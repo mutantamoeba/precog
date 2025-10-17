@@ -1,0 +1,614 @@
+# System Configuration
+# ====================
+# This is the MASTER configuration file. It controls:
+# - Which environment you're running (demo/prod/test)
+# - Database connections
+# - Logging behavior
+# - System-wide defaults
+#
+# CRITICAL: Changes here affect the ENTIRE system
+# UPSTREAM IMPACT: All modules read this file
+# DOWNSTREAM IMPACT: Determines which other configs are active
+
+---
+version: "1.0"
+last_updated: "2025-10-09"
+
+# ============================================
+# ENVIRONMENT SELECTION
+# ============================================
+# This is the MOST IMPORTANT setting - it determines everything else
+#
+# Three environments:
+# - demo: Paper trading, fake money, learning
+# - prod: REAL MONEY, live trading
+# - test: Automated testing, CI/CD
+#
+# SAFETY: Default is 'demo' to prevent accidental real money trading
+# You must EXPLICITLY change to 'prod' for live trading
+
+environment:
+  active: "demo"  # Options: demo | prod | test
+  
+  # Why three environments?
+  # - demo: Learn system safely, test strategies, no risk
+  # - prod: Real money after you're confident
+  # - test: Automated testing during development
+  
+  # Switching environments:
+  # Option 1: Change this value and restart
+  # Option 2: Set TRADING_ENV environment variable (overrides this)
+  # Example: export TRADING_ENV=prod
+  
+  # CRITICAL: Always verify which environment before trading!
+  # System will log environment on startup
+
+# ============================================
+# DATABASE CONNECTIONS
+# ============================================
+# Each environment has its own database
+# WHY? Prevents mixing paper trades with real trades
+# 
+# ARCHITECTURE NOTE: Uses repository pattern
+# - All database code goes through repositories
+# - Easy to swap databases later if needed
+
+database:
+  # Demo environment database
+  demo:
+    host: "localhost"
+    port: 5432
+    name: "precog_demo"
+    user: "postgres"
+    # Password from environment variable for security
+    # Set: $env:DEMO_DB_PASSWORD = "your_password" (PowerShell)
+    password_env: "DEMO_DB_PASSWORD"
+    
+    # Connection pool settings
+    # WHY? Reusing connections is faster than creating new ones
+    pool_size: 5  # Max concurrent connections
+    max_overflow: 10  # Additional connections if needed
+    pool_timeout: 30  # Seconds to wait for connection
+    
+    # Why these values?
+    # - Demo is single-user, doesn't need many connections
+    # - 5 base + 10 overflow = 15 max (plenty for development)
+    
+    # Connection string format (for debugging):
+    # postgresql://postgres:password@localhost:5432/precog_demo
+
+  # Production environment database
+  prod:
+    host: "localhost"  # Change to RDS endpoint in Phase 7 (cloud)
+    port: 5432
+    name: "precog_prod"
+    user: "postgres"
+    password_env: "PROD_DB_PASSWORD"
+    
+    # Production needs more connections
+    # WHY? Multiple processes, background jobs, web dashboard
+    pool_size: 10
+    max_overflow: 20
+    pool_timeout: 30
+    
+    # Production-specific settings
+    ssl_mode: "require"  # CRITICAL: Encrypt connections in prod
+    statement_timeout: 60000  # Kill queries after 60 seconds
+    idle_in_transaction_timeout: 10000  # Clean up stuck transactions
+    
+    # Why stricter timeouts in prod?
+    # Prevent hung queries from blocking system
+
+  # Test environment database
+  test:
+    host: "localhost"
+    port: 5432
+    name: "precog_test"
+    user: "postgres"
+    password_env: "TEST_DB_PASSWORD"
+    
+    pool_size: 3  # Tests are sequential, don't need many
+    max_overflow: 5
+    pool_timeout: 10  # Fail fast in tests
+    
+    # Test-specific: Drop and recreate between test runs
+    auto_create: true
+    auto_drop: false  # Set true for CI/CD
+
+# ============================================
+# LOGGING CONFIGURATION
+# ============================================
+# Comprehensive logging is CRITICAL for:
+# - Debugging issues
+# - Audit trail for trades
+# - Performance monitoring
+# - Regulatory compliance
+#
+# ARCHITECTURE: Structured logging with context
+# Every log includes: timestamp, level, module, trade_id (if applicable)
+
+logging:
+  # Base settings
+  level: "INFO"  # Options: DEBUG | INFO | WARNING | ERROR | CRITICAL
+  
+  # Why INFO default?
+  # - DEBUG is too noisy (thousands of lines per minute)
+  # - WARNING misses important operational info
+  # - INFO is sweet spot: key events without spam
+  
+  # When to use each level:
+  # DEBUG: During development, troubleshooting specific issues
+  # INFO: Normal operation (default)
+  # WARNING: Unusual but handled situations
+  # ERROR: Something failed but system continues
+  # CRITICAL: System cannot continue, immediate action needed
+  
+  # Log output destinations
+  console:
+    enabled: true
+    level: "INFO"
+    format: "human_readable"  # Options: human_readable | json
+    
+    # Why human_readable?
+    # Easier to read during development
+    # Production might use json for log aggregation tools
+  
+  file:
+    enabled: true
+    level: "DEBUG"  # File gets everything, console gets less
+    directory: "logs"
+    
+    # Rotation settings (prevents massive log files)
+    max_size_mb: 100  # Rotate when file hits 100 MB
+    max_files: 10  # Keep 10 old files (then delete oldest)
+    
+    # Why these values?
+    # 100 MB * 10 files = 1 GB max logs (reasonable disk usage)
+    # At ~10K lines/MB, that's ~1 million lines of history
+    
+    # File naming:
+    # - precog.log (current)
+    # - precog.log.1 (previous)
+    # - precog.log.2 (older)
+    # ...
+    
+    # Separate files for different purposes
+    files:
+      main: "precog.log"  # Everything
+      trades: "trades.log"  # Trade execution only (for analysis)
+      api: "api_calls.log"  # API requests (for debugging rate limits)
+      errors: "errors.log"  # Errors only (quick troubleshooting)
+  
+  # Database logging
+  # WHY? Some events need to be queryable (not just text search)
+  database:
+    enabled: true
+    tables:
+      # Activity log: Everything goes here
+      activity: true  # Table: activity_log
+      
+      # Specialized logs
+      trades: true  # Table: trade_execution_log
+      api_calls: true  # Table: api_call_log
+      circuit_breakers: true  # Table: circuit_breaker_events
+    
+    # Retention policy (prevents database bloat)
+    retention_days:
+      activity: 90  # Keep 3 months of general logs
+      trades: 365  # Keep 1 year of trades (tax/audit)
+      api_calls: 30  # Keep 1 month of API logs
+      circuit_breakers: 180  # Keep 6 months of safety events
+    
+    # Why different retention?
+    # - Trades: Legal/tax requirement
+    # - Activity: Debugging historical issues
+    # - API: Recent issues only
+  
+  # Log enrichment (automatically added to every log)
+  context:
+    include_timestamp: true
+    include_thread_id: true  # For async debugging
+    include_user: false  # No users yet (Phase 6+)
+    include_trade_id: true  # Critical for tracing trade lifecycle
+    include_market_id: true  # Which market caused this log?
+
+# ============================================
+# SYSTEM-WIDE DEFAULTS
+# ============================================
+# These values are used when specific configs don't override them
+# ARCHITECTURE: Configuration inheritance
+# Specific configs (trading.yaml) override these defaults
+
+defaults:
+  # Timezone (CRITICAL for market hours)
+  timezone: "America/New_York"  # Kalshi uses US Eastern time
+  
+  # Why this matters:
+  # - Markets open/close at specific US Eastern times
+  # - Game start times in Eastern
+  # - If you're in California, 12 PM ET = 9 AM PT
+  
+  # Currency
+  currency: "USD"  # Kalshi only supports USD
+  
+  # Decimal precision (CRITICAL - review KALSHI_DECIMAL_PRICING_CHEAT_SHEET.md)
+  decimal_places:
+    prices: 4  # $0.6234 (Kalshi uses 4 decimals)
+    amounts: 2  # $1000.00 (standard currency)
+    percentages: 2  # 15.75%
+    
+  # Why 4 decimal places for prices?
+  # Kalshi API returns: yes_price_dollars = 0.6234
+  # Must store/compute with same precision
+  # NEVER use float - always use Decimal type
+  
+  # Rate limiting (API protection)
+  rate_limits:
+    api_calls_per_minute: 100  # Kalshi limit
+    api_calls_per_hour: 5000  # Conservative estimate
+    
+    # Backoff strategy when hitting limits
+    backoff:
+      initial_delay_ms: 1000  # Wait 1 second after first limit hit
+      max_delay_ms: 30000  # Max wait 30 seconds
+      multiplier: 2  # Double delay each retry (exponential backoff)
+      max_retries: 5  # Give up after 5 tries
+    
+    # Why exponential backoff?
+    # - Gives API time to recover
+    # - Prevents hammering when already overloaded
+    # - Standard practice for API rate limiting
+  
+  # Timeout settings (prevent hanging)
+  timeouts:
+    api_request_seconds: 30  # Kill API call after 30 sec
+    database_query_seconds: 60  # Kill query after 60 sec
+    websocket_ping_seconds: 30  # Check WebSocket alive every 30 sec
+    
+    # Why these values?
+    # - API: 30 sec is generous (most calls < 5 sec)
+    # - Database: Complex queries might take time
+    # - WebSocket: Detect disconnections quickly
+  
+  # Retry settings (for transient failures)
+  retries:
+    max_attempts: 3  # Try up to 3 times
+    delay_seconds: 5  # Wait 5 seconds between retries
+    exponential_backoff: true  # Increase delay each time
+    
+    # What gets retried?
+    # - Network errors (connection failed)
+    # - API rate limits (429 errors)
+    # - Database deadlocks
+    # 
+    # What does NOT get retried?
+    # - Authentication failures (won't fix itself)
+    # - Invalid parameters (still invalid)
+    # - Permission denied
+
+# ============================================
+# HEALTH CHECKS
+# ============================================
+# System continuously monitors its own health
+# WHY? Catch problems before they cause losses
+# ARCHITECTURE: Observer pattern with health probes
+
+health_checks:
+  enabled: true
+  interval_seconds: 60  # Check every minute
+  
+  # What gets checked?
+  checks:
+    database_connection: true  # Can we query database?
+    api_connectivity: true  # Can we reach Kalshi?
+    disk_space: true  # Do we have room for logs?
+    memory_usage: true  # Are we leaking memory?
+    
+  # Thresholds (when to alert)
+  thresholds:
+    disk_space_min_gb: 5  # Alert if < 5 GB free
+    memory_usage_max_percent: 80  # Alert if > 80% RAM used
+    api_latency_max_ms: 5000  # Alert if API > 5 sec
+    
+    # Why these values?
+    # Disk: Need room for logs, database growth
+    # Memory: Prevent system slowdown from swapping
+    # Latency: API normally < 1 sec, 5 sec is concerning
+  
+  # Health status storage
+  database_table: "system_health"
+  retention_days: 30  # Keep 1 month of health data
+
+# ============================================
+# CIRCUIT BREAKERS
+# ============================================
+# Automatic safety shutoffs
+# WHY? Stop trading when something is wrong
+# ARCHITECTURE: Circuit breaker pattern (from electrical systems)
+#
+# States:
+# - CLOSED: Normal operation, trading allowed
+# - OPEN: Circuit tripped, trading stopped
+# - HALF_OPEN: Testing if problem is fixed
+
+circuit_breakers:
+  enabled: true
+  
+  # API failure breaker
+  api_failures:
+    threshold: 5  # Trip after 5 consecutive failures
+    timeout_seconds: 300  # Stay tripped for 5 minutes
+    
+    # Why 5 failures?
+    # - Single failure: Could be transient
+    # - 5 failures: Likely systemic issue
+  
+  # Data quality breaker
+  data_quality:
+    threshold: 3  # Trip after 3 bad data points
+    timeout_seconds: 600  # Stay tripped for 10 minutes
+    
+    # What's "bad data"?
+    # - Stale prices (no update in 5+ minutes during game)
+    # - Impossible values (price > $1.00)
+    # - Missing critical fields
+  
+  # Loss limit breaker
+  loss_limit:
+    daily_loss_usd: 500  # Stop if lose $500 in one day
+    timeout_seconds: 86400  # Stay stopped until manual reset
+    
+    # CRITICAL SAFETY FEATURE
+    # Prevents catastrophic losses
+    # Requires manual review and reset
+  
+  # Position count breaker
+  position_limit:
+    max_open_positions: 20  # Stop if > 20 positions
+    timeout_seconds: 3600  # Stay stopped for 1 hour
+    
+    # Why limit positions?
+    # - Risk management
+    # - Attention spread too thin
+    # - Potential system issue if opening too many
+
+# ============================================
+# ASYNC CONFIGURATION
+# ============================================
+# Starting Phase 3, system uses asynchronous I/O
+# WHY? Handle multiple API calls concurrently
+# ARCHITECTURE: Async/await pattern
+
+async:
+  enabled: false  # Phase 1-2: Synchronous, Phase 3+: Enable this
+  
+  # When enabled in Phase 3:
+  max_concurrent_requests: 10  # Max simultaneous API calls
+  max_concurrent_db_queries: 5  # Max simultaneous DB queries
+  
+  # Event loop settings
+  event_loop:
+    debug: false  # Enable for async debugging (verbose)
+    slow_callback_duration_ms: 100  # Warn if callback > 100ms
+  
+  # Why these numbers?
+  # 10 API calls: Respects rate limits
+  # 5 DB queries: Prevents connection pool exhaustion
+
+# ============================================
+# FEATURE FLAGS
+# ============================================
+# Enable/disable features without code changes
+# WHY? Gradual rollout, easy rollback, A/B testing
+# ARCHITECTURE: Feature toggle pattern
+
+features:
+  # Phase-based features
+  websockets: false  # Phase 3
+  live_trading: false  # Phase 4 (paper trading in demo)
+  position_adjustments: false  # Phase 4
+  early_exit: false  # Phase 4
+  dashboard: false  # Phase 6
+  email_alerts: false  # Phase 6
+  mobile_notifications: false  # Phase 7
+  cloud_deployment: false  # Phase 7
+  multi_sport: false  # Phase 8
+  polymarket: false  # Phase 10
+  
+  # Development features
+  debug_mode: false  # Extra logging, no real trades
+  dry_run: false  # Simulate trades but don't execute
+  
+  # Why feature flags?
+  # Turn on new features gradually
+  # Easy to disable if problems found
+  # Test in production safely
+
+# ============================================
+# MAINTENANCE WINDOWS
+# ============================================
+# Scheduled downtime for updates
+# WHY? Prevent trading during maintenance
+
+maintenance:
+  enabled: false  # Set true to enable maintenance mode
+  
+  # When in maintenance mode:
+  # - No new trades
+  # - Existing positions monitored
+  # - API polling reduced
+  # - Dashboard shows maintenance message
+  
+  scheduled_windows:
+    # Example: Every Sunday 2-3 AM ET for backups
+    - day: "sunday"
+      start_time: "02:00"
+      end_time: "03:00"
+      timezone: "America/New_York"
+      reason: "Weekly backup and database maintenance"
+
+# ============================================
+# AUDIT & COMPLIANCE
+# ============================================
+# Track everything for regulatory compliance
+# WHY? Prediction markets may face regulation
+# ARCHITECTURE: Immutable audit log
+
+audit:
+  enabled: true
+  
+  # What gets audited?
+  events:
+    trades: true  # Every trade execution
+    config_changes: true  # Any config override
+    manual_interventions: true  # Manual position closes
+    api_key_usage: true  # API authentication events
+    
+  # Audit log characteristics
+  immutable: true  # Can't delete/modify audit entries
+  retention_years: 7  # Legal standard for financial records
+  
+  # Storage
+  database_table: "audit_log"
+  
+  # Export format (for regulators/auditors)
+  export_format: "csv"  # Standard, readable format
+
+# ============================================
+# TELEMETRY & MONITORING
+# ============================================
+# System performance tracking
+# WHY? Identify bottlenecks, optimize performance
+
+telemetry:
+  enabled: true
+  
+  metrics:
+    # API performance
+    api_latency: true  # How long do API calls take?
+    api_error_rate: true  # How often do they fail?
+    
+    # Database performance
+    query_duration: true  # Slow queries?
+    connection_pool_usage: true  # Running out of connections?
+    
+    # Trading performance
+    trade_execution_time: true  # How fast from signal to trade?
+    position_count: true  # How many open positions?
+    
+    # System resources
+    cpu_usage: true
+    memory_usage: true
+    disk_usage: true
+  
+  # Where metrics go
+  storage:
+    database_table: "system_metrics"
+    retention_days: 90
+  
+  # Aggregation
+  aggregation_interval_seconds: 300  # Summarize every 5 minutes
+
+# ============================================
+# BACKUP CONFIGURATION
+# ============================================
+# Database backup settings
+# WHY? Protect against data loss, corruption
+
+backup:
+  enabled: true
+  
+  # Backup schedule
+  schedule:
+    daily:
+      time: "03:00"  # 3 AM ET
+      retention_days: 7
+    
+    weekly:
+      day: "sunday"
+      time: "04:00"
+      retention_weeks: 4
+    
+    monthly:
+      day_of_month: 1
+      time: "05:00"
+      retention_months: 12
+  
+  # Backup location
+  directory: "backups"
+  
+  # Backup verification
+  verify_after_backup: true  # Test restore process
+  
+  # CRITICAL: Store backups OFF-SITE in production
+  # Phase 7: Use AWS S3, Google Cloud Storage, etc.
+
+# ============================================
+# NOTIFICATIONS
+# ============================================
+# Alert system (Phase 6+)
+
+notifications:
+  enabled: false  # Enable in Phase 6
+  
+  channels:
+    email:
+      enabled: false
+      smtp_host: "smtp.gmail.com"
+      smtp_port: 587
+      from_address: "alerts@yourdomain.com"
+      to_addresses: ["your@email.com"]
+    
+    # Future: SMS, Slack, Discord, etc.
+
+# ============================================
+# DEVELOPMENT TOOLS
+# ============================================
+# Tools for development/debugging
+
+development:
+  # Auto-reload on code changes (Phase 1-3 only)
+  auto_reload: true
+  
+  # SQL query logging (Phase 1-3 only)
+  log_sql_queries: true
+  
+  # API request/response logging (verbose!)
+  log_api_requests: false  # Enable for debugging only
+  
+  # Profiling (performance analysis)
+  profiling:
+    enabled: false  # Enable when optimizing
+    output_directory: "profiling_results"
+
+# ============================================
+# NOTES FOR DEVELOPERS
+# ============================================
+
+# READING THIS FILE:
+# 1. This file is loaded at application startup
+# 2. Values can be overridden by environment variables
+# 3. Format: SECTION_SUBSECTION_KEY
+#    Example: LOGGING_LEVEL=DEBUG
+# 4. Environment variables take precedence over this file
+
+# MODIFYING THIS FILE:
+# 1. Always backup before changes
+# 2. Validate YAML syntax: python -c "import yaml; yaml.safe_load(open('system.yaml'))"
+# 3. Test in demo environment first
+# 4. Document changes in DOCUMENT_MAINTENANCE_LOG.md
+
+# COMMON PITFALLS:
+# 1. Changing environment to 'prod' accidentally
+# 2. Setting logging to DEBUG in production (huge files)
+# 3. Forgetting to set password environment variables
+# 4. Disabling circuit breakers (NEVER do this in prod!)
+
+# TROUBLESHOOTING:
+# - "Can't connect to database" → Check password_env is set
+# - "Too many log files" → Adjust max_files
+# - "API rate limited" → Check rate_limits settings
+# - "System slow" → Check telemetry metrics
+
+---
+# END OF SYSTEM.YAML

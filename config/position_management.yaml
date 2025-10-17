@@ -1,0 +1,515 @@
+# position_management.yaml - Position Management & Risk
+# ============================================
+# This file controls how we manage OPEN positions after entry.
+# Think of this as "portfolio management" - it's not just about
+# placing trades, but actively managing them to maximize returns
+# and minimize risk.
+#
+# Version: 1.0
+# Last Updated: 2025-10-09
+# ============================================
+
+# ============================================
+# PORTFOLIO LIMITS
+# ============================================
+# Maximum risk across ALL positions combined.
+# WHY: Individual positions might be safe, but too many
+# creates portfolio risk.
+
+portfolio:
+  # Maximum number of open positions at once
+  # WHY: More positions = more monitoring, more complexity
+  # BEGINNER: Start with 5, increase as comfortable
+  max_open_positions: 10
+  
+  # Maximum total capital deployed across all positions
+  # WHY: Even if Kelly says bet more, don't overextend
+  max_total_capital_deployed: 10000.00
+  
+  # Maximum correlated exposure (positions that move together)
+  # WHY: If all positions tied to "Chiefs win", and Chiefs lose,
+  # you lose everything. Diversification is key.
+  max_correlated_exposure: 3000.00  # Max $3k in correlated positions
+  
+  # Concentration limits by sport
+  # WHY: Don't put all eggs in NFL basket
+  max_exposure_by_sport:
+    nfl: 0.60  # 60% of portfolio max
+    nba: 0.40  # 40% of portfolio max
+    mlb: 0.30
+    nhl: 0.20
+    soccer: 0.20
+    tennis: 0.20
+  
+  # Concentration limits by game
+  # WHY: Don't have 5 positions all on same game
+  max_positions_per_game: 3
+  max_exposure_per_game: 1500.00
+
+# ============================================
+# POSITION MONITORING
+# ============================================
+# How often and how to check on open positions.
+
+monitoring:
+  # How often to update position values?
+  # WHY: Too frequent = wasted API calls, CPU
+  #      Too infrequent = miss exit opportunities
+  update_frequency_seconds: 60  # Every minute
+  
+  # What to check on each update?
+  checks:
+    - "current_price"        # Market price changed?
+    - "edge_status"          # Edge still there?
+    - "correlation"          # Correlation with other positions?
+    - "time_to_settlement"   # How long until settled?
+    - "liquidity"            # Can we exit if needed?
+  
+  # Health scoring
+  # WHY: Quantify how "healthy" each position is
+  # Score = weighted sum of factors
+  health_score:
+    enabled: true
+    factors:
+      edge_remaining: 0.40       # 40% weight
+      time_remaining: 0.20       # 20% weight
+      liquidity_depth: 0.20      # 20% weight
+      unrealized_pnl: 0.20       # 20% weight
+    
+    # Health thresholds
+    # WHY: Trigger actions based on health
+    very_healthy: 0.80  # 80+ = great position
+    healthy: 0.60       # 60-80 = okay
+    concerning: 0.40    # 40-60 = watch closely
+    unhealthy: 0.20     # 20-40 = consider exit
+    critical: 0.00      # 0-20 = exit immediately
+
+# ============================================
+# EXIT RULES
+# ============================================
+# When and how to close positions before settlement.
+
+exit_rules:
+  # MANDATORY EXITS (must close position)
+  mandatory:
+    # Exit if edge flips significantly negative
+    # WHY: Wrong side of market now, get out!
+    # Example: Entered at +8% edge, now at -5% edge
+    negative_edge:
+      enabled: true
+      threshold: -0.03  # -3% edge (we're overpriced)
+    
+    # Exit if position health becomes critical
+    # WHY: Multiple factors saying "this is bad"
+    health_critical:
+      enabled: true
+      # Uses health_score.critical threshold above
+    
+    # Exit if correlation becomes too high
+    # WHY: Position now correlated with others = concentrated risk
+    correlation_breach:
+      enabled: true
+      max_correlation: 0.75  # 75% correlation with portfolio
+    
+    # Exit if approaching settlement with loss
+    # WHY: Don't wait for settlement if losing
+    late_game_loss:
+      enabled: true
+      minutes_remaining: 10
+      loss_threshold_pct: 0.20  # Down 20% or more
+  
+  # OPTIONAL EXITS (discretionary, profit-taking)
+  discretionary:
+    # Take profit if hit target
+    profit_target:
+      enabled: true
+      # Profit targets by strategy (some strategies hold longer)
+      by_strategy:
+        pre_game_entry:
+          target_gain_pct: 0.50  # Exit at 50% gain
+        halftime_entry:
+          target_gain_pct: 0.75  # Exit at 75% gain
+        live_trading:
+          target_gain_pct: 0.40  # Exit at 40% (faster churn)
+        settlement_arbitrage:
+          target_gain_pct: 1.00  # Hold until 100% (near-certain)
+    
+    # Stop-loss if hit loss threshold
+    stop_loss:
+      enabled: true
+      by_strategy:
+        pre_game_entry:
+          max_loss_pct: 0.40  # Exit at 40% loss
+        halftime_entry:
+          max_loss_pct: 0.50  # Exit at 50% loss
+        live_trading:
+          max_loss_pct: 0.30  # Tighter stop (faster moving)
+        settlement_arbitrage:
+          max_loss_pct: 0.10  # Very tight (should be low-risk)
+    
+    # Trailing stop (lock in gains as position appreciates)
+    # WHY: Let winners run, but protect gains
+    # Example: Up 50%, set trailing stop at 40%
+    #          If drops to 40%, exit with 40% gain
+    trailing_stop:
+      enabled: true
+      activation_gain_pct: 0.30  # Activate after 30% gain
+      trail_distance_pct: 0.10   # Trail by 10%
+  
+  # EXIT TIMING (when during game to exit)
+  timing:
+    # Avoid exiting during these game states
+    # WHY: Volatility, spreads widen, hard to get good price
+    avoid_exit_during:
+      - "timeout_pending"
+      - "challenge_pending"
+      - "injury_stoppage"
+      - "two_minute_warning"  # For NFL
+      - "overtime"
+    
+    # Prefer exiting during these game states
+    # WHY: Spreads tighter, more liquidity
+    prefer_exit_during:
+      - "commercial_break"
+      - "halftime"
+      - "between_quarters"
+  
+  # EXIT METHODS
+  methods:
+    # How to exit? Limit order or market order?
+    default_order_type: limit
+    
+    # For limit orders, how aggressive?
+    # - 'passive': Wait for best price (might not fill)
+    # - 'aggressive': Accept worse price to ensure fill
+    limit_order_style: aggressive
+    
+    # If limit order doesn't fill, how long to wait before market order?
+    limit_timeout_seconds: 30
+    
+    # Maximum slippage acceptable for exit
+    # WHY: Sometimes must exit quickly, accept worse price
+    max_exit_slippage_pct: 0.03  # 3% max
+
+# ============================================
+# CORRELATION MANAGEMENT
+# ============================================
+# Prevent concentrated risk from correlated positions.
+#
+# EXAMPLE: These are highly correlated:
+# - "Chiefs win" + "Chiefs cover spread"
+# - "Over 50 points" + "Both teams score 24+"
+# - "LeBron 30+ points" + "Lakers win"
+
+correlation:
+  # Calculate correlation between positions?
+  # WHY: Essential for risk management
+  enabled: true
+  
+  # How to calculate correlation?
+  # Options:
+  # - 'market': Same market category (conservative)
+  # - 'game': Same game (stricter)
+  # - 'team': Same team involved (strictest)
+  # - 'statistical': Historical price correlation (most accurate)
+  calculation_method: statistical
+  
+  # Correlation thresholds
+  # WHY: High correlation = similar to having one large position
+  levels:
+    low: 0.30       # 0-30% = independent
+    medium: 0.60    # 30-60% = somewhat related
+    high: 0.80      # 60-80% = highly related
+    very_high: 0.90 # 80%+ = basically same bet
+  
+  # Actions based on correlation
+  actions:
+    # Reduce position size if correlated with existing positions
+    reduce_sizing_on_correlation:
+      enabled: true
+      # If new trade correlates at 0.70 with existing positions,
+      # reduce size by 30% (0.70 * reduction_factor)
+      reduction_factor: 0.5
+    
+    # Reject trade if too correlated?
+    reject_on_high_correlation:
+      enabled: true
+      threshold: 0.85  # Reject if 85%+ correlated
+    
+    # Alert if portfolio correlation increases
+    alert_on_portfolio_correlation:
+      enabled: true
+      threshold: 0.70  # Alert if avg correlation > 70%
+  
+  # Sport-specific correlation rules
+  # WHY: Different sports have different correlation patterns
+  sport_specific:
+    nfl:
+      # Game winner highly correlated with spread/total
+      assume_high_correlation:
+        - ["game_winner", "point_spread"]
+        - ["total_points", "second_half_total"]
+      
+      # These are less correlated than they seem
+      assume_low_correlation:
+        - ["first_half_winner", "second_half_winner"]
+    
+    nba:
+      assume_high_correlation:
+        - ["game_winner", "point_spread"]
+        - ["player_points", "team_total"]
+
+# ============================================
+# REBALANCING
+# ============================================
+# Adjust position sizes as edge/probabilities change.
+#
+# EXAMPLE: Enter with $100 on Team A at 60% prob.
+# Team A now 70% prob. Should increase position? Rebalancing decides.
+
+rebalancing:
+  enabled: false  # Start false, enable after comfortable
+  
+  # When to consider rebalancing?
+  triggers:
+    # Rebalance if edge increases significantly
+    edge_increase:
+      enabled: true
+      threshold: 0.05  # Edge increased by 5%
+    
+    # Rebalance if probability changes significantly
+    probability_change:
+      enabled: true
+      threshold: 0.10  # Probability changed by 10%
+    
+    # Rebalance at specific times
+    scheduled:
+      enabled: false
+      times:
+        - "halftime"
+        - "third_quarter_end"
+  
+  # How to rebalance?
+  method:
+    # Options:
+    # - 'full_kelly': Recalculate optimal Kelly size
+    # - 'incremental': Small adjustments only
+    # - 'hedge': Add opposite position if edge flipped
+    type: incremental
+    
+    # For incremental: How much to adjust?
+    incremental:
+      max_adjustment_pct: 0.25  # Max 25% size change
+      min_edge_for_increase: 0.08  # Need 8% edge to add
+  
+  # Costs
+  # WHY: Rebalancing costs transaction fees
+  consider_transaction_costs: true
+  min_edge_improvement: 0.03  # Need 3% better edge to justify cost
+
+# ============================================
+# SETTLEMENT MANAGEMENT
+# ============================================
+# Handling positions as they approach settlement.
+
+settlement:
+  # Auto-exit before settlement?
+  # WHY: Sometimes better to exit early and redeploy capital
+  # vs waiting for settlement (which can take hours/days)
+  auto_exit_before_settlement:
+    enabled: false  # Usually want to hold until settlement
+    minutes_before_settlement: 60  # Exit 1 hour early if enabled
+    min_unrealized_gain_pct: 0.80  # Only if up 80%+
+  
+  # Settlement verification
+  # WHY: Verify we got paid correctly
+  verify_settlements: true
+  
+  # Settlement disputes
+  # WHY: Sometimes markets settle incorrectly (rare but happens)
+  dispute_incorrect_settlements:
+    enabled: true
+    auto_dispute: false  # Manual review before disputing
+    log_for_review: true
+
+# ============================================
+# POSITION SIZING ADJUSTMENTS
+# ============================================
+# Modify Kelly sizing based on position characteristics.
+#
+# WHY: Not all edges are equal. Adjust sizing for risk factors.
+
+sizing_adjustments:
+  # Reduce size for volatile markets
+  # WHY: High volatility = higher risk, even with same edge
+  volatility_adjustment:
+    enabled: true
+    # If volatility is 2x normal, reduce size by 30%
+    high_volatility_threshold: 2.0
+    size_reduction_pct: 0.30
+  
+  # Reduce size for illiquid markets
+  # WHY: Hard to exit if needed
+  liquidity_adjustment:
+    enabled: true
+    # If volume < min threshold, reduce size
+    low_volume_threshold: 50  # contracts
+    size_reduction_pct: 0.50  # 50% reduction
+  
+  # Reduce size for wide spreads
+  # WHY: High transaction cost effectively reduces edge
+  spread_adjustment:
+    enabled: true
+    wide_spread_threshold: 0.04  # 4% spread
+    size_reduction_pct: 0.25  # 25% reduction
+  
+  # Adjust size based on time to settlement
+  # WHY: More time = more uncertainty
+  time_adjustment:
+    enabled: true
+    # Reduce size if > 3 hours to settlement
+    long_duration_hours: 3.0
+    size_reduction_pct: 0.20
+  
+  # Adjust size based on model confidence
+  # WHY: If model is less confident, bet less
+  confidence_adjustment:
+    enabled: true
+    # If confidence < threshold, reduce size
+    low_confidence_threshold: 0.70  # 70%
+    size_reduction_pct: 0.40
+
+# ============================================
+# PORTFOLIO OPTIMIZATION
+# ============================================
+# Advanced: Optimize portfolio for best risk/return.
+#
+# WHY: Sometimes it's better to close a winning position
+# to make room for an even better opportunity.
+
+optimization:
+  enabled: false  # Phase 6+, advanced feature
+  
+  # Reallocation triggers
+  # Close existing position to fund new one?
+  reallocate_capital:
+    enabled: false
+    # Only if new opportunity is significantly better
+    min_edge_improvement: 0.10  # 10% better edge
+    # And existing position is near profit target
+    existing_position_min_gain: 0.40  # Up 40%+
+
+# ============================================
+# RISK METRICS
+# ============================================
+# Track and report portfolio risk metrics.
+
+risk_metrics:
+  # Calculate these metrics for portfolio
+  calculate:
+    - "total_exposure"
+    - "exposure_by_sport"
+    - "exposure_by_strategy"
+    - "average_correlation"
+    - "var_95"  # Value at Risk (95% confidence)
+    - "expected_shortfall"  # Conditional VaR
+    - "sharpe_ratio"
+    - "sortino_ratio"
+    - "max_drawdown"
+  
+  # How often to recalculate?
+  calculation_frequency: "hourly"
+  
+  # Alert thresholds
+  alerts:
+    # Alert if VaR exceeds threshold
+    var_threshold: 0.10  # 10% of portfolio
+    
+    # Alert if correlation too high
+    correlation_threshold: 0.75
+    
+    # Alert if max drawdown increasing
+    max_drawdown_threshold: 0.15  # 15%
+
+# ============================================
+# POSITION LIFECYCLE TRACKING
+# ============================================
+# Track position from entry to exit for analysis.
+
+lifecycle_tracking:
+  enabled: true
+  
+  # What to log at each stage?
+  log_events:
+    - "position_opened"
+    - "position_size_adjusted"
+    - "stop_loss_adjusted"
+    - "profit_target_hit"
+    - "stop_loss_hit"
+    - "health_score_changed"
+    - "correlation_changed"
+    - "position_closed"
+    - "settlement_received"
+  
+  # Performance attribution
+  # WHY: Understand why position won/lost
+  attribution:
+    enabled: true
+    factors:
+      - "edge_accuracy"  # Was predicted edge accurate?
+      - "timing"  # Did we enter/exit at right time?
+      - "sizing"  # Was position sized correctly?
+      - "external"  # Random events (injuries, weather, etc.)
+
+# ============================================
+# NOTES FOR POSITION MANAGEMENT
+# ============================================
+# Position management is where most traders fail. They focus
+# on finding good entries but don't manage positions actively.
+#
+# KEY PRINCIPLES:
+#
+# 1. SET IT AND FORGET IT (mostly)
+#    - Don't over-manage
+#    - Let winners run
+#    - Trust your stop-losses
+#
+# 2. CUT LOSERS QUICKLY
+#    - If edge flips, exit
+#    - Don't hope it comes back
+#    - Live to trade another day
+#
+# 3. DIVERSIFY
+#    - Don't load up on correlated positions
+#    - Spread risk across sports, strategies
+#
+# 4. TRACK EVERYTHING
+#    - Learn from wins AND losses
+#    - Adjust rules based on data
+#
+# 5. AUTOMATE
+#    - Emotions are the enemy
+#    - Let the system handle exits
+#    - Only manual override in emergencies
+#
+# BEGINNER SETTINGS:
+# - Start with mandatory exits only
+# - Use wide stop-losses (50%)
+# - Don't rebalance yet
+# - Focus on entries first
+#
+# INTERMEDIATE SETTINGS:
+# - Add profit targets
+# - Add trailing stops
+# - Start tracking correlation
+# - Consider discretionary exits
+#
+# ADVANCED SETTINGS:
+# - Enable rebalancing
+# - Optimize portfolio
+# - Use all sizing adjustments
+# - Track all risk metrics
+#
+# ============================================
+# END OF POSITION_MANAGEMENT.YAML
+# ============================================
