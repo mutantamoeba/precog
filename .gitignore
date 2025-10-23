@@ -52,6 +52,7 @@ Thumbs.db
 # Development artifacts (project-specific)
 _knowledge/
 _sessions/
+_archive/
 archive/
 backups/
 .claude/

@@ -5,8 +5,10 @@
 # placing trades, but actively managing them to maximize returns
 # and minimize risk.
 #
-# Version: 1.0
-# Last Updated: 2025-10-09
+# Version: 2.0 (Phase 0.5 Enhancements)
+# Last Updated: 2025-10-21
+# Major Changes: Added dynamic monitoring, exit priorities,
+#                urgency-based execution from Phase 5 design
 # ============================================
 
 # ============================================
@@ -47,24 +49,57 @@ portfolio:
   max_exposure_per_game: 1500.00
 
 # ============================================
-# POSITION MONITORING
+# POSITION MONITORING (Phase 5 Enhancement)
 # ============================================
-# How often and how to check on open positions.
+# CRITICAL CONCEPT: Dynamic monitoring frequency
+# WHY: Balance responsiveness with API rate limits
+# - Normal mode (30s): Standard tracking for stable positions
+# - Urgent mode (5s): Fast checks when near critical thresholds
+#
+# EXAMPLE: Position at +10% profit → check every 30s (normal)
+#          Position within 2% of stop loss → check every 5s (urgent)
+#          This prevents hitting API rate limits while catching critical events
 
 monitoring:
-  # How often to update position values?
-  # WHY: Too frequent = wasted API calls, CPU
-  #      Too infrequent = miss exit opportunities
-  update_frequency_seconds: 60  # Every minute
-  
+  # PHASE 5: Dynamic Monitoring Frequencies
+  # ========================================
+  # How often to check position status?
+  # WHY: API limits = 100 calls/10s (600/min), we use 60/min max
+  #      With 20 positions: 40 calls/min normal, 60 calls/min all urgent
+
+  normal_frequency: 30      # user-customizable: Seconds between checks (normal conditions)
+  urgent_frequency: 5       # user-customizable: Seconds between checks (urgent conditions)
+
+  # URGENT MODE TRIGGERS
+  # When to switch from 30s → 5s checking?
+  # WHY: Don't want to miss stop loss or profit target by checking too slowly
+  urgent_conditions:
+    near_stop_loss_pct: 0.02      # user-customizable: Within 2% of stop loss = urgent
+    near_profit_target_pct: 0.02  # user-customizable: Within 2% of profit target = urgent
+    near_trailing_stop_pct: 0.02  # user-customizable: Within 2% of trailing stop = urgent
+
+  # EXAMPLE: Position down 13%, stop loss at -15%
+  #          → Within 2% of stop → Switch to 5s checks
+  #          This gives us 6 chances to catch the exact stop loss
+  #          vs. 1 chance with 30s checking
+
+  # API RATE MANAGEMENT
+  # ==================
+  # WHY: Kalshi has rate limits, we must stay under them
+  price_cache_ttl_seconds: 10        # Cache market prices for 10s (reduces API calls ~66%)
+  max_api_calls_per_minute: 60       # Safety limit (NOT user-customizable - system constraint)
+
   # What to check on each update?
   checks:
     - "current_price"        # Market price changed?
+    - "unrealized_pnl"       # Calculate current P&L
+    - "trailing_stop"        # Update trailing stop if needed
+    - "exit_conditions"      # Check all 10 exit conditions
     - "edge_status"          # Edge still there?
     - "correlation"          # Correlation with other positions?
     - "time_to_settlement"   # How long until settled?
     - "liquidity"            # Can we exit if needed?
-  
+
   # Health scoring
   # WHY: Quantify how "healthy" each position is
   # Score = weighted sum of factors
@@ -75,7 +110,7 @@ monitoring:
       time_remaining: 0.20       # 20% weight
       liquidity_depth: 0.20      # 20% weight
       unrealized_pnl: 0.20       # 20% weight
-    
+
     # Health thresholds
     # WHY: Trigger actions based on health
     very_healthy: 0.80  # 80+ = great position
@@ -85,7 +120,155 @@ monitoring:
     critical: 0.00      # 0-20 = exit immediately
 
 # ============================================
-# EXIT RULES
+# EXIT PRIORITY HIERARCHY (Phase 5 Enhancement)
+# ============================================
+# CRITICAL CONCEPT: Not all exits are equally urgent
+# WHY: If stop loss AND profit target both trigger, which do we execute?
+#      Priority hierarchy resolves conflicts
+#
+# PRIORITY LEVELS:
+# - CRITICAL (1): Capital protection - execute immediately with market orders
+# - HIGH (2): Risk management - execute quickly with aggressive limits
+# - MEDIUM (3): Profit taking - execute with fair limits
+# - LOW (4): Optimization - execute with conservative limits
+#
+# EXAMPLE: Position triggers both "stop_loss" (CRITICAL) and "early_exit" (LOW)
+#          → System executes stop_loss first (highest priority)
+#          → Uses market order (immediate fill)
+
+exit_priorities:
+  # CRITICAL PRIORITY (Level 1)
+  # ===========================
+  # WHY: These protect capital - cannot afford delay
+  # EXECUTION: Market orders, immediate, no retries needed
+  CRITICAL:
+    - stop_loss              # Hard stop loss hit (-15% default)
+    - circuit_breaker        # Daily loss limit exceeded ($500 default)
+
+  # HIGH PRIORITY (Level 2)
+  # =======================
+  # WHY: These protect profits or manage significant risk
+  # EXECUTION: Aggressive limit orders → walk 2x → market order
+  HIGH:
+    - trailing_stop          # Trailing stop activated and hit
+    - time_based_urgent      # Market closing in <5 minutes
+    - liquidity_dried_up     # Market became illiquid (spread >3¢ or volume <50)
+
+  # MEDIUM PRIORITY (Level 3)
+  # =========================
+  # WHY: Profit-taking - want good price but not urgent
+  # EXECUTION: Fair limit orders → walk up to 5x
+  MEDIUM:
+    - profit_target          # Target profit reached (+25% default)
+    - partial_exit_target    # Partial exit threshold reached
+
+  # LOW PRIORITY (Level 4)
+  # ======================
+  # WHY: Optimization - only exit if can get good price
+  # EXECUTION: Conservative limit orders → walk up to 10x
+  LOW:
+    - early_exit             # Edge dropped below threshold (<2%)
+    - edge_disappeared       # Edge turned negative
+    - rebalance              # Better opportunity available
+
+  # NOTE: edge_reversal REMOVED
+  # WHY: Redundant with early_exit + edge_disappeared
+  # All probability reversal scenarios covered by:
+  # - stop_loss (if losing money)
+  # - early_exit (if edge drops below 2%)
+  # - edge_disappeared (if edge negative)
+
+# ============================================
+# EXIT EXECUTION STRATEGIES (Phase 5 Enhancement)
+# ============================================
+# CRITICAL CONCEPT: Urgency-based execution
+# WHY: CRITICAL exits need immediate fills (use market orders)
+#      LOW exits can wait for better prices (use conservative limits)
+#
+# EXECUTION FLOW:
+# 1. Exit condition triggers
+# 2. Check priority level
+# 3. Choose execution strategy based on priority
+# 4. Place order
+# 5. If doesn't fill → escalate based on retry strategy
+#
+# EXAMPLE: stop_loss triggers (CRITICAL)
+#          → Use market order
+#          → Timeout 5s
+#          → Retry: immediate_market (use market again if first fails)
+
+exit_execution:
+  # CRITICAL: Capital Protection
+  # ============================
+  # GOAL: Exit NOW, price is secondary
+  CRITICAL:
+    order_type: market                    # Market order (fills immediately)
+    timeout_seconds: 5                    # Expect fill within 5s
+    retry_strategy: immediate_market      # If fails, retry market order
+    # EXAMPLE: Stop loss hit → Market sell → Fills at $0.48 (wanted $0.50)
+    #          → Accept $0.02 slippage to protect capital
+
+  # HIGH: Risk Management
+  # =====================
+  # GOAL: Exit quickly, try for decent price first
+  HIGH:
+    order_type: limit                     # Limit order first
+    price_strategy: aggressive            # Cross spread slightly (fast fill)
+    timeout_seconds: 10                   # Wait 10s for fill
+    retry_strategy: walk_then_market      # Walk price 2x, then use market
+    max_walks: 2                          # Maximum 2 price adjustments
+    # EXAMPLE: Trailing stop hit → Limit at $0.75 → Doesn't fill in 10s
+    #          → Walk to $0.74 → Wait 10s → Walk to $0.73 → Wait 10s
+    #          → Still doesn't fill → Market order → Exit at $0.72
+
+  # MEDIUM: Profit Taking
+  # =====================
+  # GOAL: Get fair price, willing to wait
+  MEDIUM:
+    order_type: limit                     # Limit order
+    price_strategy: fair                  # Mid-spread (balanced)
+    timeout_seconds: 30                   # Wait 30s for fill
+    retry_strategy: walk_price            # Walk price up to max_walks
+    max_walks: 5                          # Maximum 5 price adjustments
+    # EXAMPLE: Profit target hit → Limit at $0.80 → Walk to $0.79, $0.78, etc.
+    #          → Eventually fills or gives up after 5 walks
+
+  # LOW: Optimization
+  # =================
+  # GOAL: Only exit if can get good price
+  LOW:
+    order_type: limit                     # Limit order
+    price_strategy: conservative          # Best ask (best possible price)
+    timeout_seconds: 60                   # Wait 60s for fill
+    retry_strategy: walk_slowly           # Patient walking
+    max_walks: 10                         # Maximum 10 price adjustments
+    # EXAMPLE: Rebalancing opportunity → Limit at $0.85 → Very patient
+    #          → Walk slowly over several minutes
+    #          → If doesn't fill after 10 walks, position stays open
+
+# ============================================
+# LIQUIDITY CONSTRAINTS (Phase 5 Enhancement)
+# ============================================
+# CRITICAL CONCEPT: Illiquid markets are dangerous
+# WHY: If market has wide spread (>3¢) or low volume (<50), we can't exit easily
+#      This triggers high-priority exit to get out before liquidity disappears
+#
+# EXAMPLE: Enter position in liquid market (100 contracts, 1¢ spread)
+#          → Later, volume drops to 30 contracts, spread widens to 4¢
+#          → liquidity_dried_up triggers (HIGH priority)
+#          → System exits aggressively before market completely freezes
+
+liquidity:
+  max_spread: 0.03          # user-customizable: 3¢ maximum spread (triggers liquidity_dried_up)
+  min_volume: 50            # user-customizable: 50 contracts minimum (triggers liquidity_dried_up)
+
+  # WHY these thresholds?
+  # - Spread >3¢ = ~3-6% round-trip cost (eats into edge)
+  # - Volume <50 = might not be able to exit full position
+  # - Both indicate deteriorating market conditions
+
+# ============================================
+# EXIT RULES (Original + Enhanced)
 # ============================================
 # When and how to close positions before settlement.
 
@@ -149,13 +332,104 @@ exit_rules:
     
     # Trailing stop (lock in gains as position appreciates)
     # WHY: Let winners run, but protect gains
-    # Example: Up 50%, set trailing stop at 40%
-    #          If drops to 40%, exit with 40% gain
+    # CONCEPT: Stop loss that "trails" behind price as it rises
+    #
+    # EXAMPLE: Enter at $0.60, current price $0.75 (up 25%)
+    #          → Trailing stop activates at 10% profit
+    #          → Initial trail distance: 5%
+    #          → Peak price: $0.75, stop price: $0.7125 (5% below peak)
+    #          → Price rises to $0.80 → stop moves to $0.76
+    #          → Price falls to $0.76 → STOP HIT → Exit with 27% gain
+    #          → vs. no trailing stop → might ride back down to $0.60
+    #
+    # ADVANCED: Tightening trailing stop
+    # WHY: As profit increases, protect more of it
+    #      Initial 5% trail → tightens to 2% at higher profits
     trailing_stop:
       enabled: true
-      activation_gain_pct: 0.30  # Activate after 30% gain
-      trail_distance_pct: 0.10   # Trail by 10%
-  
+      activation_threshold: 0.10  # user-customizable: Activate after 10% profit
+      initial_distance: 0.05      # user-customizable: Start with 5% trail distance
+      tightening_rate: 0.01       # user-customizable: Tighten 1% per 5% additional gain
+      floor_distance: 0.02        # user-customizable: Minimum 2% trail (never tighter)
+
+      # TIGHTENING EXAMPLE:
+      # Profit = 10% → Trail distance = 5% (initial)
+      # Profit = 15% → Trail distance = 4% (5% - 1% = 4%)
+      # Profit = 20% → Trail distance = 3% (5% - 2% = 3%)
+      # Profit = 25% → Trail distance = 2% (5% - 3% = 2%, hits floor)
+      # Profit = 50% → Trail distance = 2% (stays at floor)
+
+      # NOTE: Trailing stop stored in database as JSONB
+      # Schema: {
+      #   "active": true,
+      #   "activation_price": "0.66",
+      #   "peak_price": "0.80",
+      #   "current_stop_price": "0.784",
+      #   "current_distance": "0.02"
+      # }
+
+    # PARTIAL EXITS (Phase 5 Enhancement)
+    # ====================================
+    # CRITICAL CONCEPT: Scale out of winners
+    # WHY: Take some profit off table while letting rest run
+    #      Reduces risk while maintaining upside exposure
+    #
+    # STRATEGY: 2-stage partial exits
+    # Stage 1: Exit 50% at +15% profit (lock in gains)
+    # Stage 2: Exit 25% at +25% profit (lock in more gains)
+    # Remaining 25%: Ride with trailing stop (let it run!)
+    #
+    # EXAMPLE: Position of 100 contracts, entry $0.60
+    #
+    # Price $0.69 (+15%):
+    #   → partial_exit_stage_1 triggers
+    #   → Sell 50 contracts at $0.69
+    #   → Realized P&L: 50 * ($0.69 - $0.60) = $4.50
+    #   → 50 contracts remain
+    #
+    # Price $0.75 (+25%):
+    #   → partial_exit_stage_2 triggers
+    #   → Sell 25 contracts at $0.75
+    #   → Realized P&L: 25 * ($0.75 - $0.60) = $3.75
+    #   → 25 contracts remain
+    #
+    # Price rides to $0.90, then trailing stop hits at $0.88:
+    #   → Sell remaining 25 at $0.88
+    #   → Realized P&L: 25 * ($0.88 - $0.60) = $7.00
+    #
+    # TOTAL REALIZED: $4.50 + $3.75 + $7.00 = $15.25
+    # vs. all-or-nothing: 100 * ($0.88 - $0.60) = $28.00 (IF trailing stop catches peak)
+    #                      100 * ($0.60 - $0.60) = $0.00 (IF price reverses before exit)
+    #
+    # PSYCHOLOGY: Partial exits reduce "what if" regret
+    # - If price tanks after stage 1: "At least I took some profit"
+    # - If price moons after stage 2: "At least I left some to run"
+
+    partial_exits:
+      enabled: true  # user-customizable: Enable staged profit-taking
+
+      stages:
+        # STAGE 1: First profit target
+        - name: "first_target"
+          profit_threshold: 0.15  # user-customizable: Exit when up 15%
+          exit_percentage: 50     # user-customizable: Exit 50% of position
+          # WHY 50%? Captures meaningful profit while keeping skin in game
+
+        # STAGE 2: Second profit target
+        - name: "second_target"
+          profit_threshold: 0.25  # user-customizable: Exit when up 25%
+          exit_percentage: 25     # user-customizable: Exit 25% of remaining (25% of original)
+          # WHY 25%? Further locks in gains, leaves 25% for moonshot
+          # NOTE: This is 25% of REMAINING (50 contracts), not original
+          #       So actually 25 contracts (25% of 100 original)
+
+        # REMAINING 25%: Rides with trailing stop
+        # No explicit stage needed - this is default behavior
+        # Trailing stop protects these final contracts
+
+      # EXECUTION: Partial exits use MEDIUM priority
+      # WHY: We want good prices, but these are profit-taking (not urgent)
+
   # EXIT TIMING (when during game to exit)
   timing:
     # Avoid exiting during these game states

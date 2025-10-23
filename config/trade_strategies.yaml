@@ -7,9 +7,122 @@
 # Think of these as different "trading playbooks" - you use different
 # plays depending on the situation.
 #
-# Version: 1.0
-# Last Updated: 2025-10-09
+# Version: 2.0 (Phase 0.5 - Added Versioning Support)
+# Last Updated: 2025-10-21
 # ============================================
+
+# ============================================
+# STRATEGY VERSIONING & LIFECYCLE (Phase 0.5)
+# ============================================
+# CRITICAL CONCEPT: Immutable strategy versions for performance tracking
+# WHY: Cannot evaluate strategy improvements if strategy keeps changing!
+#      Immutable versions allow rigorous backtesting and attribution
+#
+# VERSIONING PHILOSOPHY:
+# - Each strategy configuration gets unique version (e.g., "live_continuous_v1.0")
+# - Once deployed, version is IMMUTABLE (never changes)
+# - To modify: create NEW version (e.g., "live_continuous_v1.1")
+# - Old versions stay in database for historical analysis
+#
+# SEMANTIC VERSIONING:
+# - v1.0 → v1.1: Minor update (parameter adjustment)
+#   Example: Change required_confidence from 0.08 to 0.10
+# - v1.0 → v2.0: Major update (significant logic change)
+#   Example: Change from pre-game to live-only strategy
+#
+# LIFECYCLE STATES:
+# 1. DRAFT: Being developed, not deployed
+# 2. TESTING: In paper trading or limited deployment
+# 3. ACTIVE: Fully deployed, generating real trades
+# 4. DEPRECATED: Replaced by newer version, kept for records
+#
+# EXAMPLE LIFECYCLE:
+# pre_game_nfl_v1.0 (ACTIVE)   → Deployed, making trades
+#     ↓ (found required_confidence too low, too many losses)
+# pre_game_nfl_v1.1 (TESTING)  → Testing with required_confidence 0.10
+#     ↓ (v1.1 performs 5% better over 60 days)
+# pre_game_nfl_v1.0 (DEPRECATED) + pre_game_nfl_v1.1 (ACTIVE)
+#
+# DATABASE SCHEMA (strategies table):
+# - strategy_id: Primary key
+# - strategy_name: "pre_game_entry"
+# - strategy_version: "v1.0"
+# - sport: "nfl" | "nba" | "mlb" | NULL (multi-sport)
+# - status: "draft" | "testing" | "active" | "deprecated"
+# - config: JSONB (full configuration from this file)
+# - created_at: Timestamp
+#
+# USAGE IN TRADING:
+# - Each trade records strategy_id used
+# - Enables attribution: Which strategy generated profitable trades?
+# - Enables A/B testing: Compare v1.0 vs v1.1 performance side-by-side
+#
+# EXAMPLE TRADE RECORD:
+# - trade_id: 12345
+# - strategy_id: 42 (pre_game_nfl_v1.1)
+# - model_id: 17 (elo_nfl_v2.0)
+# - method_id: 8 (combines strategy + model + position mgmt)
+# → Full attribution chain!
+
+versioning:
+  # Enable strategy versioning?
+  # WHY: Required for Phase 5+ when multiple strategies compete
+  enabled: true
+
+  # Version naming convention
+  # Format: {strategy_type}_{sport}_{version}
+  # Examples:
+  #   - pre_game_nfl_v1.0
+  #   - live_continuous_nba_v2.3
+  #   - halftime_mlb_v1.0
+  #   - settlement_arb_v1.0 (multi-sport, no sport suffix)
+  naming_convention: "{strategy_type}_{sport}_v{major}.{minor}"
+
+  # Version lifecycle management
+  lifecycle:
+    # Require testing period before ACTIVE?
+    # WHY: Don't deploy untested strategies with real money
+    require_testing: true
+    min_testing_days: 60  # Minimum 60 days in TESTING (longer than models)
+    min_testing_trades: 50  # Minimum 50 trades
+
+    # Auto-deprecate old versions?
+    # WHY: Once v1.1 is ACTIVE, v1.0 should be DEPRECATED
+    auto_deprecate_on_replacement: true
+
+    # Keep deprecated versions in database?
+    # WHY: Historical analysis and audit trail
+    retain_deprecated: true
+    retention_years: 5  # Keep for 5 years
+
+  # A/B Testing configuration
+  # WHY: Run multiple strategy versions side-by-side to compare
+  ab_testing:
+    enabled: true
+
+    # How to split traffic between versions?
+    # Example: v1.0 (70%) vs v1.1 (30%)
+    # WHY: Strategies affect capital allocation, more conservative split
+    default_traffic_split:
+      existing_version: 0.70  # 70% of capital
+      new_version: 0.30       # 30% of capital
+
+    # Evaluation criteria for promotion
+    # WHY: Need objective criteria to promote v1.1 → ACTIVE
+    promotion_criteria:
+      min_improvement_pct: 0.05  # 5% better Sharpe ratio
+      min_evaluation_period_days: 60
+      confidence_level: 0.95  # 95% statistical significance
+      min_trade_count: 50  # Need enough trades for significance
+
+    # Performance metrics for comparison
+    # WHY: Multiple dimensions matter, not just profit
+    comparison_metrics:
+      - "sharpe_ratio"        # Risk-adjusted return
+      - "win_rate"            # % of profitable trades
+      - "avg_profit_per_trade"  # Average trade profit
+      - "max_drawdown"        # Worst losing streak
+      - "edge_accuracy"       # Predicted vs actual edges
 
 # ============================================
 # STRATEGY PRIORITY

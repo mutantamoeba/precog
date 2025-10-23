@@ -1,17 +1,28 @@
 # Development Phases & Roadmap
 
 ---
-**Version:** 1.1  
-**Last Updated:** 2025-10-12  
-**Status:** ✅ Current  
+**Version:** 1.3
+**Last Updated:** 2025-10-21
+**Status:** ✅ Current
+**Changes in v1.3:**
+- **MAJOR**: Split Phase 5 into Phase 5a (Monitoring & Evaluation, Weeks 10-12) and Phase 5b (Execution & Walking, Weeks 13-14)
+- Updated Phase 0.5 to 100% complete (Days 1-10 finished)
+- Added comprehensive Phase 5a requirements (REQ-MON-*, REQ-EXIT-*)
+- Added Phase 5b requirements (REQ-EXEC-* with price walking algorithm)
+- Updated database schema to V1.5 (position_exits, exit_attempts tables)
+- Added 10 exit conditions with priority hierarchy
+- Created VERSIONING_GUIDE, TRAILING_STOP_GUIDE, POSITION_MANAGEMENT_GUIDE
+- Updated timeline: Phase 5 total now 4 weeks (was 6 weeks)
+
+**Changes in v1.2:** Added Phase 0.5 (Foundation Enhancement) and Phase 1.5 (Foundation Validation); updated to reflect database schema V1.4 with versioning system; updated timeline to include new phases
 **Changes in v1.1:** Clarified Phase 2 (live data), Phase 3 (processing only, no edges), Phase 4 (odds/edges/historical loader); added new deliverables (GLOSSARY Phase 0, DEVELOPER_ONBOARDING Phase 0, DEPLOYMENT_GUIDE Phase 1, MODEL_VALIDATION/BACKTESTING_PROTOCOL Phase 4, USER_GUIDE Phase 5); updated Phase 0 to 100% complete.
 ---
 
 ## Timeline Overview (Realistic Part-Time Estimate)
 
-**Total to Phase 10:** ~1.5-2 years (78 weeks @ 12 hours/week)  
-**MVP Trading (Phase 5):** ~7 months from Phase 0 start  
-**Current Status:** Phase 0 at **100%** ✅ - Ready for Phase 1
+**Total to Phase 10:** ~1.5-2 years (82 weeks @ 12 hours/week)
+**MVP Trading (Phase 5):** ~8 months from Phase 0 start (includes Phase 0.5 and 1.5)
+**Current Status:** Phase 0.5 ✅ **100% COMPLETE** (All Days 1-10 finished; ready for Phase 1)
 
 ---
 
@@ -85,15 +96,78 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ---
 
-## Phase 1: Core Infrastructure (Codename: "Bootstrap")
+## Phase 0.5: Foundation Enhancement (Codename: "Upgrade")
 
-**Duration:** 6 weeks  
-**Target:** November-December 2025  
-**Status:** 🔵 Ready to start  
-**Goal:** Build core infrastructure and Kalshi API integration
+**Duration:** 3 weeks
+**Target:** October 2025
+**Status:** ✅ **100% COMPLETE**
+**Goal:** Enhance foundation with versioning system and trailing stops before Phase 1 implementation
 
 ### Dependencies
 - Requires Phase 0: 100% complete ✅
+
+### Tasks
+
+#### Database Schema V1.5 (Days 1-2) ✅
+- [✅] Create `strategies` table (immutable versions)
+- [✅] Create `probability_models` table (immutable versions)
+- [✅] Add `trailing_stop_state` JSONB to positions
+- [✅] Add `strategy_id`, `model_id` FKs to edges and trades
+- [✅] Create helper views (active_strategies, active_models, trade_attribution)
+- [✅] Apply migration to precog_dev database
+- [✅] Verify migration success
+
+#### Documentation Updates (Days 1-10) ✅
+- [✅] Day 1: DATABASE_SCHEMA_SUMMARY V1.4
+- [✅] Day 2: MASTER_REQUIREMENTS V2.4, ARCHITECTURE_DECISIONS V2.4 (ADRs 18-23)
+- [✅] Day 3: PROJECT_OVERVIEW V1.4, DEVELOPMENT_PHASES V1.2
+- [✅] Day 4: position_management.yaml V2.0, probability_models.yaml V2.0, trade_strategies.yaml V2.0
+- [✅] Day 5: MASTER_REQUIREMENTS V2.5, DATABASE_SCHEMA_SUMMARY V1.5
+- [✅] Day 6: CONFIGURATION_GUIDE V3.1 (comprehensive)
+- [✅] Day 7: VERSIONING_GUIDE.md, TRAILING_STOP_GUIDE.md
+- [✅] Day 8: POSITION_MANAGEMENT_GUIDE.md, DEVELOPMENT_PHASES V1.3
+- [✅] Day 9: Database schema V1.5 applied, MASTER_INDEX V2.3
+- [✅] Day 10: Validation tools, final review
+
+### Deliverables
+- [✅] Database schema V1.5 applied and verified
+- [✅] position_exits table (tracks exit events)
+- [✅] exit_attempts table (tracks price walking attempts)
+- [✅] Updated foundational documentation (MASTER_REQUIREMENTS V2.5, ARCHITECTURE_DECISIONS V2.4)
+- [✅] Updated planning documentation (PROJECT_OVERVIEW V1.4, DEVELOPMENT_PHASES V1.3)
+- [✅] VERSIONING_GUIDE.md (immutable versions, A/B testing)
+- [✅] TRAILING_STOP_GUIDE.md (progressive tightening, JSONB state)
+- [✅] POSITION_MANAGEMENT_GUIDE.md (10 exit conditions, complete lifecycle)
+- [✅] Updated CONFIGURATION_GUIDE V3.1 with all Phase 5 enhancements
+- [✅] All 3 YAML files updated to V2.0 (versioning + monitoring + exits)
+- [✅] Updated MASTER_INDEX to V2.3
+
+### Success Criteria
+- [✅] Schema V1.5 deployed to precog_dev
+- [✅] All new tables and columns created successfully
+- [✅] All documentation updated to reflect versioning system
+- [✅] Implementation guides available for Phase 1.5/4/5
+- [✅] Architecture decisions documented (ADR-018 through ADR-023)
+- [✅] 10 exit conditions documented with priority hierarchy
+- [✅] Phase 5 requirements fully specified (REQ-MON-*, REQ-EXIT-*, REQ-EXEC-*)
+
+**Architectural Decision:** Immutable Versions (ADR-019)
+- Strategy and model configs are IMMUTABLE once created
+- To change config: Create new version (v1.0 → v1.1)
+- Enables A/B testing integrity and precise trade attribution
+- NO row_current_ind in versioned tables (versions don't supersede each other)
+
+---
+
+## Phase 1: Core Infrastructure (Codename: "Bootstrap")
+
+**Duration:** 6 weeks
+**Target:** November-December 2025
+**Status:** 🔵 Planned (awaits Phase 0.5 completion)
+**Goal:** Build core infrastructure and Kalshi API integration
+
+### Dependencies
+- Requires Phase 0.5: 100% complete 🟢
 
 ### Tasks
 
@@ -164,15 +238,102 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ---
 
+## Phase 1.5: Foundation Validation (Codename: "Verify")
+
+**Duration:** 2 weeks
+**Target:** December 2025
+**Status:** 🔵 Planned (awaits Phase 1 completion)
+**Goal:** Validate versioning system and trailing stop infrastructure before Phase 2 complexity
+
+### Dependencies
+- Requires Phase 1: 100% complete
+
+### Tasks
+
+#### 1. Strategy Manager Implementation (Week 1)
+- [  ] Create `trading/strategy_manager.py`
+  - CRUD operations for strategies table
+  - Version validation (enforce immutability)
+  - Status lifecycle management (draft → testing → active → deprecated)
+  - Active strategy lookup
+- [  ] Unit tests for strategy versioning
+  - Test immutability enforcement
+  - Test version creation (v1.0 → v1.1)
+  - Test status transitions
+  - Test unique constraint validation
+
+#### 2. Model Manager Implementation (Week 1)
+- [  ] Create `analytics/model_manager.py`
+  - CRUD operations for probability_models table
+  - Version validation (enforce immutability)
+  - Status lifecycle management (draft → training → validating → active → deprecated)
+  - Active model lookup
+- [  ] Unit tests for model versioning
+  - Test immutability enforcement
+  - Test version creation (v1.0 → v1.1)
+  - Test validation metrics updates
+  - Test unique constraint validation
+
+#### 3. Position Manager Enhancements (Week 2)
+- [  ] Update `trading/position_manager.py`
+  - Trailing stop state initialization
+  - Trailing stop update logic
+  - Stop trigger detection
+  - JSONB state validation
+- [  ] Unit tests for trailing stops
+  - Test state initialization
+  - Test stop updates on price movement
+  - Test trigger detection
+  - Test JSONB schema validation
+
+#### 4. Configuration System Enhancement (Week 2)
+- [  ] Update `utils/config.py`
+  - YAML file loading for all 7 config files
+  - Version resolution (get active version for strategy/model)
+  - Trailing stop config retrieval
+  - Override handling
+- [  ] Unit tests for configuration
+  - Test YAML loading
+  - Test version resolution
+  - Test trailing stop config retrieval
+  - Test override priority
+
+### Deliverables
+- [  ] strategy_manager.py with full CRUD and validation
+- [  ] model_manager.py with full CRUD and validation
+- [  ] Enhanced position_manager.py with trailing stops
+- [  ] Enhanced config.py with version resolution
+- [  ] Comprehensive unit tests (>80% coverage for new code)
+- [  ] Integration tests for versioning system
+- [  ] PHASE_1.5_PLAN.md (detailed acceptance criteria)
+
+### Success Criteria
+- [  ] Can create strategy versions and enforce immutability
+- [  ] Can create model versions and enforce immutability
+- [  ] Trailing stop state initializes correctly on position creation
+- [  ] Trailing stops update correctly on price movement
+- [  ] Configuration system loads all YAML files correctly
+- [  ] Version resolution returns correct active versions
+- [  ] All unit tests pass (>80% coverage)
+- [  ] Integration tests validate versioning workflow end-to-end
+
+**Why Phase 1.5?**
+- Validates versioning system BEFORE Phase 2 complexity
+- Tests manager classes before they're used in production
+- Ensures trailing stops work before live trading
+- Prevents cascading errors in later phases
+
+---
+
 ## Phase 2: Live Data Integration (Codename: "Observer")
 
-**Duration:** 4 weeks  
-**Target:** December 2025 - January 2026  
-**Status:** 🔵 Planned  
+**Duration:** 4 weeks
+**Target:** January 2026
+**Status:** 🔵 Planned (awaits Phase 1.5 completion)
 **Goal:** Implement live game data collection for NFL/NCAAF via ESPN API
 
 ### Dependencies
-- Requires Phase 1: Core infrastructure operational
+- Requires Phase 1.5: Versioning system validated
 
 ### Tasks
 
@@ -356,12 +517,12 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ---
 
-## Phase 5: Trading Engine & Risk Management (Codename: "Executor")
+## Phase 5: Position Monitoring & Exit Management (Codename: "Executor")
 
-**Duration:** 6 weeks  
-**Target:** April-May 2026  
-**Status:** 🔵 Planned  
-**Goal:** Implement order execution, position management, and comprehensive risk controls
+**Duration:** 4 weeks (split into 5a and 5b)
+**Target:** April-May 2026
+**Status:** 🔵 Planned
+**Goal:** Implement comprehensive position monitoring, exit evaluation, and order execution with price walking
 
 ### Dependencies
 - Requires Phase 1: Core infrastructure
@@ -369,102 +530,199 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ### Sub-Phases
 
-### Phase 5a: Order Execution & Basic Risk (Weeks 1-4)
-
-#### 1. Trade Signal Processing
-- Consume edge signals from Phase 4
-- Pre-trade validation: Balance, liquidity, market open
-- Position sizing: Kelly 0.25 fractional
-- Order generation: YES/NO side, quantity, limit price
-
-#### 2. Order Execution
-- Place orders via Kalshi API (`POST /trade-api/v2/portfolio/orders`)
-- Order types: Limit, market (prefer limit for slippage control)
-- Order tracking: Store in `orders` table, update on fills
-- Partial fill handling: Update position on each fill
-
-#### 3. Position Tracking
-- Create position on trade execution (`positions` table)
-- Update quantity on additional trades (scale in/out)
-- Calculate unrealized P&L: `(current_price - entry_price) * quantity`
-- Detect when position should close (event resolved, edge disappears)
-
-#### 4. Basic Risk Management
-- **Position size limits:** Max $1,000 per position (conservative start)
-- **Total exposure limit:** Max $10,000 across all positions
-- **Daily loss limit:** $500 (circuit breaker triggers)
-- **Circuit breakers:**
-  - API failures: Stop trading if Kalshi unreachable >5 minutes
-  - Stale data: Stop if no data update >2 minutes
-  - Balance check: Pause if balance < 20% of starting capital
-
-#### 5. Paper Trading Mode
-- Simulate trades without real money
-- Validate all logic before live trading
-- Track hypothetical P&L
-- Generate reports for 2-week validation period
-
-#### 6. Reporting
-- Daily P&L summary (email or log)
-- Trade log with all details (entry/exit prices, P&L, edge)
-- Performance metrics: ROI, win rate, Sharpe ratio
-- Circuit breaker events log
-
-#### Deliverables (Phase 5a)
-- Order execution engine
-- Position management system
-- Circuit breakers implementation
-- Paper trading mode
-- Basic reporting
-- USER_GUIDE_V1.0.md (CLI commands: `edges-list`, `trade-execute --paper`, `positions-view`)
-- TRADING_EXECUTION_GUIDE_V1.0.md
-- CIRCUIT_BREAKERS_SPEC_V1.0.md
-
-#### Success Criteria (Phase 5a)
-- [  ] Paper trading profitable over 2-week validation period
-- [  ] All circuit breakers tested and working
-- [  ] Zero unintended real money trades during testing
-- [  ] Reports accurately reflect all activity
-- [  ] Position sizing respects limits (max $1,000/position)
-
-**MILESTONE: Ready for Small Live Trading ($50-100 positions)**
+**Phase 5 Split:**
+- **Phase 5a (Weeks 10-12):** Position monitoring, exit evaluation, priority hierarchy
+- **Phase 5b (Weeks 13-14):** Order execution, price walking algorithm, exit attempt logging
 
 ---
 
-### Phase 5b: Advanced Position Management (Weeks 5-6)
+## Phase 5a: Position Monitoring & Exit Evaluation (Codename: "Observer")
 
-#### 1. Dynamic Exit Rules
-- Stop loss based on confidence level (lower confidence → tighter stops)
-- Profit targets with trailing stops
-- Early exit when edge disappears (ensemble probability changes)
-- Time-based exits: Close positions before market close
+**Duration:** 3 weeks (Weeks 10-12)
+**Target:** April 2026
+**Status:** 🔵 Planned
+**Goal:** Implement dynamic position monitoring, exit condition evaluation, and priority hierarchy
 
-#### 2. Advanced Position Sizing
-- Kelly Criterion with confidence adjustment
-- Correlation-aware exposure limits (avoid concentrated risk)
-- Volatility-adjusted sizing (reduce size in high-volatility markets)
+### Dependencies
+- Requires Phase 1: Core infrastructure
+- Requires Phase 4: Edge detection operational
 
-#### 3. Scaling Strategies
-- Scale in when edge increases (add to winners)
-- Scale out when edge decreases (reduce losers)
-- Partial profit-taking rules (e.g., sell 50% at 2x profit)
+### Tasks
 
-#### 4. Position Monitoring
-- Dynamic check frequency: Faster polling in Q4 (every 30s vs. 5m in Q1)
-- Real-time P&L tracking
-- Alert on profit/loss thresholds (e.g., >$100 profit, >$50 loss)
+#### 1. Dynamic Monitoring System (Week 1)
+- Implement normal frequency monitoring (30 seconds)
+- Implement urgent frequency monitoring (5 seconds)
+- Urgent condition detection (within 2% of thresholds)
+- Price caching (10-second TTL)
+- API rate management (60 calls/min maximum)
+- Monitor loop with async processing
 
-#### Deliverables (Phase 5b)
-- Advanced position management module
-- Kelly Criterion position sizing with confidence adjustment
-- Dynamic monitoring system
-- Enhanced reporting (P&L by strategy, by sport, by time of day)
+#### 2. Position State Tracking (Week 1)
+- Update `current_price` on every check
+- Calculate `unrealized_pnl` and `unrealized_pnl_pct`
+- Update `last_update` timestamp
+- Maintain `trailing_stop_state` JSONB
+- Track peak price and trailing stop price
+- Health check monitoring
 
-#### Success Criteria (Phase 5b)
-- [  ] Position management reduces drawdowns by 20%+
-- [  ] Average win size increases vs. Phase 5a
-- [  ] Positions properly sized based on confidence and correlation
-- [  ] Dynamic monitoring reduces missed opportunities
+#### 3. Exit Condition Evaluation (Week 2)
+- Implement 10 exit conditions:
+  1. **stop_loss** (CRITICAL): Price hits stop loss threshold
+  2. **circuit_breaker** (CRITICAL): System protection triggers
+  3. **trailing_stop** (HIGH): Price hits trailing stop
+  4. **time_based_urgent** (HIGH): <10 min to event, losing position
+  5. **liquidity_dried_up** (HIGH): Spread >3¢ or volume <50
+  6. **profit_target** (MEDIUM): Price hits profit target
+  7. **partial_exit_target** (MEDIUM): 50% @ +15%, 25% @ +25%
+  8. **early_exit** (LOW): Edge drops below 2%
+  9. **edge_disappeared** (LOW): Edge turns negative
+  10. **rebalance** (LOW): Portfolio rebalancing needed
+- Per-condition trigger logic
+- Confidence-adjusted thresholds
+
+#### 4. Exit Priority Hierarchy (Week 2)
+- Implement 4-level priority system:
+  - CRITICAL: stop_loss, circuit_breaker
+  - HIGH: trailing_stop, time_based_urgent, liquidity_dried_up
+  - MEDIUM: profit_target, partial_exit_target
+  - LOW: early_exit, edge_disappeared, rebalance
+- Conflict resolution (highest priority wins)
+- Log all triggered conditions
+
+#### 5. Partial Exit Staging (Week 3)
+- Stage 1: Exit 50% at +15% profit
+- Stage 2: Exit 25% at +25% profit
+- Remaining 25%: Rides with trailing stop
+- Track partial exit history in `position_exits` table
+
+#### 6. Testing & Validation (Week 3)
+- Unit tests for each exit condition
+- Unit tests for priority resolution
+- Integration tests for monitoring loop
+- Paper trading mode validation
+- Performance metrics collection
+
+### Deliverables (Phase 5a)
+- Dynamic monitoring system (`trading/position_monitor.py`)
+- Exit condition evaluators (10 conditions)
+- Priority hierarchy resolver
+- Partial exit staging logic
+- Database updates (`position_exits` table usage)
+- Test suite (>80% coverage)
+- MONITORING_IMPLEMENTATION_GUIDE_V1.0.md
+
+### Success Criteria (Phase 5a)
+- [  ] Normal monitoring working (30s checks)
+- [  ] Urgent monitoring activates correctly (5s when needed)
+- [  ] All 10 exit conditions evaluate correctly
+- [  ] Priority hierarchy resolves conflicts properly
+- [  ] Partial exits execute at correct thresholds
+- [  ] Paper trading shows exit logic working correctly
+- [  ] API rate limits respected (<60 calls/min)
+
+**Requirements Implemented:**
+- REQ-MON-001: Dynamic monitoring frequencies ✓
+- REQ-MON-002: Position state tracking ✓
+- REQ-EXIT-001: Exit priority hierarchy ✓
+- REQ-EXIT-002: 10 exit conditions ✓
+- REQ-EXIT-003: Partial exit staging ✓
+
+---
+
+## Phase 5b: Exit Execution & Order Walking (Codename: "Walker")
+
+**Duration:** 2 weeks (Weeks 13-14)
+**Target:** May 2026
+**Status:** 🔵 Planned
+**Goal:** Implement urgency-based execution strategies, price walking algorithm, and exit attempt logging
+
+### Dependencies
+- Requires Phase 5a: Exit evaluation system operational
+
+### Tasks
+
+#### 1. Urgency-Based Execution Strategies (Week 1)
+- **CRITICAL Priority:**
+  - Market orders only
+  - 5-second timeout
+  - Immediate retry on failure
+- **HIGH Priority:**
+  - Aggressive limit orders (best_bid + $0.01)
+  - 10-second timeout
+  - Walk price 2x, then market order
+- **MEDIUM Priority:**
+  - Fair limit orders (best_bid)
+  - 30-second timeout
+  - Walk price up to 5x
+- **LOW Priority:**
+  - Conservative limit orders (best_bid - $0.01)
+  - 60-second timeout
+  - Walk price up to 10x
+
+#### 2. Price Walking Algorithm (Week 1)
+- Start with limit order at initial price
+- Wait for timeout
+- If not filled, walk price by $0.01 toward market
+- Repeat up to max_walks
+- HIGH priority: Escalate to market after max walks
+- Track all attempts in `exit_attempts` table
+
+#### 3. Exit Attempt Logging (Week 2)
+- Create `exit_attempts` table records
+- Log every order attempt:
+  - Order type (limit/market)
+  - Limit price (if applicable)
+  - Fill price (if filled)
+  - Attempt number
+  - Timeout duration
+  - Success/failure
+- Enable "Why didn't my exit fill?" analysis
+
+#### 4. Order Execution Integration (Week 2)
+- Integrate with Kalshi API order placement
+- Handle partial fills
+- Update position quantity on fills
+- Create `position_exits` record on completion
+- Error handling and retries
+
+#### 5. Testing & Validation (Week 2)
+- Unit tests for each execution strategy
+- Unit tests for price walking logic
+- Integration tests with mock Kalshi API
+- Paper trading validation (2 weeks)
+- Performance metrics (fill rates, slippage)
+
+#### 6. Reporting & Analytics (Week 2)
+- Exit attempt analysis dashboard
+- Fill rate by priority level
+- Average slippage by strategy
+- Price walking effectiveness metrics
+- Performance by exit condition
+
+### Deliverables (Phase 5b)
+- Urgency-based execution engine (`trading/exit_executor.py`)
+- Price walking algorithm
+- Exit attempt logger
+- Order execution integration
+- Test suite (>80% coverage)
+- EXIT_EXECUTION_GUIDE_V1.0.md
+- PRICE_WALKING_ANALYSIS_V1.0.md
+
+### Success Criteria (Phase 5b)
+- [  ] CRITICAL exits fill within 10 seconds (market orders)
+- [  ] HIGH exits fill within 30 seconds (95th percentile)
+- [  ] MEDIUM exits achieve <2% slippage average
+- [  ] LOW exits achieve <1% slippage average
+- [  ] Price walking improves fill prices by 1-2% vs. market
+- [  ] Exit attempt logging captures all details
+- [  ] Paper trading shows proper exit execution
+
+**Requirements Implemented:**
+- REQ-EXEC-001: Urgency-based execution ✓
+- REQ-EXEC-002: Price walking algorithm ✓
+- REQ-EXEC-003: Exit attempt logging ✓
+
+**MILESTONE: Ready for Small Live Trading ($50-100 positions)**
 
 ---
 

@@ -1,9 +1,18 @@
 # Architecture & Design Decisions (UPDATED)
 
 ---
-**Version:** 2.3
-**Last Updated:** October 16, 2025
+**Version:** 2.4
+**Last Updated:** October 19, 2025
 **Status:** ✅ Current
+**Changes in v2.4:**
+- **CRITICAL:** Added Decision #18: Immutable Versions (Phase 0.5 - foundational architectural decision)
+- Added Decision #19: Strategy & Model Versioning
+- Added Decision #20: Trailing Stop Loss
+- Added Decision #21: Enhanced Position Management
+- Added Decision #22: Configuration System Enhancements
+- Added Decision #23: Phase 0.5 vs Phase 1/1.5 Split
+- Updated Decision #2: Database Versioning Strategy to include immutable version pattern
+
 **Changes in v2.3:**
 - Updated YAML file reference from `odds_models.yaml` to `probability_models.yaml`
 
@@ -90,29 +99,50 @@ max_spread: 0.0500  # Not 5 or 0.05
 
 ---
 
-### 2. Database Versioning Strategy
+### 2. Database Versioning Strategy **[UPDATED v2.4]**
 
-**Decision:** Use `row_current_ind` for frequently-changing tables, append-only for immutable data
+**Decision:** Use `row_current_ind` for frequently-changing data, append-only for historical records, and **immutable versions** for strategies and models
 
-**Tables with Versioning (row_current_ind = TRUE/FALSE):**
+**Pattern 1: Versioned Data (row_current_ind = TRUE/FALSE)**
+Used for frequently-changing data that needs historical tracking:
 - `markets` - Prices change every 15-30 seconds
-- `game_states` - Scores update every 30 seconds  
-- `positions` - Quantity changes with each trade
+- `game_states` - Scores update every 30 seconds
+- `positions` - Quantity and trailing stop state changes
 - `edges` - Recalculated frequently as odds/prices change
 - `account_balance` - Changes with every trade
 
-**Append-Only Tables (No Versioning):**
+**Pattern 2: Append-Only Tables (No Versioning)**
+Used for immutable historical records:
 - `trades` - Immutable historical record
 - `settlements` - Final outcomes, never change
-- `odds_matrices` - Static historical probability data
+- `probability_matrices` - Static historical probability data
 - `platforms` - Configuration data, rarely changes
 - `series` - Updated in-place, no history needed
 - `events` - Status changes are lifecycle transitions, no history needed
 
-**Rationale:** 
-Balance between historical tracking needs and database bloat. Version only what requires history for analysis. For example:
-- We need historical prices to analyze how market moved
-- We DON'T need historical series data (just latest is fine)
+**Pattern 3: Immutable Versions (NEW in v2.4 - Phase 0.5)**
+Used for strategies and models that require A/B testing and precise trade attribution:
+- `strategies` - Trading strategy versions (config is IMMUTABLE)
+- `probability_models` - ML model versions (config is IMMUTABLE)
+
+**Immutable Version Details:**
+- Each version (v1.0, v1.1, v2.0) is IMMUTABLE once created
+- Config/parameters NEVER change after creation
+- To update: Create new version (v1.0 → v1.1 for bug fix, v1.0 → v2.0 for major change)
+- Only `status` and metrics update in-place (draft → active, performance tracking)
+- NO `row_current_ind` field (versions don't supersede each other)
+- Enables precise A/B testing and trade attribution
+
+**Rationale:**
+Balance between historical tracking needs and database bloat. Three patterns for three use cases:
+1. **Versioned data (row_current_ind):** Efficient for rapidly-changing data (prices, scores)
+2. **Append-only:** Simple for immutable records (trades, settlements)
+3. **Immutable versions:** Required for A/B testing integrity and exact trade attribution
+
+Examples:
+- We need historical prices to analyze how market moved (Pattern 1)
+- We DON'T need historical series data (Pattern 2)
+- We need EXACT strategy config that generated each trade (Pattern 3)
 
 **Impact:**
 ```sql
@@ -1470,8 +1500,408 @@ class Scheduler:
         return self._off_season_schedule()
 ```
 
-**Rationale:** 
+**Rationale:**
 Resource-efficient. Don't waste API calls when no games happening. Aggressive polling only when needed.
+
+---
+
+### 18. ⚠️ Immutable Versions (CRITICAL - Phase 0.5) **[NEW v2.4]**
+
+**Decision:** Strategy and model configs are IMMUTABLE once version is created. To change config, create new version.
+
+**What's IMMUTABLE:**
+- `strategies.config` - Strategy parameters (e.g., `{min_lead: 7}`)
+- `probability_models.config` - Model hyperparameters (e.g., `{k_factor: 28}`)
+- `strategy_version` and `model_version` fields - Version numbers
+
+**What's MUTABLE:**
+- `status` field - Lifecycle transitions (draft → testing → active → deprecated)
+- Performance metrics - `paper_roi`, `live_roi`, `validation_accuracy` (accumulate over time)
+
+**Rationale:**
+1. **A/B Testing Integrity** - Cannot compare v1.0 vs v2.0 if configs change after comparison starts
+2. **Trade Attribution** - Every trade links to EXACT strategy/model config used, never ambiguous
+3. **Semantic Versioning** - v1.0 → v1.1 (bug fix), v1.0 → v2.0 (major change) is industry standard
+4. **Reproducibility** - Can always recreate exact trading decision that generated historical trade
+
+**Example:**
+```sql
+-- Original strategy
+INSERT INTO strategies (strategy_name, strategy_version, config, status)
+VALUES ('halftime_entry', 'v1.0', '{"min_lead": 7, "max_spread": 0.08}', 'active');
+
+-- Bug fix: min_lead should be 10 → Create v1.1 (NEVER update v1.0 config)
+INSERT INTO strategies (strategy_name, strategy_version, config, status)
+VALUES ('halftime_entry', 'v1.1', '{"min_lead": 10, "max_spread": 0.08}', 'active');
+
+-- Update v1.0 status (config stays unchanged forever)
+UPDATE strategies SET status = 'deprecated' WHERE strategy_name = 'halftime_entry' AND strategy_version = 'v1.0';
+
+-- Metrics update is allowed
+UPDATE strategies SET paper_roi = 0.15, paper_trades_count = 42
+WHERE strategy_name = 'halftime_entry' AND strategy_version = 'v1.1';
+```
+
+**Trade Attribution:**
+```sql
+-- Every trade knows EXACTLY which strategy config and model config generated it
+SELECT
+    t.trade_id,
+    t.price,
+    s.strategy_name,
+    s.strategy_version,
+    s.config as strategy_config,
+    m.model_name,
+    m.model_version,
+    m.config as model_config
+FROM trades t
+JOIN strategies s ON t.strategy_id = s.strategy_id
+JOIN probability_models m ON t.model_id = m.model_id;
+```
+
+**Impact:**
+- Database schema V1.4 applied (strategies and probability_models tables created)
+- NO `row_current_ind` in these tables (versions don't supersede each other)
+- Unique constraint on `(name, version)` enforces no duplicates
+- Phase 4 (models) and Phase 5 (strategies) will implement version creation logic
+- Every edge and trade must link to strategy_id and model_id (enforced by FK)
+
+**Why NOT row_current_ind?**
+- row_current_ind is for data that changes frequently (prices, scores)
+- Versions are configs that NEVER change, they're alternatives not updates
+- Multiple versions can be "active" simultaneously for A/B testing
+
+**Related Decisions:**
+- Decision #2: Database Versioning Strategy (updated to include immutable version pattern)
+- Decision #19: Strategy & Model Versioning (implementation details)
+
+---
+
+### 19. Strategy & Model Versioning **[NEW v2.4]**
+
+**Decision:** Implement versioning system for strategies and models using semantic versioning (MAJOR.MINOR format).
+
+**Version Numbering:**
+- **v1.0** - Initial version
+- **v1.1** - Bug fix or minor parameter tuning (backwards compatible)
+- **v2.0** - Major change in approach or algorithm (breaking change)
+
+**Lifecycle States:**
+```
+draft → testing → active → inactive → deprecated
+  ↓        ↓         ↓
+(Paper) (Paper) (Live Trading)
+```
+
+**For Probability Models:**
+```sql
+CREATE TABLE probability_models (
+    model_id SERIAL PRIMARY KEY,
+    model_name VARCHAR NOT NULL,         -- 'elo_nfl', 'regression_nba'
+    model_version VARCHAR NOT NULL,      -- 'v1.0', 'v1.1', 'v2.0'
+    model_type VARCHAR NOT NULL,         -- 'elo', 'regression', 'ensemble', 'ml'
+    sport VARCHAR,                       -- 'nfl', 'nba', 'mlb' (NULL for multi-sport)
+    config JSONB NOT NULL,               -- ⚠️ IMMUTABLE: Model hyperparameters
+    status VARCHAR DEFAULT 'draft',      -- ✅ MUTABLE: Lifecycle
+    validation_accuracy DECIMAL(10,4),   -- ✅ MUTABLE: Performance metrics
+    UNIQUE(model_name, model_version)
+);
+```
+
+**For Strategies:**
+```sql
+CREATE TABLE strategies (
+    strategy_id SERIAL PRIMARY KEY,
+    strategy_name VARCHAR NOT NULL,      -- 'halftime_entry', 'underdog_fade'
+    strategy_version VARCHAR NOT NULL,   -- 'v1.0', 'v1.1', 'v2.0'
+    strategy_type VARCHAR NOT NULL,      -- 'entry', 'exit', 'sizing', 'hedging'
+    sport VARCHAR,                       -- 'nfl', 'nba', 'mlb' (NULL for multi-sport)
+    config JSONB NOT NULL,               -- ⚠️ IMMUTABLE: Strategy parameters
+    status VARCHAR DEFAULT 'draft',      -- ✅ MUTABLE: Lifecycle
+    paper_roi DECIMAL(10,4),             -- ✅ MUTABLE: Performance metrics
+    live_roi DECIMAL(10,4),
+    UNIQUE(strategy_name, strategy_version)
+);
+```
+
+**Phase Distribution:**
+- **Phase 1:** Schema created (V1.4 applied)
+- **Phase 4:** Model versioning logic implemented (create models, validate, compare versions)
+- **Phase 5:** Strategy versioning logic implemented (create strategies, test, compare versions)
+- **Phase 9:** Use existing system (create more models, don't rebuild versioning)
+
+**Rationale:**
+- Phase 4 is where models are created/validated → Model versioning belongs here
+- Phase 5 is where strategies are created/tested → Strategy versioning belongs here
+- Phase 9 just adds more models using the system built in Phase 4
+
+**Implementation Modules:**
+- `analytics/model_manager.py` - CRUD operations for probability_models, version validation
+- `trading/strategy_manager.py` - CRUD operations for strategies, version validation
+- Both enforce immutability (raise error if config update attempted)
+
+---
+
+### 20. Trailing Stop Loss **[NEW v2.4]**
+
+**Decision:** Implement dynamic trailing stop loss stored as JSONB in positions table.
+
+**Schema:**
+```sql
+ALTER TABLE positions ADD COLUMN trailing_stop_state JSONB;
+
+-- Example trailing_stop_state:
+{
+  "enabled": true,
+  "activation_price": 0.7500,      -- Price at which trailing stop activated
+  "stop_distance": 0.0500,         -- Distance to maintain (5 cents)
+  "current_stop": 0.7000,          -- Current stop loss price
+  "highest_price": 0.7500          -- Highest price seen since activation
+}
+```
+
+**Logic:**
+1. **Initialization** - When position opened, set activation_price = entry_price
+2. **Monitoring** - As market price moves favorably, update highest_price
+3. **Stop Update** - current_stop = highest_price - stop_distance
+4. **Trigger** - If market_price falls to current_stop, close position
+
+**Example:**
+```
+Entry: $0.70
+Stop Distance: $0.05
+
+Price moves to $0.75 → highest_price = 0.75, current_stop = 0.70 (entry)
+Price moves to $0.80 → highest_price = 0.80, current_stop = 0.75 (locked $0.05 profit)
+Price moves to $0.85 → highest_price = 0.85, current_stop = 0.80 (locked $0.10 profit)
+Price falls to $0.80 → TRIGGERED, sell position (realize $0.10 profit)
+```
+
+**Configuration (position_management.yaml):**
+```yaml
+trailing_stops:
+  default:
+    enabled: true
+    activation_threshold: 0.0500    # Activate after $0.05 profit
+    stop_distance: 0.0500           # Maintain $0.05 trailing distance
+
+  strategy_overrides:
+    halftime_entry:
+      stop_distance: 0.0400         # Tighter stop for this strategy
+```
+
+**Rationale:**
+- Protects profits on winning positions
+- Removes emotion from exit decisions
+- Configurable per strategy
+- JSONB allows flexible configuration without schema changes
+
+**Impact:**
+- Positions use row_current_ind versioning (trailing stop updates trigger new row)
+- position_manager.py implements update logic
+- Stop trigger detection runs every 15-60 seconds depending on game state
+
+---
+
+### 21. Enhanced Position Management **[NEW v2.4]**
+
+**Decision:** Centralize position management logic in `trading/position_manager.py` with trailing stop integration.
+
+**Core Responsibilities:**
+1. **Position Lifecycle**
+   - Create position on trade execution
+   - Initialize trailing_stop_state
+   - Monitor position P&L
+   - Update trailing stops on price movement
+   - Detect stop triggers
+   - Close positions (stop loss, settlement, manual)
+
+2. **Trailing Stop Management**
+   - Update highest_price as market moves favorably
+   - Calculate new current_stop = highest_price - stop_distance
+   - Trigger stop loss order when price falls to current_stop
+   - Log all stop updates for analysis
+
+3. **Position Monitoring**
+   - Query current positions (WHERE row_current_ind = TRUE AND status = 'open')
+   - Calculate unrealized P&L
+   - Check for stop triggers
+   - Alert on significant P&L changes
+
+**Implementation Pattern:**
+```python
+class PositionManager:
+    def create_position(self, market_id, side, entry_price, quantity, strategy_id, model_id):
+        """Create new position with trailing stop initialization"""
+        trailing_stop_state = {
+            "enabled": self.config.trailing_stops.enabled,
+            "activation_price": entry_price,
+            "stop_distance": self.config.trailing_stops.stop_distance,
+            "current_stop": entry_price - self.config.trailing_stops.stop_distance,
+            "highest_price": entry_price
+        }
+        # Insert position with trailing_stop_state
+
+    def update_trailing_stop(self, position_id, current_market_price):
+        """Update trailing stop if price moved favorably"""
+        position = self.get_position(position_id)
+        old_state = position.trailing_stop_state
+
+        if current_market_price > old_state["highest_price"]:
+            # Price moved up, update trailing stop
+            new_state = {
+                ...old_state,
+                "highest_price": current_market_price,
+                "current_stop": current_market_price - old_state["stop_distance"]
+            }
+            # Insert new position row with updated trailing_stop_state
+
+    def check_stop_trigger(self, position_id, current_market_price):
+        """Check if trailing stop triggered"""
+        position = self.get_position(position_id)
+        if current_market_price <= position.trailing_stop_state["current_stop"]:
+            return True  # Trigger stop loss
+        return False
+```
+
+**Rationale:**
+- Centralized position logic prevents duplication
+- Trailing stops are first-class feature, not bolt-on
+- JSONB state allows flexible configuration per position
+- Position versioning (row_current_ind) tracks stop updates over time
+
+**Related Decisions:**
+- Decision #20: Trailing Stop Loss (what to track)
+- Decision #7: Trade Strategies vs Position Management (clear separation)
+
+---
+
+### 22. Configuration System Enhancements **[NEW v2.4]**
+
+**Decision:** Enhance YAML configuration system to support versioning and trailing stop configurations.
+
+**New Configuration Files:**
+1. **probability_models.yaml** - Model version settings
+   ```yaml
+   models:
+     elo_nfl:
+       default_version: "v2.0"
+       active_versions:
+         - "v2.0"
+         - "v1.1"    # For A/B testing
+       config_overrides:
+         v2_0:
+           k_factor: 30
+   ```
+
+2. **trade_strategies.yaml** - Strategy version settings
+   ```yaml
+   strategies:
+     halftime_entry:
+       default_version: "v1.1"
+       active_versions:
+         - "v1.1"
+         - "v1.0"    # For A/B testing
+       config_overrides:
+         v1_1:
+           min_lead: 10
+   ```
+
+3. **position_management.yaml** - Enhanced with trailing stops
+   ```yaml
+   trailing_stops:
+     default:
+       enabled: true
+       activation_threshold: 0.0500
+       stop_distance: 0.0500
+     strategy_overrides:
+       halftime_entry:
+         stop_distance: 0.0400
+   ```
+
+**Configuration Loader (utils/config.py):**
+```python
+class ConfigManager:
+    def __init__(self):
+        self.trading = self.load_yaml('config/trading.yaml')
+        self.strategies = self.load_yaml('config/trade_strategies.yaml')
+        self.position_mgmt = self.load_yaml('config/position_management.yaml')
+        self.models = self.load_yaml('config/probability_models.yaml')
+        self.markets = self.load_yaml('config/markets.yaml')
+        self.data_sources = self.load_yaml('config/data_sources.yaml')
+        self.system = self.load_yaml('config/system.yaml')
+
+    def get_active_strategy_version(self, strategy_name):
+        """Get default active version for strategy"""
+        return self.strategies['strategies'][strategy_name]['default_version']
+
+    def get_trailing_stop_config(self, strategy_name):
+        """Get trailing stop configuration for strategy"""
+        default = self.position_mgmt['trailing_stops']['default']
+        overrides = self.position_mgmt['trailing_stops']['strategy_overrides'].get(strategy_name, {})
+        return {**default, **overrides}
+```
+
+**Rationale:**
+- YAML configuration for defaults, database for runtime overrides
+- Strategy/model versions configured in YAML, actual version configs in database
+- Trailing stop defaults in YAML, per-position state in database JSONB
+- Centralized config loading prevents scattered configuration logic
+
+**Priority Order (unchanged):**
+1. Database overrides (highest)
+2. Environment variables
+3. YAML files
+4. Code defaults (lowest)
+
+---
+
+### 23. Phase 0.5 vs Phase 1/1.5 Split **[NEW v2.4]**
+
+**Decision:** Insert Phase 0.5 (Foundation Enhancement) and Phase 1.5 (Foundation Validation) between Phase 0 and Phase 2.
+
+**Phase Distribution:**
+- **Phase 0:** Foundation & Documentation (completed)
+- **Phase 0.5:** Foundation Enhancement (database schema V1.4, docs) - **CURRENT**
+- **Phase 1:** Core Foundation (Kalshi API, basic tables)
+- **Phase 1.5:** Foundation Validation (test versioning system before building on it)
+- **Phase 2+:** Remaining phases unchanged
+
+**Why Phase 0.5 BEFORE Phase 1?**
+1. **Schema Must Be Final** - Cannot add versioning tables after Phase 1 code written
+2. **Documentation First** - All docs must reflect final schema before implementation
+3. **Prevents Refactoring** - Adding versioning later = rewrite Phases 1-4
+4. **Foundation Quality** - Better to have complete foundation before writing code
+
+**What Phase 0.5 Delivers:**
+- ✅ Database schema V1.4 (strategies, probability_models, trailing_stop_state, version FKs)
+- ✅ Complete documentation updates (7-day plan)
+- ✅ Architectural decisions documented (ADR-018 through ADR-023)
+- ✅ Implementation guides (VERSIONING_GUIDE.md, TRAILING_STOP_GUIDE.md)
+
+**Why Phase 1.5 AFTER Phase 1?**
+1. **Validation Before Complexity** - Test versioning system before Phase 2 complexity
+2. **Manager Classes** - Build strategy_manager and model_manager to validate schema
+3. **Configuration System** - Test YAML loading and version resolution
+4. **Unit Tests** - Write tests for immutability enforcement before building on it
+
+**What Phase 1.5 Delivers:**
+- strategy_manager.py - CRUD operations for strategies, version validation
+- model_manager.py - CRUD operations for probability_models, version validation
+- position_manager.py enhancements - Trailing stop initialization and updates
+- config.py enhancements - YAML loading for versioning configs
+- Unit tests for versioning, trailing stops, configuration
+
+**Rationale:**
+- Inserting phases prevents cascading changes to later phases
+- Phase 0.5 enhances foundation, doesn't replace Phase 1
+- Phase 1.5 validates foundation, then Phase 2 builds on it
+- Clear separation: schema (0.5), basic API (1), validation (1.5), market data (2)
+
+**Documentation:**
+- CLAUDE_CODE_IMPLEMENTATION_PLAN.md - Full Phase 0.5 details
+- PHASE_1.5_PLAN.md - Validation tasks and acceptance criteria
+- MASTER_REQUIREMENTS_V2.4.md - Updated phase descriptions
 
 ---
 
@@ -1689,9 +2119,11 @@ This document represents the architectural decisions as of October 8, 2025 (Phas
 
 ---
 
-**Document Version:** 2.3
-**Last Updated:** October 16, 2025
+**Document Version:** 2.4
+**Last Updated:** October 19, 2025
 **Critical Changes:**
+- v2.4: **CRITICAL** - Added Decisions #18-23 (Phase 0.5: Immutable Versions, Strategy & Model Versioning, Trailing Stops, Enhanced Position Management, Configuration Enhancements, Phase 0.5/1.5 Split)
+- v2.4: Updated Decision #2 (Database Versioning Strategy) to include immutable version pattern
 - v2.3: Updated YAML file reference (odds_models.yaml → probability_models.yaml)
 - v2.2: Added Decision #14 (Terminology Standards), updated all "odds" references to "probability"
 - v2.0: **DECIMAL(10,4) pricing (not INTEGER)** - Fixes critical inconsistency

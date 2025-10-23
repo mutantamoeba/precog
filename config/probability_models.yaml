@@ -1,4 +1,4 @@
-# odds_models.yaml - Statistical Models & Edge Detection
+# probability_models.yaml - Statistical Models & Edge Detection
 # ============================================
 # This file controls how we calculate win probabilities and detect edges.
 # Think of this as the "brain" of the system - it determines what's a
@@ -11,8 +11,104 @@
 #          Our model says 60% chance.
 #          Edge = (0.60 × 2.0) - 1 = 0.20 = 20% edge
 #
-# Version: 1.0
-# Last Updated: 2025-10-09
+# Version: 2.0 (Phase 0.5 - Added Versioning Support)
+# Last Updated: 2025-10-21
+# ============================================
+
+# ============================================
+# MODEL VERSIONING & LIFECYCLE (Phase 0.5)
+# ============================================
+# CRITICAL CONCEPT: Immutable model versions for A/B testing
+# WHY: Cannot compare model v1.0 vs v1.1 if v1.0 keeps changing!
+#      Immutable versions allow rigorous comparison and attribution
+#
+# VERSIONING PHILOSOPHY:
+# - Each model configuration gets unique version (e.g., "elo_nfl_v1.0")
+# - Once deployed, version is IMMUTABLE (never changes)
+# - To modify: create NEW version (e.g., "elo_nfl_v1.1")
+# - Old versions stay in database for historical analysis
+#
+# SEMANTIC VERSIONING:
+# - v1.0 → v1.1: Minor update (bug fix, small parameter change)
+#   Example: Change k_factor from 32 to 35
+# - v1.0 → v2.0: Major update (significant algorithm change)
+#   Example: Switch from simple Elo to margin-adjusted Elo
+#
+# LIFECYCLE STATES:
+# 1. DRAFT: Being developed, not deployed
+# 2. TESTING: In paper trading or limited deployment
+# 3. ACTIVE: Fully deployed, generating real trades
+# 4. DEPRECATED: Replaced by newer version, kept for records
+#
+# EXAMPLE LIFECYCLE:
+# elo_nfl_v1.0 (ACTIVE)   → Deployed, making predictions
+#     ↓ (found k_factor too low)
+# elo_nfl_v1.1 (TESTING)  → Testing in parallel with v1.0
+#     ↓ (v1.1 performs 2% better over 30 days)
+# elo_nfl_v1.0 (DEPRECATED) + elo_nfl_v1.1 (ACTIVE)
+#
+# DATABASE SCHEMA (probability_models table):
+# - model_id: Primary key
+# - model_name: "elo_nfl"
+# - model_version: "v1.0"
+# - status: "draft" | "testing" | "active" | "deprecated"
+# - config: JSONB (full configuration from this file)
+# - created_at: Timestamp
+#
+# USAGE IN TRADING:
+# - Each trade records model_id used
+# - Enables attribution: Which model generated profitable trades?
+# - Enables A/B testing: Compare v1.0 vs v1.1 performance side-by-side
+
+versioning:
+  # Enable model versioning?
+  # WHY: Required for Phase 4+ when multiple models compete
+  enabled: true
+
+  # Version naming convention
+  # Format: {model_type}_{sport}_{version}
+  # Examples:
+  #   - elo_nfl_v1.0
+  #   - regression_nba_v2.3
+  #   - ensemble_mlb_v1.0
+  naming_convention: "{model_type}_{sport}_v{major}.{minor}"
+
+  # Version lifecycle management
+  lifecycle:
+    # Require testing period before ACTIVE?
+    # WHY: Don't deploy untested models with real money
+    require_testing: true
+    min_testing_days: 30  # Minimum 30 days in TESTING
+    min_testing_predictions: 100  # Minimum 100 predictions
+
+    # Auto-deprecate old versions?
+    # WHY: Once v1.1 is ACTIVE, v1.0 should be DEPRECATED
+    auto_deprecate_on_replacement: true
+
+    # Keep deprecated versions in database?
+    # WHY: Historical analysis and audit trail
+    retain_deprecated: true
+    retention_years: 5  # Keep for 5 years
+
+  # A/B Testing configuration
+  # WHY: Run multiple model versions side-by-side to compare
+  ab_testing:
+    enabled: true
+
+    # How to split traffic between versions?
+    # Example: v1.0 (80%) vs v1.1 (20%)
+    # WHY: Don't risk all capital on unproven v1.1
+    default_traffic_split:
+      existing_version: 0.80  # 80% traffic
+      new_version: 0.20       # 20% traffic
+
+    # Evaluation criteria for promotion
+    # WHY: Need objective criteria to promote v1.1 → ACTIVE
+    promotion_criteria:
+      min_improvement_pct: 0.02  # 2% better edge accuracy
+      min_evaluation_period_days: 30
+      confidence_level: 0.95  # 95% statistical significance
+
 # ============================================
 
 # ============================================

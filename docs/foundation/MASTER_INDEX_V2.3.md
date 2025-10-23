@@ -1,9 +1,19 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.2
-**Last Updated:** 2025-10-17
+**Version:** 2.3
+**Last Updated:** 2025-10-21
 **Status:** ✅ Current
+**Changes in v2.3:**
+- **MAJOR**: Phase 0.5 (Foundation Enhancement) complete - all Days 1-10 finished
+- Updated core documents: MASTER_REQUIREMENTS V2.5, DATABASE_SCHEMA_SUMMARY V1.5, CONFIGURATION_GUIDE V3.1, DEVELOPMENT_PHASES V1.3
+- Updated YAML configs: probability_models.yaml V2.0, position_management.yaml V2.0, trade_strategies.yaml V2.0
+- Added 3 new implementation guides: VERSIONING_GUIDE, TRAILING_STOP_GUIDE, POSITION_MANAGEMENT_GUIDE
+- Database schema V1.5 with position monitoring and exit management (position_exits, exit_attempts tables)
+- 10 exit conditions documented with priority hierarchy (CRITICAL, HIGH, MEDIUM, LOW)
+- Phase 5 split into 5a (Monitoring & Evaluation) and 5b (Execution & Walking)
+- Ready for Phase 1 implementation
+
 **Changes in v2.2:** Updated all document versions (Master Requirements v2.3, Architecture Decisions v2.3, Project Overview v1.3, Configuration Guide v3.0, Database Schema v1.2); renamed all files to match internal versions; added Phase 0 completion documents (CONSISTENCY_REVIEW, FILENAME_VERSION_REPORT, PHASE_0_COMPLETENESS, CLAUDE_CODE_INSTRUCTIONS); updated probability_models.yaml reference (was odds_models.yaml).
 
 **Changes in v2.1:** Added "Location" and "Phase Ties" columns to all tables; updated to reflect Session 7 handoff streamline (7 docs archived, 4 consolidated); added Handoff_Protocol_V1.0.md; marked Phase 0 at 100%.
@@ -18,7 +28,7 @@ This is the **authoritative list of ALL project documents** - existing, planned,
 - Reference the correct version
 - Navigate the `/docs/` directory structure
 
-**Navigation:** Jump to section via links below  
+**Navigation:** Jump to section via links below
 **Maintenance:** Update this file when ANY document is added, removed, version-bumped, or significantly changed
 
 ---
@@ -32,6 +42,7 @@ This is the **authoritative list of ALL project documents** - existing, planned,
 - [Trading & Risk](#trading--risk-documents) - Strategy and risk management
 - [Testing & Quality](#testing--quality-documents) - Test specs and validation
 - [Phases & Planning](#phases--planning-documents) - Roadmap and project management
+- [Implementation Guides](#implementation-guides) - Phase-specific implementation details
 - [Utility Documents](#utility-documents) - Handoffs, logs, maintenance
 - [Supplementary](#supplementary-documents) - Guides and references
 - [Future/Archived](#future--archived-documents) - Planned and deprecated
@@ -73,11 +84,11 @@ Core architecture, requirements, and system design documents.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.3.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - UPDATED |
-| **MASTER_REQUIREMENTS_V2.3.md** | ✅ | v2.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 - UPDATED |
-| **MASTER_INDEX_V2.2.md** | ✅ | v2.2 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - UPDATED |
+| **MASTER_REQUIREMENTS_V2.5.md** | ✅ | v2.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 - UPDATED Phase 0.5 |
+| **MASTER_INDEX_V2.3.md** | ✅ | v2.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - UPDATED Phase 0.5 |
 | **ARCHITECTURE_DECISIONS_V2.3.md** | ✅ | v2.3 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale, ADRs 1-15+ - UPDATED |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
-| **DEVELOPMENT_PHASES_V1.1.md** | ✅ | v1.1 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, updated sequencing |
+| **DEVELOPMENT_PHASES_V1.3.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, Phase 5 split into 5a/5b - UPDATED Phase 0.5 |
 
 ---
 
@@ -100,7 +111,7 @@ Schema design, data models, and database architecture.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DATABASE_SCHEMA_SUMMARY_V1.2.md** | ✅ | v1.2 | `/docs/database/` | 0 | Phases 1-10 | 🔴 Critical | Complete schema, SCD Type 2, terminology updated - UPDATED |
+| **DATABASE_SCHEMA_SUMMARY_V1.5.md** | ✅ | v1.5 | `/docs/database/` | 0.5 | Phases 1-10 | 🔴 Critical | Position monitoring, exit management, 10 exit conditions - UPDATED Phase 0.5 |
 | **ODDS_RESEARCH_COMPREHENSIVE.md** | ✅ | v1.0 | `/docs/database/` | 4 | Phase 4, 9 | 🟡 High | Historical odds methodology, merged into models |
 
 ---
@@ -111,12 +122,12 @@ YAML configuration files and configuration guides.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **CONFIGURATION_GUIDE_V3.0.md** | ✅ | v3.0 | `/docs/configuration/` | 0 | Phases 1-10 | 🟡 High | Config patterns, DECIMAL format, matches actual YAML files - UPDATED |
+| **CONFIGURATION_GUIDE_V3.1.md** | ✅ | v3.1 | `/docs/configuration/` | 0.5 | Phases 1-10 | 🟡 High | Comprehensive update with all 7 YAMLs, versioning, method abstraction - UPDATED Phase 0.5 |
 | **system.yaml** | ✅ | v1.0 | `/config/` | 1 | Phases 1-10 | 🔴 Critical | System-wide settings (DB, logging, API) |
 | **trading.yaml** | ✅ | v1.0 | `/config/` | 1 | Phases 1-10 | 🔴 Critical | Trading parameters, Kelly fractions, DECIMAL examples |
-| **probability_models.yaml** | ✅ | v1.1 | `/config/` | 4 | Phases 4-9 | 🔴 Critical | Elo, regression, ML, ensemble (renamed from odds_models.yaml) |
-| **position_management.yaml** | ✅ | v1.1 | `/config/` | 1 | Phases 1-10 | 🔴 Critical | Position sizing, limits, CI adjustments |
-| **trade_strategies.yaml** | ✅ | v1.1 | `/config/` | 1 | Phases 1-10 | 🔴 Critical | Entry/exit strategies, halftime_entry rules |
+| **probability_models.yaml** | ✅ | v2.0 | `/config/` | 4 | Phases 4-9 | 🔴 Critical | Versioning support, immutable configs, educational docstrings - UPDATED Phase 0.5 |
+| **position_management.yaml** | ✅ | v2.0 | `/config/` | 1 | Phases 1-10 | 🔴 Critical | 10 exit conditions, priority hierarchy, trailing stops - UPDATED Phase 0.5 |
+| **trade_strategies.yaml** | ✅ | v2.0 | `/config/` | 1 | Phases 1-10 | 🔴 Critical | Versioning support, halftime_entry updates - UPDATED Phase 0.5 |
 | **markets.yaml** | ✅ | v1.1 | `/config/` | 1 | Phases 1-10 | 🔴 Critical | Market filtering, platform configs, research_gap_flag |
 | **data_sources.yaml** | ✅ | v1.1 | `/config/` | 2 | Phases 2-10 | 🔴 Critical | API endpoints, ESPN/Balldontlie/nflfastR configs |
 | **.env.template** | ✅ | template | `/config/` | 1 | Phases 1-10 | 🔴 Critical | All API keys Phase 1-10 placeholders |
@@ -153,10 +164,22 @@ Roadmap, timelines, and project management.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DEVELOPMENT_PHASES_V1.1.md** | ✅ | v1.1 | `/docs/foundation/` | 0 | All phases | 🟡 High | Updated Phase 3/4 sequencing, new deliverables |
+| **DEVELOPMENT_PHASES_V1.3.md** | ✅ | v1.3 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 0.5 complete, Phase 5 split into 5a/5b - UPDATED Phase 0.5 |
 | **DEPLOYMENT_GUIDE_V1.0.md** | 🔵 | - | `/docs/deployment/` | 1 | Phase 1 ✅ | 🟡 High | Local/AWS deployment stubs |
 | **USER_GUIDE_V1.0.md** | 🔵 | - | `/docs/guides/` | 5 | Phase 5 ✅ | 🟢 Medium | CLI examples (edges-list, trade-execute) |
 | **DEVELOPER_ONBOARDING_V1.0.md** | 🔵 | - | `/docs/utility/` | 0 | Phase 0 ✅ | 🟡 High | Merged with ENVIRONMENT_CHECKLIST, onboarding steps |
+
+---
+
+## Implementation Guides
+
+Phase-specific implementation guides created in Phase 0.5.
+
+| Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
+|----------|--------|---------|----------|-------|------------|----------|-------|
+| **VERSIONING_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phases 4-9 | 🔴 Critical | **NEW** - Immutable versioning for strategies and models - CREATED Phase 0.5 |
+| **TRAILING_STOP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phases 1, 4, 5 | 🔴 Critical | **NEW** - Trailing stop loss implementation guide - CREATED Phase 0.5 |
+| **POSITION_MANAGEMENT_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phase 5 | 🔴 Critical | **NEW** - Position lifecycle, 10 exit conditions, monitoring, execution - CREATED Phase 0.5 |
 
 ---
 
@@ -171,16 +194,16 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **SESSION_HANDOFF_TEMPLATE.md** | ✅ | template | `/docs/utility/` | 0 | All phases | 🔴 Critical | Streamlined ~1 page template, inline instructions |
 | **SESSION_7_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 7 | 🟡 High | Latest session handoff (session # is version) |
 | **SESSION_6_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 6 | 🟢 Medium | Previous session handoff |
-| **Handoff_Protocol_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0 | All phases | 🔴 Critical | **NEW** - Merged 4 docs: HANDOFF_PROCESS + TOKEN_MONITORING + PHASE_COMPLETION + KNOWLEDGE_STRATEGY |
+| **Handoff_Protocol_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0 | All phases | 🔴 Critical | Merged 4 docs: HANDOFF_PROCESS + TOKEN_MONITORING + PHASE_COMPLETION + KNOWLEDGE_STRATEGY |
 | **VERSION_HEADERS_GUIDE_V2.1.md** | ✅ | v2.1 | `/docs/utility/` | 0 | All phases | 🟡 High | Version control standards, references Handoff_Protocol |
 | **ENVIRONMENT_CHECKLIST_V1.1.md** | ✅ | v1.1 | `/docs/utility/` | 0 | Phase 0 ✅ | 🔴 Critical | Windows 11 setup, Parts 1-7, dependencies verification |
-| **CONSISTENCY_REVIEW.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | **NEW** - Phase 0 consistency validation, all discrepancies fixed |
-| **FILENAME_VERSION_REPORT.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | **NEW** - Filename-version consistency validation |
-| **PHASE_0_COMPLETENESS.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🔴 Critical | **NEW** - Phase 0 completion checklist, 100% complete |
-| **PHASE_0_GIT_COMMIT_CHECKLIST.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | **NEW** - Git commit guidance and checklist |
-| **GIT_COMMIT_SUMMARY.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | **NEW** - Comprehensive git commit summary |
-| **CLAUDE_CODE_INSTRUCTIONS.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0-1 | 🔴 Critical | **NEW** - Instructions for Phase 0 completion and Phase 1 kickoff |
-| **CLAUDE_CODE_INSTRUCTIONS_ERRATA.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0-1 | 🟡 High | **NEW** - Corrections to instructions for Phase 1 |
+| **CONSISTENCY_REVIEW.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Phase 0 consistency validation, all discrepancies fixed |
+| **FILENAME_VERSION_REPORT.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Filename-version consistency validation |
+| **PHASE_0_COMPLETENESS.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🔴 Critical | Phase 0 completion checklist, 100% complete |
+| **PHASE_0_GIT_COMMIT_CHECKLIST.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Git commit guidance and checklist |
+| **GIT_COMMIT_SUMMARY.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Comprehensive git commit summary |
+| **CLAUDE_CODE_INSTRUCTIONS.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0-1 | 🔴 Critical | Instructions for Phase 0 completion and Phase 1 kickoff |
+| **CLAUDE_CODE_INSTRUCTIONS_ERRATA.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0-1 | 🟡 High | Corrections to instructions for Phase 1 |
 | **TERMINOLOGY_UPDATE_SUMMARY.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Terminology change from "odds" to "probability" |
 
 ---
@@ -236,20 +259,41 @@ Additional guides, references, and supporting documentation.
 ## Statistics
 
 ### Document Count by Status
-- ✅ **Exists - Current:** 25 documents (Phase 0 at 100%)
+- ✅ **Exists - Current:** 31 documents (Phase 0.5 at 100%)
 - ⚠️ **Exists - Needs Update:** 1 document (KALSHI_API_STRUCTURE → merge complete)
 - 📝 **In Progress:** 0 documents
-- ❌ **Missing - Critical:** 0 documents (Phase 0 complete!)
+- ❌ **Missing - Critical:** 0 documents (Phase 0.5 complete!)
 - 🔵 **Missing - Planned:** 40+ documents (Phases 1-10)
 - 🗄️ **Archived:** 9 documents (7 from Session 7 streamline)
 
 ### Document Count by Phase
 - **Phase 0 (Foundation):** 25 documents ✅ 100% complete
+- **Phase 0.5 (Foundation Enhancement):** 6 new documents ✅ 100% complete (3 guides + 3 YAML updates)
 - **Phase 1-3 (Core):** 15 documents planned
 - **Phase 4-5 (Trading & Validation):** 12 documents planned
 - **Phase 6-7 (Multi-Sport):** 8 documents planned
 - **Phase 8-9 (Non-Sports & Advanced):** 10 documents planned
 - **Phase 10+ (Multi-Platform & Dashboard):** 8 documents planned
+
+### Phase 0.5 Status: ✅ 100% COMPLETE
+
+**All Phase 0.5 deliverables complete (Days 1-10):**
+- ✅ DATABASE_SCHEMA_SUMMARY_V1.5.md (position_exits, exit_attempts tables)
+- ✅ MASTER_REQUIREMENTS_V2.5.md (REQ-MON-*, REQ-EXIT-*, REQ-EXEC-*)
+- ✅ ARCHITECTURE_DECISIONS_V2.4.md (ADRs 18-23)
+- ✅ PROJECT_OVERVIEW_V1.4.md
+- ✅ DEVELOPMENT_PHASES_V1.3.md (Phase 5 split into 5a/5b)
+- ✅ position_management.yaml V2.0 (10 exit conditions)
+- ✅ probability_models.yaml V2.0 (versioning)
+- ✅ trade_strategies.yaml V2.0 (versioning)
+- ✅ CONFIGURATION_GUIDE_V3.1.md (comprehensive)
+- ✅ VERSIONING_GUIDE.md (immutable versions)
+- ✅ TRAILING_STOP_GUIDE.md (trailing stop implementation)
+- ✅ POSITION_MANAGEMENT_GUIDE.md (complete position lifecycle)
+- ✅ schema_v1.4_to_v1.5_migration.sql (database migration)
+- ✅ MASTER_INDEX_V2.3.md (this file)
+
+**Ready for Phase 1 implementation**
 
 ### Phase 0 Status: ✅ 100% COMPLETE
 
@@ -272,17 +316,20 @@ Additional guides, references, and supporting documentation.
 **Criteria:** Stable, reference documents, rarely change (monthly or less)
 
 **Currently IN Project Knowledge:**
-- MASTER_INDEX_V2.1.md (this file - navigation)
-- PROJECT_OVERVIEW_V1.2.md (architecture)
-- MASTER_REQUIREMENTS_V2.1.md (requirements)
-- ARCHITECTURE_DECISIONS_V2.1.md (design rationale)
-- CONFIGURATION_GUIDE_V2.1.md (config patterns)
-- DATABASE_SCHEMA_SUMMARY_V1.1.md (schema)
+- MASTER_INDEX_V2.3.md (this file - navigation)
+- PROJECT_OVERVIEW_V1.3.md (architecture)
+- MASTER_REQUIREMENTS_V2.5.md (requirements)
+- ARCHITECTURE_DECISIONS_V2.3.md (design rationale)
+- CONFIGURATION_GUIDE_V3.1.md (config patterns)
+- DATABASE_SCHEMA_SUMMARY_V1.5.md (schema)
 - API_INTEGRATION_GUIDE_V1.0.md (API docs)
 - KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md (critical reference)
-- DEVELOPMENT_PHASES_V1.1.md (roadmap)
-- GLOSSARY_V1.0.md (terminology)
+- DEVELOPMENT_PHASES_V1.3.md (roadmap)
+- GLOSSARY.md (terminology)
 - Handoff_Protocol_V1.0.md (process reference)
+- VERSIONING_GUIDE.md (versioning patterns)
+- TRAILING_STOP_GUIDE.md (trailing stop implementation)
+- POSITION_MANAGEMENT_GUIDE.md (position lifecycle)
 
 ### ❌ Documents NOT in Project Knowledge
 **Criteria:** Change frequently, uploaded fresh each session**
@@ -371,6 +418,7 @@ Additional guides, references, and supporting documentation.
 **Create PHASE_[N]_COMPLETION_REPORT.md after assessment.**
 
 **Phase 0 Assessment:** ✅ Complete (see SESSION_7_HANDOFF.md for results)
+**Phase 0.5 Assessment:** ✅ Complete (all Days 1-10 finished, ready for Phase 1)
 
 ---
 
@@ -378,16 +426,18 @@ Additional guides, references, and supporting documentation.
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 2.1 | 2025-10-12 | Added "Location" and "Phase Ties" columns to all tables; updated for Session 7 handoff streamline (7 docs archived, 4 consolidated); added Handoff_Protocol_V1.0.md; marked Phase 0 at 100% complete |
+| 2.3 | 2025-10-21 | Phase 0.5 complete: added 3 implementation guides (VERSIONING, TRAILING_STOP, POSITION_MANAGEMENT), updated 6 core docs (MASTER_REQUIREMENTS V2.5, DATABASE_SCHEMA V1.5, CONFIGURATION_GUIDE V3.1, DEVELOPMENT_PHASES V1.3, 3 YAML V2.0), added schema migration V1.5, Phase 5 split into 5a/5b |
+| 2.2 | 2025-10-17 | Updated all document versions (Master Requirements v2.3, Architecture Decisions v2.3, Project Overview v1.3, Configuration Guide v3.0, Database Schema v1.2); renamed all files to match internal versions; added Phase 0 completion documents |
+| 2.1 | 2025-10-12 | Added "Location" and "Phase Ties" columns; Session 7 handoff streamline (7 docs archived, 4 consolidated); added Handoff_Protocol_V1.0.md; marked Phase 0 at 100% |
 | 2.0 | 2025-10-08 | Complete document inventory through Phase 10, added YAML configs, utility docs, project knowledge strategy, maintenance protocols, statistics (Session 5) |
 | 1.1 | Earlier | Enhanced with token sizes and use-when guidance |
 | 1.0 | Earlier | Initial version with basic document list |
 
 ---
 
-**Maintained By:** Claude & User  
-**Review Frequency:** Every session (update as documents added/removed/versioned)  
-**Next Review:** Session 8 (Phase 1 kickoff)
+**Maintained By:** Claude & User
+**Review Frequency:** Every session (update as documents added/removed/versioned)
+**Next Review:** Next session (Phase 1 kickoff preparation)
 
 ---
 

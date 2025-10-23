@@ -1,22 +1,25 @@
 # Project Overview: Precog
 
 ---
-**Version:** 1.3
-**Last Updated:** 2025-10-16
+**Version:** 1.4
+**Last Updated:** 2025-10-19
 **Status:** ✅ Current
+**Changes in v1.4:** Added Phase 0.5 (Foundation Enhancement) and Phase 1.5 (Foundation Validation); updated system description to include strategy/model versioning and trailing stop loss; updated database schema to V1.4; added versioning system for A/B testing and trade attribution
 **Changes in v1.3:** Updated terminology (odds → probability); updated system description to reference probability calculations instead of odds calculations
 **Changes in v1.2:** Added testing/CI-CD section, budget estimates, phase dependencies table, clarified Phases 3/4 sequencing (live data Phase 2 → processing Phase 3 → odds/edges Phase 4), updated directory tree (data_storers/ → database/), merged comprehensive reqs.txt into Technology Stack.
 ---
 
 ## Executive Summary
 
-**Precog** is an automated prediction market trading system that identifies statistical edges in live markets (primarily Kalshi, with Polymarket in Phase 10) by comparing market prices against historical probability models. The system monitors markets in real-time, calculates true probabilities from 5+ years of historical data, detects profitable opportunities (positive EV), and executes trades automatically with comprehensive risk management.
+**Precog** is an automated prediction market trading system that identifies statistical edges in live markets (primarily Kalshi, with Polymarket in Phase 10) by comparing market prices against historical probability models using **versioned strategies and models**. The system monitors markets in real-time, calculates true probabilities from 5+ years of historical data using versioned probability models, detects profitable opportunities (positive EV) via versioned trading strategies, and executes trades automatically with comprehensive risk management including **trailing stop losses** for profit protection.
 
-**Core Value Proposition:** Markets sometimes misprice events. By using rigorous statistical analysis of historical data, we can systematically identify and capitalize on these mispricings.
+**Core Value Proposition:** Markets sometimes misprice events. By using rigorous statistical analysis of historical data and versioned models/strategies with precise trade attribution, we can systematically identify and capitalize on these mispricings while continuously improving through A/B testing.
 
 **Target ROI:** 15-25% annual return with conservative Kelly fractional sizing (0.25) and strict risk controls.
 
-**Development Approach:** Documentation-first, phased implementation (Phase 0-10), part-time sustainable pace (~12h/week).
+**Development Approach:** Documentation-first, phased implementation (Phase 0-10 with inserted Phase 0.5/1.5), part-time sustainable pace (~12h/week).
+
+**Database:** PostgreSQL with schema V1.4 (strategies, probability_models tables with immutable versioning pattern, trailing_stop_state JSONB, trade attribution FKs).
 
 ---
 
@@ -335,26 +338,36 @@ Live Game Data (ESPN) → game_states table
 
 | Phase | Name | Depends On | Deliverables | Status |
 |-------|------|------------|--------------|--------|
-| **0** | Foundation | - | All docs, YAMLs, schema, handoff system | ✅ 100% |
-| **1** | Core Infrastructure | Phase 0 | Kalshi API client, database ops, logging | 🔵 Planned |
-| **2** | Live Data Integration | Phase 1 | ESPN API client, schedulers (market_updater.py) | 🔵 Planned |
+| **0** | Foundation | - | All docs, YAMLs, schema V1.3, handoff system | ✅ 100% |
+| **0.5** | Foundation Enhancement | Phase 0 | Schema V1.4 (versioning, trailing stops), updated docs | 🟢 75% |
+| **1** | Core Infrastructure | Phase 0.5 | Kalshi API client, database ops, logging | 🔵 Planned |
+| **1.5** | Foundation Validation | Phase 1 | strategy_manager, model_manager, version tests | 🔵 Planned |
+| **2** | Live Data Integration | Phase 1.5 | ESPN API client, schedulers (market_updater.py) | 🔵 Planned |
 | **3** | Data Processing | Phase 2 | Async/WebSocket handlers, NO probability calc yet | 🔵 Planned |
-| **4** | Odds & Edge Detection | Phases 2-3 | Historical loader, ensemble model, edge calc | 🔵 Planned |
-| **5** | Trading Engine | Phases 1, 4 | Order placement, risk checks, position mgmt | 🔵 Planned |
+| **4** | Probability & Edge Detection | Phases 2-3 | Historical loader, versioned models, edge calc | 🔵 Planned |
+| **5** | Trading Engine | Phases 1.5, 4 | Versioned strategies, orders, position mgmt, trailing stops | 🔵 Planned |
 | **6** | Multi-Sport Expansion | Phases 1-5 | NBA, MLB, Tennis, UFC support | 🔵 Planned |
 | **7** | Web Dashboard | Phase 5 | FastAPI + React UI for monitoring | 🔵 Planned |
 | **8** | Sentiment Analysis | Phase 5 | NLP sentiment integration (Spacy) | 🔵 Planned |
-| **9** | Advanced Analytics | Phases 4-8 | XGBoost/LSTM training, backtesting | 🔵 Planned |
+| **9** | Advanced Analytics | Phases 4-8 | XGBoost/LSTM training, backtesting, versioned models | 🔵 Planned |
 | **10** | Multi-Platform | All phases | Polymarket integration, arbitrage | 🔵 Planned |
 
 **Critical Dependencies:**
-- Phase 4 **requires** Phase 2 (live game data for historical loader context)
-- Phase 5 **requires** Phase 4 (edge detection for trade signals)
+- **Phase 0.5** must complete BEFORE Phase 1 (schema V1.4 must exist before code written)
+- **Phase 1.5** validates versioning system before Phase 2 complexity
+- Phase 4 **requires** Phase 2 (live game data for historical loader context) and implements **model versioning**
+- Phase 5 **requires** Phase 4 (edge detection for trade signals) and implements **strategy versioning**
 - Phase 3 is pure processing (async handlers), **NO probability calc/edges**
 
+**Phase 0.5/1.5 Rationale:**
+- **Phase 0.5:** Added database versioning (strategies, probability_models) BEFORE implementation
+- **Phase 1.5:** Validates versioning system works (manager classes, version tests) BEFORE Phase 2
+- Prevents costly refactoring - versioning is fundamental, must be in foundation
+
 **Sequencing Rationale:**
-- Phase 2 provides live game states → Phase 3 processes/ingests → Phase 4 leverages for probability calc
+- Phase 2 provides live game states → Phase 3 processes/ingests → Phase 4 leverages for probability calc with versioned models
 - Separating processing (3) from probability calc (4) allows data pipeline testing without model complexity
+- Phase 4 creates versioned models, Phase 5 creates versioned strategies, Phase 9 uses the system
 
 ---
 
@@ -426,14 +439,16 @@ jobs:
 | Phase | Time Estimate | At 12h/week | Cost (if contracting @$50/h) |
 |-------|---------------|-------------|-------------------------------|
 | Phase 0 | 50 hours | 4 weeks | $2,500 |
+| Phase 0.5 | 30 hours | 2.5 weeks | $1,500 |
 | Phase 1 | 60 hours | 5 weeks | $3,000 |
+| Phase 1.5 | 20 hours | 1.5 weeks | $1,000 |
 | Phase 2 | 40 hours | 3 weeks | $2,000 |
 | Phase 3 | 40 hours | 3 weeks | $2,000 |
 | Phase 4 | 80 hours | 7 weeks | $4,000 |
 | Phase 5 | 60 hours | 5 weeks | $3,000 |
-| **Total MVP** | **330 hours** | **27 weeks (~7 months)** | **$16,500** |
+| **Total MVP** | **380 hours** | **32 weeks (~8 months)** | **$19,000** |
 
-**Note:** These are internal development hour estimates, not external costs. If self-building part-time at ~12h/week, MVP completion estimated April 2026.
+**Note:** These are internal development hour estimates, not external costs. If self-building part-time at ~12h/week, MVP completion estimated May 2026. Phase 0.5/1.5 added for versioning system and validation.
 
 ### Operational Costs (Monthly, Post-MVP)
 
