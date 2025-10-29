@@ -3,8 +3,10 @@
 ---
 **Version:** 1.0
 **Created:** 2025-10-21
+**Last Updated:** 2025-10-28 (Phase 0.6b - Filename standardization)
 **Purpose:** Comprehensive guide to versioning strategies, models, and methods in Precog
 **Status:** ✅ Complete
+**Filename Updated:** Renamed from VERSIONING_GUIDE_V1.0.md to VERSIONING_GUIDE_V1.0.md (added version number)
 ---
 
 ## Table of Contents
@@ -1448,7 +1450,7 @@ p-value: 0.08 (> 0.05)
 
 ---
 
-**Document:** VERSIONING_GUIDE.md
+**Document:** VERSIONING_GUIDE_V1.0.md
 **Version:** 1.0
 **Created:** 2025-10-21
 **Last Updated:** 2025-10-21

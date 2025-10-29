@@ -124,8 +124,8 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 - [✅] Day 4: position_management.yaml V2.0, probability_models.yaml V2.0, trade_strategies.yaml V2.0
 - [✅] Day 5: MASTER_REQUIREMENTS V2.5, DATABASE_SCHEMA_SUMMARY V1.5
 - [✅] Day 6: CONFIGURATION_GUIDE V3.1 (comprehensive)
-- [✅] Day 7: VERSIONING_GUIDE.md, TRAILING_STOP_GUIDE.md
-- [✅] Day 8: POSITION_MANAGEMENT_GUIDE.md, DEVELOPMENT_PHASES V1.3
+- [✅] Day 7: VERSIONING_GUIDE_V1.0.md, TRAILING_STOP_GUIDE_V1.0.md
+- [✅] Day 8: POSITION_MANAGEMENT_GUIDE_V1.0.md, DEVELOPMENT_PHASES V1.3
 - [✅] Day 9: Database schema V1.5 applied, MASTER_INDEX V2.3
 - [✅] Day 10: Validation tools, final review
 
@@ -135,9 +135,9 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 - [✅] exit_attempts table (tracks price walking attempts)
 - [✅] Updated foundational documentation (MASTER_REQUIREMENTS V2.5, ARCHITECTURE_DECISIONS V2.4)
 - [✅] Updated planning documentation (PROJECT_OVERVIEW V1.4, DEVELOPMENT_PHASES V1.3)
-- [✅] VERSIONING_GUIDE.md (immutable versions, A/B testing)
-- [✅] TRAILING_STOP_GUIDE.md (progressive tightening, JSONB state)
-- [✅] POSITION_MANAGEMENT_GUIDE.md (10 exit conditions, complete lifecycle)
+- [✅] VERSIONING_GUIDE_V1.0.md (immutable versions, A/B testing)
+- [✅] TRAILING_STOP_GUIDE_V1.0.md (progressive tightening, JSONB state)
+- [✅] POSITION_MANAGEMENT_GUIDE_V1.0.md (10 exit conditions, complete lifecycle)
 - [✅] Updated CONFIGURATION_GUIDE V3.1 with all Phase 5 enhancements
 - [✅] All 3 YAML files updated to V2.0 (versioning + monitoring + exits)
 - [✅] Updated MASTER_INDEX to V2.3

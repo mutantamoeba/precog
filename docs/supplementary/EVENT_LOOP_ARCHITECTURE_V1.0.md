@@ -1,10 +1,12 @@
-# Phase 5: Trading Event Loop Architecture
-**Version:** 1.0  
-**Date:** 2025-10-21  
-**Status:** 🔵 Design Complete - Ready for Implementation  
-**Phase:** 5a (Trading MVP)  
-**Dependencies:** Phase 1-4 (Infrastructure, Data, Models)  
-**Related:** PHASE_5_POSITION_MONITORING_SPEC_V1_0.md, PHASE_5_EXIT_EVALUATION_SPEC_V1_0.md
+# Trading Event Loop Architecture
+**Version:** 1.0
+**Date:** 2025-10-21
+**Last Updated:** 2025-10-28 (Phase 0.6b - Filename standardization)
+**Status:** 🔵 Design Complete - Ready for Implementation
+**Phase:** 5a (Trading MVP)
+**Dependencies:** Phase 1-4 (Infrastructure, Data, Models)
+**Related:** POSITION_MONITORING_SPEC_V1.0.md, EXIT_EVALUATION_SPEC_V1.0.md, ADR-035
+**Filename Updated:** Renamed from PHASE_5_EVENT_LOOP_ARCHITECTURE_V1_0.md to EVENT_LOOP_ARCHITECTURE_V1.0.md
 
 ---
 
@@ -843,7 +845,7 @@ CIRCUIT BREAKER 3: Database Failures
 ---
 
 **Related Documents:**
-- `PHASE_5_POSITION_MONITORING_SPEC_V1_0.md` - Monitoring implementation
-- `PHASE_5_EXIT_EVALUATION_SPEC_V1_0.md` - Exit logic details
+- `POSITION_MONITORING_SPEC_V1.0.md` - Monitoring implementation
+- `EXIT_EVALUATION_SPEC_V1.0.md` - Exit logic details
 - `ADR_021_METHOD_ABSTRACTION.md` - Configuration structure
 - `DEVELOPMENT_PHASES_V1_2.md` - Implementation timeline

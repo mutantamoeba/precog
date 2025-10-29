@@ -1,9 +1,13 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.0
-**Last Updated:** 2025-10-21
-**Status:** 📝 In Progress
+**Version:** 1.1
+**Last Updated:** 2025-10-28
+**Status:** ✅ Current
+**Changes in v1.1:**
+- Added ADR-035, ADR-036, ADR-037 (Phase 5 Trading Architecture)
+- Updated all supplementary document references to standardized filenames (V1.0 format)
+- Updated ARCHITECTURE_DECISIONS reference from V2.6 to V2.7
 **Purpose:** Master index of all architectural decisions with systematic ADR numbers
 ---
 
@@ -61,17 +65,17 @@ This document provides a systematic index of all Precog architecture decisions u
 
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
-| ADR-018 | Immutable Version Pattern for Strategies/Models | 2025-10 | ✅ | 0.5 | VERSIONING_GUIDE |
-| ADR-019 | Trailing Stop JSONB Structure | 2025-10 | ✅ | 0.5 | TRAILING_STOP_GUIDE |
-| ADR-020 | Trade Attribution Links (strategy_id, model_id) | 2025-10 | ✅ | 0.5 | DATABASE_SCHEMA_SUMMARY_V1.5 |
-| ADR-021 | Semantic Versioning for Strategies/Models | 2025-10 | ✅ | 0.5 | VERSIONING_GUIDE |
-| ADR-022 | Helper Views for Active Versions | 2025-10 | ✅ | 0.5 | DATABASE_SCHEMA_SUMMARY_V1.5 |
-| ADR-023 | Position Monitoring Architecture (30s/5s) | 2025-10 | ✅ | 0.5 | POSITION_MANAGEMENT_GUIDE |
-| ADR-024 | Exit Priority Hierarchy (4 Levels) | 2025-10 | ✅ | 0.5 | POSITION_MANAGEMENT_GUIDE |
-| ADR-025 | Price Walking Algorithm for Exits | 2025-10 | ✅ | 0.5 | POSITION_MANAGEMENT_GUIDE |
-| ADR-026 | Partial Exit Staging (2-Stage) | 2025-10 | ✅ | 0.5 | POSITION_MANAGEMENT_GUIDE |
-| ADR-027 | position_exits Append-Only Table | 2025-10 | ✅ | 0.5 | DATABASE_SCHEMA_SUMMARY_V1.5 |
-| ADR-028 | exit_attempts for Debugging | 2025-10 | ✅ | 0.5 | DATABASE_SCHEMA_SUMMARY_V1.5 |
+| ADR-018 | Immutable Version Pattern for Strategies/Models | 2025-10 | ✅ | 0.5 | VERSIONING_GUIDE_V1.0.md |
+| ADR-019 | Trailing Stop JSONB Structure | 2025-10 | ✅ | 0.5 | TRAILING_STOP_GUIDE_V1.0.md |
+| ADR-020 | Trade Attribution Links (strategy_id, model_id) | 2025-10 | ✅ | 0.5 | DATABASE_SCHEMA_SUMMARY_V1.7.md |
+| ADR-021 | Semantic Versioning for Strategies/Models | 2025-10 | ✅ | 0.5 | VERSIONING_GUIDE_V1.0.md |
+| ADR-022 | Helper Views for Active Versions | 2025-10 | ✅ | 0.5 | DATABASE_SCHEMA_SUMMARY_V1.7.md |
+| ADR-023 | Position Monitoring Architecture (30s/5s) | 2025-10 | ✅ | 0.5 | POSITION_MANAGEMENT_GUIDE_V1.0.md |
+| ADR-024 | Exit Priority Hierarchy (4 Levels) | 2025-10 | ✅ | 0.5 | POSITION_MANAGEMENT_GUIDE_V1.0.md |
+| ADR-025 | Price Walking Algorithm for Exits | 2025-10 | ✅ | 0.5 | POSITION_MANAGEMENT_GUIDE_V1.0.md |
+| ADR-026 | Partial Exit Staging (2-Stage) | 2025-10 | ✅ | 0.5 | POSITION_MANAGEMENT_GUIDE_V1.0.md |
+| ADR-027 | position_exits Append-Only Table | 2025-10 | ✅ | 0.5 | DATABASE_SCHEMA_SUMMARY_V1.7.md |
+| ADR-028 | exit_attempts for Debugging | 2025-10 | ✅ | 0.5 | DATABASE_SCHEMA_SUMMARY_V1.7.md |
 
 ### Phase 1: Database Completion
 
@@ -83,6 +87,14 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR-032 | Markets Surrogate PRIMARY KEY (id SERIAL) | 2025-10-24 | ✅ | 1 | Migration 009 |
 | ADR-033 | External ID Traceability Pattern | 2025-10-24 | ✅ | 1 | Migration 008 |
 | ADR-034 | SCD Type 2 Completion (row_end_ts) | 2025-10-24 | ✅ | 1 | Migrations 005, 007 |
+
+### Phase 5: Trading MVP (Planned)
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-035 | Event Loop Architecture (async/await) | 2025-10-28 | 🔵 | 5 | EVENT_LOOP_ARCHITECTURE_V1.0.md |
+| ADR-036 | Exit Evaluation Strategy (Priority Hierarchy) | 2025-10-28 | 🔵 | 5a | EXIT_EVALUATION_SPEC_V1.0.md |
+| ADR-037 | Advanced Order Walking (Multi-Stage Price Walking) | 2025-10-28 | 🔵 | 5b | ADVANCED_EXECUTION_SPEC_V1.0.md |
 
 ---
 
@@ -230,7 +242,7 @@ Implement immutable version pattern:
   - Database storage cost minimal
 
 **References:**
-- VERSIONING_GUIDE.md
+- VERSIONING_GUIDE_V1.0.md
 - DATABASE_SCHEMA_SUMMARY_V1.5.md (strategies, probability_models tables)
 
 ---
@@ -263,7 +275,7 @@ Implement dynamic monitoring with two frequencies:
   - Well within 60 calls/min limit
 
 **References:**
-- POSITION_MANAGEMENT_GUIDE.md Section 4
+- POSITION_MANAGEMENT_GUIDE_V1.0.md Section 4
 - REQ-MON-001, REQ-MON-002
 
 ---
@@ -297,7 +309,7 @@ Implement 4-level priority hierarchy:
   - Aligns with industry best practices
 
 **References:**
-- POSITION_MANAGEMENT_GUIDE.md Section 6-7
+- POSITION_MANAGEMENT_GUIDE_V1.0.md Section 6-7
 - REQ-EXIT-001, REQ-EXEC-001
 
 ---

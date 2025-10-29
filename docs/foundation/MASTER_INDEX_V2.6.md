@@ -1,9 +1,17 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.5
-**Last Updated:** 2025-10-24
+**Version:** 2.6
+**Last Updated:** 2025-10-28
 **Status:** ✅ Current
+**Changes in v2.6:**
+- **PHASE 0.6B DOCUMENTATION CORRECTION**: Renamed 10 supplementary documents with standardized naming (removed PHASE_ prefixes, standardized V1.0 format)
+- Updated MASTER_REQUIREMENTS V2.7 → V2.8 (added Section 4.10 CLI requirements, Phase 1 expansion to 6 weeks, updated supplementary doc references)
+- Updated ARCHITECTURE_DECISIONS V2.6 → V2.7 (added ADR-035, ADR-036, ADR-037 for Phase 5 Trading Architecture)
+- Updated ADR_INDEX V1.0 → V1.1 (added 3 new ADRs, updated doc references)
+- Renamed 10 files: VERSIONING_GUIDE_V1.0.md, TRAILING_STOP_GUIDE_V1.0.md, POSITION_MANAGEMENT_GUIDE_V1.0.md, SPORTS_PROBABILITIES_RESEARCH_V1.0.md, ORDER_EXECUTION_ARCHITECTURE_V1.0.md, ADVANCED_EXECUTION_SPEC_V1.0.md, EVENT_LOOP_ARCHITECTURE_V1.0.md, EXIT_EVALUATION_SPEC_V1.0.md, POSITION_MONITORING_SPEC_V1.0.md, USER_CUSTOMIZATION_STRATEGY_V1.0.md
+- All supplementary docs now in `/docs/supplementary/` (no `/docs/guides/` folder created)
+- Added "RENAMED" notes for traceability
 **Changes in v2.5:**
 - **PHASE 1 FOUNDATION**: Updated documentation for alerts/notifications system and ML infrastructure planning
 - Updated MASTER_REQUIREMENTS V2.6 → V2.7 (added 7 missing tables, REQ-METH-001 through REQ-METH-015, REQ-ALERT-001 through REQ-ALERT-015, REQ-ML-001 through REQ-ML-004)
@@ -95,11 +103,11 @@ Core architecture, requirements, and system design documents.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.3.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - UPDATED |
-| **MASTER_REQUIREMENTS_V2.7.md** | ✅ | v2.7 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - UPDATED V2.7 (methods, alerts, ML) |
-| **MASTER_INDEX_V2.5.md** | ✅ | v2.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - UPDATED with alerts/ML references |
-| **ARCHITECTURE_DECISIONS_V2.5.md** | ✅ | v2.5 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers - UPDATED Standardization |
-| **REQUIREMENT_INDEX.md** | ✅ | v1.1 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 89 requirements (REQ-{CATEGORY}-{NUMBER}) - UPDATED V1.1 |
-| **ADR_INDEX.md** | ✅ | v1.0 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (ADR-{NUMBER}) |
+| **MASTER_REQUIREMENTS_V2.8.md** | ✅ | v2.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.8** (CLI requirements, Phase 1 expansion, doc references) |
+| **MASTER_INDEX_V2.6.md** | ✅ | v2.6 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.6** (Phase 0.6b documentation correction) |
+| **ARCHITECTURE_DECISIONS_V2.7.md** | ✅ | v2.7 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers - **UPDATED V2.7** (ADR-035, ADR-036, ADR-037 for Phase 5) |
+| **REQUIREMENT_INDEX_V1.1.md** | ✅ | v1.1 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 89 requirements (REQ-{CATEGORY}-{NUMBER}) - UPDATED V1.1 |
+| **ADR_INDEX_V1.1.md** | ✅ | v1.1 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (ADR-{NUMBER}) - **UPDATED V1.1** (ADR-035 through ADR-037 added) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.3.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, Phase 5 split into 5a/5b - UPDATED Phase 0.5 |
 
@@ -192,9 +200,9 @@ Phase-specific implementation guides created in Phase 0.5.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **VERSIONING_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phases 4-9 | 🔴 Critical | **NEW** - Immutable versioning for strategies and models - CREATED Phase 0.5 |
-| **TRAILING_STOP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phases 1, 4, 5 | 🔴 Critical | **NEW** - Trailing stop loss implementation guide - CREATED Phase 0.5 |
-| **POSITION_MANAGEMENT_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phase 5 | 🔴 Critical | **NEW** - Position lifecycle, 10 exit conditions, monitoring, execution - CREATED Phase 0.5 |
+| **VERSIONING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 0.5 | Phases 4-9 | 🔴 Critical | **RENAMED** from VERSIONING_GUIDE_V1.0.md - Immutable versioning for strategies and models |
+| **TRAILING_STOP_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 0.5 | Phases 1, 4, 5 | 🔴 Critical | **RENAMED** from TRAILING_STOP_GUIDE_V1.0.md - Trailing stop loss implementation guide |
+| **POSITION_MANAGEMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 0.5 | Phase 5 | 🔴 Critical | **RENAMED** from POSITION_MANAGEMENT_GUIDE_V1.0.md - Position lifecycle, 10 exit conditions, monitoring, execution |
 
 ---
 
@@ -226,6 +234,25 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 ## Supplementary Documents
 
 Additional guides, references, and supporting documentation.
+
+### Supplementary Guides (Phase 0.5/0.6)
+
+| Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
+|----------|--------|---------|----------|-------|------------|----------|-------|
+| **USER_CUSTOMIZATION_STRATEGY_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 0.5 | Phases 1-10 | 🟡 High | User configuration and customization strategy |
+| **SPORTS_PROBABILITIES_RESEARCH_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 4 | Phases 4, 9 | 🟡 High | **RENAMED** - Historical win probability benchmarks for NFL, NBA, tennis |
+
+### Supplementary Specifications (Phase 5+)
+
+| Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
+|----------|--------|---------|----------|-------|------------|----------|-------|
+| **ORDER_EXECUTION_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 5 | Phases 5-8 | 🟡 High | **RENAMED** from ORDER_EXECUTION_ARCHITECTURE_ASSESSMENT_V1_0.md - Order execution architecture |
+| **ADVANCED_EXECUTION_SPEC_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 5b | Phase 5b, 8 | 🟡 High | **RENAMED** from PHASE_8_ADVANCED_EXECUTION_SPEC.md - Dynamic depth walker implementation |
+| **EVENT_LOOP_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 5a | Phase 5a | 🟡 High | **RENAMED** from PHASE_5_EVENT_LOOP_ARCHITECTURE_V1_0.md - Trading event loop architecture |
+| **EXIT_EVALUATION_SPEC_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 5a | Phase 5a | 🟡 High | **RENAMED** from PHASE_5_EXIT_EVALUATION_SPEC_V1_0.md - Exit evaluation strategy |
+| **POSITION_MONITORING_SPEC_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 5a | Phase 5a | 🟡 High | **RENAMED** from PHASE_5_POSITION_MONITORING_SPEC_V1_0.md - Position monitoring specification |
+
+### Other Supplementary Documents
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
@@ -308,9 +335,9 @@ Additional guides, references, and supporting documentation.
 - ✅ probability_models.yaml V2.0 (versioning)
 - ✅ trade_strategies.yaml V2.0 (versioning)
 - ✅ CONFIGURATION_GUIDE_V3.1.md (comprehensive)
-- ✅ VERSIONING_GUIDE.md (immutable versions)
-- ✅ TRAILING_STOP_GUIDE.md (trailing stop implementation)
-- ✅ POSITION_MANAGEMENT_GUIDE.md (complete position lifecycle)
+- ✅ VERSIONING_GUIDE_V1.0.md (immutable versions)
+- ✅ TRAILING_STOP_GUIDE_V1.0.md (trailing stop implementation)
+- ✅ POSITION_MANAGEMENT_GUIDE_V1.0.md (complete position lifecycle)
 - ✅ 002_add_alerts_table.sql (database migration)
 - ✅ MASTER_INDEX_V2.5.md (this file)
 - ✅ 4 ML documentation files planned (PROBABILITY_PRIMER, ELO_IMPLEMENTATION_GUIDE, MODEL_EVALUATION_GUIDE, MACHINE_LEARNING_ROADMAP)
@@ -352,9 +379,9 @@ Additional guides, references, and supporting documentation.
 - DEVELOPMENT_PHASES_V1.3.md (roadmap)
 - GLOSSARY.md (terminology)
 - Handoff_Protocol_V1.0.md (process reference)
-- VERSIONING_GUIDE.md (versioning patterns)
-- TRAILING_STOP_GUIDE.md (trailing stop implementation)
-- POSITION_MANAGEMENT_GUIDE.md (position lifecycle)
+- VERSIONING_GUIDE_V1.0.md (versioning patterns)
+- TRAILING_STOP_GUIDE_V1.0.md (trailing stop implementation)
+- POSITION_MANAGEMENT_GUIDE_V1.0.md (position lifecycle)
 
 ### ❌ Documents NOT in Project Knowledge
 **Criteria:** Change frequently, uploaded fresh each session**

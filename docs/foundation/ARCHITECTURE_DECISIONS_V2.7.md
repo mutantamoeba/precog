@@ -1,9 +1,16 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.6
-**Last Updated:** October 24, 2025
+**Version:** 2.7
+**Last Updated:** October 28, 2025
 **Status:** ✅ Current
+**Changes in v2.7:**
+- **PHASE 0.6B DOCUMENTATION:** Updated all supplementary specification document references to standardized filenames
+- **PHASE 5 PLANNING:** Added Decisions #30-32/ADR-035-037 (Phase 5 Trading Architecture)
+- Added ADR-035: Event Loop Architecture (async/await for real-time trading)
+- Added ADR-036: Exit Evaluation Strategy (priority hierarchy for 10 exit conditions)
+- Added ADR-037: Advanced Order Walking (multi-stage price walking with urgency levels)
+- Updated ADR references to point to standardized supplementary specs (EVENT_LOOP_ARCHITECTURE_V1.0.md, EXIT_EVALUATION_SPEC_V1.0.md, ADVANCED_EXECUTION_SPEC_V1.0.md)
 **Changes in v2.6:**
 - **PHASE 1 COMPLETION:** Added Decisions #24-29/ADR-029-034 (Database Schema Completion)
 - Added ADR-029: Elo Data Source (game_states over settlements)
@@ -1962,7 +1969,7 @@ class ConfigManager:
 - ✅ Database schema V1.5 (strategies, probability_models, trailing_stop_state, version FKs)
 - ✅ Complete documentation updates (10-day plan)
 - ✅ Architectural decisions documented (ADR-018 through ADR-028)
-- ✅ Implementation guides (VERSIONING_GUIDE.md, TRAILING_STOP_GUIDE.md, POSITION_MANAGEMENT_GUIDE.md)
+- ✅ Implementation guides (VERSIONING_GUIDE_V1.0.md, TRAILING_STOP_GUIDE_V1.0.md, POSITION_MANAGEMENT_GUIDE_V1.0.md)
 
 **Why Phase 1.5 AFTER Phase 1?**
 1. **Validation Before Complexity** - Test versioning system before Phase 2 complexity
@@ -2465,6 +2472,167 @@ ORDER BY created_at;
 
 ---
 
+## Decision #30/ADR-035: Event Loop Architecture (Phase 5)
+
+**Date:** October 28, 2025
+**Phase:** 5 (Trading MVP)
+**Status:** 🔵 Planned
+
+### Problem
+Need a real-time trading system that:
+- Monitors positions continuously for exit conditions
+- Processes market data updates efficiently
+- Manages multiple concurrent positions
+- Maintains low latency while respecting API rate limits
+
+### Decision
+**Use single-threaded async event loop with asyncio for all real-time trading operations.**
+
+Architecture:
+```python
+async def trading_event_loop():
+    while True:
+        # Entry evaluation (every 30s or on webhook)
+        await check_for_entry_opportunities()
+
+        # Position monitoring (frequency varies by position)
+        await monitor_all_positions()
+
+        # Exit evaluation (on price updates)
+        await evaluate_all_exit_conditions()
+
+        await asyncio.sleep(0.1)  # Prevent tight loop
+```
+
+### Rationale
+1. **Simplicity**: Single thread eliminates race conditions and locks
+2. **Sufficient Performance**: Can handle <200 concurrent positions easily
+3. **Python-Native**: asyncio is well-suited for I/O-bound tasks
+4. **Easy Debugging**: Sequential execution simplifies troubleshooting
+5. **Rate Limit Management**: Centralized control over API calls
+
+### Alternatives Considered
+- **Multi-threading**: Complex synchronization, Python GIL limitations
+- **Celery task queue**: Overkill for Phase 5, adds dependency
+- **Reactive streams (RxPY)**: Steeper learning curve, unnecessary complexity
+
+**Reference:** `supplementary/EVENT_LOOP_ARCHITECTURE_V1.0.md`
+
+---
+
+## Decision #31/ADR-036: Exit Evaluation Strategy (Phase 5)
+
+**Date:** October 28, 2025
+**Phase:** 5a (Position Monitoring & Exit Management)
+**Status:** 🔵 Planned
+
+### Problem
+Multiple exit conditions can trigger simultaneously. Need clear priority hierarchy and evaluation strategy to ensure:
+- Critical exits (stop loss) execute immediately
+- Conflicting exits don't cause race conditions
+- Partial exits are staged correctly
+
+### Decision
+**Evaluate ALL 10 exit conditions on every price update, select highest priority.**
+
+Priority Hierarchy:
+1. **CRITICAL** (Execute immediately, market order if needed):
+   - Stop Loss Hit
+   - Expiration Imminent (<2 hours)
+
+2. **HIGH** (Execute urgently, allow 1-2 price walks):
+   - Target Profit Hit
+   - Adverse Market Conditions
+
+3. **MEDIUM** (Execute when favorable, allow up to 5 price walks):
+   - Trailing Stop Hit
+   - Market Drying Up (low volume)
+   - Model Update (confidence drop)
+
+4. **LOW** (Opportunistic, cancel if not filled in 60s):
+   - Take Profit (early profit taking)
+   - Position Consolidation
+   - Rebalancing
+
+Evaluation Logic:
+```python
+def evaluate_exit(position):
+    triggered_exits = []
+    for exit_condition in ALL_10_CONDITIONS:
+        if exit_condition.is_triggered(position):
+            triggered_exits.append(exit_condition)
+
+    if not triggered_exits:
+        return None
+
+    # Select highest priority
+    return max(triggered_exits, key=lambda e: e.priority)
+```
+
+### Rationale
+1. **Complete Coverage**: No exit opportunity missed
+2. **Clear Hierarchy**: No ambiguity when multiple conditions trigger
+3. **Simple Logic**: Easy to test and debug
+4. **Urgency-Based Execution**: Matches exit urgency to execution strategy
+
+### Alternatives Considered
+- **First-triggered wins**: Could miss higher-priority exits
+- **Separate evaluation loops**: Risk of race conditions
+- **Rule-based engine**: Over-engineered for 10 conditions
+
+**Reference:** `supplementary/EXIT_EVALUATION_SPEC_V1.0.md`
+
+---
+
+## Decision #32/ADR-037: Advanced Order Walking (Phase 5b)
+
+**Date:** October 28, 2025
+**Phase:** 5b (Advanced Execution)
+**Status:** 🔵 Planned
+
+### Problem
+In thin markets, aggressive limit orders don't fill. Need to balance:
+- **Speed**: Get filled before opportunity disappears
+- **Price Improvement**: Don't pay unnecessarily wide spreads
+- **Market Impact**: Don't move the market against ourselves
+
+### Decision
+**Multi-stage price walking with urgency-based escalation.**
+
+Walking Algorithm:
+```
+Stage 1 (0-30s): Limit order at best bid/ask (no spread crossing)
+Stage 2 (30-60s): Walk 25% into spread every 10s
+Stage 3 (60-90s): Walk 50% into spread every 10s
+Stage 4 (90s+): Market order if urgency=CRITICAL, else cancel
+```
+
+Urgency Levels:
+- **CRITICAL** (stop loss, expiration): Market order after 90s
+- **HIGH** (target profit): Walk aggressively, give up after 120s
+- **MEDIUM** (trailing stop): Walk conservatively, give up after 180s
+- **LOW** (take profit): Cancel after 60s if no fill
+
+### Rationale
+1. **Adaptive**: Matches execution aggressiveness to exit urgency
+2. **Price Improvement**: Attempts best price first
+3. **Guaranteed Execution**: CRITICAL exits always fill (market order)
+4. **Market Awareness**: Avoids moving thin markets
+
+### Alternatives Considered
+- **Immediate market orders**: Expensive in thin markets
+- **Static limit orders**: Poor fill rates (<60% in testing)
+- **TWAP/VWAP algorithms**: Overkill for binary outcome markets
+
+### Implementation Notes
+- Phase 5a: Basic limit orders only
+- Phase 5b: Full walking algorithm (conditional on Phase 5a metrics)
+- Review fill rates after 2 weeks of Phase 5a before implementing
+
+**Reference:** `supplementary/ADVANCED_EXECUTION_SPEC_V1.0.md`
+
+---
+
 ## Lessons for Future Developers
 
 ### What Worked Well in Design
@@ -2500,9 +2668,10 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.6
-**Last Updated:** October 24, 2025
+**Document Version:** 2.7
+**Last Updated:** October 28, 2025
 **Critical Changes:**
+- v2.7: **PHASE 0.6B DOCUMENTATION + PHASE 5 PLANNING** - Updated supplementary doc references, Added Decisions #30-32/ADR-035-037 (Phase 5 Trading Architecture: Event Loop, Exit Evaluation Strategy, Advanced Order Walking)
 - v2.6: **PHASE 1 COMPLETION** - Added Decisions #24-29/ADR-029-034 (Database Schema Completion: Elo data source, Elo storage, settlements architecture, markets surrogate key, external ID traceability, SCD Type 2 completion)
 - v2.5: **STANDARDIZATION** - Added systematic ADR numbers to all decisions for traceability
 - v2.4: **CRITICAL** - Added Decisions #18-23/ADR-018-028 (Phase 0.5: Immutable Versions, Strategy & Model Versioning, Trailing Stops, Enhanced Position Management, Configuration Enhancements, Phase 0.5/1.5 Split)
@@ -2514,6 +2683,6 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 **Purpose:** Record and rationale for all major architectural decisions with systematic ADR numbering
 
-**For complete ADR catalog, see:** ADR_INDEX.md
+**For complete ADR catalog, see:** ADR_INDEX_V1.1.md
 
-**END OF ARCHITECTURE DECISIONS V2.6**
+**END OF ARCHITECTURE DECISIONS V2.7**

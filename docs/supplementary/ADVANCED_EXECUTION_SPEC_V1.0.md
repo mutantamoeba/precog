@@ -1,11 +1,13 @@
-# Phase 8: Advanced Execution Optimization
+# Advanced Execution Optimization
 ## Dynamic Depth Walker Implementation Specification
 
-**Version:** 1.0  
-**Date:** 2025-10-21  
-**Status:** 🔵 Design Complete, Awaiting Implementation  
-**Dependencies:** Phase 5 (Basic Execution), Phase 7 (Multi-Sport Trading)  
-**Related:** ADR-020 (Deferred Execution), ADR-021 (Method Abstraction)
+**Version:** 1.0
+**Date:** 2025-10-21
+**Last Updated:** 2025-10-28 (Phase 0.6b - Filename standardization)
+**Status:** 🔵 Design Complete, Awaiting Implementation
+**Dependencies:** Phase 5 (Basic Execution), Phase 7 (Multi-Sport Trading)
+**Related:** ADR-020 (Deferred Execution), ADR-021 (Method Abstraction), ADR-037 (Order Walking)
+**Filename Updated:** Renamed from PHASE_8_ADVANCED_EXECUTION_SPEC.md to ADVANCED_EXECUTION_SPEC_V1.0.md
 
 ---
 

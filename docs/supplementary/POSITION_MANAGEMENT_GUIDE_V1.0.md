@@ -3,8 +3,10 @@
 ---
 **Version:** 1.0
 **Created:** 2025-10-21
+**Last Updated:** 2025-10-28 (Phase 0.6b - Filename standardization)
 **Purpose:** Comprehensive guide to position lifecycle management in Precog
 **Status:** ✅ Complete
+**Filename Updated:** Renamed from POSITION_MANAGEMENT_GUIDE_V1.0.md to POSITION_MANAGEMENT_GUIDE_V1.0.md (added version number)
 ---
 
 ## Table of Contents
@@ -486,7 +488,7 @@ trailing_stop:
 
 **Purpose:** Lock in profits on winning positions
 
-**See TRAILING_STOP_GUIDE.md for complete details**
+**See TRAILING_STOP_GUIDE_V1.0.md for complete details**
 
 **4. Time-Based Urgent (HIGH)**
 
@@ -1479,7 +1481,7 @@ Good Position Management =
 
 ---
 
-**Document:** POSITION_MANAGEMENT_GUIDE.md
+**Document:** POSITION_MANAGEMENT_GUIDE_V1.0.md
 **Version:** 1.0
 **Created:** 2025-10-21
 **Last Updated:** 2025-10-21

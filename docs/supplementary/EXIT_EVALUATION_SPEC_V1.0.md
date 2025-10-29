@@ -1,10 +1,12 @@
-# Phase 5: Exit Evaluation Logic Specification
-**Version:** 1.0  
-**Date:** 2025-10-21  
-**Status:** 🔵 Design Complete - Ready for Implementation  
-**Phase:** 5a (Trading MVP)  
-**Dependencies:** Phase 1-4 (Infrastructure, Data, Models)  
-**Related:** ADR-021 (Method Abstraction), PHASE_5_POSITION_MONITORING_SPEC_V1_0.md
+# Exit Evaluation Logic Specification
+**Version:** 1.0
+**Date:** 2025-10-21
+**Last Updated:** 2025-10-28 (Phase 0.6b - Filename standardization)
+**Status:** 🔵 Design Complete - Ready for Implementation
+**Phase:** 5a (Trading MVP)
+**Dependencies:** Phase 1-4 (Infrastructure, Data, Models)
+**Related:** ADR-021 (Method Abstraction), ADR-036, POSITION_MONITORING_SPEC_V1.0.md
+**Filename Updated:** Renamed from PHASE_5_EXIT_EVALUATION_SPEC_V1_0.md to EXIT_EVALUATION_SPEC_V1.0.md
 
 ---
 
@@ -1564,6 +1566,6 @@ def test_price_walking_escalation():
 ---
 
 **Related Documents:**
-- `PHASE_5_POSITION_MONITORING_SPEC_V1_0.md` - Main monitoring loop
-- `PHASE_5_EVENT_LOOP_ARCHITECTURE_V1_0.md` - Complete system flow
+- `POSITION_MONITORING_SPEC_V1.0.md` - Main monitoring loop
+- `EVENT_LOOP_ARCHITECTURE_V1.0.md` - Complete system flow
 - `ADR_021_METHOD_ABSTRACTION.md` - Method configuration structure

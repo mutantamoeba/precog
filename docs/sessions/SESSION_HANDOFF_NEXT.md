@@ -40,9 +40,9 @@
    - Estimated: 1 hour
 
 3. **Update Cross-References in Guides**
-   - POSITION_MANAGEMENT_GUIDE.md
-   - VERSIONING_GUIDE.md
-   - TRAILING_STOP_GUIDE.md
+   - POSITION_MANAGEMENT_GUIDE_V1.0.md
+   - VERSIONING_GUIDE_V1.0.md
+   - TRAILING_STOP_GUIDE_V1.0.md
    - Use new REQ/ADR IDs consistently
    - Estimated: 0.5 hours
 
@@ -87,9 +87,9 @@ Start with: "Continue the documentation standardization. Update MASTER_REQUIREME
 - `MASTER_INDEX_V2.3.md` → V2.4
 
 **May Reference:**
-- `POSITION_MANAGEMENT_GUIDE.md`
-- `VERSIONING_GUIDE.md`
-- `TRAILING_STOP_GUIDE.md`
+- `POSITION_MANAGEMENT_GUIDE_V1.0.md`
+- `VERSIONING_GUIDE_V1.0.md`
+- `TRAILING_STOP_GUIDE_V1.0.md`
 
 ---
 
@@ -132,7 +132,7 @@ The system must implement dynamic monitoring with two frequencies:
 3. Price updates reflected in `positions.current_price`
 
 **References:**
-- POSITION_MANAGEMENT_GUIDE.md Section 4
+- POSITION_MANAGEMENT_GUIDE_V1.0.md Section 4
 - DATABASE_SCHEMA_SUMMARY_V1.5.md (positions.last_update)
 ```
 
@@ -177,7 +177,7 @@ Implement dynamic monitoring with two frequencies:
 
 **References:**
 - REQ-MON-001, REQ-MON-002
-- POSITION_MANAGEMENT_GUIDE.md
+- POSITION_MANAGEMENT_GUIDE_V1.0.md
 ```
 
 ---
@@ -214,9 +214,9 @@ Implement dynamic monitoring with two frequencies:
 ### Task 3: Update Cross-References (0.5 hours)
 
 **Files to Update:**
-- POSITION_MANAGEMENT_GUIDE.md
-- VERSIONING_GUIDE.md
-- TRAILING_STOP_GUIDE.md
+- POSITION_MANAGEMENT_GUIDE_V1.0.md
+- VERSIONING_GUIDE_V1.0.md
+- TRAILING_STOP_GUIDE_V1.0.md
 
 **Find and Replace:**
 - "monitoring requirements" → "REQ-MON-001"

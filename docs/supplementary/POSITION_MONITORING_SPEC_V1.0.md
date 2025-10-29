@@ -1,10 +1,12 @@
-# Phase 5: Position Monitoring & Exit Management Specification
-**Version:** 1.0  
-**Date:** 2025-10-21  
-**Status:** 🔵 Design Complete - Ready for Implementation  
-**Phase:** 5a (Trading MVP)  
-**Dependencies:** Phase 1-4 (Infrastructure, Data, Models)  
-**Related:** ADR-021 (Method Abstraction), PHASE_5_EXIT_EVALUATION_SPEC_V1_0.md
+# Position Monitoring & Exit Management Specification
+**Version:** 1.0
+**Date:** 2025-10-21
+**Last Updated:** 2025-10-28 (Phase 0.6b - Filename standardization)
+**Status:** 🔵 Design Complete - Ready for Implementation
+**Phase:** 5a (Trading MVP)
+**Dependencies:** Phase 1-4 (Infrastructure, Data, Models)
+**Related:** ADR-021 (Method Abstraction), EXIT_EVALUATION_SPEC_V1.0.md, EVENT_LOOP_ARCHITECTURE_V1.0.md
+**Filename Updated:** Renamed from PHASE_5_POSITION_MONITORING_SPEC_V1_0.md to POSITION_MONITORING_SPEC_V1.0.md
 
 ---
 
@@ -539,7 +541,7 @@ class PositionMonitor:
 
 ## Exit Evaluation
 
-See `PHASE_5_EXIT_EVALUATION_SPEC_V1_0.md` for complete specification of:
+See `EXIT_EVALUATION_SPEC_V1.0.md` for complete specification of:
 - Exit condition checking
 - Priority resolution
 - Partial exit detection
@@ -548,7 +550,7 @@ See `PHASE_5_EXIT_EVALUATION_SPEC_V1_0.md` for complete specification of:
 
 ## Exit Execution
 
-See `PHASE_5_EXIT_EVALUATION_SPEC_V1_0.md` for complete specification of:
+See `EXIT_EVALUATION_SPEC_V1.0.md` for complete specification of:
 - Urgency-based execution strategies
 - Failed exit handling
 - Progressive escalation
@@ -974,4 +976,4 @@ ORDER BY hour DESC;
 
 ---
 
-**Next Document:** See `PHASE_5_EXIT_EVALUATION_SPEC_V1_0.md` for exit condition logic.
+**Next Document:** See `EXIT_EVALUATION_SPEC_V1.0.md` for exit condition logic.

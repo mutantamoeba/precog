@@ -1,4 +1,14 @@
-# Comprehensive sports win probability data across three major betting markets
+# Sports Win Probabilities Research
+## Comprehensive sports win probability data across three major betting markets
+
+**Version:** 1.0
+**Date:** 2025-10-21
+**Last Updated:** 2025-10-28 (Phase 0.6b - Filename standardization)
+**Status:** ✅ Complete - Reference Document
+**Purpose:** Historical win probability benchmarks for NFL, NBA, and tennis markets
+**Filename Updated:** Renamed from "Comprehensive sports win probabilities from three major betting markets.md" to SPORTS_PROBABILITIES_RESEARCH_V1.0.md
+
+---
 
 **Win probabilities in sports betting are surprisingly precise and well-documented, with NFL halftime leads of 10+ points yielding 89.5% win rates, NBA home teams overcoming 3-point halftime deficits 50% of the time, and tennis players leading 2-0 in Grand Slams winning 82-85% of matches.** These benchmarks, drawn from datasets spanning decades and tens of thousands of games, provide robust validation points for odds matrices. The data reveals critical gaps in granular halftime margin breakdowns (especially 4-6 and 7-9 point ranges), highlights the dramatic 20% decline in home field advantage since 2020 across sports, and exposes significant surface-dependent variations in tennis that betting markets often undervalue. Advanced NFL metrics like EPA (Expected Points Added) and DVOA (Defense-adjusted Value Over Average) have emerged as the gold standards for predictive modeling, with EPA data freely available through nflfastR covering every play since 1999, while proprietary systems like ESPN's FPI combine multiple factors but lack transparency.
 

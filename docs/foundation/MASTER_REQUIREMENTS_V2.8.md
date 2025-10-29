@@ -1,9 +1,18 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.7
-**Last Updated:** 2025-10-24
+**Version:** 2.8
+**Last Updated:** 2025-10-28
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.8:**
+- **PHASE 0.6B DOCUMENTATION**: Updated all supplementary document references with standardized filenames (removed PHASE_ prefixes, standardized V1.0 format)
+- **NEW SECTION 4.10**: CLI Commands requirements (REQ-CLI-001 through REQ-CLI-005) - Typer framework with 5 core commands
+- **PHASE 1 EXPANSION**: Expanded Phase 1 from 2 weeks to 6 weeks with detailed weekly breakdown
+- **IMPLEMENTATION STATUS**: Added status tracking (✅ Complete, 🟡 Partial, ❌ Not Started) to Phase 1 deliverables
+- **DOCUMENTATION REORGANIZATION**: Section 2.4 now organized by document type (Foundation, Supplementary, Supplementary Specifications, Planned)
+- Updated all supplementary doc references: VERSIONING_GUIDE_V1.0.md, TRAILING_STOP_GUIDE_V1.0.md, POSITION_MANAGEMENT_GUIDE_V1.0.md, ADVANCED_EXECUTION_SPEC_V1.0.md, EVENT_LOOP_ARCHITECTURE_V1.0.md, EXIT_EVALUATION_SPEC_V1.0.md, POSITION_MONITORING_SPEC_V1.0.md, ORDER_EXECUTION_ARCHITECTURE_V1.0.md, SPORTS_PROBABILITIES_RESEARCH_V1.0.md, USER_CUSTOMIZATION_STRATEGY_V1.0.md
+- Added cross-references to ADRs in supplementary spec descriptions (ADR-035, ADR-036, ADR-037)
+- Phase 1 now shows 50% complete (Database ✅, API/CLI ❌)
 **Changes in v2.7:**
 - **COMPLETENESS**: Added 7 missing operational tables to section 4.2 (platforms, settlements, account_balance, config_overrides, circuit_breaker_events, system_health, alerts)
 - **NEW SECTION 4.7**: Trading Methods requirements (REQ-METH-001 through REQ-METH-015) - Phase 4-5 implementation
@@ -178,25 +187,38 @@ precog/
 
 ### 2.4 Documentation Structure
 - **This Document**: Master requirements (overview, phases, objectives)
-- **Supplementary Documents** (in `docs/` folder):
-  1. `API_INTEGRATION_GUIDE.md` - Detailed API specs with code examples
-  2. `DATABASE_DESIGN.md` - Full schema, relationships, migration scripts
-  3. `DATABASE_SCHEMA_SUMMARY.md` - V1.6 (alerts table, method placeholders, ML placeholders)
-  4. `EDGE_DETECTION_SPEC.md` - Mathematical formulas, decision algorithms
-  5. `TESTING_GUIDE.md` - Test cases, fixtures, mocking strategies
-  6. `DEPLOYMENT_GUIDE.md` - Setup instructions, cloud migration
-  7. `DEVELOPER_ONBOARDING.md` - Getting started guide for new developers
-  8. `KALSHI_DECIMAL_PRICING_CHEAT_SHEET.md` - ⚠️ **PRINT AND KEEP AT DESK**
-  9. `CONFIGURATION_GUIDE.md` - YAML configuration reference
-  10. `ARCHITECTURE_DECISIONS.md` - Design rationale and trade-offs
-  11. `VERSIONING_GUIDE.md` - Strategy and model versioning patterns
-  12. `TRAILING_STOP_GUIDE.md` - Trailing stop loss implementation
-  13. `REQUIREMENT_INDEX.md` - Systematic requirement catalog (NEW in V2.6)
-  14. `ADR_INDEX.md` - Architecture decision index (NEW in V2.6)
-  15. `MACHINE_LEARNING_ROADMAP.md` - ML learning path and phased implementation (PLANNED - Phase 9)
-  16. `PROBABILITY_PRIMER.md` - Expected value, Kelly Criterion, probability concepts (PLANNED - Phase 4)
-  17. `ELO_IMPLEMENTATION_GUIDE.md` - Elo rating system implementation details (PLANNED - Phase 4)
-  18. `MODEL_EVALUATION_GUIDE.md` - Model validation, metrics, A/B testing (PLANNED - Phase 9)
+- **Foundation Documents** (in `docs/foundation/`):
+  1. `PROJECT_OVERVIEW_V1.3.md` - System architecture and tech stack
+  2. `MASTER_REQUIREMENTS_V2.8.md` - This document (requirements through Phase 10)
+  3. `MASTER_INDEX_V2.6.md` - Complete document inventory
+  4. `ARCHITECTURE_DECISIONS_V2.7.md` - All 37 ADRs with design rationale
+  5. `REQUIREMENT_INDEX_V1.1.md` - Systematic requirement catalog
+  6. `ADR_INDEX_V1.1.md` - Architecture decision index
+  7. `TESTING_STRATEGY_V1.1.md` - Test cases and coverage requirements
+
+- **Supplementary Documents** (in `docs/supplementary/`):
+  8. `VERSIONING_GUIDE_V1.0.md` - Strategy and model versioning patterns (Phase 0.5)
+  9. `TRAILING_STOP_GUIDE_V1.0.md` - Trailing stop loss implementation (Phase 0.5)
+  10. `POSITION_MANAGEMENT_GUIDE_V1.0.md` - Position lifecycle management (Phase 0.5)
+  11. `ODDS_RESEARCH_COMPREHENSIVE.md` - Historical odds research and validation
+  12. `SPORTS_PROBABILITIES_RESEARCH_V1.0.md` - NFL/NBA/Tennis win probability benchmarks
+
+- **Supplementary Specifications** (in `docs/supplementary/`):
+  13. `ADVANCED_EXECUTION_SPEC_V1.0.md` - Phase 5b execution strategies (dynamic price walking)
+  14. `EVENT_LOOP_ARCHITECTURE_V1.0.md` - Phase 5 event loop design (see ADR-035)
+  15. `EXIT_EVALUATION_SPEC_V1.0.md` - Phase 5a exit condition evaluation (see ADR-036)
+  16. `POSITION_MONITORING_SPEC_V1.0.md` - Phase 5a position monitoring strategies
+  17. `ORDER_EXECUTION_ARCHITECTURE_V1.0.md` - Order execution assessment and architecture
+  18. `USER_CUSTOMIZATION_STRATEGY_V1.0.md` - User-facing customization options (Phase 10+)
+
+- **Planned Documentation** (Phase 4-9):
+  19. `MACHINE_LEARNING_ROADMAP.md` - ML learning path and phased implementation (Phase 9)
+  20. `PROBABILITY_PRIMER.md` - Expected value, Kelly Criterion, probability concepts (Phase 4)
+  21. `ELO_IMPLEMENTATION_GUIDE.md` - Elo rating system implementation details (Phase 4)
+  22. `MODEL_EVALUATION_GUIDE.md` - Model validation, metrics, A/B testing (Phase 9)
+  23. `API_INTEGRATION_GUIDE.md` - Detailed API specs with code examples (Phase 1)
+  24. `DEPLOYMENT_GUIDE.md` - Setup instructions, cloud migration (Phase 3)
+  25. `KALSHI_DECIMAL_PRICING_CHEAT_SHEET.md` - ⚠️ **PRINT AND KEEP AT DESK** (Phase 1)
 
 ---
 
@@ -294,7 +316,7 @@ precog/
 - `config` field (strategy parameters, model hyperparameters)
 - `version` field (version number)
 
-**See VERSIONING_GUIDE.md for implementation details**
+**See VERSIONING_GUIDE_V1.0.md for implementation details**
 
 ---
 
@@ -697,6 +719,60 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 
 ---
 
+### 4.10 CLI Commands (Phase 1 Implementation)
+
+Command-line interface for interacting with Kalshi API and managing local database operations.
+
+**REQ-CLI-001: CLI Framework with Typer**
+- Phase: 1
+- Priority: Critical
+- Status: 🔵 Planned
+- Description: Implement CLI using Typer framework with automatic type hint inference, help generation, and command grouping
+- Implementation: `main.py` as entry point with Typer app instance
+- Benefits: Type safety, automatic validation, rich help output, IDE support
+
+**REQ-CLI-002: Balance Fetch Command**
+- Phase: 1
+- Priority: Critical
+- Status: 🔵 Planned
+- Description: `main.py fetch-balance` command to retrieve account balance from Kalshi API and store in database
+- Functionality: Call Kalshi API `/portfolio/balance`, parse response, store in account_balance table with timestamp
+- Output: Display current balance, available balance, and payout_pending_balance (all as Decimal)
+
+**REQ-CLI-003: Positions Fetch Command**
+- Phase: 1
+- Priority: Critical
+- Status: 🔵 Planned
+- Description: `main.py fetch-positions` command to retrieve all open positions and store/update in database
+- Functionality: Call Kalshi API `/portfolio/positions`, update positions table using SCD Type 2 versioning
+- Output: Display count of open positions, total exposure, unrealized P&L
+
+**REQ-CLI-004: Fills Fetch Command**
+- Phase: 1
+- Priority: Critical
+- Status: 🔵 Planned
+- Description: `main.py fetch-fills` command to retrieve trade fills and store in trades table
+- Functionality: Call Kalshi API `/portfolio/fills`, insert new fills into trades table (append-only)
+- Output: Display count of new fills, total executed volume, execution summary
+
+**REQ-CLI-005: Settlements Fetch Command**
+- Phase: 1
+- Priority: High
+- Status: 🔵 Planned
+- Description: `main.py fetch-settlements` command to retrieve market settlements and update database
+- Functionality: Call Kalshi API `/portfolio/settlements`, update markets and positions tables with settlement data
+- Output: Display count of settled markets, total settlement proceeds, realized P&L
+
+**CLI Design Principles:**
+- All commands use type hints for automatic validation
+- All prices displayed and stored as Decimal (NEVER float)
+- Rich console output with tables and colors (using `rich` library)
+- Comprehensive error handling with user-friendly messages
+- Verbose flag (`--verbose`) for debugging
+- Dry-run flag (`--dry-run`) for testing without database writes
+
+---
+
 ## 5. Development Phases
 
 ### Phase 0: Foundation & Documentation (COMPLETED)
@@ -756,37 +832,87 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 
 **Documentation**:
 - `DATABASE_SCHEMA_SUMMARY_V1.5.md`
-- `VERSIONING_GUIDE.md`
-- `TRAILING_STOP_GUIDE.md`
-- `POSITION_MANAGEMENT_GUIDE.md`
+- `VERSIONING_GUIDE_V1.0.md`
+- `TRAILING_STOP_GUIDE_V1.0.md`
+- `POSITION_MANAGEMENT_GUIDE_V1.0.md`
 - `REQUIREMENT_INDEX.md`
 - `ADR_INDEX.md`
 
 ---
 
-### Phase 1: Core Foundation (Weeks 1-2)
+### Phase 1: Core Foundation (Weeks 1-6)
 
-**Goal**: Establish project structure, Kalshi API connectivity, and account management.
+**Goal**: Establish project structure, Kalshi API connectivity, CLI commands, and account management.
+
+**Status**: 🟡 50% Complete (Database ✅, API/CLI ❌)
 
 **Key Requirements:**
 - **REQ-API-001: Kalshi API Integration**
 - **REQ-API-002: RSA-PSS Authentication (Kalshi)**
 - **REQ-API-005: API Rate Limit Management**
 - **REQ-API-006: API Error Handling**
+- **REQ-DB-008: Database Connection Pooling**
+- **REQ-CLI-001: CLI Command Framework** (NEW)
+- **REQ-CLI-002: Balance Fetch Command** (NEW)
+- **REQ-CLI-003: Positions Fetch Command** (NEW)
+- **REQ-CLI-004: Fills Fetch Command** (NEW)
+- **REQ-CLI-005: Settlements Fetch Command** (NEW)
 
 **Key Deliverables**:
-- Project setup with .env configuration
-- Kalshi API client with HMAC-SHA256 authentication
-- Database connection and ORM models for account data (using V1.5 schema)
-- **Decimal conversion utilities** in `utils/decimal_helpers.py`
-- CRUD operations with versioning (RowCurrentInd)
-- CLI to fetch/store balance, positions, fills, settlements
-- Unit tests for API client, database operations, and decimal conversion
-- **Verify all prices stored as DECIMAL(10,4)**
 
-**Critical**: Parse `*_dollars` fields from Kalshi API, NEVER integer cents
+**Week 1: Environment Setup** (✅ COMPLETE)
+- ✅ Python 3.12+ virtual environment
+- ✅ PostgreSQL 15+ database installation
+- ✅ Git repository initialization with clean history
+- ✅ Multi-environment configuration (.env with DEV/STAGING/PROD/TEST prefixes)
+- ✅ Install dependencies from requirements.txt
 
-**Documentation**: `API_INTEGRATION_GUIDE.md` (Kalshi section), `DEVELOPER_ONBOARDING.md`, `KALSHI_DECIMAL_PRICING_CHEAT_SHEET.md`
+**Weeks 1-2: Database Implementation** (✅ COMPLETE)
+- ✅ All 25 tables created with proper indexes and constraints
+- ✅ SCD Type 2 versioning logic implemented (row_current_ind)
+- ✅ Database migrations 001-010 applied
+- ✅ CRUD operations in `database/crud_operations.py`
+- ✅ Database connection pool in `database/connection.py`
+- ✅ 66/66 tests passing, 87% coverage
+- ✅ All prices using DECIMAL(10,4) precision
+
+**Weeks 2-4: Kalshi API Integration** (❌ NOT STARTED)
+- [ ] RSA-PSS authentication implementation
+- [ ] Token refresh logic (30-minute cycle)
+- [ ] REST endpoints: markets, events, series, balance, positions, orders
+- [ ] Error handling and exponential backoff retry logic
+- [ ] Rate limiting (100 req/min throttle)
+- [ ] Parse `*_dollars` fields as DECIMAL (NEVER integer cents)
+- [ ] API client in `api_connectors/kalshi_client.py`
+
+**Week 4: Configuration System** (🟡 PARTIAL)
+- ✅ YAML configuration files created (7 files)
+- [ ] Config loader with validation (`config/config_loader.py`)
+- [ ] Environment variable integration
+- [ ] Config override mechanism
+
+**Week 5: CLI Development** (❌ NOT STARTED)
+- [ ] CLI framework with Typer
+- [ ] `main.py fetch-balance` command (REQ-CLI-002)
+- [ ] `main.py fetch-positions` command (REQ-CLI-003)
+- [ ] `main.py fetch-fills` command (REQ-CLI-004)
+- [ ] `main.py fetch-settlements` command (REQ-CLI-005)
+- [ ] Type hints for all commands
+
+**Week 6: Testing & Validation** (🟡 PARTIAL)
+- ✅ Database tests (66/66 passing)
+- [ ] API client unit tests (mock responses)
+- [ ] Integration tests (live demo API)
+- [ ] CLI command tests
+- [ ] Maintain >80% code coverage
+
+**Critical**: ALL prices must use `Decimal` type and be stored as DECIMAL(10,4)
+
+**Documentation**:
+- `API_INTEGRATION_GUIDE_V1.0.md` (Kalshi section) - PLANNED
+- `DEVELOPER_ONBOARDING.md` - PLANNED
+- `KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md` - PLANNED
+- `CLI_DEVELOPMENT_GUIDE.md` - PLANNED
 
 ---
 
@@ -913,7 +1039,7 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 - Compare model versions (A/B testing)
 - Activate/deprecate models
 
-**Documentation**: `EDGE_DETECTION_SPEC.md` (formulas, buckets, EV calculation with Decimal), `VERSIONING_GUIDE.md` (model versioning examples)
+**Documentation**: `EDGE_DETECTION_SPEC.md` (formulas, buckets, EV calculation with Decimal), `VERSIONING_GUIDE_V1.0.md` (model versioning examples)
 
 ---
 
@@ -1074,7 +1200,7 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 - position_exits table (NEW): Track each exit event (including partials)
 - exit_attempts table (NEW): Track each exit order attempt (for walking/debugging)
 
-**Documentation**: `POSITION_MANAGEMENT_GUIDE.md`, `VERSIONING_GUIDE.md`, `TRAILING_STOP_GUIDE.md`
+**Documentation**: `POSITION_MANAGEMENT_GUIDE_V1.0.md`, `VERSIONING_GUIDE_V1.0.md`, `TRAILING_STOP_GUIDE_V1.0.md`
 
 ---
 
@@ -1096,7 +1222,7 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 - **Sport-specific Kelly fractions** (NFL: 0.25, NBA: 0.22, Tennis: 0.18)
 - CLI command: `main.py fetch-markets --sport NBA`
 
-**Documentation**: `API_INTEGRATION_GUIDE.md` (new sport APIs), update `EDGE_DETECTION_SPEC.md`, `VERSIONING_GUIDE.md` (sport-specific model examples)
+**Documentation**: `API_INTEGRATION_GUIDE.md` (new sport APIs), update `EDGE_DETECTION_SPEC.md`, `VERSIONING_GUIDE_V1.0.md` (sport-specific model examples)
 
 ---
 
@@ -1119,7 +1245,7 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 - **Trailing stops** for all sports positions
 - CLI command: `main.py trade --sport all --auto`
 
-**Documentation**: Update `EDGE_DETECTION_SPEC.md` (sport-specific adjustments), `VERSIONING_GUIDE.md` (multi-sport versioning)
+**Documentation**: Update `EDGE_DETECTION_SPEC.md` (sport-specific adjustments), `VERSIONING_GUIDE_V1.0.md` (multi-sport versioning)
 
 ---
 
@@ -1147,7 +1273,7 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 - **Create culture model versions** (sentiment_analyzer v1.0)
 - Extend edge detector for culture markets
 
-**Documentation**: `WEB_SCRAPING_GUIDE.md` (BeautifulSoup/Scrapy examples, rate limiting), `VERSIONING_GUIDE.md` (non-sports model examples)
+**Documentation**: `WEB_SCRAPING_GUIDE.md` (BeautifulSoup/Scrapy examples, rate limiting), `VERSIONING_GUIDE_V1.0.md` (non-sports model examples)
 
 ---
 
@@ -1165,7 +1291,7 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 - Enhanced edge detection with premium data
 - **Use existing model versioning system** (create new model versions, don't rebuild system)
 
-**Documentation**: `MCP_INTEGRATION_GUIDE.md`, update `API_INTEGRATION_GUIDE.md`, `VERSIONING_GUIDE.md` (ensemble model examples)
+**Documentation**: `MCP_INTEGRATION_GUIDE.md`, update `API_INTEGRATION_GUIDE.md`, `VERSIONING_GUIDE_V1.0.md` (ensemble model examples)
 
 ---
 
@@ -1200,7 +1326,7 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 - Cross-platform exposure limits
 - Trailing stops work consistently across platforms
 
-**Documentation**: `POLYMARKET_INTEGRATION_GUIDE.md`, `PLATFORM_ABSTRACTION_DESIGN.md`, update `ARCHITECTURE_DECISIONS.md`, `VERSIONING_GUIDE.md` (cross-platform versioning)
+**Documentation**: `POLYMARKET_INTEGRATION_GUIDE.md`, `PLATFORM_ABSTRACTION_DESIGN.md`, update `ARCHITECTURE_DECISIONS.md`, `VERSIONING_GUIDE_V1.0.md` (cross-platform versioning)
 
 ---
 
@@ -1489,7 +1615,7 @@ def test_trailing_stop_trigger():
 - Trade without version attribution: `log.error("Trade missing strategy_id or model_id")`
 - Trailing stop state corrupted: `log.error("Invalid trailing_stop_state JSONB")`
 
-**Implementation details**: See `API_INTEGRATION_GUIDE.md` (retry logic), `utils/logger.py`, `utils/decimal_helpers.py`, `VERSIONING_GUIDE.md` (error handling)
+**Implementation details**: See `API_INTEGRATION_GUIDE.md` (retry logic), `utils/logger.py`, `utils/decimal_helpers.py`, `VERSIONING_GUIDE_V1.0.md` (error handling)
 
 ---
 
@@ -1555,7 +1681,7 @@ def test_trailing_stop_trigger():
 - Alert if immutability violation detected
 - Pause if trailing stops fail to update properly
 
-**Detailed risk formulas**: See `EDGE_DETECTION_SPEC.md` (Kelly Criterion, exposure calculations with DECIMAL), `TRAILING_STOP_GUIDE.md` (stop loss calculations)
+**Detailed risk formulas**: See `EDGE_DETECTION_SPEC.md` (Kelly Criterion, exposure calculations with DECIMAL), `TRAILING_STOP_GUIDE_V1.0.md` (stop loss calculations)
 
 ---
 
@@ -1614,7 +1740,7 @@ def test_trailing_stop_trigger():
 **Critical - Read First:**
 1. **KALSHI_DECIMAL_PRICING_CHEAT_SHEET.md** ⚠️ **PRINT AND KEEP AT DESK**
 2. **DEVELOPER_ONBOARDING.md** - Getting started guide
-3. **VERSIONING_GUIDE.md** - Strategy and model versioning patterns
+3. **VERSIONING_GUIDE_V1.0.md** - Strategy and model versioning patterns
 4. **REQUIREMENT_INDEX.md** - Systematic requirement catalog (NEW in V2.6)
 5. **ADR_INDEX.md** - Architecture decision index (NEW in V2.6)
 
@@ -1629,8 +1755,8 @@ def test_trailing_stop_trigger():
 11. `TESTING_GUIDE.md` - Test cases and fixtures
 12. `DEPLOYMENT_GUIDE.md` - Setup and deployment
 13. `ENVIRONMENT_CHECKLIST.md` - Windows 11 setup guide
-14. `TRAILING_STOP_GUIDE.md` - Trailing stop loss implementation
-15. `POSITION_MANAGEMENT_GUIDE.md` - Enhanced position management
+14. `TRAILING_STOP_GUIDE_V1.0.md` - Trailing stop loss implementation
+15. `POSITION_MANAGEMENT_GUIDE_V1.0.md` - Enhanced position management
 16. `PHASE_1.5_PLAN.md` - Foundation validation plan
 
 **Phase 10 Documentation:**
@@ -1663,7 +1789,7 @@ def test_trailing_stop_trigger():
 4. ALWAYS link trades to strategy_id and model_id
 5. Use semantic versioning (major.minor: v1.0, v1.1, v2.0)
 6. Test version immutability in unit tests
-7. Reference VERSIONING_GUIDE.md for patterns
+7. Reference VERSIONING_GUIDE_V1.0.md for patterns
 
 ### ⚠️ Configuration (ALWAYS)
 1. Load settings from YAML files in `config/` directory
@@ -1696,7 +1822,7 @@ def test_trailing_stop_trigger():
 For questions or issues:
 1. Check supplementary docs in `docs/` folder
 2. Review KALSHI_DECIMAL_PRICING_CHEAT_SHEET.md for pricing issues
-3. Review VERSIONING_GUIDE.md for versioning questions
+3. Review VERSIONING_GUIDE_V1.0.md for versioning questions
 4. Review REQUIREMENT_INDEX.md for requirement details
 5. Review test cases for implementation examples
 6. Submit GitHub issues for bugs or feature requests

@@ -3,8 +3,10 @@
 ---
 **Version:** 1.0
 **Created:** 2025-10-21
+**Last Updated:** 2025-10-28 (Phase 0.6b - Filename standardization)
 **Purpose:** Comprehensive guide to trailing stop implementation and usage in Precog
 **Status:** ✅ Complete
+**Filename Updated:** Renamed from TRAILING_STOP_GUIDE_V1.0.md to TRAILING_STOP_GUIDE_V1.0.md (added version number)
 ---
 
 ## Table of Contents
@@ -1199,7 +1201,7 @@ WHERE trailing_stop_state->>'active' = 'true'
 
 ---
 
-**Document:** TRAILING_STOP_GUIDE.md
+**Document:** TRAILING_STOP_GUIDE_V1.0.md
 **Version:** 1.0
 **Created:** 2025-10-21
 **Last Updated:** 2025-10-21
