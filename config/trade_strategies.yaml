@@ -1,0 +1,659 @@
+# trade_strategies.yaml - Strategy-Specific Parameters
+# ============================================
+# This file defines WHEN and HOW to trade based on different strategies.
+# Each strategy has different risk/reward profiles and works best in
+# different market conditions.
+#
+# Think of these as different "trading playbooks" - you use different
+# plays depending on the situation.
+#
+# Version: 2.0 (Phase 0.5 - Added Versioning Support)
+# Last Updated: 2025-10-21
+# ============================================
+
+# ============================================
+# STRATEGY VERSIONING & LIFECYCLE (Phase 0.5)
+# ============================================
+# CRITICAL CONCEPT: Immutable strategy versions for performance tracking
+# WHY: Cannot evaluate strategy improvements if strategy keeps changing!
+#      Immutable versions allow rigorous backtesting and attribution
+#
+# VERSIONING PHILOSOPHY:
+# - Each strategy configuration gets unique version (e.g., "live_continuous_v1.0")
+# - Once deployed, version is IMMUTABLE (never changes)
+# - To modify: create NEW version (e.g., "live_continuous_v1.1")
+# - Old versions stay in database for historical analysis
+#
+# SEMANTIC VERSIONING:
+# - v1.0 → v1.1: Minor update (parameter adjustment)
+#   Example: Change required_confidence from 0.08 to 0.10
+# - v1.0 → v2.0: Major update (significant logic change)
+#   Example: Change from pre-game to live-only strategy
+#
+# LIFECYCLE STATES:
+# 1. DRAFT: Being developed, not deployed
+# 2. TESTING: In paper trading or limited deployment
+# 3. ACTIVE: Fully deployed, generating real trades
+# 4. DEPRECATED: Replaced by newer version, kept for records
+#
+# EXAMPLE LIFECYCLE:
+# pre_game_nfl_v1.0 (ACTIVE)   → Deployed, making trades
+#     ↓ (found required_confidence too low, too many losses)
+# pre_game_nfl_v1.1 (TESTING)  → Testing with required_confidence 0.10
+#     ↓ (v1.1 performs 5% better over 60 days)
+# pre_game_nfl_v1.0 (DEPRECATED) + pre_game_nfl_v1.1 (ACTIVE)
+#
+# DATABASE SCHEMA (strategies table):
+# - strategy_id: Primary key
+# - strategy_name: "pre_game_entry"
+# - strategy_version: "v1.0"
+# - sport: "nfl" | "nba" | "mlb" | NULL (multi-sport)
+# - status: "draft" | "testing" | "active" | "deprecated"
+# - config: JSONB (full configuration from this file)
+# - created_at: Timestamp
+#
+# USAGE IN TRADING:
+# - Each trade records strategy_id used
+# - Enables attribution: Which strategy generated profitable trades?
+# - Enables A/B testing: Compare v1.0 vs v1.1 performance side-by-side
+#
+# EXAMPLE TRADE RECORD:
+# - trade_id: 12345
+# - strategy_id: 42 (pre_game_nfl_v1.1)
+# - model_id: 17 (elo_nfl_v2.0)
+# - method_id: 8 (combines strategy + model + position mgmt)
+# → Full attribution chain!
+
+versioning:
+  # Enable strategy versioning?
+  # WHY: Required for Phase 5+ when multiple strategies compete
+  enabled: true
+
+  # Version naming convention
+  # Format: {strategy_type}_{sport}_{version}
+  # Examples:
+  #   - pre_game_nfl_v1.0
+  #   - live_continuous_nba_v2.3
+  #   - halftime_mlb_v1.0
+  #   - settlement_arb_v1.0 (multi-sport, no sport suffix)
+  naming_convention: "{strategy_type}_{sport}_v{major}.{minor}"
+
+  # Version lifecycle management
+  lifecycle:
+    # Require testing period before ACTIVE?
+    # WHY: Don't deploy untested strategies with real money
+    require_testing: true
+    min_testing_days: 60  # Minimum 60 days in TESTING (longer than models)
+    min_testing_trades: 50  # Minimum 50 trades
+
+    # Auto-deprecate old versions?
+    # WHY: Once v1.1 is ACTIVE, v1.0 should be DEPRECATED
+    auto_deprecate_on_replacement: true
+
+    # Keep deprecated versions in database?
+    # WHY: Historical analysis and audit trail
+    retain_deprecated: true
+    retention_years: 5  # Keep for 5 years
+
+  # A/B Testing configuration
+  # WHY: Run multiple strategy versions side-by-side to compare
+  ab_testing:
+    enabled: true
+
+    # How to split traffic between versions?
+    # Example: v1.0 (70%) vs v1.1 (30%)
+    # WHY: Strategies affect capital allocation, more conservative split
+    default_traffic_split:
+      existing_version: 0.70  # 70% of capital
+      new_version: 0.30       # 30% of capital
+
+    # Evaluation criteria for promotion
+    # WHY: Need objective criteria to promote v1.1 → ACTIVE
+    promotion_criteria:
+      min_improvement_pct: 0.05  # 5% better Sharpe ratio
+      min_evaluation_period_days: 60
+      confidence_level: 0.95  # 95% statistical significance
+      min_trade_count: 50  # Need enough trades for significance
+
+    # Performance metrics for comparison
+    # WHY: Multiple dimensions matter, not just profit
+    comparison_metrics:
+      - "sharpe_ratio"        # Risk-adjusted return
+      - "win_rate"            # % of profitable trades
+      - "avg_profit_per_trade"  # Average trade profit
+      - "max_drawdown"        # Worst losing streak
+      - "edge_accuracy"       # Predicted vs actual edges
+
+# ============================================
+# STRATEGY PRIORITY
+# ============================================
+# Which strategies are enabled and in what order?
+# WHY: If multiple strategies find edges in the same market,
+# use this priority to decide which one to execute.
+
+strategy_priority:
+  1: halftime_entry      # Highest priority
+  2: live_trading
+  3: pre_game_entry
+  4: settlement_arbitrage
+  # Lower number = higher priority
+
+# ============================================
+# PRE-GAME ENTRY STRATEGY
+# ============================================
+# Trade BEFORE the game starts based on model predictions.
+#
+# PROS:
+# - More time to analyze
+# - Less emotional/reactive
+# - Can use historical data better
+#
+# CONS:
+# - No live game information
+# - Lineup changes can invalidate edge
+# - Weather changes can invalidate edge
+#
+# WHEN TO USE: When your model has strong historical edges
+# and game conditions are stable (weather forecast, lineups confirmed)
+
+pre_game_entry:
+  enabled: true
+  
+  # How early before game start can we trade?
+  # WHY: Too early = risk lineup changes, weather changes
+  #      Too late = market might have moved, edge gone
+  min_hours_before_game: 0.5   # 30 minutes minimum
+  max_hours_before_game: 24.0  # 24 hours maximum
+  
+  # Sports-specific configuration
+  sports_config:
+    nfl:
+      enabled: true
+      
+      # Confidence thresholds
+      # WHY: Pre-game has more uncertainty, so require higher edge
+      required_confidence: 0.08  # 8% minimum edge
+      
+      # Which markets to trade pre-game?
+      # Different markets have different pre-game predictability
+      allowed_markets:
+        - "game_winner"          # WHO wins (most predictable pre-game)
+        - "total_points"         # Over/under (fairly predictable)
+        - "point_spread"         # Spread (predictable if line shopping)
+        # - "first_touchdown"    # Uncomment if model supports
+        # - "player_props"       # Uncomment if model supports
+      
+      # Lineup requirements
+      # WHY: If key players are out, model predictions are less reliable
+      require_full_lineup: true
+      max_key_injuries: 1        # Max 1 key player injury tolerated
+      
+      # Weather requirements (for outdoor games)
+      weather_limits:
+        max_wind_mph: 20         # High wind affects passing
+        max_precipitation: 0.3   # Heavy rain affects scoring
+        exclude_snow: true       # Snow games are chaotic
+    
+    nba:
+      enabled: true
+      required_confidence: 0.10  # 10% (NBA harder to predict pre-game)
+      allowed_markets:
+        - "game_winner"
+        - "total_points"
+        - "point_spread"
+      require_full_lineup: true
+      max_key_injuries: 2        # NBA more resilient to injuries
+    
+    mlb:
+      enabled: false  # Start with NFL/NBA first
+      required_confidence: 0.12
+      allowed_markets:
+        - "game_winner"
+      # Baseball is very pitcher-dependent
+      require_pitcher_confirmed: true
+    
+    nhl:
+      enabled: false  # Phase 4+
+    
+    soccer:
+      enabled: false  # Phase 8+
+    
+    tennis:
+      enabled: false  # Phase 8+
+
+# ============================================
+# HALFTIME ENTRY STRATEGY
+# ============================================
+# Trade AT HALFTIME based on first half performance.
+#
+# PROS:
+# - Have actual game data (not just predictions)
+# - Can see team momentum, strategy adjustments
+# - Markets often mispriced due to recency bias
+#
+# CONS:
+# - Less time to decide (halftime is ~15 min)
+# - Must process data quickly
+# - Second half can be very different from first half
+#
+# WHEN TO USE: This is the SWEET SPOT strategy. Markets
+# overreact to first half, creating edges.
+#
+# EXAMPLE: Team down 7-3 at halftime but outgaining opponent
+# 250 yards to 150 yards. Market overweights score, underweights
+# dominance. Edge opportunity.
+
+halftime_entry:
+  enabled: true
+  
+  # Time window for halftime trading
+  # WHY: Need to analyze and place trade during halftime break
+  max_minutes_into_halftime: 10  # Must trade within 10 min of halftime
+  
+  sports_config:
+    nfl:
+      enabled: true
+      
+      # Edge requirements
+      # WHY: Halftime has good data, can be more confident
+      required_confidence: 0.06  # 6% minimum edge
+      
+      # Which second-half markets to trade?
+      allowed_markets:
+        - "second_half_winner"   # Who wins 2nd half only
+        - "second_half_total"    # 2nd half over/under
+        - "game_winner"          # Still can trade game winner
+        - "will_score_next"      # Next team to score
+      
+      # Key factors to analyze at halftime
+      # These affect whether we trust the edge
+      analysis_factors:
+        # Possession stats matter more than score
+        # Example: Losing 7-3 but dominating possession = good bet
+        weight_possession_yardage: 0.4
+        weight_score_differential: 0.2
+        weight_turnover_margin: 0.2
+        weight_time_of_possession: 0.2
+        
+        # Adjustments for game context
+        # WHY: Being down big at half can cause teams to play
+        # differently (more aggressive, risk-taking)
+        blowout_threshold: 17    # 17+ point deficit = blowout
+        close_game_threshold: 7  # 7 or less = close game
+        
+        # Team tendency adjustments
+        # Some teams are great after adjustments, others aren't
+        # WHY: Bill Belichick's teams historically good at adjustments
+        use_coach_adjustment_factor: true
+      
+      # Risk management
+      # WHY: If game is weird (lots of turnovers, fluky TDs),
+      # model might not be reliable
+      max_first_half_turnovers: 4
+      max_special_teams_tds: 1
+    
+    nba:
+      enabled: true
+      required_confidence: 0.07
+      allowed_markets:
+        - "second_half_winner"
+        - "second_half_total"
+        - "game_winner"
+      
+      analysis_factors:
+        # Basketball more about efficiency than volume
+        weight_shooting_percentage: 0.3
+        weight_turnover_margin: 0.25
+        weight_rebounding: 0.25
+        weight_free_throws: 0.20
+        
+        blowout_threshold: 20
+        close_game_threshold: 10
+    
+    mlb:
+      enabled: false  # No halftime in baseball
+    
+    nhl:
+      enabled: false  # Phase 4+, has intermissions
+
+# ============================================
+# LIVE TRADING STRATEGY
+# ============================================
+# Trade DURING the game based on real-time events.
+#
+# PROS:
+# - Most current information
+# - Can react to game flow
+# - Catch market overreactions
+#
+# CONS:
+# - Very fast-paced (must decide quickly)
+# - Higher variance (momentum can shift instantly)
+# - Requires real-time data (expensive, complex)
+#
+# WHEN TO USE: When you have reliable real-time data and
+# the market is clearly mispricing based on recent events.
+#
+# EXAMPLE: Star QB throws interception. Market overreacts,
+# drops team's win probability too much. Edge opportunity
+# if team still has strong defense and time remaining.
+
+live_trading:
+  enabled: false  # Start with false, enable in Phase 3
+  
+  # How quickly must we react?
+  # WHY: In live trading, edges disappear fast as market adjusts
+  max_decision_time_seconds: 10
+  
+  # Minimum edge required (higher than pre-game)
+  # WHY: Live trading is riskier, need bigger edge to compensate
+  min_edge_live: 0.10  # 10% minimum
+  
+  sports_config:
+    nfl:
+      enabled: false  # Phase 3+
+      
+      # Which in-game events trigger analysis?
+      # WHY: Not every play creates edge. Focus on big moments.
+      trigger_events:
+        - "touchdown"
+        - "turnover"
+        - "field_goal"
+        - "safety"
+        - "two_minute_warning"
+        - "fourth_down_conversion"
+        - "fourth_down_fail"
+      
+      # Situational modifiers
+      # WHY: Same event means different things in different contexts
+      situations:
+        # Late game situations (last 5 minutes)
+        late_game:
+          # Market overreacts to scores in last 2 min
+          # Example: Down 7 with 1 min left, TD makes it tied
+          # Market might overvalue the scoring team
+          weight_recent_score: 0.5
+          weight_timeouts_remaining: 0.3
+          weight_field_position: 0.2
+        
+        # Early game situations (first quarter)
+        early_game:
+          # Market overreacts to early scores
+          # WHY: One TD in Q1 doesn't mean much, but market
+          # adjusts as if it's a big deal
+          discount_early_score: 0.7  # Treat scores as 70% weight
+    
+    nba:
+      enabled: false  # Phase 3+
+      trigger_events:
+        - "timeout"
+        - "foul_trouble"
+        - "scoring_run"
+        - "overtime"
+    
+    tennis:
+      enabled: false  # Phase 8+
+      # Tennis great for live trading (continuous action)
+      trigger_events:
+        - "break_of_serve"
+        - "tiebreak"
+        - "set_point"
+        - "match_point"
+
+# ============================================
+# SETTLEMENT ARBITRAGE STRATEGY
+# ============================================
+# Trade near end of game when outcome is virtually certain
+# but market hasn't fully adjusted.
+#
+# PROS:
+# - Very high win rate (>95%)
+# - Low risk (outcome almost certain)
+# - Quick turnover (settled within hours)
+#
+# CONS:
+# - Small edges (2-5%)
+# - Rare opportunities (only when market is slow)
+# - Requires fast execution
+#
+# WHEN TO USE: When game outcome is 99% certain but
+# market is still pricing in some uncertainty.
+#
+# EXAMPLE: Team up 35-3 with 2 minutes left. Win probability
+# is 99.9% but market still pricing at 98%. Free 1.9% edge.
+
+settlement_arbitrage:
+  enabled: true
+  
+  # Requirements for this strategy
+  # WHY: Only trade when outcome is VERY certain
+  min_win_probability: 0.98  # 98% or higher
+  max_time_remaining_seconds: 120  # 2 minutes or less
+  
+  # Edge requirements
+  # WHY: Edges are small but wins are nearly certain
+  min_edge: 0.02  # 2% minimum (lower than other strategies)
+  
+  # Position sizing override
+  # WHY: These are nearly risk-free, so can size bigger
+  kelly_fraction_override: 0.50  # Half Kelly (vs 0.25 default)
+  max_position_override: 1000.00  # $1000 max (vs $500 default)
+  
+  sports_config:
+    nfl:
+      enabled: true
+      
+      # Sport-specific certainty rules
+      # WHY: Different ways a game can become "over"
+      certainty_rules:
+        # Possession + lead + time = certain?
+        # Example: Up 7, have ball, 1 min left, opponent no timeouts
+        score_lead_with_possession:
+          min_lead: 7
+          max_time_seconds: 90
+          opponent_max_timeouts: 0
+        
+        # Big lead + time = certain?
+        # Example: Up 21 with 3 min left
+        large_lead:
+          min_lead: 21
+          max_time_seconds: 180
+        
+        # Victory formation (opponent already conceded)
+        victory_formation: true
+    
+    nba:
+      enabled: true
+      certainty_rules:
+        # Basketball easier - just need big lead + little time
+        score_lead:
+          min_lead: 15
+          max_time_seconds: 120
+    
+    mlb:
+      enabled: false  # Phase 5+
+    
+    soccer:
+      enabled: false  # Phase 8+
+
+# ============================================
+# HEDGE STRATEGY (RISK REDUCTION)
+# ============================================
+# Place opposite bets to lock in profits or limit losses.
+#
+# EXAMPLE: Bet $100 on Team A at 60% for $167 potential return.
+# Team A now 80% likely (40% market price). Place $50 hedge bet
+# on Team B at 20% for $250 potential return.
+#
+# OUTCOMES:
+# - Team A wins: $167 - $100 - $50 = +$17 profit (locked in)
+# - Team B wins: $250 - $100 - $50 = +$100 profit (bonus)
+#
+# WHEN TO USE: When position has moved in your favor significantly
+# and you want to lock in guaranteed profit.
+
+hedge_strategy:
+  enabled: true
+  
+  # When to consider hedging?
+  hedge_triggers:
+    # Hedge if position has gained this much
+    # Example: $100 bet now worth $150 → 50% gain
+    min_unrealized_gain_pct: 0.40  # 40% unrealized gain
+    
+    # Hedge if edge has flipped this much
+    # Example: Entered at 8% edge, now -5% edge (13% flip)
+    edge_flip_threshold: 0.10  # 10% edge flip
+    
+    # Hedge if approaching settlement and protecting profit
+    near_settlement:
+      enabled: true
+      time_remaining_minutes: 5
+      min_unrealized_gain_dollars: 50.00
+  
+  # How much to hedge?
+  # Options:
+  # - 'full_lock': Guarantee profit regardless of outcome
+  # - 'partial_lock': Reduce risk but keep some upside
+  # - 'kelly_optimal': Use Kelly to determine hedge size
+  hedge_sizing_method: partial_lock
+  
+  partial_lock:
+    # What percentage of profit to lock in?
+    # Example: $100 profit available, 70% lock = $70 guaranteed
+    profit_lock_percentage: 0.70  # Lock in 70% of profit
+
+# ============================================
+# STRATEGY COMBINATIONS
+# ============================================
+# Can we use multiple strategies on the same game?
+# WHY: Sometimes pre-game bet looks good, then halftime
+# creates a new opportunity. Should we take both?
+
+combination_rules:
+  # Allow pre-game + halftime on same game?
+  # WHY: Different markets (game winner pre-game, 2nd half winner halftime)
+  allow_pre_game_and_halftime: true
+  
+  # Allow halftime + live on same game?
+  # WHY: Halftime bet on 2nd half, then live bet on specific quarter
+  allow_halftime_and_live: true
+  
+  # Maximum number of positions in same game
+  # WHY: Too many positions = concentrated risk
+  max_positions_per_game: 3
+  
+  # Maximum correlation between positions
+  # WHY: "Team A wins" and "Team A scores 30+" are highly correlated
+  max_position_correlation: 0.7
+
+# ============================================
+# STRATEGY SELECTION LOGIC
+# ============================================
+# If multiple strategies find edges, which one to use?
+
+selection_logic:
+  # Method to choose between strategies
+  # Options:
+  # - 'priority': Use strategy_priority list (top of file)
+  # - 'best_edge': Pick strategy with biggest edge
+  # - 'best_sharpe': Pick strategy with best risk-adjusted return
+  #
+  # RECOMMENDATION: priority (lets you control behavior)
+  method: priority
+  
+  # If using 'best_edge' or 'best_sharpe', minimum difference to switch
+  # WHY: If edges are 8.0% and 8.1%, don't bother switching strategies
+  min_edge_difference: 0.02  # 2% difference required
+
+# ============================================
+# BACKTESTING PARAMETERS
+# ============================================
+# Settings for testing strategies on historical data
+
+backtesting:
+  # Date range for backtesting
+  start_date: "2019-09-01"  # Start of 2019 NFL season
+  end_date: "2024-12-31"    # Through 2024
+  
+  # Which strategies to backtest?
+  strategies_to_test:
+    - pre_game_entry
+    - halftime_entry
+    # - live_trading  # Need tick data for this
+    - settlement_arbitrage
+  
+  # Simulation parameters
+  starting_bankroll: 10000.00
+  
+  # Transaction costs
+  # WHY: Backtests without costs are too optimistic
+  include_transaction_costs: true
+  transaction_cost_pct: 0.01  # 1% per trade (maker rebate on Kalshi)
+  
+  # Slippage simulation
+  # WHY: You don't always get the price you see
+  simulate_slippage: true
+  average_slippage_pct: 0.005  # 0.5% average slippage
+
+# ============================================
+# VALIDATION PARAMETERS
+# ============================================
+# Tracking actual vs. predicted performance
+
+validation:
+  # How often to compare predictions vs outcomes?
+  validation_frequency: weekly
+  
+  # What metrics to track?
+  metrics:
+    - "predicted_edge_vs_actual"
+    - "win_rate_by_strategy"
+    - "roi_by_strategy"
+    - "calibration"  # Are 60% predictions winning 60%?
+    - "kelly_sizing_effectiveness"
+  
+  # Alerts if validation fails
+  alert_on_miscalibration:
+    enabled: true
+    # Alert if actual win rate deviates too much
+    max_deviation_pct: 0.10  # 10% deviation
+    min_sample_size: 20  # Need 20 trades before alerting
+
+# ============================================
+# NOTES FOR STRATEGY SELECTION
+# ============================================
+# Which strategy should you start with?
+#
+# BEGINNER PATH:
+# 1. Week 1-2: settlement_arbitrage only
+#    - Easiest to understand
+#    - Lowest risk
+#    - Build confidence
+#
+# 2. Week 3-4: Add pre_game_entry
+#    - More opportunities
+#    - Still relatively simple
+#    - Uses historical data
+#
+# 3. Week 5-6: Add halftime_entry
+#    - THE MONEY MAKER
+#    - More complex but highest ROI
+#    - Requires faster decision making
+#
+# 4. Week 7+: Consider live_trading
+#    - Most complex
+#    - Requires real-time data infrastructure
+#    - Highest potential but highest variance
+#
+# STRATEGY EFFECTIVENESS (rough estimates):
+# - Pre-game: 3-6% ROI, 52-55% win rate
+# - Halftime: 8-12% ROI, 55-60% win rate ⭐ BEST
+# - Live: 10-15% ROI, 60-65% win rate (but harder to execute)
+# - Settlement: 2-4% ROI, 95%+ win rate (but rare opportunities)
+#
+# Remember: Start with ONE strategy, master it, then add more!
+#
+# ============================================
+# END OF TRADE_STRATEGIES.YAML
+# ============================================

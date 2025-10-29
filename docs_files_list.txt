@@ -1,0 +1,7 @@
+C\:\\users\\emtol\\repos\\precog-repo\\docs:
+api-integration			    guides		       sessions
+CLAUDE_CODE_IMPLEMENTATION_PLAN.md  phase-0.5-completion       supplementary
+configuration			    phase05\ updates	       testing-quality
+database			    phase-0-completion	       trading-risk
+development			    phases-planning	       utility
+foundation			    POSTGRESQL_SETUP_GUIDE.md

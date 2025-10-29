@@ -1,0 +1,130 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv
+
+# ============================================================================
+# SECURITY - CREDENTIALS & KEYS (⚠️ NEVER COMMIT)
+# ============================================================================
+
+# Environment variables (contains passwords, API keys)
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.staging.local
+.env.production.local
+
+# API Keys and Cryptographic Keys
+_keys/
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.crt
+*.der
+*.pub
+id_rsa
+id_dsa
+id_ecdsa
+id_ed25519
+
+# Database backups and dumps (may contain sensitive data)
+*.dump
+*.sql.bak
+*.sql.backup
+*.db.backup
+*.sqlite.backup
+
+# Configuration files with credentials (if any)
+# config/*.local.yaml
+# credentials.json
+# secrets.yaml
+
+# ============================================================================
+# DEVELOPMENT ENVIRONMENT
+# ============================================================================
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Development artifacts (project-specific)
+_knowledge/
+_sessions/
+_archive/
+archive/
+backups/
+.claude/
+phase_reports/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+.hypothesis/
+.tox/
+.nox/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Documentation builds
+docs/_build/
+site/
