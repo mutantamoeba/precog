@@ -42,16 +42,16 @@ class ValidationResult:
     warnings: List[str]
 
     def print_result(self):
-        """Print formatted validation result."""
+        """Print formatted validation result (ASCII-safe for Windows)."""
         if self.passed:
-            print(f"✅ {self.name}")
+            print(f"[OK] {self.name}")
             if self.warnings:
                 for warning in self.warnings:
-                    print(f"   ⚠️  {warning}")
+                    print(f"   [WARN] {warning}")
         else:
-            print(f"❌ {self.name} FAILED")
+            print(f"[FAIL] {self.name} FAILED")
             for error in self.errors:
-                print(f"   ❌ {error}")
+                print(f"   [ERROR] {error}")
 
 
 def find_latest_version(pattern: str) -> Path | None:
@@ -239,7 +239,7 @@ def validate_master_index() -> ValidationResult:
 
     content = master_index.read_text(encoding="utf-8")
 
-    # Extract document listings (format: | FILENAME | ✅ | vX.Y | /path/ | ...)
+    # Extract document listings (format: | FILENAME | [OK] | vX.Y | /path/ | ...)
     # Simple regex to find table rows with document names
     doc_pattern = r"\|\s+([A-Z_0-9]+_V\d+\.\d+\.md)\s+\|"
     listed_docs = re.findall(doc_pattern, content)
@@ -321,7 +321,7 @@ def validate_cross_references() -> ValidationResult:
                         break
 
                 if not found:
-                    broken_refs.append(f"{doc_file.name} → {ref}")
+                    broken_refs.append(f"{doc_file.name} -> {ref}")
 
     if broken_refs:
         errors.append(f"{len(broken_refs)} broken cross-references found:")
@@ -406,11 +406,11 @@ def main():
 
     print("=" * 60)
     if failed_checks == 0:
-        print(f"✅ ALL VALIDATION CHECKS PASSED ({passed_checks}/{total_checks})")
+        print(f"[OK] ALL VALIDATION CHECKS PASSED ({passed_checks}/{total_checks})")
         print("=" * 60)
         return 0
     else:
-        print(f"❌ VALIDATION FAILED ({passed_checks}/{total_checks} passed, {failed_checks} failed)")
+        print(f"[FAIL] VALIDATION FAILED ({passed_checks}/{total_checks} passed, {failed_checks} failed)")
         print("=" * 60)
         print("\nFix issues above before committing.")
         print("Some issues can be auto-fixed with: python scripts/fix_docs.py")

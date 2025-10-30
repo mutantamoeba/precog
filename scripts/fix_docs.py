@@ -72,11 +72,11 @@ def fix_version_header_mismatch(doc_file: Path, dry_run: bool = False) -> bool:
     new_content = content.replace(old_line, new_line, 1)
 
     if dry_run:
-        print(f"  [DRY-RUN] Would fix {doc_file.name}: V{header_version} → V{filename_version}")
+        print(f"  [DRY-RUN] Would fix {doc_file.name}: V{header_version} -> V{filename_version}")
         return True
     else:
         doc_file.write_text(new_content, encoding="utf-8")
-        print(f"  ✅ Fixed {doc_file.name}: V{header_version} → V{filename_version}")
+        print(f"  [OK] Fixed {doc_file.name}: V{header_version} -> V{filename_version}")
         return True
 
 
@@ -93,7 +93,7 @@ def add_missing_docs_to_master_index(dry_run: bool = False) -> int:
     # Find MASTER_INDEX
     master_index_files = list(FOUNDATION_DIR.glob("MASTER_INDEX_V*.md"))
     if not master_index_files:
-        print("  ❌ MASTER_INDEX not found")
+        print("  [ERROR] MASTER_INDEX not found")
         return 0
 
     # Get latest version
@@ -121,11 +121,11 @@ def add_missing_docs_to_master_index(dry_run: bool = False) -> int:
             print(f"    - {doc}")
         return len(unlisted)
     else:
-        print(f"  ⚠️  Found {len(unlisted)} unlisted documents")
-        print(f"  ℹ️  Manual addition to MASTER_INDEX recommended (requires metadata)")
+        print(f"  [WARN] Found {len(unlisted)} unlisted documents")
+        print(f"  [INFO] Manual addition to MASTER_INDEX recommended (requires metadata)")
         for doc in sorted(unlisted):
             print(f"    - {doc}")
-        print(f"  ℹ️  Add these manually to {master_index.name}")
+        print(f"  [INFO] Add these manually to {master_index.name}")
         return 0  # Not auto-fixing (requires metadata)
 
 
@@ -150,7 +150,7 @@ def fix_all(dry_run: bool = False) -> Tuple[int, int]:
             fixes_applied += 1
 
     if fixes_applied == 0:
-        print("  ✅ No version mismatches found")
+        print("  [OK] No version mismatches found")
 
     print("\n2. Checking for unlisted documents in MASTER_INDEX...")
     unlisted_count = add_missing_docs_to_master_index(dry_run)
@@ -181,14 +181,14 @@ def main():
     print("\n" + "=" * 60)
     if fixes_applied > 0:
         if args.dry_run:
-            print(f"✅ DRY-RUN: {fixes_applied} issues would be fixed")
+            print(f"[OK] DRY-RUN: {fixes_applied} issues would be fixed")
         else:
-            print(f"✅ SUCCESS: {fixes_applied} issues fixed")
+            print(f"[OK] SUCCESS: {fixes_applied} issues fixed")
     else:
-        print("✅ No auto-fixable issues found")
+        print("[OK] No auto-fixable issues found")
 
     if issues_found > 0:
-        print(f"⚠️  {issues_found} issues require manual fixing")
+        print(f"[WARN] {issues_found} issues require manual fixing")
 
     print("=" * 60)
 

@@ -21,7 +21,7 @@ echo "Test results will be saved to: $RESULT_DIR"
 echo ""
 
 # Run all tests with coverage
-pytest tests/ -v \
+python -m pytest tests/ -v \
     --cov=. \
     --cov-report=term-missing \
     --cov-report=html:htmlcov \

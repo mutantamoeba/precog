@@ -17,11 +17,11 @@ FAILED=0
 # 1. Ruff - Code Linting
 echo "1. Ruff Linting"
 echo "---------------"
-if ruff check . ; then
-    echo "  ✅ Ruff lint: No issues"
+if python -m ruff check . ; then
+    echo "  [OK] Ruff lint: No issues"
 else
-    echo "  ❌ Ruff lint: Issues found"
-    echo "     Run: ruff check --fix . (to auto-fix)"
+    echo "  [FAIL] Ruff lint: Issues found"
+    echo "     Run: python -m ruff check --fix . (to auto-fix)"
     FAILED=1
 fi
 
@@ -30,11 +30,11 @@ echo ""
 # 2. Ruff - Code Formatting
 echo "2. Ruff Formatting"
 echo "------------------"
-if ruff format --check . ; then
-    echo "  ✅ Ruff format: All code properly formatted"
+if python -m ruff format --check . ; then
+    echo "  [OK] Ruff format: All code properly formatted"
 else
-    echo "  ❌ Ruff format: Formatting issues found"
-    echo "     Run: ruff format . (to auto-fix)"
+    echo "  [FAIL] Ruff format: Formatting issues found"
+    echo "     Run: python -m ruff format . (to auto-fix)"
     FAILED=1
 fi
 
@@ -43,10 +43,10 @@ echo ""
 # 3. Mypy - Type Checking
 echo "3. Mypy Type Checking"
 echo "---------------------"
-if mypy . ; then
-    echo "  ✅ Mypy: No type errors"
+if python -m mypy . ; then
+    echo "  [OK] Mypy: No type errors"
 else
-    echo "  ❌ Mypy: Type errors found"
+    echo "  [FAIL] Mypy: Type errors found"
     FAILED=1
 fi
 
@@ -56,9 +56,9 @@ echo ""
 echo "4. Documentation Validation"
 echo "---------------------------"
 if python scripts/validate_docs.py ; then
-    echo "  ✅ Documentation: All checks passed"
+    echo "  [OK] Documentation: All checks passed"
 else
-    echo "  ❌ Documentation: Issues found"
+    echo "  [FAIL] Documentation: Issues found"
     echo "     Run: python scripts/fix_docs.py (to auto-fix some issues)"
     FAILED=1
 fi
@@ -66,11 +66,11 @@ fi
 echo ""
 echo "=========================================="
 if [ $FAILED -eq 0 ]; then
-    echo "✅ QUICK VALIDATION PASSED"
+    echo "[OK] QUICK VALIDATION PASSED"
     echo "=========================================="
     exit 0
 else
-    echo "❌ QUICK VALIDATION FAILED"
+    echo "[FAIL] QUICK VALIDATION FAILED"
     echo "Fix issues above before committing"
     echo "=========================================="
     exit 1

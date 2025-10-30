@@ -10,8 +10,8 @@ echo "Fast Test Suite (Unit Tests Only)"
 echo "=========================================="
 echo ""
 
-# Run unit tests only
-pytest tests/unit/ -v -m unit
+# Run unit tests only (no coverage for speed)
+python -m pytest tests/test_config_loader.py tests/test_logger.py -v --no-cov
 
 echo ""
-echo "✅ Fast tests complete"
+echo "[OK] Fast tests complete"
