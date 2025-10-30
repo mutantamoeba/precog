@@ -51,23 +51,23 @@ echo ""
 
 echo "Scanning for hardcoded credentials..."
 
-# Search for hardcoded passwords, API keys, tokens (exclude tests and scripts)
-if git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.py' '*.yaml' '*.sql' ':!tests/' ':!scripts/' 2>/dev/null ; then
+# Search for hardcoded passwords, API keys, tokens (exclude tests/ only)
+if git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.py' '*.yaml' '*.sql' ':!tests/' 2>/dev/null ; then
     echo "  [FAIL] SECURITY ISSUE: Hardcoded credentials found!"
     echo "     Remove hardcoded credentials and use environment variables"
     FAILED=1
 else
-    echo "  [OK] No hardcoded credentials found (tests/ and scripts/ excluded)"
+    echo "  [OK] No hardcoded credentials found (tests/ excluded, scripts/ scanned)"
 fi
 
 echo ""
 
-# Check for connection strings with passwords (exclude tests and scripts)
-if git grep -E "(postgres://|mysql://).*:.*@" -- '*.py' '*.yaml' ':!tests/' ':!scripts/' 2>/dev/null ; then
+# Check for connection strings with passwords (exclude tests/ only)
+if git grep -E "(postgres://|mysql://).*:.*@" -- '*.py' '*.yaml' ':!tests/' 2>/dev/null ; then
     echo "  [FAIL] SECURITY ISSUE: Connection strings with embedded passwords found!"
     FAILED=1
 else
-    echo "  [OK] No connection strings with embedded passwords (tests/ and scripts/ excluded)"
+    echo "  [OK] No connection strings with embedded passwords (tests/ excluded, scripts/ scanned)"
 fi
 
 echo ""
