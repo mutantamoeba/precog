@@ -1,9 +1,18 @@
 # Development Phases & Roadmap
 
 ---
-**Version:** 1.3
-**Last Updated:** 2025-10-21
+**Version:** 1.4
+**Last Updated:** 2025-10-29
 **Status:** ✅ Current
+**Changes in v1.4:**
+- **PHASE 0.6B COMPLETION**: Added Phase 0.6b (Documentation Correction & Security) - Documentation standardization complete
+- **PHASE 0.6C COMPLETION**: Added Phase 0.6c (Validation & Testing Infrastructure) - Automated validation and testing infrastructure complete
+- **PHASE 0.7 PLANNING**: Added Phase 0.7 (CI/CD Integration & Advanced Testing) - GitHub Actions, Codecov, mutation testing, property-based testing
+- Added 8 new ADRs (ADR-038 through ADR-045) for validation, testing, and CI/CD
+- Added 11 new requirements (REQ-TEST-005-008, REQ-VALIDATION-001-003, REQ-CICD-001-003)
+- Created TESTING_STRATEGY V2.0, VALIDATION_LINTING_ARCHITECTURE V1.0
+- Updated all foundation documents (ARCHITECTURE_DECISIONS V2.8, MASTER_REQUIREMENTS V2.9, ADR_INDEX V1.2, REQUIREMENT_INDEX V1.2)
+- Current status: Phase 0.6c complete, Phase 0.7 planned, Phase 1 awaits Phase 0.7 completion
 **Changes in v1.3:**
 - **MAJOR**: Split Phase 5 into Phase 5a (Monitoring & Evaluation, Weeks 10-12) and Phase 5b (Execution & Walking, Weeks 13-14)
 - Updated Phase 0.5 to 100% complete (Days 1-10 finished)
@@ -21,8 +30,8 @@
 ## Timeline Overview (Realistic Part-Time Estimate)
 
 **Total to Phase 10:** ~1.5-2 years (82 weeks @ 12 hours/week)
-**MVP Trading (Phase 5):** ~8 months from Phase 0 start (includes Phase 0.5 and 1.5)
-**Current Status:** Phase 0.5 ✅ **100% COMPLETE** (All Days 1-10 finished; ready for Phase 1)
+**MVP Trading (Phase 5):** ~8 months from Phase 0 start (includes Phase 0.5, 0.6b, 0.6c, 0.7, and 1.5)
+**Current Status:** Phase 0.6c ✅ **100% COMPLETE** (Validation & testing infrastructure ready; Phase 0.7 planned; ready for Phase 1)
 
 ---
 
@@ -159,15 +168,279 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ---
 
+## Phase 0.6b: Documentation Correction & Security (Codename: "Rectify")
+
+**Duration:** 1 week
+**Target:** October 2025
+**Status:** ✅ **100% COMPLETE**
+**Goal:** Standardize documentation filenames and enhance security practices
+
+### Dependencies
+- Requires Phase 0.5: 100% complete ✅
+
+### Tasks
+- [✅] Remove PHASE_ prefixes from supplementary document filenames
+- [✅] Standardize all supplementary docs to V1.0 format
+- [✅] Update all cross-references to use new standardized names
+- [✅] Create comprehensive security review checklist
+- [✅] Enhance .gitignore for sensitive files
+- [✅] Document security scanning procedures
+- [✅] Update MASTER_INDEX with new document names
+
+### Deliverables
+- [✅] Standardized supplementary documentation filenames
+- [✅] SECURITY_REVIEW_CHECKLIST.md
+- [✅] Enhanced .gitignore
+- [✅] Updated MASTER_REQUIREMENTS V2.8
+- [✅] Updated ARCHITECTURE_DECISIONS V2.7
+- [✅] Updated ADR_INDEX V1.1
+
+### Success Criteria
+- [✅] All supplementary docs use consistent naming (FEATURE_NAME_SPEC_V1.0.md)
+- [✅] Zero broken cross-references
+- [✅] Security checklist covers all critical areas
+- [✅] All references updated in foundation documents
+
+**ADRs:** ADR-030 through ADR-034 (Database architecture refinements)
+
+---
+
+## Phase 0.6c: Validation & Testing Infrastructure (Codename: "Sentinel")
+
+**Duration:** 1 week
+**Target:** October 2025
+**Status:** ✅ **100% COMPLETE**
+**Goal:** Implement automated validation and testing infrastructure for code quality and documentation consistency
+
+### Dependencies
+- Requires Phase 0.6b: 100% complete ✅
+
+### Tasks
+
+#### Code Quality Automation
+- [✅] Adopt Ruff for unified linting and formatting (10-100x faster than black+flake8)
+- [✅] Configure comprehensive pyproject.toml (50+ rule categories)
+- [✅] Create validation scripts (validate_quick.sh, validate_all.sh)
+- [✅] Implement cross-platform compatibility (python -m module pattern)
+- [✅] Replace Unicode emoji with ASCII for Windows compatibility
+
+#### Documentation Validation
+- [✅] Create validate_docs.py for automated consistency checks
+- [✅] Create fix_docs.py for auto-fixing simple issues
+- [✅] Validate ADR_INDEX ↔ ARCHITECTURE_DECISIONS consistency
+- [✅] Validate REQUIREMENT_INDEX ↔ MASTER_REQUIREMENTS consistency
+- [✅] Validate MASTER_INDEX accuracy (filenames, versions, locations)
+- [✅] Check version header format and filename alignment
+
+#### Testing Infrastructure
+- [✅] Configure pytest with comprehensive plugins (pytest-cov, pytest-html, pytest-asyncio, pytest-mock, pytest-xdist)
+- [✅] Create test_fast.sh for rapid unit testing (~0.3s)
+- [✅] Create test_full.sh for comprehensive testing with coverage (~30s)
+- [✅] Implement timestamped HTML test reports
+- [✅] Add factory-boy and faker for test data generation
+
+#### Security Scanning
+- [✅] Integrate credential scanning into validation pipeline
+- [✅] Exclude tests/ from security scans (test credentials acceptable)
+- [✅] Include scripts/ in security scans (production code)
+- [✅] Check for .env files staged for commit
+
+#### Layered Validation Architecture
+- [✅] Fast validation layer (~3 seconds): Ruff lint, Ruff format, Mypy, Doc validation
+- [✅] Comprehensive validation layer (~60 seconds): Fast validations + full tests + security scans
+- [✅] Clear usage guidance (fast for development, comprehensive for commits)
+
+### Deliverables
+- [✅] scripts/validate_quick.sh - Fast 3-second validation
+- [✅] scripts/validate_all.sh - Comprehensive 60-second validation
+- [✅] scripts/test_fast.sh - Rapid unit tests
+- [✅] scripts/test_full.sh - Full test suite with coverage
+- [✅] scripts/validate_docs.py - Documentation consistency validation
+- [✅] scripts/fix_docs.py - Auto-fix documentation issues
+- [✅] pyproject.toml - Unified tool configuration
+- [✅] Updated TESTING_STRATEGY V2.0.md
+- [✅] Created VALIDATION_LINTING_ARCHITECTURE_V1.0.md
+- [✅] Updated ARCHITECTURE_DECISIONS V2.8 (ADR-038 through ADR-041)
+- [✅] Updated ADR_INDEX V1.2
+- [✅] Updated MASTER_REQUIREMENTS V2.9 (REQ-TEST-005, REQ-VALIDATION-001-003)
+- [✅] Updated REQUIREMENT_INDEX V1.2
+
+### Success Criteria
+- [✅] validate_quick.sh runs in <5 seconds
+- [✅] validate_all.sh completes in <90 seconds
+- [✅] All validation scripts work cross-platform (Windows/Linux/Mac)
+- [✅] Documentation validation catches inconsistencies
+- [✅] Test infrastructure supports HTML reports and coverage tracking
+- [✅] Security scans detect hardcoded credentials
+
+**ADRs:**
+- ADR-038: Ruff for Code Quality Automation (10-100x faster)
+- ADR-039: Test Result Persistence Strategy (timestamped HTML reports)
+- ADR-040: Documentation Validation Automation (prevent drift)
+- ADR-041: Layered Validation Architecture (fast 3s + comprehensive 60s)
+
+**Requirements:** REQ-TEST-005, REQ-VALIDATION-001, REQ-VALIDATION-002, REQ-VALIDATION-003
+
+---
+
+## Phase 0.7: CI/CD Integration & Advanced Testing (Codename: "Pipeline")
+
+**Duration:** 1 week
+**Target:** November 2025
+**Status:** 🔵 **PLANNED**
+**Goal:** Integrate GitHub Actions CI/CD and advanced testing strategies (mutation, property-based, security)
+
+### Dependencies
+- Requires Phase 0.6c: 100% complete ✅
+
+### Tasks
+
+#### GitHub Actions CI/CD
+- [ ] Create .github/workflows/ci.yml workflow
+- [ ] Configure matrix testing (Python 3.12, 3.13 on ubuntu-latest, windows-latest)
+- [ ] Integrate Ruff lint + format check
+- [ ] Integrate Mypy type checking
+- [ ] Integrate documentation validation
+- [ ] Integrate full test suite with coverage
+- [ ] Integrate security scanning (Bandit, Safety, secret detection)
+- [ ] Add status badges to README.md
+
+#### Codecov Integration
+- [ ] Create codecov.yml configuration
+- [ ] Upload coverage.xml from pytest-cov
+- [ ] Configure project and patch coverage thresholds (80% minimum)
+- [ ] Enable PR comments with coverage diff
+- [ ] Set up coverage dashboard
+
+#### Branch Protection
+- [ ] Configure branch protection rules for main branch
+- [ ] Require all CI checks to pass before merge
+- [ ] Require 1 approving review (if collaborators)
+- [ ] Enforce linear history (no merge commits)
+- [ ] Disable force push and branch deletion
+
+#### Advanced Testing
+- [ ] Integrate Bandit for security static analysis
+- [ ] Integrate Safety for dependency vulnerability scanning
+- [ ] Configure mutmut for mutation testing (60%+ mutation score target)
+- [ ] Integrate Hypothesis for property-based testing (Decimal arithmetic, edge detection)
+- [ ] Create mutation testing baseline for critical modules
+
+### Deliverables
+- [ ] .github/workflows/ci.yml - GitHub Actions workflow
+- [ ] codecov.yml - Codecov configuration
+- [ ] Branch protection rules configured
+- [ ] mutmut configuration in pyproject.toml
+- [ ] Hypothesis test examples for critical logic
+- [ ] Updated ARCHITECTURE_DECISIONS V2.8 (ADR-042 through ADR-045 already documented)
+- [ ] Updated MASTER_REQUIREMENTS V2.9 (REQ-TEST-006-008, REQ-CICD-001-003 already documented)
+
+### Success Criteria
+- [ ] GitHub Actions workflow runs successfully on push and PR
+- [ ] All tests pass on both Ubuntu and Windows runners
+- [ ] Codecov reports are generated and uploaded
+- [ ] Branch protection prevents merges with failing checks
+- [ ] Mutation testing provides quality metrics for critical modules
+- [ ] Property-based tests catch edge cases in Decimal arithmetic
+
+**ADRs:**
+- ADR-042: CI/CD Integration with GitHub Actions
+- ADR-043: Security Testing Integration (Bandit, Safety, SAST)
+- ADR-044: Mutation Testing Strategy (mutmut, 60%+ score)
+- ADR-045: Property-Based Testing with Hypothesis
+
+**Requirements:** REQ-TEST-006, REQ-TEST-007, REQ-TEST-008, REQ-CICD-001, REQ-CICD-002, REQ-CICD-003
+
+---
+
 ## Phase 1: Core Infrastructure (Codename: "Bootstrap")
 
 **Duration:** 6 weeks
 **Target:** November-December 2025
-**Status:** 🔵 Planned (awaits Phase 0.5 completion)
+**Status:** 🔵 Planned (awaits Phase 0.7 completion)
 **Goal:** Build core infrastructure and Kalshi API integration
 
 ### Dependencies
-- Requires Phase 0.5: 100% complete 🟢
+- Requires Phase 0.7: 100% complete 🔵 (Phase 0.6c complete ✅, Phase 0.7 planned)
+
+### Before Starting This Phase - TEST PLANNING CHECKLIST ⚠️
+
+**MANDATORY: Complete this checklist BEFORE writing any Phase 1 code**
+
+**Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
+
+**Output:** Update SESSION_HANDOFF.md with "Phase 1 test planning complete" OR create `docs/testing/PHASE_1_TEST_PLAN_V1.0.md`
+
+#### 1. Requirements Analysis
+- [ ] Review REQ-API-001 through REQ-API-006 (Kalshi/ESPN/Balldontlie API requirements)
+- [ ] Review REQ-CLI-001 through REQ-CLI-005 (CLI command requirements with Typer framework)
+- [ ] Review REQ-SYS-001 through REQ-SYS-006 (System requirements: DB, config, logging)
+- [ ] Critical paths: RSA-PSS authentication, decimal price parsing, rate limiting, config precedence
+- [ ] New modules: `api_connectors/kalshi_client.py`, `main.py`, `utils/config_loader.py`
+
+#### 2. Test Categories Needed
+- [ ] **Unit tests**: API client methods, CLI argument parsing, config loading, decimal conversion utilities
+- [ ] **Integration tests**: API clients with mocked responses, database CRUD, CLI workflow, config override precedence
+- [ ] **Critical tests**: Decimal precision (NO float), RSA-PSS auth signature, rate limit enforcement, SQL injection prevention
+- [ ] **Mocking**: Mock all HTTP requests, mock database connections for CLI tests, mock file system for config tests
+
+#### 3. Test Infrastructure Updates
+- [ ] Create `tests/fixtures/api_responses.py` - Sample Kalshi/ESPN/Balldontlie JSON responses
+- [ ] Add `KalshiAPIFactory` to `tests/fixtures/factories.py`
+- [ ] Add `ESPNAPIFactory` to test factories
+- [ ] Add `CLICommandFactory` for CLI testing
+- [ ] Create `tests/fixtures/sample_configs/` - Valid and invalid YAML config files
+- [ ] Update `tests/conftest.py` with API client fixtures and temp config directory fixtures
+
+#### 4. Critical Test Scenarios (from user requirements)
+- [ ] **API clients fully implemented** with versioned interfaces (REQ-API-001 through REQ-API-005)
+- [ ] **CLI commands implemented** validating REQ-CLI-001 through REQ-CLI-005 using Typer framework
+- [ ] **Unit tests cover ≥80%** of API client code, including error paths and retry logic
+- [ ] **YAML config loader** validates schema; overrides work with expected precedence (DB > YAML > defaults)
+- [ ] **Verify all numerical values use Decimal** and NOT float (CRITICAL)
+- [ ] **Documentation** for API usage and CLI commands reviewed and published
+
+#### 5. Performance Baselines
+- [ ] API client request processing: <100ms (excluding network)
+- [ ] CLI startup time: <500ms
+- [ ] Config file loading: <50ms
+- [ ] Database query (single record): <10ms
+- [ ] Rate limiter overhead: <1ms per request
+
+#### 6. Security Test Scenarios
+- [ ] API keys loaded from environment variables (NOT hardcoded)
+- [ ] RSA-PSS authentication signature validation working correctly
+- [ ] Rate limit enforcement prevents API abuse
+- [ ] SQL injection prevented (parameterized queries only)
+- [ ] Input sanitization for CLI arguments
+- [ ] No credentials in logs or error messages
+
+#### 7. Edge Cases to Test
+- [ ] API returns 4xx/5xx errors → retry logic with exponential backoff
+- [ ] API rate limit exceeded (429 response) → appropriate handling
+- [ ] Sub-penny Decimal prices (0.4275, 0.4976) → preserved precision
+- [ ] Missing/malformed YAML config files → clear error messages
+- [ ] Network timeouts → graceful degradation
+- [ ] Expired API credentials → clear error and refresh attempt
+- [ ] Config value precedence: DB override > YAML > default
+- [ ] Concurrent API requests → rate limiter thread-safe
+
+#### 8. Success Criteria
+- [ ] Overall coverage: ≥80% (MANDATORY - enforced by pyproject.toml)
+- [ ] Critical module coverage:
+  - `api_connectors/kalshi_client.py`: ≥90%
+  - `main.py` (CLI): ≥85%
+  - `utils/config_loader.py`: ≥85%
+  - `database/crud_operations.py`: ≥87% (existing baseline)
+- [ ] All critical scenarios from Section 4 tested and passing
+- [ ] All edge cases from Section 7 have test coverage
+- [ ] Test suite runs in <30 seconds locally
+- [ ] All tests marked with appropriate markers (@pytest.mark.unit, @pytest.mark.integration, @pytest.mark.critical)
+- [ ] Zero security vulnerabilities (Bandit clean, Safety clean)
+
+**After completion:** Update SESSION_HANDOFF.md: "✅ Phase 1 test planning complete"
+
+---
 
 ### Tasks
 
@@ -335,6 +608,78 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 ### Dependencies
 - Requires Phase 1.5: Versioning system validated
 
+### Before Starting This Phase - TEST PLANNING CHECKLIST ⚠️
+
+**MANDATORY: Complete this checklist BEFORE writing any Phase 2 code**
+
+**Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
+
+**Output:** Update SESSION_HANDOFF.md with "Phase 2 test planning complete" OR create `docs/testing/PHASE_2_TEST_PLAN_V1.0.md`
+
+#### 1. Requirements Analysis
+- [ ] Review all Phase 2 data ingestion requirements (ESPN API, game states, task scheduling)
+- [ ] Review APScheduler integration and cron job specifications
+- [ ] Critical paths: ESPN API reliability, data freshness validation, historical backfill integrity
+- [ ] New modules: `api_connectors/espn_client.py`, `schedulers/market_updater.py`, backfill scripts
+
+#### 2. Test Categories Needed
+- [ ] **Unit tests**: ESPN API parsing, timestamp validation, data quality checks, APScheduler job logic
+- [ ] **Integration tests**: Live feed ingestion with mocked ESPN streams, end-to-end pipeline from API to database
+- [ ] **Async tests**: pytest-asyncio for concurrent polling, event loop stress tests, concurrency handling
+- [ ] **Mocking**: Mock ESPN API responses (live games, completed games, pre-game), mock APScheduler jobs
+
+#### 3. Test Infrastructure Updates
+- [ ] Create `tests/fixtures/espn_responses.py` - Sample ESPN scoreboard JSON (NFL, NCAAF, various game states)
+- [ ] Add `ESPNGameFactory` to `tests/fixtures/factories.py` for generating game state test data
+- [ ] Create `tests/fixtures/mock_scheduler.py` - Mock APScheduler for testing job execution
+- [ ] Update `tests/conftest.py` with async fixtures for event loop testing
+
+#### 4. Critical Test Scenarios (from user requirements)
+- [ ] **Live feed ingestion with mocked ESPN streams** - Verify data flows from API → game_states table
+- [ ] **Async event loop stress/concurrency tests** - Handle 50+ concurrent game updates without lag
+- [ ] **Failover/retry for REST endpoints** - Handle ESPN API errors with exponential backoff
+- [ ] **SCD Type-2 validation** - Verify row_current_ind logic for game state updates
+- [ ] **End-to-end pipeline tests** - Complete flow: ESPN API → parsing → validation → database storage
+
+#### 5. Performance Baselines
+- [ ] ESPN API response parsing: <50ms per game
+- [ ] Database insert for game state: <10ms
+- [ ] APScheduler job execution overhead: <100ms
+- [ ] Concurrent game processing (50 games): <2 seconds total
+- [ ] Historical backfill (5 years): <10 minutes total
+
+#### 6. Security Test Scenarios
+- [ ] ESPN API calls don't expose credentials (public API, but verify no leaks)
+- [ ] Input sanitization for game state data (prevent injection attacks)
+- [ ] Timestamp validation prevents time-based attacks
+- [ ] Rate limiting prevents API abuse (500 req/hour limit)
+
+#### 7. Edge Cases to Test
+- [ ] ESPN API returns stale data (>60 seconds old) → reject and log warning
+- [ ] ESPN API returns malformed JSON → graceful error handling
+- [ ] ESPN API rate limit exceeded → backoff and retry
+- [ ] Network timeout during API call → retry with exponential backoff
+- [ ] APScheduler job overlaps (previous job still running) → skip or queue
+- [ ] Game state transitions (pre-game → live → completed) → SCD Type-2 properly tracks history
+- [ ] Missing data fields in ESPN response → use defaults or skip record with warning
+- [ ] Historical backfill finds duplicate data → handle gracefully (upsert logic)
+
+#### 8. Success Criteria
+- [ ] Overall coverage: ≥80% (enforced by pyproject.toml)
+- [ ] Critical module coverage:
+  - `api_connectors/espn_client.py`: ≥85%
+  - `schedulers/market_updater.py`: ≥85%
+  - Historical backfill scripts: ≥75%
+- [ ] All critical scenarios from Section 4 tested and passing
+- [ ] Async tests validate concurrency handling (pytest-asyncio)
+- [ ] SCD Type-2 logic tested (row_current_ind updates correctly)
+- [ ] Test suite runs in <30 seconds locally
+- [ ] Zero data loss in stress tests (1000+ updates)
+
+**After completion:** Update SESSION_HANDOFF.md: "✅ Phase 2 test planning complete"
+
+---
+
 ### Tasks
 
 #### 1. ESPN API Integration (Weeks 1-2)
@@ -391,6 +736,79 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ### Dependencies
 - Requires Phase 2: Live data integration operational
+
+### Before Starting This Phase - TEST PLANNING CHECKLIST ⚠️
+
+**MANDATORY: Complete this checklist BEFORE writing any Phase 3 code**
+
+**Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
+
+**Output:** Update SESSION_HANDOFF.md with "Phase 3 test planning complete" OR create `docs/testing/PHASE_3_TEST_PLAN_V1.0.md`
+
+#### 1. Requirements Analysis
+- [ ] Review async processing framework requirements (asyncio, aiohttp, queue systems)
+- [ ] Review WebSocket integration requirements (Kalshi, ESPN)
+- [ ] Critical paths: WebSocket stability (24+ hours), queue backpressure handling, message routing
+- [ ] New modules: Async processing pipeline, WebSocket handlers, data normalization module
+
+#### 2. Test Categories Needed
+- [ ] **Async unit tests**: pytest-asyncio for queue operations, message routing, data normalization
+- [ ] **Integration tests**: WebSocket connection lifecycle, reconnection on disconnect, end-to-end message flow
+- [ ] **Stress tests**: 50+ concurrent game updates, queue backpressure simulation, high-volume periods
+- [ ] **Mocking**: Mock WebSocket connections, mock asyncio.Queue, mock concurrent game updates
+
+#### 3. Test Infrastructure Updates
+- [ ] Create `tests/fixtures/websocket_messages.py` - Sample Kalshi/ESPN WebSocket messages
+- [ ] Add `WebSocketMockFactory` for simulating WebSocket message streams
+- [ ] Create `tests/utils/async_helpers.py` - Utilities for async testing (event loop fixtures)
+- [ ] Update `tests/conftest.py` with WebSocket client fixtures and async queue fixtures
+
+#### 4. Critical Test Scenarios (from user requirements)
+- [ ] **Async event loop stress tests** - Process 50+ concurrent updates without lag or data loss
+- [ ] **Concurrency tests** - Validate thread safety and race condition handling
+- [ ] **WebSocket failover/retry** - Handle disconnections with automatic reconnection and message replay
+- [ ] **REST failover/retry** - Fallback to REST if WebSocket fails, with exponential backoff
+- [ ] **End-to-end pipeline tests** - WebSocket → queue → processing → normalization → database
+
+#### 5. Performance Baselines
+- [ ] Message processing latency: <2 seconds (95th percentile)
+- [ ] Queue throughput: >100 messages/second
+- [ ] WebSocket reconnection time: <5 seconds
+- [ ] Concurrent game processing (50 games): <2 seconds
+- [ ] Memory usage under load: <500MB
+
+#### 6. Security Test Scenarios
+- [ ] WebSocket authentication tokens refreshed securely
+- [ ] No credentials in WebSocket message logs
+- [ ] Message validation prevents injection attacks
+- [ ] Rate limiting on incoming WebSocket messages
+- [ ] SSL/TLS for all WebSocket connections
+
+#### 7. Edge Cases to Test
+- [ ] WebSocket disconnects mid-message → reconnect and resume
+- [ ] WebSocket receives malformed JSON → skip message and log error
+- [ ] Queue fills up (backpressure) → throttle incoming messages gracefully
+- [ ] Multiple WebSocket reconnections in quick succession → handle without crashes
+- [ ] Network timeout during WebSocket handshake → retry with exponential backoff
+- [ ] Concurrent writes to same game state → last-write-wins or merge logic
+- [ ] Message ordering (out-of-order WebSocket messages) → handle with timestamps
+- [ ] Long-running connections (24+ hours) → no memory leaks or degradation
+
+#### 8. Success Criteria
+- [ ] Overall coverage: ≥80% (enforced by pyproject.toml)
+- [ ] Critical module coverage:
+  - Async processing framework: ≥85%
+  - WebSocket handlers: ≥85%
+  - Data normalization: ≥80%
+- [ ] All critical scenarios from Section 4 tested and passing
+- [ ] WebSocket stability test (24-hour mock connection) passes
+- [ ] Processing latency <2 seconds in stress tests
+- [ ] Zero data loss in high-volume tests (1000+ messages)
+- [ ] Test suite runs in <45 seconds locally (async tests are slower)
+
+**After completion:** Update SESSION_HANDOFF.md: "✅ Phase 3 test planning complete"
+
+---
 
 ### Tasks
 
@@ -451,6 +869,82 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 ### Dependencies
 - Requires Phase 2: Historical data loaded (nflfastR)
 - Requires Phase 3: Data processing pipeline operational
+
+### Before Starting This Phase - TEST PLANNING CHECKLIST ⚠️
+
+**MANDATORY: Complete this checklist BEFORE writing any Phase 4 code**
+
+**Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
+
+**Output:** Update SESSION_HANDOFF.md with "Phase 4 test planning complete" OR create `docs/testing/PHASE_4_TEST_PLAN_V1.0.md`
+
+#### 1. Requirements Analysis
+- [ ] Review all Phase 4 model requirements (historical lookup, Elo, regression, ensemble)
+- [ ] Review edge detection requirements (threshold filtering, confidence scoring)
+- [ ] Review backtesting requirements (walk-forward validation, Brier score, log loss)
+- [ ] Critical paths: Model versioning immutability, ensemble accuracy, backtesting integrity
+- [ ] New modules: `models/historical_lookup.py`, `models/elo.py`, `models/regression.py`, `models/ensemble.py`, `analytics/edge_detection.py`, `analytics/backtesting.py`
+
+#### 2. Test Categories Needed
+- [ ] **Unit tests**: Individual model outputs (Elo, regression, historical lookup), ensemble weighting logic, edge calculation
+- [ ] **Integration tests**: EV+ edge detection end-to-end, model versioning immutability enforcement, backtesting engine
+- [ ] **Property-based tests**: Hypothesis for ensemble probabilities (always 0.0-1.0), edge calculation properties
+- [ ] **Performance tests**: Model prediction latency (<100ms), backtesting speed (5 years in <30 minutes)
+
+#### 3. Test Infrastructure Updates
+- [ ] Create `tests/fixtures/historical_game_data.py` - Sample nflfastR data for testing
+- [ ] Add `OddsMatrixFactory` to generate test historical odds matrices
+- [ ] Add `GameSituationFactory` for various game situations (halftime, 4th quarter, etc.)
+- [ ] Create `tests/fixtures/model_configs.py` - Sample strategy and model version configs
+- [ ] Update `tests/conftest.py` with model fixtures and backtesting fixtures
+
+#### 4. Critical Test Scenarios (from user requirements)
+- [ ] **Ensemble feature extraction** - Verify all 4 models (Elo, regression, ML, historical) provide valid probabilities
+- [ ] **Backtesting engine with reports** - Walk-forward validation produces Brier score, log loss, P&L reports
+- [ ] **Model versioning immutability** - Verify config immutability (cannot modify v1.0 config after creation)
+- [ ] **EV+ edge detection integration tests** - End-to-end: game state → models → ensemble → edge → trade signal
+- [ ] **Model performance documentation** - Automated reports comparing ensemble vs. individual models
+
+#### 5. Performance Baselines
+- [ ] Historical lookup query: <10ms per situation
+- [ ] Elo calculation: <5ms per team pair
+- [ ] Regression prediction: <20ms
+- [ ] Ensemble prediction (all 4 models): <100ms total
+- [ ] Edge detection scan (100 markets): <5 seconds
+- [ ] Backtesting (5 years, 1000 games): <30 minutes
+
+#### 6. Security Test Scenarios
+- [ ] Model configs stored securely (no secrets in JSONB)
+- [ ] Backtesting doesn't expose sensitive market data
+- [ ] Edge detection doesn't log proprietary signals
+- [ ] Model version creation validates permissions
+
+#### 7. Edge Cases to Test
+- [ ] Historical lookup with no matching data → fallback to Elo/regression only
+- [ ] Ensemble with missing model (e.g., ML not ready) → use available models and adjust weights
+- [ ] Edge detection with very low confidence (<0.50) → skip signal
+- [ ] Backtesting with missing historical data → skip games gracefully
+- [ ] Model version conflict (attempt to create duplicate v1.0) → reject with clear error
+- [ ] Probability bounds (ensemble returns >1.0 or <0.0) → clamp to [0.0, 1.0]
+- [ ] Division by zero in edge calculation → handle gracefully
+- [ ] Negative edge (market price > true probability) → correctly identify as no-trade
+
+#### 8. Success Criteria
+- [ ] Overall coverage: ≥80% (enforced by pyproject.toml)
+- [ ] Critical module coverage:
+  - `models/ensemble.py`: ≥90% (CRITICAL)
+  - `models/historical_lookup.py`: ≥85%
+  - `analytics/edge_detection.py`: ≥90% (CRITICAL)
+  - `analytics/backtesting.py`: ≥85%
+- [ ] All critical scenarios from Section 4 tested and passing
+- [ ] Backtesting shows ensemble outperforms individual models by ≥5% (validation test)
+- [ ] Property-based tests (Hypothesis) validate probability bounds and edge calculation
+- [ ] Model immutability tests prevent config modifications
+- [ ] Test suite runs in <60 seconds locally
+
+**After completion:** Update SESSION_HANDOFF.md: "✅ Phase 4 test planning complete"
+
+---
 
 ### Tasks
 
@@ -547,6 +1041,81 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 - Requires Phase 1: Core infrastructure
 - Requires Phase 4: Edge detection operational
 
+### Before Starting This Phase - TEST PLANNING CHECKLIST ⚠️
+
+**MANDATORY: Complete this checklist BEFORE writing any Phase 5a code**
+
+**Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
+
+**Output:** Update SESSION_HANDOFF.md with "Phase 5a test planning complete" OR create `docs/testing/PHASE_5A_TEST_PLAN_V1.0.md`
+
+#### 1. Requirements Analysis
+- [ ] Review REQ-MON-001 through REQ-MON-003 (dynamic monitoring, position state tracking, health checks)
+- [ ] Review REQ-EXIT-001 through REQ-EXIT-003 (exit priority hierarchy, 10 exit conditions, partial exit staging)
+- [ ] Critical paths: Monitoring loop stability (24+ hours), priority hierarchy resolution, trailing stop accuracy
+- [ ] New modules: `trading/position_monitor.py`, `trading/exit_evaluator.py`, `trading/priority_resolver.py`
+
+#### 2. Test Categories Needed
+- [ ] **Unit tests**: Each of 10 exit conditions, priority hierarchy logic, trailing stop state updates, partial exit calculations
+- [ ] **Integration tests**: Full monitoring loop with database, exit condition evaluation end-to-end, position lifecycle events
+- [ ] **Performance tests**: Monitoring latency, API rate limit compliance (<60 calls/min), memory usage during 24-hour run
+- [ ] **Mocking**: Mock position updates, mock API price fetches, mock database queries
+
+#### 3. Test Infrastructure Updates
+- [ ] Create `tests/fixtures/position_scenarios.py` - Sample positions at various profit/loss states
+- [ ] Add `PositionFactory` with realistic profit/loss scenarios
+- [ ] Create `tests/fixtures/exit_conditions.py` - Pre-configured exit condition test cases
+- [ ] Add `MonitoringLoopFactory` for simulating monitoring cycles
+- [ ] Update `tests/conftest.py` with position monitoring fixtures
+
+#### 4. Critical Test Scenarios (from user requirements)
+- [ ] **Exit conditions with priorities** - Verify all 10 conditions trigger correctly and highest priority wins
+- [ ] **Order walking validation** - Not in this phase (Phase 5b), but prepare test infrastructure
+- [ ] **Position lifecycle event logs** - Verify position_exits table records all exit events
+- [ ] **Priority conflict resolution** - Multiple conditions trigger simultaneously → highest priority executes
+- [ ] **Trailing stop progressive tightening** - Verify stop price tightens as profit increases
+
+#### 5. Performance Baselines
+- [ ] Position monitoring cycle (1 position): <100ms
+- [ ] Exit condition evaluation (all 10 conditions): <50ms
+- [ ] Priority resolution: <10ms
+- [ ] Trailing stop update: <20ms
+- [ ] API rate limit: ≤60 calls/minute (strict enforcement)
+- [ ] 24-hour monitoring run: No memory leaks, stable performance
+
+#### 6. Security Test Scenarios
+- [ ] Position data access controls (no unauthorized reads)
+- [ ] Exit condition logs don't expose proprietary strategies
+- [ ] API calls use secure credentials
+- [ ] Circuit breaker can't be bypassed maliciously
+
+#### 7. Edge Cases to Test
+- [ ] Position within 2% of multiple thresholds → urgent monitoring (5s) activates
+- [ ] Multiple exit conditions trigger simultaneously → priority hierarchy resolves correctly
+- [ ] Trailing stop hits exactly at profit target → priority determines action
+- [ ] API rate limit approaching (58/60 calls) → throttle to stay under limit
+- [ ] Position update fails (API timeout) → retry logic with backoff
+- [ ] Trailing stop state corrupted in database → reinitialize from position data
+- [ ] Partial exit quantity calculation (50% of odd number) → round correctly
+- [ ] Circuit breaker triggers → all monitoring halts immediately
+
+#### 8. Success Criteria
+- [ ] Overall coverage: ≥80% (enforced by pyproject.toml)
+- [ ] Critical module coverage:
+  - `trading/position_monitor.py`: ≥90% (CRITICAL)
+  - `trading/exit_evaluator.py`: ≥90% (CRITICAL)
+  - `trading/priority_resolver.py`: ≥85%
+- [ ] All 10 exit conditions have passing unit tests
+- [ ] Priority hierarchy resolves conflicts correctly (all test cases pass)
+- [ ] 24-hour stability test passes (no crashes, memory stable)
+- [ ] API rate limits never exceeded in stress tests
+- [ ] Paper trading validation shows correct exit logic (2-week test)
+- [ ] Test suite runs in <60 seconds locally
+
+**After completion:** Update SESSION_HANDOFF.md: "✅ Phase 5a test planning complete"
+
+---
+
 ### Tasks
 
 #### 1. Dynamic Monitoring System (Week 1)
@@ -638,6 +1207,83 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ### Dependencies
 - Requires Phase 5a: Exit evaluation system operational
+
+### Before Starting This Phase - TEST PLANNING CHECKLIST ⚠️
+
+**MANDATORY: Complete this checklist BEFORE writing any Phase 5b code**
+
+**Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
+
+**Output:** Update SESSION_HANDOFF.md with "Phase 5b test planning complete" OR create `docs/testing/PHASE_5B_TEST_PLAN_V1.0.md`
+
+#### 1. Requirements Analysis
+- [ ] Review REQ-EXEC-001 through REQ-EXEC-003 (urgency-based execution, price walking, exit attempt logging)
+- [ ] Review requirements for circuit breaker tests and position lifecycle logging
+- [ ] Critical paths: Price walking algorithm accuracy, exit attempt logging completeness, circuit breaker reliability
+- [ ] New modules: `trading/exit_executor.py`, `trading/price_walker.py`, `trading/circuit_breaker.py`
+
+#### 2. Test Categories Needed
+- [ ] **Unit tests**: Price walking algorithm, urgency-based execution strategies, timeout handling, circuit breaker logic
+- [ ] **Integration tests**: Full exit execution with mock Kalshi API, order placement and fill confirmation, exit attempt logging
+- [ ] **Load/latency tests**: Fill rates by priority level, slippage analysis, execution under high concurrency
+- [ ] **Circuit breaker tests**: System halt on trigger, trade blocking, emergency stop functionality
+
+#### 3. Test Infrastructure Updates
+- [ ] Create `tests/fixtures/order_responses.py` - Sample Kalshi order placement responses (filled, partial, rejected)
+- [ ] Add `OrderFactory` for generating test orders at various states
+- [ ] Create `tests/fixtures/market_depth.py` - Sample order book data for price walking tests
+- [ ] Add `CircuitBreakerScenarioFactory` for testing system halt conditions
+- [ ] Update `tests/conftest.py` with order execution fixtures and circuit breaker fixtures
+
+#### 4. Critical Test Scenarios (from user requirements)
+- [ ] **Circuit breaker tests halting trading** - Verify circuit breaker stops all trading immediately
+- [ ] **Position lifecycle event logs** - Verify exit_attempts table records every order attempt
+- [ ] **Load/latency tests for execution** - Measure fill rates, slippage, and execution speed under stress
+- [ ] **Price walking effectiveness** - Verify walking improves fill prices by 1-2% vs. market orders
+- [ ] **Urgency-based execution strategies** - CRITICAL uses market orders, HIGH/MEDIUM/LOW use progressive limit orders
+
+#### 5. Performance Baselines
+- [ ] CRITICAL priority fill time: <10 seconds (market orders)
+- [ ] HIGH priority fill time: <30 seconds (95th percentile)
+- [ ] MEDIUM priority average slippage: <2%
+- [ ] LOW priority average slippage: <1%
+- [ ] Price walking improvement vs. market: 1-2%
+- [ ] Circuit breaker activation time: <1 second
+- [ ] Exit attempt logging latency: <50ms per record
+
+#### 6. Security Test Scenarios
+- [ ] Order execution uses secure API credentials
+- [ ] Exit attempt logs don't expose sensitive strategy details
+- [ ] Circuit breaker can't be bypassed via API manipulation
+- [ ] Order placement validates all parameters before submission
+- [ ] No credentials in order execution logs
+
+#### 7. Edge Cases to Test
+- [ ] Price walking reaches max walks without fill → escalate to market order (HIGH priority)
+- [ ] Partial fill on limit order → update position quantity, continue walking for remainder
+- [ ] Order rejected by API (insufficient funds, invalid params) → log error, alert user
+- [ ] Circuit breaker triggers mid-execution → halt immediately, log all in-flight orders
+- [ ] Network timeout during order placement → retry with exponential backoff
+- [ ] Order fills at worse price than limit (slippage) → log actual fill price
+- [ ] Multiple exits triggered simultaneously → queue and execute serially
+- [ ] Price walks beyond best ask (limit > market price) → cap at market + $0.01
+
+#### 8. Success Criteria
+- [ ] Overall coverage: ≥80% (enforced by pyproject.toml)
+- [ ] Critical module coverage:
+  - `trading/exit_executor.py`: ≥90% (CRITICAL)
+  - `trading/price_walker.py`: ≥90% (CRITICAL)
+  - `trading/circuit_breaker.py`: ≥95% (CRITICAL - safety feature)
+- [ ] All critical scenarios from Section 4 tested and passing
+- [ ] Circuit breaker tests prove system halts reliably
+- [ ] Load tests show acceptable fill rates (≥90% for CRITICAL, ≥80% for HIGH)
+- [ ] Price walking tests prove slippage reduction
+- [ ] Paper trading validation (2 weeks) shows proper execution
+- [ ] Test suite runs in <60 seconds locally
+
+**After completion:** Update SESSION_HANDOFF.md: "✅ Phase 5b test planning complete"
+
+---
 
 ### Tasks
 

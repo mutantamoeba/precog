@@ -183,8 +183,9 @@ precog-repo/
 2. **SESSION_HANDOFF.md** - Recent work and immediate next steps
 
 **Step 2: Check Current Phase**
-- Review phase objectives in `docs/foundation/DEVELOPMENT_PHASES_V1.3.md` if needed
+- Review phase objectives in `docs/foundation/DEVELOPMENT_PHASES_V1.4.md` if needed
 - Understand what's blocking vs. nice-to-have
+- **⚠️ IF STARTING NEW PHASE:** Complete "Before Starting This Phase - TEST PLANNING CHECKLIST" from DEVELOPMENT_PHASES before writing any production code
 
 **Step 3: Create Todo List**
 ```python

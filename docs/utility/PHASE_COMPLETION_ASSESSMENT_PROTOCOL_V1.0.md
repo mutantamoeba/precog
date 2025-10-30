@@ -40,7 +40,7 @@ Developers often think a phase is "done" when the code works, but forget to:
 
 ---
 
-## The 7-Step Assessment Process
+## The 8-Step Assessment Process
 
 ### Step 1: Deliverables Verification (10 minutes)
 
@@ -340,6 +340,7 @@ archive/
 - [ ] ✅ Downstream dependencies satisfied
 - [ ] ✅ Versioning and archival complete
 - [ ] ✅ Acceptance criteria met
+- [ ] ✅ Next phase test planning complete
 
 **Acceptance Criteria Examples:**
 
@@ -378,12 +379,13 @@ archive/
 ## Assessment Results
 
 - [✅/❌] Step 1: Deliverables Verification
-- [✅/❌] Step 2: Integration Testing  
+- [✅/❌] Step 2: Integration Testing
 - [✅/❌] Step 3: Documentation Consistency
 - [✅/❌] Step 4: Upstream Impact Analysis
 - [✅/❌] Step 5: Downstream Dependency Check
 - [✅/❌] Step 6: Archive & Version Management
 - [✅/❌] Step 7: Acceptance Criteria Met
+- [✅/❌] Step 8: Next Phase Test Planning
 
 ## Issues Found
 
@@ -395,7 +397,7 @@ archive/
 
 ## Sign-Off
 
-- [ ] All 7 steps completed
+- [ ] All 8 steps completed
 - [ ] All issues resolved
 - [ ] Phase is 100% complete
 - [ ] Ready to proceed to Phase X+1
@@ -404,6 +406,91 @@ archive/
 
 **Next Phase Start Date:** [Date]
 ```
+
+---
+
+### Step 8: Next Phase Test Planning (10 minutes)
+
+**Purpose:** Plan test coverage for next phase BEFORE starting implementation
+
+**Why This Matters:**
+Writing test plans AFTER implementation leads to:
+- ❌ Forgetting edge cases
+- ❌ Low test coverage
+- ❌ Missing critical scenarios
+- ❌ Inadequate test infrastructure
+
+Writing test plans BEFORE implementation ensures:
+- ✅ Comprehensive coverage from day one
+- ✅ Test infrastructure ready before coding
+- ✅ Critical scenarios identified upfront
+- ✅ Edge cases considered early
+
+**Checklist:**
+
+- [ ] **Review Next Phase Requirements**
+  - [ ] Read next phase section in DEVELOPMENT_PHASES_V1.4.md
+  - [ ] Identify all REQ-* requirements for next phase
+  - [ ] Understand critical paths and high-risk components
+
+- [ ] **Complete Test Planning Checklist**
+  - [ ] Find "Before Starting This Phase - TEST PLANNING CHECKLIST" in DEVELOPMENT_PHASES
+  - [ ] Work through all 8 sections:
+    1. Requirements Analysis
+    2. Test Categories Needed
+    3. Test Infrastructure Updates
+    4. Critical Test Scenarios
+    5. Performance Baselines
+    6. Security Test Scenarios
+    7. Edge Cases to Test
+    8. Success Criteria
+  - [ ] Document test planning completion in SESSION_HANDOFF.md
+  - [ ] Optionally create detailed test plan document (e.g., `docs/testing/PHASE_N_TEST_PLAN_V1.0.md`)
+
+- [ ] **Prepare Test Infrastructure**
+  - [ ] Identify needed test fixtures/factories
+  - [ ] Plan mock data requirements
+  - [ ] Consider test database/API setup needs
+  - [ ] Review pytest plugins needed
+
+**Template Reference:**
+```markdown
+# Reference Document
+docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md
+
+# Example: Completing Phase 1, Planning for Phase 2
+1. Read DEVELOPMENT_PHASES_V1.4.md → Phase 2 section
+2. Complete "Before Starting This Phase - TEST PLANNING CHECKLIST"
+3. Update SESSION_HANDOFF.md: "✅ Phase 2 test planning complete"
+4. Ready to start Phase 2 implementation with clear test requirements
+```
+
+**Output:**
+```markdown
+# In SESSION_HANDOFF.md
+## Phase N Completion
+- ✅ Phase N complete (passes 7-step assessment)
+- ✅ Phase N+1 test planning complete
+- Ready to start Phase N+1 implementation
+
+**Next Session:**
+1. Review Phase N+1 test plan
+2. Create test infrastructure (fixtures, factories)
+3. Begin Phase N+1 implementation
+```
+
+**Red Flags:**
+- "We'll figure out tests as we go" - No! Plan now.
+- "Testing strategy is obvious" - Still document it.
+- "We can reuse existing test infrastructure" - Verify, don't assume.
+- Skipping this step - Your future self will regret it.
+
+**Benefits:**
+- Zero "forgot to test X" issues
+- Higher test coverage (≥80% from day one)
+- Better architecture (testability considered upfront)
+- Faster development (test infrastructure ready)
+- Confidence (know exactly what needs testing)
 
 ---
 
@@ -588,7 +675,7 @@ Use it religiously and you'll have:
 
 ---
 
-**Remember:** A phase isn't done when the code works. A phase is done when it passes this 7-step assessment.
+**Remember:** A phase isn't done when the code works. A phase is done when it passes this 8-step assessment.
 
 ---
 
