@@ -1,0 +1,291 @@
+# Precog Project Configuration
+# Phase 0.6c: Validation & Testing Infrastructure
+# Configures: ruff (formatter+linter), mypy (type checking), pytest (testing), coverage
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "precog"
+version = "0.6.3"
+description = "Prediction market trading system with automated edge detection"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    {name = "Precog Development Team"},
+]
+
+# ==============================================================================
+# RUFF CONFIGURATION (Formatter + Linter)
+# Replaces: black (formatter) + flake8 (linter) + isort (import sorting)
+# ==============================================================================
+
+[tool.ruff]
+# Target Python 3.12
+target-version = "py312"
+
+# Max line length (consistent with black default)
+line-length = 100
+
+# Directories to exclude from linting/formatting
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "_archive",
+    "build",
+    "dist",
+    "*.egg-info",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    "htmlcov",
+]
+
+[tool.ruff.lint]
+# Enable rule sets
+# See: https://docs.astral.sh/ruff/rules/
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes (unused imports, undefined names)
+    "I",      # isort (import sorting)
+    "N",      # pep8-naming (naming conventions)
+    "UP",     # pyupgrade (modernize Python syntax)
+    "B",      # flake8-bugbear (likely bugs)
+    "C4",     # flake8-comprehensions (better comprehensions)
+    "DTZ",    # flake8-datetimez (timezone-aware datetimes)
+    "T10",    # flake8-debugger (no debugger statements)
+    "EM",     # flake8-errmsg (error message best practices)
+    "ISC",    # flake8-implicit-str-concat
+    "ICN",    # flake8-import-conventions
+    "PIE",    # flake8-pie (misc lints)
+    "PT",     # flake8-pytest-style (pytest best practices)
+    "Q",      # flake8-quotes (quote style)
+    "RSE",    # flake8-raise (exception raising)
+    "RET",    # flake8-return (return statement issues)
+    "SIM",    # flake8-simplify (simplification suggestions)
+    "TCH",    # flake8-type-checking (type checking imports)
+    "ARG",    # flake8-unused-arguments
+    "PTH",    # flake8-use-pathlib (prefer pathlib over os.path)
+    "PD",     # pandas-vet (pandas best practices)
+    "RUF",    # Ruff-specific rules
+]
+
+# Disable specific rules
+ignore = [
+    "E501",   # Line too long (handled by formatter)
+    "ISC001", # Conflicts with formatter
+    "COM812", # Conflicts with formatter
+]
+
+# Allow auto-fixes for all rules
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.lint.per-file-ignores]
+# Allow unused imports in __init__.py
+"__init__.py" = ["F401"]
+# Allow assert statements in tests
+"tests/**/*.py" = ["S101"]
+# Allow print statements in scripts
+"scripts/**/*.py" = ["T201"]
+
+[tool.ruff.format]
+# Use double quotes for strings
+quote-style = "double"
+
+# Indent with spaces (4 spaces)
+indent-style = "space"
+
+# Respect magic trailing comma (like black)
+skip-magic-trailing-comma = false
+
+# Auto-detect line endings
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+# Import sorting configuration
+known-first-party = ["database", "config", "utils", "api_connectors", "trading", "analytics"]
+
+# ==============================================================================
+# MYPY CONFIGURATION (Type Checking)
+# ==============================================================================
+
+[tool.mypy]
+# Target Python 3.12
+python_version = "3.12"
+
+# Strictness settings (start moderate, can tighten over time)
+warn_return_any = true
+warn_unused_configs = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+
+# Type checking behavior
+check_untyped_defs = true
+disallow_untyped_defs = false  # Start permissive, tighten in Phase 1+
+disallow_incomplete_defs = false
+disallow_untyped_decorators = false
+
+# Import handling
+ignore_missing_imports = false
+follow_imports = "normal"
+
+# Output
+show_error_codes = true
+show_column_numbers = true
+pretty = true
+
+# Exclude patterns
+exclude = [
+    "^.venv/",
+    "^venv/",
+    "^_archive/",
+    "^build/",
+    "^dist/",
+]
+
+# Per-module settings
+[[tool.mypy.overrides]]
+module = "tests.*"
+disallow_untyped_defs = false  # Tests can be less strict
+
+[[tool.mypy.overrides]]
+module = "scripts.*"
+disallow_untyped_defs = false  # Utility scripts can be less strict
+
+[[tool.mypy.overrides]]
+module = [
+    "psycopg2.*",
+    "factory.*",
+    "faker.*",
+]
+ignore_missing_imports = true  # External libraries without type stubs
+
+# ==============================================================================
+# PYTEST CONFIGURATION (Testing)
+# ==============================================================================
+
+[tool.pytest.ini_options]
+# Test discovery
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+# Default options for pytest runs
+addopts = [
+    "-v",                             # Verbose output
+    "--strict-markers",               # Enforce marker registration
+    "--strict-config",                # Enforce config correctness
+    "--tb=short",                     # Shorter tracebacks
+    "--cov=.",                        # Coverage on all code
+    "--cov-report=term-missing",      # Show missing lines in terminal
+    "--cov-report=html:htmlcov",      # HTML coverage report
+    "--cov-report=xml:coverage.xml",  # XML coverage (for CI/CD)
+    "--cov-fail-under=80",            # FAIL if coverage < 80%
+    "--html=test_results/latest/pytest_report.html",  # HTML test report
+    "--self-contained-html",          # Embed CSS/JS in HTML report
+]
+
+# Test markers (use with: pytest -m unit)
+markers = [
+    "unit: Fast unit tests (no external dependencies)",
+    "integration: Integration tests (database, files, etc.)",
+    "slow: Slow tests (performance, load tests)",
+    "critical: Critical tests that must always pass",
+    "database: Tests requiring database connection",
+    "api: Tests requiring API access",
+]
+
+# Logging during tests
+log_cli = false
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+
+# Async test support
+asyncio_mode = "auto"
+
+# Warnings
+filterwarnings = [
+    "error",  # Treat warnings as errors (strict)
+    "ignore::DeprecationWarning",  # Ignore deprecation warnings from dependencies
+]
+
+# ==============================================================================
+# COVERAGE CONFIGURATION
+# ==============================================================================
+
+[tool.coverage.run]
+# Source code to measure
+source = ["."]
+
+# Omit files/directories from coverage
+omit = [
+    "tests/*",
+    ".venv/*",
+    "venv/*",
+    "_archive/*",
+    "scripts/*",           # Utility scripts don't need coverage
+    "*/migrations/*",      # Migration scripts don't need coverage
+    "*/seeds/*",           # Seed data scripts don't need coverage
+    "*/__pycache__/*",
+    "*/site-packages/*",
+]
+
+# Branch coverage (not just line coverage)
+branch = true
+
+# Measure concurrency (thread only - greenlet not supported on Windows)
+concurrency = ["thread"]
+
+[tool.coverage.report]
+# Reporting precision
+precision = 2
+
+# Show missing lines
+show_missing = true
+
+# Skip files with 100% coverage (focus on gaps)
+skip_covered = false
+
+# Fail if total coverage is below this threshold
+fail_under = 80.0
+
+# Exclude lines from coverage (use "pragma: no cover" comment)
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+    "@abc.abstractmethod",
+    "class .*\\bProtocol\\):",
+    "@overload",
+]
+
+[tool.coverage.html]
+# HTML coverage report directory
+directory = "htmlcov"
+
+# Show contexts (which tests cover each line)
+show_contexts = true
+
+[tool.coverage.xml]
+# XML coverage report (for CI/CD tools like Codecov)
+output = "coverage.xml"
+
+# ==============================================================================
+# END OF CONFIGURATION
+# ==============================================================================

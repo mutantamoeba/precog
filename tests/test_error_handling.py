@@ -15,7 +15,7 @@ Target: 90%+ coverage before Phase 2
 
 import pytest
 import psycopg2
-from database.connection import get_connection, init_connection_pool
+from database.connection import get_connection, initialize_pool
 from config.config_loader import ConfigLoader
 import os
 import tempfile
@@ -37,7 +37,7 @@ def test_connection_pool_exhaustion():
     max_overflow = 1
 
     # Initialize pool with small size
-    init_connection_pool(
+    initialize_pool(
         host="localhost",
         port=5432,
         dbname="precog_dev",
@@ -80,7 +80,7 @@ def test_database_connection_failure_and_reconnection():
     """
     # Simulate connection with invalid credentials
     with pytest.raises(psycopg2.OperationalError):
-        init_connection_pool(
+        initialize_pool(
             host="localhost",
             port=5432,
             dbname="nonexistent_db",

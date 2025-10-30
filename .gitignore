@@ -98,14 +98,25 @@ backups/
 .claude/
 phase_reports/
 
-# Testing
+# Testing (Phase 0.6c)
 .pytest_cache/
 .coverage
 htmlcov/
+coverage.xml
 *.cover
 .hypothesis/
 .tox/
 .nox/
+
+# Test results (keep history.json, ignore timestamped runs)
+test_results/*/
+!test_results/README.md
+
+# Ruff cache
+.ruff_cache/
+
+# Mypy cache
+.mypy_cache/
 
 # Jupyter Notebook
 .ipynb_checkpoints

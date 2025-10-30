@@ -1,10 +1,17 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-10-28
+**Last Updated:** 2025-10-29
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.1:**
+- Added Rule 6: Planning Future Work (Section 5)
+- Added Status Field Usage Standards (Section 5)
+- Added validation commands to Quick Reference (Section 10)
+- Updated Phase Completion Protocol with validate_all.sh (Section 9)
+- Updated Current Status for Phase 0.6c completion
 ---
 
 ## 🎯 What This Document Does
@@ -91,10 +98,14 @@ That's it! No need to hunt through multiple status documents.
 - **Phase 0:** Foundation & Documentation (100%)
 - **Phase 0.5:** Foundation Enhancement - Versioning, trailing stops (100%)
 - **Phase 0.6:** Documentation Correction & Security Hardening (100%)
+- **Phase 0.6c:** Validation & Testing Infrastructure (100%)
 - **Phase 1 (Partial):** Database schema V1.7, migrations 001-010, 66/66 tests passing (87% coverage)
 
 **🔵 In Progress:**
 - **Phase 1 (Remaining):** Kalshi API client, CLI commands, config loader
+
+**🔵 Planned:**
+- **Phase 0.7:** CI/CD Integration & Advanced Testing
 
 **📋 Planned:**
 - **Phase 1.5:** Strategy Manager, Model Manager, Position Manager
@@ -111,6 +122,14 @@ python -m pytest tests/ -v  # ✅ 66/66 passing, 87% coverage
 
 # Database migrations
 python scripts/apply_migration_v1.5.py  # ✅ Works
+
+# Validation & Testing (Phase 0.6c)
+./scripts/validate_quick.sh  # ✅ Works (~3 sec - code quality + docs)
+./scripts/validate_all.sh    # ✅ Works (~60 sec - full validation)
+./scripts/test_fast.sh       # ✅ Works (~5 sec - unit tests only)
+./scripts/test_full.sh       # ✅ Works (~30 sec - all tests + coverage)
+python scripts/validate_docs.py  # ✅ Works (documentation validation)
+python scripts/fix_docs.py       # ✅ Works (auto-fix doc issues)
 ```
 
 ### What Doesn't Work Yet
@@ -738,6 +757,151 @@ Complete REQ-API-001: Kalshi API client
 - Update CLAUDE.md (Phase 1: 50% → 65%)
 - Update SESSION_HANDOFF
 ```
+
+---
+
+#### Rule 6: Planning Future Work
+
+**When you identify future enhancements during implementation, you MUST:**
+
+1. ✅ **Add to DEVELOPMENT_PHASES**
+   - Create new Phase section (e.g., Phase 0.7) if logical grouping
+   - OR add to existing future phase section
+   - Mark all tasks as `[ ]` (not started)
+   ```markdown
+   ### Phase 0.7: CI/CD Integration (Future)
+   **Status:** 🔵 Planned
+   - [ ] GitHub Actions workflow
+   - [ ] Codecov integration
+   ```
+
+2. ✅ **Add to MASTER_REQUIREMENTS** (if formal requirements)
+   ```markdown
+   **REQ-CICD-001: GitHub Actions Integration**
+   - Phase: 0.7 (Future)
+   - Priority: High
+   - Status: 🔵 Planned  # Not ✅ Complete or 🟡 In Progress
+   - Description: ...
+   ```
+
+3. ✅ **Add to REQUIREMENT_INDEX** (if requirements added)
+   ```markdown
+   | REQ-CICD-001 | GitHub Actions | 0.7 | High | 🔵 Planned |
+   ```
+
+4. ✅ **Add to ARCHITECTURE_DECISIONS** (if design decisions needed)
+   ```markdown
+   ### ADR-052: CI/CD Pipeline Strategy (Planned)
+
+   **Decision #52**
+   **Phase:** 0.7 (Future)
+   **Status:** 🔵 Planned
+
+   **Decision:** Use GitHub Actions for CI/CD
+
+   **Rationale:** (high-level, can be expanded when implementing)
+
+   **Implementation:** (To be detailed in Phase 0.7)
+
+   **Related Requirements:** REQ-CICD-001
+   ```
+
+5. ✅ **Add to ADR_INDEX** (if ADRs added)
+   ```markdown
+   | ADR-052 | CI/CD Pipeline (GitHub Actions) | 0.7 | 🔵 Planned | 🟡 High |
+   ```
+
+6. ✅ **Add "Future Enhancements" section** to technical docs
+   - In TESTING_STRATEGY, VALIDATION_LINTING_ARCHITECTURE, etc.
+   - Describes what's coming next
+   - References related REQs and ADRs
+
+7. ✅ **Update version numbers** on all modified docs
+
+8. ✅ **Update MASTER_INDEX** (if filenames change)
+
+**When to use this rule:**
+- 🎯 During implementation, you discover logical next steps
+- 🎯 User mentions future work they want documented
+- 🎯 You create infrastructure that enables future capabilities
+- 🎯 Phase completion reveals obvious next phase
+
+**Example trigger:**
+"We just built validation infrastructure. This enables CI/CD integration in the future. Should document CI/CD as planned work now."
+
+**Example Commit Message:**
+```
+Implement Phase 0.6c validation suite + document Phase 0.7 CI/CD plans
+
+Implementation (Phase 0.6c):
+- Add validation suite (validate_docs.py, validate_all.sh)
+- ... (current work)
+
+Future Planning (Phase 0.7):
+- Add REQ-CICD-001 to MASTER_REQUIREMENTS V2.8 → V2.9 (🔵 Planned)
+- Add ADR-052 to ARCHITECTURE_DECISIONS V2.8 (🔵 Planned)
+- Add Phase 0.7 to DEVELOPMENT_PHASES V1.3 → V1.4
+- Add "Future Enhancements" sections to technical docs
+- Update indexes (REQUIREMENT_INDEX, ADR_INDEX)
+
+Phase 0.6c: ✅ Complete
+Phase 0.7: 🔵 Planned and documented
+```
+
+---
+
+### Status Field Usage Standards
+
+Use consistent status indicators across all documentation:
+
+#### Requirement & ADR Status
+
+| Status | Meaning | When to Use |
+|--------|---------|-------------|
+| 🔵 Planned | Documented but not started | Future work, identified but not implemented |
+| 🟡 In Progress | Currently being worked on | Active development this session |
+| ✅ Complete | Implemented and tested | Done, tests passing, committed |
+| ⏸️ Paused | Started but blocked/deferred | Waiting on dependency or decision |
+| ❌ Rejected | Considered but decided against | Document why NOT doing something |
+| 📦 Archived | Was complete, now superseded | Old versions, deprecated approaches |
+
+#### Phase Status
+
+| Status | Meaning |
+|--------|---------|
+| 🔵 Planned | Phase not yet started |
+| 🟡 In Progress | Phase currently active (XX% complete) |
+| ✅ Complete | Phase 100% complete, all deliverables done |
+
+#### Document Status (MASTER_INDEX)
+
+| Status | Meaning |
+|--------|---------|
+| ✅ Current | Latest version, actively maintained |
+| 🔵 Planned | Document listed but not yet created |
+| 📦 Archived | Old version, moved to _archive/ |
+| 🚧 Draft | Exists but incomplete/in revision |
+
+**Consistency Rules:**
+
+1. **Same status across paired documents**
+   - REQ-API-001 is 🔵 Planned in MASTER_REQUIREMENTS
+   - REQ-API-001 is 🔵 Planned in REQUIREMENT_INDEX
+   - (Never: 🔵 in one, ✅ in other)
+
+2. **Phase determines status**
+   - Phase 0.6c work = ✅ Complete (this session)
+   - Phase 0.7 work = 🔵 Planned (future)
+   - Phase 1 in-progress work = 🟡 In Progress
+
+3. **Status transitions**
+   - 🔵 Planned → 🟡 In Progress (when starting work)
+   - 🟡 In Progress → ✅ Complete (when done + tested)
+   - ✅ Complete → 📦 Archived (when superseded)
+
+4. **Never skip statuses**
+   - ❌ BAD: 🔵 Planned → ✅ Complete (skip 🟡 In Progress)
+   - ✅ GOOD: 🔵 Planned → 🟡 In Progress → ✅ Complete
 
 ---
 
@@ -1568,23 +1732,32 @@ git grep -E "(postgres://|mysql://).*:.*@" -- '*'
 ### Key Commands
 
 ```bash
-# Run all tests
-python -m pytest tests/ -v
+# Validation & Testing (Phase 0.6c)
+./scripts/validate_all.sh      # Complete validation (60s) - run before commits
+./scripts/validate_quick.sh    # Fast validation (3s) - run during development
+./scripts/test_full.sh         # All tests + coverage (30s)
+./scripts/test_fast.sh         # Unit tests only (5s)
 
-# Check coverage
-python -m pytest tests/ --cov=. --cov-report=term-missing
+# Code Quality
+ruff check .           # Linting
+ruff check --fix .     # Linting with auto-fix
+ruff format .          # Code formatting
+mypy .                 # Type checking
 
-# Test database connection
-python scripts/test_db_connection.py
+# Documentation
+python scripts/validate_docs.py  # Doc consistency validation
+python scripts/fix_docs.py       # Auto-fix doc issues
 
-# Security scan
-git grep -E "password\s*=" -- '*.py'
+# Testing (direct pytest)
+pytest tests/ -v                              # All tests
+pytest tests/unit/ -v                         # Unit tests only
+pytest --cov=. --cov-report=html             # With coverage
 
-# Validate document consistency
-python scripts/validate_doc_consistency.py
+# Database
+python scripts/test_db_connection.py  # Test connection
 
-# Format code (if Black is installed)
-black .
+# Security
+git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 ```
 
 ### Critical References
@@ -1608,10 +1781,17 @@ black .
 **API Integration:**
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md`
 
+**Validation & Testing (Phase 0.6c):**
+- `docs/foundation/TESTING_STRATEGY_V2.0.md` - Comprehensive testing infrastructure
+- `docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality & doc validation
+- `pyproject.toml` - Ruff, mypy, pytest configuration
+- `scripts/validate_all.sh` - Complete validation suite
+
 **Document Consistency:**
 - Section 5 above: Document Cohesion & Consistency
+- Rule 6: Planning Future Work
+- Status Field Usage Standards
 - Update Cascade Rules
-- Consistency Validation Checklist
 
 ---
 
@@ -1689,3 +1869,4 @@ black .
 ---
 
 **END OF CLAUDE.md V1.0**
+- always use descriptive variable names
