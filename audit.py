@@ -1,8 +1,7 @@
-import os
 import re
-import glob
 import subprocess
 from pathlib import Path
+
 
 def find_secrets(files):
     secret_patterns = [
@@ -13,7 +12,7 @@ def find_secrets(files):
     leaks = []
     for file in files:
         try:
-            with open(file, "r", encoding="utf-8", errors="ignore") as f:
+            with Path(file).open(encoding="utf-8", errors="ignore") as f:
                 for i, line in enumerate(f):
                     for pat in secret_patterns:
                         if re.search(pat, line, re.IGNORECASE):
@@ -27,7 +26,7 @@ def check_postgres_encryption(config_files):
     ssl_pat = re.compile(r'sslmode\s*=\s*[\'"]?disable[\'"]?', re.IGNORECASE)
     for cfg in config_files:
         try:
-            with open(cfg, "r", encoding="utf-8", errors="ignore") as f:
+            with Path(cfg).open(encoding="utf-8", errors="ignore") as f:
                 for i, line in enumerate(f):
                     if ssl_pat.search(line):
                         results.append((cfg, i + 1, line.strip()))
@@ -37,15 +36,15 @@ def check_postgres_encryption(config_files):
 
 def audit_dockerfiles():
     findings = []
-    for path in glob.glob("**/Dockerfile", recursive=True):
+    for path in Path().rglob("Dockerfile"):
         try:
-            with open(path) as f:
+            with path.open() as f:
                 content = f.read()
                 if "USER root" in content:
                     findings.append((path, "Runs as root user"))
                 if "EXPOSE 5432" in content:
                     findings.append((path, "Exposes default Postgres port"))
-                if not re.search(r'FROM\s+python:.*-slim', content):
+                if not re.search(r"FROM\s+python:.*-slim", content):
                     findings.append((path, "Non-slim base image (increase attack surface)"))
         except Exception:
             continue
@@ -53,11 +52,10 @@ def audit_dockerfiles():
 
 def check_env_permissions():
     issues = []
-    for env_path in glob.glob("**/.env", recursive=True):
+    for env_path in Path().rglob(".env"):
         try:
-            file = Path(env_path)
-            if file.stat().st_mode & 0o077:
-                issues.append((env_path, "Potentially world-readable"))
+            if env_path.stat().st_mode & 0o077:
+                issues.append((str(env_path), "Potentially world-readable"))
         except Exception:
             continue
     return issues
@@ -79,12 +77,15 @@ def check_dependencies():
 
 def main():
     print("Audit: Scanning for hardcoded secrets...")
-    files = glob.glob('**/*.py', recursive=True) + glob.glob('**/*.conf', recursive=True) + glob.glob('**/*.env', recursive=True)
+    py_files = [str(p) for p in Path().rglob("*.py")]
+    conf_files = [str(p) for p in Path().rglob("*.conf")]
+    env_files = [str(p) for p in Path().rglob("*.env")]
+    files = py_files + conf_files + env_files
     for file, line, val in find_secrets(files):
         print(f"[SECRET] {file}:{line} -> {val}")
 
     print("\nAudit: Checking PostgreSQL connection config for SSL enforcement...")
-    pg_configs = [f for f in files if 'postgres' in f or 'database' in f]
+    pg_configs = [f for f in files if "postgres" in f or "database" in f]
     for cfg, line, val in check_postgres_encryption(pg_configs):
         print(f"[DB ENCRYPTION] {cfg}:{line} -> {val}")
 

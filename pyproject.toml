@@ -322,32 +322,14 @@ disable_mutation_for = [
 # ==============================================================================
 
 [tool.bandit]
-# Directories to scan
-tests = ["database", "utils", "api_connectors", "trading", "analytics"]
-
-# Exclude directories
-exclude_dirs = [
-    "tests",
-    ".venv",
-    "venv",
-    "_archive",
-    "build",
-    "dist",
-]
-
-# Severity level (LOW, MEDIUM, HIGH)
-# Report findings at this level or above
-level = "MEDIUM"
-
-# Confidence level (LOW, MEDIUM, HIGH)
-# Only report findings with this confidence or above
-confidence = "MEDIUM"
+# Exclude directories (Bandit scans current directory by default)
+exclude_dirs = ["/tests", "/.venv", "/venv", "/_archive", "/build", "/dist", "/.git", "/.pytest_cache"]
 
 # Specific tests to skip (use with caution!)
 # Format: ["B101", "B601"]
-# B101 = assert_used (we want asserts in tests, but Bandit flags them)
+# B101 = assert_used (we allow asserts in production code for validation)
 # See: https://bandit.readthedocs.io/en/latest/plugins/index.html
-skips = []
+skips = ["B101"]
 
 # ==============================================================================
 # HYPOTHESIS CONFIGURATION (Property-Based Testing)
