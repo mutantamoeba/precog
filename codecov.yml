@@ -1,0 +1,59 @@
+# Codecov Configuration for Precog Project
+
+# Coverage thresholds
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+
+  status:
+    # Project-wide coverage
+    project:
+      default:
+        target: 80%                # Minimum 80% coverage required
+        threshold: 2%              # Allow 2% decrease before failing
+        informational: false       # Fail if threshold not met
+
+    # Patch (PR diff) coverage
+    patch:
+      default:
+        target: 80%                # New code must have 80% coverage
+        threshold: 5%              # Allow 5% variance
+        informational: false
+
+# PR comment configuration
+comment:
+  layout: "reach,diff,flags,tree,footer"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+
+# Files to ignore in coverage reports
+ignore:
+  - "tests/**/*"
+  - "scripts/**/*"
+  - "**/conftest.py"
+  - "**/__init__.py"
+  - "**/test_*.py"
+  - "setup.py"
+  - "venv/**/*"
+  - ".venv/**/*"
+
+# Custom flags for different test suites
+flags:
+  unittests:
+    paths:
+      - database/
+      - utils/
+      - api_connectors/
+      - trading/
+      - analytics/
+    carryforward: true
+
+# GitHub checks
+github_checks:
+  annotations: true
+
+# File-level coverage annotations
+codecov_branch: main
