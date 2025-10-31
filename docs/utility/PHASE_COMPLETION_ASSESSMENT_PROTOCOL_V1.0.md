@@ -40,7 +40,7 @@ Developers often think a phase is "done" when the code works, but forget to:
 
 ---
 
-## The 8-Step Assessment Process
+## The 8-Step Assessment Process (with Prerequisites Check)
 
 ### Step 1: Deliverables Verification (10 minutes)
 
@@ -84,6 +84,95 @@ Developers often think a phase is "done" when the code works, but forget to:
 - "We'll add that in the next phase" - No! Finish this phase first.
 - "It mostly works" - Define "works" with acceptance criteria.
 - "Documentation can wait" - No, it's part of the deliverable.
+
+---
+
+### Step 1.5: Next Phase Prerequisites Verification (2 minutes)
+
+**Purpose:** Verify that next phase can start once current phase is marked complete
+
+**Why This Matters:**
+- Catches prerequisite violations BEFORE marking phase complete
+- Prevents starting next phase only to discover blockers
+- Ensures smooth phase transitions
+- Complements session start prerequisite check
+
+**Checklist:**
+
+- [ ] **Mark Current Phase Complete**
+  - [ ] Will you mark current phase as Complete in DEVELOPMENT_PHASES?
+  - [ ] Is current phase status changing from PLANNED/IN PROGRESS to Complete?
+
+- [ ] **Run Validation Script**
+  ```bash
+  # Validate that next phase prerequisites are met
+  python scripts/validate_phase_readiness.py --phase <NEXT_PHASE>
+
+  # Example: Completing Phase 0.7, starting Phase 1
+  python scripts/validate_phase_readiness.py --phase 1
+  ```
+
+- [ ] **Check Validation Results**
+  - [ ] Does validation report `[PASS]`?
+  - [ ] Are all prerequisite phases marked Complete?
+  - [ ] Is test planning documented (if required)?
+
+- [ ] **Document Blockers (if any)**
+  - [ ] List any unmet prerequisites
+  - [ ] Identify which phases need completion first
+  - [ ] Note in phase completion report
+
+**Example Output:**
+
+**PASS Scenario (Phase 0.7 → Phase 1):**
+```bash
+$ python scripts/validate_phase_readiness.py --phase 1
+
+[CHECK] Validating Phase 1 readiness...
+
+[TEST] Check 1: Verifying Phase 1 dependencies...
+   [PASS] All dependencies met
+
+[TEST] Check 2: Verifying Phase 1 test planning...
+   [PASS] Test planning documented as complete in SESSION_HANDOFF
+
+============================================================
+[PASS] PASS: Phase 1 is ready to start
+All prerequisite dependencies are met.
+```
+→ **Action:** Proceed with marking Phase 0.7 complete, start Phase 1
+
+**FAIL Scenario (Phase 0.6c → Phase 1):**
+```bash
+$ python scripts/validate_phase_readiness.py --phase 1
+
+[CHECK] Validating Phase 1 readiness...
+
+[TEST] Check 1: Verifying Phase 1 dependencies...
+   [FAIL] FAILED: Unmet dependencies:
+      - Phase 0.7 not marked Complete
+   -> Complete prerequisite phases before starting Phase 1
+
+============================================================
+[FAIL] FAIL: Phase 1 is NOT ready
+Resolve issues above before starting Phase 1 work.
+```
+→ **Action:** Cannot mark Phase 0.6c complete and move to Phase 1. Must complete Phase 0.7 first.
+
+**Integration with Workflow:**
+
+This step creates a "look ahead" check during phase completion:
+- **Session Start (CLAUDE.md Step 2a):** "Look back" - Are current phase prerequisites met?
+- **Phase Completion (Step 1.5):** "Look ahead" - Are next phase prerequisites met?
+- **Result:** Prerequisites enforced at BOTH ends of phase transition
+
+**Red Flags:**
+- Validation fails but proceeding anyway - This defeats the purpose!
+- Skipping this step "just this once" - No exceptions, always validate
+- "We'll handle prerequisites in next session" - No, verify NOW
+- Assuming prerequisites are met without checking - Always run the script
+
+**Time Required:** 2 minutes (script runs in seconds)
 
 ---
 
@@ -379,6 +468,7 @@ archive/
 ## Assessment Results
 
 - [✅/❌] Step 1: Deliverables Verification
+- [✅/❌] Step 1.5: Next Phase Prerequisites Verification
 - [✅/❌] Step 2: Integration Testing
 - [✅/❌] Step 3: Documentation Consistency
 - [✅/❌] Step 4: Upstream Impact Analysis
@@ -397,9 +487,10 @@ archive/
 
 ## Sign-Off
 
-- [ ] All 8 steps completed
+- [ ] All 8 steps (including 1.5) completed
 - [ ] All issues resolved
 - [ ] Phase is 100% complete
+- [ ] Next phase prerequisites verified
 - [ ] Ready to proceed to Phase X+1
 
 **Certification:** Phase X is COMPLETE / NOT COMPLETE

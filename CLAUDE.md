@@ -185,7 +185,21 @@ precog-repo/
 **Step 2: Check Current Phase**
 - Review phase objectives in `docs/foundation/DEVELOPMENT_PHASES_V1.4.md` if needed
 - Understand what's blocking vs. nice-to-have
+
+**Step 2a: Verify Phase Prerequisites (MANDATORY)**
+- **⚠️ BEFORE CONTINUING ANY PHASE WORK:** Check DEVELOPMENT_PHASES for current phase's Dependencies section
+- Verify ALL "Requires Phase X: 100% complete" dependencies are met
+- Check that previous phase is marked ✅ Complete in DEVELOPMENT_PHASES
+- If dependencies NOT met: STOP and complete prerequisite phase first
 - **⚠️ IF STARTING NEW PHASE:** Complete "Before Starting This Phase - TEST PLANNING CHECKLIST" from DEVELOPMENT_PHASES before writing any production code
+
+**Example - Phase 1:**
+```bash
+# Phase 1 Dependencies: Requires Phase 0.7: 100% complete
+# Check: Is Phase 0.7 marked ✅ Complete in DEVELOPMENT_PHASES?
+# If NO → Must complete Phase 0.7 before starting Phase 1
+# If YES → Can proceed with Phase 1 test planning checklist
+```
 
 **Step 3: Create Todo List**
 ```python
