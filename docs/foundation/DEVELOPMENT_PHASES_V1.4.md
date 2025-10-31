@@ -352,6 +352,81 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 **Requirements:** REQ-TEST-006, REQ-TEST-007, REQ-TEST-008, REQ-CICD-001, REQ-CICD-002, REQ-CICD-003
 
+### Deferred Tasks
+
+The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 or later phases. These tasks are **important but not blocking** for Phase 1 development to begin.
+
+**📋 Detailed Documentation:** `docs/utility/PHASE_0.7_DEFERRED_TASKS_V1.0.md`
+
+#### High Priority (Phase 0.8 - 4-5 hours total)
+
+**DEF-001: Pre-Commit Hooks Setup (2 hours)**
+- Install pre-commit framework with Ruff, line ending normalization, security checks
+- Auto-fix formatting issues before commit (prevents CI failures)
+- Expected impact: 50% reduction in CI failures, <5 second execution time
+- **Rationale:** Prevents "would reformat" errors, catches issues immediately
+
+**DEF-002: Pre-Push Hooks Setup (1 hour)**
+- Run validation suite (Ruff, Mypy, tests, security scan) before push
+- Catches 70% of issues before CI runs
+- Expected: <60 second execution time
+- **Rationale:** Faster feedback than waiting for CI, saves CI time
+
+**DEF-003: GitHub Branch Protection Rules (30 min)**
+- Enforce PR workflow (no direct pushes to main)
+- Require CI to pass before merge
+- Require 1 approving review (if collaborators)
+- **Rationale:** Enforces code review, prevents accidental commits
+
+**DEF-004: Line Ending Edge Case Fix (1 hour)**
+- Re-commit `test_crud_operations.py` and `test_decimal_properties.py` with LF endings
+- Fixes persistent "would reformat" CI error
+- ✅ `.gitattributes` already created (prevents future issues)
+- **Note:** Will be automatically fixed once DEF-001 (pre-commit hooks) is implemented
+
+#### Low Priority (Phase 1+)
+
+**DEF-005: Pre-Commit Hook - No print() in Production (30 min)**
+- Block commits with print() in production code (only logger.info() allowed)
+- Exceptions: scripts/, tests/, commented-out debug statements
+
+**DEF-006: Pre-Commit Hook - Check for Merge Conflicts (15 min)**
+- Already included in DEF-001 configuration
+- Prevents committing files with `<<<<<<<` markers
+
+**DEF-007: Pre-Push Hook - Branch Name Convention (30 min)**
+- Enforce naming: `feature/`, `bugfix/`, `refactor/`, `docs/`, `test/`
+- Example: `feature/kalshi-api-client`, `bugfix/fix-decimal-precision`
+
+#### Implementation Timeline
+
+**Phase 0.8 (Week 1-2)**
+1. DEF-001: Pre-commit hooks setup
+2. DEF-004: Line ending fix (validate hooks catch future issues)
+3. DEF-002: Pre-push hooks setup
+4. DEF-003: Branch protection rules
+
+**Phase 1+ (As Needed)**
+5. DEF-005: No print() hook
+6. DEF-007: Branch name convention
+
+#### Success Metrics
+
+- ✅ 0 "would reformat" errors in CI after DEF-001
+- ✅ 50% reduction in CI failures (pre-commit)
+- ✅ 70% reduction in CI failures overall (pre-commit + pre-push)
+- ✅ 0 direct pushes to main (branch protection)
+- ✅ All files use LF endings (DEF-004)
+
+#### Why Deferred?
+
+1. **Not blocking Phase 1:** Database and API work can proceed without these
+2. **CI already functional:** Current CI catches all issues (just slower)
+3. **Time constraints:** Phase 0.7 focus was getting CI working, not perfecting it
+4. **Learning opportunity:** Better to implement hooks after seeing real CI failures
+
+**Note:** Pre-commit hooks will be especially valuable once multiple developers join the project (Phase 2+).
+
 ---
 
 ## Phase 1: Core Infrastructure (Codename: "Bootstrap")

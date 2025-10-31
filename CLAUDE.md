@@ -1,11 +1,17 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.1
+**Version:** 1.2
 **Created:** 2025-10-28
-**Last Updated:** 2025-10-29
+**Last Updated:** 2025-10-31
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.2:**
+- Added Deferred Tasks Workflow to Phase Completion Protocol Step 6 (Section 9)
+- Documents multi-location strategy for tracking non-blocking tasks deferred to future phases
+- Added numbering convention (DEF-001, etc.), priority levels, and documentation locations
+- Updated Current Status for Phase 0.7 completion
+- Updated references to DEVELOPMENT_PHASES V1.4
 **Changes in V1.1:**
 - Added Rule 6: Planning Future Work (Section 5)
 - Added Status Field Usage Standards (Section 5)
@@ -99,17 +105,15 @@ That's it! No need to hunt through multiple status documents.
 - **Phase 0.5:** Foundation Enhancement - Versioning, trailing stops (100%)
 - **Phase 0.6:** Documentation Correction & Security Hardening (100%)
 - **Phase 0.6c:** Validation & Testing Infrastructure (100%)
+- **Phase 0.7:** CI/CD Integration & Advanced Testing (100%)
 - **Phase 1 (Partial):** Database schema V1.7, migrations 001-010, 66/66 tests passing (87% coverage)
 
 **🔵 In Progress:**
 - **Phase 1 (Remaining):** Kalshi API client, CLI commands, config loader
 
-**🔵 Planned:**
-- **Phase 0.7:** CI/CD Integration & Advanced Testing
-
 **📋 Planned:**
 - **Phase 1.5:** Strategy Manager, Model Manager, Position Manager
-- **Phase 2+:** See `docs/foundation/DEVELOPMENT_PHASES_V1.3.md`
+- **Phase 2+:** See `docs/foundation/DEVELOPMENT_PHASES_V1.4.md`
 
 ### What Works Right Now
 
@@ -1339,7 +1343,7 @@ python scripts/validate_doc_consistency.py
 - `docs/foundation/ADR_INDEX.md`
 
 **Need phase information?**
-- `docs/foundation/DEVELOPMENT_PHASES_V1.3.md`
+- `docs/foundation/DEVELOPMENT_PHASES_V1.4.md`
 
 **Need implementation details?**
 - Database: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md`
@@ -1359,7 +1363,7 @@ python scripts/validate_doc_consistency.py
 2. **MASTER_REQUIREMENTS_V2.8.md** - All requirements with REQ IDs
 3. **ARCHITECTURE_DECISIONS_V2.7.md** - All ADRs (001-037)
 4. **PROJECT_OVERVIEW_V1.3.md** - System architecture
-5. **DEVELOPMENT_PHASES_V1.3.md** - Roadmap and phases
+5. **DEVELOPMENT_PHASES_V1.4.md** - Roadmap and phases
 6. **REQUIREMENT_INDEX.md** - Searchable requirement catalog
 7. **ADR_INDEX.md** - Searchable ADR catalog
 8. **GLOSSARY.md** - Terminology reference
@@ -1596,8 +1600,59 @@ api_key = "sk_live_abc123"
 - [ ] Future improvements identified?
 - [ ] Risk mitigation strategies noted?
 - [ ] Performance concerns documented?
+- [ ] **Deferred tasks documented?** (see Deferred Tasks Workflow below)
 
 **Output:** Risk register with mitigation plans
+
+#### Deferred Tasks Workflow
+
+**When to create a deferred tasks document:**
+- Phase identified tasks that are **important but not blocking** for next phase
+- Tasks would take >2 hours total implementation time
+- Tasks are infrastructure/tooling improvements (not core features)
+
+**Multi-Location Documentation Strategy:**
+
+1. **Create detailed document in utility/**
+   - Filename: `PHASE_N.N_DEFERRED_TASKS_V1.0.md`
+   - Include: Task IDs (DEF-001, etc.), rationale, implementation details, timeline, success metrics
+   - Example: `docs/utility/PHASE_0.7_DEFERRED_TASKS_V1.0.md`
+
+2. **Add summary to DEVELOPMENT_PHASES**
+   - Add "Deferred Tasks" subsection at end of phase (before phase separator)
+   - List high-priority vs. low-priority tasks
+   - Include task IDs, time estimates, rationale
+   - Reference detailed document: `📋 Detailed Documentation: docs/utility/PHASE_N.N_DEFERRED_TASKS_V1.0.md`
+
+3. **Update MASTER_INDEX**
+   - Add entry for deferred tasks document
+   - Category: Utility document
+
+4. **Optional: Promote critical tasks to requirements**
+   - If task is critical infrastructure (pre-commit hooks, branch protection), consider adding REQ-TOOL-* IDs
+   - Only do this if task will definitely be implemented in next 1-2 phases
+
+**Deferred Task Numbering Convention:**
+- `DEF-001`, `DEF-002`, etc. (sequential within phase)
+- Phase-specific (Phase 0.7 deferred tasks: DEF-001 through DEF-007)
+
+**Priority Levels:**
+- 🟡 **High:** Should be implemented in next phase (Phase 0.8)
+- 🟢 **Medium:** Implement within 2-3 phases
+- 🔵 **Low:** Nice-to-have, implement as time allows
+
+**Example Deferred Tasks:**
+- Pre-commit hooks (prevents CI failures locally)
+- Pre-push hooks (catches issues before CI)
+- Branch protection rules (enforces PR workflow)
+- Line ending edge cases (cosmetic CI issues)
+- Additional security checks (non-blocking)
+
+**When NOT to defer:**
+- Blocking issues (prevents next phase from starting)
+- Security vulnerabilities (must fix immediately)
+- Data corruption risks (must fix immediately)
+- Core feature requirements (belongs in phase, not deferred)
 
 ---
 
@@ -1844,6 +1899,8 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2 | 2025-10-31 | Added Deferred Tasks Workflow to Phase Completion Protocol; multi-location documentation strategy; updated for Phase 0.7 completion; updated references to DEVELOPMENT_PHASES V1.4 |
+| 1.1 | 2025-10-29 | Added Rule 6: Planning Future Work; Status Field Usage Standards; validation commands to Quick Reference; updated Phase Completion Protocol with validate_all.sh; Phase 0.6c completion updates |
 | 1.0 | 2025-10-28 | Initial creation - Streamlined handoff workflow, added comprehensive Document Cohesion & Consistency section, removed PROJECT_STATUS and DOCUMENT_MAINTENANCE_LOG overhead, fixed API_INTEGRATION_GUIDE reference to V2.0 |
 
 ---
