@@ -18,15 +18,14 @@ Returns:
     - Exit code 1 if any old references are found
 """
 
-import re
 import sys
 from pathlib import Path
-from typing import List, Dict, Tuple
 
 # Set UTF-8 encoding for stdout on Windows
-if sys.platform == 'win32':
+if sys.platform == "win32":
     import codecs
-    sys.stdout = codecs.getwriter('utf-8')(sys.stdout.buffer, 'strict')
+
+    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.buffer, "strict")
 
 
 # Old → New filename mappings
@@ -51,12 +50,12 @@ OLD_LOCATIONS = [
 ]
 
 
-def find_markdown_files(root_dir: Path) -> List[Path]:
+def find_markdown_files(root_dir: Path) -> list[Path]:
     """Find all markdown files in the project."""
     return list(root_dir.glob("**/*.md"))
 
 
-def check_file_references(file_path: Path) -> List[Tuple[int, str, str]]:
+def check_file_references(file_path: Path) -> list[tuple[int, str, str]]:
     """
     Check a single markdown file for old references.
 
@@ -66,7 +65,7 @@ def check_file_references(file_path: Path) -> List[Tuple[int, str, str]]:
     issues = []
 
     try:
-        with open(file_path, 'r', encoding='utf-8') as f:
+        with open(file_path, encoding="utf-8") as f:
             lines = f.readlines()
     except Exception as e:
         print(f"Warning: Could not read {file_path}: {e}")
@@ -81,20 +80,18 @@ def check_file_references(file_path: Path) -> List[Tuple[int, str, str]]:
                 if "RENAMED from" in line or "renamed from" in line:
                     continue
 
-                issues.append((
-                    line_num,
-                    old_name,
-                    line.strip()[:100]  # First 100 chars of context
-                ))
+                issues.append(
+                    (
+                        line_num,
+                        old_name,
+                        line.strip()[:100],  # First 100 chars of context
+                    )
+                )
 
         # Check for old location references
         for old_location in OLD_LOCATIONS:
             if old_location in line:
-                issues.append((
-                    line_num,
-                    old_location,
-                    line.strip()[:100]
-                ))
+                issues.append((line_num, old_location, line.strip()[:100]))
 
     return issues
 
@@ -126,28 +123,27 @@ def main():
         print("[SUCCESS] All document references are up to date!")
         print("\nNo references to old filenames or locations found.")
         return 0
-    else:
-        print("[ISSUES FOUND] Old references detected\n")
-        print("=" * 80)
+    print("[ISSUES FOUND] Old references detected\n")
+    print("=" * 80)
 
-        total_issues = 0
-        for file_path, issues in all_issues.items():
-            print(f"\nFile: {file_path.relative_to(root_dir)}")
-            print("-" * 80)
-            for line_num, old_ref, context in issues:
-                total_issues += 1
-                print(f"  Line {line_num}: Reference to '{old_ref}'")
-                print(f"    Context: {context}")
-            print()
+    total_issues = 0
+    for file_path, issues in all_issues.items():
+        print(f"\nFile: {file_path.relative_to(root_dir)}")
+        print("-" * 80)
+        for line_num, old_ref, context in issues:
+            total_issues += 1
+            print(f"  Line {line_num}: Reference to '{old_ref}'")
+            print(f"    Context: {context}")
+        print()
 
-        print("=" * 80)
-        print(f"\n[ERROR] Total issues: {total_issues} references in {len(all_issues)} files")
-        print("\nAction required: Update these references to use new filenames")
-        print("\nRenamed files:")
-        for old_name, new_name in RENAMED_FILES.items():
-            print(f"  {old_name} → {new_name}")
+    print("=" * 80)
+    print(f"\n[ERROR] Total issues: {total_issues} references in {len(all_issues)} files")
+    print("\nAction required: Update these references to use new filenames")
+    print("\nRenamed files:")
+    for old_name, new_name in RENAMED_FILES.items():
+        print(f"  {old_name} → {new_name}")
 
-        return 1
+    return 1
 
 
 if __name__ == "__main__":

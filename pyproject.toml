@@ -79,6 +79,31 @@ ignore = [
     "E501",   # Line too long (handled by formatter)
     "ISC001", # Conflicts with formatter
     "COM812", # Conflicts with formatter
+
+    # Phase 0.7: Temporarily disabled for pre-existing code (Phase 0-0.6)
+    # TODO Phase 1: Fix these incrementally and re-enable
+    "E721",   # Type comparisons (use isinstance)
+    "E722",   # Bare except
+    "ARG001", # Unused function arguments
+    "PTH101", # os.chmod() -> Path.chmod()
+    "PTH102", # os.mkdir() -> Path.mkdir()
+    "PTH108", # os.unlink() -> Path.unlink()
+    "PTH110", # os.path.exists() -> Path.exists()
+    "PTH118", # os.path.join() -> Path
+    "PTH123", # Use Path.open() instead of open()
+    "DTZ001", # datetime without tzinfo
+    "DTZ003", # datetime.utcnow() without tz
+    "DTZ005", # datetime.now() without tz
+    "B007",   # Unused loop variable
+    "B018",   # Useless expression
+    "EM101",  # Exception string literal
+    "EM102",  # Exception f-string literal
+    "PT011",  # pytest.raises too broad
+    "PT012",  # pytest.raises single statement
+    "PT017",  # assert on exception in except block
+    "RUF005", # Iterable unpacking
+    "RUF013", # Implicit Optional
+    "SIM105", # Use contextlib.suppress
 ]
 
 # Allow auto-fixes for all rules

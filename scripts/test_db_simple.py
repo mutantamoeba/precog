@@ -2,7 +2,9 @@
 """
 Simple database connection test - uses environment variables for security
 """
+
 import os
+
 import psycopg2
 from dotenv import load_dotenv
 
@@ -11,15 +13,15 @@ load_dotenv()
 
 # Database credentials from environment
 db_config = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': os.getenv('DB_PORT', '5432'),
-    'dbname': os.getenv('DB_NAME', 'precog_dev'),
-    'user': os.getenv('DB_USER', 'postgres'),
-    'password': os.getenv('DB_PASSWORD')  # No default - must be set!
+    "host": os.getenv("DB_HOST", "localhost"),
+    "port": os.getenv("DB_PORT", "5432"),
+    "dbname": os.getenv("DB_NAME", "precog_dev"),
+    "user": os.getenv("DB_USER", "postgres"),
+    "password": os.getenv("DB_PASSWORD"),  # No default - must be set!
 }
 
 # Validate that password is set
-if not db_config['password']:
+if not db_config["password"]:
     print("[ERROR] DB_PASSWORD environment variable not set!")
     print("\nPlease create a .env file in the project root with:")
     print("DB_PASSWORD=your_password_here")
@@ -73,7 +75,7 @@ try:
     print("Ready to begin Phase 1 implementation!")
 
 except psycopg2.Error as e:
-    print(f"[ERROR] Connection failed!")
+    print("[ERROR] Connection failed!")
     print(f"Error: {e}")
     print("\nPlease check:")
     print("1. PostgreSQL service is running")

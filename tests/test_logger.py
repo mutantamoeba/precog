@@ -9,21 +9,21 @@ Critical tests:
 - Helper functions work correctly
 """
 
-import pytest
-from decimal import Decimal
 from datetime import datetime
-import json
+from decimal import Decimal
 from pathlib import Path
 
+import pytest
+
 from utils.logger import (
-    setup_logging,
-    get_logger,
     LogContext,
-    log_trade,
-    log_position_update,
+    decimal_serializer,
+    get_logger,
     log_edge_detected,
     log_error,
-    decimal_serializer,
+    log_position_update,
+    log_trade,
+    setup_logging,
 )
 
 
@@ -46,21 +46,21 @@ def test_get_logger_with_name():
 def test_decimal_serializer():
     """CRITICAL: Test Decimal serialization (must not convert to float)."""
     # Test Decimal
-    result = decimal_serializer(Decimal('0.5200'))
-    assert result == '0.5200'
+    result = decimal_serializer(Decimal("0.5200"))
+    assert result == "0.5200"
     assert type(result) == str
 
     # Test datetime
     dt = datetime(2025, 10, 23, 14, 30, 0)
     result = decimal_serializer(dt)
-    assert '2025-10-23' in result  # ISO format
+    assert "2025-10-23" in result  # ISO format
 
 
 @pytest.mark.unit
 @pytest.mark.critical
 def test_decimal_precision_in_logs(test_logger, temp_log_dir, caplog):
     """CRITICAL: Test that Decimals log as strings (preserve precision)."""
-    price = Decimal('0.5200')
+    price = Decimal("0.5200")
 
     # Log with Decimal value
     test_logger.info("test_event", price=price)
@@ -75,13 +75,13 @@ def test_log_trade_helper(test_logger):
     """Test log_trade() helper function."""
     # Should not raise errors
     log_trade(
-        action='entry',
-        ticker='TEST-NFL-YES',
-        side='YES',
+        action="entry",
+        ticker="TEST-NFL-YES",
+        side="YES",
         quantity=100,
-        price=Decimal('0.5200'),
+        price=Decimal("0.5200"),
         strategy_id=1,
-        model_id=2
+        model_id=2,
     )
 
 
@@ -90,10 +90,10 @@ def test_log_position_update_helper(test_logger):
     """Test log_position_update() helper function."""
     log_position_update(
         position_id=42,
-        ticker='TEST-NFL-YES',
-        current_price=Decimal('0.5800'),
-        unrealized_pnl=Decimal('6.00'),
-        status='open'
+        ticker="TEST-NFL-YES",
+        current_price=Decimal("0.5800"),
+        unrealized_pnl=Decimal("6.00"),
+        status="open",
     )
 
 
@@ -101,11 +101,11 @@ def test_log_position_update_helper(test_logger):
 def test_log_edge_detected_helper(test_logger):
     """Test log_edge_detected() helper function."""
     log_edge_detected(
-        ticker='TEST-NFL-YES',
-        expected_value=Decimal('0.0500'),
-        market_price=Decimal('0.5200'),
-        model_probability=Decimal('0.5700'),
-        strategy_name='test_strategy'
+        ticker="TEST-NFL-YES",
+        expected_value=Decimal("0.0500"),
+        market_price=Decimal("0.5200"),
+        model_probability=Decimal("0.5700"),
+        strategy_name="test_strategy",
     )
 
 
@@ -113,13 +113,10 @@ def test_log_edge_detected_helper(test_logger):
 def test_log_error_helper(test_logger):
     """Test log_error() helper function."""
     try:
-        raise ValueError("Test error")
+        msg = "Test error"
+        raise ValueError(msg)
     except ValueError as e:
-        log_error(
-            error_type='test_error',
-            message='This is a test error',
-            exception=e
-        )
+        log_error(error_type="test_error", message="This is a test error", exception=e)
 
 
 @pytest.mark.unit
@@ -137,11 +134,7 @@ def test_log_context_binding(test_logger, caplog):
 @pytest.mark.unit
 def test_log_file_created(temp_log_dir):
     """Test that daily log file is created."""
-    logger = setup_logging(
-        log_level="INFO",
-        log_to_file=True,
-        log_dir=str(temp_log_dir)
-    )
+    logger = setup_logging(log_level="INFO", log_to_file=True, log_dir=str(temp_log_dir))
 
     # Log something
     logger.info("test_message")
@@ -168,8 +161,8 @@ def test_logger_with_extra_context(test_logger):
         "trade_executed",
         ticker="TEST-NFL-YES",
         quantity=100,
-        price=Decimal('0.5200'),
-        custom_field="custom_value"
+        price=Decimal("0.5200"),
+        custom_field="custom_value",
     )
 
 
@@ -187,6 +180,7 @@ def test_logger_handles_exceptions(test_logger, caplog):
 @pytest.mark.unit
 def test_decimal_serializer_fallback():
     """Test decimal_serializer converts unknown types to string."""
+
     # Custom object that can't be serialized
     class CustomObject:
         def __str__(self):
@@ -220,21 +214,13 @@ def test_concurrent_logging(test_logger):
 @pytest.mark.unit
 def test_log_with_none_values(test_logger):
     """Test logging with None values."""
-    test_logger.info(
-        "test_event",
-        value1=None,
-        value2="not_none",
-        value3=Decimal('0.5200')
-    )
+    test_logger.info("test_event", value1=None, value2="not_none", value3=Decimal("0.5200"))
 
 
 @pytest.mark.unit
 def test_setup_logging_without_file(temp_log_dir):
     """Test setup_logging with file logging disabled."""
-    logger = setup_logging(
-        log_level="INFO",
-        log_to_file=False
-    )
+    logger = setup_logging(log_level="INFO", log_to_file=False)
 
     logger.info("test_message")
 

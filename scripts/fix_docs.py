@@ -23,11 +23,10 @@ Exit codes:
     1 - Errors encountered during fixing
 """
 
+import argparse
 import re
 import sys
-import argparse
 from pathlib import Path
-from typing import List, Tuple
 
 # Project root
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -74,10 +73,9 @@ def fix_version_header_mismatch(doc_file: Path, dry_run: bool = False) -> bool:
     if dry_run:
         print(f"  [DRY-RUN] Would fix {doc_file.name}: V{header_version} -> V{filename_version}")
         return True
-    else:
-        doc_file.write_text(new_content, encoding="utf-8")
-        print(f"  [OK] Fixed {doc_file.name}: V{header_version} -> V{filename_version}")
-        return True
+    doc_file.write_text(new_content, encoding="utf-8")
+    print(f"  [OK] Fixed {doc_file.name}: V{header_version} -> V{filename_version}")
+    return True
 
 
 def add_missing_docs_to_master_index(dry_run: bool = False) -> int:
@@ -120,16 +118,15 @@ def add_missing_docs_to_master_index(dry_run: bool = False) -> int:
         for doc in sorted(unlisted):
             print(f"    - {doc}")
         return len(unlisted)
-    else:
-        print(f"  [WARN] Found {len(unlisted)} unlisted documents")
-        print(f"  [INFO] Manual addition to MASTER_INDEX recommended (requires metadata)")
-        for doc in sorted(unlisted):
-            print(f"    - {doc}")
-        print(f"  [INFO] Add these manually to {master_index.name}")
-        return 0  # Not auto-fixing (requires metadata)
+    print(f"  [WARN] Found {len(unlisted)} unlisted documents")
+    print("  [INFO] Manual addition to MASTER_INDEX recommended (requires metadata)")
+    for doc in sorted(unlisted):
+        print(f"    - {doc}")
+    print(f"  [INFO] Add these manually to {master_index.name}")
+    return 0  # Not auto-fixing (requires metadata)
 
 
-def fix_all(dry_run: bool = False) -> Tuple[int, int]:
+def fix_all(dry_run: bool = False) -> tuple[int, int]:
     """
     Run all auto-fixes.
 

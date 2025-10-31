@@ -7,23 +7,23 @@ Includes:
 """
 
 from .logger import (
-    setup_logging,
-    get_logger,
     LogContext,
-    log_trade,
-    log_position_update,
+    get_logger,
     log_edge_detected,
     log_error,
+    log_position_update,
+    log_trade,
     logger,
+    setup_logging,
 )
 
 __all__ = [
-    'setup_logging',
-    'get_logger',
-    'LogContext',
-    'log_trade',
-    'log_position_update',
-    'log_edge_detected',
-    'log_error',
-    'logger',
+    "LogContext",
+    "get_logger",
+    "log_edge_detected",
+    "log_error",
+    "log_position_update",
+    "log_trade",
+    "logger",
+    "setup_logging",
 ]

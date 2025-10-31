@@ -5,15 +5,15 @@ All functions use parameterized queries to prevent SQL injection.
 Supports SCD Type 2 versioning (row_current_ind) for markets and positions.
 """
 
-from typing import Optional, List, Dict, Any
 from decimal import Decimal
-from datetime import datetime
-from .connection import execute_query, fetch_one, fetch_all, get_cursor
+from typing import Any
 
+from .connection import fetch_all, fetch_one, get_cursor
 
 # =============================================================================
 # MARKET OPERATIONS
 # =============================================================================
+
 
 def create_market(
     platform_id: str,
@@ -23,12 +23,12 @@ def create_market(
     title: str,
     yes_price: Decimal,
     no_price: Decimal,
-    market_type: str = 'binary',
-    status: str = 'open',
-    volume: Optional[int] = None,
-    open_interest: Optional[int] = None,
-    spread: Optional[Decimal] = None,
-    metadata: Optional[Dict] = None
+    market_type: str = "binary",
+    status: str = "open",
+    volume: int | None = None,
+    open_interest: int | None = None,
+    spread: Decimal | None = None,
+    metadata: dict | None = None,
 ) -> str:
     """
     Create new market record with row_current_ind = TRUE.
@@ -78,20 +78,29 @@ def create_market(
     """
 
     params = (
-        market_id, platform_id, event_id, external_id,
-        ticker, title, market_type,
-        yes_price, no_price, status,
-        volume, open_interest, spread,
-        metadata
+        market_id,
+        platform_id,
+        event_id,
+        external_id,
+        ticker,
+        title,
+        market_type,
+        yes_price,
+        no_price,
+        status,
+        volume,
+        open_interest,
+        spread,
+        metadata,
     )
 
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return result['market_id']
+        return result["market_id"]
 
 
-def get_current_market(ticker: str) -> Optional[Dict[str, Any]]:
+def get_current_market(ticker: str) -> dict[str, Any] | None:
     """
     Get current version of market by ticker.
 
@@ -116,12 +125,12 @@ def get_current_market(ticker: str) -> Optional[Dict[str, Any]]:
 
 def update_market_with_versioning(
     ticker: str,
-    yes_price: Optional[Decimal] = None,
-    no_price: Optional[Decimal] = None,
-    status: Optional[str] = None,
-    volume: Optional[int] = None,
-    open_interest: Optional[int] = None,
-    market_metadata: Optional[Dict] = None
+    yes_price: Decimal | None = None,
+    no_price: Decimal | None = None,
+    status: str | None = None,
+    volume: int | None = None,
+    open_interest: int | None = None,
+    market_metadata: dict | None = None,
 ) -> int:
     """
     Update market using SCD Type 2 versioning.
@@ -152,28 +161,33 @@ def update_market_with_versioning(
     # Get current version
     current = get_current_market(ticker)
     if not current:
-        raise ValueError(f"Market not found: {ticker}")
+        msg = f"Market not found: {ticker}"
+        raise ValueError(msg)
 
     # Use new values or fall back to current
-    new_yes_price = yes_price if yes_price is not None else current['yes_price']
-    new_no_price = no_price if no_price is not None else current['no_price']
-    new_status = status if status is not None else current['status']
-    new_volume = volume if volume is not None else current['volume']
-    new_open_interest = open_interest if open_interest is not None else current['open_interest']
-    new_metadata = market_metadata if market_metadata is not None else current['metadata']
+    new_yes_price = yes_price if yes_price is not None else current["yes_price"]
+    new_no_price = no_price if no_price is not None else current["no_price"]
+    new_status = status if status is not None else current["status"]
+    new_volume = volume if volume is not None else current["volume"]
+    new_open_interest = open_interest if open_interest is not None else current["open_interest"]
+    new_metadata = market_metadata if market_metadata is not None else current["metadata"]
 
     with get_cursor(commit=True) as cur:
         # Step 1: Mark current row as historical
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE markets
             SET row_current_ind = FALSE,
                 row_end_ts = NOW()
             WHERE ticker = %s
               AND row_current_ind = TRUE
-        """, (ticker,))
+        """,
+            (ticker,),
+        )
 
         # Step 2: Insert new version
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO markets (
                 market_id, platform_id, event_id, external_id,
                 ticker, title, market_type,
@@ -183,28 +197,30 @@ def update_market_with_versioning(
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
             RETURNING market_id
-        """, (
-            current['market_id'],
-            current['platform_id'],
-            current['event_id'],
-            current['external_id'],
-            ticker,
-            current['title'],
-            current['market_type'],
-            new_yes_price,
-            new_no_price,
-            new_status,
-            new_volume,
-            new_open_interest,
-            current['spread'],
-            new_metadata
-        ))
+        """,
+            (
+                current["market_id"],
+                current["platform_id"],
+                current["event_id"],
+                current["external_id"],
+                ticker,
+                current["title"],
+                current["market_type"],
+                new_yes_price,
+                new_no_price,
+                new_status,
+                new_volume,
+                new_open_interest,
+                current["spread"],
+                new_metadata,
+            ),
+        )
 
         result = cur.fetchone()
-        return result['market_id']
+        return result["market_id"]
 
 
-def get_market_history(ticker: str, limit: int = 100) -> List[Dict[str, Any]]:
+def get_market_history(ticker: str, limit: int = 100) -> list[dict[str, Any]]:
     """
     Get price history for a market (all versions).
 
@@ -234,6 +250,7 @@ def get_market_history(ticker: str, limit: int = 100) -> List[Dict[str, Any]]:
 # POSITION OPERATIONS
 # =============================================================================
 
+
 def create_position(
     market_id: str,
     strategy_id: int,
@@ -241,10 +258,10 @@ def create_position(
     side: str,
     quantity: int,
     entry_price: Decimal,
-    target_price: Optional[Decimal] = None,
-    stop_loss_price: Optional[Decimal] = None,
-    trailing_stop_state: Optional[Dict] = None,
-    position_metadata: Optional[Dict] = None
+    target_price: Decimal | None = None,
+    stop_loss_price: Decimal | None = None,
+    trailing_stop_state: dict | None = None,
+    position_metadata: dict | None = None,
 ) -> int:
     """
     Create new position with status = 'open'.
@@ -288,22 +305,27 @@ def create_position(
     """
 
     params = (
-        market_id, strategy_id, model_id, side,
-        quantity, entry_price,
-        target_price, stop_loss_price,
-        trailing_stop_state, position_metadata
+        market_id,
+        strategy_id,
+        model_id,
+        side,
+        quantity,
+        entry_price,
+        target_price,
+        stop_loss_price,
+        trailing_stop_state,
+        position_metadata,
     )
 
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return result['position_id']
+        return result["position_id"]
 
 
 def get_current_positions(
-    status: Optional[str] = None,
-    market_id: Optional[int] = None
-) -> List[Dict[str, Any]]:
+    status: str | None = None, market_id: int | None = None
+) -> list[dict[str, Any]]:
     """
     Get current positions (row_current_ind = TRUE).
 
@@ -342,9 +364,7 @@ def get_current_positions(
 
 
 def update_position_price(
-    position_id: int,
-    current_price: Decimal,
-    trailing_stop_state: Optional[Dict] = None
+    position_id: int, current_price: Decimal, trailing_stop_state: dict | None = None
 ) -> int:
     """
     Update position with new price using SCD Type 2 versioning.
@@ -368,26 +388,32 @@ def update_position_price(
     """
     # Get current version
     current = fetch_one(
-        "SELECT * FROM positions WHERE position_id = %s AND row_current_ind = TRUE",
-        (position_id,)
+        "SELECT * FROM positions WHERE position_id = %s AND row_current_ind = TRUE", (position_id,)
     )
     if not current:
-        raise ValueError(f"Position not found: {position_id}")
+        msg = f"Position not found: {position_id}"
+        raise ValueError(msg)
 
-    new_trailing_stop = trailing_stop_state if trailing_stop_state is not None else current['trailing_stop_state']
+    new_trailing_stop = (
+        trailing_stop_state if trailing_stop_state is not None else current["trailing_stop_state"]
+    )
 
     with get_cursor(commit=True) as cur:
         # Mark current as historical
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE positions
             SET row_current_ind = FALSE,
                 row_end_ts = NOW()
             WHERE position_id = %s
               AND row_current_ind = TRUE
-        """, (position_id,))
+        """,
+            (position_id,),
+        )
 
         # Insert new version with updated price
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO positions (
                 market_id, strategy_id, model_id, side,
                 quantity, entry_price,
@@ -398,32 +424,31 @@ def update_position_price(
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             RETURNING position_id
-        """, (
-            current['market_id'],
-            current['strategy_id'],
-            current['model_id'],
-            current['side'],
-            current['quantity'],
-            current['entry_price'],
-            current_price,
-            (current_price - current['entry_price']) * current['quantity'],  # unrealized_pnl
-            current['target_price'],
-            current['stop_loss_price'],
-            new_trailing_stop,
-            current['position_metadata'],
-            current['status'],
-            current['entry_time']
-        ))
+        """,
+            (
+                current["market_id"],
+                current["strategy_id"],
+                current["model_id"],
+                current["side"],
+                current["quantity"],
+                current["entry_price"],
+                current_price,
+                (current_price - current["entry_price"]) * current["quantity"],  # unrealized_pnl
+                current["target_price"],
+                current["stop_loss_price"],
+                new_trailing_stop,
+                current["position_metadata"],
+                current["status"],
+                current["entry_time"],
+            ),
+        )
 
         result = cur.fetchone()
-        return result['position_id']
+        return result["position_id"]
 
 
 def close_position(
-    position_id: int,
-    exit_price: Decimal,
-    exit_reason: str,
-    realized_pnl: Decimal
+    position_id: int, exit_price: Decimal, exit_reason: str, realized_pnl: Decimal
 ) -> int:
     """
     Close position by updating status to 'closed'.
@@ -447,24 +472,28 @@ def close_position(
     """
     # Get current version
     current = fetch_one(
-        "SELECT * FROM positions WHERE position_id = %s AND row_current_ind = TRUE",
-        (position_id,)
+        "SELECT * FROM positions WHERE position_id = %s AND row_current_ind = TRUE", (position_id,)
     )
     if not current:
-        raise ValueError(f"Position not found: {position_id}")
+        msg = f"Position not found: {position_id}"
+        raise ValueError(msg)
 
     with get_cursor(commit=True) as cur:
         # Mark current as historical
-        cur.execute("""
+        cur.execute(
+            """
             UPDATE positions
             SET row_current_ind = FALSE,
                 row_end_ts = NOW()
             WHERE position_id = %s
               AND row_current_ind = TRUE
-        """, (position_id,))
+        """,
+            (position_id,),
+        )
 
         # Insert closed version
-        cur.execute("""
+        cur.execute(
+            """
             INSERT INTO positions (
                 market_id, strategy_id, model_id, side,
                 quantity, entry_price, exit_price,
@@ -475,29 +504,32 @@ def close_position(
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'closed', %s, NOW())
             RETURNING position_id
-        """, (
-            current['market_id'],
-            current['strategy_id'],
-            current['model_id'],
-            current['side'],
-            current['quantity'],
-            current['entry_price'],
-            exit_price,
-            realized_pnl,
-            current['target_price'],
-            current['stop_loss_price'],
-            current['trailing_stop_state'],
-            current['position_metadata'],
-            current['entry_time']
-        ))
+        """,
+            (
+                current["market_id"],
+                current["strategy_id"],
+                current["model_id"],
+                current["side"],
+                current["quantity"],
+                current["entry_price"],
+                exit_price,
+                realized_pnl,
+                current["target_price"],
+                current["stop_loss_price"],
+                current["trailing_stop_state"],
+                current["position_metadata"],
+                current["entry_time"],
+            ),
+        )
 
         result = cur.fetchone()
-        return result['position_id']
+        return result["position_id"]
 
 
 # =============================================================================
 # TRADE OPERATIONS
 # =============================================================================
+
 
 def create_trade(
     market_id: str,
@@ -506,9 +538,9 @@ def create_trade(
     side: str,
     quantity: int,
     price: Decimal,
-    position_id: Optional[int] = None,
-    order_type: str = 'market',
-    trade_metadata: Optional[Dict] = None
+    position_id: int | None = None,
+    order_type: str = "market",
+    trade_metadata: dict | None = None,
 ) -> int:
     """
     Record executed trade with strategy and model attribution.
@@ -550,22 +582,24 @@ def create_trade(
     """
 
     params = (
-        market_id, strategy_id, model_id,
-        side, quantity, price,
-        position_id, order_type,
-        trade_metadata
+        market_id,
+        strategy_id,
+        model_id,
+        side,
+        quantity,
+        price,
+        position_id,
+        order_type,
+        trade_metadata,
     )
 
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return result['trade_id']
+        return result["trade_id"]
 
 
-def get_trades_by_market(
-    market_id: str,
-    limit: int = 100
-) -> List[Dict[str, Any]]:
+def get_trades_by_market(market_id: str, limit: int = 100) -> list[dict[str, Any]]:
     """
     Get all trades for a specific market.
 
@@ -593,10 +627,7 @@ def get_trades_by_market(
     return fetch_all(query, (market_id, limit))
 
 
-def get_recent_trades(
-    strategy_id: Optional[int] = None,
-    limit: int = 100
-) -> List[Dict[str, Any]]:
+def get_recent_trades(strategy_id: int | None = None, limit: int = 100) -> list[dict[str, Any]]:
     """
     Get recent trades across all markets.
 

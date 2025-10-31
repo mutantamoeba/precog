@@ -8,13 +8,14 @@ Uses structlog for JSON-formatted logs with:
 - Context binding for request tracking
 """
 
-import structlog
 import logging
 import sys
-from pathlib import Path
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, Dict
+from pathlib import Path
+from typing import Any
+
+import structlog
 
 
 def decimal_serializer(obj: Any, **kwargs) -> Any:
@@ -35,21 +36,18 @@ def decimal_serializer(obj: Any, **kwargs) -> Any:
     if isinstance(obj, Decimal):
         # Convert Decimal to string to preserve precision
         return str(obj)
-    elif isinstance(obj, datetime):
+    if isinstance(obj, datetime):
         # Convert datetime to ISO format
         return obj.isoformat()
-    elif isinstance(obj, (dict, list, str, int, float, bool, type(None))):
+    if isinstance(obj, (dict, list, str, int, float, bool, type(None))):
         # Already JSON-serializable
         return obj
-    else:
-        # Unknown type - convert to string as fallback
-        return str(obj)
+    # Unknown type - convert to string as fallback
+    return str(obj)
 
 
 def setup_logging(
-    log_level: str = "INFO",
-    log_to_file: bool = True,
-    log_dir: str = "logs"
+    log_level: str = "INFO", log_to_file: bool = True, log_dir: str = "logs"
 ) -> structlog.BoundLogger:
     """
     Configure structured logging for the application.
@@ -85,10 +83,7 @@ def setup_logging(
             # Console handler (always enabled)
             logging.StreamHandler(sys.stdout),
             # File handler (if enabled)
-            *(
-                [logging.FileHandler(log_file, mode='a', encoding='utf-8')]
-                if log_file else []
-            ),
+            *([logging.FileHandler(log_file, mode="a", encoding="utf-8")] if log_file else []),
         ],
     )
 
@@ -108,7 +103,8 @@ def setup_logging(
 
     # Configure structlog
     structlog.configure(
-        processors=shared_processors + [
+        processors=shared_processors
+        + [
             # Use ProcessorFormatter for final rendering
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
         ],
@@ -147,7 +143,7 @@ def setup_logging(
     return logger
 
 
-def get_logger(name: str = None) -> structlog.BoundLogger:
+def get_logger(name: str | None = None) -> structlog.BoundLogger:
     """
     Get a logger instance with optional name binding.
 
@@ -207,7 +203,8 @@ except Exception as e:
     logger = structlog.get_logger()
     # Don't log the warning if we're in test environment (pytest sets PYTEST_CURRENT_TEST)
     import os
-    if 'PYTEST_CURRENT_TEST' not in os.environ:
+
+    if "PYTEST_CURRENT_TEST" not in os.environ:
         print(f"[WARNING] Logging setup failed: {e}")
 
 
@@ -220,7 +217,7 @@ def log_trade(
     price: Decimal,
     strategy_id: int,
     model_id: int,
-    **extra
+    **extra,
 ):
     """
     Log a trade event with standardized format.
@@ -264,7 +261,7 @@ def log_position_update(
     current_price: Decimal,
     unrealized_pnl: Decimal,
     status: str,
-    **extra
+    **extra,
 ):
     """
     Log a position monitoring update.
@@ -303,7 +300,7 @@ def log_edge_detected(
     market_price: Decimal,
     model_probability: Decimal,
     strategy_name: str,
-    **extra
+    **extra,
 ):
     """
     Log an EV+ edge detection.
@@ -336,12 +333,7 @@ def log_edge_detected(
     )
 
 
-def log_error(
-    error_type: str,
-    message: str,
-    exception: Exception = None,
-    **extra
-):
+def log_error(error_type: str, message: str, exception: Exception | None = None, **extra):
     """
     Log an error with standardized format.
 

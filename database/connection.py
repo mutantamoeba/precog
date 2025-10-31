@@ -6,28 +6,27 @@ Loads credentials from .env file.
 """
 
 import os
-from typing import Optional, List, Tuple, Any
 from contextlib import contextmanager
+
 import psycopg2
-from psycopg2 import pool, extras
-from decimal import Decimal
 from dotenv import load_dotenv
+from psycopg2 import extras, pool
 
 # Load environment variables from .env file
 load_dotenv()
 
 # Connection pool (global singleton)
-_connection_pool: Optional[pool.SimpleConnectionPool] = None
+_connection_pool: pool.SimpleConnectionPool | None = None
 
 
 def initialize_pool(
     minconn: int = 2,
     maxconn: int = 10,
-    host: Optional[str] = None,
-    port: Optional[int] = None,
-    database: Optional[str] = None,
-    user: Optional[str] = None,
-    password: Optional[str] = None
+    host: str | None = None,
+    port: int | None = None,
+    database: str | None = None,
+    user: str | None = None,
+    password: str | None = None,
 ):
     """
     Initialize PostgreSQL connection pool.
@@ -55,24 +54,19 @@ def initialize_pool(
         return _connection_pool
 
     # Use environment variables if parameters not provided
-    host = host or os.getenv('DB_HOST', 'localhost')
-    port = port or int(os.getenv('DB_PORT', '5432'))
-    database = database or os.getenv('DB_NAME', 'precog_dev')
-    user = user or os.getenv('DB_USER', 'postgres')
-    password = password or os.getenv('DB_PASSWORD')
+    host = host or os.getenv("DB_HOST", "localhost")
+    port = port or int(os.getenv("DB_PORT", "5432"))
+    database = database or os.getenv("DB_NAME", "precog_dev")
+    user = user or os.getenv("DB_USER", "postgres")
+    password = password or os.getenv("DB_PASSWORD")
 
     if not password:
-        raise ValueError("Database password not found in environment variables")
+        msg = "Database password not found in environment variables"
+        raise ValueError(msg)
 
     try:
         _connection_pool = pool.SimpleConnectionPool(
-            minconn,
-            maxconn,
-            host=host,
-            port=port,
-            database=database,
-            user=user,
-            password=password
+            minconn, maxconn, host=host, port=port, database=database, user=user, password=password
         )
         print(f"[OK] Database connection pool initialized ({minconn}-{maxconn} connections)")
         print(f"     Connected to: {user}@{host}:{port}/{database}")
@@ -158,11 +152,7 @@ def get_cursor(commit: bool = False):
         release_connection(conn)
 
 
-def execute_query(
-    query: str,
-    params: Optional[Tuple] = None,
-    commit: bool = True
-) -> int:
+def execute_query(query: str, params: tuple | None = None, commit: bool = True) -> int:
     """
     Execute a query that doesn't return results (INSERT, UPDATE, DELETE).
 
@@ -187,7 +177,7 @@ def execute_query(
         return cur.rowcount
 
 
-def fetch_one(query: str, params: Optional[Tuple] = None) -> Optional[dict]:
+def fetch_one(query: str, params: tuple | None = None) -> dict | None:
     """
     Fetch single row from database.
 
@@ -210,7 +200,7 @@ def fetch_one(query: str, params: Optional[Tuple] = None) -> Optional[dict]:
         return cur.fetchone()
 
 
-def fetch_all(query: str, params: Optional[Tuple] = None) -> List[dict]:
+def fetch_all(query: str, params: tuple | None = None) -> list[dict]:
     """
     Fetch all rows from database.
 
@@ -267,7 +257,7 @@ def test_connection():
         with get_cursor() as cur:
             cur.execute("SELECT 1 as test")
             result = cur.fetchone()
-            if result and result['test'] == 1:
+            if result and result["test"] == 1:
                 print("[OK] Database connection test successful")
                 return True
     except Exception as e:

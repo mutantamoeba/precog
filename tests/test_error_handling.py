@@ -13,17 +13,21 @@ Tests error paths and edge cases that were missing from initial test suite:
 Target: 90%+ coverage before Phase 2
 """
 
-import pytest
-import psycopg2
-from database.connection import get_connection, initialize_pool
-from config.config_loader import ConfigLoader
+import builtins
+import contextlib
 import os
 import tempfile
 
+import psycopg2
+import pytest
+
+from config.config_loader import ConfigLoader
+from database.connection import get_connection, initialize_pool
 
 # ============================================================================
 # Connection Pool Error Handling (HIGH PRIORITY)
 # ============================================================================
+
 
 def test_connection_pool_exhaustion():
     """
@@ -44,14 +48,14 @@ def test_connection_pool_exhaustion():
         user="postgres",
         password=os.getenv("DEMO_DB_PASSWORD", "password"),
         min_conn=pool_size,
-        max_conn=pool_size + max_overflow
+        max_conn=pool_size + max_overflow,
     )
 
     # Hold all connections
     connections = []
     try:
         # Request more connections than pool allows
-        for i in range(pool_size + max_overflow + 1):
+        for _i in range(pool_size + max_overflow + 1):
             conn = get_connection()
             connections.append(conn)
 
@@ -65,10 +69,8 @@ def test_connection_pool_exhaustion():
     finally:
         # Clean up connections
         for conn in connections:
-            try:
+            with contextlib.suppress(builtins.BaseException):
                 conn.close()
-            except:
-                pass
 
 
 def test_database_connection_failure_and_reconnection():
@@ -87,7 +89,7 @@ def test_database_connection_failure_and_reconnection():
             user="invalid_user",
             password="wrong_password",
             min_conn=1,
-            max_conn=2
+            max_conn=2,
         )
 
 
@@ -136,6 +138,7 @@ def test_transaction_rollback_on_connection_loss():
 # Configuration Error Handling (MEDIUM PRIORITY)
 # ============================================================================
 
+
 def test_config_loader_invalid_yaml_syntax():
     """
     Test behavior when YAML file has syntax errors.
@@ -144,7 +147,7 @@ def test_config_loader_invalid_yaml_syntax():
     Coverage: config/config_loader.py lines 288-293 (YAML parsing errors)
     """
     # Create temporary invalid YAML file
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write("""
         invalid_yaml:
           - item1
@@ -161,7 +164,7 @@ def test_config_loader_invalid_yaml_syntax():
 
         # Error message should mention YAML parsing
         error_msg = str(exc_info.value).lower()
-        assert any(keyword in error_msg for keyword in ['yaml', 'syntax', 'parse', 'invalid'])
+        assert any(keyword in error_msg for keyword in ["yaml", "syntax", "parse", "invalid"])
 
     finally:
         os.unlink(temp_path)
@@ -191,7 +194,7 @@ def test_config_loader_missing_environment_variable():
     Coverage: config/config_loader.py lines 332-333 (env var expansion)
     """
     # Create temp config with env var reference
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write("""
         database:
           password: ${NONEXISTENT_ENV_VAR}
@@ -204,9 +207,9 @@ def test_config_loader_missing_environment_variable():
 
         # Should either raise error or leave unexpanded
         # (Behavior depends on ConfigLoader implementation)
-        if isinstance(config['database']['password'], str):
+        if isinstance(config["database"]["password"], str):
             # If it doesn't expand, should still contain the variable reference
-            assert "NONEXISTENT_ENV_VAR" in config['database']['password']
+            assert "NONEXISTENT_ENV_VAR" in config["database"]["password"]
 
     finally:
         os.unlink(temp_path)
@@ -220,7 +223,7 @@ def test_config_loader_invalid_data_type():
     Coverage: config/config_loader.py lines 346-347 (type validation)
     """
     # Create temp config with type mismatch
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write("""
         database:
           pool_size: "not_a_number"  # Should be integer
@@ -233,11 +236,11 @@ def test_config_loader_invalid_data_type():
         config = loader.load_yaml_file(temp_path)
 
         # Verify loaded as string (YAML parser doesn't enforce types)
-        assert isinstance(config['database']['pool_size'], str)
+        assert isinstance(config["database"]["pool_size"], str)
 
         # Application code should validate types
         with pytest.raises(ValueError):
-            int(config['database']['pool_size'])
+            int(config["database"]["pool_size"])
 
     finally:
         os.unlink(temp_path)
@@ -247,6 +250,7 @@ def test_config_loader_invalid_data_type():
 # Logging Error Handling (LOW PRIORITY)
 # ============================================================================
 
+
 def test_logger_file_permission_error():
     """
     Test behavior when log file directory has no write permissions.
@@ -254,7 +258,6 @@ def test_logger_file_permission_error():
     Expected: Fallback to console logging or raise clear error
     Coverage: utils/logger.py lines 204-211 (file handler errors)
     """
-    import logging
     from utils.logger import get_logger
 
     # Create read-only directory
@@ -292,7 +295,7 @@ def test_logger_disk_full_simulation():
     from utils.logger import get_logger
 
     # Create logger with valid file
-    with tempfile.NamedTemporaryFile(mode='w', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", delete=False) as f:
         temp_log = f.name
 
     try:
@@ -314,6 +317,7 @@ def test_logger_disk_full_simulation():
 # Database CRUD Error Handling (MEDIUM PRIORITY)
 # ============================================================================
 
+
 def test_crud_operation_with_null_violation():
     """
     Test CRUD operations handle NOT NULL constraint violations.
@@ -330,7 +334,7 @@ def test_crud_operation_with_null_violation():
             platform_id="kalshi",
             event_id=None,  # NULL violates NOT NULL constraint
             ticker="INVALID",
-            title="Test Market"
+            title="Test Market",
         )
 
     error_msg = str(exc_info.value).lower()
@@ -353,7 +357,7 @@ def test_crud_operation_with_foreign_key_violation():
             platform_id="nonexistent_platform",  # FK violation
             event_id="TEST-EVENT",
             ticker="INVALID",
-            title="Test Market"
+            title="Test Market",
         )
 
     error_msg = str(exc_info.value).lower()

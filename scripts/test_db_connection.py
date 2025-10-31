@@ -2,20 +2,22 @@
 """
 Quick test script to verify PostgreSQL database connection
 """
+
 import os
-from dotenv import load_dotenv
+
 import psycopg2
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
 # Get database credentials
 db_config = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': os.getenv('DB_PORT', '5432'),
-    'dbname': os.getenv('DB_NAME', 'precog_dev'),
-    'user': os.getenv('DB_USER', 'postgres'),
-    'password': os.getenv('DB_PASSWORD', '')
+    "host": os.getenv("DB_HOST", "localhost"),
+    "port": os.getenv("DB_PORT", "5432"),
+    "dbname": os.getenv("DB_NAME", "precog_dev"),
+    "user": os.getenv("DB_USER", "postgres"),
+    "password": os.getenv("DB_PASSWORD", ""),
 }
 
 print("Testing PostgreSQL connection...")
@@ -47,7 +49,7 @@ try:
     print("\n✓ Database connection test PASSED")
 
 except psycopg2.Error as e:
-    print(f"✗ Connection failed!")
+    print("✗ Connection failed!")
     print(f"Error: {e}")
     print("\nPlease check:")
     print("1. PostgreSQL service is running")

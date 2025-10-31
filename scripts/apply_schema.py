@@ -2,7 +2,9 @@
 """
 Apply database schema to precog_dev
 """
+
 import os
+
 import psycopg2
 from dotenv import load_dotenv
 
@@ -11,15 +13,15 @@ load_dotenv()
 
 # Database configuration from environment
 db_config = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': os.getenv('DB_PORT', '5432'),
-    'dbname': os.getenv('DB_NAME', 'precog_dev'),
-    'user': os.getenv('DB_USER', 'postgres'),
-    'password': os.getenv('DB_PASSWORD')  # No default - must be set!
+    "host": os.getenv("DB_HOST", "localhost"),
+    "port": os.getenv("DB_PORT", "5432"),
+    "dbname": os.getenv("DB_NAME", "precog_dev"),
+    "user": os.getenv("DB_USER", "postgres"),
+    "password": os.getenv("DB_PASSWORD"),  # No default - must be set!
 }
 
 # Validate that password is set
-if not db_config['password']:
+if not db_config["password"]:
     print("[ERROR] DB_PASSWORD environment variable not set!")
     print("\nPlease create a .env file in the project root with:")
     print("DB_PASSWORD=your_password_here")
@@ -31,7 +33,7 @@ conn.autocommit = True
 cursor = conn.cursor()
 
 print("Reading enhanced schema file...")
-with open('src/database/schema_enhanced.sql', 'r', encoding='utf-8') as f:
+with open("src/database/schema_enhanced.sql", encoding="utf-8") as f:
     schema_sql = f.read()
 
 print("Applying schema...")
@@ -83,6 +85,6 @@ for p in platforms:
 cursor.close()
 conn.close()
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("[SUCCESS] Database schema applied and verified!")
-print("="*60)
+print("=" * 60)

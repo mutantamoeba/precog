@@ -10,9 +10,10 @@ catching edge cases that manual tests might miss.
 """
 
 from decimal import Decimal, InvalidOperation
-import pytest
-from hypothesis import given, strategies as st, assume
 
+import pytest
+from hypothesis import assume, given
+from hypothesis import strategies as st
 
 # Strategy for valid Kalshi prices (0.0001 to 0.9999, 4 decimal places)
 kalshi_prices = st.decimals(
@@ -20,7 +21,7 @@ kalshi_prices = st.decimals(
     max_value=Decimal("0.9999"),
     places=4,
     allow_nan=False,
-    allow_infinity=False
+    allow_infinity=False,
 )
 
 # Strategy for Kelly fractions (0.10 to 0.50, 2 decimal places)
@@ -29,7 +30,7 @@ kelly_fractions = st.decimals(
     max_value=Decimal("0.50"),
     places=2,
     allow_nan=False,
-    allow_infinity=False
+    allow_infinity=False,
 )
 
 # Strategy for position sizes (1 to 10000)
@@ -57,7 +58,9 @@ def test_decimal_addition_associative(price1, price2, price3):
     result1 = (price1 + price2) + price3
     result2 = price1 + (price2 + price3)
 
-    assert result1 == result2, f"({price1} + {price2}) + {price3} != {price1} + ({price2} + {price3})"
+    assert result1 == result2, (
+        f"({price1} + {price2}) + {price3} != {price1} + ({price2} + {price3})"
+    )
 
 
 @given(price=kalshi_prices)
@@ -108,14 +111,15 @@ def test_kalshi_price_complement(yes_price):
     Kalshi markets have complementary pricing with a small spread.
     """
     # Typical spread is 1-2 cents
-    spread = Decimal("0.02")
+    Decimal("0.02")
     no_price = Decimal("1.00") - yes_price
 
     # Combined price should be close to $1.00
     total = yes_price + no_price
 
-    assert Decimal("0.98") <= total <= Decimal("1.02"), \
+    assert Decimal("0.98") <= total <= Decimal("1.02"), (
         f"YES ({yes_price}) + NO ({no_price}) = {total} is outside valid range"
+    )
 
 
 @given(price=kalshi_prices)
@@ -150,8 +154,8 @@ def test_decimal_precision_maintained(price):
     # Convert to string and check decimal places
     price_str = str(price)
 
-    if '.' in price_str:
-        _, decimal_part = price_str.split('.')
+    if "." in price_str:
+        _, decimal_part = price_str.split(".")
         # Should have exactly 4 decimal places (or fewer if trailing zeros)
         assert len(decimal_part) <= 4, f"Price {price} has more than 4 decimal places"
 
@@ -175,11 +179,7 @@ def test_trade_cost_calculation(price, quantity):
     assert cost <= Decimal("10000"), "Cost exceeds maximum"
 
 
-@given(
-    entry_price=kalshi_prices,
-    exit_price=kalshi_prices,
-    quantity=position_sizes
-)
+@given(entry_price=kalshi_prices, exit_price=kalshi_prices, quantity=position_sizes)
 def test_pnl_calculation(entry_price, exit_price, quantity):
     """
     Property: PnL calculation is always precise and type-safe.
@@ -215,8 +215,9 @@ def test_implied_probability_conversion(price):
     implied_prob_pct = price * Decimal("100")
 
     # Should be between 0.01% and 99.99%
-    assert Decimal("0.01") <= implied_prob_pct <= Decimal("99.99"), \
+    assert Decimal("0.01") <= implied_prob_pct <= Decimal("99.99"), (
         f"Implied probability {implied_prob_pct}% is outside valid range"
+    )
 
     # Should maintain Decimal type
     assert isinstance(implied_prob_pct, Decimal), "Conversion created non-Decimal"
@@ -242,4 +243,5 @@ def test_float_contamination_raises_error(price):
         # This would be a bug - we should never do this
         # Hypothesis will verify we handle it correctly
         if isinstance(price, float):  # This should never be true
-            raise TypeError("Found float where Decimal expected!")
+            msg = "Found float where Decimal expected!"
+            raise TypeError(msg)

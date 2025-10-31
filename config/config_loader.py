@@ -20,11 +20,12 @@ IMPORTANT: Money/price values automatically converted to Decimal to prevent
 floating-point precision errors.
 """
 
-import yaml
+import os
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, Dict, Optional, Union
-import os
+from typing import Any
+
+import yaml
 from dotenv import load_dotenv
 
 
@@ -36,7 +37,7 @@ class ConfigLoader:
     Configurations are cached after first load for performance.
     """
 
-    def __init__(self, config_dir: Optional[str] = None):
+    def __init__(self, config_dir: str | None = None):
         """
         Initialize configuration loader.
 
@@ -47,23 +48,23 @@ class ConfigLoader:
             # Default to config directory relative to this file
             config_dir = Path(__file__).parent
         self.config_dir = Path(config_dir)
-        self.configs: Dict[str, Dict[str, Any]] = {}
+        self.configs: dict[str, dict[str, Any]] = {}
 
         # Load environment variables from .env file
         load_dotenv()
 
         # Get current environment (development, staging, production, test)
-        self.environment = os.getenv('ENVIRONMENT', 'development')
+        self.environment = os.getenv("ENVIRONMENT", "development")
 
         # List of all configuration files
         self.config_files = [
-            'trading.yaml',
-            'trade_strategies.yaml',
-            'position_management.yaml',
-            'probability_models.yaml',
-            'markets.yaml',
-            'data_sources.yaml',
-            'system.yaml'
+            "trading.yaml",
+            "trade_strategies.yaml",
+            "position_management.yaml",
+            "probability_models.yaml",
+            "markets.yaml",
+            "data_sources.yaml",
+            "system.yaml",
         ]
 
     def get_env(self, key: str, default: Any = None, as_type: type = str) -> Any:
@@ -110,8 +111,8 @@ class ConfigLoader:
 
         # Convert to requested type
         if as_type == bool:
-            return value.lower() in ('true', '1', 'yes', 'on')
-        elif as_type == int:
+            return value.lower() in ("true", "1", "yes", "on")
+        if as_type == int:
             try:
                 return int(value)
             except ValueError:
@@ -124,7 +125,7 @@ class ConfigLoader:
         else:
             return value
 
-    def get_db_config(self) -> Dict[str, Any]:
+    def get_db_config(self) -> dict[str, Any]:
         """
         Get database configuration from environment variables.
 
@@ -138,14 +139,14 @@ class ConfigLoader:
             {'host': 'localhost', 'port': 5432, 'database': 'precog_dev', ...}
         """
         return {
-            'host': self.get_env('DB_HOST', 'localhost'),
-            'port': self.get_env('DB_PORT', 5432, as_type=int),
-            'database': self.get_env('DB_NAME', 'precog_dev'),
-            'user': self.get_env('DB_USER', 'postgres'),
-            'password': self.get_env('DB_PASSWORD')
+            "host": self.get_env("DB_HOST", "localhost"),
+            "port": self.get_env("DB_PORT", 5432, as_type=int),
+            "database": self.get_env("DB_NAME", "precog_dev"),
+            "user": self.get_env("DB_USER", "postgres"),
+            "password": self.get_env("DB_PASSWORD"),
         }
 
-    def get_kalshi_config(self) -> Dict[str, Any]:
+    def get_kalshi_config(self) -> dict[str, Any]:
         """
         Get Kalshi API configuration from environment variables.
 
@@ -159,28 +160,30 @@ class ConfigLoader:
             'https://demo-api.kalshi.co'
         """
         return {
-            'api_key': self.get_env('KALSHI_API_KEY'),
-            'private_key_path': self.get_env('KALSHI_PRIVATE_KEY_PATH', '_keys/kalshi_demo_private.pem'),
-            'base_url': self.get_env('KALSHI_BASE_URL', 'https://demo-api.kalshi.co')
+            "api_key": self.get_env("KALSHI_API_KEY"),
+            "private_key_path": self.get_env(
+                "KALSHI_PRIVATE_KEY_PATH", "_keys/kalshi_demo_private.pem"
+            ),
+            "base_url": self.get_env("KALSHI_BASE_URL", "https://demo-api.kalshi.co"),
         }
 
     def is_production(self) -> bool:
         """Check if running in production environment."""
-        return self.environment == 'production'
+        return self.environment == "production"
 
     def is_development(self) -> bool:
         """Check if running in development environment."""
-        return self.environment == 'development'
+        return self.environment == "development"
 
     def is_staging(self) -> bool:
         """Check if running in staging environment."""
-        return self.environment == 'staging'
+        return self.environment == "staging"
 
     def is_test(self) -> bool:
         """Check if running in test environment."""
-        return self.environment == 'test'
+        return self.environment == "test"
 
-    def _convert_to_decimal(self, obj: Any, keys_to_convert: set = None) -> Any:
+    def _convert_to_decimal(self, obj: Any, keys_to_convert: set | None = None) -> Any:
         """
         Recursively convert float values to Decimal for specified keys.
 
@@ -195,44 +198,41 @@ class ConfigLoader:
         if keys_to_convert is None:
             keys_to_convert = {
                 # Money/dollar amounts
-                'max_total_exposure_dollars',
-                'daily_loss_limit_dollars',
-                'weekly_loss_limit_dollars',
-                'min_balance_to_trade_dollars',
-                'max_position_size_dollars',
-                'min_trade_size_dollars',
-                'max_trade_size_dollars',
-                'initial_capital',
-                'balance',
-
+                "max_total_exposure_dollars",
+                "daily_loss_limit_dollars",
+                "weekly_loss_limit_dollars",
+                "min_balance_to_trade_dollars",
+                "max_position_size_dollars",
+                "min_trade_size_dollars",
+                "max_trade_size_dollars",
+                "initial_capital",
+                "balance",
                 # Prices and spreads
-                'entry_price',
-                'exit_price',
-                'stop_loss',
-                'target_price',
-                'yes_price',
-                'no_price',
-                'price',
-                'spread',
-                'min_spread',
-                'max_spread',
-
+                "entry_price",
+                "exit_price",
+                "stop_loss",
+                "target_price",
+                "yes_price",
+                "no_price",
+                "price",
+                "spread",
+                "min_spread",
+                "max_spread",
                 # Probabilities and thresholds
-                'probability',
-                'min_probability',
-                'max_probability',
-                'threshold',
-                'min_ev_threshold',
-                'kelly_fraction',
-                'max_kelly_fraction',
-                'confidence',
-                'min_edge',
-
+                "probability",
+                "min_probability",
+                "max_probability",
+                "threshold",
+                "min_ev_threshold",
+                "kelly_fraction",
+                "max_kelly_fraction",
+                "confidence",
+                "min_edge",
                 # Percentages
-                'trailing_stop_percent',
-                'stop_loss_percent',
-                'target_profit_percent',
-                'max_drawdown_percent',
+                "trailing_stop_percent",
+                "stop_loss_percent",
+                "target_profit_percent",
+                "max_drawdown_percent",
             }
 
         if isinstance(obj, dict):
@@ -244,12 +244,11 @@ class ConfigLoader:
                 )
                 for key, value in obj.items()
             }
-        elif isinstance(obj, list):
+        if isinstance(obj, list):
             return [self._convert_to_decimal(item, keys_to_convert) for item in obj]
-        else:
-            return obj
+        return obj
 
-    def load(self, config_name: str, convert_decimals: bool = True) -> Dict[str, Any]:
+    def load(self, config_name: str, convert_decimals: bool = True) -> dict[str, Any]:
         """
         Load a specific configuration file.
 
@@ -271,20 +270,21 @@ class ConfigLoader:
             Decimal('10000.00')
         """
         # Add .yaml extension if not present
-        if not config_name.endswith('.yaml'):
+        if not config_name.endswith(".yaml"):
             config_name = f"{config_name}.yaml"
 
         # Check cache first
-        cache_key = config_name.replace('.yaml', '')
+        cache_key = config_name.replace(".yaml", "")
         if cache_key in self.configs:
             return self.configs[cache_key]
 
         # Load from file
         file_path = self.config_dir / config_name
         if not file_path.exists():
-            raise FileNotFoundError(f"Config file not found: {file_path}")
+            msg = f"Config file not found: {file_path}"
+            raise FileNotFoundError(msg)
 
-        with open(file_path, 'r') as f:
+        with open(file_path) as f:
             config = yaml.safe_load(f)
 
         # Convert money/price values to Decimal
@@ -295,7 +295,7 @@ class ConfigLoader:
         self.configs[cache_key] = config
         return config
 
-    def load_all(self, convert_decimals: bool = True) -> Dict[str, Dict[str, Any]]:
+    def load_all(self, convert_decimals: bool = True) -> dict[str, dict[str, Any]]:
         """
         Load all configuration files.
 
@@ -312,7 +312,7 @@ class ConfigLoader:
             dict_keys(['trading', 'trade_strategies', 'position_management', ...])
         """
         for config_file in self.config_files:
-            config_name = config_file.replace('.yaml', '')
+            config_name = config_file.replace(".yaml", "")
             if config_name not in self.configs:
                 try:
                     self.load(config_file, convert_decimals=convert_decimals)
@@ -324,7 +324,7 @@ class ConfigLoader:
 
         return self.configs
 
-    def get(self, config_name: str, key_path: Optional[str] = None, default: Any = None) -> Any:
+    def get(self, config_name: str, key_path: str | None = None, default: Any = None) -> Any:
         """
         Get configuration value with optional nested key access.
 
@@ -360,7 +360,7 @@ class ConfigLoader:
             return config
 
         # Navigate nested keys
-        keys = key_path.split('.')
+        keys = key_path.split(".")
         value = config
         for key in keys:
             if isinstance(value, dict) and key in value:
@@ -370,7 +370,7 @@ class ConfigLoader:
 
         return value
 
-    def reload(self, config_name: Optional[str] = None):
+    def reload(self, config_name: str | None = None):
         """
         Reload configuration from disk (clears cache).
 
@@ -384,7 +384,7 @@ class ConfigLoader:
         """
         if config_name:
             # Remove specific config from cache
-            config_name = config_name.replace('.yaml', '')
+            config_name = config_name.replace(".yaml", "")
             self.configs.pop(config_name, None)
         else:
             # Clear entire cache
@@ -405,7 +405,7 @@ class ConfigLoader:
         all_valid = True
 
         for config_file in self.config_files:
-            config_name = config_file.replace('.yaml', '')
+            config_file.replace(".yaml", "")
             try:
                 self.load(config_file)
                 print(f"[OK] {config_file} loaded successfully")
@@ -427,12 +427,12 @@ config = ConfigLoader()
 
 
 # Convenience functions for common access patterns
-def get_trading_config() -> Dict[str, Any]:
+def get_trading_config() -> dict[str, Any]:
     """Get trading configuration."""
-    return config.load('trading')
+    return config.load("trading")
 
 
-def get_strategy_config(strategy_name: str) -> Optional[Dict[str, Any]]:
+def get_strategy_config(strategy_name: str) -> dict[str, Any] | None:
     """
     Get configuration for a specific strategy.
 
@@ -442,11 +442,11 @@ def get_strategy_config(strategy_name: str) -> Optional[Dict[str, Any]]:
     Returns:
         Strategy configuration dict, or None if not found
     """
-    strategies = config.load('trade_strategies')
-    return strategies.get('strategies', {}).get(strategy_name)
+    strategies = config.load("trade_strategies")
+    return strategies.get("strategies", {}).get(strategy_name)
 
 
-def get_model_config(model_name: str) -> Optional[Dict[str, Any]]:
+def get_model_config(model_name: str) -> dict[str, Any] | None:
     """
     Get configuration for a specific probability model.
 
@@ -456,11 +456,11 @@ def get_model_config(model_name: str) -> Optional[Dict[str, Any]]:
     Returns:
         Model configuration dict, or None if not found
     """
-    models = config.load('probability_models')
-    return models.get('models', {}).get(model_name)
+    models = config.load("probability_models")
+    return models.get("models", {}).get(model_name)
 
 
-def get_market_config(market_type: str) -> Optional[Dict[str, Any]]:
+def get_market_config(market_type: str) -> dict[str, Any] | None:
     """
     Get configuration for a specific market type.
 
@@ -470,15 +470,16 @@ def get_market_config(market_type: str) -> Optional[Dict[str, Any]]:
     Returns:
         Market configuration dict, or None if not found
     """
-    markets = config.load('markets')
-    return markets.get('markets', {}).get(market_type)
+    markets = config.load("markets")
+    return markets.get("markets", {}).get(market_type)
 
 
 # ============================================================================
 # Environment Variable Convenience Functions
 # ============================================================================
 
-def get_db_config() -> Dict[str, Any]:
+
+def get_db_config() -> dict[str, Any]:
     """
     Get database configuration for current environment.
 
@@ -493,7 +494,7 @@ def get_db_config() -> Dict[str, Any]:
     return config.get_db_config()
 
 
-def get_kalshi_config() -> Dict[str, Any]:
+def get_kalshi_config() -> dict[str, Any]:
     """
     Get Kalshi API configuration for current environment.
 

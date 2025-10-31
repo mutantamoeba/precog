@@ -5,23 +5,23 @@ Fixtures are reusable test setup/teardown functions.
 They run before each test that uses them.
 """
 
-import pytest
-from decimal import Decimal
-from datetime import datetime
-from pathlib import Path
-import tempfile
 import shutil
+import tempfile
+from decimal import Decimal
+from pathlib import Path
+
+import pytest
+
+from config.config_loader import ConfigLoader
 
 # Import modules to test
-from database.connection import get_cursor, close_pool, initialize_pool
-from database import crud_operations
-from config.config_loader import ConfigLoader
-from utils.logger import setup_logging, get_logger
-
+from database.connection import close_pool, get_cursor, initialize_pool
+from utils.logger import setup_logging
 
 # =============================================================================
 # DATABASE FIXTURES
 # =============================================================================
+
 
 @pytest.fixture(scope="session")
 def db_pool():
@@ -39,7 +39,7 @@ def db_pool():
     close_pool()
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def db_cursor(db_pool):
     """
     Provide database cursor with automatic rollback.
@@ -54,7 +54,7 @@ def db_cursor(db_pool):
         # Rollback happens automatically in finally block
 
 
-@pytest.fixture(scope="function")
+@pytest.fixture
 def clean_test_data(db_cursor):
     """
     Clean up test data before and after each test.
@@ -130,21 +130,22 @@ def clean_test_data(db_cursor):
 # TEST DATA FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def sample_market_data():
     """Sample market data for testing."""
     return {
-        'platform_id': 'test_platform',  # Must match clean_test_data fixture
-        'event_id': 'TEST-EVT-NFL-KC-BUF',  # Must match clean_test_data fixture
-        'external_id': 'TEST-EXT-123',
-        'ticker': 'TEST-NFL-KC-BUF-YES',
-        'title': 'TEST: Chiefs to beat Bills',
-        'yes_price': Decimal('0.5200'),
-        'no_price': Decimal('0.4800'),
-        'market_type': 'binary',
-        'status': 'open',
-        'volume': 1000,
-        'open_interest': 500,
+        "platform_id": "test_platform",  # Must match clean_test_data fixture
+        "event_id": "TEST-EVT-NFL-KC-BUF",  # Must match clean_test_data fixture
+        "external_id": "TEST-EXT-123",
+        "ticker": "TEST-NFL-KC-BUF-YES",
+        "title": "TEST: Chiefs to beat Bills",
+        "yes_price": Decimal("0.5200"),
+        "no_price": Decimal("0.4800"),
+        "market_type": "binary",
+        "status": "open",
+        "volume": 1000,
+        "open_interest": 500,
     }
 
 
@@ -152,13 +153,13 @@ def sample_market_data():
 def sample_position_data():
     """Sample position data for testing."""
     return {
-        'strategy_id': 1,
-        'model_id': 1,
-        'side': 'YES',
-        'quantity': 100,
-        'entry_price': Decimal('0.5200'),
-        'target_price': Decimal('0.6000'),
-        'stop_loss_price': Decimal('0.4800'),
+        "strategy_id": 1,
+        "model_id": 1,
+        "side": "YES",
+        "quantity": 100,
+        "entry_price": Decimal("0.5200"),
+        "target_price": Decimal("0.6000"),
+        "stop_loss_price": Decimal("0.4800"),
     }
 
 
@@ -166,18 +167,19 @@ def sample_position_data():
 def sample_trade_data():
     """Sample trade data for testing."""
     return {
-        'strategy_id': 1,
-        'model_id': 1,
-        'side': 'buy',  # trades use 'buy'/'sell', not 'yes'/'no'
-        'quantity': 100,
-        'price': Decimal('0.5200'),
-        'order_type': 'market',
+        "strategy_id": 1,
+        "model_id": 1,
+        "side": "buy",  # trades use 'buy'/'sell', not 'yes'/'no'
+        "quantity": 100,
+        "price": Decimal("0.5200"),
+        "order_type": "market",
     }
 
 
 # =============================================================================
 # CONFIG FIXTURES
 # =============================================================================
+
 
 @pytest.fixture
 def temp_config_dir():
@@ -218,6 +220,7 @@ def config_loader(temp_config_dir):
 # LOGGER FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def temp_log_dir():
     """Create temporary directory for test logs."""
@@ -240,6 +243,7 @@ def test_logger(temp_log_dir):
 # UTILITY FIXTURES
 # =============================================================================
 
+
 @pytest.fixture
 def decimal_prices():
     """
@@ -252,12 +256,12 @@ def decimal_prices():
     - Sub-penny precision (0.4275)
     """
     return {
-        'min': Decimal('0.0001'),
-        'max': Decimal('0.9999'),
-        'mid': Decimal('0.5000'),
-        'sub_penny': Decimal('0.4275'),
-        'tight_spread_bid': Decimal('0.7550'),
-        'tight_spread_ask': Decimal('0.7551'),  # Only 0.01¢ spread
+        "min": Decimal("0.0001"),
+        "max": Decimal("0.9999"),
+        "mid": Decimal("0.5000"),
+        "sub_penny": Decimal("0.4275"),
+        "tight_spread_bid": Decimal("0.7550"),
+        "tight_spread_ask": Decimal("0.7551"),  # Only 0.01¢ spread
     }
 
 
@@ -269,6 +273,7 @@ def assert_decimal_precision():
     Usage:
         assert_decimal_precision(value, expected, places=4)
     """
+
     def _assert(value, expected, places=4):
         """
         Assert that value equals expected with exact decimal precision.
@@ -286,8 +291,7 @@ def assert_decimal_precision():
             expected = Decimal(expected)
 
         # Compare as strings to ensure exact representation
-        assert str(value) == str(expected), \
-            f"Decimal precision mismatch: {value} != {expected}"
+        assert str(value) == str(expected), f"Decimal precision mismatch: {value} != {expected}"
 
     return _assert
 
@@ -296,17 +300,12 @@ def assert_decimal_precision():
 # MARKER HELPERS
 # =============================================================================
 
+
 def pytest_configure(config):
     """Register custom markers."""
-    config.addinivalue_line(
-        "markers", "unit: Unit tests (isolated, fast)"
-    )
+    config.addinivalue_line("markers", "unit: Unit tests (isolated, fast)")
     config.addinivalue_line(
         "markers", "integration: Integration tests (database, external dependencies)"
     )
-    config.addinivalue_line(
-        "markers", "slow: Slow tests (can skip during development)"
-    )
-    config.addinivalue_line(
-        "markers", "critical: Critical path tests (must always pass)"
-    )
+    config.addinivalue_line("markers", "slow: Slow tests (can skip during development)")
+    config.addinivalue_line("markers", "critical: Critical path tests (must always pass)")

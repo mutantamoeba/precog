@@ -7,7 +7,7 @@ def find_secrets(files):
     secret_patterns = [
         r'api[_-]?key\s*=\s*[\'"][A-Za-z0-9_\-]{16,}[\'"]',
         r'token\s*=\s*[\'"][A-Za-z0-9_\-]{16,}[\'"]',
-        r'password\s*=\s*[\'"][^\'"]+[\'"]'
+        r'password\s*=\s*[\'"][^\'"]+[\'"]',
     ]
     leaks = []
     for file in files:
@@ -21,6 +21,7 @@ def find_secrets(files):
             continue
     return leaks
 
+
 def check_postgres_encryption(config_files):
     results = []
     ssl_pat = re.compile(r'sslmode\s*=\s*[\'"]?disable[\'"]?', re.IGNORECASE)
@@ -33,6 +34,7 @@ def check_postgres_encryption(config_files):
         except Exception:
             continue
     return results
+
 
 def audit_dockerfiles():
     findings = []
@@ -50,6 +52,7 @@ def audit_dockerfiles():
             continue
     return findings
 
+
 def check_env_permissions():
     issues = []
     for env_path in Path().rglob(".env"):
@@ -59,6 +62,7 @@ def check_env_permissions():
         except Exception:
             continue
     return issues
+
 
 def check_dependencies():
     vuln_report = []
@@ -74,6 +78,7 @@ def check_dependencies():
     except Exception as e:
         vuln_report.append(str(e))
     return vuln_report
+
 
 def main():
     print("Audit: Scanning for hardcoded secrets...")
@@ -100,6 +105,7 @@ def main():
     print("\nAudit: Dependency Vulnerability Scan...")
     for finding in check_dependencies():
         print(f"[DEPENDENCY] {finding}")
+
 
 if __name__ == "__main__":
     main()

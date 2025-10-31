@@ -24,9 +24,9 @@ This script validates phase prerequisites before starting work.
     2: Invalid arguments or file errors
 """
 
-import sys
 import argparse
 import re
+import sys
 from pathlib import Path
 
 
@@ -115,7 +115,7 @@ def check_test_planning(phase, session_handoff_path):
     if not session_handoff_path.exists():
         return False
 
-    content = session_handoff_path.read_text(encoding='utf-8')
+    content = session_handoff_path.read_text(encoding="utf-8")
 
     # Look for "Phase N test planning complete" marker
     pattern = rf"Phase {phase} test planning complete"
@@ -136,12 +136,10 @@ def main():
         "--phase",
         type=str,
         required=True,
-        help="Phase identifier to validate (e.g., 1, 2, 3, 1.5, 0.7)"
+        help="Phase identifier to validate (e.g., 1, 2, 3, 1.5, 0.7)",
     )
     parser.add_argument(
-        "--strict",
-        action="store_true",
-        help="Strict mode: require detailed test plan document"
+        "--strict", action="store_true", help="Strict mode: require detailed test plan document"
     )
 
     args = parser.parse_args()
@@ -162,7 +160,7 @@ def main():
         return 2
 
     try:
-        dev_phases_content = dev_phases_path.read_text(encoding='utf-8')
+        dev_phases_content = dev_phases_path.read_text(encoding="utf-8")
     except Exception as e:
         print(f"[FAIL] ERROR: Could not read DEVELOPMENT_PHASES: {e}")
         return 2
@@ -175,9 +173,9 @@ def main():
     deps_met, unmet_deps = check_dependencies(phase, dev_phases_content)
 
     if deps_met:
-        print(f"   [PASS] All dependencies met")
+        print("   [PASS] All dependencies met")
     else:
-        print(f"   [FAIL] FAILED: Unmet dependencies:")
+        print("   [FAIL] FAILED: Unmet dependencies:")
         for dep_phase in unmet_deps:
             print(f"      - Phase {dep_phase} not marked Complete")
         print(f"   -> Complete prerequisite phases before starting Phase {phase}")
@@ -190,11 +188,11 @@ def main():
     test_planning_done = check_test_planning(phase, session_handoff_path)
 
     if test_planning_done:
-        print(f"   [PASS] Test planning documented as complete in SESSION_HANDOFF")
+        print("   [PASS] Test planning documented as complete in SESSION_HANDOFF")
     else:
-        print(f"   [WARN] WARNING: Test planning not documented in SESSION_HANDOFF")
+        print("   [WARN] WARNING: Test planning not documented in SESSION_HANDOFF")
         print(f"   -> Add 'Phase {phase} test planning complete' to SESSION_HANDOFF.md")
-        print(f"   -> Reference: docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md")
+        print("   -> Reference: docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md")
         # Note: Test planning is recommended but not strictly blocking (for now)
         # Phase 0.7 CI/CD may make this blocking in future
 
@@ -202,28 +200,27 @@ def main():
 
     # Check 3: Optional strict mode - require test plan document
     if args.strict:
-        print(f"[TEST] Check 3: Verifying test plan document (strict mode)...")
+        print("[TEST] Check 3: Verifying test plan document (strict mode)...")
         test_plan_path = project_root / "docs" / "testing" / f"PHASE_{phase}_TEST_PLAN_V1.0.md"
 
         if test_plan_path.exists():
             print(f"   [PASS] Test plan document exists: {test_plan_path.name}")
         else:
-            print(f"   [FAIL] FAILED: Test plan document not found")
+            print("   [FAIL] FAILED: Test plan document not found")
             print(f"   -> Expected: {test_plan_path}")
             all_checks_passed = False
 
         print()
 
     # Final result
-    print("="* 60)
+    print("=" * 60)
     if all_checks_passed:
         print(f"[PASS] PASS: Phase {phase} is ready to start")
-        print(f"All prerequisite dependencies are met.")
+        print("All prerequisite dependencies are met.")
         return 0
-    else:
-        print(f"[FAIL] FAIL: Phase {phase} is NOT ready")
-        print(f"Resolve issues above before starting Phase {phase} work.")
-        return 1
+    print(f"[FAIL] FAIL: Phase {phase} is NOT ready")
+    print(f"Resolve issues above before starting Phase {phase} work.")
+    return 1
 
 
 if __name__ == "__main__":

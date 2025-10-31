@@ -19,8 +19,9 @@ Usage:
     markets = MarketFactory.create_batch(5)
 """
 
-from decimal import Decimal
 from datetime import datetime, timedelta
+from decimal import Decimal
+
 import factory
 from faker import Faker
 
@@ -34,6 +35,7 @@ fake = Faker()
 # Base Factories
 # ==============================================================================
 
+
 class BaseFactory(factory.Factory):
     """Base factory with common settings."""
 
@@ -44,6 +46,7 @@ class BaseFactory(factory.Factory):
 # ==============================================================================
 # Market Data Factories
 # ==============================================================================
+
 
 class MarketDataFactory(BaseFactory):
     """
@@ -121,6 +124,7 @@ class TradeDataFactory(BaseFactory):
 # Strategy & Model Factories
 # ==============================================================================
 
+
 class StrategyDataFactory(BaseFactory):
     """Factory for strategy test data (dict format)."""
 
@@ -130,12 +134,14 @@ class StrategyDataFactory(BaseFactory):
     strategy_name = factory.Sequence(lambda n: f"test_strategy_{n}")
     strategy_version = "v1.0"
 
-    config = factory.LazyFunction(lambda: {
-        "min_edge": 0.05,
-        "max_position_size": 1000,
-        "entry_timing": "halftime",
-        "risk_multiplier": 1.0,
-    })
+    config = factory.LazyFunction(
+        lambda: {
+            "min_edge": 0.05,
+            "max_position_size": 1000,
+            "entry_timing": "halftime",
+            "risk_multiplier": 1.0,
+        }
+    )
 
     status = "active"  # active, testing, deprecated
     description = factory.LazyAttribute(
@@ -152,11 +158,13 @@ class ProbabilityModelDataFactory(BaseFactory):
     model_name = factory.Sequence(lambda n: f"test_model_{n}")
     model_version = "v1.0"
 
-    config = factory.LazyFunction(lambda: {
-        "model_type": "elo_based",
-        "confidence_threshold": 0.75,
-        "adjustment_factor": 1.0,
-    })
+    config = factory.LazyFunction(
+        lambda: {
+            "model_type": "elo_based",
+            "confidence_threshold": 0.75,
+            "adjustment_factor": 1.0,
+        }
+    )
 
     status = "active"
     description = factory.LazyAttribute(
@@ -167,6 +175,7 @@ class ProbabilityModelDataFactory(BaseFactory):
 # ==============================================================================
 # Edge Case Factories
 # ==============================================================================
+
 
 class DecimalEdgeCaseFactory(BaseFactory):
     """Factory for decimal edge case prices."""
@@ -209,6 +218,7 @@ class DecimalEdgeCaseFactory(BaseFactory):
 # Game State Factories
 # ==============================================================================
 
+
 class GameStateDataFactory(BaseFactory):
     """Factory for game state test data (dict format)."""
 
@@ -235,6 +245,7 @@ class GameStateDataFactory(BaseFactory):
 # ==============================================================================
 # Helper Functions
 # ==============================================================================
+
 
 def create_test_market_with_position():
     """

@@ -9,9 +9,9 @@ Critical tests:
 - Missing configs handled gracefully
 """
 
-import pytest
 from decimal import Decimal
-from pathlib import Path
+
+import pytest
 import yaml
 
 from config.config_loader import ConfigLoader
@@ -27,9 +27,9 @@ def test_config_loader_initialization(temp_config_dir):
 @pytest.mark.unit
 def test_load_yaml_file(config_loader):
     """Test loading a YAML file."""
-    config = config_loader.load('test_config')
+    config = config_loader.load("test_config")
     assert config is not None
-    assert 'trading' in config
+    assert "trading" in config
 
 
 @pytest.mark.unit
@@ -47,16 +47,16 @@ some_string: "hello"
 """)
 
     loader = ConfigLoader(config_dir=str(temp_config_dir))
-    config = loader.load('money_test', convert_decimals=True)
+    config = loader.load("money_test", convert_decimals=True)
 
     # Money fields should be Decimal
-    assert type(config['max_position_size_dollars']) == Decimal
-    assert type(config['min_ev_threshold']) == Decimal
-    assert type(config['kelly_fraction']) == Decimal
+    assert type(config["max_position_size_dollars"]) == Decimal
+    assert type(config["min_ev_threshold"]) == Decimal
+    assert type(config["kelly_fraction"]) == Decimal
 
     # Non-money fields should be original types
-    assert type(config['some_integer']) == int
-    assert type(config['some_string']) == str
+    assert type(config["some_integer"]) == int
+    assert type(config["some_string"]) == str
 
 
 @pytest.mark.unit
@@ -71,12 +71,12 @@ tight_spread: 0.0001
 """)
 
     loader = ConfigLoader(config_dir=str(temp_config_dir))
-    config = loader.load('precision_test', convert_decimals=True)
+    config = loader.load("precision_test", convert_decimals=True)
 
     # Verify exact string representation (no rounding)
-    assert str(config['price']) == '0.5200' or str(config['price']) == '0.52'
-    assert str(config['sub_penny']) == '0.4275'
-    assert str(config['tight_spread']) == '0.0001'
+    assert str(config["price"]) == "0.5200" or str(config["price"]) == "0.52"
+    assert str(config["sub_penny"]) == "0.4275"
+    assert str(config["tight_spread"]) == "0.0001"
 
 
 @pytest.mark.unit
@@ -88,10 +88,10 @@ max_position_size_dollars: 1000.00
 """)
 
     loader = ConfigLoader(config_dir=str(temp_config_dir))
-    config = loader.load('float_test', convert_decimals=False)
+    config = loader.load("float_test", convert_decimals=False)
 
     # Should be float when conversion disabled
-    assert type(config['max_position_size_dollars']) == float
+    assert type(config["max_position_size_dollars"]) == float
 
 
 @pytest.mark.unit
@@ -110,23 +110,23 @@ strategies:
 """)
 
     loader = ConfigLoader(config_dir=str(temp_config_dir))
-    config = loader.load('nested_test', convert_decimals=True)
+    config = loader.load("nested_test", convert_decimals=True)
 
     # Nested dicts
-    assert type(config['account']['max_total_exposure_dollars']) == Decimal
-    assert type(config['account']['daily_loss_limit_dollars']) == Decimal
+    assert type(config["account"]["max_total_exposure_dollars"]) == Decimal
+    assert type(config["account"]["daily_loss_limit_dollars"]) == Decimal
 
     # Nested lists
-    assert type(config['strategies'][0]['min_ev_threshold']) == Decimal
-    assert type(config['strategies'][1]['min_ev_threshold']) == Decimal
+    assert type(config["strategies"][0]["min_ev_threshold"]) == Decimal
+    assert type(config["strategies"][1]["min_ev_threshold"]) == Decimal
 
 
 @pytest.mark.unit
 def test_config_caching(config_loader):
     """Test that configs are cached after first load."""
     # Load twice
-    config1 = config_loader.load('test_config')
-    config2 = config_loader.load('test_config')
+    config1 = config_loader.load("test_config")
+    config2 = config_loader.load("test_config")
 
     # Should be same object (cached)
     assert config1 is config2
@@ -145,15 +145,15 @@ trading:
     loader = ConfigLoader(config_dir=str(temp_config_dir))
 
     # Access nested key with dot notation
-    value = loader.get('nested_access', 'trading.account.max_exposure')
-    assert value == Decimal('10000.00')
+    value = loader.get("nested_access", "trading.account.max_exposure")
+    assert value == Decimal("10000.00")
 
 
 @pytest.mark.unit
 def test_get_with_default_value(config_loader):
     """Test that get() returns default for missing keys."""
-    value = config_loader.get('nonexistent_config', 'some.key', default='default_value')
-    assert value == 'default_value'
+    value = config_loader.get("nonexistent_config", "some.key", default="default_value")
+    assert value == "default_value"
 
 
 @pytest.mark.unit
@@ -169,7 +169,7 @@ trading:
     loader = ConfigLoader(config_dir=str(temp_config_dir))
 
     # Access missing nested key
-    value = loader.get('partial', 'trading.missing.key', default=None)
+    value = loader.get("partial", "trading.missing.key", default=None)
     assert value is None
 
 
@@ -182,20 +182,20 @@ def test_reload_clears_cache(temp_config_dir):
     loader = ConfigLoader(config_dir=str(temp_config_dir))
 
     # Load config
-    config1 = loader.load('reload_test', convert_decimals=False)
-    assert config1['value'] == 1
+    config1 = loader.load("reload_test", convert_decimals=False)
+    assert config1["value"] == 1
 
     # Modify file
     config_file.write_text("value: 2")
 
     # Load again (should be cached)
-    config2 = loader.load('reload_test', convert_decimals=False)
-    assert config2['value'] == 1  # Still old value
+    config2 = loader.load("reload_test", convert_decimals=False)
+    assert config2["value"] == 1  # Still old value
 
     # Reload and load again
-    loader.reload('reload_test')
-    config3 = loader.load('reload_test', convert_decimals=False)
-    assert config3['value'] == 2  # New value
+    loader.reload("reload_test")
+    config3 = loader.load("reload_test", convert_decimals=False)
+    assert config3["value"] == 2  # New value
 
 
 @pytest.mark.unit
@@ -206,21 +206,21 @@ def test_load_all_configs(temp_config_dir):
     (temp_config_dir / "config2.yaml").write_text("key2: value2")
 
     loader = ConfigLoader(config_dir=str(temp_config_dir))
-    loader.config_files = ['config1.yaml', 'config2.yaml']
+    loader.config_files = ["config1.yaml", "config2.yaml"]
 
     configs = loader.load_all(convert_decimals=False)
 
-    assert 'config1' in configs
-    assert 'config2' in configs
-    assert configs['config1']['key1'] == 'value1'
-    assert configs['config2']['key2'] == 'value2'
+    assert "config1" in configs
+    assert "config2" in configs
+    assert configs["config1"]["key1"] == "value1"
+    assert configs["config2"]["key2"] == "value2"
 
 
 @pytest.mark.unit
 def test_missing_config_file_raises_error(config_loader):
     """Test that loading missing file raises FileNotFoundError."""
     with pytest.raises(FileNotFoundError):
-        config_loader.load('nonexistent_file')
+        config_loader.load("nonexistent_file")
 
 
 @pytest.mark.unit
@@ -233,7 +233,7 @@ def test_invalid_yaml_raises_error(temp_config_dir):
     loader = ConfigLoader(config_dir=str(temp_config_dir))
 
     with pytest.raises(yaml.YAMLError):
-        loader.load('invalid')
+        loader.load("invalid")
 
 
 @pytest.mark.integration
@@ -242,14 +242,14 @@ def test_load_real_trading_config():
     loader = ConfigLoader()  # Use default config directory
 
     try:
-        config = loader.load('trading')
+        config = loader.load("trading")
 
         # Verify expected structure
-        assert 'account' in config
-        assert 'max_total_exposure_dollars' in config['account']
+        assert "account" in config
+        assert "max_total_exposure_dollars" in config["account"]
 
         # Verify Decimal conversion
-        assert type(config['account']['max_total_exposure_dollars']) == Decimal
+        assert type(config["account"]["max_total_exposure_dollars"]) == Decimal
 
     except FileNotFoundError:
         pytest.skip("trading.yaml not found in config directory")
@@ -263,7 +263,7 @@ def test_validate_required_configs(temp_config_dir):
     (temp_config_dir / "system.yaml").write_text("key: value")
 
     loader = ConfigLoader(config_dir=str(temp_config_dir))
-    loader.config_files = ['trading.yaml', 'system.yaml']
+    loader.config_files = ["trading.yaml", "system.yaml"]
 
     # Should pass validation
     result = loader.validate_required_configs()
@@ -274,7 +274,7 @@ def test_validate_required_configs(temp_config_dir):
 def test_validate_required_configs_fails_on_missing(temp_config_dir):
     """Test validation fails when configs missing."""
     loader = ConfigLoader(config_dir=str(temp_config_dir))
-    loader.config_files = ['missing1.yaml', 'missing2.yaml']
+    loader.config_files = ["missing1.yaml", "missing2.yaml"]
 
     # Should fail validation
     result = loader.validate_required_configs()

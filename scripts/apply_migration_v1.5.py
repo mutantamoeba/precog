@@ -3,9 +3,11 @@
 Apply schema v1.5 migration (V1.4 → V1.5)
 Phase 0.5: Position monitoring and exit management
 """
+
 import os
-import psycopg2
 from pathlib import Path
+
+import psycopg2
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
@@ -13,24 +15,24 @@ load_dotenv()
 
 # Database configuration from environment
 db_config = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': os.getenv('DB_PORT', '5432'),
-    'dbname': os.getenv('DB_NAME', 'precog_dev'),
-    'user': os.getenv('DB_USER', 'postgres'),
-    'password': os.getenv('DB_PASSWORD')  # No default - must be set!
+    "host": os.getenv("DB_HOST", "localhost"),
+    "port": os.getenv("DB_PORT", "5432"),
+    "dbname": os.getenv("DB_NAME", "precog_dev"),
+    "user": os.getenv("DB_USER", "postgres"),
+    "password": os.getenv("DB_PASSWORD"),  # No default - must be set!
 }
 
 # Validate that password is set
-if not db_config['password']:
+if not db_config["password"]:
     print("[ERROR] DB_PASSWORD environment variable not set!")
     print("\nPlease create a .env file in the project root with:")
     print("DB_PASSWORD=your_password_here")
     exit(1)
 
-print("="*60)
+print("=" * 60)
 print("Schema Migration: V1.4 -> V1.5")
 print("Phase 0.5: Position Monitoring & Exit Management")
-print("="*60)
+print("=" * 60)
 
 print("\nConnecting to database...")
 try:
@@ -43,9 +45,15 @@ except Exception as e:
     exit(1)
 
 print("\nReading migration file...")
-migration_file = Path(__file__).parent.parent / 'src' / 'database' / 'migrations' / 'schema_v1.4_to_v1.5_migration.sql'
+migration_file = (
+    Path(__file__).parent.parent
+    / "src"
+    / "database"
+    / "migrations"
+    / "schema_v1.4_to_v1.5_migration.sql"
+)
 try:
-    with open(migration_file, 'r', encoding='utf-8') as f:
+    with open(migration_file, encoding="utf-8") as f:
         migration_sql = f.read()
     print(f"[OK] Loaded {migration_file.name}")
 except Exception as e:
@@ -63,9 +71,9 @@ except Exception as e:
     exit(1)
 
 # Verification
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("VERIFICATION")
-print("="*60)
+print("=" * 60)
 
 # Verify tables created
 print("\n1. Verifying new tables...")
@@ -93,9 +101,15 @@ cursor.execute("""
     ORDER BY column_name;
 """)
 columns = cursor.fetchall()
-expected_columns = ['current_price', 'exit_priority', 'exit_reason', 'last_update', 'unrealized_pnl_pct']
+expected_columns = [
+    "current_price",
+    "exit_priority",
+    "exit_reason",
+    "last_update",
+    "unrealized_pnl_pct",
+]
 if len(columns) == 5:
-    print(f"[OK] New columns in positions:")
+    print("[OK] New columns in positions:")
     for col in columns:
         print(f"  - {col[0]}")
 else:
@@ -112,7 +126,7 @@ cursor.execute("""
 """)
 constraints = cursor.fetchall()
 print(f"[OK] position_exits CHECK constraints: {len(constraints)}")
-for name, definition in constraints:
+for name, _definition in constraints:
     print(f"  - {name}")
 
 # Verify indexes
@@ -146,7 +160,7 @@ else:
 
 # Get table counts
 print("\n6. Current table row counts...")
-for table in ['position_exits', 'exit_attempts', 'positions']:
+for table in ["position_exits", "exit_attempts", "positions"]:
     try:
         cursor.execute(f"SELECT COUNT(*) FROM {table};")
         count = cursor.fetchone()[0]
@@ -157,9 +171,9 @@ for table in ['position_exits', 'exit_attempts', 'positions']:
 cursor.close()
 conn.close()
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("[SUCCESS] Migration V1.4 -> V1.5 complete!")
-print("="*60)
+print("=" * 60)
 print("\nNew features:")
 print("  [OK] position_exits table (track each exit event)")
 print("  [OK] exit_attempts table (debug price walking)")

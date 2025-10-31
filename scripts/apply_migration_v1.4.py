@@ -2,7 +2,9 @@
 """
 Apply schema v1.4 migration
 """
+
 import os
+
 import psycopg2
 from dotenv import load_dotenv
 
@@ -11,15 +13,15 @@ load_dotenv()
 
 # Database configuration from environment
 db_config = {
-    'host': os.getenv('DB_HOST', 'localhost'),
-    'port': os.getenv('DB_PORT', '5432'),
-    'dbname': os.getenv('DB_NAME', 'precog_dev'),
-    'user': os.getenv('DB_USER', 'postgres'),
-    'password': os.getenv('DB_PASSWORD')  # No default - must be set!
+    "host": os.getenv("DB_HOST", "localhost"),
+    "port": os.getenv("DB_PORT", "5432"),
+    "dbname": os.getenv("DB_NAME", "precog_dev"),
+    "user": os.getenv("DB_USER", "postgres"),
+    "password": os.getenv("DB_PASSWORD"),  # No default - must be set!
 }
 
 # Validate that password is set
-if not db_config['password']:
+if not db_config["password"]:
     print("[ERROR] DB_PASSWORD environment variable not set!")
     print("\nPlease create a .env file in the project root with:")
     print("DB_PASSWORD=your_password_here")
@@ -31,7 +33,7 @@ conn.autocommit = True
 cursor = conn.cursor()
 
 print("Reading migration file...")
-with open('src/database/migrations/schema_v1.3_to_v1.4_migration.sql', 'r', encoding='utf-8') as f:
+with open("src/database/migrations/schema_v1.3_to_v1.4_migration.sql", encoding="utf-8") as f:
     migration_sql = f.read()
 
 print("Applying migration...")
@@ -68,7 +70,7 @@ cursor.execute("""
     ORDER BY table_name, column_name;
 """)
 columns = cursor.fetchall()
-print(f"[OK] New columns:")
+print("[OK] New columns:")
 for table, column in columns:
     print(f"  - {table}.{column}")
 
@@ -87,6 +89,6 @@ print(f"[OK] New views: {[v[0] for v in views]}")
 cursor.close()
 conn.close()
 
-print("\n" + "="*60)
+print("\n" + "=" * 60)
 print("[SUCCESS] Migration v1.3 → v1.4 complete!")
-print("="*60)
+print("=" * 60)

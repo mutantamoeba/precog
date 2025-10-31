@@ -9,13 +9,14 @@ Tests:
 """
 
 import pytest
+
 from database.connection import (
-    get_connection,
-    release_connection,
-    get_cursor,
     execute_query,
-    fetch_one,
     fetch_all,
+    fetch_one,
+    get_connection,
+    get_cursor,
+    release_connection,
 )
 from database.connection import test_connection as check_db_connection
 
@@ -44,7 +45,7 @@ def test_get_cursor_context_manager(db_pool):
     with get_cursor() as cur:
         cur.execute("SELECT 1 as test")
         result = cur.fetchone()
-        assert result['test'] == 1
+        assert result["test"] == 1
 
 
 @pytest.mark.integration
@@ -55,8 +56,8 @@ def test_cursor_returns_dict(db_pool):
         result = cur.fetchone()
 
         # Should be dict-like
-        assert result['num'] == 1
-        assert result['text'] == 'test'
+        assert result["num"] == 1
+        assert result["text"] == "test"
 
 
 @pytest.mark.integration
@@ -64,7 +65,7 @@ def test_fetch_one(db_pool):
     """Test fetch_one() helper function."""
     result = fetch_one("SELECT %s as value", (42,))
     assert result is not None
-    assert result['value'] == 42
+    assert result["value"] == 42
 
 
 @pytest.mark.integration
@@ -83,9 +84,9 @@ def test_fetch_all(db_pool):
     """)
 
     assert len(results) == 3
-    assert results[0]['num'] == 1
-    assert results[1]['num'] == 2
-    assert results[2]['num'] == 3
+    assert results[0]["num"] == 1
+    assert results[1]["num"] == 2
+    assert results[2]["num"] == 3
 
 
 @pytest.mark.integration
@@ -102,15 +103,24 @@ def test_execute_query(db_pool, clean_test_data):
             ticker, title, yes_price, no_price,
             status, row_current_ind, updated_at
         ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())""",
-        ('MKT-TEST-EXECUTE-QUERY', 'test_platform', 'TEST-EVT', 'TEST-EXT',
-         'TEST-EXECUTE-QUERY', 'Test Market', 0.5000, 0.5000, 'open'),
-        commit=True
+        (
+            "MKT-TEST-EXECUTE-QUERY",
+            "test_platform",
+            "TEST-EVT",
+            "TEST-EXT",
+            "TEST-EXECUTE-QUERY",
+            "Test Market",
+            0.5000,
+            0.5000,
+            "open",
+        ),
+        commit=True,
     )
 
     assert rowcount == 1
 
     # Clean up
-    execute_query("DELETE FROM markets WHERE ticker = %s", ('TEST-EXECUTE-QUERY',), commit=True)
+    execute_query("DELETE FROM markets WHERE ticker = %s", ("TEST-EXECUTE-QUERY",), commit=True)
 
 
 @pytest.mark.integration
@@ -161,7 +171,7 @@ def test_transaction_rollback_on_error(db_pool, db_cursor):
     # Verify table still only has original row
     db_cursor.execute("SELECT COUNT(*) as cnt FROM test_rollback")
     result = db_cursor.fetchone()
-    assert result['cnt'] == 1
+    assert result["cnt"] == 1
 
 
 @pytest.mark.integration
@@ -171,13 +181,10 @@ def test_parameterized_query_prevents_injection(db_pool):
     malicious_input = "'; DROP TABLE markets; --"
 
     # This should NOT execute the DROP TABLE command
-    result = fetch_one(
-        "SELECT %s as value",
-        (malicious_input,)
-    )
+    result = fetch_one("SELECT %s as value", (malicious_input,))
 
     # Should return the string as-is (safely escaped)
-    assert result['value'] == malicious_input
+    assert result["value"] == malicious_input
 
     # Verify markets table still exists
     tables = fetch_all("""

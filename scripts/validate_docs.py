@@ -22,9 +22,8 @@ Exit codes:
 
 import re
 import sys
-from pathlib import Path
-from typing import Dict, List, Set, Tuple
 from dataclasses import dataclass
+from pathlib import Path
 
 # Project root
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -38,8 +37,8 @@ class ValidationResult:
 
     name: str
     passed: bool
-    errors: List[str]
-    warnings: List[str]
+    errors: list[str]
+    warnings: list[str]
 
     def print_result(self):
         """Print formatted validation result (ASCII-safe for Windows)."""
@@ -76,12 +75,12 @@ def find_latest_version(pattern: str) -> Path | None:
     return versioned[0][2]
 
 
-def extract_adr_numbers(content: str) -> Set[str]:
+def extract_adr_numbers(content: str) -> set[str]:
     """Extract all ADR numbers (ADR-001, ADR-002, etc.) from content."""
     return set(re.findall(r"ADR-(\d{3})", content))
 
 
-def extract_requirement_ids(content: str) -> Set[str]:
+def extract_requirement_ids(content: str) -> set[str]:
     """Extract all requirement IDs (REQ-XXX-NNN) from content."""
     return set(re.findall(r"REQ-[A-Z]+-\d{3}", content))
 
@@ -143,7 +142,7 @@ def validate_adr_consistency() -> ValidationResult:
 
         if missing_numbers:
             warnings.append(
-                f"Non-sequential ADR numbering - missing: "
+                "Non-sequential ADR numbering - missing: "
                 + ", ".join([f"ADR-{num:03d}" for num in sorted(missing_numbers)])
             )
 
@@ -153,14 +152,17 @@ def validate_adr_consistency() -> ValidationResult:
     if duplicates:
         unique_duplicates = list(set(duplicates))
         errors.append(
-            f"Duplicate ADR numbers in ARCHITECTURE_DECISIONS: "
+            "Duplicate ADR numbers in ARCHITECTURE_DECISIONS: "
             + ", ".join([f"ADR-{num}" for num in unique_duplicates])
         )
 
     passed = len(errors) == 0
 
     return ValidationResult(
-        name=f"ADR Consistency ({len(arch_adrs)} ADRs)", passed=passed, errors=errors, warnings=warnings
+        name=f"ADR Consistency ({len(arch_adrs)} ADRs)",
+        passed=passed,
+        errors=errors,
+        warnings=warnings,
     )
 
 
@@ -245,7 +247,9 @@ def validate_master_index() -> ValidationResult:
     listed_docs = re.findall(doc_pattern, content)
 
     if not listed_docs:
-        warnings.append("No versioned documents found in MASTER_INDEX (may be formatted differently)")
+        warnings.append(
+            "No versioned documents found in MASTER_INDEX (may be formatted differently)"
+        )
 
     # Check each listed document exists
     for doc_name in listed_docs:
@@ -270,7 +274,8 @@ def validate_master_index() -> ValidationResult:
 
     if unlisted:
         warnings.append(
-            f"{len(unlisted)} documents exist but not in MASTER_INDEX: " + ", ".join(sorted(unlisted))
+            f"{len(unlisted)} documents exist but not in MASTER_INDEX: "
+            + ", ".join(sorted(unlisted))
         )
 
     passed = len(errors) == 0
@@ -409,12 +414,13 @@ def main():
         print(f"[OK] ALL VALIDATION CHECKS PASSED ({passed_checks}/{total_checks})")
         print("=" * 60)
         return 0
-    else:
-        print(f"[FAIL] VALIDATION FAILED ({passed_checks}/{total_checks} passed, {failed_checks} failed)")
-        print("=" * 60)
-        print("\nFix issues above before committing.")
-        print("Some issues can be auto-fixed with: python scripts/fix_docs.py")
-        return 1
+    print(
+        f"[FAIL] VALIDATION FAILED ({passed_checks}/{total_checks} passed, {failed_checks} failed)"
+    )
+    print("=" * 60)
+    print("\nFix issues above before committing.")
+    print("Some issues can be auto-fixed with: python scripts/fix_docs.py")
+    return 1
 
 
 if __name__ == "__main__":
