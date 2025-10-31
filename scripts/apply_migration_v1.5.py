@@ -162,6 +162,7 @@ else:
 print("\n6. Current table row counts...")
 for table in ["position_exits", "exit_attempts", "positions"]:
     try:
+        # nosec B608 - table name from hardcoded list, not user input
         cursor.execute(f"SELECT COUNT(*) FROM {table};")
         count = cursor.fetchone()[0]
         print(f"  - {table}: {count} rows")
