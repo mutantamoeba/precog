@@ -287,5 +287,92 @@ show_contexts = true
 output = "coverage.xml"
 
 # ==============================================================================
+# MUTMUT CONFIGURATION (Mutation Testing)
+# Phase 0.7: CI/CD Integration & Advanced Testing
+# ==============================================================================
+
+[tool.mutmut]
+# Directories to mutate
+paths_to_mutate = ["database/", "utils/"]
+
+# Test command (must exit with 0 for pass, non-zero for fail)
+runner = "python -m pytest tests/ --cov=. --cov-fail-under=80 -x"
+
+# Mutation score target: 60%+ (Phase 0.7 baseline)
+# Higher is better - 60% means 60% of mutants are caught by tests
+
+# Exclude patterns (don't mutate these)
+# Note: mutmut uses fnmatch patterns
+dict_synonyms = ["Struct", "Record", "DataClass"]
+
+# Files to skip mutation testing
+# Format: module.function or module.Class.method
+disable_mutation_for = [
+    # Skip __init__ files (usually just imports)
+    "**/__init__.py",
+    # Skip migration scripts (data transformation, not logic)
+    "**/migrations/**",
+    # Skip seed data
+    "**/seeds/**",
+]
+
+# ==============================================================================
+# BANDIT CONFIGURATION (Security Scanning)
+# Phase 0.7: CI/CD Integration & Advanced Testing
+# ==============================================================================
+
+[tool.bandit]
+# Directories to scan
+tests = ["database", "utils", "api_connectors", "trading", "analytics"]
+
+# Exclude directories
+exclude_dirs = [
+    "tests",
+    ".venv",
+    "venv",
+    "_archive",
+    "build",
+    "dist",
+]
+
+# Severity level (LOW, MEDIUM, HIGH)
+# Report findings at this level or above
+level = "MEDIUM"
+
+# Confidence level (LOW, MEDIUM, HIGH)
+# Only report findings with this confidence or above
+confidence = "MEDIUM"
+
+# Specific tests to skip (use with caution!)
+# Format: ["B101", "B601"]
+# B101 = assert_used (we want asserts in tests, but Bandit flags them)
+# See: https://bandit.readthedocs.io/en/latest/plugins/index.html
+skips = []
+
+# ==============================================================================
+# HYPOTHESIS CONFIGURATION (Property-Based Testing)
+# Phase 0.7: CI/CD Integration & Advanced Testing
+# ==============================================================================
+
+[tool.hypothesis]
+# Maximum number of examples to try per test
+max_examples = 100  # Default: 100 (increase for more thorough testing)
+
+# Verbosity (quiet, normal, verbose, debug)
+verbosity = "normal"
+
+# Database directory for test results
+database = ".hypothesis/examples"
+
+# Derandomize tests (use fixed seed for reproducibility)
+derandomize = false  # Set to true for debugging
+
+# Deadline for each test (ms) - prevents infinite loops
+deadline = 400  # 400ms per example (adjust if needed)
+
+# Suppress health check warnings
+suppress_health_check = []
+
+# ==============================================================================
 # END OF CONFIGURATION
 # ==============================================================================
