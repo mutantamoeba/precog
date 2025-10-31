@@ -1885,3 +1885,4 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 
 **END OF CLAUDE.md V1.0**
 - always use descriptive variable names
+- Always document deferred tasks appropriately in requirements, architural, and project development phases documentation

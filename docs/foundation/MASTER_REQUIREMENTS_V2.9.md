@@ -196,9 +196,9 @@ precog/
 ### 2.4 Documentation Structure
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
-  1. `PROJECT_OVERVIEW_V1.3.md` - System architecture and tech stack
+  1. `PROJECT_OVERVIEW_V1.4.md` - System architecture and tech stack
   2. `MASTER_REQUIREMENTS_V2.9.md` - This document (requirements through Phase 10)
-  3. `MASTER_INDEX_V2.6.md` - Complete document inventory
+  3. `MASTER_INDEX_V2.7.md` - Complete document inventory
   4. `ARCHITECTURE_DECISIONS_V2.8.md` - All 44 ADRs with design rationale (Phase 0-0.7)
   5. `REQUIREMENT_INDEX.md` - Systematic requirement catalog
   6. `ADR_INDEX_V1.2.md` - Architecture decision index
@@ -426,7 +426,7 @@ precog/
 
 **Total Tables:** 21 operational + 4 ML placeholders = 25 tables
 
-**Detailed schema with indexes, constraints, and sample queries**: See `DATABASE_SCHEMA_SUMMARY_V1.6.md`
+**Detailed schema with indexes, constraints, and sample queries**: See `DATABASE_SCHEMA_SUMMARY_V1.7.md`
 
 ### 4.3 Critical Database Rules
 
@@ -572,7 +572,7 @@ Trading methods bundle complete trading approaches (strategy + model + position 
 - Status: 🔵 Planned
 - Description: Track paper_roi, live_roi, sharpe_ratio, win_rate, total_trades per method version
 
-**Implementation Note:** Methods table designed in Phase 0.5 (ADR-021) but implementation deferred to Phase 4-5 when strategy and model versioning systems are fully operational. See DATABASE_SCHEMA_SUMMARY_V1.6.md for complete schema.
+**Implementation Note:** Methods table designed in Phase 0.5 (ADR-021) but implementation deferred to Phase 4-5 when strategy and model versioning systems are fully operational. See DATABASE_SCHEMA_SUMMARY_V1.7.md for complete schema.
 
 ---
 
@@ -676,7 +676,7 @@ Centralized alert and notification system for critical events, errors, and syste
 - **MEDIUM**: gain_threshold, system_warning → console + file + database
 - **LOW**: informational → file + database
 
-**Implementation:** See DATABASE_SCHEMA_SUMMARY_V1.6.md for alerts table schema. Configuration in system.yaml (notifications section). Implementation in utils/notification_manager.py and utils/alert_manager.py.
+**Implementation:** See DATABASE_SCHEMA_SUMMARY_V1.7.md for alerts table schema. Configuration in system.yaml (notifications section). Implementation in utils/notification_manager.py and utils/alert_manager.py.
 
 ---
 
@@ -817,8 +817,11 @@ Command-line interface for interacting with Kalshi API and managing local databa
 - **REQ-VER-002: Semantic Versioning**
 - **REQ-VER-003: Trade Attribution**
 - **REQ-VER-004: Version Lifecycle Management**
+- **REQ-VER-005: A/B Testing Support**
 - **REQ-TRAIL-001: Dynamic Trailing Stops**
 - **REQ-TRAIL-002: JSONB State Management**
+- **REQ-TRAIL-003: Stop Price Updates**
+- **REQ-TRAIL-004: Peak Price Tracking**
 - **REQ-MON-001: Dynamic Monitoring Frequencies**
 - **REQ-MON-002: Position State Tracking**
 - **REQ-EXIT-001: Exit Priority Hierarchy**
@@ -840,7 +843,7 @@ Command-line interface for interacting with Kalshi API and managing local databa
   - ✅ MASTER_INDEX V2.3 updated
 
 **Documentation**:
-- `DATABASE_SCHEMA_SUMMARY_V1.5.md`
+- `DATABASE_SCHEMA_SUMMARY_V1.7.md`
 - `VERSIONING_GUIDE_V1.0.md`
 - `TRAILING_STOP_GUIDE_V1.0.md`
 - `POSITION_MANAGEMENT_GUIDE_V1.0.md`
@@ -918,9 +921,9 @@ Command-line interface for interacting with Kalshi API and managing local databa
 **Critical**: ALL prices must use `Decimal` type and be stored as DECIMAL(10,4)
 
 **Documentation**:
-- `API_INTEGRATION_GUIDE_V1.0.md` (Kalshi section) - PLANNED
+- `API_INTEGRATION_GUIDE_V2.0.md` (Kalshi section) - PLANNED
 - `DEVELOPER_ONBOARDING.md` - PLANNED
-- `KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md` - PLANNED
+- `KALSHI_DECIMAL_PRICING_CHEAT_SHEET.md` - PLANNED
 - `CLI_DEVELOPMENT_GUIDE.md` - PLANNED
 
 ---
@@ -988,7 +991,7 @@ Command-line interface for interacting with Kalshi API and managing local databa
 - CLI commands: `main.py fetch-series`, `fetch-events`, `fetch-markets`
 - Unit tests for pagination, market data CRUD, and decimal precision
 
-**Documentation**: `API_INTEGRATION_GUIDE.md` (Kalshi pagination), `DATABASE_SCHEMA_SUMMARY_V1.5.md` (relationships)
+**Documentation**: `API_INTEGRATION_GUIDE.md` (Kalshi pagination), `DATABASE_SCHEMA_SUMMARY_V1.7.md` (relationships)
 
 ---
 
@@ -1143,6 +1146,18 @@ Command-line interface for interacting with Kalshi API and managing local databa
 **Phase:** 5
 **Priority:** High
 **Status:** ✅ Complete (Documented)
+
+**REQ-EXIT-005: Exit Performance Tracking**
+
+**Phase:** 5
+**Priority:** Medium
+**Status:** ✅ Complete (Documented)
+
+**Description:**
+- Track exit performance metrics in position_exits table
+- Analyze slippage, execution success rate, urgency vs. fill rate
+- Enable "Did my exit strategy work?" analysis
+- Reference: POSITION_MANAGEMENT_GUIDE_V1.0.md
 
 #### **Phase 5b: Exit Execution & Order Walking (Weeks 13-14)**
 
@@ -1908,7 +1923,7 @@ Configure GitHub branch protection for main branch:
 
 **Reference Documentation:**
 6. `API_INTEGRATION_GUIDE.md` - Detailed API specifications
-7. `DATABASE_SCHEMA_SUMMARY_V1.5.md` - Full schema with versioning tables
+7. `DATABASE_SCHEMA_SUMMARY_V1.7.md` - Full schema with versioning tables
 8. `EDGE_DETECTION_SPEC.md` - Mathematical formulas
 9. `CONFIGURATION_GUIDE.md` - YAML configuration reference (includes versioning configs)
 10. `ARCHITECTURE_DECISIONS.md` - Design rationale and trade-offs

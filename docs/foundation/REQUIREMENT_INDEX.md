@@ -36,6 +36,7 @@ This document provides a systematic index of all Precog requirements using categ
 |----------|------|-------------|-------|
 | System | SYS | System-level requirements (database, config, logging) | 0-0.5 |
 | API | API | API integration requirements | 1-2 |
+| CLI | CLI | Command-line interface requirements | 1 |
 | Database | DB | Database schema and data requirements | 0-0.5 |
 | Monitoring | MON | Position monitoring requirements | 5 |
 | Exit | EXIT | Exit management requirements | 5 |
@@ -61,9 +62,9 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-SYS-001 | Database Schema Versioning | 0 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
 | REQ-SYS-002 | Configuration Management (YAML) | 0 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
 | REQ-SYS-003 | Decimal Precision for Prices | 0 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
-| REQ-SYS-004 | System Uptime 99%+ | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
-| REQ-SYS-005 | Data Latency <5 seconds | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 | REQ-SYS-006 | Structured Logging | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+
+**Note:** System Uptime and Data Latency requirements are tracked as REQ-PERF-001 and REQ-PERF-002 in the Performance section.
 
 ---
 
@@ -80,6 +81,18 @@ This document provides a systematic index of all Precog requirements using categ
 
 ---
 
+## CLI Requirements (CLI)
+
+| ID | Title | Phase | Priority | Status | Document |
+|----|-------|-------|----------|--------|----------|
+| REQ-CLI-001 | CLI Framework with Typer | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-CLI-002 | Balance Fetch Command | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-CLI-003 | Positions Fetch Command | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-CLI-004 | Fills Fetch Command | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-CLI-005 | Settlements Fetch Command | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+
+---
+
 ## Database Requirements (DB)
 
 | ID | Title | Phase | Priority | Status | Document |
@@ -91,6 +104,7 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-DB-005 | exit_attempts Table | 0.5 | Critical | ✅ | DATABASE_SCHEMA_SUMMARY_V1.5 |
 | REQ-DB-006 | Foreign Key Constraints | 0 | High | ✅ | DATABASE_SCHEMA_SUMMARY_V1.5 |
 | REQ-DB-007 | CHECK Constraints for Enums | 0 | High | ✅ | DATABASE_SCHEMA_SUMMARY_V1.5 |
+| REQ-DB-008 | Database Connection Pooling | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 
 ---
 

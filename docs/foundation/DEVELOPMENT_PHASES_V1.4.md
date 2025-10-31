@@ -370,7 +370,7 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 **Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
 
-**Output:** Update SESSION_HANDOFF.md with "Phase 1 test planning complete" OR create `docs/testing/PHASE_1_TEST_PLAN_V1.0.md`
+**Output:** Update SESSION_HANDOFF.md with "Phase 1 test planning complete" (detailed test plan to be created when Phase 1 starts)
 
 #### 1. Requirements Analysis
 - [ ] Review REQ-API-001 through REQ-API-006 (Kalshi/ESPN/Balldontlie API requirements)
@@ -615,7 +615,7 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 **Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
 
-**Output:** Update SESSION_HANDOFF.md with "Phase 2 test planning complete" OR create `docs/testing/PHASE_2_TEST_PLAN_V1.0.md`
+**Output:** Update SESSION_HANDOFF.md with "Phase 2 test planning complete" (detailed test plan to be created when Phase 2 starts)
 
 #### 1. Requirements Analysis
 - [ ] Review all Phase 2 data ingestion requirements (ESPN API, game states, task scheduling)
@@ -744,7 +744,7 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 **Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
 
-**Output:** Update SESSION_HANDOFF.md with "Phase 3 test planning complete" OR create `docs/testing/PHASE_3_TEST_PLAN_V1.0.md`
+**Output:** Update SESSION_HANDOFF.md with "Phase 3 test planning complete" (detailed test plan to be created when Phase 3 starts)
 
 #### 1. Requirements Analysis
 - [ ] Review async processing framework requirements (asyncio, aiohttp, queue systems)
@@ -877,7 +877,7 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 **Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
 
-**Output:** Update SESSION_HANDOFF.md with "Phase 4 test planning complete" OR create `docs/testing/PHASE_4_TEST_PLAN_V1.0.md`
+**Output:** Update SESSION_HANDOFF.md with "Phase 4 test planning complete" (detailed test plan to be created when Phase 4 starts)
 
 #### 1. Requirements Analysis
 - [ ] Review all Phase 4 model requirements (historical lookup, Elo, regression, ensemble)
@@ -1048,7 +1048,7 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 **Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
 
-**Output:** Update SESSION_HANDOFF.md with "Phase 5a test planning complete" OR create `docs/testing/PHASE_5A_TEST_PLAN_V1.0.md`
+**Output:** Update SESSION_HANDOFF.md with "Phase 5a test planning complete" (detailed test plan to be created when Phase 5a starts)
 
 #### 1. Requirements Analysis
 - [ ] Review REQ-MON-001 through REQ-MON-003 (dynamic monitoring, position state tracking, health checks)
@@ -1215,7 +1215,7 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 **Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
 
-**Output:** Update SESSION_HANDOFF.md with "Phase 5b test planning complete" OR create `docs/testing/PHASE_5B_TEST_PLAN_V1.0.md`
+**Output:** Update SESSION_HANDOFF.md with "Phase 5b test planning complete" (detailed test plan to be created when Phase 5b starts)
 
 #### 1. Requirements Analysis
 - [ ] Review REQ-EXEC-001 through REQ-EXEC-003 (urgency-based execution, price walking, exit attempt logging)

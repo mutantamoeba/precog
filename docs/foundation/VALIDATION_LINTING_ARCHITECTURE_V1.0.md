@@ -262,7 +262,7 @@ Running validation checks...
 #### Auto-Fixable Issues
 
 1. **Version header mismatches**
-   - Filename: `MASTER_REQUIREMENTS_V2.8.md`
+   - Filename: `MASTER_REQUIREMENTS_V2.9.md`
    - Header: `Version: 2.9`
    - Fix: Update header to `2.8`
 

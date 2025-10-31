@@ -2954,6 +2954,147 @@ def test_spread_always_positive(price):
 
 ---
 
+## Distributed Architecture Decisions
+
+Some ADRs are documented in specialized documents for better organization and technical depth. These decisions are fully documented in the referenced files and are listed here for completeness and traceability.
+
+### ADR-006: SQLAlchemy as ORM
+
+**Status:** ✅ Accepted
+**Phase:** 0
+**Documented in:** PROJECT_OVERVIEW_V1.4.md
+
+Decision to use SQLAlchemy as the Object-Relational Mapper for database operations. Provides type-safe query building, connection pooling, and database abstraction.
+
+### ADR-008: Modular Directory Structure
+
+**Status:** ✅ Accepted
+**Phase:** 0
+**Documented in:** PROJECT_OVERVIEW_V1.4.md
+
+Decision on project directory structure with clear separation of concerns (database/, api_connectors/, trading/, analytics/, utils/, config/).
+
+### ADR-010: Structured Logging with Python logging
+
+**Status:** ✅ Accepted
+**Phase:** 0
+**Documented in:** utils/logger.py, ARCHITECTURE_DECISIONS (brief mention)
+
+Decision to use Python's standard logging library with structlog for structured JSON logging with decimal serialization support.
+
+### ADR-011: pytest for Testing Framework
+
+**Status:** ✅ Accepted
+**Phase:** 0
+**Documented in:** pyproject.toml, TESTING_STRATEGY_V2.0.md
+
+Decision to use pytest as the primary testing framework with coverage, async support, and HTML reporting.
+
+### ADR-012: Foreign Key Constraints for Referential Integrity
+
+**Status:** ✅ Accepted
+**Phase:** 0
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.7.md
+
+Decision to enforce referential integrity using PostgreSQL foreign key constraints on all relationship columns.
+
+### ADR-014: ON DELETE CASCADE for Cascading Deletes
+
+**Status:** ✅ Accepted
+**Phase:** 0
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.7.md
+
+Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key relationships.
+
+### ADR-015: Helper Views for Current Data
+
+**Status:** ✅ Accepted
+**Phase:** 0
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.7.md
+
+Decision to create database views that filter for current rows (row_current_ind = TRUE) to simplify application queries.
+
+### ADR-025: Price Walking Algorithm for Exits
+
+**Status:** ✅ Accepted
+**Phase:** 0.5
+**Documented in:** POSITION_MANAGEMENT_GUIDE_V1.0.md
+
+Decision on multi-stage price walking algorithm for exit order execution (start with limit, walk toward market price if not filled).
+
+### ADR-026: Partial Exit Staging (2-Stage)
+
+**Status:** ✅ Accepted
+**Phase:** 0.5
+**Documented in:** POSITION_MANAGEMENT_GUIDE_V1.0.md
+
+Decision to implement 2-stage partial exits (50% at +15%, 25% at +25%, 25% with trailing stop).
+
+### ADR-027: position_exits Append-Only Table
+
+**Status:** ✅ Accepted
+**Phase:** 0.5
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.7.md
+
+Decision to use append-only table for position_exits to maintain complete exit event history.
+
+### ADR-028: exit_attempts for Debugging
+
+**Status:** ✅ Accepted
+**Phase:** 0.5
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.7.md
+
+Decision to log all exit order attempts (filled and unfilled) to exit_attempts table for debugging "why didn't my exit fill?" issues.
+
+---
+
+## Future Architecture Decisions (Planned)
+
+The following ADR numbers are reserved for future phases. These decisions will be documented as the corresponding phases are implemented.
+
+### Core Engine Decisions (100-199)
+
+**Phase 1: Core Trading Engine**
+
+- **ADR-100:** TBD - Kalshi API Client Architecture
+- **ADR-101:** TBD - RSA-PSS Authentication Implementation
+- **ADR-102:** TBD - Error Handling Strategy
+- **ADR-103:** TBD - Rate Limiting Implementation
+- **ADR-104:** TBD - Trade Execution Workflow
+
+**Phase 2: Live Data Integration**
+
+- **ADR-110:** TBD - ESPN API Integration Strategy
+- **ADR-111:** TBD - Game State Polling Frequency
+- **ADR-112:** TBD - Data Staleness Detection
+
+**Phase 3: Edge Detection**
+
+- **ADR-120:** TBD - Edge Calculation Algorithm
+- **ADR-121:** TBD - Confidence Scoring Methodology
+
+### Probability Model Decisions (200-299)
+
+**Phase 4: Historical Probability Models**
+
+- **ADR-200:** TBD - Elo Rating System Implementation
+- **ADR-201:** TBD - Regression Model Architecture
+- **ADR-202:** TBD - Model Validation Methodology
+- **ADR-203:** TBD - Backtesting Framework
+
+### Position Management Decisions (300-399)
+
+**Phase 5: Position Management**
+
+- **ADR-300:** 10 Exit Conditions with Priorities - Documented in POSITION_MANAGEMENT_GUIDE_V1.0.md
+- **ADR-301:** Urgency-Based Execution Strategies - Documented in POSITION_MANAGEMENT_GUIDE_V1.0.md
+- **ADR-302:** TBD - Fractional Kelly Position Sizing
+- **ADR-303:** TBD - Circuit Breaker Triggers
+
+**Note:** ADR-300 and ADR-301 are already documented in POSITION_MANAGEMENT_GUIDE_V1.0.md as they were part of Phase 0.5 position management architecture design.
+
+---
+
 ## Lessons for Future Developers
 
 ### What Worked Well in Design
