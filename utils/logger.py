@@ -39,7 +39,7 @@ def decimal_serializer(obj: Any, **kwargs) -> Any:
     if isinstance(obj, datetime):
         # Convert datetime to ISO format
         return obj.isoformat()
-    if isinstance(obj, (dict, list, str, int, float, bool, type(None))):
+    if isinstance(obj, dict | list | str | int | float | bool | type(None)):
         # Already JSON-serializable
         return obj
     # Unknown type - convert to string as fallback
