@@ -176,7 +176,7 @@ def execute_query(query: str, params: tuple | None = None, commit: bool = True) 
     """
     with get_cursor(commit=commit) as cur:
         cur.execute(query, params)
-        return cast(int, cur.rowcount)
+        return cast("int", cur.rowcount)
 
 
 def fetch_one(query: str, params: tuple | None = None) -> dict | None:
@@ -199,7 +199,7 @@ def fetch_one(query: str, params: tuple | None = None) -> dict | None:
     """
     with get_cursor() as cur:
         cur.execute(query, params)
-        return cast(dict | None, cur.fetchone())
+        return cast("dict | None", cur.fetchone())
 
 
 def fetch_all(query: str, params: tuple | None = None) -> list[dict]:
@@ -223,7 +223,7 @@ def fetch_all(query: str, params: tuple | None = None) -> list[dict]:
     """
     with get_cursor() as cur:
         cur.execute(query, params)
-        return cast(list[dict], cur.fetchall())
+        return cast("list[dict]", cur.fetchall())
 
 
 def close_pool():

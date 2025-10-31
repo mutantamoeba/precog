@@ -97,7 +97,7 @@ def create_market(
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return cast(str, result["market_id"])
+        return cast("str", result["market_id"])
 
 
 def get_current_market(ticker: str) -> dict[str, Any] | None:
@@ -217,7 +217,7 @@ def update_market_with_versioning(
         )
 
         result = cur.fetchone()
-        return cast(int, result["market_id"])
+        return cast("int", result["market_id"])
 
 
 def get_market_history(ticker: str, limit: int = 100) -> list[dict[str, Any]]:
@@ -320,7 +320,7 @@ def create_position(
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return cast(int, result["position_id"])
+        return cast("int", result["position_id"])
 
 
 def get_current_positions(
@@ -444,7 +444,7 @@ def update_position_price(
         )
 
         result = cur.fetchone()
-        return cast(int, result["position_id"])
+        return cast("int", result["position_id"])
 
 
 def close_position(
@@ -523,7 +523,7 @@ def close_position(
         )
 
         result = cur.fetchone()
-        return cast(int, result["position_id"])
+        return cast("int", result["position_id"])
 
 
 # =============================================================================
@@ -596,7 +596,7 @@ def create_trade(
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return cast(int, result["trade_id"])
+        return cast("int", result["trade_id"])
 
 
 def get_trades_by_market(market_id: str, limit: int = 100) -> list[dict[str, Any]]:

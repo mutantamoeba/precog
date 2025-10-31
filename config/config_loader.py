@@ -25,7 +25,7 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 
-import yaml  # type: ignore[import-untyped]
+import yaml
 from dotenv import load_dotenv
 
 
@@ -294,7 +294,7 @@ class ConfigLoader:
 
         # Cache the result
         self.configs[cache_key] = config
-        return cast(dict[str, Any], config)
+        return cast("dict[str, Any]", config)
 
     def load_all(self, convert_decimals: bool = True) -> dict[str, dict[str, Any]]:
         """
@@ -444,7 +444,7 @@ def get_strategy_config(strategy_name: str) -> dict[str, Any] | None:
         Strategy configuration dict, or None if not found
     """
     strategies = config.load("trade_strategies")
-    return cast(dict[str, Any] | None, strategies.get("strategies", {}).get(strategy_name))
+    return cast("dict[str, Any] | None", strategies.get("strategies", {}).get(strategy_name))
 
 
 def get_model_config(model_name: str) -> dict[str, Any] | None:
@@ -458,7 +458,7 @@ def get_model_config(model_name: str) -> dict[str, Any] | None:
         Model configuration dict, or None if not found
     """
     models = config.load("probability_models")
-    return cast(dict[str, Any] | None, models.get("models", {}).get(model_name))
+    return cast("dict[str, Any] | None", models.get("models", {}).get(model_name))
 
 
 def get_market_config(market_type: str) -> dict[str, Any] | None:
@@ -472,7 +472,7 @@ def get_market_config(market_type: str) -> dict[str, Any] | None:
         Market configuration dict, or None if not found
     """
     markets = config.load("markets")
-    return cast(dict[str, Any] | None, markets.get("markets", {}).get(market_type))
+    return cast("dict[str, Any] | None", markets.get("markets", {}).get(market_type))
 
 
 # ============================================================================
