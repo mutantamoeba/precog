@@ -1,9 +1,17 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.8
-**Last Updated:** 2025-10-28
+**Version:** 2.9
+**Last Updated:** 2025-10-29
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.9:**
+- **PHASE 0.6C COMPLETION**: Added 11 new requirements for validation, testing, and CI/CD infrastructure
+- **NEW REQUIREMENTS**: REQ-TEST-005 through REQ-TEST-008 (Test result persistence, security testing, mutation testing, property-based testing)
+- **NEW SECTION 7.5**: Code Quality, Validation & CI/CD requirements (REQ-VALIDATION-001 through REQ-VALIDATION-003, REQ-CICD-001 through REQ-CICD-003)
+- **PHASE 0.6C STATUS**: REQ-TEST-005, REQ-VALIDATION-001-003 marked as ✅ Complete
+- **PHASE 0.7 PLANNING**: REQ-TEST-006-008, REQ-CICD-001-003 marked as 🔵 Planned
+- **CROSS-REFERENCES**: Added ADR-038 through ADR-045 references
+- **DOCUMENTATION REFERENCES**: Added TESTING_STRATEGY_V2.0.md, VALIDATION_LINTING_ARCHITECTURE_V1.0.md
 **Changes in v2.8:**
 - **PHASE 0.6B DOCUMENTATION**: Updated all supplementary document references with standardized filenames (removed PHASE_ prefixes, standardized V1.0 format)
 - **NEW SECTION 4.10**: CLI Commands requirements (REQ-CLI-001 through REQ-CLI-005) - Typer framework with 5 core commands
@@ -189,36 +197,37 @@ precog/
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.3.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.8.md` - This document (requirements through Phase 10)
+  2. `MASTER_REQUIREMENTS_V2.9.md` - This document (requirements through Phase 10)
   3. `MASTER_INDEX_V2.6.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.7.md` - All 37 ADRs with design rationale
-  5. `REQUIREMENT_INDEX_V1.1.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.1.md` - Architecture decision index
-  7. `TESTING_STRATEGY_V1.1.md` - Test cases and coverage requirements
+  4. `ARCHITECTURE_DECISIONS_V2.8.md` - All 44 ADRs with design rationale (Phase 0-0.7)
+  5. `REQUIREMENT_INDEX.md` - Systematic requirement catalog
+  6. `ADR_INDEX_V1.2.md` - Architecture decision index
+  7. `TESTING_STRATEGY_V2.0.md` - Test cases, coverage requirements, future enhancements
+  8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
 - **Supplementary Documents** (in `docs/supplementary/`):
-  8. `VERSIONING_GUIDE_V1.0.md` - Strategy and model versioning patterns (Phase 0.5)
-  9. `TRAILING_STOP_GUIDE_V1.0.md` - Trailing stop loss implementation (Phase 0.5)
-  10. `POSITION_MANAGEMENT_GUIDE_V1.0.md` - Position lifecycle management (Phase 0.5)
-  11. `ODDS_RESEARCH_COMPREHENSIVE.md` - Historical odds research and validation
-  12. `SPORTS_PROBABILITIES_RESEARCH_V1.0.md` - NFL/NBA/Tennis win probability benchmarks
+  9. `VERSIONING_GUIDE_V1.0.md` - Strategy and model versioning patterns (Phase 0.5)
+  10. `TRAILING_STOP_GUIDE_V1.0.md` - Trailing stop loss implementation (Phase 0.5)
+  11. `POSITION_MANAGEMENT_GUIDE_V1.0.md` - Position lifecycle management (Phase 0.5)
+  12. `ODDS_RESEARCH_COMPREHENSIVE.md` - Historical odds research and validation
+  13. `SPORTS_PROBABILITIES_RESEARCH_V1.0.md` - NFL/NBA/Tennis win probability benchmarks
 
 - **Supplementary Specifications** (in `docs/supplementary/`):
-  13. `ADVANCED_EXECUTION_SPEC_V1.0.md` - Phase 5b execution strategies (dynamic price walking)
-  14. `EVENT_LOOP_ARCHITECTURE_V1.0.md` - Phase 5 event loop design (see ADR-035)
-  15. `EXIT_EVALUATION_SPEC_V1.0.md` - Phase 5a exit condition evaluation (see ADR-036)
-  16. `POSITION_MONITORING_SPEC_V1.0.md` - Phase 5a position monitoring strategies
-  17. `ORDER_EXECUTION_ARCHITECTURE_V1.0.md` - Order execution assessment and architecture
-  18. `USER_CUSTOMIZATION_STRATEGY_V1.0.md` - User-facing customization options (Phase 10+)
+  14. `ADVANCED_EXECUTION_SPEC_V1.0.md` - Phase 5b execution strategies (dynamic price walking)
+  15. `EVENT_LOOP_ARCHITECTURE_V1.0.md` - Phase 5 event loop design (see ADR-035)
+  16. `EXIT_EVALUATION_SPEC_V1.0.md` - Phase 5a exit condition evaluation (see ADR-036)
+  17. `POSITION_MONITORING_SPEC_V1.0.md` - Phase 5a position monitoring strategies
+  18. `ORDER_EXECUTION_ARCHITECTURE_V1.0.md` - Order execution assessment and architecture
+  19. `USER_CUSTOMIZATION_STRATEGY_V1.0.md` - User-facing customization options (Phase 10+)
 
 - **Planned Documentation** (Phase 4-9):
-  19. `MACHINE_LEARNING_ROADMAP.md` - ML learning path and phased implementation (Phase 9)
-  20. `PROBABILITY_PRIMER.md` - Expected value, Kelly Criterion, probability concepts (Phase 4)
-  21. `ELO_IMPLEMENTATION_GUIDE.md` - Elo rating system implementation details (Phase 4)
-  22. `MODEL_EVALUATION_GUIDE.md` - Model validation, metrics, A/B testing (Phase 9)
-  23. `API_INTEGRATION_GUIDE.md` - Detailed API specs with code examples (Phase 1)
-  24. `DEPLOYMENT_GUIDE.md` - Setup instructions, cloud migration (Phase 3)
-  25. `KALSHI_DECIMAL_PRICING_CHEAT_SHEET.md` - ⚠️ **PRINT AND KEEP AT DESK** (Phase 1)
+  20. `MACHINE_LEARNING_ROADMAP.md` - ML learning path and phased implementation (Phase 9)
+  21. `PROBABILITY_PRIMER.md` - Expected value, Kelly Criterion, probability concepts (Phase 4)
+  22. `ELO_IMPLEMENTATION_GUIDE.md` - Elo rating system implementation details (Phase 4)
+  23. `MODEL_EVALUATION_GUIDE.md` - Model validation, metrics, A/B testing (Phase 9)
+  24. `API_INTEGRATION_GUIDE.md` - Detailed API specs with code examples (Phase 1)
+  25. `DEPLOYMENT_GUIDE.md` - Setup instructions, cloud migration (Phase 3)
+  26. `KALSHI_DECIMAL_PRICING_CHEAT_SHEET.md` - ⚠️ **PRINT AND KEEP AT DESK** (Phase 1)
 
 ---
 
@@ -1457,6 +1466,58 @@ pyyaml==6.0.1
 **Priority:** High
 **Status:** 🔵 Planned
 
+**REQ-TEST-005: Test Result Persistence**
+
+**Phase:** 0.6c
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** ADR-039, TESTING_STRATEGY_V2.0.md
+
+Test results must be persisted with timestamps for trend analysis and CI/CD integration:
+- Timestamped HTML reports in `test_results/YYYY-MM-DD_HHMMSS/`
+- Coverage reports (HTML, XML, terminal)
+- Latest symlink for easy access
+- 30-day retention policy
+
+**REQ-TEST-006: Security Testing Integration**
+
+**Phase:** 0.7
+**Priority:** Critical
+**Status:** 🔵 Planned
+**Reference:** ADR-043
+
+Integrate security testing tools for vulnerability detection:
+- **Bandit**: Static analysis for security issues
+- **Safety**: Dependency vulnerability scanning
+- **Secret Detection**: Pre-commit hooks for credential scanning
+- **SAST Integration**: GitHub Advanced Security
+
+**REQ-TEST-007: Mutation Testing**
+
+**Phase:** 0.7
+**Priority:** Medium
+**Status:** 🔵 Planned
+**Reference:** ADR-044
+
+Validate test quality through mutation testing:
+- **mutmut** for Python mutation testing
+- Target: 60%+ mutation score on critical modules
+- Focus areas: trading logic, edge detection, risk management
+- Exclude: trivial getters, logging, configuration
+
+**REQ-TEST-008: Property-Based Testing**
+
+**Phase:** 0.7
+**Priority:** Medium
+**Status:** 🔵 Planned
+**Reference:** ADR-045
+
+Add property-based testing for complex business logic:
+- **Hypothesis** framework integration
+- Focus areas: Decimal arithmetic, edge detection, position management
+- Properties: Decimal precision, monotonicity, idempotence
+- Integration with existing pytest suite
+
 - **Unit Tests**: >80% code coverage
 - **Integration Tests**: All API → DB workflows
 - **End-to-End Tests**: Full pipeline (fetch → calculate → trade → attribute)
@@ -1566,6 +1627,107 @@ def test_trailing_stop_trigger():
 ```
 
 **Detailed test cases and fixtures**: See `TESTING_GUIDE.md`
+
+### 7.5 Code Quality, Validation & CI/CD (Phase 0.6c-0.7)
+
+**REQ-VALIDATION-001: Automated Code Quality (Ruff)**
+
+**Phase:** 0.6c
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** ADR-038, VALIDATION_LINTING_ARCHITECTURE_V1.0.md
+
+Use Ruff for unified code quality enforcement (10-100x faster than black+flake8):
+- **Linting**: 50+ rule categories (E, W, F, I, N, UP, B, C4, DTZ, etc.)
+- **Formatting**: Replaces black with consistent 100-char line length
+- **Auto-fix**: Automatic correction of most issues
+- **Configuration**: Single pyproject.toml for all tools
+- **Integration**: validate_quick.sh (~3s) and validate_all.sh (~60s)
+
+**REQ-VALIDATION-002: Documentation Validation Automation**
+
+**Phase:** 0.6c
+**Priority:** Medium
+**Status:** ✅ Complete
+**Reference:** ADR-040, VALIDATION_LINTING_ARCHITECTURE_V1.0.md
+
+Automated documentation consistency validation:
+- **validate_docs.py**: Checks version headers, MASTER_INDEX accuracy, paired document consistency
+- **fix_docs.py**: Auto-fixes simple issues (version mismatches)
+- **Validation Checks**:
+  - ADR_INDEX ↔ ARCHITECTURE_DECISIONS consistency
+  - REQUIREMENT_INDEX ↔ MASTER_REQUIREMENTS consistency
+  - MASTER_INDEX accuracy (filenames, versions, locations)
+  - Version header format and filename alignment
+- **Performance**: <1 second validation time
+- **Integration**: Part of validate_quick.sh and validate_all.sh
+
+**REQ-VALIDATION-003: Layered Validation Architecture**
+
+**Phase:** 0.6c
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** ADR-041, VALIDATION_LINTING_ARCHITECTURE_V1.0.md
+
+Two-tier validation for different workflow stages:
+- **Fast Layer (validate_quick.sh)**: ~3 seconds
+  - Ruff linting and formatting
+  - Mypy type checking
+  - Documentation validation
+  - Use: During development for rapid feedback
+- **Comprehensive Layer (validate_all.sh)**: ~60 seconds
+  - All fast validations
+  - Full test suite with coverage
+  - Security scanning (hardcoded credentials, connection strings, .env staging)
+  - Use: Before commits and phase completion
+
+**REQ-CICD-001: GitHub Actions CI/CD Integration**
+
+**Phase:** 0.7
+**Priority:** High
+**Status:** 🔵 Planned
+**Reference:** ADR-042
+
+Implement GitHub Actions workflow for automated CI/CD:
+- **Trigger**: On push to main, PR creation, manual dispatch
+- **Jobs**:
+  - Code quality (Ruff lint + format check)
+  - Type checking (Mypy)
+  - Documentation validation
+  - Test suite (pytest with coverage)
+  - Security scanning (Bandit, Safety, secret detection)
+- **Matrix Testing**: Python 3.12, 3.13 on ubuntu-latest, windows-latest
+- **Artifacts**: Test reports, coverage reports
+- **Status Badges**: README.md integration
+
+**REQ-CICD-002: Codecov Integration**
+
+**Phase:** 0.7
+**Priority:** Medium
+**Status:** 🔵 Planned
+**Reference:** ADR-042
+
+Integrate Codecov for coverage tracking and visualization:
+- **Upload**: coverage.xml from pytest-cov
+- **Dashboard**: Coverage trends, file-level reports
+- **PR Comments**: Coverage diff on pull requests
+- **Thresholds**: Enforce 80% minimum coverage
+- **Configuration**: codecov.yml with project/patch targets
+
+**REQ-CICD-003: Branch Protection Rules**
+
+**Phase:** 0.7
+**Priority:** High
+**Status:** 🔵 Planned
+**Reference:** ADR-042
+
+Configure GitHub branch protection for main branch:
+- **Required Checks**: All CI jobs must pass
+- **Review Requirements**: 1 approving review (if collaborators)
+- **Linear History**: Enforce no merge commits
+- **Force Push**: Disabled
+- **Delete**: Branch deletion disabled
+- **Status Checks**: Codecov, all tests, security scans
 
 ---
 

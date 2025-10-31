@@ -1,9 +1,20 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.7
-**Last Updated:** October 28, 2025
+**Version:** 2.8
+**Last Updated:** October 29, 2025
 **Status:** ✅ Current
+**Changes in v2.8:**
+- **PHASE 0.6C COMPLETION:** Added Decisions #33-36/ADR-038-041 (Validation & Testing Infrastructure - Complete)
+- **PHASE 0.7 PLANNING:** Added Decisions #37-40/ADR-042-045 (CI/CD Integration & Advanced Testing - Planned)
+- Added ADR-038: Ruff for Code Quality Automation (10-100x faster than black+flake8)
+- Added ADR-039: Test Result Persistence Strategy (timestamped HTML reports)
+- Added ADR-040: Documentation Validation Automation (validate_docs.py prevents drift)
+- Added ADR-041: Layered Validation Architecture (fast 3s + comprehensive 60s)
+- Added ADR-042: CI/CD Integration with GitHub Actions (Phase 0.7 planned)
+- Added ADR-043: Security Testing Integration with Bandit/Safety (Phase 0.7 planned)
+- Added ADR-044: Mutation Testing Strategy (Phase 0.7 planned)
+- Added ADR-045: Property-Based Testing with Hypothesis (Phase 0.7 planned)
 **Changes in v2.7:**
 - **PHASE 0.6B DOCUMENTATION:** Updated all supplementary specification document references to standardized filenames
 - **PHASE 5 PLANNING:** Added Decisions #30-32/ADR-035-037 (Phase 5 Trading Architecture)
@@ -2633,6 +2644,350 @@ Urgency Levels:
 
 ---
 
+## Decision #33/ADR-038: Ruff for Code Quality Automation (Phase 0.6c)
+
+**Date:** October 29, 2025
+**Phase:** 0.6c (Validation & Testing Infrastructure)
+**Status:** ✅ Complete
+
+### Problem
+Multiple tools (black, flake8, isort) were slow (~15s) and required separate configuration. Need faster, unified code quality tooling.
+
+### Decision
+**Adopt Ruff as unified formatter and linter, replacing black + flake8 + isort.**
+
+Configuration:
+```toml
+# pyproject.toml
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "C4", "DTZ", "T10", ...]
+fixable = ["ALL"]
+```
+
+### Rationale
+1. **10-100x Faster**: Rust-based, runs in ~1 second vs ~15 seconds
+2. **Unified Config**: Single pyproject.toml for all tools
+3. **Auto-fix**: Fixes most issues automatically
+4. **Modern**: Actively developed, replaces aging tools
+
+### Alternatives Considered
+- **Keep black + flake8**: Slower, multiple configs
+- **pylint**: Even slower than flake8
+- **mypy only**: Doesn't handle formatting
+
+### Implementation
+- Created comprehensive pyproject.toml configuration
+- Integrated into validate_quick.sh (~3s) and validate_all.sh (~60s)
+- Works cross-platform (Windows/Linux/Mac)
+
+**Reference:** `foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md`
+
+---
+
+## Decision #34/ADR-039: Test Result Persistence Strategy (Phase 0.6c)
+
+**Date:** October 29, 2025
+**Phase:** 0.6c (Validation & Testing Infrastructure)
+**Status:** ✅ Complete
+
+### Problem
+Test results were ephemeral, making it difficult to track quality trends over time.
+
+### Decision
+**Persist test results in timestamped directories with HTML reports and logs.**
+
+Structure:
+```
+test_results/
+├── 2025-10-29_143022/
+│   ├── pytest_report.html
+│   ├── test_output.log
+│   └── metadata.json (future)
+└── README.md
+```
+
+### Rationale
+1. **Historical Tracking**: Can compare results across sessions
+2. **Debugging**: Logs available for failed tests
+3. **CI/CD Ready**: Reports can be archived by GitHub Actions
+4. **Timestamped**: No conflicts between runs
+
+### Alternatives Considered
+- **Ephemeral results**: Discarded after each run (loses history)
+- **Git-committed results**: Would bloat repository
+- **Database storage**: Overkill for current needs
+
+### Implementation
+- test_full.sh creates timestamped directories
+- pytest-html generates HTML reports
+- .gitignore excludes timestamped runs (keeps README.md)
+
+**Reference:** `foundation/TESTING_STRATEGY_V2.0.md`
+
+---
+
+## Decision #35/ADR-040: Documentation Validation Automation (Phase 0.6c)
+
+**Date:** October 29, 2025
+**Phase:** 0.6c (Validation & Testing Infrastructure)
+**Status:** ✅ Complete
+
+### Problem
+Phase 0.6b revealed documentation drift:
+- ADR_INDEX ↔ ARCHITECTURE_DECISIONS mismatches (28 inconsistencies)
+- REQUIREMENT_INDEX ↔ MASTER_REQUIREMENTS mismatches (12 inconsistencies)
+- Broken cross-references, version header mismatches
+
+### Decision
+**Automated documentation consistency validation with validate_docs.py.**
+
+Checks:
+1. ADR consistency (ARCHITECTURE_DECISIONS ↔ ADR_INDEX)
+2. Requirement consistency (MASTER_REQUIREMENTS ↔ REQUIREMENT_INDEX)
+3. MASTER_INDEX accuracy
+4. Cross-reference validation
+5. Version header consistency
+
+### Rationale
+1. **Prevents Drift**: Catches inconsistencies immediately
+2. **Fast**: Runs in ~1 second
+3. **Pre-commit**: Integrated into validate_all.sh quality gate
+4. **Auto-fix**: fix_docs.py auto-fixes simple issues
+
+### Alternatives Considered
+- **Manual validation**: Error-prone, time-consuming
+- **Pre-commit hooks**: Too slow for development workflow
+- **CI/CD only**: Catches issues too late
+
+### Implementation
+- validate_docs.py: Python script with 5 validation checks
+- fix_docs.py: Auto-fix simple issues (version headers)
+- ASCII-safe output (Windows compatible)
+
+**Reference:** `foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md`
+
+---
+
+## Decision #36/ADR-041: Layered Validation Architecture (Phase 0.6c)
+
+**Date:** October 29, 2025
+**Phase:** 0.6c (Validation & Testing Infrastructure)
+**Status:** ✅ Complete
+
+### Problem
+Need both fast feedback during development and comprehensive validation before commits.
+
+### Decision
+**Two-tier validation architecture:**
+
+Fast (validate_quick.sh - ~3 seconds):
+- Ruff linting
+- Ruff formatting
+- Mypy type checking
+- Documentation validation
+
+Comprehensive (validate_all.sh - ~60 seconds):
+- All quick validation checks
+- Full test suite with coverage
+- Security scan (hardcoded credentials)
+
+### Rationale
+1. **Fast Feedback**: 3-second loop keeps developers in flow state
+2. **Comprehensive Gate**: 60-second validation before commits
+3. **Layered**: Fast checks run frequently, slow checks run strategically
+4. **Cross-platform**: Works on Windows/Linux/Mac without modification
+
+### Alternatives Considered
+- **Single validation script**: Too slow for development
+- **IDE integration only**: Not consistent across team
+- **Manual checks**: Unreliable, inconsistent
+
+### Implementation
+- validate_quick.sh: Development feedback loop (every 2-5 min)
+- validate_all.sh: Pre-commit quality gate
+- Both use python -m module for cross-platform compatibility
+
+**Reference:** `foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md`
+
+---
+
+## Decision #37/ADR-042: CI/CD Integration with GitHub Actions (Phase 0.7)
+
+**Date:** October 29, 2025
+**Phase:** 0.7 (CI/CD Integration)
+**Status:** 🔵 Planned
+
+### Problem
+Manual validation before commits is reliable but not enforced. Need automated quality gates.
+
+### Decision
+**GitHub Actions workflow running validate_all.sh on every push/PR.**
+
+Workflow:
+```yaml
+name: CI
+on: [push, pull_request]
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+      - run: pip install -r requirements.txt
+      - run: ./scripts/validate_all.sh
+      - uses: codecov/codecov-action@v3
+```
+
+### Rationale
+1. **Enforced Quality**: Can't merge without passing validation
+2. **Team Collaboration**: Consistent quality across all contributors
+3. **Coverage Tracking**: Codecov shows coverage trends
+4. **Status Badges**: Public quality signals on README
+
+### Alternatives Considered
+- **Pre-commit hooks only**: Can be bypassed
+- **Manual validation**: Not scalable to team
+- **Travis CI / CircleCI**: GitHub Actions is free for public repos
+
+### Implementation
+- Phase 0.7 task (after Phase 0.6c validation suite operational)
+- Branch protection rules require passing CI
+- Codecov integration for coverage tracking
+
+**Reference:** `foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md`, REQ-CICD-001
+
+---
+
+## Decision #38/ADR-043: Security Testing Integration (Phase 0.7)
+
+**Date:** October 29, 2025
+**Phase:** 0.7 (CI/CD Integration)
+**Status:** 🔵 Planned
+
+### Problem
+Manual security scans catch common issues but don't check for Python-specific vulnerabilities or dependency issues.
+
+### Decision
+**Integrate Bandit (Python security linter) and Safety (dependency vulnerability scanner) into CI/CD.**
+
+Integration:
+```bash
+# In validate_all.sh (Phase 0.7)
+bandit -r . -ll  # High/Medium severity only
+safety check --full-report
+```
+
+### Rationale
+1. **Automated**: No manual security reviews needed
+2. **Dependency Tracking**: Alerts on vulnerable packages
+3. **Python-specific**: Catches Python security anti-patterns
+4. **CI Integration**: Blocks merge on critical findings
+
+### Alternatives Considered
+- **Manual code review only**: Doesn't scale
+- **Snyk**: Commercial tool, overkill for current needs
+- **SAST tools**: More complex, slower
+
+### Implementation
+- Phase 0.7 task (integrate into validate_all.sh)
+- CI workflow fails on high/critical findings
+- Weekly dependency scans via scheduled workflow
+
+**Reference:** `foundation/TESTING_STRATEGY_V2.0.md`, REQ-TEST-008
+
+---
+
+## Decision #39/ADR-044: Mutation Testing Strategy (Phase 0.7)
+
+**Date:** October 29, 2025
+**Phase:** 0.7 (Advanced Testing)
+**Status:** 🔵 Planned
+
+### Problem
+High code coverage (87%) doesn't guarantee test quality. Need to validate that tests actually catch bugs.
+
+### Decision
+**Mutation testing with mutpy on critical modules (database/, api_connectors/, trading/).**
+
+Concept: mutpy changes code (e.g., `>` to `>=`). Good tests catch these mutations.
+
+Usage:
+```bash
+# Run on critical module
+mut.py --target database/ --unit-test tests/unit/test_database*.py
+```
+
+Target: >80% mutation score on critical modules
+
+### Rationale
+1. **Test Quality**: Validates tests catch real bugs
+2. **Focused**: Run on critical modules only (not all code)
+3. **Confidence**: High mutation score = high-quality tests
+4. **Selective**: Expensive, so run periodically (not every commit)
+
+### Alternatives Considered
+- **Code coverage only**: Doesn't measure test quality
+- **Manual test review**: Subjective, time-consuming
+- **Full mutation testing**: Too slow for all code
+
+### Implementation
+- Phase 0.7 task (after Phase 1 completion)
+- Run weekly on critical modules
+- Track mutation score trends
+
+**Reference:** `foundation/TESTING_STRATEGY_V2.0.md`, REQ-TEST-009
+
+---
+
+## Decision #40/ADR-045: Property-Based Testing with Hypothesis (Phase 0.7)
+
+**Date:** October 29, 2025
+**Phase:** 0.7 (Advanced Testing)
+**Status:** 🔵 Planned
+
+### Problem
+Unit tests cover specific examples but don't test edge cases comprehensively. Need automated edge case discovery.
+
+### Decision
+**Property-based testing with Hypothesis for critical calculations (decimal arithmetic, spread calculations, PnL).**
+
+Example:
+```python
+from hypothesis import given
+from hypothesis.strategies import decimals
+
+@given(
+    price=decimals(min_value='0.0001', max_value='0.9999', places=4)
+)
+def test_spread_always_positive(price):
+    spread = calculate_spread(price)
+    assert spread >= Decimal('0')
+```
+
+### Rationale
+1. **Edge Cases**: Hypothesis generates edge cases automatically
+2. **Regression Prevention**: Shrinks failures to minimal examples
+3. **Confidence**: Tests mathematical properties, not just examples
+4. **Decimal Safety**: Critical for financial calculations
+
+### Alternatives Considered
+- **Exhaustive testing**: Computationally infeasible
+- **Manual edge cases**: Incomplete, miss corner cases
+- **Fuzzing**: Less structured than property-based testing
+
+### Implementation
+- Phase 0.7 task (after Phase 2 completion)
+- Focus on financial calculations (decimal precision critical)
+- Integrate into test suite (pytest-hypothesis plugin)
+
+**Reference:** `foundation/TESTING_STRATEGY_V2.0.md`, REQ-TEST-010
+
+---
+
 ## Lessons for Future Developers
 
 ### What Worked Well in Design
@@ -2663,14 +3018,15 @@ Urgency Levels:
 This document represents the architectural decisions as of October 22, 2025 (Phase 0.5 completion with standardization).
 
 **Approved By:** Project Lead
-**Date:** October 22, 2025
+**Date:** October 29, 2025
 **Next Review:** Before Phase 8 (Non-Sports Expansion)
 
 ---
 
-**Document Version:** 2.7
-**Last Updated:** October 28, 2025
+**Document Version:** 2.8
+**Last Updated:** October 29, 2025
 **Critical Changes:**
+- v2.8: **PHASE 0.6C + 0.7 PLANNING** - Added Decisions #33-40/ADR-038-045 (Validation & Testing Infrastructure complete, CI/CD & Advanced Testing planned)
 - v2.7: **PHASE 0.6B DOCUMENTATION + PHASE 5 PLANNING** - Updated supplementary doc references, Added Decisions #30-32/ADR-035-037 (Phase 5 Trading Architecture: Event Loop, Exit Evaluation Strategy, Advanced Order Walking)
 - v2.6: **PHASE 1 COMPLETION** - Added Decisions #24-29/ADR-029-034 (Database Schema Completion: Elo data source, Elo storage, settlements architecture, markets surrogate key, external ID traceability, SCD Type 2 completion)
 - v2.5: **STANDARDIZATION** - Added systematic ADR numbers to all decisions for traceability
@@ -2683,6 +3039,6 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 **Purpose:** Record and rationale for all major architectural decisions with systematic ADR numbering
 
-**For complete ADR catalog, see:** ADR_INDEX_V1.1.md
+**For complete ADR catalog, see:** ADR_INDEX_V1.2.md
 
-**END OF ARCHITECTURE DECISIONS V2.7**
+**END OF ARCHITECTURE DECISIONS V2.8**

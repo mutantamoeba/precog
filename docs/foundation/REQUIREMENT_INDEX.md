@@ -1,10 +1,16 @@
 # Requirement Index
 
 ---
-**Version:** 1.1
-**Last Updated:** 2025-10-24
+**Version:** 1.2
+**Last Updated:** 2025-10-29
 **Status:** ✅ Current
 **Purpose:** Master index of all system requirements with systematic IDs
+**Changes in v1.2:**
+- **PHASE 0.6C COMPLETION**: Added validation and testing requirements (REQ-TEST-005, REQ-VALIDATION-001-003)
+- **PHASE 0.7 PLANNING**: Added CI/CD and advanced testing requirements (REQ-TEST-006-008, REQ-CICD-001-003)
+- Added new categories: VALIDATION (Code Quality & Documentation), CICD (Continuous Integration/Deployment)
+- Updated document references from V2.7 to V2.9
+- Updated requirement statistics (89 → 99 total requirements)
 **Changes in v1.1:**
 - Added Trading Methods requirements (REQ-METH-001 through REQ-METH-015)
 - Added Alerts & Monitoring requirements (REQ-ALERT-001 through REQ-ALERT-015)
@@ -43,6 +49,8 @@ This document provides a systematic index of all Precog requirements using categ
 | Machine Learning | ML | ML infrastructure and model development | 1-9 |
 | Testing | TEST | Testing and validation requirements | 1-10 |
 | Performance | PERF | Performance requirements | 1-10 |
+| Validation | VALIDATION | Code quality and documentation validation | 0.6c-0.7 |
+| CI/CD | CICD | Continuous integration and deployment | 0.7 |
 
 ---
 
@@ -50,12 +58,12 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-SYS-001 | Database Schema Versioning | 0 | Critical | ✅ | MASTER_REQUIREMENTS_V2.7 |
-| REQ-SYS-002 | Configuration Management (YAML) | 0 | Critical | ✅ | MASTER_REQUIREMENTS_V2.7 |
-| REQ-SYS-003 | Decimal Precision for Prices | 0 | Critical | ✅ | MASTER_REQUIREMENTS_V2.7 |
-| REQ-SYS-004 | System Uptime 99%+ | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-SYS-005 | Data Latency <5 seconds | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-SYS-006 | Structured Logging | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.7 |
+| REQ-SYS-001 | Database Schema Versioning | 0 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-SYS-002 | Configuration Management (YAML) | 0 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-SYS-003 | Decimal Precision for Prices | 0 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-SYS-004 | System Uptime 99%+ | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-SYS-005 | Data Latency <5 seconds | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-SYS-006 | Structured Logging | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 
 ---
 
@@ -63,12 +71,12 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-API-001 | Kalshi API Integration | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.7 |
+| REQ-API-001 | Kalshi API Integration | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 | REQ-API-002 | RSA-PSS Authentication (Kalshi) | 1 | Critical | 🔵 | API_INTEGRATION_GUIDE_V1.0 |
-| REQ-API-003 | ESPN API Integration | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-API-004 | Balldontlie API Integration | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-API-005 | API Rate Limit Management | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-API-006 | API Error Handling | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
+| REQ-API-003 | ESPN API Integration | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-API-004 | Balldontlie API Integration | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-API-005 | API Rate Limit Management | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-API-006 | API Error Handling | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 
 ---
 
@@ -76,7 +84,7 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-DB-001 | PostgreSQL 15+ Database | 0 | Critical | ✅ | MASTER_REQUIREMENTS_V2.7 |
+| REQ-DB-001 | PostgreSQL 15+ Database | 0 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
 | REQ-DB-002 | SCD Type 2 Versioning Pattern | 0 | Critical | ✅ | DATABASE_SCHEMA_SUMMARY_V1.5 |
 | REQ-DB-003 | DECIMAL(10,4) for Prices/Probabilities | 0 | Critical | ✅ | DATABASE_SCHEMA_SUMMARY_V1.5 |
 | REQ-DB-004 | position_exits Table | 0.5 | Critical | ✅ | DATABASE_SCHEMA_SUMMARY_V1.5 |
@@ -90,8 +98,8 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-MON-001 | Dynamic Monitoring Frequencies | 5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.7 |
-| REQ-MON-002 | Position State Tracking | 5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.7 |
+| REQ-MON-001 | Dynamic Monitoring Frequencies | 5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-MON-002 | Position State Tracking | 5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
 | REQ-MON-003 | Urgent Condition Detection | 5 | High | ✅ | POSITION_MANAGEMENT_GUIDE |
 | REQ-MON-004 | Price Caching (10s TTL) | 5 | Medium | ✅ | POSITION_MANAGEMENT_GUIDE |
 | REQ-MON-005 | API Rate Management (60/min) | 5 | High | ✅ | POSITION_MANAGEMENT_GUIDE |
@@ -120,9 +128,9 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-EXIT-001 | Exit Priority Hierarchy | 5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.7 |
-| REQ-EXIT-002 | 10 Exit Conditions | 5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.7 |
-| REQ-EXIT-003 | Partial Exit Staging | 5 | High | ✅ | MASTER_REQUIREMENTS_V2.7 |
+| REQ-EXIT-001 | Exit Priority Hierarchy | 5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-EXIT-002 | 10 Exit Conditions | 5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-EXIT-003 | Partial Exit Staging | 5 | High | ✅ | MASTER_REQUIREMENTS_V2.9 |
 | REQ-EXIT-004 | Exit Attempt Logging | 5 | High | ✅ | POSITION_MANAGEMENT_GUIDE |
 | REQ-EXIT-005 | Exit Performance Tracking | 5 | Medium | ✅ | POSITION_MANAGEMENT_GUIDE |
 
@@ -160,11 +168,11 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-EXEC-001 | Urgency-Based Execution | 5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.7 |
-| REQ-EXEC-002 | Price Walking Algorithm | 5 | High | ✅ | MASTER_REQUIREMENTS_V2.7 |
-| REQ-EXEC-003 | Exit Attempt Logging | 5 | High | ✅ | MASTER_REQUIREMENTS_V2.7 |
+| REQ-EXEC-001 | Urgency-Based Execution | 5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-EXEC-002 | Price Walking Algorithm | 5 | High | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-EXEC-003 | Exit Attempt Logging | 5 | High | ✅ | MASTER_REQUIREMENTS_V2.9 |
 | REQ-EXEC-004 | Order Timeout Management | 5 | High | ✅ | POSITION_MANAGEMENT_GUIDE |
-| REQ-EXEC-005 | Execution Success >95% | 5 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
+| REQ-EXEC-005 | Execution Success >95% | 5 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 
 **Details:**
 
@@ -251,7 +259,7 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-RISK-001 | Circuit Breakers (5 consecutive losses) | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.7 |
+| REQ-RISK-001 | Circuit Breakers (5 consecutive losses) | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 | REQ-RISK-002 | Daily Loss Limit | 1 | Critical | 🔵 | position_management.yaml |
 | REQ-RISK-003 | Max Open Positions | 1 | High | 🔵 | position_management.yaml |
 | REQ-RISK-004 | Max Position Size | 1 | High | 🔵 | position_management.yaml |
@@ -263,10 +271,38 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-TEST-001 | Code Coverage >80% | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-TEST-002 | Unit Tests for Core Modules | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-TEST-003 | Integration Tests for APIs | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-TEST-004 | Backtesting Framework | 4 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
+| REQ-TEST-001 | Code Coverage >80% | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-TEST-002 | Unit Tests for Core Modules | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-TEST-003 | Integration Tests for APIs | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-TEST-004 | Backtesting Framework | 4 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-TEST-005 | Test Result Persistence | 0.6c | High | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-TEST-006 | Security Testing Integration | 0.7 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-TEST-007 | Mutation Testing | 0.7 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-TEST-008 | Property-Based Testing | 0.7 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+
+---
+
+## Validation Requirements (VALIDATION)
+
+| ID | Title | Phase | Priority | Status | Document |
+|----|-------|-------|----------|--------|----------|
+| REQ-VALIDATION-001 | Automated Code Quality (Ruff) | 0.6c | High | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-VALIDATION-002 | Documentation Validation Automation | 0.6c | Medium | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-VALIDATION-003 | Layered Validation Architecture | 0.6c | High | ✅ | MASTER_REQUIREMENTS_V2.9 |
+
+**Summary:** Phase 0.6c implemented automated code quality and documentation validation, replacing manual checks with fast (<3s) and comprehensive (~60s) validation layers.
+
+---
+
+## CI/CD Requirements (CICD)
+
+| ID | Title | Phase | Priority | Status | Document |
+|----|-------|-------|----------|--------|----------|
+| REQ-CICD-001 | GitHub Actions CI/CD Integration | 0.7 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-CICD-002 | Codecov Integration | 0.7 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-CICD-003 | Branch Protection Rules | 0.7 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+
+**Summary:** Phase 0.7 will integrate GitHub Actions for automated CI/CD, coverage tracking with Codecov, and branch protection for main branch.
 
 ---
 
@@ -274,10 +310,10 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-PERF-001 | System Uptime 99%+ | 1-10 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-PERF-002 | Data Latency <5s | 1-10 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-PERF-003 | Edge Detection Accuracy 55%+ | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-PERF-004 | Execution Success >95% | 5 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
+| REQ-PERF-001 | System Uptime 99%+ | 1-10 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-PERF-002 | Data Latency <5s | 1-10 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-PERF-003 | Edge Detection Accuracy 55%+ | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-PERF-004 | Execution Success >95% | 5 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 
 ---
 
@@ -285,21 +321,21 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-METH-001 | Method Creation from Templates | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-002 | Immutable Method Configurations | 4-5 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-003 | Semantic Versioning for Methods | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-004 | Configuration Hashing | 4-5 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-005 | Method Lifecycle Management | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-006 | Activation Criteria | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-007 | Trade Attribution to Methods | 4-5 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-008 | A/B Testing Support | 4-5 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-009 | Helper Views | 4-5 | Low | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-010 | Export/Import Capability | 4-5 | Low | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-011 | Deprecation Automation | 4-5 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-012 | Historical Retention | 4-5 | Low | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-013 | Backward Compatibility | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-014 | Method Templates | 4-5 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-METH-015 | Performance Tracking | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
+| REQ-METH-001 | Method Creation from Templates | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-002 | Immutable Method Configurations | 4-5 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-003 | Semantic Versioning for Methods | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-004 | Configuration Hashing | 4-5 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-005 | Method Lifecycle Management | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-006 | Activation Criteria | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-007 | Trade Attribution to Methods | 4-5 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-008 | A/B Testing Support | 4-5 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-009 | Helper Views | 4-5 | Low | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-010 | Export/Import Capability | 4-5 | Low | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-011 | Deprecation Automation | 4-5 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-012 | Historical Retention | 4-5 | Low | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-013 | Backward Compatibility | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-014 | Method Templates | 4-5 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-METH-015 | Performance Tracking | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 
 **Summary:** Trading methods bundle complete trading approaches (strategy + model + position management + risk) into versioned, immutable configurations. Implementation deferred to Phase 4-5.
 
@@ -309,21 +345,21 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-ALERT-001 | Centralized Alert Logging | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-002 | Severity Levels | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-003 | Acknowledgement Tracking | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-004 | Resolution Tracking | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-005 | Multi-Channel Notifications | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-006 | Severity-Based Routing | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-007 | Alert Deduplication | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-008 | Rate Limiting | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-009 | Email Notifications | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-010 | SMS Notifications | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-011 | Notification Delivery Tracking | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-012 | Source Linking | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-013 | Environment Tagging | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-014 | Flexible Metadata | 1 | Low | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ALERT-015 | Query Performance | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
+| REQ-ALERT-001 | Centralized Alert Logging | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-002 | Severity Levels | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-003 | Acknowledgement Tracking | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-004 | Resolution Tracking | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-005 | Multi-Channel Notifications | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-006 | Severity-Based Routing | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-007 | Alert Deduplication | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-008 | Rate Limiting | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-009 | Email Notifications | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-010 | SMS Notifications | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-011 | Notification Delivery Tracking | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-012 | Source Linking | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-013 | Environment Tagging | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-014 | Flexible Metadata | 1 | Low | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ALERT-015 | Query Performance | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 
 **Summary:** Centralized alert and notification system for critical events, errors, and system health monitoring. Supports email, SMS, Slack, webhook channels with severity-based routing.
 
@@ -333,10 +369,10 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-ML-001 | Phase 1-6 - Probability Matrices + Simple Models | 1-6 | Critical | ✅ | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ML-002 | Phase 9 - Feature Storage for Advanced ML | 9 | High | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ML-003 | Phase 9 - MLOps Infrastructure | 9 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.7 |
-| REQ-ML-004 | Model Development Documentation | 1-10 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.7 |
+| REQ-ML-001 | Phase 1-6 - Probability Matrices + Simple Models | 1-6 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ML-002 | Phase 9 - Feature Storage for Advanced ML | 9 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ML-003 | Phase 9 - MLOps Infrastructure | 9 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ML-004 | Model Development Documentation | 1-10 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 
 **Details:**
 

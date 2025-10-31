@@ -1,9 +1,19 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.6
-**Last Updated:** 2025-10-28
+**Version:** 2.7
+**Last Updated:** 2025-10-29
 **Status:** ✅ Current
+**Changes in v2.7:**
+- **PHASE 0.6C COMPLETION**: Added validation and testing infrastructure
+- Updated ARCHITECTURE_DECISIONS V2.7 → V2.8 (added ADR-038 through ADR-045 for validation, testing, and CI/CD)
+- Updated ADR_INDEX V1.1 → V1.2 (added 8 new ADRs, total now 44 ADRs)
+- Updated MASTER_REQUIREMENTS V2.8 → V2.9 (added REQ-TEST-005-008, REQ-VALIDATION-001-003, REQ-CICD-001-003)
+- Updated REQUIREMENT_INDEX V1.1 → V1.2 (added 10 new requirements, total now 99 requirements)
+- Updated DEVELOPMENT_PHASES V1.3 → V1.4 (added Phase 0.6b, Phase 0.6c complete, Phase 0.7 planned)
+- Updated TESTING_STRATEGY V1.0 → V2.0 (added future enhancements: mutation testing, property-based testing, CI/CD integration)
+- Added VALIDATION_LINTING_ARCHITECTURE_V1.0.md (new foundation document for code quality and documentation validation)
+- All foundation documents now reflect Phase 0.6c completion and Phase 0.7 planning
 **Changes in v2.6:**
 - **PHASE 0.6B DOCUMENTATION CORRECTION**: Renamed 10 supplementary documents with standardized naming (removed PHASE_ prefixes, standardized V1.0 format)
 - Updated MASTER_REQUIREMENTS V2.7 → V2.8 (added Section 4.10 CLI requirements, Phase 1 expansion to 6 weeks, updated supplementary doc references)
@@ -103,13 +113,15 @@ Core architecture, requirements, and system design documents.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.3.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - UPDATED |
-| **MASTER_REQUIREMENTS_V2.8.md** | ✅ | v2.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.8** (CLI requirements, Phase 1 expansion, doc references) |
-| **MASTER_INDEX_V2.6.md** | ✅ | v2.6 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.6** (Phase 0.6b documentation correction) |
-| **ARCHITECTURE_DECISIONS_V2.7.md** | ✅ | v2.7 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers - **UPDATED V2.7** (ADR-035, ADR-036, ADR-037 for Phase 5) |
-| **REQUIREMENT_INDEX_V1.1.md** | ✅ | v1.1 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 89 requirements (REQ-{CATEGORY}-{NUMBER}) - UPDATED V1.1 |
-| **ADR_INDEX_V1.1.md** | ✅ | v1.1 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (ADR-{NUMBER}) - **UPDATED V1.1** (ADR-035 through ADR-037 added) |
+| **MASTER_REQUIREMENTS_V2.9.md** | ✅ | v2.9 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.9** (Phase 0.6c validation, testing, CI/CD requirements added) |
+| **MASTER_INDEX_V2.7.md** | ✅ | v2.7 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.7** (Phase 0.6c completion) |
+| **ARCHITECTURE_DECISIONS_V2.8.md** | ✅ | v2.8 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (44 total) - **UPDATED V2.8** (ADR-038 through ADR-045 for validation, testing, CI/CD) |
+| **REQUIREMENT_INDEX.md** | ✅ | v1.2 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 99 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.2** (added 10 new requirements) |
+| **ADR_INDEX_V1.2.md** | ✅ | v1.2 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (44 ADRs) - **UPDATED V1.2** (ADR-038 through ADR-045 added) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
-| **DEVELOPMENT_PHASES_V1.3.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, Phase 5 split into 5a/5b - UPDATED Phase 0.5 |
+| **DEVELOPMENT_PHASES_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, added Phase 0.6b/0.6c/0.7 - **UPDATED V1.4** (Phase 0.6c complete) |
+| **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |
+| **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
 
 ---
 

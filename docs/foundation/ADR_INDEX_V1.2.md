@@ -1,13 +1,14 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.1
-**Last Updated:** 2025-10-28
+**Version:** 1.2
+**Last Updated:** 2025-10-29
 **Status:** ✅ Current
-**Changes in v1.1:**
-- Added ADR-035, ADR-036, ADR-037 (Phase 5 Trading Architecture)
-- Updated all supplementary document references to standardized filenames (V1.0 format)
-- Updated ARCHITECTURE_DECISIONS reference from V2.6 to V2.7
+**Changes in v1.2:**
+- **PHASE 0.6C COMPLETION:** Added ADR-038 through ADR-041 (Validation & Testing Infrastructure - Complete)
+- **PHASE 0.7 PLANNING:** Added ADR-042 through ADR-045 (CI/CD Integration & Advanced Testing - Planned)
+- Updated ARCHITECTURE_DECISIONS reference from V2.7 to V2.8
+- Total ADRs: 36 → 44 (8 new ADRs added)
 **Purpose:** Master index of all architectural decisions with systematic ADR numbers
 ---
 
@@ -87,6 +88,24 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR-032 | Markets Surrogate PRIMARY KEY (id SERIAL) | 2025-10-24 | ✅ | 1 | Migration 009 |
 | ADR-033 | External ID Traceability Pattern | 2025-10-24 | ✅ | 1 | Migration 008 |
 | ADR-034 | SCD Type 2 Completion (row_end_ts) | 2025-10-24 | ✅ | 1 | Migrations 005, 007 |
+
+### Phase 0.6c: Validation & Testing Infrastructure
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-038 | Ruff for Code Quality Automation | 2025-10-29 | ✅ | 0.6c | ARCHITECTURE_DECISIONS_V2.8 |
+| ADR-039 | Test Result Persistence Strategy | 2025-10-29 | ✅ | 0.6c | ARCHITECTURE_DECISIONS_V2.8 |
+| ADR-040 | Documentation Validation Automation | 2025-10-29 | ✅ | 0.6c | ARCHITECTURE_DECISIONS_V2.8 |
+| ADR-041 | Layered Validation Architecture | 2025-10-29 | ✅ | 0.6c | ARCHITECTURE_DECISIONS_V2.8 |
+
+### Phase 0.7: CI/CD & Advanced Testing (Planned)
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-042 | CI/CD Integration with GitHub Actions | 2025-10-29 | 🔵 | 0.7 | ARCHITECTURE_DECISIONS_V2.8 |
+| ADR-043 | Security Testing Integration | 2025-10-29 | 🔵 | 0.7 | ARCHITECTURE_DECISIONS_V2.8 |
+| ADR-044 | Mutation Testing Strategy | 2025-10-29 | 🔵 | 0.7 | ARCHITECTURE_DECISIONS_V2.8 |
+| ADR-045 | Property-Based Testing with Hypothesis | 2025-10-29 | 🔵 | 0.7 | ARCHITECTURE_DECISIONS_V2.8 |
 
 ### Phase 5: Trading MVP (Planned)
 
@@ -316,20 +335,22 @@ Implement 4-level priority hierarchy:
 
 ## ADR Statistics
 
-**Total ADRs:** 36
-**Accepted (✅):** 29 (Phase 0-0.5)
-**Proposed (🔵):** 7+ (Phase 1-10)
+**Total ADRs:** 44
+**Accepted (✅):** 33 (Phase 0-0.6c)
+**Proposed (🔵):** 11+ (Phase 0.7, 1-10)
 **Rejected (❌):** 0
 **Superseded (⚠️):** 0
 
 **By Phase:**
 - Phase 0: 17 ADRs (100% accepted)
 - Phase 0.5: 12 ADRs (100% accepted)
-- Phase 1: 5 ADRs (0% - planned)
+- Phase 1: 6 ADRs (100% accepted)
+- Phase 0.6c: 4 ADRs (100% accepted)
+- Phase 0.7: 4 ADRs (0% - planned)
 - Phase 2: 3 ADRs (0% - planned)
 - Phase 3: 2 ADRs (0% - planned)
 - Phase 4: 4 ADRs (0% - planned)
-- Phase 5: 4 ADRs (25% accepted, 75% planned)
+- Phase 5: 3 ADRs (0% - planned)
 
 ---
 
@@ -342,8 +363,13 @@ Implement 4-level priority hierarchy:
 
 ---
 
-**Document Version:** 1.0
+**Document Version:** 1.2
 **Created:** 2025-10-21
+**Last Updated:** 2025-10-29
 **Purpose:** Systematic architecture decision tracking and reference
+**Critical Changes:**
+- v1.2: Added 8 new ADRs (ADR-038 through ADR-045) for Phase 0.6c completion and Phase 0.7 planning
 
-**END OF ADR INDEX**
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.8.md
+
+**END OF ADR INDEX V1.2**
