@@ -7,6 +7,7 @@ Loads credentials from .env file.
 
 import os
 from contextlib import contextmanager
+from typing import cast
 
 import psycopg2
 from dotenv import load_dotenv
@@ -97,6 +98,7 @@ def get_connection():
     if _connection_pool is None:
         initialize_pool()
 
+    assert _connection_pool is not None, "Connection pool initialization failed"
     return _connection_pool.getconn()
 
 
@@ -174,7 +176,7 @@ def execute_query(query: str, params: tuple | None = None, commit: bool = True) 
     """
     with get_cursor(commit=commit) as cur:
         cur.execute(query, params)
-        return cur.rowcount
+        return cast(int, cur.rowcount)
 
 
 def fetch_one(query: str, params: tuple | None = None) -> dict | None:
@@ -197,7 +199,7 @@ def fetch_one(query: str, params: tuple | None = None) -> dict | None:
     """
     with get_cursor() as cur:
         cur.execute(query, params)
-        return cur.fetchone()
+        return cast(dict | None, cur.fetchone())
 
 
 def fetch_all(query: str, params: tuple | None = None) -> list[dict]:
@@ -221,7 +223,7 @@ def fetch_all(query: str, params: tuple | None = None) -> list[dict]:
     """
     with get_cursor() as cur:
         cur.execute(query, params)
-        return cur.fetchall()
+        return cast(list[dict], cur.fetchall())
 
 
 def close_pool():

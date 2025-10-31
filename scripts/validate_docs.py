@@ -291,7 +291,7 @@ def validate_master_index() -> ValidationResult:
 def validate_cross_references() -> ValidationResult:
     """Validate all .md cross-references point to existing files."""
     errors = []
-    warnings = []
+    warnings: list[str] = []
 
     # Check foundation documents for broken references
     foundation_files = list(FOUNDATION_DIR.glob("*.md"))

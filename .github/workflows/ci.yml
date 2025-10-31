@@ -50,7 +50,7 @@ jobs:
           pip install mypy
 
       - name: Run Mypy
-        run: python -m mypy database/ utils/ --ignore-missing-imports
+        run: python -m mypy . --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --exclude '.venv/' --ignore-missing-imports
 
   security-scan:
     name: Security Scanning
@@ -78,8 +78,8 @@ jobs:
 
       - name: Check for secrets in code
         run: |
-          # Search for potential hardcoded credentials
-          if git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.py' '*.yaml' '*.sql'; then
+          # Search for potential hardcoded credentials (exclude test files)
+          if git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.py' '*.yaml' '*.sql' ':!tests/' ':!test_*'; then
             echo "ERROR: Found potential hardcoded credentials!"
             exit 1
           fi

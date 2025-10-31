@@ -62,7 +62,7 @@ def check_file_references(file_path: Path) -> list[tuple[int, str, str]]:
     Returns:
         List of (line_number, old_reference, context) tuples
     """
-    issues = []
+    issues: list[tuple[int, str, str]] = []
 
     try:
         with open(file_path, encoding="utf-8") as f:

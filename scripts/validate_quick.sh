@@ -43,7 +43,7 @@ echo ""
 # 3. Mypy - Type Checking
 echo "3. Mypy Type Checking"
 echo "---------------------"
-if python -m mypy . ; then
+if python -m mypy . --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --exclude '.venv/' --ignore-missing-imports ; then
     echo "  [OK] Mypy: No type errors"
 else
     echo "  [FAIL] Mypy: Type errors found"

@@ -103,7 +103,7 @@ def setup_logging(
 
     # Configure structlog
     structlog.configure(
-        processors=shared_processors
+        processors=shared_processors  # type: ignore[arg-type]
         + [
             # Use ProcessorFormatter for final rendering
             structlog.stdlib.ProcessorFormatter.wrap_for_formatter,
@@ -116,7 +116,7 @@ def setup_logging(
     # Configure formatters for different outputs
     formatter = structlog.stdlib.ProcessorFormatter(
         # Foreign log messages (from stdlib logging)
-        foreign_pre_chain=shared_processors,
+        foreign_pre_chain=shared_processors,  # type: ignore[arg-type]
         # Structlog messages
         processors=[
             # Remove internal _record and _from_structlog keys
@@ -140,7 +140,7 @@ def setup_logging(
         log_file=str(log_file) if log_file else None,
     )
 
-    return logger
+    return logger  # type: ignore[no-any-return]
 
 
 def get_logger(name: str | None = None) -> structlog.BoundLogger:
@@ -157,7 +157,7 @@ def get_logger(name: str | None = None) -> structlog.BoundLogger:
         >>> logger = get_logger(__name__)
         >>> logger.info("module_started")
     """
-    return structlog.get_logger(name)
+    return structlog.get_logger(name)  # type: ignore[no-any-return]
 
 
 # Context manager for request tracking

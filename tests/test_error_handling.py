@@ -83,7 +83,7 @@ def test_database_connection_failure_and_reconnection():
     # Simulate connection with invalid credentials
     with pytest.raises(psycopg2.OperationalError):
         # Test connection failure with invalid credentials
-        invalid_password = "invalid"  # noqa: S105 - test credential, not real
+        invalid_password = "invalid"  # Test credential, not real
         initialize_pool(
             host="localhost",
             port=5432,

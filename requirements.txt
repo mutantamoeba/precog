@@ -35,6 +35,7 @@ factory-boy==3.3.1  # Test data factories (Nov 2024)
 faker==30.8.2  # Fake data generation (Oct 2024)
 ruff==0.8.4  # Code formatter + linter (replaces black + flake8; Dec 2024)
 mypy==1.12.0  # Type checking (Oct 9, 2025)
+types-PyYAML==6.0.12.20240917  # Type stubs for PyYAML (Sep 2024)
 
 # Monitoring and Logging (from Checklist)
 structlog==25.4.0  # Structured logging (Oct 2025)

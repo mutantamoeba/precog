@@ -23,9 +23,9 @@ floating-point precision errors.
 import os
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 from dotenv import load_dotenv
 
 
@@ -37,7 +37,7 @@ class ConfigLoader:
     Configurations are cached after first load for performance.
     """
 
-    def __init__(self, config_dir: str | None = None):
+    def __init__(self, config_dir: str | Path | None = None):
         """
         Initialize configuration loader.
 
@@ -46,8 +46,9 @@ class ConfigLoader:
         """
         if config_dir is None:
             # Default to config directory relative to this file
-            config_dir = Path(__file__).parent
-        self.config_dir = Path(config_dir)
+            self.config_dir = Path(__file__).parent
+        else:
+            self.config_dir = Path(config_dir)
         self.configs: dict[str, dict[str, Any]] = {}
 
         # Load environment variables from .env file
@@ -293,7 +294,7 @@ class ConfigLoader:
 
         # Cache the result
         self.configs[cache_key] = config
-        return config
+        return cast(dict[str, Any], config)
 
     def load_all(self, convert_decimals: bool = True) -> dict[str, dict[str, Any]]:
         """
@@ -443,7 +444,7 @@ def get_strategy_config(strategy_name: str) -> dict[str, Any] | None:
         Strategy configuration dict, or None if not found
     """
     strategies = config.load("trade_strategies")
-    return strategies.get("strategies", {}).get(strategy_name)
+    return cast(dict[str, Any] | None, strategies.get("strategies", {}).get(strategy_name))
 
 
 def get_model_config(model_name: str) -> dict[str, Any] | None:
@@ -457,7 +458,7 @@ def get_model_config(model_name: str) -> dict[str, Any] | None:
         Model configuration dict, or None if not found
     """
     models = config.load("probability_models")
-    return models.get("models", {}).get(model_name)
+    return cast(dict[str, Any] | None, models.get("models", {}).get(model_name))
 
 
 def get_market_config(market_type: str) -> dict[str, Any] | None:
@@ -471,7 +472,7 @@ def get_market_config(market_type: str) -> dict[str, Any] | None:
         Market configuration dict, or None if not found
     """
     markets = config.load("markets")
-    return markets.get("markets", {}).get(market_type)
+    return cast(dict[str, Any] | None, markets.get("markets", {}).get(market_type))
 
 
 # ============================================================================
