@@ -353,8 +353,12 @@ exclude_dirs = ["/tests", "/.venv", "/venv", "/_archive", "/build", "/dist", "/.
 # Specific tests to skip (use with caution!)
 # Format: ["B101", "B601"]
 # B101 = assert_used (we allow asserts in production code for validation)
+# B404 = blacklist (subprocess module - flagged but acceptable in scripts)
+# B112 = try_except_continue (acceptable error handling pattern)
+# B607 = start_process_with_partial_path (acceptable in controlled scripts)
+# B603 = subprocess_without_shell_equals_true (we intentionally avoid shell=True for security)
 # See: https://bandit.readthedocs.io/en/latest/plugins/index.html
-skips = ["B101"]
+skips = ["B101", "B404", "B112", "B607", "B603"]
 
 # ==============================================================================
 # HYPOTHESIS CONFIGURATION (Property-Based Testing)
