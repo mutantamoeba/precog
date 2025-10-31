@@ -2008,40 +2008,6 @@ class ConfigManager:
 
 ---
 
-## Key Technology Choices
-
-### ADR-001: Why PostgreSQL?
-- ✅ Robust JSONB support for flexible metadata
-- ✅ Excellent support for time-series data
-- ✅ Strong ACID guarantees (critical for financial data)
-- ✅ Native DECIMAL type (exact precision for money)
-- ✅ Easy backup/restore
-- ✅ Well-understood by developer
-
-### ADR-005: Why Python?
-- ✅ Beginner-friendly
-- ✅ Excellent libraries (pandas, scipy, asyncio, decimal)
-- ✅ Strong API client ecosystem
-- ✅ Easy prototyping and iteration
-- ✅ Good for data science / model building
-
-### ADR-004: Why YAML for Config?
-- ✅ Human-readable
-- ✅ Comments supported
-- ✅ Standard format
-- ✅ Easy Git diffs
-- ✅ No compilation needed
-- ❌ NOT for secrets (use .env)
-
-### ADR-002: Why Decimal (not Float)?
-- ✅ Exact precision (critical for financial calculations)
-- ✅ No rounding errors (0.43 stays 0.43, not 0.42999999)
-- ✅ Required by Kalshi's sub-penny pricing
-- ✅ Standard for financial applications
-- ❌ Float would cause accumulating errors
-
----
-
 ## Architecture Patterns
 
 ### Repository Pattern
