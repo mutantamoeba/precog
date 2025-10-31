@@ -27,7 +27,7 @@ spacy==3.8.7  # Text parsing (Master Req; May 23, 2025; post-install: python -m 
 # Development Tools (Testing/Linting/Static Analysis; Phase 0.6c)
 pytest==8.4.2  # Unit/integration tests (>80% coverage; Sep 4, 2025)
 pytest-asyncio==0.24.0  # Async testing (Oct 1, 2025)
-pytest-cov==5.1.1  # Coverage reporting (Sep 20, 2025)
+pytest-cov==6.0.0  # Coverage reporting (Sep 20, 2025)
 pytest-mock==3.14.0  # Mocking support (Oct 2024)
 pytest-xdist==3.6.1  # Parallel test execution (Oct 2024)
 pytest-html==4.1.1  # HTML test reports (Oct 2024)
