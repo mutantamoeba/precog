@@ -1,11 +1,27 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.2
+**Version:** 1.5
 **Created:** 2025-10-28
-**Last Updated:** 2025-10-31
+**Last Updated:** 2025-11-05
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.5:**
+- Created `docs/guides/` folder for implementation guides (addresses documentation discoverability issue)
+- Moved 5 implementation guides from supplementary/ and configuration/ to docs/guides/
+- Updated Section 6 "Implementation Guides" to list all 5 guides (added CONFIGURATION_GUIDE and POSTGRESQL_SETUP_GUIDE)
+- Updated MASTER_INDEX V2.8 → V2.9 (5 location changes)
+- Aligns documentation structure with Section 6 references (previously referenced non-existent folder)
+**Changes in V1.4:**
+- Added session history archiving workflow to Section 3 (Ending a Session - Step 0)
+- Extracted 7 historical SESSION_HANDOFF.md versions from git history to docs/sessions/
+- Preserves full session history with date-stamped archives before overwriting
+**Changes in V1.3:**
+- Updated all version references to reflect Phase 1 API best practices documentation (PART 0-1 updates)
+- MASTER_REQUIREMENTS V2.8 → V2.10 (added REQ-API-007, REQ-OBSERV-001, REQ-SEC-009, REQ-VALIDATION-004)
+- ARCHITECTURE_DECISIONS V2.7 → V2.9 (added ADR-047 through ADR-052 for API integration best practices)
+- MASTER_INDEX V2.6 → V2.8 (added PHASE_1_TEST_PLAN and PHASE_0.7_DEFERRED_TASKS)
+- Updated Quick Reference and Documentation Structure sections with current document versions
 **Changes in V1.2:**
 - Added Deferred Tasks Workflow to Phase Completion Protocol Step 6 (Section 9)
 - Documents multi-location strategy for tracking non-blocking tasks deferred to future phases
@@ -241,6 +257,16 @@ git diff --cached --name-only | grep "\.env$"
 **If ANY of these fail, DO NOT COMMIT until fixed.**
 
 ### Ending a Session (10 minutes)
+
+**Step 0: Archive Current SESSION_HANDOFF.md**
+
+```bash
+# Archive current session handoff before overwriting (preserves history)
+cp SESSION_HANDOFF.md "docs/sessions/SESSION_HANDOFF_$(date +%Y-%m-%d).md"
+git add "docs/sessions/SESSION_HANDOFF_$(date +%Y-%m-%d).md"
+```
+
+**Why:** Preserves full session history in `docs/sessions/` directory. Each session handoff is archived with date stamp before being overwritten.
 
 **Step 1: Update SESSION_HANDOFF.md**
 
@@ -501,6 +527,65 @@ git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.p
 ```
 
 **Reference:** `docs/utility/SECURITY_REVIEW_CHECKLIST.md`
+
+---
+
+### Pattern 5: Cross-Platform Compatibility (Windows/Linux)
+
+**WHY:** Development occurs on both Windows (local) and Linux (CI/CD). Python scripts that work on Linux fail on Windows with `UnicodeEncodeError` when printing emoji to console.
+
+**The Problem:** Windows console uses cp1252 encoding (limited character set), Linux/Mac use UTF-8 (full Unicode support).
+
+**ALWAYS:**
+```python
+# ✅ CORRECT - ASCII equivalents for console output
+print("[OK] All tests passed")
+print("[FAIL] 3 errors found")
+print("[WARN] Consider updating")
+print("[IN PROGRESS] Phase 1 - 50% complete")
+
+# ✅ CORRECT - Explicit UTF-8 for file I/O
+with open("file.md", "r", encoding="utf-8") as f:
+    content = f.read()
+
+with open("output.json", "w", encoding="utf-8") as f:
+    json.dump(data, f)
+
+# ✅ CORRECT - Sanitize Unicode when reading from markdown
+def sanitize_unicode(text: str) -> str:
+    """Replace emoji with ASCII equivalents for Windows console."""
+    replacements = {
+        "✅": "[COMPLETE]",
+        "🔵": "[PLANNED]",
+        "🟡": "[IN PROGRESS]",
+        "❌": "[FAILED]",
+        "⚠️": "[WARNING]",
+    }
+    for unicode_char, ascii_replacement in replacements.items():
+        text = text.replace(unicode_char, ascii_replacement)
+    return text
+
+# Usage
+print(sanitize_unicode(error_message))  # Safe for Windows console
+```
+
+**NEVER:**
+```python
+# ❌ WRONG - Emoji in console output
+print("✅ All tests passed")  # Crashes on Windows cp1252
+print("❌ 3 errors found")
+
+# ❌ WRONG - Platform default encoding
+with open("file.md", "r") as f:  # cp1252 on Windows, UTF-8 on Linux
+    content = f.read()
+```
+
+**Where Emoji is OK:**
+- **Markdown files (.md)**: ✅ Yes (GitHub/VS Code render correctly)
+- **Script `print()` output**: ❌ No (use ASCII equivalents)
+- **Error messages**: ❌ No (may be printed to console - sanitize first)
+
+**Reference:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.10.md` (ADR-053), `scripts/validate_docs.py` (lines 57-82 for sanitization example)
 
 ---
 
@@ -1335,11 +1420,11 @@ python scripts/validate_doc_consistency.py
 - `SESSION_HANDOFF.md`
 
 **Need requirements?**
-- `docs/foundation/MASTER_REQUIREMENTS_V2.8.md`
+- `docs/foundation/MASTER_REQUIREMENTS_V2.10.md`
 - `docs/foundation/REQUIREMENT_INDEX.md`
 
 **Need architecture decisions?**
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.7.md`
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.9.md`
 - `docs/foundation/ADR_INDEX.md`
 
 **Need phase information?**
@@ -1353,15 +1438,15 @@ python scripts/validate_doc_consistency.py
 - Position Management: `docs/guides/POSITION_MANAGEMENT_GUIDE_V1.0.md`
 
 **Need to find any document?**
-- `docs/foundation/MASTER_INDEX_V2.6.md`
+- `docs/foundation/MASTER_INDEX_V2.8.md`
 
 ### Foundation Documents (Authoritative)
 
 **Location:** `docs/foundation/`
 
-1. **MASTER_INDEX_V2.6.md** - Complete document inventory
-2. **MASTER_REQUIREMENTS_V2.8.md** - All requirements with REQ IDs
-3. **ARCHITECTURE_DECISIONS_V2.7.md** - All ADRs (001-037)
+1. **MASTER_INDEX_V2.8.md** - Complete document inventory
+2. **MASTER_REQUIREMENTS_V2.10.md** - All requirements with REQ IDs
+3. **ARCHITECTURE_DECISIONS_V2.9.md** - All ADRs (001-052)
 4. **PROJECT_OVERVIEW_V1.3.md** - System architecture
 5. **DEVELOPMENT_PHASES_V1.4.md** - Roadmap and phases
 6. **REQUIREMENT_INDEX.md** - Searchable requirement catalog
@@ -1372,9 +1457,11 @@ python scripts/validate_doc_consistency.py
 
 **Location:** `docs/guides/`
 
-1. **VERSIONING_GUIDE_V1.0.md** - Strategy/model versioning
-2. **TRAILING_STOP_GUIDE_V1.0.md** - Trailing stop implementation
-3. **POSITION_MANAGEMENT_GUIDE_V1.0.md** - Position lifecycle
+1. **CONFIGURATION_GUIDE_V3.1.md** - YAML configuration reference (START HERE)
+2. **VERSIONING_GUIDE_V1.0.md** - Strategy/model versioning
+3. **TRAILING_STOP_GUIDE_V1.0.md** - Trailing stop implementation
+4. **POSITION_MANAGEMENT_GUIDE_V1.0.md** - Position lifecycle
+5. **POSTGRESQL_SETUP_GUIDE.md** - Database setup (Windows/Linux/Mac)
 
 ### API & Integration
 
@@ -1793,7 +1880,7 @@ git grep -E "(postgres://|mysql://).*:.*@" -- '*'
 2. `SESSION_HANDOFF.md`
 
 **When Starting Phase:**
-3. `docs/foundation/DEVELOPMENT_PHASES_V1.3.md`
+3. `docs/foundation/DEVELOPMENT_PHASES_V1.4.md`
 
 **When Implementing:**
 4. Relevant guides from `docs/guides/`
@@ -1899,6 +1986,9 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.5 | 2025-11-05 | Created docs/guides/ folder and moved 5 implementation guides (CONFIGURATION, VERSIONING, TRAILING_STOP, POSITION_MANAGEMENT, POSTGRESQL_SETUP); updated Section 6 and MASTER_INDEX V2.8→V2.9; aligns docs structure with Section 6 references; addresses discoverability issue |
+| 1.4 | 2025-11-05 | Added session history archiving workflow (Section 3 Step 0); extracted 7 historical SESSION_HANDOFF.md versions from git history to docs/sessions/; preserves full session history with date-stamped archives |
+| 1.3 | 2025-11-04 | Updated all version references: MASTER_REQUIREMENTS V2.8→V2.10, ARCHITECTURE_DECISIONS V2.7→V2.9, MASTER_INDEX V2.6→V2.8; reflects Phase 1 API best practices documentation (ADR-047 through ADR-052, REQ-API-007, REQ-OBSERV-001, REQ-SEC-009, REQ-VALIDATION-004) |
 | 1.2 | 2025-10-31 | Added Deferred Tasks Workflow to Phase Completion Protocol; multi-location documentation strategy; updated for Phase 0.7 completion; updated references to DEVELOPMENT_PHASES V1.4 |
 | 1.1 | 2025-10-29 | Added Rule 6: Planning Future Work; Status Field Usage Standards; validation commands to Quick Reference; updated Phase Completion Protocol with validate_all.sh; Phase 0.6c completion updates |
 | 1.0 | 2025-10-28 | Initial creation - Streamlined handoff workflow, added comprehensive Document Cohesion & Consistency section, removed PROJECT_STATUS and DOCUMENT_MAINTENANCE_LOG overhead, fixed API_INTEGRATION_GUIDE reference to V2.0 |
@@ -1925,6 +2015,7 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 4. Check coverage: `pytest --cov`
 
 **End Session (10 min):**
+0. Archive `SESSION_HANDOFF.md` to `docs/sessions/` (preserves history)
 1. Update `SESSION_HANDOFF.md`
 2. Commit with descriptive message (list all doc updates)
 3. Push to remote
@@ -1940,6 +2031,6 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 
 ---
 
-**END OF CLAUDE.md V1.0**
+**END OF CLAUDE.md V1.5**
 - always use descriptive variable names
 - Always document deferred tasks appropriately in requirements, architural, and project development phases documentation

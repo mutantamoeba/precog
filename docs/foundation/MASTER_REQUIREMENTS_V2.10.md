@@ -1,9 +1,15 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.9
-**Last Updated:** 2025-10-29
+**Version:** 2.10
+**Last Updated:** 2025-10-31
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.10:**
+- **PHASE 1 API BEST PRACTICES**: Added 4 new requirements for API integration best practices (Phase 1)
+- **NEW REQUIREMENTS**: REQ-API-007 (Pydantic validation), REQ-OBSERV-001 (correlation IDs), REQ-SEC-009 (log masking), REQ-VALIDATION-004 (YAML validation)
+- **CROSS-REFERENCES**: Added ADR-047 (Pydantic), ADR-049 (B3 correlation IDs), ADR-051 (sensitive data masking), ADR-052 (YAML validation)
+- **SECTION 7.5 EXTENDED**: Added API Response Validation, Observability (Request Tracing), Security (Log Masking), and YAML Configuration Validation
+- **COMPLIANCE**: Added GDPR/PCI-DSS requirements for sensitive data handling
 **Changes in v2.9:**
 - **PHASE 0.6C COMPLETION**: Added 11 new requirements for validation, testing, and CI/CD infrastructure
 - **NEW REQUIREMENTS**: REQ-TEST-005 through REQ-TEST-008 (Test result persistence, security testing, mutation testing, property-based testing)
@@ -1743,6 +1749,85 @@ Configure GitHub branch protection for main branch:
 - **Force Push**: Disabled
 - **Delete**: Branch deletion disabled
 - **Status Checks**: Codecov, all tests, security scans
+
+**REQ-VALIDATION-004: YAML Configuration Validation**
+
+**Phase:** 1
+**Priority:** Medium
+**Status:** 🔵 Planned
+**Reference:** ADR-052, VALIDATION_LINTING_ARCHITECTURE_V1.0.md
+
+Comprehensive YAML configuration validation with 4 validation levels:
+- **Level 1 - Syntax Validation**: Parse all YAML files (7 files in config/) for syntax errors
+- **Level 2 - Type Validation**: Ensure Decimal fields use string format (not float)
+  - Keywords: price, threshold, limit, kelly, spread, probability, fraction, rate, fee, stop, target, trailing, bid, ask, edge
+  - Warn on float contamination: `threshold: 0.75` (float) → should be `threshold: "0.75"` (string)
+- **Level 3 - Required Keys**: Validate required keys per file type
+  - system.yaml: environment, log_level
+  - trading.yaml: max_position_size, max_total_exposure
+  - position_management.yaml: stop_loss, profit_target
+- **Level 4 - Cross-file Consistency**: Validate references between files (e.g., strategy references valid model)
+- **Implementation**: Add to validate_docs.py as Check #9
+- **Integration**: validate_quick.sh (~3s), validate_all.sh (~60s), pre-commit hooks, GitHub Actions CI
+
+**REQ-API-007: API Response Validation with Pydantic**
+
+**Phase:** 1
+**Priority:** High
+**Status:** 🔵 Planned
+**Reference:** ADR-047, API_INTEGRATION_GUIDE_V2.0.md
+
+Runtime validation of all API responses using Pydantic BaseModel:
+- **Automatic Type Conversion**: Float → Decimal for all price fields (*_dollars)
+- **Field Validation**: Enforce ranges (prices: 0.0001-0.9999, volumes/open_interest: >= 0)
+- **Business Rule Enforcement**: Validate bid < ask, spread >= min_spread
+- **Clear Error Messages**: Pydantic provides detailed validation errors with field names
+- **Implementation**:
+  - Define models in `api_connectors/kalshi_models.py`
+  - Use @validator decorators for Decimal conversion
+  - Return validated models from all API client methods
+- **Coverage Target**: 100% for model validation (critical path)
+- **Benefits**: Catches type errors at API boundary, eliminates float contamination, serves as API contract documentation
+
+**REQ-OBSERV-001: Request Correlation IDs (B3 Standard)**
+
+**Phase:** 1
+**Priority:** Medium
+**Status:** 🔵 Planned
+**Reference:** ADR-049, API_INTEGRATION_GUIDE_V2.0.md
+
+Implement distributed request tracing with B3 correlation ID propagation:
+- **Standard**: B3 spec (OpenTelemetry/Zipkin compatible)
+- **Format**: UUID4 generated at request entry point
+- **Propagation**: X-Request-ID header in all API calls
+- **Logging**: Include request_id in every log entry (API calls, DB queries, business logic)
+- **Use Cases**:
+  - Debug distributed systems: trace API → Database → async task operations
+  - Performance analysis: track request latency across components
+  - Correlate errors: filter logs by request_id to see entire request lifecycle
+- **Implementation**:
+  - Generate UUID4 at CLI command or scheduled task entry
+  - Pass request_id parameter through all method calls
+  - Configure structlog to always include request_id field
+- **Future**: Migrate to full OpenTelemetry with trace/span IDs (Phase 3+)
+
+**REQ-SEC-009: Sensitive Data Masking in Logs**
+
+**Phase:** 1
+**Priority:** High
+**Status:** 🔵 Planned
+**Reference:** ADR-051, SECURITY_REVIEW_CHECKLIST.md
+
+Automatic masking of sensitive data in all log output for GDPR/PCI compliance:
+- **Sensitive Keywords**: api_key, token, password, private_key, secret, api_secret, access_token, refresh_token, bearer_token, authorization, auth, credentials
+- **Pattern Matching**: Detect and mask sensitive patterns in strings (e.g., "Bearer <token>", "api_key=<value>")
+- **Masking Strategy**: Show first 4 + last 4 characters for debugging (e.g., "sk_li...xyz9"), or "***REDACTED***" for short values
+- **Implementation**:
+  - Add structlog processor `mask_sensitive_data()`
+  - Process BEFORE JSONRenderer output
+  - Test masking with unit tests (verify no credentials in output)
+- **Compliance**: Required for GDPR (data privacy), PCI-DSS (payment card data), SOC 2 (security controls)
+- **Benefits**: Defense-in-depth (even if log aggregation compromised, credentials are masked), automatic (can't forget to mask), debugging-friendly (shows partial data)
 
 ---
 

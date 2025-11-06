@@ -2,6 +2,7 @@
 
 **Date:** 2025-10-17
 **Purpose:** Guide for setting up PostgreSQL authentication for Precog project
+**Filename Updated:** Moved from docs/supplementary/ to docs/guides/ on 2025-11-05
 
 ---
 

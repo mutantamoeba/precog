@@ -6,7 +6,7 @@
 **Last Updated:** 2025-10-28 (Phase 0.6b - Filename standardization)
 **Purpose:** Comprehensive guide to versioning strategies, models, and methods in Precog
 **Status:** ✅ Complete
-**Filename Updated:** Renamed from VERSIONING_GUIDE_V1.0.md to VERSIONING_GUIDE_V1.0.md (added version number)
+**Filename Updated:** Moved from docs/supplementary/ to docs/guides/ on 2025-11-05 (previously renamed in Phase 0.6b)
 ---
 
 ## Table of Contents

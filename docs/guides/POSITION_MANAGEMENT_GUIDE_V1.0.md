@@ -6,7 +6,7 @@
 **Last Updated:** 2025-10-28 (Phase 0.6b - Filename standardization)
 **Purpose:** Comprehensive guide to position lifecycle management in Precog
 **Status:** ✅ Complete
-**Filename Updated:** Renamed from POSITION_MANAGEMENT_GUIDE_V1.0.md to POSITION_MANAGEMENT_GUIDE_V1.0.md (added version number)
+**Filename Updated:** Moved from docs/supplementary/ to docs/guides/ on 2025-11-05 (previously renamed in Phase 0.6b)
 ---
 
 ## Table of Contents

@@ -4,6 +4,7 @@
 **Version:** 3.1
 **Last Updated:** 2025-10-21
 **Status:** ✅ Current - Matches actual implementation
+**Filename Updated:** Moved from docs/configuration/ to docs/guides/ on 2025-11-05
 **Changes in v3.1:**
 - **CRITICAL**: Added Phase 5 position monitoring configuration (dynamic frequencies)
 - Added exit priority hierarchy documentation (4 levels: CRITICAL/HIGH/MEDIUM/LOW)

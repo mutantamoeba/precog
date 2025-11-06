@@ -1,10 +1,16 @@
 # Requirement Index
 
 ---
-**Version:** 1.2
-**Last Updated:** 2025-10-29
+**Version:** 1.3
+**Last Updated:** 2025-10-31
 **Status:** ✅ Current
 **Purpose:** Master index of all system requirements with systematic IDs
+**Changes in v1.3:**
+- **PHASE 1 API BEST PRACTICES**: Added 4 new requirements for API integration best practices
+- **NEW REQUIREMENTS**: REQ-API-007 (Pydantic validation), REQ-OBSERV-001 (correlation IDs), REQ-SEC-009 (log masking), REQ-VALIDATION-004 (YAML validation)
+- **NEW CATEGORIES**: OBSERV (Observability), SEC (Security)
+- Updated document references from V2.9 to V2.10
+- Updated requirement statistics (99 → 103 total requirements)
 **Changes in v1.2:**
 - **PHASE 0.6C COMPLETION**: Added validation and testing requirements (REQ-TEST-005, REQ-VALIDATION-001-003)
 - **PHASE 0.7 PLANNING**: Added CI/CD and advanced testing requirements (REQ-TEST-006-008, REQ-CICD-001-003)
@@ -50,8 +56,10 @@ This document provides a systematic index of all Precog requirements using categ
 | Machine Learning | ML | ML infrastructure and model development | 1-9 |
 | Testing | TEST | Testing and validation requirements | 1-10 |
 | Performance | PERF | Performance requirements | 1-10 |
-| Validation | VALIDATION | Code quality and documentation validation | 0.6c-0.7 |
+| Validation | VALIDATION | Code quality and documentation validation | 0.6c-1 |
 | CI/CD | CICD | Continuous integration and deployment | 0.7 |
+| Observability | OBSERV | Request tracing and distributed system observability | 1 |
+| Security | SEC | Security and compliance requirements | 1-10 |
 
 ---
 
@@ -72,12 +80,13 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-API-001 | Kalshi API Integration | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-API-001 | Kalshi API Integration | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.10 |
 | REQ-API-002 | RSA-PSS Authentication (Kalshi) | 1 | Critical | 🔵 | API_INTEGRATION_GUIDE_V1.0 |
-| REQ-API-003 | ESPN API Integration | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
-| REQ-API-004 | Balldontlie API Integration | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
-| REQ-API-005 | API Rate Limit Management | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
-| REQ-API-006 | API Error Handling | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-API-003 | ESPN API Integration | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-API-004 | Balldontlie API Integration | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-API-005 | API Rate Limit Management | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-API-006 | API Error Handling | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-API-007 | API Response Validation with Pydantic | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
 
 ---
 
@@ -300,11 +309,12 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-VALIDATION-001 | Automated Code Quality (Ruff) | 0.6c | High | ✅ | MASTER_REQUIREMENTS_V2.9 |
-| REQ-VALIDATION-002 | Documentation Validation Automation | 0.6c | Medium | ✅ | MASTER_REQUIREMENTS_V2.9 |
-| REQ-VALIDATION-003 | Layered Validation Architecture | 0.6c | High | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-VALIDATION-001 | Automated Code Quality (Ruff) | 0.6c | High | ✅ | MASTER_REQUIREMENTS_V2.10 |
+| REQ-VALIDATION-002 | Documentation Validation Automation | 0.6c | Medium | ✅ | MASTER_REQUIREMENTS_V2.10 |
+| REQ-VALIDATION-003 | Layered Validation Architecture | 0.6c | High | ✅ | MASTER_REQUIREMENTS_V2.10 |
+| REQ-VALIDATION-004 | YAML Configuration Validation | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.10 |
 
-**Summary:** Phase 0.6c implemented automated code quality and documentation validation, replacing manual checks with fast (<3s) and comprehensive (~60s) validation layers.
+**Summary:** Phase 0.6c implemented automated code quality and documentation validation. Phase 1 adds YAML configuration validation with 4-level checks (syntax, Decimal type safety, required keys, cross-file consistency).
 
 ---
 
@@ -312,11 +322,31 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-CICD-001 | GitHub Actions CI/CD Integration | 0.7 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
-| REQ-CICD-002 | Codecov Integration | 0.7 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
-| REQ-CICD-003 | Branch Protection Rules | 0.7 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-CICD-001 | GitHub Actions CI/CD Integration | 0.7 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-CICD-002 | Codecov Integration | 0.7 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-CICD-003 | Branch Protection Rules | 0.7 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
 
 **Summary:** Phase 0.7 will integrate GitHub Actions for automated CI/CD, coverage tracking with Codecov, and branch protection for main branch.
+
+---
+
+## Observability Requirements (OBSERV)
+
+| ID | Title | Phase | Priority | Status | Document |
+|----|-------|-------|----------|--------|----------|
+| REQ-OBSERV-001 | Request Correlation IDs (B3 Standard) | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+
+**Summary:** Phase 1 implements distributed request tracing with B3 correlation IDs (OpenTelemetry/Zipkin compatible) for debugging distributed systems and performance analysis.
+
+---
+
+## Security Requirements (SEC)
+
+| ID | Title | Phase | Priority | Status | Document |
+|----|-------|-------|----------|--------|----------|
+| REQ-SEC-009 | Sensitive Data Masking in Logs | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+
+**Summary:** Phase 1 implements automatic masking of sensitive data (API keys, tokens, passwords) in all log output for GDPR/PCI-DSS compliance.
 
 ---
 
@@ -324,10 +354,10 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-PERF-001 | System Uptime 99%+ | 1-10 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
-| REQ-PERF-002 | Data Latency <5s | 1-10 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
-| REQ-PERF-003 | Edge Detection Accuracy 55%+ | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
-| REQ-PERF-004 | Execution Success >95% | 5 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-PERF-001 | System Uptime 99%+ | 1-10 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-PERF-002 | Data Latency <5s | 1-10 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-PERF-003 | Edge Detection Accuracy 55%+ | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-PERF-004 | Execution Success >95% | 5 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
 
 ---
 
@@ -421,13 +451,13 @@ This document provides a systematic index of all Precog requirements using categ
 
 ## Requirement Statistics
 
-**Total Requirements:** 89
-**Completed (✅):** 24 (Phase 0-0.5 + REQ-ML-001)
-**Planned (🔵):** 65 (Phase 1-10)
+**Total Requirements:** 103
+**Completed (✅):** 27 (Phase 0-0.6c + REQ-ML-001)
+**Planned (🔵):** 76 (Phase 0.7, 1-10)
 
 **By Category:**
 - System (SYS): 6 requirements
-- API (API): 6 requirements
+- **API (API): 7 requirements** (added REQ-API-007 in V1.3)
 - Database (DB): 7 requirements
 - Monitoring (MON): 5 requirements
 - Exit (EXIT): 5 requirements
@@ -436,16 +466,22 @@ This document provides a systematic index of all Precog requirements using categ
 - Trailing (TRAIL): 4 requirements
 - Kelly (KELLY): 3 requirements
 - Risk (RISK): 5 requirements
-- **Methods (METH): 15 requirements** (NEW in V1.1)
-- **Alerts (ALERT): 15 requirements** (NEW in V1.1)
-- **Machine Learning (ML): 4 requirements** (NEW in V1.1)
-- Testing (TEST): 4 requirements
+- Methods (METH): 15 requirements
+- Alerts (ALERT): 15 requirements
+- Machine Learning (ML): 4 requirements
+- **Testing (TEST): 8 requirements** (added 4 in V1.2)
 - Performance (PERF): 4 requirements
+- **Validation (VALIDATION): 4 requirements** (added REQ-VALIDATION-004 in V1.3)
+- **CI/CD (CICD): 3 requirements** (added in V1.2)
+- **Observability (OBSERV): 1 requirement** (NEW in V1.3)
+- **Security (SEC): 1 requirement** (NEW in V1.3)
 
 **By Phase:**
 - Phase 0: 6 requirements (100% complete)
 - Phase 0.5: 17 requirements (100% complete)
-- Phase 1: 25 requirements (0% complete) - includes alerts system
+- **Phase 0.6c: 3 requirements (100% complete)** - validation infrastructure
+- **Phase 0.7: 7 requirements (0% complete)** - CI/CD and advanced testing
+- **Phase 1: 29 requirements (0% complete)** - API best practices, alerts, CLI
 - Phase 2: 3 requirements (0% complete)
 - Phase 4: 5 requirements (0% complete)
 - Phase 4-5: 15 requirements (0% complete) - methods system

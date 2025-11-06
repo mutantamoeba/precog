@@ -1,9 +1,28 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.7
-**Last Updated:** 2025-10-29
+**Version:** 2.9
+**Last Updated:** 2025-11-05
 **Status:** ✅ Current
+**Changes in v2.9:**
+- **GUIDES FOLDER CREATED**: Moved 5 implementation guides from supplementary/ and configuration/ to new docs/guides/ folder
+- Moved CONFIGURATION_GUIDE_V3.1.md from `/docs/configuration/` to `/docs/guides/`
+- Moved VERSIONING_GUIDE_V1.0.md from `/docs/supplementary/` to `/docs/guides/`
+- Moved TRAILING_STOP_GUIDE_V1.0.md from `/docs/supplementary/` to `/docs/guides/`
+- Moved POSITION_MANAGEMENT_GUIDE_V1.0.md from `/docs/supplementary/` to `/docs/guides/`
+- Moved POSTGRESQL_SETUP_GUIDE.md from `/docs/supplementary/` to `/docs/guides/`
+- Supplementary folder reduced from 16 to 11 documents (cleaner organization)
+- Aligns documentation structure with CLAUDE.md Section 6 (Implementation Guides)
+- Improves discoverability: guides no longer buried among specs/research/analysis docs
+**Changes in v2.8:**
+- **PHASE 1 API BEST PRACTICES**: Added ADRs and requirements for API integration best practices
+- Updated ARCHITECTURE_DECISIONS V2.8 → V2.9 (added ADR-047 through ADR-052: Pydantic validation, circuit breaker, correlation IDs, connection pooling, log masking, YAML validation)
+- Updated ADR_INDEX V1.2 → V1.3 (added 6 new ADRs, total now 50 ADRs)
+- Updated MASTER_REQUIREMENTS V2.9 → V2.10 (added REQ-API-007, REQ-OBSERV-001, REQ-SEC-009, REQ-VALIDATION-004)
+- Updated REQUIREMENT_INDEX V1.2 → V1.3 (added 4 new requirements in 3 categories: API, Observability, Security, Validation; total now 103 requirements)
+- Added PHASE_1_TEST_PLAN_V1.0.md (testing & quality documents section)
+- Added PHASE_0.7_DEFERRED_TASKS_V1.0.md (utility documents section)
+- All foundation documents now reference updated versions (ADRs, REQs)
 **Changes in v2.7:**
 - **PHASE 0.6C COMPLETION**: Added validation and testing infrastructure
 - Updated ARCHITECTURE_DECISIONS V2.7 → V2.8 (added ADR-038 through ADR-045 for validation, testing, and CI/CD)
@@ -20,7 +39,7 @@
 - Updated ARCHITECTURE_DECISIONS V2.6 → V2.7 (added ADR-035, ADR-036, ADR-037 for Phase 5 Trading Architecture)
 - Updated ADR_INDEX V1.0 → V1.1 (added 3 new ADRs, updated doc references)
 - Renamed 10 files: VERSIONING_GUIDE_V1.0.md, TRAILING_STOP_GUIDE_V1.0.md, POSITION_MANAGEMENT_GUIDE_V1.0.md, SPORTS_PROBABILITIES_RESEARCH_V1.0.md, ORDER_EXECUTION_ARCHITECTURE_V1.0.md, ADVANCED_EXECUTION_SPEC_V1.0.md, EVENT_LOOP_ARCHITECTURE_V1.0.md, EXIT_EVALUATION_SPEC_V1.0.md, POSITION_MONITORING_SPEC_V1.0.md, USER_CUSTOMIZATION_STRATEGY_V1.0.md
-- All supplementary docs now in `/docs/supplementary/` (no `/docs/guides/` folder created)
+- All supplementary docs initially moved to `/docs/supplementary/` (guides/ folder created in v2.9)
 - Added "RENAMED" notes for traceability
 **Changes in v2.5:**
 - **PHASE 1 FOUNDATION**: Updated documentation for alerts/notifications system and ML infrastructure planning
@@ -157,7 +176,7 @@ YAML configuration files and configuration guides.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **CONFIGURATION_GUIDE_V3.1.md** | ✅ | v3.1 | `/docs/configuration/` | 0.5 | Phases 1-10 | 🟡 High | Comprehensive update with all 7 YAMLs, versioning, method abstraction - UPDATED Phase 0.5 |
+| **CONFIGURATION_GUIDE_V3.1.md** | ✅ | v3.1 | `/docs/guides/` | 0.5 | Phases 1-10 | 🟡 High | **MOVED** from /configuration/ - Comprehensive update with all 7 YAMLs, versioning, method abstraction |
 | **system.yaml** | ✅ | v1.0 | `/config/` | 1 | Phases 1-10 | 🔴 Critical | **UPDATED** - Added comprehensive notifications config (email, SMS, Slack, webhook, alert_routing) |
 | **trading.yaml** | ✅ | v1.0 | `/config/` | 1 | Phases 1-10 | 🔴 Critical | Trading parameters, Kelly fractions, DECIMAL examples |
 | **probability_models.yaml** | ✅ | v2.0 | `/config/` | 4 | Phases 4-9 | 🔴 Critical | Versioning support, immutable configs, educational docstrings - UPDATED Phase 0.5 |
@@ -187,7 +206,8 @@ Test specifications, validation protocols, and quality assurance.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **TESTING_STRATEGY_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 1 | Phases 1-10 | 🟡 High | **NEW** - Pytest strategy, 80% coverage requirement, test categories (Phase 1) |
+| **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |
+| **PHASE_1_TEST_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1 | Phase 1 | 🟡 High | **NEW** - Comprehensive test plan for Phase 1 (database, API, CLI) with test cases, fixtures, and success criteria |
 | **MODEL_VALIDATION_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4 ✅ | 🟡 High | Elo vs. research, backtesting benchmarks |
 | **BACKTESTING_PROTOCOL_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4-5 ✅ | 🟡 High | Walk-forward validation, train/test splits |
 
@@ -212,9 +232,10 @@ Phase-specific implementation guides created in Phase 0.5.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **VERSIONING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 0.5 | Phases 4-9 | 🔴 Critical | **RENAMED** from VERSIONING_GUIDE_V1.0.md - Immutable versioning for strategies and models |
-| **TRAILING_STOP_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 0.5 | Phases 1, 4, 5 | 🔴 Critical | **RENAMED** from TRAILING_STOP_GUIDE_V1.0.md - Trailing stop loss implementation guide |
-| **POSITION_MANAGEMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 0.5 | Phase 5 | 🔴 Critical | **RENAMED** from POSITION_MANAGEMENT_GUIDE_V1.0.md - Position lifecycle, 10 exit conditions, monitoring, execution |
+| **VERSIONING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phases 4-9 | 🔴 Critical | **MOVED** from /supplementary/ - Immutable versioning for strategies and models |
+| **TRAILING_STOP_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phases 1, 4, 5 | 🔴 Critical | **MOVED** from /supplementary/ - Trailing stop loss implementation guide |
+| **POSITION_MANAGEMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phase 5 | 🔴 Critical | **MOVED** from /supplementary/ - Position lifecycle, 10 exit conditions, monitoring, execution |
+| **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
 
 ---
 
@@ -231,6 +252,7 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **SESSION_6_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 6 | 🟢 Medium | Previous session handoff |
 | **Handoff_Protocol_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0 | All phases | 🔴 Critical | Merged 4 docs: HANDOFF_PROCESS + TOKEN_MONITORING + PHASE_COMPLETION + KNOWLEDGE_STRATEGY |
 | **VERSION_HEADERS_GUIDE_V2.1.md** | ✅ | v2.1 | `/docs/utility/` | 0 | All phases | 🟡 High | Version control standards, references Handoff_Protocol |
+| **PHASE_0.7_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **NEW** - Tracks deferred enhancements from Phase 0.6c (CI/CD, advanced testing, schema validation) |
 | **ENVIRONMENT_CHECKLIST_V1.1.md** | ✅ | v1.1 | `/docs/utility/` | 0 | Phase 0 ✅ | 🔴 Critical | Windows 11 setup, Parts 1-7, dependencies verification |
 | **CONSISTENCY_REVIEW.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Phase 0 consistency validation, all discrepancies fixed |
 | **FILENAME_VERSION_REPORT.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Filename-version consistency validation |

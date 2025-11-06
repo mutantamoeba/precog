@@ -1,9 +1,22 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.8
-**Last Updated:** October 29, 2025
+**Version:** 2.10
+**Last Updated:** November 4, 2025
 **Status:** ✅ Current
+**Changes in v2.10:**
+- **CROSS-PLATFORM STANDARDS:** Added Decision #47/ADR-053 (Cross-Platform Development - Windows/Linux compatibility)
+- Added ADR-053: Cross-Platform Development Standards (ASCII-safe console output, explicit UTF-8 file I/O, Unicode sanitization helper)
+- Documents pattern for Windows cp1252 vs. Linux UTF-8 compatibility (prevents UnicodeEncodeError)
+- Establishes mandatory standards for all Python scripts (emoji in markdown OK, ASCII in console output only)
+**Changes in v2.9:**
+- **PHASE 1 API BEST PRACTICES:** Added Decisions #41-46/ADR-047-052 (API Integration Best Practices - Planned)
+- Added ADR-047: API Response Validation with Pydantic (runtime type safety, automatic Decimal conversion)
+- Added ADR-048: Circuit Breaker Implementation Strategy (use circuitbreaker library, not custom)
+- Added ADR-049: Request Correlation ID Standard (B3 spec for distributed tracing)
+- Added ADR-050: HTTP Connection Pooling Configuration (explicit HTTPAdapter for performance)
+- Added ADR-051: Sensitive Data Masking in Logs (structlog processor for GDPR/PCI compliance)
+- Added ADR-052: YAML Configuration Validation (4-level validation in validate_docs.py)
 **Changes in v2.8:**
 - **PHASE 0.6C COMPLETION:** Added Decisions #33-36/ADR-038-041 (Validation & Testing Infrastructure - Complete)
 - **PHASE 0.7 PLANNING:** Added Decisions #37-40/ADR-042-045 (CI/CD Integration & Advanced Testing - Planned)
@@ -2711,12 +2724,18 @@ Phase 0.6b revealed documentation drift:
 ### Decision
 **Automated documentation consistency validation with validate_docs.py.**
 
-Checks:
+Checks (Phase 0.6c baseline):
 1. ADR consistency (ARCHITECTURE_DECISIONS ↔ ADR_INDEX)
 2. Requirement consistency (MASTER_REQUIREMENTS ↔ REQUIREMENT_INDEX)
 3. MASTER_INDEX accuracy
 4. Cross-reference validation
 5. Version header consistency
+
+Enhanced checks (Phase 0.6c final):
+6. New Docs Enforcement (all versioned .md files must be in MASTER_INDEX)
+7. Git-aware Version Bumps (renamed docs must increment version)
+8. Phase Completion Status (validates proper completion markers)
+9. YAML Configuration Validation (syntax, Decimal safety, required keys, cross-file consistency)
 
 ### Rationale
 1. **Prevents Drift**: Catches inconsistencies immediately
@@ -2730,9 +2749,10 @@ Checks:
 - **CI/CD only**: Catches issues too late
 
 ### Implementation
-- validate_docs.py: Python script with 5 validation checks
+- validate_docs.py: Python script with 9 validation checks (5 baseline + 4 enhanced)
 - fix_docs.py: Auto-fix simple issues (version headers)
-- ASCII-safe output (Windows compatible)
+- ASCII-safe output (Windows compatible via Unicode sanitization)
+- Git integration for version bump detection
 
 **Reference:** `foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md`
 
@@ -2954,6 +2974,705 @@ def test_spread_always_positive(price):
 
 ---
 
+## Decision #41/ADR-047: API Response Validation with Pydantic (Phase 1)
+
+**Date:** October 31, 2025
+**Phase:** 1 (API Integration)
+**Status:** 🔵 Planned
+
+### Problem
+API responses from Kalshi return data as dictionaries with potential type inconsistencies, missing fields, and values that need conversion (e.g., float prices to Decimal). Manual validation is error-prone and doesn't catch runtime type errors until they cause failures.
+
+### Decision
+**Use Pydantic BaseModel classes for all API response validation with automatic Decimal conversion for price fields.**
+
+Implementation:
+```python
+from pydantic import BaseModel, Field, validator
+from decimal import Decimal
+
+class KalshiMarket(BaseModel):
+    """Kalshi market response model with automatic validation."""
+    ticker: str = Field(..., min_length=1)
+    event_ticker: str
+    yes_bid: Decimal = Field(ge=Decimal("0.0001"), le=Decimal("0.9999"))
+    yes_ask: Decimal = Field(ge=Decimal("0.0001"), le=Decimal("0.9999"))
+    no_bid: Decimal = Field(ge=Decimal("0.0001"), le=Decimal("0.9999"))
+    no_ask: Decimal = Field(ge=Decimal("0.0001"), le=Decimal("0.9999"))
+    volume: int = Field(ge=0)
+    open_interest: int = Field(ge=0)
+
+    @validator('yes_bid', 'yes_ask', 'no_bid', 'no_ask', pre=True)
+    def parse_decimal_from_dollars(cls, v):
+        """Convert *_dollars fields to Decimal, handle float contamination."""
+        if isinstance(v, (int, float)):
+            return Decimal(str(v))
+        return Decimal(v)
+
+    @validator('yes_bid')
+    def validate_bid_ask_spread(cls, v, values):
+        """Business rule: bid must be less than ask."""
+        if 'yes_ask' in values and v >= values['yes_ask']:
+            raise ValueError(f"yes_bid ({v}) must be < yes_ask ({values['yes_ask']})")
+        return v
+
+# Usage in API client
+def get_markets(self) -> List[KalshiMarket]:
+    response = self._make_request("GET", "/markets")
+    # Automatic validation and conversion
+    return [KalshiMarket(**market) for market in response['markets']]
+```
+
+### Rationale
+1. **Runtime Type Safety**: Catches type errors at API boundary, not in business logic
+2. **Automatic Decimal Conversion**: Eliminates float contamination risk
+3. **Field Validation**: Ensures prices in valid range (0.0001-0.9999)
+4. **Business Rule Enforcement**: Validates bid < ask, volume >= 0
+5. **Industry Standard**: Pydantic v2.12+ is production-ready (already installed in requirements.txt)
+6. **Clear Error Messages**: Pydantic provides detailed validation error messages with field names
+7. **Documentation**: BaseModel serves as API contract documentation
+
+### Alternatives Considered
+- **Manual validation with if/else**: Error-prone, verbose, no type checking
+- **TypedDict with type hints**: No runtime validation, doesn't catch errors
+- **marshmallow**: Less modern, slower than Pydantic v2, no automatic Decimal support
+- **Custom validation classes**: Reinventing the wheel, more code to maintain
+
+### Implementation
+- **Phase 1** (API Integration): Add Pydantic models for all Kalshi API responses
+- Define models in `api_connectors/kalshi_models.py`
+- Update `KalshiClient` to return validated models
+- Add unit tests for validation failures (invalid prices, missing fields)
+- Document model schema in API_INTEGRATION_GUIDE
+- **Coverage target**: 100% for model validation (critical path)
+
+**Reference:** `api-integration/API_INTEGRATION_GUIDE_V2.0.md`, REQ-API-007, ADR-002 (Decimal Precision)
+
+---
+
+## Decision #42/ADR-048: Circuit Breaker Implementation Strategy (Phase 1)
+
+**Date:** October 31, 2025
+**Phase:** 1 (API Integration)
+**Status:** 🔵 Planned
+
+### Problem
+API failures (network errors, 500 errors, rate limiting) can cause cascading failures if we continue making requests. Need automatic failure detection and recovery without manual intervention.
+
+### Decision
+**Use the `circuitbreaker` library (NOT custom implementation) for all external API calls.**
+
+Library: `circuitbreaker==2.0.0`
+
+Implementation:
+```python
+from circuitbreaker import circuit
+import requests
+from decimal import Decimal
+
+class KalshiClient:
+    def __init__(self):
+        self.base_url = "https://api.kalshi.com"
+        self.failure_threshold = 5  # Open after 5 failures
+        self.recovery_timeout = 60  # Try recovery after 60 seconds
+
+    @circuit(failure_threshold=5, recovery_timeout=60, expected_exception=requests.RequestException, name="Kalshi_API")
+    def get_markets(self) -> List[Dict]:
+        """Fetch markets with automatic circuit breaker protection."""
+        response = requests.get(f"{self.base_url}/markets")
+        response.raise_for_status()
+        return response.json()['markets']
+
+    @circuit(failure_threshold=5, recovery_timeout=60, expected_exception=requests.RequestException, name="Kalshi_API")
+    def get_balance(self) -> Decimal:
+        """Fetch balance with circuit breaker."""
+        response = requests.get(f"{self.base_url}/portfolio/balance")
+        response.raise_for_status()
+        return Decimal(str(response.json()['balance_dollars']))
+
+# Circuit breaker behavior:
+# 1. CLOSED (normal): Requests pass through
+# 2. OPEN (failing): Requests immediately fail without calling API (fail-fast)
+# 3. HALF_OPEN (recovery): Single test request to check if API recovered
+```
+
+### Rationale
+1. **Battle-Tested**: circuitbreaker library is production-proven, thread-safe
+2. **Automatic Recovery**: Half-open state tests API recovery automatically
+3. **Fail-Fast**: Prevents wasting time on requests that will fail
+4. **Resource Protection**: Stops overwhelming failing APIs
+5. **Cleaner Syntax**: Decorator-based vs. manual state management
+6. **Metrics Support**: Built-in logging and monitoring hooks
+7. **Thread-Safe**: Custom implementation would require complex locking
+
+### Alternatives Considered
+- **Custom circuit breaker**: More code, not thread-safe, harder to test, no metrics
+- **Retry logic only**: Doesn't prevent cascading failures during prolonged outages
+- **No circuit breaker**: Risk of overwhelming APIs during failures, slow failure detection
+
+### Implementation
+- **Phase 1** (API Integration): Add to all Kalshi API calls
+- Install: `pip install circuitbreaker==2.0.0` (add to requirements.txt)
+- Configure per-endpoint thresholds (balance: 5 failures, markets: 10 failures)
+- Log circuit breaker state changes (OPEN, HALF_OPEN, CLOSED)
+- Add unit tests mocking failures to verify circuit opens
+- **Document custom implementation as educational reference only** (do not use in production)
+
+**Reference:** `api-integration/API_INTEGRATION_GUIDE_V2.0.md`, REQ-API-007, ADR-102 (Error Handling Strategy)
+
+---
+
+## Decision #43/ADR-049: Request Correlation ID Standard (Phase 1)
+
+**Date:** October 31, 2025
+**Phase:** 1 (API Integration)
+**Status:** 🔵 Planned
+
+### Problem
+Debugging distributed systems (API calls, database queries, async tasks) requires tracing requests across components. Need to correlate log entries for a single logical operation.
+
+### Decision
+**Implement B3 correlation ID propagation (OpenTelemetry/Zipkin standard) using UUID4 per request.**
+
+Standard: https://github.com/openzipkin/b3-propagation
+
+Implementation:
+```python
+import uuid
+import structlog
+
+logger = structlog.get_logger()
+
+class KalshiClient:
+    def get_markets(self, request_id: str = None) -> List[Dict]:
+        """Fetch markets with correlation ID for tracing."""
+        if request_id is None:
+            request_id = str(uuid.uuid4())
+
+        # Log request start with correlation ID
+        logger.info(
+            "api_request_start",
+            request_id=request_id,
+            method="GET",
+            path="/markets",
+            api="Kalshi"
+        )
+
+        try:
+            # Propagate via X-Request-ID header (B3 single-header format)
+            headers = {
+                "X-Request-ID": request_id,
+                "Authorization": f"Bearer {self.api_key}"
+            }
+
+            response = requests.get(
+                f"{self.base_url}/markets",
+                headers=headers
+            )
+
+            logger.info(
+                "api_request_success",
+                request_id=request_id,
+                status_code=response.status_code,
+                response_time_ms=response.elapsed.total_seconds() * 1000
+            )
+
+            return response.json()['markets']
+
+        except Exception as e:
+            logger.error(
+                "api_request_failed",
+                request_id=request_id,
+                error=str(e),
+                error_type=type(e).__name__
+            )
+            raise
+
+# Database operations also log with request_id
+def create_market(market_data: Dict, request_id: str):
+    logger.info("db_insert_start", request_id=request_id, table="markets")
+    # ... insert logic ...
+    logger.info("db_insert_success", request_id=request_id, table="markets")
+```
+
+### Rationale
+1. **Industry Standard**: B3 spec used by Zipkin, Jaeger, OpenTelemetry
+2. **Distributed Tracing**: Correlate API → Database → async task operations
+3. **Debugging**: Filter logs by request_id to see entire request lifecycle
+4. **Performance Analysis**: Track request latency across components
+5. **Future-Proof**: Compatible with OpenTelemetry when we add full tracing
+6. **UUID4 Uniqueness**: Collision probability negligible (2^122 possible IDs)
+
+### Alternatives Considered
+- **No correlation IDs**: Impossible to trace requests across components
+- **Custom ID format**: Not compatible with industry tools
+- **Thread-local storage**: Doesn't work with async/await
+- **Full OpenTelemetry now**: Over-engineering for Phase 1, add in Phase 3+
+
+### Implementation
+- **Phase 1** (API Integration): Add to all API client methods
+- Generate UUID4 at request entry point (CLI command, scheduled task)
+- Propagate via X-Request-ID header to external APIs
+- Log with every operation (API call, DB query, business logic)
+- Add request_id parameter to all public methods
+- Update logger configuration to always include request_id field
+- **Phase 3+**: Migrate to full OpenTelemetry with trace/span IDs
+
+**Reference:** `api-integration/API_INTEGRATION_GUIDE_V2.0.md`, REQ-OBSERV-001, ADR-010 (Structured Logging)
+
+---
+
+## Decision #44/ADR-050: HTTP Connection Pooling Configuration (Phase 1)
+
+**Date:** October 31, 2025
+**Phase:** 1 (API Integration)
+**Status:** 🔵 Planned
+
+### Problem
+Creating new HTTP connections for every API request is slow (TLS handshake overhead). Default requests library behavior doesn't optimize connection reuse.
+
+### Decision
+**Configure explicit HTTPAdapter with connection pooling for all HTTP clients.**
+
+Implementation:
+```python
+import requests
+from requests.adapters import HTTPAdapter
+
+class KalshiClient:
+    def __init__(self):
+        self.base_url = "https://api.kalshi.com"
+
+        # Create session with connection pooling
+        self.session = requests.Session()
+
+        # Configure HTTPAdapter for connection pooling
+        adapter = HTTPAdapter(
+            pool_connections=10,    # Number of connection pools (one per host)
+            pool_maxsize=20,        # Max connections per pool
+            max_retries=0,          # We handle retries in circuit breaker
+            pool_block=False        # Don't block when pool is full, create new connection
+        )
+
+        # Mount adapter for both http and https
+        self.session.mount('https://', adapter)
+        self.session.mount('http://', adapter)
+
+        # Set common headers
+        self.session.headers.update({
+            'User-Agent': 'Precog/1.0',
+            'Accept': 'application/json'
+        })
+
+    def _make_request(self, method: str, path: str, **kwargs):
+        """Make request using pooled session."""
+        url = f"{self.base_url}{path}"
+        response = self.session.request(method, url, **kwargs)
+        return response
+
+# Connection reuse:
+# First request: ~200ms (TLS handshake + request)
+# Subsequent requests: ~50ms (reuse existing connection)
+```
+
+### Rationale
+1. **Performance**: 4x faster than creating new connections
+2. **TLS Optimization**: Reuses TLS sessions, saves handshake overhead
+3. **Resource Efficiency**: Fewer open sockets, lower memory usage
+4. **Explicit Configuration**: Default requests.get() doesn't pool optimally
+5. **Scalability**: Supports concurrent requests without connection exhaustion
+6. **Industry Standard**: HTTPAdapter is recommended by requests documentation
+
+### Alternatives Considered
+- **No pooling (requests.get)**: 4x slower, more connections, worse performance
+- **httpx with connection pooling**: More features but heavier dependency, requests is sufficient for Phase 1
+- **aiohttp**: Overkill for sync API client, consider for Phase 3 async
+
+### Implementation
+- **Phase 1** (API Integration): Configure in KalshiClient.__init__
+- Use `pool_connections=10` (one pool per unique host)
+- Use `pool_maxsize=20` (max 20 concurrent requests per host)
+- Set `max_retries=0` (circuit breaker handles retries)
+- Document connection pool configuration in API_INTEGRATION_GUIDE
+- Monitor connection pool metrics (pool exhaustion warnings)
+
+**Reference:** `api-integration/API_INTEGRATION_GUIDE_V2.0.md`, REQ-API-007, ADR-100 (Kalshi API Client Architecture)
+
+---
+
+## Decision #45/ADR-051: Sensitive Data Masking in Logs (Phase 1)
+
+**Date:** October 31, 2025
+**Phase:** 1 (API Integration)
+**Status:** 🔵 Planned
+
+### Problem
+Logs may accidentally contain sensitive data (API keys, tokens, passwords, private keys) which creates security and compliance risks (GDPR, PCI-DSS). Need automatic scrubbing before log output.
+
+### Decision
+**Implement structlog processor to automatically mask sensitive fields in all log output.**
+
+Implementation:
+```python
+import structlog
+import re
+
+def mask_sensitive_data(logger, method_name, event_dict):
+    """
+    Structlog processor to mask sensitive data before output.
+
+    Masks: api_key, token, password, private_key, secret, authorization
+    """
+    SENSITIVE_KEYS = {
+        'api_key', 'token', 'password', 'private_key', 'secret',
+        'api_secret', 'access_token', 'refresh_token', 'bearer_token',
+        'authorization', 'auth', 'credentials'
+    }
+
+    # Mask dictionary values
+    for key, value in event_dict.items():
+        if key.lower() in SENSITIVE_KEYS and value:
+            # Keep first 4 and last 4 characters for debugging
+            if len(str(value)) > 8:
+                masked = f"{str(value)[:4]}...{str(value)[-4:]}"
+            else:
+                masked = "***REDACTED***"
+            event_dict[key] = masked
+
+    # Mask sensitive patterns in string values (e.g., Bearer tokens in headers)
+    SENSITIVE_PATTERNS = [
+        (r'Bearer\s+[A-Za-z0-9_\-\.]+', 'Bearer ***REDACTED***'),
+        (r'api[_-]?key[=:]\s*[A-Za-z0-9_\-\.]+', 'api_key=***REDACTED***'),
+        (r'token[=:]\s*[A-Za-z0-9_\-\.]+', 'token=***REDACTED***'),
+    ]
+
+    for key, value in event_dict.items():
+        if isinstance(value, str):
+            for pattern, replacement in SENSITIVE_PATTERNS:
+                value = re.sub(pattern, replacement, value, flags=re.IGNORECASE)
+            event_dict[key] = value
+
+    return event_dict
+
+# Configure structlog with masking processor
+structlog.configure(
+    processors=[
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        mask_sensitive_data,  # Add masking BEFORE output
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+)
+
+# Usage - automatic masking
+logger = structlog.get_logger()
+logger.info("api_request", api_key="sk_live_abc123xyz789", endpoint="/markets")
+# Output: {"api_key": "sk_l...8789", "endpoint": "/markets"}
+```
+
+### Rationale
+1. **Security**: Prevents accidental credential leakage in logs
+2. **Compliance**: Required for GDPR, PCI-DSS, SOC 2
+3. **Automatic**: No manual scrubbing needed, can't forget to mask
+4. **Debugging-Friendly**: Shows first/last 4 chars for identification
+5. **Defense-in-Depth**: Even if log aggregation is compromised, credentials are masked
+6. **Pattern-Based**: Catches credentials in various formats (headers, query params)
+
+### Alternatives Considered
+- **Manual masking**: Error-prone, developers will forget
+- **No logging of sensitive fields**: Loses debugging capability
+- **Separate credential logs**: Complex, hard to correlate with requests
+- **Encryption in logs**: Adds overhead, doesn't prevent leakage if keys compromised
+
+### Implementation
+- **Phase 1** (API Integration): Add masking processor to structlog configuration
+- Mask: api_key, token, password, private_key, secret, authorization
+- Show first 4 + last 4 characters for debugging (e.g., "sk_li...xyz9")
+- Test masking with unit tests (verify credentials don't appear in output)
+- Document sensitive field naming convention (always use lowercase with underscores)
+- Add to pre-commit hook: scan for log statements with sensitive keys
+
+**Reference:** `utility/SECURITY_REVIEW_CHECKLIST.md`, REQ-SEC-009, ADR-010 (Structured Logging), ADR-009 (Environment Variables for Secrets)
+
+---
+
+## Decision #46/ADR-052: YAML Configuration Validation (Phase 1)
+
+**Date:** October 31, 2025
+**Phase:** 1 (Configuration)
+**Status:** 🔵 Planned
+
+### Problem
+YAML configuration files (7 files in `config/`) may have syntax errors, incorrect types (float instead of string for Decimal fields), or missing required keys. These errors only surface at runtime, causing crashes or incorrect calculations.
+
+### Decision
+**Add comprehensive YAML validation to `validate_docs.py` with 4 validation levels.**
+
+Implementation:
+```python
+# scripts/validate_docs.py - Add new validation check
+
+import yaml
+from pathlib import Path
+from typing import Dict, Any
+
+def validate_yaml_files() -> ValidationResult:
+    """
+    Validate YAML configuration files for syntax and type safety.
+
+    Checks:
+    1. Valid YAML syntax (no parse errors)
+    2. Decimal fields use string format (not float) - CRITICAL for price precision
+    3. Required keys present (per file type)
+    4. Cross-file consistency (e.g., strategy references valid model)
+
+    Returns:
+        ValidationResult with errors and warnings
+    """
+    errors = []
+    warnings = []
+
+    config_dir = PROJECT_ROOT / "config"
+    yaml_files = list(config_dir.glob("*.yaml"))
+
+    if not yaml_files:
+        errors.append("No YAML files found in config/ directory")
+        return ValidationResult(
+            name=f"YAML Configuration Validation (0 files)",
+            passed=False,
+            errors=errors,
+            warnings=warnings
+        )
+
+    # Keywords that indicate Decimal fields (should be strings not floats)
+    DECIMAL_KEYWORDS = [
+        "price", "threshold", "limit", "kelly", "spread",
+        "probability", "fraction", "rate", "fee", "stop",
+        "target", "trailing", "bid", "ask", "edge"
+    ]
+
+    for yaml_file in yaml_files:
+        file_name = yaml_file.name
+
+        # Level 1: Syntax validation
+        try:
+            with open(yaml_file, 'r', encoding='utf-8') as f:
+                data = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            errors.append(
+                f"{file_name}: YAML syntax error - {str(e)}"
+            )
+            continue  # Skip other checks if syntax invalid
+
+        # Level 2: Type validation (Decimal fields must be strings)
+        def check_decimal_types(obj, path=""):
+            """Recursively check for float values in Decimal fields."""
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    current_path = f"{path}.{key}" if path else key
+
+                    # Check if key suggests Decimal value
+                    if any(kw in key.lower() for kw in DECIMAL_KEYWORDS):
+                        if isinstance(value, float):
+                            warnings.append(
+                                f"{file_name}: {current_path} = {value} (float) "
+                                f"→ Should be \"{value}\" (string) for Decimal precision"
+                            )
+                        elif isinstance(value, str):
+                            # Verify string can be parsed as Decimal
+                            try:
+                                from decimal import Decimal, InvalidOperation
+                                Decimal(value)
+                            except (InvalidOperation, ValueError):
+                                errors.append(
+                                    f"{file_name}: {current_path} = \"{value}\" "
+                                    f"is not a valid Decimal"
+                                )
+
+                    # Recurse into nested structures
+                    if isinstance(value, (dict, list)):
+                        check_decimal_types(value, current_path)
+
+            elif isinstance(obj, list):
+                for idx, item in enumerate(obj):
+                    check_decimal_types(item, f"{path}[{idx}]")
+
+        check_decimal_types(data)
+
+        # Level 3: Required keys validation (per file type)
+        REQUIRED_KEYS = {
+            "system.yaml": ["environment", "log_level"],
+            "trading.yaml": ["max_position_size", "max_total_exposure"],
+            "position_management.yaml": ["stop_loss", "profit_target"],
+            # Add more as needed
+        }
+
+        if file_name in REQUIRED_KEYS:
+            for required_key in REQUIRED_KEYS[file_name]:
+                if required_key not in data:
+                    errors.append(
+                        f"{file_name}: Missing required key '{required_key}'"
+                    )
+
+    return ValidationResult(
+        name=f"YAML Configuration Validation ({len(yaml_files)} files)",
+        passed=len(errors) == 0,
+        errors=errors,
+        warnings=warnings
+    )
+
+# Add to main validation checks
+checks = [
+    # ... existing checks ...
+    validate_yaml_files(),  # NEW CHECK #9
+]
+```
+
+### Rationale
+1. **Prevent Runtime Crashes**: Catch syntax errors at validation time, not in production
+2. **Type Safety**: Enforce string format for Decimal fields (prevents float contamination)
+3. **Early Detection**: Pre-commit hook catches issues before commit
+4. **Cross-Platform**: Works on Windows, Linux, Mac (part of validation suite)
+5. **Zero Overhead**: Validation runs in <1 second (part of validate_quick.sh)
+6. **Documentation**: Warnings teach correct Decimal format
+
+### Alternatives Considered
+- **Manual YAML validation**: Developers will forget, no enforcement
+- **Pydantic for YAML**: Overkill for simple validation, adds complexity
+- **Schema validation libraries (Cerberus)**: Additional dependency, simple checks don't need it
+- **No validation**: Runtime crashes, Decimal precision errors
+
+### Implementation
+- **Phase 1** (Configuration): Add to `scripts/validate_docs.py` as Check #9
+- Validate all 7 YAML files in `config/` directory
+- Integrate with `validate_quick.sh` (~3s) and `validate_all.sh` (~60s)
+- Add to pre-commit hooks (runs automatically before commit)
+- Add to GitHub Actions CI/CD (line 102 of `.github/workflows/ci.yml` already runs validate_docs.py)
+- Document Decimal string format in CONFIGURATION_GUIDE
+
+**Reference:** `foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md`, REQ-VALIDATION-004, ADR-002 (Decimal Precision), ADR-040 (Documentation Validation Automation)
+
+---
+
+## Decision #47/ADR-053: Cross-Platform Development Standards (Windows/Linux)
+
+**Date:** November 4, 2025
+**Phase:** 0.6c (Validation Infrastructure)
+**Status:** ✅ Accepted
+
+### Problem
+Development and CI/CD occur on both Windows (local development) and Linux (GitHub Actions). Python scripts that work perfectly on Linux fail on Windows with `UnicodeEncodeError` when printing emoji to the console. This creates a poor developer experience and makes scripts unusable on Windows.
+
+**Real Examples Encountered:**
+- **Phase 0.6c**: `validate_docs.py` and `fix_docs.py` crashed on Windows when printing ✅❌⚠️ emoji
+- **This session**: `ValidationResult.print_result()` crashed printing status emoji from DEVELOPMENT_PHASES content
+
+**Root Cause:** Windows console uses cp1252 encoding (limited character set), Linux/Mac use UTF-8 (full Unicode support).
+
+### Decision
+**Establish cross-platform development standards with mandatory ASCII-safe output for all Python scripts.**
+
+#### Standards
+
+**1. Console Output (Scripts/Tools)**
+```python
+# ✅ CORRECT: ASCII equivalents for cross-platform safety
+print("[OK] All tests passed")
+print("[FAIL] 3 errors found")
+print("[WARN] Consider updating documentation")
+print("[IN PROGRESS] Phase 1 - 50% complete")
+
+# ❌ WRONG: Emoji in console output
+print("✅ All tests passed")  # Crashes on Windows cp1252
+print("❌ 3 errors found")
+print("⚠️ Consider updating documentation")
+```
+
+**2. File I/O (Always Specify Encoding)**
+```python
+# ✅ CORRECT: Explicit UTF-8 encoding
+with open("file.md", "r", encoding="utf-8") as f:
+    content = f.read()
+
+with open("output.json", "w", encoding="utf-8") as f:
+    json.dump(data, f)
+
+# ❌ WRONG: Platform default encoding
+with open("file.md", "r") as f:  # cp1252 on Windows, UTF-8 on Linux
+    content = f.read()
+```
+
+**3. Unicode Sanitization Helper**
+```python
+def sanitize_unicode_for_console(text: str) -> str:
+    """Replace common Unicode emoji with ASCII equivalents for Windows console."""
+    replacements = {
+        "✅": "[COMPLETE]",
+        "🔵": "[PLANNED]",
+        "🟡": "[IN PROGRESS]",
+        "❌": "[FAILED]",
+        "⏸️": "[PAUSED]",
+        "📦": "[ARCHIVED]",
+        "🚧": "[DRAFT]",
+        "⚠️": "[WARNING]",
+        "🎯": "[TARGET]",
+        "🔒": "[LOCKED]",
+    }
+    for unicode_char, ascii_replacement in replacements.items():
+        text = text.replace(unicode_char, ascii_replacement)
+    return text
+
+# Usage in all print statements reading from markdown
+print(sanitize_unicode_for_console(error_message))
+```
+
+**4. Documentation Files vs. Script Output**
+- **Markdown files (.md)**: Emoji OK ✅ (GitHub/VS Code render them correctly)
+- **Script output (print/logging)**: ASCII only (cross-platform compatibility)
+- **Error messages**: Always ASCII-safe (may be read from markdown, then printed)
+
+**5. Testing Requirements**
+- CI/CD must test on both Windows and Linux (already configured in `.github/workflows/ci.yml`)
+- Matrix strategy: `os: [ubuntu-latest, windows-latest]`
+- Validates scripts work identically on both platforms
+
+### Rationale
+1. **Developer Experience**: Scripts work identically on Windows and Linux
+2. **CI/CD Reliability**: No platform-specific failures
+3. **Accessibility**: ASCII output works in all terminals (Windows CMD, PowerShell, WSL, Linux, Mac)
+4. **Simplicity**: Clear rule - "console output = ASCII only"
+5. **Documentation Flexibility**: Markdown files can still use emoji for readability
+6. **Prevention**: Caught early in development, not in production
+
+### Alternatives Considered
+- **Force UTF-8 console encoding on Windows**: Requires environment configuration, brittle
+- **Emoji in scripts, sanitize only when needed**: Inconsistent, developers will forget
+- **No emoji anywhere**: Reduces markdown readability
+- **Platform-specific code paths**: Complex, error-prone
+
+### Implementation
+- **Phase 0.6c** (✅ Complete): Applied to `validate_docs.py`, `fix_docs.py`
+- **This session** (✅ Complete): Applied to `ValidationResult.print_result()` in enhanced validate_docs.py
+- **Future**: All new Python scripts MUST follow these standards
+- **Code Review Checkpoint**: Check for `print()` statements with emoji before merging
+- **Document in CLAUDE.md**: Add as Pattern #5 (Cross-Platform Compatibility)
+
+### Pattern Summary
+| Context | Emoji Allowed? | Encoding |
+|---------|---------------|----------|
+| Markdown files (.md) | ✅ Yes | UTF-8 explicit |
+| Script `print()` output | ❌ No (ASCII only) | cp1252-safe |
+| File I/O | N/A | UTF-8 explicit |
+| Error messages (from markdown → console) | ❌ No (sanitize first) | ASCII equiv |
+| GitHub/VS Code rendering | ✅ Yes | UTF-8 |
+
+**Reference:** `foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md`, `scripts/validate_docs.py` (lines 57-82), ADR-040 (Documentation Validation Automation)
+
+---
+
 ## Distributed Architecture Decisions
 
 Some ADRs are documented in specialized documents for better organization and technical depth. These decisions are fully documented in the referenced files and are listed here for completeness and traceability.
@@ -3130,9 +3849,11 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.8
-**Last Updated:** October 29, 2025
+**Document Version:** 2.10
+**Last Updated:** November 4, 2025
 **Critical Changes:**
+- v2.10: **CROSS-PLATFORM STANDARDS** - Added Decision #47/ADR-053 (Windows/Linux compatibility: ASCII-safe console output, explicit UTF-8 file I/O, Unicode sanitization)
+- v2.9: **PHASE 1 API BEST PRACTICES** - Added Decisions #41-46/ADR-047-052 (API Integration Best Practices: Pydantic validation, circuit breaker, correlation IDs, connection pooling, log masking, YAML validation)
 - v2.8: **PHASE 0.6C + 0.7 PLANNING** - Added Decisions #33-40/ADR-038-045 (Validation & Testing Infrastructure complete, CI/CD & Advanced Testing planned)
 - v2.7: **PHASE 0.6B DOCUMENTATION + PHASE 5 PLANNING** - Updated supplementary doc references, Added Decisions #30-32/ADR-035-037 (Phase 5 Trading Architecture: Event Loop, Exit Evaluation Strategy, Advanced Order Walking)
 - v2.6: **PHASE 1 COMPLETION** - Added Decisions #24-29/ADR-029-034 (Database Schema Completion: Elo data source, Elo storage, settlements architecture, markets surrogate key, external ID traceability, SCD Type 2 completion)
@@ -3146,6 +3867,6 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 **Purpose:** Record and rationale for all major architectural decisions with systematic ADR numbering
 
-**For complete ADR catalog, see:** ADR_INDEX_V1.2.md
+**For complete ADR catalog, see:** ADR_INDEX_V1.4.md
 
-**END OF ARCHITECTURE DECISIONS V2.8**
+**END OF ARCHITECTURE DECISIONS V2.10**

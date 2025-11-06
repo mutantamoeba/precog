@@ -1,9 +1,24 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.2
-**Last Updated:** 2025-10-29
+**Version:** 1.4
+**Last Updated:** 2025-11-04
 **Status:** ✅ Current
+**Changes in v1.4:**
+- **CROSS-PLATFORM STANDARDS:** Added ADR-053 (Cross-Platform Development - Windows/Linux compatibility)
+- Added ADR-053: Cross-Platform Development Standards (ASCII-safe console output, UTF-8 file I/O)
+- Updated ARCHITECTURE_DECISIONS reference from V2.9 to V2.10
+- Total ADRs: 50 → 51 (1 new ADR added)
+**Changes in v1.3:**
+- **PHASE 1 API BEST PRACTICES:** Added ADR-047 through ADR-052 (API Integration Best Practices - Planned)
+- Added ADR-047: API Response Validation with Pydantic
+- Added ADR-048: Circuit Breaker Implementation (use library not custom)
+- Added ADR-049: Request Correlation ID Standard (B3 spec)
+- Added ADR-050: HTTP Connection Pooling Configuration
+- Added ADR-051: Sensitive Data Masking in Logs
+- Added ADR-052: YAML Configuration Validation
+- Updated ARCHITECTURE_DECISIONS reference from V2.8 to V2.9
+- Total ADRs: 44 → 50 (6 new ADRs added)
 **Changes in v1.2:**
 - **PHASE 0.6C COMPLETION:** Added ADR-038 through ADR-041 (Validation & Testing Infrastructure - Complete)
 - **PHASE 0.7 PLANNING:** Added ADR-042 through ADR-045 (CI/CD Integration & Advanced Testing - Planned)
@@ -97,6 +112,7 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR-039 | Test Result Persistence Strategy | 2025-10-29 | ✅ | 0.6c | ARCHITECTURE_DECISIONS_V2.8 |
 | ADR-040 | Documentation Validation Automation | 2025-10-29 | ✅ | 0.6c | ARCHITECTURE_DECISIONS_V2.8 |
 | ADR-041 | Layered Validation Architecture | 2025-10-29 | ✅ | 0.6c | ARCHITECTURE_DECISIONS_V2.8 |
+| ADR-053 | Cross-Platform Development Standards (Windows/Linux) | 2025-11-04 | ✅ | 0.6c | ARCHITECTURE_DECISIONS_V2.10 |
 
 ### Phase 0.7: CI/CD & Advanced Testing (Planned)
 
@@ -105,7 +121,18 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR-042 | CI/CD Integration with GitHub Actions | 2025-10-29 | 🔵 | 0.7 | ARCHITECTURE_DECISIONS_V2.8 |
 | ADR-043 | Security Testing Integration | 2025-10-29 | 🔵 | 0.7 | ARCHITECTURE_DECISIONS_V2.8 |
 | ADR-044 | Mutation Testing Strategy | 2025-10-29 | 🔵 | 0.7 | ARCHITECTURE_DECISIONS_V2.8 |
-| ADR-045 | Property-Based Testing with Hypothesis | 2025-10-29 | 🔵 | 0.7 | ARCHITECTURE_DECISIONS_V2.8 |
+| ADR-045 | Property-Based Testing with Hypothesis | 2025-10-29 | 🔵 | 0.7 | ARCHITECTURE_DECISIONS_V2.10 |
+
+### Phase 1: API Integration Best Practices (Planned)
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-047 | API Response Validation with Pydantic | 2025-10-31 | 🔵 | 1 | ARCHITECTURE_DECISIONS_V2.10 |
+| ADR-048 | Circuit Breaker Implementation (circuitbreaker library) | 2025-10-31 | 🔵 | 1 | ARCHITECTURE_DECISIONS_V2.10 |
+| ADR-049 | Request Correlation ID Standard (B3 Spec) | 2025-10-31 | 🔵 | 1 | ARCHITECTURE_DECISIONS_V2.10 |
+| ADR-050 | HTTP Connection Pooling Configuration | 2025-10-31 | 🔵 | 1 | ARCHITECTURE_DECISIONS_V2.10 |
+| ADR-051 | Sensitive Data Masking in Logs | 2025-10-31 | 🔵 | 1 | ARCHITECTURE_DECISIONS_V2.10 |
+| ADR-052 | YAML Configuration Validation | 2025-10-31 | 🔵 | 1 | ARCHITECTURE_DECISIONS_V2.10 |
 
 ### Phase 5: Trading MVP (Planned)
 
@@ -335,17 +362,17 @@ Implement 4-level priority hierarchy:
 
 ## ADR Statistics
 
-**Total ADRs:** 44
-**Accepted (✅):** 33 (Phase 0-0.6c)
-**Proposed (🔵):** 11+ (Phase 0.7, 1-10)
+**Total ADRs:** 51
+**Accepted (✅):** 34 (Phase 0-0.6c)
+**Proposed (🔵):** 17 (Phase 0.7, 1, 2-10)
 **Rejected (❌):** 0
 **Superseded (⚠️):** 0
 
 **By Phase:**
 - Phase 0: 17 ADRs (100% accepted)
 - Phase 0.5: 12 ADRs (100% accepted)
-- Phase 1: 6 ADRs (100% accepted)
-- Phase 0.6c: 4 ADRs (100% accepted)
+- Phase 1: 12 ADRs (6 accepted for DB completion + 6 planned for API best practices)
+- Phase 0.6c: 5 ADRs (100% accepted - includes cross-platform standards)
 - Phase 0.7: 4 ADRs (0% - planned)
 - Phase 2: 3 ADRs (0% - planned)
 - Phase 3: 2 ADRs (0% - planned)
@@ -363,13 +390,15 @@ Implement 4-level priority hierarchy:
 
 ---
 
-**Document Version:** 1.2
+**Document Version:** 1.4
 **Created:** 2025-10-21
-**Last Updated:** 2025-10-29
+**Last Updated:** 2025-11-04
 **Purpose:** Systematic architecture decision tracking and reference
 **Critical Changes:**
+- v1.4: Added ADR-053 for cross-platform development standards (Windows/Linux compatibility)
+- v1.3: Added 6 new ADRs (ADR-047 through ADR-052) for Phase 1 API Integration best practices
 - v1.2: Added 8 new ADRs (ADR-038 through ADR-045) for Phase 0.6c completion and Phase 0.7 planning
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.8.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.10.md
 
-**END OF ADR INDEX V1.2**
+**END OF ADR INDEX V1.4**

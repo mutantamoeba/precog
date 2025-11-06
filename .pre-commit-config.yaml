@@ -1,0 +1,117 @@
+# Pre-commit Hooks Configuration
+# See https://pre-commit.com for documentation
+# Run: pre-commit install (one-time setup)
+# Run: pre-commit run --all-files (manual full validation)
+
+default_stages: [commit]
+fail_fast: false  # Run all hooks, don't stop at first failure
+
+repos:
+  # Local custom hooks (project-specific validation)
+  - repo: local
+    hooks:
+      # Documentation validation (9 comprehensive checks)
+      - id: validate-docs
+        name: Documentation Validation (9 checks)
+        entry: python scripts/validate_docs.py
+        language: system
+        pass_filenames: false
+        files: \.(md|yaml|yml)$
+        description: "Validates documentation consistency, cross-references, versioning, phase status, and YAML configs"
+
+      # Code quality: Ruff linter
+      - id: ruff-check
+        name: Ruff Linter
+        entry: python -m ruff check .
+        language: system
+        pass_filenames: false
+        types: [python]
+        description: "Runs Ruff linter for code quality"
+
+      # Code quality: Ruff formatter
+      - id: ruff-format
+        name: Ruff Formatter Check
+        entry: python -m ruff format --check .
+        language: system
+        pass_filenames: false
+        types: [python]
+        description: "Checks code formatting with Ruff"
+
+      # Type checking: Mypy
+      - id: mypy
+        name: Mypy Type Checking
+        entry: python -m mypy . --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --exclude '.venv/' --ignore-missing-imports
+        language: system
+        pass_filenames: false
+        types: [python]
+        description: "Type checking with mypy"
+
+      # Security: Hardcoded credentials scan
+      - id: security-credentials
+        name: Security Scan (Hardcoded Credentials)
+        entry: bash -c 'if git grep -E "(password|secret|api_key|token)\s*=\s*['\''"][^'\''\"]{5,}['\''"]" -- "*.py" "*.yaml" "*.yml" "*.sql" ":!tests/" ":!test_*"; then echo "ERROR: Found potential hardcoded credentials!"; exit 1; fi; echo "No hardcoded credentials detected"'
+        language: system
+        pass_filenames: false
+        description: "Scans for hardcoded passwords, API keys, tokens, and secrets"
+
+  # Standard pre-commit hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      # File formatting
+      - id: trailing-whitespace
+        name: Trim Trailing Whitespace
+        description: "Removes trailing whitespace from all files"
+
+      - id: end-of-file-fixer
+        name: Fix End of Files
+        description: "Ensures files end with a newline"
+
+      - id: mixed-line-ending
+        name: Fix Mixed Line Endings
+        args: [--fix=lf]
+        description: "Normalizes line endings to LF"
+
+      # File checks
+      - id: check-added-large-files
+        name: Check Large Files
+        args: [--maxkb=1000]
+        description: "Prevents large files (>1MB) from being committed"
+
+      - id: check-case-conflict
+        name: Check Case Conflicts
+        description: "Checks for files that would conflict in case-insensitive filesystems"
+
+      - id: check-merge-conflict
+        name: Check Merge Conflicts
+        description: "Checks for unresolved merge conflict markers"
+
+      # YAML/JSON validation
+      - id: check-yaml
+        name: Validate YAML Syntax
+        exclude: '\.github/workflows/.*\.yml$'  # GitHub Actions YAML can have special syntax
+        description: "Validates YAML file syntax"
+
+      - id: check-json
+        name: Validate JSON Syntax
+        description: "Validates JSON file syntax"
+
+      # Python-specific
+      - id: check-ast
+        name: Check Python AST
+        description: "Validates Python syntax by parsing AST"
+
+      - id: debug-statements
+        name: Check Debug Statements
+        description: "Detects python debug statements (pdb, ipdb, breakpoint)"
+
+      # Git-specific
+      - id: check-symlinks
+        name: Check Broken Symlinks
+        description: "Checks for broken symbolic links"
+
+# CI/CD integration note:
+# These hooks run automatically on `git commit` after running `pre-commit install`.
+# To skip hooks temporarily (NOT RECOMMENDED): git commit --no-verify
+# To run hooks manually: pre-commit run --all-files
+# To update hook versions: pre-commit autoupdate

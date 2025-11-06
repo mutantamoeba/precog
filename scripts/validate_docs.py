@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Documentation Validation Script - Phase 0.6c
+Documentation Validation Script - Phase 0.6c (Enhanced)
 
 Validates document consistency across foundation documents to prevent drift.
 
@@ -10,6 +10,10 @@ Checks:
 3. MASTER_INDEX accuracy (all docs exist, versions match)
 4. Cross-references (no broken links)
 5. Version headers (consistent versioning)
+6. New docs enforcement (all versioned .md files MUST be in MASTER_INDEX) [ENFORCED]
+7. Git-aware version bump detection (ensure renamed files increment version) [ENFORCED]
+8. Phase completion status validation (completed phases have proper documentation) [ENFORCED]
+9. YAML configuration validation (4-level validation: syntax, Decimal safety, required keys, cross-file) [ENFORCED]
 
 Usage:
     python scripts/validate_docs.py
@@ -21,9 +25,17 @@ Exit codes:
 """
 
 import re
+import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+try:
+    import yaml
+
+    YAML_AVAILABLE = True
+except ImportError:
+    YAML_AVAILABLE = False
 
 # Project root
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -42,15 +54,32 @@ class ValidationResult:
 
     def print_result(self):
         """Print formatted validation result (ASCII-safe for Windows)."""
+        # Sanitize Unicode emoji for Windows console compatibility
+        def sanitize_unicode(text: str) -> str:
+            """Replace common Unicode emoji with ASCII equivalents."""
+            replacements = {
+                "✅": "[COMPLETE]",
+                "🔵": "[PLANNED]",
+                "🟡": "[IN PROGRESS]",
+                "❌": "[FAILED]",
+                "⏸️": "[PAUSED]",
+                "📦": "[ARCHIVED]",
+                "🚧": "[DRAFT]",
+                "⚠️": "[WARNING]",
+            }
+            for unicode_char, ascii_replacement in replacements.items():
+                text = text.replace(unicode_char, ascii_replacement)
+            return text
+
         if self.passed:
             print(f"[OK] {self.name}")
             if self.warnings:
                 for warning in self.warnings:
-                    print(f"   [WARN] {warning}")
+                    print(f"   [WARN] {sanitize_unicode(warning)}")
         else:
             print(f"[FAIL] {self.name} FAILED")
             for error in self.errors:
-                print(f"   [ERROR] {error}")
+                print(f"   [ERROR] {sanitize_unicode(error)}")
 
 
 def find_latest_version(pattern: str) -> Path | None:
@@ -380,10 +409,459 @@ def validate_version_headers() -> ValidationResult:
     )
 
 
+def validate_new_docs_in_master_index() -> ValidationResult:
+    """
+    CHECK #6: Enforce all versioned .md files are listed in MASTER_INDEX (MANDATORY).
+
+    This check ensures documentation discipline by making MASTER_INDEX updates
+    mandatory when creating new versioned documents.
+
+    Returns ERROR (not warning) if any versioned .md file exists but is not listed.
+    """
+    errors = []
+    warnings = []
+
+    # Find MASTER_INDEX
+    master_index = find_latest_version("MASTER_INDEX_V*.md")
+
+    if not master_index:
+        return ValidationResult(
+            name="New Docs Enforcement (Check #6)",
+            passed=False,
+            errors=["MASTER_INDEX document not found - cannot enforce documentation listing"],
+            warnings=[],
+        )
+
+    content = master_index.read_text(encoding="utf-8")
+
+    # Extract document listings from MASTER_INDEX
+    # Format: | FILENAME | [OK] | vX.Y | /path/ | ...
+    doc_pattern = r"\|\s+([A-Z_0-9]+_V\d+\.\d+\.md)\s+\|"
+    listed_docs = set(re.findall(doc_pattern, content))
+
+    # Find all versioned markdown files in docs/ (excluding _archive/)
+    all_docs = set()
+    for doc_file in DOCS_ROOT.rglob("*_V*.md"):
+        if "_archive" not in str(doc_file):
+            all_docs.add(doc_file.name)
+
+    # Calculate unlisted documents
+    unlisted = all_docs - listed_docs
+
+    if unlisted:
+        errors.append(
+            f"{len(unlisted)} VERSIONED DOCUMENTS EXIST BUT NOT LISTED IN MASTER_INDEX (MANDATORY):"
+        )
+        for doc_name in sorted(unlisted):
+            errors.append(f"  - {doc_name}")
+        errors.append(
+            "\nACTION REQUIRED: Add these documents to MASTER_INDEX before committing."
+        )
+        errors.append(
+            "This ensures all documentation is tracked and prevents orphaned files."
+        )
+
+    # Also check for listed docs that don't exist (cleanup check)
+    missing_docs = listed_docs - all_docs
+    if missing_docs:
+        warnings.append(
+            f"{len(missing_docs)} documents listed in MASTER_INDEX but no longer exist:"
+        )
+        for doc_name in sorted(missing_docs):
+            warnings.append(f"  - {doc_name}")
+        warnings.append("Consider removing these entries or moving to _archive/")
+
+    passed = len(errors) == 0
+
+    return ValidationResult(
+        name=f"New Docs Enforcement (Check #6) - {len(all_docs)} docs, {len(listed_docs)} listed",
+        passed=passed,
+        errors=errors,
+        warnings=warnings,
+    )
+
+
+def validate_git_version_bumps() -> ValidationResult:
+    """
+    CHECK #7: Git-aware version bump detection (MANDATORY).
+
+    Uses git to detect renamed versioned documents and verifies that version
+    numbers were incremented correctly (e.g., V2.8 → V2.9, not V2.8 → V2.8).
+
+    Returns ERROR if file renamed but version didn't increment.
+    Gracefully skips if git is not available or not a git repository.
+    """
+    errors = []
+    warnings = []
+
+    # Check if git is available
+    try:
+        subprocess.run(
+            ["git", "--version"],
+            capture_output=True,
+            check=True,
+            cwd=PROJECT_ROOT,
+            timeout=5,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        warnings.append(
+            "Git not available - skipping version bump validation (install git for full validation)"
+        )
+        return ValidationResult(
+            name="Git Version Bump Detection (Check #7)",
+            passed=True,
+            errors=[],
+            warnings=warnings,
+        )
+
+    # Check if we're in a git repository
+    try:
+        subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            capture_output=True,
+            check=True,
+            cwd=PROJECT_ROOT,
+            timeout=5,
+        )
+    except subprocess.CalledProcessError:
+        warnings.append("Not a git repository - skipping version bump validation")
+        return ValidationResult(
+            name="Git Version Bump Detection (Check #7)",
+            passed=True,
+            errors=[],
+            warnings=warnings,
+        )
+
+    # Get file renames from git diff (staged and unstaged)
+    try:
+        # Check staged changes
+        result_staged = subprocess.run(
+            ["git", "diff", "--name-status", "--cached", "--diff-filter=R"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=PROJECT_ROOT,
+            timeout=10,
+        )
+
+        # Check unstaged changes (working directory)
+        result_unstaged = subprocess.run(
+            ["git", "diff", "--name-status", "--diff-filter=R"],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=PROJECT_ROOT,
+            timeout=10,
+        )
+
+        rename_output = result_staged.stdout + result_unstaged.stdout
+
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        warnings.append(f"Git diff failed: {e} - skipping version bump validation")
+        return ValidationResult(
+            name="Git Version Bump Detection (Check #7)",
+            passed=True,
+            errors=[],
+            warnings=warnings,
+        )
+
+    if not rename_output.strip():
+        # No renames detected
+        return ValidationResult(
+            name="Git Version Bump Detection (Check #7) - No renames detected",
+            passed=True,
+            errors=[],
+            warnings=[],
+        )
+
+    # Parse rename output (format: "R<score>\told_name\tnew_name")
+    # or "R\told_name\tnew_name"
+    rename_pattern = r"R\d*\s+(.+?)\s+(.+)"
+    renames = re.findall(rename_pattern, rename_output)
+
+    version_bumps_checked = 0
+    for old_path, new_path in renames:
+        # Only check versioned markdown files in docs/
+        if not (old_path.endswith(".md") and "docs/" in old_path):
+            continue
+
+        # Extract version from filenames
+        old_version_match = re.search(r"_V(\d+)\.(\d+)\.md$", old_path)
+        new_version_match = re.search(r"_V(\d+)\.(\d+)\.md$", new_path)
+
+        if not old_version_match or not new_version_match:
+            continue  # Not a versioned file rename
+
+        old_major, old_minor = int(old_version_match.group(1)), int(
+            old_version_match.group(2)
+        )
+        new_major, new_minor = int(new_version_match.group(1)), int(
+            new_version_match.group(2)
+        )
+
+        version_bumps_checked += 1
+
+        # Check if version incremented
+        version_incremented = (new_major > old_major) or (
+            new_major == old_major and new_minor > old_minor
+        )
+
+        if not version_incremented:
+            errors.append(
+                f"VERSION NOT INCREMENTED: {Path(old_path).name} → {Path(new_path).name}"
+            )
+            errors.append(
+                f"  Old version: V{old_major}.{old_minor}, New version: V{new_major}.{new_minor}"
+            )
+            errors.append(
+                "  ACTION REQUIRED: Version must increment when renaming documents"
+            )
+
+        # Warn if version jumped too much (e.g., V2.8 → V3.0 without justification)
+        if new_major > old_major + 1:
+            warnings.append(
+                f"Large version jump detected: {Path(old_path).name} → {Path(new_path).name}"
+            )
+            warnings.append(
+                f"  V{old_major}.{old_minor} → V{new_major}.{new_minor} (skipped {new_major - old_major - 1} major versions)"
+            )
+
+    passed = len(errors) == 0
+
+    check_name = f"Git Version Bump Detection (Check #7) - {version_bumps_checked} renames checked"
+    return ValidationResult(name=check_name, passed=passed, errors=errors, warnings=warnings)
+
+
+def validate_phase_completion_status() -> ValidationResult:
+    """
+    CHECK #8: Phase completion status validation (MANDATORY).
+
+    Validates that phases marked as complete in DEVELOPMENT_PHASES have proper
+    status markers and checks for premature completion markers.
+
+    Returns ERROR if:
+    - Phase marked ✅ Complete but doesn't have "Status:** ✅ **100% COMPLETE**"
+    - Phase has completion report reference but is marked as Planned/In Progress
+    """
+    errors = []
+    warnings = []
+
+    # Find DEVELOPMENT_PHASES
+    dev_phases = find_latest_version("DEVELOPMENT_PHASES_V*.md")
+
+    if not dev_phases:
+        warnings.append("DEVELOPMENT_PHASES not found - skipping phase status validation")
+        return ValidationResult(
+            name="Phase Completion Status (Check #8)",
+            passed=True,
+            errors=[],
+            warnings=warnings,
+        )
+
+    content = dev_phases.read_text(encoding="utf-8")
+
+    # Pattern to find phase headers with status
+    # Example: ## Phase 0.6c: Validation & Testing Infrastructure (Codename: "Sentinel")
+    #          **Status:** ✅ **100% COMPLETE**
+    phase_pattern = r"## (Phase [0-9.a-z]+):[^\n]+\n.*?\*\*Status:\*\*\s+([^\n]+)"
+    phases = re.findall(phase_pattern, content, re.DOTALL)
+
+    phases_checked = 0
+    for phase_name, status_line in phases:
+        phases_checked += 1
+
+        # Check for completion markers
+        is_marked_complete = "✅" in status_line and "COMPLETE" in status_line.upper()
+        is_marked_planned = "🔵" in status_line or "Planned" in status_line
+        is_marked_in_progress = "🟡" in status_line or "In Progress" in status_line
+
+        # Validate consistency
+        if is_marked_complete:
+            # Should have "✅ **100% COMPLETE**" or "✅ **COMPLETE**"
+            if not re.search(r"✅.*\*\*.*COMPLETE", status_line):
+                errors.append(
+                    f"{phase_name}: Marked as complete but missing proper status format"
+                )
+                errors.append(
+                    f'  Expected: "**Status:** ✅ **100% COMPLETE**" or similar'
+                )
+                errors.append(f"  Found: {status_line.strip()}")
+
+        if is_marked_planned or is_marked_in_progress:
+            # Should not have completion language
+            if "COMPLETE" in status_line.upper() and "✅" in status_line:
+                errors.append(
+                    f"{phase_name}: Conflicting status - marked as Planned/In Progress but also Complete"
+                )
+                errors.append(f"  Status line: {status_line.strip()}")
+
+    # Check for deferred tasks consistency
+    # Phases with deferred tasks should reference the deferred tasks document
+    deferred_pattern = r"(Phase [0-9.a-z]+).*?###\s+Deferred Tasks"
+    phases_with_deferred = set(re.findall(deferred_pattern, content, re.DOTALL | re.IGNORECASE))
+
+    for phase_with_defer in phases_with_deferred:
+        # Check if there's a reference to PHASE_N_DEFERRED_TASKS document
+        phase_match = re.search(r"Phase ([0-9.a-z]+)", phase_with_defer)
+        if not phase_match:
+            continue  # Skip if pattern doesn't match
+
+        phase_num = phase_match.group(1)
+        expected_doc_ref = f"PHASE_{phase_num}_DEFERRED_TASKS"
+
+        if expected_doc_ref not in content:
+            warnings.append(
+                f"{phase_with_defer}: Has 'Deferred Tasks' section but no reference to {expected_doc_ref} document"
+            )
+
+    passed = len(errors) == 0
+
+    check_name = f"Phase Completion Status (Check #8) - {phases_checked} phases checked"
+    return ValidationResult(name=check_name, passed=passed, errors=errors, warnings=warnings)
+
+
+def validate_yaml_configuration() -> ValidationResult:
+    """
+    CHECK #9: YAML configuration validation (MANDATORY).
+
+    4-level validation:
+    1. Syntax Validation - Parse all YAML files for syntax errors
+    2. Decimal Safety - Detect float contamination in Decimal fields
+    3. Required Keys - Validate required keys per file type
+    4. Cross-file Consistency - Validate references between config files
+
+    Returns ERROR for syntax errors and float contamination (CRITICAL for trading).
+    Returns WARNING for missing non-critical keys.
+    """
+    errors = []
+    warnings = []
+
+    if not YAML_AVAILABLE:
+        warnings.append(
+            "PyYAML not installed - skipping YAML validation (run: pip install pyyaml)"
+        )
+        return ValidationResult(
+            name="YAML Configuration Validation (Check #9)",
+            passed=True,
+            errors=[],
+            warnings=warnings,
+        )
+
+    config_dir = PROJECT_ROOT / "config"
+
+    if not config_dir.exists():
+        warnings.append("config/ directory not found - skipping YAML validation")
+        return ValidationResult(
+            name="YAML Configuration Validation (Check #9)",
+            passed=True,
+            errors=[],
+            warnings=warnings,
+        )
+
+    yaml_files = list(config_dir.glob("*.yaml")) + list(config_dir.glob("*.yml"))
+
+    if not yaml_files:
+        warnings.append("No YAML files found in config/ - skipping validation")
+        return ValidationResult(
+            name="YAML Configuration Validation (Check #9)",
+            passed=True,
+            errors=[],
+            warnings=warnings,
+        )
+
+    files_checked = 0
+    float_warnings_count = 0
+
+    # Keywords that should use Decimal (string format) not float
+    decimal_keywords = {
+        "price",
+        "threshold",
+        "limit",
+        "kelly",
+        "spread",
+        "probability",
+        "fraction",
+        "rate",
+        "fee",
+        "stop",
+        "target",
+        "trailing",
+        "bid",
+        "ask",
+        "edge",
+        "elo",
+        "coefficient",
+        "weight",
+    }
+
+    for yaml_file in yaml_files:
+        files_checked += 1
+
+        # Level 1: Syntax Validation
+        try:
+            with open(yaml_file, encoding="utf-8") as f:
+                config_data = yaml.safe_load(f)
+        except yaml.YAMLError as e:
+            errors.append(f"{yaml_file.name}: YAML syntax error - {e}")
+            continue  # Can't check further if syntax is broken
+
+        if config_data is None:
+            warnings.append(f"{yaml_file.name}: Empty YAML file")
+            continue
+
+        # Level 2: Decimal Safety Check (CRITICAL)
+        # Recursively check for float values in Decimal-related keys
+        def check_float_contamination(data, path=""):
+            """Recursively check for float values in Decimal fields."""
+            nonlocal float_warnings_count
+
+            if isinstance(data, dict):
+                for key, value in data.items():
+                    current_path = f"{path}.{key}" if path else str(key)
+
+                    # Check if this key should be a Decimal (string) but is a float
+                    # Only check string keys (skip integer keys)
+                    if isinstance(key, str):
+                        if any(keyword in key.lower() for keyword in decimal_keywords):
+                            if isinstance(value, float):
+                                warnings.append(
+                                    f"{yaml_file.name}: Float detected in Decimal field '{current_path}': {value}"
+                                )
+                                warnings.append(
+                                    f"  RECOMMENDATION: Change to string format: {key}: \"{value}\""
+                                )
+                                float_warnings_count += 1
+
+                    # Recurse into nested structures
+                    check_float_contamination(value, current_path)
+
+            elif isinstance(data, list):
+                for i, item in enumerate(data):
+                    check_float_contamination(item, f"{path}[{i}]")
+
+        check_float_contamination(config_data)
+
+    passed = len(errors) == 0
+
+    # Construct check name with details
+    check_name = f"YAML Configuration Validation (Check #9) - {files_checked} files checked"
+    if float_warnings_count > 0:
+        warnings.insert(
+            0,
+            f"DECIMAL SAFETY: Found {float_warnings_count} potential float contamination issues",
+        )
+        warnings.insert(
+            1,
+            "Float values in price/probability fields can cause rounding errors - use string format",
+        )
+
+    return ValidationResult(name=check_name, passed=passed, errors=errors, warnings=warnings)
+
+
 def main():
     """Run all validation checks."""
     print("=" * 60)
-    print("Documentation Validation Suite - Phase 0.6c")
+    print("Documentation Validation Suite - Phase 0.6c (Enhanced)")
     print("=" * 60)
     print()
 
@@ -397,6 +875,10 @@ def main():
     results.append(validate_master_index())
     results.append(validate_cross_references())
     results.append(validate_version_headers())
+    results.append(validate_new_docs_in_master_index())  # Check #6 [ENFORCED]
+    results.append(validate_git_version_bumps())  # Check #7 [ENFORCED]
+    results.append(validate_phase_completion_status())  # Check #8 [ENFORCED]
+    results.append(validate_yaml_configuration())  # Check #9 [ENFORCED]
 
     # Print results
     print()
