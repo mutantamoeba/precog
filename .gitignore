@@ -98,6 +98,9 @@ backups/
 .claude/
 phase_reports/
 
+# Session archives (local development context - already committed archives stay in git history)
+docs/sessions/
+
 # Testing (Phase 0.6c)
 .pytest_cache/
 .coverage

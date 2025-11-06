@@ -1,11 +1,17 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.5
+**Version:** 1.6
 **Created:** 2025-10-28
 **Last Updated:** 2025-11-05
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.6:**
+- Changed session archiving from `docs/sessions/` (committed) to `_sessions/` (local-only, excluded from git)
+- Added `docs/sessions/` to .gitignore to prevent repository bloat from session archives
+- Updated Section 3 "Ending a Session" Step 0 to use local `_sessions/` folder
+- Historical session archives (2025-10-28 through 2025-11-05) remain in git history at `docs/sessions/`
+- Rationale: Session archives are ephemeral documentation; git commit messages + foundation docs provide permanent context
 **Changes in V1.5:**
 - Created `docs/guides/` folder for implementation guides (addresses documentation discoverability issue)
 - Moved 5 implementation guides from supplementary/ and configuration/ to docs/guides/
@@ -261,12 +267,14 @@ git diff --cached --name-only | grep "\.env$"
 **Step 0: Archive Current SESSION_HANDOFF.md**
 
 ```bash
-# Archive current session handoff before overwriting (preserves history)
-cp SESSION_HANDOFF.md "docs/sessions/SESSION_HANDOFF_$(date +%Y-%m-%d).md"
-git add "docs/sessions/SESSION_HANDOFF_$(date +%Y-%m-%d).md"
+# Archive current session handoff before overwriting (local-only, not committed)
+cp SESSION_HANDOFF.md "_sessions/SESSION_HANDOFF_$(date +%Y-%m-%d).md"
+
+# Note: _sessions/ is in .gitignore (local archives, not committed to git)
+# Historical archives (2025-10-28 through 2025-11-05) remain in docs/sessions/ git history
 ```
 
-**Why:** Preserves full session history in `docs/sessions/` directory. Each session handoff is archived with date stamp before being overwritten.
+**Why:** Preserves session context locally during active development. Archives are local-only (excluded from git) to prevent repository bloat. Git commit messages and foundation documents provide permanent context.
 
 **Step 1: Update SESSION_HANDOFF.md**
 
@@ -1986,6 +1994,7 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.6 | 2025-11-05 | Changed session archiving from docs/sessions/ (committed) to _sessions/ (local-only); added docs/sessions/ to .gitignore; updated Section 3 Step 0 workflow; prevents repository bloat while preserving local context |
 | 1.5 | 2025-11-05 | Created docs/guides/ folder and moved 5 implementation guides (CONFIGURATION, VERSIONING, TRAILING_STOP, POSITION_MANAGEMENT, POSTGRESQL_SETUP); updated Section 6 and MASTER_INDEX V2.8→V2.9; aligns docs structure with Section 6 references; addresses discoverability issue |
 | 1.4 | 2025-11-05 | Added session history archiving workflow (Section 3 Step 0); extracted 7 historical SESSION_HANDOFF.md versions from git history to docs/sessions/; preserves full session history with date-stamped archives |
 | 1.3 | 2025-11-04 | Updated all version references: MASTER_REQUIREMENTS V2.8→V2.10, ARCHITECTURE_DECISIONS V2.7→V2.9, MASTER_INDEX V2.6→V2.8; reflects Phase 1 API best practices documentation (ADR-047 through ADR-052, REQ-API-007, REQ-OBSERV-001, REQ-SEC-009, REQ-VALIDATION-004) |
@@ -2031,6 +2040,6 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 
 ---
 
-**END OF CLAUDE.md V1.5**
+**END OF CLAUDE.md V1.6**
 - always use descriptive variable names
 - Always document deferred tasks appropriately in requirements, architural, and project development phases documentation
