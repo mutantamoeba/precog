@@ -31,10 +31,7 @@ Exit Codes:
 - 1: Validation failed (schema drift detected)
 """
 
-import re
 import sys
-from pathlib import Path
-from typing import Dict, List, Set, Tuple
 
 # TODO Phase 0.8: Import database connection utilities
 # from database.connection import get_db_connection
@@ -615,11 +612,10 @@ def main() -> int:
         print("Full validation will be implemented in Phase 0.8.")
         print("See: docs/utility/PHASE_0.7_DEFERRED_TASKS_V1.0.md (DEF-008)")
         return 0
-    else:
-        print("[FAIL] Validation failed")
-        print("")
-        print("NOTE: This is a stub implementation.")
-        return 1
+    print("[FAIL] Validation failed")
+    print("")
+    print("NOTE: This is a stub implementation.")
+    return 1
 
 
 if __name__ == "__main__":
