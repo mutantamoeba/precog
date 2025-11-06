@@ -676,24 +676,22 @@ def validate_phase_completion_status() -> ValidationResult:
         is_marked_in_progress = "🟡" in status_line or "In Progress" in status_line
 
         # Validate consistency
-        if is_marked_complete:
+        if is_marked_complete and not re.search(r"✅.*\*\*.*COMPLETE", status_line):
             # Should have "✅ **100% COMPLETE**" or "✅ **COMPLETE**"
-            if not re.search(r"✅.*\*\*.*COMPLETE", status_line):
-                errors.append(
-                    f"{phase_name}: Marked as complete but missing proper status format"
-                )
-                errors.append(
-                    f'  Expected: "**Status:** ✅ **100% COMPLETE**" or similar'
-                )
-                errors.append(f"  Found: {status_line.strip()}")
+            errors.append(
+                f"{phase_name}: Marked as complete but missing proper status format"
+            )
+            errors.append(
+                '  Expected: "**Status:** ✅ **100% COMPLETE**" or similar'
+            )
+            errors.append(f"  Found: {status_line.strip()}")
 
-        if is_marked_planned or is_marked_in_progress:
+        if (is_marked_planned or is_marked_in_progress) and "COMPLETE" in status_line.upper() and "✅" in status_line:
             # Should not have completion language
-            if "COMPLETE" in status_line.upper() and "✅" in status_line:
-                errors.append(
-                    f"{phase_name}: Conflicting status - marked as Planned/In Progress but also Complete"
-                )
-                errors.append(f"  Status line: {status_line.strip()}")
+            errors.append(
+                f"{phase_name}: Conflicting status - marked as Planned/In Progress but also Complete"
+            )
+            errors.append(f"  Status line: {status_line.strip()}")
 
     # Check for deferred tasks consistency
     # Phases with deferred tasks should reference the deferred tasks document
@@ -811,7 +809,7 @@ def validate_yaml_configuration() -> ValidationResult:
 
         # Level 2: Decimal Safety Check (CRITICAL)
         # Recursively check for float values in Decimal-related keys
-        def check_float_contamination(data, path=""):
+        def check_float_contamination(data, path="", file_name=yaml_file.name):
             """Recursively check for float values in Decimal fields."""
             nonlocal float_warnings_count
 
@@ -821,25 +819,25 @@ def validate_yaml_configuration() -> ValidationResult:
 
                     # Check if this key should be a Decimal (string) but is a float
                     # Only check string keys (skip integer keys)
-                    if isinstance(key, str):
-                        if any(keyword in key.lower() for keyword in decimal_keywords):
-                            if isinstance(value, float):
-                                warnings.append(
-                                    f"{yaml_file.name}: Float detected in Decimal field '{current_path}': {value}"
-                                )
-                                warnings.append(
-                                    f"  RECOMMENDATION: Change to string format: {key}: \"{value}\""
-                                )
-                                float_warnings_count += 1
+                    if (isinstance(key, str) and
+                        any(keyword in key.lower() for keyword in decimal_keywords) and
+                        isinstance(value, float)):
+                        warnings.append(
+                            f"{file_name}: Float detected in Decimal field '{current_path}': {value}"
+                        )
+                        warnings.append(
+                            f'  RECOMMENDATION: Change to string format: {key}: "{value}"'
+                        )
+                        float_warnings_count += 1
 
                     # Recurse into nested structures
-                    check_float_contamination(value, current_path)
+                    check_float_contamination(value, current_path, file_name)
 
             elif isinstance(data, list):
                 for i, item in enumerate(data):
-                    check_float_contamination(item, f"{path}[{i}]")
+                    check_float_contamination(item, f"{path}[{i}]", file_name)
 
-        check_float_contamination(config_data)
+        check_float_contamination(config_data, "", yaml_file.name)
 
     passed = len(errors) == 0
 
