@@ -1,8 +1,43 @@
 """
 Database connection management with connection pooling.
 
-Uses psycopg2 with connection pooling for efficient database access.
-Loads credentials from .env file.
+Connection Pooling Explained:
+-----------------------------
+Imagine a parking lot with 10 spots. Instead of building a new car (connection)
+every time you want to drive (query), you borrow a car from the lot and return
+it when done. This is MUCH faster than creating a new TCP connection to PostgreSQL
+for every query.
+
+Why This Matters:
+- Creating a new connection: ~50-100ms overhead (TCP handshake, auth, session setup)
+- Reusing pooled connection: <1ms overhead (just borrow from pool)
+- For 1000 queries: 50 seconds wasted vs 1 second (50x faster!)
+
+Thread Safety:
+- psycopg2.pool.SimpleConnectionPool is thread-safe
+- Multiple threads can call get_connection() simultaneously
+- Pool ensures no two threads get the same connection object
+- Lock-based implementation prevents race conditions
+
+Performance Metrics:
+- Min connections (minconn=2): Always 2 connections ready (warm pool)
+- Max connections (maxconn=10): Pool grows up to 10 under heavy load
+- Idle behavior: Connections returned to pool immediately after use
+- Connection lifetime: Reused indefinitely (until close_pool() called)
+
+Architecture Pattern:
+This module uses the **Singleton Pattern** for the connection pool.
+Only ONE pool exists globally (_connection_pool), shared across all modules.
+This prevents connection leaks and simplifies resource management.
+
+Security Note:
+- Credentials ALWAYS loaded from environment variables (.env file)
+- NEVER hardcode passwords in this module
+- See: docs/utility/SECURITY_REVIEW_CHECKLIST.md
+
+Reference: docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+Related Requirements: REQ-DB-002 (Connection Pooling)
+Related ADR: ADR-008 (PostgreSQL Connection Strategy)
 """
 
 import os
@@ -132,12 +167,48 @@ def get_cursor(commit: bool = False):
         commit: Whether to commit transaction on success (default: False)
 
     Yields:
-        Database cursor
+        Database cursor (RealDictCursor - returns rows as dictionaries)
 
-    Example:
-        >>> with get_cursor(commit=True) as cur:
-        >>>     cur.execute("INSERT INTO markets (...) VALUES (%s, %s)", (val1, val2))
+    Example (Read-only query):
+        >>> with get_cursor() as cur:
+        >>>     cur.execute("SELECT * FROM markets WHERE ticker = %s", ("NFL-KC-YES",))
+        >>>     market = cur.fetchone()
+        >>>     print(market['yes_price'])  # Dict access!
         # Connection automatically returned to pool
+
+    Example (Write query with commit):
+        >>> with get_cursor(commit=True) as cur:
+        >>>     cur.execute(
+        >>>         "INSERT INTO markets (ticker, yes_price) VALUES (%s, %s)",
+        >>>         ("NFL-KC-YES", Decimal("0.5200"))
+        >>>     )
+        # Transaction committed, connection returned to pool
+
+    Educational Notes:
+        Context Manager Pattern:
+        - Ensures cleanup happens even if exception occurs
+        - No need to manually call cursor.close() or release_connection()
+        - Python's `with` statement guarantees cleanup (like try/finally)
+
+        RealDictCursor:
+        - Returns rows as dictionaries instead of tuples
+        - Access columns by name: row['ticker'] vs row[0]
+        - Much more readable and less error-prone
+
+        Commit Behavior:
+        - commit=False (default): SELECT queries, no changes saved
+        - commit=True: INSERT/UPDATE/DELETE queries, changes saved
+        - On exception: Automatic rollback (changes discarded)
+
+        Thread Safety:
+        - Each call gets a different connection from the pool
+        - Safe to use from multiple threads simultaneously
+        - Connections never shared between threads
+
+    Performance Note:
+        This is slower than reusing a connection across multiple queries
+        (pool overhead ~1ms per call). For bulk operations with 1000+ queries,
+        consider using get_connection() directly and reusing the same connection.
     """
     conn = get_connection()
     cursor = conn.cursor(cursor_factory=extras.RealDictCursor)
