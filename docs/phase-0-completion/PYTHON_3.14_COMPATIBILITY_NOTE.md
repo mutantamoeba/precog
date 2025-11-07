@@ -10,10 +10,9 @@
 
 Python 3.14.0 is very new (just released). Some packages we planned to use don't have Python 3.14 compatible wheels yet:
 
-### Packages Not Compatible with Python 3.14:
-- `python-dateutil==2.9.1` - Version doesn't exist (latest is 2.9.0.post0)
-- `spacy==3.8.7` - Max Python version is 3.13
-- Several others with Python <3.13 requirements
+### Packages Not Compatible with Python 3.14 (Resolved):
+- `python-dateutil==2.9.1` - Version doesn't exist (latest is 2.9.0.post0) ✅ **FIXED**: Updated to 2.9.0.post0
+- `spacy==3.8.7` - Max Python version is 3.13 ✅ **RESOLVED**: Replaced with transformers 4.47.0 (better fit for our use case + Python 3.14 compatible)
 
 ---
 
@@ -34,7 +33,7 @@ Created `requirements-phase1.txt` with only the packages needed for Phase 1 (Cor
 **What's Excluded (not needed for Phase 1 anyway):**
 - ❌ pandas, numpy (Phase 3-4: Data processing)
 - ❌ apscheduler (Phase 2: Scheduling)
-- ❌ spacy (Phase 8: NLP/Sentiment)
+- ❌ transformers, torch (Phase 3-4: NLP/Sentiment - replaced spacy with transformers for better sentiment analysis)
 
 ---
 
@@ -113,8 +112,8 @@ pip install -r requirements.txt
 ## Status
 
 **Phase 1:** ✅ Can proceed with `requirements-phase1.txt`
-**Phase 2-4:** ⚠️ May need to address spacy/pandas/numpy compatibility
-**Phase 8:** ⚠️ Will definitely need spacy Python 3.14 support OR Python 3.13
+**Phase 2-4:** ⚠️ May need to address pandas/numpy compatibility (transformers ✅ compatible)
+**Phase 3-4 (NLP):** ✅ **RESOLVED** - Using transformers instead of spacy (better sentiment analysis + Python 3.14 compatible)
 
 ---
 
@@ -125,8 +124,8 @@ pip install -r requirements.txt
 3. 🔄 Monitor PyPI for Python 3.14 wheels:
    - pandas (currently max 3.13)
    - numpy (currently max 3.13)
-   - spacy (currently max 3.13)
-4. 🔄 Update requirements.txt when packages support Python 3.14
+   - ~~spacy~~ ✅ **RESOLVED** - Replaced with transformers 4.47.0 (Python 3.14 compatible)
+4. 🔄 Update requirements.txt when pandas/numpy support Python 3.14
 5. 🔄 If stuck before packages update, consider Python 3.13 venv
 
 ---

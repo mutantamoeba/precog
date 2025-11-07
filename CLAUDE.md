@@ -1,11 +1,19 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.8
+**Version:** 1.9
 **Created:** 2025-10-28
 **Last Updated:** 2025-11-07
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.9:**
+- **Implemented DEF-003: GitHub Branch Protection Rules** - Configured comprehensive branch protection for `main` branch via GitHub API
+- **Added "Branch Protection & Pull Request Workflow" section** - Documents third layer of defense (pre-commit → pre-push → CI/CD → branch protection)
+- Branch protection enforces: require PRs, require 6 CI status checks to pass, require up-to-date branches, require conversation resolution, no force pushes, no deletions, applies to administrators
+- Pull request workflow documented: create feature branch, commit (pre-commit hooks), push (pre-push hooks), create PR, wait for CI, merge when green
+- PR best practices: small focused PRs, descriptive titles, link to requirements, test locally first, watch CI results
+- Repository changed from private to public to enable branch protection via API
+- Completes three-layer local + remote validation: pre-commit (2-5s, auto-fix) → pre-push (30-60s, tests) → CI/CD (2-5min, coverage) → branch protection (enforced merge gate)
 **Changes in V1.8:**
 - **Implemented DEF-002: Pre-Push Hooks Setup** - Created .git/hooks/pre-push script with 4 validation steps (quick validation, unit tests, full type checking, security scan)
 - **Added "Pre-Push Hooks" section** - Documents second layer of defense, runs automatically on `git push`, ~30-60 second validation, includes tests (first time tests run in local workflow)
@@ -521,6 +529,90 @@ git push --no-verify
 - **Acceptable delay** (you push less frequently than you commit)
 
 **If hooks fail, fix the issues before pushing. Use `--no-verify` only in emergencies (CI will still catch issues).**
+
+---
+
+**Branch Protection & Pull Request Workflow (GitHub):**
+
+The `main` branch is protected and **cannot be pushed to directly**. All changes must go through pull requests (PRs) with CI checks passing.
+
+**Branch Protection Rules (Configured):**
+- ✅ **Require pull requests** - Direct pushes to `main` blocked
+- ✅ **Require CI to pass** - 6 status checks must succeed:
+  - `pre-commit-checks` - Ruff, Mypy, security scan
+  - `security-scan` - Bandit & Safety vulnerability scanning
+  - `documentation-validation` - Doc consistency checks
+  - `test` - Full test suite (Python 3.12 & 3.13, Ubuntu & Windows)
+  - `validate-quick` - Quick validation suite
+  - `ci-summary` - Overall CI status
+- ✅ **Require up-to-date branches** - Must merge latest `main` before merging PR
+- ✅ **Require conversation resolution** - All review comments must be resolved
+- ✅ **No force pushes** - Prevents history rewriting
+- ✅ **No deletions** - Prevents accidental branch deletion
+- ✅ **Applies to administrators** - Rules enforce for everyone
+
+**Pull Request Workflow:**
+
+```bash
+# 1. Create feature branch
+git checkout -b feature/my-feature
+
+# 2. Make changes and commit (pre-commit hooks run)
+git add .
+git commit -m "Implement feature X"
+
+# 3. Push to feature branch (pre-push hooks run)
+git push origin feature/my-feature
+
+# 4. Create PR via GitHub CLI or web UI
+gh pr create --title "Add feature X" --body "Description of changes"
+
+# 5. Wait for CI checks to pass (2-5 minutes)
+#    - All 6 status checks must succeed
+#    - Fix any failures and push updates
+#    - CI re-runs automatically on new commits
+
+# 6. Merge PR (once CI passes)
+gh pr merge --squash  # Squash merge (recommended)
+# OR: Merge via GitHub web UI
+
+# 7. Delete feature branch (cleanup)
+gh pr close --delete-branch
+```
+
+**PR Best Practices:**
+- **Small, focused PRs** - Easier to review, faster to merge
+- **Descriptive titles** - Clearly state what the PR does
+- **Link to issues/requirements** - Reference REQ-XXX, ADR-XXX, or DEF-XXX IDs
+- **Test locally first** - Pre-push hooks catch most issues before CI
+- **Watch CI results** - Fix failures quickly
+
+**If CI fails:**
+```bash
+# View CI logs
+gh pr checks
+
+# Fix issues locally
+# ... make fixes ...
+
+# Commit and push (CI re-runs automatically)
+git commit -am "Fix CI failures"
+git push
+```
+
+**Emergency bypass (LAST RESORT - not recommended):**
+```bash
+# If you absolutely must push to main (CI will still run)
+git push --no-verify origin main
+# WARNING: Branch protection will still block this!
+# Only works if branch protection is temporarily disabled
+```
+
+**Why this workflow matters:**
+- 🛡️ **Third layer of defense** - Pre-commit → Pre-push → CI/CD → Branch protection
+- 🔒 **Enforces code quality** - No way to bypass CI checks
+- 📝 **Code review ready** - PRs provide review context
+- 🚀 **Faster iterations** - Local hooks catch 80-90% of issues before CI
 
 ---
 

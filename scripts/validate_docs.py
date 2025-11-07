@@ -271,23 +271,27 @@ def validate_master_index() -> ValidationResult:
 
     content = master_index.read_text(encoding="utf-8")
 
-    # Extract document listings (format: | **FILENAME** | ✅ | vX.Y | /path/ | ...)
-    # Regex accounts for bold markdown syntax (**...**) around filenames
-    # Also extracts status emoji to skip planned/archived documents
-    # Note: Emojis may have variation selectors (U+FE0F), so we capture the emoji + optional \uFE0F
-    doc_line_pattern = r"\|\s+\*\*([A-Z_0-9]+_V\d+\.\d+\.md)\*\*\s+\|\s+([✅⚠️📝❌🔵🗄]\uFE0F?)"
-    doc_matches = re.findall(doc_line_pattern, content)
+    # Extract document listings (format: | **FILENAME** | [STATUS] | vX.Y | /path/ | ...)
+    # Regex accounts for bold markdown markers (**) around filenames
+    # Capture both filename and status emoji to skip planned documents (🔵)
+    doc_pattern = r"\|\s+\*\*([A-Z_0-9]+_V\d+\.\d+\.md)\*\*\s+\|\s+(✅|🔵|📦|🚧)"
+    all_matches = re.findall(doc_pattern, content)
 
-    # Filter out planned (🔵) and archived (🗄️) documents
-    # Note: Compare just the base emoji character (first char) to handle variation selectors
-    listed_docs = [doc for doc, status in doc_matches if status[0] not in ("🔵", "🗄")]
+    # Only check documents with ✅ status (existing), skip 🔵 (planned), 📦 (archived), 🚧 (draft)
+    listed_docs = [filename for filename, status in all_matches if status == "✅"]
+    planned_docs = [filename for filename, status in all_matches if status == "🔵"]
 
-    if not listed_docs:
+    if not all_matches:
         warnings.append(
             "No versioned documents found in MASTER_INDEX (may be formatted differently)"
         )
 
-    # Check each listed document exists
+    if planned_docs:
+        warnings.append(
+            f"{len(planned_docs)} planned documents (🔵) not yet created - this is expected"
+        )
+
+    # Check each listed document exists (only ✅ status)
     for doc_name in listed_docs:
         # Search in all subdirectories of docs/
         found = False
@@ -703,27 +707,41 @@ def validate_phase_completion_status() -> ValidationResult:
         phases_checked += 1
 
         # Check for completion markers
-        is_marked_complete = "✅" in status_line and "COMPLETE" in status_line.upper()
-        is_marked_planned = "🔵" in status_line or "Planned" in status_line
-        is_marked_in_progress = "🟡" in status_line or "In Progress" in status_line
+        # Match completion status at the BEGINNING of the status line (not in parenthetical notes)
+        # Valid complete formats: "✅ **100% COMPLETE**" or "[COMPLETE] **100% COMPLETE**"
+        # Account for both emoji (✅) and sanitized ASCII ([COMPLETE])
+        is_marked_complete = bool(
+            re.match(r"^(✅|\[COMPLETE\]).*\*\*.*COMPLETE", status_line.strip())
+        )
+
+        # Match planned/in-progress status at the beginning
+        # Account for both emoji (🔵, 🟡) and sanitized ASCII ([PLANNED], [IN PROGRESS])
+        is_marked_planned = bool(re.match(r"^(🔵|\[PLANNED\]|Planned)", status_line.strip()))
+        is_marked_in_progress = bool(
+            re.match(r"^(🟡|\[IN PROGRESS\]|In Progress)", status_line.strip())
+        )
 
         # Validate consistency
-        if is_marked_complete and not re.search(r"✅.*\*\*.*COMPLETE", status_line):
-            # Should have "✅ **100% COMPLETE**" or "✅ **COMPLETE**"
-            errors.append(f"{phase_name}: Marked as complete but missing proper status format")
-            errors.append('  Expected: "**Status:** ✅ **100% COMPLETE**" or similar')
-            errors.append(f"  Found: {status_line.strip()}")
-
-        if (
-            (is_marked_planned or is_marked_in_progress)
-            and "COMPLETE" in status_line.upper()
-            and "✅" in status_line
-        ):
-            # Should not have completion language
-            errors.append(
-                f"{phase_name}: Conflicting status - marked as Planned/In Progress but also Complete"
+        if is_marked_complete:
+            # Properly formatted complete status
+            pass
+        elif is_marked_planned or is_marked_in_progress:
+            # Check if status line has conflicting completion markers AT THE BEGINNING
+            # Ignore references to prerequisite completion (e.g., "Phase 0.7 complete ✅")
+            # Only flag if MAIN status is marked complete (starts with ✅/[COMPLETE] and has COMPLETE)
+            # Account for both emoji and sanitized ASCII in the check
+            main_status_complete = bool(
+                re.match(
+                    r"^(🔵|\[PLANNED\]|🟡|\[IN PROGRESS\]).*(✅|\[COMPLETE\]).*\*\*.*COMPLETE",
+                    status_line.strip(),
+                )
             )
-            errors.append(f"  Status line: {status_line.strip()}")
+            if main_status_complete:
+                # Should not have completion language in main status
+                errors.append(
+                    f"{phase_name}: Conflicting status - marked as Planned/In Progress but also Complete"
+                )
+                errors.append(f"  Status line: {status_line.strip()}")
 
     # Check for deferred tasks consistency
     # Phases with deferred tasks should reference the deferred tasks document
@@ -744,12 +762,7 @@ def validate_phase_completion_status() -> ValidationResult:
                 f"{phase_with_defer}: Has 'Deferred Tasks' section but no reference to {expected_doc_ref} document"
             )
 
-    # Convert errors to warnings (Phase Completion Status is non-critical formatting check)
-    # This check has false positives when phases reference prerequisite completion
-    # (e.g., "Phase 1: Planned (Ready to Start - Phase 0.7 complete ✅)")
-    warnings.extend(errors)
-    errors = []
-    passed = True  # Always pass now that errors are converted to warnings
+    passed = len(errors) == 0
 
     check_name = f"Phase Completion Status (Check #8) - {phases_checked} phases checked"
     return ValidationResult(name=check_name, passed=passed, errors=errors, warnings=warnings)

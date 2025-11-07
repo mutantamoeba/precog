@@ -526,7 +526,6 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 - Git repository initialization
 - IDE configuration (VSCode recommended)
 - Install dependencies from requirements.txt
-- Verify Spacy model: `spacy download en_core_web_sm`
 
 #### 2. Database Implementation (Weeks 1-2)
 - Create all tables with proper indexes (from DATABASE_SCHEMA_SUMMARY_V1.1.md)
@@ -1587,8 +1586,8 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 - Custom odds matrices for entertainment
 
 #### 3. NLP Sentiment Analysis (Weeks 9-12)
-- Spacy 3.7+ sentiment analysis (`utils/text_parser.py`)
-- Twitter/news sentiment for political markets
+- Transformers 4.47+ sentiment analysis (`utils/text_parser.py`)
+- Twitter/news sentiment for political markets using pre-trained models (DistilBERT, RoBERTa)
 - Integrate sentiment into odds models (Phase 8-9 blend)
 
 #### 4. Generalized Infrastructure (Week 11-12)
