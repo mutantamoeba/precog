@@ -8,31 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  lint-and-format:
-    name: Lint and Format Check
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install ruff
-
-      - name: Run Ruff linter
-        run: ruff check .
-
-      - name: Run Ruff formatter check
-        run: ruff format --check .
-
-  type-check:
-    name: Type Checking (Mypy)
+  pre-commit-checks:
+    name: Pre-commit Validation (Ruff, Mypy, Security)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -47,13 +24,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install mypy
+          pip install pre-commit
 
-      - name: Run Mypy
-        run: python -m mypy . --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --exclude '.venv/' --ignore-missing-imports
+      - name: Run pre-commit hooks
+        run: pre-commit run --all-files
 
   security-scan:
-    name: Security Scanning
+    name: Security Scanning (Bandit & Safety)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -75,17 +52,6 @@ jobs:
       - name: Run Safety dependency vulnerability scanner
         run: python -m safety check --json
         continue-on-error: true
-
-      - name: Check for secrets in code
-        run: |
-          # Search for potential hardcoded credentials (exclude test files and placeholders)
-          # Excludes: test files, obvious placeholders (YOUR_, TEST_, EXAMPLE_)
-          if git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.py' '*.yaml' '*.yml' '*.sql' ':(exclude)tests/**' ':(exclude)test_*.py' | grep -v -E '(YOUR_|TEST_|EXAMPLE_|PLACEHOLDER|<[A-Z_]+>)'; then
-            echo "ERROR: Found potential hardcoded credentials!"
-            echo "If this is a false positive (test/example value), use placeholders like YOUR_KEY or TEST_VALUE"
-            exit 1
-          fi
-          echo "No hardcoded credentials detected"
 
   documentation-validation:
     name: Documentation Validation
@@ -181,20 +147,18 @@ jobs:
   ci-summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [lint-and-format, type-check, security-scan, documentation-validation, test, validate-quick]
+    needs: [pre-commit-checks, security-scan, documentation-validation, test, validate-quick]
     if: always()
     steps:
       - name: Check all jobs status
         run: |
-          echo "Lint and Format: ${{ needs.lint-and-format.result }}"
-          echo "Type Check: ${{ needs.type-check.result }}"
+          echo "Pre-commit Checks: ${{ needs.pre-commit-checks.result }}"
           echo "Security Scan: ${{ needs.security-scan.result }}"
           echo "Documentation Validation: ${{ needs.documentation-validation.result }}"
           echo "Tests: ${{ needs.test.result }}"
           echo "Quick Validation: ${{ needs.validate-quick.result }}"
 
-          if [[ "${{ needs.lint-and-format.result }}" == "failure" ]] || \
-             [[ "${{ needs.type-check.result }}" == "failure" ]] || \
+          if [[ "${{ needs.pre-commit-checks.result }}" == "failure" ]] || \
              [[ "${{ needs.security-scan.result }}" == "failure" ]] || \
              [[ "${{ needs.documentation-validation.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
