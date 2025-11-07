@@ -1,11 +1,119 @@
 """
-Structured logging for Precog trading system.
+Structured logging for Precog trading system with JSON output.
 
-Uses structlog for JSON-formatted logs with:
-- Daily log files (logs/precog_YYYY-MM-DD.log)
-- Console output with color
-- Decimal serialization (prevents float conversion)
-- Context binding for request tracking
+Structured Logging Explained:
+-----------------------------
+Instead of plain text logs like:
+  "User john executed trade at 0.52 for NFL-KC-YES"
+
+We output JSON with structured fields:
+  {"event": "trade_entry", "user": "john", "price": "0.5200", "ticker": "NFL-KC-YES", "timestamp": "..."}
+
+Why This Matters for Trading:
+- **Searchability:** Query logs like a database ("find all trade_entry events where price > 0.50")
+- **Alerting:** Trigger alerts on specific field values ("notify if unrealized_pnl < -100")
+- **Analytics:** Aggregate metrics ("count trades per hour", "average execution price")
+- **Debugging:** Correlation across distributed systems (request_id links logs)
+- **Compliance:** Audit trail for regulatory requirements (immutable JSON logs)
+
+Log Levels (from most to least critical):
+-----------------------------------------
+**CRITICAL** - System is unusable, manual intervention required
+  - Examples: Database down, API authentication failed, trading halted
+  - Action: Page on-call engineer immediately
+  - Frequency: Should be RARE (< 1 per month)
+
+**ERROR** - Feature failed but system continues
+  - Examples: Trade execution failed, position update failed, market fetch error
+  - Action: Investigate within hours, may require code fix
+  - Frequency: Acceptable but should trend down (< 10 per day)
+
+**WARNING** - Unexpected but handled situation
+  - Examples: Rate limit hit (retrying), stale data (using cache), API degraded
+  - Action: Monitor trends, may need capacity planning
+  - Frequency: Common during normal operations (10-100 per hour)
+
+**INFO** - Normal operations (business events)
+  - Examples: Trade executed, position opened, edge detected, market fetched
+  - Action: No action needed, business metrics
+  - Frequency: Most common level (100-1000 per hour)
+
+**DEBUG** - Detailed troubleshooting information
+  - Examples: SQL queries, API request/response payloads, calculation steps
+  - Action: Used during development or production debugging
+  - Frequency: Disabled in production (too verbose)
+
+Performance Implications:
+------------------------
+JSON serialization adds overhead compared to plain text:
+- **Plain text:** ~10-20 microseconds per log line
+- **JSON structured:** ~30-50 microseconds per log line
+- **Overhead:** ~2-3x slower but WORTH IT for observability
+
+When to avoid logging:
+- Inside tight loops (< 1ms iteration time)
+- High-frequency operations (> 1000 calls/sec)
+- Hot path code (latency-critical trading decisions)
+
+Example - Avoid logging in hot loops:
+  ```python
+  # ❌ BAD - Logs 1000 times in tight loop
+  for market in markets:  # 1000 markets
+      logger.debug("processing_market", ticker=market.ticker)
+      process_market(market)
+
+  # ✅ GOOD - Log once with batch info
+  logger.info("processing_markets", count=len(markets))
+  for market in markets:
+      process_market(market)
+  logger.info("markets_processed", count=len(markets))
+  ```
+
+Decimal Precision in Logs:
+--------------------------
+Custom decimal_serializer preserves financial precision in JSON:
+- Decimal("0.5200") → "0.5200" (NOT 0.52 or 0.5199999)
+- Critical for price reconstruction from logs
+- Enables exact trade replication for backtesting
+
+Daily Log Files:
+---------------
+Logs automatically rotate daily:
+- Format: logs/precog_2025-11-06.log
+- Retention: Not automated (implement in Phase 2+)
+- Size: Typically 10-50 MB per day (INFO level)
+- Compression: Recommend gzip for archival (90% reduction)
+
+Context Binding (Request Tracking):
+-----------------------------------
+LogContext binds fields to ALL logs within a scope:
+```python
+# Without context:
+logger.info("step1")  # {"event": "step1"}
+logger.info("step2")  # {"event": "step2"}
+
+# With context:
+with LogContext(request_id="abc-123", strategy_id=1):
+    logger.info("step1")  # {"event": "step1", "request_id": "abc-123", "strategy_id": 1}
+    logger.info("step2")  # {"event": "step2", "request_id": "abc-123", "strategy_id": 1}
+```
+
+Use cases:
+- HTTP request tracking (request_id)
+- Trading session tracking (session_id)
+- Strategy execution tracking (strategy_id, model_id)
+
+Observability Stack (Future):
+-----------------------------
+This structured logging enables future integrations:
+- **Elasticsearch:** Full-text search, aggregations, dashboards
+- **Datadog/New Relic:** APM metrics, alerts, anomaly detection
+- **Grafana Loki:** Log aggregation, correlation with metrics
+- **CloudWatch Logs:** AWS-native log management
+
+Reference: docs/guides/CONFIGURATION_GUIDE_V3.1.md (Logging section)
+Related Requirements: REQ-OBSERV-001 (Structured Logging)
+Related ADR: ADR-048 (Logging Strategy)
 """
 
 import logging
