@@ -76,11 +76,12 @@ def mock_load_private_key(mock_private_key):
 
 @pytest.fixture
 def sample_pem_key_content():
-    """Sample PEM-formatted private key for testing file loading."""
-    return b"""-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj
-MzEfYyjiWA4R4/M2bS1+fWIcPm15j9m26hXwzjJErHP2L0FZhW1B/4Zr3L0PUqLp
------END PRIVATE KEY-----"""
+    """Sample PEM-formatted private key for testing file loading.
+
+    This is a test-only RSA private key (2048-bit) generated specifically
+    for unit tests. DO NOT use in production.
+    """
+    return b'-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQCx1C7gSi+eFBpN\naEDK0+S/FV7m4FD5hznvwmqPWc7YLwYVv6lcYw/iQzEL5eboAoswEzbSpwv6sbfY\npSbnIXhLrUq3O2fO2KL6W26xERqVFbNPquyFuJ5tpJS5p6iVSZAIts7tR5aD6n5c\n4ze58riPnJ8E5B7XNgZpgwPWB/ZZGNbX5AN51jFCj7WFBGgjNhOuFgK2fBYfFcwL\nc4jficjz0UHuPE51yiD4TTfn9hkFljlmiM1vhyVgP4ucOmBCvS4JlHTTDWvjfuHY\n8LURUUyruP3vBmLJfGDDcsvotirmIILIEPMBHRjveNI5fEMqTMQU5WblQ7yeyd95\n0WtUo7eHAgMBAAECggEAQZ+04M5fvi1a+3/ikTca7i07xWW4XC08Ay+y1U3mGD9a\nNoJxRIfGH9B99A8WZD40ETy1+YztzcjxuIBR1++xDfRYY0AH8fxeQJenRK60KZpF\nfrvr5vkXdgzLWav2eYkZHy4fNM87S1ko4qxzLyrUUyMQR+TLQM5OFXfk3YI4te3m\nxrys8+rPTVu6YGVk4Op2MW2zCbeJtrbBygaT1elvd1of59E5UdjXvpXux4BET+px\n6x88jo8isS3kGjUrttA3mhmTRh4D951uafFLKYZuiFQ0/Fm8LfuL30/kFOXQu1z/\n/j9OjtwwQgOpidInR1WtJsooROI1zrbaRPJbQ/wzwQKBgQD0TGd0EIjR0+SQ3Oc0\ngPVCwbwOqAWdneOjsaBNvNiq5d0C4CSiBuucgYFmJzKk5nWwrz5qEdAYtFG/R5UK\nSnFcNh9WBl1261JtSoHnvJ53VZKlxweTQHJ4eg3QDDdprSY+oXqXUET14OelnvrO\nzEvgwb8TFNyZn15IgQxKRTBOJwKBgQC6WLnyQlHmn4H7C6Mp2ZPoZDp9VHStYpF9\n9xrXKjcJJreHEN/+oBv31jlZjgzHQ/HNfeWMLHdISIzQkv/nDJE7bg+rREj2l8Vr\nfdlfGY2wkQbXAHlA0ds32Hm0ipQOTRpIRAVwowtFrbQ0eUWVlq0qXewLnOQN7ypK\nZBB1+xSHoQKBgCZhOn+JeXU9jNMVYV1mRSHPvfOvgfJZM8Irzbtox8FRi39AJ4Et\nBSb5UZLy5YnyitrPLUcMtVysN4uNe2S6fUS3XATvyw87uR9ibTYy89Jbp0ZUFmST\n42f6BOGCidIYWcHNLK1I9wyJ4NqsN0r13ZXZ2mLtDBs2ZmGNpJimdghRAoGAH7iC\nzq5jarK0WZu9hp43A1QscLEzu2AQDDVIKGBTRgeFLkS9HIb8u8+Hq6r2meUDAEvy\nC052b6OJ9OdREG+fOVKe8DSLhw6G2KlvmzSqXegSFf9KpLIUcwkyjn0Yfua5Fpwd\noPLgNFhBWL1cDv67M38Rc1idqZGQzWEDPFIlSIECgYEA0rOF9aU5BlelD5wgbHf5\nH+BiRRjaMxAWM4jAQzFYNiGyZWvr/pqSXwyJMyrtxA98F0PetagD0Pi3cvLEjfTq\ncaTFBhxl41xPJ/8VIO2bC3IkgjGRvrT9S5NI1k3YlsJbiggPF/u7QO/Ng/sdnxLu\n6dZWB6OXwLHFJZHXTeJhGxE=\n-----END PRIVATE KEY-----\n'
 
 
 # =============================================================================
@@ -92,7 +93,6 @@ class TestKalshiAuthentication:
 
     @pytest.mark.unit
     @pytest.mark.critical
-    @pytest.mark.skip(reason="Requires valid PEM key - TODO: generate test key with cryptography")
     def test_load_private_key_success(self, tmp_path, sample_pem_key_content):
         """Test loading RSA private key from PEM file."""
         from api_connectors.kalshi_auth import load_private_key
