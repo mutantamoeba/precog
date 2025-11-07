@@ -690,6 +690,97 @@ return cast(List[ProcessedMarketData], markets)
 
 ---
 
+### Pattern 7: Educational Docstrings (ALWAYS)
+
+**WHY:** Complex concepts (RSA-PSS auth, Decimal precision, SCD Type 2) require educational context. Verbose docstrings with examples prevent mistakes and accelerate onboarding.
+
+**ALWAYS Include:**
+1. **Clear description** of what the function does
+2. **Args/Returns documentation** with types
+3. **Educational Note** explaining WHY this pattern matters
+4. **Examples** showing correct AND incorrect usage
+5. **Related references** (ADRs, REQs, docs)
+
+**ALWAYS:**
+```python
+def create_account_balance_record(session, balance: Decimal, platform_id: str) -> int:
+    """
+    Create account balance snapshot in database.
+
+    Args:
+        session: SQLAlchemy session (active transaction)
+        balance: Account balance as Decimal (NEVER float!)
+        platform_id: Platform identifier ("kalshi", "polymarket")
+
+    Returns:
+        int: Record ID (balance_id from database)
+
+    Raises:
+        ValueError: If balance is float (not Decimal)
+        TypeError: If session is not SQLAlchemy session
+
+    Educational Note:
+        Balance stored as DECIMAL(10,4) in PostgreSQL for exact precision.
+        NEVER use float - causes rounding errors with sub-penny prices.
+
+        Why this matters:
+        - Kalshi uses sub-penny pricing (e.g., $0.4975)
+        - Float arithmetic: 0.4975 + 0.0050 = 0.502499999... (WRONG!)
+        - Decimal arithmetic: 0.4975 + 0.0050 = 0.5025 (CORRECT!)
+
+    Example:
+        >>> from decimal import Decimal
+        >>> balance = Decimal("1234.5678")  # ✅ Correct
+        >>> record_id = create_account_balance_record(
+        ...     session=session,
+        ...     balance=balance,
+        ...     platform_id="kalshi"
+        ... )
+        >>> print(record_id)  # 42
+
+        >>> # ❌ WRONG - Float contamination
+        >>> balance = 1234.5678  # float type
+        >>> # Will raise ValueError
+
+    Related:
+        - REQ-SYS-003: Decimal Precision for All Prices
+        - ADR-002: Decimal-Only Financial Calculations
+        - Pattern 1 in CLAUDE.md: Decimal Precision
+    """
+    if not isinstance(balance, Decimal):
+        raise ValueError(f"Balance must be Decimal, got {type(balance)}")
+
+    # Implementation...
+    return record_id
+```
+
+**NEVER:**
+```python
+# ❌ Minimal docstring (insufficient for complex project)
+def create_account_balance_record(session, balance, platform_id):
+    """Create balance record."""
+    # Missing: Why Decimal? What's platform_id? Examples? Related docs?
+    return session.query(...).insert(...)
+```
+
+**Apply to ALL modules:**
+- ✅ API connectors: Already have excellent educational docstrings
+- ⚠️ Database CRUD: Needs enhancement (Phase 1.5 improvement)
+- ⚠️ Config loader: Needs enhancement (Phase 1.5 improvement)
+- ⚠️ CLI commands: Adequate (main.py has good command docstrings)
+- ✅ Utils (logger): Good docstrings
+
+**When to use Educational Notes:**
+- **Complex algorithms**: Token bucket, exponential backoff, SCD Type 2
+- **Security-critical code**: Authentication, credential handling, SQL injection prevention
+- **Precision-critical code**: Decimal arithmetic, price calculations, financial math
+- **Common mistakes**: Float vs Decimal, mutable defaults, SQL injection
+- **Non-obvious behavior**: RSA-PSS signature format, timezone handling, rate limiting
+
+**Reference:** `api_connectors/kalshi_auth.py` (lines 41-90, 92-162) for excellent examples
+
+---
+
 ## 📑 Document Cohesion & Consistency
 
 ⚠️ **CRITICAL SECTION** - Read carefully. Document drift causes bugs, confusion, and wasted time.
