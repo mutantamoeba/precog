@@ -470,7 +470,11 @@ def validate_new_docs_in_master_index() -> ValidationResult:
     # Extract document listings from MASTER_INDEX
     # Format: | **FILENAME** | [OK] | vX.Y | /path/ | ...
     # The document name is wrapped in markdown bold (**) in MASTER_INDEX tables
-    doc_pattern = r"\|\s+\*\*([A-Z_0-9]+_V\d+\.\d+\.md)\*\*\s+\|"
+    # Pattern handles:
+    #  - Mixed-case filenames (e.g., Handoff_Protocol_V1_1.md)
+    #  - Dots in base filename (e.g., PHASE_0.7_DEFERRED_TASKS_V1.0.md)
+    #  - Both dot and underscore version separators (V1.0 and V1_1)
+    doc_pattern = r"\|\s+\*\*([A-Za-z_0-9.]+_V\d+[._]\d+\.md)\*\*\s+\|"
     listed_docs = set(re.findall(doc_pattern, content))
 
     # Find all versioned markdown files in docs/ (excluding _archive/ and ephemeral patterns)
