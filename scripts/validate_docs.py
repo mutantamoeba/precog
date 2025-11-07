@@ -708,15 +708,17 @@ def validate_phase_completion_status() -> ValidationResult:
 
         # Check for completion markers
         # Match completion status at the BEGINNING of the status line (not in parenthetical notes)
-        # Valid complete formats: "✅ **100% COMPLETE**" or "✅ **COMPLETE**"
-        is_marked_complete = bool(re.match(r"^✅.*\*\*.*COMPLETE", status_line.strip()))
+        # Valid complete formats: "✅ **100% COMPLETE**" or "[COMPLETE] **100% COMPLETE**"
+        # Account for both emoji (✅) and sanitized ASCII ([COMPLETE])
+        is_marked_complete = bool(
+            re.match(r"^(✅|\[COMPLETE\]).*\*\*.*COMPLETE", status_line.strip())
+        )
 
         # Match planned/in-progress status at the beginning
-        is_marked_planned = bool(
-            re.match(r"^🔵", status_line.strip()) or re.match(r"^Planned", status_line.strip())
-        )
+        # Account for both emoji (🔵, 🟡) and sanitized ASCII ([PLANNED], [IN PROGRESS])
+        is_marked_planned = bool(re.match(r"^(🔵|\[PLANNED\]|Planned)", status_line.strip()))
         is_marked_in_progress = bool(
-            re.match(r"^🟡", status_line.strip()) or re.match(r"^In Progress", status_line.strip())
+            re.match(r"^(🟡|\[IN PROGRESS\]|In Progress)", status_line.strip())
         )
 
         # Validate consistency
@@ -726,9 +728,13 @@ def validate_phase_completion_status() -> ValidationResult:
         elif is_marked_planned or is_marked_in_progress:
             # Check if status line has conflicting completion markers AT THE BEGINNING
             # Ignore references to prerequisite completion (e.g., "Phase 0.7 complete ✅")
-            # Only flag if MAIN status is marked complete (starts with ✅ and has COMPLETE)
+            # Only flag if MAIN status is marked complete (starts with ✅/[COMPLETE] and has COMPLETE)
+            # Account for both emoji and sanitized ASCII in the check
             main_status_complete = bool(
-                re.match(r"^(🔵|🟡).*✅.*\*\*.*COMPLETE", status_line.strip())
+                re.match(
+                    r"^(🔵|\[PLANNED\]|🟡|\[IN PROGRESS\]).*(✅|\[COMPLETE\]).*\*\*.*COMPLETE",
+                    status_line.strip(),
+                )
             )
             if main_status_complete:
                 # Should not have completion language in main status
