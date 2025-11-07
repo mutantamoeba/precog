@@ -27,15 +27,15 @@ Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
 Related ADR: ADR-047 (RSA-PSS Authentication Pattern)
 """
 
-import time
 import base64
+import time
 from pathlib import Path
-from typing import Optional, cast
+from typing import cast
 
+from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
-from cryptography.hazmat.backends import default_backend
 
 
 def load_private_key(key_path: str) -> RSAPrivateKey:
@@ -78,23 +78,18 @@ def load_private_key(key_path: str) -> RSAPrivateKey:
             private_key = serialization.load_pem_private_key(
                 key_file.read(),
                 password=None,  # No password encryption (simpler, but less secure)
-                backend=default_backend()
+                backend=default_backend(),
             )
     except Exception as e:
         raise ValueError(
             f"Failed to load private key from {key_path}. "
             f"Ensure the file is a valid PEM-formatted private key. Error: {e}"
-        )
+        ) from e
 
-    return cast(RSAPrivateKey, private_key)
+    return cast("RSAPrivateKey", private_key)
 
 
-def generate_signature(
-    private_key: RSAPrivateKey,
-    timestamp: int,
-    method: str,
-    path: str
-) -> str:
+def generate_signature(private_key: RSAPrivateKey, timestamp: int, method: str, path: str) -> str:
     """
     Generate RSA-PSS signature for Kalshi API request.
 
@@ -148,18 +143,16 @@ def generate_signature(
 
     # Step 2: Sign the message with RSA-PSS
     signature_bytes = private_key.sign(
-        message.encode('utf-8'),  # Convert string to bytes
+        message.encode("utf-8"),  # Convert string to bytes
         padding.PSS(
             mgf=padding.MGF1(hashes.SHA256()),  # Mask generation function
-            salt_length=padding.PSS.DIGEST_LENGTH  # 32 bytes for SHA256
+            salt_length=padding.PSS.DIGEST_LENGTH,  # 32 bytes for SHA256
         ),
-        hashes.SHA256()  # Hash algorithm
+        hashes.SHA256(),  # Hash algorithm
     )
 
     # Step 3: Encode as base64 for HTTP transport
-    signature_b64 = base64.b64encode(signature_bytes).decode('utf-8')
-
-    return signature_b64
+    return base64.b64encode(signature_bytes).decode("utf-8")
 
 
 class KalshiAuth:
@@ -174,7 +167,7 @@ class KalshiAuth:
 
     Usage:
         >>> auth = KalshiAuth(
-        ...     api_key="your-key-id",
+        ...     api_key="YOUR_KALSHI_API_KEY",
         ...     private_key_path="./your_key.pem"
         ... )
         >>>
@@ -205,7 +198,7 @@ class KalshiAuth:
 
         Example:
             >>> auth = KalshiAuth(
-            ...     api_key="a952bcbe-ec3b-4b5b-b8f9-11dae589608c",
+            ...     api_key="YOUR_KALSHI_API_KEY",
             ...     private_key_path="./kalshi_demo_key.pem"
             ... )
         """
@@ -214,8 +207,8 @@ class KalshiAuth:
 
         # Token management (Phase 1.5 - not implemented yet)
         # Kalshi tokens expire after 30 minutes
-        self.token: Optional[str] = None
-        self.token_expiry: Optional[int] = None
+        self.token: str | None = None
+        self.token_expiry: int | None = None
 
     def get_headers(self, method: str, path: str) -> dict:
         """
@@ -256,21 +249,16 @@ class KalshiAuth:
 
         # Generate signature
         signature = generate_signature(
-            private_key=self.private_key,
-            timestamp=timestamp,
-            method=method,
-            path=path
+            private_key=self.private_key, timestamp=timestamp, method=method, path=path
         )
 
         # Build headers dictionary
-        headers = {
-            'KALSHI-ACCESS-KEY': self.api_key,
-            'KALSHI-ACCESS-TIMESTAMP': str(timestamp),
-            'KALSHI-ACCESS-SIGNATURE': signature,
-            'Content-Type': 'application/json'
+        return {
+            "KALSHI-ACCESS-KEY": self.api_key,
+            "KALSHI-ACCESS-TIMESTAMP": str(timestamp),
+            "KALSHI-ACCESS-SIGNATURE": signature,
+            "Content-Type": "application/json",
         }
-
-        return headers
 
     def is_token_expired(self) -> bool:
         """
@@ -307,4 +295,3 @@ class KalshiAuth:
         """
         # Token refresh implementation deferred to Phase 1.5
         # For Phase 1, we generate fresh signatures for each request
-        pass

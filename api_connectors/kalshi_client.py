@@ -31,11 +31,11 @@ Related Requirements:
     - REQ-SYS-003: Decimal Precision for Prices
 """
 
+import logging
 import os
 import time
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, cast
-import logging
+from typing import Any, ClassVar, cast
 
 import requests
 from dotenv import load_dotenv
@@ -43,9 +43,9 @@ from dotenv import load_dotenv
 from .kalshi_auth import KalshiAuth
 from .rate_limiter import RateLimiter
 from .types import (
+    ProcessedFillData,
     ProcessedMarketData,
     ProcessedPositionData,
-    ProcessedFillData,
     ProcessedSettlementData,
 )
 
@@ -90,9 +90,9 @@ class KalshiClient:
     """
 
     # API base URLs
-    BASE_URLS = {
+    BASE_URLS: ClassVar[dict[str, str]] = {
         "demo": "https://demo-api.kalshi.co/trade-api/v2",
-        "prod": "https://api.elections.kalshi.com/trade-api/v2"
+        "prod": "https://api.elections.kalshi.com/trade-api/v2",
     }
 
     def __init__(self, environment: str = "demo"):
@@ -110,9 +110,7 @@ class KalshiClient:
             >>> client = KalshiClient(environment="demo")
         """
         if environment not in ["demo", "prod"]:
-            raise ValueError(
-                f"Invalid environment: {environment}. Must be 'demo' or 'prod'"
-            )
+            raise ValueError(f"Invalid environment: {environment}. Must be 'demo' or 'prod'")
 
         self.environment = environment
         self.base_url = self.BASE_URLS[environment]
@@ -125,7 +123,7 @@ class KalshiClient:
         keyfile_path = os.getenv(keyfile_env_var)
 
         if not api_key or not keyfile_path:
-            raise EnvironmentError(
+            raise OSError(
                 f"Missing Kalshi credentials. Please set {key_env_var} and "
                 f"{keyfile_env_var} in .env file.\n"
                 f"See docs/guides/CONFIGURATION_GUIDE_V3.1.md for setup instructions."
@@ -142,17 +140,17 @@ class KalshiClient:
 
         logger.info(
             f"KalshiClient initialized for {environment} environment",
-            extra={"environment": environment, "base_url": self.base_url}
+            extra={"environment": environment, "base_url": self.base_url},
         )
 
     def _make_request(
         self,
         method: str,
         path: str,
-        params: Optional[Dict] = None,
-        json_data: Optional[Dict] = None,
-        max_retries: int = 3
-    ) -> Dict:
+        params: dict | None = None,
+        json_data: dict | None = None,
+        max_retries: int = 3,
+    ) -> dict:
         """
         Make authenticated API request with exponential backoff retry logic.
 
@@ -215,8 +213,8 @@ class KalshiClient:
                             "method": method,
                             "path": path,
                             "params": params,
-                            "has_json_data": json_data is not None
-                        }
+                            "has_json_data": json_data is not None,
+                        },
                     )
                 else:
                     logger.info(
@@ -225,8 +223,8 @@ class KalshiClient:
                             "method": method,
                             "path": path,
                             "attempt": attempt,
-                            "max_retries": max_retries
-                        }
+                            "max_retries": max_retries,
+                        },
                     )
 
                 # Rate limiting: Wait if needed to comply with API limits
@@ -239,7 +237,7 @@ class KalshiClient:
                     params=params,
                     json=json_data,
                     headers=headers,
-                    timeout=30  # 30 second timeout (ADR-050)
+                    timeout=30,  # 30 second timeout (ADR-050)
                 )
 
                 # Raise exception if request failed
@@ -248,39 +246,32 @@ class KalshiClient:
                 # Log success
                 logger.debug(
                     f"API Response: {response.status_code}",
-                    extra={
-                        "status_code": response.status_code,
-                        "path": path,
-                        "attempt": attempt
-                    }
+                    extra={"status_code": response.status_code, "path": path, "attempt": attempt},
                 )
 
-                return cast(Dict[Any, Any], response.json())
+                return cast("dict[Any, Any]", response.json())
 
-            except requests.exceptions.Timeout as e:
+            except requests.exceptions.Timeout:
                 logger.error(
                     f"Request timeout for {path} (attempt {attempt + 1}/{max_retries + 1})",
-                    extra={"path": path, "attempt": attempt}
+                    extra={"path": path, "attempt": attempt},
                 )
                 # Don't retry on timeout - let caller decide
                 raise
 
-            except requests.exceptions.HTTPError as e:
+            except requests.exceptions.HTTPError:
                 status_code = response.status_code
 
                 # Handle rate limit errors (429)
                 if status_code == 429:
-                    retry_after_str = response.headers.get('Retry-After')
-                    retry_after_int: Optional[int] = None
+                    retry_after_str = response.headers.get("Retry-After")
+                    retry_after_int: int | None = None
                     if retry_after_str:
                         retry_after_int = int(retry_after_str)
 
                     logger.warning(
                         f"Rate limit (429) exceeded for {path}",
-                        extra={
-                            "path": path,
-                            "retry_after": retry_after_int
-                        }
+                        extra={"path": path, "retry_after": retry_after_int},
                     )
 
                     self.rate_limiter.handle_rate_limit_error(retry_after=retry_after_int)
@@ -290,7 +281,7 @@ class KalshiClient:
                 # Retry on 5xx errors (server errors)
                 if 500 <= status_code < 600 and attempt < max_retries:
                     # Calculate exponential backoff delay: 1s, 2s, 4s
-                    delay = 2 ** attempt
+                    delay = 2**attempt
 
                     logger.warning(
                         f"Server error {status_code} for {path}, retrying in {delay}s "
@@ -299,8 +290,8 @@ class KalshiClient:
                             "status_code": status_code,
                             "path": path,
                             "attempt": attempt,
-                            "delay_seconds": delay
-                        }
+                            "delay_seconds": delay,
+                        },
                     )
 
                     time.sleep(delay)
@@ -313,22 +304,22 @@ class KalshiClient:
                         "status_code": status_code,
                         "path": path,
                         "response_body": response.text,
-                        "attempt": attempt
-                    }
+                        "attempt": attempt,
+                    },
                 )
                 raise
 
             except requests.exceptions.RequestException as e:
                 logger.error(
                     f"Request failed for {path}: {e}",
-                    extra={"path": path, "error": str(e), "attempt": attempt}
+                    extra={"path": path, "error": str(e), "attempt": attempt},
                 )
                 raise
 
         # Should never reach here, but just in case
         raise requests.exceptions.RetryError(f"Max retries ({max_retries}) exceeded for {path}")
 
-    def _convert_prices_to_decimal(self, data: Dict) -> None:
+    def _convert_prices_to_decimal(self, data: dict) -> None:
         """
         Convert all price fields in dictionary from string to Decimal.
 
@@ -347,9 +338,20 @@ class KalshiClient:
         Related: REQ-SYS-003 (Decimal Precision for Prices)
         """
         price_fields = [
-            'yes_bid', 'yes_ask', 'no_bid', 'no_ask', 'last_price',
-            'user_average_price', 'realized_pnl', 'total_cost', 'fees_paid',
-            'price', 'settlement_value', 'revenue', 'total_fees', 'balance'
+            "yes_bid",
+            "yes_ask",
+            "no_bid",
+            "no_ask",
+            "last_price",
+            "user_average_price",
+            "realized_pnl",
+            "total_cost",
+            "fees_paid",
+            "price",
+            "settlement_value",
+            "revenue",
+            "total_fees",
+            "balance",
         ]
 
         for field in price_fields:
@@ -361,16 +363,16 @@ class KalshiClient:
                 except (ValueError, TypeError) as e:
                     logger.warning(
                         f"Failed to convert {field} to Decimal: {data[field]}",
-                        extra={"field": field, "value": data[field], "error": str(e)}
+                        extra={"field": field, "value": data[field], "error": str(e)},
                     )
 
     def get_markets(
         self,
-        series_ticker: Optional[str] = None,
-        event_ticker: Optional[str] = None,
+        series_ticker: str | None = None,
+        event_ticker: str | None = None,
         limit: int = 100,
-        cursor: Optional[str] = None
-    ) -> List[ProcessedMarketData]:
+        cursor: str | None = None,
+    ) -> list[ProcessedMarketData]:
         """
         Get list of markets with price data.
 
@@ -404,7 +406,7 @@ class KalshiClient:
         Reference: REQ-API-001 (Kalshi API Integration)
         Related: ADR-048 (Decimal-First Response Parsing)
         """
-        params: Dict[str, Any] = {"limit": limit}
+        params: dict[str, Any] = {"limit": limit}
 
         if series_ticker:
             params["series_ticker"] = series_ticker
@@ -426,11 +428,11 @@ class KalshiClient:
             extra={
                 "count": len(markets),
                 "series_ticker": series_ticker,
-                "has_more": "cursor" in response
-            }
+                "has_more": "cursor" in response,
+            },
         )
 
-        return cast(List[ProcessedMarketData], markets)
+        return cast("list[ProcessedMarketData]", markets)
 
     def get_market(self, ticker: str) -> ProcessedMarketData:
         """
@@ -458,7 +460,7 @@ class KalshiClient:
 
         logger.info(f"Fetched market: {ticker}", extra={"ticker": ticker})
 
-        return cast(ProcessedMarketData, market)
+        return cast("ProcessedMarketData", market)
 
     def get_balance(self) -> Decimal:
         """
@@ -494,10 +496,8 @@ class KalshiClient:
         return balance
 
     def get_positions(
-        self,
-        status: Optional[str] = None,
-        ticker: Optional[str] = None
-    ) -> List[ProcessedPositionData]:
+        self, status: str | None = None, ticker: str | None = None
+    ) -> list[ProcessedPositionData]:
         """
         Get current positions.
 
@@ -516,7 +516,7 @@ class KalshiClient:
 
         Reference: REQ-CLI-003 (Positions Fetch Command)
         """
-        params: Dict[str, Any] = {}
+        params: dict[str, Any] = {}
         if status:
             params["status"] = status
         if ticker:
@@ -530,20 +530,19 @@ class KalshiClient:
             self._convert_prices_to_decimal(position)
 
         logger.info(
-            f"Fetched {len(positions)} positions",
-            extra={"count": len(positions), "status": status}
+            f"Fetched {len(positions)} positions", extra={"count": len(positions), "status": status}
         )
 
-        return cast(List[ProcessedPositionData], positions)
+        return cast("list[ProcessedPositionData]", positions)
 
     def get_fills(
         self,
-        ticker: Optional[str] = None,
-        min_ts: Optional[int] = None,
-        max_ts: Optional[int] = None,
+        ticker: str | None = None,
+        min_ts: int | None = None,
+        max_ts: int | None = None,
         limit: int = 100,
-        cursor: Optional[str] = None
-    ) -> List[ProcessedFillData]:
+        cursor: str | None = None,
+    ) -> list[ProcessedFillData]:
         """
         Get trade fills (executed orders).
 
@@ -565,7 +564,7 @@ class KalshiClient:
 
         Reference: REQ-CLI-004 (Fills Fetch Command)
         """
-        params: Dict[str, Any] = {"limit": limit}
+        params: dict[str, Any] = {"limit": limit}
 
         if ticker:
             params["ticker"] = ticker
@@ -585,14 +584,11 @@ class KalshiClient:
 
         logger.info(f"Fetched {len(fills)} fills", extra={"count": len(fills)})
 
-        return cast(List[ProcessedFillData], fills)
+        return cast("list[ProcessedFillData]", fills)
 
     def get_settlements(
-        self,
-        ticker: Optional[str] = None,
-        limit: int = 100,
-        cursor: Optional[str] = None
-    ) -> List[ProcessedSettlementData]:
+        self, ticker: str | None = None, limit: int = 100, cursor: str | None = None
+    ) -> list[ProcessedSettlementData]:
         """
         Get market settlements.
 
@@ -612,7 +608,7 @@ class KalshiClient:
 
         Reference: REQ-CLI-005 (Settlements Fetch Command)
         """
-        params: Dict[str, Any] = {"limit": limit}
+        params: dict[str, Any] = {"limit": limit}
 
         if ticker:
             params["ticker"] = ticker
@@ -626,12 +622,9 @@ class KalshiClient:
         for settlement in settlements:
             self._convert_prices_to_decimal(settlement)
 
-        logger.info(
-            f"Fetched {len(settlements)} settlements",
-            extra={"count": len(settlements)}
-        )
+        logger.info(f"Fetched {len(settlements)} settlements", extra={"count": len(settlements)})
 
-        return cast(List[ProcessedSettlementData], settlements)
+        return cast("list[ProcessedSettlementData]", settlements)
 
     def close(self) -> None:
         """

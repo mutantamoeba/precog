@@ -26,17 +26,13 @@ Related Requirements:
 Related ADR: ADR-051 (CLI Framework Choice - Typer)
 """
 
-import os
-import sys
+from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import Optional
-from datetime import datetime
 
 import typer
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
-from rich import print as rprint
-from dotenv import load_dotenv
 
 # Local imports
 from api_connectors.kalshi_client import KalshiClient
@@ -90,10 +86,10 @@ def get_kalshi_client(environment: str = "demo") -> KalshiClient:
         console.print("  - KALSHI_DEMO_API_KEY or KALSHI_PROD_API_KEY")
         console.print("  - KALSHI_DEMO_KEYFILE or KALSHI_PROD_KEYFILE")
         console.print("  - KALSHI_DEMO_API_BASE or KALSHI_PROD_API_BASE")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
     except Exception as e:
         console.print(f"[red]Unexpected error:[/red] {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 @app.command()
@@ -137,17 +133,14 @@ def fetch_balance(
     client = get_kalshi_client(environment)
 
     try:
-        # Fetch balance from API
-        balance_data = client.get_balance()
-        logger.info(f"Balance fetched successfully: {balance_data}")
+        # Fetch balance from API (returns Decimal directly)
+        balance = client.get_balance()
+        logger.info(f"Balance fetched successfully: {balance}")
 
         # Display balance in a nice table
         table = Table(title=f"Account Balance ({environment.upper()})")
         table.add_column("Field", style="cyan", no_wrap=True)
         table.add_column("Value", style="green")
-
-        # Extract balance (already Decimal from API client)
-        balance = balance_data.get("balance", Decimal("0.0000"))
 
         table.add_row("Balance", f"${balance:,.4f}")
         table.add_row("Timestamp", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
@@ -156,7 +149,9 @@ def fetch_balance(
 
         # TODO Phase 1.5: Store in database
         if not dry_run:
-            console.print("\n[yellow]Note:[/yellow] Database persistence not yet implemented (Phase 1.5)")
+            console.print(
+                "\n[yellow]Note:[/yellow] Database persistence not yet implemented (Phase 1.5)"
+            )
             console.print("  Balance fetched successfully from API")
         else:
             console.print("\n[yellow]Dry-run mode:[/yellow] Balance not saved to database")
@@ -164,7 +159,7 @@ def fetch_balance(
     except Exception as e:
         logger.error(f"Failed to fetch balance: {e}", exc_info=verbose)
         console.print(f"\n[red]Error:[/red] Failed to fetch balance: {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 @app.command()
@@ -207,9 +202,8 @@ def fetch_positions(
     client = get_kalshi_client(environment)
 
     try:
-        # Fetch positions from API
-        positions_data = client.get_positions()
-        positions = positions_data.get("positions", [])
+        # Fetch positions from API (returns list directly)
+        positions = client.get_positions()
         logger.info(f"Fetched {len(positions)} positions")
 
         if not positions:
@@ -248,7 +242,9 @@ def fetch_positions(
 
         # TODO Phase 1.5: Store in database with SCD Type 2 versioning
         if not dry_run:
-            console.print("\n[yellow]Note:[/yellow] Database persistence not yet implemented (Phase 1.5)")
+            console.print(
+                "\n[yellow]Note:[/yellow] Database persistence not yet implemented (Phase 1.5)"
+            )
             console.print(f"  Fetched {len(positions)} positions successfully from API")
         else:
             console.print("\n[yellow]Dry-run mode:[/yellow] Positions not saved to database")
@@ -256,7 +252,7 @@ def fetch_positions(
     except Exception as e:
         logger.error(f"Failed to fetch positions: {e}", exc_info=verbose)
         console.print(f"\n[red]Error:[/red] Failed to fetch positions: {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 @app.command()
@@ -299,15 +295,22 @@ def fetch_fills(
     if verbose:
         logger.info("Verbose mode enabled")
 
-    console.print(f"\n[bold cyan]Fetching fills (last {days} days) from Kalshi {environment} API...[/bold cyan]")
+    console.print(
+        f"\n[bold cyan]Fetching fills (last {days} days) from Kalshi {environment} API...[/bold cyan]"
+    )
 
     # Initialize Kalshi client
     client = get_kalshi_client(environment)
 
     try:
-        # Fetch fills from API
-        fills_data = client.get_fills(days=days)
-        fills = fills_data.get("fills", [])
+        # Calculate timestamp range for days parameter
+        # Kalshi uses Unix milliseconds for timestamps
+        now = datetime.now()
+        min_datetime = now - timedelta(days=days)
+        min_ts = int(min_datetime.timestamp() * 1000)  # Convert to milliseconds
+
+        # Fetch fills from API (returns list directly)
+        fills = client.get_fills(min_ts=min_ts)
         logger.info(f"Fetched {len(fills)} fills")
 
         if not fills:
@@ -355,7 +358,9 @@ def fetch_fills(
 
         # TODO Phase 1.5: Store in database (append-only trades table)
         if not dry_run:
-            console.print("\n[yellow]Note:[/yellow] Database persistence not yet implemented (Phase 1.5)")
+            console.print(
+                "\n[yellow]Note:[/yellow] Database persistence not yet implemented (Phase 1.5)"
+            )
             console.print(f"  Fetched {len(fills)} fills successfully from API")
         else:
             console.print("\n[yellow]Dry-run mode:[/yellow] Fills not saved to database")
@@ -363,7 +368,7 @@ def fetch_fills(
     except Exception as e:
         logger.error(f"Failed to fetch fills: {e}", exc_info=verbose)
         console.print(f"\n[red]Error:[/red] Failed to fetch fills: {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 @app.command()
@@ -405,9 +410,8 @@ def fetch_settlements(
     client = get_kalshi_client(environment)
 
     try:
-        # Fetch settlements from API
-        settlements_data = client.get_settlements()
-        settlements = settlements_data.get("settlements", [])
+        # Fetch settlements from API (returns list directly)
+        settlements = client.get_settlements()
         logger.info(f"Fetched {len(settlements)} settlements")
 
         if not settlements:
@@ -415,7 +419,9 @@ def fetch_settlements(
             return
 
         # Display settlements in a table
-        table = Table(title=f"Market Settlements ({environment.upper()}) - {len(settlements)} total")
+        table = Table(
+            title=f"Market Settlements ({environment.upper()}) - {len(settlements)} total"
+        )
         table.add_column("Ticker", style="cyan", no_wrap=True)
         table.add_column("Result", style="magenta")
         table.add_column("Settlement Value", style="yellow", justify="right")
@@ -461,7 +467,7 @@ def fetch_settlements(
     except Exception as e:
         logger.error(f"Failed to fetch settlements: {e}", exc_info=verbose)
         console.print(f"\n[red]Error:[/red] Failed to fetch settlements: {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
 
 def main():

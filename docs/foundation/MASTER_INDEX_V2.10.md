@@ -1,9 +1,19 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.9
-**Last Updated:** 2025-11-05
+**Version:** 2.10
+**Last Updated:** 2025-11-06
 **Status:** ✅ Current
+**Changes in v2.10:**
+- **VERSION MISMATCH CORRECTIONS**: Fixed all version discrepancies in foundation documents table
+- Updated ARCHITECTURE_DECISIONS V2.9 → V2.10 (table showed V2.8, actual was V2.10)
+- Updated ADR_INDEX V1.2 → V1.4 (table showed V1.2, actual was V1.4)
+- Updated DATABASE_SCHEMA_SUMMARY V1.6 → V1.7 (table showed V1.6, actual was V1.7)
+- Updated MASTER_INDEX self-reference from V2.7 to V2.10 (table entry for "THIS FILE")
+- Corrected MASTER_REQUIREMENTS table entry to reflect existing V2.10 version
+- **CODE QUALITY**: Fixed all CI failures - Mypy (6 errors → 0), Ruff (220 violations → 0)
+- Installed types-PyYAML for complete type coverage
+- Updated pyproject.toml to allow unused pytest fixtures (ARG002) in test files
 **Changes in v2.9:**
 - **GUIDES FOLDER CREATED**: Moved 5 implementation guides from supplementary/ and configuration/ to new docs/guides/ folder
 - Moved CONFIGURATION_GUIDE_V3.1.md from `/docs/configuration/` to `/docs/guides/`
@@ -132,11 +142,11 @@ Core architecture, requirements, and system design documents.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.3.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - UPDATED |
-| **MASTER_REQUIREMENTS_V2.9.md** | ✅ | v2.9 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.9** (Phase 0.6c validation, testing, CI/CD requirements added) |
-| **MASTER_INDEX_V2.7.md** | ✅ | v2.7 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.7** (Phase 0.6c completion) |
-| **ARCHITECTURE_DECISIONS_V2.8.md** | ✅ | v2.8 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (44 total) - **UPDATED V2.8** (ADR-038 through ADR-045 for validation, testing, CI/CD) |
-| **REQUIREMENT_INDEX.md** | ✅ | v1.2 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 99 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.2** (added 10 new requirements) |
-| **ADR_INDEX_V1.2.md** | ✅ | v1.2 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (44 ADRs) - **UPDATED V1.2** (ADR-038 through ADR-045 added) |
+| **MASTER_REQUIREMENTS_V2.10.md** | ✅ | v2.10 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.10** (Phase 1 API best practices, validation, testing, CI/CD requirements) |
+| **MASTER_INDEX_V2.10.md** | ✅ | v2.10 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.10** (Fixed version mismatches, code quality fixes) |
+| **ARCHITECTURE_DECISIONS_V2.10.md** | ✅ | v2.10 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (50+ total) - **UPDATED V2.10** (ADR-047 through ADR-052 for API best practices) |
+| **REQUIREMENT_INDEX.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 103 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.3** (added 4 Phase 1 API requirements) |
+| **ADR_INDEX_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (50+ ADRs) - **UPDATED V1.4** (ADR-047 through ADR-052 added) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, added Phase 0.6b/0.6c/0.7 - **UPDATED V1.4** (Phase 0.6c complete) |
 | **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |
@@ -163,7 +173,7 @@ Schema design, data models, and database architecture.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DATABASE_SCHEMA_SUMMARY_V1.6.md** | ✅ | v1.6 | `/docs/database/` | 0.5-1 | Phases 1-10 | 🔴 Critical | **UPDATED V1.6** - Added alerts table (Phase 1) + 4 ML infrastructure placeholders (Phase 9) - Total 25 tables |
+| **DATABASE_SCHEMA_SUMMARY_V1.7.md** | ✅ | v1.7 | `/docs/database/` | 0.5-1 | Phases 1-10 | 🔴 Critical | **UPDATED V1.7** - Complete schema with migrations 001-010, 25 tables including alerts + ML placeholders |
 | **DATABASE_TABLES_REFERENCE.md** | ✅ | v1.0 | `/docs/database/` | 1 | Phases 1-10 | 🟡 High | Quick lookup for all tables, common queries (Phase 1) |
 | **ODDS_RESEARCH_COMPREHENSIVE.md** | ✅ | v1.0 | `/docs/database/` | 4 | Phase 4, 9 | 🟡 High | Historical odds methodology, merged into models |
 | **DATA_DICTIONARY.md** | 🔵 | - | `/docs/database/` | 6-7 | Phases 6-10 | 🟡 High | Comprehensive data dictionary - all columns documented (planned Phase 6-7) |

@@ -9,13 +9,12 @@ Educational Notes:
 - Use threading to test thread-safety
 """
 
-import pytest
-import time
 import threading
-from unittest.mock import Mock, patch
-from decimal import Decimal
+from unittest.mock import patch
 
-from api_connectors.rate_limiter import TokenBucket, RateLimiter
+import pytest
+
+from api_connectors.rate_limiter import RateLimiter, TokenBucket
 
 
 class TestTokenBucket:
@@ -79,7 +78,7 @@ class TestTokenBucket:
         assert bucket.tokens == 0.0
 
         # Simulate 5 seconds passing
-        with patch('time.time') as mock_time:
+        with patch("time.time") as mock_time:
             # Set initial time
             mock_time.return_value = bucket.last_refill
 
@@ -99,7 +98,7 @@ class TestTokenBucket:
         bucket.tokens = 90.0
 
         # Simulate 10 seconds passing (should add 100 tokens, but cap at 100)
-        with patch('time.time') as mock_time:
+        with patch("time.time") as mock_time:
             mock_time.return_value = bucket.last_refill
             mock_time.return_value += 10.0
 
@@ -117,31 +116,31 @@ class TestTokenBucket:
         assert bucket.tokens == 0.0
 
         # Mock sleep to verify wait time
-        with patch('time.sleep') as mock_sleep:
-            with patch('time.time') as mock_time:
-                # Set initial time
-                mock_time.return_value = bucket.last_refill
+        with patch("time.sleep") as mock_sleep, patch("time.time") as mock_time:
+            # Set initial time
+            mock_time.return_value = bucket.last_refill
 
-                # First acquire call: no tokens, should calculate wait
-                # Need 1 token, refill rate 1.0 tokens/sec -> wait 1 second
-                # Then on retry (after sleep), advance time and refill
-                call_count = [0]
-                def time_side_effect():
-                    call_count[0] += 1
-                    if call_count[0] <= 5:  # Initial refill checks
-                        return bucket.last_refill
-                    else:  # After sleep, time advanced
-                        return bucket.last_refill + 1.0
+            # First acquire call: no tokens, should calculate wait
+            # Need 1 token, refill rate 1.0 tokens/sec -> wait 1 second
+            # Then on retry (after sleep), advance time and refill
+            call_count = [0]
 
-                mock_time.side_effect = time_side_effect
+            def time_side_effect():
+                call_count[0] += 1
+                if call_count[0] <= 5:  # Initial refill checks
+                    return bucket.last_refill
+                # After sleep, time advanced
+                return bucket.last_refill + 1.0
 
-                result = bucket.acquire(tokens=1, block=True)
+            mock_time.side_effect = time_side_effect
 
-                assert result is True
-                # Should have called sleep with wait time ~1 second
-                assert mock_sleep.called
-                wait_time = mock_sleep.call_args[0][0]
-                assert 0.9 <= wait_time <= 1.1  # Allow small floating point error
+            result = bucket.acquire(tokens=1, block=True)
+
+            assert result is True
+            # Should have called sleep with wait time ~1 second
+            assert mock_sleep.called
+            wait_time = mock_sleep.call_args[0][0]
+            assert 0.9 <= wait_time <= 1.1  # Allow small floating point error
 
     def test_get_available_tokens(self):
         """Test getting current token count."""
@@ -193,7 +192,7 @@ class TestRateLimiter:
         assert limiter.requests_per_minute == 100
         assert limiter.burst_size == 100
         assert limiter.bucket.capacity == 100
-        assert limiter.bucket.refill_rate == pytest.approx(100/60, rel=0.01)
+        assert limiter.bucket.refill_rate == pytest.approx(100 / 60, rel=0.01)
 
     def test_initialization_with_custom_burst_size(self):
         """Test rate limiter with custom burst size."""
@@ -218,7 +217,7 @@ class TestRateLimiter:
         """Test handling 429 error with Retry-After header."""
         limiter = RateLimiter(requests_per_minute=100)
 
-        with patch('time.sleep') as mock_sleep:
+        with patch("time.sleep") as mock_sleep:
             limiter.handle_rate_limit_error(retry_after=30)
 
             # Should sleep for exact retry_after duration
@@ -228,7 +227,7 @@ class TestRateLimiter:
         """Test handling 429 error without Retry-After header."""
         limiter = RateLimiter(requests_per_minute=100)
 
-        with patch('time.sleep') as mock_sleep:
+        with patch("time.sleep") as mock_sleep:
             limiter.handle_rate_limit_error(retry_after=None)
 
             # Should sleep for default 60 seconds
@@ -334,7 +333,7 @@ class TestIntegration:
         assert limiter.bucket.acquire(tokens=1, block=False) is False
 
         # Simulate 10 seconds passing and make requests
-        with patch('api_connectors.rate_limiter.time.time') as mock_time:
+        with patch("api_connectors.rate_limiter.time.time") as mock_time:
             # Initial time
             start_time = limiter.bucket.last_refill
             # Return advanced time for all subsequent calls

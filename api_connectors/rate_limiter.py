@@ -29,10 +29,9 @@ Related Requirements: REQ-API-005 (API Rate Limit Management)
 Related ADR: ADR-051 (Rate Limiting Strategy)
 """
 
-import time
 import logging
 import threading
-from typing import Optional
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -89,7 +88,7 @@ class TokenBucket:
         logger.info(
             f"TokenBucket initialized: capacity={capacity}, "
             f"refill_rate={refill_rate:.2f} tokens/sec",
-            extra={"capacity": capacity, "refill_rate": refill_rate}
+            extra={"capacity": capacity, "refill_rate": refill_rate},
         )
 
     def _refill(self) -> None:
@@ -122,8 +121,8 @@ class TokenBucket:
             extra={
                 "tokens_added": tokens_to_add,
                 "elapsed_seconds": elapsed,
-                "tokens_available": self.tokens
-            }
+                "tokens_available": self.tokens,
+            },
         )
 
     def acquire(self, tokens: int = 1, block: bool = True) -> bool:
@@ -162,9 +161,7 @@ class TokenBucket:
             Use block=False for user-facing requests (fail fast)
         """
         if tokens > self.capacity:
-            raise ValueError(
-                f"Requested {tokens} tokens exceeds capacity {self.capacity}"
-            )
+            raise ValueError(f"Requested {tokens} tokens exceeds capacity {self.capacity}")
 
         with self._lock:  # Thread-safe token check/modification
             self._refill()  # Add tokens based on elapsed time
@@ -180,13 +177,13 @@ class TokenBucket:
                         extra={
                             "tokens_remaining": self.tokens,
                             "capacity": self.capacity,
-                            "utilization_pct": (1 - self.tokens/self.capacity) * 100
-                        }
+                            "utilization_pct": (1 - self.tokens / self.capacity) * 100,
+                        },
                     )
 
                 logger.debug(
                     f"Acquired {tokens} token(s), {self.tokens:.1f} remaining",
-                    extra={"tokens_consumed": tokens, "tokens_remaining": self.tokens}
+                    extra={"tokens_consumed": tokens, "tokens_remaining": self.tokens},
                 )
 
                 return True
@@ -195,10 +192,7 @@ class TokenBucket:
             if not block:
                 logger.debug(
                     f"Cannot acquire {tokens} token(s), only {self.tokens:.1f} available",
-                    extra={
-                        "tokens_requested": tokens,
-                        "tokens_available": self.tokens
-                    }
+                    extra={"tokens_requested": tokens, "tokens_available": self.tokens},
                 )
                 return False
 
@@ -209,10 +203,7 @@ class TokenBucket:
 
         logger.info(
             f"Rate limit reached, waiting {wait_time:.2f}s for {tokens_needed:.1f} tokens",
-            extra={
-                "wait_seconds": wait_time,
-                "tokens_needed": tokens_needed
-            }
+            extra={"wait_seconds": wait_time, "tokens_needed": tokens_needed},
         )
 
         time.sleep(wait_time)
@@ -264,11 +255,7 @@ class RateLimiter:
         - Provides simple wait_if_needed() interface
     """
 
-    def __init__(
-        self,
-        requests_per_minute: int,
-        burst_size: Optional[int] = None
-    ):
+    def __init__(self, requests_per_minute: int, burst_size: int | None = None):
         """
         Initialize rate limiter.
 
@@ -286,18 +273,11 @@ class RateLimiter:
         # Convert to token bucket parameters
         refill_rate = requests_per_minute / 60.0  # tokens per second
 
-        self.bucket = TokenBucket(
-            capacity=self.burst_size,
-            refill_rate=refill_rate
-        )
+        self.bucket = TokenBucket(capacity=self.burst_size, refill_rate=refill_rate)
 
         logger.info(
-            f"RateLimiter initialized: {requests_per_minute} req/min "
-            f"(burst: {self.burst_size})",
-            extra={
-                "requests_per_minute": requests_per_minute,
-                "burst_size": self.burst_size
-            }
+            f"RateLimiter initialized: {requests_per_minute} req/min (burst: {self.burst_size})",
+            extra={"requests_per_minute": requests_per_minute, "burst_size": self.burst_size},
         )
 
     def wait_if_needed(self) -> None:
@@ -315,7 +295,7 @@ class RateLimiter:
         """
         self.bucket.acquire(tokens=1, block=True)
 
-    def handle_rate_limit_error(self, retry_after: Optional[int] = None) -> None:
+    def handle_rate_limit_error(self, retry_after: int | None = None) -> None:
         """
         Handle 429 (Too Many Requests) error.
 
@@ -337,15 +317,12 @@ class RateLimiter:
             Retry-After header tells you exactly how long to wait.
             If not provided, we use exponential backoff (60s default).
         """
-        if retry_after is not None:
-            wait_time = int(retry_after)
-        else:
-            # Default to 60 seconds if no Retry-After header
-            wait_time = 60
+        # Use Retry-After header if provided, otherwise default to 60s
+        wait_time = int(retry_after) if retry_after is not None else 60
 
         logger.warning(
             f"Rate limit (429) error, waiting {wait_time}s before retry",
-            extra={"retry_after_seconds": wait_time}
+            extra={"retry_after_seconds": wait_time},
         )
 
         time.sleep(wait_time)

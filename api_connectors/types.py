@@ -11,16 +11,17 @@ Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
 Related ADR: ADR-002 (Decimal Precision for Monetary Values)
 """
 
-from typing import TypedDict, Optional, Literal
 from decimal import Decimal
-
+from typing import Literal, TypedDict
 
 # =============================================================================
 # Market Response Types
 # =============================================================================
 
+
 class MarketData(TypedDict):
     """Single market data from Kalshi API."""
+
     ticker: str
     event_ticker: str
     series_ticker: str
@@ -31,7 +32,7 @@ class MarketData(TypedDict):
     expiration_time: str
     status: Literal["open", "closed", "settled"]
     can_close_early: bool
-    result: Optional[Literal["yes", "no"]]
+    result: Literal["yes", "no"] | None
     # Price fields as strings (will be converted to Decimal)
     yes_bid: str
     yes_ask: str
@@ -45,12 +46,14 @@ class MarketData(TypedDict):
 
 class MarketsResponse(TypedDict):
     """Response from /markets endpoint."""
+
     markets: list[MarketData]
-    cursor: Optional[str]  # Pagination cursor
+    cursor: str | None  # Pagination cursor
 
 
 class SingleMarketResponse(TypedDict):
     """Response from /markets/{ticker} endpoint."""
+
     market: MarketData
 
 
@@ -58,8 +61,10 @@ class SingleMarketResponse(TypedDict):
 # Balance Response Type
 # =============================================================================
 
+
 class BalanceResponse(TypedDict):
     """Response from /portfolio/balance endpoint."""
+
     balance: str  # String format with 4 decimal places (e.g., "1234.5678")
 
 
@@ -67,8 +72,10 @@ class BalanceResponse(TypedDict):
 # Position Response Types
 # =============================================================================
 
+
 class PositionData(TypedDict):
     """Single position data from Kalshi API."""
+
     ticker: str
     market_ticker: str
     position: int  # Number of contracts
@@ -82,16 +89,19 @@ class PositionData(TypedDict):
 
 class PositionsResponse(TypedDict):
     """Response from /portfolio/positions endpoint."""
+
     positions: list[PositionData]
-    cursor: Optional[str]
+    cursor: str | None
 
 
 # =============================================================================
 # Fill Response Types
 # =============================================================================
 
+
 class FillData(TypedDict):
     """Single fill (trade execution) from Kalshi API."""
+
     order_id: str
     trade_id: str
     ticker: str
@@ -105,16 +115,19 @@ class FillData(TypedDict):
 
 class FillsResponse(TypedDict):
     """Response from /portfolio/fills endpoint."""
+
     fills: list[FillData]
-    cursor: Optional[str]
+    cursor: str | None
 
 
 # =============================================================================
 # Settlement Response Types
 # =============================================================================
 
+
 class SettlementData(TypedDict):
     """Single settlement data from Kalshi API."""
+
     ticker: str
     market_result: Literal["yes", "no"]
     settlement_value: str  # "1.0000" for win, "0.0000" for loss
@@ -125,6 +138,7 @@ class SettlementData(TypedDict):
 
 class SettlementsResponse(TypedDict):
     """Response from /portfolio/settlements endpoint."""
+
     settlements: list[SettlementData]
 
 
@@ -132,8 +146,10 @@ class SettlementsResponse(TypedDict):
 # Error Response Types
 # =============================================================================
 
+
 class ErrorResponse(TypedDict):
     """Standard error response from Kalshi API."""
+
     code: str
     message: str
     details: str
@@ -141,6 +157,7 @@ class ErrorResponse(TypedDict):
 
 class RateLimitErrorResponse(ErrorResponse):
     """429 rate limit error with retry information."""
+
     retry_after: int  # Seconds to wait
 
 
@@ -148,8 +165,10 @@ class RateLimitErrorResponse(ErrorResponse):
 # Processed Response Types (After Decimal Conversion)
 # =============================================================================
 
+
 class ProcessedMarketData(TypedDict):
     """Market data after Decimal conversion (for internal use)."""
+
     ticker: str
     event_ticker: str
     series_ticker: str
@@ -160,7 +179,7 @@ class ProcessedMarketData(TypedDict):
     expiration_time: str
     status: Literal["open", "closed", "settled"]
     can_close_early: bool
-    result: Optional[Literal["yes", "no"]]
+    result: Literal["yes", "no"] | None
     # Price fields as Decimal
     yes_bid: Decimal
     yes_ask: Decimal
@@ -174,6 +193,7 @@ class ProcessedMarketData(TypedDict):
 
 class ProcessedPositionData(TypedDict):
     """Position data after Decimal conversion (for internal use)."""
+
     ticker: str
     market_ticker: str
     position: int
@@ -187,6 +207,7 @@ class ProcessedPositionData(TypedDict):
 
 class ProcessedFillData(TypedDict):
     """Fill data after Decimal conversion (for internal use)."""
+
     order_id: str
     trade_id: str
     ticker: str
@@ -200,6 +221,7 @@ class ProcessedFillData(TypedDict):
 
 class ProcessedSettlementData(TypedDict):
     """Settlement data after Decimal conversion (for internal use)."""
+
     ticker: str
     market_result: Literal["yes", "no"]
     settlement_value: Decimal

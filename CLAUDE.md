@@ -1,11 +1,17 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.6
+**Version:** 1.7
 **Created:** 2025-10-28
-**Last Updated:** 2025-11-05
+**Last Updated:** 2025-11-06
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.7:**
+- **Added Section: "🚨 CRITICAL: Pre-Commit Protocol (MANDATORY)"** - Prominent 4-step pre-commit checklist before "What Works Right Now" to prevent protocol violations
+- **Added Section: "📋 Phase Task Visibility System"** - 3-step phase start protocol to prevent task blindness (deferred tasks, prerequisites, master todo list)
+- Documents Phase 1 oversight: Missed DEF-001 through DEF-008 deferred tasks, missed test planning checklist (8 sections, ~50 checkboxes)
+- **Solution:** Mandatory phase start protocol surfaces ALL tasks (deferred + checklist + phase tasks) in single master todo list
+- Updated Current Status: Phase 1 progress details (API client 100%, CLI 80%)
 **Changes in V1.6:**
 - Changed session archiving from `docs/sessions/` (committed) to `_sessions/` (local-only, excluded from git)
 - Added `docs/sessions/` to .gitignore to prevent repository bloat from session archives
@@ -128,14 +134,204 @@ That's it! No need to hunt through multiple status documents.
 - **Phase 0.6:** Documentation Correction & Security Hardening (100%)
 - **Phase 0.6c:** Validation & Testing Infrastructure (100%)
 - **Phase 0.7:** CI/CD Integration & Advanced Testing (100%)
-- **Phase 1 (Partial):** Database schema V1.7, migrations 001-010, 66/66 tests passing (87% coverage)
+- **Phase 1 (Partial):** Database schema V1.7, migrations 001-010, Kalshi API client (100%), CLI commands (80% - API fetching only)
 
 **🔵 In Progress:**
-- **Phase 1 (Remaining):** Kalshi API client, CLI commands, config loader
+- **Phase 1 (Remaining):** CLI database integration (Phase 1.5), config loader expansion, integration testing
 
 **📋 Planned:**
 - **Phase 1.5:** Strategy Manager, Model Manager, Position Manager
 - **Phase 2+:** See `docs/foundation/DEVELOPMENT_PHASES_V1.4.md`
+
+---
+
+## 🚨 CRITICAL: Pre-Commit Protocol (MANDATORY)
+
+**⚠️ READ THIS SECTION BEFORE EVERY `git commit` ⚠️**
+
+### You MUST Run These 4 Checks - NO EXCEPTIONS
+
+**Before staging files with `git add`, run:**
+
+**□ Step 1/4: Run Tests**
+```bash
+python -m pytest tests/ -v
+```
+**Expected:** All tests passing
+**If FAIL:** Fix tests BEFORE committing. Do not use `--no-verify`.
+
+**□ Step 2/4: Security Scan**
+```bash
+git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.py' '*.yaml' '*.sql'
+```
+**Expected:** No matches (or only docstring examples with "test-key-id" / "example-key")
+**If MATCH:** Remove ALL hardcoded credentials. Use `os.getenv()` instead.
+
+**□ Step 3/4: Check .env File**
+```bash
+git diff --cached --name-only | grep "\.env$" && echo "❌ .env STAGED!" || echo "✅ No .env"
+```
+**Expected:** "✅ No .env"
+**If "❌ .env STAGED!":** Run `git reset HEAD .env` immediately
+
+**□ Step 4/4: Quick Validation**
+```bash
+./scripts/validate_quick.sh
+```
+**Expected:** All checks pass (~3 seconds)
+**If FAIL:** Fix linting/docs errors before committing
+
+---
+
+**✅ ALL 4 PASS** → Safe to commit:
+```bash
+git add <files>
+git commit -m "Your commit message"
+```
+
+**❌ ANY FAIL** → FIX FIRST, then re-run all 4 checks
+
+---
+
+### Permanent Solution: Pre-Commit Hooks
+
+**Status:** Ready to install (`.pre-commit-config.yaml` exists, framework in requirements.txt)
+
+**To install (do this once):**
+```bash
+# Install pre-commit framework
+pip install pre-commit
+
+# Install git hooks
+pre-commit install
+
+# Test hooks on all files
+pre-commit run --all-files
+```
+
+**After installation:** Git will automatically run all 4 checks before EVERY commit.
+- Hooks will BLOCK commits that fail security/quality checks
+- To bypass (ONLY in emergencies): `git commit --no-verify`
+
+**Deferred Task:** DEF-001 in `docs/utility/PHASE_0.7_DEFERRED_TASKS_V1.0.md`
+
+---
+
+## 📋 Phase Task Visibility System
+
+**⚠️ READ AT START OF EVERY PHASE ⚠️**
+
+### Problem: Task Blindness
+
+Tasks get overlooked because they're scattered across multiple documents:
+- Deferred tasks in `docs/utility/PHASE_*_DEFERRED_TASKS_V1.0.md`
+- Phase checklist in `DEVELOPMENT_PHASES_V1.4.md`
+- Requirements in `MASTER_REQUIREMENTS_V2.10.md`
+- ADRs in `ARCHITECTURE_DECISIONS_V2.10.md`
+
+### Solution: 3-Step Phase Start Protocol
+
+**At the START of every new phase, follow this exact sequence:**
+
+#### Step 1: Check Deferred Tasks (5 min)
+
+```bash
+# Find all deferred task documents
+find docs/utility -name "PHASE_*_DEFERRED_TASKS*.md"
+
+# Read each document, extract tasks for CURRENT phase
+# Example: If starting Phase 1, find all tasks with "Target Phase: 1" or "0.8"
+```
+
+**Create checklist:**
+```markdown
+## Phase 1 Deferred Tasks (from Phase 0.7)
+- [ ] DEF-001: Pre-commit hooks setup (2 hours, 🟡 High)
+- [ ] DEF-002: Pre-push hooks setup (1 hour, 🟡 High)
+- [ ] DEF-003: Branch protection rules (30 min, 🟢 Medium)
+- [ ] DEF-004: Line ending edge cases (1 hour, 🟢 Medium)
+- [ ] DEF-008: Database schema validation script (3-4 hours, 🟡 High)
+```
+
+#### Step 2: Check Phase Prerequisites (5 min)
+
+Open `DEVELOPMENT_PHASES_V1.4.md`, find current phase section.
+
+**Check:**
+- [ ] **Dependencies met?** (e.g., "Requires Phase 0.7: 100% complete ✅")
+- [ ] **Test planning checklist exists?** ("Before Starting This Phase - TEST PLANNING CHECKLIST")
+- [ ] **Tasks clearly listed?** (numbered task list in phase section)
+
+**If test planning checklist exists:**
+```markdown
+## Phase 1 Test Planning Checklist (MANDATORY - BEFORE CODE)
+- [ ] Requirements analysis (15 min)
+- [ ] Test categories needed (10 min)
+- [ ] Test infrastructure updates (30 min)
+- [ ] Critical test scenarios (20 min)
+- [ ] Performance baselines (10 min)
+- [ ] Security test scenarios (10 min)
+- [ ] Edge cases to test (15 min)
+- [ ] Success criteria (10 min)
+```
+
+**STOP:** Do NOT write production code until test planning complete!
+
+#### Step 3: Create Master Todo List (10 min)
+
+Combine Steps 1 and 2 into ONE master todo list using TodoWrite:
+
+```python
+TodoWrite([
+    # Deferred tasks first (usually infrastructure)
+    {"content": "DEF-001: Install pre-commit hooks (2h)", "status": "pending", "activeForm": "Installing pre-commit hooks"},
+    {"content": "DEF-002: Install pre-push hooks (1h)", "status": "pending", "activeForm": "Installing pre-push hooks"},
+
+    # Test planning checklist second (MANDATORY before code)
+    {"content": "Complete Phase 1 test planning checklist (2h)", "status": "pending", "activeForm": "Completing Phase 1 test planning checklist"},
+
+    # Phase tasks third (implementation)
+    {"content": "Implement Kalshi API client (8h)", "status": "pending", "activeForm": "Implementing Kalshi API client"},
+    {"content": "Implement CLI commands (6h)", "status": "pending", "activeForm": "Implementing CLI commands"},
+    # ... more tasks
+])
+```
+
+### Phase 1 Example: What We Missed
+
+**Deferred tasks for Phase 1 (from Phase 0.7):**
+- DEF-001: Pre-commit hooks setup (🟡 High priority, target Phase 0.8/1)
+- DEF-002: Pre-push hooks setup (🟡 High priority)
+- DEF-008: Database schema validation script (🟡 High priority, 3-4 hours)
+
+**Test planning checklist (from DEVELOPMENT_PHASES lines 442-518):**
+- [ ] Requirements analysis
+- [ ] Test infrastructure updates (API fixtures, CLI factories)
+- [ ] Critical test scenarios
+- [ ] Performance baselines
+- [ ] Security test scenarios
+- [ ] Edge cases
+- [ ] Success criteria
+
+**We DID:** Implemented Kalshi API client, CLI commands
+**We MISSED:** Deferred tasks, test planning checklist
+
+### Prevention: Update SESSION_HANDOFF Template
+
+Add this to the top of `SESSION_HANDOFF.md`:
+
+```markdown
+## 🔍 Phase Checklist Status
+
+**Current Phase:** Phase 1
+**Deferred Tasks Completed:** 0/5 (DEF-001, DEF-002, DEF-003, DEF-004, DEF-008)
+**Test Planning Checklist:** ⚠️ NOT STARTED (MANDATORY BEFORE CODE!)
+**Phase Tasks Completed:** 2/6 (API client ✅, CLI ✅, Config loader pending)
+```
+
+This makes task status **visible at every session start**.
+
+---
 
 ### What Works Right Now
 

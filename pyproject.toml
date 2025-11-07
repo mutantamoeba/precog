@@ -116,8 +116,8 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 [tool.ruff.lint.per-file-ignores]
 # Allow unused imports in __init__.py
 "__init__.py" = ["F401"]
-# Allow assert statements in tests
-"tests/**/*.py" = ["S101"]
+# Allow assert statements and unused pytest fixtures in tests
+"tests/**/*.py" = ["S101", "ARG002"]
 # Allow print statements in scripts
 "scripts/**/*.py" = ["T201"]
 

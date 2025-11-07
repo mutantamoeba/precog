@@ -54,6 +54,7 @@ class ValidationResult:
 
     def print_result(self):
         """Print formatted validation result (ASCII-safe for Windows)."""
+
         # Sanitize Unicode emoji for Windows console compatibility
         def sanitize_unicode(text: str) -> str:
             """Replace common Unicode emoji with ASCII equivalents."""
@@ -454,12 +455,8 @@ def validate_new_docs_in_master_index() -> ValidationResult:
         )
         for doc_name in sorted(unlisted):
             errors.append(f"  - {doc_name}")
-        errors.append(
-            "\nACTION REQUIRED: Add these documents to MASTER_INDEX before committing."
-        )
-        errors.append(
-            "This ensures all documentation is tracked and prevents orphaned files."
-        )
+        errors.append("\nACTION REQUIRED: Add these documents to MASTER_INDEX before committing.")
+        errors.append("This ensures all documentation is tracked and prevents orphaned files.")
 
     # Also check for listed docs that don't exist (cleanup check)
     missing_docs = listed_docs - all_docs
@@ -592,12 +589,8 @@ def validate_git_version_bumps() -> ValidationResult:
         if not old_version_match or not new_version_match:
             continue  # Not a versioned file rename
 
-        old_major, old_minor = int(old_version_match.group(1)), int(
-            old_version_match.group(2)
-        )
-        new_major, new_minor = int(new_version_match.group(1)), int(
-            new_version_match.group(2)
-        )
+        old_major, old_minor = int(old_version_match.group(1)), int(old_version_match.group(2))
+        new_major, new_minor = int(new_version_match.group(1)), int(new_version_match.group(2))
 
         version_bumps_checked += 1
 
@@ -607,15 +600,11 @@ def validate_git_version_bumps() -> ValidationResult:
         )
 
         if not version_incremented:
-            errors.append(
-                f"VERSION NOT INCREMENTED: {Path(old_path).name} → {Path(new_path).name}"
-            )
+            errors.append(f"VERSION NOT INCREMENTED: {Path(old_path).name} → {Path(new_path).name}")
             errors.append(
                 f"  Old version: V{old_major}.{old_minor}, New version: V{new_major}.{new_minor}"
             )
-            errors.append(
-                "  ACTION REQUIRED: Version must increment when renaming documents"
-            )
+            errors.append("  ACTION REQUIRED: Version must increment when renaming documents")
 
         # Warn if version jumped too much (e.g., V2.8 → V3.0 without justification)
         if new_major > old_major + 1:
@@ -678,15 +667,15 @@ def validate_phase_completion_status() -> ValidationResult:
         # Validate consistency
         if is_marked_complete and not re.search(r"✅.*\*\*.*COMPLETE", status_line):
             # Should have "✅ **100% COMPLETE**" or "✅ **COMPLETE**"
-            errors.append(
-                f"{phase_name}: Marked as complete but missing proper status format"
-            )
-            errors.append(
-                '  Expected: "**Status:** ✅ **100% COMPLETE**" or similar'
-            )
+            errors.append(f"{phase_name}: Marked as complete but missing proper status format")
+            errors.append('  Expected: "**Status:** ✅ **100% COMPLETE**" or similar')
             errors.append(f"  Found: {status_line.strip()}")
 
-        if (is_marked_planned or is_marked_in_progress) and "COMPLETE" in status_line.upper() and "✅" in status_line:
+        if (
+            (is_marked_planned or is_marked_in_progress)
+            and "COMPLETE" in status_line.upper()
+            and "✅" in status_line
+        ):
             # Should not have completion language
             errors.append(
                 f"{phase_name}: Conflicting status - marked as Planned/In Progress but also Complete"
@@ -735,9 +724,7 @@ def validate_yaml_configuration() -> ValidationResult:
     warnings = []
 
     if not YAML_AVAILABLE:
-        warnings.append(
-            "PyYAML not installed - skipping YAML validation (run: pip install pyyaml)"
-        )
+        warnings.append("PyYAML not installed - skipping YAML validation (run: pip install pyyaml)")
         return ValidationResult(
             name="YAML Configuration Validation (Check #9)",
             passed=True,
@@ -819,9 +806,11 @@ def validate_yaml_configuration() -> ValidationResult:
 
                     # Check if this key should be a Decimal (string) but is a float
                     # Only check string keys (skip integer keys)
-                    if (isinstance(key, str) and
-                        any(keyword in key.lower() for keyword in decimal_keywords) and
-                        isinstance(value, float)):
+                    if (
+                        isinstance(key, str)
+                        and any(keyword in key.lower() for keyword in decimal_keywords)
+                        and isinstance(value, float)
+                    ):
                         warnings.append(
                             f"{file_name}: Float detected in Decimal field '{current_path}': {value}"
                         )

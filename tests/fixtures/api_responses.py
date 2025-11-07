@@ -45,7 +45,7 @@ KALSHI_MARKET_RESPONSE = {
             "last_price": "0.6225",
             "volume": 15420,
             "open_interest": 8750,
-            "liquidity": 125000
+            "liquidity": 125000,
         },
         {
             "ticker": "KXNFLGAME-25DEC15-BUF-YES",
@@ -67,10 +67,10 @@ KALSHI_MARKET_RESPONSE = {
             "last_price": "0.4300",
             "volume": 8920,
             "open_interest": 4560,
-            "liquidity": 87500
-        }
+            "liquidity": 87500,
+        },
     ],
-    "cursor": "next_page_token_abc123"  # Pagination cursor
+    "cursor": "next_page_token_abc123",  # Pagination cursor
 }
 
 KALSHI_SINGLE_MARKET_RESPONSE = {
@@ -93,7 +93,7 @@ KALSHI_SINGLE_MARKET_RESPONSE = {
         "last_price": "0.6225",
         "volume": 15420,
         "open_interest": 8750,
-        "liquidity": 125000
+        "liquidity": 125000,
     }
 }
 
@@ -112,7 +112,7 @@ KALSHI_POSITIONS_RESPONSE = {
             "realized_pnl": "0.0000",
             "total_cost": "61.0000",
             "fees_paid": "1.2200",
-            "resting_order_count": 0
+            "resting_order_count": 0,
         },
         {
             "ticker": "KXNFLGAME-25DEC15-BUF-YES",
@@ -123,8 +123,8 @@ KALSHI_POSITIONS_RESPONSE = {
             "realized_pnl": "5.0000",
             "total_cost": "21.0000",
             "fees_paid": "0.4200",
-            "resting_order_count": 1
-        }
+            "resting_order_count": 1,
+        },
     ]
 }
 
@@ -139,7 +139,7 @@ KALSHI_FILLS_RESPONSE = {
             "count": 50,
             "price": "0.6150",  # Execution price
             "created_time": "2025-12-10T14:23:45Z",
-            "is_taker": True
+            "is_taker": True,
         },
         {
             "order_id": "order_789ghi",
@@ -150,10 +150,10 @@ KALSHI_FILLS_RESPONSE = {
             "count": 50,
             "price": "0.4200",
             "created_time": "2025-12-10T15:10:22Z",
-            "is_taker": False
-        }
+            "is_taker": False,
+        },
     ],
-    "cursor": None  # No more pages
+    "cursor": None,  # No more pages
 }
 
 KALSHI_SETTLEMENTS_RESPONSE = {
@@ -164,7 +164,7 @@ KALSHI_SETTLEMENTS_RESPONSE = {
             "settlement_value": "1.0000",  # Full dollar payout
             "settled_time": "2025-12-08T23:30:00Z",
             "revenue": "100.0000",  # 100 contracts * $1.00
-            "total_fees": "2.0000"
+            "total_fees": "2.0000",
         },
         {
             "ticker": "KXNFLGAME-25DEC08-BUF-YES",
@@ -172,8 +172,8 @@ KALSHI_SETTLEMENTS_RESPONSE = {
             "settlement_value": "0.0000",  # Worthless
             "settled_time": "2025-12-08T23:45:00Z",
             "revenue": "0.0000",
-            "total_fees": "0.0000"
-        }
+            "total_fees": "0.0000",
+        },
     ]
 }
 
@@ -184,26 +184,26 @@ KALSHI_SETTLEMENTS_RESPONSE = {
 KALSHI_ERROR_401_RESPONSE = {
     "code": "unauthorized",
     "message": "Invalid signature or expired token",
-    "details": "Authentication failed. Please check your API key and signature."
+    "details": "Authentication failed. Please check your API key and signature.",
 }
 
 KALSHI_ERROR_429_RESPONSE = {
     "code": "rate_limit_exceeded",
     "message": "Too many requests",
     "details": "You have exceeded the rate limit of 100 requests per minute.",
-    "retry_after": 30  # Seconds to wait before retry
+    "retry_after": 30,  # Seconds to wait before retry
 }
 
 KALSHI_ERROR_500_RESPONSE = {
     "code": "internal_server_error",
     "message": "Internal server error",
-    "details": "An unexpected error occurred. Please try again later."
+    "details": "An unexpected error occurred. Please try again later.",
 }
 
 KALSHI_ERROR_400_RESPONSE = {
     "code": "bad_request",
     "message": "Invalid request parameters",
-    "details": "The 'series_ticker' parameter is required."
+    "details": "The 'series_ticker' parameter is required.",
 }
 
 # =============================================================================
@@ -249,19 +249,19 @@ DECIMAL_ARITHMETIC_TESTS = [
         "operation": "spread",
         "ask": Decimal("0.6250"),
         "bid": Decimal("0.6200"),
-        "expected_result": Decimal("0.0050")
+        "expected_result": Decimal("0.0050"),
     },
     {
         "operation": "pnl",
         "entry_price": Decimal("0.6100"),
         "exit_price": Decimal("0.6500"),
         "quantity": 100,
-        "expected_result": Decimal("40.0000")  # (0.6500 - 0.6100) * 100
+        "expected_result": Decimal("40.0000"),  # (0.6500 - 0.6100) * 100
     },
     {
         "operation": "edge",
         "true_prob": Decimal("0.7000"),
         "market_price": Decimal("0.6200"),
-        "expected_result": Decimal("0.0800")  # 0.7000 - 0.6200
-    }
+        "expected_result": Decimal("0.0800"),  # 0.7000 - 0.6200
+    },
 ]

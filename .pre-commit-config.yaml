@@ -49,10 +49,20 @@ repos:
       # Security: Hardcoded credentials scan
       - id: security-credentials
         name: Security Scan (Hardcoded Credentials)
-        entry: bash -c 'if git grep -E "(password|secret|api_key|token)\s*=\s*['\''"][^'\''\"]{5,}['\''"]" -- "*.py" "*.yaml" "*.yml" "*.sql" ":!tests/" ":!test_*"; then echo "ERROR: Found potential hardcoded credentials!"; exit 1; fi; echo "No hardcoded credentials detected"'
+        entry: bash
+        args:
+          - -c
+          - |
+            # Exclude test files, test data, and obvious placeholders (YOUR_, TEST_, EXAMPLE_)
+            if git grep -E '(password|secret|api_key|token)\s*=\s*['\''"][^'\''\"]{5,}['\''"]' -- '*.py' '*.yaml' '*.yml' '*.sql' ':(exclude)tests/**' ':(exclude)test_*.py' | grep -v -E '(YOUR_|TEST_|EXAMPLE_|PLACEHOLDER|<[A-Z_]+>)'; then
+              echo "ERROR: Found potential hardcoded credentials!"
+              echo "If this is a false positive (test/example value), use placeholders like YOUR_KEY or TEST_VALUE"
+              exit 1
+            fi
+            echo "No hardcoded credentials detected"
         language: system
         pass_filenames: false
-        description: "Scans for hardcoded passwords, API keys, tokens, and secrets"
+        description: "Scans for hardcoded passwords, API keys, tokens, and secrets (excludes tests and placeholders)"
 
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
