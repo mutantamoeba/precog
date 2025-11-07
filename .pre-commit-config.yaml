@@ -30,14 +30,14 @@ repos:
         types: [python]
         description: "Runs Ruff linter for code quality"
 
-      # Code quality: Ruff formatter (auto-fixes locally, checks in CI)
+      # Code quality: Ruff formatter (checks only - run `ruff format .` manually to fix)
       - id: ruff-format
         name: Ruff Formatter
-        entry: python -m ruff format .
+        entry: python -m ruff format --check .
         language: system
         pass_filenames: false
         types: [python]
-        description: "Formats code with Ruff (auto-fix)"
+        description: "Checks code formatting with Ruff (no auto-fix)"
 
       # Type checking: Mypy
       - id: mypy
