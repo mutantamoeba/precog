@@ -1,8 +1,258 @@
 """
-CRUD operations for Precog database using raw SQL queries.
+CRUD operations for Precog database with SCD Type 2 versioning support.
 
-All functions use parameterized queries to prevent SQL injection.
-Supports SCD Type 2 versioning (row_current_ind) for markets and positions.
+SCD Type 2 (Slowly Changing Dimension) Explained:
+--------------------------------------------------
+Imagine a Wikipedia article with full edit history. Instead of OVERWRITING the article
+(losing the old version), Wikipedia saves each edit as a new version. You can:
+- View the current version (what users see now)
+- View historical versions (what it looked like on 2023-05-15)
+- Compare changes between versions
+
+We do the SAME thing for markets and positions:
+
+**Traditional Database (Loses History):**
+```sql
+UPDATE markets SET yes_price = 0.5500 WHERE ticker = 'NFL-KC-YES'
+-- ❌ Old price (0.5200) is GONE FOREVER
+-- ❌ Can't backtest strategies with historical prices
+-- ❌ Can't audit "what price did we see at 2PM yesterday?"
+```
+
+**SCD Type 2 (Preserves History):**
+```sql
+-- Step 1: Mark current row as historical
+UPDATE markets SET row_current_ind = FALSE, row_end_ts = NOW()
+WHERE ticker = 'NFL-KC-YES' AND row_current_ind = TRUE
+
+-- Step 2: Insert new version
+INSERT INTO markets (..., row_current_ind = TRUE, row_start_ts = NOW())
+VALUES ('NFL-KC-YES', 0.5500, ...)
+-- ✅ Old price (0.5200) preserved with timestamps
+-- ✅ Can backtest with exact historical prices
+-- ✅ Full audit trail for compliance
+```
+
+Visual Example - Market Price History:
+```
+┌────────────┬──────────┬─────────────────────┬─────────────────────┬────────────────┐
+│ market_id  │yes_price │ row_start_ts        │ row_end_ts          │row_current_ind │
+├────────────┼──────────┼─────────────────────┼─────────────────────┼────────────────┤
+│  42        │ 0.5200   │ 2024-01-01 10:00:00 │ 2024-01-01 11:00:00 │ FALSE (old)    │
+│  42        │ 0.5350   │ 2024-01-01 11:00:00 │ 2024-01-01 13:00:00 │ FALSE (old)    │
+│  42        │ 0.5500   │ 2024-01-01 13:00:00 │ NULL                │ TRUE (current) │
+└────────────┴──────────┴─────────────────────┴─────────────────────┴────────────────┘
+
+Query for CURRENT price:
+    SELECT * FROM markets WHERE market_id = 42 AND row_current_ind = TRUE
+    → Returns 0.5500 (latest version only)
+
+Query for HISTORICAL prices:
+    SELECT * FROM markets WHERE market_id = 42 ORDER BY row_start_ts
+    → Returns all 3 versions (complete price history)
+```
+
+Why This Matters for Trading:
+------------------------------
+**1. Backtesting Accuracy**
+   - Test strategies against EXACT historical prices (not approximations)
+   - Know "what price did the API show at 2:15:37 PM on Game Day?"
+   - Reproduce trading decisions with 100% accuracy
+
+**2. Compliance & Auditing**
+   - SEC/regulatory requirement: "Why did you execute this trade?"
+   - Answer: "Market showed 0.5200 at 14:15:37, our model predicted 0.5700, edge = 0.0500"
+   - Prove it with immutable database records
+
+**3. Trade Attribution**
+   - Every trade links to EXACT strategy version (v1.0, v1.1, v2.0)
+   - A/B testing: "Did strategy v1.1 perform better than v1.0?"
+   - Know EXACTLY which config generated each trade
+
+**4. Position Monitoring**
+   - Track unrealized P&L changes over time
+   - Know when trailing stop was triggered (exact price and timestamp)
+   - Reconstruct "why did we exit at 0.5800 instead of 0.6000?"
+
+**5. Debugging**
+   - "Why didn't we enter this market?" → Check historical prices
+   - "Did our price feed freeze?" → Check row timestamps
+   - "When did this market close?" → Check status history
+
+The row_current_ind Pattern (CRITICAL):
+----------------------------------------
+**ALWAYS query with row_current_ind = TRUE to get current data!**
+
+```python
+# ✅ CORRECT - Gets current market price only
+current_market = db.execute('''
+    SELECT * FROM markets
+    WHERE ticker = %s
+      AND row_current_ind = TRUE
+''', ('NFL-KC-YES',))
+
+# ❌ WRONG - Gets ALL versions (including historical)
+all_versions = db.execute('''
+    SELECT * FROM markets
+    WHERE ticker = %s
+''', ('NFL-KC-YES',))
+# ^ This returns 50 historical rows! Your code will use RANDOM old price!
+```
+
+**Common Mistake:**
+Forgetting `row_current_ind = TRUE` causes bugs where code uses stale prices
+from 3 days ago instead of current market price. ALWAYS filter by row_current_ind!
+
+**When to query historical versions:**
+```python
+# Get price history for charting
+history = db.execute('''
+    SELECT yes_price, row_start_ts, row_end_ts
+    FROM markets
+    WHERE ticker = %s
+    ORDER BY row_start_ts DESC
+    LIMIT 100
+''', ('NFL-KC-YES',))
+```
+
+Performance Implications:
+-------------------------
+**Storage Cost:**
+- Each price update creates NEW row (not UPDATE)
+- 1000 price updates per day = 1000 rows (vs 1 row with UPDATE)
+- PostgreSQL handles this efficiently with indexes
+- Typical size: ~500 bytes/row → 500 KB/day per active market
+- For 100 active markets: ~50 MB/day (negligible)
+
+**Query Performance:**
+- `WHERE row_current_ind = TRUE` uses BTREE index (fast: <1ms)
+- Historical queries may scan more rows (add LIMIT to prevent full table scan)
+- Vacuum regularly to reclaim space from old versions
+
+**When to use SCD Type 2:**
+- ✅ Markets (prices change frequently, need audit trail)
+- ✅ Positions (track unrealized P&L changes, trailing stops)
+- ✅ Account Balance (track deposits/withdrawals/P&L)
+- ❌ Strategies (use immutable versioning instead - see versioning guide)
+- ❌ Probability Models (use immutable versioning instead)
+
+Trade Attribution Pattern:
+--------------------------
+**EVERY trade MUST link to exact strategy and model versions:**
+
+```python
+# ✅ CORRECT - Full attribution
+trade = create_trade(
+    market_id=42,
+    strategy_id=1,   # Links to strategies.strategy_id (v1.0)
+    model_id=2,      # Links to probability_models.model_id (v2.1)
+    quantity=100,
+    price=Decimal("0.5200")
+)
+
+# Later: Analyze which strategy version performed best
+performance = db.execute('''
+    SELECT s.strategy_version, AVG(t.realized_pnl) as avg_pnl
+    FROM trades t
+    JOIN strategies s ON t.strategy_id = s.strategy_id
+    GROUP BY s.strategy_version
+    ORDER BY avg_pnl DESC
+''')
+# Output: v1.1 = +$4.50/trade, v1.0 = +$2.10/trade
+# Conclusion: v1.1 is 2x better! Keep using it.
+```
+
+**Why immutable strategy versions matter:**
+If we allowed modifying strategy configs, we'd lose ability to attribute performance.
+Example: Strategy v1.0 config changes from `min_edge=0.05` to `min_edge=0.10`.
+Now we can't tell which trades used which config! Solution: Create v1.1 instead.
+
+Security - SQL Injection Prevention:
+------------------------------------
+**ALL functions use parameterized queries:**
+
+```python
+# ✅ CORRECT - Safe from SQL injection
+ticker = user_input  # Could be malicious: "'; DROP TABLE markets; --"
+result = db.execute(
+    "SELECT * FROM markets WHERE ticker = %s",
+    (ticker,)  # PostgreSQL escapes this safely
+)
+
+# ❌ WRONG - SQL injection vulnerability
+query = f"SELECT * FROM markets WHERE ticker = '{ticker}'"
+# ^ If ticker = "'; DROP TABLE markets; --" → DELETES ALL DATA!
+```
+
+**Key principle:** NEVER concatenate user input into SQL strings.
+ALWAYS use parameterized queries with %s placeholders.
+
+Common Operations Cheat Sheet:
+------------------------------
+```python
+# Create new market
+market_id = create_market(
+    platform_id="kalshi",
+    ticker="NFL-KC-YES",
+    yes_price=Decimal("0.5200"),
+    no_price=Decimal("0.4800")
+)
+
+# Get current market data
+market = get_current_market("NFL-KC-YES")  # Returns latest version only
+
+# Update market price (creates new version)
+new_id = update_market_with_versioning(
+    ticker="NFL-KC-YES",
+    yes_price=Decimal("0.5500")
+)
+# Old version: row_current_ind = FALSE (preserved)
+# New version: row_current_ind = TRUE (active)
+
+# Get price history for backtesting
+history = get_market_history("NFL-KC-YES", limit=100)
+# Returns all versions ordered by newest first
+
+# Create position
+pos_id = create_position(
+    market_id=42,
+    strategy_id=1,
+    model_id=2,
+    side='YES',
+    quantity=100,
+    entry_price=Decimal("0.5200")
+)
+
+# Update position price (monitoring)
+update_position_price(
+    position_id=pos_id,
+    current_price=Decimal("0.5800"),
+    trailing_stop_state={"peak": "0.5800", "stop": "0.5500"}
+)
+
+# Close position
+close_position(
+    position_id=pos_id,
+    exit_price=Decimal("0.6000"),
+    exit_reason='target_hit',
+    realized_pnl=Decimal("8.00")
+)
+
+# Record trade with attribution
+trade_id = create_trade(
+    market_id=42,
+    strategy_id=1,  # Which strategy version generated this?
+    model_id=2,     # Which model version predicted probability?
+    side='YES',
+    quantity=100,
+    price=Decimal("0.5200")
+)
+```
+
+Reference: docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+Related Requirements: REQ-DB-003 (SCD Type 2 Versioning)
+Related ADR: ADR-019 (Historical Data Versioning Strategy)
+Related Guide: docs/guides/VERSIONING_GUIDE_V1.0.md
 """
 
 from decimal import Decimal
