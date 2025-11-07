@@ -30,7 +30,7 @@ Related ADR: ADR-047 (RSA-PSS Authentication Pattern)
 import time
 import base64
 from pathlib import Path
-from typing import Optional
+from typing import Optional, cast
 
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
@@ -86,7 +86,7 @@ def load_private_key(key_path: str) -> RSAPrivateKey:
             f"Ensure the file is a valid PEM-formatted private key. Error: {e}"
         )
 
-    return private_key
+    return cast(RSAPrivateKey, private_key)
 
 
 def generate_signature(

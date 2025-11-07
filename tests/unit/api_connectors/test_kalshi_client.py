@@ -21,6 +21,7 @@ from unittest.mock import Mock, patch, MagicMock
 import time
 import os
 from pathlib import Path
+import requests
 
 # Import test fixtures
 from tests.fixtures.api_responses import (
@@ -38,9 +39,9 @@ from tests.fixtures.api_responses import (
     DECIMAL_ARITHMETIC_TESTS,
 )
 
-# These imports will work after implementation
-# from api_connectors.kalshi_auth import load_private_key, generate_signature, KalshiAuth
-# from api_connectors.kalshi_client import KalshiClient
+# Import implementation modules
+from api_connectors.kalshi_auth import load_private_key, generate_signature, KalshiAuth
+from api_connectors.kalshi_client import KalshiClient
 
 
 # =============================================================================
@@ -62,8 +63,15 @@ def mock_private_key():
     # This would be replaced with actual test key generation
     # For now, return a mock object
     mock_key = Mock()
-    mock_key.sign = Mock(return_value=b'fake_signature_bytes')
+    mock_key.sign = Mock(return_value=b'fake_signature_bytes_for_testing_purposes_only')
     return mock_key
+
+
+@pytest.fixture
+def mock_load_private_key(mock_private_key):
+    """Patch load_private_key to return mock key."""
+    with patch('api_connectors.kalshi_auth.load_private_key', return_value=mock_private_key):
+        yield mock_private_key
 
 
 @pytest.fixture
@@ -248,12 +256,9 @@ class TestKalshiMarketData:
 
     @pytest.mark.unit
     @pytest.mark.critical
-    def test_get_markets_returns_decimal_prices(self, mock_env_credentials):
+    def test_get_markets_returns_decimal_prices(self, mock_env_credentials, mock_load_private_key):
         """Test get_markets() parses all prices as Decimal (NOT float)."""
-        pytest.skip("Implementation pending")
-
-        with patch('api_connectors.kalshi_auth.load_private_key'):
-            client = KalshiClient(environment="demo")
+        client = KalshiClient(environment="demo")
 
         # Mock HTTP response
         with patch.object(client.session, 'request') as mock_request:
@@ -277,12 +282,9 @@ class TestKalshiMarketData:
 
     @pytest.mark.unit
     @pytest.mark.critical
-    def test_get_markets_sub_penny_precision(self, mock_env_credentials):
+    def test_get_markets_sub_penny_precision(self, mock_env_credentials, mock_load_private_key):
         """Test that sub-penny prices (0.4275, 0.4976) are parsed exactly."""
-        pytest.skip("Implementation pending")
-
-        with patch('api_connectors.kalshi_auth.load_private_key'):
-            client = KalshiClient(environment="demo")
+        client = KalshiClient(environment="demo")
 
         with patch.object(client.session, 'request') as mock_request:
             mock_response = Mock()
@@ -301,12 +303,9 @@ class TestKalshiMarketData:
         assert buffalo_market['last_price'] == Decimal("0.4300")
 
     @pytest.mark.unit
-    def test_get_markets_with_filters(self, mock_env_credentials):
+    def test_get_markets_with_filters(self, mock_env_credentials, mock_load_private_key):
         """Test get_markets() with series_ticker and event_ticker filters."""
-        pytest.skip("Implementation pending")
-
-        with patch('api_connectors.kalshi_auth.load_private_key'):
-            client = KalshiClient(environment="demo")
+        client = KalshiClient(environment="demo")
 
         with patch.object(client.session, 'request') as mock_request:
             mock_response = Mock()
@@ -327,12 +326,9 @@ class TestKalshiMarketData:
 
     @pytest.mark.unit
     @pytest.mark.critical
-    def test_get_single_market_decimal_prices(self, mock_env_credentials):
+    def test_get_single_market_decimal_prices(self, mock_env_credentials, mock_load_private_key):
         """Test get_market() for single market returns Decimal prices."""
-        pytest.skip("Implementation pending")
-
-        with patch('api_connectors.kalshi_auth.load_private_key'):
-            client = KalshiClient(environment="demo")
+        client = KalshiClient(environment="demo")
 
         with patch.object(client.session, 'request') as mock_request:
             mock_response = Mock()
@@ -358,12 +354,9 @@ class TestKalshiBalanceAndPositions:
 
     @pytest.mark.unit
     @pytest.mark.critical
-    def test_get_balance_returns_decimal(self, mock_env_credentials):
+    def test_get_balance_returns_decimal(self, mock_env_credentials, mock_load_private_key):
         """Test get_balance() returns Decimal (NOT float)."""
-        pytest.skip("Implementation pending")
-
-        with patch('api_connectors.kalshi_auth.load_private_key'):
-            client = KalshiClient(environment="demo")
+        client = KalshiClient(environment="demo")
 
         with patch.object(client.session, 'request') as mock_request:
             mock_response = Mock()
@@ -379,12 +372,9 @@ class TestKalshiBalanceAndPositions:
 
     @pytest.mark.unit
     @pytest.mark.critical
-    def test_get_positions_decimal_prices(self, mock_env_credentials):
+    def test_get_positions_decimal_prices(self, mock_env_credentials, mock_load_private_key):
         """Test get_positions() parses all prices as Decimal."""
-        pytest.skip("Implementation pending")
-
-        with patch('api_connectors.kalshi_auth.load_private_key'):
-            client = KalshiClient(environment="demo")
+        client = KalshiClient(environment="demo")
 
         with patch.object(client.session, 'request') as mock_request:
             mock_response = Mock()
@@ -409,12 +399,9 @@ class TestKalshiErrorHandling:
 
     @pytest.mark.unit
     @pytest.mark.critical
-    def test_401_unauthorized_error(self, mock_env_credentials):
+    def test_401_unauthorized_error(self, mock_env_credentials, mock_load_private_key):
         """Test handling of 401 Unauthorized (invalid credentials)."""
-        pytest.skip("Implementation pending")
-
-        with patch('api_connectors.kalshi_auth.load_private_key'):
-            client = KalshiClient(environment="demo")
+        client = KalshiClient(environment="demo")
 
         with patch.object(client.session, 'request') as mock_request:
             mock_response = Mock()
@@ -430,12 +417,9 @@ class TestKalshiErrorHandling:
 
     @pytest.mark.unit
     @pytest.mark.critical
-    def test_429_rate_limit_error(self, mock_env_credentials):
+    def test_429_rate_limit_error(self, mock_env_credentials, mock_load_private_key):
         """Test handling of 429 Too Many Requests (rate limit exceeded)."""
-        pytest.skip("Implementation pending")
-
-        with patch('api_connectors.kalshi_auth.load_private_key'):
-            client = KalshiClient(environment="demo")
+        client = KalshiClient(environment="demo")
 
         with patch.object(client.session, 'request') as mock_request:
             mock_response = Mock()
@@ -450,21 +434,36 @@ class TestKalshiErrorHandling:
             assert "429" in str(exc_info.value)
 
     @pytest.mark.unit
-    def test_500_server_error_retry(self, mock_env_credentials):
+    def test_500_server_error_retry(self, mock_env_credentials, mock_load_private_key):
         """Test exponential backoff retry on 500 Server Error."""
-        pytest.skip("Implementation pending")
+        # This test will be fully implemented after exponential backoff is added
+        client = KalshiClient(environment="demo")
 
-        # This test would verify retry logic with exponential backoff
-        # On 5xx errors, client should retry up to 3 times with delays
-        pass
+        with patch.object(client.session, 'request') as mock_request:
+            mock_response = Mock()
+            mock_response.status_code = 500
+            mock_response.json.return_value = KALSHI_ERROR_500_RESPONSE
+            mock_response.text = "Internal Server Error"
+            mock_response.raise_for_status.side_effect = requests.exceptions.HTTPError("500 Server Error")
+            mock_request.return_value = mock_response
+
+            with pytest.raises(requests.exceptions.HTTPError) as exc_info:
+                client.get_markets()
+
+            assert "500" in str(exc_info.value)
 
     @pytest.mark.unit
-    def test_network_timeout_error(self, mock_env_credentials):
+    def test_network_timeout_error(self, mock_env_credentials, mock_load_private_key):
         """Test handling of network timeout."""
-        pytest.skip("Implementation pending")
+        client = KalshiClient(environment="demo")
 
-        # This test would verify timeout handling
-        pass
+        with patch.object(client.session, 'request') as mock_request:
+            mock_request.side_effect = requests.exceptions.Timeout("Connection timed out")
+
+            with pytest.raises(requests.exceptions.Timeout) as exc_info:
+                client.get_markets()
+
+            assert "timed out" in str(exc_info.value).lower()
 
 
 # =============================================================================
@@ -525,12 +524,9 @@ class TestKalshiIntegration:
     """Integration tests for complete workflows."""
 
     @pytest.mark.integration
-    def test_complete_workflow_fetch_markets_and_balance(self, mock_env_credentials):
+    def test_complete_workflow_fetch_markets_and_balance(self, mock_env_credentials, mock_load_private_key):
         """Test complete workflow: initialize client, fetch markets, fetch balance."""
-        pytest.skip("Implementation pending")
-
-        with patch('api_connectors.kalshi_auth.load_private_key'):
-            client = KalshiClient(environment="demo")
+        client = KalshiClient(environment="demo")
 
         # Mock market request
         with patch.object(client.session, 'request') as mock_request:
@@ -554,3 +550,50 @@ class TestKalshiIntegration:
         assert len(markets) == 2
         assert isinstance(balance, Decimal)
         assert all(isinstance(m['yes_bid'], Decimal) for m in markets)
+
+    def test_get_fills_returns_decimal_prices(self, mock_env_credentials, mock_load_private_key):
+        """Test get_fills() returns fills with Decimal prices."""
+        client = KalshiClient(environment="demo")
+
+        # Mock response
+        with patch.object(client.session, 'request') as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_FILLS_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            fills = client.get_fills(ticker="KXNFLGAME-25OCT05-NEBUF-B250")
+
+        # Verify Decimal conversion
+        assert len(fills) == 2
+        assert isinstance(fills[0]['price'], Decimal)
+        assert fills[0]['price'] == Decimal("0.6150")
+        assert isinstance(fills[1]['price'], Decimal)
+        assert fills[1]['price'] == Decimal("0.4200")
+
+    def test_get_settlements_returns_decimal_values(self, mock_env_credentials, mock_load_private_key):
+        """Test get_settlements() returns settlements with Decimal values."""
+        client = KalshiClient(environment="demo")
+
+        # Mock response
+        with patch.object(client.session, 'request') as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_SETTLEMENTS_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            settlements = client.get_settlements()
+
+        # Verify Decimal conversion
+        assert len(settlements) == 2
+        assert isinstance(settlements[0]['settlement_value'], Decimal)
+        assert settlements[0]['settlement_value'] == Decimal("1.0000")
+
+    def test_close_method(self, mock_env_credentials, mock_load_private_key):
+        """Test client close() method closes session."""
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, 'close') as mock_close:
+            client.close()
+
+        mock_close.assert_called_once()

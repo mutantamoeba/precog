@@ -34,13 +34,20 @@ Related Requirements:
 import os
 import time
 from decimal import Decimal
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 import logging
 
 import requests
 from dotenv import load_dotenv
 
 from .kalshi_auth import KalshiAuth
+from .rate_limiter import RateLimiter
+from .types import (
+    ProcessedMarketData,
+    ProcessedPositionData,
+    ProcessedFillData,
+    ProcessedSettlementData,
+)
 
 # Load environment variables
 load_dotenv()
@@ -130,6 +137,9 @@ class KalshiClient:
         # Session for connection pooling (more efficient)
         self.session = requests.Session()
 
+        # Rate limiting (100 requests per minute for Kalshi)
+        self.rate_limiter = RateLimiter(requests_per_minute=100)
+
         logger.info(
             f"KalshiClient initialized for {environment} environment",
             extra={"environment": environment, "base_url": self.base_url}
@@ -140,91 +150,183 @@ class KalshiClient:
         method: str,
         path: str,
         params: Optional[Dict] = None,
-        json_data: Optional[Dict] = None
+        json_data: Optional[Dict] = None,
+        max_retries: int = 3
     ) -> Dict:
         """
-        Make authenticated API request.
+        Make authenticated API request with exponential backoff retry logic.
 
         Args:
             method: HTTP method (GET, POST, DELETE)
             path: API endpoint path (without base URL)
             params: Query parameters (for GET requests)
             json_data: JSON body (for POST requests)
+            max_retries: Maximum retry attempts for 5xx errors (default 3)
 
         Returns:
             Response data as dictionary
 
         Raises:
-            requests.HTTPError: If request fails
+            requests.HTTPError: If request fails after all retries
+            requests.Timeout: If request times out
+            requests.RequestException: For other request failures
 
-        Educational Note:
-            This is a "private" method (starts with _).
-            Convention in Python: _ prefix = internal implementation.
-            Users of this class shouldn't call this directly,
-            they should use higher-level methods like get_markets().
+        Educational Notes:
+            Exponential Backoff:
+            - Retry 1: Wait 1 second (2^0)
+            - Retry 2: Wait 2 seconds (2^1)
+            - Retry 3: Wait 4 seconds (2^2)
+
+            Why Exponential Backoff?
+            - Gives server time to recover from transient issues
+            - Reduces load on server during outages
+            - Each retry waits longer, increasing chance of success
+
+            5xx Errors (Server Errors):
+            - 500 Internal Server Error
+            - 502 Bad Gateway
+            - 503 Service Unavailable
+            - 504 Gateway Timeout
+            These are transient - server might recover, so we retry.
+
+            4xx Errors (Client Errors):
+            - 400 Bad Request
+            - 401 Unauthorized
+            - 403 Forbidden
+            - 404 Not Found
+            These won't fix themselves - retrying won't help, so we don't retry.
+
+        Reference: ADR-050 (Exponential Backoff Strategy)
+        Related: REQ-API-006 (API Error Handling)
         """
         url = f"{self.base_url}{path}"
 
-        # Get authentication headers
-        headers = self.auth.get_headers(method=method, path=path)
+        # Retry loop with exponential backoff
+        for attempt in range(max_retries + 1):  # +1 for initial attempt
+            try:
+                # Get fresh authentication headers for each attempt
+                headers = self.auth.get_headers(method=method, path=path)
 
-        # Log request (without sensitive headers)
-        logger.debug(
-            f"API Request: {method} {path}",
-            extra={
-                "method": method,
-                "path": path,
-                "params": params,
-                "has_json_data": json_data is not None
-            }
-        )
+                # Log request (without sensitive headers)
+                if attempt == 0:
+                    logger.debug(
+                        f"API Request: {method} {path}",
+                        extra={
+                            "method": method,
+                            "path": path,
+                            "params": params,
+                            "has_json_data": json_data is not None
+                        }
+                    )
+                else:
+                    logger.info(
+                        f"API Retry {attempt}/{max_retries}: {method} {path}",
+                        extra={
+                            "method": method,
+                            "path": path,
+                            "attempt": attempt,
+                            "max_retries": max_retries
+                        }
+                    )
 
-        # Make request
-        try:
-            response = self.session.request(
-                method=method,
-                url=url,
-                params=params,
-                json=json_data,
-                headers=headers,
-                timeout=30  # 30 second timeout (ADR-050)
-            )
+                # Rate limiting: Wait if needed to comply with API limits
+                self.rate_limiter.wait_if_needed()
 
-            # Raise exception if request failed
-            response.raise_for_status()
+                # Make request
+                response = self.session.request(
+                    method=method,
+                    url=url,
+                    params=params,
+                    json=json_data,
+                    headers=headers,
+                    timeout=30  # 30 second timeout (ADR-050)
+                )
 
-            # Log success
-            logger.debug(
-                f"API Response: {response.status_code}",
-                extra={
-                    "status_code": response.status_code,
-                    "path": path
-                }
-            )
+                # Raise exception if request failed
+                response.raise_for_status()
 
-            return response.json()
+                # Log success
+                logger.debug(
+                    f"API Response: {response.status_code}",
+                    extra={
+                        "status_code": response.status_code,
+                        "path": path,
+                        "attempt": attempt
+                    }
+                )
 
-        except requests.exceptions.Timeout as e:
-            logger.error(f"Request timeout for {path}", extra={"path": path})
-            raise
+                return cast(Dict[Any, Any], response.json())
 
-        except requests.exceptions.HTTPError as e:
-            logger.error(
-                f"HTTP error {response.status_code} for {path}",
-                extra={
-                    "status_code": response.status_code,
-                    "path": path,
-                    "response_body": response.text
-                }
-            )
-            raise
+            except requests.exceptions.Timeout as e:
+                logger.error(
+                    f"Request timeout for {path} (attempt {attempt + 1}/{max_retries + 1})",
+                    extra={"path": path, "attempt": attempt}
+                )
+                # Don't retry on timeout - let caller decide
+                raise
 
-        except requests.exceptions.RequestException as e:
-            logger.error(
-                f"Request failed for {path}: {e}",
-                extra={"path": path, "error": str(e)}
-            )
-            raise
+            except requests.exceptions.HTTPError as e:
+                status_code = response.status_code
+
+                # Handle rate limit errors (429)
+                if status_code == 429:
+                    retry_after_str = response.headers.get('Retry-After')
+                    retry_after_int: Optional[int] = None
+                    if retry_after_str:
+                        retry_after_int = int(retry_after_str)
+
+                    logger.warning(
+                        f"Rate limit (429) exceeded for {path}",
+                        extra={
+                            "path": path,
+                            "retry_after": retry_after_int
+                        }
+                    )
+
+                    self.rate_limiter.handle_rate_limit_error(retry_after=retry_after_int)
+                    # Don't retry automatically - let caller decide
+                    raise
+
+                # Retry on 5xx errors (server errors)
+                if 500 <= status_code < 600 and attempt < max_retries:
+                    # Calculate exponential backoff delay: 1s, 2s, 4s
+                    delay = 2 ** attempt
+
+                    logger.warning(
+                        f"Server error {status_code} for {path}, retrying in {delay}s "
+                        f"(attempt {attempt + 1}/{max_retries + 1})",
+                        extra={
+                            "status_code": status_code,
+                            "path": path,
+                            "attempt": attempt,
+                            "delay_seconds": delay
+                        }
+                    )
+
+                    time.sleep(delay)
+                    continue  # Retry
+
+                # Don't retry on 4xx errors (client errors) or if max retries reached
+                logger.error(
+                    f"HTTP error {status_code} for {path}",
+                    extra={
+                        "status_code": status_code,
+                        "path": path,
+                        "response_body": response.text,
+                        "attempt": attempt
+                    }
+                )
+                raise
+
+            except requests.exceptions.RequestException as e:
+                logger.error(
+                    f"Request failed for {path}: {e}",
+                    extra={"path": path, "error": str(e), "attempt": attempt}
+                )
+                raise
+
+        # Should never reach here, but just in case
+        raise requests.exceptions.RetryError(f"Max retries ({max_retries}) exceeded for {path}")
 
     def _convert_prices_to_decimal(self, data: Dict) -> None:
         """
@@ -268,7 +370,7 @@ class KalshiClient:
         event_ticker: Optional[str] = None,
         limit: int = 100,
         cursor: Optional[str] = None
-    ) -> List[Dict]:
+    ) -> List[ProcessedMarketData]:
         """
         Get list of markets with price data.
 
@@ -302,7 +404,7 @@ class KalshiClient:
         Reference: REQ-API-001 (Kalshi API Integration)
         Related: ADR-048 (Decimal-First Response Parsing)
         """
-        params = {"limit": limit}
+        params: Dict[str, Any] = {"limit": limit}
 
         if series_ticker:
             params["series_ticker"] = series_ticker
@@ -328,9 +430,9 @@ class KalshiClient:
             }
         )
 
-        return markets
+        return cast(List[ProcessedMarketData], markets)
 
-    def get_market(self, ticker: str) -> Dict:
+    def get_market(self, ticker: str) -> ProcessedMarketData:
         """
         Get details for single market.
 
@@ -356,7 +458,7 @@ class KalshiClient:
 
         logger.info(f"Fetched market: {ticker}", extra={"ticker": ticker})
 
-        return market
+        return cast(ProcessedMarketData, market)
 
     def get_balance(self) -> Decimal:
         """
@@ -395,7 +497,7 @@ class KalshiClient:
         self,
         status: Optional[str] = None,
         ticker: Optional[str] = None
-    ) -> List[Dict]:
+    ) -> List[ProcessedPositionData]:
         """
         Get current positions.
 
@@ -414,7 +516,7 @@ class KalshiClient:
 
         Reference: REQ-CLI-003 (Positions Fetch Command)
         """
-        params = {}
+        params: Dict[str, Any] = {}
         if status:
             params["status"] = status
         if ticker:
@@ -432,7 +534,7 @@ class KalshiClient:
             extra={"count": len(positions), "status": status}
         )
 
-        return positions
+        return cast(List[ProcessedPositionData], positions)
 
     def get_fills(
         self,
@@ -441,7 +543,7 @@ class KalshiClient:
         max_ts: Optional[int] = None,
         limit: int = 100,
         cursor: Optional[str] = None
-    ) -> List[Dict]:
+    ) -> List[ProcessedFillData]:
         """
         Get trade fills (executed orders).
 
@@ -463,7 +565,7 @@ class KalshiClient:
 
         Reference: REQ-CLI-004 (Fills Fetch Command)
         """
-        params = {"limit": limit}
+        params: Dict[str, Any] = {"limit": limit}
 
         if ticker:
             params["ticker"] = ticker
@@ -483,14 +585,14 @@ class KalshiClient:
 
         logger.info(f"Fetched {len(fills)} fills", extra={"count": len(fills)})
 
-        return fills
+        return cast(List[ProcessedFillData], fills)
 
     def get_settlements(
         self,
         ticker: Optional[str] = None,
         limit: int = 100,
         cursor: Optional[str] = None
-    ) -> List[Dict]:
+    ) -> List[ProcessedSettlementData]:
         """
         Get market settlements.
 
@@ -510,7 +612,7 @@ class KalshiClient:
 
         Reference: REQ-CLI-005 (Settlements Fetch Command)
         """
-        params = {"limit": limit}
+        params: Dict[str, Any] = {"limit": limit}
 
         if ticker:
             params["ticker"] = ticker
@@ -529,7 +631,7 @@ class KalshiClient:
             extra={"count": len(settlements)}
         )
 
-        return settlements
+        return cast(List[ProcessedSettlementData], settlements)
 
     def close(self) -> None:
         """
