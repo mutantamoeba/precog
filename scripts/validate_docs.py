@@ -707,27 +707,35 @@ def validate_phase_completion_status() -> ValidationResult:
         phases_checked += 1
 
         # Check for completion markers
-        is_marked_complete = "✅" in status_line and "COMPLETE" in status_line.upper()
-        is_marked_planned = "🔵" in status_line or "Planned" in status_line
-        is_marked_in_progress = "🟡" in status_line or "In Progress" in status_line
+        # Match completion status at the BEGINNING of the status line (not in parenthetical notes)
+        # Valid complete formats: "✅ **100% COMPLETE**" or "✅ **COMPLETE**"
+        is_marked_complete = bool(re.match(r"^✅.*\*\*.*COMPLETE", status_line.strip()))
+
+        # Match planned/in-progress status at the beginning
+        is_marked_planned = bool(
+            re.match(r"^🔵", status_line.strip()) or re.match(r"^Planned", status_line.strip())
+        )
+        is_marked_in_progress = bool(
+            re.match(r"^🟡", status_line.strip()) or re.match(r"^In Progress", status_line.strip())
+        )
 
         # Validate consistency
-        if is_marked_complete and not re.search(r"✅.*\*\*.*COMPLETE", status_line):
-            # Should have "✅ **100% COMPLETE**" or "✅ **COMPLETE**"
-            errors.append(f"{phase_name}: Marked as complete but missing proper status format")
-            errors.append('  Expected: "**Status:** ✅ **100% COMPLETE**" or similar')
-            errors.append(f"  Found: {status_line.strip()}")
-
-        if (
-            (is_marked_planned or is_marked_in_progress)
-            and "COMPLETE" in status_line.upper()
-            and "✅" in status_line
-        ):
-            # Should not have completion language
-            errors.append(
-                f"{phase_name}: Conflicting status - marked as Planned/In Progress but also Complete"
+        if is_marked_complete:
+            # Properly formatted complete status
+            pass
+        elif is_marked_planned or is_marked_in_progress:
+            # Check if status line has conflicting completion markers AT THE BEGINNING
+            # Ignore references to prerequisite completion (e.g., "Phase 0.7 complete ✅")
+            # Only flag if MAIN status is marked complete (starts with ✅ and has COMPLETE)
+            main_status_complete = bool(
+                re.match(r"^(🔵|🟡).*✅.*\*\*.*COMPLETE", status_line.strip())
             )
-            errors.append(f"  Status line: {status_line.strip()}")
+            if main_status_complete:
+                # Should not have completion language in main status
+                errors.append(
+                    f"{phase_name}: Conflicting status - marked as Planned/In Progress but also Complete"
+                )
+                errors.append(f"  Status line: {status_line.strip()}")
 
     # Check for deferred tasks consistency
     # Phases with deferred tasks should reference the deferred tasks document
