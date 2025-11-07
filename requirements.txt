@@ -37,6 +37,7 @@ faker==30.8.2  # Fake data generation (Oct 2024)
 ruff==0.8.4  # Code formatter + linter (replaces black + flake8; Dec 2024)
 mypy==1.12.0  # Type checking (Oct 9, 2025)
 types-PyYAML==6.0.12.20240917  # Type stubs for PyYAML (Sep 2024)
+types-requests==2.32.1.20241016  # Type stubs for requests (Oct 2024)
 pre-commit==4.0.1  # Git hooks framework (validation enforcement; Nov 2024)
 
 # Monitoring and Logging (from Checklist)

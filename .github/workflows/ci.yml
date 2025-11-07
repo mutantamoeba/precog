@@ -78,9 +78,11 @@ jobs:
 
       - name: Check for secrets in code
         run: |
-          # Search for potential hardcoded credentials (exclude test files)
-          if git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.py' '*.yaml' '*.sql' ':!tests/' ':!test_*'; then
+          # Search for potential hardcoded credentials (exclude test files and placeholders)
+          # Excludes: test files, obvious placeholders (YOUR_, TEST_, EXAMPLE_)
+          if git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.py' '*.yaml' '*.yml' '*.sql' ':(exclude)tests/**' ':(exclude)test_*.py' | grep -v -E '(YOUR_|TEST_|EXAMPLE_|PLACEHOLDER|<[A-Z_]+>)'; then
             echo "ERROR: Found potential hardcoded credentials!"
+            echo "If this is a false positive (test/example value), use placeholders like YOUR_KEY or TEST_VALUE"
             exit 1
           fi
           echo "No hardcoded credentials detected"
