@@ -418,9 +418,41 @@ def validate_new_docs_in_master_index() -> ValidationResult:
     mandatory when creating new versioned documents.
 
     Returns ERROR (not warning) if any versioned .md file exists but is not listed.
+
+    Excludes ephemeral documents (session handoffs, temporary planning docs, templates).
     """
     errors = []
     warnings = []
+
+    # Define ephemeral document patterns (session-specific, temporary, templates)
+    # Using lowercase to satisfy Ruff N806 (variable in function should be lowercase)
+    ephemeral_patterns = [
+        # Session-specific documents
+        "SESSION_HANDOFF_",  # Session handoffs (e.g., SESSION_HANDOFF_2025-10-29_v0.md)
+        "CLAUDE_CODE_",  # Temporary Claude Code handoff documents
+        # Templates
+        "_TEMPLATE_",  # Template files (not actual content)
+        # Temporary planning and task documents
+        "_TASK_PLAN_",  # Task planning documents (e.g., PHASE_1_TASK_PLAN_V1.0.md)
+        "_IMPLEMENTATION_PLAN_",  # Implementation plan documents
+        "REFACTORING_PLAN_",  # Refactoring plan documents
+        # Analysis and review documents (temporary, not permanent specs)
+        "_ANALYSIS_",  # Analysis documents (e.g., ELO_AND_SETTLEMENTS_ARCHITECTURE_ANALYSIS_V1.0.md)
+        "_REVIEW_",  # Review documents (e.g., DOCUMENTATION_V2_REVIEW_GUIDE.md)
+        "_ASSESSMENT_",  # Assessment documents (e.g., ORDER_EXECUTION_ARCHITECTURE_ASSESSMENT_V1_0.md)
+        "_CLARIFICATION_",  # Clarification documents
+        # Reports and audits (point-in-time, not living documents)
+        "_REPORT",  # Report documents (e.g., FILENAME_VERSION_REPORT.md)
+        "_AUDIT_",  # Audit documents (e.g., YAML_CONSISTENCY_AUDIT_V1_0.md)
+        # Temporary update specs (superseded once applied)
+        "_UPDATE_SPEC_",  # Update spec documents (e.g., CONFIGURATION_GUIDE_UPDATE_SPEC_V1_0.md)
+        # Phase-specific comprehensive handoffs (different from SESSION_HANDOFF_)
+        "PHASE_0_5_COMPREHENSIVE_HANDOFF_",  # Phase 0.5 handoff document
+    ]
+
+    def is_ephemeral(filename: str) -> bool:
+        """Check if document is ephemeral (session-specific, temporary)."""
+        return any(pattern in filename for pattern in ephemeral_patterns)
 
     # Find MASTER_INDEX
     master_index = find_latest_version("MASTER_INDEX_V*.md")
@@ -436,14 +468,15 @@ def validate_new_docs_in_master_index() -> ValidationResult:
     content = master_index.read_text(encoding="utf-8")
 
     # Extract document listings from MASTER_INDEX
-    # Format: | FILENAME | [OK] | vX.Y | /path/ | ...
-    doc_pattern = r"\|\s+([A-Z_0-9]+_V\d+\.\d+\.md)\s+\|"
+    # Format: | **FILENAME** | [OK] | vX.Y | /path/ | ...
+    # The document name is wrapped in markdown bold (**) in MASTER_INDEX tables
+    doc_pattern = r"\|\s+\*\*([A-Z_0-9]+_V\d+\.\d+\.md)\*\*\s+\|"
     listed_docs = set(re.findall(doc_pattern, content))
 
-    # Find all versioned markdown files in docs/ (excluding _archive/)
+    # Find all versioned markdown files in docs/ (excluding _archive/ and ephemeral patterns)
     all_docs = set()
     for doc_file in DOCS_ROOT.rglob("*_V*.md"):
-        if "_archive" not in str(doc_file):
+        if "_archive" not in str(doc_file) and not is_ephemeral(doc_file.name):
             all_docs.add(doc_file.name)
 
     # Calculate unlisted documents
