@@ -75,9 +75,11 @@ repos:
           - |
             # Check for print() in production code paths (excludes scripts/ and tests/)
             # Production paths: database/, api_connectors/, trading/, analytics/, utils/, config/
+            # Excludes docstring examples (>>> print(...) and ... print(...))
             staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '(database|api_connectors|trading|analytics|utils|config)/.*\.py$' || true)
             if [ -n "$staged_files" ]; then
-              if echo "$staged_files" | xargs grep -n 'print(' 2>/dev/null; then
+              # Use grep to find print() but exclude docstring examples (lines with >>> or ...)
+              if echo "$staged_files" | xargs grep -n 'print(' 2>/dev/null | grep -v -E '(>>>|\.\.\.)' ; then
                 echo ""
                 echo "ERROR: Found print() statements in production code!"
                 echo "Fix: Use logger.info(), logger.debug(), or logger.error() instead"
