@@ -271,23 +271,27 @@ def validate_master_index() -> ValidationResult:
 
     content = master_index.read_text(encoding="utf-8")
 
-    # Extract document listings (format: | **FILENAME** | ✅ | vX.Y | /path/ | ...)
-    # Regex accounts for bold markdown syntax (**...**) around filenames
-    # Also extracts status emoji to skip planned/archived documents
-    # Note: Emojis may have variation selectors (U+FE0F), so we capture the emoji + optional \uFE0F
-    doc_line_pattern = r"\|\s+\*\*([A-Z_0-9]+_V\d+\.\d+\.md)\*\*\s+\|\s+([✅⚠️📝❌🔵🗄]\uFE0F?)"
-    doc_matches = re.findall(doc_line_pattern, content)
+    # Extract document listings (format: | **FILENAME** | [STATUS] | vX.Y | /path/ | ...)
+    # Regex accounts for bold markdown markers (**) around filenames
+    # Capture both filename and status emoji to skip planned documents (🔵)
+    doc_pattern = r"\|\s+\*\*([A-Z_0-9]+_V\d+\.\d+\.md)\*\*\s+\|\s+(✅|🔵|📦|🚧)"
+    all_matches = re.findall(doc_pattern, content)
 
-    # Filter out planned (🔵) and archived (🗄️) documents
-    # Note: Compare just the base emoji character (first char) to handle variation selectors
-    listed_docs = [doc for doc, status in doc_matches if status[0] not in ("🔵", "🗄")]
+    # Only check documents with ✅ status (existing), skip 🔵 (planned), 📦 (archived), 🚧 (draft)
+    listed_docs = [filename for filename, status in all_matches if status == "✅"]
+    planned_docs = [filename for filename, status in all_matches if status == "🔵"]
 
-    if not listed_docs:
+    if not all_matches:
         warnings.append(
             "No versioned documents found in MASTER_INDEX (may be formatted differently)"
         )
 
-    # Check each listed document exists
+    if planned_docs:
+        warnings.append(
+            f"{len(planned_docs)} planned documents (🔵) not yet created - this is expected"
+        )
+
+    # Check each listed document exists (only ✅ status)
     for doc_name in listed_docs:
         # Search in all subdirectories of docs/
         found = False
@@ -744,12 +748,7 @@ def validate_phase_completion_status() -> ValidationResult:
                 f"{phase_with_defer}: Has 'Deferred Tasks' section but no reference to {expected_doc_ref} document"
             )
 
-    # Convert errors to warnings (Phase Completion Status is non-critical formatting check)
-    # This check has false positives when phases reference prerequisite completion
-    # (e.g., "Phase 1: Planned (Ready to Start - Phase 0.7 complete ✅)")
-    warnings.extend(errors)
-    errors = []
-    passed = True  # Always pass now that errors are converted to warnings
+    passed = len(errors) == 0
 
     check_name = f"Phase Completion Status (Check #8) - {phases_checked} phases checked"
     return ValidationResult(name=check_name, passed=passed, errors=errors, warnings=warnings)
