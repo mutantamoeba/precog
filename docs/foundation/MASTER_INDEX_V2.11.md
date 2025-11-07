@@ -1,9 +1,15 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.10
-**Last Updated:** 2025-11-06
+**Version:** 2.11
+**Last Updated:** 2025-11-07
 **Status:** ✅ Current
+**Changes in v2.11:**
+- **PHASE 0.7 DEFERRED TASKS COMPLETION**: Marked DEF-003 and DEF-004 as complete
+- Added GITHUB_BRANCH_PROTECTION_CONFIG.md (comprehensive branch protection documentation, completes DEF-003)
+- Updated PHASE_0.7_DEFERRED_TASKS V1.0 → V1.1 (marked DEF-003 GitHub Branch Protection and DEF-004 Python 3.14 migration as complete)
+- Added complete GitHub branch protection configuration with API reproduction commands, troubleshooting guide, and security implications
+- Documents all 5 required status checks, admin enforcement, and verification procedures
 **Changes in v2.10:**
 - **VERSION MISMATCH CORRECTIONS**: Fixed all version discrepancies in foundation documents table
 - Updated ARCHITECTURE_DECISIONS V2.9 → V2.10 (table showed V2.8, actual was V2.10)
@@ -143,7 +149,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.4** |
 | **MASTER_REQUIREMENTS_V2.10.md** | ✅ | v2.10 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.10** (Phase 1 API best practices, validation, testing, CI/CD requirements) |
-| **MASTER_INDEX_V2.10.md** | ✅ | v2.10 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.10** (Fixed version mismatches, code quality fixes) |
+| **MASTER_INDEX_V2.11.md** | ✅ | v2.11 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.11** (DEF-003/DEF-004 completion, branch protection docs) |
 | **ARCHITECTURE_DECISIONS_V2.10.md** | ✅ | v2.10 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (50+ total) - **UPDATED V2.10** (ADR-047 through ADR-052 for API best practices) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 103 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.3** (added 4 Phase 1 API requirements) |
 | **ADR_INDEX_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (50+ ADRs) - **UPDATED V1.4** (ADR-047 through ADR-052 added) |
@@ -262,7 +268,8 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **SESSION_6_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 6 | 🟢 Medium | Previous session handoff |
 | **Handoff_Protocol_V1_1.md** | ✅ | v1.1 | `/docs/utility/` | 0 | All phases | 🔴 Critical | **UPDATED V1.1** - Merged 4 docs: HANDOFF_PROCESS + TOKEN_MONITORING + PHASE_COMPLETION + KNOWLEDGE_STRATEGY (V1.0 archived) |
 | **VERSION_HEADERS_GUIDE_V2_1.md** | ✅ | v2.1 | `/docs/utility/` | 0 | All phases | 🟡 High | Version control standards, references Handoff_Protocol (**FIXED** filename from V2.1 → V2_1) |
-| **PHASE_0.7_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | Tracks deferred enhancements from Phase 0.6c (CI/CD, advanced testing, schema validation) |
+| **PHASE_0.7_DEFERRED_TASKS_V1.1.md** | ✅ | v1.1 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | Tracks deferred enhancements from Phase 0.7 (2/8 tasks complete: DEF-003, DEF-004) - **UPDATED** from V1.0 |
+| **GITHUB_BRANCH_PROTECTION_CONFIG.md** | ✅ | v1.0 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **NEW** - Complete GitHub branch protection configuration (completes DEF-003) |
 | **PHASE_1_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1 | 🟡 High | **NEW** - Tracks deferred enhancements from Phase 1 (extended docstrings, pre-commit hooks, branch protection) |
 | **ENVIRONMENT_CHECKLIST_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0 | Phase 0 ✅ | 🔴 Critical | Windows 11 setup, Parts 1-7, dependencies verification (**FIXED** filename from V1.1 → V1.0) |
 | **CONSISTENCY_REVIEW.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Phase 0 consistency validation, all discrepancies fixed |

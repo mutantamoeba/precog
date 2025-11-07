@@ -1,9 +1,15 @@
 # Phase 0.7 Deferred Tasks
 
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-10-31
+**Last Updated:** 2025-11-07
 **Phase:** 0.7 (CI/CD Infrastructure)
-**Status:** 🔵 Planned for Phase 0.8
+**Status:** 🟡 In Progress - 2/8 tasks complete (DEF-003, DEF-004)
+**Changes in V1.1:**
+- Marked DEF-003 (GitHub Branch Protection) as ✅ Complete (2025-11-07 via PR #2)
+- Marked DEF-004 (Line Ending Fix) as ✅ Complete (2025-11-07 via PR #2/PR #3)
+- Created comprehensive documentation: `GITHUB_BRANCH_PROTECTION_CONFIG.md`
+- Added Status column to summary table
 
 ---
 
@@ -15,16 +21,16 @@ This document tracks tasks that were identified during Phase 0.7 (CI/CD) but def
 
 ## Deferred Tasks Summary
 
-| ID | Task | Priority | Estimated Effort | Target Phase |
-|----|------|----------|------------------|--------------|
-| DEF-001 | Pre-Commit Hooks Setup | 🟡 High | 2 hours | 0.8 |
-| DEF-002 | Pre-Push Hooks Setup | 🟡 High | 1 hour | 0.8 |
-| DEF-003 | GitHub Branch Protection Rules | 🟢 Medium | 30 min | 0.8 |
-| DEF-004 | Line Ending Edge Case Fix | 🟢 Medium | 1 hour | 0.8 |
-| DEF-005 | Pre-Commit Hook: No print() in Production | 🔵 Low | 30 min | 1+ |
-| DEF-006 | Pre-Commit Hook: Check for Merge Conflicts | 🔵 Low | 15 min | 1+ |
-| DEF-007 | Pre-Push Hook: Verify Branch Name Convention | 🔵 Low | 30 min | 1+ |
-| DEF-008 | Database Schema Validation Script | 🟡 High | 3-4 hours | 0.8 |
+| ID | Task | Priority | Estimated Effort | Target Phase | Status |
+|----|------|----------|------------------|--------------|--------|
+| DEF-001 | Pre-Commit Hooks Setup | 🟡 High | 2 hours | 0.8 | 🔵 Pending |
+| DEF-002 | Pre-Push Hooks Setup | 🟡 High | 1 hour | 0.8 | 🔵 Pending |
+| DEF-003 | GitHub Branch Protection Rules | 🟢 Medium | 30 min | 0.8 | ✅ Complete (2025-11-07) |
+| DEF-004 | Line Ending Edge Case Fix | 🟢 Medium | 1 hour | 0.8 | ✅ Complete (2025-11-07) |
+| DEF-005 | Pre-Commit Hook: No print() in Production | 🔵 Low | 30 min | 1+ | 🔵 Pending |
+| DEF-006 | Pre-Commit Hook: Check for Merge Conflicts | 🔵 Low | 15 min | 1+ | 🔵 Pending |
+| DEF-007 | Pre-Push Hook: Verify Branch Name Convention | 🔵 Low | 30 min | 1+ | 🔵 Pending |
+| DEF-008 | Database Schema Validation Script | 🟡 High | 3-4 hours | 0.8 | 🔵 Pending |
 
 ---
 
@@ -191,7 +197,10 @@ git push --no-verify
 
 ---
 
-## DEF-003: GitHub Branch Protection Rules
+## DEF-003: GitHub Branch Protection Rules ✅ **COMPLETED**
+
+**Completed:** 2025-11-07 via PR #2
+**Documentation:** `docs/utility/GITHUB_BRANCH_PROTECTION_CONFIG.md`
 
 ### Description
 Configure GitHub branch protection rules to enforce code quality and prevent accidental pushes to `main`.
@@ -202,56 +211,63 @@ Configure GitHub branch protection rules to enforce code quality and prevent acc
 - Requires code review before merging
 - Prevents force pushes that could lose history
 
-### Implementation
+### Implementation ✅
 
-**Navigate to:**
-```
-GitHub Repo → Settings → Branches → Branch protection rules → Add rule
-```
+**Configured via GitHub API on 2025-11-07**
 
-**Configure for `main` branch:**
+Branch protection now active for `main` branch with the following settings:
 
-**1. Basic Settings**
+**1. Basic Settings ✅**
 - [x] Require a pull request before merging
-- [x] Require approvals: 1 (if team member available, otherwise 0)
+- [x] Require approvals: 0 (solo development, but PRs mandatory)
 - [x] Dismiss stale pull request approvals when new commits are pushed
-- [x] Require review from Code Owners (optional, if CODEOWNERS file created)
+- [ ] Require review from Code Owners (not using CODEOWNERS file)
 
-**2. Status Checks**
+**2. Status Checks ✅**
 - [x] Require status checks to pass before merging
-- [x] Require branches to be up to date before merging
+- [x] Require branches to be up to date before merging (strict: true)
 - Required checks:
-  - ✅ Lint and Format Check
-  - ✅ Type Checking (Mypy)
-  - ✅ Security Scanning
+  - ✅ Pre-commit Validation (Ruff, Mypy, Security)
+  - ✅ Security Scanning (Bandit & Safety)
   - ✅ Documentation Validation
-  - ✅ Tests (all matrix combinations)
   - ✅ Quick Validation Suite
+  - ✅ CI Summary (aggregates all test matrix results)
 
-**3. Protection Rules**
+**3. Protection Rules ✅**
 - [x] Require conversation resolution before merging
-- [x] Require signed commits (optional, high security)
-- [x] Require linear history (no merge commits, only squash or rebase)
+- [ ] Require signed commits (not implemented - deferred)
+- [ ] Require linear history (not enforced - squash merges preferred but not required)
 - [ ] Require deployments to succeed (N/A for this project)
 
-**4. Force Push**
+**4. Force Push ✅**
 - [x] Do not allow force pushes
 - [x] Do not allow deletions
 
-**5. Rules Applied To**
-- Administrators: [x] Include administrators (best practice)
+**5. Rules Applied To ✅**
+- Administrators: [x] Include administrators ⚠️ **CRITICAL: Even admins must use PRs**
+
+### Final Configuration
+
+Full configuration documented in `docs/utility/GITHUB_BRANCH_PROTECTION_CONFIG.md` including:
+- Exact JSON payload for reproduction
+- GitHub CLI commands for re-applying settings
+- Troubleshooting guide
+- Security implications
+- History of configuration changes
 
 ### Benefits
-- Enforces code review process
-- Prevents accidental commits to main
-- Ensures all code passes CI before merging
-- Maintains clean Git history
+- ✅ Enforces code review process
+- ✅ Prevents accidental commits to main
+- ✅ Ensures all code passes CI before merging
+- ✅ Maintains clean Git history
+- ✅ Tested and verified working (PR #2, PR #3)
 
-### Acceptance Criteria
-- [ ] Branch protection rules configured for `main`
-- [ ] Test: Try to push directly to main → blocked
-- [ ] Test: Create PR → can only merge after CI passes
-- [ ] Document PR workflow in CLAUDE.md
+### Acceptance Criteria ✅ ALL COMPLETE
+- [x] Branch protection rules configured for `main` ✅ Done 2025-11-07
+- [x] Test: Try to push directly to main → blocked ✅ Verified working
+- [x] Test: Create PR → can only merge after CI passes ✅ PR #2 and #3 both required passing CI
+- [x] Document PR workflow in CLAUDE.md ✅ Already documented in CLAUDE.md
+- [x] **BONUS:** Comprehensive configuration documentation created ✅ GITHUB_BRANCH_PROTECTION_CONFIG.md
 
 ---
 
