@@ -19,7 +19,7 @@ This protocol ensures that each development phase is **truly complete** before m
 
 **Who Performs:** Developer + Claude working together
 
-**Time Required:** 30-60 minutes per phase
+**Time Required:** 60-90 minutes per phase
 
 ---
 
@@ -31,16 +31,18 @@ Developers often think a phase is "done" when the code works, but forget to:
 - Archive outdated documents
 - Check for upstream/downstream impacts
 - Validate that the phase deliverables actually work together
+- **Update validation scripts for new tables/columns** ⚠️ NEW
 
 **This Protocol Prevents:**
 - Starting Phase 2 only to discover Phase 1 wasn't really finished
 - Finding inconsistencies between code and documentation 6 months later
 - Discovering missing tables/configs when trying to deploy
 - Architectural drift where components don't fit together
+- **Validation scripts becoming outdated and failing unexpectedly** ⚠️ NEW
 
 ---
 
-## The 8-Step Assessment Process (with Prerequisites Check)
+## The 9-Step Assessment Process (with Prerequisites Check)
 
 ### Step 1: Deliverables Verification (10 minutes)
 
@@ -362,7 +364,67 @@ Phase 2 needs live game data, so Phase 1 must have:
 
 ---
 
-### Step 6: Archive & Version Management (5 minutes)
+### Step 6: Validation Scripts & Technical Debt (5 minutes)
+
+**Purpose:** Ensure validation scripts are updated for new tables/modules
+
+**Checklist:**
+
+- [ ] **Schema Validation Script Updates**
+  - [ ] Price columns added to `validate_schema_consistency.py`? (if new price/probability columns)
+  - [ ] SCD Type 2 tables added to `versioned_tables` list? (if new versioned tables)
+  - [ ] JSONB config checks added? (if new strategies/models with config)
+  - [ ] Script tested successfully: `python scripts/validate_schema_consistency.py`
+
+- [ ] **Documentation Validation Script Updates**
+  - [ ] New document types added to `validate_docs.py`? (if new doc categories)
+  - [ ] Cross-reference patterns updated? (if new reference formats)
+  - [ ] Script tested successfully: `python scripts/validate_docs.py`
+
+- [ ] **Test Coverage Validation**
+  - [ ] New modules added to coverage configuration? (if new code modules)
+  - [ ] Coverage threshold still met: `pytest --cov --cov-fail-under=80`
+  - [ ] Test matrix updated? (if new integration points)
+
+- [ ] **Technical Debt Documentation**
+  - [ ] Known issues logged with severity levels?
+  - [ ] Future improvements identified and documented?
+  - [ ] Deferred tasks documented? (see Deferred Tasks Workflow in CLAUDE.md)
+  - [ ] Performance concerns noted? (if applicable)
+  - [ ] Security findings documented? (even if not critical)
+
+**How to Check:**
+```bash
+# Schema validation
+python scripts/validate_schema_consistency.py
+# Expected: All checks pass OR documented exceptions
+
+# Documentation validation
+python scripts/validate_docs.py
+# Expected: All checks pass OR documented exceptions
+
+# Coverage check
+pytest tests/ --cov --cov-fail-under=80
+# Expected: ≥80% coverage maintained
+```
+
+**Common Oversights:**
+```markdown
+❌ Added price columns to new table, forgot to update validation script
+❌ Created new SCD Type 2 table, forgot to add to versioned_tables list
+❌ Added new document type, validate_docs.py doesn't check it
+❌ "I'll update the validation scripts later" - No, do it now (5-10 min total)
+```
+
+**Red Flags:**
+- Validation scripts not run during phase
+- New tables/columns but scripts unchanged
+- "Validation can wait until next phase" - No, update now
+- Technical debt not documented (leads to surprises later)
+
+---
+
+### Step 7: Archive & Version Management (5 minutes)
 
 **Purpose:** Clean up old docs, version new docs properly
 
@@ -416,7 +478,7 @@ archive/
 
 ---
 
-### Step 7: Phase Completion Certification (5 minutes)
+### Step 8: Phase Completion Certification (5 minutes)
 
 **Purpose:** Formal sign-off that phase is 100% complete
 
@@ -473,9 +535,10 @@ archive/
 - [✅/❌] Step 3: Documentation Consistency
 - [✅/❌] Step 4: Upstream Impact Analysis
 - [✅/❌] Step 5: Downstream Dependency Check
-- [✅/❌] Step 6: Archive & Version Management
-- [✅/❌] Step 7: Acceptance Criteria Met
-- [✅/❌] Step 8: Next Phase Test Planning
+- [✅/❌] Step 6: Validation Scripts & Technical Debt
+- [✅/❌] Step 7: Archive & Version Management
+- [✅/❌] Step 8: Phase Completion Certification
+- [✅/❌] Step 9: Next Phase Test Planning
 
 ## Issues Found
 
@@ -487,7 +550,7 @@ archive/
 
 ## Sign-Off
 
-- [ ] All 8 steps (including 1.5) completed
+- [ ] All 9 steps (including 1.5) completed
 - [ ] All issues resolved
 - [ ] Phase is 100% complete
 - [ ] Next phase prerequisites verified
@@ -500,7 +563,7 @@ archive/
 
 ---
 
-### Step 8: Next Phase Test Planning (10 minutes)
+### Step 9: Next Phase Test Planning (10 minutes)
 
 **Purpose:** Plan test coverage for next phase BEFORE starting implementation
 
@@ -560,7 +623,7 @@ docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md
 ```markdown
 # In SESSION_HANDOFF.md
 ## Phase N Completion
-- ✅ Phase N complete (passes 7-step assessment)
+- ✅ Phase N complete (passes 9-step assessment)
 - ✅ Phase N+1 test planning complete
 - Ready to start Phase N+1 implementation
 

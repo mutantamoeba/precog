@@ -467,6 +467,11 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 - [ ] Add `CLICommandFactory` for CLI testing
 - [ ] Create `tests/fixtures/sample_configs/` - Valid and invalid YAML config files
 - [ ] Update `tests/conftest.py` with API client fixtures and temp config directory fixtures
+- [ ] **⚠️ VALIDATION SCRIPTS:** Update `scripts/validate_schema_consistency.py` (~5-10 min):
+  - [ ] Add Phase 1 tables with price columns to `price_columns` dict (if applicable)
+  - [ ] Add Phase 1 SCD Type 2 tables to `versioned_tables` list (if applicable)
+  - [ ] Test script: `python scripts/validate_schema_consistency.py`
+  - [ ] See script's MAINTENANCE GUIDE for detailed instructions
 
 #### 4. Critical Test Scenarios (from user requirements)
 - [ ] **API clients fully implemented** with versioned interfaces (REQ-API-001 through REQ-API-005)
@@ -708,6 +713,11 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 - [ ] Add `ESPNGameFactory` to `tests/fixtures/factories.py` for generating game state test data
 - [ ] Create `tests/fixtures/mock_scheduler.py` - Mock APScheduler for testing job execution
 - [ ] Update `tests/conftest.py` with async fixtures for event loop testing
+- [ ] **⚠️ VALIDATION SCRIPTS:** Update `scripts/validate_schema_consistency.py` (~5 min):
+  - [ ] Add `game_states` table to `versioned_tables` list (SCD Type 2 table)
+  - [ ] Add price columns if any new tables with financial data
+  - [ ] Test script: `python scripts/validate_schema_consistency.py`
+  - [ ] See script's MAINTENANCE GUIDE for detailed instructions
 
 #### 4. Critical Test Scenarios (from user requirements)
 - [ ] **Live feed ingestion with mocked ESPN streams** - Verify data flows from API → game_states table
@@ -837,6 +847,11 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 - [ ] Add `WebSocketMockFactory` for simulating WebSocket message streams
 - [ ] Create `tests/utils/async_helpers.py` - Utilities for async testing (event loop fixtures)
 - [ ] Update `tests/conftest.py` with WebSocket client fixtures and async queue fixtures
+- [ ] **⚠️ VALIDATION SCRIPTS:** Update `scripts/validate_schema_consistency.py` (~2-5 min):
+  - [ ] Add any new Phase 3 tables with price columns to `price_columns` dict
+  - [ ] Add any new SCD Type 2 tables to `versioned_tables` list
+  - [ ] Test script: `python scripts/validate_schema_consistency.py`
+  - [ ] See script's MAINTENANCE GUIDE for detailed instructions
 
 #### 4. Critical Test Scenarios (from user requirements)
 - [ ] **Async event loop stress tests** - Process 50+ concurrent updates without lag or data loss
@@ -972,6 +987,11 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 - [ ] Add `GameSituationFactory` for various game situations (halftime, 4th quarter, etc.)
 - [ ] Create `tests/fixtures/model_configs.py` - Sample strategy and model version configs
 - [ ] Update `tests/conftest.py` with model fixtures and backtesting fixtures
+- [ ] **⚠️ VALIDATION SCRIPTS:** Update `scripts/validate_schema_consistency.py` (~2-5 min):
+  - [ ] Add any new Phase 4 tables with price columns to `price_columns` dict
+  - [ ] Add any new SCD Type 2 tables to `versioned_tables` list (e.g., if model results are versioned)
+  - [ ] Test script: `python scripts/validate_schema_consistency.py`
+  - [ ] See script's MAINTENANCE GUIDE for detailed instructions
 
 #### 4. Critical Test Scenarios (from user requirements)
 - [ ] **Ensemble feature extraction** - Verify all 4 models (Elo, regression, ML, historical) provide valid probabilities
@@ -1142,6 +1162,11 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 - [ ] Create `tests/fixtures/exit_conditions.py` - Pre-configured exit condition test cases
 - [ ] Add `MonitoringLoopFactory` for simulating monitoring cycles
 - [ ] Update `tests/conftest.py` with position monitoring fixtures
+- [ ] **⚠️ VALIDATION SCRIPTS:** Update `scripts/validate_schema_consistency.py` (~2-5 min):
+  - [ ] Add any new Phase 5a tables with price columns to `price_columns` dict (e.g., exit prices in position_exits)
+  - [ ] Add any new SCD Type 2 tables to `versioned_tables` list
+  - [ ] Test script: `python scripts/validate_schema_consistency.py`
+  - [ ] See script's MAINTENANCE GUIDE for detailed instructions
 
 #### 4. Critical Test Scenarios (from user requirements)
 - [ ] **Exit conditions with priorities** - Verify all 10 conditions trigger correctly and highest priority wins
@@ -1309,6 +1334,11 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 - [ ] Create `tests/fixtures/market_depth.py` - Sample order book data for price walking tests
 - [ ] Add `CircuitBreakerScenarioFactory` for testing system halt conditions
 - [ ] Update `tests/conftest.py` with order execution fixtures and circuit breaker fixtures
+- [ ] **⚠️ VALIDATION SCRIPTS:** Update `scripts/validate_schema_consistency.py` (~2-5 min):
+  - [ ] Add any new Phase 5b tables with price columns to `price_columns` dict (e.g., fill prices in exit_attempts)
+  - [ ] Add any new SCD Type 2 tables to `versioned_tables` list
+  - [ ] Test script: `python scripts/validate_schema_consistency.py`
+  - [ ] See script's MAINTENANCE GUIDE for detailed instructions
 
 #### 4. Critical Test Scenarios (from user requirements)
 - [ ] **Circuit breaker tests halting trading** - Verify circuit breaker stops all trading immediately
