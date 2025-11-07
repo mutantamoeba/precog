@@ -66,6 +66,31 @@ repos:
         pass_filenames: false
         description: "Scans for hardcoded passwords, API keys, tokens, and secrets (excludes tests and placeholders)"
 
+      # DEF-005: No print() in production code (use logger instead)
+      - id: no-print-in-production
+        name: No print() in Production Code
+        entry: bash
+        args:
+          - -c
+          - |
+            # Check for print() in production code paths (excludes scripts/ and tests/)
+            # Production paths: database/, api_connectors/, trading/, analytics/, utils/, config/
+            staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '(database|api_connectors|trading|analytics|utils|config)/.*\.py$' || true)
+            if [ -n "$staged_files" ]; then
+              if echo "$staged_files" | xargs grep -n 'print(' 2>/dev/null; then
+                echo ""
+                echo "ERROR: Found print() statements in production code!"
+                echo "Fix: Use logger.info(), logger.debug(), or logger.error() instead"
+                echo "Allowed: print() in scripts/ and tests/ directories"
+                exit 1
+              fi
+            fi
+            echo "No print() statements in production code"
+        language: system
+        pass_filenames: false
+        files: '(database|api_connectors|trading|analytics|utils|config)/.*\.py$'
+        description: "Prevents print() in production code (use structured logging instead)"
+
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0

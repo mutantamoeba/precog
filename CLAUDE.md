@@ -683,6 +683,12 @@ Use this structure:
 - Created: `tests/test_kalshi_client.py`
 - Updated: `requirements.txt` (added requests)
 
+## Validation Script Updates (if applicable)
+- [ ] Schema validation updated? (new price/versioned tables added to `validate_schema_consistency.py`)
+- [ ] Documentation validation updated? (new doc types added to `validate_docs.py`)
+- [ ] Test coverage config updated? (new modules added)
+- [ ] All validation scripts tested successfully?
+
 ## Notes
 - API auth uses RSA-PSS (not HMAC-SHA256)
 - All prices parsed as Decimal from *_dollars fields
@@ -771,6 +777,13 @@ yes_bid = Column(Float, nullable=False)
 
 **Reference:** `docs/api-integration/KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md`
 
+**⚠️ MAINTENANCE REMINDER:**
+When adding new database tables with price/probability columns:
+1. Add table name and column list to `price_columns` dict in `scripts/validate_schema_consistency.py`
+2. Run validation: `python scripts/validate_schema_consistency.py`
+3. See script's MAINTENANCE GUIDE for detailed instructions
+4. **Time estimate:** ~5 minutes per table
+
 ---
 
 ### Pattern 2: Dual Versioning System
@@ -828,6 +841,18 @@ v1_0.status = "deprecated"  # OK
 - Semantic versioning (v1.0 → v1.1 = bug fix, v1.0 → v2.0 = major change)
 
 **Reference:** `docs/guides/VERSIONING_GUIDE_V1.0.md`
+
+**⚠️ MAINTENANCE REMINDER:**
+When adding new SCD Type 2 tables (versioned tables):
+1. Add table name to `versioned_tables` list in `scripts/validate_schema_consistency.py`
+2. Ensure table has ALL 4 required columns:
+   - `row_current_ind BOOLEAN NOT NULL DEFAULT TRUE`
+   - `row_start_ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP`
+   - `row_end_ts TIMESTAMP` (nullable)
+   - `row_version INTEGER NOT NULL DEFAULT 1`
+3. Run validation: `python scripts/validate_schema_consistency.py`
+4. See script's MAINTENANCE GUIDE for detailed instructions
+5. **Time estimate:** ~2 minutes per table
 
 ---
 
