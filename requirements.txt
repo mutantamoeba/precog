@@ -23,7 +23,13 @@ typer==0.15.1  # CLI framework with type hints (main.py; Nov 2024)
 rich==14.0.0  # Beautiful console output (tables, colors; Nov 2024)
 cryptography==46.0.2  # RSA-PSS auth (Kalshi; Sep 30, 2025)
 apscheduler==3.11.0  # Scheduling (market updates; Oct 2025)
-spacy==3.8.7  # Text parsing (Master Req; May 23, 2025; post-install: python -m spacy download en_core_web_sm)
+# NLP & Sentiment Analysis (Phase 3-4; Master Req REQ-ML-001)
+# transformers==4.47.0  # Hugging Face Transformers for sentiment analysis (Nov 2024)
+# torch==2.5.0  # PyTorch backend for transformers (Oct 2024)
+# DEFERRED TO PHASE 3-4: Not needed for Phase 0.7/Phase 1 infrastructure work
+# TODO: Uncomment when needed (Phase 3-4) for sentiment analysis and market-moving event detection
+# NOTE: Replaces original spacy requirement - transformers provides superior sentiment analysis
+#       and Python 3.14 compatibility
 
 # Development Tools (Testing/Linting/Static Analysis; Phase 0.6c)
 pytest==8.4.2  # Unit/integration tests (>80% coverage; Sep 4, 2025)
