@@ -38,4 +38,5 @@ structlog==25.4.0
 # pandas==2.3.3  # Will install in Phase 3-4 when needed
 # numpy==2.3.3   # Will install in Phase 3-4 when needed
 # apscheduler==3.11.0  # Will install in Phase 2
-# spacy==3.8.7  # Phase 8 - not Python 3.14 compatible yet
+# transformers==4.47.0  # Phase 3-4 - NLP/sentiment analysis (Python 3.14 compatible)
+# torch==2.5.0  # PyTorch backend for transformers

@@ -97,7 +97,7 @@ This is the **master requirements document** providing a high-level overview of 
 - **API**: requests (sync), aiohttp (async)
 - **Data Processing**: pandas, numpy
 - **Decimal Precision**: Python Decimal library (NEVER float for prices)
-- **Text Parsing**: Spacy
+- **Text Parsing**: Transformers (Hugging Face) with PyTorch backend
 - **Testing**: pytest (target: >80% coverage)
 - **Scheduling**: APScheduler
 - **Logging**: Python logging library
@@ -1441,7 +1441,8 @@ sqlalchemy==2.0.25
 psycopg2-binary==2.9.9
 pandas==2.1.4
 numpy==1.26.2
-spacy==3.7.2
+transformers==4.47.0  # Hugging Face Transformers for sentiment analysis
+torch==2.5.0  # PyTorch backend for transformers
 pytest==7.4.3
 apscheduler==3.10.4
 beautifulsoup4==4.12.2

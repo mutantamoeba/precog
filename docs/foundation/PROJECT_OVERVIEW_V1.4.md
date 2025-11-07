@@ -110,9 +110,9 @@
 **Task Scheduling:**
 - APScheduler 3.10+ (cron-like job scheduling)
 
-**NLP & Sentiment (Phase 8):**
-- spacy 3.7+ with en_core_web_sm model
-- transformers 4.35+ (Hugging Face models)
+**NLP & Sentiment (Phase 3-4):**
+- transformers 4.47+ (Hugging Face models for sentiment analysis)
+- torch 2.5+ (PyTorch backend for transformers)
 
 **Authentication & Security:**
 - cryptography 42.0+ (RSA-PSS signing for Kalshi API, not HMAC-SHA256)
@@ -185,11 +185,10 @@ mypy==1.7.1
 pre-commit==3.5.0
 ```
 
-**NLP & Sentiment (Phase 8):**
+**NLP & Sentiment (Phase 3-4):**
 ```
-spacy==3.7.2
-transformers==4.35.2
-torch==2.1.1  # For transformers
+transformers==4.47.0  # Hugging Face Transformers for sentiment analysis
+torch==2.5.0  # PyTorch backend for transformers
 ```
 
 **Advanced Analytics (Phase 9):**
@@ -205,12 +204,13 @@ tensorflow==2.15.0  # Or pytorch==2.1.1
 # Core dependencies
 pip install -r requirements.txt
 
-# Spacy language model
-spacy download en_core_web_sm
+# Transformers model (Phase 3-4 sentiment analysis)
+# Models are automatically downloaded on first use
+# Example: transformers.pipeline('sentiment-analysis', model='distilbert-base-uncased-finetuned-sst-2-english')
 
 # Verify installation
 pip list | grep -E "(sqlalchemy|cryptography|click)"
-python -c "import spacy; nlp = spacy.load('en_core_web_sm')"
+python -c "from transformers import pipeline; print('Transformers installed successfully')"
 ```
 
 **Rationale for Version Choices:** As of October 2025, these are the latest stable versions with security patches, async support improvements, and DECIMAL precision fixes in SQLAlchemy 2.0.23.
@@ -263,7 +263,7 @@ precog/
 │
 ├── utils/                       # Utility functions
 │   ├── decimal_helpers.py       # DECIMAL precision helpers (e.g., is_material_change())
-│   ├── text_parser.py           # Spacy sentiment analysis (Phase 8)
+│   ├── text_parser.py           # Transformers sentiment analysis (Phase 3-4)
 │   └── logger.py                # Structured logging
 │
 ├── tests/                       # Test suite
@@ -348,7 +348,7 @@ Live Game Data (ESPN) → game_states table
 | **5** | Trading Engine | Phases 1.5, 4 | Versioned strategies, orders, position mgmt, trailing stops | 🔵 Planned |
 | **6** | Multi-Sport Expansion | Phases 1-5 | NBA, MLB, Tennis, UFC support | 🔵 Planned |
 | **7** | Web Dashboard | Phase 5 | FastAPI + React UI for monitoring | 🔵 Planned |
-| **8** | Sentiment Analysis | Phase 5 | NLP sentiment integration (Spacy) | 🔵 Planned |
+| **8** | Sentiment Analysis | Phase 3-4 | NLP sentiment integration (Transformers) | 🔵 Planned |
 | **9** | Advanced Analytics | Phases 4-8 | XGBoost/LSTM training, backtesting, versioned models | 🔵 Planned |
 | **10** | Multi-Platform | All phases | Polymarket integration, arbitrage | 🔵 Planned |
 
@@ -411,7 +411,6 @@ jobs:
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
-          spacy download en_core_web_sm
       - name: Run tests
         run: pytest --cov=precog --cov-report=xml
       - name: Upload coverage
