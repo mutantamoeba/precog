@@ -771,4 +771,3 @@ alert_routing:
 2. Alerts table implementation
 3. Email/SMS in system.yaml
 4. 2-session implementation plan
-

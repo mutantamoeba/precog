@@ -186,4 +186,3 @@ COMMENT ON COLUMN alerts.resolution_action IS 'How alert was resolved: fixed, fa
 
 -- To rollback this migration:
 -- DROP TABLE IF EXISTS alerts CASCADE;
-

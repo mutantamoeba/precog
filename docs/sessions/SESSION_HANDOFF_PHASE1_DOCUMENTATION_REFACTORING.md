@@ -463,4 +463,3 @@ Begin with MASTER_REQUIREMENTS update, then system.yaml, then migration SQL, the
 ---
 
 **Handoff complete. Next session can resume with clear tasks and context.**
-

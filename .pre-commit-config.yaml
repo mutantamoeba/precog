@@ -3,7 +3,7 @@
 # Run: pre-commit install (one-time setup)
 # Run: pre-commit run --all-files (manual full validation)
 
-default_stages: [commit]
+default_stages: [pre-commit]
 fail_fast: false  # Run all hooks, don't stop at first failure
 
 repos:
