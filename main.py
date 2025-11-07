@@ -1,29 +1,395 @@
 """
 Precog CLI - Command-line interface for Kalshi trading operations.
 
-This is the main entry point for all CLI commands using the Typer framework.
-Provides commands to fetch and manage Kalshi API data with database persistence.
+CLI (Command-Line Interface) Explained:
+----------------------------------------
+Think of the CLI as your "mission control" for talking to the Kalshi API.
+Instead of writing Python scripts for every operation, you run simple commands:
 
-Usage:
-    python main.py fetch-balance          # Fetch account balance
-    python main.py fetch-positions        # Fetch open positions
-    python main.py fetch-fills            # Fetch trade fills
-    python main.py fetch-settlements      # Fetch market settlements
-    python main.py --help                 # Show all commands
+```bash
+# Before CLI (manual script execution):
+$ python fetch_balance_script.py --environment demo --api_key xxx
+# ^ Tedious, error-prone, no validation
 
-Educational Notes:
-    Typer provides automatic type validation, help generation, and IDE support.
-    All commands use type hints for safety and automatic validation.
-    Rich library provides beautiful console output with tables and colors.
+# After CLI (Typer framework):
+$ python main.py fetch-balance --env demo
+# ^ Clean, type-safe, automatic validation, beautiful output
+```
 
+Why CLI Over Scripts:
+---------------------
+**1. Type Safety & Validation**
+   - Typer uses type hints to validate inputs BEFORE execution
+   - Invalid environment? Error shown immediately (no API call wasted)
+   - Missing required parameters? Typer shows what's missing
+
+**2. Automatic Help Generation**
+   - Every command has --help flag automatically
+   - No need to write help text manually
+   - IDE autocomplete for parameters
+
+**3. Beautiful Console Output**
+   - Rich library provides tables, colors, progress bars
+   - Much easier to read than plain print() statements
+   - Professional user experience
+
+**4. Consistent Error Handling**
+   - Graceful failures with clear error messages
+   - Exit codes (0 = success, 1 = error) for automation
+   - Verbose mode for debugging
+
+Typer Framework Explained:
+---------------------------
+Typer converts Python functions into CLI commands automatically.
+
+**Magic Transformation:**
+```python
+# Python function (before Typer):
+def fetch_balance(environment: str, verbose: bool = False):
+    # ... implementation ...
+
+# Typer command (after @app.command() decorator):
+$ python main.py fetch-balance --env demo --verbose
+# Typer automatically:
+#   - Converts function arguments to CLI flags
+#   - Validates types (environment must be string)
+#   - Parses --env demo into environment="demo" parameter
+#   - Generates help text from docstring
+```
+
+**Type Safety Example:**
+```bash
+# ✅ Valid command:
+$ python main.py fetch-fills --days 30
+# Typer validates: days is int, converts "30" string to 30
+
+# ❌ Invalid command:
+$ python main.py fetch-fills --days abc
+# Typer error: "Invalid value for '--days': 'abc' is not a valid integer"
+# ^ Fails BEFORE making API call (saves time and API quota)
+```
+
+Rich Console Output - Why Beautiful Tables Matter:
+---------------------------------------------------
+**Plain print() vs Rich tables:**
+
+```
+# ❌ Plain print() - Hard to read:
+Balance: 1234.5678
+Timestamp: 2024-01-01 14:15:37
+
+Position 1: NFL-KC-YES, YES, 100, 0.5200, 52.00
+Position 2: NFL-BUF-YES, NO, 50, 0.4800, 24.00
+
+# ✅ Rich table - Professional and scannable:
+╭──────────── Account Balance (DEMO) ────────────╮
+│ Field     │ Value                              │
+├───────────┼────────────────────────────────────┤
+│ Balance   │ $1,234.5678                        │
+│ Timestamp │ 2024-01-01 14:15:37                │
+╰───────────┴────────────────────────────────────╯
+
+╭──────────── Open Positions (DEMO) - 2 total ───────────╮
+│ Ticker      │ Side │ Quantity │ Avg Price │ Total Cost │
+├─────────────┼──────┼──────────┼───────────┼────────────┤
+│ NFL-KC-YES  │ YES  │      100 │   $0.5200 │    $52.00  │
+│ NFL-BUF-YES │ NO   │       50 │   $0.4800 │    $24.00  │
+╰─────────────┴──────┴──────────┴───────────┴────────────╯
+```
+
+**Why this matters:**
+- Easier to scan data visually (columns aligned)
+- Colors highlight important info (green = profit, red = loss)
+- Professional appearance (looks like real trading software)
+- Less mental effort to parse information
+
+Environment Separation Pattern (Demo vs Prod):
+-----------------------------------------------
+**CRITICAL Safety Feature:**
+
+```python
+# Demo environment (safe for testing):
+$ python main.py fetch-balance --env demo
+# Uses: KALSHI_DEMO_API_KEY, KALSHI_DEMO_KEYFILE
+# Trades with FAKE money (Kalshi provides $10,000 demo balance)
+# No risk of real financial loss
+
+# Production environment (real money!):
+$ python main.py fetch-balance --env prod
+# Uses: KALSHI_PROD_API_KEY, KALSHI_PROD_KEYFILE
+# Trades with REAL money from your bank account
+# ⚠️ Financial risk! Only use when ready to trade for real
+```
+
+**Why separate environments:**
+1. **Testing**: Develop and test strategies with fake money
+2. **Safety**: Prevent accidental real trades during development
+3. **Debugging**: Reproduce prod issues in demo without financial risk
+4. **Credentials**: Different API keys prevent mixing environments
+
+**Default = Demo:**
+All commands default to demo environment for safety. Must explicitly pass
+`--env prod` to trade with real money. This prevents "oops, I just spent
+$1000 testing my buggy code" disasters.
+
+Dry-Run Pattern (Test Without Side Effects):
+---------------------------------------------
+Every command supports `--dry-run` flag for testing:
+
+```bash
+# ✅ Dry-run mode (safe):
+$ python main.py fetch-positions --dry-run
+# Fetches data from API ✅
+# Shows data in console ✅
+# Does NOT write to database ❌
+# Useful for: testing API connectivity, viewing data, debugging
+
+# ❌ Normal mode (has side effects):
+$ python main.py fetch-positions
+# Fetches data from API ✅
+# Shows data in console ✅
+# Writes to database ✅ (creates rows, updates timestamps)
+```
+
+**When to use dry-run:**
+- Testing new commands before trusting them
+- Viewing current API data without persisting
+- Debugging API responses without polluting database
+- Running in CI/CD to verify API connectivity
+
+Error Handling Pattern:
+-----------------------
+**Graceful failures with clear actionable messages:**
+
+```python
+# If credentials missing:
+$ python main.py fetch-balance
+[ERROR] Failed to initialize Kalshi client: Missing API credentials
+
+[YELLOW] Please ensure your .env file contains:
+  - KALSHI_DEMO_API_KEY or KALSHI_PROD_API_KEY
+  - KALSHI_DEMO_KEYFILE or KALSHI_PROD_KEYFILE
+  - KALSHI_DEMO_API_BASE or KALSHI_PROD_API_BASE
+
+Exit Code: 1
+
+# If API call fails:
+$ python main.py fetch-positions
+[ERROR] Failed to fetch positions: HTTP 401 Unauthorized
+
+Exit Code: 1
+```
+
+**Exit codes for automation:**
+- `0` = Success (all operations completed)
+- `1` = Error (credential failure, API error, network timeout)
+
+**Use in scripts:**
+```bash
+#!/bin/bash
+python main.py fetch-balance --env demo
+if [ $? -ne 0 ]; then
+    echo "Balance fetch failed! Aborting."
+    exit 1
+fi
+# Continue with other commands...
+```
+
+Verbose Mode for Debugging:
+----------------------------
+**Every command supports --verbose flag:**
+
+```bash
+# Normal mode (quiet):
+$ python main.py fetch-fills
+Fetching fills from Kalshi demo API...
+[Table with 10 fills displayed]
+
+# Verbose mode (detailed):
+$ python main.py fetch-fills --verbose
+[2024-01-01 14:15:37] INFO: Verbose mode enabled
+[2024-01-01 14:15:37] INFO: Kalshi client initialized for demo environment
+[2024-01-01 14:15:38] INFO: Fetched 23 fills
+[Table with 10 fills displayed]
+
+# Verbose + error (shows full stack trace):
+$ python main.py fetch-fills --verbose
+[2024-01-01 14:15:37] INFO: Verbose mode enabled
+[2024-01-01 14:15:37] ERROR: Failed to fetch fills: Connection timeout
+Traceback (most recent call last):
+  File "api_connectors/kalshi_client.py", line 123, in get_fills
+    response = requests.get(...)
+  ...
+```
+
+**When to use verbose:**
+- Debugging API errors (see full stack trace)
+- Understanding command execution flow
+- Logging detailed info for troubleshooting
+- Submitting bug reports (include verbose output)
+
+Database Integration (Phase 1.5 - Future):
+-------------------------------------------
+**Current State (Phase 1):**
+- Commands fetch data from Kalshi API ✅
+- Commands display data in Rich tables ✅
+- Commands do NOT persist to database ❌
+
+**Future State (Phase 1.5):**
+```python
+# fetch-balance will:
+1. Fetch balance from API
+2. Insert into account_balance table (append-only)
+3. Show "Saved to database" confirmation
+
+# fetch-positions will:
+1. Fetch positions from API
+2. Update positions table using SCD Type 2 versioning
+   - Mark old positions as row_current_ind = FALSE
+   - Insert new positions as row_current_ind = TRUE
+3. Show "Updated X positions in database"
+
+# fetch-fills will:
+1. Fetch fills from API (last N days)
+2. Insert NEW fills into trades table (append-only)
+3. Skip fills already in database (deduplicate by trade_id)
+4. Show "Inserted X new fills"
+
+# fetch-settlements will:
+1. Fetch settlements from API
+2. Update markets table status to 'settled'
+3. Update positions table with realized P&L
+4. Insert settlement records
+5. Show "Settled X markets, realized P&L: $XXX"
+```
+
+**Why deferred to Phase 1.5:**
+API connectivity and CLI commands are higher priority than persistence.
+Database integration requires CRUD operations and versioning logic (complex).
+Better to get API working first, then add persistence layer.
+
+Command-Specific Usage Examples:
+---------------------------------
+
+**1. fetch-balance - Check account balance**
+```bash
+# Demo environment (default):
+$ python main.py fetch-balance
+$ python main.py fetch-balance --env demo
+
+# Production environment:
+$ python main.py fetch-balance --env prod
+
+# Dry-run (no database write):
+$ python main.py fetch-balance --dry-run
+
+# Verbose mode (debugging):
+$ python main.py fetch-balance --verbose
+```
+
+**2. fetch-positions - View open positions**
+```bash
+# Basic usage:
+$ python main.py fetch-positions
+
+# Production:
+$ python main.py fetch-positions --env prod
+
+# Dry-run + verbose:
+$ python main.py fetch-positions --dry-run --verbose
+```
+
+**3. fetch-fills - Get trade history**
+```bash
+# Last 7 days (default):
+$ python main.py fetch-fills
+
+# Last 30 days:
+$ python main.py fetch-fills --days 30
+
+# Short flag:
+$ python main.py fetch-fills -d 14
+
+# Production fills:
+$ python main.py fetch-fills --env prod --days 90
+```
+
+**4. fetch-settlements - Get settled markets**
+```bash
+# Basic usage:
+$ python main.py fetch-settlements
+
+# Production settlements:
+$ python main.py fetch-settlements --env prod
+
+# Dry-run (view without database update):
+$ python main.py fetch-settlements --dry-run
+```
+
+**5. Help for any command**
+```bash
+# List all commands:
+$ python main.py --help
+
+# Help for specific command:
+$ python main.py fetch-balance --help
+$ python main.py fetch-fills --help
+```
+
+Performance Considerations:
+---------------------------
+**API Rate Limits:**
+- Kalshi demo: ~100 requests/minute
+- Commands make 1 API call each (efficient)
+- Verbose logging adds <1ms overhead (negligible)
+
+**Console Output Speed:**
+- Rich tables render in ~5-10ms (unnoticeable to user)
+- Faster than plain print() for large tables (buffered rendering)
+
+**Database Writes (Phase 1.5):**
+- Bulk inserts for fills (1 transaction for N fills, not N transactions)
+- SCD Type 2 updates use 2 queries (UPDATE old, INSERT new)
+- Connection pooling reuses connections (no new connection per command)
+
+Common Mistakes to Avoid:
+--------------------------
+```bash
+# ❌ WRONG - Using prod without thinking:
+$ python main.py fetch-balance --env prod
+# ^ ARE YOU SURE? This uses REAL credentials and REAL money!
+
+# ✅ CORRECT - Always start with demo:
+$ python main.py fetch-balance
+# ^ Safe default (demo environment)
+
+# ❌ WRONG - Forgetting to check exit code in scripts:
+python main.py fetch-balance
+python main.py fetch-positions  # Runs even if balance fetch failed!
+
+# ✅ CORRECT - Check exit codes:
+python main.py fetch-balance || exit 1
+python main.py fetch-positions || exit 1
+# ^ Stops script on first error
+
+# ❌ WRONG - Running without --dry-run for first time:
+$ python main.py fetch-settlements  # Unknown consequences!
+
+# ✅ CORRECT - Test with dry-run first:
+$ python main.py fetch-settlements --dry-run  # See what it does
+$ python main.py fetch-settlements             # Then run for real
+```
+
+Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md (Kalshi API details)
 Related Requirements:
     REQ-CLI-001: CLI Framework with Typer
     REQ-CLI-002: Balance Fetch Command
     REQ-CLI-003: Positions Fetch Command
     REQ-CLI-004: Fills Fetch Command
     REQ-CLI-005: Settlements Fetch Command
-
+    REQ-OBSERV-001: Structured Logging (verbose mode uses this)
 Related ADR: ADR-051 (CLI Framework Choice - Typer)
+Related Guide: docs/guides/CONFIGURATION_GUIDE_V3.1.md (Environment variables)
 """
 
 from datetime import datetime, timedelta
