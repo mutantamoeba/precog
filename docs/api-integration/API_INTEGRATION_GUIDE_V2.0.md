@@ -1,17 +1,17 @@
 # API Integration Guide v2.0
 
 ---
-**Version:** 2.0  
-**Last Updated:** 2025-10-16  
-**Status:** ✅ Current  
-**Phase Coverage:** Phases 1-4, 6, 10  
-**Purpose:** Comprehensive implementation guide for all external API integrations  
+**Version:** 2.0
+**Last Updated:** 2025-10-16
+**Status:** ✅ Current
+**Phase Coverage:** Phases 1-4, 6, 10
+**Purpose:** Comprehensive implementation guide for all external API integrations
 **Changes from v1.0:** 🔴 Fixed Kalshi auth (HMAC → RSA-PSS), ✅ Expanded ESPN/Balldontlie, ✅ Added Weather API
 ---
 
 ## ⚠️ Critical Update Notice
 
-**MAJOR CORRECTION**: Version 1.0 incorrectly stated that Kalshi uses HMAC-SHA256 authentication. **This is WRONG.** 
+**MAJOR CORRECTION**: Version 1.0 incorrectly stated that Kalshi uses HMAC-SHA256 authentication. **This is WRONG.**
 
 Kalshi uses **RSA-PSS signature authentication** with a private key. This has been corrected throughout this document with extensive educational docstrings to help you understand both the "what" and the "why" as you learn.
 
@@ -150,59 +150,59 @@ from cryptography.hazmat.backends import default_backend
 def load_private_key(key_path: str):
     """
     Load RSA private key from PEM file.
-    
+
     Args:
         key_path: Path to .pem file containing private key
-        
+
     Returns:
         RSAPrivateKey object for signing
-        
+
     Raises:
         FileNotFoundError: If key file doesn't exist
         ValueError: If file isn't a valid PEM private key
-        
+
     Educational Note:
         PEM (Privacy Enhanced Mail) is a base64 encoding format for keys.
         It looks like:
         -----BEGIN PRIVATE KEY-----
         MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC...
         -----END PRIVATE KEY-----
-        
+
         This is the private key. NEVER share this or commit to Git!
     """
     key_path = Path(key_path)
-    
+
     if not key_path.exists():
         raise FileNotFoundError(f"Private key not found at: {key_path}")
-    
+
     with open(key_path, "rb") as key_file:
         private_key = serialization.load_pem_private_key(
             key_file.read(),
             password=None,  # No password encryption (simpler, but less secure)
             backend=default_backend()
         )
-    
+
     return private_key
 
 
 def generate_signature(
-    private_key, 
-    timestamp: int, 
-    method: str, 
+    private_key,
+    timestamp: int,
+    method: str,
     path: str
 ) -> str:
     """
     Generate RSA-PSS signature for Kalshi API request.
-    
+
     Args:
         private_key: RSA private key (from load_private_key())
         timestamp: Current time in milliseconds since epoch
         method: HTTP method in UPPERCASE (GET, POST, DELETE, etc.)
         path: API endpoint path (e.g., '/trade-api/v2/markets')
-        
+
     Returns:
         Base64-encoded signature string
-        
+
     Example:
         >>> private_key = load_private_key("./my_key.pem")
         >>> timestamp = int(time.time() * 1000)
@@ -213,24 +213,24 @@ def generate_signature(
         ...     path="/trade-api/v2/markets"
         ... )
         >>> print(sig)  # Something like: "a8s7d6f5g4h3j2k1..."
-        
+
     Educational Notes:
         1. Message construction:
            - Concatenate: timestamp + method + path
            - No delimiters, no spaces
            - Method MUST be uppercase
-           
+
         2. PSS padding:
            - PSS = Probabilistic Signature Scheme
            - Adds randomness to signatures (same message = different signatures)
            - Makes signatures more secure against certain attacks
            - MGF1 = Mask Generation Function (used internally by PSS)
-           
+
         3. SHA256 hashing:
            - Converts variable-length message to fixed 256-bit hash
            - One-way function (can't reverse hash to get message)
            - Tiny change in input = completely different hash output
-           
+
         4. Base64 encoding:
            - Converts binary signature to ASCII text
            - Makes signature safe to send in HTTP headers
@@ -239,7 +239,7 @@ def generate_signature(
     # Step 1: Construct the message
     # Format: timestamp + METHOD + /path
     message = f"{timestamp}{method.upper()}{path}"
-    
+
     # Step 2: Sign the message
     signature_bytes = private_key.sign(
         message.encode('utf-8'),  # Convert string to bytes
@@ -249,41 +249,41 @@ def generate_signature(
         ),
         hashes.SHA256()  # Hash algorithm
     )
-    
+
     # Step 3: Encode as base64 for HTTP transport
     signature_b64 = base64.b64encode(signature_bytes).decode('utf-8')
-    
+
     return signature_b64
 
 
 class KalshiAuth:
     """
     Manages Kalshi API authentication with RSA-PSS signatures.
-    
+
     Handles:
     - Loading private keys
     - Generating signatures for requests
     - Building authentication headers
     - Token management (Kalshi tokens expire after 30 minutes)
-    
+
     Usage:
         auth = KalshiAuth(
             api_key="your-key-id",
             private_key_path="./your_key.pem"
         )
-        
+
         headers = auth.get_headers(method="GET", path="/trade-api/v2/markets")
         response = requests.get(url, headers=headers)
     """
-    
+
     def __init__(self, api_key: str, private_key_path: str):
         """
         Initialize authentication manager.
-        
+
         Args:
             api_key: Your Kalshi API key (UUID format)
             private_key_path: Path to your .pem private key file
-            
+
         Educational Note:
             The API key is like a username - it identifies you.
             The private key is like a password - it proves you're you.
@@ -294,18 +294,18 @@ class KalshiAuth:
         self.private_key = load_private_key(private_key_path)
         self.token = None
         self.token_expiry = None
-    
+
     def get_headers(self, method: str, path: str) -> dict:
         """
         Generate authentication headers for API request.
-        
+
         Args:
             method: HTTP method (GET, POST, DELETE, etc.)
             path: API endpoint path
-            
+
         Returns:
             Dictionary of headers to include in request
-            
+
         Example:
             >>> auth = KalshiAuth("my-key", "./key.pem")
             >>> headers = auth.get_headers("GET", "/trade-api/v2/markets")
@@ -319,7 +319,7 @@ class KalshiAuth:
         """
         # Get current timestamp in milliseconds
         timestamp = int(time.time() * 1000)
-        
+
         # Generate signature
         signature = generate_signature(
             private_key=self.private_key,
@@ -327,7 +327,7 @@ class KalshiAuth:
             method=method,
             path=path
         )
-        
+
         # Build headers
         headers = {
             'KALSHI-ACCESS-KEY': self.api_key,
@@ -335,7 +335,7 @@ class KalshiAuth:
             'KALSHI-ACCESS-SIGNATURE': signature,
             'Content-Type': 'application/json'
         }
-        
+
         return headers
 ```
 
@@ -383,97 +383,97 @@ load_dotenv()
 class KalshiClient:
     """
     High-level Kalshi API client.
-    
+
     Manages:
     - Authentication and token lifecycle
     - API requests with retry logic
     - Response parsing and Decimal conversion
     - Error handling
-    
+
     Usage:
         # Initialize
         client = KalshiClient(environment="demo")
-        
+
         # Get markets
         markets = client.get_markets(series_ticker="KXNFLGAME")
-        
+
         # All prices are Decimal objects
         for market in markets:
             print(f"Yes ask: ${market['yes_ask']}")  # Decimal('0.6500')
     """
-    
+
     # API base URLs
     BASE_URLS = {
         "demo": "https://demo-api.kalshi.co/trade-api/v2",
         "prod": "https://api.elections.kalshi.com/trade-api/v2"
     }
-    
+
     def __init__(self, environment: str = "demo"):
         """
         Initialize Kalshi client.
-        
+
         Args:
             environment: "demo" or "prod"
-            
+
         Raises:
             ValueError: If environment invalid
             EnvironmentError: If required env vars missing
-            
+
         Educational Note:
             Always develop against "demo" first!
             Demo environment:
             - Uses fake money
             - Identical API to production
             - Safe place to test and learn
-            
+
             Only switch to "prod" when you're confident your code works.
         """
         if environment not in ["demo", "prod"]:
             raise ValueError(f"Invalid environment: {environment}. Must be 'demo' or 'prod'")
-        
+
         self.environment = environment
         self.base_url = self.BASE_URLS[environment]
-        
+
         # Load credentials from environment
         key_env_var = f"KALSHI_{environment.upper()}_KEY_ID"
         keyfile_env_var = f"KALSHI_{environment.upper()}_KEYFILE"
-        
+
         api_key = os.getenv(key_env_var)
         keyfile_path = os.getenv(keyfile_env_var)
-        
+
         if not api_key or not keyfile_path:
             raise EnvironmentError(
                 f"Missing Kalshi credentials. Please set {key_env_var} and {keyfile_env_var} in .env"
             )
-        
+
         # Initialize authentication
         self.auth = KalshiAuth(api_key, keyfile_path)
-        
+
         # Session for connection pooling (more efficient)
         self.session = requests.Session()
-    
+
     def _make_request(
-        self, 
-        method: str, 
-        path: str, 
+        self,
+        method: str,
+        path: str,
         params: Optional[Dict] = None,
         json_data: Optional[Dict] = None
     ) -> Dict:
         """
         Make authenticated API request.
-        
+
         Args:
             method: HTTP method (GET, POST, DELETE)
             path: API endpoint path (without base URL)
             params: Query parameters (for GET requests)
             json_data: JSON body (for POST requests)
-            
+
         Returns:
             Response data as dictionary
-            
+
         Raises:
             requests.HTTPError: If request fails
-            
+
         Educational Note:
             This is a "private" method (starts with _).
             Convention in Python: _ prefix = internal implementation.
@@ -481,10 +481,10 @@ class KalshiClient:
             they should use higher-level methods like get_markets().
         """
         url = f"{self.base_url}{path}"
-        
+
         # Get authentication headers
         headers = self.auth.get_headers(method=method, path=path)
-        
+
         # Make request
         response = self.session.request(
             method=method,
@@ -494,12 +494,12 @@ class KalshiClient:
             headers=headers,
             timeout=10  # Always set timeouts!
         )
-        
+
         # Raise exception if request failed
         response.raise_for_status()
-        
+
         return response.json()
-    
+
     def get_markets(
         self,
         series_ticker: Optional[str] = None,
@@ -509,47 +509,47 @@ class KalshiClient:
     ) -> List[Dict]:
         """
         Get list of markets with price data.
-        
+
         Args:
             series_ticker: Filter by series (e.g., "KXNFLGAME")
             event_ticker: Filter by event (e.g., "KXNFLGAME-25OCT05-NEBUF")
             limit: Max markets to return (default 100, max 200)
             cursor: Pagination cursor for next page
-            
+
         Returns:
             List of market dictionaries with Decimal prices
-            
+
         Example:
             >>> client = KalshiClient("demo")
             >>> markets = client.get_markets(series_ticker="KXNFLGAME")
             >>> for market in markets:
             ...     print(f"{market['ticker']}: ${market['yes_ask']}")
-            
+
         Educational Notes:
             Pagination: Kalshi limits responses to 200 markets max.
             If more exist, response includes a 'cursor'.
             Pass that cursor to next call to get next page.
-            
+
             This is like "turning pages" in search results:
             Page 1: limit=100, cursor=None -> returns markets 1-100
             Page 2: limit=100, cursor="abc123" -> returns markets 101-200
             Page 3: limit=100, cursor="def456" -> returns markets 201-300
-            
+
             Keep calling until response has no cursor (you're done).
         """
         params = {"limit": limit}
-        
+
         if series_ticker:
             params["series_ticker"] = series_ticker
         if event_ticker:
             params["event_ticker"] = event_ticker
         if cursor:
             params["cursor"] = cursor
-        
+
         response = self._make_request("GET", "/markets", params=params)
-        
+
         markets = response.get("markets", [])
-        
+
         # Convert all prices to Decimal (CRITICAL for precision!)
         for market in markets:
             # Parse yes prices
@@ -557,29 +557,29 @@ class KalshiClient:
                 market["yes_bid"] = Decimal(str(market["yes_bid"]))
             if "yes_ask" in market:
                 market["yes_ask"] = Decimal(str(market["yes_ask"]))
-            
+
             # Parse no prices
             if "no_bid" in market:
                 market["no_bid"] = Decimal(str(market["no_bid"]))
             if "no_ask" in market:
                 market["no_ask"] = Decimal(str(market["no_ask"]))
-            
+
             # Parse last price
             if "last_price" in market:
                 market["last_price"] = Decimal(str(market["last_price"]))
-        
+
         return markets
-    
+
     def get_market(self, ticker: str) -> Dict:
         """
         Get details for single market.
-        
+
         Args:
             ticker: Market ticker (e.g., "KXNFLGAME-25OCT05-NEBUF-B250")
-            
+
         Returns:
             Market dictionary with Decimal prices
-            
+
         Example:
             >>> client = KalshiClient("demo")
             >>> market = client.get_market("KXNFLGAME-25OCT05-NEBUF-B250")
@@ -588,7 +588,7 @@ class KalshiClient:
         """
         response = self._make_request("GET", f"/markets/{ticker}")
         market = response.get("market", {})
-        
+
         # Convert prices to Decimal
         if "yes_bid" in market:
             market["yes_bid"] = Decimal(str(market["yes_bid"]))
@@ -600,9 +600,9 @@ class KalshiClient:
             market["no_ask"] = Decimal(str(market["no_ask"]))
         if "last_price" in market:
             market["last_price"] = Decimal(str(market["last_price"]))
-        
+
         return market
-    
+
     def get_series(
         self,
         limit: int = 100,
@@ -611,15 +611,15 @@ class KalshiClient:
     ) -> List[Dict]:
         """
         Get list of series (market categories).
-        
+
         Args:
             limit: Max series to return
             cursor: Pagination cursor
             category: Filter by category (e.g., "sports")
-            
+
         Returns:
             List of series dictionaries
-            
+
         Example:
             >>> client = KalshiClient("demo")
             >>> series = client.get_series(category="sports")
@@ -633,10 +633,10 @@ class KalshiClient:
             params["cursor"] = cursor
         if category:
             params["category"] = category
-        
+
         response = self._make_request("GET", "/series", params=params)
         return response.get("series", [])
-    
+
     def get_events(
         self,
         series_ticker: Optional[str] = None,
@@ -645,15 +645,15 @@ class KalshiClient:
     ) -> List[Dict]:
         """
         Get list of events.
-        
+
         Args:
             series_ticker: Filter by series
             limit: Max events to return
             cursor: Pagination cursor
-            
+
         Returns:
             List of event dictionaries
-            
+
         Example:
             >>> client = KalshiClient("demo")
             >>> events = client.get_events(series_ticker="KXNFLGAME")
@@ -665,17 +665,17 @@ class KalshiClient:
             params["series_ticker"] = series_ticker
         if cursor:
             params["cursor"] = cursor
-        
+
         response = self._make_request("GET", "/events", params=params)
         return response.get("events", [])
-    
+
     def get_balance(self) -> Dict:
         """
         Get account balance.
-        
+
         Returns:
             Balance dictionary with Decimal amounts
-            
+
         Example:
             >>> client = KalshiClient("demo")
             >>> balance = client.get_balance()
@@ -684,20 +684,20 @@ class KalshiClient:
         """
         response = self._make_request("GET", "/portfolio/balance")
         balance = response.get("balance", {})
-        
+
         # Convert to Decimal
         if "balance" in balance:
             balance["balance"] = Decimal(str(balance["balance"]))
-        
+
         return balance
-    
+
     def get_positions(self) -> List[Dict]:
         """
         Get open positions.
-        
+
         Returns:
             List of positions with Decimal values
-            
+
         Example:
             >>> client = KalshiClient("demo")
             >>> positions = client.get_positions()
@@ -706,7 +706,7 @@ class KalshiClient:
         """
         response = self._make_request("GET", "/portfolio/positions")
         positions = response.get("positions", [])
-        
+
         # Convert monetary values to Decimal
         for pos in positions:
             if "market_exposure" in pos:
@@ -715,7 +715,7 @@ class KalshiClient:
                 pos["realized_pnl"] = Decimal(str(pos["realized_pnl"]))
             if "unrealized_pnl" in pos:
                 pos["unrealized_pnl"] = Decimal(str(pos["unrealized_pnl"]))
-        
+
         return positions
 
 
@@ -723,17 +723,17 @@ class KalshiClient:
 if __name__ == "__main__":
     # Initialize client
     client = KalshiClient(environment="demo")
-    
+
     print("✅ Connected to Kalshi Demo API")
-    
+
     # Get balance
     balance = client.get_balance()
     print(f"\n💰 Balance: ${balance['balance']}")
-    
+
     # Get NFL markets
     nfl_markets = client.get_markets(series_ticker="KXNFLGAME", limit=5)
     print(f"\n📊 Found {len(nfl_markets)} NFL markets")
-    
+
     # Display first market
     if nfl_markets:
         market = nfl_markets[0]
@@ -855,56 +855,56 @@ import time
 class ESPNClient:
     """
     Client for ESPN's sports APIs.
-    
+
     Provides methods to fetch live game data, scores, and statistics
     for NFL, NCAAF, and other sports.
-    
+
     No authentication required - this is a public API!
-    
+
     Usage:
         client = ESPNClient()
-        
+
         # Get today's NFL games
         scoreboard = client.get_nfl_scoreboard()
-        
+
         # Get specific week
         scoreboard = client.get_nfl_scoreboard(week=5, year=2025)
-        
+
         # Process games
         for game in scoreboard['games']:
             print(f"{game['away_team']} @ {game['home_team']}: {game['status']}")
     """
-    
+
     def __init__(self):
         """
         Initialize ESPN client.
-        
+
         Educational Note:
             We use requests.Session() for connection pooling.
             This reuses HTTP connections, making requests faster.
-            
+
             Without Session: Open connection → Request → Close connection
             With Session: Open connection once → Many requests → Close once
-            
+
             This can make your code 2-3x faster when making many requests!
         """
         self.base_url = "https://site.api.espn.com/apis/site/v2/sports"
         self.session = requests.Session()
-        
+
         # Set a user agent so ESPN knows we're not a bot scraping maliciously
         self.session.headers.update({
             'User-Agent': 'Precog-Trading-System/1.0 (Educational/Research)'
         })
-    
+
     def get_nfl_scoreboard(
-        self, 
+        self,
         week: Optional[int] = None,
         year: Optional[int] = None,
         date_str: Optional[str] = None
     ) -> Dict:
         """
         Get NFL scoreboard data.
-        
+
         Args:
             week: NFL week (1-18 regular season, 19+ playoffs)
                   If None, gets current week
@@ -912,35 +912,35 @@ class ESPNClient:
                   If None, gets current season
             date_str: Specific date in YYYYMMDD format (e.g., "20251016")
                      Overrides week/year if provided
-        
+
         Returns:
             Dictionary containing:
             - games: List of game dictionaries (parsed for easy use)
             - raw_response: Original ESPN response (if you need it)
-            
+
         Example:
             >>> client = ESPNClient()
             >>> scoreboard = client.get_nfl_scoreboard(week=5, year=2025)
             >>> print(f"Found {len(scoreboard['games'])} games")
-            >>> 
+            >>>
             >>> for game in scoreboard['games']:
             ...     print(f"{game['away_team']} @ {game['home_team']}")
             ...     print(f"  Score: {game['away_score']}-{game['home_score']}")
             ...     print(f"  Status: {game['status']}")
             ...     print(f"  Period: {game['period']}, Time: {game['clock']}")
-        
+
         Educational Notes:
             NFL Structure:
             - Regular season: Weeks 1-18
             - Playoffs: Weeks 19+ (Wild Card, Divisional, Conference, Super Bowl)
             - Bye weeks: Some teams don't play certain weeks
-            
+
             Game States:
             - "STATUS_SCHEDULED": Game hasn't started yet
             - "STATUS_IN_PROGRESS": Game is live! (this is what we watch)
             - "STATUS_FINAL": Game over
             - "STATUS_FINAL_OVERTIME": Game over after OT
-            
+
             Why We Parse the Response:
             ESPN's raw response is complex and nested. We extract just
             what we need into a simpler structure. This makes the rest
@@ -955,10 +955,10 @@ class ESPNClient:
                 params['week'] = week
             if year:
                 params['seasonYear'] = year
-        
+
         # Make request
         url = f"{self.base_url}/football/nfl/scoreboard"
-        
+
         try:
             response = self.session.get(url, params=params, timeout=10)
             response.raise_for_status()  # Raise exception for 4xx/5xx errors
@@ -967,58 +967,58 @@ class ESPNClient:
             # Log error and return empty result
             print(f"Error fetching NFL scoreboard: {e}")
             return {'games': [], 'raw_response': None, 'error': str(e)}
-        
+
         # Parse games into simpler format
         games = self._parse_nfl_games(data)
-        
+
         return {
             'games': games,
             'raw_response': data  # Keep original in case you need it
         }
-    
+
     def _parse_nfl_games(self, data: Dict) -> List[Dict]:
         """
         Parse ESPN's complex JSON into simple game dictionaries.
-        
+
         Args:
             data: Raw ESPN API response
-            
+
         Returns:
             List of game dictionaries with flattened structure
-            
+
         Educational Note:
             This is a "private" method (starts with _).
             Python convention: _ means "internal helper, don't call directly"
-            
+
             We do the complex parsing here so other code can stay clean.
             This is called "separation of concerns" - each function does
             one thing well.
-            
+
             The raw ESPN response has games nested like:
             data -> events -> competitions -> competitors
-            
+
             We flatten this to just:
             {home_team, away_team, home_score, away_score, status, etc.}
-            
+
             Much easier to work with!
         """
         games = []
-        
+
         for event in data.get('events', []):
             try:
                 # Get first competition (there's usually only one)
                 competition = event['competitions'][0]
-                
+
                 # Get competitors (teams)
                 competitors = competition['competitors']
-                
+
                 # Find home and away teams
                 # ESPN marks one as homeAway: "home" and other as "away"
                 home_team = None
                 away_team = None
                 home_score = 0
                 away_score = 0
-                
+
                 for competitor in competitors:
                     team_info = {
                         'id': competitor['team']['id'],
@@ -1027,62 +1027,62 @@ class ESPNClient:
                         'score': int(competitor.get('score', 0)),
                         'record': competitor.get('records', [{}])[0].get('summary', '0-0')
                     }
-                    
+
                     if competitor['homeAway'] == 'home':
                         home_team = team_info
                         home_score = team_info['score']
                     else:
                         away_team = team_info
                         away_score = team_info['score']
-                
+
                 # Get game status
                 status = competition['status']
                 game_status = status['type']['name']  # STATUS_SCHEDULED, STATUS_IN_PROGRESS, etc.
                 period = status.get('period', 0)
                 clock = status.get('displayClock', '0:00')
-                
+
                 # Build game dictionary
                 game = {
                     'id': event['id'],
                     'date': event['date'],
                     'name': event['name'],
                     'short_name': event['shortName'],
-                    
+
                     'home_team': home_team['name'],
                     'home_abbr': home_team['abbreviation'],
                     'home_score': home_score,
                     'home_record': home_team['record'],
-                    
+
                     'away_team': away_team['name'],
                     'away_abbr': away_team['abbreviation'],
                     'away_score': away_score,
                     'away_record': away_team['record'],
-                    
+
                     'status': game_status,
                     'period': period,
                     'clock': clock,
-                    
+
                     'is_live': game_status == 'STATUS_IN_PROGRESS',
                     'is_final': 'FINAL' in game_status,
-                    
+
                     # Venue info
                     'venue': competition.get('venue', {}).get('fullName', 'Unknown'),
                     'city': competition.get('venue', {}).get('address', {}).get('city', 'Unknown'),
-                    
+
                     # Calculate useful fields
                     'lead': abs(home_score - away_score),
                     'leader': 'home' if home_score > away_score else ('away' if away_score > home_score else 'tied')
                 }
-                
+
                 games.append(game)
-                
+
             except (KeyError, IndexError, TypeError) as e:
                 # Skip games with parsing errors
                 print(f"Error parsing game: {e}")
                 continue
-        
+
         return games
-    
+
     def get_ncaaf_scoreboard(
         self,
         week: Optional[int] = None,
@@ -1091,42 +1091,42 @@ class ESPNClient:
     ) -> Dict:
         """
         Get NCAA Football (college) scoreboard.
-        
+
         Args:
             week: Week number (1-15 for regular season)
             year: Season year
             group: 80 for FBS (Division 1), 81 for FCS (Division 1-AA)
-        
+
         Returns:
             Dictionary with games list (same format as NFL)
-            
+
         Example:
             >>> client = ESPNClient()
             >>> scoreboard = client.get_ncaaf_scoreboard(week=5, year=2025)
-            >>> 
+            >>>
             >>> # Find ranked matchups
             >>> for game in scoreboard['games']:
             ...     if '#' in game['home_team'] or '#' in game['away_team']:
             ...         print(f"Ranked game: {game['name']}")
-        
+
         Educational Notes:
             College Football Structure:
             - FBS: Top division (~130 teams), includes SEC, Big Ten, etc.
             - FCS: Second division (~120 teams), smaller schools
             - Group 80 = FBS, Group 81 = FCS
-            
+
             College vs NFL:
             - More games per week (50+ vs 16)
             - Wider score differentials (blowouts more common)
             - Rankings matter more (for playoffs)
             - More variety in team quality
-            
+
             Why This Matters for Trading:
             College games are harder to predict because:
             1. Bigger talent gaps between teams
             2. Less historical data per team
             3. More variance game-to-game
-            
+
             But this also means more opportunities for edges!
         """
         params = {'groups': group}
@@ -1134,9 +1134,9 @@ class ESPNClient:
             params['week'] = week
         if year:
             params['seasonYear'] = year
-        
+
         url = f"{self.base_url}/football/college-football/scoreboard"
-        
+
         try:
             response = self.session.get(url, params=params, timeout=10)
             response.raise_for_status()
@@ -1144,47 +1144,47 @@ class ESPNClient:
         except requests.exceptions.RequestException as e:
             print(f"Error fetching NCAAF scoreboard: {e}")
             return {'games': [], 'raw_response': None, 'error': str(e)}
-        
+
         # Same parsing as NFL (structure is identical)
         games = self._parse_nfl_games(data)
-        
+
         return {
             'games': games,
             'raw_response': data
         }
-    
+
     def get_nba_scoreboard(self, date_str: Optional[str] = None) -> Dict:
         """
         Get NBA scoreboard data.
-        
+
         Args:
             date_str: Date in YYYYMMDD format (e.g., "20251016")
                      If None, gets today's games
-        
+
         Returns:
             Dictionary with games list
-            
+
         Example:
             >>> client = ESPNClient()
             >>> scoreboard = client.get_nba_scoreboard()
-            >>> 
+            >>>
             >>> for game in scoreboard['games']:
             ...     if game['is_live']:
             ...         print(f"LIVE: {game['name']}")
             ...         print(f"  Q{game['period']}, {game['clock']}")
-        
+
         Educational Notes:
             NBA Schedule:
             - Regular season: October-April (~82 games per team)
             - Playoffs: April-June (best-of-7 series)
             - Multiple games per day (10-15 games on busy nights)
-            
+
             NBA vs NFL Trading:
             - More games = more opportunities
             - Higher scoring = different probability models
             - Individual players matter more (injuries crucial)
             - Home court advantage smaller than NFL
-            
+
             Phase 6+: When we add NBA trading, we'll need:
             1. Player injury tracking
             2. Back-to-back game fatigue models
@@ -1193,9 +1193,9 @@ class ESPNClient:
         params = {}
         if date_str:
             params['dates'] = date_str
-        
+
         url = f"{self.base_url}/basketball/nba/scoreboard"
-        
+
         try:
             response = self.session.get(url, params=params, timeout=10)
             response.raise_for_status()
@@ -1203,14 +1203,14 @@ class ESPNClient:
         except requests.exceptions.RequestException as e:
             print(f"Error fetching NBA scoreboard: {e}")
             return {'games': [], 'raw_response': None, 'error': str(e)}
-        
+
         games = self._parse_nfl_games(data)  # Same structure!
-        
+
         return {
             'games': games,
             'raw_response': data
         }
-    
+
     def monitor_live_games(
         self,
         sport: str = "nfl",
@@ -1219,37 +1219,37 @@ class ESPNClient:
     ):
         """
         Continuously monitor live games and call callback on updates.
-        
+
         Args:
             sport: "nfl", "ncaaf", or "nba"
             callback: Function to call with game data: callback(games)
             poll_interval: Seconds between checks (default 15)
-        
+
         Example:
             >>> def on_game_update(games):
             ...     for game in games:
             ...         if game['is_live']:
             ...             print(f"Update: {game['name']} - {game['home_score']}-{game['away_score']}")
-            >>> 
+            >>>
             >>> client = ESPNClient()
             >>> client.monitor_live_games(sport="nfl", callback=on_game_update)
             # Runs forever, calling callback every 15 seconds
-        
+
         Educational Notes:
             This is a "blocking" function - it runs forever in a loop.
-            
+
             In production (Phase 3+), we'll use:
             - APScheduler for cron-like scheduling
             - Async/await for non-blocking operation
             - WebSockets for real-time updates (if available)
-            
+
             But for Phase 2, this simple polling approach works great!
-            
+
             Polling Tradeoffs:
             - Too fast (every 5s): Wastes bandwidth, might anger ESPN
             - Too slow (every 60s): Miss important updates
             - 15-30s is sweet spot for live sports
-            
+
             Why 15 seconds?
             - Scores don't change every second
             - ESPN updates every 10-15s anyway
@@ -1262,35 +1262,35 @@ class ESPNClient:
             'ncaaf': self.get_ncaaf_scoreboard,
             'nba': self.get_nba_scoreboard
         }
-        
+
         get_scoreboard = scoreboard_funcs.get(sport.lower())
         if not get_scoreboard:
             raise ValueError(f"Unknown sport: {sport}. Must be 'nfl', 'ncaaf', or 'nba'")
-        
+
         print(f"🔄 Starting live monitor for {sport.upper()} (poll every {poll_interval}s)")
         print("Press Ctrl+C to stop")
-        
+
         try:
             while True:
                 # Fetch current games
                 scoreboard = get_scoreboard()
                 games = scoreboard['games']
-                
+
                 # Filter to just live games
                 live_games = [g for g in games if g['is_live']]
-                
+
                 if live_games:
                     print(f"\n⚡ {len(live_games)} live games")
-                    
+
                     # Call callback if provided
                     if callback:
                         callback(live_games)
                 else:
                     print(f"\n💤 No live games right now")
-                
+
                 # Wait before next check
                 time.sleep(poll_interval)
-                
+
         except KeyboardInterrupt:
             print("\n\n🛑 Monitor stopped")
 
@@ -1299,21 +1299,21 @@ class ESPNClient:
 if __name__ == "__main__":
     """
     Test script to verify ESPN API is working.
-    
+
     Run this to make sure everything is set up correctly:
         python api_connectors/espn_client.py
     """
     client = ESPNClient()
-    
+
     print("=" * 60)
     print("ESPN API CLIENT - TEST SCRIPT")
     print("=" * 60)
-    
+
     # Test NFL
     print("\n📊 Fetching NFL scoreboard...")
     nfl = client.get_nfl_scoreboard()
     print(f"✅ Found {len(nfl['games'])} NFL games")
-    
+
     if nfl['games']:
         print("\nSample NFL game:")
         game = nfl['games'][0]
@@ -1322,18 +1322,18 @@ if __name__ == "__main__":
         print(f"  Status: {game['status']}")
         if game['is_live']:
             print(f"  🔴 LIVE - Q{game['period']}, {game['clock']}")
-    
+
     # Test NCAAF
     print("\n📊 Fetching NCAAF scoreboard...")
     ncaaf = client.get_ncaaf_scoreboard()
     print(f"✅ Found {len(ncaaf['games'])} college football games")
-    
+
     # Count live games
     live_nfl = sum(1 for g in nfl['games'] if g['is_live'])
     live_ncaaf = sum(1 for g in ncaaf['games'] if g['is_live'])
-    
+
     print(f"\n⚡ Live games: {live_nfl} NFL, {live_ncaaf} NCAAF")
-    
+
     print("\n✅ ESPN API client is working!")
 ```
 
@@ -1347,32 +1347,32 @@ if __name__ == "__main__":
     'date': '2025-01-16T18:00Z',         # ISO timestamp
     'name': 'Kansas City Chiefs at Buffalo Bills',
     'short_name': 'KC @ BUF',
-    
+
     # Home team
     'home_team': 'Buffalo Bills',
     'home_abbr': 'BUF',
     'home_score': 24,
     'home_record': '14-4',
-    
+
     # Away team
     'away_team': 'Kansas City Chiefs',
     'away_abbr': 'KC',
     'away_score': 27,
     'away_record': '15-3',
-    
+
     # Game state
     'status': 'STATUS_IN_PROGRESS',       # or STATUS_FINAL, STATUS_SCHEDULED
     'period': 4,                          # Quarter (1-4, 5+ for OT)
     'clock': '2:45',                      # Time remaining in period
-    
+
     # Convenience flags
     'is_live': True,                      # Game currently in progress?
     'is_final': False,                    # Game over?
-    
+
     # Venue
     'venue': 'Highmark Stadium',
     'city': 'Orchard Park',
-    
+
     # Calculated fields (useful for odds)
     'lead': 3,                            # Point differential
     'leader': 'away'                      # 'home', 'away', or 'tied'
@@ -1444,7 +1444,7 @@ production systems. Always have a backup!
 
 Paid Tiers:
 - Standard: $10/month, 30 req/min
-- Pro: $25/month, 60 req/min  
+- Pro: $25/month, 60 req/min
 - Enterprise: Custom pricing
 
 For Phase 2-3, free tier is fine. Upgrade if needed in Phase 5+.
@@ -1463,93 +1463,93 @@ load_dotenv()
 class BalldontlieClient:
     """
     Client for Balldontlie NFL API.
-    
+
     Provides backup NFL data source with official statistics.
     Requires API key (free tier available).
-    
+
     Usage:
         client = BalldontlieClient()
-        
+
         # Get games for specific date
         games = client.get_games(date="2025-10-16")
-        
+
         # Get live games
         live_games = client.get_live_games()
-    
+
     Rate Limiting:
         Free tier: 5 requests/minute
         This client automatically handles rate limiting with delays.
     """
-    
+
     def __init__(self):
         """
         Initialize Balldontlie client.
-        
+
         Raises:
             EnvironmentError: If BALLDONTLIE_API_KEY not in environment
-            
+
         Educational Note:
             We load the API key from environment variables for security.
             Never hardcode API keys in your code!
-            
+
             Why?
             1. Keys in code can leak if you share code
             2. Keys in Git history are compromised forever
             3. Different keys for dev/prod environments
-            
+
             Always use .env files for secrets!
         """
         self.base_url = "https://api.balldontlie.io/v1/nfl"
         self.api_key = os.getenv('BALLDONTLIE_API_KEY')
-        
+
         if not self.api_key:
             raise EnvironmentError(
                 "BALLDONTLIE_API_KEY not found in environment. "
                 "Please add to .env file."
             )
-        
+
         # Session for connection pooling
         self.session = requests.Session()
         self.session.headers.update({
             'Authorization': f'Bearer {self.api_key}'
         })
-        
+
         # Rate limiting
         self.requests_per_minute = 5
         self.min_request_interval = 60.0 / self.requests_per_minute  # 12 seconds
         self.last_request_time = 0
-    
+
     def _rate_limit(self):
         """
         Enforce rate limiting by adding delays between requests.
-        
+
         Free tier: 5 requests/minute = 1 request every 12 seconds
-        
+
         Educational Note:
             Rate limiting is crucial to avoid getting banned!
-            
+
             How it works:
             1. Track when we last made a request
             2. Calculate how long to wait (12 seconds for free tier)
             3. Sleep if needed before next request
-            
+
             Example:
             - Request at 10:00:00
             - Next request at 10:00:05 → wait 7 more seconds
             - Next request at 10:00:15 → no wait needed (12s passed)
-            
+
             This is called "token bucket" rate limiting.
         """
         current_time = time.time()
         time_since_last = current_time - self.last_request_time
-        
+
         if time_since_last < self.min_request_interval:
             wait_time = self.min_request_interval - time_since_last
             print(f"⏳ Rate limit: waiting {wait_time:.1f}s...")
             time.sleep(wait_time)
-        
+
         self.last_request_time = time.time()
-    
+
     def get_games(
         self,
         start_date: Optional[str] = None,
@@ -1558,39 +1558,39 @@ class BalldontlieClient:
     ) -> List[Dict]:
         """
         Get NFL games within date range.
-        
+
         Args:
             start_date: Start date in YYYY-MM-DD format (e.g., "2025-10-16")
             end_date: End date in YYYY-MM-DD format
             season: Season year (e.g., 2025)
-        
+
         Returns:
             List of game dictionaries
-            
+
         Example:
             >>> client = BalldontlieClient()
             >>> games = client.get_games(start_date="2025-10-16")
-            >>> 
+            >>>
             >>> for game in games:
             ...     print(f"{game['away_team']} @ {game['home_team']}")
             ...     if game['status'] == 'Final':
             ...         print(f"  Final: {game['away_score']}-{game['home_score']}")
-        
+
         Educational Notes:
             Date Ranges:
             - Single day: set start_date = end_date
             - Week: start_date = Monday, end_date = Monday+7
             - Season: set season parameter
-            
+
             Response includes:
             - Scheduled games (future)
             - In-progress games (live)
             - Completed games (final)
-            
+
             Filter by status in your code if needed!
         """
         self._rate_limit()
-        
+
         params = {}
         if start_date:
             params['start_date'] = start_date
@@ -1598,9 +1598,9 @@ class BalldontlieClient:
             params['end_date'] = end_date
         if season:
             params['season'] = season
-        
+
         url = f"{self.base_url}/games"
-        
+
         try:
             response = self.session.get(url, params=params, timeout=10)
             response.raise_for_status()
@@ -1608,47 +1608,47 @@ class BalldontlieClient:
         except requests.exceptions.RequestException as e:
             print(f"Error fetching Balldontlie games: {e}")
             return []
-        
+
         return data.get('data', [])
-    
+
     def get_live_games(self) -> List[Dict]:
         """
         Get currently live NFL games.
-        
+
         Returns:
             List of in-progress games
-            
+
         Example:
             >>> client = BalldontlieClient()
             >>> live = client.get_live_games()
-            >>> 
+            >>>
             >>> if live:
             ...     print(f"🔴 {len(live)} live games!")
             ...     for game in live:
             ...         print(f"  {game['home_team']} vs {game['away_team']}")
             ... else:
             ...     print("No live games right now")
-        
+
         Educational Note:
             This is a convenience method that:
             1. Gets today's games
             2. Filters to status = "In Progress"
-            
+
             Same result as:
                 games = client.get_games(start_date=today)
                 live = [g for g in games if g['status'] == 'In Progress']
-            
+
             But cleaner API for common use case!
         """
         today = date.today().isoformat()
         games = self.get_games(start_date=today, end_date=today)
-        
+
         # Filter to in-progress games
         live_games = [
-            g for g in games 
+            g for g in games
             if g.get('status') == 'In Progress'
         ]
-        
+
         return live_games
 
 
@@ -1656,17 +1656,17 @@ class BalldontlieClient:
 if __name__ == "__main__":
     """
     Side-by-side comparison of ESPN and Balldontlie APIs.
-    
+
     This helps you understand the tradeoffs:
     - ESPN: Faster, no key, more flexible
     - Balldontlie: Official data, rate limited
     """
     from .espn_client import ESPNClient
-    
+
     print("=" * 60)
     print("API COMPARISON: ESPN vs BALLDONTLIE")
     print("=" * 60)
-    
+
     # ESPN
     print("\n📊 ESPN API:")
     espn = ESPNClient()
@@ -1676,7 +1676,7 @@ if __name__ == "__main__":
     print(f"  ✅ {len(espn_games['games'])} games in {espn_time:.2f}s")
     print(f"  ⚡ No rate limits!")
     print(f"  🆓 No API key required")
-    
+
     # Balldontlie
     print("\n📊 Balldontlie API:")
     try:
@@ -1690,7 +1690,7 @@ if __name__ == "__main__":
         print(f"  🔑 API key required")
     except EnvironmentError as e:
         print(f"  ❌ {e}")
-    
+
     print("\n📋 RECOMMENDATION:")
     print("  PRIMARY: Use ESPN (faster, no limits)")
     print("  BACKUP: Use Balldontlie (if ESPN fails)")
@@ -1786,43 +1786,43 @@ NFL_STADIUMS = {
     "Highmark Stadium": {"lat": 42.7738, "lon": -78.7870, "dome": False},
     "Hard Rock Stadium": {"lat": 25.9580, "lon": -80.2389, "dome": False},
     "MetLife Stadium": {"lat": 40.8128, "lon": -74.0742, "dome": False},
-    
+
     # AFC North
     "M&T Bank Stadium": {"lat": 39.2780, "lon": -76.6227, "dome": False},
     "Paycor Stadium": {"lat": 39.0954, "lon": -84.5160, "dome": False},
     "FirstEnergy Stadium": {"lat": 41.5061, "lon": -81.6995, "dome": False},
     "Acrisure Stadium": {"lat": 40.4468, "lon": -80.0158, "dome": False},
-    
+
     # AFC South
     "NRG Stadium": {"lat": 29.6847, "lon": -95.4107, "dome": True},  # Retractable
     "Lucas Oil Stadium": {"lat": 39.7601, "lon": -86.1639, "dome": True},  # Retractable
     "TIAA Bank Field": {"lat": 30.3239, "lon": -81.6373, "dome": False},
     "Nissan Stadium": {"lat": 36.1665, "lon": -86.7713, "dome": False},
-    
+
     # AFC West
     "Empower Field at Mile High": {"lat": 39.7439, "lon": -105.0201, "dome": False},
     "Arrowhead Stadium": {"lat": 39.0489, "lon": -94.4839, "dome": False},
     "Allegiant Stadium": {"lat": 36.0909, "lon": -115.1833, "dome": True},
     "SoFi Stadium": {"lat": 33.9535, "lon": -118.3390, "dome": True},
-    
+
     # NFC East
     "AT&T Stadium": {"lat": 32.7473, "lon": -97.0945, "dome": True},  # Retractable
     "MetLife Stadium": {"lat": 40.8128, "lon": -74.0742, "dome": False},  # Giants/Jets
     "Lincoln Financial Field": {"lat": 39.9008, "lon": -75.1675, "dome": False},
     "FedExField": {"lat": 38.9076, "lon": -76.8645, "dome": False},
-    
+
     # NFC North
     "Soldier Field": {"lat": 41.8623, "lon": -87.6167, "dome": False},
     "Ford Field": {"lat": 42.3400, "lon": -83.0456, "dome": True},
     "Lambeau Field": {"lat": 44.5013, "lon": -88.0622, "dome": False},  # Outdoor in GB!
     "U.S. Bank Stadium": {"lat": 44.9736, "lon": -93.2577, "dome": True},
-    
+
     # NFC South
     "Mercedes-Benz Stadium": {"lat": 33.7553, "lon": -84.4006, "dome": True},  # Retractable
     "Bank of America Stadium": {"lat": 35.2258, "lon": -80.8528, "dome": False},
     "Caesars Superdome": {"lat": 29.9511, "lon": -90.0812, "dome": True},
     "Raymond James Stadium": {"lat": 27.9759, "lon": -82.5033, "dome": False},
-    
+
     # NFC West
     "State Farm Stadium": {"lat": 33.5276, "lon": -112.2626, "dome": True},  # Retractable
     "Levi's Stadium": {"lat": 37.4032, "lon": -121.9698, "dome": False},
@@ -1848,13 +1848,13 @@ NCAAF_STADIUMS = {
 def get_stadium_coords(stadium_name: str) -> Optional[Dict]:
     """
     Get coordinates for a stadium.
-    
+
     Args:
         stadium_name: Name of stadium (from ESPN data)
-        
+
     Returns:
         Dict with lat, lon, dome status, or None if not found
-        
+
     Example:
         >>> coords = get_stadium_coords("Lambeau Field")
         >>> print(coords)
@@ -1863,11 +1863,11 @@ def get_stadium_coords(stadium_name: str) -> Optional[Dict]:
     # Check NFL first
     if stadium_name in NFL_STADIUMS:
         return NFL_STADIUMS[stadium_name]
-    
+
     # Check NCAAF
     if stadium_name in NCAAF_STADIUMS:
         return NCAAF_STADIUMS[stadium_name]
-    
+
     return None
 ```
 
@@ -1926,47 +1926,47 @@ load_dotenv()
 class WeatherClient:
     """
     Client for OpenWeatherMap API.
-    
+
     Fetches current and forecast weather data for stadium locations.
-    
+
     Usage:
         weather = WeatherClient()
-        
+
         # Get current weather at stadium
         conditions = weather.get_current_weather("Lambeau Field")
         print(f"Temp: {conditions['temp_f']}°F, Wind: {conditions['wind_mph']} MPH")
-        
+
         # Assess game impact
         impact = weather.assess_game_impact(conditions)
         if impact['severity'] == 'major':
             print(f"⚠️ Weather alert: {impact['description']}")
     """
-    
+
     def __init__(self):
         """
         Initialize weather client.
-        
+
         Raises:
             EnvironmentError: If OPENWEATHER_API_KEY not in environment
         """
         self.base_url = "https://api.openweathermap.org/data/2.5"
         self.api_key = os.getenv('OPENWEATHER_API_KEY')
-        
+
         if not self.api_key:
             raise EnvironmentError(
                 "OPENWEATHER_API_KEY not found in environment. "
                 "Sign up at https://openweathermap.org/api and add to .env"
             )
-        
+
         self.session = requests.Session()
-    
+
     def get_current_weather(self, stadium_name: str) -> Optional[Dict]:
         """
         Get current weather at a stadium.
-        
+
         Args:
             stadium_name: Name of stadium (e.g., "Lambeau Field")
-            
+
         Returns:
             Weather dictionary with:
             - temp_f: Temperature in Fahrenheit
@@ -1977,29 +1977,29 @@ class WeatherClient:
             - conditions: Description (e.g., "Clear", "Rain", "Snow")
             - precipitation: Precipitation type (none, rain, snow)
             - dome: Is this a dome stadium? (always perfect if True)
-            
+
         Returns None if stadium not found or API error.
-        
+
         Example:
             >>> weather = WeatherClient()
             >>> conditions = weather.get_current_weather("Lambeau Field")
-            >>> 
+            >>>
             >>> if conditions:
             ...     print(f"Lambeau Field weather:")
             ...     print(f"  Temp: {conditions['temp_f']}°F")
             ...     print(f"  Wind: {conditions['wind_mph']} MPH")
             ...     print(f"  Conditions: {conditions['conditions']}")
-            ...     
+            ...
             ...     if conditions['dome']:
             ...         print("  (Dome stadium - weather doesn't matter!)")
-        
+
         Educational Notes:
             API Response: OpenWeatherMap returns temp in Kelvin by default!
             We convert to Fahrenheit: F = (K - 273.15) * 9/5 + 32
-            
+
             Why Fahrenheit? US sports use Fahrenheit, so easier to think about.
             "20°F is really cold" vs "266K is really cold" 😄
-            
+
             Wind direction: Degrees converted to compass points:
             - 0°/360° = N (North)
             - 90° = E (East)
@@ -2011,7 +2011,7 @@ class WeatherClient:
         if not coords:
             print(f"⚠️  Stadium not found: {stadium_name}")
             return None
-        
+
         # If dome stadium, return perfect conditions (weather doesn't matter!)
         if coords['dome']:
             return {
@@ -2025,7 +2025,7 @@ class WeatherClient:
                 'dome': True,
                 'raw_data': None
             }
-        
+
         # Fetch weather from API
         params = {
             'lat': coords['lat'],
@@ -2033,7 +2033,7 @@ class WeatherClient:
             'appid': self.api_key,
             'units': 'metric'  # We'll convert to imperial ourselves
         }
-        
+
         try:
             response = self.session.get(
                 f"{self.base_url}/weather",
@@ -2045,30 +2045,30 @@ class WeatherClient:
         except requests.exceptions.RequestException as e:
             print(f"Error fetching weather: {e}")
             return None
-        
+
         # Parse and convert
         temp_c = data['main']['temp']
         feels_like_c = data['main']['feels_like']
-        
+
         # Convert Celsius to Fahrenheit
         temp_f = temp_c * 9/5 + 32
         feels_like_f = feels_like_c * 9/5 + 32
-        
+
         # Wind speed: m/s to MPH
         wind_ms = data['wind']['speed']
         wind_mph = wind_ms * 2.237
-        
+
         # Wind direction: degrees to compass
         wind_deg = data['wind'].get('deg', 0)
         wind_direction = self._degrees_to_compass(wind_deg)
-        
+
         # Precipitation type
         precipitation = 'none'
         if 'rain' in data:
             precipitation = 'rain'
         elif 'snow' in data:
             precipitation = 'snow'
-        
+
         weather_data = {
             'temp_f': round(temp_f, 1),
             'feels_like_f': round(feels_like_f, 1),
@@ -2081,80 +2081,80 @@ class WeatherClient:
             'dome': False,
             'raw_data': data  # Keep full response for debugging
         }
-        
+
         return weather_data
-    
+
     def _degrees_to_compass(self, degrees: float) -> str:
         """
         Convert wind direction from degrees to compass point.
-        
+
         Args:
             degrees: 0-360 degrees (0 = North, 90 = East, etc.)
-            
+
         Returns:
             Compass direction (N, NE, E, SE, S, SW, W, NW)
-            
+
         Educational Note:
             We divide the circle into 8 sectors (45° each):
             - 337.5° to 22.5° = N
             - 22.5° to 67.5° = NE
             - 67.5° to 112.5° = E
             And so on...
-            
+
             This is simpler than raw degrees for humans to understand.
         """
         directions = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
         index = round(degrees / 45) % 8
         return directions[index]
-    
+
     def assess_game_impact(self, weather: Dict) -> Dict:
         """
         Assess how weather will impact game.
-        
+
         Args:
             weather: Weather data from get_current_weather()
-            
+
         Returns:
             Impact assessment with:
             - severity: 'none', 'minor', 'moderate', 'major'
             - description: Human-readable description
             - scoring_adjustment: Estimated points impact (negative = lower scoring)
             - confidence: 'high', 'medium', 'low'
-            
+
         Example:
             >>> weather = client.get_current_weather("Lambeau Field")
             >>> impact = client.assess_game_impact(weather)
-            >>> 
+            >>>
             >>> print(f"Impact: {impact['severity']}")
             >>> print(f"Description: {impact['description']}")
             >>> print(f"Scoring adjustment: {impact['scoring_adjustment']} points")
-            >>> 
+            >>>
             >>> if impact['severity'] in ['major', 'moderate']:
             ...     print("⚠️  Weather is a factor - adjust odds accordingly!")
-        
+
         Educational Notes:
             This implements research-backed weather adjustments:
-            
+
             WIND IMPACT:
             - <10 MPH: Negligible
             - 10-15 MPH: Minor (-1 to -2 points)
             - 15-20 MPH: Moderate (-3 to -5 points)
             - 20+ MPH: Major (-5 to -8 points)
-            
+
             PRECIPITATION:
             - Light rain: -2 to -4 points
             - Heavy rain: -4 to -7 points
             - Snow: -6 to -10 points
-            
+
             TEMPERATURE:
             - Cold (20-32°F): -2 to -4 points
             - Extreme cold (<20°F): -4 to -6 points
-            
+
             These are GUIDELINES, not absolutes! Actual impact depends on:
             - Team playing styles (run vs pass heavy)
             - Player experience in conditions
             - Home field advantage (home team used to it)
-            
+
             Phase 4+: Build statistical models using historical data.
             For now, use these as starting points.
         """
@@ -2166,11 +2166,11 @@ class WeatherClient:
                 'scoring_adjustment': 0.0,
                 'confidence': 'high'
             }
-        
+
         severity = 'none'
         factors = []
         scoring_adj = 0.0
-        
+
         # Check wind
         wind = weather['wind_mph']
         if wind >= 20:
@@ -2185,7 +2185,7 @@ class WeatherClient:
             severity = 'minor' if severity == 'none' else severity
             factors.append(f'breezy ({wind} MPH)')
             scoring_adj -= 2.0
-        
+
         # Check precipitation
         precip = weather['precipitation']
         if precip == 'snow':
@@ -2197,7 +2197,7 @@ class WeatherClient:
                 severity = 'moderate'
             factors.append('rain')
             scoring_adj -= 5.0
-        
+
         # Check temperature
         temp = weather['temp_f']
         if temp < 20:
@@ -2208,13 +2208,13 @@ class WeatherClient:
             severity = 'minor' if severity == 'none' else severity
             factors.append(f'freezing ({temp}°F)')
             scoring_adj -= 3.0
-        
+
         # Build description
         if not factors:
             description = f"Good conditions - {temp}°F, {wind} MPH wind"
         else:
             description = f"Challenging: {', '.join(factors)}"
-        
+
         return {
             'severity': severity,
             'description': description,
@@ -2229,11 +2229,11 @@ if __name__ == "__main__":
     Test weather API and see example output.
     """
     client = WeatherClient()
-    
+
     print("=" * 60)
     print("WEATHER API CLIENT - TEST SCRIPT")
     print("=" * 60)
-    
+
     # Test a few notable stadiums
     test_stadiums = [
         "Lambeau Field",         # Outdoor, cold weather
@@ -2241,20 +2241,20 @@ if __name__ == "__main__":
         "Soldier Field",         # Outdoor, Chicago weather
         "Empower Field at Mile High"  # High altitude, outdoor
     ]
-    
+
     for stadium in test_stadiums:
         print(f"\n📍 {stadium}")
         print("-" * 60)
-        
+
         weather = client.get_current_weather(stadium)
-        
+
         if weather:
             print(f"  🌡️  Temp: {weather['temp_f']}°F (feels like {weather['feels_like_f']}°F)")
             print(f"  💨 Wind: {weather['wind_mph']} MPH {weather['wind_direction']}")
             print(f"  ☁️  Conditions: {weather['conditions']}")
             if weather['precipitation'] != 'none':
                 print(f"  🌧️  Precipitation: {weather['precipitation']}")
-            
+
             # Assess impact
             impact = client.assess_game_impact(weather)
             print(f"\n  📊 Game Impact: {impact['severity'].upper()}")
@@ -2263,7 +2263,7 @@ if __name__ == "__main__":
                 print(f"     Expected scoring: {impact['scoring_adjustment']:+.1f} points")
         else:
             print("  ❌ Could not fetch weather")
-    
+
     print("\n" + "=" * 60)
     print("✅ Weather API client is working!")
 ```
@@ -2353,19 +2353,19 @@ import threading
 class RateLimiter:
     """
     Token bucket rate limiter.
-    
+
     Ensures API requests don't exceed specified rate limits.
     Thread-safe for concurrent usage.
-    
+
     Usage:
         # 5 requests per minute
         limiter = RateLimiter(requests_per_period=5, period_seconds=60)
-        
+
         for i in range(100):
             limiter.wait()  # Blocks if rate limit would be exceeded
             make_api_request()
     """
-    
+
     def __init__(
         self,
         requests_per_period: int,
@@ -2374,27 +2374,27 @@ class RateLimiter:
     ):
         """
         Initialize rate limiter.
-        
+
         Args:
             requests_per_period: Max requests allowed in period
             period_seconds: Time period in seconds (default 60)
             burst_size: Max burst size (default = requests_per_period)
-            
+
         Example:
             # Balldontlie: 5 requests per minute
             limiter = RateLimiter(requests_per_period=5, period_seconds=60)
-            
+
             # ESPN: 500 requests per hour (roughly 8-9 per minute)
             limiter = RateLimiter(requests_per_period=8, period_seconds=60)
-        
+
         Educational Note:
             burst_size lets you make multiple requests quickly,
             as long as you don't exceed the average rate.
-            
+
             Example: 5 req/min with burst_size=5
             - Can make 5 requests instantly
             - Then must wait 60 seconds for refill
-            
+
             vs burst_size=1:
             - Must wait 12 seconds between each request
             - No bursting allowed
@@ -2402,55 +2402,55 @@ class RateLimiter:
         self.requests_per_period = requests_per_period
         self.period_seconds = period_seconds
         self.burst_size = burst_size or requests_per_period
-        
+
         # Track recent request timestamps
         self.request_times = deque(maxlen=self.burst_size)
-        
+
         # Thread safety
         self.lock = threading.Lock()
-        
+
         # Calculate minimum delay between requests
         self.min_delay = period_seconds / requests_per_period
-    
+
     def wait(self):
         """
         Wait if necessary to respect rate limit.
-        
+
         This method blocks (sleeps) if making a request now would
         exceed the rate limit.
-        
+
         Educational Note:
             This is a "blocking" operation - your code stops here
             until it's safe to proceed.
-            
+
             In async code (Phase 3+), use asyncio.sleep() instead.
             For now, time.sleep() is simpler and works fine.
         """
         with self.lock:
             current_time = time.time()
-            
+
             # If we're at burst limit, check oldest request
             if len(self.request_times) >= self.burst_size:
                 oldest_request = self.request_times[0]
                 time_passed = current_time - oldest_request
-                
+
                 # If not enough time has passed, wait
                 if time_passed < self.period_seconds:
                     wait_time = self.period_seconds - time_passed
                     print(f"⏳ Rate limit: waiting {wait_time:.1f}s...")
                     time.sleep(wait_time)
                     current_time = time.time()
-            
+
             # Record this request
             self.request_times.append(current_time)
-    
+
     def get_wait_time(self) -> float:
         """
         Get time to wait before next request (without blocking).
-        
+
         Returns:
             Seconds to wait (0 if can proceed immediately)
-            
+
         Example:
             >>> limiter = RateLimiter(5, 60)
             >>> wait = limiter.get_wait_time()
@@ -2460,16 +2460,16 @@ class RateLimiter:
         with self.lock:
             if len(self.request_times) < self.burst_size:
                 return 0.0
-            
+
             current_time = time.time()
             oldest_request = self.request_times[0]
             time_passed = current_time - oldest_request
-            
+
             if time_passed < self.period_seconds:
                 return self.period_seconds - time_passed
-            
+
             return 0.0
-    
+
     def reset(self):
         """Reset the rate limiter (clear all tracked requests)."""
         with self.lock:
@@ -2479,19 +2479,19 @@ class RateLimiter:
 class ExponentialBackoff:
     """
     Exponential backoff for retry logic.
-    
+
     When API requests fail, retry with increasing delays:
     - 1st retry: wait 1 second
     - 2nd retry: wait 2 seconds
     - 3rd retry: wait 4 seconds
     - 4th retry: wait 8 seconds
     - etc.
-    
+
     This gives the API time to recover and prevents hammering it.
-    
+
     Usage:
         backoff = ExponentialBackoff(max_retries=5)
-        
+
         for attempt in range(backoff.max_retries):
             try:
                 result = make_api_request()
@@ -2503,23 +2503,23 @@ class ExponentialBackoff:
                     time.sleep(wait_time)
                 else:
                     raise  # Final attempt failed
-    
+
     Educational Notes:
         Why exponential?
-        
+
         Linear backoff (1s, 2s, 3s, 4s...):
         - Still hits API too frequently
         - Doesn't give enough recovery time
-        
+
         Exponential (1s, 2s, 4s, 8s, 16s...):
         - Quickly backs off
         - Gives API time to recover
         - Prevents cascading failures
-        
+
         This is the industry standard for retry logic.
         Used by AWS, Google Cloud, etc.
     """
-    
+
     def __init__(
         self,
         base_delay: float = 1.0,
@@ -2528,7 +2528,7 @@ class ExponentialBackoff:
     ):
         """
         Initialize exponential backoff.
-        
+
         Args:
             base_delay: Initial delay in seconds
             max_delay: Maximum delay in seconds
@@ -2537,17 +2537,17 @@ class ExponentialBackoff:
         self.base_delay = base_delay
         self.max_delay = max_delay
         self.max_retries = max_retries
-    
+
     def get_wait_time(self, attempt: int) -> float:
         """
         Calculate wait time for given attempt number.
-        
+
         Args:
             attempt: Attempt number (0-indexed)
-            
+
         Returns:
             Seconds to wait
-            
+
         Example:
             >>> backoff = ExponentialBackoff()
             >>> for i in range(5):
@@ -2560,7 +2560,7 @@ class ExponentialBackoff:
         """
         # Calculate: base_delay * 2^attempt
         wait = self.base_delay * (2 ** attempt)
-        
+
         # Cap at max_delay
         return min(wait, self.max_delay)
 
@@ -2573,25 +2573,25 @@ if __name__ == "__main__":
     print("=" * 60)
     print("RATE LIMITER DEMONSTRATION")
     print("=" * 60)
-    
+
     # Create rate limiter: 5 requests per minute
     limiter = RateLimiter(requests_per_period=5, period_seconds=60)
-    
+
     print("\nSimulating 10 API requests (limit: 5 per minute)")
     print("Watch how the rate limiter adds delays...")
     print()
-    
+
     for i in range(10):
         start = time.time()
-        
+
         limiter.wait()  # This will block if necessary
-        
+
         # Simulate API request
         print(f"Request {i + 1}/10 sent at {time.strftime('%H:%M:%S')}")
-        
+
         if i == 4:
             print("\n⏸️  Hit rate limit (5 requests). Must wait before continuing...\n")
-    
+
     print("\n" + "=" * 60)
     print("✅ All requests completed within rate limits!")
 ```
@@ -2612,14 +2612,14 @@ APIs can fail in many ways. Good error handling is what separates production-rea
    - Timeouts
    - Connection refused
    - DNS failures
-   
+
 2. **Client Errors (4xx)**
    - 400 Bad Request: Your request is malformed
    - 401 Unauthorized: Bad credentials
    - 403 Forbidden: Valid credentials, but no permission
    - 404 Not Found: Resource doesn't exist
    - 429 Too Many Requests: Rate limited!
-   
+
 3. **Server Errors (5xx)**
    - 500 Internal Server Error: Bug on their end
    - 502 Bad Gateway: Server overloaded
@@ -2699,54 +2699,54 @@ def with_retry(
 ):
     """
     Decorator to add retry logic to functions.
-    
+
     Args:
         max_retries: Maximum number of retry attempts
         backoff: ExponentialBackoff instance (default: 1s, 2s, 4s...)
         retry_on: Tuple of exceptions to retry on
         fallback_value: Value to return if all retries fail (else raise)
-        
+
     Example:
         @with_retry(max_retries=3)
         def fetch_data():
             response = requests.get("https://api.example.com/data")
             response.raise_for_status()
             return response.json()
-        
+
         # Will automatically retry up to 3 times on network errors
         data = fetch_data()
-    
+
     Educational Notes:
         Decorators are functions that modify other functions.
-        
+
         @with_retry
         def my_function():
             ...
-        
+
         Is equivalent to:
-        
+
         def my_function():
             ...
         my_function = with_retry(my_function)
-        
+
         Decorators let us add functionality (retries, logging, etc.)
         without cluttering our business logic.
     """
     if backoff is None:
         backoff = ExponentialBackoff(max_retries=max_retries)
-    
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)  # Preserves function metadata
         def wrapper(*args, **kwargs):
             last_exception = None
-            
+
             for attempt in range(max_retries):
                 try:
                     return func(*args, **kwargs)
-                
+
                 except retry_on as e:
                     last_exception = e
-                    
+
                     if attempt < max_retries - 1:
                         wait_time = backoff.get_wait_time(attempt)
                         logger.warning(
@@ -2759,14 +2759,14 @@ def with_retry(
                             f"{func.__name__} failed after {max_retries} attempts. "
                             f"Final error: {e}"
                         )
-            
+
             # All retries exhausted
             if fallback_value is not None:
                 logger.info(f"Returning fallback value for {func.__name__}")
                 return fallback_value
             else:
                 raise last_exception
-        
+
         return wrapper
     return decorator
 
@@ -2774,28 +2774,28 @@ def with_retry(
 def handle_api_response(response: requests.Response) -> dict:
     """
     Handle API response with comprehensive error checking.
-    
+
     Args:
         response: requests.Response object
-        
+
     Returns:
         Parsed JSON data
-        
+
     Raises:
         RateLimitError: If rate limit exceeded (429)
         AuthenticationError: If auth failed (401, 403)
         APIError: For other HTTP errors
         DataError: If JSON parsing fails
-        
+
     Example:
         response = requests.get(url, headers=headers)
         data = handle_api_response(response)
-    
+
     Educational Notes:
         This centralizes all error handling logic.
         Every API client can use this function rather than
         duplicating error handling code everywhere.
-        
+
         DRY principle: Don't Repeat Yourself!
     """
     # Check for rate limiting
@@ -2804,77 +2804,77 @@ def handle_api_response(response: requests.Response) -> dict:
         message = f"Rate limit exceeded"
         if retry_after:
             message += f". Retry after {retry_after} seconds"
-        
+
         logger.warning(message)
         raise RateLimitError(message)
-    
+
     # Check for authentication errors
     if response.status_code in [401, 403]:
         logger.error(f"Authentication failed: {response.status_code} {response.text}")
         raise AuthenticationError(f"Auth failed: {response.status_code}")
-    
+
     # Check for other HTTP errors
     try:
         response.raise_for_status()
     except requests.exceptions.HTTPError as e:
         logger.error(f"HTTP error: {e}")
         raise APIError(f"API request failed: {e}")
-    
+
     # Parse JSON
     try:
         data = response.json()
     except ValueError as e:
         logger.error(f"Invalid JSON response: {response.text[:200]}")
         raise DataError(f"Invalid JSON: {e}")
-    
+
     return data
 
 
 class CircuitBreaker:
     """
     Circuit breaker pattern to prevent cascading failures.
-    
+
     States:
     1. CLOSED: Normal operation, all requests go through
     2. OPEN: Too many failures, all requests fail fast
     3. HALF_OPEN: Testing if service recovered
-    
+
     Example:
         breaker = CircuitBreaker(failure_threshold=5, timeout=60)
-        
+
         def fetch_data():
             with breaker:
                 return requests.get(url).json()
-        
+
         # After 5 failures, breaker opens
         # All requests fail fast for 60 seconds
         # Then tries again (half-open state)
-    
+
     Educational Notes:
         Why circuit breakers?
-        
+
         Without circuit breaker:
         - Service goes down
         - We keep trying
         - Every request times out (30+ seconds)
         - Our system becomes unresponsive
         - Users get frustrated
-        
+
         With circuit breaker:
         - Service goes down
         - We detect it quickly (5 failures)
         - Stop sending requests (fail fast in 0.001s)
         - Try again after timeout
         - System stays responsive
-        
+
         This prevents:
         1. Wasting resources on doomed requests
         2. Cascading failures across systems
         3. Making outages worse with traffic
-        
+
         Industry standard for microservices!
     """
-    
+
     def __init__(
         self,
         failure_threshold: int = 5,
@@ -2883,7 +2883,7 @@ class CircuitBreaker:
     ):
         """
         Initialize circuit breaker.
-        
+
         Args:
             failure_threshold: Failures before opening circuit
             timeout: Seconds before attempting recovery
@@ -2892,11 +2892,11 @@ class CircuitBreaker:
         self.failure_threshold = failure_threshold
         self.timeout = timeout
         self.name = name
-        
+
         self.failures = 0
         self.last_failure_time = None
         self.state = "CLOSED"  # CLOSED, OPEN, HALF_OPEN
-    
+
     def __enter__(self):
         """Context manager entry."""
         if self.state == "OPEN":
@@ -2906,9 +2906,9 @@ class CircuitBreaker:
                 self.state = "HALF_OPEN"
             else:
                 raise APIError(f"Circuit breaker {self.name} is OPEN. Service unavailable.")
-        
+
         return self
-    
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         """Context manager exit."""
         if exc_type is None:
@@ -2921,7 +2921,7 @@ class CircuitBreaker:
             # Failure
             self.failures += 1
             self.last_failure_time = time.time()
-            
+
             if self.failures >= self.failure_threshold:
                 if self.state != "OPEN":
                     logger.error(
@@ -2929,7 +2929,7 @@ class CircuitBreaker:
                         f"Will retry in {self.timeout}s"
                     )
                 self.state = "OPEN"
-        
+
         # Don't suppress exception
         return False
 
@@ -2939,7 +2939,7 @@ if __name__ == "__main__":
     """
     Demonstrate error handling patterns.
     """
-    
+
     # Example 1: Retry decorator
     @with_retry(max_retries=3)
     def flaky_api_call():
@@ -2948,18 +2948,18 @@ if __name__ == "__main__":
         if random.random() < 0.6:  # 60% failure rate
             raise requests.exceptions.Timeout("Simulated timeout")
         return {"data": "success"}
-    
+
     print("Testing retry logic...")
     try:
         result = flaky_api_call()
         print(f"✅ Success: {result}")
     except Exception as e:
         print(f"❌ Failed after retries: {e}")
-    
+
     # Example 2: Circuit breaker
     print("\nTesting circuit breaker...")
     breaker = CircuitBreaker(failure_threshold=3, timeout=5, name="TestAPI")
-    
+
     for i in range(10):
         try:
             with breaker:
@@ -2969,7 +2969,7 @@ if __name__ == "__main__":
                 print(f"Request {i + 1}: Success!")
         except APIError as e:
             print(f"Request {i + 1}: {e}")
-        
+
         time.sleep(0.5)
 ```
 
@@ -3060,49 +3060,49 @@ from api_connectors.kalshi_auth import KalshiAuth
 class TestKalshiAuth:
     """
     Test RSA-PSS authentication.
-    
+
     Note: We CAN'T fully mock RSA signatures (they're cryptographically complex).
     But we can test the structure and flow.
     """
-    
+
     @patch('api_connectors.kalshi_auth.load_private_key')
     def test_get_headers_structure(self, mock_load_key):
         """Test that headers have correct structure."""
         # Mock the private key
         mock_key = Mock()
         mock_load_key.return_value = mock_key
-        
+
         # Mock the signature generation
         mock_key.sign.return_value = b'fake_signature_bytes'
-        
+
         auth = KalshiAuth(api_key="test-key", private_key_path="fake.pem")
         headers = auth.get_headers(method="GET", path="/test")
-        
+
         # Verify header structure
         assert 'KALSHI-ACCESS-KEY' in headers
         assert 'KALSHI-ACCESS-TIMESTAMP' in headers
         assert 'KALSHI-ACCESS-SIGNATURE' in headers
         assert headers['KALSHI-ACCESS-KEY'] == "test-key"
         assert headers['Content-Type'] == 'application/json'
-    
+
     def test_signature_message_format(self):
         """Test that signature message is constructed correctly."""
         # This tests the MESSAGE format, not the actual signature
         from api_connectors.kalshi_auth import generate_signature
-        
+
         # We can test that the message gets formed correctly
         # by mocking just the signing part
         with patch('cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey') as mock_key:
             mock_key_instance = Mock()
             mock_key_instance.sign.return_value = b'signature'
-            
+
             # Message should be: timestamp + METHOD (uppercase) + path
             # Example: "1729123456789GET/trade-api/v2/markets"
 
 
 class TestKalshiClient:
     """Test Kalshi API client methods."""
-    
+
     @pytest.fixture
     def mock_client(self):
         """Create a Kalshi client with mocked authentication."""
@@ -3113,7 +3113,7 @@ class TestKalshiClient:
             with patch('api_connectors.kalshi_client.KalshiAuth'):
                 client = KalshiClient(environment="demo")
                 return client
-    
+
     def test_get_markets_parses_decimals(self, mock_client):
         """Test that market prices are converted to Decimal."""
         # Mock the API response
@@ -3129,35 +3129,35 @@ class TestKalshiClient:
                 }
             ]
         }
-        
+
         with patch.object(mock_client, '_make_request', return_value=mock_response):
             markets = mock_client.get_markets()
-            
+
             # Verify conversion to Decimal
             assert isinstance(markets[0]['yes_bid'], Decimal)
             assert isinstance(markets[0]['yes_ask'], Decimal)
             assert markets[0]['yes_bid'] == Decimal('0.65')
             assert markets[0]['yes_ask'] == Decimal('0.67')
-    
+
     def test_get_markets_filters(self, mock_client):
         """Test that filter parameters are passed correctly."""
         mock_response = {"markets": []}
-        
+
         with patch.object(mock_client, '_make_request', return_value=mock_response) as mock_request:
             mock_client.get_markets(
                 series_ticker="KXNFLGAME",
                 limit=50,
                 cursor="abc123"
             )
-            
+
             # Verify parameters were passed
             call_args = mock_request.call_args
             params = call_args[1]['params']
-            
+
             assert params['series_ticker'] == "KXNFLGAME"
             assert params['limit'] == 50
             assert params['cursor'] == "abc123"
-    
+
     def test_get_balance_returns_decimal(self, mock_client):
         """Test that balance is returned as Decimal."""
         mock_response = {
@@ -3165,23 +3165,23 @@ class TestKalshiClient:
                 "balance": 1000.50
             }
         }
-        
+
         with patch.object(mock_client, '_make_request', return_value=mock_response):
             balance = mock_client.get_balance()
-            
+
             assert isinstance(balance['balance'], Decimal)
             assert balance['balance'] == Decimal('1000.50')
 
 
 class TestESPNClient:
     """Test ESPN API client."""
-    
+
     @pytest.fixture
     def client(self):
         """Create ESPN client."""
         from api_connectors.espn_client import ESPNClient
         return ESPNClient()
-    
+
     def test_parse_nfl_games(self, client):
         """Test parsing of ESPN game data."""
         # Sample ESPN response (simplified)
@@ -3230,12 +3230,12 @@ class TestESPNClient:
                 }
             ]
         }
-        
+
         games = client._parse_nfl_games(mock_data)
-        
+
         assert len(games) == 1
         game = games[0]
-        
+
         assert game['id'] == "401547516"
         assert game['home_team'] == "Buffalo Bills"
         assert game['away_team'] == "Kansas City Chiefs"
@@ -3254,65 +3254,65 @@ class TestESPNClient:
 class TestKalshiIntegration:
     """
     Integration tests that make REAL API calls.
-    
+
     Run these with: pytest -m integration
-    
+
     Requirements:
     - Valid KALSHI_DEMO_KEY_ID in .env
     - Valid KALSHI_DEMO_KEYFILE in .env
     - Internet connection
-    
+
     Note: These are slower and depend on external service.
     Run before deployment to verify everything works.
     """
-    
+
     @pytest.fixture
     def client(self):
         """Create real Kalshi client (demo environment)."""
         return KalshiClient(environment="demo")
-    
+
     def test_authentication(self, client):
         """Test that we can authenticate with Kalshi."""
         # Try to get balance (requires authentication)
         balance = client.get_balance()
-        
+
         assert 'balance' in balance
         assert isinstance(balance['balance'], Decimal)
         print(f"✅ Authentication successful. Balance: ${balance['balance']}")
-    
+
     def test_get_markets_real(self, client):
         """Test fetching real markets."""
         markets = client.get_markets(series_ticker="KXNFLGAME", limit=5)
-        
+
         assert isinstance(markets, list)
         assert len(markets) > 0
-        
+
         # Check first market
         market = markets[0]
         assert 'ticker' in market
         assert isinstance(market.get('yes_bid'), (Decimal, type(None)))
-        
+
         print(f"✅ Fetched {len(markets)} NFL markets")
 
 
-@pytest.mark.integration  
+@pytest.mark.integration
 class TestESPNIntegration:
     """Integration tests for ESPN API (real calls)."""
-    
+
     @pytest.fixture
     def client(self):
         from api_connectors.espn_client import ESPNClient
         return ESPNClient()
-    
+
     def test_get_nfl_scoreboard_real(self, client):
         """Test fetching real NFL scoreboard."""
         scoreboard = client.get_nfl_scoreboard()
-        
+
         assert 'games' in scoreboard
         assert isinstance(scoreboard['games'], list)
-        
+
         print(f"✅ Fetched {len(scoreboard['games'])} NFL games")
-        
+
         if scoreboard['games']:
             game = scoreboard['games'][0]
             print(f"   Sample: {game['away_team']} @ {game['home_team']}")
@@ -3322,20 +3322,20 @@ class TestESPNIntegration:
 if __name__ == "__main__":
     """
     Run test suite.
-    
+
     Commands:
         # Run all tests
         pytest
-        
+
         # Run only unit tests (fast)
         pytest -m "not integration"
-        
+
         # Run only integration tests
         pytest -m integration
-        
+
         # Run with verbose output
         pytest -v
-        
+
         # Run specific test file
         pytest tests/api_connectors/test_kalshi_client.py
     """

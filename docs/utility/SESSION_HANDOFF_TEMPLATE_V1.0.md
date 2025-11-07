@@ -1,7 +1,7 @@
 # Session [NUMBER] Handoff
 
-**Date:** YYYY-MM-DD  
-**Token Usage:** ~XXX / 190K (XX%)  
+**Date:** YYYY-MM-DD
+**Token Usage:** ~XXX / 190K (XX%)
 **Status:** [✅ Complete / ⚠️ Partial / 🔴 Issues]
 
 ---
@@ -195,11 +195,11 @@
 
 ### Keep It Short
 
-**Good handoff:** 1-2 pages, 5 min read, clear next steps  
+**Good handoff:** 1-2 pages, 5 min read, clear next steps
 **Bad handoff:** 10+ pages, 30 min read, unclear priorities
 
 ---
 
-**Template Version:** 1.0  
-**Last Updated:** 2025-10-08  
+**Template Version:** 1.0
+**Last Updated:** 2025-10-08
 **Maintained By:** Claude & User

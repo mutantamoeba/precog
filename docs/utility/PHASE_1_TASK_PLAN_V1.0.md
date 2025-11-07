@@ -75,7 +75,7 @@ Each task follows this format:
 ### Category A: Database Foundation (16 hours)
 
 #### [A1] Database Schema Creation (3 hours)
-**Priority:** 🔴 Critical - Start here  
+**Priority:** 🔴 Critical - Start here
 **Depends on:** None (foundational)
 
 **Deliverables:**
@@ -124,7 +124,7 @@ CREATE TABLE markets (
 ---
 
 #### [A2] Database Connection Pooling (2 hours)
-**Priority:** 🔴 Critical  
+**Priority:** 🔴 Critical
 **Depends on:** [A1]
 
 **Deliverables:**
@@ -182,7 +182,7 @@ def get_db_session():
 ---
 
 #### [A3] CRUD Operations (4 hours)
-**Priority:** 🔴 Critical  
+**Priority:** 🔴 Critical
 **Depends on:** [A1], [A2]
 
 **Deliverables:**
@@ -240,14 +240,14 @@ def update_market_with_versioning(
         Market.ticker == ticker,
         Market.RowCurrentInd == 1
     ).first()
-    
+
     if not old_market:
         raise ValueError(f"Market {ticker} not found")
-    
+
     # Close old record
     old_market.RowCurrentInd = 0
     old_market.RowEndDate = datetime.utcnow()
-    
+
     # Create new record
     new_market = Market(
         ticker=ticker,
@@ -257,7 +257,7 @@ def update_market_with_versioning(
         RowCurrentInd=1,
         RowStartDate=datetime.utcnow()
     )
-    
+
     db.add(new_market)
     db.commit()
     return new_market
@@ -295,7 +295,7 @@ def get_market_history(db: Session, ticker: str) -> list[Market]:
 ---
 
 #### [A4] Database Migrations with Alembic (3 hours)
-**Priority:** 🟡 Important  
+**Priority:** 🟡 Important
 **Depends on:** [A1], [A2], [A3]
 
 **Deliverables:**
@@ -348,7 +348,7 @@ alembic upgrade head
 ---
 
 #### [A5] Database Seeding & Test Data (2 hours)
-**Priority:** 🟢 Nice to have  
+**Priority:** 🟢 Nice to have
 **Depends on:** [A1], [A2], [A3]
 
 **Deliverables:**
@@ -368,7 +368,7 @@ from database.connection import SessionLocal
 
 def seed_markets():
     db = SessionLocal()
-    
+
     # Sample NFL market
     create_market(
         db=db,
@@ -377,7 +377,7 @@ def seed_markets():
         yes_ask=Decimal("0.5225"),
         event_ticker="NFL-KC-BUF"
     )
-    
+
     # Edge case: very tight spread
     create_market(
         db=db,
@@ -386,7 +386,7 @@ def seed_markets():
         yes_ask=Decimal("0.7551"),  # Only 0.01¢ spread!
         event_ticker="NBA-GSW-LAL"
     )
-    
+
     # Edge case: near extremes
     create_market(
         db=db,
@@ -395,7 +395,7 @@ def seed_markets():
         yes_ask=Decimal("0.0525"),
         event_ticker="TENNIS"
     )
-    
+
     db.close()
 
 if __name__ == "__main__":
@@ -415,7 +415,7 @@ if __name__ == "__main__":
 ---
 
 #### [A6] Database Health Checks (2 hours)
-**Priority:** 🟡 Important  
+**Priority:** 🟡 Important
 **Depends on:** [A1], [A2]
 
 **Deliverables:**
@@ -447,10 +447,10 @@ def check_tables_exist() -> dict:
     """Verify all required tables exist."""
     inspector = inspect(engine)
     existing_tables = inspector.get_table_names()
-    
+
     required_tables = ['markets', 'events', 'leagues', 'trades', 'positions', 'logs']
     missing_tables = [t for t in required_tables if t not in existing_tables]
-    
+
     if missing_tables:
         return {"status": "error", "message": f"Missing tables: {missing_tables}"}
     return {"status": "ok", "message": "All tables exist"}
@@ -459,7 +459,7 @@ def check_decimal_precision() -> dict:
     """Verify price columns use DECIMAL(10,4), not Float."""
     inspector = inspect(engine)
     columns = inspector.get_columns('markets')
-    
+
     price_columns = ['yes_bid', 'yes_ask', 'no_bid', 'no_ask']
     for col in columns:
         if col['name'] in price_columns:
@@ -469,7 +469,7 @@ def check_decimal_precision() -> dict:
                     "status": "error",
                     "message": f"Column {col['name']} is {col_type}, should be DECIMAL(10,4)"
                 }
-    
+
     return {"status": "ok", "message": "All price columns use DECIMAL precision"}
 
 def run_all_health_checks() -> dict:
@@ -479,9 +479,9 @@ def run_all_health_checks() -> dict:
         "tables": check_tables_exist(),
         "decimal_precision": check_decimal_precision()
     }
-    
+
     all_ok = all(check["status"] == "ok" for check in checks.values())
-    
+
     return {
         "overall_status": "ok" if all_ok else "error",
         "checks": checks
@@ -502,7 +502,7 @@ def run_all_health_checks() -> dict:
 ### Category B: Configuration System (8 hours)
 
 #### [B1] YAML Configuration Loader (3 hours)
-**Priority:** 🔴 Critical  
+**Priority:** 🔴 Critical
 **Depends on:** [A1] (needs database models)
 
 **Deliverables:**
@@ -535,13 +535,13 @@ class TradingConfig(BaseModel):
     min_ev_threshold: Decimal
     max_position_size: Decimal
     max_total_exposure: Decimal
-    
+
     @validator('min_ev_threshold')
     def validate_min_ev(cls, v):
         if v < 0 or v > 1:
             raise ValueError("min_ev_threshold must be between 0 and 1")
         return v
-    
+
     @validator('max_position_size', 'max_total_exposure')
     def validate_positive(cls, v):
         if v <= 0:
@@ -550,11 +550,11 @@ class TradingConfig(BaseModel):
 
 class ConfigLoader:
     """Load and validate YAML configuration files."""
-    
+
     def __init__(self, config_dir: str = "config"):
         self.config_dir = Path(config_dir)
         self.configs = {}
-    
+
     def load_all(self) -> Dict[str, Any]:
         """Load all YAML config files."""
         yaml_files = [
@@ -566,14 +566,14 @@ class ConfigLoader:
             'data_sources.yaml',
             'system.yaml'
         ]
-        
+
         for filename in yaml_files:
             file_path = self.config_dir / filename
             with open(file_path, 'r') as f:
                 self.configs[filename.replace('.yaml', '')] = yaml.safe_load(f)
-        
+
         return self.configs
-    
+
     def get(self, config_name: str) -> Dict[str, Any]:
         """Get specific config by name."""
         if config_name not in self.configs:
@@ -602,7 +602,7 @@ config = ConfigLoader()
 ---
 
 #### [B2] Environment Variable Loading (1 hour)
-**Priority:** 🔴 Critical  
+**Priority:** 🔴 Critical
 **Depends on:** None
 
 **Deliverables:**
@@ -625,7 +625,7 @@ load_dotenv()
 
 class Environment:
     """Validated environment variables."""
-    
+
     @staticmethod
     def get_required(key: str) -> str:
         """Get required env var, raise if missing."""
@@ -633,35 +633,35 @@ class Environment:
         if not value:
             raise ValueError(f"Required environment variable {key} is not set")
         return value
-    
+
     @staticmethod
     def get_optional(key: str, default: Optional[str] = None) -> Optional[str]:
         """Get optional env var with default."""
         return os.getenv(key, default)
-    
+
     # Database
     DB_HOST: str = get_required.__func__("DB_HOST")
     DB_PORT: int = int(get_optional.__func__("DB_PORT", "5432"))
     DB_NAME: str = get_required.__func__("DB_NAME")
     DB_USER: str = get_required.__func__("DB_USER")
     DB_PASSWORD: str = get_required.__func__("DB_PASSWORD")
-    
+
     # Kalshi API
     KALSHI_API_KEY: str = get_required.__func__("KALSHI_API_KEY")
     KALSHI_PRIVATE_KEY_PATH: str = get_required.__func__("KALSHI_PRIVATE_KEY_PATH")
-    
+
     # Trading
     TRADING_ENV: str = get_optional.__func__("TRADING_ENV", "PROD")
-    
+
     @classmethod
     def validate_all(cls):
         """Validate all required env vars are set."""
         required = ['DB_HOST', 'DB_NAME', 'DB_USER', 'DB_PASSWORD', 'KALSHI_API_KEY']
         missing = [key for key in required if not os.getenv(key)]
-        
+
         if missing:
             raise ValueError(f"Missing required environment variables: {missing}")
-        
+
         print("✅ All environment variables validated")
 
 # Validate on import
@@ -680,7 +680,7 @@ Environment.validate_all()
 ---
 
 #### [B3] Database Configuration Overrides (2 hours)
-**Priority:** 🟡 Important  
+**Priority:** 🟡 Important
 **Depends on:** [A3], [B1]
 
 **Deliverables:**
@@ -701,7 +701,7 @@ import json
 
 class ConfigOverride(Base):
     __tablename__ = 'config_overrides'
-    
+
     key = Column(String(100), primary_key=True)
     value = Column(Text, nullable=False)  # JSON string
     updated_by = Column(String(50))
@@ -711,27 +711,27 @@ def get_config_with_overrides(config_name: str) -> dict:
     """Get config with database overrides applied."""
     from config.config_loader import config
     from database.connection import SessionLocal
-    
+
     # Start with YAML config
     base_config = config.get(config_name)
-    
+
     # Apply database overrides
     db = SessionLocal()
     overrides = db.query(ConfigOverride).filter(
         ConfigOverride.key.startswith(f"{config_name}.")
     ).all()
-    
+
     for override in overrides:
         # Parse JSON value
         value = json.loads(override.value)
-        
+
         # Apply to config (supports nested keys: "trading.min_ev_threshold")
         keys = override.key.split('.')
         current = base_config
         for key in keys[1:-1]:  # Navigate to parent
             current = current[key]
         current[keys[-1]] = Decimal(value) if isinstance(value, (int, float, str)) else value
-    
+
     db.close()
     return base_config
 ```
@@ -748,7 +748,7 @@ def get_config_with_overrides(config_name: str) -> dict:
 ---
 
 #### [B4] Configuration Validation (2 hours)
-**Priority:** 🟡 Important  
+**Priority:** 🟡 Important
 **Depends on:** [B1], [B3]
 
 **Deliverables:**
@@ -767,42 +767,42 @@ from typing import Dict, List
 def validate_trading_config(config: Dict) -> List[str]:
     """Validate trading.yaml config."""
     errors = []
-    
+
     # Check min_ev_threshold
     if not (0 < config['min_ev_threshold'] < 1):
         errors.append("min_ev_threshold must be between 0 and 1")
-    
+
     # Check max_position_size vs max_total_exposure
     if config['max_position_size'] > config['max_total_exposure']:
         errors.append("max_position_size cannot exceed max_total_exposure")
-    
+
     # Check Kelly fractions
     for sport in ['nfl', 'nba', 'tennis']:
         key = f'kelly_fraction_{sport}'
         if key in config:
             if not (0 < config[key] <= 1):
                 errors.append(f"{key} must be between 0 and 1")
-    
+
     return errors
 
 def validate_all_configs() -> bool:
     """Validate all config files."""
     from config.config_loader import config
-    
+
     all_errors = []
-    
+
     # Validate each config
     trading_errors = validate_trading_config(config.get('trading'))
     all_errors.extend(trading_errors)
-    
+
     # Add more validators for other configs...
-    
+
     if all_errors:
         print("❌ Configuration validation failed:")
         for error in all_errors:
             print(f"  - {error}")
         return False
-    
+
     print("✅ All configurations valid")
     return True
 ```
@@ -821,7 +821,7 @@ def validate_all_configs() -> bool:
 ### Category C: Logging Infrastructure (6 hours)
 
 #### [C1] Structured Logging Setup (2 hours)
-**Priority:** 🔴 Critical  
+**Priority:** 🔴 Critical
 **Depends on:** [A1] (for database logging)
 
 **Deliverables:**
@@ -841,10 +841,10 @@ from pathlib import Path
 
 def setup_logging():
     """Configure structlog for JSON logging."""
-    
+
     # Create logs directory
     Path("logs").mkdir(exist_ok=True)
-    
+
     # Configure structlog
     structlog.configure(
         processors=[
@@ -859,7 +859,7 @@ def setup_logging():
         logger_factory=structlog.stdlib.LoggerFactory(),
         cache_logger_on_first_use=True,
     )
-    
+
     return structlog.get_logger()
 
 # Global logger instance
@@ -883,7 +883,7 @@ logger = setup_logging()
 ---
 
 #### [C2] Database Log Storage (2 hours)
-**Priority:** 🟡 Important  
+**Priority:** 🟡 Important
 **Depends on:** [A3], [C1]
 
 **Deliverables:**
@@ -903,7 +903,7 @@ from datetime import datetime
 
 class Log(Base):
     __tablename__ = 'logs'
-    
+
     id = Column(Integer, primary_key=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
     level = Column(String(10))  # DEBUG, INFO, WARNING, ERROR
@@ -915,10 +915,10 @@ def log_to_database(level: str, message: str, context: dict):
     """Write log to database (for ERROR/WARNING only)."""
     if level not in ['ERROR', 'WARNING']:
         return  # Only store critical logs
-    
+
     from database.connection import SessionLocal
     import json
-    
+
     db = SessionLocal()
     log_entry = Log(
         level=level,
@@ -943,7 +943,7 @@ def log_to_database(level: str, message: str, context: dict):
 ---
 
 #### [C3] Log Rotation & Cleanup (2 hours)
-**Priority:** 🟢 Nice to have  
+**Priority:** 🟢 Nice to have
 **Depends on:** [C1]
 
 **Deliverables:**
@@ -964,17 +964,17 @@ def cleanup_old_logs(max_age_days: int = 30):
     """Delete log files older than max_age_days."""
     logs_dir = Path("logs")
     cutoff_date = datetime.now() - timedelta(days=max_age_days)
-    
+
     deleted_count = 0
     for log_file in logs_dir.glob("precog_*.log"):
         # Extract date from filename: precog_2025-10-15.log
         file_date_str = log_file.stem.split('_')[1]
         file_date = datetime.strptime(file_date_str, "%Y-%m-%d")
-        
+
         if file_date < cutoff_date:
             log_file.unlink()
             deleted_count += 1
-    
+
     print(f"✅ Deleted {deleted_count} old log files")
 
 if __name__ == "__main__":
@@ -995,7 +995,7 @@ if __name__ == "__main__":
 ### Category D: Kalshi API Client (20 hours)
 
 #### [D1] RSA-PSS Authentication (4 hours)
-**Priority:** 🔴 Critical - Most complex task  
+**Priority:** 🔴 Critical - Most complex task
 **Depends on:** [C1] (for logging)
 
 **Deliverables:**
@@ -1018,25 +1018,25 @@ from pathlib import Path
 
 class KalshiAuth:
     """Handle RSA-PSS authentication for Kalshi API."""
-    
+
     def __init__(self, api_key: str, private_key_path: str):
         self.api_key = api_key
         self.private_key = self._load_private_key(private_key_path)
         self.token = None
         self.token_expiry = 0
-    
+
     def _load_private_key(self, path: str):
         """Load RSA private key from PEM file."""
         with open(path, 'rb') as f:
             return serialization.load_pem_private_key(f.read(), password=None)
-    
+
     def _generate_signature(self, timestamp: int, method: str, path: str) -> str:
         """
         Generate RSA-PSS signature.
         Message format: timestamp + method + path (no delimiters)
         """
         message = f"{timestamp}{method}{path}".encode('utf-8')
-        
+
         signature = self.private_key.sign(
             message,
             padding.PSS(
@@ -1045,36 +1045,36 @@ class KalshiAuth:
             ),
             hashes.SHA256()
         )
-        
+
         return base64.b64encode(signature).decode('utf-8')
-    
+
     def get_headers(self, method: str, path: str) -> dict:
         """Get authenticated headers for API request."""
         timestamp = int(time.time() * 1000)  # Milliseconds
         signature = self._generate_signature(timestamp, method, path)
-        
+
         return {
             "KALSHI-ACCESS-KEY": self.api_key,
             "KALSHI-ACCESS-TIMESTAMP": str(timestamp),
             "KALSHI-ACCESS-SIGNATURE": signature
         }
-    
+
     def login(self) -> str:
         """
         Login to Kalshi API and get bearer token.
         Tokens expire after 30 minutes.
         """
         import requests
-        
+
         path = "/trade-api/v2/login"
         headers = self.get_headers("POST", path)
-        
+
         response = requests.post(
             f"https://demo-api.kalshi.co{path}",
             headers=headers,
             json={"email": "", "password": ""}  # Email/pass not needed with key auth
         )
-        
+
         if response.status_code == 200:
             data = response.json()
             self.token = data['token']
@@ -1082,7 +1082,7 @@ class KalshiAuth:
             return self.token
         else:
             raise Exception(f"Login failed: {response.status_code} {response.text}")
-    
+
     def ensure_authenticated(self):
         """Ensure we have a valid token, refresh if needed."""
         if not self.token or time.time() > self.token_expiry:
@@ -1108,7 +1108,7 @@ class KalshiAuth:
 ---
 
 #### [D2] Market Data Fetching (3 hours)
-**Priority:** 🔴 Critical  
+**Priority:** 🔴 Critical
 **Depends on:** [D1]
 
 **Deliverables:**
@@ -1128,12 +1128,12 @@ from typing import List, Dict, Optional
 
 class KalshiClient:
     """Kalshi API client."""
-    
+
     BASE_URL = "https://demo-api.kalshi.co"
-    
+
     def __init__(self, auth: KalshiAuth):
         self.auth = auth
-    
+
     def get_markets(
         self,
         status: str = "open",
@@ -1142,60 +1142,60 @@ class KalshiClient:
     ) -> List[Dict]:
         """
         Fetch markets from Kalshi API.
-        
+
         Returns list of markets with DECIMAL prices.
         """
         self.auth.ensure_authenticated()
-        
+
         params = {
             "status": status,
             "limit": limit
         }
         if cursor:
             params["cursor"] = cursor
-        
+
         response = requests.get(
             f"{self.BASE_URL}/trade-api/v2/markets",
             headers={"Authorization": f"Bearer {self.auth.token}"},
             params=params
         )
-        
+
         if response.status_code == 200:
             data = response.json()
-            
+
             # ✅ CRITICAL: Parse prices as Decimal
             for market in data['markets']:
                 market['yes_bid'] = Decimal(market['yes_bid_dollars'])
                 market['yes_ask'] = Decimal(market['yes_ask_dollars'])
                 market['no_bid'] = Decimal(market['no_bid_dollars'])
                 market['no_ask'] = Decimal(market['no_ask_dollars'])
-                
+
                 # Remove _dollars fields (redundant)
                 del market['yes_bid_dollars']
                 del market['yes_ask_dollars']
                 del market['no_bid_dollars']
                 del market['no_ask_dollars']
-            
+
             return data['markets']
         else:
             raise Exception(f"Failed to fetch markets: {response.status_code}")
-    
+
     def get_market(self, ticker: str) -> Dict:
         """Fetch single market by ticker."""
         self.auth.ensure_authenticated()
-        
+
         response = requests.get(
             f"{self.BASE_URL}/trade-api/v2/markets/{ticker}",
             headers={"Authorization": f"Bearer {self.auth.token}"}
         )
-        
+
         if response.status_code == 200:
             market = response.json()['market']
-            
+
             # Parse prices as Decimal
             market['yes_bid'] = Decimal(market['yes_bid_dollars'])
             market['yes_ask'] = Decimal(market['yes_ask_dollars'])
-            
+
             return market
         else:
             raise Exception(f"Failed to fetch market: {response.status_code}")
@@ -1214,7 +1214,7 @@ class KalshiClient:
 ---
 
 #### [D3] Error Handling & Retry Logic (3 hours)
-**Priority:** 🔴 Critical  
+**Priority:** 🔴 Critical
 **Depends on:** [D1], [D2]
 
 **Deliverables:**
@@ -1244,20 +1244,20 @@ class RetryableError(Exception):
 def api_call_with_retry(method: str, url: str, **kwargs):
     """Make API call with automatic retry on transient errors."""
     response = requests.request(method, url, **kwargs)
-    
+
     # Retryable errors
     if response.status_code in [429, 500, 502, 503, 504]:
         raise RetryableError(f"Transient error: {response.status_code}")
-    
+
     # Auth error - re-login
     if response.status_code == 401:
         # Re-authenticate and retry
         raise RetryableError("Authentication expired")
-    
+
     # Non-retryable errors
     if response.status_code >= 400:
         raise Exception(f"API error: {response.status_code} {response.text}")
-    
+
     return response
 ```
 
@@ -1274,7 +1274,7 @@ def api_call_with_retry(method: str, url: str, **kwargs):
 ---
 
 #### [D4] Market Data Storage (3 hours)
-**Priority:** 🔴 Critical  
+**Priority:** 🔴 Critical
 **Depends on:** [A3], [D2]
 
 **Deliverables:**
@@ -1293,17 +1293,17 @@ from database.crud_operations import update_market_with_versioning, create_marke
 def sync_markets_to_database(client: KalshiClient, db_session):
     """Fetch markets from API and sync to database."""
     markets = client.get_markets(status="open")
-    
+
     for market in markets:
         # Check if market exists
         existing = db_session.query(Market).filter(
             Market.ticker == market['ticker'],
             Market.RowCurrentInd == 1
         ).first()
-        
+
         if existing:
             # Check if prices changed
-            if (existing.yes_bid != market['yes_bid'] or 
+            if (existing.yes_bid != market['yes_bid'] or
                 existing.yes_ask != market['yes_ask']):
                 # Update with versioning
                 update_market_with_versioning(
@@ -1336,7 +1336,7 @@ def sync_markets_to_database(client: KalshiClient, db_session):
 ---
 
 #### [D5] Rate Limiting & Throttling (2 hours)
-**Priority:** 🟡 Important  
+**Priority:** 🟡 Important
 **Depends on:** [D2]
 
 **Deliverables:**
@@ -1355,26 +1355,26 @@ from collections import deque
 
 class RateLimiter:
     """Track API calls and enforce rate limits."""
-    
+
     def __init__(self, max_requests: int = 60, window_seconds: int = 60):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
         self.requests = deque()  # Timestamps of recent requests
-    
+
     def wait_if_needed(self):
         """Wait if rate limit would be exceeded."""
         now = time.time()
-        
+
         # Remove requests outside window
         while self.requests and self.requests[0] < now - self.window_seconds:
             self.requests.popleft()
-        
+
         # If at limit, wait
         if len(self.requests) >= self.max_requests:
             sleep_time = self.requests[0] + self.window_seconds - now
             if sleep_time > 0:
                 time.sleep(sleep_time)
-        
+
         # Record this request
         self.requests.append(time.time())
 
@@ -1398,7 +1398,7 @@ def api_call_with_rate_limit(method: str, url: str, **kwargs):
 ---
 
 #### [D6] WebSocket Connection (Phase 1: Basic Setup) (3 hours)
-**Priority:** 🟢 Nice to have (full implementation in Phase 2)  
+**Priority:** 🟢 Nice to have (full implementation in Phase 2)
 **Depends on:** [D1]
 
 **Deliverables:**
@@ -1423,7 +1423,7 @@ async def connect_to_kalshi_websocket(token: str):
     Phase 1: Just verify connection works.
     """
     uri = "wss://demo-api.kalshi.co/trade-api/ws/v2"
-    
+
     async with websockets.connect(uri) as websocket:
         # Authenticate
         await websocket.send(json.dumps({
@@ -1434,7 +1434,7 @@ async def connect_to_kalshi_websocket(token: str):
                 "market_tickers": ["MARKET-YES"]
             }
         }))
-        
+
         # Receive first message (proof of concept)
         message = await websocket.recv()
         print(f"Received: {message}")
@@ -1457,7 +1457,7 @@ if __name__ == "__main__":
 ---
 
 #### [D7] API Client Documentation (2 hours)
-**Priority:** 🟢 Nice to have  
+**Priority:** 🟢 Nice to have
 **Depends on:** [D1], [D2], [D3], [D4]
 
 **Deliverables:**
@@ -1514,7 +1514,7 @@ except Exception as e:
 ### Category E: CLI Framework (8 hours)
 
 #### [E1] Click CLI Setup (2 hours)
-**Priority:** 🟡 Important  
+**Priority:** 🟡 Important
 **Depends on:** [A6], [B1], [C1]
 
 **Deliverables:**
@@ -1586,7 +1586,7 @@ precog version
 ---
 
 #### [E2] Database CLI Commands (3 hours)
-**Priority:** 🔴 Critical  
+**Priority:** 🔴 Critical
 **Depends on:** [A6], [E1]
 
 **Deliverables:**
@@ -1609,7 +1609,7 @@ def db_init():
     """Initialize database schema."""
     from database.connection import engine
     from database.models import Base
-    
+
     click.echo("Creating database tables...")
     Base.metadata.create_all(engine)
     click.echo("✅ Database initialized successfully")
@@ -1618,10 +1618,10 @@ def db_init():
 def db_health():
     """Check database health."""
     from database.health import run_all_health_checks
-    
+
     click.echo("Running health checks...")
     results = run_all_health_checks()
-    
+
     if results["overall_status"] == "ok":
         click.echo("✅ All health checks passed")
     else:
@@ -1633,7 +1633,7 @@ def db_health():
 def db_seed():
     """Populate database with test data."""
     from scripts.seed_database import seed_markets
-    
+
     click.echo("Seeding database...")
     seed_markets()
     click.echo("✅ Database seeded successfully")
@@ -1651,7 +1651,7 @@ def db_seed():
 ---
 
 #### [E3] API CLI Commands (2 hours)
-**Priority:** 🟡 Important  
+**Priority:** 🟡 Important
 **Depends on:** [D2], [E1]
 
 **Deliverables:**
@@ -1674,22 +1674,22 @@ def api_test():
     from api.kalshi_auth import KalshiAuth
     from api.kalshi_client import KalshiClient
     import os
-    
+
     click.echo("Testing Kalshi API connection...")
-    
+
     auth = KalshiAuth(
         api_key=os.getenv("KALSHI_API_KEY"),
         private_key_path=os.getenv("KALSHI_PRIVATE_KEY_PATH")
     )
-    
+
     try:
         auth.login()
         click.echo("✅ Authentication successful")
-        
+
         client = KalshiClient(auth)
         markets = client.get_markets(limit=1)
         click.echo(f"✅ Fetched {len(markets)} market")
-        
+
     except Exception as e:
         click.echo(f"❌ API test failed: {str(e)}")
 
@@ -1700,15 +1700,15 @@ def fetch_markets(limit):
     from api.kalshi_client import KalshiClient
     from api.kalshi_auth import KalshiAuth
     import os
-    
+
     auth = KalshiAuth(
         api_key=os.getenv("KALSHI_API_KEY"),
         private_key_path=os.getenv("KALSHI_PRIVATE_KEY_PATH")
     )
     client = KalshiClient(auth)
-    
+
     markets = client.get_markets(limit=limit)
-    
+
     for market in markets:
         click.echo(f"{market['ticker']}: Bid={market['yes_bid']}, Ask={market['yes_ask']}")
 ```
@@ -1724,7 +1724,7 @@ def fetch_markets(limit):
 ---
 
 #### [E4] Configuration CLI Commands (1 hour)
-**Priority:** 🟢 Nice to have  
+**Priority:** 🟢 Nice to have
 **Depends on:** [B1], [E1]
 
 **Deliverables:**
@@ -1747,7 +1747,7 @@ def config_show(config_name):
     """Show configuration."""
     from config.config_loader import config
     import json
-    
+
     cfg = config.get(config_name)
     click.echo(json.dumps(cfg, indent=2, default=str))
 
@@ -1755,7 +1755,7 @@ def config_show(config_name):
 def config_validate():
     """Validate all configuration files."""
     from config.validators import validate_all_configs
-    
+
     if validate_all_configs():
         click.echo("✅ All configurations valid")
     else:
@@ -1775,7 +1775,7 @@ def config_validate():
 ### Category F: Testing & Documentation (14 hours)
 
 #### [F1] Unit Tests (6 hours)
-**Priority:** 🔴 Critical  
+**Priority:** 🔴 Critical
 **Depends on:** All previous tasks
 
 **Deliverables:**
@@ -1798,25 +1798,25 @@ from database.crud_operations import create_market, get_current_market
 def test_decimal_precision_preserved():
     """CRITICAL: Verify prices stored/retrieved with exact precision."""
     db = get_test_db_session()
-    
+
     # Create market with sub-penny pricing
     ticker = "TEST-MARKET-YES"
     yes_bid = Decimal("0.4275")  # 42.75¢
     yes_ask = Decimal("0.4300")  # 43.00¢
-    
+
     create_market(db, ticker, yes_bid, yes_ask, "TEST-EVENT")
-    
+
     # Retrieve and verify
     market = get_current_market(db, ticker)
-    
+
     # ✅ MUST pass: Exact precision preserved
     assert market.yes_bid == Decimal("0.4275")
     assert market.yes_ask == Decimal("0.4300")
-    
+
     # ❌ MUST fail: No float conversion
     assert type(market.yes_bid) is Decimal
     assert type(market.yes_ask) is Decimal
-    
+
     # ✅ Verify 4 decimal places
     assert str(market.yes_bid) == "0.4275"
     assert str(market.yes_ask) == "0.4300"
@@ -1825,12 +1825,12 @@ def test_no_float_arithmetic():
     """CRITICAL: Verify no float arithmetic used."""
     bid = Decimal("0.45")
     ask = Decimal("0.46")
-    
+
     # ✅ CORRECT: Decimal arithmetic
     spread = ask - bid
     assert spread == Decimal("0.01")
     assert type(spread) is Decimal
-    
+
     # ❌ This should NEVER happen in codebase:
     # bid_float = float(bid)  # NEVER DO THIS
     # ask_float = float(ask)
@@ -1849,7 +1849,7 @@ def test_no_float_arithmetic():
 ---
 
 #### [F2] Integration Tests (4 hours)
-**Priority:** 🟡 Important  
+**Priority:** 🟡 Important
 **Depends on:** All previous tasks
 
 **Deliverables:**
@@ -1872,14 +1872,14 @@ def test_full_pipeline():
     # Setup
     client = get_test_client()
     db = get_test_db_session()
-    
+
     # Fetch markets from API
     sync_markets_to_database(client, db)
-    
+
     # Verify stored in database
     markets = db.query(Market).filter(Market.RowCurrentInd == 1).all()
     assert len(markets) > 0
-    
+
     # Verify DECIMAL precision
     for market in markets:
         assert type(market.yes_bid) is Decimal
@@ -1889,10 +1889,10 @@ def test_price_update_versioning():
     """Test SCD Type 2 versioning on price change."""
     # Create initial market
     create_market(db, "TEST-YES", Decimal("0.50"), Decimal("0.51"), "TEST")
-    
+
     # Simulate price change
     update_market_with_versioning(db, "TEST-YES", Decimal("0.52"), Decimal("0.53"))
-    
+
     # Verify old version closed
     old_version = db.query(Market).filter(
         Market.ticker == "TEST-YES",
@@ -1900,7 +1900,7 @@ def test_price_update_versioning():
     ).first()
     assert old_version is not None
     assert old_version.yes_bid == Decimal("0.50")
-    
+
     # Verify new version current
     new_version = db.query(Market).filter(
         Market.ticker == "TEST-YES",
@@ -1920,7 +1920,7 @@ def test_price_update_versioning():
 ---
 
 #### [F3] Code Quality Enforcement (2 hours)
-**Priority:** 🟡 Important  
+**Priority:** 🟡 Important
 **Depends on:** All code complete
 
 **Deliverables:**
@@ -1956,7 +1956,7 @@ mypy src/
 ---
 
 #### [F4] Documentation & Deployment Guide (2 hours)
-**Priority:** 🟡 Important  
+**Priority:** 🟡 Important
 **Depends on:** All tasks complete
 
 **Deliverables:**

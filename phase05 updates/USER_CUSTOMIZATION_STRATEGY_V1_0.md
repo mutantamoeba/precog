@@ -1,8 +1,8 @@
 # User Customization Strategy V1.0
 
-**Version:** 1.0  
-**Created:** 2025-10-21  
-**Status:** ✅ Design Complete  
+**Version:** 1.0
+**Created:** 2025-10-21
+**Status:** ✅ Design Complete
 **Implementation:** Phase 1 (basic), Phase 1.5 (full), Phase 4-5 (methods)
 
 ---
@@ -17,7 +17,7 @@ Define how users can customize position management, entry, exit, and risk parame
 
 ### Phase 1: Single-User YAML Configuration
 
-**Status:** Current  
+**Status:** Current
 **Customization Method:** Direct YAML editing
 
 **Capabilities:**
@@ -51,7 +51,7 @@ exit_rules:
 
 ### Phase 1.5: Multi-User Database Overrides
 
-**Status:** Planned  
+**Status:** Planned
 **Customization Method:** Webapp UI + Database
 
 **Capabilities:**
@@ -104,7 +104,7 @@ Profit Target (Low Confidence): [0.15]
 
 ### Phase 4-5: Method-Based Configuration (ADR-021)
 
-**Status:** Designed (ADR-021)  
+**Status:** Designed (ADR-021)
 **Customization Method:** Method Templates + Webapp
 
 **Capabilities:**
@@ -124,7 +124,7 @@ Profit Target (Low Confidence): [0.15]
     "method_version": "v1.0",
     "strategy_id": 1,  // halftime_entry v1.0
     "model_id": 1,     // elo_nfl v1.0
-    
+
     "position_mgmt_config": {
         "trailing_stop": {
             "enabled": true,  // ← Can disable per method
@@ -158,14 +158,14 @@ Profit Target (Low Confidence): [0.15]
             "rebalance": {"enabled": false}  // ← Disabled for conservative
         }
     },
-    
+
     "risk_config": {
         "kelly_fraction": 0.15,  // ← More conservative (was 0.25)
         "max_position_size_dollars": 500,  // ← Smaller (was 1000)
         "max_total_exposure_dollars": 5000,
         "daily_loss_limit_dollars": 200
     },
-    
+
     "execution_config": {
         "algorithm": "simple_limit",  // No advanced execution
         "default_order_type": "limit",
@@ -188,7 +188,7 @@ Profit Target (Low Confidence): [0.15]
 2. **Customize:**
    ```
    Conservative NFL v1.0 → Clone to "My Conservative NFL v1.0"
-   
+
    Position Management:
    - Trailing Stop: [✓ Enabled] Activation: [10%] Distance: [5%]
    - Profit Target: [✓ Enabled] High: [20%] Med: [15%] Low: [10%]
@@ -196,7 +196,7 @@ Profit Target (Low Confidence): [0.15]
    - Partial Exits: [✓ Enabled]
      - Stage 1: [15%] profit → exit [50%]
      - Stage 2: [25%] profit → exit [25%]
-   
+
    Exit Conditions:
    - [✓] Early Exit (edge drops below threshold)
    - [✓] Edge Disappeared (edge turns negative)
@@ -204,19 +204,19 @@ Profit Target (Low Confidence): [0.15]
    - [✓] Profit Target
    - [✓] Trailing Stop
    - [✗] Rebalance (disabled for conservative)
-   
+
    Risk:
    - Kelly Fraction: [0.15]
    - Max Position: [$500]
    - Daily Loss Limit: [$200]
-   
+
    [Save as v1.0] [Test in Paper Trading]
    ```
 
 3. **A/B Test:**
    ```python
    # Trades link to method_id
-   SELECT 
+   SELECT
        m.method_name,
        COUNT(*) as trades,
        AVG(t.roi) as avg_roi,
@@ -224,7 +224,7 @@ Profit Target (Low Confidence): [0.15]
    FROM trades t
    JOIN methods m ON t.method_id = m.method_id
    GROUP BY m.method_name;
-   
+
    # Result:
    # Conservative NFL: 45 trades, 8.2% avg_roi, 3.1% volatility
    # Aggressive NFL: 38 trades, 12.5% avg_roi, 7.8% volatility
@@ -233,11 +233,11 @@ Profit Target (Low Confidence): [0.15]
 4. **Version and Iterate:**
    ```
    My Conservative NFL v1.0 → (test 50 trades) → 8.2% ROI
-   
+
    Hypothesis: Tighten profit targets to reduce risk
-   
+
    My Conservative NFL v2.0 → (test 50 trades) → 9.1% ROI ✓ Better!
-   
+
    Changes: profit_targets.high_confidence: 0.20 → 0.18
    ```
 
@@ -485,8 +485,8 @@ profit_targets:
 
 ## Summary
 
-**Phase 1:** Single user, YAML editing, restart required  
-**Phase 1.5:** Multi-user, database overrides, no restart  
+**Phase 1:** Single user, YAML editing, restart required
+**Phase 1.5:** Multi-user, database overrides, no restart
 **Phase 4-5:** Method templates, A/B testing, complete customization
 
 **All phases support:**
@@ -503,6 +503,6 @@ profit_targets:
 
 ---
 
-**Document Status:** ✅ Complete  
-**Next:** Update CONFIGURATION_GUIDE_V3.0 → V3.1 with user customization section  
+**Document Status:** ✅ Complete
+**Next:** Update CONFIGURATION_GUIDE_V3.0 → V3.1 with user customization section
 **Related:** ADR-021 (Method Abstraction), YAML_CONSISTENCY_AUDIT_V1_0

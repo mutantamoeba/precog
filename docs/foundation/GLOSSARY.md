@@ -272,7 +272,7 @@ What the market price suggests is the probability of an outcome.
 
 **Calculation:** Implied Probability = Market Price (for Yes side)
 
-**Example:** 
+**Example:**
 - Market price: $0.65
 - Implied probability: 65%
 
@@ -394,7 +394,7 @@ Total amount at risk across all positions.
 ### Maximum Drawdown
 The largest peak-to-trough decline in account value.
 
-**Example:** 
+**Example:**
 - Peak: $10,000
 - Trough: $8,500
 - Max Drawdown: $1,500 (15%)
@@ -531,7 +531,7 @@ Train model on past data, test on future data, repeat sliding forward through ti
 **Example:**
 - Train: 2019-2020 data
 - Test: 2021 data
-- Train: 2019-2021 data  
+- Train: 2019-2021 data
 - Test: 2022 data
 - Etc.
 
@@ -550,7 +550,7 @@ Percentage profit/loss on invested capital.
 
 **Formula:** (Profit / Initial Investment) × 100%
 
-**Example:** 
+**Example:**
 - Invested: $1,000
 - Profit: $150
 - ROI: 15%
@@ -628,6 +628,6 @@ Data retention strategy:
 
 ---
 
-**Document Version:** 1.0  
-**Last Updated:** October 8, 2025  
+**Document Version:** 1.0
+**Last Updated:** October 8, 2025
 **Purpose:** Reference for terminology used throughout the project

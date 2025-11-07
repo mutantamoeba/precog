@@ -1,9 +1,9 @@
 # ADR-021: Method Abstraction Layer
 
-**Status:** ✅ Accepted (Design), 🔵 Pending Implementation  
-**Date:** 2025-10-21  
-**Phase:** 0.5 (Design), 4-5 (Implementation)  
-**Supersedes:** None  
+**Status:** ✅ Accepted (Design), 🔵 Pending Implementation
+**Date:** 2025-10-21
+**Phase:** 0.5 (Design), 4-5 (Implementation)
+**Supersedes:** None
 **Related:** ADR-019 (Immutable Versions), ADR-002 (Database Versioning)
 
 ---
@@ -14,7 +14,7 @@
 
 **Current Attribution (Phase 0.5):**
 ```sql
-SELECT 
+SELECT
     t.trade_id,
     s.strategy_name,      -- "halftime_entry"
     s.strategy_version,   -- "v1.0"
@@ -59,7 +59,7 @@ Two traders want different approaches:
 - Execution: Simple limit orders
 - Sport Config: NFL only, min_volume 200
 
-# Trader B: "Aggressive NFL"  
+# Trader B: "Aggressive NFL"
 - Strategy: live_continuous (trade momentum changes)
 - Model: ensemble_nfl (higher-variance model)
 - Position Mgmt: Loose trailing stops (7%), hold for 30% profit
@@ -103,16 +103,16 @@ Two traders want different approaches:
 -- ============================================
 CREATE TABLE methods (
     method_id SERIAL PRIMARY KEY,
-    
+
     -- Identity
     method_name VARCHAR(100) NOT NULL,
     method_version VARCHAR(20) NOT NULL,
     description TEXT,
-    
+
     -- Component Links (immutable references)
     strategy_id INT NOT NULL REFERENCES strategies(strategy_id),
     model_id INT NOT NULL REFERENCES probability_models(model_id),
-    
+
     -- Position Management Config (IMMUTABLE)
     position_mgmt_config JSONB NOT NULL,
     /* Example:
@@ -161,7 +161,7 @@ CREATE TABLE methods (
         }
     }
     */
-    
+
     -- Risk Config (IMMUTABLE)
     risk_config JSONB NOT NULL,
     /* Example:
@@ -179,7 +179,7 @@ CREATE TABLE methods (
         }
     }
     */
-    
+
     -- Execution Config (IMMUTABLE)
     execution_config JSONB NOT NULL,
     /* Example:
@@ -199,7 +199,7 @@ CREATE TABLE methods (
         }
     }
     */
-    
+
     -- Sport-Specific Config (IMMUTABLE)
     sport_config JSONB NOT NULL,
     /* Example:
@@ -225,36 +225,36 @@ CREATE TABLE methods (
         }
     }
     */
-    
+
     -- Configuration Hash (for quick comparison)
     config_hash VARCHAR(64) NOT NULL,
     -- MD5(strategy_id || model_id || position_mgmt_config || risk_config || execution_config || sport_config)
-    
+
     -- Lifecycle Management
     status VARCHAR(20) NOT NULL DEFAULT 'draft',
     -- 'draft' → 'testing' → 'active' → 'inactive' → 'deprecated'
     CHECK (status IN ('draft', 'testing', 'active', 'inactive', 'deprecated')),
-    
+
     -- Timestamps
     created_at TIMESTAMP DEFAULT NOW(),
     created_by VARCHAR(100),
     activated_at TIMESTAMP,
     deactivated_at TIMESTAMP,
-    
+
     -- Performance Metrics (MUTABLE - updated as trades execute)
     paper_trades_count INT DEFAULT 0,
     paper_roi DECIMAL(10,4),
     paper_sharpe DECIMAL(10,4),
     paper_win_rate DECIMAL(6,4),
-    
+
     live_trades_count INT DEFAULT 0,
     live_roi DECIMAL(10,4),
     live_sharpe DECIMAL(10,4),
     live_win_rate DECIMAL(6,4),
-    
+
     -- Notes
     notes TEXT,
-    
+
     -- Constraints
     UNIQUE(method_name, method_version),
     CHECK (method_version ~ '^v[0-9]+\.[0-9]+$')  -- Enforce vX.Y format
@@ -272,30 +272,30 @@ CREATE INDEX idx_methods_name_version ON methods(method_name, method_version);
 -- ============================================
 CREATE TABLE method_templates (
     template_id SERIAL PRIMARY KEY,
-    
+
     -- Identity
     template_name VARCHAR(100) NOT NULL UNIQUE,
     description TEXT,
     category VARCHAR(50),  -- 'conservative', 'aggressive', 'moderate', 'experimental'
-    
+
     -- Default Configs (can be overridden when creating method)
     position_mgmt_config JSONB NOT NULL,
     risk_config JSONB NOT NULL,
     execution_config JSONB NOT NULL,
     sport_config JSONB NOT NULL,
-    
+
     -- Metadata
     created_at TIMESTAMP DEFAULT NOW(),
     created_by VARCHAR(100),
     is_public BOOLEAN DEFAULT TRUE,
     usage_count INT DEFAULT 0,  -- How many methods created from this template
-    
+
     notes TEXT
 );
 
 -- Seed templates
 INSERT INTO method_templates (template_name, category, description, position_mgmt_config, risk_config, execution_config, sport_config) VALUES
-('conservative', 'conservative', 'Low-risk approach with tight stops and early exits', 
+('conservative', 'conservative', 'Low-risk approach with tight stops and early exits',
     '{"trailing_stop": {"activation_threshold": 0.10, "initial_distance": 0.03}, "profit_targets": {"high_confidence": 0.15}}'::jsonb,
     '{"kelly_fraction": 0.15, "max_position_size_dollars": 500}'::jsonb,
     '{"algorithm": "simple_limit", "max_slippage_percent": 0.015}'::jsonb,
@@ -351,7 +351,7 @@ SELECT
     m.activated_at,
     COUNT(t.trade_id) as actual_trade_count,
     AVG(t.edge_at_execution) as avg_edge,
-    SUM(CASE WHEN t.price > 0 THEN 1 ELSE 0 END)::FLOAT / 
+    SUM(CASE WHEN t.price > 0 THEN 1 ELSE 0 END)::FLOAT /
         NULLIF(COUNT(t.trade_id), 0) as actual_win_rate
 FROM methods m
 LEFT JOIN strategies s ON m.strategy_id = s.strategy_id
@@ -371,35 +371,35 @@ SELECT
     t.side,
     t.price,
     t.quantity,
-    
+
     -- Market
     mk.ticker as market_ticker,
     mk.title as market_title,
-    
+
     -- Method
     m.method_name,
     m.method_version,
-    
+
     -- Strategy
     s.strategy_name,
     s.strategy_version,
     s.config as strategy_config,
-    
+
     -- Model
     pm.model_name,
     pm.model_version,
     pm.config as model_config,
-    
+
     -- Method Configs
     m.position_mgmt_config,
     m.risk_config,
     m.execution_config,
     m.sport_config,
-    
+
     -- Trade Context
     t.edge_at_execution,
     t.confidence_at_execution
-    
+
 FROM trades t
 JOIN markets mk ON t.market_id = mk.market_id
 LEFT JOIN methods m ON t.method_id = m.method_id
@@ -423,40 +423,40 @@ import json
 class Method:
     """
     Complete trading method specification.
-    
+
     Bundles strategy, model, position management, risk, and execution configs.
     Methods are immutable once created (same pattern as strategies/models).
     """
-    
+
     method_id: Optional[int] = None
     method_name: str = None
     method_version: str = None
     description: str = ""
-    
+
     # Component links
     strategy_id: int = None
     model_id: int = None
-    
+
     # Immutable configs
     position_mgmt_config: Dict = None
     risk_config: Dict = None
     execution_config: Dict = None
     sport_config: Dict = None
-    
+
     # Lifecycle
     status: str = "draft"
     created_by: str = None
-    
+
     # Performance (mutable)
     paper_trades_count: int = 0
     paper_roi: Optional[Decimal] = None
     live_trades_count: int = 0
     live_roi: Optional[Decimal] = None
-    
+
     def __post_init__(self):
         """Generate config hash."""
         self.config_hash = self._generate_hash()
-    
+
     def _generate_hash(self) -> str:
         """Generate MD5 hash of all configs for comparison."""
         config_string = json.dumps({
@@ -467,9 +467,9 @@ class Method:
             "execution": self.execution_config,
             "sport": self.sport_config
         }, sort_keys=True)
-        
+
         return hashlib.md5(config_string.encode()).hexdigest()
-    
+
     @classmethod
     def from_template(
         cls,
@@ -482,7 +482,7 @@ class Method:
     ):
         """
         Create method from template.
-        
+
         Args:
             method_name: Unique method name
             method_version: Version (e.g., "v1.0")
@@ -490,7 +490,7 @@ class Method:
             model_id: Model to use
             template_name: Template to base configs on
             overrides: Optional config overrides
-            
+
         Example:
             >>> method = Method.from_template(
             ...     method_name="my_conservative_nfl",
@@ -505,13 +505,13 @@ class Method:
         """
         # Load template from database
         template = MethodTemplate.get_by_name(template_name)
-        
+
         # Start with template configs
         position_mgmt = template.position_mgmt_config
         risk = template.risk_config
         execution = template.execution_config
         sport = template.sport_config
-        
+
         # Apply overrides
         if overrides:
             if "position_mgmt_config" in overrides:
@@ -522,7 +522,7 @@ class Method:
                 execution.update(overrides["execution_config"])
             if "sport_config" in overrides:
                 sport.update(overrides["sport_config"])
-        
+
         return cls(
             method_name=method_name,
             method_version=method_version,
@@ -533,34 +533,34 @@ class Method:
             execution_config=execution,
             sport_config=sport
         )
-    
+
     def validate(self) -> bool:
         """
         Validate method configuration.
-        
+
         Ensures all components are compatible and configs are valid.
         """
         errors = []
-        
+
         # 1. Validate version format
         import re
         if not re.match(r'^v\d+\.\d+$', self.method_version):
             errors.append(f"Invalid version format: {self.method_version}")
-        
+
         # 2. Validate configs are complete
         required_position = ["trailing_stop", "profit_targets", "stop_loss"]
         for key in required_position:
             if key not in self.position_mgmt_config:
                 errors.append(f"Missing position_mgmt_config key: {key}")
-        
+
         required_risk = ["kelly_fraction", "max_position_size_dollars"]
         for key in required_risk:
             if key not in self.risk_config:
                 errors.append(f"Missing risk_config key: {key}")
-        
+
         # 3. Validate component compatibility
         strategy = Strategy.get_by_id(self.strategy_id)
-        
+
         # Aggressive strategies should have higher Kelly fraction
         if "aggressive" in strategy.strategy_name:
             if self.risk_config["kelly_fraction"] < 0.20:
@@ -568,16 +568,16 @@ class Method:
                     f"Aggressive strategy requires kelly >= 0.20, "
                     f"got {self.risk_config['kelly_fraction']}"
                 )
-        
+
         # 4. Validate sport configs
         if not any(sport_cfg.get("enabled") for sport_cfg in self.sport_config.values()):
             errors.append("At least one sport must be enabled")
-        
+
         if errors:
             raise ValidationError(f"Method validation failed: {errors}")
-        
+
         return True
-    
+
     def get_config_for_sport(self, sport: str) -> Dict:
         """Get sport-specific configuration."""
         base_config = {
@@ -585,21 +585,21 @@ class Method:
             "risk": self.risk_config,
             "execution": self.execution_config
         }
-        
+
         # Apply sport-specific overrides
         if sport in self.sport_config:
             sport_overrides = self.sport_config[sport]
-            
+
             # Override Kelly fraction if specified
             if "kelly_fraction_override" in sport_overrides:
                 base_config["risk"]["kelly_fraction"] = \
                     sport_overrides["kelly_fraction_override"]
-            
+
             # Add sport-specific constraints
             base_config["sport_constraints"] = sport_overrides
-        
+
         return base_config
-    
+
     def export(self) -> Dict:
         """Export method as JSON for sharing."""
         return {
@@ -622,7 +622,7 @@ class Method:
             },
             "config_hash": self.config_hash
         }
-    
+
     @classmethod
     def import_from_json(cls, data: Dict):
         """Import method from exported JSON."""
@@ -635,7 +635,7 @@ class Method:
             data["model"]["name"],
             data["model"]["version"]
         )
-        
+
         return cls(
             method_name=data["method_name"],
             method_version=data["method_version"],
@@ -653,10 +653,10 @@ class Method:
 
 class MethodManager:
     """Manages method lifecycle and operations."""
-    
+
     def __init__(self, db_session):
         self.db = db_session
-    
+
     def create_method(
         self,
         method_name: str,
@@ -668,7 +668,7 @@ class MethodManager:
     ) -> Method:
         """
         Create new method from template.
-        
+
         Example:
             >>> manager = MethodManager(db_session)
             >>> method = manager.create_method(
@@ -688,39 +688,39 @@ class MethodManager:
             template_name=template_name,
             overrides=overrides
         )
-        
+
         # Validate
         method.validate()
-        
+
         # Save to database
         self.db.add(method)
         self.db.commit()
-        
+
         return method
-    
+
     def activate_method(self, method_id: int):
         """Activate method for live trading."""
         method = self.db.query(Method).get(method_id)
-        
+
         # Validation before activation
         if method.status != "testing":
             raise ValueError(f"Can only activate methods in 'testing' status")
-        
+
         if method.paper_trades_count < 10:
             raise ValueError("Need at least 10 paper trades before activating")
-        
+
         if method.paper_roi < 0:
             raise ValueError("Cannot activate method with negative paper ROI")
-        
+
         # Activate
         method.status = "active"
         method.activated_at = datetime.now()
         self.db.commit()
-    
+
     def compare_methods(self, method_ids: List[int]) -> pd.DataFrame:
         """
         Compare performance of multiple methods.
-        
+
         Returns:
             DataFrame with side-by-side comparison
         """
@@ -736,13 +736,13 @@ class MethodManager:
         WHERE method_id = ANY(:method_ids)
         ORDER BY live_roi DESC
         """
-        
+
         return pd.read_sql(query, self.db.bind, params={"method_ids": method_ids})
-    
+
     def get_config_for_trade(self, method_id: int, sport: str) -> Dict:
         """
         Get complete config for executing a trade.
-        
+
         Used by trading engine to get all parameters.
         """
         method = self.db.query(Method).get(method_id)
@@ -797,15 +797,15 @@ aggressive_multi = MethodManager(db).create_method(
 # When placing trade, link to method
 def execute_trade(edge_id, method_id):
     """Execute trade with full attribution."""
-    
+
     # Get method config
     method = Method.get_by_id(method_id)
     config = method.get_config_for_sport(edge.sport)
-    
+
     # Calculate position size using method's Kelly fraction
     kelly = config["risk"]["kelly_fraction"]
     size = calculate_kelly_size(edge, kelly)
-    
+
     # Place order using method's execution config
     order = place_order(
         market=edge.market_id,
@@ -813,7 +813,7 @@ def execute_trade(edge_id, method_id):
         size=size,
         execution_config=config["execution"]
     )
-    
+
     # Record trade with method attribution
     trade = Trade(
         market_id=edge.market_id,
@@ -825,7 +825,7 @@ def execute_trade(edge_id, method_id):
         price=order.filled_price,
         quantity=order.filled_quantity
     )
-    
+
     db.add(trade)
     db.commit()
 ```
@@ -847,7 +847,7 @@ print(comparison)
 
 # Query: Which specific configs differ?
 query = """
-SELECT 
+SELECT
     m1.method_name as method_1,
     m2.method_name as method_2,
     m1.risk_config->'kelly_fraction' as kelly_1,
@@ -999,7 +999,7 @@ legacy_method = Method(
 )
 
 # Optionally backfill old trades
-UPDATE trades 
+UPDATE trades
 SET method_id = legacy_method.method_id
 WHERE method_id IS NULL AND created_at < '2025-11-01';
 ```
@@ -1066,7 +1066,7 @@ CREATE TABLE methods (
 **Optimization:**
 ```sql
 -- If JSONB queries slow, add GIN index
-CREATE INDEX idx_methods_position_config 
+CREATE INDEX idx_methods_position_config
 ON methods USING GIN (position_mgmt_config);
 
 -- Query specific config
@@ -1095,7 +1095,7 @@ def test_method_validation():
     """Test method validation catches errors."""
     method = Method(...)
     method.risk_config = {}  # Missing required keys
-    
+
     with pytest.raises(ValidationError):
         method.validate()
 
@@ -1104,10 +1104,10 @@ def test_method_immutability():
     method = Method(...)
     db.add(method)
     db.commit()
-    
+
     # Try to change config
     method.risk_config["kelly_fraction"] = 0.50
-    
+
     # Should fail (or be prevented by ORM)
     with pytest.raises(ImmutabilityError):
         db.commit()
@@ -1119,14 +1119,14 @@ def test_complete_trade_attribution():
     """Test that trades link to methods correctly."""
     method = create_method()
     edge = create_edge()
-    
+
     trade = execute_trade(edge.edge_id, method.method_id)
-    
+
     # Query complete attribution
     attribution = db.query(CompleteTradeAttribution).filter_by(
         trade_id=trade.trade_id
     ).first()
-    
+
     assert attribution.method_name == method.method_name
     assert attribution.strategy_name is not None
     assert attribution.model_name is not None
@@ -1146,9 +1146,9 @@ def test_complete_trade_attribution():
 
 ## Approval
 
-**Decided By:** Project Lead  
-**Date:** 2025-10-21  
-**Design Review:** Phase 0.5  
+**Decided By:** Project Lead
+**Date:** 2025-10-21
+**Design Review:** Phase 0.5
 **Implementation:** Phase 4 (Models), Phase 5 (Trade Attribution)
 
 ---

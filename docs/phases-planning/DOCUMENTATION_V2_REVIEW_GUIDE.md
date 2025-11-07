@@ -1,7 +1,7 @@
 # Documentation v2.0 Review Guide
 
-**Date:** October 8, 2025  
-**Purpose:** Focused review of critical v2.0 changes  
+**Date:** October 8, 2025
+**Purpose:** Focused review of critical v2.0 changes
 **Documents:** CONFIGURATION_GUIDE.md v2.0, ARCHITECTURE_DECISIONS.md v2.0
 
 ---
@@ -40,7 +40,7 @@ yes_bid = Decimal(market_data["yes_bid_dollars"])  # Future-proof field
 ### Why This Is Critical
 
 1. **Kalshi is deprecating integer cent fields** - They're moving to sub-penny precision
-2. **Timeline unclear** - Could happen "in near future" 
+2. **Timeline unclear** - Could happen "in near future"
 3. **Breaking change** - Code using old approach will break
 4. **Sub-penny pricing coming** - Examples: 42.75¢, 58.33¢
 
@@ -89,7 +89,7 @@ platform_specific:
     execution:
       use_websocket: true
       rest_polling_interval: 60
-  
+
   polymarket:
     fee_structure:
       base_gas_estimate: 0.0050  # Ethereum gas variable
@@ -137,12 +137,12 @@ categories:
       kelly_fraction: 0.25
       max_spread: 0.0500
       auto_execute_threshold: 0.1500
-    
+
     nba:
       kelly_fraction: 0.22  # More conservative
       max_spread: 0.0600   # Wider spread tolerance
       auto_execute_threshold: 0.1700  # Higher threshold
-    
+
     tennis:
       kelly_fraction: 0.18  # Very conservative
       max_spread: 0.1000   # Much wider spread
@@ -205,32 +205,32 @@ ARCHITECTURE_DECISIONS.md now documents how to choose platform when a market exi
 def select_best_platform(market_options):
     """
     Given same market on multiple platforms, choose best one.
-    
+
     Args:
         market_options: List of (platform, market_data) tuples
-    
+
     Returns:
         Selected (platform, market_data)
     """
     scored = []
     for platform, market in market_options:
         score = 0
-        
+
         # 1. Liquidity (40% weight)
         score += (market.volume / max_volume) * 40
-        
+
         # 2. Fees (30% weight)
         cost = market.yes_ask + platform.fees
         score += (1 - cost/max_cost) * 30
-        
+
         # 3. Speed (20% weight)
         score += platform.speed_score * 20
-        
+
         # 4. Preference (10% weight)
         score += config.platform_preference[platform.name] * 10
-        
+
         scored.append((score, platform, market))
-    
+
     return max(scored)[1:]  # Return (platform, market) with highest score
 ```
 
@@ -241,7 +241,7 @@ def detect_arbitrage(market_a, market_b):
     cost = market_a.yes_ask + market_a.fees + market_b.no_ask + market_b.fees
     payout = Decimal('1.0000')
     profit = payout - cost
-    
+
     if profit > Decimal('0.0200'):  # Min 2¢ after fees
         return Arbitrage(...)
 ```
@@ -289,32 +289,32 @@ def detect_correlation(position_a, position_b):
     if (position_a.event_id == position_b.event_id and
         position_a.platform != position_b.platform):
         return 1.0
-    
-    # Tier 2: High correlation  
+
+    # Tier 2: High correlation
     if position_a.event_id == position_b.event_id:
         return 0.8  # Same game, different outcomes
-    
+
     # Tier 3: Moderate correlation
     if (position_a.sport == position_b.sport and
         position_a.event_date == position_b.event_date):
         return 0.5
-    
+
     return 0.0  # No correlation
 
 def enforce_correlation_limits(new_position, existing_positions):
     for existing in existing_positions:
         correlation = detect_correlation(new_position, existing)
-        
+
         if correlation >= 1.0:
             raise CannotHoldBothSides()
-        
+
         if correlation >= 0.7:
             max_size = existing.size * 0.5
             if new_position.size > max_size:
                 raise CorrelationLimitExceeded()
-        
+
         if correlation >= 0.4:
-            total_exposure = sum(p.exposure for p in existing_positions 
+            total_exposure = sum(p.exposure for p in existing_positions
                                 if detect_correlation(new_position, p) >= 0.4)
             if total_exposure + new_position.exposure > config.max_correlated_exposure:
                 raise CorrelationLimitExceeded()
@@ -373,12 +373,12 @@ async def on_reconnect(self):
         since=self.last_message_time,
         limit=100
     )
-    
+
     if len(gap_updates) >= 100:
         # May have missed updates beyond limit
         self.require_manual_review = True
         self.pause_automated_trading()
-    
+
     # Apply gap updates
     for update in gap_updates:
         self.process_update(update)
@@ -390,7 +390,7 @@ class WebSocketManager:
     def __init__(self):
         self.state = State.DISCONNECTED
         self.rest_fallback = KalshiRestClient()
-    
+
     async def ensure_data(self):
         """Get market data from WebSocket or REST"""
         if self.state == State.SUBSCRIBED:
@@ -446,7 +446,7 @@ class WebSocketManager:
 
 **Politics:** Semi-structured data
 - Days until election
-- Polling average  
+- Polling average
 - Approval rating
 - → Different schema needed
 

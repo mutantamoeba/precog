@@ -1,8 +1,8 @@
 # Configuration Guide Update Specification V1.0
 
-**Version:** 1.0  
-**Created:** 2025-10-21  
-**Purpose:** Define required updates to CONFIGURATION_GUIDE_V3.0 → V3.1  
+**Version:** 1.0
+**Created:** 2025-10-21
+**Purpose:** Define required updates to CONFIGURATION_GUIDE_V3.0 → V3.1
 **Status:** ✅ Specification Complete
 
 ---
@@ -59,7 +59,7 @@ monitoring:
 ```yaml
   urgent_conditions:
     near_stop_loss_pct: 0.02      # Within 2% of stop loss
-    near_profit_target_pct: 0.02  # Within 2% of profit target  
+    near_profit_target_pct: 0.02  # Within 2% of profit target
     near_trailing_stop_pct: 0.02  # Within 2% of trailing stop
 ```
 
@@ -177,21 +177,21 @@ exit_execution:
     order_type: market           # Market order (immediate fill)
     timeout_seconds: 5           # Fast timeout
     retry_strategy: immediate_market  # No limit attempts, go market
-    
+
   HIGH:
     order_type: limit            # Limit order (reduce slippage)
     price_strategy: aggressive   # Best bid + 1 tick
     timeout_seconds: 10
     retry_strategy: walk_then_market  # Walk 2x, then market
     max_walks: 2
-    
+
   MEDIUM:
     order_type: limit
     price_strategy: fair         # Best bid (no premium)
     timeout_seconds: 30
     retry_strategy: walk_price   # Walk price patiently
     max_walks: 5
-    
+
   LOW:
     order_type: limit
     price_strategy: conservative # Best bid - 1 tick (wait for better)
@@ -358,7 +358,7 @@ partial_exits:
       profit_threshold: 0.15  # +15% profit
       exit_percentage: 50     # Exit 50% of position
       description: "Initial profit taking to reduce risk"
-    
+
     - name: "second_target"   # NEW
       profit_threshold: 0.25  # +25% profit
       exit_percentage: 25     # Exit another 25%
@@ -388,7 +388,7 @@ Configuration to handle illiquid markets:
 liquidity:
   max_spread: 0.03  # Maximum 3¢ spread (triggers liquidity_dried_up exit)
   min_volume: 50    # Minimum 50 contracts (triggers liquidity_dried_up exit)
-  
+
   exit_on_illiquid: true   # Auto-exit if market becomes illiquid
   alert_on_illiquid: true  # Alert user when illiquidity detected
 ```
@@ -642,7 +642,7 @@ Starting Precog Trading Platform...
 ├─ Loading configuration files...
 │  ├─ trading.yaml ✓
 │  ├─ position_management.yaml ✗
-│  
+│
 ERROR: Configuration validation failed
 
 File: config/position_management.yaml
@@ -939,19 +939,19 @@ After updates, verify:
 
 **CONFIGURATION_GUIDE_V3.1 is complete when:**
 
-✅ All 7 new sections written and integrated  
-✅ All Session 7 enhancements documented  
-✅ All user customization options explained  
-✅ All safety constraints clearly marked  
-✅ All examples tested and validated  
-✅ All cross-references working  
-✅ Passes consistency check against other docs  
-✅ No references to deprecated features  
+✅ All 7 new sections written and integrated
+✅ All Session 7 enhancements documented
+✅ All user customization options explained
+✅ All safety constraints clearly marked
+✅ All examples tested and validated
+✅ All cross-references working
+✅ Passes consistency check against other docs
+✅ No references to deprecated features
 
 ---
 
-**Document:** CONFIGURATION_GUIDE_UPDATE_SPEC_V1_0.md  
-**Created:** 2025-10-21  
-**Purpose:** Comprehensive update specification for CONFIGURATION_GUIDE_V3.0 → V3.1  
-**Related:** YAML_CONSISTENCY_AUDIT_V1_0, USER_CUSTOMIZATION_STRATEGY_V1_0, ADR-021  
+**Document:** CONFIGURATION_GUIDE_UPDATE_SPEC_V1_0.md
+**Created:** 2025-10-21
+**Purpose:** Comprehensive update specification for CONFIGURATION_GUIDE_V3.0 → V3.1
+**Related:** YAML_CONSISTENCY_AUDIT_V1_0, USER_CUSTOMIZATION_STRATEGY_V1_0, ADR-021
 **Status:** ✅ Complete - Ready for Implementation

@@ -1,9 +1,9 @@
 # Phase 5: Position Monitoring & Exit Management Specification
-**Version:** 1.0  
-**Date:** 2025-10-21  
-**Status:** 🔵 Design Complete - Ready for Implementation  
-**Phase:** 5a (Trading MVP)  
-**Dependencies:** Phase 1-4 (Infrastructure, Data, Models)  
+**Version:** 1.0
+**Date:** 2025-10-21
+**Status:** 🔵 Design Complete - Ready for Implementation
+**Phase:** 5a (Trading MVP)
+**Dependencies:** Phase 1-4 (Infrastructure, Data, Models)
 **Related:** ADR-021 (Method Abstraction), PHASE_5_EXIT_EVALUATION_SPEC_V1_0.md
 
 ---
@@ -126,7 +126,7 @@ logger = logging.getLogger(__name__)
 class PositionMonitor:
     """
     Continuously monitors open positions and triggers exits.
-    
+
     Features:
     - Dynamic monitoring frequency (urgent vs normal)
     - Rate limit aware (API call management)
@@ -134,7 +134,7 @@ class PositionMonitor:
     - Trailing stop updates
     - Real-time P&L tracking
     """
-    
+
     def __init__(
         self,
         kalshi_client: KalshiClient,
@@ -144,29 +144,29 @@ class PositionMonitor:
         self.kalshi_client = kalshi_client
         self.exit_evaluator = exit_evaluator
         self.exit_executor = exit_executor
-        
+
         # Rate limiting
         self.api_calls_per_minute = 0
         self.api_call_reset_time = datetime.now() + timedelta(minutes=1)
         self.max_api_calls_per_minute = 60  # Conservative limit
-        
+
         # State
         self.active_monitors: Dict[int, asyncio.Task] = {}  # position_id → task
         self.price_cache: Dict[str, tuple] = {}  # market_id → (price, timestamp)
         self.cache_ttl_seconds = 10  # Cache prices for 10s
-    
+
     async def start_monitoring(self):
         """
         Main monitoring loop.
         Discovers all open positions and spawns monitor tasks.
         """
         logger.info("Starting position monitor...")
-        
+
         while True:
             try:
                 # Get all open positions
                 open_positions = self._get_open_positions()
-                
+
                 # Start monitoring new positions
                 for position in open_positions:
                     if position.position_id not in self.active_monitors:
@@ -178,7 +178,7 @@ class PositionMonitor:
                             f"Started monitoring position {position.position_id} "
                             f"({position.market_id} {position.side})"
                         )
-                
+
                 # Clean up completed monitors
                 completed = [
                     pid for pid, task in self.active_monitors.items()
@@ -186,32 +186,32 @@ class PositionMonitor:
                 ]
                 for pid in completed:
                     del self.active_monitors[pid]
-                
+
                 # Check every 15 seconds for new positions
                 await asyncio.sleep(15)
-                
+
             except Exception as e:
                 logger.error(f"Error in main monitoring loop: {e}", exc_info=True)
                 await asyncio.sleep(30)  # Back off on error
-    
+
     async def _monitor_single_position(self, position: Position):
         """
         Monitor a single position until closed.
-        
+
         Monitoring frequency:
         - Normal: Every 30 seconds (standard tracking)
         - Urgent: Every 5 seconds (near thresholds)
-        
+
         Args:
             position: Position to monitor
         """
         logger.info(f"Monitoring position {position.position_id}")
-        
+
         # Get method configuration
         method = self._get_method(position.method_id)
-        
+
         monitoring_iterations = 0
-        
+
         try:
             while True:
                 # Check if position still open
@@ -222,41 +222,41 @@ class PositionMonitor:
                         f"stopping monitor"
                     )
                     break
-                
+
                 # Get current market price (with caching)
                 current_price = await self._get_current_price(position.market_id)
-                
+
                 # Update unrealized P&L (local calculation, no DB write)
                 self._update_unrealized_pnl(position, current_price)
-                
+
                 # Update trailing stop if needed
                 self._update_trailing_stop(position, current_price, method)
-                
+
                 # Check exit conditions
                 exit_trigger = self.exit_evaluator.check_exit_conditions(
                     position=position,
                     current_price=current_price,
                     method=method
                 )
-                
+
                 # If exit triggered, execute it
                 if exit_trigger:
                     logger.info(
                         f"Exit trigger for position {position.position_id}: "
                         f"{exit_trigger.reason} (Priority {exit_trigger.priority})"
                     )
-                    
+
                     await self.exit_executor.execute_exit(
                         position=position,
                         trigger=exit_trigger
                     )
-                    
+
                     # Exit monitor loop (position now closed)
                     break
-                
+
                 # Determine sleep interval based on urgency
                 sleep_interval = self._calculate_sleep_interval(position, method)
-                
+
                 # Log periodic status (every 10 iterations or urgent checks)
                 monitoring_iterations += 1
                 if monitoring_iterations % 10 == 0 or sleep_interval < 10:
@@ -266,9 +266,9 @@ class PositionMonitor:
                         f"Price={current_price}, "
                         f"Next check in {sleep_interval}s"
                     )
-                
+
                 await asyncio.sleep(sleep_interval)
-                
+
         except Exception as e:
             logger.error(
                 f"Error monitoring position {position.position_id}: {e}",
@@ -276,59 +276,59 @@ class PositionMonitor:
             )
             # Don't crash the monitor, keep trying
             await asyncio.sleep(60)
-    
+
     async def _get_current_price(self, market_id: str) -> Decimal:
         """
         Get current market price with caching to reduce API calls.
-        
+
         Cache strategy:
         - Cache prices for 10 seconds
         - After 10s, make new API call
         - Reduces API load while staying reasonably current
-        
+
         Args:
             market_id: Market ticker
-            
+
         Returns:
             Current market price
         """
         now = datetime.now()
-        
+
         # Check cache
         if market_id in self.price_cache:
             cached_price, cached_time = self.price_cache[market_id]
             age_seconds = (now - cached_time).total_seconds()
-            
+
             if age_seconds < self.cache_ttl_seconds:
                 # Cache hit - return cached price
                 return cached_price
-        
+
         # Cache miss or stale - fetch from API
         await self._check_rate_limit()
-        
+
         market = await self.kalshi_client.get_market(market_id)
-        
+
         # Cache the price
         self.price_cache[market_id] = (market.yes_bid, now)
-        
+
         return market.yes_bid
-    
+
     async def _check_rate_limit(self):
         """
         Ensure we don't exceed API rate limits.
-        
+
         Kalshi limits: 100 requests per 10s = 600/minute
         Our limit: 60/minute (conservative)
-        
+
         If approaching limit, sleep to avoid hitting it.
         """
         now = datetime.now()
-        
+
         # Reset counter every minute
         if now >= self.api_call_reset_time:
             self.api_calls_per_minute = 0
             self.api_call_reset_time = now + timedelta(minutes=1)
-        
+
         # Check if approaching limit
         if self.api_calls_per_minute >= self.max_api_calls_per_minute:
             # Sleep until next reset
@@ -337,14 +337,14 @@ class PositionMonitor:
                 f"Rate limit approaching, sleeping {sleep_seconds:.1f}s"
             )
             await asyncio.sleep(sleep_seconds)
-            
+
             # Reset counter
             self.api_calls_per_minute = 0
             self.api_call_reset_time = datetime.now() + timedelta(minutes=1)
-        
+
         # Increment counter
         self.api_calls_per_minute += 1
-    
+
     def _calculate_sleep_interval(
         self,
         position: Position,
@@ -352,30 +352,30 @@ class PositionMonitor:
     ) -> int:
         """
         Determine how long to sleep before next check.
-        
+
         Strategy:
         - Urgent (5s): Within 2% of stop loss or profit target
         - Normal (30s): Everything else
-        
+
         Args:
             position: Position being monitored
             method: Method configuration
-            
+
         Returns:
             Sleep interval in seconds
         """
         config = method.position_mgmt_config
-        
+
         # Check if near stop loss
         stop_loss_threshold = config.get('stop_loss', {}).get('threshold', -0.15)
         if position.unrealized_pnl_pct < (stop_loss_threshold + 0.02):
             return 5  # Urgent - near stop loss
-        
+
         # Check if near profit target
         profit_target = config.get('profit_targets', {}).get('high_confidence', 0.25)
         if position.unrealized_pnl_pct > (profit_target - 0.02):
             return 5  # Urgent - near profit target
-        
+
         # Check if near trailing stop
         if position.trailing_stop_active:
             distance_to_stop = (
@@ -383,10 +383,10 @@ class PositionMonitor:
             ) / position.current_price
             if distance_to_stop < 0.02:  # Within 2%
                 return 5  # Urgent - near trailing stop
-        
+
         # Normal monitoring
         return 30
-    
+
     def _update_unrealized_pnl(
         self,
         position: Position,
@@ -394,10 +394,10 @@ class PositionMonitor:
     ):
         """
         Update position's unrealized P&L.
-        
+
         This is a local calculation, no database write.
         P&L is persisted when position closes.
-        
+
         Args:
             position: Position object (modified in place)
             current_price: Current market price
@@ -407,13 +407,13 @@ class PositionMonitor:
         current_value = current_price * position.count
         unrealized_pnl = current_value - entry_cost
         unrealized_pnl_pct = unrealized_pnl / entry_cost
-        
+
         # Update position (in-memory)
         position.current_price = current_price
         position.unrealized_pnl = unrealized_pnl
         position.unrealized_pnl_pct = unrealized_pnl_pct
         position.last_update = datetime.now()
-    
+
     def _update_trailing_stop(
         self,
         position: Position,
@@ -422,64 +422,64 @@ class PositionMonitor:
     ):
         """
         Update trailing stop if price moved favorably.
-        
+
         Logic:
         1. Check if trailing stop activated (profit > threshold)
         2. Update peak price if current price is new high
         3. Calculate new trailing stop price
         4. Update position.trailing_stop_state
-        
+
         Args:
             position: Position object (modified in place)
             current_price: Current market price
             method: Method configuration
         """
         config = method.position_mgmt_config.get('trailing_stop', {})
-        
+
         if not config.get('enabled', False):
             return  # Trailing stops disabled
-        
+
         # Check activation
         activation_threshold = Decimal(
             str(config.get('activation_threshold', 0.10))
         )
-        
+
         if not position.trailing_stop_active:
             # Check if we should activate
             if position.unrealized_pnl_pct >= activation_threshold:
                 position.trailing_stop_active = True
                 position.peak_price = current_price
-                
+
                 distance = Decimal(str(config.get('initial_distance', 0.05)))
                 position.trailing_stop_price = position.peak_price * (
                     Decimal('1.0') - distance
                 )
-                
+
                 logger.info(
                     f"Trailing stop activated for position {position.position_id} "
                     f"at {position.peak_price} (stop: {position.trailing_stop_price})"
                 )
-        
+
         else:
             # Already active - update if price moved up
             if current_price > position.peak_price:
                 position.peak_price = current_price
-                
+
                 # Calculate trailing stop distance (with tightening)
                 distance = self._calculate_trailing_distance(
                     position=position,
                     config=config
                 )
-                
+
                 position.trailing_stop_price = position.peak_price * (
                     Decimal('1.0') - distance
                 )
-                
+
                 logger.debug(
                     f"Trailing stop updated for position {position.position_id}: "
                     f"Peak={position.peak_price}, Stop={position.trailing_stop_price}"
                 )
-    
+
     def _calculate_trailing_distance(
         self,
         position: Position,
@@ -487,48 +487,48 @@ class PositionMonitor:
     ) -> Decimal:
         """
         Calculate trailing stop distance with tightening.
-        
+
         Example from config:
         - Initial distance: 5%
         - Tightening rate: 1% per 5% gain
         - Floor: 2%
-        
+
         If profit is 15%:
         - Tightening: 15% / 5% = 3 steps
         - Reduction: 3 * 1% = 3%
         - Distance: 5% - 3% = 2% (at floor)
-        
+
         Args:
             position: Position with current profit
             config: Trailing stop configuration
-            
+
         Returns:
             Trailing stop distance as decimal
         """
         initial_distance = Decimal(str(config.get('initial_distance', 0.05)))
         tightening_rate = Decimal(str(config.get('tightening_rate', 0.01)))
         floor_distance = Decimal(str(config.get('floor_distance', 0.02)))
-        
+
         # Calculate tightening
         profit_pct = position.unrealized_pnl_pct
         tightening_steps = int(profit_pct / Decimal('0.05'))  # Every 5% profit
         reduction = tightening_rate * tightening_steps
-        
+
         # Apply floor
         distance = max(initial_distance - reduction, floor_distance)
-        
+
         return distance
-    
+
     def _get_open_positions(self) -> List[Position]:
         """Get all open positions from database."""
         # Implementation uses SQLAlchemy
         pass
-    
+
     def _refresh_position(self, position_id: int) -> Position:
         """Reload position from database."""
         # Implementation uses SQLAlchemy
         pass
-    
+
     def _get_method(self, method_id: int) -> Method:
         """Load method configuration."""
         # Implementation uses SQLAlchemy
@@ -582,28 +582,28 @@ ALTER TABLE positions ADD COLUMN IF NOT EXISTS exit_priority VARCHAR(20);
 CREATE TABLE position_exits (
     exit_id SERIAL PRIMARY KEY,
     position_id INT NOT NULL REFERENCES positions(position_id),
-    
+
     -- Exit details
     exit_reason VARCHAR(50) NOT NULL,  -- "stop_loss", "profit_target", etc.
     exit_priority VARCHAR(20) NOT NULL,  -- "CRITICAL", "HIGH", "MEDIUM", "LOW"
     exit_quantity INT NOT NULL,
     partial_exit BOOLEAN DEFAULT FALSE,
-    
+
     -- Execution details
     exit_price DECIMAL(10,4) NOT NULL,
     execution_strategy VARCHAR(20),  -- "market", "limit", "aggressive_limit"
-    
+
     -- Performance
     unrealized_pnl DECIMAL(10,2),
     unrealized_pnl_pct DECIMAL(6,4),
-    
+
     -- Timestamps
     triggered_at TIMESTAMP DEFAULT NOW(),
     executed_at TIMESTAMP,
-    
+
     -- For partial exits
     remaining_quantity INT,
-    
+
     INDEX idx_position_exits_position (position_id),
     INDEX idx_position_exits_reason (exit_reason)
 );
@@ -616,26 +616,26 @@ CREATE TABLE exit_attempts (
     attempt_id SERIAL PRIMARY KEY,
     position_id INT NOT NULL REFERENCES positions(position_id),
     exit_id INT REFERENCES position_exits(exit_id),
-    
+
     -- Attempt details
     attempt_number INT NOT NULL,
     order_type VARCHAR(20),  -- "market", "limit"
     limit_price DECIMAL(10,4),
     quantity INT NOT NULL,
-    
+
     -- Result
     status VARCHAR(20),  -- "pending", "filled", "partial", "cancelled", "failed"
     filled_quantity INT DEFAULT 0,
     filled_price DECIMAL(10,4),
-    
+
     -- Timing
     placed_at TIMESTAMP DEFAULT NOW(),
     filled_at TIMESTAMP,
     cancelled_at TIMESTAMP,
-    
+
     -- Error tracking
     error_message TEXT,
-    
+
     INDEX idx_exit_attempts_position (position_id),
     INDEX idx_exit_attempts_exit (exit_id)
 );
@@ -654,16 +654,16 @@ monitoring:
   # Monitoring frequencies (seconds)
   normal_frequency: 30      # Standard monitoring
   urgent_frequency: 5       # Near thresholds
-  
+
   # Urgency triggers
   urgent_conditions:
     near_stop_loss_pct: 0.02      # Within 2% of stop loss
     near_profit_target_pct: 0.02  # Within 2% of profit target
     near_trailing_stop_pct: 0.02  # Within 2% of trailing stop
-  
+
   # Cache settings
   price_cache_ttl_seconds: 10
-  
+
   # Rate limiting
   max_api_calls_per_minute: 60  # Conservative limit
 
@@ -672,16 +672,16 @@ exit_priorities:
   CRITICAL:
     - stop_loss
     - circuit_breaker
-  
+
   HIGH:
     - trailing_stop
     - time_based_urgent  # <5min to settlement
     - liquidity_dried_up  # Spread >3¢
-  
+
   MEDIUM:
     - profit_target
     - partial_exit_target
-  
+
   LOW:
     - early_exit  # Edge < threshold
     - edge_disappeared  # Edge negative
@@ -701,21 +701,21 @@ exit_execution:
     order_type: market
     timeout_seconds: 5
     retry_strategy: immediate_market
-  
+
   HIGH:
     order_type: limit
     price_adjustment: aggressive  # Cross spread slightly
     timeout_seconds: 10
     retry_strategy: walk_then_market
     max_walks: 2
-  
+
   MEDIUM:
     order_type: limit
     price_adjustment: fair  # Mid-spread
     timeout_seconds: 30
     retry_strategy: walk_price
     max_walks: 5
-  
+
   LOW:
     order_type: limit
     price_adjustment: conservative  # Best ask
@@ -737,20 +737,20 @@ def test_monitoring_frequency_urgent():
     """Test that urgent positions check every 5s."""
     position = create_test_position(unrealized_pnl_pct=-0.13)  # Near stop loss
     method = create_test_method(stop_loss=-0.15)
-    
+
     monitor = PositionMonitor(...)
     interval = monitor._calculate_sleep_interval(position, method)
-    
+
     assert interval == 5  # Urgent
 
 def test_monitoring_frequency_normal():
     """Test that normal positions check every 30s."""
     position = create_test_position(unrealized_pnl_pct=0.05)  # Stable
     method = create_test_method()
-    
+
     monitor = PositionMonitor(...)
     interval = monitor._calculate_sleep_interval(position, method)
-    
+
     assert interval == 30  # Normal
 
 def test_trailing_stop_activation():
@@ -766,14 +766,14 @@ def test_trailing_stop_activation():
             'initial_distance': 0.05
         }
     )
-    
+
     monitor = PositionMonitor(...)
     monitor._update_trailing_stop(
         position,
         current_price=Decimal("0.66"),
         method=method
     )
-    
+
     assert position.trailing_stop_active
     assert position.peak_price == Decimal("0.66")
     assert position.trailing_stop_price == Decimal("0.627")  # 0.66 * 0.95
@@ -781,15 +781,15 @@ def test_trailing_stop_activation():
 def test_price_caching():
     """Test that prices are cached to reduce API calls."""
     monitor = PositionMonitor(...)
-    
+
     # First call should hit API
     price1 = await monitor._get_current_price("TEST-MARKET")
     api_calls_1 = monitor.api_calls_per_minute
-    
+
     # Second call (within 10s) should use cache
     price2 = await monitor._get_current_price("TEST-MARKET")
     api_calls_2 = monitor.api_calls_per_minute
-    
+
     assert price1 == price2
     assert api_calls_2 == api_calls_1  # No new API call
 
@@ -797,16 +797,16 @@ def test_rate_limiting():
     """Test rate limit enforcement."""
     monitor = PositionMonitor(...)
     monitor.api_calls_per_minute = 59
-    
+
     # This should work (at limit)
     await monitor._check_rate_limit()
     assert monitor.api_calls_per_minute == 60
-    
+
     # This should sleep to avoid exceeding
     start = time.time()
     await monitor._check_rate_limit()
     elapsed = time.time() - start
-    
+
     assert elapsed > 0.5  # Slept to reset counter
 ```
 
@@ -818,29 +818,29 @@ def test_rate_limiting():
 @pytest.mark.asyncio
 async def test_complete_monitoring_cycle():
     """Test complete cycle: monitor → detect exit → execute."""
-    
+
     # Create test position
     position = create_test_position(
         entry_price=Decimal("0.60"),
         count=50
     )
-    
+
     # Mock Kalshi API
     with patch('kalshi_client.get_market') as mock_market:
         mock_market.return_value = Market(
             market_id="TEST",
             yes_bid=Decimal("0.50")  # Down 16.7% - triggers stop loss
         )
-        
+
         # Start monitoring
         monitor = PositionMonitor(...)
         task = asyncio.create_task(
             monitor._monitor_single_position(position)
         )
-        
+
         # Wait for exit to trigger
         await asyncio.sleep(2)
-        
+
         # Verify exit was executed
         position = refresh_position(position.position_id)
         assert position.status == "closed"

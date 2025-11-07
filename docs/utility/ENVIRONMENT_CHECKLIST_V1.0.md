@@ -1,11 +1,11 @@
 # Environment Setup Checklist - Windows 11
 
 ---
-**Version:** 1.0  
-**Created:** 2025-10-09  
-**Platform:** Windows 11  
-**Target:** Python 3.12 + PostgreSQL 15+ + Git + VSCode + Claude Code  
-**Time Required:** 2-3 hours first time  
+**Version:** 1.0
+**Created:** 2025-10-09
+**Platform:** Windows 11
+**Target:** Python 3.12 + PostgreSQL 15+ + Git + VSCode + Claude Code
+**Time Required:** 2-3 hours first time
 ---
 
 ## Overview
@@ -361,16 +361,16 @@ code --install-extension usernamehw.errorlens
     "python.linting.pylintEnabled": true,
     "python.formatting.provider": "black",
     "python.languageServer": "Pylance",
-    
+
     // Editor
     "editor.formatOnSave": true,
     "editor.rulers": [88, 120],
     "files.trimTrailingWhitespace": true,
     "files.insertFinalNewline": true,
-    
+
     // Terminal
     "terminal.integrated.defaultProfile.windows": "PowerShell",
-    
+
     // Git
     "git.autofetch": true,
     "git.confirmSync": false
@@ -809,7 +809,7 @@ def check_requirements():
 
 def main():
     print("=== System Health Check ===\n")
-    
+
     checks = [
         ("Python 3.12", check_python),
         ("Git", check_git),
@@ -818,16 +818,16 @@ def main():
         (".env File", check_env_file),
         ("Dependencies", check_requirements),
     ]
-    
+
     results = []
     for name, check in checks:
         results.append(check())
-    
+
     print(f"\n=== Summary ===")
     passed = sum(results)
     total = len(results)
     print(f"{passed}/{total} checks passed")
-    
+
     if passed == total:
         print("\n🎉 Environment is fully configured!")
         return 0
@@ -866,16 +866,16 @@ try:
         password=os.getenv('DEV_DB_PASSWORD')
     )
     print("✅ Database connection successful!")
-    
+
     # Test query
     cur = conn.cursor()
     cur.execute('SELECT version();')
     version = cur.fetchone()
     print(f"PostgreSQL version: {version[0]}")
-    
+
     cur.close()
     conn.close()
-    
+
 except Exception as e:
     print(f"❌ Database connection failed: {e}")
     print("\nCheck:")

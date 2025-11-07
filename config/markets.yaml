@@ -15,11 +15,11 @@ platforms:
     enabled: true
     platform_id: "kalshi"
     display_name: "Kalshi"
-    
+
     # API Configuration (references .env)
     api_key_env: "KALSHI_PROD_API_KEY_ID"
     api_secret_env: "KALSHI_PROD_API_KEYFILE"
-    
+
     # Endpoints
     environments:
       demo:
@@ -33,20 +33,20 @@ platforms:
       test:
         base_url: "http://localhost:8000"  # Mock server
         enabled: false
-    
+
     # Active environment (demo, prod, or test)
     active_environment: "demo"  # Change to "prod" when ready
-    
+
     # Rate Limiting
     rate_limit_per_minute: 100
     rate_limit_buffer: 0.8  # Use 80% of limit for safety
-    
+
     # Transaction Costs
     fees:
       maker_fee_percent: 0.00  # Maker rebate (paid to you)
       taker_fee_percent: 0.07  # 7% on winnings
       withdrawal_fee: 0.00
-      
+
     # Market Categories on Kalshi
     categories:
       sports:
@@ -56,7 +56,7 @@ platforms:
           nfl:
             enabled: true
             # Kalshi series identifiers
-            series_tickers: 
+            series_tickers:
               - "KXNFLGAME"
             # Market filtering
             filter_method: "series_ticker"
@@ -67,7 +67,7 @@ platforms:
             # Sport-specific settings (override trade_strategies.yaml)
             kelly_fraction: 0.25      # 25% of full Kelly
             min_edge: 0.05            # 5% minimum edge
-          
+
           # NCAAF (Phase 1-2)
           ncaaf:
             enabled: true
@@ -79,7 +79,7 @@ platforms:
             include_futures: false
             kelly_fraction: 0.20      # More conservative (20%)
             min_edge: 0.06            # Higher edge required (6%)
-          
+
           # NBA (Phase 6)
           nba:
             enabled: false
@@ -92,7 +92,7 @@ platforms:
             include_props: false
             kelly_fraction: 0.22
             min_edge: 0.05
-          
+
           # MLB (Phase 6)
           mlb:
             enabled: false
@@ -103,7 +103,7 @@ platforms:
             max_spread: 0.05
             kelly_fraction: 0.20
             min_edge: 0.06
-          
+
           # Tennis (Phase 6)
           tennis:
             enabled: false
@@ -114,7 +114,7 @@ platforms:
             max_spread: 0.07    # Tennis can have wider spreads
             kelly_fraction: 0.18      # More volatile (18%)
             min_edge: 0.07            # Higher edge required (7%)
-      
+
       # Political Markets (Phase 8)
       politics:
         enabled: false
@@ -135,7 +135,7 @@ platforms:
             enabled: false
           legislation:
             enabled: false
-      
+
       # Entertainment Markets (Phase 8)
       entertainment:
         enabled: false
@@ -154,7 +154,7 @@ platforms:
             enabled: false
           streaming:
             enabled: false
-      
+
       # Economics Markets (Future)
       economics:
         enabled: false
@@ -166,17 +166,17 @@ platforms:
         max_spread: 0.04
         kelly_fraction: 0.15
         min_edge: 0.08
-  
+
   # Polymarket (Phase 10)
   polymarket:
     enabled: false
     platform_id: "polymarket"
     display_name: "Polymarket"
-    
+
     # API Configuration
     api_key_env: "POLYMARKET_PROD_PRIVATE_KEY"
     wallet_address_env: "POLYMARKET_PROD_WALLET_ADDRESS"
-    
+
     # Endpoints
     environments:
       mainnet:
@@ -188,14 +188,14 @@ platforms:
         base_url: "https://clob-mumbai.polymarket.com"
         chain_id: 80001  # Polygon testnet
         enabled: false
-    
+
     active_environment: "mumbai"  # Start with testnet
-    
+
     # Transaction Costs (blockchain)
     fees:
       gas_price_gwei: 30       # Polygon gas price
       protocol_fee_percent: 0.02  # 2% protocol fee
-    
+
     # Polymarket doesn't use series tickers like Kalshi
     # Uses market IDs and condition IDs
     categories:
@@ -205,14 +205,14 @@ platforms:
         max_spread: 0.05
         kelly_fraction: 0.20
         min_edge: 0.06
-      
+
       politics:
         enabled: false
         min_liquidity: 5000
         max_spread: 0.03
         kelly_fraction: 0.15
         min_edge: 0.08
-      
+
       sports:
         enabled: false
         min_liquidity: 1000
@@ -225,7 +225,7 @@ platforms:
 #=============================================================================
 global_filters:
   # Apply to ALL platforms
-  
+
   # Time Filters
   time_constraints:
     min_time_to_close_hours: 1    # Don't trade if market closes in <1 hour
@@ -235,13 +235,13 @@ global_filters:
       enabled: false               # Restrict to specific hours
       start_time: "09:00"          # EST
       end_time: "17:00"            # EST
-  
+
   # Liquidity Filters
   liquidity:
     min_volume_24h: 50             # Minimum 24h volume (dollars/USDC)
     min_open_interest: 100         # Minimum total open interest
     min_bid_ask_size: 10           # Minimum size at best bid/ask
-  
+
   # Market Status
   status:
     allowed_statuses:
@@ -251,13 +251,13 @@ global_filters:
       - "closed"
       - "settled"
       - "finalized"
-  
+
   # Market Type Filters
   market_types:
     include_binary: true           # Yes/No markets
     include_ranged: false          # Numeric range markets (future)
     include_categorical: false     # Multi-outcome (future)
-  
+
   # Risk Filters
   risk:
     max_implied_volatility: 0.50   # Skip highly volatile markets
@@ -273,13 +273,13 @@ discovery:
     enabled: true
     interval_seconds: 300          # Check every 5 minutes
     use_websocket: false           # Phase 9: Use WebSocket instead
-  
+
   # What to fetch
   fetch_strategy:
     fetch_all_series: true         # Get all series on startup
     fetch_active_events: true      # Get events with open markets
     fetch_upcoming_events: false   # Don't preload events far in future
-  
+
   # Caching
   cache:
     enabled: true
@@ -291,11 +291,11 @@ discovery:
 #=============================================================================
 watchlists:
   enabled: false
-  
+
   # Specific markets to monitor closely
   monitored_tickers:
     - "KXNFLGAME-2025-10-15-TB-DET"  # Example: specific game
-  
+
   # Alert on changes
   alerts:
     price_move_percent: 0.05       # Alert on 5%+ price move
@@ -307,22 +307,22 @@ watchlists:
 blacklist:
   # Markets/events to never trade
   enabled: true
-  
+
   # Specific tickers to exclude
   excluded_tickers:
     # Add specific problem markets here
     # - "KXNFLGAME-BAD-MARKET"
-  
+
   # Pattern matching
   excluded_patterns:
     - ".*PROP.*"        # Exclude player props (regex)
     # - ".*SEASON.*"    # Exclude season-long markets
-  
+
   # Event-based exclusions
   excluded_events:
     # Add specific events to skip
     # - "superbowl-futures"
-  
+
   # Reason codes for audit
   reasons:
     illiquid: "Market has insufficient liquidity"
@@ -335,15 +335,15 @@ blacklist:
 #=============================================================================
 prioritization:
   # How to rank markets when multiple edges detected
-  
+
   sort_by: "edge"  # Options: edge, liquidity, confidence, composite
-  
+
   # Composite scoring (if sort_by: composite)
   weights:
     edge_weight: 0.50              # 50% weight on edge size
     liquidity_weight: 0.25         # 25% weight on liquidity
     confidence_weight: 0.25        # 25% weight on confidence
-  
+
   # Limits
   max_simultaneous_markets: 20    # Don't spread too thin
   max_per_sport: 10               # Max markets per sport at once
@@ -354,13 +354,13 @@ prioritization:
 #=============================================================================
 special_events:
   # Adjust parameters for major events
-  
+
   playoffs:
     enabled: false
     multipliers:
       min_liquidity: 2.0           # 2x normal liquidity requirement
       kelly_fraction: 0.5          # Half of normal Kelly (more conservative)
-  
+
   championships:
     enabled: false
     multipliers:

@@ -126,7 +126,7 @@ architecture:
   #
   # RECOMMENDATION: Start with 'elo', add complexity later
   primary_model: elo
-  
+
   # Use multiple models and combine predictions?
   # WHY: Different models catch different patterns.
   # Ensemble often more accurate than any single model.
@@ -162,7 +162,7 @@ elo:
   # Initial rating for new teams
   # WHY: 1500 is standard, represents "average" team
   initial_rating: 1500
-  
+
   # K-factor (how much ratings change per game)
   # Higher K = faster adaptation but more volatility
   # Lower K = slower adaptation but more stability
@@ -175,7 +175,7 @@ elo:
     nhl: 24
     soccer: 28
     tennis: 40  # Higher (individual players, more variance)
-  
+
   # Margin of victory adjustment
   # WHY: Winning by 30 tells you more than winning by 3
   # Multiply K-factor by MOV multiplier
@@ -184,7 +184,7 @@ elo:
     # Formula: multiplier = ln(MOV + 1) / 2
     # Capped at max_multiplier to prevent over-weighting blowouts
     max_multiplier: 2.0
-  
+
   # Home field advantage
   # WHY: Home teams win more often across all sports
   # Add this to home team's rating for probability calc
@@ -194,7 +194,7 @@ elo:
     mlb: 40   # ~2 points
     nhl: 60
     soccer: 50
-  
+
   # Recency weighting
   # WHY: Recent games matter more than games from 2 years ago
   # Apply exponential decay to old games
@@ -202,7 +202,7 @@ elo:
     enabled: true
     # Half-life in days (games this many days ago worth 50% weight)
     half_life_days: 180  # 6 months
-  
+
   # Regression to mean
   # WHY: Extreme ratings tend to revert toward average over time
   # Pull ratings toward mean during off-season
@@ -212,7 +212,7 @@ elo:
     factor: 0.20  # 20% regression
     # When to apply (typically off-season)
     apply_frequency: "off_season"
-  
+
   # Convert Elo rating difference to win probability
   # FORMULA: P(win) = 1 / (1 + 10^((rating_diff / scaling_factor)))
   # WHY: Logistic curve - small differences = close games,
@@ -238,7 +238,7 @@ elo:
 
 regression:
   enabled: false  # Phase 3+
-  
+
   # Which features to include?
   # WHY: More features = more accuracy, but also more complexity
   features:
@@ -249,33 +249,33 @@ regression:
       - "rebounding_rate"  # NBA
       - "yards_per_play"  # NFL
       - "success_rate"  # NFL
-    
+
     matchup_stats:
       - "pace_differential"  # Fast vs slow teams
       - "style_mismatch"  # Run-heavy vs run defense
       - "rest_differential"  # Days since last game
-    
+
     situational:
       - "home_away"
       - "day_of_week"
       - "weather"  # For outdoor sports
       - "injury_impact"
-  
+
   # Regularization
   # WHY: Prevents overfitting to training data
   regularization:
     type: "l2"  # Ridge regression
     alpha: 0.01
-  
+
   # Training parameters
   training:
     # How much historical data to use?
     lookback_years: 5
-    
+
     # Re-train frequency
     # WHY: Teams change, must update model
     retrain_frequency: "weekly"
-    
+
     # Validation method
     validation: "time_series_split"  # Don't peek into future
     validation_split: 0.20  # 20% for validation
@@ -287,32 +287,32 @@ regression:
 
 ml:
   enabled: false  # Phase 7+
-  
+
   # Which ML algorithm?
   # Options:
   # - 'random_forest': Ensemble of decision trees
   # - 'gradient_boosting': XGBoost, LightGBM
   # - 'neural_network': Deep learning
   algorithm: gradient_boosting
-  
+
   # Feature engineering
   feature_engineering:
     # Create interaction features (e.g., offense_rank × defense_rank)
     interactions: true
-    
+
     # Create polynomial features (e.g., stat²)
     polynomials: false
-    
+
     # Use time-series features (rolling averages, trends)
     time_series: true
-  
+
   # Hyperparameters (for gradient boosting)
   hyperparameters:
     n_estimators: 100
     max_depth: 6
     learning_rate: 0.05
     subsample: 0.80
-  
+
   # Model selection
   # WHY: Try multiple hyperparameters, pick best
   hyperparameter_tuning:
@@ -332,7 +332,7 @@ edge_detection:
   # - 'kelly': Calculate optimal Kelly bet size
   # - 'expected_value': E[return] accounting for all outcomes
   method: simple
-  
+
   # Adjustment for model uncertainty
   # WHY: Model is not perfect. Discount predictions.
   uncertainty_discount:
@@ -340,7 +340,7 @@ edge_detection:
     # Shrink probabilities toward 50% (maximum uncertainty)
     # Example: Model says 65%, discount to 62%
     shrinkage_factor: 0.10  # 10% shrinkage
-  
+
   # Transaction cost adjustment
   # WHY: Kalshi charges fees, reduce effective edge
   transaction_costs:
@@ -351,14 +351,14 @@ edge_detection:
     taker_fee: 0.01  # 1% fee
     # Conservative: assume we're taker (pay fee)
     assume_taker: true
-  
+
   # Slippage adjustment
   # WHY: Price moves between detection and execution
   slippage:
     enabled: true
     # Assume this much average slippage
     expected_slippage_pct: 0.005  # 0.5%
-  
+
   # Minimum edge thresholds (by strategy)
   # WHY: Different strategies have different requirements
   min_edge:
@@ -381,17 +381,17 @@ calibration:
   # Calibrate probabilities?
   # WHY: Raw model outputs often poorly calibrated
   enabled: true
-  
+
   # Calibration method
   # Options:
   # - 'platt': Logistic regression on model outputs
   # - 'isotonic': Non-parametric (more flexible)
   method: platt
-  
+
   # Training for calibration
   # WHY: Need separate validation set to avoid overfitting
   calibration_set_size: 0.15  # 15% of data
-  
+
   # Calibration diagnostics
   # Track calibration quality over time
   diagnostics:
@@ -418,17 +418,17 @@ market_efficiency:
       game_winner: 0.75  # Pretty efficient (Vegas lines)
       player_props: 0.60  # Less efficient
       live_trading: 0.55  # Even less efficient (fast-moving)
-    
+
     nba:
       game_winner: 0.80  # Very efficient
       player_props: 0.65
       live_trading: 0.60
-    
+
     mlb:
       game_winner: 0.70
-    
+
     # Lower efficiency = easier to find edges
-  
+
   # Adjust required edge based on efficiency
   # WHY: In efficient markets, need bigger edge to be confident
   efficiency_adjustment:
@@ -453,35 +453,35 @@ situational_adjustments:
       wind:
         threshold_mph: 15
         passing_adjustment: -0.05  # Reduce passing team prob by 5%
-      
+
       # Rain affects ball handling
       rain:
         threshold_inches: 0.25
         turnover_increase: 0.15  # 15% more turnovers
-      
+
       # Snow is chaos
       snow:
         # Discount model confidence by 20%
         confidence_discount: 0.20
-      
+
       # Temperature extremes
       temperature:
         cold_threshold_f: 20
         cold_adjustment: -0.03  # Slight disadvantage
         hot_threshold_f: 95
         hot_adjustment: -0.02
-  
+
   # Rest/schedule adjustments
   rest:
     enabled: true
     # Back-to-back games (NBA)
     back_to_back:
       disadvantage: 0.03  # 3% probability decrease
-    
+
     # Rest advantage (NFL)
     extra_rest_days:
       advantage_per_day: 0.01  # 1% per extra day (max 3 days)
-    
+
     # Travel distance (all sports)
     travel:
       enabled: true
@@ -489,7 +489,7 @@ situational_adjustments:
       coast_to_coast: 0.02  # 2% disadvantage
       # Time zone changes
       timezone_change_disadvantage: 0.01  # per hour
-  
+
   # Injury adjustments
   injuries:
     enabled: true
@@ -500,7 +500,7 @@ situational_adjustments:
       star_player: 0.08  # 8% (NBA, other sports)
       starter: 0.03  # 3%
       bench: 0.01  # 1%
-  
+
   # Motivation adjustments
   # WHY: Playoff races, rivalry games, etc. affect performance
   motivation:
@@ -518,11 +518,11 @@ situational_adjustments:
 
 live_updates:
   enabled: false  # Phase 3+
-  
+
   # Update frequency
   # WHY: Balance between accuracy and API costs
   update_frequency_seconds: 30
-  
+
   # What events trigger re-calculation?
   trigger_events:
     - "score"
@@ -531,14 +531,14 @@ live_updates:
     - "timeout"
     - "quarter_end"
     - "two_minute_warning"
-  
+
   # Live model type
   # Options:
   # - 'win_probability': Real-time win prob model
   # - 'score_differential': Based on expected scoring
   # - 'possession': Based on who has ball, field position
   model_type: win_probability
-  
+
   # Factors in live model
   factors:
     score_differential: 0.35
@@ -558,7 +558,7 @@ backtesting:
   train_end: "2023-12-31"
   test_start: "2024-01-01"
   test_end: "2024-12-31"
-  
+
   # Walk-forward validation
   # WHY: Mimics real trading (no peeking into future)
   walk_forward:
@@ -566,7 +566,7 @@ backtesting:
     training_window_months: 12  # Train on 12 months
     test_window_months: 3  # Test on next 3 months
     step_size_months: 1  # Step forward 1 month each time
-  
+
   # Metrics to track
   metrics:
     - "log_loss"  # Calibration quality
@@ -574,7 +574,7 @@ backtesting:
     - "auc_roc"  # Discrimination
     - "accuracy"  # % of correct predictions
     - "edge_accuracy"  # Do predicted edges translate to profit?
-  
+
   # Benchmarks
   # WHY: Compare to naive strategies
   benchmarks:
@@ -590,28 +590,28 @@ backtesting:
 monitoring:
   # Track actual vs predicted outcomes
   enabled: true
-  
+
   # Metrics to monitor
   metrics:
     # Calibration: Are 60% predictions winning 60%?
-    calibration_error: 
+    calibration_error:
       alert_threshold: 0.08  # 8% error
-    
+
     # Profit: Are edges translating to profit?
     edge_profitability:
       alert_threshold: 0.50  # If edges only 50% profitable, issue
-    
+
     # Accuracy: Are we predicting winners correctly?
     accuracy:
       alert_threshold: 0.52  # Should beat 50% by some margin
-  
+
   # Alert if model degrading
   degradation_alerts:
     enabled: true
     # Compare recent performance to historical
     lookback_window_days: 30
     min_performance_pct: 0.85  # Alert if < 85% of historical
-  
+
   # Automatic model re-training
   auto_retrain:
     enabled: true
@@ -630,18 +630,18 @@ monitoring:
 
 confidence_intervals:
   enabled: true
-  
+
   # Method to calculate
   # Options:
   # - 'bootstrap': Resample data, recalculate
   # - 'bayesian': Posterior distribution
   # - 'historical': Historical error rates
   method: historical
-  
+
   # Confidence level
   # WHY: 95% means we're 95% confident true value in this range
   confidence_level: 0.95  # 95%
-  
+
   # Use in edge detection?
   # WHY: If confidence interval wide, reduce bet size
   use_in_sizing:

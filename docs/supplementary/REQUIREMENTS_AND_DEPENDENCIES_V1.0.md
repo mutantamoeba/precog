@@ -1,12 +1,12 @@
 # Requirements and Dependencies Guide
 
 ---
-**Version:** 1.0  
-**Created:** 2025-10-15  
-**Status:** ✅ Active  
-**Purpose:** Map Python packages to system requirements and provide dependency management guidance  
-**Depends On:** MASTER_REQUIREMENTS_V2.1.md, ENVIRONMENT_CHECKLIST_V1.1.md  
-**Referenced By:** Phase 1+ implementation  
+**Version:** 1.0
+**Created:** 2025-10-15
+**Status:** ✅ Active
+**Purpose:** Map Python packages to system requirements and provide dependency management guidance
+**Depends On:** MASTER_REQUIREMENTS_V2.1.md, ENVIRONMENT_CHECKLIST_V1.1.md
+**Referenced By:** Phase 1+ implementation
 ---
 
 ## Document Purpose
@@ -178,10 +178,10 @@ python-dotenv-vault==0.6.0    # Secret management (production)
 ## Core Dependencies (Phase 1)
 
 ### 1. python-dotenv (1.0.0)
-**Requirement Mapping**: FR-6.2, NFR-7.1  
+**Requirement Mapping**: FR-6.2, NFR-7.1
 **Purpose**: Load environment variables from `.env` file
 
-**Why This Version**: 
+**Why This Version**:
 - 1.0.0 is stable and widely adopted
 - Full support for multi-line values
 - Compatible with Python 3.12+
@@ -195,7 +195,7 @@ load_dotenv()
 api_key = os.getenv("KALSHI_API_KEY")
 ```
 
-**Critical Notes**: 
+**Critical Notes**:
 - ✅ Load `.env` at application startup (before any config loading)
 - ✅ Never commit `.env` to version control (use `.env.template`)
 - ⚠️ Validate that required variables exist after loading
@@ -203,7 +203,7 @@ api_key = os.getenv("KALSHI_API_KEY")
 ---
 
 ### 2. pyyaml (6.0.1)
-**Requirement Mapping**: FR-6.1  
+**Requirement Mapping**: FR-6.1
 **Purpose**: Parse YAML configuration files
 
 **Why This Version**:
@@ -235,7 +235,7 @@ with open('config/trading.yaml', 'r') as f:
 ---
 
 ### 3. psycopg2-binary (2.9.9)
-**Requirement Mapping**: FR-1.3, FR-5.1, FR-7.2  
+**Requirement Mapping**: FR-1.3, FR-5.1, FR-7.2
 **Purpose**: PostgreSQL database driver
 
 **Why This Version**:
@@ -269,7 +269,7 @@ conn = psycopg2.connect(
 ---
 
 ### 4. sqlalchemy (2.0.25)
-**Requirement Mapping**: FR-1.3, FR-5.1, FR-7.2, NFR-3.1, NFR-3.2  
+**Requirement Mapping**: FR-1.3, FR-5.1, FR-7.2, NFR-3.1, NFR-3.2
 **Purpose**: ORM for database operations, connection pooling, migrations
 
 **Why This Version**:
@@ -289,10 +289,10 @@ Base = declarative_base()
 
 class Market(Base):
     __tablename__ = 'markets'
-    
+
     ticker = Column(String(100), primary_key=True)
     yes_bid = Column(DECIMAL(10, 4), nullable=False)  # ✅ DECIMAL not Float
-    
+
 engine = create_engine(
     "postgresql+psycopg2://user:pass@localhost/precog",
     pool_size=10,  # Connection pool
@@ -311,7 +311,7 @@ SessionLocal = sessionmaker(bind=engine)
 ---
 
 ### 5. alembic (1.13.0)
-**Requirement Mapping**: FR-1.3 (database migrations)  
+**Requirement Mapping**: FR-1.3 (database migrations)
 **Purpose**: Database schema version control and migrations
 
 **Why This Version**:
@@ -343,7 +343,7 @@ alembic downgrade -1
 ---
 
 ### 6. requests (2.31.0)
-**Requirement Mapping**: FR-1.1, FR-2.2, FR-4.1  
+**Requirement Mapping**: FR-1.1, FR-2.2, FR-4.1
 **Purpose**: Synchronous HTTP client for API calls
 
 **Why This Version**:
@@ -377,7 +377,7 @@ yes_bid = Decimal(data["yes_bid_dollars"])
 ---
 
 ### 7. cryptography (41.0.7)
-**Requirement Mapping**: FR-1.1, FR-4.1 (Kalshi RSA-PSS authentication)  
+**Requirement Mapping**: FR-1.1, FR-4.1 (Kalshi RSA-PSS authentication)
 **Purpose**: RSA-PSS signature generation for Kalshi API
 
 **Why This Version**:
@@ -394,9 +394,9 @@ import base64
 def sign_request(private_key_path, timestamp, method, path):
     with open(private_key_path, 'rb') as f:
         private_key = serialization.load_pem_private_key(f.read(), password=None)
-    
+
     message = f"{timestamp}{method}{path}".encode('utf-8')
-    
+
     signature = private_key.sign(
         message,
         padding.PSS(
@@ -405,7 +405,7 @@ def sign_request(private_key_path, timestamp, method, path):
         ),
         hashes.SHA256()
     )
-    
+
     return base64.b64encode(signature).decode('utf-8')
 ```
 
@@ -418,7 +418,7 @@ def sign_request(private_key_path, timestamp, method, path):
 ---
 
 ### 8. structlog (23.2.0)
-**Requirement Mapping**: FR-7.1, NFR-5.4  
+**Requirement Mapping**: FR-7.1, NFR-5.4
 **Purpose**: Structured logging with context
 
 **Why This Version**:
@@ -451,7 +451,7 @@ logger.info("order_placed", ticker="MARKET-YES", quantity=10, price=Decimal("0.4
 ## Data Processing Dependencies (Phase 2-3)
 
 ### 9. pandas (2.1.4)
-**Requirement Mapping**: FR-2.1, FR-5.2  
+**Requirement Mapping**: FR-2.1, FR-5.2
 **Purpose**: DataFrame operations for historical data analysis
 
 **Why This Version**:
@@ -491,7 +491,7 @@ total_exposure = sum(Decimal(str(x)) for x in df['position_size'])
 ---
 
 ### 10. numpy (1.26.2)
-**Requirement Mapping**: FR-2.1 (statistical calculations ONLY)  
+**Requirement Mapping**: FR-2.1 (statistical calculations ONLY)
 **Purpose**: Array operations for non-price calculations
 
 **Why This Version**:
@@ -525,7 +525,7 @@ avg_price = sum(prices) / len(prices)   # Exact arithmetic
 ---
 
 ### 11. scipy (1.11.4)
-**Requirement Mapping**: FR-2.1 (statistical distributions)  
+**Requirement Mapping**: FR-2.1 (statistical distributions)
 **Purpose**: Advanced statistics for odds modeling
 
 **Why This Version**:
@@ -558,7 +558,7 @@ implied_odds = Decimal(str(prob_over_28))
 ## Advanced Dependencies (Phase 4+)
 
 ### 12. aiohttp (3.9.1)
-**Requirement Mapping**: FR-8.1, NFR-3.2, NFR-6.2  
+**Requirement Mapping**: FR-8.1, NFR-3.2, NFR-6.2
 **Purpose**: Async HTTP client and WebSocket support
 
 **Why This Version**:
@@ -590,7 +590,7 @@ asyncio.run(fetch_markets())
 ---
 
 ### 13. websockets (12.0)
-**Requirement Mapping**: FR-8.1  
+**Requirement Mapping**: FR-8.1
 **Purpose**: Dedicated WebSocket client (alternative to aiohttp)
 
 **Why This Version**:
@@ -607,7 +607,7 @@ async def listen_to_market_updates():
     uri = "wss://api.kalshi.com/v2/websocket"
     async with websockets.connect(uri) as websocket:
         await websocket.send('{"action": "subscribe", "ticker": "MARKET-YES"}')
-        
+
         async for message in websocket:
             data = json.loads(message)
             # Process market update
@@ -621,7 +621,7 @@ async def listen_to_market_updates():
 ---
 
 ### 14. apscheduler (3.10.4)
-**Requirement Mapping**: NFR-6.1  
+**Requirement Mapping**: NFR-6.1
 **Purpose**: Task scheduling (cron-like jobs)
 
 **Why This Version**:
@@ -656,7 +656,7 @@ scheduler.start()
 ## Development & Testing Dependencies
 
 ### 15. pytest (7.4.3)
-**Requirement Mapping**: NFR-4.1  
+**Requirement Mapping**: NFR-4.1
 **Purpose**: Testing framework
 
 **Why This Version**:
@@ -674,9 +674,9 @@ def test_kelly_calculation():
     edge = Decimal("0.10")  # 10% edge
     odds = Decimal("0.45")
     kelly_fraction = Decimal("0.25")
-    
+
     size = calculate_kelly_size(edge, odds, kelly_fraction)
-    
+
     assert isinstance(size, Decimal)
     assert size > 0
     assert size <= 1  # Never bet more than 100% of bankroll
@@ -691,7 +691,7 @@ def test_kelly_calculation():
 ---
 
 ### 16. pytest-asyncio (0.21.1)
-**Requirement Mapping**: NFR-4.2  
+**Requirement Mapping**: NFR-4.2
 **Purpose**: Async test support for pytest
 
 **Usage Pattern**:
@@ -711,7 +711,7 @@ async def test_async_market_fetch():
 ---
 
 ### 17. pytest-cov (4.1.0)
-**Requirement Mapping**: NFR-4.1  
+**Requirement Mapping**: NFR-4.1
 **Purpose**: Code coverage reporting
 
 **Usage Pattern**:
@@ -730,7 +730,7 @@ open htmlcov/index.html
 ---
 
 ### 18. black (23.12.1)
-**Requirement Mapping**: NFR-5.1  
+**Requirement Mapping**: NFR-5.1
 **Purpose**: Code formatter (PEP 8 compliant)
 
 **Usage Pattern**:
@@ -750,7 +750,7 @@ black --check src/
 ---
 
 ### 19. pylint (3.0.3)
-**Requirement Mapping**: NFR-5.2  
+**Requirement Mapping**: NFR-5.2
 **Purpose**: Code linter (static analysis)
 
 **Usage Pattern**:
@@ -770,7 +770,7 @@ pylint --rcfile=.pylintrc src/
 ---
 
 ### 20. mypy (1.7.1)
-**Requirement Mapping**: NFR-5.3  
+**Requirement Mapping**: NFR-5.3
 **Purpose**: Static type checker
 
 **Usage Pattern**:

@@ -62,7 +62,7 @@ EXIT_CONDITIONS = {
     # ==================
     # CRITICAL (Priority 1) - Capital Protection
     # ==================
-    
+
     "stop_loss": {
         "priority": ExitPriority.CRITICAL,
         "description": "Hard stop loss hit",
@@ -76,7 +76,7 @@ EXIT_CONDITIONS = {
             "retry": "immediate_market"
         }
     },
-    
+
     "circuit_breaker": {
         "priority": ExitPriority.CRITICAL,
         "description": "Account-level risk limit breached",
@@ -88,11 +88,11 @@ EXIT_CONDITIONS = {
             "retry": "immediate_market"
         }
     },
-    
+
     # ==================
     # HIGH (Priority 2) - Risk Management
     # ==================
-    
+
     "trailing_stop": {
         "priority": ExitPriority.HIGH,
         "description": "Trailing stop activated and hit",
@@ -109,7 +109,7 @@ EXIT_CONDITIONS = {
             "max_walks": 2
         }
     },
-    
+
     "time_based_urgent": {
         "priority": ExitPriority.HIGH,
         "description": "Market closing soon",
@@ -123,7 +123,7 @@ EXIT_CONDITIONS = {
             "max_walks": 2
         }
     },
-    
+
     "liquidity_dried_up": {
         "priority": ExitPriority.HIGH,
         "description": "Market became illiquid (from Grok)",
@@ -140,16 +140,16 @@ EXIT_CONDITIONS = {
             "max_walks": 3
         }
     },
-    
+
     # ==================
     # MEDIUM (Priority 3) - Profit Taking
     # ==================
-    
+
     "profit_target": {
         "priority": ExitPriority.MEDIUM,
         "description": "Profit target reached",
         "check": lambda pos, method: (
-            pos.unrealized_pnl_pct >= 
+            pos.unrealized_pnl_pct >=
             method.position_mgmt_config['profit_targets']['threshold']
         ),
         "quantity": "full_or_partial",  # Check partial exit config
@@ -161,7 +161,7 @@ EXIT_CONDITIONS = {
             "max_walks": 5
         }
     },
-    
+
     "partial_exit_target": {
         "priority": ExitPriority.MEDIUM,
         "description": "Partial exit threshold reached",
@@ -175,16 +175,16 @@ EXIT_CONDITIONS = {
             "max_walks": 5
         }
     },
-    
+
     # ==================
     # LOW (Priority 4) - Optimization
     # ==================
-    
+
     "early_exit": {
         "priority": ExitPriority.LOW,
         "description": "Edge dropped below minimum threshold",
         "check": lambda pos, method: (
-            calculate_current_edge(pos) < 
+            calculate_current_edge(pos) <
             method.position_mgmt_config['early_exit']['threshold']
         ),
         "quantity": "full",
@@ -196,7 +196,7 @@ EXIT_CONDITIONS = {
             "max_walks": 10
         }
     },
-    
+
     "edge_disappeared": {
         "priority": ExitPriority.LOW,
         "description": "Edge turned negative",
@@ -210,7 +210,7 @@ EXIT_CONDITIONS = {
             "max_walks": 5
         }
     },
-    
+
     "rebalance": {
         "priority": ExitPriority.LOW,
         "description": "Portfolio rebalancing needed",
@@ -269,7 +269,7 @@ logger = logging.getLogger(__name__)
 class ExitTrigger:
     """
     Represents a triggered exit condition.
-    
+
     Attributes:
         reason: Exit condition name (e.g., "stop_loss")
         priority: Exit priority level
@@ -288,17 +288,17 @@ class ExitTrigger:
 class ExitEvaluator:
     """
     Evaluates all exit conditions and determines when to exit.
-    
+
     Features:
     - Checks all conditions in priority order
     - Resolves conflicts (multiple triggers)
     - Calculates partial exit quantities
     - Logs all decisions for analysis
     """
-    
+
     def __init__(self, kalshi_client):
         self.kalshi_client = kalshi_client
-    
+
     def check_exit_conditions(
         self,
         position: Position,
@@ -307,95 +307,95 @@ class ExitEvaluator:
     ) -> Optional[ExitTrigger]:
         """
         Check all exit conditions for a position.
-        
+
         Priority resolution:
         - If multiple conditions trigger, execute highest priority
         - Log all triggered conditions for analysis
-        
+
         Args:
             position: Position to evaluate
             current_price: Current market price
             method: Method configuration with exit rules
-            
+
         Returns:
             ExitTrigger if exit should occur, None otherwise
         """
         all_triggers: List[ExitTrigger] = []
-        
+
         # Update position with current price (for checks)
         position.current_price = current_price
-        
+
         # Get current market data (for liquidity checks)
         market = self._get_cached_market(position.market_id)
-        
+
         # Check each condition
-        
+
         # CRITICAL: Stop Loss
         trigger = self._check_stop_loss(position, method)
         if trigger:
             all_triggers.append(trigger)
-        
+
         # CRITICAL: Circuit Breaker
         trigger = self._check_circuit_breaker()
         if trigger:
             all_triggers.append(trigger)
-        
+
         # HIGH: Trailing Stop
         trigger = self._check_trailing_stop(position)
         if trigger:
             all_triggers.append(trigger)
-        
+
         # HIGH: Time-Based Urgent
         trigger = self._check_time_based_urgent(position)
         if trigger:
             all_triggers.append(trigger)
-        
+
         # HIGH: Liquidity Dried Up
         trigger = self._check_liquidity(position, market)
         if trigger:
             all_triggers.append(trigger)
-        
+
         # MEDIUM: Profit Target
         trigger = self._check_profit_target(position, method)
         if trigger:
             all_triggers.append(trigger)
-        
+
         # MEDIUM: Partial Exit
         trigger = self._check_partial_exit(position, method)
         if trigger:
             all_triggers.append(trigger)
-        
+
         # LOW: Early Exit (Edge Threshold)
         trigger = self._check_early_exit(position, method)
         if trigger:
             all_triggers.append(trigger)
-        
+
         # LOW: Edge Disappeared
         trigger = self._check_edge_disappeared(position)
         if trigger:
             all_triggers.append(trigger)
-        
+
         # LOW: Rebalance
         trigger = self._check_rebalance(position)
         if trigger:
             all_triggers.append(trigger)
-        
+
         # Resolve if multiple triggers
         if not all_triggers:
             return None
-        
+
         return self._resolve_multiple_triggers(all_triggers, position)
-    
+
     def _check_stop_loss(
         self,
         position: Position,
         method: Method
     ) -> Optional[ExitTrigger]:
         """Check if hard stop loss hit."""
-        
+
         config = method.position_mgmt_config.get('stop_loss', {})
         threshold = Decimal(str(config.get('threshold', -0.15)))
-        
+
         if position.unrealized_pnl_pct < threshold:
             return ExitTrigger(
                 reason="stop_loss",
@@ -412,16 +412,16 @@ class ExitEvaluator:
                     "loss_amount": float(position.unrealized_pnl)
                 }
             )
-        
+
         return None
-    
+
     def _check_circuit_breaker(self) -> Optional[ExitTrigger]:
         """Check if account-level circuit breaker triggered."""
-        
+
         # Query daily loss
         daily_loss = self._calculate_daily_loss()
         daily_limit = Decimal(str(config.get('daily_loss_limit', 500)))
-        
+
         if abs(daily_loss) > daily_limit:
             return ExitTrigger(
                 reason="circuit_breaker",
@@ -438,18 +438,18 @@ class ExitEvaluator:
                     "message": "Account daily loss limit exceeded"
                 }
             )
-        
+
         return None
-    
+
     def _check_trailing_stop(
         self,
         position: Position
     ) -> Optional[ExitTrigger]:
         """Check if trailing stop hit."""
-        
+
         if not position.trailing_stop_active:
             return None
-        
+
         if position.current_price <= position.trailing_stop_price:
             return ExitTrigger(
                 reason="trailing_stop",
@@ -472,17 +472,17 @@ class ExitEvaluator:
                     )
                 }
             )
-        
+
         return None
-    
+
     def _check_time_based_urgent(
         self,
         position: Position
     ) -> Optional[ExitTrigger]:
         """Check if market closing soon."""
-        
+
         time_to_close = self._get_time_to_settlement(position.market_id)
-        
+
         if time_to_close and time_to_close < timedelta(minutes=5):
             return ExitTrigger(
                 reason="time_based_urgent",
@@ -500,16 +500,16 @@ class ExitEvaluator:
                     "message": "Market closing in <5 minutes"
                 }
             )
-        
+
         return None
-    
+
     def _check_liquidity(
         self,
         position: Position,
         market: Market
     ) -> Optional[ExitTrigger]:
         """Check if market liquidity dried up (from Grok)."""
-        
+
         # Check spread
         if market.spread > Decimal("0.03"):
             return ExitTrigger(
@@ -529,7 +529,7 @@ class ExitEvaluator:
                     "reason": "Spread too wide"
                 }
             )
-        
+
         # Check volume
         if market.volume < 50:
             return ExitTrigger(
@@ -549,32 +549,32 @@ class ExitEvaluator:
                     "reason": "Volume too low"
                 }
             )
-        
+
         return None
-    
+
     def _check_profit_target(
         self,
         position: Position,
         method: Method
     ) -> Optional[ExitTrigger]:
         """Check if profit target reached."""
-        
+
         config = method.position_mgmt_config.get('profit_targets', {})
-        
+
         # Get confidence-adjusted target
         confidence = self._get_edge_confidence(position)
         target_key = f"{confidence}_confidence"
         threshold = Decimal(str(config.get(target_key, 0.20)))
-        
+
         if position.unrealized_pnl_pct >= threshold:
             # Check if partial exits configured
             partial_config = method.position_mgmt_config.get('partial_exits', {})
-            
+
             if partial_config.get('enabled', False):
                 quantity = "partial"  # Let partial handler determine amount
             else:
                 quantity = "full"
-            
+
             return ExitTrigger(
                 reason="profit_target",
                 priority=ExitPriority.MEDIUM,
@@ -593,34 +593,34 @@ class ExitEvaluator:
                     "profit_amount": float(position.unrealized_pnl)
                 }
             )
-        
+
         return None
-    
+
     def _check_partial_exit(
         self,
         position: Position,
         method: Method
     ) -> Optional[ExitTrigger]:
         """Check if partial exit threshold reached."""
-        
+
         config = method.position_mgmt_config.get('partial_exits', {})
-        
+
         if not config.get('enabled', False):
             return None
-        
+
         # Check each stage
         for stage in config.get('stages', []):
             # Skip if already executed
             if self._stage_already_executed(position, stage['name']):
                 continue
-            
+
             # Check if threshold reached
             threshold = Decimal(str(stage['profit_threshold']))
             if position.unrealized_pnl_pct >= threshold:
                 # Calculate quantity
                 exit_pct = stage['exit_percentage'] / 100
                 exit_quantity = int(position.count * exit_pct)
-                
+
                 return ExitTrigger(
                     reason=f"partial_exit_{stage['name']}",
                     priority=ExitPriority.MEDIUM,
@@ -640,26 +640,26 @@ class ExitEvaluator:
                         "remaining_quantity": position.count - exit_quantity
                     }
                 )
-        
+
         return None
-    
+
     def _check_early_exit(
         self,
         position: Position,
         method: Method
     ) -> Optional[ExitTrigger]:
         """Check if edge dropped below minimum threshold."""
-        
+
         config = method.position_mgmt_config.get('early_exit', {})
-        
+
         if not config.get('enabled', True):
             return None
-        
+
         threshold = Decimal(str(config.get('edge_threshold', 0.02)))
-        
+
         # Calculate current edge
         current_edge = self._calculate_current_edge(position)
-        
+
         if current_edge < threshold:
             return ExitTrigger(
                 reason="early_exit",
@@ -678,17 +678,17 @@ class ExitEvaluator:
                     "message": "Edge dropped below minimum threshold"
                 }
             )
-        
+
         return None
-    
+
     def _check_edge_disappeared(
         self,
         position: Position
     ) -> Optional[ExitTrigger]:
         """Check if edge turned negative."""
-        
+
         current_edge = self._calculate_current_edge(position)
-        
+
         if current_edge < 0:
             return ExitTrigger(
                 reason="edge_disappeared",
@@ -706,23 +706,23 @@ class ExitEvaluator:
                     "message": "Edge turned negative"
                 }
             )
-        
+
         return None
-    
+
     def _check_rebalance(
         self,
         position: Position
     ) -> Optional[ExitTrigger]:
         """Check if portfolio rebalancing needed."""
-        
+
         # Only rebalance profitable positions
         if position.unrealized_pnl_pct <= 0:
             return None
-        
+
         # Check if better opportunity exists
         if not self._better_opportunity_exists(position):
             return None
-        
+
         return ExitTrigger(
             reason="rebalance",
             priority=ExitPriority.LOW,
@@ -739,7 +739,7 @@ class ExitEvaluator:
                 "message": "Better opportunity available"
             }
         )
-    
+
     def _resolve_multiple_triggers(
         self,
         all_triggers: List[ExitTrigger],
@@ -747,24 +747,24 @@ class ExitEvaluator:
     ) -> ExitTrigger:
         """
         Resolve conflicts when multiple exit conditions trigger.
-        
+
         Resolution strategy:
         1. Sort by priority (lowest number = highest priority)
         2. Execute highest priority trigger
         3. Log all triggered conditions for analysis
-        
+
         Args:
             all_triggers: List of all triggered exit conditions
             position: Position being evaluated
-            
+
         Returns:
             The exit trigger to execute
         """
         # Sort by priority (CRITICAL=1 first)
         all_triggers.sort(key=lambda t: t.priority)
-        
+
         highest_priority = all_triggers[0]
-        
+
         # Log conflict if multiple triggers
         if len(all_triggers) > 1:
             reasons = [t.reason for t in all_triggers]
@@ -773,53 +773,53 @@ class ExitEvaluator:
                 f"{reasons}. Executing: {highest_priority.reason} "
                 f"(Priority {highest_priority.priority})"
             )
-            
+
             # Store all triggers in metadata for analysis
             highest_priority.metadata['conflicting_triggers'] = [
                 {"reason": t.reason, "priority": t.priority}
                 for t in all_triggers[1:]
             ]
-        
+
         return highest_priority
-    
+
     def _calculate_current_edge(self, position: Position) -> Decimal:
         """
         Calculate current edge for position.
-        
+
         Edge = Model Probability - Market Implied Probability
-        
+
         This requires re-running the probability model with current
         game state / market conditions.
         """
         # TODO: Implement probability model re-calculation
         # For now, placeholder
         return Decimal("0.05")
-    
+
     def _get_cached_market(self, market_id: str) -> Market:
         """Get cached market data (price caching handled by PositionMonitor)."""
         # Implementation
         pass
-    
+
     def _get_time_to_settlement(self, market_id: str) -> Optional[timedelta]:
         """Calculate time remaining until market settles."""
         # Implementation
         pass
-    
+
     def _get_edge_confidence(self, position: Position) -> str:
         """Get confidence level of edge (high/medium/low)."""
         # Implementation
         pass
-    
+
     def _stage_already_executed(self, position: Position, stage_name: str) -> bool:
         """Check if partial exit stage already executed."""
         # Implementation
         pass
-    
+
     def _calculate_daily_loss(self) -> Decimal:
         """Calculate total P&L for today."""
         # Implementation
         pass
-    
+
     def _better_opportunity_exists(self, position: Position) -> bool:
         """Check if better opportunity available for rebalancing."""
         # Implementation
@@ -849,17 +849,17 @@ logger = logging.getLogger(__name__)
 class ExitExecutor:
     """
     Executes exit orders based on exit triggers.
-    
+
     Features:
     - Urgency-based execution (market vs limit)
     - Failed order handling with escalation
     - Price walking for unfilled limits
     - Comprehensive logging
     """
-    
+
     def __init__(self, kalshi_client: KalshiClient):
         self.kalshi_client = kalshi_client
-    
+
     async def execute_exit(
         self,
         position: Position,
@@ -867,7 +867,7 @@ class ExitExecutor:
     ):
         """
         Execute position exit based on trigger.
-        
+
         Flow:
         1. Determine quantity to exit
         2. Calculate exit price (if limit order)
@@ -875,7 +875,7 @@ class ExitExecutor:
         4. Monitor fill status
         5. Handle unfilled orders (escalation)
         6. Update position
-        
+
         Args:
             position: Position to exit
             trigger: Exit trigger with execution params
@@ -884,14 +884,14 @@ class ExitExecutor:
             f"Executing exit for position {position.position_id}: "
             f"{trigger.reason} (Priority {trigger.priority})"
         )
-        
+
         # Determine quantity
         exit_quantity = self._determine_exit_quantity(position, trigger)
-        
+
         # Get execution parameters
         exec_params = trigger.execution_params
         order_type = exec_params['order_type']
-        
+
         # Place order
         if order_type == "market":
             order = await self._place_market_order(position, exit_quantity)
@@ -907,33 +907,33 @@ class ExitExecutor:
                 exit_quantity,
                 exit_price
             )
-        
+
         # Monitor and handle unfilled
         await self._monitor_and_escalate(
             position=position,
             order=order,
             trigger=trigger
         )
-        
+
         # Update position
         self._update_position_after_exit(
             position=position,
             order=order,
             trigger=trigger
         )
-        
+
         logger.info(
             f"Exit completed for position {position.position_id}: "
             f"{exit_quantity} @ {order.filled_price}"
         )
-    
+
     async def _place_market_order(
         self,
         position: Position,
         quantity: int
     ) -> Order:
         """Place market order for immediate execution."""
-        
+
         order = await self.kalshi_client.place_order(
             ticker=position.market_id,
             side=position.side,  # "yes" or "no"
@@ -941,14 +941,14 @@ class ExitExecutor:
             type="market",
             count=quantity
         )
-        
+
         logger.info(
             f"Market order placed: {quantity} {position.side} "
             f"@ market (Order ID: {order.order_id})"
         )
-        
+
         return order
-    
+
     async def _place_limit_order(
         self,
         position: Position,
@@ -956,7 +956,7 @@ class ExitExecutor:
         price: Decimal
     ) -> Order:
         """Place limit order at calculated price."""
-        
+
         order = await self.kalshi_client.place_order(
             ticker=position.market_id,
             side=position.side,
@@ -965,14 +965,14 @@ class ExitExecutor:
             count=quantity,
             price=price
         )
-        
+
         logger.info(
             f"Limit order placed: {quantity} {position.side} "
             f"@ {price} (Order ID: {order.order_id})"
         )
-        
+
         return order
-    
+
     async def _monitor_and_escalate(
         self,
         position: Position,
@@ -981,13 +981,13 @@ class ExitExecutor:
     ):
         """
         Monitor order fill and escalate if needed.
-        
+
         Escalation strategies:
         - immediate_market: Use market order immediately
         - walk_then_market: Walk price, then market
         - walk_price: Walk price up to max walks
         - walk_slowly: Patient walking
-        
+
         Args:
             position: Position being exited
             order: Order that was placed
@@ -997,37 +997,37 @@ class ExitExecutor:
             # Market orders fill immediately (or fail fast)
             await self._wait_for_fill(order, timeout_seconds=5)
             return
-        
+
         # Limit order - may need escalation
         exec_params = trigger.execution_params
         timeout = exec_params.get('timeout', 30)
         retry_strategy = exec_params.get('retry', 'walk_price')
         max_walks = exec_params.get('max_walks', 5)
-        
+
         # Wait for initial fill
         filled = await self._wait_for_fill(order, timeout_seconds=timeout)
-        
+
         if filled:
             return  # Success!
-        
+
         # Order didn't fill - escalate
         logger.warning(
             f"Order {order.order_id} not filled in {timeout}s, "
             f"escalating with strategy: {retry_strategy}"
         )
-        
+
         if retry_strategy == "immediate_market":
             await self._escalate_to_market(order, position)
-        
+
         elif retry_strategy == "walk_then_market":
             await self._walk_then_market(order, position, max_walks=2)
-        
+
         elif retry_strategy == "walk_price":
             await self._walk_price(order, position, max_walks=max_walks)
-        
+
         elif retry_strategy == "walk_slowly":
             await self._walk_slowly(order, position, max_walks=max_walks)
-    
+
     async def _wait_for_fill(
         self,
         order: Order,
@@ -1035,61 +1035,61 @@ class ExitExecutor:
     ) -> bool:
         """
         Wait for order to fill.
-        
+
         Args:
             order: Order to monitor
             timeout_seconds: How long to wait
-            
+
         Returns:
             True if filled, False if timeout
         """
         start_time = datetime.now()
-        
+
         while (datetime.now() - start_time).total_seconds() < timeout_seconds:
             # Check order status
             updated_order = await self.kalshi_client.get_order(order.order_id)
-            
+
             if updated_order.status == "filled":
                 logger.info(f"Order {order.order_id} filled")
                 order.status = "filled"
                 order.filled_price = updated_order.filled_price
                 order.filled_quantity = updated_order.filled_quantity
                 return True
-            
+
             elif updated_order.status == "cancelled":
                 logger.warning(f"Order {order.order_id} was cancelled")
                 return False
-            
+
             # Check every 2 seconds
             await asyncio.sleep(2)
-        
+
         logger.warning(f"Order {order.order_id} timeout after {timeout_seconds}s")
         return False
-    
+
     async def _escalate_to_market(
         self,
         old_order: Order,
         position: Position
     ):
         """Cancel limit and use market order."""
-        
+
         # Cancel old order
         await self.kalshi_client.cancel_order(old_order.order_id)
-        
+
         # Place market order
         market_order = await self._place_market_order(
             position,
             old_order.quantity
         )
-        
+
         # Wait for fill (fast)
         await self._wait_for_fill(market_order, timeout_seconds=5)
-        
+
         logger.info(
             f"Escalated to market order: {market_order.order_id} "
             f"filled @ {market_order.filled_price}"
         )
-    
+
     async def _walk_then_market(
         self,
         old_order: Order,
@@ -1097,7 +1097,7 @@ class ExitExecutor:
         max_walks: int
     ):
         """Try walking price, then fallback to market."""
-        
+
         for walk_num in range(max_walks):
             # Walk price
             new_order = await self._walk_price_once(
@@ -1105,18 +1105,18 @@ class ExitExecutor:
                 position,
                 aggressiveness=1.5 + (walk_num * 0.5)
             )
-            
+
             # Wait for fill
             filled = await self._wait_for_fill(new_order, timeout_seconds=10)
             if filled:
                 return
-            
+
             old_order = new_order
-        
+
         # Still not filled - use market
         logger.warning(f"Position {position.position_id}: walks failed, using market")
         await self._escalate_to_market(old_order, position)
-    
+
     async def _walk_price(
         self,
         old_order: Order,
@@ -1124,7 +1124,7 @@ class ExitExecutor:
         max_walks: int
     ):
         """Walk price up to max_walks times."""
-        
+
         for walk_num in range(max_walks):
             # Walk price
             new_order = await self._walk_price_once(
@@ -1132,20 +1132,20 @@ class ExitExecutor:
                 position,
                 aggressiveness=1.0 + (walk_num * 0.5)
             )
-            
+
             # Wait for fill
             filled = await self._wait_for_fill(new_order, timeout_seconds=15)
             if filled:
                 return
-            
+
             old_order = new_order
-        
+
         # After max walks, give up (position stays open)
         logger.warning(
             f"Position {position.position_id}: "
             f"exit not filled after {max_walks} walks"
         )
-    
+
     async def _walk_slowly(
         self,
         old_order: Order,
@@ -1153,7 +1153,7 @@ class ExitExecutor:
         max_walks: int
     ):
         """Patient walking for LOW priority exits."""
-        
+
         for walk_num in range(max_walks):
             # Walk price slowly
             new_order = await self._walk_price_once(
@@ -1161,14 +1161,14 @@ class ExitExecutor:
                 position,
                 aggressiveness=1.0 + (walk_num * 0.3)
             )
-            
+
             # Wait longer for fill
             filled = await self._wait_for_fill(new_order, timeout_seconds=30)
             if filled:
                 return
-            
+
             old_order = new_order
-    
+
     async def _walk_price_once(
         self,
         old_order: Order,
@@ -1177,22 +1177,22 @@ class ExitExecutor:
     ) -> Order:
         """
         Walk price by one step.
-        
+
         Args:
             old_order: Order to replace
             position: Position being exited
             aggressiveness: How much to walk (1.0 = 1¢, 2.0 = 2¢)
-            
+
         Returns:
             New order at walked price
         """
         # Cancel old order
         await self.kalshi_client.cancel_order(old_order.order_id)
-        
+
         # Calculate new price (more aggressive)
         market = await self.kalshi_client.get_market(position.market_id)
         walk_amount = Decimal("0.01") * Decimal(str(aggressiveness))
-        
+
         if position.side == "yes":
             # Selling yes: reduce price to fill faster
             new_price = old_order.price - walk_amount
@@ -1202,21 +1202,21 @@ class ExitExecutor:
             # Selling no: reduce price
             new_price = old_order.price - walk_amount
             new_price = max(new_price, market.no_bid - market.spread)
-        
+
         # Place new order
         new_order = await self._place_limit_order(
             position,
             old_order.quantity,
             new_price
         )
-        
+
         logger.info(
             f"Walked price: {old_order.price} → {new_price} "
             f"(aggressiveness={aggressiveness})"
         )
-        
+
         return new_order
-    
+
     def _calculate_exit_price(
         self,
         position: Position,
@@ -1224,44 +1224,44 @@ class ExitExecutor:
     ) -> Decimal:
         """
         Calculate exit price based on strategy.
-        
+
         Strategies:
         - aggressive: Cross spread (fast fill)
         - fair: Mid-spread (balanced)
         - conservative: Best ask (best price)
-        
+
         Args:
             position: Position being exited
             strategy: Price strategy
-            
+
         Returns:
             Exit price
         """
         market = self.kalshi_client.get_market_cached(position.market_id)
-        
+
         if position.side == "yes":
             bid = market.yes_bid
             ask = market.yes_ask
         else:
             bid = market.no_bid
             ask = market.no_ask
-        
+
         if strategy == "aggressive":
             # Cross spread slightly for fast fill
             return max(bid - Decimal("0.01"), bid * Decimal("0.98"))
-        
+
         elif strategy == "fair":
             # Mid-spread
             return (bid + ask) / 2
-        
+
         elif strategy == "conservative":
             # Try to get ask price
             return ask
-        
+
         else:
             # Default to fair
             return (bid + ask) / 2
-    
+
     def _determine_exit_quantity(
         self,
         position: Position,
@@ -1269,35 +1269,35 @@ class ExitExecutor:
     ) -> int:
         """
         Determine how many contracts to exit.
-        
+
         Args:
             position: Position being exited
             trigger: Exit trigger with quantity spec
-            
+
         Returns:
             Number of contracts to exit
         """
         if isinstance(trigger.quantity, int):
             return trigger.quantity
-        
+
         elif trigger.quantity == "full":
             return position.count
-        
+
         elif trigger.quantity == "partial":
             # Use quantity from trigger metadata
             return trigger.metadata.get('exit_quantity', position.count)
-        
+
         elif trigger.quantity == "all_positions":
             # Circuit breaker - handled separately
             return position.count
-        
+
         else:
             logger.warning(
                 f"Unknown quantity spec: {trigger.quantity}, "
                 f"defaulting to full exit"
             )
             return position.count
-    
+
     def _update_position_after_exit(
         self,
         position: Position,
@@ -1306,7 +1306,7 @@ class ExitExecutor:
     ):
         """
         Update position in database after exit.
-        
+
         Args:
             position: Position that was exited
             order: Exit order
@@ -1330,10 +1330,10 @@ exit_conditions:
   # CRITICAL exits
   stop_loss:
     threshold: -0.15  # -15% loss
-  
+
   circuit_breaker:
     daily_loss_limit: 500  # $500 daily loss
-  
+
   # HIGH priority exits
   trailing_stop:
     enabled: true
@@ -1341,20 +1341,20 @@ exit_conditions:
     initial_distance: 0.05
     tightening_rate: 0.01
     floor_distance: 0.02
-  
+
   time_based_urgent:
     threshold_minutes: 5  # Exit if <5min to settlement
-  
+
   liquidity:
     max_spread: 0.03  # 3¢ spread
     min_volume: 50    # 50 contracts
-  
+
   # MEDIUM priority exits
   profit_targets:
     high_confidence: 0.25  # 25%
     medium_confidence: 0.20
     low_confidence: 0.15
-  
+
   partial_exits:
     enabled: true
     stages:
@@ -1364,12 +1364,12 @@ exit_conditions:
       - name: "second_target"
         profit_threshold: 0.25
         exit_percentage: 25
-  
+
   # LOW priority exits
   early_exit:
     enabled: true
     edge_threshold: 0.02  # 2% minimum edge
-  
+
   # Note: edge_reversal REMOVED (redundant)
 
 # Exit execution parameters
@@ -1378,21 +1378,21 @@ exit_execution:
     order_type: market
     timeout_seconds: 5
     retry_strategy: immediate_market
-  
+
   HIGH:
     order_type: limit
     price_strategy: aggressive
     timeout_seconds: 10
     retry_strategy: walk_then_market
     max_walks: 2
-  
+
   MEDIUM:
     order_type: limit
     price_strategy: fair
     timeout_seconds: 30
     retry_strategy: walk_price
     max_walks: 5
-  
+
   LOW:
     order_type: limit
     price_strategy: conservative
@@ -1414,10 +1414,10 @@ def test_stop_loss_triggers():
     """Test stop loss triggers at threshold."""
     position = create_test_position(unrealized_pnl_pct=-0.16)
     method = create_test_method(stop_loss_threshold=-0.15)
-    
+
     evaluator = ExitEvaluator(...)
     trigger = evaluator.check_exit_conditions(position, ..., method)
-    
+
     assert trigger is not None
     assert trigger.reason == "stop_loss"
     assert trigger.priority == ExitPriority.CRITICAL
@@ -1431,10 +1431,10 @@ def test_multiple_triggers_priority():
         trailing_stop_price=Decimal("0.56")
     )
     method = create_test_method()
-    
+
     evaluator = ExitEvaluator(...)
     trigger = evaluator.check_exit_conditions(position, ..., method)
-    
+
     # Stop loss (CRITICAL) should take priority over trailing stop (HIGH)
     assert trigger.reason == "stop_loss"
     assert trigger.priority == ExitPriority.CRITICAL
@@ -1443,18 +1443,18 @@ def test_multiple_triggers_priority():
 def test_edge_reversal_removed():
     """Verify edge_reversal was removed as redundant."""
     evaluator = ExitEvaluator(...)
-    
+
     # Check that evaluator doesn't have edge_reversal method
     assert not hasattr(evaluator, '_check_edge_reversal')
-    
+
     # Verify early_exit covers absolute threshold
     position = create_test_position()
     method = create_test_method(early_exit_threshold=0.02)
-    
+
     # Mock edge calculation to return 1% (below 2% threshold)
     with patch.object(evaluator, '_calculate_current_edge', return_value=Decimal("0.01")):
         trigger = evaluator.check_exit_conditions(position, ..., method)
-        
+
         assert trigger.reason == "early_exit"  # Not edge_reversal
 
 def test_partial_exit_stages():
@@ -1471,10 +1471,10 @@ def test_partial_exit_stages():
             ]
         }
     )
-    
+
     evaluator = ExitEvaluator(...)
     trigger = evaluator.check_exit_conditions(position, ..., method)
-    
+
     assert trigger.reason == "partial_exit_first"
     assert trigger.quantity == 50  # 50% of 100
 
@@ -1492,10 +1492,10 @@ def test_exit_execution_market_order():
         },
         metadata={}
     )
-    
+
     executor = ExitExecutor(...)
     await executor.execute_exit(position, trigger)
-    
+
     # Verify market order was placed
     assert mock_kalshi.place_order.called
     call_args = mock_kalshi.place_order.call_args
@@ -1517,12 +1517,12 @@ def test_price_walking_escalation():
         },
         metadata={}
     )
-    
+
     # Mock order not filling
     with patch.object(executor, '_wait_for_fill', return_value=False):
         executor = ExitExecutor(...)
         await executor.execute_exit(position, trigger)
-    
+
     # Verify walking occurred
     assert mock_kalshi.cancel_order.call_count == 3  # 3 walks
     assert mock_kalshi.place_order.call_count == 4  # Initial + 3 walks

@@ -158,22 +158,22 @@ strategy_priority:
 
 pre_game_entry:
   enabled: true
-  
+
   # How early before game start can we trade?
   # WHY: Too early = risk lineup changes, weather changes
   #      Too late = market might have moved, edge gone
   min_hours_before_game: 0.5   # 30 minutes minimum
   max_hours_before_game: 24.0  # 24 hours maximum
-  
+
   # Sports-specific configuration
   sports_config:
     nfl:
       enabled: true
-      
+
       # Confidence thresholds
       # WHY: Pre-game has more uncertainty, so require higher edge
       required_confidence: 0.08  # 8% minimum edge
-      
+
       # Which markets to trade pre-game?
       # Different markets have different pre-game predictability
       allowed_markets:
@@ -182,18 +182,18 @@ pre_game_entry:
         - "point_spread"         # Spread (predictable if line shopping)
         # - "first_touchdown"    # Uncomment if model supports
         # - "player_props"       # Uncomment if model supports
-      
+
       # Lineup requirements
       # WHY: If key players are out, model predictions are less reliable
       require_full_lineup: true
       max_key_injuries: 1        # Max 1 key player injury tolerated
-      
+
       # Weather requirements (for outdoor games)
       weather_limits:
         max_wind_mph: 20         # High wind affects passing
         max_precipitation: 0.3   # Heavy rain affects scoring
         exclude_snow: true       # Snow games are chaotic
-    
+
     nba:
       enabled: true
       required_confidence: 0.10  # 10% (NBA harder to predict pre-game)
@@ -203,7 +203,7 @@ pre_game_entry:
         - "point_spread"
       require_full_lineup: true
       max_key_injuries: 2        # NBA more resilient to injuries
-    
+
     mlb:
       enabled: false  # Start with NFL/NBA first
       required_confidence: 0.12
@@ -211,13 +211,13 @@ pre_game_entry:
         - "game_winner"
       # Baseball is very pitcher-dependent
       require_pitcher_confirmed: true
-    
+
     nhl:
       enabled: false  # Phase 4+
-    
+
     soccer:
       enabled: false  # Phase 8+
-    
+
     tennis:
       enabled: false  # Phase 8+
 
@@ -245,26 +245,26 @@ pre_game_entry:
 
 halftime_entry:
   enabled: true
-  
+
   # Time window for halftime trading
   # WHY: Need to analyze and place trade during halftime break
   max_minutes_into_halftime: 10  # Must trade within 10 min of halftime
-  
+
   sports_config:
     nfl:
       enabled: true
-      
+
       # Edge requirements
       # WHY: Halftime has good data, can be more confident
       required_confidence: 0.06  # 6% minimum edge
-      
+
       # Which second-half markets to trade?
       allowed_markets:
         - "second_half_winner"   # Who wins 2nd half only
         - "second_half_total"    # 2nd half over/under
         - "game_winner"          # Still can trade game winner
         - "will_score_next"      # Next team to score
-      
+
       # Key factors to analyze at halftime
       # These affect whether we trust the edge
       analysis_factors:
@@ -274,24 +274,24 @@ halftime_entry:
         weight_score_differential: 0.2
         weight_turnover_margin: 0.2
         weight_time_of_possession: 0.2
-        
+
         # Adjustments for game context
         # WHY: Being down big at half can cause teams to play
         # differently (more aggressive, risk-taking)
         blowout_threshold: 17    # 17+ point deficit = blowout
         close_game_threshold: 7  # 7 or less = close game
-        
+
         # Team tendency adjustments
         # Some teams are great after adjustments, others aren't
         # WHY: Bill Belichick's teams historically good at adjustments
         use_coach_adjustment_factor: true
-      
+
       # Risk management
       # WHY: If game is weird (lots of turnovers, fluky TDs),
       # model might not be reliable
       max_first_half_turnovers: 4
       max_special_teams_tds: 1
-    
+
     nba:
       enabled: true
       required_confidence: 0.07
@@ -299,20 +299,20 @@ halftime_entry:
         - "second_half_winner"
         - "second_half_total"
         - "game_winner"
-      
+
       analysis_factors:
         # Basketball more about efficiency than volume
         weight_shooting_percentage: 0.3
         weight_turnover_margin: 0.25
         weight_rebounding: 0.25
         weight_free_throws: 0.20
-        
+
         blowout_threshold: 20
         close_game_threshold: 10
-    
+
     mlb:
       enabled: false  # No halftime in baseball
-    
+
     nhl:
       enabled: false  # Phase 4+, has intermissions
 
@@ -340,19 +340,19 @@ halftime_entry:
 
 live_trading:
   enabled: false  # Start with false, enable in Phase 3
-  
+
   # How quickly must we react?
   # WHY: In live trading, edges disappear fast as market adjusts
   max_decision_time_seconds: 10
-  
+
   # Minimum edge required (higher than pre-game)
   # WHY: Live trading is riskier, need bigger edge to compensate
   min_edge_live: 0.10  # 10% minimum
-  
+
   sports_config:
     nfl:
       enabled: false  # Phase 3+
-      
+
       # Which in-game events trigger analysis?
       # WHY: Not every play creates edge. Focus on big moments.
       trigger_events:
@@ -363,7 +363,7 @@ live_trading:
         - "two_minute_warning"
         - "fourth_down_conversion"
         - "fourth_down_fail"
-      
+
       # Situational modifiers
       # WHY: Same event means different things in different contexts
       situations:
@@ -375,14 +375,14 @@ live_trading:
           weight_recent_score: 0.5
           weight_timeouts_remaining: 0.3
           weight_field_position: 0.2
-        
+
         # Early game situations (first quarter)
         early_game:
           # Market overreacts to early scores
           # WHY: One TD in Q1 doesn't mean much, but market
           # adjusts as if it's a big deal
           discount_early_score: 0.7  # Treat scores as 70% weight
-    
+
     nba:
       enabled: false  # Phase 3+
       trigger_events:
@@ -390,7 +390,7 @@ live_trading:
         - "foul_trouble"
         - "scoring_run"
         - "overtime"
-    
+
     tennis:
       enabled: false  # Phase 8+
       # Tennis great for live trading (continuous action)
@@ -424,25 +424,25 @@ live_trading:
 
 settlement_arbitrage:
   enabled: true
-  
+
   # Requirements for this strategy
   # WHY: Only trade when outcome is VERY certain
   min_win_probability: 0.98  # 98% or higher
   max_time_remaining_seconds: 120  # 2 minutes or less
-  
+
   # Edge requirements
   # WHY: Edges are small but wins are nearly certain
   min_edge: 0.02  # 2% minimum (lower than other strategies)
-  
+
   # Position sizing override
   # WHY: These are nearly risk-free, so can size bigger
   kelly_fraction_override: 0.50  # Half Kelly (vs 0.25 default)
   max_position_override: 1000.00  # $1000 max (vs $500 default)
-  
+
   sports_config:
     nfl:
       enabled: true
-      
+
       # Sport-specific certainty rules
       # WHY: Different ways a game can become "over"
       certainty_rules:
@@ -452,16 +452,16 @@ settlement_arbitrage:
           min_lead: 7
           max_time_seconds: 90
           opponent_max_timeouts: 0
-        
+
         # Big lead + time = certain?
         # Example: Up 21 with 3 min left
         large_lead:
           min_lead: 21
           max_time_seconds: 180
-        
+
         # Victory formation (opponent already conceded)
         victory_formation: true
-    
+
     nba:
       enabled: true
       certainty_rules:
@@ -469,10 +469,10 @@ settlement_arbitrage:
         score_lead:
           min_lead: 15
           max_time_seconds: 120
-    
+
     mlb:
       enabled: false  # Phase 5+
-    
+
     soccer:
       enabled: false  # Phase 8+
 
@@ -494,30 +494,30 @@ settlement_arbitrage:
 
 hedge_strategy:
   enabled: true
-  
+
   # When to consider hedging?
   hedge_triggers:
     # Hedge if position has gained this much
     # Example: $100 bet now worth $150 → 50% gain
     min_unrealized_gain_pct: 0.40  # 40% unrealized gain
-    
+
     # Hedge if edge has flipped this much
     # Example: Entered at 8% edge, now -5% edge (13% flip)
     edge_flip_threshold: 0.10  # 10% edge flip
-    
+
     # Hedge if approaching settlement and protecting profit
     near_settlement:
       enabled: true
       time_remaining_minutes: 5
       min_unrealized_gain_dollars: 50.00
-  
+
   # How much to hedge?
   # Options:
   # - 'full_lock': Guarantee profit regardless of outcome
   # - 'partial_lock': Reduce risk but keep some upside
   # - 'kelly_optimal': Use Kelly to determine hedge size
   hedge_sizing_method: partial_lock
-  
+
   partial_lock:
     # What percentage of profit to lock in?
     # Example: $100 profit available, 70% lock = $70 guaranteed
@@ -534,15 +534,15 @@ combination_rules:
   # Allow pre-game + halftime on same game?
   # WHY: Different markets (game winner pre-game, 2nd half winner halftime)
   allow_pre_game_and_halftime: true
-  
+
   # Allow halftime + live on same game?
   # WHY: Halftime bet on 2nd half, then live bet on specific quarter
   allow_halftime_and_live: true
-  
+
   # Maximum number of positions in same game
   # WHY: Too many positions = concentrated risk
   max_positions_per_game: 3
-  
+
   # Maximum correlation between positions
   # WHY: "Team A wins" and "Team A scores 30+" are highly correlated
   max_position_correlation: 0.7
@@ -561,7 +561,7 @@ selection_logic:
   #
   # RECOMMENDATION: priority (lets you control behavior)
   method: priority
-  
+
   # If using 'best_edge' or 'best_sharpe', minimum difference to switch
   # WHY: If edges are 8.0% and 8.1%, don't bother switching strategies
   min_edge_difference: 0.02  # 2% difference required
@@ -575,22 +575,22 @@ backtesting:
   # Date range for backtesting
   start_date: "2019-09-01"  # Start of 2019 NFL season
   end_date: "2024-12-31"    # Through 2024
-  
+
   # Which strategies to backtest?
   strategies_to_test:
     - pre_game_entry
     - halftime_entry
     # - live_trading  # Need tick data for this
     - settlement_arbitrage
-  
+
   # Simulation parameters
   starting_bankroll: 10000.00
-  
+
   # Transaction costs
   # WHY: Backtests without costs are too optimistic
   include_transaction_costs: true
   transaction_cost_pct: 0.01  # 1% per trade (maker rebate on Kalshi)
-  
+
   # Slippage simulation
   # WHY: You don't always get the price you see
   simulate_slippage: true
@@ -604,7 +604,7 @@ backtesting:
 validation:
   # How often to compare predictions vs outcomes?
   validation_frequency: weekly
-  
+
   # What metrics to track?
   metrics:
     - "predicted_edge_vs_actual"
@@ -612,7 +612,7 @@ validation:
     - "roi_by_strategy"
     - "calibration"  # Are 60% predictions winning 60%?
     - "kelly_sizing_effectiveness"
-  
+
   # Alerts if validation fails
   alert_on_miscalibration:
     enabled: true

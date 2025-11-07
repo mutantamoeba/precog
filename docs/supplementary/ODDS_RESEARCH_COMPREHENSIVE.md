@@ -1,8 +1,8 @@
 # Comprehensive Sports Win Probability Data & Research
 
-**Version:** 2.0 (Comprehensive Merge)  
-**Last Updated:** October 7, 2025  
-**Research Scope:** NFL, NBA, Tennis  
+**Version:** 2.0 (Comprehensive Merge)
+**Last Updated:** October 7, 2025
+**Research Scope:** NFL, NBA, Tennis
 **Data Sources:** 40+ validated datasets covering 1980-2025
 
 ---
@@ -217,7 +217,7 @@ Comprehensive dataset: **17,269 Grand Slam matches (1990-2024)**
 
 **Deciding Set Win Rates (After 2-2):**
 - **Australian Open (hard)**: 57%+ comeback player advantage
-- **French Open (clay)**: 57%+ comeback player advantage  
+- **French Open (clay)**: 57%+ comeback player advantage
 - **Wimbledon (grass)**: **50%** (NO momentum advantage)
 - **US Open (hard)**: Similar to Australian Open
 
@@ -337,7 +337,7 @@ Four advanced metrics dominate modern NFL analytics, each with distinct purposes
 
 ### 1. DVOA (Defense-adjusted Value Over Average)
 
-**Creator:** Aaron Schatz (2003)  
+**Creator:** Aaron Schatz (2003)
 **Availability:** ftnfantasy.com (1978-present, after Football Outsiders shutdown 2023)
 
 **Methodology:**
@@ -356,7 +356,7 @@ Four advanced metrics dominate modern NFL analytics, each with distinct purposes
 
 ### 2. EPA (Expected Points Added)
 
-**Origins:** Carter & Machol (1970), modernized by Carnegie Mellon & Ben Baldwin's nflfastR  
+**Origins:** Carter & Machol (1970), modernized by Carnegie Mellon & Ben Baldwin's nflfastR
 **Availability:** **FREE** via nflfastR R package (1999-present), rbsdm.com dashboards (no coding required)
 
 **Methodology:**
@@ -387,8 +387,8 @@ Four advanced metrics dominate modern NFL analytics, each with distinct purposes
 
 ### 3. SP+ (Success Rate Plus)
 
-**Creator:** Bill Connelly  
-**Sport:** **COLLEGE FOOTBALL ONLY** (NOT NFL)  
+**Creator:** Bill Connelly
+**Sport:** **COLLEGE FOOTBALL ONLY** (NOT NFL)
 **Availability:** ESPN.com (weekly updates)
 
 **Methodology:**
@@ -404,7 +404,7 @@ Four advanced metrics dominate modern NFL analytics, each with distinct purposes
 
 ### 4. FPI (Football Power Index)
 
-**Creator:** ESPN (proprietary)  
+**Creator:** ESPN (proprietary)
 **Availability:** ESPN.com (daily updates)
 
 **Methodology:**
@@ -698,10 +698,10 @@ For any odds matrix:
 
 ## Document Status
 
-**Version:** 2.0 (Comprehensive Merge)  
-**Validation Status:** ✅ Cross-referenced with 40+ sources  
-**Next Review:** Phase 4 start (before odds matrix implementation)  
-**Owner:** Precog Research Team  
+**Version:** 2.0 (Comprehensive Merge)
+**Validation Status:** ✅ Cross-referenced with 40+ sources
+**Next Review:** Phase 4 start (before odds matrix implementation)
+**Owner:** Precog Research Team
 **Confidence Level:** High (for core benchmarks), Moderate (for interpolated ranges)
 
 ---
@@ -714,6 +714,6 @@ For any odds matrix:
 
 ---
 
-**Last Updated:** October 7, 2025  
-**Data Currency:** Through 2024-25 season  
+**Last Updated:** October 7, 2025
+**Data Currency:** Through 2024-25 season
 **Next Scheduled Update:** End of 2025-26 season

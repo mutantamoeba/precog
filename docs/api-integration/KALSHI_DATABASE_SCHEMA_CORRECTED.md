@@ -1,6 +1,6 @@
 # KALSHI API - Database Schema Considerations (CORRECTED)
-**Version**: 2.1  
-**Last Updated**: October 8, 2025  
+**Version**: 2.1
+**Last Updated**: October 8, 2025
 **Changes**: Fixed integer cents → decimal pricing throughout
 
 ---
@@ -129,7 +129,7 @@ CREATE TABLE markets (
     no_sub_title VARCHAR(200),
     category VARCHAR(50),
     status VARCHAR(20),
-    
+
     -- Timestamps
     open_time TIMESTAMP,
     close_time TIMESTAMP,
@@ -138,7 +138,7 @@ CREATE TABLE markets (
     last_update_time TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
-    
+
     -- Prices (DECIMAL for sub-penny support)
     yes_bid DECIMAL(10,4) NOT NULL,
     yes_ask DECIMAL(10,4) NOT NULL,
@@ -146,18 +146,18 @@ CREATE TABLE markets (
     no_ask DECIMAL(10,4) NOT NULL,
     last_price DECIMAL(10,4),
     previous_price DECIMAL(10,4),
-    
+
     -- Volume
     volume BIGINT DEFAULT 0,
     volume_24h BIGINT DEFAULT 0,
     open_interest INT DEFAULT 0,
     liquidity INT DEFAULT 0,
-    
+
     -- Settlement
     result VARCHAR(3) CHECK (result IN ('yes', 'no')),
     settlement_value DECIMAL(10,4),
     can_close_early BOOLEAN DEFAULT FALSE,
-    
+
     -- Configuration
     notional_value DECIMAL(10,4) DEFAULT 1.0000,
     tick_size DECIMAL(10,6) DEFAULT 0.0100,
@@ -165,10 +165,10 @@ CREATE TABLE markets (
     settlement_timer_seconds INT,
     rules_primary TEXT,
     rules_secondary TEXT,
-    
+
     -- Versioning
     row_current_ind BOOLEAN DEFAULT TRUE,
-    
+
     -- Constraints
     CHECK (yes_bid >= 0.0001 AND yes_bid <= 0.9999),
     CHECK (yes_ask >= 0.0001 AND yes_ask <= 0.9999),
@@ -235,34 +235,34 @@ CREATE TABLE orders (
     order_id VARCHAR(100) PRIMARY KEY,
     client_order_id VARCHAR(64),
     ticker VARCHAR(100) REFERENCES markets(ticker),
-    
+
     -- Order details
     side VARCHAR(3) CHECK (side IN ('yes', 'no')),
     action VARCHAR(4) CHECK (action IN ('buy', 'sell')),
     type VARCHAR(10) CHECK (type IN ('limit', 'market')),
     status VARCHAR(20),
-    
+
     -- Quantities
     initial_count INT NOT NULL,
     fill_count INT DEFAULT 0,
     remaining_count INT,
     queue_position INT,
-    
+
     -- Prices (DECIMAL)
     yes_price DECIMAL(10,4),
     no_price DECIMAL(10,4),
-    
+
     -- Costs (DECIMAL)
     maker_fees DECIMAL(10,4) DEFAULT 0,
     taker_fees DECIMAL(10,4) DEFAULT 0,
     maker_fill_cost DECIMAL(10,4) DEFAULT 0,
     taker_fill_cost DECIMAL(10,4) DEFAULT 0,
-    
+
     -- Timestamps
     created_time TIMESTAMP DEFAULT NOW(),
     expiration_time TIMESTAMP,
     last_update_time TIMESTAMP DEFAULT NOW(),
-    
+
     CHECK (status IN ('pending', 'resting', 'executed', 'canceled'))
 );
 
@@ -303,7 +303,7 @@ last_updated_ts TIMESTAMP DEFAULT NOW()
 CREATE TABLE positions (
     position_id SERIAL PRIMARY KEY,
     ticker VARCHAR(100) REFERENCES markets(ticker),
-    
+
     -- Position details
     position INT NOT NULL,  -- Quantity (can be negative)
     market_exposure DECIMAL(10,4),
@@ -311,7 +311,7 @@ CREATE TABLE positions (
     fees_paid DECIMAL(10,4),
     realized_pnl DECIMAL(10,4),
     resting_orders_count INT DEFAULT 0,
-    
+
     -- Timestamp
     last_updated_ts TIMESTAMP DEFAULT NOW()
 );
@@ -355,18 +355,18 @@ CREATE TABLE fills (
     order_id VARCHAR(100) REFERENCES orders(order_id),
     trade_id VARCHAR(100),
     ticker VARCHAR(100) REFERENCES markets(ticker),
-    
+
     -- Fill details
     side VARCHAR(3) CHECK (side IN ('yes', 'no')),
     action VARCHAR(4) CHECK (action IN ('buy', 'sell')),
     count INT NOT NULL,
-    
+
     -- Prices (DECIMAL)
     yes_price DECIMAL(10,4),
     no_price DECIMAL(10,4),
-    
+
     is_taker BOOLEAN,
-    
+
     -- Timestamp
     created_time TIMESTAMP DEFAULT NOW()
 );
@@ -390,17 +390,17 @@ CREATE TABLE series (
     frequency VARCHAR(20),
     fee_type VARCHAR(20),
     fee_multiplier DECIMAL(6,4),  -- e.g., 0.0700 for 7%
-    
+
     -- JSONB fields
     product_metadata JSONB,
     settlement_sources JSONB,
     tags JSONB,
     additional_prohibitions JSONB,
-    
+
     -- URLs
     rules_url TEXT,
     about_url TEXT,
-    
+
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -415,7 +415,7 @@ CREATE TABLE events (
     series_ticker VARCHAR(100) REFERENCES series(ticker),
     title VARCHAR(500) NOT NULL,
     category VARCHAR(50),
-    
+
     -- Timestamps
     strike_date DATE,
     settlement_date TIMESTAMP,
@@ -441,14 +441,14 @@ class KalshiMarketStore:
     """
     Store Kalshi market data with proper decimal handling.
     """
-    
+
     def __init__(self, db_connection):
         self.conn = db_connection
-    
+
     def insert_market(self, market_data: dict):
         """
         Insert market data from Kalshi API.
-        
+
         Args:
             market_data: Raw market data from Kalshi API
         """
@@ -457,10 +457,10 @@ class KalshiMarketStore:
         yes_ask = Decimal(market_data.get("yes_ask_dollars", "0"))
         no_bid = Decimal(market_data.get("no_bid_dollars", "0"))
         no_ask = Decimal(market_data.get("no_ask_dollars", "0"))
-        
+
         # Validation
         self._validate_prices(yes_bid, yes_ask, no_bid, no_ask)
-        
+
         with self.conn.cursor() as cur:
             cur.execute("""
                 INSERT INTO markets (
@@ -475,7 +475,7 @@ class KalshiMarketStore:
                     NOW(), TRUE
                 )
                 ON CONFLICT (ticker) DO UPDATE
-                SET 
+                SET
                     yes_bid = EXCLUDED.yes_bid,
                     yes_ask = EXCLUDED.yes_ask,
                     no_bid = EXCLUDED.no_bid,
@@ -492,9 +492,9 @@ class KalshiMarketStore:
                 market_data.get("volume", 0),
                 market_data.get("open_interest", 0)
             ))
-        
+
         self.conn.commit()
-    
+
     def _validate_prices(self, yes_bid, yes_ask, no_bid, no_ask):
         """Validate price constraints."""
         if not (0.0001 <= yes_bid <= 0.9999):
@@ -505,7 +505,7 @@ class KalshiMarketStore:
             raise ValueError(f"Invalid no_bid: {no_bid}")
         if not (0.0001 <= no_ask <= 0.9999):
             raise ValueError(f"Invalid no_ask: {no_ask}")
-        
+
         # YES + NO should approximately equal 1.0 (accounting for spread)
         total = yes_bid + no_ask
         if not (0.95 <= total <= 1.05):
@@ -530,14 +530,14 @@ yes_bid = Decimal(market_data["yes_bid_dollars"])  # "0.4275"
 **Database Migration:**
 ```sql
 -- If you have existing tables with INTEGER prices
-ALTER TABLE markets 
+ALTER TABLE markets
     ALTER COLUMN yes_bid TYPE DECIMAL(10,4) USING (yes_bid::DECIMAL / 100),
     ALTER COLUMN yes_ask TYPE DECIMAL(10,4) USING (yes_ask::DECIMAL / 100),
     ALTER COLUMN no_bid TYPE DECIMAL(10,4) USING (no_bid::DECIMAL / 100),
     ALTER COLUMN no_ask TYPE DECIMAL(10,4) USING (no_ask::DECIMAL / 100);
 
 -- Update constraints
-ALTER TABLE markets 
+ALTER TABLE markets
     DROP CONSTRAINT IF EXISTS markets_yes_bid_check,
     ADD CHECK (yes_bid >= 0.0001 AND yes_bid <= 0.9999);
 ```
@@ -546,17 +546,17 @@ ALTER TABLE markets
 
 ## Key Takeaways
 
-✅ **Use DECIMAL(10,4) for all price fields**  
-✅ **Use DECIMAL(10,4) for all fee/cost fields**  
-✅ **Always parse `_dollars` fields from API**  
-✅ **Never use integer cent fields (deprecated)**  
-✅ **Use Python's `decimal.Decimal` type**  
+✅ **Use DECIMAL(10,4) for all price fields**
+✅ **Use DECIMAL(10,4) for all fee/cost fields**
+✅ **Always parse `_dollars` fields from API**
+✅ **Never use integer cent fields (deprecated)**
+✅ **Use Python's `decimal.Decimal` type**
 ✅ **Validate price constraints in application code**
 
 **Reference:** [Kalshi Sub-Penny Pricing Documentation](https://docs.kalshi.com/getting_started/subpenny_pricing)
 
 ---
 
-**Document Version**: 2.1  
-**Last Updated**: October 8, 2025  
+**Document Version**: 2.1
+**Last Updated**: October 8, 2025
 **Changes**: Converted all INTEGER cents to DECIMAL(10,4) throughout

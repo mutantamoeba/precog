@@ -246,7 +246,7 @@ This guide will help you get set up and contributing to Precog, an automated pre
 
 - **Language:** Python 3.12
 - **Database:** PostgreSQL 14+
-- **Key Libraries:** 
+- **Key Libraries:**
   - `psycopg2` - Database
   - `requests` - API calls
   - `cryptography` - Kalshi authentication
@@ -593,11 +593,11 @@ def calculate_edge(
 ) -> Decimal:
     """
     Calculate expected value edge.
-    
+
     Args:
         market_price: Current market price (0.00-1.00)
         true_probability: Our calculated probability
-        
+
     Returns:
         Edge percentage (positive = profitable)
     """
@@ -612,17 +612,17 @@ def calculate_edge(
 def fetch_live_games(sport: str) -> List[Dict]:
     """
     Fetch currently live games for a sport.
-    
+
     Args:
         sport: Sport name ("nfl", "ncaaf", "nba")
-        
+
     Returns:
         List of game dictionaries with scores and game state
-        
+
     Raises:
         ValueError: If sport not supported
         APIError: If API request fails
-        
+
     Example:
         >>> games = fetch_live_games("nfl")
         >>> for game in games:
@@ -699,26 +699,26 @@ from models.odds_calculator import calculate_implied_probability
 
 class TestOddsCalculator:
     """Test suite for odds calculations."""
-    
+
     def test_implied_probability_basic(self):
         """Test basic implied probability calculation."""
         # Given: Market price of 0.65
         market_price = Decimal('0.65')
-        
+
         # When: Calculate implied probability
         prob = calculate_implied_probability(market_price)
-        
+
         # Then: Should equal market price (no vig in this example)
         assert prob == market_price
-    
+
     def test_implied_probability_invalid_input(self):
         """Test that invalid inputs raise ValueError."""
         with pytest.raises(ValueError):
             calculate_implied_probability(Decimal('1.5'))  # Over 1.0
-        
+
         with pytest.raises(ValueError):
             calculate_implied_probability(Decimal('-0.1'))  # Negative
-    
+
     @pytest.mark.parametrize("price,expected", [
         (Decimal('0.50'), Decimal('0.50')),
         (Decimal('0.25'), Decimal('0.25')),
@@ -793,7 +793,7 @@ def get_event(self, event_ticker: str) -> Dict:
 def test_get_event(mock_client):
     """Test fetching single event."""
     mock_response = {"event": {"ticker": "TEST", "title": "Test Event"}}
-    
+
     with patch.object(mock_client, '_make_request', return_value=mock_response):
         event = mock_client.get_event("TEST")
         assert event['ticker'] == "TEST"
@@ -818,7 +818,7 @@ CREATE TABLE weather_conditions (
     wind_mph DECIMAL(5,2),
     conditions VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     FOREIGN KEY (game_id) REFERENCES games(id)
 );
 
@@ -831,7 +831,7 @@ CREATE INDEX idx_weather_game_id ON weather_conditions(game_id);
 
 class WeatherCondition(Base):
     __tablename__ = 'weather_conditions'
-    
+
     id = Column(Integer, primary_key=True)
     game_id = Column(String(100), ForeignKey('games.id'))
     temperature_f = Column(DECIMAL(5, 2))
@@ -1417,9 +1417,9 @@ Each task has detailed steps, expected outputs, and success criteria.
 Save this file and provide it to Claude Code:
 
 ```bash
-claude-code "Follow all instructions in CLAUDE_CODE_INSTRUCTIONS.md. 
-Work through each task systematically. 
-Create all required reports and documents. 
+claude-code "Follow all instructions in CLAUDE_CODE_INSTRUCTIONS.md.
+Work through each task systematically.
+Create all required reports and documents.
 Ask for clarification if any task is ambiguous."
 ```
 

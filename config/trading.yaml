@@ -30,26 +30,26 @@ account:
   # WHY: If you have $10k at risk and the market moves against you,
   # you could lose significant money. This caps your exposure.
   max_total_exposure_dollars: 10000.00
-  
+
   # Maximum you're willing to lose in a single day
   # WHY: Prevents catastrophic losses. If you're down $500, something
   # is wrong - stop trading and investigate.
   daily_loss_limit_dollars: 500.00
-  
+
   # Maximum you're willing to lose in a single week
   # WHY: Multiple bad days can compound. Weekly limit catches trends.
   weekly_loss_limit_dollars: 1500.00
-  
+
   # Minimum account balance to keep trading
   # WHY: If balance drops below this, stop trading to prevent
   # complete account wipeout.
   min_balance_to_trade_dollars: 1000.00
-  
+
   # Maximum number of trades per hour
   # WHY: Prevents runaway trading due to bugs or model errors.
   # Also avoids API rate limits.
   max_trades_per_hour: 10
-  
+
   # Maximum number of trades per day
   # WHY: More trades = more transaction costs. Also prevents
   # overtrading on days when edges are scarce.
@@ -71,7 +71,7 @@ position_sizing:
   # WHY KELLY: Mathematically optimal for maximizing long-term growth
   # while managing risk. Automatically sizes bigger when edge is bigger.
   method: kelly
-  
+
   # Kelly Criterion Settings
   kelly:
     # What fraction of the "full Kelly" bet to use?
@@ -87,7 +87,7 @@ position_sizing:
     # Example: 10% edge at 2.0 odds with 0.25 fraction:
     #   bet = (0.10 / 2.0) * 0.25 = 0.0125 = 1.25% of bankroll
     default_fraction: 0.25
-    
+
     # Minimum edge required to place a trade
     # WHY: Small edges are risky due to:
     # 1. Estimation error (maybe edge is actually smaller)
@@ -96,7 +96,7 @@ position_sizing:
     #
     # If edge < this value, don't trade.
     min_edge_threshold: 0.05  # 5% minimum edge
-    
+
     # Maximum position size as a percentage of bankroll
     # WHY: Even with a huge edge, don't risk everything on one trade.
     # This caps Kelly to prevent over-concentration.
@@ -105,21 +105,21 @@ position_sizing:
     #   Uncapped: (0.20 / 2.0) * 0.25 = 2.5% of bankroll
     #   If this exceeds max_position_pct, use max_position_pct instead
     max_position_pct: 0.05  # 5% of bankroll maximum
-    
+
     # Minimum position size in dollars
     # WHY: Trades smaller than this aren't worth the effort.
     # Transaction costs become too large relative to position size.
     min_position_dollars: 10.00
-    
+
     # Maximum position size in dollars
     # WHY: Hard cap regardless of Kelly calculation. Prevents
     # accidentally betting huge amounts due to calculation errors.
     max_position_dollars: 500.00
-  
+
   # Fixed Dollar Settings (if method = 'fixed')
   fixed:
     position_size_dollars: 50.00
-  
+
   # Fixed Fraction Settings (if method = 'fixed_fraction')
   fixed_fraction:
     fraction_of_bankroll: 0.02  # 2% of bankroll per trade
@@ -138,12 +138,12 @@ execution:
   # by the time order executes it's $0.52. Limit orders control price.
   # Downside: might not fill if market moves away.
   default_order_type: limit
-  
+
   # For limit orders: How long to wait before canceling?
   # WHY: If order doesn't fill quickly, the edge might be gone.
   # Cancel and re-evaluate rather than waiting indefinitely.
   limit_order_timeout_seconds: 30
-  
+
   # For limit orders: How much worse than current price will we accept?
   # Example: Current price $0.50, max_slippage_pct 2%
   #   Limit price: $0.51 (we'll buy up to $0.51)
@@ -151,7 +151,7 @@ execution:
   # WHY: Allows some price movement while still controlling cost.
   # Too tight = orders never fill. Too loose = paying too much.
   max_slippage_pct: 0.02  # 2% maximum slippage
-  
+
   # Should we retry failed orders?
   # WHY: Network issues, temporary API errors, etc. can cause failures.
   # Retry with exponential backoff (wait longer each retry).
@@ -174,7 +174,7 @@ market_filters:
   #
   # RECOMMENDATION: Start with min 100 contracts, increase as you scale
   min_volume_contracts: 100
-  
+
   # Maximum spread (difference between bid and ask)
   # Example: Bid $0.48, Ask $0.52 → Spread = $0.04 = 4%
   #
@@ -183,21 +183,21 @@ market_filters:
   #
   # CALCULATION: spread_pct = (ask - bid) / ask * 100
   max_spread_pct: 0.05  # 5% maximum spread
-  
+
   # Markets to exclude completely (even if they meet filters)
   # WHY: Some markets are too unpredictable, too manipulated,
   # or have issues with settlement rules.
   exclude_categories:
     - "politics"  # Too unpredictable, often manipulated
     # - "entertainment"  # Uncomment to exclude
-  
+
   # Time windows when trading is allowed
   # WHY: Prevents trading at bad times (e.g., 3am when volume is low)
   trading_hours:
     enabled: true
     # Trading allowed Monday-Friday 9am-11pm Eastern
     # WHY: Peak liquidity hours. Avoid early morning / late night.
-    monday: 
+    monday:
       start: "09:00"
       end: "23:00"
     tuesday:
@@ -230,40 +230,40 @@ position_management:
   # WHY: If edge disappears or flips negative, get out!
   # Don't wait for settlement if you're on the wrong side.
   monitor_and_exit: true
-  
+
   # How often to check positions for early exit?
   # WHY: Too frequent = wasted API calls. Too infrequent = miss exits.
   monitoring_interval_seconds: 60
-  
+
   # When to consider early exit?
   early_exit:
     # Exit if edge flips negative (our side is now overpriced)
     exit_on_negative_edge: true
-    
+
     # Exit if edge drops below this threshold
     # WHY: If edge was 8% and drops to 2%, might not be worth holding.
     min_edge_to_hold: 0.02  # 2%
-    
+
     # Exit if correlation with other positions gets too high
     # WHY: Correlated positions = concentrated risk
     # Example: "Cowboys win" and "Cowboys score 30+" are correlated
     max_correlation: 0.7
-  
+
   # Stop-loss rules (exit on losses)
   stop_loss:
     enabled: true
-    
+
     # Exit if position is down this much (as % of position size)
     # Example: $100 position, -50% stop-loss → Exit at $50 loss
     #
     # WHY: Prevents holding onto losers. Sometimes wrong = wrong,
     # and continuing to hold just increases losses.
     loss_threshold_pct: 0.50  # 50% loss
-  
+
   # Profit-taking rules (exit on gains)
   profit_target:
     enabled: true
-    
+
     # Exit if position is up this much (as % of position size)
     # Example: $100 position, +100% target → Exit at $100 profit
     #
@@ -281,12 +281,12 @@ data_freshness:
   # Maximum age of market price data
   # WHY: If price data is 5 minutes old in a live game, it's useless.
   max_price_age_seconds: 120  # 2 minutes
-  
+
   # Maximum age of game state data (scores, stats, etc.)
   # WHY: If game is tied but our data says one team is ahead,
   # our edge calculations are wrong.
   max_game_state_age_seconds: 60  # 1 minute
-  
+
   # What to do if data is stale?
   # Options:
   # - 'stop_trading': Halt all trading (safest)
@@ -308,7 +308,7 @@ circuit_breakers:
   api_errors:
     threshold: 5
     window_minutes: 5
-  
+
   # Stop trading if edge calculations seem wrong
   # Example: Suddenly finding 50% edges when normally 5-8%
   # WHY: Model might be broken. Better safe than sorry.
@@ -316,13 +316,13 @@ circuit_breakers:
     threshold_pct: 0.30  # 30% edges are suspicious
     count: 3  # 3 suspicious edges in window
     window_minutes: 10
-  
+
   # Stop trading if losing too fast
   # WHY: Rapid losses suggest something is fundamentally wrong.
   rapid_loss:
     loss_dollars: 200.00
     window_minutes: 15
-  
+
   # Stop trading if unusual activity detected
   # Example: Placing 20 trades in 5 minutes when normally 2-3
   unusual_activity:
@@ -340,14 +340,14 @@ logging:
   #      INFO = normal operations (production)
   #      WARNING+ = problems only
   level: INFO
-  
+
   # Where to write logs
   # WHY: File = persistent record for analysis
   #      Console = see what's happening in real-time
   outputs:
     - console
     - file
-  
+
   # Log file settings
   file:
     path: "logs/trading.log"
@@ -355,7 +355,7 @@ logging:
     rotation: daily
     # Keep 30 days of logs
     retention_days: 30
-  
+
   # What to log
   log_trades: true           # Every trade executed
   log_signals: true          # Every trade signal generated
@@ -372,20 +372,20 @@ logging:
 alerts:
   # Alert on circuit breaker trips
   on_circuit_breaker: true
-  
+
   # Alert on large losses
   on_loss_threshold:
     enabled: true
     threshold_dollars: 100.00
-  
+
   # Alert on large gains
   on_gain_threshold:
     enabled: true
     threshold_dollars: 500.00
-  
+
   # Alert on API issues
   on_api_failure: true
-  
+
   # Alert on system errors
   on_system_error: true
 

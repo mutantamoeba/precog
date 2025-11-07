@@ -23,16 +23,16 @@ portfolio:
   # WHY: More positions = more monitoring, more complexity
   # BEGINNER: Start with 5, increase as comfortable
   max_open_positions: 10
-  
+
   # Maximum total capital deployed across all positions
   # WHY: Even if Kelly says bet more, don't overextend
   max_total_capital_deployed: 10000.00
-  
+
   # Maximum correlated exposure (positions that move together)
   # WHY: If all positions tied to "Chiefs win", and Chiefs lose,
   # you lose everything. Diversification is key.
   max_correlated_exposure: 3000.00  # Max $3k in correlated positions
-  
+
   # Concentration limits by sport
   # WHY: Don't put all eggs in NFL basket
   max_exposure_by_sport:
@@ -42,7 +42,7 @@ portfolio:
     nhl: 0.20
     soccer: 0.20
     tennis: 0.20
-  
+
   # Concentration limits by game
   # WHY: Don't have 5 positions all on same game
   max_positions_per_game: 3
@@ -281,26 +281,26 @@ exit_rules:
     negative_edge:
       enabled: true
       threshold: -0.03  # -3% edge (we're overpriced)
-    
+
     # Exit if position health becomes critical
     # WHY: Multiple factors saying "this is bad"
     health_critical:
       enabled: true
       # Uses health_score.critical threshold above
-    
+
     # Exit if correlation becomes too high
     # WHY: Position now correlated with others = concentrated risk
     correlation_breach:
       enabled: true
       max_correlation: 0.75  # 75% correlation with portfolio
-    
+
     # Exit if approaching settlement with loss
     # WHY: Don't wait for settlement if losing
     late_game_loss:
       enabled: true
       minutes_remaining: 10
       loss_threshold_pct: 0.20  # Down 20% or more
-  
+
   # OPTIONAL EXITS (discretionary, profit-taking)
   discretionary:
     # Take profit if hit target
@@ -316,7 +316,7 @@ exit_rules:
           target_gain_pct: 0.40  # Exit at 40% (faster churn)
         settlement_arbitrage:
           target_gain_pct: 1.00  # Hold until 100% (near-certain)
-    
+
     # Stop-loss if hit loss threshold
     stop_loss:
       enabled: true
@@ -329,7 +329,7 @@ exit_rules:
           max_loss_pct: 0.30  # Tighter stop (faster moving)
         settlement_arbitrage:
           max_loss_pct: 0.10  # Very tight (should be low-risk)
-    
+
     # Trailing stop (lock in gains as position appreciates)
     # WHY: Let winners run, but protect gains
     # CONCEPT: Stop loss that "trails" behind price as it rises
@@ -440,27 +440,27 @@ exit_rules:
       - "injury_stoppage"
       - "two_minute_warning"  # For NFL
       - "overtime"
-    
+
     # Prefer exiting during these game states
     # WHY: Spreads tighter, more liquidity
     prefer_exit_during:
       - "commercial_break"
       - "halftime"
       - "between_quarters"
-  
+
   # EXIT METHODS
   methods:
     # How to exit? Limit order or market order?
     default_order_type: limit
-    
+
     # For limit orders, how aggressive?
     # - 'passive': Wait for best price (might not fill)
     # - 'aggressive': Accept worse price to ensure fill
     limit_order_style: aggressive
-    
+
     # If limit order doesn't fill, how long to wait before market order?
     limit_timeout_seconds: 30
-    
+
     # Maximum slippage acceptable for exit
     # WHY: Sometimes must exit quickly, accept worse price
     max_exit_slippage_pct: 0.03  # 3% max
@@ -479,7 +479,7 @@ correlation:
   # Calculate correlation between positions?
   # WHY: Essential for risk management
   enabled: true
-  
+
   # How to calculate correlation?
   # Options:
   # - 'market': Same market category (conservative)
@@ -487,7 +487,7 @@ correlation:
   # - 'team': Same team involved (strictest)
   # - 'statistical': Historical price correlation (most accurate)
   calculation_method: statistical
-  
+
   # Correlation thresholds
   # WHY: High correlation = similar to having one large position
   levels:
@@ -495,7 +495,7 @@ correlation:
     medium: 0.60    # 30-60% = somewhat related
     high: 0.80      # 60-80% = highly related
     very_high: 0.90 # 80%+ = basically same bet
-  
+
   # Actions based on correlation
   actions:
     # Reduce position size if correlated with existing positions
@@ -504,17 +504,17 @@ correlation:
       # If new trade correlates at 0.70 with existing positions,
       # reduce size by 30% (0.70 * reduction_factor)
       reduction_factor: 0.5
-    
+
     # Reject trade if too correlated?
     reject_on_high_correlation:
       enabled: true
       threshold: 0.85  # Reject if 85%+ correlated
-    
+
     # Alert if portfolio correlation increases
     alert_on_portfolio_correlation:
       enabled: true
       threshold: 0.70  # Alert if avg correlation > 70%
-  
+
   # Sport-specific correlation rules
   # WHY: Different sports have different correlation patterns
   sport_specific:
@@ -523,11 +523,11 @@ correlation:
       assume_high_correlation:
         - ["game_winner", "point_spread"]
         - ["total_points", "second_half_total"]
-      
+
       # These are less correlated than they seem
       assume_low_correlation:
         - ["first_half_winner", "second_half_winner"]
-    
+
     nba:
       assume_high_correlation:
         - ["game_winner", "point_spread"]
@@ -543,26 +543,26 @@ correlation:
 
 rebalancing:
   enabled: false  # Start false, enable after comfortable
-  
+
   # When to consider rebalancing?
   triggers:
     # Rebalance if edge increases significantly
     edge_increase:
       enabled: true
       threshold: 0.05  # Edge increased by 5%
-    
+
     # Rebalance if probability changes significantly
     probability_change:
       enabled: true
       threshold: 0.10  # Probability changed by 10%
-    
+
     # Rebalance at specific times
     scheduled:
       enabled: false
       times:
         - "halftime"
         - "third_quarter_end"
-  
+
   # How to rebalance?
   method:
     # Options:
@@ -570,12 +570,12 @@ rebalancing:
     # - 'incremental': Small adjustments only
     # - 'hedge': Add opposite position if edge flipped
     type: incremental
-    
+
     # For incremental: How much to adjust?
     incremental:
       max_adjustment_pct: 0.25  # Max 25% size change
       min_edge_for_increase: 0.08  # Need 8% edge to add
-  
+
   # Costs
   # WHY: Rebalancing costs transaction fees
   consider_transaction_costs: true
@@ -594,11 +594,11 @@ settlement:
     enabled: false  # Usually want to hold until settlement
     minutes_before_settlement: 60  # Exit 1 hour early if enabled
     min_unrealized_gain_pct: 0.80  # Only if up 80%+
-  
+
   # Settlement verification
   # WHY: Verify we got paid correctly
   verify_settlements: true
-  
+
   # Settlement disputes
   # WHY: Sometimes markets settle incorrectly (rare but happens)
   dispute_incorrect_settlements:
@@ -621,7 +621,7 @@ sizing_adjustments:
     # If volatility is 2x normal, reduce size by 30%
     high_volatility_threshold: 2.0
     size_reduction_pct: 0.30
-  
+
   # Reduce size for illiquid markets
   # WHY: Hard to exit if needed
   liquidity_adjustment:
@@ -629,14 +629,14 @@ sizing_adjustments:
     # If volume < min threshold, reduce size
     low_volume_threshold: 50  # contracts
     size_reduction_pct: 0.50  # 50% reduction
-  
+
   # Reduce size for wide spreads
   # WHY: High transaction cost effectively reduces edge
   spread_adjustment:
     enabled: true
     wide_spread_threshold: 0.04  # 4% spread
     size_reduction_pct: 0.25  # 25% reduction
-  
+
   # Adjust size based on time to settlement
   # WHY: More time = more uncertainty
   time_adjustment:
@@ -644,7 +644,7 @@ sizing_adjustments:
     # Reduce size if > 3 hours to settlement
     long_duration_hours: 3.0
     size_reduction_pct: 0.20
-  
+
   # Adjust size based on model confidence
   # WHY: If model is less confident, bet less
   confidence_adjustment:
@@ -663,7 +663,7 @@ sizing_adjustments:
 
 optimization:
   enabled: false  # Phase 6+, advanced feature
-  
+
   # Reallocation triggers
   # Close existing position to fund new one?
   reallocate_capital:
@@ -690,18 +690,18 @@ risk_metrics:
     - "sharpe_ratio"
     - "sortino_ratio"
     - "max_drawdown"
-  
+
   # How often to recalculate?
   calculation_frequency: "hourly"
-  
+
   # Alert thresholds
   alerts:
     # Alert if VaR exceeds threshold
     var_threshold: 0.10  # 10% of portfolio
-    
+
     # Alert if correlation too high
     correlation_threshold: 0.75
-    
+
     # Alert if max drawdown increasing
     max_drawdown_threshold: 0.15  # 15%
 
@@ -712,7 +712,7 @@ risk_metrics:
 
 lifecycle_tracking:
   enabled: true
-  
+
   # What to log at each stage?
   log_events:
     - "position_opened"
@@ -724,7 +724,7 @@ lifecycle_tracking:
     - "correlation_changed"
     - "position_closed"
     - "settlement_received"
-  
+
   # Performance attribution
   # WHY: Understand why position won/lost
   attribution:

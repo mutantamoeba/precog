@@ -3,10 +3,10 @@
 
 ---
 
-**Document Version:** 2.0  
-**Created:** October 18, 2025  
-**Purpose:** Comprehensive implementation guide addressing versioning, multi-user, position management, and system consistency  
-**Target:** Claude Code CLI for automated implementation  
+**Document Version:** 2.0
+**Created:** October 18, 2025
+**Purpose:** Comprehensive implementation guide addressing versioning, multi-user, position management, and system consistency
+**Target:** Claude Code CLI for automated implementation
 **Status:** Ready for Phase 1 implementation
 
 ---
@@ -71,7 +71,7 @@
 ```
 Current database design has "version" columns but lacks proper integration:
 - strategies table has strategy_version VARCHAR
-- models table has model_version VARCHAR  
+- models table has model_version VARCHAR
 - edges table has no versioning
 - No strategy_versions or model_versions tracking tables
 - No clear lifecycle: create â†' test â†' activate â†' deprecate
@@ -90,7 +90,7 @@ Versioning was added as an afterthought without thinking through the full lifecy
 - Need A/B testing: run v1.0 and v2.0 simultaneously
 - Need rollback if new version underperforms
 
-**MODELS: YES ✅**  
+**MODELS: YES ✅**
 - Probability models evolve as we collect more historical data
 - Need to track which model version generated each prediction
 - Need to validate model improvements (v2.0 vs v1.0)
@@ -113,34 +113,34 @@ CREATE TABLE strategies (
     user_id UUID NOT NULL REFERENCES users(user_id),
     strategy_name VARCHAR(100) NOT NULL,  -- e.g., "halftime_entry"
     strategy_version VARCHAR(20) NOT NULL,  -- e.g., "1.0", "1.1", "2.0"
-    
+
     -- Configuration (JSONB for flexibility)
     config JSONB NOT NULL,  -- All strategy parameters
-    
+
     -- Lifecycle
-    status VARCHAR(20) NOT NULL DEFAULT 'draft',  
+    status VARCHAR(20) NOT NULL DEFAULT 'draft',
         -- Values: 'draft', 'testing', 'active', 'inactive', 'deprecated'
-    
+
     -- Metadata
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     created_by VARCHAR(100),
     notes TEXT,  -- Why this version was created
-    
+
     -- Performance tracking
     paper_trades_count INTEGER DEFAULT 0,
     paper_roi DECIMAL(10,4),
     live_trades_count INTEGER DEFAULT 0,
     live_roi DECIMAL(10,4),
-    
+
     -- Activation
     activated_at TIMESTAMP,
     deactivated_at TIMESTAMP,
-    
+
     UNIQUE(user_id, strategy_name, strategy_version)
 );
 
 -- Index for finding active strategies per user
-CREATE INDEX idx_strategies_active ON strategies(user_id, strategy_name) 
+CREATE INDEX idx_strategies_active ON strategies(user_id, strategy_name)
 WHERE status = 'active';
 
 -- Example data:
@@ -170,38 +170,38 @@ CREATE TABLE probability_models (
     user_id UUID REFERENCES users(user_id),  -- NULL for system models
     model_name VARCHAR(100) NOT NULL,  -- e.g., "nfl_ensemble"
     model_version VARCHAR(20) NOT NULL,  -- e.g., "1.0", "2.0"
-    
+
     -- Configuration
     config JSONB NOT NULL,  -- Model parameters, data sources, weights
-    
+
     -- Training info
     training_start_date DATE,
     training_end_date DATE,
     training_sample_size INTEGER,
-    
-    -- Lifecycle  
+
+    -- Lifecycle
     status VARCHAR(20) NOT NULL DEFAULT 'draft',
         -- Values: 'draft', 'training', 'validating', 'active', 'deprecated'
-    
+
     -- Metadata
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     created_by VARCHAR(100),
     notes TEXT,
-    
+
     -- Validation metrics
     validation_accuracy DECIMAL(6,4),  -- e.g., 0.6500 = 65%
     validation_calibration DECIMAL(6,4),  -- Brier score
     validation_sample_size INTEGER,
-    
+
     -- Activation
     activated_at TIMESTAMP,
     deactivated_at TIMESTAMP,
-    
+
     UNIQUE(model_name, model_version)
 );
 
 -- Index for active models
-CREATE INDEX idx_models_active ON probability_models(model_name) 
+CREATE INDEX idx_models_active ON probability_models(model_name)
 WHERE status = 'active';
 ```
 
@@ -213,21 +213,21 @@ CREATE TABLE edges (
     edge_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(user_id),
     ticker VARCHAR(100) NOT NULL,
-    
+
     -- Which strategy/model generated this edge
     strategy_id UUID REFERENCES strategies(strategy_id),
     model_id UUID REFERENCES probability_models(model_id),
-    
+
     -- Edge calculation
     ensemble_probability DECIMAL(10,4) NOT NULL,
     market_price DECIMAL(10,4) NOT NULL,
     edge_value DECIMAL(10,4) NOT NULL,  -- ensemble_probability - market_price
     confidence DECIMAL(6,4) NOT NULL,
-    
+
     -- Timestamps (versioning via row_current_ind instead)
     calculated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     row_current_ind BOOLEAN DEFAULT TRUE,
-    
+
     -- Composite primary key for versioning
     PRIMARY KEY (ticker, user_id, calculated_at)
 );
@@ -255,13 +255,13 @@ CREATE TABLE edges (
 class StrategyVersionLifecycle:
     """
     Manages strategy version transitions.
-    
+
     LEARNING NOTES:
     - Only ONE version of a strategy can be 'active' per user at a time
     - When activating a new version, the old version moves to 'inactive'
     - 'testing' status allows paper trading without affecting live trading
     """
-    
+
     VALID_TRANSITIONS = {
         'draft': ['testing', 'active', 'deprecated'],
         'testing': ['active', 'draft', 'deprecated'],
@@ -269,7 +269,7 @@ class StrategyVersionLifecycle:
         'inactive': ['active', 'deprecated'],
         'deprecated': []  # Terminal state
     }
-    
+
     @staticmethod
     def activate_strategy_version(
         db_session,
@@ -278,18 +278,18 @@ class StrategyVersionLifecycle:
     ) -> Result:
         """
         Activate a strategy version.
-        
+
         This automatically deactivates any other active version
         of the same strategy for this user.
-        
+
         Args:
             db_session: Database session
             strategy_id: Strategy version to activate
             user_id: Owner of the strategy
-            
+
         Returns:
             Result object with success/failure
-            
+
         Example:
             >>> result = StrategyVersionLifecycle.activate_strategy_version(
             ...     db,
@@ -304,17 +304,17 @@ class StrategyVersionLifecycle:
             Strategy.strategy_id == strategy_id,
             Strategy.user_id == user_id
         ).first()
-        
+
         if not strategy:
             return Result(success=False, error="Strategy not found")
-        
+
         # Check current status
         if strategy.status not in StrategyVersionLifecycle.VALID_TRANSITIONS:
             return Result(
-                success=False, 
+                success=False,
                 error=f"Cannot activate from status '{strategy.status}'"
             )
-        
+
         # Deactivate any currently active version of this strategy
         db_session.query(Strategy).filter(
             Strategy.user_id == user_id,
@@ -324,14 +324,14 @@ class StrategyVersionLifecycle:
             'status': 'inactive',
             'deactivated_at': datetime.now()
         })
-        
+
         # Activate the new version
         strategy.status = 'active'
         strategy.activated_at = datetime.now()
         strategy.deactivated_at = None
-        
+
         db_session.commit()
-        
+
         return Result(
             success=True,
             data={
@@ -350,34 +350,34 @@ class StrategyVersionLifecycle:
 class StrategyExecutor:
     """
     Execute trades based on active strategies.
-    
+
     Supports A/B testing by allocating capital between strategy versions.
     """
-    
+
     def __init__(self, db_session, user_id: UUID):
         self.db = db_session
         self.user_id = user_id
-    
+
     def get_active_strategies(self) -> List[Strategy]:
         """
         Get all active strategies for user.
-        
+
         Returns list of Strategy objects with status='active'.
         For A/B testing, user can have multiple strategies active
         if they have different strategy_names.
-        
+
         Example:
             User has TWO strategies active:
             - halftime_entry v2.0 (active)
             - q3_entry v1.5 (active)
-            
+
             This is allowed because different strategy names.
         """
         return self.db.query(Strategy).filter(
             Strategy.user_id == self.user_id,
             Strategy.status == 'active'
         ).all()
-    
+
     def execute_edge_signal(
         self,
         edge: Edge,
@@ -385,17 +385,17 @@ class StrategyExecutor:
     ) -> Optional[Trade]:
         """
         Execute a trade based on edge signal and strategy config.
-        
+
         Links the trade to the specific strategy version that generated it,
         enabling performance tracking per version.
-        
+
         Args:
             edge: Edge signal (from edge detector)
             strategy: Strategy version to use
-            
+
         Returns:
             Trade object if executed, None if filtered out
-            
+
         Example:
             >>> edge = Edge(ticker='KXNFL-CHI-YES', edge_value=0.08, ...)
             >>> strategy = get_strategy('halftime_entry', version='2.0')
@@ -404,19 +404,19 @@ class StrategyExecutor:
         """
         # Check strategy config filters
         config = strategy.config
-        
+
         if edge.edge_value < config.get('min_edge', 0.05):
             return None
-        
+
         if edge.confidence < config.get('min_confidence', 0.70):
             return None
-        
+
         # Calculate position size using strategy config
         position_size = self._calculate_position_size(
             edge,
             max_size=config.get('max_position_size', 1000)
         )
-        
+
         # Create trade
         trade = Trade(
             user_id=self.user_id,
@@ -428,10 +428,10 @@ class StrategyExecutor:
             limit_price=edge.market_price,
             created_at=datetime.now()
         )
-        
+
         self.db.add(trade)
         self.db.commit()
-        
+
         return trade
 ```
 
@@ -448,13 +448,13 @@ def calculate_strategy_version_performance(
 ) -> StrategyPerformance:
     """
     Calculate performance metrics for a specific strategy version.
-    
+
     This enables comparing v1.0 vs v2.0 to see if the new version
     is actually better.
-    
+
     Returns:
         StrategyPerformance with ROI, win_rate, sharpe_ratio, etc.
-        
+
     Example:
         >>> perf_v1 = calculate_strategy_version_performance(db, 'strat-v1')
         >>> perf_v2 = calculate_strategy_version_performance(db, 'strat-v2')
@@ -465,14 +465,14 @@ def calculate_strategy_version_performance(
     trades = db_session.query(Trade).filter(
         Trade.strategy_id == strategy_id
     )
-    
+
     if start_date:
         trades = trades.filter(Trade.created_at >= start_date)
     if end_date:
         trades = trades.filter(Trade.created_at <= end_date)
-    
+
     trades = trades.all()
-    
+
     if not trades:
         return StrategyPerformance(
             strategy_id=strategy_id,
@@ -480,15 +480,15 @@ def calculate_strategy_version_performance(
             roi=Decimal('0.0'),
             win_rate=Decimal('0.0')
         )
-    
+
     # Calculate metrics
     total_pnl = sum(t.realized_pnl or Decimal('0.0') for t in trades)
     total_risk = sum(t.quantity * t.limit_price for t in trades)
     roi = total_pnl / total_risk if total_risk > 0 else Decimal('0.0')
-    
+
     wins = [t for t in trades if (t.realized_pnl or 0) > 0]
     win_rate = Decimal(len(wins)) / Decimal(len(trades)) if trades else Decimal('0.0')
-    
+
     return StrategyPerformance(
         strategy_id=strategy_id,
         trade_count=len(trades),
@@ -523,28 +523,28 @@ CREATE TABLE users (
     user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     username VARCHAR(50) UNIQUE NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
-    
+
     -- Authentication (passwords hashed with bcrypt)
     password_hash VARCHAR(255) NOT NULL,
-    
+
     -- Profile
     display_name VARCHAR(100),
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     last_login TIMESTAMP,
-    
+
     -- Status
     is_active BOOLEAN DEFAULT TRUE,
     is_admin BOOLEAN DEFAULT FALSE,
-    
+
     -- Settings
     timezone VARCHAR(50) DEFAULT 'UTC',
     notification_preferences JSONB DEFAULT '{}',
-    
+
     -- Schema name for data isolation (Pattern 2)
     data_schema VARCHAR(100) UNIQUE,
         -- e.g., 'user_john', 'user_mary'
         -- Each user gets their own PostgreSQL schema
-    
+
     CONSTRAINT valid_username CHECK (username ~ '^[a-zA-Z0-9_]{3,50}$')
 );
 
@@ -553,18 +553,18 @@ CREATE TABLE user_api_keys (
     key_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     platform VARCHAR(50) NOT NULL,  -- 'kalshi', 'polymarket', etc.
-    
+
     -- Encrypted API credentials
     api_key_encrypted BYTEA NOT NULL,
     api_secret_encrypted BYTEA,
     additional_config JSONB,  -- Platform-specific settings
-    
+
     -- Metadata
     key_name VARCHAR(100),  -- User-friendly name
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     last_used TIMESTAMP,
     is_active BOOLEAN DEFAULT TRUE,
-    
+
     UNIQUE(user_id, platform)
 );
 
@@ -574,15 +574,15 @@ CREATE TABLE user_config_overrides (
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
     config_key VARCHAR(255) NOT NULL,  -- e.g., 'trading.kelly_fraction_nfl'
     config_value JSONB NOT NULL,
-    
+
     -- Metadata
     set_at TIMESTAMP NOT NULL DEFAULT NOW(),
     set_by VARCHAR(100),  -- Username who made the change
     notes TEXT,
-    
+
     -- Priority (higher = overrides lower)
     priority INTEGER DEFAULT 100,
-    
+
     UNIQUE(user_id, config_key)
 );
 
@@ -590,28 +590,28 @@ CREATE TABLE user_config_overrides (
 CREATE TABLE user_permissions (
     permission_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-    
+
     -- Trading permissions
     can_trade_live BOOLEAN DEFAULT FALSE,  -- Must be explicitly enabled
     can_paper_trade BOOLEAN DEFAULT TRUE,
-    
+
     -- Position limits
     max_position_size_dollars DECIMAL(12,2) DEFAULT 1000.00,
     max_total_exposure_dollars DECIMAL(12,2) DEFAULT 10000.00,
     max_daily_loss_dollars DECIMAL(12,2) DEFAULT 500.00,
-    
+
     -- Strategy permissions
     allowed_strategies TEXT[],  -- Array of strategy names
     allowed_sports TEXT[],  -- e.g., ['nfl', 'ncaaf']
-    
+
     -- Rate limits
     max_trades_per_day INTEGER DEFAULT 50,
     max_trades_per_hour INTEGER DEFAULT 10,
-    
+
     -- Audit
     granted_at TIMESTAMP NOT NULL DEFAULT NOW(),
     granted_by UUID REFERENCES users(user_id),
-    
+
     UNIQUE(user_id)
 );
 ```
@@ -664,14 +664,14 @@ PostgreSQL Database: precog_production
 class MultiTenantDatabase:
     """
     Manages multi-tenant database with schema-per-user pattern.
-    
+
     LEARNING NOTES:
     - Each user gets their own PostgreSQL schema (e.g., user_john)
     - Shared data (markets, events) lives in 'public' schema
     - User data (trades, positions) lives in user's schema
     - This provides complete data isolation for security
     """
-    
+
     @staticmethod
     def create_user_schema(
         db_session,
@@ -680,25 +680,25 @@ class MultiTenantDatabase:
     ) -> str:
         """
         Create a new PostgreSQL schema for a user.
-        
+
         This schema will contain all user-specific tables:
         - strategies
-        - probability_models  
+        - probability_models
         - edges
         - positions
         - trades
         - settlements
         - account_balance
         - alert_history
-        
+
         Args:
             db_session: Database session
             user_id: UUID of the user
             username: Username (will be sanitized for schema name)
-            
+
         Returns:
             Schema name (e.g., 'user_john')
-            
+
         Example:
             >>> schema = MultiTenantDatabase.create_user_schema(
             ...     db,
@@ -709,15 +709,15 @@ class MultiTenantDatabase:
         """
         # Sanitize username for schema name
         schema_name = f"user_{re.sub(r'[^a-z0-9_]', '', username.lower())}"
-        
+
         # Create schema
         db_session.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name}"))
-        
+
         # Grant permissions
         db_session.execute(text(f"""
             GRANT ALL PRIVILEGES ON SCHEMA {schema_name} TO precog_app;
         """))
-        
+
         # Create user-specific tables in this schema
         for table_sql in USER_SCHEMA_TABLES:
             # Replace 'public.' with 'user_john.'
@@ -726,16 +726,16 @@ class MultiTenantDatabase:
                 f'CREATE TABLE {schema_name}.'
             )
             db_session.execute(text(table_sql_customized))
-        
+
         # Update users table with schema name
         db_session.execute(text("""
             UPDATE users SET data_schema = :schema WHERE user_id = :user_id
         """), {'schema': schema_name, 'user_id': str(user_id)})
-        
+
         db_session.commit()
-        
+
         return schema_name
-    
+
     @staticmethod
     def get_user_session(
         base_session,
@@ -743,23 +743,23 @@ class MultiTenantDatabase:
     ) -> UserDatabaseSession:
         """
         Create a database session scoped to a specific user.
-        
+
         This session automatically uses the user's schema for all queries,
         making it impossible to accidentally query another user's data.
-        
+
         Args:
             base_session: Base database session
             user_id: User to scope session to
-            
+
         Returns:
             UserDatabaseSession with search_path set to user's schema
-            
+
         Example:
             >>> user_session = MultiTenantDatabase.get_user_session(db, user_id)
-            >>> 
+            >>>
             >>> # This query runs in user_john schema automatically
             >>> trades = user_session.query(Trade).all()
-            >>> 
+            >>>
             >>> # To query shared data, use explicit schema
             >>> markets = user_session.query(Market).filter(...).all()
         """
@@ -767,18 +767,18 @@ class MultiTenantDatabase:
         user = base_session.query(User).filter(
             User.user_id == user_id
         ).first()
-        
+
         if not user or not user.data_schema:
             raise ValueError(f"User {user_id} not found or schema not created")
-        
+
         # Create new session with user's search path
         user_session = UserDatabaseSession(bind=base_session.bind)
         user_session.execute(text(f"SET search_path TO {user.data_schema}, public"))
-        
+
         # Attach metadata for logging
         user_session.user_id = user_id
         user_session.user_schema = user.data_schema
-        
+
         return user_session
 ```
 
@@ -793,7 +793,7 @@ class UserConfig:
     1. user_config_overrides table (highest)
     2. YAML files
     3. Code defaults (lowest)
-    
+
     Allows each user to customize:
     - Kelly fractions
     - Position size limits
@@ -801,41 +801,41 @@ class UserConfig:
     - Risk parameters
     - Notification settings
     """
-    
+
     def __init__(self, db_session, user_id: UUID):
         self.db = db_session
         self.user_id = user_id
         self._yaml_config = load_yaml_configs()  # Global configs
         self._user_overrides = self._load_user_overrides()
-    
+
     def _load_user_overrides(self) -> Dict:
         """Load user-specific overrides from database."""
         overrides = self.db.query(UserConfigOverride).filter(
             UserConfigOverride.user_id == self.user_id
         ).all()
-        
+
         result = {}
         for override in overrides:
             result[override.config_key] = override.config_value
-        
+
         return result
-    
+
     def get(self, config_key: str, default=None):
         """
         Get config value with priority.
-        
+
         Priority:
         1. Database override (user-specific)
         2. YAML file (global)
         3. Default parameter
-        
+
         Args:
             config_key: Dot-notation key (e.g., 'trading.kelly_fraction_nfl')
             default: Default value if not found
-            
+
         Returns:
             Config value
-            
+
         Example:
             >>> config = UserConfig(db, user_id='john')
             >>> kelly = config.get('trading.kelly_fraction_nfl', 0.25)
@@ -845,7 +845,7 @@ class UserConfig:
         # Check database override first
         if config_key in self._user_overrides:
             return self._user_overrides[config_key]
-        
+
         # Check YAML
         keys = config_key.split('.')
         value = self._yaml_config
@@ -854,9 +854,9 @@ class UserConfig:
                 value = value[key]
             else:
                 return default
-        
+
         return value
-    
+
     def set_override(
         self,
         config_key: str,
@@ -865,14 +865,14 @@ class UserConfig:
     ):
         """
         Set a user-specific config override.
-        
+
         This allows runtime changes without editing YAML files.
-        
+
         Args:
             config_key: Key to override
             config_value: New value
             notes: Optional explanation
-            
+
         Example:
             >>> config.set_override(
             ...     'trading.kelly_fraction_nfl',
@@ -885,7 +885,7 @@ class UserConfig:
             UserConfigOverride.user_id == self.user_id,
             UserConfigOverride.config_key == config_key
         ).first()
-        
+
         if existing:
             existing.config_value = config_value
             existing.set_at = datetime.now()
@@ -898,9 +898,9 @@ class UserConfig:
                 notes=notes
             )
             self.db.add(override)
-        
+
         self.db.commit()
-        
+
         # Refresh cache
         self._user_overrides[config_key] = config_value
 ```
@@ -949,16 +949,16 @@ position_lifecycle:
   entry:
     # Minimum edge required to enter (user-customizable)
     min_edge_required: 0.0500  # 5% minimum edge
-    
+
     # Confidence thresholds for automated vs manual review
     confidence_thresholds:
       auto_execute: 0.7500       # ≥75% confidence: auto-execute
       manual_review: 0.6000      # 60-75%: alert user for approval
       ignore: 0.5000             # <60%: skip
-    
+
     # Position sizing method
     sizing_method: "kelly_criterion"  # Options: 'kelly_criterion', 'fixed', 'volatility_adjusted'
-    
+
     # Kelly Criterion settings (user-customizable)
     kelly_settings:
       # Base Kelly fractions by sport
@@ -967,28 +967,28 @@ position_lifecycle:
       kelly_fraction_nba: 0.2200      # 22% (more variance)
       kelly_fraction_mlb: 0.2000
       kelly_fraction_tennis: 0.1800   # 18% (highest variance)
-      
+
       # Adjust Kelly based on confidence
       confidence_multipliers:
         high: 1.00    # confidence ≥ 0.80
         medium: 0.80  # confidence 0.60-0.80
         low: 0.60     # confidence 0.50-0.60
-      
+
       # Correlation adjustments
       correlation_limit: 0.6000  # Reduce size if correlated positions > 60%
       correlation_multiplier: 0.7000  # Reduce to 70% of Kelly if correlated
-    
+
     # Fixed sizing (if sizing_method = 'fixed')
     fixed_settings:
       default_position_size_dollars: 100.00
-    
+
   # Monitoring rules (how often to check positions)
   monitoring:
     # Check frequency (dynamic based on conditions)
     check_frequency_default: 60       # Every 60 seconds (normal)
     check_frequency_critical: 15      # Every 15 seconds when critical
     check_frequency_slow: 120         # Every 2 minutes when stable
-    
+
     # Critical conditions (check more frequently)
     critical_conditions:
       - "period IN ('Q4', 'OT') AND time_remaining < 300"  # Final 5 minutes
@@ -996,76 +996,76 @@ position_lifecycle:
       - "unrealized_pnl_pct < -0.1000"                     # Down 10%+
       - "market_spread < 0.0200"                           # Spread < 2Â¢
       - "edge < 0.0300"                                    # Edge < 3%
-    
+
     # Slow conditions (check less frequently)
     slow_conditions:
       - "period IN ('Q1', 'Q2') AND unrealized_pnl_pct BETWEEN -0.0500 AND 0.0500"
-  
+
   # Exit rules (when to close positions)
   exit_rules:
     # Profit targets (user-customizable)
     profit_target:
       default_pct: 0.2000             # Take profit at +20%
-      
+
       # Adjust based on confidence
       confidence_adjustments:
         high: 0.2500                  # 25% for high confidence
         medium: 0.2000                # 20% for medium
         low: 0.1500                   # 15% for low confidence
-      
+
       # Adjust based on time remaining
       time_adjustments:
         - condition: "time_remaining < 120"
           multiplier: 0.8000          # 16% target near end
         - condition: "time_remaining < 60"
           multiplier: 0.6000          # 12% target at end
-    
+
     # Stop losses (user-customizable)
     stop_loss:
       default_pct: -0.1500            # Stop loss at -15%
-      
+
       # Adjust based on confidence
       confidence_adjustments:
         high: -0.1000                 # Tighter stop for high confidence
         medium: -0.1500
         low: -0.2000                  # Wider stop for low confidence
-      
+
       # Trailing stop loss (see Issue #4 for details)
       trailing_enabled: true
       trailing_activation: 0.1000     # Activate after +10% gain
       trailing_distance: 0.0500       # Trail by 5%
       trailing_tighten_rate: 0.0100   # Tighten 1% per 5% gain
-    
+
     # Early exit if edge disappears
     early_exit_threshold: 0.0300      # Exit if edge drops below 3%
-    
+
     # Hold to settlement? (strategy-dependent)
     hold_until_settlement: false      # Don't always hold
-    
+
     # Partial exit rules
     partial_exit:
       enabled: true
       trigger: "unrealized_pnl_pct > 0.1500"  # At +15% profit
       exit_percentage: 0.5000         # Sell 50% of position
       remaining_target: 0.3000        # New 30% target for remainder
-  
+
   # Scaling rules (add/reduce position)
   scaling:
     # Scale in (add to position)
     scale_in:
       enabled: true
       max_scale_factor: 2.0           # Max 2x original position
-      
+
       triggers:
         - condition: "edge_increased_by >= 0.0500"
           add_percentage: 0.5000      # Add 50% more
         - condition: "price_moved_against_us >= 0.0300 AND edge_still_positive"
           add_percentage: 0.3000      # Average down (carefully)
-    
+
     # Scale out (reduce position)
     scale_out:
       enabled: true
-      
+
       triggers:
         - condition: "unrealized_pnl_pct > 0.1000 AND edge < 0.0200"
           reduce_percentage: 0.3000   # Take 30% off table
@@ -1081,18 +1081,18 @@ risk_limits:
   position:
     # Maximum position size (user-customizable)
     max_position_size_dollars: 1000.00
-    
+
     # Minimum position size (avoid tiny positions)
     min_position_size_dollars: 50.00
-    
+
     # Max quantity per ticker
     max_quantity_per_ticker: 10000  # contracts
-  
+
   # Exposure limits
   exposure:
     # Total exposure across all positions (user-customizable)
     max_total_exposure_dollars: 10000.00
-    
+
     # Max exposure per sport
     max_exposure_per_sport:
       nfl: 5000.00
@@ -1100,21 +1100,21 @@ risk_limits:
       nba: 3000.00
       mlb: 2000.00
       tennis: 1000.00
-    
+
     # Max exposure per event
     max_exposure_per_event_dollars: 2000.00
-    
+
     # Max correlated exposure (same team, same day)
     max_correlated_exposure_dollars: 3000.00
-  
+
   # Loss limits (circuit breakers)
   loss_limits:
     # Daily loss limit (user-customizable)
     max_daily_loss_dollars: 500.00
-    
+
     # Weekly loss limit
     max_weekly_loss_dollars: 1500.00
-    
+
     # Per-position max loss
     max_loss_per_position_dollars: 200.00
 
@@ -1129,13 +1129,13 @@ strategy_overrides:
     stop_loss: -0.1500
     trailing_enabled: true
     hold_until_settlement: true       # Usually hold these
-  
+
   live_continuous:
     profit_target: 0.1500             # Lower target for live trading
     stop_loss: -0.1000                # Tighter stop
     trailing_enabled: true
     hold_until_settlement: false      # More active management
-  
+
   q3_entry:
     profit_target: 0.2000
     stop_loss: -0.1200
@@ -1152,15 +1152,15 @@ alerts:
     - condition: "unrealized_pnl_pct > 0.2000"
       alert_type: "profit_target_approaching"
       notify_user: true
-    
+
     - condition: "unrealized_pnl_pct < -0.1000"
       alert_type: "stop_loss_approaching"
       notify_user: true
-    
+
     - condition: "edge < 0.0200 AND unrealized_pnl_pct < 0.0500"
       alert_type: "edge_disappearing"
       notify_user: true
-  
+
   # Alert channels
   channels:
     email: true
@@ -1177,21 +1177,21 @@ alerts:
 class PositionManager:
     """
     Manages position lifecycle and risk limits.
-    
+
     Enforces user-specific risk limits and monitors positions
     for exit conditions (profit target, stop loss, trailing stop).
-    
+
     LEARNING NOTES:
     - All risk limits are user-customizable via user_config_overrides
     - System checks positions every 15-120 seconds (dynamic frequency)
     - Multiple exit conditions can trigger simultaneously (uses most conservative)
     """
-    
+
     def __init__(self, db_session, user_id: UUID):
         self.db = db_session
         self.user_id = user_id
         self.config = UserConfig(db_session, user_id)
-    
+
     def check_can_open_position(
         self,
         ticker: str,
@@ -1200,7 +1200,7 @@ class PositionManager:
     ) -> Tuple[bool, Optional[str]]:
         """
         Check if user can open a new position without violating risk limits.
-        
+
         Checks:
         1. Position size limit
         2. Total exposure limit
@@ -1208,15 +1208,15 @@ class PositionManager:
         4. Event exposure limit
         5. Correlated exposure limit
         6. Daily loss circuit breaker
-        
+
         Args:
             ticker: Market ticker
             proposed_size_dollars: Proposed position size
             sport: Sport category
-            
+
         Returns:
             (can_open, reason_if_not)
-            
+
         Example:
             >>> manager = PositionManager(db, user_id='john')
             >>> can_open, reason = manager.check_can_open_position(
@@ -1236,7 +1236,7 @@ class PositionManager:
                 False,
                 f"Position size ${proposed_size_dollars} exceeds limit ${max_position_size}"
             )
-        
+
         # Check 2: Total exposure limit
         current_exposure = self._calculate_total_exposure()
         max_total_exposure = Decimal(
@@ -1248,7 +1248,7 @@ class PositionManager:
                 f"Would exceed total exposure limit: "
                 f"${current_exposure + proposed_size_dollars} > ${max_total_exposure}"
             )
-        
+
         # Check 3: Sport exposure limit
         current_sport_exposure = self._calculate_sport_exposure(sport)
         max_sport_exposure = Decimal(
@@ -1260,7 +1260,7 @@ class PositionManager:
                 f"Would exceed {sport.upper()} exposure limit: "
                 f"${current_sport_exposure + proposed_size_dollars} > ${max_sport_exposure}"
             )
-        
+
         # Check 4: Event exposure limit
         event_id = self._get_event_id_from_ticker(ticker)
         current_event_exposure = self._calculate_event_exposure(event_id)
@@ -1272,7 +1272,7 @@ class PositionManager:
                 False,
                 f"Would exceed per-event exposure limit"
             )
-        
+
         # Check 5: Daily loss circuit breaker
         daily_pnl = self._calculate_daily_pnl()
         max_daily_loss = Decimal(
@@ -1283,24 +1283,24 @@ class PositionManager:
                 False,
                 f"Daily loss circuit breaker triggered: ${daily_pnl} < ${max_daily_loss}"
             )
-        
+
         # All checks passed
         return (True, None)
-    
+
     def monitor_position(self, position_id: UUID) -> PositionAction:
         """
         Check if position should be exited or adjusted.
-        
+
         Evaluates exit conditions:
         - Profit target reached
         - Stop loss hit
         - Trailing stop triggered
         - Edge disappeared
         - Partial exit conditions
-        
+
         Returns:
             PositionAction (HOLD, EXIT_FULL, EXIT_PARTIAL, SCALE_IN, SCALE_OUT)
-            
+
         Example:
             >>> action = manager.monitor_position(position_id)
             >>> if action.action_type == 'EXIT_FULL':
@@ -1310,17 +1310,17 @@ class PositionManager:
             Position.position_id == position_id,
             Position.user_id == self.user_id
         ).first()
-        
+
         if not position:
             return PositionAction(action_type='ERROR', reason='Position not found')
-        
+
         # Calculate current P&L
         unrealized_pnl_pct = self._calculate_unrealized_pnl_pct(position)
-        
+
         # Get exit thresholds (user-specific)
         profit_target = self._get_profit_target(position)
         stop_loss = self._get_stop_loss(position)
-        
+
         # Check profit target
         if unrealized_pnl_pct >= profit_target:
             return PositionAction(
@@ -1328,7 +1328,7 @@ class PositionManager:
                 reason=f'Profit target reached: {unrealized_pnl_pct:.2%} >= {profit_target:.2%}',
                 priority='HIGH'
             )
-        
+
         # Check stop loss
         if unrealized_pnl_pct <= stop_loss:
             return PositionAction(
@@ -1336,12 +1336,12 @@ class PositionManager:
                 reason=f'Stop loss hit: {unrealized_pnl_pct:.2%} <= {stop_loss:.2%}',
                 priority='CRITICAL'
             )
-        
+
         # Check trailing stop (if enabled and activated)
         trailing_action = self._check_trailing_stop(position, unrealized_pnl_pct)
         if trailing_action:
             return trailing_action
-        
+
         # Check edge disappearance
         current_edge = self._get_current_edge(position.ticker)
         early_exit_threshold = Decimal(
@@ -1353,7 +1353,7 @@ class PositionManager:
                 reason=f'Edge disappeared: {current_edge:.2%} < {early_exit_threshold:.2%}',
                 priority='MEDIUM'
             )
-        
+
         # Check partial exit conditions
         partial_enabled = self.config.get('position_lifecycle.exit_rules.partial_exit.enabled', True)
         if partial_enabled:
@@ -1370,7 +1370,7 @@ class PositionManager:
                     exit_percentage=exit_pct,
                     priority='MEDIUM'
                 )
-        
+
         # No action needed
         return PositionAction(action_type='HOLD', reason='All conditions normal')
 ```
@@ -1404,21 +1404,21 @@ from datetime import datetime
 class TrailingStopState:
     """
     State of a trailing stop for a position.
-    
+
     LEARNING NOTES:
     - Trailing stops "follow" the price up
     - Once activated, they never widen, only tighten
     - If price falls from peak, stop loss triggers
-    
+
     Example:
         Entry price: $0.50
         Current price: $0.65 (+30%)
         Trailing stop activated at +10%
         Trailing distance: 5%
-        
+
         Peak price seen: $0.65
         Current stop price: $0.65 * (1 - 0.05) = $0.6175
-        
+
         If price falls to $0.61, stop loss triggers!
     """
     position_id: UUID
@@ -1431,31 +1431,31 @@ class TrailingStopState:
 class TrailingStopManager:
     """
     Manages trailing stop losses for positions.
-    
+
     Trailing stops protect profits by following price up,
     then triggering if price falls back down.
     """
-    
+
     def __init__(self, db_session, user_config: UserConfig):
         self.db = db_session
         self.config = user_config
-    
+
     def initialize_trailing_stop(
         self,
         position: Position
     ) -> Optional[TrailingStopState]:
         """
         Initialize trailing stop for a position.
-        
+
         Trailing stop is NOT activated immediately.
         It activates only after position reaches activation threshold.
-        
+
         Args:
             position: Position to initialize trailing stop for
-            
+
         Returns:
             TrailingStopState (not yet activated)
-            
+
         Example:
             >>> position = get_position('pos-123')
             >>> trailing = manager.initialize_trailing_stop(position)
@@ -1471,10 +1471,10 @@ class TrailingStopManager:
                 True
             )
         )
-        
+
         if not trailing_enabled:
             return None
-        
+
         # Get activation threshold
         activation_threshold = Decimal(
             self.config.get(
@@ -1482,7 +1482,7 @@ class TrailingStopManager:
                 0.10  # Default: activate after +10% profit
             )
         )
-        
+
         return TrailingStopState(
             position_id=position.position_id,
             is_activated=False,
@@ -1491,7 +1491,7 @@ class TrailingStopManager:
             current_stop_price=Decimal('0.0'),
             last_updated=datetime.now()
         )
-    
+
     def update_trailing_stop(
         self,
         position: Position,
@@ -1500,21 +1500,21 @@ class TrailingStopManager:
     ) -> Tuple[TrailingStopState, Optional[str]]:
         """
         Update trailing stop based on current price.
-        
+
         Logic:
         1. If not activated, check if should activate
         2. If activated, update peak price if higher
         3. Calculate current stop price from peak
         4. Apply tightening rule (stop gets closer as profit increases)
-        
+
         Args:
             position: Position
             current_price: Current market price
             trailing_state: Current trailing stop state
-            
+
         Returns:
             (updated_state, trigger_reason_if_stopped)
-            
+
         Example:
             >>> # Position bought at $0.50, now at $0.65
             >>> state, trigger = manager.update_trailing_stop(
@@ -1529,14 +1529,14 @@ class TrailingStopManager:
         """
         entry_price = position.entry_price
         unrealized_pnl_pct = (current_price - entry_price) / entry_price
-        
+
         # Step 1: Check if should activate
         if not trailing_state.is_activated:
             if unrealized_pnl_pct >= trailing_state.activation_pnl_pct:
                 # ACTIVATE!
                 trailing_state.is_activated = True
                 trailing_state.peak_price_seen = current_price
-                
+
                 # Calculate initial stop price
                 trailing_distance = Decimal(
                     self.config.get(
@@ -1548,18 +1548,18 @@ class TrailingStopManager:
                     Decimal('1.0') - trailing_distance
                 )
                 trailing_state.last_updated = datetime.now()
-                
+
                 return (trailing_state, None)
             else:
                 # Not yet activated, no stop
                 return (trailing_state, None)
-        
+
         # Step 2: Trailing stop is activated, update
-        
+
         # Update peak if price is higher
         if current_price > trailing_state.peak_price_seen:
             trailing_state.peak_price_seen = current_price
-        
+
         # Calculate base trailing distance
         base_trailing_distance = Decimal(
             self.config.get(
@@ -1567,7 +1567,7 @@ class TrailingStopManager:
                 0.05
             )
         )
-        
+
         # Apply tightening rule (stop gets closer as profit increases)
         # For every 5% gain above activation, tighten by 1%
         tighten_rate = Decimal(
@@ -1576,13 +1576,13 @@ class TrailingStopManager:
                 0.01  # Tighten 1% per 5% gain
             )
         )
-        
+
         profit_above_activation = unrealized_pnl_pct - trailing_state.activation_pnl_pct
         if profit_above_activation > Decimal('0.0'):
             # Tighten for every 5% gain
             tighten_amount = (profit_above_activation / Decimal('0.05')) * tighten_rate
             effective_trailing_distance = base_trailing_distance - tighten_amount
-            
+
             # Floor at 2% (don't get too tight)
             effective_trailing_distance = max(
                 effective_trailing_distance,
@@ -1590,30 +1590,30 @@ class TrailingStopManager:
             )
         else:
             effective_trailing_distance = base_trailing_distance
-        
+
         # Calculate new stop price from peak
         new_stop_price = trailing_state.peak_price_seen * (
             Decimal('1.0') - effective_trailing_distance
         )
-        
+
         # Ensure stop only tightens, never widens
         trailing_state.current_stop_price = max(
             trailing_state.current_stop_price,
             new_stop_price
         )
-        
+
         trailing_state.last_updated = datetime.now()
-        
+
         # Step 3: Check if stop triggered
         if current_price <= trailing_state.current_stop_price:
             return (
                 trailing_state,
                 f"Trailing stop triggered: price ${current_price} <= stop ${trailing_state.current_stop_price}"
             )
-        
+
         # No trigger
         return (trailing_state, None)
-    
+
     def get_trailing_stop_display(
         self,
         position: Position,
@@ -1621,14 +1621,14 @@ class TrailingStopManager:
     ) -> Dict:
         """
         Get human-readable trailing stop info for display.
-        
+
         Returns dictionary with:
         - is_activated
         - activation_threshold
         - peak_price
         - current_stop_price
         - distance_from_current
-        
+
         Example:
             >>> display = manager.get_trailing_stop_display(position, state)
             >>> print(f"Trailing Stop: {'ACTIVE' if display['is_activated'] else 'INACTIVE'}")
@@ -1644,12 +1644,12 @@ class TrailingStopManager:
                     Decimal('1.0') + trailing_state.activation_pnl_pct
                 )
             }
-        
+
         current_price = self._get_current_market_price(position.ticker)
         distance_from_current = (
             current_price - trailing_state.current_stop_price
         ) / current_price
-        
+
         return {
             'is_activated': True,
             'peak_price': trailing_state.peak_price_seen,
@@ -1783,13 +1783,13 @@ jwt = JWTManager(app)
 def register():
     """
     Register a new user.
-    
+
     Creates:
     1. User record
     2. User schema (for data isolation)
     3. Default permissions
     4. Initial config overrides
-    
+
     Request:
         POST /api/auth/register
         {
@@ -1797,7 +1797,7 @@ def register():
             "email": "john@example.com",
             "password": "securepassword123"
         }
-    
+
     Response:
         {
             "user_id": "uuid",
@@ -1806,17 +1806,17 @@ def register():
         }
     """
     data = request.get_json()
-    
+
     # Validate input
     if not data.get('username') or not data.get('password'):
         return jsonify({'error': 'Username and password required'}), 400
-    
+
     # Hash password
     password_hash = bcrypt.hashpw(
         data['password'].encode('utf-8'),
         bcrypt.gensalt()
     ).decode('utf-8')
-    
+
     # Create user
     user = User(
         username=data['username'],
@@ -1825,14 +1825,14 @@ def register():
     )
     db.session.add(user)
     db.session.flush()  # Get user_id
-    
+
     # Create user schema
     schema_name = MultiTenantDatabase.create_user_schema(
         db.session,
         user.user_id,
         user.username
     )
-    
+
     # Create default permissions
     permissions = UserPermissions(
         user_id=user.user_id,
@@ -1843,12 +1843,12 @@ def register():
         max_daily_loss_dollars=Decimal('50.00')
     )
     db.session.add(permissions)
-    
+
     db.session.commit()
-    
+
     # Generate JWT token
     access_token = create_access_token(identity=str(user.user_id))
-    
+
     return jsonify({
         'user_id': str(user.user_id),
         'username': user.username,
@@ -1859,14 +1859,14 @@ def register():
 def login():
     """
     Login endpoint.
-    
+
     Request:
         POST /api/auth/login
         {
             "username": "john",
             "password": "securepassword123"
         }
-    
+
     Response:
         {
             "access_token": "jwt_token",
@@ -1875,29 +1875,29 @@ def login():
         }
     """
     data = request.get_json()
-    
+
     # Find user
     user = db.session.query(User).filter(
         User.username == data.get('username')
     ).first()
-    
+
     if not user:
         return jsonify({'error': 'Invalid credentials'}), 401
-    
+
     # Check password
     if not bcrypt.checkpw(
         data.get('password', '').encode('utf-8'),
         user.password_hash.encode('utf-8')
     ):
         return jsonify({'error': 'Invalid credentials'}), 401
-    
+
     # Update last login
     user.last_login = datetime.now()
     db.session.commit()
-    
+
     # Generate JWT
     access_token = create_access_token(identity=str(user.user_id))
-    
+
     return jsonify({
         'access_token': access_token,
         'user_id': str(user.user_id),
@@ -1909,10 +1909,10 @@ def login():
 def get_profile():
     """
     Get user profile.
-    
+
     Headers:
         Authorization: Bearer <jwt_token>
-    
+
     Response:
         {
             "user_id": "uuid",
@@ -1923,24 +1923,24 @@ def get_profile():
         }
     """
     user_id = UUID(get_jwt_identity())
-    
+
     user = db.session.query(User).filter(
         User.user_id == user_id
     ).first()
-    
+
     if not user:
         return jsonify({'error': 'User not found'}), 404
-    
+
     # Get permissions
     permissions = db.session.query(UserPermissions).filter(
         UserPermissions.user_id == user_id
     ).first()
-    
+
     # Get config overrides
     overrides = db.session.query(UserConfigOverride).filter(
         UserConfigOverride.user_id == user_id
     ).all()
-    
+
     return jsonify({
         'user_id': str(user.user_id),
         'username': user.username,
@@ -2175,15 +2175,15 @@ def test_strategy_version_lifecycle():
         status='draft'
     )
     assert strategy.status == 'draft'
-    
+
     # Transition to testing
     lifecycle.transition(strategy, 'testing')
     assert strategy.status == 'testing'
-    
+
     # Transition to active
     lifecycle.transition(strategy, 'active')
     assert strategy.status == 'active'
-    
+
     # Create v2.0 and activate (should deactivate v1.0)
     strategy_v2 = create_strategy(
         user_id='test-user',
@@ -2192,11 +2192,11 @@ def test_strategy_version_lifecycle():
         status='draft'
     )
     lifecycle.activate_strategy_version(db, strategy_v2.strategy_id, 'test-user')
-    
+
     # Check v1.0 is now inactive
     db.session.refresh(strategy)
     assert strategy.status == 'inactive'
-    
+
     # Check v2.0 is active
     assert strategy_v2.status == 'active'
 
@@ -2204,10 +2204,10 @@ def test_trailing_stop_activation():
     """Test trailing stop activates at correct profit level."""
     position = create_test_position(entry_price=Decimal('0.50'))
     trailing = manager.initialize_trailing_stop(position)
-    
+
     # Not activated yet
     assert not trailing.is_activated
-    
+
     # Price moves up but not enough
     state, trigger = manager.update_trailing_stop(
         position,
@@ -2216,7 +2216,7 @@ def test_trailing_stop_activation():
     )
     assert not state.is_activated
     assert trigger is None
-    
+
     # Price moves up past threshold
     state, trigger = manager.update_trailing_stop(
         position,
@@ -2231,13 +2231,13 @@ def test_trailing_stop_tightening():
     """Test trailing stop tightens as profit increases."""
     position = create_test_position(entry_price=Decimal('0.50'))
     trailing = manager.initialize_trailing_stop(position)
-    
+
     # Activate at +12%
     state, _ = manager.update_trailing_stop(
         position, Decimal('0.56'), trailing
     )
     assert state.current_stop_price == Decimal('0.532')  # 5% trail
-    
+
     # Price moves to +30%
     state, _ = manager.update_trailing_stop(
         position, Decimal('0.65'), state
@@ -2251,24 +2251,24 @@ def test_user_data_isolation():
     # Create two users
     user_john = create_user('john')
     user_mary = create_user('mary')
-    
+
     # John creates a strategy
     strategy_john = create_strategy(
         user_id=user_john.user_id,
         name='halftime_entry',
         version='1.0'
     )
-    
+
     # Mary's session
     mary_session = MultiTenantDatabase.get_user_session(db, user_mary.user_id)
-    
+
     # Mary cannot see John's strategy
     strategies = mary_session.query(Strategy).all()
     assert len(strategies) == 0
-    
+
     # John's session
     john_session = MultiTenantDatabase.get_user_session(db, user_john.user_id)
-    
+
     # John can see his own strategy
     strategies = john_session.query(Strategy).all()
     assert len(strategies) == 1
@@ -2278,14 +2278,14 @@ def test_config_override_priority():
     """Test config priority: DB override > YAML > default."""
     user_id = create_test_user()
     config = UserConfig(db, user_id)
-    
+
     # No override, should use YAML
     kelly = config.get('trading.kelly_fraction_nfl')
     assert kelly == Decimal('0.25')  # From YAML
-    
+
     # Set override
     config.set_override('trading.kelly_fraction_nfl', Decimal('0.30'))
-    
+
     # Should now use override
     kelly = config.get('trading.kelly_fraction_nfl')
     assert kelly == Decimal('0.30')  # From database
@@ -2311,7 +2311,7 @@ def test_config_override_priority():
 
 **Day 5-6: Multi-Tenant Database**
 - Implement `MultiTenantDatabase` class
-- Implement `create_user_schema()` 
+- Implement `create_user_schema()`
 - Implement `get_user_session()`
 - Write tests for data isolation
 - **Deliverable:** User schemas created automatically
@@ -2415,13 +2415,13 @@ def test_config_override_priority():
 
 ```bash
 # Create user management tables
-claude-code "Create database/migrations/002_user_tables.sql. 
-Implement users, user_api_keys, user_config_overrides, and user_permissions tables 
+claude-code "Create database/migrations/002_user_tables.sql.
+Implement users, user_api_keys, user_config_overrides, and user_permissions tables
 per the schema in CLAUDE_CODE_IMPLEMENTATION_PLAN.md section 'Multi-User Architecture'.
 Use UUID primary keys, proper foreign keys, and constraints."
 
 # Create multi-tenant utilities
-claude-code "Create database/multi_tenant.py. 
+claude-code "Create database/multi_tenant.py.
 Implement MultiTenantDatabase class with create_user_schema() and get_user_session() methods.
 Include complete docstrings and type hints. Follow schema-per-user pattern from implementation plan."
 ```

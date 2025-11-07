@@ -43,8 +43,8 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ## Phase 0: Foundation (Codename: "Genesis")
 
-**Duration:** 8 weeks  
-**Status:** ✅ **100% COMPLETE** (Session 7)  
+**Duration:** 8 weeks
+**Status:** ✅ **100% COMPLETE** (Session 7)
 **Goal:** Create comprehensive documentation, configuration system, and project foundation
 
 ### Deliverables
@@ -805,9 +805,9 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 
 ## Phase 3: Data Processing (Codename: "Pipeline")
 
-**Duration:** 4 weeks  
-**Target:** January-February 2026  
-**Status:** 🔵 Planned  
+**Duration:** 4 weeks
+**Target:** January-February 2026
+**Status:** 🔵 Planned
 **Goal:** Implement asynchronous data processing and WebSocket handlers (**NO odds calculation or edge detection in this phase**)
 
 ### Dependencies
@@ -937,9 +937,9 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 
 ## Phase 4: Odds Calculation & Edge Detection (Codename: "Oracle")
 
-**Duration:** 8 weeks  
-**Target:** February-April 2026  
-**Status:** 🔵 Planned  
+**Duration:** 8 weeks
+**Target:** February-April 2026
+**Status:** 🔵 Planned
 **Goal:** Implement odds models, historical lookup, ensemble, and edge detection
 
 ### Dependencies
@@ -1450,9 +1450,9 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 
 ## Phase 6: Multi-Sport Expansion (Codename: "Constellation")
 
-**Duration:** 6 weeks  
-**Target:** May-June 2026  
-**Status:** 🔵 Planned  
+**Duration:** 6 weeks
+**Target:** May-June 2026
+**Status:** 🔵 Planned
 **Goal:** Add NBA, MLB, Tennis, and UFC support
 
 ### Dependencies
@@ -1509,9 +1509,9 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 
 ## Phase 7: Web Dashboard (Codename: "Augment")
 
-**Duration:** 8 weeks  
-**Target:** June-August 2026  
-**Status:** 🔵 Planned  
+**Duration:** 8 weeks
+**Target:** June-August 2026
+**Status:** 🔵 Planned
 **Goal:** Create web dashboard for monitoring and manual control
 
 ### Dependencies
@@ -1563,9 +1563,9 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 
 ## Phase 8: Non-Sports Markets (Codename: "Multiverse")
 
-**Duration:** 12 weeks  
-**Target:** August-November 2026  
-**Status:** 🔵 Planned  
+**Duration:** 12 weeks
+**Target:** August-November 2026
+**Status:** 🔵 Planned
 **Goal:** Expand to politics, entertainment, and other non-sports categories
 
 ### Dependencies
@@ -1612,9 +1612,9 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 
 ## Phase 9: Machine Learning Enhancement (Codename: "Singularity")
 
-**Duration:** 16 weeks  
-**Target:** November 2026 - March 2027  
-**Status:** 🔵 Planned  
+**Duration:** 16 weeks
+**Target:** November 2026 - March 2027
+**Status:** 🔵 Planned
 **Goal:** Integrate advanced ML models for enhanced predictions
 
 ### Dependencies
@@ -1666,9 +1666,9 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 
 ## Phase 10: Multi-Platform & Advanced Features (Codename: "Nexus Prime")
 
-**Duration:** 12 weeks  
-**Target:** March-June 2027  
-**Status:** 🔵 Planned  
+**Duration:** 12 weeks
+**Target:** March-June 2027
+**Status:** 🔵 Planned
 **Goal:** Add Polymarket integration and cross-platform arbitrage
 
 ### Dependencies
@@ -1757,8 +1757,8 @@ See PROJECT_OVERVIEW_V1.2.md for complete Phase Dependencies Table. Key dependen
 
 ---
 
-**Maintained By:** Project lead  
-**Review Frequency:** Update after each phase completion  
+**Maintained By:** Project lead
+**Review Frequency:** Update after each phase completion
 **Next Review:** Phase 1 kickoff (after Phase 0 complete)
 
 ---

@@ -1,7 +1,7 @@
 # YAML Configuration Consistency Audit
-**Version:** 1.0  
-**Date:** 2025-10-21  
-**Audited By:** Claude  
+**Version:** 1.0
+**Date:** 2025-10-21
+**Audited By:** Claude
 **Scope:** All 7 YAML config files vs. MASTER_REQUIREMENTS + Recent Enhancements
 
 ---
@@ -286,19 +286,19 @@ For each YAML file:
 monitoring:
   # Normal monitoring for stable positions
   normal_frequency: 30  # seconds - balances responsiveness with API limits
-  
+
   # Urgent monitoring for positions near thresholds
   urgent_frequency: 5  # seconds - faster checks when capital at risk
-  
+
   # Conditions that trigger urgent monitoring
   urgent_conditions:
     near_stop_loss_pct: 0.02      # Within 2% of stop loss
     near_profit_target_pct: 0.02  # Within 2% of profit target
     near_trailing_stop_pct: 0.02  # Within 2% of trailing stop
-  
+
   # Price caching to reduce API calls
   price_cache_ttl_seconds: 10  # Cache prices for 10s
-  
+
   # Rate limiting
   max_api_calls_per_minute: 60  # Conservative limit (Kalshi allows 600)
 ```
@@ -311,21 +311,21 @@ exit_priorities:
   CRITICAL:  # Immediate execution, capital protection
     - stop_loss
     - circuit_breaker
-  
+
   HIGH:  # Fast execution needed
     - trailing_stop
     - time_based_urgent  # <5min to settlement
     - liquidity_dried_up  # Spread >3¢ or volume <50
-  
+
   MEDIUM:  # Normal profit taking
     - profit_target
     - partial_exit_target
-  
+
   LOW:  # Opportunistic optimization
     - early_exit  # Edge < 2% threshold
     - edge_disappeared  # Edge negative
     - rebalance
-  
+
   # NOTE: edge_reversal was REMOVED as redundant (covered by early_exit and edge_disappeared)
 ```
 
@@ -338,21 +338,21 @@ exit_execution:
     order_type: market  # Immediate fill
     timeout_seconds: 5
     retry_strategy: immediate_market
-  
+
   HIGH:
     order_type: limit
     price_strategy: aggressive  # Cross spread slightly
     timeout_seconds: 10
     retry_strategy: walk_then_market
     max_walks: 2
-  
+
   MEDIUM:
     order_type: limit
     price_strategy: fair  # Mid-spread
     timeout_seconds: 30
     retry_strategy: walk_price
     max_walks: 5
-  
+
   LOW:
     order_type: limit
     price_strategy: conservative  # Best ask
@@ -371,12 +371,12 @@ partial_exits:
       profit_threshold: 0.15  # +15% profit
       exit_percentage: 50     # Sell 50%
       description: "Initial profit taking to reduce risk"
-    
+
     - name: "second_target"  # ADDED from Session 7
       profit_threshold: 0.25  # +25% profit
       exit_percentage: 25     # Sell another 25%
       description: "Further de-risking, let 25% ride with trailing stop"
-    
+
 # Remaining 25% of position rides with trailing stop protection
 ```
 
@@ -386,7 +386,7 @@ partial_exits:
 liquidity:
   max_spread: 0.03  # 3¢ maximum spread (triggers liquidity_dried_up exit)
   min_volume: 50    # 50 contracts minimum (triggers liquidity_dried_up exit)
-  
+
   # Exit if market becomes illiquid
   exit_on_illiquid: true
   alert_on_illiquid: true
@@ -395,7 +395,7 @@ liquidity:
 **Remove edge_reversal (If Present):**
 ```yaml
 # REMOVED: edge_reversal exit condition (Session 7 decision)
-# Rationale: Redundant with early_exit (absolute threshold) and 
+# Rationale: Redundant with early_exit (absolute threshold) and
 #            edge_disappeared (negative edge) conditions
 # Scenarios covered without edge_reversal:
 # - Edge goes negative → edge_disappeared triggers
@@ -411,16 +411,16 @@ liquidity:
 ```yaml
 position_sizing:
   method: kelly
-  
+
   kelly:
     # Sport-specific Kelly fractions (from MASTER_REQUIREMENTS)
     default_fraction: 0.25  # Used if sport not specified
-    
+
     sport_fractions:  # VERIFY THIS EXISTS
       nfl: 0.25    # Most confident
       nba: 0.22    # Slightly less
       tennis: 0.18 # Least confident
-    
+
     # Or alternative structure:
     nfl:
       kelly_fraction: 0.25
@@ -450,7 +450,7 @@ exit_rules:
     high_confidence: 0.25  # user-customizable: 25% profit target
     medium_confidence: 0.20  # user-customizable: 20% profit target
     low_confidence: 0.15  # user-customizable: 15% profit target
-  
+
   stop_loss:
     threshold: -0.15  # user-customizable: -15% stop loss
 ```
@@ -600,6 +600,6 @@ Your YAML configurations have a solid foundation (75% confidence) with core trad
 
 ---
 
-**Audit Status:** ✅ Complete  
-**Next Review:** After position_management.yaml updates  
+**Audit Status:** ✅ Complete
+**Next Review:** After position_management.yaml updates
 **Confidence Target:** 95%+ before Phase 5 implementation

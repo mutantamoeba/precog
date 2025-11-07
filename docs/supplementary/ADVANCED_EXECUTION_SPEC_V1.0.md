@@ -77,7 +77,7 @@ class Trade:
     fill_time_seconds: int       # Time to fill
     market_volume_at_entry: int  # Liquidity when we traded
     market_spread_at_entry: Decimal
-    
+
     # Categorization
     liquidity_category: str      # "liquid", "moderate", "thin"
 ```
@@ -158,10 +158,10 @@ split_2 = place_order(price=levels[1], count=40% of total)
 # 3. Monitor loop (every 4 seconds)
 for i in range(10):  # Max 10 walks
     await asyncio.sleep(4)
-    
+
     # 4. Check momentum
     momentum = calculate_momentum(market.ticker)
-    
+
     # 5. Walk if needed
     if not_filling and momentum > 0.10:
         cancel_and_replace_at_better_price(split_1)
@@ -237,14 +237,14 @@ class SimpleExecutor(OrderExecutor):
 
 class DynamicDepthWalker(OrderExecutor):
     """Phase 8 advanced execution."""
-    
+
     def __init__(self):
         self.analyzer = OrderbookAnalyzer()
         self.splitter = OrderSplitter()
         self.momentum = MomentumCalculator()
         self.walker = PriceWalker()
         self.state_mgr = ExecutionStateManager()
-    
+
     def execute(self, edge, method, market) -> ExecutionResult:
         # Multi-level order splitting with walking
         pass
@@ -252,7 +252,7 @@ class DynamicDepthWalker(OrderExecutor):
 # Factory pattern
 def get_executor(method: Method) -> OrderExecutor:
     algorithm = method.execution_config["algorithm"]
-    
+
     if algorithm == "simple_limit":
         return SimpleExecutor()
     elif algorithm == "dynamic_depth_walker":
@@ -274,10 +274,10 @@ def get_executor(method: Method) -> OrderExecutor:
 CREATE TABLE order_book_snapshots (
     snapshot_id SERIAL PRIMARY KEY,
     market_id VARCHAR REFERENCES markets(market_id),
-    
+
     -- Snapshot time
     timestamp TIMESTAMP DEFAULT NOW(),
-    
+
     -- Orderbook depth (up to 10 levels each side)
     yes_depth JSONB NOT NULL,
     /* Format:
@@ -287,18 +287,18 @@ CREATE TABLE order_book_snapshots (
         {"price": "0.6900", "quantity": 1000, "order_count": 3}
     ]
     */
-    
+
     no_depth JSONB NOT NULL,
-    
+
     -- Aggregate metrics
     yes_total_volume INT,
     no_total_volume INT,
     spread DECIMAL(10,4),
-    
+
     -- Best bid/ask
     yes_best_bid DECIMAL(10,4),
     no_best_bid DECIMAL(10,4),
-    
+
     -- Indexes
     INDEX idx_orderbook_market_time (market_id, timestamp DESC),
     INDEX idx_orderbook_time (timestamp DESC)
@@ -315,25 +315,25 @@ CREATE TABLE execution_state (
     edge_id INT NOT NULL REFERENCES edges(edge_id),
     method_id INT NOT NULL REFERENCES methods(method_id),
     market_id VARCHAR NOT NULL REFERENCES markets(market_id),
-    
+
     -- Algorithm selection
     algorithm VARCHAR(50) NOT NULL,
     -- 'simple_limit' | 'dynamic_depth_walker' | 'twap' | 'adaptive_limit'
-    
+
     -- Target execution
     target_price DECIMAL(10,4) NOT NULL,
     target_quantity INT NOT NULL,
-    
+
     -- Current status
     status VARCHAR(20) NOT NULL DEFAULT 'executing',
     -- 'executing' | 'completed' | 'failed' | 'cancelled'
     CHECK (status IN ('executing', 'completed', 'failed', 'cancelled')),
-    
+
     -- Fill progress
     filled_quantity INT DEFAULT 0,
     filled_value DECIMAL(10,4) DEFAULT 0,  -- Total cost
     average_fill_price DECIMAL(10,4),
-    
+
     -- Walker state (if applicable)
     walker_state JSONB,
     /* Format:
@@ -345,7 +345,7 @@ CREATE TABLE execution_state (
         "last_walk_at": "2025-10-21T14:30:15Z"
     }
     */
-    
+
     -- Split configurations (if applicable)
     split_configs JSONB,
     /* Format:
@@ -368,18 +368,18 @@ CREATE TABLE execution_state (
         }
     ]
     */
-    
+
     -- Orderbook snapshot reference (for analysis)
     initial_snapshot_id INT REFERENCES order_book_snapshots(snapshot_id),
-    
+
     -- Timing
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     completed_at TIMESTAMP,
-    
+
     -- Error handling
     error_message TEXT,
-    
+
     -- Indexes
     INDEX idx_execution_status (status),
     INDEX idx_execution_method (method_id),
@@ -393,24 +393,24 @@ CREATE TABLE execution_state (
 CREATE TABLE split_orders (
     split_id SERIAL PRIMARY KEY,
     execution_id INT NOT NULL REFERENCES execution_state(execution_id),
-    
+
     -- Order identification
     order_id VARCHAR,  -- Kalshi order ID (after placement)
     level INT NOT NULL,  -- Which depth level (1, 2, 3)
-    
+
     -- Order details
     target_price DECIMAL(10,4) NOT NULL,
     quantity INT NOT NULL,
     side VARCHAR(10) NOT NULL,  -- 'yes' | 'no'
-    
+
     -- Fill status
     status VARCHAR(20) NOT NULL DEFAULT 'pending',
     -- 'pending' | 'placed' | 'partial' | 'filled' | 'cancelled' | 'failed'
     CHECK (status IN ('pending', 'placed', 'partial', 'filled', 'cancelled', 'failed')),
-    
+
     filled_quantity INT DEFAULT 0,
     average_fill_price DECIMAL(10,4),
-    
+
     -- Walk history
     walk_count INT DEFAULT 0,
     price_walk_history JSONB,
@@ -420,16 +420,16 @@ CREATE TABLE split_orders (
         {"timestamp": "2025-10-21T14:30:19Z", "old_price": "0.7150", "new_price": "0.7200", "reason": "high_momentum"}
     ]
     */
-    
+
     -- Timing
     created_at TIMESTAMP DEFAULT NOW(),
     placed_at TIMESTAMP,
     filled_at TIMESTAMP,
     cancelled_at TIMESTAMP,
-    
+
     -- Error handling
     error_message TEXT,
-    
+
     -- Indexes
     INDEX idx_split_execution (execution_id),
     INDEX idx_split_order (order_id),
@@ -442,41 +442,41 @@ CREATE TABLE split_orders (
 CREATE TABLE execution_metrics (
     metric_id SERIAL PRIMARY KEY,
     execution_id INT NOT NULL REFERENCES execution_state(execution_id),
-    
+
     -- Target vs Actual
     target_price DECIMAL(10,4) NOT NULL,
     target_quantity INT NOT NULL,
     filled_quantity INT NOT NULL,
     average_fill_price DECIMAL(10,4) NOT NULL,
-    
+
     -- Quality metrics
     fill_rate DECIMAL(6,4),  -- filled / target
     slippage_percent DECIMAL(10,4),  -- (avg_fill - target) / target
     slippage_basis_points INT,  -- slippage * 10000
-    
+
     -- Timing metrics
     time_to_first_fill INT,  -- seconds
     time_to_full_fill INT,   -- seconds (NULL if partial)
     total_execution_time INT,  -- seconds
-    
+
     -- Algorithm-specific metrics
     algorithm VARCHAR(50),
     walks_executed INT,
     splits_used INT,
     momentum_at_execution DECIMAL(10,4),
-    
+
     -- Market conditions
     market_volume_at_entry INT,
     market_spread_at_entry DECIMAL(10,4),
     liquidity_category VARCHAR(20),  -- 'liquid' | 'moderate' | 'thin'
-    
+
     -- Comparison to basic execution (estimated)
     estimated_basic_slippage DECIMAL(10,4),
     improvement_over_basic DECIMAL(10,4),
-    
+
     -- Timestamps
     created_at TIMESTAMP DEFAULT NOW(),
-    
+
     -- Indexes
     INDEX idx_metrics_execution (execution_id),
     INDEX idx_metrics_algorithm (algorithm),
@@ -511,11 +511,11 @@ ALTER TABLE trades ADD COLUMN liquidity_category VARCHAR(20);
 def get_orderbook(ticker: str, depth: int = 10) -> Dict:
     """
     Get orderbook depth for market.
-    
+
     Args:
         ticker: Market ticker
         depth: Number of levels per side (max 100)
-    
+
     Returns:
         {
             "orderbook": {
@@ -607,25 +607,25 @@ ws://kalshi/orderbook/MARKET-YES
 ```python
 class RateLimiter:
     """Token bucket rate limiter."""
-    
+
     def __init__(self, max_calls=90, window=60):  # 90/min (buffer below 100)
         self.max_calls = max_calls
         self.window = window
         self.tokens = max_calls
         self.last_update = time.time()
-    
+
     async def acquire(self, calls=1):
         """Wait if needed to stay under rate limit."""
         now = time.time()
         elapsed = now - self.last_update
-        
+
         # Refill tokens
         self.tokens = min(
             self.max_calls,
             self.tokens + (elapsed / self.window) * self.max_calls
         )
         self.last_update = now
-        
+
         # Wait if not enough tokens
         if self.tokens < calls:
             wait_time = ((calls - self.tokens) / self.max_calls) * self.window
@@ -675,11 +675,11 @@ class DepthAnalysis:
 
 class OrderbookAnalyzer:
     """Analyze orderbook depth for optimal execution."""
-    
+
     def __init__(self):
         self.liquid_threshold = 100
         self.moderate_threshold = 50
-    
+
     def analyze(
         self,
         orderbook: Dict,
@@ -688,12 +688,12 @@ class OrderbookAnalyzer:
     ) -> DepthAnalysis:
         """
         Analyze orderbook depth around target price.
-        
+
         Args:
             orderbook: Kalshi orderbook response
             target_price: Our desired price
             side: 'yes' or 'no'
-        
+
         Returns:
             DepthAnalysis with liquidity profile
         """
@@ -702,18 +702,18 @@ class OrderbookAnalyzer:
             depth_data = orderbook["orderbook"]["yes_dollars"]
         else:
             depth_data = orderbook["orderbook"]["no_dollars"]
-        
+
         # Parse levels
         levels = []
         cumulative = 0
-        
+
         for price_str, quantity in depth_data:
             price = Decimal(price_str)
-            
+
             # Only consider levels at or better than target
             if (side == "yes" and price <= target_price) or \
                (side == "no" and price >= target_price):
-                
+
                 cumulative += quantity
                 levels.append(DepthLevel(
                     price=price,
@@ -721,15 +721,15 @@ class OrderbookAnalyzer:
                     cumulative_quantity=cumulative,
                     order_count=0  # Not provided by Kalshi
                 ))
-        
+
         # Calculate metrics
         total_liquidity = cumulative
         spread = self._calculate_spread(orderbook)
         category = self._categorize_liquidity(total_liquidity)
-        
+
         # Find sweet spot (level with enough cumulative liquidity)
         sweet_spot = self._find_sweet_spot(levels, target_price)
-        
+
         return DepthAnalysis(
             levels=levels,
             total_liquidity=total_liquidity,
@@ -738,17 +738,17 @@ class OrderbookAnalyzer:
             sweet_spot_price=sweet_spot.price if sweet_spot else target_price,
             sweet_spot_quantity=sweet_spot.cumulative_quantity if sweet_spot else 0
         )
-    
+
     def _calculate_spread(self, orderbook: Dict) -> Decimal:
         """Calculate bid-ask spread."""
         yes_best = Decimal(orderbook["orderbook"]["yes_dollars"][0][0])
         no_best = Decimal(orderbook["orderbook"]["no_dollars"][0][0])
-        
+
         # Yes ask = 1.0 - No bid
         yes_ask = Decimal("1.0000") - no_best
-        
+
         return yes_ask - yes_best
-    
+
     def _categorize_liquidity(self, total_volume: int) -> str:
         """Categorize market liquidity."""
         if total_volume >= self.liquid_threshold:
@@ -757,7 +757,7 @@ class OrderbookAnalyzer:
             return "moderate"
         else:
             return "thin"
-    
+
     def _find_sweet_spot(
         self,
         levels: List[DepthLevel],
@@ -765,17 +765,17 @@ class OrderbookAnalyzer:
     ) -> Optional[DepthLevel]:
         """
         Find "sweet spot" - price level with sufficient cumulative liquidity.
-        
+
         Strategy: Find first level where cumulative >= 50% of what we need
         """
         if not levels:
             return None
-        
+
         # Prefer levels close to target price with good liquidity
         for level in levels:
             if level.price <= target_price and level.cumulative_quantity >= 50:
                 return level
-        
+
         # Fallback to best available
         return levels[0] if levels else None
 ```
@@ -797,17 +797,17 @@ class OrderSplit:
 
 class OrderSplitter:
     """Split orders across depth levels."""
-    
+
     def __init__(self, split_ratios: List[float] = [0.6, 0.4]):
         """
         Initialize splitter.
-        
+
         Args:
             split_ratios: How to distribute quantity across levels
                           Default: 60% at level 1, 40% at level 2
         """
         self.split_ratios = split_ratios
-    
+
     def calculate_splits(
         self,
         depth_analysis: DepthAnalysis,
@@ -816,16 +816,16 @@ class OrderSplitter:
     ) -> List[OrderSplit]:
         """
         Calculate optimal order splits.
-        
+
         Strategy:
         - If insufficient depth: Single order at target price
         - If good depth: Split across 2-3 levels proportional to liquidity
-        
+
         Args:
             depth_analysis: Orderbook analysis
             total_quantity: Total contracts to buy
             target_price: Desired price
-        
+
         Returns:
             List of OrderSplit configs
         """
@@ -836,29 +836,29 @@ class OrderSplitter:
                 price=target_price,
                 quantity=total_quantity
             )]
-        
+
         # Good depth: Split across levels
         splits = []
         levels_to_use = min(len(depth_analysis.levels), len(self.split_ratios))
-        
+
         for i in range(levels_to_use):
             level = depth_analysis.levels[i]
             ratio = self.split_ratios[i]
             quantity = int(total_quantity * ratio)
-            
+
             if quantity > 0:
                 splits.append(OrderSplit(
                     level=i + 1,
                     price=level.price,
                     quantity=quantity
                 ))
-        
+
         # Adjust last split to account for rounding
         if splits:
             assigned = sum(s.quantity for s in splits)
             remainder = total_quantity - assigned
             splits[-1].quantity += remainder
-        
+
         return splits
 ```
 
@@ -873,55 +873,55 @@ from datetime import datetime, timedelta
 
 class MomentumCalculator:
     """Calculate volume momentum for price walking decisions."""
-    
+
     def __init__(self, lookback_minutes: int = 2):
         """
         Initialize calculator.
-        
+
         Args:
             lookback_minutes: How far back to look for momentum
         """
         self.lookback_minutes = lookback_minutes
-    
+
     def calculate(self, market_id: str) -> Decimal:
         """
         Calculate momentum score.
-        
+
         Momentum = (current_volume - average_volume) / average_volume
-        
+
         Positive momentum: Volume increasing (price pressure up)
         Negative momentum: Volume decreasing (price pressure down)
-        
+
         Args:
             market_id: Market to analyze
-        
+
         Returns:
             Momentum score (e.g., 0.15 = 15% above average)
         """
         # Get recent orderbook snapshots
         cutoff = datetime.now() - timedelta(minutes=self.lookback_minutes)
-        
+
         snapshots = db.query(OrderBookSnapshot)\
             .filter(OrderBookSnapshot.market_id == market_id)\
             .filter(OrderBookSnapshot.timestamp >= cutoff)\
             .order_by(OrderBookSnapshot.timestamp.asc())\
             .all()
-        
+
         if len(snapshots) < 2:
             return Decimal("0")  # Not enough data
-        
+
         # Extract volumes
         volumes = [s.yes_total_volume + s.no_total_volume for s in snapshots]
-        
+
         current = volumes[-1]
         average = sum(volumes[:-1]) / len(volumes[:-1])
-        
+
         if average == 0:
             return Decimal("0")
-        
+
         momentum = (current - average) / average
         return Decimal(str(momentum))
-    
+
     def calculate_ema_slippage(
         self,
         market_id: str,
@@ -929,35 +929,35 @@ class MomentumCalculator:
     ) -> Decimal:
         """
         Calculate exponential moving average of recent slippage.
-        
+
         Used to predict future slippage.
-        
+
         Args:
             market_id: Market to analyze
             alpha: EMA smoothing factor (0.3 = 30% weight on recent)
-        
+
         Returns:
             EMA of slippage
         """
         # Get recent executions
         cutoff = datetime.now() - timedelta(minutes=10)
-        
+
         recent_metrics = db.query(ExecutionMetrics)\
             .join(ExecutionState)\
             .filter(ExecutionState.market_id == market_id)\
             .filter(ExecutionMetrics.created_at >= cutoff)\
             .order_by(ExecutionMetrics.created_at.asc())\
             .all()
-        
+
         if not recent_metrics:
             return Decimal("0.01")  # Default 1% estimate
-        
+
         # Calculate EMA
         ema = recent_metrics[0].slippage_percent
-        
+
         for metric in recent_metrics[1:]:
             ema = alpha * metric.slippage_percent + (1 - alpha) * ema
-        
+
         return ema
 ```
 
@@ -971,7 +971,7 @@ from typing import Optional
 
 class PriceWalker:
     """Walk price incrementally based on momentum."""
-    
+
     def __init__(
         self,
         base_increment: Decimal = Decimal("0.005"),  # 0.5 cents
@@ -979,14 +979,14 @@ class PriceWalker:
     ):
         """
         Initialize walker.
-        
+
         Args:
             base_increment: Normal price adjustment
             aggressive_increment: High momentum price adjustment
         """
         self.base_increment = base_increment
         self.aggressive_increment = aggressive_increment
-    
+
     def calculate_walk_price(
         self,
         current_price: Decimal,
@@ -995,12 +995,12 @@ class PriceWalker:
     ) -> Decimal:
         """
         Calculate new price after walking.
-        
+
         Args:
             current_price: Current order price
             momentum: Momentum score
             direction: 'up' or 'down'
-        
+
         Returns:
             New price to use
         """
@@ -1009,16 +1009,16 @@ class PriceWalker:
             increment = self.aggressive_increment
         else:
             increment = self.base_increment
-        
+
         # Walk price
         if direction == "up":
             new_price = current_price + increment
         else:
             new_price = current_price - increment
-        
+
         # Clamp to valid range
         return max(Decimal("0.0001"), min(Decimal("0.9999"), new_price))
-    
+
     def should_walk(
         self,
         split_order: 'SplitOrder',
@@ -1027,31 +1027,31 @@ class PriceWalker:
     ) -> bool:
         """
         Decide if order should walk.
-        
+
         Args:
             split_order: Order to check
             momentum: Current momentum
             momentum_threshold: Minimum momentum to trigger walk
-        
+
         Returns:
             True if should walk
         """
         # Don't walk if already filled
         if split_order.status == "filled":
             return False
-        
+
         # Don't walk if at max walks
         if split_order.walk_count >= 10:
             return False
-        
+
         # Walk if high momentum
         if abs(momentum) >= momentum_threshold:
             return True
-        
+
         # Don't walk if some quantity filled (wait for more fills)
         if split_order.filled_quantity > 0:
             return False
-        
+
         return False
 ```
 
@@ -1068,24 +1068,24 @@ from datetime import datetime
 class DynamicDepthWalker(OrderExecutor):
     """
     Hybrid execution algorithm.
-    
+
     Combines:
     - Liquidity Depth Optimizer: Multi-level splitting
     - Dynamic Spread Walker: Momentum-based price adjustments
     """
-    
+
     def __init__(self):
         self.analyzer = OrderbookAnalyzer()
         self.splitter = OrderSplitter()
         self.momentum = MomentumCalculator()
         self.walker = PriceWalker()
-        
+
         # Config
         self.walk_interval = 4  # seconds
         self.max_walks = 10
         self.min_volume_threshold = 50
         self.momentum_threshold = Decimal("0.10")
-    
+
     async def execute(
         self,
         edge: Edge,
@@ -1094,38 +1094,38 @@ class DynamicDepthWalker(OrderExecutor):
     ) -> ExecutionResult:
         """
         Execute trade using depth-aware splitting and walking.
-        
+
         Args:
             edge: Trade signal
             method: Method config
             market: Market info
-        
+
         Returns:
             ExecutionResult with fill details
         """
         # 1. Get orderbook
         orderbook = await self.get_orderbook(market.ticker)
-        
+
         # 2. Analyze depth
         depth_analysis = self.analyzer.analyze(
             orderbook=orderbook,
             target_price=edge.target_price,
             side=edge.side
         )
-        
+
         # 3. Check if sufficient liquidity
         if depth_analysis.total_liquidity < self.min_volume_threshold:
             # Fallback to simple execution
             logger.info(f"Insufficient liquidity, using simple execution")
             return await self.simple_fallback(edge, method, market)
-        
+
         # 4. Calculate splits
         splits = self.splitter.calculate_splits(
             depth_analysis=depth_analysis,
             total_quantity=edge.position_size,
             target_price=edge.target_price
         )
-        
+
         # 5. Create execution state
         execution_state = ExecutionState(
             edge_id=edge.edge_id,
@@ -1145,7 +1145,7 @@ class DynamicDepthWalker(OrderExecutor):
         )
         db.add(execution_state)
         db.commit()
-        
+
         # 6. Place split orders
         split_orders = []
         for split in splits:
@@ -1156,15 +1156,15 @@ class DynamicDepthWalker(OrderExecutor):
                 side=edge.side
             )
             split_orders.append(order)
-        
+
         # 7. Monitor and walk
         await self.monitor_and_walk(execution_state, split_orders, market)
-        
+
         # 8. Compile results
         result = self.compile_results(execution_state, split_orders)
-        
+
         return result
-    
+
     async def place_split_order(
         self,
         execution_state: ExecutionState,
@@ -1173,7 +1173,7 @@ class DynamicDepthWalker(OrderExecutor):
         side: str
     ) -> SplitOrder:
         """Place individual split order."""
-        
+
         # Create split_order record
         split_order = SplitOrder(
             execution_id=execution_state.execution_id,
@@ -1185,7 +1185,7 @@ class DynamicDepthWalker(OrderExecutor):
         )
         db.add(split_order)
         db.commit()
-        
+
         # Place order via Kalshi API
         try:
             api_order = await self.kalshi_client.place_order(
@@ -1197,21 +1197,21 @@ class DynamicDepthWalker(OrderExecutor):
                 no_price_dollars=str(split.price) if side == "no" else None,
                 count=split.quantity
             )
-            
+
             # Update with order ID
             split_order.order_id = api_order["order_id"]
             split_order.status = "placed"
             split_order.placed_at = datetime.now()
             db.commit()
-            
+
         except Exception as e:
             split_order.status = "failed"
             split_order.error_message = str(e)
             db.commit()
             logger.error(f"Failed to place split order: {e}")
-        
+
         return split_order
-    
+
     async def monitor_and_walk(
         self,
         execution_state: ExecutionState,
@@ -1220,7 +1220,7 @@ class DynamicDepthWalker(OrderExecutor):
     ):
         """
         Monitor fills and walk prices if needed.
-        
+
         Runs until:
         - All orders filled
         - Max walks reached
@@ -1228,14 +1228,14 @@ class DynamicDepthWalker(OrderExecutor):
         """
         start_time = datetime.now()
         timeout = 40  # seconds
-        
+
         while True:
             # Check timeout
             elapsed = (datetime.now() - start_time).total_seconds()
             if elapsed > timeout:
                 logger.info(f"Execution timeout reached")
                 break
-            
+
             # Check if all filled
             all_filled = all(
                 s.status == "filled" for s in split_orders
@@ -1243,30 +1243,30 @@ class DynamicDepthWalker(OrderExecutor):
             if all_filled:
                 logger.info(f"All splits filled")
                 break
-            
+
             # Check if max walks reached
             total_walks = sum(s.walk_count for s in split_orders)
             if total_walks >= self.max_walks * len(split_orders):
                 logger.info(f"Max walks reached")
                 break
-            
+
             # Wait for interval
             await asyncio.sleep(self.walk_interval)
-            
+
             # Refresh split orders from DB
             for split_order in split_orders:
                 db.refresh(split_order)
-                
+
                 # Check order status via API
                 await self.update_split_status(split_order)
-            
+
             # Calculate momentum
             momentum = self.momentum.calculate(market.market_id)
-            
+
             # Update execution state
             execution_state.walker_state["momentum"] = float(momentum)
             db.commit()
-            
+
             # Walk prices if needed
             for split_order in split_orders:
                 if self.walker.should_walk(split_order, momentum, self.momentum_threshold):
@@ -1275,28 +1275,28 @@ class DynamicDepthWalker(OrderExecutor):
                         momentum=momentum,
                         market=market
                     )
-        
+
         # Mark execution complete
         execution_state.status = "completed"
         execution_state.completed_at = datetime.now()
-        
+
         # Calculate final metrics
         filled_qty = sum(s.filled_quantity for s in split_orders)
         total_qty = execution_state.target_quantity
-        
+
         execution_state.filled_quantity = filled_qty
         execution_state.fill_rate = filled_qty / total_qty if total_qty > 0 else 0
-        
+
         db.commit()
-    
+
     async def update_split_status(self, split_order: SplitOrder):
         """Check order status via Kalshi API."""
         if split_order.status in ["filled", "cancelled", "failed"]:
             return  # Already terminal state
-        
+
         try:
             order_status = await self.kalshi_client.get_order(split_order.order_id)
-            
+
             # Update fill info
             if order_status["status"] == "filled":
                 split_order.status = "filled"
@@ -1305,19 +1305,19 @@ class DynamicDepthWalker(OrderExecutor):
                     order_status["average_fill_price_dollars"]
                 )
                 split_order.filled_at = datetime.now()
-                
+
             elif order_status["status"] == "partial":
                 split_order.status = "partial"
                 split_order.filled_quantity = order_status["filled_count"]
                 split_order.average_fill_price = Decimal(
                     order_status["average_fill_price_dollars"]
                 )
-            
+
             db.commit()
-            
+
         except Exception as e:
             logger.error(f"Error checking order status: {e}")
-    
+
     async def walk_split_price(
         self,
         split_order: SplitOrder,
@@ -1326,7 +1326,7 @@ class DynamicDepthWalker(OrderExecutor):
     ):
         """
         Walk (adjust) price for a split order.
-        
+
         Process:
         1. Calculate new price
         2. Cancel existing order
@@ -1339,17 +1339,17 @@ class DynamicDepthWalker(OrderExecutor):
             momentum=momentum,
             direction="up"  # Always walk up (better price for us)
         )
-        
+
         logger.info(
             f"Walking split {split_order.split_id}: "
             f"{split_order.target_price} → {new_price} "
             f"(momentum: {momentum})"
         )
-        
+
         # Cancel existing order
         try:
             await self.kalshi_client.cancel_order(split_order.order_id)
-            
+
             # Place new order
             api_order = await self.kalshi_client.place_order(
                 ticker=market.ticker,
@@ -1360,55 +1360,55 @@ class DynamicDepthWalker(OrderExecutor):
                 no_price_dollars=str(new_price) if split_order.side == "no" else None,
                 count=split_order.quantity - split_order.filled_quantity  # Remaining quantity
             )
-            
+
             # Update record
             old_price = split_order.target_price
             split_order.target_price = new_price
             split_order.order_id = api_order["order_id"]
             split_order.walk_count += 1
-            
+
             # Add to walk history
             if not split_order.price_walk_history:
                 split_order.price_walk_history = []
-            
+
             split_order.price_walk_history.append({
                 "timestamp": datetime.now().isoformat(),
                 "old_price": str(old_price),
                 "new_price": str(new_price),
                 "momentum": float(momentum)
             })
-            
+
             db.commit()
-            
+
         except Exception as e:
             logger.error(f"Error walking price: {e}")
             split_order.error_message = str(e)
             db.commit()
-    
+
     def compile_results(
         self,
         execution_state: ExecutionState,
         split_orders: List[SplitOrder]
     ) -> ExecutionResult:
         """Compile execution results."""
-        
+
         filled_quantity = sum(s.filled_quantity for s in split_orders)
         total_cost = sum(
             s.filled_quantity * s.average_fill_price
             for s in split_orders
             if s.average_fill_price
         )
-        
+
         average_fill_price = (
             total_cost / filled_quantity if filled_quantity > 0 else None
         )
-        
+
         # Calculate slippage
         slippage = None
         if average_fill_price:
             slippage = (average_fill_price - execution_state.target_price) / \
                        execution_state.target_price
-        
+
         # Create metrics record
         metrics = ExecutionMetrics(
             execution_id=execution_state.execution_id,
@@ -1424,7 +1424,7 @@ class DynamicDepthWalker(OrderExecutor):
         )
         db.add(metrics)
         db.commit()
-        
+
         return ExecutionResult(
             execution_id=execution_state.execution_id,
             filled_quantity=filled_quantity,
@@ -1451,7 +1451,7 @@ method = Method(
         "algorithm": "dynamic_depth_walker",
         "max_slippage_percent": 0.025,
         "order_timeout_seconds": 40,
-        
+
         # Dynamic Depth Walker specific params
         "dynamic_depth_walker": {
             "enabled": True,
@@ -1474,13 +1474,13 @@ method = Method(
 
 def execute_trade(edge: Edge, method: Method):
     """Execute trade using method's execution algorithm."""
-    
+
     # Get executor based on method config
     executor = get_executor(method)
-    
+
     # Execute
     result = executor.execute(edge, method, edge.market)
-    
+
     # Record trade
     trade = Trade(
         edge_id=edge.edge_id,
@@ -1496,7 +1496,7 @@ def execute_trade(edge: Edge, method: Method):
     )
     db.add(trade)
     db.commit()
-    
+
     return trade
 ```
 
@@ -1520,14 +1520,14 @@ def test_orderbook_analyzer():
             ]
         }
     }
-    
+
     analyzer = OrderbookAnalyzer()
     analysis = analyzer.analyze(
         orderbook=orderbook,
         target_price=Decimal("0.7050"),
         side="yes"
     )
-    
+
     assert analysis.total_liquidity == 7500
     assert analysis.liquidity_category == "liquid"
 
@@ -1544,14 +1544,14 @@ def test_order_splitter():
         sweet_spot_price=Decimal("0.71"),
         sweet_spot_quantity=5000
     )
-    
+
     splitter = OrderSplitter()
     splits = splitter.calculate_splits(
         depth_analysis=analysis,
         total_quantity=100,
         target_price=Decimal("0.7050")
     )
-    
+
     assert len(splits) == 2
     assert splits[0].quantity == 60
     assert splits[1].quantity == 40
@@ -1567,22 +1567,22 @@ def test_momentum_calculator():
         )
         db.add(snapshot)
     db.commit()
-    
+
     calc = MomentumCalculator()
     momentum = calc.calculate("TEST-YES")
-    
+
     assert momentum > 0  # Should be positive (volume increasing)
 
 def test_price_walker():
     """Test price walking logic."""
     walker = PriceWalker()
-    
+
     new_price = walker.calculate_walk_price(
         current_price=Decimal("0.7000"),
         momentum=Decimal("0.15"),  # High momentum
         direction="up"
     )
-    
+
     assert new_price > Decimal("0.7000")
     assert new_price == Decimal("0.7050")  # Should use base increment
 ```
@@ -1595,25 +1595,25 @@ def test_price_walker():
 @pytest.mark.asyncio
 async def test_dynamic_depth_walker_execution():
     """Test complete execution flow."""
-    
+
     # Setup
     method = create_test_method(algorithm="dynamic_depth_walker")
     edge = create_test_edge(target_price=Decimal("0.70"))
     market = create_test_market()
-    
+
     # Mock Kalshi API
     with patch('kalshi_client.get_orderbook') as mock_orderbook, \
          patch('kalshi_client.place_order') as mock_place, \
          patch('kalshi_client.get_order') as mock_status:
-        
+
         mock_orderbook.return_value = get_mock_orderbook()
         mock_place.return_value = {"order_id": "test_order_123"}
         mock_status.return_value = {"status": "filled", "filled_count": 60}
-        
+
         # Execute
         executor = DynamicDepthWalker()
         result = await executor.execute(edge, method, market)
-        
+
         # Verify
         assert result.filled_quantity > 0
         assert result.average_fill_price is not None
@@ -1627,23 +1627,23 @@ async def test_dynamic_depth_walker_execution():
 
 def test_execution_speed():
     """Ensure execution completes within reasonable time."""
-    
+
     start = time.time()
-    
+
     # Execute with Dynamic Depth Walker
     result = execute_trade(edge, method)
-    
+
     elapsed = time.time() - start
-    
+
     assert elapsed < 45  # Should complete within 45 seconds
     assert result.filled_quantity > 0
 
 def test_api_rate_limiting():
     """Verify rate limiting works."""
-    
+
     # Execute 10 concurrent trades
     results = asyncio.run(execute_concurrent_trades(count=10))
-    
+
     # Check that we didn't hit rate limits
     for result in results:
         assert not result.error_message
@@ -1755,9 +1755,9 @@ if await rate_limiter.would_exceed_limit(calls=15):
 
 ## Approval & Timeline
 
-**Designed By:** Project Lead  
-**Date:** 2025-10-21  
-**Review Date:** Week 16 (after Phase 7 complete)  
+**Designed By:** Project Lead
+**Date:** 2025-10-21
+**Review Date:** Week 16 (after Phase 7 complete)
 **Conditional Implementation:** Week 17-18 (if metrics justify)
 
 ---

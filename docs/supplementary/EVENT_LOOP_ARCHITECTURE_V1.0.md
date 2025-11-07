@@ -177,11 +177,11 @@ START: Edge Detected
 
 class EntryFlow:
     """Manages complete entry flow from edge to position."""
-    
+
     async def execute_entry(self, edge: Edge):
         """
         Complete entry flow.
-        
+
         Steps:
         1. Validate edge quality
         2. Check risk limits
@@ -190,23 +190,23 @@ class EntryFlow:
         5. Create position record
         6. Start monitoring
         """
-        
+
         # 1. Validate edge
         if not self._validate_edge(edge):
             logger.info(f"Edge {edge.edge_id} failed validation")
             return
-        
+
         # 2. Risk checks
         if not await self.risk_manager.can_trade(edge):
             logger.warning(f"Risk limits prevent trading {edge.market_id}")
             return
-        
+
         # 3. Calculate size
         quantity = self.position_sizer.calculate_size(
             edge=edge,
             method=edge.method
         )
-        
+
         # 4. Place order
         order = await self.order_executor.execute_entry(
             market_id=edge.market_id,
@@ -214,21 +214,21 @@ class EntryFlow:
             quantity=quantity,
             target_price=edge.target_price
         )
-        
+
         if not order.filled:
             logger.warning(f"Entry order {order.order_id} not filled")
             return
-        
+
         # 5. Create position
         position = self.position_creator.create_position(
             edge=edge,
             order=order,
             method=edge.method
         )
-        
+
         # 6. Start monitoring
         await self.position_monitor.start_monitoring_position(position)
-        
+
         logger.info(
             f"Entry complete: Position {position.position_id} "
             f"({quantity} @ {order.filled_price})"
@@ -319,31 +319,31 @@ START: Position Opened
 async def monitor_single_position(position: Position):
     """
     Monitor one position until closed.
-    
+
     This is the HEART of the trading system.
     Runs continuously in async loop.
     """
-    
+
     while position.status == "open":
-        
+
         # 1. Get current price (with caching)
         current_price = await get_current_price(position.market_id)
-        
+
         # 2. Update unrealized P&L (local only)
         position.unrealized_pnl = calculate_pnl(position, current_price)
         position.unrealized_pnl_pct = position.unrealized_pnl / position.cost_basis
-        
+
         # 3. Update trailing stop if needed
         if position.trailing_stop_enabled:
             update_trailing_stop(position, current_price)
-        
+
         # 4. Check ALL exit conditions
         exit_trigger = exit_evaluator.check_exit_conditions(
             position=position,
             current_price=current_price,
             method=position.method
         )
-        
+
         # 5. If exit triggered, execute it
         if exit_trigger:
             await exit_executor.execute_exit(
@@ -351,13 +351,13 @@ async def monitor_single_position(position: Position):
                 trigger=exit_trigger
             )
             break  # Exit loop, position now closed
-        
+
         # 6. Determine sleep interval
         if near_threshold(position):
             sleep_interval = 5  # Urgent
         else:
             sleep_interval = 30  # Normal
-        
+
         # 7. Sleep before next check
         await asyncio.sleep(sleep_interval)
 ```
@@ -545,51 +545,51 @@ Exit Condition Triggered
 async def execute_exit(position: Position, trigger: ExitTrigger):
     """
     Execute exit with urgency-based strategy.
-    
+
     Flow depends on trigger priority:
     - CRITICAL: Market order immediately
     - HIGH: Aggressive limit, then market if needed
     - MEDIUM: Fair limit, walk if needed
     - LOW: Conservative limit, patient walking
     """
-    
+
     # 1. Determine quantity
     quantity = determine_quantity(position, trigger)
-    
+
     # 2. Get execution params
     params = trigger.execution_params
-    
+
     # 3. Place order
     if params['order_type'] == 'market':
         # CRITICAL exit - market order
         order = await place_market_order(position, quantity)
         await wait_for_fill(order, timeout=5)
-        
+
     else:
         # Limit order
         price = calculate_exit_price(position, params['price_strategy'])
         order = await place_limit_order(position, quantity, price)
-        
+
         # Wait for fill
         filled = await wait_for_fill(order, timeout=params['timeout'])
-        
+
         if not filled:
             # Escalate based on strategy
             if params['retry'] == 'immediate_market':
                 await cancel_and_use_market(order, position)
-            
+
             elif params['retry'] == 'walk_then_market':
                 await walk_price_twice_then_market(order, position)
-            
+
             elif params['retry'] == 'walk_price':
                 await walk_price_up_to_max(order, position, params['max_walks'])
-            
+
             elif params['retry'] == 'walk_slowly':
                 await walk_slowly(order, position, params['max_walks'])
-    
+
     # 4. Update position
     update_position_after_exit(position, order, trigger)
-    
+
     logger.info(f"Exit complete: {position.position_id}")
 ```
 

@@ -1,8 +1,8 @@
 # Kalshi API Technical Reference for Trading System Integration
 
-**Version:** 2.0 (Comprehensive Merge)  
-**Last Updated:** October 7, 2025  
-**API Version:** v2  
+**Version:** 2.0 (Comprehensive Merge)
+**Last Updated:** October 7, 2025
+**API Version:** v2
 **Official Documentation:** https://docs.kalshi.com
 
 ---
@@ -13,7 +13,7 @@ Kalshi provides a comprehensive RESTful API with WebSocket support for predictio
 
 **Key Technical Specifications:**
 - **Authentication**: RSA-PSS with SHA256 (30-minute token expiration)
-- **Base URLs**: 
+- **Base URLs**:
   - Production REST: `https://api.elections.kalshi.com/trade-api/v2`
   - Production WebSocket: `wss://trading-api.kalshi.com/trade-api/ws/v2`
   - Demo REST: `https://demo-api.kalshi.co/trade-api/v2`
@@ -43,7 +43,7 @@ Kalshi provides a comprehensive RESTful API with WebSocket support for predictio
    ```python
    # ✅ CORRECT (future-proof):
    yes_bid = Decimal(market["yes_bid_dollars"])  # "0.4275"
-   
+
    # ❌ WRONG (will break):
    yes_bid = market["yes_bid"]  # 43 (deprecated soon)
    ```
@@ -143,16 +143,16 @@ from cryptography.hazmat.backends import default_backend
 def generate_rsa_signature(private_key_path: str, timestamp: int, method: str, path: str) -> str:
     """
     Generate RSA-PSS signature for Kalshi API request.
-    
+
     Args:
         private_key_path: Path to RSA private key (.pem file)
         timestamp: Current time in milliseconds (int(time.time() * 1000))
         method: HTTP method in UPPERCASE (GET, POST, DELETE)
         path: API endpoint path (e.g., '/trade-api/v2/markets')
-    
+
     Returns:
         Base64-encoded signature string
-    
+
     Example:
         >>> timestamp = int(time.time() * 1000)
         >>> sig = generate_rsa_signature(
@@ -164,7 +164,7 @@ def generate_rsa_signature(private_key_path: str, timestamp: int, method: str, p
     """
     # Construct message
     message = f"{timestamp}{method.upper()}{path}"
-    
+
     # Load private key
     with open(private_key_path, "rb") as key_file:
         private_key = serialization.load_pem_private_key(
@@ -172,7 +172,7 @@ def generate_rsa_signature(private_key_path: str, timestamp: int, method: str, p
             password=None,
             backend=default_backend()
         )
-    
+
     # Sign with RSA-PSS
     signature = private_key.sign(
         message.encode('utf-8'),
@@ -182,7 +182,7 @@ def generate_rsa_signature(private_key_path: str, timestamp: int, method: str, p
         ),
         hashes.SHA256()
     )
-    
+
     # Return base64-encoded signature
     return base64.b64encode(signature).decode('utf-8')
 
@@ -839,21 +839,21 @@ Arrays sorted from **worst to best prices** (lowest to highest). Best bid is the
 def parse_orderbook(orderbook):
     """
     Calculate best prices and spread from Kalshi orderbook.
-    
+
     Returns:
         dict with best_yes_bid, best_yes_ask, best_no_bid, best_no_ask, spread
     """
     # Best bids are last elements (highest price)
     best_yes_bid = orderbook["yes"][-1][0] if orderbook["yes"] else 0
     best_no_bid = orderbook["no"][-1][0] if orderbook["no"] else 0
-    
+
     # Calculate asks using complement
     best_yes_ask = 100 - best_no_bid
     best_no_ask = 100 - best_yes_bid
-    
+
     # Spread
     spread = best_yes_ask - best_yes_bid
-    
+
     return {
         "best_yes_bid": best_yes_bid,
         "best_yes_ask": best_yes_ask,
@@ -1285,7 +1285,7 @@ The combination of REST endpoints, WebSocket feeds, historical data, and robust 
 
 ---
 
-**Document Status:** ✅ Comprehensive (Merged v1.0 + v2.0)  
-**Last Validation:** October 7, 2025  
-**Next Review:** Phase 2 implementation start  
+**Document Status:** ✅ Comprehensive (Merged v1.0 + v2.0)
+**Last Validation:** October 7, 2025
+**Next Review:** Phase 2 implementation start
 **Maintainer:** Precog Architecture Team

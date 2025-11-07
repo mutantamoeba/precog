@@ -15,42 +15,42 @@ live_stats:
   espn:
     enabled: true
     provider: "ESPN"
-    
+
     # Endpoints by sport
     endpoints:
       nfl:
         scoreboard: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
         schedule: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?dates={year}{month}{day}"
         teams: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams"
-      
+
       ncaaf:
         scoreboard: "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
         schedule: "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard?dates={year}{month}{day}"
         teams: "https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams"
         groups: "https://site.api.espn.com/apis/site/v2/sports/football/college-football/groups"
-      
+
       nba:
         scoreboard: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
         schedule: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={year}{month}{day}"
         teams: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams"
-      
+
       mlb:
         scoreboard: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard"
         schedule: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/scoreboard?dates={year}{month}{day}"
         teams: "https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams"
-    
+
     # Polling configuration
     polling:
       interval_seconds: 30           # Poll every 30 seconds during games
       timeout_seconds: 10
       retry_attempts: 3
       retry_delay_seconds: 2
-    
+
     # Rate limiting (ESPN is generous but respect it)
     rate_limit:
       requests_per_minute: 60
       burst_allowance: 10
-    
+
     # Data parsing
     parsing:
       extract_score: true
@@ -59,63 +59,63 @@ live_stats:
       extract_possession: true
       extract_drives: false          # Not needed for Phase 1-2
       extract_play_by_play: false    # Phase 9+
-  
+
   # Balldontlie API (NFL fallback/supplement)
   balldontlie:
     enabled: true
     provider: "Balldontlie"
     api_key_env: "BALLDONTLIE_API_KEY"
-    
+
     # Endpoints
     base_url: "https://api.balldontlie.io"
     endpoints:
       games: "/v1/games"
       teams: "/v1/teams"
       players: "/v1/players"  # Future - player stats
-    
+
     # Polling (slower than ESPN due to rate limits)
     polling:
       interval_seconds: 60           # Free tier: 5 req/min
       timeout_seconds: 15
       retry_attempts: 2
-    
+
     # Rate limiting (FREE TIER: 5 requests/minute)
     rate_limit:
       requests_per_minute: 5
       burst_allowance: 0             # No bursting on free tier
       upgrade_tier: "free"           # Options: free, paid
-    
+
     # Use as
     role: "fallback"                 # Primary: ESPN, Fallback: Balldontlie
-  
+
   # NCAAF API (College Football - Phase 3)
   ncaaf_api:
     enabled: false                   # Enable in Phase 3
     provider: "NCAA"
     api_key_env: "NCAAF_API_KEY"     # May not need key - TBD
-    
+
     # TBD - Need to research best source
     base_url: "https://api.ncaa.com"  # Placeholder
-    
+
     polling:
       interval_seconds: 45
       timeout_seconds: 10
-    
+
     rate_limit:
       requests_per_minute: 30
-  
+
   # Tennis API (Phase 6)
   tennis_api:
     enabled: false
     provider: "TBD"                  # Research: Tennis Abstract, ATP, WTA
     api_key_env: "TENNIS_API_KEY"
-    
+
     base_url: "TBD"
-    
+
     polling:
       interval_seconds: 60           # Tennis is slower-paced
       timeout_seconds: 10
-    
+
     rate_limit:
       requests_per_minute: 20
 
@@ -128,66 +128,66 @@ historical_data:
     enabled: true
     provider: "Sports Reference LLC"
     base_url: "https://www.pro-football-reference.com"
-    
+
     # Scraping configuration
     scraping:
       allowed: true                  # Respect robots.txt
       rate_limit_per_hour: 20        # Be respectful
       delay_between_requests: 5      # Seconds
       user_agent: "precog-trading-bot/1.0 (research purposes)"
-    
+
     # What to scrape
     data_types:
       - "game_scores"
       - "team_stats"
       - "play_by_play"               # Phase 4+ for odds modeling
-    
+
     # Date range for historical backfill
     backfill:
       start_year: 2019
       end_year: 2024
       seasons: ["regular", "playoffs"]
-  
+
   # College Football Reference
   cfbreference:
     enabled: true
     provider: "Sports Reference LLC"
     base_url: "https://www.sports-reference.com/cfb"
-    
+
     scraping:
       allowed: true
       rate_limit_per_hour: 20
       delay_between_requests: 5
       user_agent: "precog-trading-bot/1.0 (research purposes)"
-    
+
     data_types:
       - "game_scores"
       - "team_stats"
       - "rankings"                   # AP, Coaches polls
-    
+
     backfill:
       start_year: 2019
       end_year: 2024
       divisions: ["fbs"]             # FBS only for now
-  
+
   # Basketball Reference (Phase 6)
   basketballreference:
     enabled: false
     provider: "Sports Reference LLC"
     base_url: "https://www.basketball-reference.com"
-    
+
     scraping:
       allowed: true
       rate_limit_per_hour: 20
       delay_between_requests: 5
       user_agent: "precog-trading-bot/1.0 (research purposes)"
-  
+
   # Baseball Reference (Phase 6)
   baseballreference:
     enabled: false
     provider: "Sports Reference LLC"
     base_url: "https://www.baseball-reference.com"
-    
+
     scraping:
       allowed: true
       rate_limit_per_hour: 20
@@ -206,35 +206,35 @@ advanced_metrics:
     api_key_env: "FOOTBALL_OUTSIDERS_API_KEY"
     username_env: "FOOTBALL_OUTSIDERS_USERNAME"
     password_env: "FOOTBALL_OUTSIDERS_PASSWORD"
-    
+
     # Subscription required
     subscription_required: true
-    
+
     data_types:
       - "team_dvoa"                  # Defensive/Offensive/Special Teams
       - "player_stats"
       - "game_charting"
-    
+
     update_frequency: "weekly"       # Updated once per week
-  
+
   # Pro Football Focus (PFF)
   pff:
     enabled: false
     provider: "Pro Football Focus"
     base_url: "https://api.pff.com"
     api_key_env: "PFF_API_KEY"
-    
+
     # Very expensive - optional
     subscription_required: true
     subscription_tier_env: "PFF_SUBSCRIPTION_TIER"
-    
+
     data_types:
       - "player_grades"
       - "team_grades"
       - "coverage_stats"
-    
+
     update_frequency: "daily"
-  
+
   # SportsRadar (Comprehensive sports data)
   sportsradar:
     enabled: false
@@ -242,13 +242,13 @@ advanced_metrics:
     base_url: "https://api.sportradar.com"
     api_key_env: "SPORTSRADAR_API_KEY"
     access_level_env: "SPORTSRADAR_ACCESS_LEVEL"  # trial, basic, premium
-    
+
     # Expensive but comprehensive
     endpoints:
       nfl: "https://api.sportradar.us/nfl/official/trial/v7"
       nba: "https://api.sportradar.us/nba/trial/v8"
       mlb: "https://api.sportradar.us/mlb/trial/v7"
-    
+
     rate_limit:
       trial_per_month: 1000
       basic_per_month: 10000
@@ -262,40 +262,40 @@ political_data:
     enabled: false
     provider: "RealClearPolitics"
     base_url: "https://www.realclearpolling.com"
-    
+
     scraping:
       allowed: true
       rate_limit_per_hour: 20
       delay_between_requests: 5
       user_agent: "precog-trading-bot/1.0 (research purposes)"
-    
+
     data_types:
       - "presidential_polls"
       - "senate_polls"
       - "house_polls"
       - "governor_polls"
       - "approval_ratings"
-    
+
     polling:
       update_frequency_hours: 6      # Check 4 times per day
-  
+
   # FiveThirtyEight (Scraping - public data)
   fivethirtyeight:
     enabled: false
     provider: "ABC News / FiveThirtyEight"
     base_url: "https://projects.fivethirtyeight.com"
-    
+
     scraping:
       allowed: true
       rate_limit_per_hour: 30
       delay_between_requests: 3
       user_agent: "precog-trading-bot/1.0 (research purposes)"
-    
+
     data_types:
       - "election_forecasts"
       - "poll_aggregation"
       - "historical_models"
-    
+
     polling:
       update_frequency_hours: 12
 
@@ -308,28 +308,28 @@ entertainment_data:
     enabled: false
     provider: "IMDbPro / Amazon"
     base_url: "https://www.boxofficemojo.com"
-    
+
     scraping:
       allowed: true
       rate_limit_per_hour: 10        # Be conservative
       delay_between_requests: 10     # Amazon monitors carefully
       user_agent: "precog-trading-bot/1.0 (research purposes)"
-    
+
     data_types:
       - "daily_box_office"
       - "opening_weekend"
       - "theater_counts"
       - "historical_performance"
-    
+
     polling:
       update_frequency_hours: 24     # Daily updates
-  
+
   # The Numbers (Box Office Data)
   thenumbers:
     enabled: false
     provider: "The Numbers"
     base_url: "https://www.the-numbers.com"
-    
+
     scraping:
       allowed: true
       rate_limit_per_hour: 15
@@ -345,53 +345,53 @@ social_media:
     enabled: false
     provider: "X Corp"
     base_url: "https://api.twitter.com/2"
-    
+
     # API v2 credentials
     api_key_env: "TWITTER_API_KEY"
     api_secret_env: "TWITTER_API_SECRET"
     bearer_token_env: "TWITTER_BEARER_TOKEN"
     access_token_env: "TWITTER_ACCESS_TOKEN"
     access_token_secret_env: "TWITTER_ACCESS_TOKEN_SECRET"
-    
+
     # Rate limiting (Free tier)
     rate_limit:
       tweets_per_month: 10000        # Free tier limit
       requests_per_15min: 15
-    
+
     # What to monitor
     monitoring:
       search_queries:
         - "#Election2024"
         - "#BoxOffice"
       accounts: []                   # Specific accounts to follow
-    
+
     polling:
       interval_seconds: 300          # Every 5 minutes
-  
+
   # Reddit API
   reddit:
     enabled: false
     provider: "Reddit Inc"
     base_url: "https://oauth.reddit.com"
-    
+
     # OAuth2 credentials
     client_id_env: "REDDIT_CLIENT_ID"
     client_secret_env: "REDDIT_CLIENT_SECRET"
     user_agent_env: "REDDIT_USER_AGENT"
     username_env: "REDDIT_USERNAME"
     password_env: "REDDIT_PASSWORD"
-    
+
     # Rate limiting
     rate_limit:
       requests_per_minute: 60
-    
+
     # Subreddits to monitor
     monitoring:
       subreddits:
         - "politics"
         - "boxoffice"
         - "nfl"
-    
+
     polling:
       interval_seconds: 600          # Every 10 minutes
 
@@ -406,57 +406,57 @@ ai_services:
     base_url: "https://api.openai.com/v1"
     api_key_env: "OPENAI_API_KEY"
     organization_id_env: "OPENAI_ORGANIZATION_ID"
-    
+
     # Model selection
     models:
       chat: "gpt-4-turbo-preview"
       embedding: "text-embedding-ada-002"
-    
+
     # Rate limiting
     rate_limit:
       requests_per_minute: 60
       tokens_per_minute: 90000
-    
+
     # Use cases
     use_for:
       - "sentiment_analysis"
       - "text_classification"
       - "summarization"
-  
+
   # Anthropic API (Claude)
   anthropic:
     enabled: false
     provider: "Anthropic"
     base_url: "https://api.anthropic.com/v1"
     api_key_env: "ANTHROPIC_API_KEY"
-    
+
     # Model selection
     models:
       default: "claude-3-sonnet-20240229"
-    
+
     # Rate limiting
     rate_limit:
       requests_per_minute: 60
       tokens_per_minute: 100000
-    
+
     # Use cases
     use_for:
       - "advanced_reasoning"
       - "document_analysis"
       - "code_analysis"
-  
+
   # Hugging Face (Open source models)
   huggingface:
     enabled: false
     provider: "Hugging Face"
     base_url: "https://api-inference.huggingface.co"
     api_key_env: "HUGGINGFACE_API_KEY"
-    
+
     # Models to use
     models:
       sentiment: "cardiffnlp/twitter-roberta-base-sentiment"
       classification: "facebook/bart-large-mnli"
-    
+
     # Use cases
     use_for:
       - "sentiment_analysis"
@@ -472,31 +472,31 @@ crypto_finance:
     provider: "CoinMarketCap"
     base_url: "https://pro-api.coinmarketcap.com/v1"
     api_key_env: "COINMARKETCAP_API_KEY"
-    
+
     # Rate limiting (Free tier)
     rate_limit:
       requests_per_month: 10000
       requests_per_minute: 30
-    
+
     data_types:
       - "cryptocurrency_prices"
       - "market_cap"
       - "volume"
-    
+
     polling:
       interval_seconds: 300
-  
+
   # CoinGecko (Free tier doesn't need key)
   coingecko:
     enabled: false
     provider: "CoinGecko"
     base_url: "https://api.coingecko.com/api/v3"
     api_key_env: "COINGECKO_API_KEY"  # Optional for free tier
-    
+
     # Rate limiting (Free tier)
     rate_limit:
       requests_per_minute: 10
-    
+
     polling:
       interval_seconds: 600
 
@@ -510,37 +510,37 @@ tech_data:
     provider: "GitHub"
     base_url: "https://api.github.com"
     api_token_env: "GITHUB_TOKEN"
-    
+
     # Rate limiting (Authenticated)
     rate_limit:
       requests_per_hour: 5000
-    
+
     # What to monitor
     monitoring:
       repositories: []               # Specific repos to track
       topics: []                     # GitHub topics to monitor
-    
+
     data_types:
       - "repository_activity"
       - "star_count"
       - "commit_frequency"
       - "pull_requests"
-    
+
     use_for:
       - "tech_trend_analysis"
       - "project_momentum"
-  
+
   # Product Hunt
   producthunt:
     enabled: false
     provider: "Product Hunt"
     base_url: "https://api.producthunt.com/v2"
     api_token_env: "PRODUCTHUNT_TOKEN"
-    
+
     # Rate limiting
     rate_limit:
       requests_per_hour: 100
-    
+
     polling:
       interval_hours: 24
 
@@ -554,36 +554,36 @@ science_data:
     provider: "NASA"
     base_url: "https://api.nasa.gov"
     api_key_env: "NASA_API_KEY"
-    
+
     # Rate limiting (Free tier)
     rate_limit:
       requests_per_hour: 1000
-    
+
     data_types:
       - "astronomy_picture"
       - "mars_rover_photos"
       - "near_earth_objects"
-    
+
     use_for:
       - "space_mission_markets"
       - "asteroid_detection"
-  
+
   # NOAA (Weather/Climate)
   noaa:
     enabled: false
     provider: "NOAA"
     base_url: "https://www.ncei.noaa.gov/cdo-web/api/v2"
     api_key_env: "NOAA_API_KEY"
-    
+
     # Rate limiting
     rate_limit:
       requests_per_second: 5
-    
+
     data_types:
       - "weather_data"
       - "climate_data"
       - "storm_tracking"
-    
+
     use_for:
       - "weather_markets"
       - "climate_predictions"
@@ -598,25 +598,25 @@ transcription:
     provider: "Rev.ai"
     base_url: "https://api.rev.ai/speechtotext/v1"
     api_key_env: "REV_API_KEY"
-    
+
     # Pricing
     cost_per_minute: 0.02            # $0.02 per minute
-    
+
     use_for:
       - "debate_transcription"
       - "speech_analysis"
       - "press_conference_analysis"
-  
+
   # AssemblyAI
   assemblyai:
     enabled: false
     provider: "AssemblyAI"
     base_url: "https://api.assemblyai.com/v2"
     api_key_env: "ASSEMBLYAI_API_KEY"
-    
+
     # Pricing
     cost_per_hour: 0.37              # $0.37 per audio hour
-    
+
     use_for:
       - "podcast_analysis"
       - "earnings_call_analysis"
@@ -631,22 +631,22 @@ scraping_infrastructure:
     provider: "ScraperAPI"
     base_url: "https://api.scraperapi.com"
     api_key_env: "SCRAPER_API_KEY"
-    
+
     # Pricing (Pay per request)
     requests_per_month: 1000         # Free tier
     cost_per_1000: 1.00              # $1 per 1,000 requests
-    
+
     features:
       - "proxy_rotation"
       - "captcha_solving"
       - "javascript_rendering"
-  
+
   # Bright Data (formerly Luminati)
   brightdata:
     enabled: false
     provider: "Bright Data"
     api_key_env: "BRIGHT_DATA_API_KEY"
-    
+
     # Enterprise-grade scraping
     subscription_required: true
 
@@ -660,13 +660,13 @@ data_quality:
     max_data_age_minutes: 10         # Alert if data >10 min old
     require_timestamps: true
     validate_schema: true
-    
+
   # Fallback strategy
   fallback:
     enabled: true
     # If primary source fails, try secondary
     primary_to_secondary_delay: 30   # Wait 30s before failover
-  
+
   # Data reconciliation
   reconciliation:
     enabled: false                   # Phase 9+
@@ -679,14 +679,14 @@ data_quality:
 caching:
   enabled: true
   backend: "redis"                   # Options: redis, memory, file
-  
+
   # Redis configuration
   redis:
     host_env: "REDIS_HOST"
     port_env: "REDIS_PORT"
     password_env: "REDIS_PASSWORD"
     db_env: "REDIS_DB"
-  
+
   # TTL by data type
   ttl_seconds:
     live_stats: 30                   # 30 seconds
@@ -703,7 +703,7 @@ monitoring:
     enabled: true
     interval_seconds: 60
     alert_on_failure: true
-  
+
   # API usage tracking
   usage_tracking:
     enabled: true

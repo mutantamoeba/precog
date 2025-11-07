@@ -1,16 +1,16 @@
 # Development Phases & Roadmap
 
 ---
-**Version:** 1.1  
-**Last Updated:** 2025-10-12  
-**Status:** ✅ Current  
+**Version:** 1.1
+**Last Updated:** 2025-10-12
+**Status:** ✅ Current
 **Changes in v1.1:** Clarified Phase 2 (live data), Phase 3 (processing only, no edges), Phase 4 (odds/edges/historical loader); added new deliverables (GLOSSARY Phase 0, DEVELOPER_ONBOARDING Phase 0, DEPLOYMENT_GUIDE Phase 1, MODEL_VALIDATION/BACKTESTING_PROTOCOL Phase 4, USER_GUIDE Phase 5); updated Phase 0 to 100% complete.
 ---
 
 ## Timeline Overview (Realistic Part-Time Estimate)
 
-**Total to Phase 10:** ~1.5-2 years (78 weeks @ 12 hours/week)  
-**MVP Trading (Phase 5):** ~7 months from Phase 0 start  
+**Total to Phase 10:** ~1.5-2 years (78 weeks @ 12 hours/week)
+**MVP Trading (Phase 5):** ~7 months from Phase 0 start
 **Current Status:** Phase 0 at **100%** ✅ - Ready for Phase 1
 
 ---
@@ -23,8 +23,8 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ## Phase 0: Foundation (Codename: "Genesis")
 
-**Duration:** 8 weeks  
-**Status:** ✅ **100% COMPLETE** (Session 7)  
+**Duration:** 8 weeks
+**Status:** ✅ **100% COMPLETE** (Session 7)
 **Goal:** Create comprehensive documentation, configuration system, and project foundation
 
 ### Deliverables
@@ -87,9 +87,9 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ## Phase 1: Core Infrastructure (Codename: "Bootstrap")
 
-**Duration:** 6 weeks  
-**Target:** November-December 2025  
-**Status:** 🔵 Ready to start  
+**Duration:** 6 weeks
+**Target:** November-December 2025
+**Status:** 🔵 Ready to start
 **Goal:** Build core infrastructure and Kalshi API integration
 
 ### Dependencies
@@ -166,9 +166,9 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ## Phase 2: Live Data Integration (Codename: "Observer")
 
-**Duration:** 4 weeks  
-**Target:** December 2025 - January 2026  
-**Status:** 🔵 Planned  
+**Duration:** 4 weeks
+**Target:** December 2025 - January 2026
+**Status:** 🔵 Planned
 **Goal:** Implement live game data collection for NFL/NCAAF via ESPN API
 
 ### Dependencies
@@ -223,9 +223,9 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ## Phase 3: Data Processing (Codename: "Pipeline")
 
-**Duration:** 4 weeks  
-**Target:** January-February 2026  
-**Status:** 🔵 Planned  
+**Duration:** 4 weeks
+**Target:** January-February 2026
+**Status:** 🔵 Planned
 **Goal:** Implement asynchronous data processing and WebSocket handlers (**NO odds calculation or edge detection in this phase**)
 
 ### Dependencies
@@ -282,9 +282,9 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ## Phase 4: Odds Calculation & Edge Detection (Codename: "Oracle")
 
-**Duration:** 8 weeks  
-**Target:** February-April 2026  
-**Status:** 🔵 Planned  
+**Duration:** 8 weeks
+**Target:** February-April 2026
+**Status:** 🔵 Planned
 **Goal:** Implement odds models, historical lookup, ensemble, and edge detection
 
 ### Dependencies
@@ -358,9 +358,9 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ## Phase 5: Trading Engine & Risk Management (Codename: "Executor")
 
-**Duration:** 6 weeks  
-**Target:** April-May 2026  
-**Status:** 🔵 Planned  
+**Duration:** 6 weeks
+**Target:** April-May 2026
+**Status:** 🔵 Planned
 **Goal:** Implement order execution, position management, and comprehensive risk controls
 
 ### Dependencies
@@ -470,9 +470,9 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ## Phase 6: Multi-Sport Expansion (Codename: "Constellation")
 
-**Duration:** 6 weeks  
-**Target:** May-June 2026  
-**Status:** 🔵 Planned  
+**Duration:** 6 weeks
+**Target:** May-June 2026
+**Status:** 🔵 Planned
 **Goal:** Add NBA, MLB, Tennis, and UFC support
 
 ### Dependencies
@@ -529,9 +529,9 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ## Phase 7: Web Dashboard (Codename: "Augment")
 
-**Duration:** 8 weeks  
-**Target:** June-August 2026  
-**Status:** 🔵 Planned  
+**Duration:** 8 weeks
+**Target:** June-August 2026
+**Status:** 🔵 Planned
 **Goal:** Create web dashboard for monitoring and manual control
 
 ### Dependencies
@@ -583,9 +583,9 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ## Phase 8: Non-Sports Markets (Codename: "Multiverse")
 
-**Duration:** 12 weeks  
-**Target:** August-November 2026  
-**Status:** 🔵 Planned  
+**Duration:** 12 weeks
+**Target:** August-November 2026
+**Status:** 🔵 Planned
 **Goal:** Expand to politics, entertainment, and other non-sports categories
 
 ### Dependencies
@@ -632,9 +632,9 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ## Phase 9: Machine Learning Enhancement (Codename: "Singularity")
 
-**Duration:** 16 weeks  
-**Target:** November 2026 - March 2027  
-**Status:** 🔵 Planned  
+**Duration:** 16 weeks
+**Target:** November 2026 - March 2027
+**Status:** 🔵 Planned
 **Goal:** Integrate advanced ML models for enhanced predictions
 
 ### Dependencies
@@ -686,9 +686,9 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 
 ## Phase 10: Multi-Platform & Advanced Features (Codename: "Nexus Prime")
 
-**Duration:** 12 weeks  
-**Target:** March-June 2027  
-**Status:** 🔵 Planned  
+**Duration:** 12 weeks
+**Target:** March-June 2027
+**Status:** 🔵 Planned
 **Goal:** Add Polymarket integration and cross-platform arbitrage
 
 ### Dependencies
@@ -777,8 +777,8 @@ See PROJECT_OVERVIEW_V1.2.md for complete Phase Dependencies Table. Key dependen
 
 ---
 
-**Maintained By:** Project lead  
-**Review Frequency:** Update after each phase completion  
+**Maintained By:** Project lead
+**Review Frequency:** Update after each phase completion
 **Next Review:** Phase 1 kickoff (after Phase 0 complete)
 
 ---

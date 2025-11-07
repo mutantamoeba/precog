@@ -1,8 +1,8 @@
 # Phase 0.5 Comprehensive Handoff for Claude Code
 
-**Version:** 1.0  
-**Date:** 2025-10-21  
-**Session:** Complete Phase 5 Design + User Customization + Configuration Alignment  
+**Version:** 1.0
+**Date:** 2025-10-21
+**Session:** Complete Phase 5 Design + User Customization + Configuration Alignment
 **Status:** ✅ Ready for Implementation
 
 ---
@@ -58,13 +58,13 @@ From **YAML_CONSISTENCY_AUDIT_V1_0.md**, these updates are mandatory:
 monitoring:
   normal_frequency: 30      # user-customizable: Check every 30 seconds under normal conditions
   urgent_frequency: 5       # user-customizable: Check every 5 seconds when urgent
-  
+
   # Urgent mode triggers when position is within these thresholds
   urgent_conditions:
     near_stop_loss_pct: 0.02      # user-customizable: Within 2% of stop loss
     near_profit_target_pct: 0.02  # user-customizable: Within 2% of profit target
     near_trailing_stop_pct: 0.02  # user-customizable: Within 2% of trailing stop
-  
+
   # API rate management
   price_cache_ttl_seconds: 10        # Cache prices for 10 seconds (reduces API load)
   max_api_calls_per_minute: 60      # Safety limit (NOT user-customizable)
@@ -85,16 +85,16 @@ exit_priorities:
   CRITICAL:
     - stop_loss              # Capital protection (market order, immediate)
     - circuit_breaker        # System-wide shutdown on loss limits
-  
+
   HIGH:
     - trailing_stop          # Lock in profits quickly
     - time_based_urgent      # <5 min to settlement
     - liquidity_dried_up     # Market became illiquid
-  
+
   MEDIUM:
     - profit_target          # Target profit reached
     - partial_exit_target    # Partial profit taking
-  
+
   LOW:
     - early_exit             # Edge dropped below threshold
     - edge_disappeared       # Edge turned negative
@@ -119,21 +119,21 @@ exit_execution:
     timeout_seconds: 5              # Fast timeout
     retry_strategy: immediate_market # No limit attempts, go straight to market
     # NOT user-customizable for safety
-  
+
   HIGH:
     order_type: limit               # user-customizable: limit or market
     price_strategy: aggressive      # Best bid + 1 tick (pay premium for speed)
     timeout_seconds: 10             # user-customizable: 5-20 seconds
     retry_strategy: walk_then_market # Try limit, walk 2x, then market
     max_walks: 2                    # user-customizable: 1-5 walks
-  
+
   MEDIUM:
     order_type: limit               # user-customizable
     price_strategy: fair            # Best bid (no premium)
     timeout_seconds: 30             # user-customizable: 15-60 seconds
     retry_strategy: walk_price      # Walk price patiently
     max_walks: 5                    # user-customizable: 3-10 walks
-  
+
   LOW:
     order_type: limit               # user-customizable
     price_strategy: conservative    # Best bid - 1 tick (wait for better price)
@@ -154,18 +154,18 @@ exit_execution:
 # Partial Exit Rules
 partial_exits:
   enabled: true  # user-customizable: Enable/disable partial exits
-  
+
   stages:
     - name: "first_target"
       profit_threshold: 0.15  # user-customizable: +15% profit (range: 0.10-0.30)
       exit_percentage: 50     # user-customizable: Exit 50% (range: 30-70)
       description: "Initial profit taking to reduce risk"
-    
+
     - name: "second_target"   # NEW - Add this stage
       profit_threshold: 0.25  # user-customizable: +25% profit (range: 0.15-0.40)
       exit_percentage: 25     # user-customizable: Exit 25% (range: 20-40)
       description: "Further de-risking, let 25% ride with trailing stop"
-  
+
   # Remaining 25% of position rides with trailing stop for maximum upside
 ```
 
@@ -183,7 +183,7 @@ partial_exits:
 liquidity:
   max_spread: 0.03  # user-customizable: Maximum 3¢ spread (triggers liquidity_dried_up exit)
   min_volume: 50    # user-customizable: Minimum 50 contracts (triggers liquidity_dried_up exit)
-  
+
   exit_on_illiquid: true   # user-customizable: Auto-exit if market becomes illiquid
   alert_on_illiquid: true  # user-customizable: Alert user when illiquidity detected
 ```
@@ -290,23 +290,23 @@ Add these requirements:
 ```markdown
 ## REQ-MON: Position Monitoring Requirements
 
-**REQ-MON-001:** System SHALL monitor all open positions continuously  
-**REQ-MON-002:** Monitoring frequency SHALL be dynamic (30s normal, 5s urgent)  
-**REQ-MON-003:** System SHALL cache prices for 10s to reduce API calls  
-**REQ-MON-004:** API usage SHALL stay below 60 calls/minute  
+**REQ-MON-001:** System SHALL monitor all open positions continuously
+**REQ-MON-002:** Monitoring frequency SHALL be dynamic (30s normal, 5s urgent)
+**REQ-MON-003:** System SHALL cache prices for 10s to reduce API calls
+**REQ-MON-004:** API usage SHALL stay below 60 calls/minute
 **REQ-MON-005:** System SHALL track unrealized P&L in-memory (not persisted every check)
 
 ## REQ-EXIT: Exit Management Requirements
 
-**REQ-EXIT-001:** System SHALL evaluate 10 distinct exit conditions  
-**REQ-EXIT-002:** Exit conditions SHALL have priority hierarchy (CRITICAL > HIGH > MEDIUM > LOW)  
-**REQ-EXIT-003:** Multiple exit triggers SHALL resolve to highest priority  
-**REQ-EXIT-004:** CRITICAL exits SHALL use market orders  
-**REQ-EXIT-005:** HIGH/MEDIUM/LOW exits SHALL use limit orders with escalation  
-**REQ-EXIT-006:** Unfilled limit orders SHALL escalate progressively (walk → market)  
-**REQ-EXIT-007:** System SHALL support partial exits (50% then 25%)  
-**REQ-EXIT-008:** All exits SHALL log reason, priority, and execution details  
-**REQ-EXIT-009:** System SHALL NOT use edge_reversal condition (redundant, removed v2.5)  
+**REQ-EXIT-001:** System SHALL evaluate 10 distinct exit conditions
+**REQ-EXIT-002:** Exit conditions SHALL have priority hierarchy (CRITICAL > HIGH > MEDIUM > LOW)
+**REQ-EXIT-003:** Multiple exit triggers SHALL resolve to highest priority
+**REQ-EXIT-004:** CRITICAL exits SHALL use market orders
+**REQ-EXIT-005:** HIGH/MEDIUM/LOW exits SHALL use limit orders with escalation
+**REQ-EXIT-006:** Unfilled limit orders SHALL escalate progressively (walk → market)
+**REQ-EXIT-007:** System SHALL support partial exits (50% then 25%)
+**REQ-EXIT-008:** All exits SHALL log reason, priority, and execution details
+**REQ-EXIT-009:** System SHALL NOT use edge_reversal condition (redundant, removed v2.5)
 **REQ-EXIT-010:** Liquidity checks SHALL trigger exits if spread >3¢ or volume <50
 ```
 
@@ -357,9 +357,9 @@ From **USER_CUSTOMIZATION_STRATEGY_V1_0.md**, users can customize parameters acr
 
 #### Phase 1: YAML Editing (Current)
 
-**Method:** Direct YAML file editing  
-**Scope:** All parameters marked `# user-customizable`  
-**Requires:** Application restart  
+**Method:** Direct YAML file editing
+**Scope:** All parameters marked `# user-customizable`
+**Requires:** Application restart
 **Hierarchy:** `YAML > Code Defaults`
 
 **Example:**
@@ -373,9 +373,9 @@ User edits to 0.20, restarts app, change takes effect.
 
 #### Phase 1.5: Database Overrides (Planned)
 
-**Method:** Webapp UI  
-**Scope:** Per-user overrides of any user-customizable parameter  
-**Requires:** No restart  
+**Method:** Webapp UI
+**Scope:** Per-user overrides of any user-customizable parameter
+**Requires:** No restart
 **Hierarchy:** `Database Override > YAML > Code Defaults`
 
 **Database Schema:**
@@ -395,8 +395,8 @@ User 123 sets profit_target to 0.20 via UI → Stored in database → Takes effe
 
 #### Phase 4-5: Method Abstraction (Planned, ADR-021)
 
-**Method:** Method templates + customization UI  
-**Scope:** Complete configuration bundles  
+**Method:** Method templates + customization UI
+**Scope:** Complete configuration bundles
 **Hierarchy:** `Active Method > Database Override > YAML > Code`
 
 **Example:**
@@ -674,8 +674,8 @@ READY FOR PHASE 5 IMPLEMENTATION ✓
 
 **Choice:** Phased rollout of customization capabilities
 
-**Phase 1:** YAML editing (simple, version controlled)  
-**Phase 1.5:** Database overrides (per-user, no restart)  
+**Phase 1:** YAML editing (simple, version controlled)
+**Phase 1.5:** Database overrides (per-user, no restart)
 **Phase 4-5:** Method templates (complete bundles, A/B testing)
 
 **Rationale:**
@@ -736,24 +736,24 @@ $ grep -r "edge_reversal" trading/
 
 ### Phase 0.5 Complete When:
 
-✅ All YAML files updated per YAML_CONSISTENCY_AUDIT  
-✅ All documentation updated (MASTER_REQUIREMENTS, DATABASE_SCHEMA, CONFIGURATION_GUIDE, DEVELOPMENT_PHASES)  
-✅ New documentation added (USER_CUSTOMIZATION_STRATEGY, CONFIGURATION_GUIDE_UPDATE_SPEC)  
-✅ Database schema updated (positions table, new tables)  
-✅ YAML validation passes  
-✅ Consistency audit passes  
-✅ All cross-references working  
-✅ No deprecated features referenced  
+✅ All YAML files updated per YAML_CONSISTENCY_AUDIT
+✅ All documentation updated (MASTER_REQUIREMENTS, DATABASE_SCHEMA, CONFIGURATION_GUIDE, DEVELOPMENT_PHASES)
+✅ New documentation added (USER_CUSTOMIZATION_STRATEGY, CONFIGURATION_GUIDE_UPDATE_SPEC)
+✅ Database schema updated (positions table, new tables)
+✅ YAML validation passes
+✅ Consistency audit passes
+✅ All cross-references working
+✅ No deprecated features referenced
 ✅ Ready for Phase 5 implementation
 
 ### Ready for Phase 5 When:
 
-✅ Position monitoring system can be implemented from specs  
-✅ Exit evaluation system can be implemented from specs  
-✅ Exit execution system can be implemented from specs  
-✅ All architectural decisions documented  
-✅ All integration points clear  
-✅ Test strategy defined  
+✅ Position monitoring system can be implemented from specs
+✅ Exit evaluation system can be implemented from specs
+✅ Exit execution system can be implemented from specs
+✅ All architectural decisions documented
+✅ All integration points clear
+✅ Test strategy defined
 
 ---
 
@@ -931,8 +931,8 @@ This session completed comprehensive design for:
 
 ---
 
-**Status:** ✅ Complete and Ready for Implementation  
-**Estimated Implementation Time:** 8 hours (Phase 0.5 updates)  
+**Status:** ✅ Complete and Ready for Implementation
+**Estimated Implementation Time:** 8 hours (Phase 0.5 updates)
 **Phase 5 Implementation:** Ready to begin after Phase 0.5 complete
 
 🚀 **Ready for Claude Code!**

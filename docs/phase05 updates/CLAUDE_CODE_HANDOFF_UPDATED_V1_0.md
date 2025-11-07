@@ -1,6 +1,6 @@
 # Phase 0.5 Progress Summary for Claude Code
-**Date:** 2025-10-21  
-**Session:** Position Monitoring & Exit Management Design Complete  
+**Date:** 2025-10-21
+**Session:** Position Monitoring & Exit Management Design Complete
 **Status:** Ready for Documentation Updates + Phase 5 Specifications Added
 
 ---
@@ -183,21 +183,21 @@ exit_execution:
     order_type: market
     timeout_seconds: 5
     retry_strategy: immediate_market
-  
+
   HIGH:
     order_type: limit
     price_strategy: aggressive
     timeout_seconds: 10
     retry_strategy: walk_then_market
     max_walks: 2
-  
+
   MEDIUM:
     order_type: limit
     price_strategy: fair
     timeout_seconds: 30
     retry_strategy: walk_price
     max_walks: 5
-  
+
   LOW:
     order_type: limit
     price_strategy: conservative

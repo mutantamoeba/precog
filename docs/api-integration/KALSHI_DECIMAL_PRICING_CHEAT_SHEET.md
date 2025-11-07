@@ -44,7 +44,7 @@ from decimal import Decimal
 def parse_kalshi_market(market_data: dict) -> dict:
     """
     Parse Kalshi market data correctly.
-    
+
     ALWAYS use *_dollars fields, NEVER integer fields.
     """
     return {
@@ -121,21 +121,21 @@ from decimal import Decimal, ROUND_HALF_UP
 def calculate_edge(true_prob: Decimal, market_price: Decimal) -> Decimal:
     """
     Calculate expected value with sub-penny precision.
-    
+
     Example:
         true_prob = 0.6500 (65% win probability)
         market_price = 0.5800 (market pricing at 58¢)
-        
+
         Returns: 0.0770 (7.7% edge)
     """
     profit_if_win = Decimal("1.0000") - market_price
     expected_gain = true_prob * profit_if_win
-    
+
     prob_loss = Decimal("1.0000") - true_prob
     expected_loss = prob_loss * market_price
-    
+
     edge = expected_gain - expected_loss
-    
+
     # Round to 4 decimal places
     return edge.quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
@@ -154,7 +154,7 @@ print(f"Edge: {edge}")  # 0.0770 (7.7%)
 def calculate_spread(yes_bid: Decimal, no_bid: Decimal) -> Decimal:
     """
     Calculate market spread.
-    
+
     Kalshi orderbooks show bids only.
     YES ask = 1.0 - NO bid
     NO ask = 1.0 - YES bid
@@ -190,7 +190,7 @@ trading:
       ignore_threshold: 0.0500      # 5%
       alert_threshold: 0.0800       # 8%
       auto_execute_threshold: 0.1500  # 15%
-    
+
     liquidity:
       min_spread: 0.0200  # 2¢ (can go lower with sub-penny)
       max_spread: 0.0800  # 8¢
@@ -206,16 +206,16 @@ from decimal import Decimal, InvalidOperation
 def validate_price(price: Decimal, field_name: str = "price") -> None:
     """
     Validate that price is in valid range.
-    
+
     Raises:
         ValueError: If price is out of bounds
     """
     if not isinstance(price, Decimal):
         raise TypeError(f"{field_name} must be Decimal, got {type(price)}")
-    
+
     if price < Decimal("0.0001"):
         raise ValueError(f"{field_name} too low: {price} < 0.0001")
-    
+
     if price > Decimal("0.9999"):
         raise ValueError(f"{field_name} too high: {price} > 0.9999")
 
@@ -224,7 +224,7 @@ def validate_price_consistency(yes_bid: Decimal, no_bid: Decimal) -> None:
     Validate that YES + NO bids approximately equal 1.0.
     """
     total = yes_bid + (Decimal("1.0000") - no_bid)  # YES bid + YES ask
-    
+
     # Allow for spread (95% to 105%)
     if not (Decimal("0.95") <= total <= Decimal("1.05")):
         raise ValueError(
@@ -290,26 +290,26 @@ class TestDecimalPricing(unittest.TestCase):
             "no_bid_dollars": "0.5700",
             "no_ask_dollars": "0.5725"
         }
-        
+
         parsed = parse_kalshi_market(market_data)
-        
+
         self.assertIsInstance(parsed["yes_bid"], Decimal)
         self.assertEqual(parsed["yes_bid"], Decimal("0.4275"))
-    
+
     def test_edge_calculation(self):
         """Test edge calculation with sub-penny precision."""
         edge = calculate_edge(
             true_prob=Decimal("0.6500"),
             market_price=Decimal("0.5800")
         )
-        
+
         self.assertEqual(edge, Decimal("0.0770"))  # 7.7%
-    
+
     def test_price_validation(self):
         """Test that invalid prices are rejected."""
         with self.assertRaises(ValueError):
             validate_price(Decimal("1.0500"))  # Too high
-        
+
         with self.assertRaises(ValueError):
             validate_price(Decimal("0.0000"))  # Too low
 ```

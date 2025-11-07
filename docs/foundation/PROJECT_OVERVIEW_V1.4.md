@@ -478,33 +478,33 @@ jobs:
 ## Key Design Decisions
 
 ### 1. DECIMAL Precision (Critical)
-**Decision:** Use `DECIMAL(10,4)` for all prices (never float/int)  
-**Rationale:** Avoid floating-point errors in financial calculations  
+**Decision:** Use `DECIMAL(10,4)` for all prices (never float/int)
+**Rationale:** Avoid floating-point errors in financial calculations
 **Implementation:** SQLAlchemy DECIMAL columns, Python `Decimal` type, parse `*_dollars` API fields
 
 ### 2. RSA-PSS Authentication (Phase 1)
-**Decision:** Use RSA-PSS with SHA256 (not HMAC-SHA256) for Kalshi API  
-**Rationale:** Kalshi API updated to RSA-PSS in 2025  
+**Decision:** Use RSA-PSS with SHA256 (not HMAC-SHA256) for Kalshi API
+**Rationale:** Kalshi API updated to RSA-PSS in 2025
 **Implementation:** `cryptography` library, sign requests with private key
 
 ### 3. SCD Type 2 for Historical Accuracy
-**Decision:** Implement Slowly Changing Dimensions Type 2 in database  
-**Rationale:** Track all historical changes to market prices, positions, odds  
+**Decision:** Implement Slowly Changing Dimensions Type 2 in database
+**Rationale:** Track all historical changes to market prices, positions, odds
 **Implementation:** `row_current_ind` flag, `row_effective_date`, `row_expiration_date`
 
 ### 4. Ensemble Model with Historical Lookup
-**Decision:** Combine Elo (0.40) + Regression (0.35) + ML (0.25) + Historical (0.30)  
-**Rationale:** Diversify model risk, leverage historical research  
+**Decision:** Combine Elo (0.40) + Regression (0.35) + ML (0.25) + Historical (0.30)
+**Rationale:** Diversify model risk, leverage historical research
 **Implementation:** Weighted average in `ensemble.py`, Phase 4+
 
 ### 5. Conservative Risk Management
-**Decision:** Kelly 0.25 fractional, max 15% per market, circuit breakers  
-**Rationale:** User preference for safety, avoid ruin risk  
+**Decision:** Kelly 0.25 fractional, max 15% per market, circuit breakers
+**Rationale:** User preference for safety, avoid ruin risk
 **Implementation:** `position_management.yaml`, pre-trade validation
 
 ### 6. Phase 3/4 Sequencing
-**Decision:** Separate data processing (Phase 3) from odds calculation (Phase 4)  
-**Rationale:** Test data pipeline independently, leverage Phase 2 data in Phase 4  
+**Decision:** Separate data processing (Phase 3) from odds calculation (Phase 4)
+**Rationale:** Test data pipeline independently, leverage Phase 2 data in Phase 4
 **Implementation:** Phase 3 = async handlers only, Phase 4 = historical loader + odds
 
 **See ARCHITECTURE_DECISIONS_V2.1.md for complete ADR list (15+ decisions).**
@@ -571,10 +571,10 @@ jobs:
 
 ## Document Status
 
-**Version:** 1.2  
-**Last Updated:** 2025-10-12  
-**Status:** ✅ Current  
-**Next Review:** Phase 1 kickoff (after Phase 0 completion)  
+**Version:** 1.2
+**Last Updated:** 2025-10-12
+**Status:** ✅ Current
+**Next Review:** Phase 1 kickoff (after Phase 0 completion)
 **Maintainer:** Project lead
 
 **Related Documents:**
