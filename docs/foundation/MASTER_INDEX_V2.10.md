@@ -161,9 +161,9 @@ External API documentation, integration guides, and authentication specs.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **API_INTEGRATION_GUIDE_V2.0.md** | ✅ | v2.0 | `/docs/api-integration/` | 1 | Phases 1-2, 6, 10 | 🔴 Critical | **UPDATED V2.0** - Merged Kalshi/ESPN/Balldontlie, RSA-PSS auth examples, API best practices |
-| **KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md** | ✅ | v1.0 | `/docs/api-integration/` | 1 | Phases 1-5 | 🔴 Critical | **PRINT & KEEP AT DESK** - Critical reference |
+| **KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md** | 🔵 | - | `/docs/api-integration/` | 1 | Phases 1-5 | 🔴 Critical | **PRINT & KEEP AT DESK** - Critical reference (PLANNED) |
 | **KALSHI_API_STRUCTURE_COMPREHENSIVE_V2.0.md** | ⚠️ | v2.0 | `/docs/api-integration/` | 1 | Phases 1-5 | 🟡 High | ⚠️ Merged into API_INTEGRATION_GUIDE, mark archived |
-| **KALSHI_DATABASE_SCHEMA_CORRECTED_V1.0.md** | ✅ | v1.0 | `/docs/api-integration/` | 1 | Phase 1 | 🟢 Medium | Kalshi-specific schema corrections |
+| **KALSHI_DATABASE_SCHEMA_CORRECTED_V1.0.md** | 🔵 | - | `/docs/api-integration/` | 1 | Phase 1 | 🟢 Medium | Kalshi-specific schema corrections (PLANNED) |
 
 ---
 
@@ -229,7 +229,7 @@ Roadmap, timelines, and project management.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DEVELOPMENT_PHASES_V1.3.md** | ✅ | v1.3 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 0.5 complete, Phase 5 split into 5a/5b - UPDATED Phase 0.5 |
+| **DEVELOPMENT_PHASES_V1.3.md** | 🗄️ | v1.3 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 0.5 complete, Phase 5 split into 5a/5b - SUPERSEDED BY V1.4 |
 | **DEPLOYMENT_GUIDE_V1.0.md** | 🔵 | - | `/docs/deployment/` | 1 | Phase 1 ✅ | 🟡 High | Local/AWS deployment stubs |
 | **USER_GUIDE_V1.0.md** | 🔵 | - | `/docs/guides/` | 5 | Phase 5 ✅ | 🟢 Medium | CLI examples (edges-list, trade-execute) |
 | **DEVELOPER_ONBOARDING_V1.0.md** | 🔵 | - | `/docs/utility/` | 0 | Phase 0 ✅ | 🟡 High | Merged with ENVIRONMENT_CHECKLIST, onboarding steps |
@@ -421,7 +421,7 @@ Additional guides, references, and supporting documentation.
 - DATABASE_SCHEMA_SUMMARY_V1.6.md (schema - 25 tables including alerts + ML placeholders)
 - API_INTEGRATION_GUIDE_V1.0.md (API docs)
 - KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md (critical reference)
-- DEVELOPMENT_PHASES_V1.3.md (roadmap)
+- DEVELOPMENT_PHASES_V1.4.md (roadmap)
 - GLOSSARY.md (terminology)
 - Handoff_Protocol_V1.0.md (process reference)
 - VERSIONING_GUIDE_V1.0.md (versioning patterns)
