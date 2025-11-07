@@ -597,6 +597,99 @@ with open("file.md", "r") as f:  # cp1252 on Windows, UTF-8 on Linux
 
 ---
 
+### Pattern 6: TypedDict for API Response Types (ALWAYS)
+
+**WHY:** Type safety prevents field name typos and wrong types at compile-time. TypedDict provides IDE autocomplete and mypy validation with zero runtime overhead.
+
+**TypedDict vs Pydantic:**
+- **TypedDict:** Compile-time type hints, no runtime validation, zero overhead
+- **Pydantic:** Runtime validation, automatic parsing, detailed errors, slower
+
+**Use TypedDict for Phase 1-4** (internal code, trusted APIs)
+**Use Pydantic for Phase 5+** (external inputs, trading execution)
+
+**ALWAYS:**
+```python
+from typing import TypedDict, List, cast
+from decimal import Decimal
+
+# ✅ CORRECT - Define response structure
+class MarketResponse(TypedDict):
+    ticker: str
+    yes_bid: Decimal  # After conversion
+    yes_ask: Decimal
+    volume: int
+    status: Literal["open", "closed", "settled"]  # Use Literal for enums
+
+# ✅ CORRECT - Use in function signature
+def get_markets(self) -> List[MarketResponse]:
+    """Fetch markets with type safety."""
+    response = self._make_request("GET", "/markets")
+    markets = response.get("markets", [])
+
+    # Convert prices to Decimal
+    for market in markets:
+        self._convert_prices_to_decimal(market)
+
+    return cast(List[MarketResponse], markets)
+
+# ✅ CORRECT - IDE knows which fields exist
+market = get_markets()[0]
+print(market['ticker'])  # ✅ Autocomplete works
+print(market['volume'])  # ✅ Type checker knows it's int
+
+# ✅ CORRECT - Mypy catches errors
+print(market['price'])  # ❌ Error: 'price' not in MarketResponse
+```
+
+**NEVER:**
+```python
+# ❌ WRONG - Untyped dictionary
+def get_markets(self) -> List[Dict]:
+    return self._make_request("GET", "/markets")
+
+market = get_markets()[0]
+print(market['tickr'])  # ❌ Typo! No autocomplete, no error until runtime
+```
+
+**Key Patterns:**
+
+1. **Separate "Raw" and "Processed" Types:**
+```python
+# Raw API response (prices as strings)
+class MarketDataRaw(TypedDict):
+    ticker: str
+    yes_bid: str  # "0.6250"
+    yes_ask: str  # "0.6300"
+
+# After Decimal conversion
+class ProcessedMarketData(TypedDict):
+    ticker: str
+    yes_bid: Decimal  # Decimal("0.6250")
+    yes_ask: Decimal  # Decimal("0.6300")
+```
+
+2. **Use Literal types for enums:**
+```python
+from typing import Literal
+
+class Position(TypedDict):
+    ticker: str
+    side: Literal["yes", "no"]  # Only these values allowed
+    action: Literal["buy", "sell"]
+```
+
+3. **Use cast() to assert runtime matches compile-time:**
+```python
+# After processing, assert dict matches TypedDict structure
+return cast(List[ProcessedMarketData], markets)
+```
+
+**Reference:** `api_connectors/types.py` for 17 TypedDict examples
+**Related:** ADR-048 (Decimal-First Response Parsing), REQ-API-007 (Pydantic migration planned for Phase 1.5)
+
+---
+
 ## 📑 Document Cohesion & Consistency
 
 ⚠️ **CRITICAL SECTION** - Read carefully. Document drift causes bugs, confusion, and wasted time.
@@ -1573,6 +1666,161 @@ python -m pytest tests/ --cov=api_connectors
 
 ---
 
+### Task 6: Validate Implementation Against Requirements (MANDATORY)
+
+**WHY:** Prevent "implementation complete but requirements not met" gaps. This validation should run BEFORE marking any feature complete.
+
+**When to run:**
+- Before marking any REQ as ✅ Complete
+- Before marking any phase deliverable as done
+- After implementing significant functionality (API client, database layer, trading logic)
+
+**Step 1: Identify Relevant Requirements**
+
+```bash
+# Find all requirements for current phase
+grep "Phase: 1" docs/foundation/MASTER_REQUIREMENTS*.md
+
+# Find all ADRs for current phase
+grep "Phase:** 1" docs/foundation/ARCHITECTURE_DECISIONS*.md
+```
+
+**Step 2: Validate Each Requirement**
+
+For each REQ-XXX-NNN in scope:
+
+```markdown
+**Validation Checklist:**
+
+- [ ] **Requirement exists in code?**
+  - Find implementing function/class
+  - Verify functionality matches requirement description
+
+- [ ] **Tests exist for requirement?**
+  - Search tests for requirement coverage
+  - Verify all requirement scenarios tested
+
+- [ ] **ADRs followed?**
+  - Check implementation matches architectural decisions
+  - Verify no deviations without documented reason
+
+- [ ] **Documentation updated?**
+  - Requirement marked complete in MASTER_REQUIREMENTS
+  - REQUIREMENT_INDEX updated
+  - DEVELOPMENT_PHASES task marked complete
+```
+
+**Step 3: Run Validation Commands**
+
+```bash
+# 1. Check requirement coverage
+python scripts/validate_requirements_coverage.py  # Phase 0.8 future task
+
+# 2. Verify all tests passing
+python -m pytest tests/ -v
+
+# 3. Check coverage threshold
+python -m pytest tests/ --cov=api_connectors --cov-fail-under=80
+
+# 4. Verify type safety
+python -m mypy api_connectors/
+
+# 5. Check code quality
+python -m ruff check .
+```
+
+**Example: Validating REQ-API-001 (Kalshi API Integration)**
+
+```markdown
+**REQ-API-001 Validation:**
+
+✅ **Implementation exists:**
+- File: api_connectors/kalshi_client.py
+- Class: KalshiClient
+- Methods: get_markets(), get_positions(), get_balance(), etc.
+
+✅ **Tests exist:**
+- File: tests/unit/api_connectors/test_kalshi_client.py
+- Coverage: 27/27 tests passing (87.24% coverage)
+- Scenarios tested:
+  - [x] RSA-PSS authentication
+  - [x] Rate limiting (100 req/min)
+  - [x] Exponential backoff
+  - [x] Decimal price conversion
+  - [x] Error handling (4xx, 5xx)
+  - [x] TypedDict return types
+
+✅ **ADRs followed:**
+- ADR-002: Decimal precision ✅ (all prices use Decimal)
+- ADR-047: RSA-PSS authentication ✅ (implemented in kalshi_auth.py)
+- ADR-048: Rate limiting ✅ (100 req/min with token bucket)
+- ADR-049: Exponential backoff ✅ (max 3 retries, 1s/2s/4s delays)
+- ADR-050: TypedDict responses ✅ (17 TypedDict classes in types.py)
+
+✅ **Documentation updated:**
+- MASTER_REQUIREMENTS V2.10: REQ-API-001 status = ✅ Complete
+- REQUIREMENT_INDEX: REQ-API-001 status = ✅ Complete
+- DEVELOPMENT_PHASES V1.4: Phase 1 API tasks marked complete
+
+**RESULT:** REQ-API-001 VALIDATED ✅
+```
+
+**Step 4: Identify Gaps**
+
+If validation finds gaps:
+
+```markdown
+**Gap Identified:**
+- **Requirement:** REQ-API-007 (Retry-After header handling)
+- **Status:** Implemented but not tested
+- **Gap:** No test for 429 error with Retry-After header
+- **Action:** Add test_handle_429_with_retry_after() to test suite
+- **Priority:** 🔴 Critical (must fix before marking complete)
+```
+
+**Step 5: Document Validation**
+
+Add to SESSION_HANDOFF.md:
+
+```markdown
+## Implementation Validation
+
+**Requirements Validated:**
+- ✅ REQ-API-001: Kalshi API Integration
+- ✅ REQ-API-002: RSA-PSS Authentication
+- ✅ REQ-API-003: Rate Limiting
+- ⚠️ REQ-API-007: Retry-After handling (test gap identified)
+
+**Gaps Found:** 1 (REQ-API-007 test coverage)
+**Gaps Resolved:** 1 (added test_handle_429_with_retry_after)
+
+**Validation Status:** ✅ PASS (all requirements met)
+```
+
+**Reference:**
+- MASTER_REQUIREMENTS_V2.10.md - All requirements
+- ARCHITECTURE_DECISIONS_V2.10.md - All ADRs
+- DEVELOPMENT_PHASES_V1.4.md - Phase deliverables
+- Phase Completion Protocol (Section 9) - 8-step assessment
+
+**Automation (Future - Phase 0.8):**
+
+Create `scripts/validate_requirements_coverage.py` to automate validation:
+
+```python
+"""
+Validate all requirements have implementation and tests.
+
+Checks:
+1. Each REQ-XXX-NNN in MASTER_REQUIREMENTS has:
+   - Implementation (code file reference)
+   - Tests (test file with coverage)
+   - Documentation (marked complete when done)
+"""
+```
+
+---
+
 ## 🔒 Security Guidelines
 
 ### Pre-Commit Security Scan (MANDATORY)
@@ -1794,6 +2042,69 @@ git grep -E "(postgres://|mysql://).*:.*@" -- '*'
 5. Update `.gitignore` if needed
 
 **Output:** Security scan report with ✅ PASS or ❌ FAIL + remediation
+
+---
+
+### Step 8a: Performance Profiling (Phase 5+ Only) ⚡ **OPTIONAL**
+
+**When to profile:**
+- **Phase 5+ ONLY:** Trading execution, order walking, position monitoring
+- **NOT Phase 1-4:** Infrastructure, data processing, API integration
+
+**Why defer optimization:**
+- "Make it work, make it right, make it fast" - in that order
+- Premature optimization wastes time on wrong bottlenecks
+- Phase 1-4 focus: Correctness, type safety, test coverage
+- Phase 5+ focus: Speed (when trading performance matters)
+
+**Profiling Tools:**
+```bash
+# 1. Profile critical trading paths with cProfile
+python -m cProfile -o profile.stats main.py execute-trades
+
+# 2. Visualize with snakeviz (install: pip install snakeviz)
+snakeviz profile.stats
+
+# 3. Look for hotspots (functions taking >10% total time)
+python -m pstats profile.stats
+>>> sort time
+>>> stats 20
+```
+
+**Only optimize if:**
+- [ ] Bottleneck identified (single function >10% total execution time)
+- [ ] Impacts trading performance (missed opportunities, slow exits)
+- [ ] Simple optimization available (caching, vectorization, batch processing)
+- [ ] Optimization doesn't sacrifice correctness or readability
+
+**Common optimizations (Phase 5+):**
+- **Caching:** Memoize expensive calculations (Elo ratings, model features)
+- **Vectorization:** Use NumPy/Pandas for batch operations
+- **Database:** Add indexes on frequently queried columns
+- **API:** Batch requests instead of individual calls
+- **WebSocket:** Use for live data instead of polling
+
+**What NOT to optimize:**
+- Database connection pooling (Phase 1-4: single connection is fine)
+- API rate limiting (Phase 1-4: 100 req/min is sufficient)
+- Code formatting/linting (zero performance impact)
+- Test execution time (unless >5 minutes)
+
+**Example Decision Matrix:**
+
+| Scenario | Phase 1-4 | Phase 5+ | Optimize? |
+|----------|-----------|----------|-----------|
+| API request takes 200ms | ✅ OK | ✅ OK | ❌ No - network latency normal |
+| Database query takes 50ms | ✅ OK | ✅ OK | ❌ No - reasonable for complex query |
+| Model prediction takes 2s | ✅ OK | ⚠️ Slow | ✅ Yes - could miss trade opportunities |
+| Order execution takes 500ms | N/A | ⚠️ Slow | ✅ Yes - price may move in 500ms |
+| Position check takes 100ms | ✅ OK | ⚠️ Slow | ✅ Yes - runs every second in Phase 5 |
+
+**Output:** Performance profile report with optimization recommendations (Phase 5+ only)
+
+**Reference:**
+- ADR-TBD (Performance Optimization Strategy) - Phase 5+
+- "Premature optimization is the root of all evil" - Donald Knuth
 
 ---
 
