@@ -131,8 +131,8 @@ indent-style = "space"
 # Respect magic trailing comma (like black)
 skip-magic-trailing-comma = false
 
-# Auto-detect line endings
-line-ending = "auto"
+# Use LF line endings (consistent across Windows/Linux/macOS)
+line-ending = "lf"
 
 [tool.ruff.lint.isort]
 # Import sorting configuration
