@@ -1,23 +1,86 @@
 """
 Configuration loader with YAML support and environment-aware .env loading.
 
-Loads 7 YAML configuration files:
-- trading.yaml: Core trading parameters
-- trade_strategies.yaml: Strategy configurations
-- position_management.yaml: Position and risk management
-- probability_models.yaml: Probability model configurations
-- markets.yaml: Market-specific settings
-- data_sources.yaml: API and data source credentials
-- system.yaml: System-level settings
+Configuration Hierarchy (Priority Order):
+-----------------------------------------
+1. **YAML files** (config/*.yaml) - Base defaults for all environments
+2. **Environment variables** (.env file) - Overrides YAML (secrets, env-specific values)
+3. **Command-line arguments** - Highest priority (not yet implemented)
 
-ALSO loads environment variables from .env file with multi-environment support:
-- DEV_* prefix for development environment
-- STAGING_* prefix for staging environment
-- PROD_* prefix for production environment
-- TEST_* prefix for test environment
+This 3-tier hierarchy allows:
+- **Version control** for base configs (YAML files checked into git)
+- **Secret management** for credentials (.env file in .gitignore)
+- **Runtime overrides** for testing (CLI args override everything)
 
-IMPORTANT: Money/price values automatically converted to Decimal to prevent
-floating-point precision errors.
+7 YAML Configuration Files:
+---------------------------
+- **trading.yaml**: Core trading parameters (max exposure, kelly fraction)
+- **trade_strategies.yaml**: Strategy configurations (versions, parameters)
+- **position_management.yaml**: Position and risk management (stop losses, position sizing)
+- **probability_models.yaml**: Model configurations (Elo ratings, ensemble weights)
+- **markets.yaml**: Market-specific settings (NFL, NBA, election markets)
+- **data_sources.yaml**: API endpoints (Kalshi, ESPN, balldontlie)
+- **system.yaml**: System-level settings (logging, database, performance)
+
+Multi-Environment Support:
+--------------------------
+Environment variables use automatic prefixes based on ENVIRONMENT variable:
+- **DEV_*** prefix for development (local laptop)
+- **STAGING_*** prefix for staging (pre-production testing)
+- **PROD_*** prefix for production (live trading!)
+- **TEST_*** prefix for test (pytest fixtures)
+
+Example - Different database hosts per environment:
+  .env file:
+    ENVIRONMENT=development
+    DEV_DB_HOST=localhost
+    STAGING_DB_HOST=staging.precog.internal
+    PROD_DB_HOST=prod.precog.internal
+
+  loader.get_env('DB_HOST')  # Returns 'localhost' (DEV_DB_HOST)
+
+  # Change to production:
+  ENVIRONMENT=production
+  loader.get_env('DB_HOST')  # Returns 'prod.precog.internal' (PROD_DB_HOST)
+
+Security Architecture:
+---------------------
+**CRITICAL: NEVER put secrets in YAML files!**
+
+Why This Matters:
+- YAML files are checked into git (version control)
+- Git history is permanent (even after deleting files)
+- Anyone with repo access sees all secrets
+- Leaked API keys = unauthorized trading with YOUR money
+
+Secrets ALWAYS go in .env file (.gitignore prevents git commits):
+- ✅ CORRECT: PROD_KALSHI_API_KEY=sk_live_xxx  (in .env)
+- ❌ WRONG: kalshi_api_key: sk_live_xxx  (in YAML)
+
+See: docs/utility/SECURITY_REVIEW_CHECKLIST.md for pre-commit security scan
+
+Decimal Precision (CRITICAL for Money):
+---------------------------------------
+All monetary values automatically converted from float → Decimal:
+- Prevents floating-point errors (0.1 + 0.2 ≠ 0.3 in float!)
+- Kalshi uses sub-penny pricing ($0.4975) - MUST be exact
+- Financial calculations require precision to the penny
+
+Auto-converted keys (see _convert_to_decimal):
+- *_dollars, *_price, *_spread → Decimal
+- probability, threshold, *_percent → Decimal
+- See full list in _convert_to_decimal() method (200+ lines)
+
+Caching Strategy:
+----------------
+Configurations cached after first load for performance:
+- First load: Read YAML from disk (~5-10ms)
+- Subsequent loads: Return cached dict (<0.1ms)
+- Call reload() to force re-read from disk
+
+Reference: docs/guides/CONFIGURATION_GUIDE_V3.1.md
+Related Requirements: REQ-CONFIG-001 (YAML Configuration), REQ-SEC-009 (Credential Management)
+Related ADR: ADR-012 (Configuration Management Strategy), ADR-002 (Decimal Precision)
 """
 
 import os
