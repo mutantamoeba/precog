@@ -1,11 +1,20 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.9
+**Version:** 1.10
 **Created:** 2025-10-28
-**Last Updated:** 2025-11-07
+**Last Updated:** 2025-11-08
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.10:**
+- **Added Pattern 8: Configuration File Synchronization (CRITICAL)** - Comprehensive guide to prevent configuration drift across 4 layers (tool configs, pipeline configs, application configs, documentation)
+- Documents the Bandit → Ruff migration issue we just fixed (orphaned `[tool.bandit]` in pyproject.toml caused 200+ errors)
+- Provides migration checklists for 3 common scenarios: tool migration, requirement changes, new validation rules
+- Explains YAML configuration validation (Check #9 in validate_docs.py) - already checking all 7 config/*.yaml files for float contamination
+- Adds Decimal safety guidance for YAML files (use string format "0.05" not float 0.05)
+- Includes configuration migration template with 4-layer checklist
+- Provides common drift scenarios table and prevention strategies
+- Total addition: ~200 lines of configuration management patterns
 **Changes in V1.9:**
 - **Implemented DEF-003: GitHub Branch Protection Rules** - Configured comprehensive branch protection for `main` branch via GitHub API
 - **Added "Branch Protection & Pull Request Workflow" section** - Documents third layer of defense (pre-commit → pre-push → CI/CD → branch protection)
@@ -1191,6 +1200,211 @@ def create_account_balance_record(session, balance, platform_id):
 - **Non-obvious behavior**: RSA-PSS signature format, timezone handling, rate limiting
 
 **Reference:** `api_connectors/kalshi_auth.py` (lines 41-90, 92-162) for excellent examples
+
+---
+
+### Pattern 8: Configuration File Synchronization (CRITICAL)
+
+**WHY:** Configuration files exist at **4 different layers** in the validation pipeline. When migrating tools or changing requirements, ALL layers must be updated to prevent configuration drift.
+
+**The Problem We Just Fixed:**
+- Migrated Bandit → Ruff in 3 layers (.pre-commit-config.yaml, .git/hooks/pre-push, .github/workflows/ci.yml)
+- **MISSED** pyproject.toml `[tool.bandit]` section
+- Result: pytest auto-detected Bandit config → 200+ Bandit errors → all pushes blocked
+
+**Four Configuration Layers:**
+
+```
+Layer 1: Tool Configuration Files
+├── pyproject.toml           [tool.ruff], [tool.mypy], [tool.pytest], [tool.coverage]
+├── .pre-commit-config.yaml  Pre-commit hook definitions (12 checks)
+└── pytest.ini               Test framework settings (if separate)
+
+Layer 2: Pipeline Configuration Files
+├── .git/hooks/pre-push      Pre-push validation script (Bash)
+├── .git/hooks/pre-commit    Pre-commit validation script (managed by pre-commit framework)
+└── .github/workflows/ci.yml GitHub Actions CI/CD pipeline (YAML)
+
+Layer 3: Application Configuration Files
+├── config/database.yaml          Database connection, pool settings
+├── config/markets.yaml           Market selection, edge thresholds, Kelly fractions
+├── config/probability_models.yaml Model weights, ensemble config
+├── config/trade_strategies.yaml   Strategy versions, entry/exit rules
+├── config/position_management.yaml Trailing stops, profit targets, correlation limits
+├── config/trading.yaml            Circuit breakers, position sizing, risk limits
+└── config/logging.yaml            Log levels, rotation, output formats
+
+Layer 4: Documentation Files
+├── docs/foundation/MASTER_REQUIREMENTS*.md    Requirement definitions
+├── docs/foundation/ARCHITECTURE_DECISIONS*.md  ADR definitions
+├── docs/guides/*.md                            Implementation guides
+└── CLAUDE.md                                   Development patterns
+```
+
+**ALWAYS Update ALL Layers When:**
+
+**Scenario 1: Migrating Tools** (e.g., Bandit → Ruff)
+- [ ] Update `pyproject.toml` - Remove `[tool.bandit]`, update `[tool.ruff]`
+- [ ] Update `.pre-commit-config.yaml` - Change hook from `bandit` to `ruff --select S`
+- [ ] Update `.git/hooks/pre-push` - Change security scan command + comments
+- [ ] Update `.github/workflows/ci.yml` - Change CI job from `bandit` to `ruff`
+- [ ] Update `CLAUDE.md` - Update pre-commit/pre-push documentation
+- [ ] Update `SESSION_HANDOFF.md` - Document the migration
+
+**Scenario 2: Changing Application Requirements** (e.g., min_edge threshold)
+
+Example: REQ-TRADE-005 changes minimum edge from 0.05 to 0.08
+
+- [ ] Update `docs/foundation/MASTER_REQUIREMENTS*.md` - Change requirement
+- [ ] Update `config/markets.yaml` - Update all `min_edge` values in each league/category
+- [ ] Update `config/trade_strategies.yaml` - Update strategy-specific edge thresholds
+- [ ] Update `config/trading.yaml` - Update `position_sizing.kelly.min_edge_threshold`
+- [ ] Update `docs/guides/CONFIGURATION_GUIDE*.md` - Update examples
+- [ ] Run validation: `python scripts/validate_docs.py` (checks YAML files!)
+- [ ] Commit ALL files together atomically
+
+**Scenario 3: Adding New Validation Checks**
+
+Example: Adding new Ruff rule (like S608 for SQL injection)
+
+- [ ] Update `pyproject.toml` - Add rule to `[tool.ruff.lint].select`
+- [ ] Update `.pre-commit-config.yaml` - Add `--select S608` to args (if needed)
+- [ ] Update `.git/hooks/pre-push` - Document new check in comments
+- [ ] Update `.github/workflows/ci.yml` - Ensure CI runs new check
+- [ ] Update `CLAUDE.md` - Document new check in validation section
+
+**Validation Commands:**
+
+```bash
+# Layer 1: Check pyproject.toml syntax
+python -c "import tomli; tomli.load(open('pyproject.toml', 'rb'))"
+
+# Layer 2: Test pre-push hooks locally
+bash .git/hooks/pre-push
+
+# Layer 3: Validate YAML configs (DECIMAL SAFETY CHECK)
+python scripts/validate_docs.py
+# Checks for float contamination in config/*.yaml files
+
+# Layer 4: Validate documentation consistency
+python scripts/validate_docs.py
+```
+
+**YAML Configuration Validation (Already Implemented!):**
+
+The `validate_docs.py` script (Check #9) automatically checks:
+- ✅ All 7 config/*.yaml files for YAML syntax errors
+- ✅ **Decimal safety** - Detects float values in price/probability fields
+- ✅ **Schema consistency** - Ensures required fields present
+
+**Decimal Safety in YAML Files:**
+
+```yaml
+# ❌ WRONG - Float contamination (causes rounding errors)
+platforms:
+  kalshi:
+    fees:
+      taker_fee_percent: 0.07      # Float!
+    categories:
+      sports:
+        leagues:
+          nfl:
+            min_edge: 0.05           # Float!
+            kelly_fraction: 0.25     # Float!
+
+# ✅ CORRECT - String format (converted to Decimal by config_loader.py)
+platforms:
+  kalshi:
+    fees:
+      taker_fee_percent: "0.07"    # String → Decimal
+    categories:
+      sports:
+        leagues:
+          nfl:
+            min_edge: "0.05"         # String → Decimal
+            kelly_fraction: "0.25"   # String → Decimal
+```
+
+**Why String Format in YAML?**
+- YAML parser treats `0.05` as float (64-bit binary)
+- Float: `0.05` → `0.050000000000000003` (rounding error!)
+- String: `"0.05"` → `Decimal("0.05")` → `0.0500` (exact!)
+- ConfigLoader converts strings to Decimal automatically (see `config_loader.py:decimal_conversion=True`)
+
+**Configuration Migration Checklist (Template):**
+
+```markdown
+## Configuration Migration: [Tool/Requirement Name]
+
+**Date:** YYYY-MM-DD
+**Reason:** [Why migrating? Performance, Python 3.14 compat, new feature?]
+
+**Layer 1: Tool Configuration**
+- [ ] `pyproject.toml` - [Specific changes]
+- [ ] `.pre-commit-config.yaml` - [Specific changes]
+- [ ] Validated syntax: `python -c "import tomli; tomli.load(open('pyproject.toml', 'rb'))"`
+
+**Layer 2: Pipeline Configuration**
+- [ ] `.git/hooks/pre-push` - [Specific changes]
+- [ ] `.github/workflows/ci.yml` - [Specific changes]
+- [ ] Tested pre-push hooks: `bash .git/hooks/pre-push`
+
+**Layer 3: Application Configuration** (if applicable)
+- [ ] `config/[specific].yaml` - [Specific changes]
+- [ ] Validated YAML: `python scripts/validate_docs.py`
+- [ ] Checked Decimal safety: No float contamination warnings
+
+**Layer 4: Documentation**
+- [ ] `CLAUDE.md` - [Specific changes]
+- [ ] `SESSION_HANDOFF.md` - [Specific changes]
+- [ ] Relevant guides updated
+
+**Validation:**
+- [ ] All tests passing: `python -m pytest tests/ -v`
+- [ ] Pre-push hooks passing: `bash .git/hooks/pre-push`
+- [ ] YAML configs valid: `python scripts/validate_docs.py`
+- [ ] No configuration drift detected
+
+**Commit:**
+```bash
+git add pyproject.toml .pre-commit-config.yaml .git/hooks/pre-push .github/workflows/ci.yml CLAUDE.md
+git commit -m "[Tool/Req]: [Migration description]
+
+Layer 1: Tool configuration updates
+Layer 2: Pipeline configuration updates
+Layer 3: Application configuration updates (if applicable)
+Layer 4: Documentation updates
+
+All 4 layers synchronized to prevent configuration drift.
+"
+```
+
+**Common Configuration Drift Scenarios:**
+
+| Scenario | Layers Affected | Checklist |
+|----------|----------------|-----------|
+| **Tool migration** (Bandit→Ruff) | 1, 2, 4 | Update pyproject.toml, hooks, CI, docs |
+| **Requirement change** (min_edge) | 3, 4 | Update config/*.yaml, MASTER_REQUIREMENTS, guides |
+| **New validation rule** | 1, 2, 4 | Update pyproject.toml, hooks, CI, docs |
+| **Python version upgrade** | 1, 2 | Update pyproject.toml, CI matrix |
+| **Decimal precision fix** | 3 | Update all config/*.yaml floats → strings |
+| **Security rule change** | 1, 2, 4 | Update ruff S-rules, hooks, docs |
+
+**Prevention Strategy:**
+
+1. **Atomic commits** - Commit all layers together in ONE commit
+2. **Validation scripts** - Run `validate_docs.py` before every commit (catches YAML drift)
+3. **Pre-push hooks** - Catch configuration errors locally (30-60s vs 2-5min CI)
+4. **Documentation** - Always update CLAUDE.md when changing validation pipeline
+5. **Session handoff** - Document configuration changes in SESSION_HANDOFF.md
+6. **Checklists** - Use migration checklist template above
+
+**Reference:**
+- Pattern 1: Decimal Precision (why string format matters)
+- Pattern 4: Security (no hardcoded credentials in any config layer)
+- Section 5: Document Cohesion & Consistency (same principles apply to configs)
+- `scripts/validate_docs.py` - YAML validation implementation (Check #9)
+- `config/config_loader.py` - String → Decimal conversion logic
 
 ---
 
@@ -2803,6 +3017,8 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 8. **Add requirement without updating REQUIREMENT_INDEX** ❌
 9. **Add ADR without updating ADR_INDEX** ❌
 10. **Rename file without updating all references** ❌
+11. **Use float in YAML configs:** `min_edge: 0.05` ❌ (use string: `"0.05"`)
+12. **Update one config layer without updating all 4 layers** ❌ (causes config drift)
 
 ### ✅ ALWAYS Do These
 
@@ -2816,6 +3032,8 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 8. **Update REQUIREMENT_INDEX when adding REQ** ✅
 9. **Update ADR_INDEX when adding ADR** ✅
 10. **Update all references when renaming files** ✅
+11. **Use string format in YAML configs:** `min_edge: "0.05"` ✅ (prevents float contamination)
+12. **Update all 4 config layers together atomically** ✅ (prevents config drift)
 
 ---
 
