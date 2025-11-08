@@ -342,24 +342,23 @@ disable_mutation_for = [
 ]
 
 # ==============================================================================
-# BANDIT CONFIGURATION (Security Scanning)
-# Phase 0.7: CI/CD Integration & Advanced Testing
+# SECURITY SCANNING (Ruff Security Rules - Python 3.14 Compatible)
+# Replaced Bandit with Ruff security scanning for Python 3.14 compatibility
+# See ADR-054: Bandit 1.8.6 incompatible with Python 3.14 (ast.Num deprecated)
 # ==============================================================================
 
-[tool.bandit]
-# Exclude directories (Bandit scans current directory by default)
-# Note: Paths are relative to project root, no leading slashes needed
-exclude_dirs = ["tests", ".venv", "venv", "_archive", "build", "dist", ".git", ".pytest_cache", "__pycache__", "htmlcov"]
-
-# Specific tests to skip (use with caution!)
-# Format: ["B101", "B601"]
-# B101 = assert_used (we allow asserts in production code for validation)
-# B404 = blacklist (subprocess module - flagged but acceptable in scripts)
-# B112 = try_except_continue (acceptable error handling pattern)
-# B607 = start_process_with_partial_path (acceptable in controlled scripts)
-# B603 = subprocess_without_shell_equals_true (we intentionally avoid shell=True for security)
-# See: https://bandit.readthedocs.io/en/latest/plugins/index.html
-skips = ["B101", "B404", "B112", "B607", "B603"]
+# Security scanning now handled by Ruff (--select S rules)
+# Run with: python -m ruff check --select S --ignore S101,S112,S607 .
+#
+# Rule mapping (Bandit → Ruff):
+# - Hardcoded credentials: S105, S106, S107
+# - SQL injection: S608
+# - Shell injection: S602, S603, S604, S605, S606
+# - Insecure SSL/TLS: S501, S502, S503, S504
+# - Assert usage: S101 (ignored in tests/)
+# - Subprocess with shell: S602, S603, S604, S605, S606, S607
+#
+# See: https://docs.astral.sh/ruff/rules/#flake8-bandit-s
 
 # ==============================================================================
 # HYPOTHESIS CONFIGURATION (Property-Based Testing)
