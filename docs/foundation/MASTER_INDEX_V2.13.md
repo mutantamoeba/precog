@@ -167,9 +167,9 @@ Core architecture, requirements, and system design documents.
 | **PROJECT_OVERVIEW_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.4** |
 | **MASTER_REQUIREMENTS_V2.11.md** | ✅ | v2.11 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.11** (Python 3.14 compatibility: Ruff security rules replace Bandit) |
 | **MASTER_INDEX_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.13** (Python 3.14 compatibility: Bandit → Ruff migration) |
-| **ARCHITECTURE_DECISIONS_V2.11.md** | ✅ | v2.11 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (52 total) - **UPDATED V2.11** (ADR-054: Ruff Security Rules Instead of Bandit) |
-| **REQUIREMENT_INDEX.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 103 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.3** (added 4 Phase 1 API requirements) |
-| **ADR_INDEX_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (52 ADRs) - **UPDATED V1.5** (ADR-054 added for Python 3.14 compatibility) |
+| **ARCHITECTURE_DECISIONS_V2.11.md** | ✅ | v2.11 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (53 total) - **UPDATED V2.11** (ADR-074: Property-Based Testing Strategy) |
+| **REQUIREMENT_INDEX.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 114 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED** (added REQ-TEST-009, REQ-TEST-010, REQ-TEST-011) |
+| **ADR_INDEX_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (53 ADRs) - **UPDATED V1.6** (ADR-074 added for property-based testing POC) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, added Phase 0.6b/0.6c/0.7 - **UPDATED V1.4** (Phase 0.6c complete) |
 | **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |

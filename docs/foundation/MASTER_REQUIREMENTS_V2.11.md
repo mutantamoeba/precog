@@ -211,9 +211,9 @@ precog/
   1. `PROJECT_OVERVIEW_V1.4.md` - System architecture and tech stack
   2. `MASTER_REQUIREMENTS_V2.11.md` - This document (requirements through Phase 10)
   3. `MASTER_INDEX_V2.13.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.11.md` - All 52 ADRs with design rationale (Phase 0-1)
+  4. `ARCHITECTURE_DECISIONS_V2.11.md` - All 53 ADRs with design rationale (Phase 0-1.5)
   5. `REQUIREMENT_INDEX.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.5.md` - Architecture decision index
+  6. `ADR_INDEX_V1.6.md` - Architecture decision index
   7. `TESTING_STRATEGY_V2.0.md` - Test cases, coverage requirements, future enhancements
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
@@ -1535,18 +1535,218 @@ Validate test quality through mutation testing:
 - Focus areas: trading logic, edge detection, risk management
 - Exclude: trivial getters, logging, configuration
 
-**REQ-TEST-008: Property-Based Testing**
+**REQ-TEST-008: Property-Based Testing - Proof of Concept**
 
-**Phase:** 0.7
-**Priority:** Medium
+**Phase:** 1.5
+**Priority:** 🔴 Critical
+**Status:** ✅ Complete
+**Reference:** ADR-074, `docs/testing/HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md`
+
+Implement property-based testing proof-of-concept with Hypothesis framework:
+
+**Proof-of-Concept Complete (26 tests, 2600+ cases, 0 failures, 3.32s):**
+- `tests/property/test_kelly_criterion_properties.py` - 11 properties, 1100+ cases
+- `tests/property/test_edge_detection_properties.py` - 16 properties, 1600+ cases
+
+**Custom Hypothesis Strategies:**
+- `probability()` - Generate valid probabilities [0, 1] as Decimal
+- `market_price()` - Generate market prices [0, 1] as Decimal
+- `edge_value()` - Generate edge values [-0.5, 0.5] as Decimal
+- `kelly_fraction()` - Generate Kelly fractions [0, 1] as Decimal
+- `bankroll_amount()` - Generate bankroll [$100, $100k] as Decimal
+- `bid_ask_spread()` - Generate realistic spreads with bid < ask
+
+**Critical Invariants Validated:**
+- Position size NEVER exceeds bankroll (prevents margin calls)
+- Negative edge NEVER recommends trade (prevents guaranteed losses)
+- Trailing stop price NEVER loosens (only tightens)
+- Edge calculation correctly accounts for fees and spread
+- Kelly criterion produces reasonable position sizes
+- Decimal precision maintained throughout calculations
+
+**Why Property-Based Testing Matters:**
+- Traditional example-based tests: 5-10 hand-picked scenarios
+- Property-based tests: 100+ auto-generated scenarios per property
+- Hypothesis shrinking: Automatically minimizes failing examples
+- Catches edge cases humans wouldn't think to test (edge = 0.9999999?)
+
+**Integration:**
+- Configured in `pyproject.toml` (max_examples=100, deadline=400ms)
+- Runs with existing pytest suite
+- Pre-commit hooks validate property tests
+
+**REQ-TEST-009: Property Testing - Core Trading Logic (Phase 1.5)**
+
+**Phase:** 1.5
+**Priority:** 🔴 Critical
 **Status:** 🔵 Planned
-**Reference:** ADR-045
+**Reference:** ADR-074, `docs/testing/HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md` (Phase 1.5)
 
-Add property-based testing for complex business logic:
-- **Hypothesis** framework integration
-- Focus areas: Decimal arithmetic, edge detection, position management
-- Properties: Decimal precision, monotonicity, idempotence
-- Integration with existing pytest suite
+Expand property-based testing to cover core trading logic:
+
+**Test Suites to Implement (6-8 hours):**
+1. **Config Validation Properties** (`test_config_validation_properties.py`)
+   - YAML structure validation across all edge cases
+   - Type safety (no strings where Decimals expected)
+   - Constraint enforcement (kelly_fraction ∈ [0, 1])
+   - Required fields never missing
+
+2. **Position Sizing Properties** (expand `test_kelly_criterion_properties.py`)
+   - Kelly criterion with multiple position limits
+   - Fractional Kelly (quarter Kelly, half Kelly)
+   - Max position constraints respected
+   - Bankroll updates propagate correctly
+
+3. **Edge Detection Properties** (expand `test_edge_detection_properties.py`)
+   - Edge calculation with varying fee structures
+   - Spread impact on realizable edge
+   - Minimum edge threshold enforcement
+   - Probability bounds validation [0, 1]
+
+**Custom Strategies Needed:**
+- `yaml_config()` - Generate valid/invalid YAML configurations
+- `position_limits()` - Generate position size constraints
+- `fee_structure()` - Generate fee percentages and tiered fees
+
+**Success Criteria:**
+- 40+ total properties (4000+ test cases)
+- <5 second total execution time
+- All critical trading invariants validated
+
+**REQ-TEST-010: Property Testing - Data Validation & Models (Phase 2-4)**
+
+**Phase:** 2, 3, 4
+**Priority:** 🟡 High
+**Status:** 🔵 Planned
+**Reference:** ADR-074, `docs/testing/HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md` (Phases 2-4)
+
+Implement property-based testing for data pipelines and models:
+
+**Test Suites to Implement (22-28 hours):**
+
+**Phase 2 - Data Validation (8-10h):**
+1. **Historical Data Properties** (`test_historical_data_properties.py`)
+   - Timestamp ordering (monotonically increasing)
+   - No duplicate records (game_id + timestamp unique)
+   - Score progression (scores never decrease)
+   - Probability bounds [0, 1] always respected
+
+2. **Model Validation Properties** (`test_model_validation_properties.py`)
+   - Model outputs always in valid range
+   - Prediction consistency (same inputs → same outputs)
+   - Calibration properties (predicted probabilities vs. outcomes)
+   - Version immutability enforcement
+
+3. **Strategy Versioning Properties** (`test_strategy_versioning_properties.py`)
+   - Config immutability (cannot modify after creation)
+   - Status lifecycle valid transitions only
+   - Version semantic correctness (v1.0 → v1.1 → v2.0)
+   - Trade attribution always valid
+
+**Phase 3 - Order Book & Entry (6-8h):**
+4. **Order Book Properties** (`test_order_book_properties.py`)
+   - Bid ≤ Ask always (no crossed markets)
+   - Order book depth never negative
+   - Liquidity aggregation correctness
+   - Best execution price selection
+
+5. **Entry Optimization Properties** (`test_entry_optimization_properties.py`)
+   - Entry price ≤ worst acceptable price
+   - Slippage within tolerance
+   - Partial fill handling
+   - Order book impact estimation
+
+**Phase 4 - Ensemble & Backtesting (8-10h):**
+6. **Ensemble Properties** (`test_ensemble_properties.py`)
+   - Weight constraints (sum to 1.0)
+   - Weighted average bounds (min ≤ ensemble ≤ max)
+   - Model version tracking consistency
+   - Feature extraction determinism
+
+7. **Backtesting Properties** (`test_backtesting_properties.py`)
+   - No lookahead bias (only past data used)
+   - P&L calculation correctness
+   - Performance metrics consistency (Sharpe, win rate)
+   - Position sizing reflects backtest constraints
+
+**Custom Strategies Needed:**
+- `historical_game_state()` - Generate realistic game progressions
+- `model_prediction()` - Generate model outputs with constraints
+- `order_book()` - Generate realistic order books
+- `ensemble_weights()` - Generate valid weight distributions
+
+**Success Criteria:**
+- 85+ total properties (8500+ test cases)
+- <15 second total execution time
+- All data invariants validated
+- All model constraints enforced
+
+**REQ-TEST-011: Property Testing - Position & Exit Management (Phase 5)**
+
+**Phase:** 5
+**Priority:** 🔴 Critical
+**Status:** 🔵 Planned
+**Reference:** ADR-074, `docs/testing/HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md` (Phase 5)
+
+Implement property-based testing for position and exit management:
+
+**Test Suites to Implement (10-12 hours):**
+
+1. **Position Lifecycle Properties** (`test_position_lifecycle_properties.py`)
+   - Position state transitions valid (open → monitoring → exited)
+   - Position size always ≤ original quantity
+   - Realized P&L = (exit_price - entry_price) × quantity
+   - Unrealized P&L updates with current market price
+   - SCD Type 2 versioning (row_current_ind consistency)
+
+2. **Trailing Stop Properties** (`test_trailing_stop_properties.py`)
+   - Stop price NEVER loosens (only tightens or stays same)
+   - Stop distance maintains configured percentage
+   - Activation threshold respected
+   - Trigger detection accuracy (price crosses stop)
+   - State persistence across position updates
+
+3. **Exit Priority Properties** (`test_exit_priority_properties.py`)
+   - 10-condition hierarchy always respected
+   - Stop loss overrides all other exits
+   - Target profit takes precedence over time-based
+   - Emergency exits trigger immediately
+   - No conflicting exit signals
+
+4. **Exit Execution Properties** (`test_exit_execution_properties.py`)
+   - Exit price within acceptable bounds
+   - Slippage tolerance enforcement
+   - Partial exits maintain position integrity
+   - Order walking never increases average exit price
+   - Circuit breaker prevents rapid exits
+
+5. **Reporting Metrics Properties** (`test_reporting_metrics_properties.py`)
+   - Win rate = wins / total_trades ∈ [0, 1]
+   - Sharpe ratio calculation correctness
+   - Drawdown never positive
+   - Total P&L = sum of realized P&L
+   - Position count consistency
+
+**Custom Strategies Needed:**
+- `position_state()` - Generate valid position states
+- `trailing_stop_config()` - Generate trailing stop configurations
+- `exit_condition()` - Generate exit trigger conditions
+- `price_series()` - Generate realistic price movements
+- `execution_context()` - Generate market conditions for execution
+
+**Critical Properties (Trading Safety):**
+- Stop loss ALWAYS prevents catastrophic losses
+- Position size NEVER exceeds risk limits
+- Exit prices NEVER worse than stop loss
+- Trailing stops NEVER loosen (one-way ratchet)
+- Circuit breaker ALWAYS triggers on rapid losses
+
+**Success Criteria:**
+- 40+ total properties (4000+ test cases)
+- <8 second total execution time
+- All position management invariants validated
+- All exit optimization constraints enforced
+- Zero false negatives on stop loss triggers
 
 - **Unit Tests**: >80% code coverage
 - **Integration Tests**: All API → DB workflows

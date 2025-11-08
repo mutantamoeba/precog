@@ -297,11 +297,14 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-TEST-001 | Code Coverage >80% | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 | REQ-TEST-002 | Unit Tests for Core Modules | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 | REQ-TEST-003 | Integration Tests for APIs | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
-| REQ-TEST-004 | Backtesting Framework | 4 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
-| REQ-TEST-005 | Test Result Persistence | 0.6c | High | ✅ | MASTER_REQUIREMENTS_V2.9 |
-| REQ-TEST-006 | Security Testing Integration | 0.7 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.9 |
-| REQ-TEST-007 | Mutation Testing | 0.7 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
-| REQ-TEST-008 | Property-Based Testing | 0.7 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-TEST-004 | Backtesting Framework | 4 | High | 🔵 | MASTER_REQUIREMENTS_V2.11 |
+| REQ-TEST-005 | Test Result Persistence | 0.6c | High | ✅ | MASTER_REQUIREMENTS_V2.11 |
+| REQ-TEST-006 | Security Testing Integration | 0.7 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.11 |
+| REQ-TEST-007 | Mutation Testing | 0.7 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.11 |
+| REQ-TEST-008 | Property-Based Testing - Proof of Concept | 1.5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.11 |
+| REQ-TEST-009 | Property-Based Testing - Phase 1.5 Expansion | 1.5 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.11 |
+| REQ-TEST-010 | Property-Based Testing - Phases 2-4 Expansion | 2-4 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.11 |
+| REQ-TEST-011 | Property-Based Testing - Phase 5 Expansion | 5 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.11 |
 
 ---
 
