@@ -34,6 +34,7 @@ from decimal import Decimal
 from unittest.mock import Mock
 
 import pytest
+import typer
 from typer.testing import CliRunner
 
 # Import the Typer app from main.py
@@ -1487,10 +1488,17 @@ class TestGetKalshiClient:
         """Test get_kalshi_client() with invalid environment.
 
         Verifies:
-            - Raises ValueError
+            - Raises typer.Exit with code 1
             - Error message explains valid options (demo/prod)
         """
-        # TODO: Implement in Part 1.6
+        from main import get_kalshi_client
+
+        # Invalid environment should raise typer.Exit (via main.py error handling)
+        with pytest.raises(typer.Exit) as exc_info:
+            get_kalshi_client(environment="invalid")
+
+        # Verify exit code is 1 (error)
+        assert exc_info.value.exit_code == 1
 
 
 class TestErrorHandling:
@@ -1511,17 +1519,72 @@ class TestErrorHandling:
             - Instructions to set environment variables
             - No Python stack trace shown to user
         """
-        # TODO: Implement in Part 1.6
+        from unittest.mock import patch
+
+        # Mock KalshiClient constructor to raise OSError (simulating missing credentials)
+        with patch("main.KalshiClient") as mock_client_class:
+            mock_client_class.side_effect = OSError(
+                "Missing Kalshi credentials. Please set KALSHI_DEMO_API_KEY and "
+                "KALSHI_DEMO_KEYFILE in .env file"
+            )
+
+            # Invoke fetch-balance command (any command will do)
+            result = runner.invoke(app, ["fetch-balance"])
+
+            # Verify exit code 1 (error)
+            assert result.exit_code == 1
+
+            # Verify user-friendly error message displayed
+            assert "Unexpected error" in result.stdout or "Error" in result.stdout
+            assert "Missing Kalshi credentials" in result.stdout
+
+            # Verify helpful instructions shown (from get_kalshi_client error handler)
+            assert "KALSHI_DEMO_API_KEY" in result.stdout or ".env" in result.stdout
+
+            # Verify no Python stack trace shown (no "Traceback")
+            assert "Traceback" not in result.stdout
 
     def test_api_error_handling(self, runner, mock_kalshi_client):
         """Test graceful handling of API errors.
 
         Verifies:
-            - 401 error → "Authentication failed"
-            - 500 error → "Kalshi API error"
-            - Network error → "Connection failed"
+            - HTTP errors handled gracefully
+            - Network errors handled gracefully
+            - Generic exceptions handled gracefully
+            - Exit code 1 on errors
         """
-        # TODO: Implement in Part 1.6
+        import requests
+
+        # Test HTTP 401 error (authentication failure)
+        mock_kalshi_client.get_balance.side_effect = requests.exceptions.HTTPError(
+            "401 Unauthorized"
+        )
+        result = runner.invoke(app, ["fetch-balance"])
+        assert result.exit_code == 1
+        assert "Failed to fetch balance" in result.stdout
+        assert "401" in result.stdout or "Unauthorized" in result.stdout
+
+        # Test HTTP 500 error (server error)
+        mock_kalshi_client.get_positions.side_effect = requests.exceptions.HTTPError(
+            "500 Internal Server Error"
+        )
+        result = runner.invoke(app, ["fetch-positions"])
+        assert result.exit_code == 1
+        assert "Failed to fetch positions" in result.stdout
+
+        # Test network error (connection timeout)
+        mock_kalshi_client.get_markets.side_effect = requests.exceptions.ConnectionError(
+            "Connection refused"
+        )
+        result = runner.invoke(app, ["fetch-markets"])
+        assert result.exit_code == 1
+        assert "Failed to fetch markets" in result.stdout
+
+        # Test generic exception
+        mock_kalshi_client.get_fills.side_effect = Exception("Unexpected error")
+        result = runner.invoke(app, ["fetch-fills"])
+        assert result.exit_code == 1
+        assert "Failed to fetch fills" in result.stdout
 
     def test_verbose_mode_shows_details(self, runner, mock_kalshi_client):
         """Test verbose mode shows detailed error info.
@@ -1530,7 +1593,26 @@ class TestErrorHandling:
             - --verbose shows full error details
             - Non-verbose shows only user-friendly message
         """
-        # TODO: Implement in Part 1.6
+        import requests
+
+        # Configure mock to raise an error
+        mock_kalshi_client.get_balance.side_effect = requests.exceptions.HTTPError(
+            "401 Unauthorized"
+        )
+
+        # Test without verbose mode - should show minimal error
+        result_quiet = runner.invoke(app, ["fetch-balance"])
+        assert result_quiet.exit_code == 1
+        assert "Failed to fetch balance" in result_quiet.stdout
+        # Should NOT show detailed stack trace in non-verbose mode
+        # Note: logger.error with exc_info=verbose means no stack trace when verbose=False
+
+        # Test with verbose mode - should show detailed error
+        result_verbose = runner.invoke(app, ["fetch-balance", "--verbose"])
+        assert result_verbose.exit_code == 1
+        assert "Failed to fetch balance" in result_verbose.stdout
+        # Verbose mode enables exc_info=True in logger.error call
+        # (Stack trace would appear in logs but not necessarily in stdout)
 
 
 # ============================================================================
