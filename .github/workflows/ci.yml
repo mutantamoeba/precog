@@ -31,7 +31,7 @@ jobs:
         run: pre-commit run --all-files
 
   security-scan:
-    name: Security Scanning (Ruff & Safety)
+    name: Security Scanning (Bandit & Safety)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
