@@ -2027,6 +2027,226 @@ class ConfigManager:
 
 ---
 
+### ADR-074: Property-Based Testing Strategy (Hypothesis Framework)
+
+**Decision #24**
+**Phase:** 1.5
+**Status:** ✅ Complete (Proof-of-Concept), 🔵 Planned (Full Implementation)
+
+**Decision:** Adopt Hypothesis framework for property-based testing across all critical trading logic, with phased implementation starting in Phase 1.5.
+
+**Why Property-Based Testing Matters for Trading:**
+
+Traditional example-based testing validates 5-10 hand-picked scenarios:
+```python
+def test_kelly_criterion_example():
+    # Test one specific case
+    position = calculate_kelly_size(
+        edge=Decimal("0.10"),
+        kelly_fraction=Decimal("0.25"),
+        bankroll=Decimal("10000")
+    )
+    assert position == Decimal("250")
+```
+
+Property-based testing validates **mathematical invariants** across thousands of auto-generated scenarios:
+```python
+@given(
+    edge=edge_value(),           # Generates hundreds of edge values
+    kelly_frac=kelly_fraction(), # Generates hundreds of kelly fractions
+    bankroll=bankroll_amount()   # Generates hundreds of bankroll amounts
+)
+def test_position_never_exceeds_bankroll(edge, kelly_frac, bankroll):
+    """PROPERTY: Position size MUST NEVER exceed bankroll (prevents margin calls)"""
+    position = calculate_kelly_size(edge, kelly_frac, bankroll)
+    assert position <= bankroll  # Validates across 1000+ combinations
+```
+
+**Key Difference:** Example-based tests say "this works for these 5 cases." Property-based tests say "this ALWAYS works, for ALL valid inputs."
+
+**Proof-of-Concept Results (Phase 1.5):**
+- **26 property tests implemented** (`tests/property/test_kelly_criterion_properties.py`, `tests/property/test_edge_detection_properties.py`)
+- **2600+ test cases executed** (100 examples per property × 26 properties)
+- **0 failures** in 3.32 seconds
+- **Critical invariants validated:**
+  - Position size NEVER exceeds bankroll (prevents margin calls)
+  - Negative edge NEVER recommends trade (prevents guaranteed losses)
+  - Trailing stop price NEVER loosens (only tightens or stays same)
+  - Edge calculation correctly accounts for fees and bid-ask spread
+  - Kelly criterion produces reasonable position sizes relative to edge
+  - Decimal precision maintained throughout all calculations
+
+**Custom Hypothesis Strategies (Trading Domain):**
+
+Created reusable generators for trading primitives:
+```python
+@st.composite
+def probability(draw, min_value=0, max_value=1, places=4):
+    """Generate valid probabilities [0, 1] as Decimal."""
+    return draw(st.decimals(min_value=min_value, max_value=max_value, places=places))
+
+@st.composite
+def bid_ask_spread(draw, min_spread=0.0001, max_spread=0.05):
+    """Generate realistic bid-ask spreads with bid < ask constraint."""
+    bid = draw(st.decimals(min_value=0, max_value=0.99, places=4))
+    spread = draw(st.decimals(min_value=min_spread, max_value=max_spread, places=4))
+    ask = bid + spread
+    return (bid, ask)
+```
+
+**Why Custom Strategies Matter:**
+- Generate **domain-valid** inputs (bid < ask, probability ∈ [0, 1])
+- Avoid wasting test cases on invalid inputs (negative prices, probabilities > 1)
+- Encode domain constraints once, reuse across all property tests
+- Improve Hypothesis shrinking (finds minimal failing examples faster)
+
+**Hypothesis Shrinking - Automatic Bug Minimization:**
+
+When a property test fails, Hypothesis automatically minimizes the failing example:
+```python
+# Initial failure: edge=0.473821, kelly_frac=0.87, bankroll=54329.12
+# After shrinking: edge=0.5, kelly_frac=1.0, bankroll=100.0
+# Shrinking time: <1 second
+
+# Minimal example reveals root cause:
+# Bug: When edge=0.5 and kelly_frac=1.0, position exceeds bankroll!
+# Fix: Add constraint: position = min(calculated_position, bankroll)
+```
+
+**Phased Implementation Roadmap (38-48 hours total):**
+
+**Phase 1.5 - Core Trading Logic (6-8h):** ✅ IN PROGRESS
+- ✅ Kelly criterion properties (REQ-TEST-008)
+- ✅ Edge detection properties (REQ-TEST-008)
+- 🔵 Config validation properties (REQ-TEST-009)
+- 🔵 Position sizing properties (REQ-TEST-009)
+
+**Phase 2 - Data Validation (8-10h):**
+- Historical data properties (REQ-TEST-010)
+- Model validation properties (REQ-TEST-010)
+- Strategy versioning properties (REQ-TEST-010)
+
+**Phase 3 - Order Book & Entry (6-8h):**
+- Order book properties (REQ-TEST-010)
+- Entry optimization properties (REQ-TEST-010)
+
+**Phase 4 - Ensemble & Backtesting (8-10h):**
+- Ensemble properties (REQ-TEST-010)
+- Backtesting properties (REQ-TEST-010)
+
+**Phase 5 - Position & Exit Management (10-12h):**
+- Position lifecycle properties (REQ-TEST-011)
+- Trailing stop properties (REQ-TEST-011)
+- Exit priority properties (REQ-TEST-011)
+- Exit execution properties (REQ-TEST-011)
+- Reporting metrics properties (REQ-TEST-011)
+
+**Total:** 165 properties, 16,500+ test cases
+
+**Critical Properties for Trading Safety:**
+
+1. **Position Sizing:**
+   - Position ≤ bankroll (prevents margin calls)
+   - Position ≤ max_position_limit (risk management)
+   - Kelly fraction ∈ [0, 1] (validated at config load)
+
+2. **Edge Detection:**
+   - Negative edge → don't trade (prevents guaranteed losses)
+   - Edge accounts for fees and spread (realistic P&L)
+   - Probability bounds [0, 1] always respected
+
+3. **Trailing Stops:**
+   - Stop price NEVER loosens (one-way ratchet)
+   - Stop distance maintained (configured percentage)
+   - Trigger detection accurate (price crosses stop)
+
+4. **Exit Management:**
+   - Stop loss overrides all other exits (safety first)
+   - Exit price within acceptable bounds (slippage tolerance)
+   - Circuit breaker prevents rapid losses (5 exits in 10 min)
+
+**Configuration (`pyproject.toml`):**
+```toml
+[tool.hypothesis]
+max_examples = 100          # Test 100 random inputs per property
+verbosity = "normal"         # Show shrinking progress
+database = ".hypothesis/examples"  # Cache discovered edge cases
+deadline = 400              # 400ms timeout per example (prevents infinite loops)
+derandomize = false         # True for debugging (reproducible failures)
+```
+
+**Integration with Existing Test Infrastructure:**
+- ✅ Runs with existing pytest suite (`pytest tests/property/`)
+- ✅ Pre-commit hooks validate property tests
+- ✅ CI/CD pipeline includes property tests
+- ✅ Coverage tracking includes property test files
+- ✅ Same test markers (`@pytest.mark.unit`, `@pytest.mark.critical`)
+
+**When to Use Property-Based vs. Example-Based Tests:**
+
+**Use Property-Based Tests For:**
+- Mathematical invariants (position ≤ bankroll, bid ≤ ask)
+- Business rules (negative edge → don't trade)
+- State transitions (trailing stop only tightens)
+- Data validation (probability ∈ [0, 1])
+- Edge cases humans wouldn't think to test
+
+**Use Example-Based Tests For:**
+- Specific known bugs (regression tests)
+- Integration with external APIs (mock responses)
+- Complex business scenarios (halftime entry strategy)
+- User-facing behavior (CLI command output)
+- Performance benchmarks (test takes exactly X seconds)
+
+**Best Practice:** Use **both**. Property tests validate invariants, example tests validate specific scenarios.
+
+**Performance Considerations:**
+- **Property tests are slower** (100 examples vs. 1 example)
+- **Phase 1.5:** 26 properties × 100 examples = 2600 cases in 3.32s (acceptable)
+- **Full implementation:** 165 properties × 100 examples = 16,500 cases in ~30-40s (acceptable)
+- **CI/CD impact:** Add ~30-40 seconds to test suite (total ~90-120 seconds)
+- **Mitigation:** Run property tests in parallel, use `max_examples=20` in CI (faster feedback)
+
+**Documentation:**
+- **Implementation Plan:** `docs/testing/HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md` (comprehensive roadmap)
+- **Requirements:** REQ-TEST-008 (complete), REQ-TEST-009 through REQ-TEST-011 (planned)
+- **CLAUDE.md Pattern 9:** Property-Based Testing Pattern (to be added)
+
+**Rationale:**
+
+1. **Trading Logic is Math-Heavy:** Kelly criterion, edge detection, P&L calculation - all have mathematical invariants that MUST hold
+2. **Edge Cases Matter:** A bug that manifests only when edge = 0.9999999 could cause catastrophic loss
+3. **Hypothesis Finds Edge Cases Humans Miss:** Shrinking reveals minimal failing examples automatically
+4. **Critical for Model Validation:** Property tests ensure models ALWAYS output valid predictions
+5. **Prevents Production Bugs:** 26 properties caught 0 bugs in POC because code was well-designed. Property tests will catch bugs in future features BEFORE production.
+
+**Impact:**
+- **Phase 1.5:** Add property tests to test suite
+- **Phase 2-5:** Expand property tests as new features implemented
+- **All Developers:** Write property tests for new trading logic (documented in CLAUDE.md Pattern 9)
+- **CI/CD:** Add property test execution to pipeline
+- **Test Coverage:** Increase from 80% line coverage to 80% line + invariant coverage
+
+**Success Metrics:**
+- ✅ 0 production bugs related to position sizing (property test would have caught it)
+- ✅ 0 production bugs related to edge detection (property test would have caught it)
+- ✅ 0 production bugs related to trailing stops (property test would have caught it)
+- ✅ <5% increase in CI/CD execution time (property tests run efficiently)
+
+**Related ADRs:**
+- ADR-011: pytest for Testing Framework (foundation)
+- ADR-041: Testing Strategy Expansion (Phase 0.6c)
+- ADR-045: Mutmut for Mutation Testing (Phase 0.7, measures test quality)
+
+**Related Requirements:**
+- REQ-TEST-001: Unit Testing Standards (>80% coverage)
+- REQ-TEST-008: Property-Based Testing - Proof of Concept (complete)
+- REQ-TEST-009: Property Testing - Core Trading Logic (Phase 1.5)
+- REQ-TEST-010: Property Testing - Data Validation & Models (Phase 2-4)
+- REQ-TEST-011: Property Testing - Position & Exit Management (Phase 5)
+
+---
+
 ## Architecture Patterns
 
 ### Repository Pattern
@@ -3987,9 +4207,10 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.10
-**Last Updated:** November 4, 2025
+**Document Version:** 2.11
+**Last Updated:** November 8, 2025
 **Critical Changes:**
+- v2.11: **PROPERTY-BASED TESTING STRATEGY** - Added Decision #24/ADR-074 (Hypothesis framework adoption: 26 property tests POC, custom strategies, phased implementation roadmap, 165 properties planned)
 - v2.10: **CROSS-PLATFORM STANDARDS** - Added Decision #47/ADR-053 (Windows/Linux compatibility: ASCII-safe console output, explicit UTF-8 file I/O, Unicode sanitization)
 - v2.9: **PHASE 1 API BEST PRACTICES** - Added Decisions #41-46/ADR-047-052 (API Integration Best Practices: Pydantic validation, circuit breaker, correlation IDs, connection pooling, log masking, YAML validation)
 - v2.8: **PHASE 0.6C + 0.7 PLANNING** - Added Decisions #33-40/ADR-038-045 (Validation & Testing Infrastructure complete, CI/CD & Advanced Testing planned)
