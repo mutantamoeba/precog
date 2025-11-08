@@ -1,13 +1,20 @@
 """
-Structured logging for Precog trading system with JSON output.
+Structured logging for Precog trading system with dual output formats.
+
+Output Formats:
+--------------
+**Console (stdout):** Human-readable text with structured fields
+  [info     ] trade_entry user=john price=0.5200 ticker=NFL-KC-YES [main]
+
+**File (logs/):** JSON for machine parsing and observability tools
+  {"event": "trade_entry", "user": "john", "price": "0.5200", "ticker": "NFL-KC-YES", "timestamp": "..."}
 
 Structured Logging Explained:
 -----------------------------
 Instead of plain text logs like:
   "User john executed trade at 0.52 for NFL-KC-YES"
 
-We output JSON with structured fields:
-  {"event": "trade_entry", "user": "john", "price": "0.5200", "ticker": "NFL-KC-YES", "timestamp": "..."}
+We capture structured fields that enable querying, alerting, and analytics.
 
 Why This Matters for Trading:
 - **Searchability:** Query logs like a database ("find all trade_entry events where price > 0.50")
@@ -222,21 +229,40 @@ def setup_logging(
     )
 
     # Configure formatters for different outputs
-    formatter = structlog.stdlib.ProcessorFormatter(
+    # Console formatter (human-readable with color)
+    console_formatter = structlog.stdlib.ProcessorFormatter(
         # Foreign log messages (from stdlib logging)
         foreign_pre_chain=shared_processors,  # type: ignore[arg-type]
         # Structlog messages
         processors=[
             # Remove internal _record and _from_structlog keys
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            # Render as JSON
-            structlog.processors.JSONRenderer(serializer=decimal_serializer),
+            # Render as human-readable console output (returns string)
+            structlog.dev.ConsoleRenderer(colors=False),
         ],
     )
 
-    # Apply formatter to all handlers
+    # File formatter (JSON for machine parsing)
+    file_formatter = structlog.stdlib.ProcessorFormatter(
+        # Foreign log messages (from stdlib logging)
+        foreign_pre_chain=shared_processors,  # type: ignore[arg-type]
+        # Structlog messages
+        processors=[
+            # Remove internal _record and _from_structlog keys
+            structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            # Render as JSON (use default= instead of serializer=, returns string)
+            structlog.processors.JSONRenderer(default=decimal_serializer),
+        ],
+    )
+
+    # Apply appropriate formatter to each handler
     for handler in logging.root.handlers:
-        handler.setFormatter(formatter)
+        if isinstance(handler, logging.StreamHandler) and handler.stream == sys.stdout:
+            # Console handler gets human-readable format
+            handler.setFormatter(console_formatter)
+        else:
+            # File handler gets JSON format
+            handler.setFormatter(file_formatter)
 
     # Get logger instance
     logger = structlog.get_logger()
@@ -313,7 +339,8 @@ except Exception as e:
     import os
 
     if "PYTEST_CURRENT_TEST" not in os.environ:
-        print(f"[WARNING] Logging setup failed: {e}")
+        # Use logging.warning instead of print (since basicConfig already set up)
+        logging.warning(f"Logging setup failed: {e}")
 
 
 # Helper functions for common log patterns
