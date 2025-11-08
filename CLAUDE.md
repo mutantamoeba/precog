@@ -1,11 +1,22 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.10
+**Version:** 1.11
 **Created:** 2025-10-28
 **Last Updated:** 2025-11-08
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.11:**
+- **Added Pattern 9: Property-Based Testing with Hypothesis (ALWAYS for Trading Logic)** - Comprehensive guide for writing property tests across all critical trading logic
+- Documents proof-of-concept completion (26 tests, 2600+ test cases, 0 failures, 3.32s execution)
+- Provides side-by-side comparison: example-based testing (5-10 cases) vs. property-based testing (thousands of auto-generated cases)
+- Includes "ALWAYS Use Property Tests For" section covering 4 categories: mathematical invariants, business rules, state transitions, data validation
+- Documents 3 custom Hypothesis strategies for trading domain (probability, bid_ask_spread, price_series)
+- Demonstrates Hypothesis shrinking with concrete example (edge=0.473821 → edge=0.5)
+- Provides decision table: when to use property tests vs. example tests (9 scenarios)
+- Includes quick start guide (4 steps), common pitfalls (2 examples), performance considerations
+- Cross-references Pattern 1 (Decimal Precision), Pattern 7 (Educational Docstrings), ADR-074, REQ-TEST-008 through REQ-TEST-011
+- Total addition: ~235 lines of property-based testing patterns and guidance
 **Changes in V1.10:**
 - **Added Pattern 8: Configuration File Synchronization (CRITICAL)** - Comprehensive guide to prevent configuration drift across 4 layers (tool configs, pipeline configs, application configs, documentation)
 - Documents the Bandit → Ruff migration issue we just fixed (orphaned `[tool.bandit]` in pyproject.toml caused 200+ errors)
@@ -1405,6 +1416,243 @@ All 4 layers synchronized to prevent configuration drift.
 - Section 5: Document Cohesion & Consistency (same principles apply to configs)
 - `scripts/validate_docs.py` - YAML validation implementation (Check #9)
 - `config/config_loader.py` - String → Decimal conversion logic
+
+---
+
+### Pattern 9: Property-Based Testing with Hypothesis (ALWAYS for Trading Logic)
+
+**WHY:** Trading logic has **mathematical invariants** that MUST hold for ALL inputs. Example-based tests validate 5-10 cases. Property-based tests validate thousands of cases automatically, catching edge cases humans miss.
+
+**The Difference:**
+
+```python
+# ❌ EXAMPLE-BASED TEST - Tests 1 specific case
+def test_kelly_criterion_example():
+    position = calculate_kelly_size(
+        edge=Decimal("0.10"),
+        kelly_fraction=Decimal("0.25"),
+        bankroll=Decimal("10000")
+    )
+    assert position == Decimal("250")  # What if edge = 0.9999999?
+
+# ✅ PROPERTY-BASED TEST - Tests 100+ cases automatically
+@given(
+    edge=edge_value(),           # Generates edge ∈ [-0.5, 0.5]
+    kelly_frac=kelly_fraction(), # Generates kelly ∈ [0, 1]
+    bankroll=bankroll_amount()   # Generates bankroll ∈ [$100, $100k]
+)
+def test_position_never_exceeds_bankroll(edge, kelly_frac, bankroll):
+    """PROPERTY: Position ≤ bankroll ALWAYS (prevents margin calls)"""
+    position = calculate_kelly_size(edge, kelly_frac, bankroll)
+    assert position <= bankroll  # Validates 100+ combinations
+```
+
+**ALWAYS Use Property Tests For:**
+
+1. **Mathematical Invariants:**
+   - Position size ≤ bankroll (prevents margin calls)
+   - Bid price ≤ ask price (no crossed markets)
+   - Trailing stop price NEVER loosens (one-way ratchet)
+   - Probability ∈ [0, 1] (always bounded)
+   - Kelly fraction ∈ [0, 1] (validated at config load)
+
+2. **Business Rules:**
+   - Negative edge → don't trade (prevents guaranteed losses)
+   - Stop loss overrides all other exits (safety first)
+   - Exit price within slippage tolerance (risk management)
+
+3. **State Transitions:**
+   - Position lifecycle: open → monitoring → exited (valid transitions only)
+   - Strategy status: draft → testing → active → deprecated (no invalid jumps)
+   - Trailing stop updates: current_stop = max(old_stop, new_stop) (never decreases)
+
+4. **Data Validation:**
+   - Timestamp ordering monotonic (no time travel)
+   - Score progression never decreases (game logic)
+   - Model outputs ∈ valid range (prediction bounds)
+
+**Custom Hypothesis Strategies (Trading Domain):**
+
+Create reusable generators in `tests/property/strategies.py`:
+
+```python
+from hypothesis import strategies as st
+from decimal import Decimal
+
+@st.composite
+def probability(draw, min_value=0, max_value=1, places=4):
+    """Generate valid probabilities [0, 1] as Decimal."""
+    return draw(st.decimals(min_value=min_value, max_value=max_value, places=places))
+
+@st.composite
+def bid_ask_spread(draw, min_spread=0.0001, max_spread=0.05):
+    """Generate realistic bid-ask spreads with bid < ask constraint."""
+    bid = draw(st.decimals(min_value=0, max_value=0.99, places=4))
+    spread = draw(st.decimals(min_value=min_spread, max_value=max_spread, places=4))
+    ask = bid + spread
+    return (bid, ask)
+
+@st.composite
+def price_series(draw, length=10, volatility=Decimal("0.05")):
+    """Generate realistic price movement series."""
+    start_price = draw(st.decimals(min_value=0.40, max_value=0.60, places=4))
+    prices = [start_price]
+    for _ in range(length - 1):
+        change = draw(st.decimals(min_value=-volatility, max_value=volatility, places=4))
+        new_price = max(Decimal("0.01"), min(Decimal("0.99"), prices[-1] + change))
+        prices.append(new_price)
+    return prices
+```
+
+**Why Custom Strategies Matter:**
+- Generate **domain-valid** inputs only (no wasted test cases on negative prices)
+- Encode constraints once, reuse everywhere (bid < ask, probability ∈ [0, 1])
+- Improve Hypothesis shrinking (finds minimal failing examples faster)
+- Document domain assumptions (probabilities are Decimal, not float)
+
+**Hypothesis Shrinking - Automatic Bug Minimization:**
+
+When a property test fails, Hypothesis **automatically** finds the simplest failing example:
+
+```python
+# Failing test:
+@given(edge=edge_value(), kelly_frac=kelly_fraction(), bankroll=bankroll_amount())
+def test_position_never_exceeds_bankroll(edge, kelly_frac, bankroll):
+    position = calculate_kelly_size(edge, kelly_frac, bankroll)
+    assert position <= bankroll
+
+# Initial failure (complex):
+# edge=0.473821, kelly_frac=0.87, bankroll=54329.12
+# position=54330.00 > bankroll (BUG!)
+
+# After shrinking (<1 second):
+# edge=0.5, kelly_frac=1.0, bankroll=100.0
+# position=101.0 > bankroll (minimal example reveals bug)
+
+# Root cause: Forgot to cap position at bankroll!
+# Fix: position = min(calculated_position, bankroll)
+```
+
+**When to Use Property Tests vs. Example Tests:**
+
+| Test Type | Use For | Example |
+|-----------|---------|---------|
+| **Property Test** | Mathematical invariants | Position ≤ bankroll |
+| **Property Test** | Business rules | Negative edge → don't trade |
+| **Property Test** | State transitions | Trailing stop only tightens |
+| **Property Test** | Data validation | Probability ∈ [0, 1] |
+| **Example Test** | Specific known bugs | Regression test for Issue #42 |
+| **Example Test** | Integration with APIs | Mock Kalshi API response |
+| **Example Test** | Complex business scenarios | Halftime entry strategy |
+| **Example Test** | User-facing behavior | CLI output format |
+| **Example Test** | Performance benchmarks | Test runs in <100ms |
+
+**Best Practice:** Use **both**. Property tests validate invariants, example tests validate specific scenarios.
+
+**Configuration (`pyproject.toml`):**
+
+```toml
+[tool.hypothesis]
+max_examples = 100          # Test 100 random inputs per property
+verbosity = "normal"         # Show shrinking progress
+database = ".hypothesis/examples"  # Cache discovered edge cases
+deadline = 400              # 400ms timeout per example (prevents infinite loops)
+derandomize = false         # True for debugging (reproducible failures)
+```
+
+**Project Status:**
+
+**✅ Phase 1.5 Proof-of-Concept (COMPLETE):**
+- `tests/property/test_kelly_criterion_properties.py` - 11 properties, 1100+ cases
+- `tests/property/test_edge_detection_properties.py` - 16 properties, 1600+ cases
+- Custom strategies: `probability()`, `market_price()`, `edge_value()`, `kelly_fraction()`, `bankroll_amount()`
+- **Critical invariants validated:**
+  - Position ≤ bankroll (prevents margin calls)
+  - Negative edge → don't trade (prevents losses)
+  - Trailing stop only tightens (never loosens)
+  - Edge accounts for fees and spread (realistic P&L)
+
+**🔵 Full Implementation Roadmap (Phases 1.5-5):**
+- Phase 1.5: Config validation, position sizing (40+ properties)
+- Phase 2: Historical data, model validation, strategy versioning (35+ properties)
+- Phase 3: Order book, entry optimization (25+ properties)
+- Phase 4: Ensemble models, backtesting (30+ properties)
+- Phase 5: Position lifecycle, exit optimization, reporting (45+ properties)
+- **Total: 165 properties, 16,500+ test cases**
+
+**Writing Property Tests - Quick Start:**
+
+```python
+# 1. Import Hypothesis
+from hypothesis import given
+from hypothesis import strategies as st
+from decimal import Decimal
+
+# 2. Define custom strategy (if needed)
+@st.composite
+def edge_value(draw):
+    return draw(st.decimals(min_value=-0.5, max_value=0.5, places=4))
+
+# 3. Write property test with @given decorator
+@given(edge=edge_value(), kelly_frac=kelly_fraction(), bankroll=bankroll_amount())
+def test_position_never_exceeds_bankroll(edge, kelly_frac, bankroll):
+    """PROPERTY: Position ≤ bankroll (prevents margin calls)"""
+    position = calculate_kelly_size(edge, kelly_frac, bankroll)
+    assert position <= bankroll, f"Position {position} > bankroll {bankroll}!"
+
+# 4. Run with pytest
+# pytest tests/property/test_kelly_criterion_properties.py -v
+```
+
+**Common Pitfalls:**
+
+```python
+# ❌ WRONG - Testing implementation details
+@given(edge=edge_value())
+def test_kelly_formula_calculation(edge):
+    # Don't test "how" calculation is done, test "what" properties hold
+    assert calculate_kelly_size(edge, ...) == edge * kelly_frac * bankroll
+
+# ✅ CORRECT - Testing invariants
+@given(edge=edge_value())
+def test_negative_edge_means_no_trade(edge):
+    if edge < 0:
+        position = calculate_kelly_size(edge, kelly_frac, bankroll)
+        assert position == Decimal("0")  # Property: negative edge → don't trade
+```
+
+```python
+# ❌ WRONG - Unconstrained inputs waste test cases
+@given(price=st.floats())  # Generates NaN, inf, negative prices
+def test_bid_less_than_ask(price):
+    # Most generated prices are invalid (negative, >1, NaN)
+    # Hypothesis spends 90% of time on invalid inputs
+
+# ✅ CORRECT - Constrained inputs focus on valid domain
+@given(bid=st.decimals(min_value=0, max_value=0.99, places=4))
+def test_bid_less_than_ask(bid):
+    ask = bid + Decimal("0.01")  # Valid constraint
+    # All generated bids are valid, tests are efficient
+```
+
+**Performance:**
+- Property tests are slower (100 examples vs. 1 example)
+- Phase 1.5: 26 properties = 2600 cases in 3.32s (acceptable)
+- Full implementation: 165 properties = 16,500 cases in ~30-40s (acceptable)
+- CI/CD impact: +30-40 seconds (total ~90-120 seconds)
+- Mitigation: Run in parallel, use `max_examples=20` in CI
+
+**Documentation:**
+- **Requirements:** REQ-TEST-008 (complete), REQ-TEST-009 through REQ-TEST-011 (planned)
+- **Architecture:** ADR-074 (Property-Based Testing Strategy)
+- **Implementation Plan:** `docs/testing/HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md` (comprehensive roadmap)
+- **Proof-of-Concept:** `tests/property/test_kelly_criterion_properties.py`, `tests/property/test_edge_detection_properties.py`
+
+**Reference:**
+- Pattern 1: Decimal Precision (use Decimal in custom strategies, never float)
+- Pattern 7: Educational Docstrings (explain WHY properties matter in docstrings)
+- ADR-074: Full rationale for property-based testing adoption
+- REQ-TEST-008: Proof-of-concept completion details
 
 ---
 
