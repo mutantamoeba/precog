@@ -1,9 +1,14 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.5
-**Last Updated:** 2025-11-07
+**Version:** 1.6
+**Last Updated:** 2025-11-08
 **Status:** ✅ Current
+**Changes in v1.6:**
+- **PROPERTY-BASED TESTING INTEGRATION:** Added ADR-074 (Property-Based Testing Strategy with Hypothesis)
+- Added Phase 1.5 section for property-based testing integration
+- Added ADR-074: Property-Based Testing Strategy (Hypothesis Framework) - POC complete
+- Total ADRs: 52 → 53 (1 new ADR added)
 **Changes in v1.5:**
 - **PYTHON 3.14 COMPATIBILITY:** Added ADR-054 (Ruff Security Rules Instead of Bandit)
 - Added ADR-054: Ruff Security Rules Instead of Bandit (Python 3.14 compatibility)
@@ -139,6 +144,12 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR-050 | HTTP Connection Pooling Configuration | 2025-10-31 | 🔵 | 1 | ARCHITECTURE_DECISIONS_V2.10 |
 | ADR-051 | Sensitive Data Masking in Logs | 2025-10-31 | 🔵 | 1 | ARCHITECTURE_DECISIONS_V2.10 |
 | ADR-052 | YAML Configuration Validation | 2025-10-31 | 🔵 | 1 | ARCHITECTURE_DECISIONS_V2.10 |
+
+### Phase 1.5: Property-Based Testing Integration
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-074 | Property-Based Testing Strategy (Hypothesis Framework) | 2025-11-08 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.11 |
 
 ### Phase 5: Trading MVP (Planned)
 
@@ -368,8 +379,8 @@ Implement 4-level priority hierarchy:
 
 ## ADR Statistics
 
-**Total ADRs:** 52
-**Accepted (✅):** 35 (Phase 0-0.7 partial)
+**Total ADRs:** 53
+**Accepted (✅):** 36 (Phase 0-1.5 partial)
 **Proposed (🔵):** 17 (Phase 0.7, 1, 2-10)
 **Rejected (❌):** 0
 **Superseded (⚠️):** 0
@@ -378,6 +389,7 @@ Implement 4-level priority hierarchy:
 - Phase 0: 17 ADRs (100% accepted)
 - Phase 0.5: 12 ADRs (100% accepted)
 - Phase 1: 12 ADRs (6 accepted for DB completion + 6 planned for API best practices)
+- Phase 1.5: 1 ADR (100% accepted - property-based testing POC)
 - Phase 0.6c: 5 ADRs (100% accepted - includes cross-platform standards)
 - Phase 0.7: 5 ADRs (1 accepted: Python 3.14 compatibility + 4 planned)
 - Phase 2: 3 ADRs (0% - planned)
@@ -396,11 +408,12 @@ Implement 4-level priority hierarchy:
 
 ---
 
-**Document Version:** 1.5
+**Document Version:** 1.6
 **Created:** 2025-10-21
-**Last Updated:** 2025-11-07
+**Last Updated:** 2025-11-08
 **Purpose:** Systematic architecture decision tracking and reference
 **Critical Changes:**
+- v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
 - v1.4: Added ADR-053 for cross-platform development standards (Windows/Linux compatibility)
 - v1.3: Added 6 new ADRs (ADR-047 through ADR-052) for Phase 1 API Integration best practices
@@ -408,4 +421,4 @@ Implement 4-level priority hierarchy:
 
 **For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.11.md
 
-**END OF ADR INDEX V1.5**
+**END OF ADR INDEX V1.6**
