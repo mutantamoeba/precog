@@ -262,9 +262,9 @@ Running validation checks...
 #### Auto-Fixable Issues
 
 1. **Version header mismatches**
-   - Filename: `MASTER_REQUIREMENTS_V2.10.md`
-   - Header: `Version: 2.10`
-   - Fix: Update header to `2.10`
+   - Filename: `MASTER_REQUIREMENTS_V2.11.md`
+   - Header: `Version: 2.11`
+   - Fix: Update header to `2.11`
 
 2. **Missing documents in MASTER_INDEX**
    - Reports unlisted documents (manual addition recommended)
@@ -882,8 +882,8 @@ pytest tests/unit/test_specific.py --pdb
 ## Related Documents
 
 - **Testing:** `TESTING_STRATEGY_V2.0.md` - Comprehensive testing infrastructure
-- **Requirements:** `MASTER_REQUIREMENTS_V2.10.md` - REQ-VALIDATION-001, REQ-VALIDATION-002
-- **ADRs:** `ARCHITECTURE_DECISIONS_V2.10.md` - ADR-048 (Ruff), ADR-050 (Doc Validation), ADR-051 (Layered Validation)
+- **Requirements:** `MASTER_REQUIREMENTS_V2.11.md` - REQ-VALIDATION-001, REQ-VALIDATION-002
+- **ADRs:** `ARCHITECTURE_DECISIONS_V2.11.md` - ADR-048 (Ruff), ADR-050 (Doc Validation), ADR-051 (Layered Validation), ADR-054 (Bandit→Ruff Migration)
 - **Process:** `CLAUDE.md V1.1` - Section 5 (Document Cohesion), Section 9 (Phase Completion Protocol)
 - **Configuration:** `pyproject.toml` - All tool configurations
 
