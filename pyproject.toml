@@ -348,7 +348,8 @@ disable_mutation_for = [
 
 [tool.bandit]
 # Exclude directories (Bandit scans current directory by default)
-exclude_dirs = ["/tests", "/.venv", "/venv", "/_archive", "/build", "/dist", "/.git", "/.pytest_cache"]
+# Note: Paths are relative to project root, no leading slashes needed
+exclude_dirs = ["tests", ".venv", "venv", "_archive", "build", "dist", ".git", ".pytest_cache", "__pycache__", "htmlcov"]
 
 # Specific tests to skip (use with caution!)
 # Format: ["B101", "B601"]
