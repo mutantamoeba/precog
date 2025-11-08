@@ -883,7 +883,7 @@ pytest tests/unit/test_specific.py --pdb
 
 - **Testing:** `TESTING_STRATEGY_V2.0.md` - Comprehensive testing infrastructure
 - **Requirements:** `MASTER_REQUIREMENTS_V2.11.md` - REQ-VALIDATION-001, REQ-VALIDATION-002
-- **ADRs:** `ARCHITECTURE_DECISIONS_V2.11.md` - ADR-048 (Ruff), ADR-050 (Doc Validation), ADR-051 (Layered Validation), ADR-054 (Bandit→Ruff Migration)
+- **ADRs:** `ARCHITECTURE_DECISIONS_V2.12.md` - ADR-048 (Ruff), ADR-050 (Doc Validation), ADR-051 (Layered Validation), ADR-054 (Bandit→Ruff Migration), ADR-075 (Multi-Source Warning Governance)
 - **Process:** `CLAUDE.md V1.1` - Section 5 (Document Cohesion), Section 9 (Phase Completion Protocol)
 - **Configuration:** `pyproject.toml` - All tool configurations
 

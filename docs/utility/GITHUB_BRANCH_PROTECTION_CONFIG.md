@@ -1,10 +1,13 @@
 # GitHub Branch Protection Configuration
 
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-11-07
-**Last Updated:** 2025-11-07
+**Last Updated:** 2025-11-08
 **Purpose:** Documents the GitHub branch protection rules configured for the main branch
 **Related:** DEF-003 (GitHub Branch Protection Rules)
+**Changes in V1.1:**
+- Updated all security scanning references from "Bandit" to "Ruff security rules" (aligns with ADR-054 migration)
+- No functional changes - actual CI workflow already using Ruff correctly
 
 ---
 
@@ -38,7 +41,7 @@ All status checks must pass before merging. The PR branch must be up-to-date wit
 | Check Name | Description | Workflow File | Typical Duration |
 |------------|-------------|---------------|------------------|
 | **Pre-commit Validation (Ruff, Mypy, Security)** | Runs Ruff formatter/linter, Mypy type checking, and security scans | `.github/workflows/ci.yml` | ~1-2 min |
-| **Security Scanning (Bandit & Safety)** | Runs Bandit (code security) and Safety (dependency vulnerabilities) | `.github/workflows/ci.yml` | ~20-30 sec |
+| **Security Scanning (Ruff & Safety)** | Runs Ruff security rules (code security) and Safety (dependency vulnerabilities) | `.github/workflows/ci.yml` | ~20-30 sec |
 | **Documentation Validation** | Validates documentation consistency (9 checks via `validate_docs.py`) | `.github/workflows/ci.yml` | ~5-10 sec |
 | **Quick Validation Suite** | Fast validation for rapid feedback (Ruff + docs + fast tests) | `.github/workflows/ci.yml` | ~30-60 sec |
 | **CI Summary** | Summary check that aggregates all test results | `.github/workflows/ci.yml` | ~1-5 sec |
@@ -114,7 +117,7 @@ This is the exact JSON payload used to configure branch protection via GitHub AP
     "strict": true,
     "checks": [
       {"context": "Pre-commit Validation (Ruff, Mypy, Security)"},
-      {"context": "Security Scanning (Bandit & Safety)"},
+      {"context": "Security Scanning (Ruff & Safety)"},
       {"context": "Documentation Validation"},
       {"context": "Quick Validation Suite"},
       {"context": "CI Summary"}
@@ -155,7 +158,7 @@ gh api -X PUT \
     "strict": true,
     "checks": [
       {"context": "Pre-commit Validation (Ruff, Mypy, Security)"},
-      {"context": "Security Scanning (Bandit & Safety)"},
+      {"context": "Security Scanning (Ruff & Safety)"},
       {"context": "Documentation Validation"},
       {"context": "Quick Validation Suite"},
       {"context": "CI Summary"}
@@ -189,7 +192,7 @@ EOF
    - Check "Require branches to be up to date before merging"
    - Add required status checks:
      - Pre-commit Validation (Ruff, Mypy, Security)
-     - Security Scanning (Bandit & Safety)
+     - Security Scanning (Ruff & Safety)
      - Documentation Validation
      - Quick Validation Suite
      - CI Summary
@@ -320,7 +323,7 @@ The following enhancements are documented in `PHASE_0.7_DEFERRED_TASKS_V1.0.md` 
 1. ✅ **Enforce Admins:** All users (including admins) must go through PRs
 2. ✅ **No Force Push:** Prevents history rewriting on main
 3. ✅ **No Deletions:** Prevents accidental branch deletion
-4. ✅ **Required Security Scan:** Bandit + Safety must pass
+4. ✅ **Required Security Scan:** Ruff + Safety must pass
 5. ✅ **Required Pre-commit:** Credentials scan must pass
 
 **What This Prevents:**

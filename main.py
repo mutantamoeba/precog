@@ -529,6 +529,134 @@ def fetch_balance(
 
 
 @app.command()
+def fetch_markets(
+    series_ticker: str | None = typer.Option(
+        None,
+        "--series",
+        "-s",
+        help="Filter by series ticker (e.g., 'KXNFLGAME')",
+    ),
+    event_ticker: str | None = typer.Option(
+        None,
+        "--event",
+        "-e",
+        help="Filter by event ticker (e.g., 'KXNFLGAME-25OCT05-NEBUF')",
+    ),
+    limit: int = typer.Option(
+        100,
+        "--limit",
+        "-l",
+        help="Maximum number of markets to fetch (default 100, max 200)",
+    ),
+    environment: str = typer.Option(
+        "demo",
+        "--env",
+        help="Environment to use (demo or prod)",
+    ),
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Fetch data but don't write to database",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose output for debugging",
+    ),
+) -> None:
+    """
+    Fetch available markets from Kalshi API and display/store in database.
+
+    Retrieves markets with current pricing data. Can filter by series or event
+    ticker to narrow results.
+
+    Example:
+        python main.py fetch-markets --env demo
+        python main.py fetch-markets --series KXNFLGAME --limit 50
+        python main.py fetch-markets --event KXNFLGAME-25OCT05-NEBUF --verbose
+    """
+    if verbose:
+        logger.info("Verbose mode enabled")
+
+    console.print(f"\n[bold cyan]Fetching markets from Kalshi {environment} API...[/bold cyan]")
+
+    # Initialize Kalshi client
+    client = get_kalshi_client(environment)
+
+    try:
+        # Fetch markets from API (returns list of ProcessedMarketData)
+        markets = client.get_markets(
+            series_ticker=series_ticker,
+            event_ticker=event_ticker,
+            limit=limit,
+        )
+        logger.info(f"Fetched {len(markets)} markets")
+
+        if not markets:
+            console.print("\n[yellow]No markets found[/yellow]")
+            return
+
+        # Display markets in a table
+        filter_info = []
+        if series_ticker:
+            filter_info.append(f"Series: {series_ticker}")
+        if event_ticker:
+            filter_info.append(f"Event: {event_ticker}")
+        filter_str = f" ({', '.join(filter_info)})" if filter_info else ""
+
+        table = Table(
+            title=f"Available Markets ({environment.upper()}){filter_str} - {len(markets)} total"
+        )
+        table.add_column("Ticker", style="cyan", no_wrap=True)
+        table.add_column("Title", style="white", overflow="fold")
+        table.add_column("Status", style="magenta")
+        table.add_column("Yes Bid", style="green", justify="right")
+        table.add_column("Yes Ask", style="yellow", justify="right")
+        table.add_column("Volume", style="blue", justify="right")
+        table.add_column("Last Price", style="dim", justify="right")
+
+        for market in markets:
+            ticker = market.get("ticker", "N/A")
+            title = market.get("title", "N/A")
+            status = market.get("status", "N/A")
+            yes_bid = market.get("yes_bid", Decimal("0.0000"))
+            yes_ask = market.get("yes_ask", Decimal("0.0000"))
+            volume = market.get("volume", 0)
+            last_price = market.get("last_price", Decimal("0.0000"))
+
+            # Truncate title if too long
+            if len(title) > 50:
+                title = title[:47] + "..."
+
+            table.add_row(
+                ticker,
+                title,
+                status.upper(),
+                f"${yes_bid:,.4f}",
+                f"${yes_ask:,.4f}",
+                f"{volume:,}",
+                f"${last_price:,.4f}",
+            )
+
+        console.print(table)
+
+        # TODO Phase 1.5: Store in database
+        if not dry_run:
+            console.print(
+                "\n[yellow]Note:[/yellow] Database persistence not yet implemented (Phase 1.5)"
+            )
+            console.print(f"  Fetched {len(markets)} markets successfully from API")
+        else:
+            console.print("\n[yellow]Dry-run mode:[/yellow] Markets not saved to database")
+
+    except Exception as e:
+        logger.error(f"Failed to fetch markets: {e}", exc_info=verbose)
+        console.print(f"\n[red]Error:[/red] Failed to fetch markets: {e}")
+        raise typer.Exit(code=1) from e
+
+
+@app.command()
 def fetch_positions(
     environment: str = typer.Option(
         "demo",

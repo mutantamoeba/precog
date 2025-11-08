@@ -149,7 +149,8 @@ This document provides a systematic index of all Precog architecture decisions u
 
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
-| ADR-074 | Property-Based Testing Strategy (Hypothesis Framework) | 2025-11-08 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.11 |
+| ADR-074 | Property-Based Testing Strategy (Hypothesis Framework) | 2025-11-08 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.12 |
+| ADR-075 | Multi-Source Warning Governance Architecture | 2025-11-08 | ✅ | 0.7/1 | ARCHITECTURE_DECISIONS_V2.12 |
 
 ### Phase 5: Trading MVP (Planned)
 

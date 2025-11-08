@@ -1,11 +1,23 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.11
+**Version:** 1.12
 **Created:** 2025-10-28
 **Last Updated:** 2025-11-08
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.12:**
+- **Added Pattern 9: Multi-Source Warning Governance (MANDATORY)** - Comprehensive governance across pytest + validate_docs + code quality tools
+- Documents discovery of 388 untracked warnings (90% blind spot from initial pytest-only governance)
+- Establishes 429-warning baseline locked across 3 validation sources (pytest: 41, validate_docs: 388, code quality: 0)
+- Classifies warnings: 182 actionable, 231 informational, 16 expected, 4 upstream
+- Implements zero-regression policy via check_warning_debt.py (multi-source validation)
+- Adds pre-push hook integration (Step 4) for local enforcement
+- Documents governance policy: baseline locked, zero tolerance, phased reduction targets (Phase 1.5: -60, Phase 2: -182 total to zero)
+- Provides example workflow, acceptable baseline update criteria, common mistakes
+- Cross-references ADR-075, WARNING_DEBT_TRACKER.md, warning_baseline.json
+- **Renumbered existing Pattern 9 (Property-Based Testing) → Pattern 10** for clarity
+- Total addition: ~200 lines of warning governance patterns
 **Changes in V1.11:**
 - **Added Pattern 9: Property-Based Testing with Hypothesis (ALWAYS for Trading Logic)** - Comprehensive guide for writing property tests across all critical trading logic
 - Documents proof-of-concept completion (26 tests, 2600+ test cases, 0 failures, 3.32s execution)
@@ -1419,7 +1431,197 @@ All 4 layers synchronized to prevent configuration drift.
 
 ---
 
-### Pattern 9: Property-Based Testing with Hypothesis (ALWAYS for Trading Logic)
+### Pattern 9: Multi-Source Warning Governance (MANDATORY)
+
+**WHY:** Warnings from **multiple validation systems** (pytest, validate_docs, Ruff, Mypy) were being tracked inconsistently. Without comprehensive governance, warnings accumulate silently until they block development.
+
+**The Problem We Fixed:**
+- Initial governance only tracked pytest warnings (41)
+- Missed 388 warnings from validate_docs.py (YAML floats, MASTER_INDEX issues, ADR gaps)
+- Missed code quality warnings (Ruff, Mypy)
+- Total: 429 warnings across 3 validation systems
+
+**Three Warning Sources:**
+
+```
+Source 1: pytest Test Warnings (41 total)
+├── Hypothesis decimal precision (19)
+├── ResourceWarning unclosed files (13)
+├── pytest-asyncio deprecation (4)
+├── structlog UserWarning (1)
+└── Coverage context warning (1)
+
+Source 2: validate_docs.py Warnings (388 total)
+├── ADR non-sequential numbering (231) - Informational
+├── YAML float literals (111) - Actionable
+├── MASTER_INDEX missing docs (27) - Actionable
+├── MASTER_INDEX deleted docs (11) - Actionable
+└── MASTER_INDEX planned docs (8) - Expected
+
+Source 3: Code Quality (0 total)
+├── Ruff linting errors (0)
+└── Mypy type errors (0)
+```
+
+**Warning Classification:**
+- **Actionable (182):** Must be fixed (YAML floats, unclosed files, MASTER_INDEX sync)
+- **Informational (231):** Expected behavior (ADR gaps from doc reorganization)
+- **Expected (16):** Intentional (coverage contexts, planned docs)
+- **Upstream (4):** Dependency issues (pytest-asyncio Python 3.16 compat)
+
+**ALWAYS Track Warnings Across ALL Sources:**
+
+```bash
+# Multi-source validation (automated in check_warning_debt.py)
+python scripts/check_warning_debt.py
+
+# Manual verification (4 sources)
+python -m pytest tests/ -v -W default --tb=no  # pytest warnings
+python scripts/validate_docs.py                # Documentation warnings
+python -m ruff check .                         # Linting errors
+python -m mypy .                               # Type errors
+```
+
+**Governance Infrastructure:**
+
+**1. warning_baseline.json (429 warnings locked)**
+```json
+{
+  "baseline_date": "2025-11-08",
+  "total_warnings": 429,
+  "warning_categories": {
+    "yaml_float_literals": {"count": 111, "target_phase": "1.5"},
+    "hypothesis_decimal_precision": {"count": 19, "target_phase": "1.5"},
+    "resource_warning_unclosed_files": {"count": 13, "target_phase": "1.5"},
+    "master_index_missing_docs": {"count": 27, "target_phase": "1.5"},
+    "master_index_deleted_docs": {"count": 11, "target_phase": "1.5"},
+    "adr_non_sequential_numbering": {"count": 231, "informational": true}
+  },
+  "governance_policy": {
+    "max_warnings_allowed": 429,
+    "new_warning_policy": "fail",
+    "regression_tolerance": 0
+  }
+}
+```
+
+**2. WARNING_DEBT_TRACKER.md (comprehensive tracking)**
+- Documents all 429 warnings across 3 sources
+- Categorizes by actionability (actionable vs informational vs expected)
+- Tracks deferred fixes (WARN-001 through WARN-007)
+- Documents fix priorities, estimates, target phases
+- Provides measurement commands for all sources
+
+**3. check_warning_debt.py (automated validation)**
+- Runs all 4 validation sources (pytest, validate_docs, Ruff, Mypy)
+- Compares against baseline (429 warnings)
+- Fails CI if new warnings detected
+- Provides comprehensive breakdown by source
+
+**Enforcement Rules:**
+
+1. **Baseline Locked:** 429 warnings (182 actionable)
+2. **Zero Regression:** New actionable warnings → CI fails → Must fix before merge
+3. **Baseline Updates:** Require explicit approval + documentation in WARNING_DEBT_TRACKER.md
+4. **Phase Targets:** Each phase reduces actionable warnings by 20-30
+5. **Zero Goal:** Target 0 actionable warnings by Phase 2 completion
+
+**Integration Points:**
+
+```bash
+# Pre-push hooks (runs automatically on git push)
+bash .git/hooks/pre-push
+# → Step 4: python scripts/check_warning_debt.py (multi-source check)
+
+# CI/CD (.github/workflows/ci.yml)
+# → Job: warning-governance
+#   Runs: python scripts/check_warning_debt.py
+#   Blocks merge if warnings exceed baseline
+```
+
+**Example Workflow:**
+
+```bash
+# 1. Developer adds code that introduces new warning
+git add feature.py
+git commit -m "Add feature X"
+
+# 2. Pre-push hooks run (automatic)
+git push
+# → check_warning_debt.py detects 430 warnings (baseline: 429)
+# → [FAIL] Warning count: 430/429 (+1 new warning)
+# → Push blocked locally
+
+# 3. Developer fixes warning
+# Fix the warning in code
+
+# 4. Re-push (automatic validation)
+git push
+# → [OK] Warning count: 429/429 (baseline maintained)
+# → Push succeeds
+```
+
+**Acceptable Baseline Updates:**
+
+You MAY update the baseline IF:
+1. **New validation source** added (e.g., adding Bandit security scanner)
+2. **Upstream dependency** introduces warnings (e.g., pytest-asyncio Python 3.16 compat)
+3. **Intentional refactor** creates temporary warnings (document + target phase to fix)
+
+You MUST document in WARNING_DEBT_TRACKER.md:
+```markdown
+### Baseline Update: [Date] - [Reason]
+
+**Previous Baseline:** 429 warnings
+**New Baseline:** 435 warnings (+6)
+
+**New Warnings:**
+- WARN-008: New security warnings from Bandit addition (6 warnings)
+  - Reason: Added Bandit security scanner to CI
+  - Target Phase: 1.5
+  - Estimate: 2 hours
+  - Priority: Medium
+
+**Approval:** Approved by [Name] on [Date]
+**Next Action:** Fix WARN-008 in Phase 1.5 (target: -6 warnings)
+```
+
+**Common Mistakes:**
+
+```python
+# ❌ WRONG - Only checking pytest warnings
+def check_warnings():
+    pytest_output = run_pytest()
+    count = extract_warning_count(pytest_output)
+    # Misses validate_docs warnings!
+
+# ✅ CORRECT - Multi-source validation
+def check_warnings():
+    pytest_count = run_pytest_warnings()
+    docs_count = run_validate_docs()
+    ruff_count = run_ruff()
+    mypy_count = run_mypy()
+    total = pytest_count + sum(docs_count.values()) + ruff_count + mypy_count
+    return total  # Comprehensive
+```
+
+**Files Modified:**
+- `scripts/warning_baseline.json` - Baseline (152 → 429 warnings)
+- `scripts/check_warning_debt.py` - Multi-source validation
+- `docs/utility/WARNING_DEBT_TRACKER.md` - Comprehensive tracking
+- `CLAUDE.md` - This pattern
+- `docs/foundation/ARCHITECTURE_DECISIONS*.md` - ADR-054 (Warning Governance Architecture)
+
+**Reference:**
+- WARNING_DEBT_TRACKER.md - Comprehensive warning documentation
+- warning_baseline.json - Locked baseline configuration
+- check_warning_debt.py - Automated validation script
+- ADR-054: Warning Governance Architecture
+- Pattern 5: Cross-Platform Compatibility (ASCII output for Windows)
+
+---
+
+### Pattern 10: Property-Based Testing with Hypothesis (ALWAYS for Trading Logic)
 
 **WHY:** Trading logic has **mathematical invariants** that MUST hold for ALL inputs. Example-based tests validate 5-10 cases. Property-based tests validate thousands of cases automatically, catching edge cases humans miss.
 

@@ -167,7 +167,7 @@ Core architecture, requirements, and system design documents.
 | **PROJECT_OVERVIEW_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.4** |
 | **MASTER_REQUIREMENTS_V2.11.md** | ✅ | v2.11 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.11** (Python 3.14 compatibility: Ruff security rules replace Bandit) |
 | **MASTER_INDEX_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.13** (Python 3.14 compatibility: Bandit → Ruff migration) |
-| **ARCHITECTURE_DECISIONS_V2.11.md** | ✅ | v2.11 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (53 total) - **UPDATED V2.11** (ADR-074: Property-Based Testing Strategy) |
+| **ARCHITECTURE_DECISIONS_V2.12.md** | ✅ | v2.12 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (75 total) - **UPDATED V2.12** (ADR-075: Multi-Source Warning Governance Architecture) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 114 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED** (added REQ-TEST-009, REQ-TEST-010, REQ-TEST-011) |
 | **ADR_INDEX_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (53 ADRs) - **UPDATED V1.6** (ADR-074 added for property-based testing POC) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
@@ -286,7 +286,7 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **SESSION_6_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 6 | 🟢 Medium | Previous session handoff |
 | **Handoff_Protocol_V1_1.md** | ✅ | v1.1 | `/docs/utility/` | 0 | All phases | 🔴 Critical | **UPDATED V1.1** - Merged 4 docs: HANDOFF_PROCESS + TOKEN_MONITORING + PHASE_COMPLETION + KNOWLEDGE_STRATEGY (V1.0 archived) |
 | **VERSION_HEADERS_GUIDE_V2_1.md** | ✅ | v2.1 | `/docs/utility/` | 0 | All phases | 🟡 High | Version control standards, references Handoff_Protocol (**FIXED** filename from V2.1 → V2_1) |
-| **PHASE_0.7_DEFERRED_TASKS_V1.2.md** | ✅ | v1.2 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **PHASE 0.7 COMPLETE** - All 8/8 tasks complete (DEF-001 through DEF-008: pre-commit, pre-push, branch protection, schema validation, all hooks) - **UPDATED** from V1.1 |
+| **PHASE_0.7_DEFERRED_TASKS_V1.3.md** | ✅ | v1.3 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **PHASE 0.7 COMPLETE** - All 8/8 tasks complete (DEF-001 through DEF-008: pre-commit, pre-push, branch protection, schema validation, all hooks) - **UPDATED V1.3** (fixed Bandit→Ruff documentation references) |
 | **GITHUB_BRANCH_PROTECTION_CONFIG.md** | ✅ | v1.0 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **NEW** - Complete GitHub branch protection configuration (completes DEF-003) |
 | **PHASE_1_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1 | 🟡 High | **NEW** - Tracks deferred enhancements from Phase 1 (extended docstrings, pre-commit hooks, branch protection) |
 | **ENVIRONMENT_CHECKLIST_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0 | Phase 0 ✅ | 🔴 Critical | Windows 11 setup, Parts 1-7, dependencies verification (**FIXED** filename from V1.1 → V1.0) |
