@@ -1,10 +1,15 @@
 # Phase 0.7 Deferred Tasks
 
-**Version:** 1.2
+**Version:** 1.3
 **Created:** 2025-10-31
-**Last Updated:** 2025-11-07
+**Last Updated:** 2025-11-08
 **Phase:** 0.7 (CI/CD Infrastructure)
 **Status:** ✅ COMPLETE - 8/8 tasks complete (ALL TASKS DONE)
+**Changes in V1.3:**
+- Updated DEF-002 Pre-Push Hook documentation to reflect Ruff security scanning (replaced outdated Bandit command reference)
+- Updated branch protection status check description (Bandit & Safety → Ruff & Safety)
+- Aligns documentation with ADR-054 (Ruff Security Rules Instead of Bandit for Python 3.14 Compatibility)
+- No functional changes - actual pre-push hooks already using Ruff correctly
 **Changes in V1.2:**
 - Marked DEF-001 (Pre-Commit Hooks) as ✅ Complete (2025-11-07)
 - Marked DEF-002 (Pre-Push Hooks) as ✅ Complete (2025-11-07)
@@ -174,7 +179,7 @@ python -m mypy . --exclude 'tests/' --exclude '_archive/' --ignore-missing-impor
 # 4. Security scan
 echo ""
 echo "4/4 Running security scan..."
-python -m bandit -r . -c pyproject.toml -ll -q
+python -m ruff check --select S --ignore S101,S112,S607 --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --quiet .
 
 echo ""
 echo "✅ All pre-push checks passed! Pushing to remote..."
@@ -236,7 +241,7 @@ Branch protection now active for `main` branch with the following settings:
 - [x] Require branches to be up to date before merging (strict: true)
 - Required checks:
   - ✅ Pre-commit Validation (Ruff, Mypy, Security)
-  - ✅ Security Scanning (Bandit & Safety)
+  - ✅ Security Scanning (Ruff & Safety)
   - ✅ Documentation Validation
   - ✅ Quick Validation Suite
   - ✅ CI Summary (aggregates all test matrix results)
