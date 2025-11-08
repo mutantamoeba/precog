@@ -1,8 +1,9 @@
 """
 Unit tests for CLI commands in main.py
 
-Tests all 4 CLI commands:
+Tests all 5 CLI commands:
 - fetch-balance: Account balance retrieval
+- fetch-markets: Available markets retrieval (with filtering)
 - fetch-positions: Position retrieval
 - fetch-fills: Trade fill history
 - fetch-settlements: Settlement data retrieval
@@ -20,7 +21,7 @@ Educational Note:
     5. Test parameter variations (--env, --dry-run, --verbose)
 
 Related:
-    - main.py: CLI command implementations (4 commands)
+    - main.py: CLI command implementations (5 commands)
     - api_connectors/kalshi_client.py: API client being mocked
     - REQ-CLI-001: CLI Framework (Typer)
     - REQ-CLI-002: Environment Selection (demo/prod)
@@ -62,8 +63,8 @@ def mock_kalshi_client():
     """Create mocked KalshiClient for testing.
 
     Returns:
-        Mock object with get_balance(), get_positions(), get_fills(),
-        get_settlements() methods
+        Mock object with get_balance(), get_markets(), get_positions(),
+        get_fills(), get_settlements() methods
 
     Educational Note:
         Mocking prevents live API calls during tests. Each test can
@@ -74,6 +75,7 @@ def mock_kalshi_client():
 
     # Default return values (tests can override)
     mock_client.get_balance.return_value = Decimal("1234.5678")
+    mock_client.get_markets.return_value = []
     mock_client.get_positions.return_value = []
     mock_client.get_fills.return_value = []
     mock_client.get_settlements.return_value = []
@@ -169,6 +171,129 @@ class TestFetchBalance:
             - Exit code 1 (failure)
             - Error message displayed
             - Graceful error handling (no crash)
+        """
+        # TODO: Implement in Part 1.6
+
+
+class TestFetchMarkets:
+    """Test cases for fetch-markets CLI command.
+
+    Command: main.py fetch-markets [--series SERIES] [--event EVENT] [--limit LIMIT]
+                                    [--env ENV] [--dry-run] [--verbose]
+
+    Tests:
+        - Successful market retrieval (empty, single, multiple)
+        - Decimal price display (yes_bid, yes_ask, last_price)
+        - Rich table with columns (ticker, title, status, prices, volume)
+        - Filtering (series, event, limit)
+        - Dry-run and verbose modes
+        - Error handling
+    """
+
+    def test_fetch_markets_empty(self, runner, mock_kalshi_client):
+        """Test fetch-markets with no markets available.
+
+        Verifies:
+            - Exit code 0 (success)
+            - "No markets found" message
+        """
+        # TODO: Implement in Part B
+
+    def test_fetch_markets_single(self, runner, mock_kalshi_client):
+        """Test fetch-markets with one market.
+
+        Verifies:
+            - Market displayed in Rich table
+            - Ticker, title, status, prices, volume shown
+            - Decimal price formatting (4 decimals)
+        """
+        # TODO: Implement in Part B
+
+    def test_fetch_markets_multiple(self, runner, mock_kalshi_client):
+        """Test fetch-markets with multiple markets.
+
+        Verifies:
+            - All markets displayed
+            - Proper table formatting
+            - Total count shown in title
+        """
+        # TODO: Implement in Part B
+
+    def test_fetch_markets_filter_by_series(self, runner, mock_kalshi_client):
+        """Test fetch-markets with --series filter.
+
+        Verifies:
+            - Series ticker passed to get_markets()
+            - Filter info shown in table title
+        """
+        # TODO: Implement in Part B
+
+    def test_fetch_markets_filter_by_event(self, runner, mock_kalshi_client):
+        """Test fetch-markets with --event filter.
+
+        Verifies:
+            - Event ticker passed to get_markets()
+            - Filter info shown in table title
+        """
+        # TODO: Implement in Part B
+
+    def test_fetch_markets_custom_limit(self, runner, mock_kalshi_client):
+        """Test fetch-markets with --limit parameter.
+
+        Verifies:
+            - Limit passed to get_markets()
+            - Correct number of markets returned
+        """
+        # TODO: Implement in Part B
+
+    def test_fetch_markets_title_truncation(self, runner, mock_kalshi_client):
+        """Test market titles truncated to 50 characters.
+
+        Verifies:
+            - Long titles truncated with "..."
+            - Short titles unchanged
+        """
+        # TODO: Implement in Part B
+
+    def test_fetch_markets_dry_run(self, runner, mock_kalshi_client):
+        """Test fetch-markets with --dry-run.
+
+        Verifies:
+            - API call made
+            - "Dry-run mode" message shown
+        """
+        # TODO: Implement in Part B
+
+    def test_fetch_markets_verbose(self, runner, mock_kalshi_client):
+        """Test fetch-markets with --verbose.
+
+        Verifies:
+            - Detailed output (API endpoint, environment)
+            - Market data shown
+        """
+        # TODO: Implement in Part B
+
+    def test_fetch_markets_decimal_prices(self, runner, mock_kalshi_client):
+        """Test market prices displayed with Decimal precision.
+
+        Verifies:
+            - Prices show 4 decimal places
+            - No rounding errors
+
+        Educational Note:
+            Market prices from Kalshi API use yes_bid, yes_ask, last_price
+            as Decimal (already converted by client). Must display with
+            4 decimals (e.g., $0.4975).
+        """
+        # TODO: Implement in Part B
+
+    def test_fetch_markets_api_error(self, runner, mock_kalshi_client):
+        """Test fetch-markets with API error.
+
+        Verifies:
+            - Exit code 1
+            - Error message displayed
+            - Graceful handling
         """
         # TODO: Implement in Part 1.6
 
@@ -505,7 +630,12 @@ class TestErrorHandling:
 # ============================================================================
 
 """
-Implementation Order (Parts 1.2-1.6):
+Implementation Order (Parts B, 1.2-1.6):
+
+Part B (15 min): Test fetch-markets command ✅ SKELETON COMPLETE
+    - ✅ Added TestFetchMarkets class (11 test methods)
+    - ✅ Updated mock_kalshi_client fixture with get_markets()
+    - TODO: Implement actual test logic in future parts
 
 Part 1.2 (45 min): Test fetch-balance command
     - Implement TestFetchBalance tests
