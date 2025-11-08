@@ -84,12 +84,16 @@ Related ADR: ADR-012 (Configuration Management Strategy), ADR-002 (Decimal Preci
 """
 
 import os
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, cast
 
 import yaml
 from dotenv import load_dotenv
+
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 class ConfigLoader:
@@ -184,7 +188,7 @@ class ConfigLoader:
         elif as_type == Decimal:
             try:
                 return Decimal(str(value))
-            except (ValueError, TypeError):
+            except (ValueError, TypeError, InvalidOperation):
                 return default
         else:
             return value
@@ -381,9 +385,9 @@ class ConfigLoader:
                 try:
                     self.load(config_file, convert_decimals=convert_decimals)
                 except FileNotFoundError:
-                    print(f"[WARNING] Config file not found: {config_file} (skipping)")
+                    logger.warning(f"Config file not found: {config_file} (skipping)")
                 except yaml.YAMLError as e:
-                    print(f"[ERROR] Error parsing {config_file}: {e}")
+                    logger.error(f"Error parsing {config_file}: {e}")
                     raise
 
         return self.configs
@@ -472,15 +476,15 @@ class ConfigLoader:
             config_file.replace(".yaml", "")
             try:
                 self.load(config_file)
-                print(f"[OK] {config_file} loaded successfully")
+                logger.info(f"{config_file} loaded successfully")
             except FileNotFoundError:
-                print(f"[ERROR] {config_file} not found")
+                logger.error(f"{config_file} not found")
                 all_valid = False
             except yaml.YAMLError as e:
-                print(f"[ERROR] {config_file} has YAML errors: {e}")
+                logger.error(f"{config_file} has YAML errors: {e}")
                 all_valid = False
             except Exception as e:
-                print(f"[ERROR] {config_file} failed to load: {e}")
+                logger.error(f"{config_file} failed to load: {e}")
                 all_valid = False
 
         return all_valid

@@ -45,10 +45,11 @@ jobs:
       - name: Install security tools
         run: |
           python -m pip install --upgrade pip
-          pip install bandit[toml] safety
+          pip install -r requirements.txt
+          pip install safety
 
-      - name: Run Bandit security scanner
-        run: python -m bandit -r . -c pyproject.toml
+      - name: Run Ruff security scanner
+        run: python -m ruff check --select S --ignore S101,S112,S607 --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' .
 
       - name: Run Safety dependency vulnerability scanner
         run: python -m safety check --json

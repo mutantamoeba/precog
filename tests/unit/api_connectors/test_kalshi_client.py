@@ -118,6 +118,21 @@ class TestKalshiAuthentication:
 
     @pytest.mark.unit
     @pytest.mark.critical
+    def test_load_private_key_invalid_pem_format(self, tmp_path):
+        """Test error handling when PEM file contains invalid key data."""
+
+        # Create file with invalid PEM content
+        invalid_key_file = tmp_path / "invalid_key.pem"
+        invalid_key_file.write_text("This is not a valid PEM key format")
+
+        with pytest.raises(ValueError) as exc_info:
+            load_private_key(str(invalid_key_file))
+
+        assert "Failed to load private key" in str(exc_info.value)
+        assert "valid PEM-formatted private key" in str(exc_info.value)
+
+    @pytest.mark.unit
+    @pytest.mark.critical
     def test_generate_signature_format(self, mock_private_key):
         """Test RSA-PSS signature generation returns base64 string."""
 
@@ -184,6 +199,66 @@ class TestKalshiAuthentication:
         assert headers["Content-Type"] == "application/json"
         assert headers["KALSHI-ACCESS-TIMESTAMP"].isdigit()
         assert len(headers["KALSHI-ACCESS-SIGNATURE"]) > 0
+
+    @pytest.mark.unit
+    def test_is_token_expired_when_token_none(self, mock_private_key):
+        """Test is_token_expired() returns True when token is None."""
+
+        with patch("api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key):
+            auth = KalshiAuth(api_key="test-key", private_key_path="/fake/path.pem")
+
+            # Initially token and expiry are None
+            assert auth.token is None
+            assert auth.token_expiry is None
+
+            # Should return True (token is expired/missing)
+            assert auth.is_token_expired() is True
+
+    @pytest.mark.unit
+    def test_is_token_expired_when_expiry_none(self, mock_private_key):
+        """Test is_token_expired() returns True when expiry is None (even if token exists)."""
+
+        with patch("api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key):
+            auth = KalshiAuth(api_key="test-key", private_key_path="/fake/path.pem")
+
+            # Set token but leave expiry None
+            auth.token = "some-jwt-token"
+            auth.token_expiry = None
+
+            # Should return True (expiry is missing)
+            assert auth.is_token_expired() is True
+
+    @pytest.mark.unit
+    def test_is_token_expired_when_expired(self, mock_private_key):
+        """Test is_token_expired() returns True when token expiry is in the past."""
+        import time
+
+        with patch("api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key):
+            auth = KalshiAuth(api_key="test-key", private_key_path="/fake/path.pem")
+
+            # Set token with expiry 1 hour in the past
+            auth.token = "expired-jwt-token"
+            one_hour_ago_ms = int((time.time() - 3600) * 1000)
+            auth.token_expiry = one_hour_ago_ms
+
+            # Should return True (token is expired)
+            assert auth.is_token_expired() is True
+
+    @pytest.mark.unit
+    def test_is_token_expired_when_not_expired(self, mock_private_key):
+        """Test is_token_expired() returns False when token expiry is in the future."""
+        import time
+
+        with patch("api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key):
+            auth = KalshiAuth(api_key="test-key", private_key_path="/fake/path.pem")
+
+            # Set token with expiry 1 hour in the future
+            auth.token = "valid-jwt-token"
+            one_hour_from_now_ms = int((time.time() + 3600) * 1000)
+            auth.token_expiry = one_hour_from_now_ms
+
+            # Should return False (token is still valid)
+            assert auth.is_token_expired() is False
 
 
 # =============================================================================
@@ -336,6 +411,42 @@ class TestKalshiMarketData:
         assert market["yes_bid"] == Decimal("0.6200")
         assert market["yes_ask"] == Decimal("0.6250")
 
+    @pytest.mark.unit
+    def test_get_markets_with_event_ticker(self, mock_env_credentials, mock_load_private_key):
+        """Test get_markets() with event_ticker parameter."""
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_MARKET_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            _markets = client.get_markets(event_ticker="NFLGAME-25OCT05")
+
+        # Verify request parameters
+        call_kwargs = mock_request.call_args.kwargs
+        assert "event_ticker" in call_kwargs["params"]
+        assert call_kwargs["params"]["event_ticker"] == "NFLGAME-25OCT05"
+
+    @pytest.mark.unit
+    def test_get_markets_with_cursor(self, mock_env_credentials, mock_load_private_key):
+        """Test get_markets() with cursor for pagination."""
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_MARKET_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            _markets = client.get_markets(cursor="next_page_token_123")
+
+        # Verify cursor parameter passed
+        call_kwargs = mock_request.call_args.kwargs
+        assert "cursor" in call_kwargs["params"]
+        assert call_kwargs["params"]["cursor"] == "next_page_token_123"
+
 
 # =============================================================================
 # Balance and Position Tests
@@ -381,6 +492,42 @@ class TestKalshiBalanceAndPositions:
         for position in positions:
             assert isinstance(position["user_average_price"], Decimal)
             assert isinstance(position["total_cost"], Decimal)
+
+    @pytest.mark.unit
+    def test_get_positions_with_status_filter(self, mock_env_credentials, mock_load_private_key):
+        """Test get_positions() with status filter parameter."""
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_POSITIONS_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            _positions = client.get_positions(status="open")
+
+        # Verify status parameter passed
+        call_kwargs = mock_request.call_args.kwargs
+        assert "status" in call_kwargs["params"]
+        assert call_kwargs["params"]["status"] == "open"
+
+    @pytest.mark.unit
+    def test_get_positions_with_ticker_filter(self, mock_env_credentials, mock_load_private_key):
+        """Test get_positions() with ticker filter parameter."""
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_POSITIONS_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            _positions = client.get_positions(ticker="KXNFLGAME-25OCT05-KC-YES")
+
+        # Verify ticker parameter passed
+        call_kwargs = mock_request.call_args.kwargs
+        assert "ticker" in call_kwargs["params"]
+        assert call_kwargs["params"]["ticker"] == "KXNFLGAME-25OCT05-KC-YES"
 
 
 # =============================================================================
@@ -460,6 +607,52 @@ class TestKalshiErrorHandling:
                 client.get_markets()
 
             assert "timed out" in str(exc_info.value).lower()
+
+    @pytest.mark.unit
+    def test_request_exception_raised(self, mock_env_credentials, mock_load_private_key):
+        """Test handling of generic RequestException (connection errors, DNS failures, etc.)."""
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_request.side_effect = requests.exceptions.RequestException("Connection refused")
+
+            with pytest.raises(requests.exceptions.RequestException) as exc_info:
+                client.get_markets()
+
+            assert "Connection refused" in str(exc_info.value)
+
+    @pytest.mark.unit
+    def test_decimal_conversion_error_handling(self, mock_env_credentials, mock_load_private_key):
+        """Test handling of Decimal conversion errors for malformed price data."""
+        from decimal import InvalidOperation
+
+        client = KalshiClient(environment="demo")
+
+        # Create response with invalid Decimal value (non-numeric string)
+        malformed_response = {
+            "markets": [
+                {
+                    "ticker": "INVALID-MARKET",
+                    "yes_bid": "not-a-number",  # Invalid Decimal value
+                    "yes_ask": "0.6250",
+                    "no_bid": "0.3700",
+                    "no_ask": "0.3750",
+                    "last_price": "0.6200",
+                    "volume": 1000,
+                }
+            ]
+        }
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = malformed_response
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            # Current implementation raises InvalidOperation for malformed Decimal
+            # This test verifies the exception is raised (not silently swallowed)
+            with pytest.raises(InvalidOperation):
+                client.get_markets()
 
 
 # =============================================================================
@@ -590,6 +783,80 @@ class TestKalshiIntegration:
         assert len(settlements) == 2
         assert isinstance(settlements[0]["settlement_value"], Decimal)
         assert settlements[0]["settlement_value"] == Decimal("1.0000")
+
+    @pytest.mark.unit
+    def test_get_fills_with_time_range(self, mock_env_credentials, mock_load_private_key):
+        """Test get_fills() with min_ts and max_ts parameters."""
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_FILLS_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            _fills = client.get_fills(min_ts=1698249600000, max_ts=1698336000000)
+
+        # Verify time range parameters passed
+        call_kwargs = mock_request.call_args.kwargs
+        assert "min_ts" in call_kwargs["params"]
+        assert "max_ts" in call_kwargs["params"]
+        assert call_kwargs["params"]["min_ts"] == 1698249600000
+        assert call_kwargs["params"]["max_ts"] == 1698336000000
+
+    @pytest.mark.unit
+    def test_get_fills_with_cursor(self, mock_env_credentials, mock_load_private_key):
+        """Test get_fills() with cursor for pagination."""
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_FILLS_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            _fills = client.get_fills(cursor="fills_page_2_token")
+
+        # Verify cursor parameter passed
+        call_kwargs = mock_request.call_args.kwargs
+        assert "cursor" in call_kwargs["params"]
+        assert call_kwargs["params"]["cursor"] == "fills_page_2_token"
+
+    @pytest.mark.unit
+    def test_get_settlements_with_ticker_filter(self, mock_env_credentials, mock_load_private_key):
+        """Test get_settlements() with ticker filter parameter."""
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_SETTLEMENTS_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            _settlements = client.get_settlements(ticker="KXNFLGAME-25OCT05-KC-YES")
+
+        # Verify ticker parameter passed
+        call_kwargs = mock_request.call_args.kwargs
+        assert "ticker" in call_kwargs["params"]
+        assert call_kwargs["params"]["ticker"] == "KXNFLGAME-25OCT05-KC-YES"
+
+    @pytest.mark.unit
+    def test_get_settlements_with_cursor(self, mock_env_credentials, mock_load_private_key):
+        """Test get_settlements() with cursor for pagination."""
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_SETTLEMENTS_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            _settlements = client.get_settlements(cursor="settlements_page_2_token")
+
+        # Verify cursor parameter passed
+        call_kwargs = mock_request.call_args.kwargs
+        assert "cursor" in call_kwargs["params"]
+        assert call_kwargs["params"]["cursor"] == "settlements_page_2_token"
 
     def test_close_method(self, mock_env_credentials, mock_load_private_key):
         """Test client close() method closes session."""

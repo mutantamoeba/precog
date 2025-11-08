@@ -1,9 +1,17 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.12
+**Version:** 2.13
 **Last Updated:** 2025-11-07
 **Status:** ✅ Current
+**Changes in v2.13:**
+- **PYTHON 3.14 COMPATIBILITY**: Migrated from Bandit to Ruff security rules (--select S) for security scanning
+- Added ADR-054 (Ruff Security Rules Instead of Bandit) to ARCHITECTURE_DECISIONS_V2.10 → V2.11
+- Updated MASTER_REQUIREMENTS_V2.10 → V2.11 (REQ-TEST-006, REQ-CICD-001 updated for Ruff)
+- Updated ADR_INDEX_V1.4 → V1.5 (added ADR-054, total ADRs: 52)
+- Updated .git/hooks/pre-push (replaced Bandit with Ruff security scan)
+- Updated .github/workflows/ci.yml (security-scan job now uses Ruff)
+- Bandit 1.8.6 crashes on Python 3.14 (ast.Num removed), Ruff provides equivalent coverage with 10-100x better performance
 **Changes in v2.12:**
 - **PHASE 0.7 COMPLETE**: All 8 deferred tasks completed, comprehensive development philosophy documented
 - Added DEVELOPMENT_PHILOSOPHY_V1.0.md (foundation document - TDD, DID, DDD, 9 core principles)
@@ -157,16 +165,16 @@ Core architecture, requirements, and system design documents.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.4** |
-| **MASTER_REQUIREMENTS_V2.10.md** | ✅ | v2.10 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.10** (Phase 1 API best practices, validation, testing, CI/CD requirements) |
-| **MASTER_INDEX_V2.12.md** | ✅ | v2.12 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.12** (Phase 0.7 complete, DEVELOPMENT_PHILOSOPHY added, all deferred tasks done) |
-| **ARCHITECTURE_DECISIONS_V2.10.md** | ✅ | v2.10 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (50+ total) - **UPDATED V2.10** (ADR-047 through ADR-052 for API best practices) |
+| **MASTER_REQUIREMENTS_V2.11.md** | ✅ | v2.11 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.11** (Python 3.14 compatibility: Ruff security rules replace Bandit) |
+| **MASTER_INDEX_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.13** (Python 3.14 compatibility: Bandit → Ruff migration) |
+| **ARCHITECTURE_DECISIONS_V2.11.md** | ✅ | v2.11 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (52 total) - **UPDATED V2.11** (ADR-054: Ruff Security Rules Instead of Bandit) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 103 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.3** (added 4 Phase 1 API requirements) |
-| **ADR_INDEX_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (50+ ADRs) - **UPDATED V1.4** (ADR-047 through ADR-052 added) |
+| **ADR_INDEX_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (52 ADRs) - **UPDATED V1.5** (ADR-054 added for Python 3.14 compatibility) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, added Phase 0.6b/0.6c/0.7 - **UPDATED V1.4** (Phase 0.6c complete) |
 | **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
-| **DEVELOPMENT_PHILOSOPHY_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.7 | All phases | 🔴 Critical | **NEW** - Core development principles: TDD, Defense in Depth, DDD, Data-Driven Design, 9 principles with examples (Phase 0.7) |
+| **DEVELOPMENT_PHILOSOPHY_V1.1.md** | ✅ | v1.1 | `/docs/foundation/` | 0.7 | All phases | 🔴 Critical | Core development principles: TDD, Defense in Depth, DDD, Data-Driven Design, 10 sections (9 principles + anti-patterns) - **UPDATED V1.1** (added Section 10: Anti-Patterns to Avoid with 7 anti-patterns) |
 
 ---
 

@@ -276,6 +276,18 @@ Open `DEVELOPMENT_PHASES_V1.4.md`, find current phase section.
 - [ ] **Dependencies met?** (e.g., "Requires Phase 0.7: 100% complete ✅")
 - [ ] **Test planning checklist exists?** ("Before Starting This Phase - TEST PLANNING CHECKLIST")
 - [ ] **Tasks clearly listed?** (numbered task list in phase section)
+- [ ] **Coverage targets exist for ALL deliverables?** (Extract deliverables → Verify each has explicit coverage target)
+  ```bash
+  # Example validation:
+  # 1. List deliverables from DEVELOPMENT_PHASES Phase N task list
+  # 2. Check "Critical Module Coverage Targets" section has target for EACH
+  # 3. If missing → Add coverage target BEFORE starting implementation
+  #
+  # Common tiers:
+  # - Infrastructure (logger, config, connection): ≥80%
+  # - Business logic (CRUD, trading, position): ≥85%
+  # - Critical path (API auth, execution, risk): ≥90%
+  ```
 
 **If test planning checklist exists:**
 ```markdown
@@ -429,6 +441,10 @@ precog-repo/
 - Check that previous phase is marked ✅ Complete in DEVELOPMENT_PHASES
 - If dependencies NOT met: STOP and complete prerequisite phase first
 - **⚠️ IF STARTING NEW PHASE:** Complete "Before Starting This Phase - TEST PLANNING CHECKLIST" from DEVELOPMENT_PHASES before writing any production code
+- **⚠️ IF RESUMING PARTIALLY-COMPLETE PHASE:** Verify test planning checklist was completed
+  - If NOT completed: Complete it now before continuing any work
+  - If partially done: Update checklist for remaining work and document what testing exists for completed work
+  - **Critical:** Don't skip this - partially-complete phases are where test gaps hide!
 
 **Example - Phase 1:**
 ```bash
@@ -2367,8 +2383,22 @@ api_key = "sk_live_abc123"
 - [ ] All cross-references working?
 - [ ] All code examples tested?
 - [ ] All tests written and passing?
+- [ ] **All modules have coverage targets AND met targets?**
+  ```bash
+  # Run coverage report and compare to documented targets
+  python -m pytest tests/ --cov=. --cov-report=term
 
-**Output:** List of deliverables with ✅/❌ status
+  # Example validation:
+  # - kalshi_client.py: 93.19% (target 90%+) ✅ PASS
+  # - config_loader.py: 98.97% (target 85%+) ✅ PASS
+  # - crud_operations.py: 91.26% (target 87%+) ✅ PASS
+  # - connection.py: 81.44% (target 80%+) ✅ PASS
+  # - logger.py: 87.84% (target 80%+) ✅ PASS
+  #
+  # If ANY module below target → NOT COMPLETE
+  ```
+
+**Output:** List of deliverables with ✅/❌ status + coverage verification report
 
 ---
 
