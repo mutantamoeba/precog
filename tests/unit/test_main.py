@@ -197,7 +197,7 @@ class TestFetchMarkets:
             - Exit code 0 (success)
             - "No markets found" message
         """
-        # TODO: Implement in Part B
+        # TODO: Implement in Part 1.2
 
     def test_fetch_markets_single(self, runner, mock_kalshi_client):
         """Test fetch-markets with one market.
@@ -207,7 +207,7 @@ class TestFetchMarkets:
             - Ticker, title, status, prices, volume shown
             - Decimal price formatting (4 decimals)
         """
-        # TODO: Implement in Part B
+        # TODO: Implement in Part 1.2
 
     def test_fetch_markets_multiple(self, runner, mock_kalshi_client):
         """Test fetch-markets with multiple markets.
@@ -217,7 +217,7 @@ class TestFetchMarkets:
             - Proper table formatting
             - Total count shown in title
         """
-        # TODO: Implement in Part B
+        # TODO: Implement in Part 1.2
 
     def test_fetch_markets_filter_by_series(self, runner, mock_kalshi_client):
         """Test fetch-markets with --series filter.
@@ -226,7 +226,7 @@ class TestFetchMarkets:
             - Series ticker passed to get_markets()
             - Filter info shown in table title
         """
-        # TODO: Implement in Part B
+        # TODO: Implement in Part 1.2
 
     def test_fetch_markets_filter_by_event(self, runner, mock_kalshi_client):
         """Test fetch-markets with --event filter.
@@ -235,7 +235,7 @@ class TestFetchMarkets:
             - Event ticker passed to get_markets()
             - Filter info shown in table title
         """
-        # TODO: Implement in Part B
+        # TODO: Implement in Part 1.2
 
     def test_fetch_markets_custom_limit(self, runner, mock_kalshi_client):
         """Test fetch-markets with --limit parameter.
@@ -244,7 +244,7 @@ class TestFetchMarkets:
             - Limit passed to get_markets()
             - Correct number of markets returned
         """
-        # TODO: Implement in Part B
+        # TODO: Implement in Part 1.2
 
     def test_fetch_markets_title_truncation(self, runner, mock_kalshi_client):
         """Test market titles truncated to 50 characters.
@@ -253,7 +253,7 @@ class TestFetchMarkets:
             - Long titles truncated with "..."
             - Short titles unchanged
         """
-        # TODO: Implement in Part B
+        # TODO: Implement in Part 1.2
 
     def test_fetch_markets_dry_run(self, runner, mock_kalshi_client):
         """Test fetch-markets with --dry-run.
@@ -262,7 +262,7 @@ class TestFetchMarkets:
             - API call made
             - "Dry-run mode" message shown
         """
-        # TODO: Implement in Part B
+        # TODO: Implement in Part 1.2
 
     def test_fetch_markets_verbose(self, runner, mock_kalshi_client):
         """Test fetch-markets with --verbose.
@@ -271,7 +271,7 @@ class TestFetchMarkets:
             - Detailed output (API endpoint, environment)
             - Market data shown
         """
-        # TODO: Implement in Part B
+        # TODO: Implement in Part 1.2
 
     def test_fetch_markets_decimal_prices(self, runner, mock_kalshi_client):
         """Test market prices displayed with Decimal precision.
@@ -285,7 +285,7 @@ class TestFetchMarkets:
             as Decimal (already converted by client). Must display with
             4 decimals (e.g., $0.4975).
         """
-        # TODO: Implement in Part B
+        # TODO: Implement in Part 1.2
 
     def test_fetch_markets_api_error(self, runner, mock_kalshi_client):
         """Test fetch-markets with API error.
