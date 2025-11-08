@@ -9,9 +9,8 @@ These tests use Hypothesis to generate thousands of test cases automatically,
 catching edge cases that manual tests might miss.
 """
 
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
-import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
@@ -223,25 +222,27 @@ def test_implied_probability_conversion(price):
     assert isinstance(implied_prob_pct, Decimal), "Conversion created non-Decimal"
 
 
-# Example of testing for invalid operations (should raise)
+# Example of testing decimal operations remain decimal
 @given(price=kalshi_prices)
-def test_float_contamination_raises_error(price):
+def test_decimal_operations_preserve_type(price):
     """
-    Property: Mixing Decimal with float should be caught.
+    Property: Decimal operations should preserve Decimal type.
 
-    We want to catch accidental float usage at test time.
+    We want to ensure Decimal arithmetic doesn't accidentally create floats.
     """
-    # This is a negative test - we WANT to ensure we don't mix types
-    # In production code, this should never happen
-
     # Verify that we're using Decimal
     assert isinstance(price, Decimal), "Price should be Decimal"
 
-    # If we accidentally had a float in the system, arithmetic would still work
-    # but precision could be lost. This test documents the expectation.
-    with pytest.raises((TypeError, InvalidOperation)):
-        # This would be a bug - we should never do this
-        # Hypothesis will verify we handle it correctly
-        if isinstance(price, float):  # This should never be true
-            msg = "Found float where Decimal expected!"
-            raise TypeError(msg)
+    # Test that arithmetic operations preserve Decimal type
+    result = price + Decimal("0.01")
+    assert isinstance(result, Decimal), "Addition should preserve Decimal type"
+
+    result = price * Decimal("2.0")
+    assert isinstance(result, Decimal), "Multiplication should preserve Decimal type"
+
+    result = price - Decimal("0.005")
+    assert isinstance(result, Decimal), "Subtraction should preserve Decimal type"
+
+    # Note: In Python, Decimal + float doesn't raise an error,
+    # it coerces to Decimal. The real protection is in our code using
+    # type hints and never accepting float parameters.

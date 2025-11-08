@@ -429,6 +429,10 @@ precog-repo/
 - Check that previous phase is marked ✅ Complete in DEVELOPMENT_PHASES
 - If dependencies NOT met: STOP and complete prerequisite phase first
 - **⚠️ IF STARTING NEW PHASE:** Complete "Before Starting This Phase - TEST PLANNING CHECKLIST" from DEVELOPMENT_PHASES before writing any production code
+- **⚠️ IF RESUMING PARTIALLY-COMPLETE PHASE:** Verify test planning checklist was completed
+  - If NOT completed: Complete it now before continuing any work
+  - If partially done: Update checklist for remaining work and document what testing exists for completed work
+  - **Critical:** Don't skip this - partially-complete phases are where test gaps hide!
 
 **Example - Phase 1:**
 ```bash

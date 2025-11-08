@@ -1,9 +1,16 @@
 # Development Philosophy
 
 ---
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-11-07
 **Last Updated:** 2025-11-07
+**Changes in V1.1:**
+- **ANTI-PATTERNS SECTION ADDED:** New Section 10 - Anti-Patterns to Avoid (7 anti-patterns documented)
+- Added real examples from Phase 1 test coverage work (Partial Thoroughness, Percentage Point Blindness, etc.)
+- Added Anti-Pattern Detection Checklist (run before marking work complete)
+- Added "Option B Development Approach" subsection (Test-Driven vs Feature-Driven)
+- Updated Summary Checklist to include anti-pattern awareness
+- Added validation workflows and prevention strategies for each anti-pattern
 **Purpose:** Core principles guiding Precog development
 **Target Audience:** All developers working on Precog
 **Status:** ✅ Active - Follow in ALL development work
@@ -38,7 +45,8 @@ This document defines the foundational development principles for Precog. These 
 7. [Cross-Document Consistency](#7-cross-document-consistency)
 8. [Maintenance Visibility](#8-maintenance-visibility)
 9. [Security by Default](#9-security-by-default)
-10. [Summary Checklist](#summary-philosophy-checklist)
+10. [Anti-Patterns to Avoid](#10-anti-patterns-to-avoid-) ⚠️ **NEW**
+11. [Summary Checklist](#summary-philosophy-checklist)
 
 ---
 
@@ -108,6 +116,149 @@ def get_balance(self) -> Decimal:
 - **≥80% overall coverage** (measured by pytest-cov)
 - **100% for critical paths** (financial calculations, trading logic)
 - **100% for security code** (authentication, credential handling)
+
+---
+
+### Coverage-Driven Development (CDD)
+
+**Philosophy:** When inheriting untested code or when TDD wasn't followed, use coverage gaps to guide test creation.
+
+**Complementary to TDD, not replacement:**
+- **TDD:** Tests before code (green field)
+- **CDD:** Coverage report drives test creation (legacy code, retrofitting)
+
+**The CDD Workflow:**
+
+```bash
+# Step 1: Run coverage report
+pytest --cov=api_connectors --cov-report=term-missing
+
+# Output shows gaps:
+api_connectors/kalshi_client.py   81.68%   Missing: 267-279, 320, 364
+
+# Step 2: Examine uncovered code
+# Lines 267-279: Handle 429 rate limit with Retry-After header
+
+# Step 3: Ask "What scenario exercises this?"
+# Answer: API returns 429 with Retry-After: 60 header
+
+# Step 4: Write test for that scenario
+def test_handle_429_with_retry_after():
+    """Test 429 rate limit handling with Retry-After header."""
+    # Mock response with 429 status and Retry-After header
+    # Verify rate limiter updated with retry_after value
+    # Verify exception raised (don't auto-retry)
+
+# Step 5: Re-run coverage
+pytest --cov=api_connectors --cov-report=term-missing
+# Lines 267-279 now covered ✅
+```
+
+**When to Use CDD:**
+- [ ] Inheriting code without tests
+- [ ] Retrofitting tests to reach coverage targets
+- [ ] TDD wasn't followed initially (fixing coverage gaps)
+- [ ] Post-implementation test hardening
+
+**When NOT to Use CDD:**
+- ❌ Green field development (use TDD instead)
+- ❌ As primary development approach (TDD is primary, CDD is remediation)
+- ❌ To justify skipping TDD ("we'll add tests later via CDD")
+
+---
+
+### Prioritized Test Coverage Sprint
+
+**Philosophy:** When multiple modules need coverage improvement, prioritize by business criticality and gap size.
+
+**Prioritization Matrix:**
+
+```
+High Business Criticality + Large Gap = Priority 1 (do first)
+High Business Criticality + Small Gap = Priority 2
+Low Business Criticality + Large Gap = Priority 3
+Low Business Criticality + Small Gap = Priority 4 (do last)
+```
+
+**Real Example (Phase 1):**
+
+```
+Priority 1: Kalshi API client (90% target, 81.68% current = 8.32 point gap, CRITICAL path)
+Priority 2: Kalshi Auth (90% target, 80.95% current = 9.05 point gap, CRITICAL security)
+Priority 3: Config loader (85% target, 21.35% current = 63.65 point gap, HIGH priority)
+Priority 4: Database CRUD (87% target, 13.59% current = 73.41 point gap, HIGH priority)
+Priority 5: Database connection (80% target, 35.05% current = 44.95 point gap, MEDIUM)
+Priority 6: CLI (85% target, 0% current = 85 point gap, MEDIUM priority)
+```
+
+**Why This Order:**
+1. **Critical paths first** - API/Auth are blocking dependencies for all features
+2. **Large gaps later** - Config/DB/CLI have bigger gaps but lower immediate impact
+3. **Sequential value** - Each priority delivers working, tested subsystem
+4. **Morale boost** - Quick wins (Priorities 1-2) build momentum
+
+**Outcome:**
+- ✅ Priority 1 complete: Kalshi API 93.19% (EXCEEDS 90% target)
+- ✅ Priority 2 complete: Kalshi Auth 100% (EXCEEDS 90% target)
+- 🟡 Priorities 3-6 pending
+
+---
+
+### Systematic Coverage Gap Analysis
+
+**Philosophy:** Convert abstract coverage percentages into concrete, actionable test tasks.
+
+**The Translation Process:**
+
+```
+Step 1: Coverage Report
+┌──────────────────────────────────────────────────────┐
+│ kalshi_client.py: 81.68% coverage                    │
+│ Target: 90%                                          │
+│ Gap: 8.32 percentage points                          │
+└──────────────────────────────────────────────────────┘
+
+Step 2: Translate to Lines/Branches
+┌──────────────────────────────────────────────────────┐
+│ Gap breakdown:                                       │
+│ - 21 lines uncovered                                 │
+│ - 12 partial branches uncovered                      │
+│ - Total: 33 coverage points missing                  │
+└──────────────────────────────────────────────────────┘
+
+Step 3: Group by Functionality
+┌──────────────────────────────────────────────────────┐
+│ Missing coverage categories:                         │
+│ 1. Optional parameters (14 lines) → 7 tests         │
+│ 2. Error handling (6 lines) → 2 tests               │
+│ 3. Edge cases (13 branches) → 5 tests               │
+│ Total: 14 tests needed to close gap                  │
+└──────────────────────────────────────────────────────┘
+
+Step 4: Actionable Tasks
+┌──────────────────────────────────────────────────────┐
+│ ✅ Write 7 tests for optional parameters             │
+│ ✅ Write 2 tests for error handling                  │
+│ ✅ Write 5 tests for edge cases                      │
+│ = 14 tests total (closes 8.32 point gap)             │
+└──────────────────────────────────────────────────────┘
+```
+
+**Key Insight:**
+- "8.32 percentage points below target" = vague, hard to act on
+- "14 specific tests needed" = concrete, achievable goal
+
+**Tools:**
+```bash
+# Generate detailed coverage report with missing lines
+pytest --cov=module --cov-report=term-missing --cov-branch
+
+# Output shows exactly what's uncovered:
+Missing: 267-279, 320, 364
+BrPart: 414->416, 521->523, 569->571 (partial branches)
+```
+
+---
 
 **Related Documents:**
 - `docs/foundation/TESTING_STRATEGY_V2.0.md`
@@ -829,6 +980,694 @@ git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.p
 
 ---
 
+## 10. Anti-Patterns to Avoid ⚠️
+
+### Common Development Traps
+
+**Philosophy:** Awareness of anti-patterns prevents mistakes. Document what NOT to do as clearly as what TO do.
+
+**Why This Matters:**
+- **Anti-patterns are subtle** - Easy to fall into without realizing
+- **Prevention > Remediation** - Catching anti-patterns early saves time
+- **Explicit warnings help** - "Don't do X" is clearer than implying it
+- **Common traps are predictable** - Same mistakes happen repeatedly
+
+---
+
+### Anti-Pattern 1: Partial Thoroughness
+
+**Description:** Assuming work is "complete enough" without checking against explicit targets.
+
+**Real Example from Phase 1:**
+```
+❌ BAD: "Kalshi API has 81.68% coverage - that's pretty good!"
+✅ GOOD: "Kalshi API target is 90%. Current 81.68% = 8.32 points below. Need 14 more tests."
+
+Why it matters:
+- 8.32 percentage points = 21 lines + 12 partial branches uncovered
+- Small percentage gaps can represent significant functional gaps
+- "Pretty good" != "meets requirement"
+```
+
+**How to Detect:**
+- [ ] Compare coverage % to explicit target (not "feels good enough")
+- [ ] Check absolute number of uncovered lines (not just percentage)
+- [ ] Look at partial branch coverage (branches often hide edge cases)
+- [ ] Verify ALL success criteria met (not just most)
+
+**Prevention Checklist:**
+- [ ] Every module has explicit coverage target (not implicit)
+- [ ] Targets documented in test planning checklist
+- [ ] Coverage report shows uncovered lines (not just percentage)
+- [ ] Success criteria use ≥ operator (not ~roughly)
+
+**Validation:**
+```bash
+# ❌ BAD: Vague check
+pytest --cov
+# "81% coverage - looks good!"
+
+# ✅ GOOD: Target-driven check
+pytest --cov=api_connectors --cov-fail-under=90
+# FAILED: Coverage 81.68% < 90% → 14 more tests needed
+```
+
+---
+
+### Anti-Pattern 2: Percentage Point Blindness
+
+**Description:** Not realizing small percentage differences represent significant uncovered code.
+
+**Real Example:**
+```
+Phase 1 Coverage Analysis:
+- Kalshi API: 81.68% vs 90% target
+- Gap: 8.32 percentage points (sounds small)
+- Reality: 21 lines + 12 partial branches uncovered
+- Missing scenarios: 429 rate limit edge cases, max retries fallback, Decimal warning logs
+```
+
+**Why Percentages Mislead:**
+- 90% coverage of 100-line module = 10 lines uncovered
+- 90% coverage of 1000-line module = 100 lines uncovered
+- Same percentage, 10x difference in uncovered code!
+
+**How to Detect:**
+- [ ] Check `Missing` column in coverage report (line numbers)
+- [ ] Check `BrPart` column (partial branch coverage)
+- [ ] Count uncovered scenarios (not just lines)
+- [ ] Ask: "What functionality is missing?"
+
+**Prevention:**
+```python
+# Add to pyproject.toml to show missing lines by default
+[tool.pytest.ini_options]
+addopts = [
+    "--cov=.",
+    "--cov-report=term-missing",  # Shows line numbers!
+    "--cov-branch",               # Track branch coverage
+]
+```
+
+---
+
+### Anti-Pattern 3: Coverage Complacency
+
+**Description:** Checking coverage once when work starts, never rechecking as code evolves.
+
+**Real Example:**
+```
+Session 1: "Kalshi API at 81.68% - good start!"
+Session 2-5: Add features, refactor code, no coverage checks
+Session 6: "Wait, coverage is now 65%? When did that happen?"
+```
+
+**Why This Happens:**
+- Coverage tracked manually (not automated)
+- Focus on features, not tests
+- Assume "if tests pass, coverage is fine"
+- No coverage gates in CI/CD
+
+**How to Detect:**
+- [ ] Coverage % decreased since last session?
+- [ ] New code added without tests?
+- [ ] Tests passing but coverage report not checked?
+- [ ] CI/CD doesn't fail on coverage drop?
+
+**Prevention (Defense in Depth):**
+1. **Pre-commit:** Run coverage report locally before commit
+2. **Pre-push:** Coverage check in pre-push hook
+3. **CI/CD:** `--cov-fail-under=80` gate (blocks merge if <80%)
+4. **Phase completion:** Full coverage audit before marking phase complete
+
+**Automation:**
+```yaml
+# .github/workflows/ci.yml
+- name: Test with coverage
+  run: |
+    pytest --cov=. --cov-fail-under=80
+    # CI fails if coverage <80% (can't merge!)
+```
+
+---
+
+### Anti-Pattern 4: Test Planning After Code
+
+**Description:** Writing implementation first, then figuring out how to test it later.
+
+**Why This Fails:**
+- Code not designed for testability
+- Hard to mock tightly-coupled dependencies
+- Edge cases discovered too late
+- Tests become brittle (test implementation, not behavior)
+
+**Real Example:**
+```python
+# ❌ BAD: Code first, tests later
+# Step 1: Implement feature
+def process_trade(trade_data: dict):
+    # 200 lines of complex logic with database, API, calculations mixed together
+    # (Hard to test - tightly coupled!)
+    pass
+
+# Step 2: Try to write tests (struggle to mock everything)
+
+# ✅ GOOD: Tests first (TDD)
+# Step 1: Write test describing behavior
+def test_process_trade_rejects_invalid_price():
+    """Trade with price=0 should be rejected."""
+    with pytest.raises(ValueError, match="Price must be >0"):
+        process_trade({"price": 0})
+
+# Step 2: Implement minimal solution
+def process_trade(trade_data: dict):
+    if trade_data["price"] <= 0:
+        raise ValueError("Price must be >0")
+    # (Easy to test - clear behavior!)
+```
+
+**Prevention:**
+- [ ] Complete test planning checklist BEFORE writing code
+- [ ] Write test first (red), then implementation (green), then refactor (blue)
+- [ ] If test is hard to write, redesign interface
+- [ ] Reject PRs without corresponding tests
+
+---
+
+### Anti-Pattern 5: Spot Checking vs. Systematic Validation
+
+**Description:** Checking one or two modules instead of validating all modules against targets.
+
+**Real Example:**
+```
+# ❌ BAD: Spot check
+"I checked Kalshi API - 81.68% coverage. Ship it!"
+
+# Missing checks:
+- Config loader: 21.35% (needs 85%+) ← 63.65 points below target!
+- Database CRUD: 13.59% (needs 87%+) ← 73.41 points below target!
+- Database connection: 35.05% (needs 80%+) ← 44.95 points below target!
+- CLI: 0% (needs 85%+) ← Not even started!
+
+# ✅ GOOD: Systematic validation
+"Checked ALL Phase 1 modules against targets. Found 4 gaps. See Priority 3-6 tasks."
+```
+
+**How to Detect:**
+- [ ] Coverage report shows overall % only (not per-module)?
+- [ ] Only checked "main" module (ignored utilities, config, DB)?
+- [ ] Success criteria lists multiple modules but only validated one?
+- [ ] Didn't check integration tests (only unit tests)?
+
+**Prevention:**
+```bash
+# Generate per-module coverage report
+pytest --cov=. --cov-report=term-missing
+
+# Checklist approach (from test planning):
+- [ ] api_connectors/kalshi_client.py: ≥90% (current: 93.19% ✅)
+- [ ] api_connectors/kalshi_auth.py: ≥90% (current: 100% ✅)
+- [ ] config/config_loader.py: ≥85% (current: 21.35% ❌)
+- [ ] database/crud_operations.py: ≥87% (current: 13.59% ❌)
+- [ ] database/connection.py: ≥80% (current: 35.05% ❌)
+- [ ] main.py (CLI): ≥85% (current: Not measured ❌)
+```
+
+---
+
+### Anti-Pattern 6: "Partially Complete" Means "Good Enough"
+
+**Description:** Resuming work on partially-complete phase without validating assumptions.
+
+**Real Example:**
+```
+# Assumption: "Phase 1 API work is partially complete with 81.68% coverage"
+# Reality check:
+- Overall Phase 1 coverage: 49.49% (BELOW 80% threshold by 30.51 points!)
+- Critical gaps: Config loader 21.35%, Database 13-35%, CLI 0%
+- If we'd started Phase 2 without checking: Technical debt explosion!
+```
+
+**Why This Happens:**
+- Assume previous session did comprehensive work
+- Don't re-validate targets when resuming
+- "Partially complete" sounds positive (hides gaps)
+- Focus on new work (ignore unfinished old work)
+
+**How to Detect:**
+- [ ] Phase marked "50% complete" but coverage targets not verified?
+- [ ] Resuming work after break without running full test suite?
+- [ ] Test planning checklist has unchecked boxes?
+- [ ] No coverage report in previous SESSION_HANDOFF?
+
+**Prevention (CLAUDE.md Step 2a):**
+```markdown
+**Step 2a: Verify Phase Prerequisites (MANDATORY)**
+- ⚠️ BEFORE CONTINUING ANY PHASE WORK: Check DEVELOPMENT_PHASES for current phase's Dependencies section
+- Verify ALL "Requires Phase X: 100% complete" dependencies are met
+- Check previous phase is marked ✅ Complete in DEVELOPMENT_PHASES
+- **IF RESUMING PARTIALLY-COMPLETE PHASE:**
+  - Re-run full test suite: `pytest --cov=.`
+  - Compare coverage to targets (per-module, not overall)
+  - Check test planning checklist status (what's unchecked?)
+  - Identify gaps BEFORE continuing implementation
+```
+
+---
+
+### Anti-Pattern 7: Ignoring Test Planning Checklists
+
+**Description:** Skipping the "Before Starting This Phase" test planning checklist and jumping to code.
+
+**Real Example:**
+```
+# ❌ BAD workflow:
+1. See "Phase 1: Build API client"
+2. Start coding immediately
+3. Write some tests after (if time allows)
+4. Mark phase complete
+
+Result: 49.49% coverage, critical gaps in config/database/CLI
+
+# ✅ GOOD workflow:
+1. Read "Before Starting This Phase - TEST PLANNING CHECKLIST"
+2. Complete 8 sections BEFORE writing code:
+   - Requirements analysis
+   - Test categories needed
+   - Test infrastructure updates
+   - Critical test scenarios
+   - Performance baselines
+   - Security test scenarios
+   - Edge cases to test
+   - Success criteria
+3. THEN start implementation (with clear targets)
+4. Validate ALL success criteria before marking complete
+
+Result: 80%+ coverage, all gaps identified upfront
+```
+
+**How to Detect:**
+- [ ] Phase started without completing test planning checklist?
+- [ ] No test fixtures/factories created before implementation?
+- [ ] Critical scenarios not listed before coding?
+- [ ] Success criteria vague ("good coverage") instead of specific (≥90%)?
+
+**Prevention:**
+- [ ] Mark test planning checklist as MANDATORY (blocking)
+- [ ] Require checklist completion in SESSION_HANDOFF before coding
+- [ ] Add test planning time to phase estimates (2-4 hours)
+- [ ] Code reviews verify checklist was completed
+
+---
+
+### Anti-Pattern 8: "Tests Pass = Good Coverage" Fallacy
+
+**Description:** Assuming that because all tests pass, coverage must be sufficient.
+
+**Why This Is Dangerous:**
+- Tests can all pass with 30-50% coverage (uncovered code never executed)
+- Passing tests only validate tested paths (not untested paths)
+- Ship with large portions of code untested, unvalidated
+- Edge cases, error handlers, fallback logic completely uncovered
+
+**Real Example:**
+
+```bash
+# ❌ FALSE SENSE OF SECURITY
+$ pytest
+================================================
+45 passed in 7.7s ✅
+================================================
+# Looks great! Ship it!
+
+# BUT...
+$ pytest --cov
+================================================
+45 passed in 7.7s
+
+Coverage: 53.29% ⚠️ BELOW 80% threshold by 26.71 points!
+================================================
+
+# Reality:
+- 287 lines uncovered (46.71% of code NEVER tested!)
+- Config loader: 21.35% (critical config precedence logic untested)
+- Database CRUD: 13.59% (SQL injection prevention untested)
+- Error handling paths: 0% (what happens when things fail?)
+```
+
+**How to Detect:**
+- [ ] "All tests passing" celebrated without checking coverage?
+- [ ] Coverage report not run before marking feature complete?
+- [ ] No coverage gates in CI/CD (tests pass, coverage ignored)?
+- [ ] Coverage metrics not tracked in SESSION_HANDOFF?
+
+**Prevention (Defense in Depth):**
+
+```bash
+# 1. Pre-push hook: Check coverage before pushing
+pytest --cov=. --cov-fail-under=80
+# Blocks push if coverage <80%
+
+# 2. CI/CD: Automated coverage gate
+# In .github/workflows/ci.yml:
+- name: Test with coverage
+  run: |
+    pytest --cov=. --cov-fail-under=80
+    # CI fails if <80% (can't merge PR!)
+
+# 3. Phase completion: Mandatory coverage audit
+- [ ] Overall coverage ≥80%?
+- [ ] All critical modules meet targets?
+- [ ] Coverage report in SESSION_HANDOFF?
+```
+
+**Key Insight:**
+- ✅ "Tests pass" = Code that IS tested works correctly
+- ❌ "Tests pass" ≠ All code is tested
+- ✅ "Tests pass + 80% coverage" = Comprehensive validation
+
+---
+
+### Anti-Pattern 9: Branch Coverage Neglect
+
+**Description:** Focusing only on line coverage while ignoring branch coverage (partial branches uncovered).
+
+**Why Branches Matter:**
+- **Line coverage:** Did we execute this line?
+- **Branch coverage:** Did we test all outcomes of conditionals?
+- Branches often represent edge cases, error paths, validation logic
+
+**Real Example (Phase 1 Kalshi API):**
+
+```python
+# Before branch coverage attention:
+Line coverage: 81.68% (looks good!)
+Branch coverage: 12 partial branches uncovered (hidden problem!)
+
+# What those 12 branches represented:
+if status_code == 429:
+    retry_after_str = response.headers.get("Retry-After")
+    if retry_after_str:  # ← Branch 1: What if Retry-After present?
+        retry_after_int = int(retry_after_str)  # ← Never tested!
+    # Branch 2: What if Retry-After absent? ← Also never tested!
+```
+
+**Coverage Report Shows:**
+
+```
+Name                         Stmts   Miss  Branch  BrPart   Cover
+----------------------------------------------------------------
+kalshi_client.py               143      9      48      12   81.68%
+                                                    ^^^^
+                                            12 partial branches!
+```
+
+**How to Detect:**
+- [ ] Coverage report shows `BrPart` column (partial branches)?
+- [ ] Focused on `Cover %` without looking at `BrPart` number?
+- [ ] Line coverage high (>80%) but branch coverage low?
+- [ ] Tests for happy path only (no error/edge case tests)?
+
+**Prevention:**
+
+```bash
+# Always check branch coverage
+pytest --cov=. --cov-report=term-missing --cov-branch
+
+# Focus on BrPart column:
+Name                  Stmts  Miss  Branch  BrPart   Cover
+--------------------------------------------------------
+kalshi_client.py        143     9      48      12   81.68%
+                                              ^^^
+                                        12 branches partially tested!
+
+# For each partial branch, ask:
+# - What condition is this?
+# - What happens when True? (tested?)
+# - What happens when False? (tested?)
+# - Which path is uncovered?
+```
+
+**Targeting Branch Coverage:**
+
+```python
+# ❌ BAD: Only tests happy path
+def test_get_markets_success():
+    """Test get_markets() returns markets."""
+    markets = client.get_markets()
+    assert len(markets) > 0  # Only tests successful path!
+
+# ✅ GOOD: Tests both branches
+def test_get_markets_success():
+    """Test get_markets() returns markets."""
+    markets = client.get_markets()
+    assert len(markets) > 0
+
+def test_get_markets_with_event_ticker():
+    """Test get_markets() with event_ticker filter."""
+    # Tests if event_ticker branch
+    markets = client.get_markets(event_ticker="NFLGAME")
+    # Verifies event_ticker parameter passed correctly
+
+def test_get_markets_without_event_ticker():
+    """Test get_markets() without event_ticker (default behavior)."""
+    # Tests else branch (no event_ticker)
+    markets = client.get_markets()
+    # Verifies default behavior when parameter absent
+```
+
+---
+
+### Anti-Pattern 10: Coverage Target Negotiation
+
+**Description:** Lowering coverage targets instead of writing tests when hitting target is difficult.
+
+**The Slippery Slope:**
+
+```
+Week 1: "80% coverage is the target"
+Week 2: "80% is hard to hit, let's aim for 75%"
+Week 4: "75% is still challenging, 70% is more realistic"
+Week 8: "70% seems arbitrary, 60% is plenty"
+Result: 50% coverage, massive technical debt
+```
+
+**Why This Happens:**
+- Writing tests for complex code is hard
+- Deadline pressure makes shortcuts tempting
+- "Good enough" mindset creeps in
+- No one challenges the negotiation
+
+**Real Example:**
+
+```
+# Situation: Database CRUD at 13.59% coverage
+Developer: "87% target is unrealistic. This code is hard to test. Let's lower it to 50%."
+
+# ❌ BAD: Negotiate target down
+New target: 50% (easy to hit, but leaves 50% untested!)
+
+# ✅ GOOD: Ask WHY it's hard to test
+- Is code tightly coupled? → Refactor for testability
+- Missing test fixtures? → Create factories
+- Complex setup? → Simplify or document setup steps
+- Don't know how to mock? → Learn mocking patterns
+
+# Outcome:
+- Refactored for testability → Better code design
+- Created test fixtures → Reusable test infrastructure
+- Hit 87% target → Comprehensive coverage
+```
+
+**How to Detect:**
+- [ ] Coverage target discussion focuses on "lowering bar" vs "how to reach it"?
+- [ ] Justifications like "this code is special/hard to test"?
+- [ ] Targets differ across similar modules (inconsistent standards)?
+- [ ] Coverage targets decreasing over time?
+
+**Prevention:**
+
+```markdown
+# Make targets NON-NEGOTIABLE requirements (not suggestions)
+
+## MASTER_REQUIREMENTS (REQ-TEST-002):
+**Requirement:** All modules MUST meet coverage targets:
+- Critical modules (API, auth, trading): ≥90%
+- High priority (config, database): ≥85%
+- Standard modules: ≥80%
+
+**Status:** 🔴 MANDATORY - Cannot mark phase complete without meeting targets
+
+**Rationale:** Targets are based on risk analysis, not arbitrary numbers
+```
+
+**If hitting target is genuinely impossible:**
+1. **Document why** (e.g., third-party library code, OS-specific code)
+2. **Get explicit approval** (don't silently lower target)
+3. **Add to exceptions list** (with justification and mitigation)
+4. **Time-box reassessment** (revisit in 6 months)
+
+**Key Insight:**
+- Targets are REQUIREMENTS (like "code must compile")
+- If target is hard to hit, code likely needs refactoring
+- Lowering targets = technical debt accumulation
+
+---
+
+### Anti-Pattern 11: Test Inflation Without Value
+
+**Description:** Writing trivial tests just to inflate coverage numbers without testing meaningful behavior.
+
+**Why This Defeats the Purpose:**
+- Coverage number goes up
+- Code quality doesn't improve
+- False sense of security
+- Maintenance burden (useless tests require maintenance too)
+
+**Examples of Valueless Tests:**
+
+```python
+# ❌ BAD: Tests implementation detail (not behavior)
+def test_function_exists():
+    """Test that calculate_profit function exists."""
+    assert callable(calculate_profit)
+    # Useless! If function doesn't exist, code won't even import.
+
+# ❌ BAD: Tests Python language feature (not our code)
+def test_dict_has_keys():
+    """Test that dict has expected keys."""
+    market_data = {"ticker": "TEST", "price": 0.50}
+    assert "ticker" in market_data
+    # Useless! Tests Python dict behavior, not our logic.
+
+# ❌ BAD: Tests trivial getter (no logic to test)
+def test_get_ticker_returns_ticker():
+    """Test get_ticker() returns ticker."""
+    market = Market(ticker="TEST")
+    assert market.get_ticker() == "TEST"
+    # Useless! Getter has no logic, just returns attribute.
+
+# ❌ BAD: Mock everything, test nothing
+def test_process_trade_calls_functions(mocker):
+    """Test process_trade calls expected functions."""
+    mocker.patch('module.validate_price')
+    mocker.patch('module.execute_trade')
+    mocker.patch('module.log_trade')
+
+    process_trade({"price": 0.50})
+
+    # Just verifies functions were called, not WHAT they did
+    # If logic is wrong, test still passes!
+```
+
+**Examples of Valuable Tests:**
+
+```python
+# ✅ GOOD: Tests actual behavior
+def test_calculate_profit_with_valid_prices():
+    """Profit = (exit_price - entry_price) * quantity."""
+    profit = calculate_profit(
+        entry_price=Decimal("0.50"),
+        exit_price=Decimal("0.75"),
+        quantity=100
+    )
+    # Tests actual calculation logic
+    assert profit == Decimal("25.00")
+
+# ✅ GOOD: Tests validation logic
+def test_calculate_profit_rejects_negative_quantity():
+    """Negative quantity should raise ValueError."""
+    with pytest.raises(ValueError, match="Quantity must be positive"):
+        calculate_profit(
+            entry_price=Decimal("0.50"),
+            exit_price=Decimal("0.75"),
+            quantity=-100  # Invalid input
+        )
+    # Tests edge case/error handling
+
+# ✅ GOOD: Tests business rule
+def test_process_trade_below_min_profit_threshold_skipped():
+    """Trades with profit <$5 should be skipped (not worth fees)."""
+    result = process_trade({
+        "entry_price": Decimal("0.50"),
+        "exit_price": Decimal("0.51"),  # Only $1 profit
+        "quantity": 100
+    })
+    assert result.status == "skipped"
+    assert result.reason == "profit_below_threshold"
+    # Tests actual business logic
+```
+
+**How to Detect:**
+- [ ] Test just calls function, asserts it doesn't crash?
+- [ ] Test verifies function was called (but not what it returned)?
+- [ ] Test checks object exists (but not its behavior)?
+- [ ] Test duplicates functionality (tests same thing multiple ways)?
+- [ ] Test name describes WHAT function does, not WHAT SHOULD HAPPEN?
+
+**Prevention:**
+
+```markdown
+# Code Review Checklist:
+- [ ] Every test has clear "GIVEN-WHEN-THEN" structure?
+- [ ] Test name describes expected behavior (not implementation)?
+- [ ] Test would catch a bug if logic changed incorrectly?
+- [ ] Test verifies OUTPUT/BEHAVIOR (not just function called)?
+- [ ] Removing this test would reduce confidence in code?
+
+# If answer is "NO" to any → Test is probably valueless
+```
+
+**Key Insight:**
+- **Goal:** Test behavior, not implementation
+- **Good test:** Fails when behavior breaks, passes when behavior correct
+- **Bad test:** Passes even when behavior broken (because mocks hide bugs)
+
+---
+
+### Anti-Pattern Detection Checklist
+
+**Run this before marking any work "complete":**
+
+- [ ] **Partial Thoroughness:** All modules checked against explicit targets (not "feels good")?
+- [ ] **Percentage Point Blindness:** Checked uncovered line count (not just percentage)?
+- [ ] **Coverage Complacency:** Re-ran coverage report (not relying on old data)?
+- [ ] **Test Planning After Code:** Tests written BEFORE implementation (TDD followed)?
+- [ ] **Spot Checking:** ALL modules validated (not just main module)?
+- [ ] **Partial Complete Assumption:** Re-validated targets when resuming work?
+- [ ] **Checklist Ignored:** Test planning checklist completed BEFORE coding?
+
+**If ANY box unchecked → Work is NOT complete. Fix anti-pattern first.**
+
+---
+
+### Prevention: Option B Development Approach
+
+**When choosing between:**
+- **Option A:** Continue with new features, fix coverage gaps later
+- **Option B:** Fix coverage gaps NOW, then continue with structured approach
+
+**ALWAYS choose Option B:**
+- Prevents technical debt accumulation
+- Ensures foundation is solid before building on it
+- Catches gaps early (cheaper to fix)
+- Structured development reduces rework
+
+**Real Decision (Phase 1):**
+```
+User asked: "Should we continue with config loader or fix Kalshi coverage gaps first?"
+
+❌ Option A (Feature-Driven): Continue to config loader, fix Kalshi later
+- Risk: Coverage gaps grow, technical debt accumulates
+- Result: Phase ends with 50% coverage, needs Phase 1.5 to fix
+
+✅ Option B (Test-Driven): Fix Kalshi gaps NOW, then config loader
+- Benefit: Solid foundation, coverage targets met incrementally
+- Result: Kalshi API 93.19% ✅, Auth 100% ✅, ready for next priority
+```
+
+---
+
 ## Summary: Philosophy Checklist
 
 Before marking any feature complete, validate ALL principles followed:
@@ -839,9 +1678,10 @@ Before marking any feature complete, validate ALL principles followed:
 - [ ] **Data-Driven:** Configuration externalized (not hard-coded)?
 - [ ] **Fail-Safe:** Validation scripts skip gracefully (don't crash)?
 - [ ] **Explicit:** Code clarity prioritized over brevity?
-- [ ] **Consistent:** All dependent docs updated? (follow cascade rules)
+- [ ] **Consistent:** All dependent docs updated? (follow cascade rules)?
 - [ ] **Maintainable:** Maintenance guides written? (time estimates provided)
 - [ ] **Secure:** No hardcoded credentials? (all in .env)
+- [ ] **Anti-Patterns Avoided:** Ran Anti-Pattern Detection Checklist? ⚠️ **NEW**
 
 **If ANY box unchecked → Feature NOT complete.**
 
