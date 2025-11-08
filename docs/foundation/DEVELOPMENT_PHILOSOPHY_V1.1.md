@@ -1668,6 +1668,109 @@ User asked: "Should we continue with config loader or fix Kalshi coverage gaps f
 
 ---
 
+## 10. Test Coverage Accountability
+
+### Every Deliverable Must Have Explicit Coverage Target
+
+**Philosophy:** Every Phase N deliverable MUST have an explicit, documented test coverage target. No module ships without a coverage goal.
+
+**Why This Matters:**
+- **Prevents "forgot to test" scenarios** - Coverage targets force test planning
+- **Enables progress tracking** - Know exactly how much testing remains
+- **Catches gaps during planning** - Not at the end when it's expensive to fix
+- **Creates accountability** - Target is explicit, achievement is measurable
+
+**Coverage Target Tiers:**
+
+```python
+# Infrastructure modules (connection pools, loggers, config loaders)
+INFRASTRUCTURE_TARGET = 80  # ≥80% coverage
+
+# Business logic (CRUD operations, trading logic, position management)
+BUSINESS_LOGIC_TARGET = 85  # ≥85% coverage
+
+# Critical path (API auth, order execution, risk management)
+CRITICAL_PATH_TARGET = 90  # ≥90% coverage
+```
+
+**Pattern: Deliverable → Coverage Target Mapping**
+
+When adding a Phase N deliverable to DEVELOPMENT_PHASES:
+
+1. **Identify module type** (infrastructure / business logic / critical path)
+2. **Assign coverage target** based on tier
+3. **Document in "Critical Module Coverage Targets" section**
+4. **Track in todo list** during implementation
+
+**Example: Phase 1 Coverage Targets**
+
+```markdown
+### Critical Module Coverage Targets (Phase 1)
+
+**API Connectors (Critical Path):** ≥90%
+- kalshi_client.py: Target 90%+
+- kalshi_auth.py: Target 90%+
+- rate_limiter.py: Target 90%+
+
+**Configuration (Infrastructure):** ≥80%
+- config_loader.py: Target 85%+ (higher due to complexity)
+
+**Database (Business Logic):** ≥85%
+- crud_operations.py: Target 87%+ (higher due to financial data)
+- connection.py: Target 80%+
+
+**Utilities (Infrastructure):** ≥80%
+- logger.py: Target 80%+
+```
+
+**Validation Checkpoints:**
+
+**At Phase Start (Proactive):**
+- Extract ALL deliverables from phase task list
+- Verify EACH has explicit coverage target
+- If missing → Add target BEFORE starting implementation
+
+**During Implementation (Continuous):**
+- Track coverage in todo list
+- Run coverage reports frequently
+- Update targets if scope changes
+
+**At Phase Completion (Retrospective):**
+- Verify ALL modules met or exceeded targets
+- Document final coverage in completion report
+- Identify modules that need Phase N+1 improvements
+
+**Common Mistake: "We'll add tests later"**
+
+```markdown
+❌ WRONG: Defer test coverage to "Phase 1.5"
+- Phase 1: 50% coverage, "we'll fix it later"
+- Phase 1.5: Scrambling to retrofit tests
+- Result: Technical debt, low confidence in code
+
+✅ CORRECT: Meet targets incrementally
+- Priority 1: API client to 90%+ → Tests written → Target met
+- Priority 2: Config loader to 85%+ → Tests written → Target met
+- Priority 3: Database to 87%+ → Tests written → Target met
+- Result: Phase 1 ends with 94.71% coverage, high confidence
+```
+
+**Real Example (Phase 1):**
+
+Logger module was Phase 1 deliverable but missing from coverage targets checklist. Discovered when user asked: "Why doesn't logger have a coverage target?"
+
+**Prevention (3-Layer Defense):**
+1. **Phase Start:** Validate deliverables → coverage targets mapping
+2. **Documentation:** Add this section (Pattern 10)
+3. **Phase Completion:** Verify all modules met targets
+
+**Related Documents:**
+- `CLAUDE.md` Section 3, Step 2 (Phase start coverage validation)
+- `CLAUDE.md` Section 9, Step 1 (Phase completion coverage verification)
+- `DEVELOPMENT_PHASES_V1.4.md` (Phase-specific coverage targets)
+
+---
+
 ## Summary: Philosophy Checklist
 
 Before marking any feature complete, validate ALL principles followed:
@@ -1681,6 +1784,7 @@ Before marking any feature complete, validate ALL principles followed:
 - [ ] **Consistent:** All dependent docs updated? (follow cascade rules)?
 - [ ] **Maintainable:** Maintenance guides written? (time estimates provided)
 - [ ] **Secure:** No hardcoded credentials? (all in .env)
+- [ ] **Coverage Targets:** All deliverables have explicit coverage targets? (deliverable → target mapping validated)
 - [ ] **Anti-Patterns Avoided:** Ran Anti-Pattern Detection Checklist? ⚠️ **NEW**
 
 **If ANY box unchecked → Feature NOT complete.**

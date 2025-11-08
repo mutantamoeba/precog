@@ -1,9 +1,15 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.10
-**Last Updated:** 2025-10-31
+**Version:** 2.11
+**Last Updated:** 2025-11-07
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.11:**
+- **PYTHON 3.14 COMPATIBILITY**: Updated REQ-TEST-006 and REQ-CICD-001 to replace Bandit with Ruff security rules (--select S)
+- **SECURITY SCANNING**: Bandit 1.8.6 incompatible with Python 3.14 (ast.Num removed), replaced with Ruff S-rules (equivalent coverage, 10-100x faster)
+- **CROSS-REFERENCE**: Added ADR-054 (Ruff Security Rules Instead of Bandit) for rationale and implementation details
+- REQ-TEST-006: Changed "Bandit: Static analysis" → "Ruff security rules (--select S): Static analysis"
+- REQ-CICD-001: Changed "Security scanning (Bandit, Safety)" → "Security scanning (Ruff security rules, Safety)"
 **Changes in v2.10:**
 - **PHASE 1 API BEST PRACTICES**: Added 4 new requirements for API integration best practices (Phase 1)
 - **NEW REQUIREMENTS**: REQ-API-007 (Pydantic validation), REQ-OBSERV-001 (correlation IDs), REQ-SEC-009 (log masking), REQ-VALIDATION-004 (YAML validation)
@@ -1506,13 +1512,15 @@ Test results must be persisted with timestamps for trend analysis and CI/CD inte
 **Phase:** 0.7
 **Priority:** Critical
 **Status:** 🔵 Planned
-**Reference:** ADR-043
+**Reference:** ADR-043, ADR-054
 
 Integrate security testing tools for vulnerability detection:
-- **Bandit**: Static analysis for security issues
+- **Ruff security rules (--select S)**: Static analysis for security issues (Python 3.14 compatible, replaces Bandit)
 - **Safety**: Dependency vulnerability scanning
 - **Secret Detection**: Pre-commit hooks for credential scanning
 - **SAST Integration**: GitHub Advanced Security
+
+**Note:** Originally specified Bandit, but Bandit 1.8.6 is incompatible with Python 3.14 (`ast.Num` removed). Ruff S-rules provide equivalent coverage (hardcoded passwords, SQL injection, file permissions) with 10-100x better performance. See ADR-054 for rationale.
 
 **REQ-TEST-007: Mutation Testing**
 
@@ -1708,7 +1716,7 @@ Two-tier validation for different workflow stages:
 **Phase:** 0.7
 **Priority:** High
 **Status:** 🔵 Planned
-**Reference:** ADR-042
+**Reference:** ADR-042, ADR-054
 
 Implement GitHub Actions workflow for automated CI/CD:
 - **Trigger**: On push to main, PR creation, manual dispatch
@@ -1717,10 +1725,12 @@ Implement GitHub Actions workflow for automated CI/CD:
   - Type checking (Mypy)
   - Documentation validation
   - Test suite (pytest with coverage)
-  - Security scanning (Bandit, Safety, secret detection)
-- **Matrix Testing**: Python 3.12, 3.13 on ubuntu-latest, windows-latest
+  - Security scanning (Ruff security rules --select S, Safety, secret detection)
+- **Matrix Testing**: Python 3.12, 3.13, 3.14 on ubuntu-latest, windows-latest
 - **Artifacts**: Test reports, coverage reports
 - **Status Badges**: README.md integration
+
+**Note:** Security scanning uses Ruff S-rules instead of Bandit for Python 3.14 compatibility. See ADR-054 and REQ-TEST-006 for details.
 
 **REQ-CICD-002: Codecov Integration**
 
