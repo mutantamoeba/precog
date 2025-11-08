@@ -1,0 +1,280 @@
+{
+  "baseline_date": "2025-11-08",
+  "total_warnings": 429,
+  "warning_categories": {
+    "yaml_float_literals": {
+      "count": 111,
+      "severity": "low",
+      "source": "scripts/validate_docs.py",
+      "message_pattern": "Float detected in Decimal field",
+      "examples": [
+        "markets.yaml: Float detected in Decimal field 'rate_limit_buffer': 0.8",
+        "markets.yaml: Float detected in Decimal field 'kelly_fraction': 0.25",
+        "position_management.yaml: Float detected in Decimal field 'max_spread': 0.03"
+      ],
+      "reason_deferred": "YAML float literals (0.25) should be strings (\"0.25\") for safer Decimal conversion",
+      "impact": "None (config_loader._convert_to_decimal() handles float→Decimal correctly)",
+      "fix_priority": "low",
+      "fix_estimate": "2-3 hours",
+      "target_phase": "1.5",
+      "notes": "Change 111 float literals to string format across 7 YAML config files. Improves safety but not functionally broken."
+    },
+    "hypothesis_decimal_precision": {
+      "count": 19,
+      "severity": "low",
+      "source": "hypothesis.strategies._internal.core",
+      "message_pattern": "cannot be exactly represented as a decimal with places=",
+      "examples": [
+        "0.1 cannot be exactly represented as a decimal with places=2",
+        "0.3 cannot be exactly represented as a decimal with places=4",
+        "0.001 cannot be exactly represented as a decimal with places=4"
+      ],
+      "reason_deferred": "Hypothesis limitation - float to Decimal conversion",
+      "impact": "None (tests still validate precision correctly)",
+      "fix_priority": "medium",
+      "fix_estimate": "2-3 hours",
+      "target_phase": "1.5",
+      "notes": "Consider using Decimal('0.1000') directly instead of decimals(min_value=0.1, max_value=0.9, places=4)"
+    },
+    "pytest_asyncio_deprecation": {
+      "count": 4,
+      "severity": "medium",
+      "source": "pytest_asyncio.plugin",
+      "message_pattern": "deprecated and slated for removal in Python 3.16",
+      "examples": [
+        "asyncio.iscoroutinefunction is deprecated (3 locations)",
+        "asyncio.get_event_loop_policy is deprecated (1 location)"
+      ],
+      "reason_deferred": "Dependency warning (not our code)",
+      "impact": "Will break in Python 3.16 (future)",
+      "fix_priority": "low",
+      "fix_estimate": "N/A (wait for pytest-asyncio update)",
+      "target_phase": "N/A",
+      "notes": "Upstream dependency - will be fixed when pytest-asyncio updates for Python 3.16 compatibility"
+    },
+    "resource_warning_unclosed_files": {
+      "count": 13,
+      "severity": "medium",
+      "source": "utils/logger.py:194",
+      "message_pattern": "ResourceWarning: unclosed file",
+      "examples": [
+        "unclosed file <_io.TextIOWrapper name='...precog_2025-11-08.log' mode='a' encoding='utf-8'>"
+      ],
+      "reason_deferred": "Test isolation issue - FileHandler created but not explicitly closed",
+      "impact": "File handles leak in tests (but OS cleans up on process exit)",
+      "fix_priority": "high",
+      "fix_estimate": "1 hour",
+      "target_phase": "1.5",
+      "notes": "Add explicit handler.close() in test teardown or use context manager for logging setup"
+    },
+    "structlog_format_exc_info": {
+      "count": 1,
+      "severity": "low",
+      "source": "structlog.stdlib",
+      "message_pattern": "Remove `format_exc_info` from your processor chain",
+      "examples": [
+        "Remove `format_exc_info` from your processor chain if you want pretty exceptions"
+      ],
+      "reason_deferred": "Cosmetic - not affecting functionality",
+      "impact": "None (exceptions still render correctly)",
+      "fix_priority": "low",
+      "fix_estimate": "15 minutes",
+      "target_phase": "1.5",
+      "notes": "Remove format_exc_info processor if we want ConsoleRenderer to handle exception formatting"
+    },
+    "coverage_no_contexts": {
+      "count": 1,
+      "severity": "low",
+      "source": "coverage.html",
+      "message_pattern": "No contexts were measured",
+      "examples": [
+        "CoverageWarning: No contexts were measured"
+      ],
+      "reason_deferred": "Coverage configuration - not using context tracking",
+      "impact": "None (coverage still works correctly)",
+      "fix_priority": "low",
+      "fix_estimate": "N/A (intentional - not using coverage contexts)",
+      "target_phase": "N/A",
+      "notes": "We're not using coverage contexts (dynamic_context feature) - this is expected"
+    },
+    "master_index_missing_docs": {
+      "count": 27,
+      "severity": "medium",
+      "source": "scripts/validate_docs.py",
+      "message_pattern": "MASTER_INDEX: Document exists but not in index",
+      "examples": [
+        "Document exists but not in MASTER_INDEX: docs/foundation/TESTING_STRATEGY_V2.0.md",
+        "Document exists but not in MASTER_INDEX: docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md",
+        "Document exists but not in MASTER_INDEX: docs/utility/GITHUB_BRANCH_PROTECTION_CONFIG.md"
+      ],
+      "reason_deferred": "Documentation inventory gap - MASTER_INDEX not updated after adding docs",
+      "impact": "Medium (docs discoverable via file system, not via index)",
+      "fix_priority": "medium",
+      "fix_estimate": "1 hour",
+      "target_phase": "1.5",
+      "notes": "Add 27 missing documents to MASTER_INDEX V2.11 for complete inventory"
+    },
+    "master_index_deleted_docs": {
+      "count": 11,
+      "severity": "medium",
+      "source": "scripts/validate_docs.py",
+      "message_pattern": "MASTER_INDEX: Document in index but does not exist",
+      "examples": [
+        "Document in MASTER_INDEX but does not exist: docs/foundation/MASTER_REQUIREMENTS_V2.8.md",
+        "Document in MASTER_INDEX but does not exist: docs/supplementary/ADVANCED_EXECUTION_SPEC_V1.0.md",
+        "Document in MASTER_INDEX but does not exist: docs/utility/PHASE_0.7_DEFERRED_TASKS_V1.0.md"
+      ],
+      "reason_deferred": "Stale index entries - documents renamed/moved but MASTER_INDEX not updated",
+      "impact": "Low (broken references, but current docs exist with new names)",
+      "fix_priority": "low",
+      "fix_estimate": "30 minutes",
+      "target_phase": "1.5",
+      "notes": "Remove 11 stale entries from MASTER_INDEX or update to current filenames"
+    },
+    "master_index_planned_docs": {
+      "count": 8,
+      "severity": "low",
+      "source": "scripts/validate_docs.py",
+      "message_pattern": "MASTER_INDEX: Planned document (Status: Planned)",
+      "examples": [
+        "Planned document in MASTER_INDEX: docs/foundation/PHASE_5_IMPLEMENTATION_PLAN.md",
+        "Planned document in MASTER_INDEX: docs/supplementary/WEBSOCKET_INTEGRATION_SPEC.md"
+      ],
+      "reason_deferred": "Expected - documents planned for future phases",
+      "impact": "None (intentional - roadmap planning)",
+      "fix_priority": "N/A",
+      "fix_estimate": "N/A (expected behavior)",
+      "target_phase": "N/A",
+      "notes": "These are intentionally planned docs for future phases - not a warning issue"
+    },
+    "adr_non_sequential_numbering": {
+      "count": 231,
+      "severity": "low",
+      "source": "scripts/validate_docs.py",
+      "message_pattern": "ADR gap detected",
+      "examples": [
+        "ADR gap detected: Expected ADR-006 but found ADR-012 in ARCHITECTURE_DECISIONS",
+        "ADR gap detected: Expected ADR-013 but found ADR-018 in ARCHITECTURE_DECISIONS"
+      ],
+      "reason_deferred": "Informational only - ADR numbers intentionally non-sequential due to reorganization",
+      "impact": "None (ADRs still valid and referenced correctly)",
+      "fix_priority": "informational",
+      "fix_estimate": "N/A (intentional numbering scheme)",
+      "target_phase": "N/A",
+      "notes": "ADR gaps are intentional - some numbers reserved for future decisions or removed during doc reorganization. Not a defect."
+    }
+  },
+  "deferred_fixes": [
+    {
+      "id": "WARN-001",
+      "title": "Fix ResourceWarning: unclosed file handles in logger tests",
+      "category": "resource_warning_unclosed_files",
+      "priority": "high",
+      "estimate": "1 hour",
+      "target_phase": "1.5",
+      "description": "13 tests create FileHandler objects that aren't explicitly closed, causing ResourceWarning",
+      "proposed_fix": "Add explicit handler.close() in test teardown or refactor setup_logging to use context manager",
+      "acceptance_criteria": "Zero ResourceWarnings in test output"
+    },
+    {
+      "id": "WARN-002",
+      "title": "Fix Hypothesis decimal precision warnings",
+      "category": "hypothesis_decimal_precision",
+      "priority": "medium",
+      "estimate": "2-3 hours",
+      "target_phase": "1.5",
+      "description": "19 warnings from Hypothesis property tests using float min/max values converted to Decimal",
+      "proposed_fix": "Use Decimal('0.1000') directly in decimals() strategy instead of float conversion",
+      "acceptance_criteria": "Zero Hypothesis deprecation warnings in test output"
+    },
+    {
+      "id": "WARN-003",
+      "title": "Remove format_exc_info processor from structlog chain",
+      "category": "structlog_format_exc_info",
+      "priority": "low",
+      "estimate": "15 minutes",
+      "target_phase": "1.5",
+      "description": "structlog suggests removing format_exc_info when using ConsoleRenderer",
+      "proposed_fix": "Remove structlog.processors.format_exc_info from shared_processors in utils/logger.py",
+      "acceptance_criteria": "Zero structlog UserWarnings in test output"
+    },
+    {
+      "id": "WARN-004",
+      "title": "Convert YAML float literals to string format",
+      "category": "yaml_float_literals",
+      "priority": "low",
+      "estimate": "2-3 hours",
+      "target_phase": "1.5",
+      "description": "111 float literals in YAML config files should be strings for safer Decimal conversion",
+      "proposed_fix": "Change float literals (kelly_fraction: 0.25) to strings (kelly_fraction: \"0.25\") across all 7 YAML files",
+      "acceptance_criteria": "Zero float literal warnings from validate_docs.py"
+    },
+    {
+      "id": "WARN-005",
+      "title": "Add missing documents to MASTER_INDEX",
+      "category": "master_index_missing_docs",
+      "priority": "medium",
+      "estimate": "1 hour",
+      "target_phase": "1.5",
+      "description": "27 documents exist but are not listed in MASTER_INDEX V2.11",
+      "proposed_fix": "Add all 27 missing documents to MASTER_INDEX with correct metadata (version, location, status, phase)",
+      "acceptance_criteria": "Zero 'Document exists but not in index' warnings from validate_docs.py"
+    },
+    {
+      "id": "WARN-006",
+      "title": "Remove stale entries from MASTER_INDEX",
+      "category": "master_index_deleted_docs",
+      "priority": "low",
+      "estimate": "30 minutes",
+      "target_phase": "1.5",
+      "description": "11 documents listed in MASTER_INDEX no longer exist (renamed or moved)",
+      "proposed_fix": "Remove stale entries or update to current filenames (e.g., MASTER_REQUIREMENTS_V2.8 → V2.10)",
+      "acceptance_criteria": "Zero 'Document in index but does not exist' warnings from validate_docs.py"
+    },
+    {
+      "id": "WARN-007",
+      "title": "Document ADR numbering scheme in ARCHITECTURE_DECISIONS",
+      "category": "adr_non_sequential_numbering",
+      "priority": "informational",
+      "estimate": "15 minutes",
+      "target_phase": "1.5",
+      "description": "231 ADR gap warnings due to intentional non-sequential numbering",
+      "proposed_fix": "Add note to ARCHITECTURE_DECISIONS header explaining ADR numbering scheme and intentional gaps",
+      "acceptance_criteria": "ADR numbering policy documented (warnings remain as informational)"
+    }
+  ],
+  "tracking": {
+    "last_measured": "2025-11-08T20:30:00Z",
+    "measurement_commands": {
+      "pytest_warnings": "python -m pytest tests/ -v -W default --tb=no",
+      "validate_docs_warnings": "python scripts/validate_docs.py",
+      "code_quality_ruff": "python -m ruff check .",
+      "code_quality_mypy": "python -m mypy ."
+    },
+    "test_count": 248,
+    "test_status": "248 passed, 8 skipped",
+    "warning_sources": {
+      "pytest": 41,
+      "validate_docs_yaml_floats": 111,
+      "validate_docs_master_index_missing": 27,
+      "validate_docs_master_index_deleted": 11,
+      "validate_docs_master_index_planned": 8,
+      "validate_docs_adr_non_sequential": 231,
+      "code_quality_ruff": 0,
+      "code_quality_mypy": 0,
+      "total": 429
+    },
+    "warning_breakdown": {
+      "actionable": 182,
+      "informational": 231,
+      "expected": 16,
+      "total": 429
+    }
+  },
+  "governance_policy": {
+    "max_warnings_allowed": 429,
+    "new_warning_policy": "fail",
+    "regression_tolerance": 0,
+    "notes": "Baseline established 2025-11-08 with warnings from THREE validation systems: (1) pytest test warnings (41), (2) validate_docs.py warnings (388 across 5 categories), (3) code quality (Ruff 0, Mypy 0). Total: 429 warnings. Breakdown: 182 actionable, 231 informational (ADR gaps), 16 expected (coverage, planned docs). No new actionable warnings allowed without explicit approval and baseline update. Multi-source governance enforces zero-regression policy across ALL validation tools."
+  }
+}

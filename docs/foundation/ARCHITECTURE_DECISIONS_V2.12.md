@@ -1,9 +1,16 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.11
-**Last Updated:** November 7, 2025
+**Version:** 2.12
+**Last Updated:** November 8, 2025
 **Status:** ✅ Current
+**Changes in v2.12:**
+- **MULTI-SOURCE WARNING GOVERNANCE:** Added Decision #75/ADR-075 (Multi-Source Warning Governance Architecture)
+- Establishes comprehensive governance across 3 validation sources: pytest (41 warnings), validate_docs (388 warnings), code quality tools (0 warnings)
+- Locks 429-warning baseline with zero-regression policy enforced via check_warning_debt.py
+- Classifies warnings: 182 actionable, 231 informational, 16 expected, 4 upstream dependencies
+- Addresses 90% blind spot from initial pytest-only governance (discovered 388 untracked warnings)
+- Complements Pattern 9 in CLAUDE.md V1.12 and WARNING_DEBT_TRACKER.md comprehensive tracking
 **Changes in v2.11:**
 - **PYTHON 3.14 COMPATIBILITY:** Added Decision #48/ADR-054 (Ruff Security Rules Instead of Bandit)
 - Replace Bandit with Ruff security scanning (--select S) due to Python 3.14 incompatibility
@@ -2244,6 +2251,241 @@ derandomize = false         # True for debugging (reproducible failures)
 - REQ-TEST-009: Property Testing - Core Trading Logic (Phase 1.5)
 - REQ-TEST-010: Property Testing - Data Validation & Models (Phase 2-4)
 - REQ-TEST-011: Property Testing - Position & Exit Management (Phase 5)
+
+---
+
+### ADR-075: Multi-Source Warning Governance Architecture
+
+**Decision #25**
+**Phase:** 0.7 / 1
+**Status:** ✅ Complete
+
+**Decision:** Implement comprehensive warning governance system that tracks warnings across THREE validation sources (pytest, validate_docs.py, code quality tools) with zero-regression enforcement policy.
+
+**Context:**
+
+Initial warning governance (Phase 0.7) only tracked pytest warnings, creating blind spots:
+- **Tracked:** 41 pytest warnings (Hypothesis, ResourceWarning, pytest-asyncio)
+- **MISSED:** 388 validate_docs warnings (YAML floats, MASTER_INDEX sync, ADR gaps)
+- **MISSED:** Code quality warnings (Ruff, Mypy)
+- **Total Blind Spot:** 388 warnings (90% of warnings untracked!)
+
+**Problem:** Warnings accumulate silently in untracked sources, eventually blocking development when discovered.
+
+**Three Warning Sources:**
+
+```
+Source 1: pytest Test Warnings (41 total)
+├── Hypothesis decimal precision (19)
+├── ResourceWarning unclosed files (13)
+├── pytest-asyncio deprecation (4)
+├── structlog UserWarning (1)
+└── Coverage context warning (1)
+
+Source 2: validate_docs.py Warnings (388 total)
+├── ADR non-sequential numbering (231) - Informational
+├── YAML float literals (111) - Actionable
+├── MASTER_INDEX missing docs (27) - Actionable
+├── MASTER_INDEX deleted docs (11) - Actionable
+└── MASTER_INDEX planned docs (8) - Expected
+
+Source 3: Code Quality (0 total)
+├── Ruff linting errors (0)
+└── Mypy type errors (0)
+
+**Total:** 429 warnings (182 actionable, 231 informational, 16 expected)
+```
+
+**Decision Components:**
+
+**1. Baseline Locking (`warning_baseline.json`)**
+```json
+{
+  "baseline_date": "2025-11-08",
+  "total_warnings": 429,
+  "warning_categories": {
+    "yaml_float_literals": {"count": 111, "severity": "low", "target_phase": "1.5"},
+    "hypothesis_decimal_precision": {"count": 19, "severity": "low", "target_phase": "1.5"},
+    "resource_warning_unclosed_files": {"count": 13, "severity": "medium", "target_phase": "1.5"},
+    "master_index_missing_docs": {"count": 27, "severity": "medium", "target_phase": "1.5"},
+    "master_index_deleted_docs": {"count": 11, "severity": "medium", "target_phase": "1.5"},
+    "master_index_planned_docs": {"count": 8, "severity": "low", "target_phase": "N/A"},
+    "adr_non_sequential_numbering": {"count": 231, "severity": "low", "target_phase": "N/A"}
+  },
+  "governance_policy": {
+    "max_warnings_allowed": 429,
+    "new_warning_policy": "fail",
+    "regression_tolerance": 0
+  }
+}
+```
+
+**2. Comprehensive Tracking (`WARNING_DEBT_TRACKER.md`)**
+- Documents all 429 warnings with categorization (actionable vs informational vs expected)
+- Tracks 7 deferred fixes (WARN-001 through WARN-007)
+- Provides fix priorities, estimates, target phases
+- Documents measurement commands for all sources
+
+**3. Automated Multi-Source Validation (`check_warning_debt.py`)**
+- Runs 4 validation tools automatically:
+  1. `pytest tests/ -W default` (pytest warnings)
+  2. `python scripts/validate_docs.py` (documentation warnings)
+  3. `python -m ruff check .` (linting errors)
+  4. `python -m mypy .` (type errors)
+- Compares total against baseline (429 warnings)
+- Fails if total exceeds baseline (prevents regression)
+- Provides detailed breakdown by source
+
+**Enforcement Mechanisms:**
+
+**Pre-Push Hooks:**
+```bash
+# .git/hooks/pre-push Step 4
+python scripts/check_warning_debt.py
+# → Blocks push if warnings exceed baseline
+```
+
+**CI/CD Pipeline:**
+```yaml
+# .github/workflows/ci.yml
+- name: Warning Governance
+  run: python scripts/check_warning_debt.py
+  # → Blocks merge if warnings exceed baseline
+```
+
+**Governance Policy:**
+
+1. **Baseline Locked:** 429 warnings (182 actionable) as of 2025-11-08
+2. **Zero Regression:** New actionable warnings → CI fails → Must fix before merge
+3. **Baseline Updates:** Require explicit approval + documentation in WARNING_DEBT_TRACKER.md
+4. **Phase Targets:** Each phase reduces actionable warnings by 20-30
+5. **Zero Goal:** Target 0 actionable warnings by Phase 2 completion
+
+**Warning Classification:**
+
+- **Actionable (182):** MUST be fixed eventually (YAML floats, unclosed files, MASTER_INDEX sync)
+  - High priority: 13 (ResourceWarning - file handle leaks)
+  - Medium priority: 84 (YAML + MASTER_INDEX sync)
+  - Low priority: 85 (Hypothesis + structlog)
+
+- **Informational (231):** Expected behavior (ADR gaps from intentional non-sequential numbering)
+  - No action needed (documented in ADR header)
+
+- **Expected (16):** Intentional (coverage contexts not used, planned docs)
+  - No action needed (working as designed)
+
+- **Upstream (4):** Dependency issues (pytest-asyncio Python 3.16 compat)
+  - Wait for upstream fix
+
+**Example Workflow:**
+
+```bash
+# Developer adds code that introduces new warning
+git add feature.py
+git commit -m "Add feature X"
+git push
+
+# Pre-push hooks detect regression
+# → check_warning_debt.py: [FAIL] 430/429 warnings (+1 new)
+# → Push blocked locally
+
+# Developer fixes warning
+# Fix code...
+
+# Re-push succeeds
+git push
+# → check_warning_debt.py: [OK] 429/429 warnings
+# → Push succeeds
+```
+
+**Rationale:**
+
+1. **Comprehensive Coverage:** Single-source tracking (pytest only) missed 90% of warnings
+2. **Early Detection:** Pre-push hooks catch regressions locally (30s vs 2-5min CI)
+3. **Zero Tolerance:** Locked baseline prevents warning accumulation
+4. **Actionable Tracking:** Classify warnings to focus on fixable issues
+5. **Phased Reduction:** Target zero actionable warnings by Phase 2 (realistic timeline)
+
+**Implementation:**
+
+**Files Created:**
+- `scripts/warning_baseline.json` - Locked baseline configuration
+- `scripts/check_warning_debt.py` - Multi-source validation script
+- `docs/utility/WARNING_DEBT_TRACKER.md` - Comprehensive warning documentation
+
+**Files Modified:**
+- `CLAUDE.md` - Added Pattern 9: Multi-Source Warning Governance
+- `.git/hooks/pre-push` - Added Step 4: warning debt check
+- `.github/workflows/ci.yml` - Added warning-governance job (future)
+
+**Impact:**
+
+**Immediate:**
+- 429 warnings now tracked across all sources
+- Zero-regression policy prevents new warnings
+- Developer feedback in 30s (pre-push) vs 2-5min (CI)
+
+**Phase 1.5 (Target: -60 warnings):**
+- Fix WARN-001: ResourceWarning (13) - High priority
+- Fix WARN-004: YAML float literals (111 → 20 after partial fix)
+- Fix WARN-005: MASTER_INDEX missing docs (27)
+- **New baseline:** 369 warnings
+
+**Phase 2 (Target: -182 warnings total):**
+- Fix all actionable warnings
+- **New baseline:** 247 warnings (informational + expected only)
+- **Achievement:** Zero actionable warnings 🎯
+
+**Lessons Learned:**
+
+**❌ What Went Wrong:**
+- Initial governance only tracked pytest warnings
+- Discovered 388 untracked warnings during comprehensive audit
+- Warning debt invisible until blocking development
+
+**✅ What Worked:**
+- Multi-source validation catches all warning sources
+- Automated validation prevents manual oversight
+- Classification (actionable vs informational) focuses effort
+- Phased reduction provides realistic timeline
+
+**Alternatives Considered:**
+
+**Alternative 1: Manual Tracking (Rejected)**
+- **Pro:** Simple, no tooling needed
+- **Con:** Human error, inconsistent, doesn't scale
+- **Why Rejected:** Already failed (missed 388 warnings)
+
+**Alternative 2: Separate Baselines per Source (Rejected)**
+- **Pro:** More granular control
+- **Con:** Complex, multiple files to maintain, harder to reason about total
+- **Why Rejected:** Single baseline simpler, total count is what matters
+
+**Alternative 3: Zero-Warning Policy (No Baseline) (Rejected)**
+- **Pro:** Cleanest approach
+- **Con:** Unrealistic with 429 existing warnings, blocks all work
+- **Why Rejected:** Phased approach more pragmatic
+
+**Success Metrics:**
+
+- ✅ All 429 warnings tracked comprehensively
+- ✅ Zero new warnings allowed (baseline locked)
+- ✅ Pre-push hooks prevent local regressions
+- ⏳ Phase 1.5: Reduce to 369 warnings (-60)
+- ⏳ Phase 2: Reduce to 247 warnings (-182 total)
+
+**Related ADRs:**
+- ADR-041: Testing Strategy Expansion (Phase 0.6c)
+- ADR-074: Property-Based Testing Strategy (validation infrastructure)
+
+**Related Requirements:**
+- REQ-VALIDATION-004: Documentation Validation System (validate_docs.py)
+- REQ-TEST-001: Unit Testing Standards (pytest warnings)
+
+**Related Documentation:**
+- Pattern 9 in CLAUDE.md: Multi-Source Warning Governance
+- docs/utility/WARNING_DEBT_TRACKER.md: Comprehensive warning tracking
+- scripts/warning_baseline.json: Baseline configuration
 
 ---
 

@@ -167,7 +167,7 @@ Core architecture, requirements, and system design documents.
 | **PROJECT_OVERVIEW_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.4** |
 | **MASTER_REQUIREMENTS_V2.11.md** | ✅ | v2.11 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.11** (Python 3.14 compatibility: Ruff security rules replace Bandit) |
 | **MASTER_INDEX_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.13** (Python 3.14 compatibility: Bandit → Ruff migration) |
-| **ARCHITECTURE_DECISIONS_V2.11.md** | ✅ | v2.11 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (53 total) - **UPDATED V2.11** (ADR-074: Property-Based Testing Strategy) |
+| **ARCHITECTURE_DECISIONS_V2.12.md** | ✅ | v2.12 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (75 total) - **UPDATED V2.12** (ADR-075: Multi-Source Warning Governance Architecture) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 114 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED** (added REQ-TEST-009, REQ-TEST-010, REQ-TEST-011) |
 | **ADR_INDEX_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (53 ADRs) - **UPDATED V1.6** (ADR-074 added for property-based testing POC) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
