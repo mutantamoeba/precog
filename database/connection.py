@@ -48,6 +48,10 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2 import extras, pool
 
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
+
 # Load environment variables from .env file
 load_dotenv()
 
@@ -86,7 +90,7 @@ def initialize_pool(
     global _connection_pool
 
     if _connection_pool is not None:
-        print("WARNING: Connection pool already initialized")
+        logger.warning("Connection pool already initialized")
         return _connection_pool
 
     # Use environment variables if parameters not provided
@@ -104,12 +108,12 @@ def initialize_pool(
         _connection_pool = pool.SimpleConnectionPool(
             minconn, maxconn, host=host, port=port, database=database, user=user, password=password
         )
-        print(f"[OK] Database connection pool initialized ({minconn}-{maxconn} connections)")
-        print(f"     Connected to: {user}@{host}:{port}/{database}")
+        logger.info(f"Database connection pool initialized ({minconn}-{maxconn} connections)")
+        logger.info(f"Connected to: {user}@{host}:{port}/{database}")
         return _connection_pool
 
     except psycopg2.Error as e:
-        print(f"[ERROR] Failed to initialize connection pool: {e}")
+        logger.error(f"Failed to initialize connection pool: {e}")
         raise
 
 
@@ -312,7 +316,7 @@ def close_pool():
     if _connection_pool is not None:
         _connection_pool.closeall()
         _connection_pool = None
-        print("[OK] Connection pool closed")
+        logger.info("Connection pool closed")
 
 
 def test_connection():
@@ -331,10 +335,10 @@ def test_connection():
             cur.execute("SELECT 1 as test")
             result = cur.fetchone()
             if result and result["test"] == 1:
-                print("[OK] Database connection test successful")
+                logger.info("Database connection test successful")
                 return True
     except Exception as e:
-        print(f"[ERROR] Database connection test failed: {e}")
+        logger.error(f"Database connection test failed: {e}")
         return False
 
     return False
@@ -344,5 +348,5 @@ def test_connection():
 try:
     initialize_pool()
 except Exception as e:
-    print(f"[WARNING] Connection pool not initialized on import: {e}")
-    print("          Call initialize_pool() manually with correct credentials")
+    logger.warning(f"Connection pool not initialized on import: {e}")
+    logger.warning("Call initialize_pool() manually with correct credentials")
