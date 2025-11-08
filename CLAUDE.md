@@ -515,7 +515,7 @@ Pre-push hooks are installed and run automatically on `git push`. They provide a
 - **All pre-commit checks** (runs again on entire codebase)
 - **Unit tests** (fast tests only - config_loader, logger)
 - **Full type checking** (entire codebase, not just changed files)
-- **Deep security scan** (Bandit for comprehensive checks)
+- **Deep security scan** (Ruff security rules - Python 3.14 compatible)
 - **Slower but thorough** (~30-60 seconds)
 
 ```bash
@@ -525,7 +525,7 @@ git push origin main
 # → Step 1: Quick validation (Ruff + docs)
 # → Step 2: Fast unit tests
 # → Step 3: Full type checking (Mypy)
-# → Step 4: Security scan (Bandit)
+# → Step 4: Security scan (Ruff security rules)
 
 # Bypass hooks (EMERGENCY ONLY - NOT RECOMMENDED)
 git push --no-verify
@@ -535,7 +535,7 @@ git push --no-verify
 1. 📋 **Quick validation** - validate_quick.sh (Ruff, docs, ~3 sec)
 2. 🧪 **Unit tests** - pytest test_config_loader.py test_logger.py (~10 sec)
 3. 🔍 **Full type checking** - mypy on entire codebase (~5 sec)
-4. 🔒 **Security scan** - bandit deep scan (~5 sec)
+4. 🔒 **Security scan** - Ruff security rules (--select S, ~5 sec)
 
 **Why pre-push in addition to pre-commit?**
 - **Catches test failures** before CI (pre-commit doesn't run tests)
