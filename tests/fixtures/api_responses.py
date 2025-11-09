@@ -256,7 +256,7 @@ DECIMAL_ARITHMETIC_TESTS = [
         "entry_price": Decimal("0.6100"),
         "exit_price": Decimal("0.6500"),
         "quantity": 100,
-        "expected_result": Decimal("40.0000"),  # (0.6500 - 0.6100) * 100
+        "expected_result": Decimal("4.0000"),  # (0.6500 - 0.6100) * 100 = 0.04 * 100
     },
     {
         "operation": "edge",
