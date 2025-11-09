@@ -122,6 +122,8 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "tests/**/*.py" = ["S101", "ARG002"]
 # Allow print statements in scripts
 "scripts/**/*.py" = ["T201"]
+# Allow regex patterns in security validation script (not actual hardcoded passwords)
+"scripts/validate_security_patterns.py" = ["S105"]
 
 [tool.ruff.format]
 # Use double quotes for strings
