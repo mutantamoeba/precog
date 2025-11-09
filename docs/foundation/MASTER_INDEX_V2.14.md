@@ -1,9 +1,15 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.13
-**Last Updated:** 2025-11-07
+**Version:** 2.14
+**Last Updated:** 2025-11-08
 **Status:** ✅ Current
+**Changes in v2.14:**
+- **PHASE 1.5 PROPERTY TESTING COMPLETE**: 40 property tests implemented (114% of 35-test target)
+- Added PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md (comprehensive roadmap for 74-91 additional property tests across Phases 1.5-4)
+- Created tests/property/test_config_validation_properties.py (14 tests: Kelly fraction, edge thresholds, fees, loss/profit targets, correlation, Decimal conversion)
+- Fixed ConfigLoader bug: Added 9 missing keys to Decimal conversion (default_fraction, min_edge_threshold, min_position_dollars, etc.)
+- Phase 1.5 property testing status: Kelly Criterion (11 tests ✅), Edge Detection (15 tests ✅), Configuration Validation (14 tests ✅)
 **Changes in v2.13:**
 - **PYTHON 3.14 COMPATIBILITY**: Migrated from Bandit to Ruff security rules (--select S) for security scanning
 - Added ADR-054 (Ruff Security Rules Instead of Bandit) to ARCHITECTURE_DECISIONS_V2.10 → V2.11
@@ -166,7 +172,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.4** |
 | **MASTER_REQUIREMENTS_V2.11.md** | ✅ | v2.11 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.11** (Python 3.14 compatibility: Ruff security rules replace Bandit) |
-| **MASTER_INDEX_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.13** (Python 3.14 compatibility: Bandit → Ruff migration) |
+| **MASTER_INDEX_V2.14.md** | ✅ | v2.14 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.14** (Phase 1.5 property testing complete: 40 tests, deferred test roadmap) |
 | **ARCHITECTURE_DECISIONS_V2.12.md** | ✅ | v2.12 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (75 total) - **UPDATED V2.12** (ADR-075: Multi-Source Warning Governance Architecture) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 114 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED** (added REQ-TEST-009, REQ-TEST-010, REQ-TEST-011) |
 | **ADR_INDEX_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (53 ADRs) - **UPDATED V1.6** (ADR-074 added for property-based testing POC) |
@@ -242,6 +248,7 @@ Test specifications, validation protocols, and quality assurance.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |
 | **PHASE_1_TEST_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1 | Phase 1 | 🟡 High | **NEW** - Comprehensive test plan for Phase 1 (database, API, CLI) with test cases, fixtures, and success criteria |
+| **HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🟡 High | **NEW** - Property-based testing strategy with Hypothesis framework (3 test suites: Kelly Criterion, Edge Detection, Configuration Validation; 35+ tests implemented) |
 | **MODEL_VALIDATION_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4 ✅ | 🟡 High | Elo vs. research, backtesting benchmarks |
 | **BACKTESTING_PROTOCOL_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4-5 ✅ | 🟡 High | Walk-forward validation, train/test splits |
 
@@ -289,6 +296,7 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **PHASE_0.7_DEFERRED_TASKS_V1.3.md** | ✅ | v1.3 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **PHASE 0.7 COMPLETE** - All 8/8 tasks complete (DEF-001 through DEF-008: pre-commit, pre-push, branch protection, schema validation, all hooks) - **UPDATED V1.3** (fixed Bandit→Ruff documentation references) |
 | **GITHUB_BRANCH_PROTECTION_CONFIG.md** | ✅ | v1.0 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **NEW** - Complete GitHub branch protection configuration (completes DEF-003) |
 | **PHASE_1_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1 | 🟡 High | **NEW** - Tracks deferred enhancements from Phase 1 (extended docstrings, pre-commit hooks, branch protection) |
+| **PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 1.5-4 | 🟡 High | **NEW** - Comprehensive property-based testing roadmap (74-91 tests deferred to Phases 1.5-4: database CRUD, strategy versioning, position lifecycle, async handling, ensemble predictions) |
 | **ENVIRONMENT_CHECKLIST_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0 | Phase 0 ✅ | 🔴 Critical | Windows 11 setup, Parts 1-7, dependencies verification (**FIXED** filename from V1.1 → V1.0) |
 | **CONSISTENCY_REVIEW.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Phase 0 consistency validation, all discrepancies fixed |
 | **FILENAME_VERSION_REPORT.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Filename-version consistency validation |
