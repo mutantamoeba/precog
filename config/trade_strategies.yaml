@@ -7,7 +7,7 @@
 # Think of these as different "trading playbooks" - you use different
 # plays depending on the situation.
 #
-# Version: 2.0 (Phase 0.5 - Added Versioning Support)
+# Version: "2.0" (Phase 0.5 - Added Versioning Support)
 # Last Updated: 2025-10-21
 # ============================================
 
@@ -104,15 +104,15 @@ versioning:
     # Example: v1.0 (70%) vs v1.1 (30%)
     # WHY: Strategies affect capital allocation, more conservative split
     default_traffic_split:
-      existing_version: 0.70  # 70% of capital
-      new_version: 0.30       # 30% of capital
+      existing_version: "0.70"  # 70% of capital
+      new_version: "0.30"       # 30% of capital
 
     # Evaluation criteria for promotion
     # WHY: Need objective criteria to promote v1.1 → ACTIVE
     promotion_criteria:
-      min_improvement_pct: 0.05  # 5% better Sharpe ratio
+      min_improvement_pct: "0.05"  # 5% better Sharpe ratio
       min_evaluation_period_days: 60
-      confidence_level: 0.95  # 95% statistical significance
+      confidence_level: "0.95"  # 95% statistical significance
       min_trade_count: 50  # Need enough trades for significance
 
     # Performance metrics for comparison
@@ -162,8 +162,8 @@ pre_game_entry:
   # How early before game start can we trade?
   # WHY: Too early = risk lineup changes, weather changes
   #      Too late = market might have moved, edge gone
-  min_hours_before_game: 0.5   # 30 minutes minimum
-  max_hours_before_game: 24.0  # 24 hours maximum
+  min_hours_before_game: "0.5"   # 30 minutes minimum
+  max_hours_before_game: "24.0"  # 24 hours maximum
 
   # Sports-specific configuration
   sports_config:
@@ -172,7 +172,7 @@ pre_game_entry:
 
       # Confidence thresholds
       # WHY: Pre-game has more uncertainty, so require higher edge
-      required_confidence: 0.08  # 8% minimum edge
+      required_confidence: "0.08"  # 8% minimum edge
 
       # Which markets to trade pre-game?
       # Different markets have different pre-game predictability
@@ -191,12 +191,12 @@ pre_game_entry:
       # Weather requirements (for outdoor games)
       weather_limits:
         max_wind_mph: 20         # High wind affects passing
-        max_precipitation: 0.3   # Heavy rain affects scoring
+        max_precipitation: "0.3"   # Heavy rain affects scoring
         exclude_snow: true       # Snow games are chaotic
 
     nba:
       enabled: true
-      required_confidence: 0.10  # 10% (NBA harder to predict pre-game)
+      required_confidence: "0.10"  # 10% (NBA harder to predict pre-game)
       allowed_markets:
         - "game_winner"
         - "total_points"
@@ -206,7 +206,7 @@ pre_game_entry:
 
     mlb:
       enabled: false  # Start with NFL/NBA first
-      required_confidence: 0.12
+      required_confidence: "0.12"
       allowed_markets:
         - "game_winner"
       # Baseball is very pitcher-dependent
@@ -256,7 +256,7 @@ halftime_entry:
 
       # Edge requirements
       # WHY: Halftime has good data, can be more confident
-      required_confidence: 0.06  # 6% minimum edge
+      required_confidence: "0.06"  # 6% minimum edge
 
       # Which second-half markets to trade?
       allowed_markets:
@@ -270,10 +270,10 @@ halftime_entry:
       analysis_factors:
         # Possession stats matter more than score
         # Example: Losing 7-3 but dominating possession = good bet
-        weight_possession_yardage: 0.4
-        weight_score_differential: 0.2
-        weight_turnover_margin: 0.2
-        weight_time_of_possession: 0.2
+        weight_possession_yardage: "0.4"
+        weight_score_differential: "0.2"
+        weight_turnover_margin: "0.2"
+        weight_time_of_possession: "0.2"
 
         # Adjustments for game context
         # WHY: Being down big at half can cause teams to play
@@ -294,7 +294,7 @@ halftime_entry:
 
     nba:
       enabled: true
-      required_confidence: 0.07
+      required_confidence: "0.07"
       allowed_markets:
         - "second_half_winner"
         - "second_half_total"
@@ -302,10 +302,10 @@ halftime_entry:
 
       analysis_factors:
         # Basketball more about efficiency than volume
-        weight_shooting_percentage: 0.3
-        weight_turnover_margin: 0.25
-        weight_rebounding: 0.25
-        weight_free_throws: 0.20
+        weight_shooting_percentage: "0.3"
+        weight_turnover_margin: "0.25"
+        weight_rebounding: "0.25"
+        weight_free_throws: "0.20"
 
         blowout_threshold: 20
         close_game_threshold: 10
@@ -347,7 +347,7 @@ live_trading:
 
   # Minimum edge required (higher than pre-game)
   # WHY: Live trading is riskier, need bigger edge to compensate
-  min_edge_live: 0.10  # 10% minimum
+  min_edge_live: "0.10"  # 10% minimum
 
   sports_config:
     nfl:
@@ -372,16 +372,16 @@ live_trading:
           # Market overreacts to scores in last 2 min
           # Example: Down 7 with 1 min left, TD makes it tied
           # Market might overvalue the scoring team
-          weight_recent_score: 0.5
-          weight_timeouts_remaining: 0.3
-          weight_field_position: 0.2
+          weight_recent_score: "0.5"
+          weight_timeouts_remaining: "0.3"
+          weight_field_position: "0.2"
 
         # Early game situations (first quarter)
         early_game:
           # Market overreacts to early scores
           # WHY: One TD in Q1 doesn't mean much, but market
           # adjusts as if it's a big deal
-          discount_early_score: 0.7  # Treat scores as 70% weight
+          discount_early_score: "0.7"  # Treat scores as 70% weight
 
     nba:
       enabled: false  # Phase 3+
@@ -427,17 +427,17 @@ settlement_arbitrage:
 
   # Requirements for this strategy
   # WHY: Only trade when outcome is VERY certain
-  min_win_probability: 0.98  # 98% or higher
+  min_win_probability: "0.98"  # 98% or higher
   max_time_remaining_seconds: 120  # 2 minutes or less
 
   # Edge requirements
   # WHY: Edges are small but wins are nearly certain
-  min_edge: 0.02  # 2% minimum (lower than other strategies)
+  min_edge: "0.02"  # 2% minimum (lower than other strategies)
 
   # Position sizing override
   # WHY: These are nearly risk-free, so can size bigger
-  kelly_fraction_override: 0.50  # Half Kelly (vs 0.25 default)
-  max_position_override: 1000.00  # $1000 max (vs $500 default)
+  kelly_fraction_override: "0.50"  # Half Kelly (vs 0.25 default)
+  max_position_override: "1000.00"  # $1000 max (vs $500 default)
 
   sports_config:
     nfl:
@@ -499,17 +499,17 @@ hedge_strategy:
   hedge_triggers:
     # Hedge if position has gained this much
     # Example: $100 bet now worth $150 → 50% gain
-    min_unrealized_gain_pct: 0.40  # 40% unrealized gain
+    min_unrealized_gain_pct: "0.40"  # 40% unrealized gain
 
     # Hedge if edge has flipped this much
     # Example: Entered at 8% edge, now -5% edge (13% flip)
-    edge_flip_threshold: 0.10  # 10% edge flip
+    edge_flip_threshold: "0.10"  # 10% edge flip
 
     # Hedge if approaching settlement and protecting profit
     near_settlement:
       enabled: true
       time_remaining_minutes: 5
-      min_unrealized_gain_dollars: 50.00
+      min_unrealized_gain_dollars: "50.00"
 
   # How much to hedge?
   # Options:
@@ -521,7 +521,7 @@ hedge_strategy:
   partial_lock:
     # What percentage of profit to lock in?
     # Example: $100 profit available, 70% lock = $70 guaranteed
-    profit_lock_percentage: 0.70  # Lock in 70% of profit
+    profit_lock_percentage: "0.70"  # Lock in 70% of profit
 
 # ============================================
 # STRATEGY COMBINATIONS
@@ -545,7 +545,7 @@ combination_rules:
 
   # Maximum correlation between positions
   # WHY: "Team A wins" and "Team A scores 30+" are highly correlated
-  max_position_correlation: 0.7
+  max_position_correlation: "0.7"
 
 # ============================================
 # STRATEGY SELECTION LOGIC
@@ -564,7 +564,7 @@ selection_logic:
 
   # If using 'best_edge' or 'best_sharpe', minimum difference to switch
   # WHY: If edges are 8.0% and 8.1%, don't bother switching strategies
-  min_edge_difference: 0.02  # 2% difference required
+  min_edge_difference: "0.02"  # 2% difference required
 
 # ============================================
 # BACKTESTING PARAMETERS
@@ -584,17 +584,17 @@ backtesting:
     - settlement_arbitrage
 
   # Simulation parameters
-  starting_bankroll: 10000.00
+  starting_bankroll: "10000.00"
 
   # Transaction costs
   # WHY: Backtests without costs are too optimistic
   include_transaction_costs: true
-  transaction_cost_pct: 0.01  # 1% per trade (maker rebate on Kalshi)
+  transaction_cost_pct: "0.01"  # 1% per trade (maker rebate on Kalshi)
 
   # Slippage simulation
   # WHY: You don't always get the price you see
   simulate_slippage: true
-  average_slippage_pct: 0.005  # 0.5% average slippage
+  average_slippage_pct: "0.005"  # 0.5% average slippage
 
 # ============================================
 # VALIDATION PARAMETERS
@@ -617,7 +617,7 @@ validation:
   alert_on_miscalibration:
     enabled: true
     # Alert if actual win rate deviates too much
-    max_deviation_pct: 0.10  # 10% deviation
+    max_deviation_pct: "0.10"  # 10% deviation
     min_sample_size: 20  # Need 20 trades before alerting
 
 # ============================================

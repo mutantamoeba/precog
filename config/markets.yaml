@@ -1,5 +1,5 @@
 # markets.yaml - Market Filtering and Platform Configuration
-# Version: 1.0
+# Version: "1.0"
 # Created: 2025-10-09 (Session 6)
 # Project: Precog
 #
@@ -39,13 +39,13 @@ platforms:
 
     # Rate Limiting
     rate_limit_per_minute: 100
-    rate_limit_buffer: 0.8  # Use 80% of limit for safety
+    rate_limit_buffer: "0.8"  # Use 80% of limit for safety
 
     # Transaction Costs
     fees:
-      maker_fee_percent: 0.00  # Maker rebate (paid to you)
-      taker_fee_percent: 0.07  # 7% on winnings
-      withdrawal_fee: 0.00
+      maker_fee_percent: "0.00"  # Maker rebate (paid to you)
+      taker_fee_percent: "0.07"  # 7% on winnings
+      withdrawal_fee: "0.00"
 
     # Market Categories on Kalshi
     categories:
@@ -61,12 +61,12 @@ platforms:
             # Market filtering
             filter_method: "series_ticker"
             min_liquidity: 100  # Minimum volume in dollars
-            max_spread: 0.05    # Max 5% spread (Type: Decimal)
+            max_spread: "0.05"    # Max 5% spread (Type: Decimal)
             include_futures: false    # Don't trade season futures yet
             include_props: false      # Don't trade player props yet
             # Sport-specific settings (override trade_strategies.yaml)
-            kelly_fraction: 0.25      # 25% of full Kelly
-            min_edge: 0.05            # 5% minimum edge
+            kelly_fraction: "0.25"      # 25% of full Kelly
+            min_edge: "0.05"            # 5% minimum edge
 
           # NCAAF (Phase 1-2)
           ncaaf:
@@ -75,10 +75,10 @@ platforms:
               - "KXNCAAFGAME"
             filter_method: "series_ticker"
             min_liquidity: 50   # Lower threshold for college
-            max_spread: 0.06    # Slightly wider spreads acceptable
+            max_spread: "0.06"    # Slightly wider spreads acceptable
             include_futures: false
-            kelly_fraction: 0.20      # More conservative (20%)
-            min_edge: 0.06            # Higher edge required (6%)
+            kelly_fraction: "0.20"      # More conservative (20%)
+            min_edge: "0.06"            # Higher edge required (6%)
 
           # NBA (Phase 6)
           nba:
@@ -87,11 +87,11 @@ platforms:
               - "KXNBAGAME"
             filter_method: "series_ticker"
             min_liquidity: 100
-            max_spread: 0.05
+            max_spread: "0.05"
             include_futures: false
             include_props: false
-            kelly_fraction: 0.22
-            min_edge: 0.05
+            kelly_fraction: "0.22"
+            min_edge: "0.05"
 
           # MLB (Phase 6)
           mlb:
@@ -100,9 +100,9 @@ platforms:
               - "KXMLBGAME"
             filter_method: "series_ticker"
             min_liquidity: 75
-            max_spread: 0.05
-            kelly_fraction: 0.20
-            min_edge: 0.06
+            max_spread: "0.05"
+            kelly_fraction: "0.20"
+            min_edge: "0.06"
 
           # Tennis (Phase 6)
           tennis:
@@ -111,9 +111,9 @@ platforms:
               - "KXTENNISGAME"  # TBD - need to verify actual ticker
             filter_method: "series_ticker"
             min_liquidity: 50
-            max_spread: 0.07    # Tennis can have wider spreads
-            kelly_fraction: 0.18      # More volatile (18%)
-            min_edge: 0.07            # Higher edge required (7%)
+            max_spread: "0.07"    # Tennis can have wider spreads
+            kelly_fraction: "0.18"      # More volatile (18%)
+            min_edge: "0.07"            # Higher edge required (7%)
 
       # Political Markets (Phase 8)
       politics:
@@ -123,9 +123,9 @@ platforms:
           - "politics"
           - "elections"
         min_liquidity: 200      # Politics needs more liquidity
-        max_spread: 0.04        # Tighter spreads (4%)
-        kelly_fraction: 0.15    # Very conservative (15%)
-        min_edge: 0.08          # High edge required (8%)
+        max_spread: "0.04"        # Tighter spreads (4%)
+        kelly_fraction: "0.15"    # Very conservative (15%)
+        min_edge: "0.08"          # High edge required (8%)
         subcategories:
           elections:
             enabled: false
@@ -144,9 +144,9 @@ platforms:
           - "entertainment"
           - "culture"
         min_liquidity: 100
-        max_spread: 0.06
-        kelly_fraction: 0.18
-        min_edge: 0.07
+        max_spread: "0.06"
+        kelly_fraction: "0.18"
+        min_edge: "0.07"
         subcategories:
           boxoffice:
             enabled: false
@@ -163,9 +163,9 @@ platforms:
           - "economics"
           - "finance"
         min_liquidity: 200
-        max_spread: 0.04
-        kelly_fraction: 0.15
-        min_edge: 0.08
+        max_spread: "0.04"
+        kelly_fraction: "0.15"
+        min_edge: "0.08"
 
   # Polymarket (Phase 10)
   polymarket:
@@ -194,7 +194,7 @@ platforms:
     # Transaction Costs (blockchain)
     fees:
       gas_price_gwei: 30       # Polygon gas price
-      protocol_fee_percent: 0.02  # 2% protocol fee
+      protocol_fee_percent: "0.02"  # 2% protocol fee
 
     # Polymarket doesn't use series tickers like Kalshi
     # Uses market IDs and condition IDs
@@ -202,23 +202,23 @@ platforms:
       crypto:
         enabled: false
         min_liquidity: 1000  # In USDC
-        max_spread: 0.05
-        kelly_fraction: 0.20
-        min_edge: 0.06
+        max_spread: "0.05"
+        kelly_fraction: "0.20"
+        min_edge: "0.06"
 
       politics:
         enabled: false
         min_liquidity: 5000
-        max_spread: 0.03
-        kelly_fraction: 0.15
-        min_edge: 0.08
+        max_spread: "0.03"
+        kelly_fraction: "0.15"
+        min_edge: "0.08"
 
       sports:
         enabled: false
         min_liquidity: 1000
-        max_spread: 0.05
-        kelly_fraction: 0.25
-        min_edge: 0.05
+        max_spread: "0.05"
+        kelly_fraction: "0.25"
+        min_edge: "0.05"
 
 #=============================================================================
 # GLOBAL MARKET FILTERS
@@ -260,7 +260,7 @@ global_filters:
 
   # Risk Filters
   risk:
-    max_implied_volatility: 0.50   # Skip highly volatile markets
+    max_implied_volatility: "0.50"   # Skip highly volatile markets
     min_market_age_hours: 1        # Skip brand new markets
     exclude_controversial: false    # Flag for sensitive topics
 
@@ -298,8 +298,8 @@ watchlists:
 
   # Alert on changes
   alerts:
-    price_move_percent: 0.05       # Alert on 5%+ price move
-    volume_spike: 2.0              # Alert on 2x normal volume
+    price_move_percent: "0.05"       # Alert on 5%+ price move
+    volume_spike: "2.0"              # Alert on 2x normal volume
 
 #=============================================================================
 # BLACKLIST
@@ -340,9 +340,9 @@ prioritization:
 
   # Composite scoring (if sort_by: composite)
   weights:
-    edge_weight: 0.50              # 50% weight on edge size
-    liquidity_weight: 0.25         # 25% weight on liquidity
-    confidence_weight: 0.25        # 25% weight on confidence
+    edge_weight: "0.50"              # 50% weight on edge size
+    liquidity_weight: "0.25"         # 25% weight on liquidity
+    confidence_weight: "0.25"        # 25% weight on confidence
 
   # Limits
   max_simultaneous_markets: 20    # Don't spread too thin
@@ -358,15 +358,15 @@ special_events:
   playoffs:
     enabled: false
     multipliers:
-      min_liquidity: 2.0           # 2x normal liquidity requirement
-      kelly_fraction: 0.5          # Half of normal Kelly (more conservative)
+      min_liquidity: "2.0"           # 2x normal liquidity requirement
+      kelly_fraction: "0.5"          # Half of normal Kelly (more conservative)
 
   championships:
     enabled: false
     multipliers:
-      min_liquidity: 3.0
-      kelly_fraction: 0.3
-      min_edge: 1.5                # 1.5x normal edge requirement
+      min_liquidity: "3.0"
+      kelly_fraction: "0.3"
+      min_edge: "1.5"                # 1.5x normal edge requirement
 
 #=============================================================================
 # NOTES

@@ -191,6 +191,8 @@ def setup_logging(
         log_file = None
 
     # Configure standard library logging (required for structlog)
+    # force=True: Clear existing handlers to prevent ResourceWarnings when
+    # setup_logging() is called multiple times (e.g., in tests)
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         format="%(message)s",
@@ -200,6 +202,7 @@ def setup_logging(
             # File handler (if enabled)
             *([logging.FileHandler(log_file, mode="a", encoding="utf-8")] if log_file else []),
         ],
+        force=True,  # Clear old handlers before adding new ones
     )
 
     # Configure structlog processors

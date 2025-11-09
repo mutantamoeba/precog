@@ -1,10 +1,16 @@
 # Security Review Checklist
 
 ---
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-10-28
+**Last Updated:** 2025-11-09
 **Status:** ✅ Active
-**Purpose:** Ensure no sensitive data is committed to version control
+**Purpose:** Comprehensive security review covering credentials, API security, data protection, compliance, and incident response
+**Changes in V1.1:**
+- Added API Security section (authentication, authorization, rate limiting)
+- Added Data Protection section (encryption, PII handling)
+- Added Compliance section (GDPR, PCI-DSS per REQ-SEC-009)
+- Added Incident Response section (logging, alerting, breach procedures)
 ---
 
 ## Document Purpose
@@ -443,6 +449,296 @@ git commit -m "Fixed login, password is abc123"
 
 ---
 
+## API Security
+
+**Purpose:** Ensure API integrations are secure and cannot be exploited.
+
+### Authentication & Authorization
+- [ ] **Kalshi API authentication implemented** (ADR-047)
+  - RSA-PSS signature authentication
+  - Private key stored securely (environment variable or secrets manager)
+  - No API keys in code or logs
+- [ ] **ESPN API authentication** (if implemented)
+  - API key in headers only
+  - API key loaded from environment variable
+- [ ] **Internal API authentication** (Phase 5+)
+  - API keys or OAuth tokens required
+  - No anonymous access allowed
+  - Token rotation policy defined
+
+### Authorization
+- [ ] **Role-based access control** (Phase 7+)
+  - Admin, trader, readonly roles defined
+  - Least privilege principle enforced
+  - Unauthorized actions blocked
+- [ ] **API endpoint protection**
+  - Sensitive endpoints require authentication
+  - Input validation on all endpoints
+  - Output sanitization (no sensitive data leaked)
+
+### Rate Limiting
+- [ ] **Rate limiting implemented**
+  - Kalshi: 100 req/min token bucket (ADR-048)
+  - Internal APIs: Appropriate limits set
+  - Rate limit headers checked
+- [ ] **Rate limit monitoring**
+  - Current usage tracked
+  - Alert when approaching limit (>80%)
+  - Graceful degradation when limit hit
+- [ ] **Abuse prevention**
+  - IP-based rate limiting (if applicable)
+  - Account-based rate limiting
+  - Circuit breakers on repeated failures
+
+### API Security Testing
+- [ ] **SQL injection prevented**
+  - All queries use parameterized statements
+  - No string concatenation in queries
+  - Example: `cur.execute("SELECT * FROM users WHERE id = %s", (user_id,))`
+- [ ] **Command injection prevented**
+  - No user input passed to shell commands
+  - If necessary, use subprocess with list arguments (not shell=True)
+- [ ] **Path traversal prevented**
+  - File paths validated (no `../` allowed)
+  - Whitelisted paths only
+- [ ] **XML/JSON parsing attacks prevented**
+  - JSON parsing: Use standard library json module
+  - No eval() on user input
+  - Schema validation on API inputs
+
+---
+
+## Data Protection
+
+**Purpose:** Ensure sensitive data is encrypted and handled securely.
+
+### Encryption at Rest
+- [ ] **Database encryption** (Production - Phase 7+)
+  - Sensitive columns encrypted (API keys, PII if stored)
+  - Encryption key stored in secrets manager
+  - Key rotation policy defined
+- [ ] **File system encryption** (Production)
+  - Disk encryption enabled (LUKS, BitLocker, dm-crypt)
+  - Backup encryption enabled
+- [ ] **Secrets encryption**
+  - Secrets stored in AWS Secrets Manager, Azure Key Vault, or HashiCorp Vault
+  - No plaintext secrets in production
+
+### Encryption in Transit
+- [ ] **HTTPS enforced**
+  - All HTTP traffic redirected to HTTPS
+  - Valid SSL/TLS certificates
+  - TLS 1.2+ only (no TLS 1.0/1.1)
+- [ ] **API calls encrypted**
+  - Kalshi API: HTTPS only
+  - ESPN API: HTTPS only
+  - Database connections: SSL/TLS enabled
+- [ ] **WebSocket encryption** (Phase 3+)
+  - WSS (WebSocket Secure) only
+  - No WS (plain WebSocket)
+
+### PII Handling (ADR-072: Privacy-Preserving Logging)
+- [ ] **PII identification**
+  - PII defined: Email, phone, name, address, SSN, etc.
+  - PII fields identified in database schema
+  - PII fields documented
+- [ ] **PII minimization**
+  - Only collect PII if necessary
+  - Delete PII when no longer needed
+  - Anonymize/pseudonymize where possible
+- [ ] **PII in logs masked**
+  - Email addresses masked: `user@example.com` → `u***@e***.com`
+  - Phone numbers masked: `555-1234` → `***-***4`
+  - No full PII in log files
+- [ ] **PII access controlled**
+  - Database: Separate readonly user without PII access
+  - Application: PII fields encrypted
+  - Logs: PII redacted before logging
+
+### Sensitive Data Inventory
+- [ ] **Financial data protected**
+  - Prices stored as DECIMAL (Pattern 1 in CLAUDE.md)
+  - Account balances encrypted if stored
+  - Transaction history access controlled
+- [ ] **Credentials protected**
+  - API keys never logged
+  - Database passwords never logged
+  - OAuth tokens encrypted in database
+- [ ] **Trading data protected**
+  - Position data access controlled
+  - Strategy configurations encrypted
+  - Model weights encrypted
+
+---
+
+## Compliance
+
+**Purpose:** Ensure regulatory compliance (GDPR, PCI-DSS, SOC 2).
+
+### GDPR Compliance (if handling EU user data)
+- [ ] **Data retention policy documented** (REQ-COMP-003)
+  - Retention periods defined: Trades (7 years), Logs (90 days), etc.
+  - Automatic deletion after retention period
+  - User data deletion on request
+- [ ] **Right to erasure implemented**
+  - User data deletion API endpoint
+  - Data purged from backups
+  - Third-party data processors notified
+- [ ] **Data portability implemented**
+  - User can export their data (JSON format)
+  - Export includes all personal data
+  - Export available within 30 days of request
+- [ ] **Consent management**
+  - User consent recorded for data processing
+  - Consent can be withdrawn
+  - Processing stops after withdrawal
+- [ ] **Data processing agreements**
+  - DPAs with third parties (Kalshi, ESPN, etc.)
+  - Subprocessor list maintained
+  - Transfer mechanisms documented (Standard Contractual Clauses, etc.)
+- [ ] **GDPR documentation**
+  - Privacy policy published
+  - Data protection impact assessment (DPIA) completed
+  - Records of processing activities (ROPA) maintained
+
+### PCI-DSS Compliance (if handling payment card data)
+- [ ] **Cardholder data not stored**
+  - No storage of full PAN (Primary Account Number)
+  - No storage of CVV/CVC
+  - No storage of magnetic stripe data
+- [ ] **Payment gateway integration**
+  - Use Stripe, PayPal, or certified payment gateway
+  - Tokenization for recurring payments
+  - No direct handling of card data
+- [ ] **PCI audit completed** (Production)
+  - Annual PCI DSS audit or SAQ (Self-Assessment Questionnaire)
+  - Remediation of any findings
+  - Compliance certificate obtained
+- [ ] **Network segmentation** (Production)
+  - Payment systems isolated from other systems
+  - Firewall rules restrict access
+  - Regular penetration testing
+
+### SOC 2 Compliance (if required)
+- [ ] **Security controls documented**
+  - Access control policies
+  - Encryption policies
+  - Incident response procedures
+  - Change management procedures
+- [ ] **Control effectiveness monitored**
+  - Quarterly control testing
+  - Remediation of control failures
+  - Evidence collection automated
+- [ ] **Annual SOC 2 audit** (Production)
+  - Type I or Type II audit
+  - Audit report distributed to customers
+  - Remediation of audit findings
+
+### Audit Trail Requirements (REQ-COMP-003)
+- [ ] **Database audit trail**
+  - SCD Type 2 history preserved (row_start_ts, row_end_ts)
+  - All changes logged with user/timestamp
+  - Audit log retention: 7 years
+- [ ] **Application audit trail**
+  - All trades logged with full context (strategy, model, price, timestamp)
+  - All configuration changes logged
+  - All user actions logged (login, logout, commands)
+- [ ] **Infrastructure audit trail**
+  - All production changes logged (deployments, config changes)
+  - CloudTrail or equivalent enabled
+  - Log retention: 1 year minimum
+
+---
+
+## Incident Response
+
+**Purpose:** Ensure rapid detection and response to security incidents.
+
+### Security Monitoring
+- [ ] **Application logs monitored**
+  - Centralized logging (Elasticsearch, CloudWatch Logs)
+  - Log retention: 90 days
+  - Full-text search enabled
+- [ ] **Security event logging**
+  - Failed authentication attempts logged
+  - Authorization failures logged
+  - Unusual API activity logged (rate limit hits, unusual endpoints)
+- [ ] **Alerting configured**
+  - Critical errors alert immediately (PagerDuty, Opsgenie)
+  - Security events alert within 5 minutes
+  - Alert escalation policy defined
+
+### Intrusion Detection
+- [ ] **Failed login monitoring**
+  - Alert on >5 failed logins in 1 minute
+  - Account lockout after 10 failed attempts
+  - Unlock mechanism (time-based or admin)
+- [ ] **Suspicious activity detection**
+  - Unusual API call patterns (geographic, time-of-day)
+  - Unusual database queries (SELECT *, large result sets)
+  - Unusual trading behavior (large positions, rapid trading)
+- [ ] **Vulnerability scanning** (Production)
+  - Quarterly vulnerability scans (Nessus, OpenVAS)
+  - Critical vulnerabilities patched within 24 hours
+  - High vulnerabilities patched within 7 days
+
+### Breach Response Procedures
+- [ ] **Incident response plan documented**
+  - Detection procedures
+  - Containment procedures
+  - Eradication procedures
+  - Recovery procedures
+  - Post-incident review
+- [ ] **Notification procedures**
+  - Internal notification: Security team within 1 hour
+  - Executive notification: C-level within 4 hours
+  - Customer notification: Within 72 hours (GDPR requirement)
+  - Regulatory notification: As required (GDPR, PCI-DSS)
+- [ ] **Incident response team**
+  - On-call rotation defined
+  - Contact information current
+  - Escalation procedures clear
+- [ ] **Post-mortem template**
+  - Timeline reconstruction
+  - Root cause analysis
+  - Impact assessment
+  - Remediation actions
+  - Prevention measures
+
+### Backup & Recovery (Disaster Recovery)
+- [ ] **Backup strategy**
+  - Database backups: Daily at 2 AM UTC
+  - Application backups: Weekly
+  - Encryption: All backups encrypted
+  - Retention: 30 days
+  - Storage: Off-site (S3, Azure Blob)
+- [ ] **Backup validation**
+  - Monthly restore test to staging environment
+  - Verify data integrity
+  - Document restore procedure
+- [ ] **Recovery time objectives (RTO)**
+  - Database restore: <4 hours
+  - Application deployment: <1 hour
+  - Full system recovery: <8 hours
+- [ ] **Recovery point objectives (RPO)**
+  - Database: <24 hours (daily backups)
+  - Application: <7 days (weekly backups)
+
+### Security Patch Management
+- [ ] **Patch monitoring**
+  - Subscribe to security advisories (Python, PostgreSQL, dependencies)
+  - Weekly review of new CVEs
+- [ ] **Patch testing**
+  - Test patches in staging environment
+  - Regression testing before production
+- [ ] **Patch deployment**
+  - Critical security patches: Within 24 hours
+  - High-priority patches: Within 7 days
+  - Medium/low patches: Within 30 days
+  - Maintenance window scheduled
+
+---
+
 ## Security Review Sign-off
 
 At the end of each phase, the following person should sign off:
@@ -476,17 +772,33 @@ _________________________________________
 
 ## Resources
 
+**Related Documentation:**
+- **DEVELOPMENT_PHILOSOPHY_V1.1.md** - Section 9: Security by Default
+  - Core principle: No credentials in code, environment variables for all credentials
+  - Zero tolerance for hardcoded secrets
+  - Enables per-environment configuration and safe credential rotation
+- **DEVELOPMENT_PHILOSOPHY_V1.1.md** - Section 2: Defense in Depth
+  - Example 2: Security (3-layer validation for credentials)
+  - Pre-commit security scan → Pre-push comprehensive scan → CI/CD recorded proof
+  - No way to merge hardcoded credentials into main branch
+- **CLAUDE.md** - Section 8: Security Guidelines
+  - Pre-commit security scan commands
+  - What NEVER to commit (files and patterns)
+  - Full security checklist reference
+- **CLAUDE.md** - Section 4, Pattern 4: Security
+  - Security pattern examples (environment variables, validation, pre-commit scan)
+
 **Tools:**
 - TruffleHog: https://github.com/trufflesecurity/truffleHog
 - git-secrets: https://github.com/awslabs/git-secrets
 - gitleaks: https://github.com/gitleaks/gitleaks
 - BFG Repo-Cleaner: https://reps.bfg-repo-cleaner.com/
 
-**References:**
+**External References:**
 - OWASP Top 10: https://owasp.org/Top10/
 - GitHub Security Best Practices: https://docs.github.com/en/code-security
 - .env Best Practices: https://github.com/motdotla/dotenv#should-i-commit-my-env-file
 
 ---
 
-**END OF SECURITY REVIEW CHECKLIST V1.0**
+**END OF SECURITY REVIEW CHECKLIST V1.1**

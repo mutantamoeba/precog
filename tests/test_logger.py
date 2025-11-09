@@ -30,8 +30,13 @@ from utils.logger import (
 @pytest.mark.unit
 def test_logger_initialization(temp_log_dir):
     """Test that logger initializes without errors."""
+    import logging
+
     logger = setup_logging(log_level="DEBUG", log_to_file=True, log_dir=str(temp_log_dir))
     assert logger is not None
+
+    # Cleanup: Properly shutdown all logging handlers to prevent ResourceWarning
+    logging.shutdown()
 
 
 @pytest.mark.unit
@@ -134,6 +139,8 @@ def test_log_context_binding(test_logger, caplog):
 @pytest.mark.unit
 def test_log_file_created(temp_log_dir):
     """Test that daily log file is created."""
+    import logging
+
     logger = setup_logging(log_level="INFO", log_to_file=True, log_dir=str(temp_log_dir))
 
     # Log something
@@ -142,6 +149,9 @@ def test_log_file_created(temp_log_dir):
     # Check log file exists
     log_files = list(Path(temp_log_dir).glob("precog_*.log"))
     assert len(log_files) == 1
+
+    # Cleanup: Properly shutdown all logging handlers to prevent ResourceWarning
+    logging.shutdown()
 
 
 @pytest.mark.unit

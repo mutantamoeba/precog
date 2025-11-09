@@ -317,7 +317,7 @@ class ConfigLoader:
             return {
                 key: (
                     Decimal(str(value))
-                    if key in keys_to_convert and isinstance(value, int | float)
+                    if key in keys_to_convert and isinstance(value, (int, float, str))
                     else self._convert_to_decimal(value, keys_to_convert)
                 )
                 for key, value in obj.items()

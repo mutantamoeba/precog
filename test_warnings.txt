@@ -1,0 +1,1400 @@
+2025-11-08T19:58:14.658425Z [info     ] logging_initialized            [utils.logger] log_file=logs\precog_2025-11-08.log log_level=INFO
+2025-11-08T19:58:14.739197Z [info     ] Database connection pool initialized (2-10 connections) [database.connection]
+2025-11-08T19:58:14.739414Z [info     ] Connected to: postgres@localhost:5432/precog_test [database.connection]
+============================= test session starts =============================
+platform win32 -- Python 3.14.0, pytest-8.4.2, pluggy-1.6.0 -- C:\Python314\python.exe
+cachedir: .pytest_cache
+hypothesis profile 'default'
+metadata: {'Python': '3.14.0', 'Platform': 'Windows-11-10.0.26100-SP0', 'Packages': {'pytest': '8.4.2', 'pluggy': '1.6.0'}, 'Plugins': {'anyio': '4.11.0', 'Faker': '37.12.0', 'hypothesis': '6.146.0', 'asyncio': '0.24.0', 'cov': '7.0.0', 'html': '4.1.1', 'metadata': '3.1.1', 'xdist': '3.8.0'}}
+rootdir: C:\Users\emtol\repos\precog-repo
+configfile: pytest.ini
+plugins: anyio-4.11.0, Faker-37.12.0, hypothesis-6.146.0, asyncio-0.24.0, cov-7.0.0, html-4.1.1, metadata-3.1.1, xdist-3.8.0
+asyncio: mode=Mode.STRICT, default_loop_scope=None
+collecting ... collected 256 items
+
+tests/property/test_edge_detection_properties.py::test_edge_formula_correctness PASSED
+tests/property/test_edge_detection_properties.py::test_fees_always_reduce_edge PASSED
+tests/property/test_edge_detection_properties.py::test_edge_zero_when_true_prob_equals_cost PASSED
+tests/property/test_edge_detection_properties.py::test_negative_edge_never_recommends_trade PASSED
+tests/property/test_edge_detection_properties.py::test_edge_bounded_by_reasonable_range PASSED
+tests/property/test_edge_detection_properties.py::test_edge_increases_monotonically_with_true_probability PASSED
+tests/property/test_edge_detection_properties.py::test_edge_decreases_monotonically_with_market_price PASSED
+tests/property/test_edge_detection_properties.py::test_spread_reduces_realizable_edge PASSED
+tests/property/test_edge_detection_properties.py::test_realizable_edge_uses_ask_price PASSED
+tests/property/test_edge_detection_properties.py::test_edge_above_threshold_recommends_trade PASSED
+tests/property/test_edge_detection_properties.py::test_threshold_zero_means_any_positive_edge_trades PASSED
+tests/property/test_edge_detection_properties.py::test_true_probability_outside_valid_range_raises_error PASSED
+tests/property/test_edge_detection_properties.py::test_market_price_outside_valid_range_raises_error PASSED
+tests/property/test_edge_detection_properties.py::test_negative_fees_raise_error PASSED
+tests/property/test_edge_detection_properties.py::test_bid_exceeds_ask_raises_error PASSED
+tests/property/test_kelly_criterion_properties.py::test_position_size_never_exceeds_bankroll PASSED
+tests/property/test_kelly_criterion_properties.py::test_position_size_always_non_negative PASSED
+tests/property/test_kelly_criterion_properties.py::test_zero_edge_means_zero_position PASSED
+tests/property/test_kelly_criterion_properties.py::test_negative_edge_means_zero_position PASSED
+tests/property/test_kelly_criterion_properties.py::test_kelly_fraction_reduces_position_proportionally PASSED
+tests/property/test_kelly_criterion_properties.py::test_position_size_scales_linearly_with_bankroll PASSED
+tests/property/test_kelly_criterion_properties.py::test_position_increases_monotonically_with_edge PASSED
+tests/property/test_kelly_criterion_properties.py::test_max_position_constraint_respected PASSED
+tests/property/test_kelly_criterion_properties.py::test_kelly_fraction_outside_valid_range_raises_error PASSED
+tests/property/test_kelly_criterion_properties.py::test_negative_bankroll_raises_error PASSED
+tests/property/test_kelly_criterion_properties.py::test_position_size_reasonable_bounds PASSED
+tests/test_config_loader.py::test_config_loader_initialization PASSED
+tests/test_config_loader.py::test_load_yaml_file PASSED
+tests/test_config_loader.py::test_decimal_conversion PASSED
+tests/test_config_loader.py::test_decimal_precision_preserved PASSED
+tests/test_config_loader.py::test_no_decimal_conversion_when_disabled PASSED
+tests/test_config_loader.py::test_nested_decimal_conversion PASSED
+tests/test_config_loader.py::test_config_caching PASSED
+tests/test_config_loader.py::test_get_with_nested_key_path PASSED
+tests/test_config_loader.py::test_get_with_default_value PASSED
+tests/test_config_loader.py::test_get_missing_nested_key_returns_default PASSED
+tests/test_config_loader.py::test_reload_clears_cache PASSED
+tests/test_config_loader.py::test_load_all_configs PASSED
+tests/test_config_loader.py::test_missing_config_file_raises_error PASSED
+tests/test_config_loader.py::test_invalid_yaml_raises_error PASSED
+tests/test_config_loader.py::test_load_real_trading_config PASSED
+tests/test_config_loader.py::test_validate_required_configs 2025-11-08T19:58:18.507578Z [info     ] trading.yaml loaded successfully [config.config_loader]
+
+-------------------------------- live log call --------------------------------
+[INFO] config.config_loader: {'event': 'trading.yaml loaded successfully', 'level': 'info', 'logger': 'config.config_loader', 'timestamp': '2025-11-08T19:58:18.507578Z'}
+2025-11-08T19:58:18.509028Z [info     ] system.yaml loaded successfully [config.config_loader]
+[INFO] config.config_loader: {'event': 'system.yaml loaded successfully', 'level': 'info', 'logger': 'config.config_loader', 'timestamp': '2025-11-08T19:58:18.509028Z'}
+PASSED
+tests/test_config_loader.py::test_validate_required_configs_fails_on_missing 2025-11-08T19:58:18.516796Z [error    ] missing1.yaml not found        [config.config_loader]
+
+-------------------------------- live log call --------------------------------
+[ERROR] config.config_loader: {'event': 'missing1.yaml not found', 'level': 'error', 'logger': 'config.config_loader', 'timestamp': '2025-11-08T19:58:18.516796Z'}
+2025-11-08T19:58:18.517033Z [error    ] missing2.yaml not found        [config.config_loader]
+[ERROR] config.config_loader: {'event': 'missing2.yaml not found', 'level': 'error', 'logger': 'config.config_loader', 'timestamp': '2025-11-08T19:58:18.517033Z'}
+PASSED
+tests/test_config_loader.py::test_get_env_with_environment_prefix PASSED
+tests/test_config_loader.py::test_get_env_fallback_to_unprefixed PASSED
+tests/test_config_loader.py::test_get_env_returns_default_when_not_found PASSED
+tests/test_config_loader.py::test_get_env_bool_conversion PASSED
+tests/test_config_loader.py::test_get_env_int_conversion PASSED
+tests/test_config_loader.py::test_get_env_decimal_conversion PASSED
+tests/test_config_loader.py::test_get_db_config PASSED
+tests/test_config_loader.py::test_get_kalshi_config PASSED
+tests/test_config_loader.py::test_is_production PASSED
+tests/test_config_loader.py::test_is_development PASSED
+tests/test_config_loader.py::test_is_staging PASSED
+tests/test_config_loader.py::test_is_test PASSED
+tests/test_config_loader.py::test_get_returns_entire_config_when_no_key_path PASSED
+tests/test_config_loader.py::test_get_returns_default_when_config_not_found_and_not_cached PASSED
+tests/test_config_loader.py::test_reload_all_configs_clears_entire_cache PASSED
+tests/test_config_loader.py::test_validate_required_configs_handles_yaml_error 2025-11-08T19:58:18.620510Z [error    ] invalid_yaml.yaml has YAML errors: while scanning for the next token
+found character '\t' that cannot start any token
+  in "C:\Users\emtol\AppData\Local\Temp\precog_test_ya5x6yi0\invalid_yaml.yaml", line 2, column 1 [config.config_loader]
+
+-------------------------------- live log call --------------------------------
+[ERROR] config.config_loader: {'event': 'invalid_yaml.yaml has YAML errors: while scanning for the next token\nfound character \'\\t\' that cannot start any token\n  in "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_test_ya5x6yi0\\invalid_yaml.yaml", line 2, column 1', 'level': 'error', 'logger': 'config.config_loader', 'timestamp': '2025-11-08T19:58:18.620510Z'}
+PASSED
+tests/test_config_loader.py::test_validate_required_configs_handles_generic_exception 2025-11-08T19:58:18.627856Z [error    ] test_exception.yaml failed to load: Simulated unexpected error [config.config_loader]
+
+-------------------------------- live log call --------------------------------
+[ERROR] config.config_loader: {'event': 'test_exception.yaml failed to load: Simulated unexpected error', 'level': 'error', 'logger': 'config.config_loader', 'timestamp': '2025-11-08T19:58:18.627856Z'}
+PASSED
+tests/test_config_loader.py::test_load_all_handles_file_not_found_with_warning 2025-11-08T19:58:18.636100Z [warning  ] Config file not found: missing.yaml (skipping) [config.config_loader]
+
+-------------------------------- live log call --------------------------------
+[WARNING] config.config_loader: {'event': 'Config file not found: missing.yaml (skipping)', 'level': 'warning', 'logger': 'config.config_loader', 'timestamp': '2025-11-08T19:58:18.636100Z'}
+PASSED
+tests/test_config_loader.py::test_load_all_propagates_yaml_error 2025-11-08T19:58:18.644108Z [error    ] Error parsing bad_yaml.yaml: while scanning for the next token
+found character '\t' that cannot start any token
+  in "C:\Users\emtol\AppData\Local\Temp\precog_test_91ib2fs0\bad_yaml.yaml", line 2, column 1 [config.config_loader]
+
+-------------------------------- live log call --------------------------------
+[ERROR] config.config_loader: {'event': 'Error parsing bad_yaml.yaml: while scanning for the next token\nfound character \'\\t\' that cannot start any token\n  in "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_test_91ib2fs0\\bad_yaml.yaml", line 2, column 1', 'level': 'error', 'logger': 'config.config_loader', 'timestamp': '2025-11-08T19:58:18.644108Z'}
+PASSED
+tests/test_config_loader.py::test_get_trading_config_global_function PASSED
+tests/test_config_loader.py::test_get_strategy_config_global_function PASSED
+tests/test_config_loader.py::test_get_model_config_global_function PASSED
+tests/test_config_loader.py::test_get_market_config_global_function PASSED
+tests/test_config_loader.py::test_get_db_config_global_function PASSED
+tests/test_config_loader.py::test_get_kalshi_config_global_function PASSED
+tests/test_config_loader.py::test_get_env_global_function PASSED
+tests/test_config_loader.py::test_get_environment_global_function PASSED
+tests/test_config_loader.py::test_is_production_global_function PASSED
+tests/test_config_loader.py::test_is_development_global_function PASSED
+tests/test_config_loader.py::test_is_staging_global_function PASSED
+tests/test_config_loader.py::test_is_test_global_function PASSED
+tests/test_crud_operations.py::test_create_market_with_decimal_precision 2025-11-08T19:58:18.723620Z [warning  ] Connection pool already initialized [database.connection]
+
+------------------------------- live log setup --------------------------------
+[WARNING] database.connection: {'event': 'Connection pool already initialized', 'level': 'warning', 'logger': 'database.connection', 'timestamp': '2025-11-08T19:58:18.723620Z'}
+PASSED
+tests/test_crud_operations.py::test_decimal_precision_not_float PASSED
+tests/test_crud_operations.py::test_create_market_sub_penny_precision PASSED
+tests/test_crud_operations.py::test_get_current_market_filters_by_row_current_ind PASSED
+tests/test_crud_operations.py::test_scd_type2_versioning PASSED
+tests/test_crud_operations.py::test_update_market_partial_fields PASSED
+tests/test_crud_operations.py::test_get_market_history_limit PASSED
+tests/test_crud_operations.py::test_create_position PASSED
+tests/test_crud_operations.py::test_get_current_positions_filters_open PASSED
+tests/test_crud_operations.py::test_update_position_price_versioning PASSED
+tests/test_crud_operations.py::test_close_position PASSED
+tests/test_crud_operations.py::test_position_unrealized_pnl_calculation PASSED
+tests/test_crud_operations.py::test_create_trade_with_attribution PASSED
+tests/test_crud_operations.py::test_get_trades_by_market PASSED
+tests/test_crud_operations.py::test_get_recent_trades PASSED
+tests/test_crud_operations.py::test_trade_strategy_model_attribution PASSED
+tests/test_crud_operations.py::test_extreme_prices PASSED
+tests/test_crud_operations.py::test_tight_spread PASSED
+tests/test_crud_operations.py::test_update_nonexistent_market_raises_error PASSED
+tests/test_crud_operations.py::test_close_nonexistent_position_raises_error PASSED
+tests/test_database_connection.py::test_connection_pool_exists PASSED
+tests/test_database_connection.py::test_database_connectivity 2025-11-08T19:58:18.853848Z [info     ] Database connection test successful [database.connection]
+
+-------------------------------- live log call --------------------------------
+[INFO] database.connection: {'event': 'Database connection test successful', 'level': 'info', 'logger': 'database.connection', 'timestamp': '2025-11-08T19:58:18.853848Z'}
+PASSED
+tests/test_database_connection.py::test_get_cursor_context_manager PASSED
+tests/test_database_connection.py::test_cursor_returns_dict PASSED
+tests/test_database_connection.py::test_fetch_one PASSED
+tests/test_database_connection.py::test_fetch_one_no_results PASSED
+tests/test_database_connection.py::test_fetch_all PASSED
+tests/test_database_connection.py::test_execute_query PASSED
+tests/test_database_connection.py::test_connection_reuse PASSED
+tests/test_database_connection.py::test_cursor_auto_cleanup PASSED
+tests/test_database_connection.py::test_transaction_rollback_on_error PASSED
+tests/test_database_connection.py::test_parameterized_query_prevents_injection PASSED
+tests/test_decimal_properties.py::test_decimal_addition_commutative PASSED
+tests/test_decimal_properties.py::test_decimal_addition_associative PASSED
+tests/test_decimal_properties.py::test_decimal_string_conversion_reversible PASSED
+tests/test_decimal_properties.py::test_position_sizing_always_valid PASSED
+tests/test_decimal_properties.py::test_kalshi_price_complement PASSED
+tests/test_decimal_properties.py::test_decimal_never_becomes_float PASSED
+tests/test_decimal_properties.py::test_decimal_precision_maintained PASSED
+tests/test_decimal_properties.py::test_trade_cost_calculation PASSED
+tests/test_decimal_properties.py::test_pnl_calculation PASSED
+tests/test_decimal_properties.py::test_implied_probability_conversion PASSED
+tests/test_decimal_properties.py::test_decimal_operations_preserve_type PASSED
+tests/test_error_handling.py::test_connection_pool_exhaustion SKIPPED
+tests/test_error_handling.py::test_database_connection_failure_and_reconnection SKIPPED
+tests/test_error_handling.py::test_transaction_rollback_on_connection_loss PASSED
+tests/test_error_handling.py::test_config_loader_invalid_yaml_syntax SKIPPED
+tests/test_error_handling.py::test_config_loader_missing_required_file PASSED
+tests/test_error_handling.py::test_config_loader_missing_environment_variable SKIPPED
+tests/test_error_handling.py::test_config_loader_invalid_data_type SKIPPED
+tests/test_error_handling.py::test_logger_file_permission_error SKIPPED
+tests/test_error_handling.py::test_logger_disk_full_simulation SKIPPED
+tests/test_error_handling.py::test_crud_operation_with_null_violation SKIPPED
+tests/test_error_handling.py::test_crud_operation_with_foreign_key_violation PASSED
+tests/test_logger.py::test_logger_initialization 2025-11-08T19:58:19.587065Z [info     ] logging_initialized            [utils.logger] log_file=C:\Users\emtol\AppData\Local\Temp\precog_logs_9fglm3_3\precog_2025-11-08.log log_level=DEBUG
+
+-------------------------------- live log call --------------------------------
+{"log_level": "DEBUG", "log_file": "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_9fglm3_3\\precog_2025-11-08.log", "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.587065Z"}
+PASSED
+tests/test_logger.py::test_get_logger_with_name PASSED
+tests/test_logger.py::test_decimal_serializer PASSED
+tests/test_logger.py::test_decimal_precision_in_logs 2025-11-08T19:58:19.594597Z [info     ] logging_initialized            [utils.logger] log_file=C:\Users\emtol\AppData\Local\Temp\precog_logs_unr2rxi5\precog_2025-11-08.log log_level=DEBUG
+
+------------------------------- live log setup --------------------------------
+{"log_level": "DEBUG", "log_file": "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_unr2rxi5\\precog_2025-11-08.log", "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.594597Z"}
+2025-11-08T19:58:19.595030Z [info     ] test_event                     [utils.logger] price=Decimal('0.5200')
+-------------------------------- live log call --------------------------------
+{"price": "0.5200", "event": "test_event", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.595030Z"}
+PASSED
+tests/test_logger.py::test_log_trade_helper 2025-11-08T19:58:19.596742Z [info     ] logging_initialized            [utils.logger] log_file=C:\Users\emtol\AppData\Local\Temp\precog_logs_xfzzwd2q\precog_2025-11-08.log log_level=DEBUG
+
+------------------------------- live log setup --------------------------------
+{"log_level": "DEBUG", "log_file": "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_xfzzwd2q\\precog_2025-11-08.log", "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.596742Z"}
+2025-11-08T19:58:19.597152Z [info     ] trade_entry                    [utils.logger] model_id=2 price=Decimal('0.5200') quantity=100 side=YES strategy_id=1 ticker=TEST-NFL-YES
+-------------------------------- live log call --------------------------------
+{"ticker": "TEST-NFL-YES", "side": "YES", "quantity": 100, "price": "0.5200", "strategy_id": 1, "model_id": 2, "event": "trade_entry", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.597152Z"}
+PASSED
+tests/test_logger.py::test_log_position_update_helper 2025-11-08T19:58:19.598613Z [info     ] logging_initialized            [utils.logger] log_file=C:\Users\emtol\AppData\Local\Temp\precog_logs_ivkx5fn5\precog_2025-11-08.log log_level=DEBUG
+
+------------------------------- live log setup --------------------------------
+{"log_level": "DEBUG", "log_file": "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_ivkx5fn5\\precog_2025-11-08.log", "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.598613Z"}
+2025-11-08T19:58:19.598968Z [info     ] position_update                [utils.logger] current_price=Decimal('0.5800') position_id=42 status=open ticker=TEST-NFL-YES unrealized_pnl=Decimal('6.00')
+-------------------------------- live log call --------------------------------
+{"position_id": 42, "ticker": "TEST-NFL-YES", "current_price": "0.5800", "unrealized_pnl": "6.00", "status": "open", "event": "position_update", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.598968Z"}
+PASSED
+tests/test_logger.py::test_log_edge_detected_helper 2025-11-08T19:58:19.600672Z [info     ] logging_initialized            [utils.logger] log_file=C:\Users\emtol\AppData\Local\Temp\precog_logs_s9y8pxrp\precog_2025-11-08.log log_level=DEBUG
+
+------------------------------- live log setup --------------------------------
+{"log_level": "DEBUG", "log_file": "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_s9y8pxrp\\precog_2025-11-08.log", "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.600672Z"}
+2025-11-08T19:58:19.601024Z [info     ] edge_detected                  [utils.logger] expected_value=Decimal('0.0500') market_price=Decimal('0.5200') model_probability=Decimal('0.5700') strategy_name=test_strategy ticker=TEST-NFL-YES
+-------------------------------- live log call --------------------------------
+{"ticker": "TEST-NFL-YES", "expected_value": "0.0500", "market_price": "0.5200", "model_probability": "0.5700", "strategy_name": "test_strategy", "event": "edge_detected", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.601024Z"}
+PASSED
+tests/test_logger.py::test_log_error_helper 2025-11-08T19:58:19.602889Z [info     ] logging_initialized            [utils.logger] log_file=C:\Users\emtol\AppData\Local\Temp\precog_logs_lw_xlaf2\precog_2025-11-08.log log_level=DEBUG
+
+------------------------------- live log setup --------------------------------
+{"log_level": "DEBUG", "log_file": "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_lw_xlaf2\\precog_2025-11-08.log", "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.602889Z"}
+2025-11-08T19:58:19.603664Z [error    ] test_error                     [utils.logger] exception_message='Test error' exception_type=ValueError message='This is a test error'
+-------------------------------- live log call --------------------------------
+{"message": "This is a test error", "exception_type": "ValueError", "exception_message": "Test error", "event": "test_error", "level": "error", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.603664Z"}
+PASSED
+tests/test_logger.py::test_log_context_binding 2025-11-08T19:58:19.605182Z [info     ] logging_initialized            [utils.logger] log_file=C:\Users\emtol\AppData\Local\Temp\precog_logs_mwcejfao\precog_2025-11-08.log log_level=DEBUG
+
+------------------------------- live log setup --------------------------------
+{"log_level": "DEBUG", "log_file": "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_mwcejfao\\precog_2025-11-08.log", "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.605182Z"}
+2025-11-08T19:58:19.605642Z [info     ] test_event_1                   [root]
+-------------------------------- live log call --------------------------------
+{"event": "test_event_1", "level": "info", "logger": "root", "timestamp": "2025-11-08T19:58:19.605642Z"}
+2025-11-08T19:58:19.605828Z [info     ] test_event_2                   [root]
+{"event": "test_event_2", "level": "info", "logger": "root", "timestamp": "2025-11-08T19:58:19.605828Z"}
+PASSED
+tests/test_logger.py::test_log_file_created 2025-11-08T19:58:19.607652Z [info     ] logging_initialized            [utils.logger] log_file=C:\Users\emtol\AppData\Local\Temp\precog_logs_ijdwyqek\precog_2025-11-08.log log_level=INFO
+
+-------------------------------- live log call --------------------------------
+{"log_level": "INFO", "log_file": "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_ijdwyqek\\precog_2025-11-08.log", "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.607652Z"}
+2025-11-08T19:58:19.607853Z [info     ] test_message                   [utils.logger]
+{"event": "test_message", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.607853Z"}
+PASSED
+tests/test_logger.py::test_log_levels 2025-11-08T19:58:19.609508Z [info     ] logging_initialized            [utils.logger] log_file=C:\Users\emtol\AppData\Local\Temp\precog_logs_ku3d4sas\precog_2025-11-08.log log_level=DEBUG
+
+------------------------------- live log setup --------------------------------
+{"log_level": "DEBUG", "log_file": "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_ku3d4sas\\precog_2025-11-08.log", "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.609508Z"}
+2025-11-08T19:58:19.609869Z [info     ] info message                   [utils.logger]
+-------------------------------- live log call --------------------------------
+{"event": "info message", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.609869Z"}
+2025-11-08T19:58:19.610026Z [warning  ] warning message                [utils.logger]
+{"event": "warning message", "level": "warning", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.610026Z"}
+2025-11-08T19:58:19.610137Z [error    ] error message                  [utils.logger]
+{"event": "error message", "level": "error", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.610137Z"}
+PASSED
+tests/test_logger.py::test_logger_with_extra_context 2025-11-08T19:58:19.611900Z [info     ] logging_initialized            [utils.logger] log_file=C:\Users\emtol\AppData\Local\Temp\precog_logs_1_rfjnkn\precog_2025-11-08.log log_level=DEBUG
+
+------------------------------- live log setup --------------------------------
+{"log_level": "DEBUG", "log_file": "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_1_rfjnkn\\precog_2025-11-08.log", "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.611900Z"}
+2025-11-08T19:58:19.612238Z [info     ] trade_executed                 [utils.logger] custom_field=custom_value price=Decimal('0.5200') quantity=100 ticker=TEST-NFL-YES
+-------------------------------- live log call --------------------------------
+{"ticker": "TEST-NFL-YES", "quantity": 100, "price": "0.5200", "custom_field": "custom_value", "event": "trade_executed", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.612238Z"}
+PASSED
+tests/test_logger.py::test_logger_handles_exceptions 2025-11-08T19:58:19.613793Z [info     ] logging_initialized            [utils.logger] log_file=C:\Users\emtol\AppData\Local\Temp\precog_logs_g68z1e8y\precog_2025-11-08.log log_level=DEBUG
+
+------------------------------- live log setup --------------------------------
+{"log_level": "DEBUG", "log_file": "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_g68z1e8y\\precog_2025-11-08.log", "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.613793Z"}
+2025-11-08T19:58:19.614162Z [error    ] division_error                 [utils.logger]
+Traceback (most recent call last):
+  File "C:\Users\emtol\Repos\precog-repo\tests\test_logger.py", line 173, in test_logger_handles_exceptions
+    1 / 0
+    ~~^~~
+ZeroDivisionError: division by zero
+-------------------------------- live log call --------------------------------
+{"event": "division_error", "level": "error", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.614162Z", "exception": "Traceback (most recent call last):\n  File \"C:\\Users\\emtol\\Repos\\precog-repo\\tests\\test_logger.py\", line 173, in test_logger_handles_exceptions\n    1 / 0\n    ~~^~~\nZeroDivisionError: division by zero"}
+PASSED
+tests/test_logger.py::test_decimal_serializer_fallback PASSED
+tests/test_logger.py::test_concurrent_logging 2025-11-08T19:58:19.616825Z [info     ] logging_initialized            [utils.logger] log_file=C:\Users\emtol\AppData\Local\Temp\precog_logs_xf8qorsq\precog_2025-11-08.log log_level=DEBUG
+
+------------------------------- live log setup --------------------------------
+{"log_level": "DEBUG", "log_file": "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_xf8qorsq\\precog_2025-11-08.log", "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.616825Z"}
+2025-11-08T19:58:19.617715Z [info     ] concurrent_log                 [utils.logger] iteration=0
+-------------------------------- live log call --------------------------------
+{"iteration": 0, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.617715Z"}
+2025-11-08T19:58:19.618024Z [info     ] concurrent_log                 [utils.logger] iteration=0
+2025-11-08T19:58:19.618185Z [info     ] concurrent_log                 [utils.logger] iteration=1
+{"iteration": 0, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.618024Z"}
+2025-11-08T19:58:19.618488Z [info     ] concurrent_log                 [utils.logger] iteration=1
+{"iteration": 1, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.618185Z"}
+2025-11-08T19:58:19.618654Z [info     ] concurrent_log                 [utils.logger] iteration=2
+{"iteration": 1, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.618488Z"}
+2025-11-08T19:58:19.618760Z [info     ] concurrent_log                 [utils.logger] iteration=0
+2025-11-08T19:58:19.619094Z [info     ] concurrent_log                 [utils.logger] iteration=2
+{"iteration": 0, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.618760Z"}
+2025-11-08T19:58:19.619384Z [info     ] concurrent_log                 [utils.logger] iteration=1
+{"iteration": 2, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.618654Z"}
+2025-11-08T19:58:19.619556Z [info     ] concurrent_log                 [utils.logger] iteration=3
+{"iteration": 2, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.619094Z"}
+2025-11-08T19:58:19.619715Z [info     ] concurrent_log                 [utils.logger] iteration=3
+{"iteration": 1, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.619384Z"}
+2025-11-08T19:58:19.619855Z [info     ] concurrent_log                 [utils.logger] iteration=2
+{"iteration": 3, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.619556Z"}
+2025-11-08T19:58:19.619998Z [info     ] concurrent_log                 [utils.logger] iteration=4
+{"iteration": 3, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.619715Z"}
+2025-11-08T19:58:19.620139Z [info     ] concurrent_log                 [utils.logger] iteration=4
+{"iteration": 2, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.619855Z"}
+2025-11-08T19:58:19.620283Z [info     ] concurrent_log                 [utils.logger] iteration=3
+{"iteration": 4, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.619998Z"}
+2025-11-08T19:58:19.620424Z [info     ] concurrent_log                 [utils.logger] iteration=5
+{"iteration": 4, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.620139Z"}
+2025-11-08T19:58:19.620563Z [info     ] concurrent_log                 [utils.logger] iteration=5
+{"iteration": 3, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.620283Z"}
+{"iteration": 5, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.620424Z"}
+2025-11-08T19:58:19.620784Z [info     ] concurrent_log                 [utils.logger] iteration=4
+{"iteration": 5, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.620563Z"}
+2025-11-08T19:58:19.621051Z [info     ] concurrent_log                 [utils.logger] iteration=6
+{"iteration": 4, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.620784Z"}
+2025-11-08T19:58:19.620876Z [info     ] concurrent_log                 [utils.logger] iteration=6
+{"iteration": 6, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.621051Z"}
+2025-11-08T19:58:19.621412Z [info     ] concurrent_log                 [utils.logger] iteration=7
+{"iteration": 6, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.620876Z"}
+2025-11-08T19:58:19.621247Z [info     ] concurrent_log                 [utils.logger] iteration=5
+{"iteration": 7, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.621412Z"}
+2025-11-08T19:58:19.621607Z [info     ] concurrent_log                 [utils.logger] iteration=7
+{"iteration": 5, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.621247Z"}
+2025-11-08T19:58:19.621904Z [info     ] concurrent_log                 [utils.logger] iteration=6
+2025-11-08T19:58:19.621773Z [info     ] concurrent_log                 [utils.logger] iteration=8
+{"iteration": 7, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.621607Z"}
+2025-11-08T19:58:19.622171Z [info     ] concurrent_log                 [utils.logger] iteration=8
+{"iteration": 8, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.621773Z"}
+2025-11-08T19:58:19.622329Z [info     ] concurrent_log                 [utils.logger] iteration=9
+{"iteration": 6, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.621904Z"}
+2025-11-08T19:58:19.622477Z [info     ] concurrent_log                 [utils.logger] iteration=7
+{"iteration": 7, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.622477Z"}
+2025-11-08T19:58:19.622588Z [info     ] concurrent_log                 [utils.logger] iteration=8
+{"iteration": 9, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.622329Z"}
+{"iteration": 8, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.622171Z"}
+2025-11-08T19:58:19.622942Z [info     ] concurrent_log                 [utils.logger] iteration=9
+{"iteration": 8, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.622588Z"}
+2025-11-08T19:58:19.623146Z [info     ] concurrent_log                 [utils.logger] iteration=9
+{"iteration": 9, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.622942Z"}
+{"iteration": 9, "event": "concurrent_log", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.623146Z"}
+PASSED
+tests/test_logger.py::test_log_with_none_values 2025-11-08T19:58:19.625488Z [info     ] logging_initialized            [utils.logger] log_file=C:\Users\emtol\AppData\Local\Temp\precog_logs__h9tx240\precog_2025-11-08.log log_level=DEBUG
+
+------------------------------- live log setup --------------------------------
+{"log_level": "DEBUG", "log_file": "C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs__h9tx240\\precog_2025-11-08.log", "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.625488Z"}
+2025-11-08T19:58:19.625836Z [info     ] test_event                     [utils.logger] value1=None value2=not_none value3=Decimal('0.5200')
+-------------------------------- live log call --------------------------------
+{"value1": null, "value2": "not_none", "value3": "0.5200", "event": "test_event", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.625836Z"}
+PASSED
+tests/test_logger.py::test_setup_logging_without_file 2025-11-08T19:58:19.627086Z [info     ] logging_initialized            [utils.logger] log_file=None log_level=INFO
+
+-------------------------------- live log call --------------------------------
+{"log_level": "INFO", "log_file": null, "event": "logging_initialized", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.627086Z"}
+2025-11-08T19:58:19.627284Z [info     ] test_message                   [utils.logger]
+{"event": "test_message", "level": "info", "logger": "utils.logger", "timestamp": "2025-11-08T19:58:19.627284Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiAuthentication::test_load_private_key_success PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiAuthentication::test_load_private_key_file_not_found PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiAuthentication::test_load_private_key_invalid_pem_format PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiAuthentication::test_generate_signature_format PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiAuthentication::test_generate_signature_message_format PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiAuthentication::test_kalshi_auth_get_headers PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiAuthentication::test_is_token_expired_when_token_none PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiAuthentication::test_is_token_expired_when_expiry_none PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiAuthentication::test_is_token_expired_when_expired PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiAuthentication::test_is_token_expired_when_not_expired PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiClient::test_client_initialization_demo 2025-11-08T19:58:19.677004Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.677145Z"}
+2025-11-08T19:58:19.677246Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.677297Z"}
+2025-11-08T19:58:19.677373Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.677421Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiClient::test_client_initialization_prod 2025-11-08T19:58:19.678422Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.678537Z"}
+2025-11-08T19:58:19.678629Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.678678Z"}
+2025-11-08T19:58:19.678761Z [info     ] KalshiClient initialized for prod environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for prod environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.678811Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiClient::test_client_initialization_invalid_environment PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiClient::test_client_initialization_missing_credentials PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiMarketData::test_get_markets_returns_decimal_prices 2025-11-08T19:58:19.681034Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.681147Z"}
+2025-11-08T19:58:19.681244Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.681295Z"}
+2025-11-08T19:58:19.681371Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.681419Z"}
+2025-11-08T19:58:19.681833Z [info     ] Fetched 2 markets              [api_connectors.kalshi_client]
+{"event": "Fetched 2 markets", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.681934Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiMarketData::test_get_markets_sub_penny_precision 2025-11-08T19:58:19.682944Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.683054Z"}
+2025-11-08T19:58:19.683146Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.683196Z"}
+2025-11-08T19:58:19.683270Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.683316Z"}
+2025-11-08T19:58:19.683660Z [info     ] Fetched 2 markets              [api_connectors.kalshi_client]
+{"event": "Fetched 2 markets", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.683731Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiMarketData::test_get_markets_with_filters 2025-11-08T19:58:19.684756Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.684863Z"}
+2025-11-08T19:58:19.684956Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.685005Z"}
+2025-11-08T19:58:19.685080Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.685126Z"}
+2025-11-08T19:58:19.685535Z [info     ] Fetched 2 markets              [api_connectors.kalshi_client]
+{"event": "Fetched 2 markets", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.685609Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiMarketData::test_get_single_market_decimal_prices 2025-11-08T19:58:19.686649Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.686754Z"}
+2025-11-08T19:58:19.686845Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.686894Z"}
+2025-11-08T19:58:19.686968Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.687015Z"}
+2025-11-08T19:58:19.687348Z [info     ] Fetched market: KXNFLGAME-25DEC15-KC-YES [api_connectors.kalshi_client]
+{"event": "Fetched market: KXNFLGAME-25DEC15-KC-YES", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.687416Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiMarketData::test_get_markets_with_event_ticker 2025-11-08T19:58:19.688408Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.688511Z"}
+2025-11-08T19:58:19.688635Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.688686Z"}
+2025-11-08T19:58:19.688760Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.688807Z"}
+2025-11-08T19:58:19.689145Z [info     ] Fetched 2 markets              [api_connectors.kalshi_client]
+{"event": "Fetched 2 markets", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.689213Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiMarketData::test_get_markets_with_cursor 2025-11-08T19:58:19.690325Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.690434Z"}
+2025-11-08T19:58:19.690528Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.690580Z"}
+2025-11-08T19:58:19.690658Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.690705Z"}
+2025-11-08T19:58:19.691061Z [info     ] Fetched 2 markets              [api_connectors.kalshi_client]
+{"event": "Fetched 2 markets", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.691122Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiBalanceAndPositions::test_get_balance_returns_decimal 2025-11-08T19:58:19.692574Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.692699Z"}
+2025-11-08T19:58:19.692792Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.692842Z"}
+2025-11-08T19:58:19.692916Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.692963Z"}
+2025-11-08T19:58:19.693334Z [info     ] Fetched balance: $1234.5678    [api_connectors.kalshi_client]
+{"event": "Fetched balance: $1234.5678", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.693426Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiBalanceAndPositions::test_get_positions_decimal_prices 2025-11-08T19:58:19.694457Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.694564Z"}
+2025-11-08T19:58:19.694651Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.694702Z"}
+2025-11-08T19:58:19.694773Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.694818Z"}
+2025-11-08T19:58:19.695161Z [info     ] Fetched 2 positions            [api_connectors.kalshi_client]
+{"event": "Fetched 2 positions", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.695218Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiBalanceAndPositions::test_get_positions_with_status_filter 2025-11-08T19:58:19.696198Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.696300Z"}
+2025-11-08T19:58:19.696385Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.696432Z"}
+2025-11-08T19:58:19.696506Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.696551Z"}
+2025-11-08T19:58:19.696912Z [info     ] Fetched 2 positions            [api_connectors.kalshi_client]
+{"event": "Fetched 2 positions", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.696983Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiBalanceAndPositions::test_get_positions_with_ticker_filter 2025-11-08T19:58:19.697982Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.698084Z"}
+2025-11-08T19:58:19.698174Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.698225Z"}
+2025-11-08T19:58:19.698341Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.698389Z"}
+2025-11-08T19:58:19.698717Z [info     ] Fetched 2 positions            [api_connectors.kalshi_client]
+{"event": "Fetched 2 positions", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.698774Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiErrorHandling::test_401_unauthorized_error 2025-11-08T19:58:19.699774Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.699875Z"}
+2025-11-08T19:58:19.699963Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.700014Z"}
+2025-11-08T19:58:19.700089Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.700136Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiErrorHandling::test_429_rate_limit_error 2025-11-08T19:58:19.701388Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.701497Z"}
+2025-11-08T19:58:19.701589Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.701637Z"}
+2025-11-08T19:58:19.701711Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.701757Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiErrorHandling::test_500_server_error_retry 2025-11-08T19:58:19.702936Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.703039Z"}
+2025-11-08T19:58:19.703145Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:19.703199Z"}
+2025-11-08T19:58:19.703275Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.703321Z"}
+2025-11-08T19:58:19.703927Z [warning  ] Server error 500 for /markets, retrying in 1s (attempt 1/4) [api_connectors.kalshi_client]
+{"event": "Server error 500 for /markets, retrying in 1s (attempt 1/4)", "level": "warning", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:19.704212Z"}
+2025-11-08T19:58:20.704994Z [info     ] API Retry 1/3: GET /markets    [api_connectors.kalshi_client]
+{"event": "API Retry 1/3: GET /markets", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:20.705148Z"}
+2025-11-08T19:58:20.705329Z [warning  ] Server error 500 for /markets, retrying in 2s (attempt 2/4) [api_connectors.kalshi_client]
+{"event": "Server error 500 for /markets, retrying in 2s (attempt 2/4)", "level": "warning", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:20.705398Z"}
+2025-11-08T19:58:22.706353Z [info     ] API Retry 2/3: GET /markets    [api_connectors.kalshi_client]
+{"event": "API Retry 2/3: GET /markets", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:22.706484Z"}
+2025-11-08T19:58:22.706637Z [warning  ] Server error 500 for /markets, retrying in 4s (attempt 3/4) [api_connectors.kalshi_client]
+{"event": "Server error 500 for /markets, retrying in 4s (attempt 3/4)", "level": "warning", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:22.706698Z"}
+2025-11-08T19:58:26.707557Z [info     ] API Retry 3/3: GET /markets    [api_connectors.kalshi_client]
+{"event": "API Retry 3/3: GET /markets", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.707797Z"}
+2025-11-08T19:58:26.708061Z [error    ] HTTP error 500 for /markets    [api_connectors.kalshi_client]
+{"event": "HTTP error 500 for /markets", "level": "error", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.708156Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiErrorHandling::test_network_timeout_error 2025-11-08T19:58:26.710451Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.710635Z"}
+2025-11-08T19:58:26.710996Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.711095Z"}
+2025-11-08T19:58:26.711212Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.711283Z"}
+2025-11-08T19:58:26.711631Z [error    ] Request timeout for /markets (attempt 1/4) [api_connectors.kalshi_client]
+{"event": "Request timeout for /markets (attempt 1/4)", "level": "error", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.711710Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiErrorHandling::test_request_exception_raised 2025-11-08T19:58:26.713545Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.713763Z"}
+2025-11-08T19:58:26.713910Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.713993Z"}
+2025-11-08T19:58:26.714553Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.714644Z"}
+2025-11-08T19:58:26.714986Z [error    ] Request failed for /markets: Connection refused [api_connectors.kalshi_client]
+{"event": "Request failed for /markets: Connection refused", "level": "error", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.715071Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiErrorHandling::test_decimal_conversion_error_handling 2025-11-08T19:58:26.716721Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.716882Z"}
+2025-11-08T19:58:26.717019Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.717091Z"}
+2025-11-08T19:58:26.717198Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.717262Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestDecimalPrecision::test_sub_penny_precision[test_case0] PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestDecimalPrecision::test_sub_penny_precision[test_case1] PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestDecimalPrecision::test_sub_penny_precision[test_case2] PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestDecimalPrecision::test_sub_penny_precision[test_case3] PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestDecimalPrecision::test_sub_penny_precision[test_case4] PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestDecimalPrecision::test_decimal_spread_calculation PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestDecimalPrecision::test_decimal_pnl_calculation PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiIntegration::test_complete_workflow_fetch_markets_and_balance 2025-11-08T19:58:26.722065Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.722197Z"}
+2025-11-08T19:58:26.722294Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.722346Z"}
+2025-11-08T19:58:26.722423Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.722469Z"}
+2025-11-08T19:58:26.722842Z [info     ] Fetched 2 markets              [api_connectors.kalshi_client]
+{"event": "Fetched 2 markets", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.722902Z"}
+2025-11-08T19:58:26.723089Z [info     ] Fetched balance: $1234.5678    [api_connectors.kalshi_client]
+{"event": "Fetched balance: $1234.5678", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.723145Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiIntegration::test_get_fills_returns_decimal_prices 2025-11-08T19:58:26.724178Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.724282Z"}
+2025-11-08T19:58:26.724381Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.724429Z"}
+2025-11-08T19:58:26.724506Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.724550Z"}
+2025-11-08T19:58:26.725170Z [info     ] Fetched 2 fills                [api_connectors.kalshi_client]
+{"event": "Fetched 2 fills", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.725246Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiIntegration::test_get_settlements_returns_decimal_values 2025-11-08T19:58:26.726301Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.726408Z"}
+2025-11-08T19:58:26.726494Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.726542Z"}
+2025-11-08T19:58:26.726614Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.726660Z"}
+2025-11-08T19:58:26.726985Z [info     ] Fetched 2 settlements          [api_connectors.kalshi_client]
+{"event": "Fetched 2 settlements", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.727042Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiIntegration::test_get_fills_with_time_range 2025-11-08T19:58:26.728032Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.728134Z"}
+2025-11-08T19:58:26.728221Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.728268Z"}
+2025-11-08T19:58:26.728340Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.728385Z"}
+2025-11-08T19:58:26.728697Z [info     ] Fetched 2 fills                [api_connectors.kalshi_client]
+{"event": "Fetched 2 fills", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.728761Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiIntegration::test_get_fills_with_cursor 2025-11-08T19:58:26.729750Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.730051Z"}
+2025-11-08T19:58:26.730151Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.730201Z"}
+2025-11-08T19:58:26.730276Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.730323Z"}
+2025-11-08T19:58:26.730716Z [info     ] Fetched 2 fills                [api_connectors.kalshi_client]
+{"event": "Fetched 2 fills", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.730772Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiIntegration::test_get_settlements_with_ticker_filter 2025-11-08T19:58:26.732014Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.732154Z"}
+2025-11-08T19:58:26.732243Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.732291Z"}
+2025-11-08T19:58:26.732362Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.732407Z"}
+2025-11-08T19:58:26.732739Z [info     ] Fetched 2 settlements          [api_connectors.kalshi_client]
+{"event": "Fetched 2 settlements", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.732805Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiIntegration::test_get_settlements_with_cursor 2025-11-08T19:58:26.733817Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.733922Z"}
+2025-11-08T19:58:26.734012Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.734060Z"}
+2025-11-08T19:58:26.734133Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.734178Z"}
+2025-11-08T19:58:26.734510Z [info     ] Fetched 2 settlements          [api_connectors.kalshi_client]
+{"event": "Fetched 2 settlements", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.734568Z"}
+PASSED
+tests/unit/api_connectors/test_kalshi_client.py::TestKalshiIntegration::test_close_method 2025-11-08T19:58:26.735567Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.735670Z"}
+2025-11-08T19:58:26.735759Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.735805Z"}
+2025-11-08T19:58:26.735876Z [info     ] KalshiClient initialized for demo environment [api_connectors.kalshi_client]
+{"event": "KalshiClient initialized for demo environment", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.735921Z"}
+2025-11-08T19:58:26.736173Z [info     ] KalshiClient closed            [api_connectors.kalshi_client]
+{"event": "KalshiClient closed", "level": "info", "logger": "api_connectors.kalshi_client", "timestamp": "2025-11-08T19:58:26.736238Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestTokenBucket::test_initial_state 2025-11-08T19:58:26.736996Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.737093Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestTokenBucket::test_acquire_single_token 2025-11-08T19:58:26.737661Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.737748Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestTokenBucket::test_acquire_multiple_tokens 2025-11-08T19:58:26.738275Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.738360Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestTokenBucket::test_acquire_fails_when_insufficient_tokens_nonblocking 2025-11-08T19:58:26.738860Z [info     ] TokenBucket initialized: capacity=10, refill_rate=1.00 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=10, refill_rate=1.00 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.739035Z"}
+2025-11-08T19:58:26.739140Z [warning  ] Rate limit warning: Only 0.0/10 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 0.0/10 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.739191Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestTokenBucket::test_acquire_exceeding_capacity_raises_error 2025-11-08T19:58:26.740477Z [info     ] TokenBucket initialized: capacity=10, refill_rate=1.00 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=10, refill_rate=1.00 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.740581Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestTokenBucket::test_refill_adds_tokens_over_time 2025-11-08T19:58:26.741210Z [info     ] TokenBucket initialized: capacity=100, refill_rate=10.00 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=10.00 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.741304Z"}
+2025-11-08T19:58:26.741394Z [warning  ] Rate limit warning: Only 0.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 0.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.741441Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestTokenBucket::test_refill_respects_capacity_limit 2025-11-08T19:58:26.742120Z [info     ] TokenBucket initialized: capacity=100, refill_rate=10.00 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=10.00 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.742213Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestTokenBucket::test_blocking_acquire_waits_for_tokens 2025-11-08T19:58:26.742874Z [info     ] TokenBucket initialized: capacity=10, refill_rate=1.00 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=10, refill_rate=1.00 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.742966Z"}
+2025-11-08T19:58:26.743080Z [warning  ] Rate limit warning: Only 0.0/10 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 0.0/10 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.743130Z"}
+2025-11-08T19:58:26.743396Z [info     ] Rate limit reached, waiting 1.00s for 1.0 tokens [api_connectors.rate_limiter]
+{"event": "Rate limit reached, waiting 1.00s for 1.0 tokens", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.743450Z"}
+2025-11-08T19:58:26.743621Z [info     ] Rate limit reached, waiting 1.00s for 1.0 tokens [api_connectors.rate_limiter]
+{"event": "Rate limit reached, waiting 1.00s for 1.0 tokens", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.743683Z"}
+2025-11-08T19:58:26.743777Z [info     ] Rate limit reached, waiting 1.00s for 1.0 tokens [api_connectors.rate_limiter]
+{"event": "Rate limit reached, waiting 1.00s for 1.0 tokens", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.743825Z"}
+2025-11-08T19:58:26.743910Z [info     ] Rate limit reached, waiting 1.00s for 1.0 tokens [api_connectors.rate_limiter]
+{"event": "Rate limit reached, waiting 1.00s for 1.0 tokens", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.743955Z"}
+2025-11-08T19:58:26.744036Z [info     ] Rate limit reached, waiting 1.00s for 1.0 tokens [api_connectors.rate_limiter]
+{"event": "Rate limit reached, waiting 1.00s for 1.0 tokens", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.744080Z"}
+2025-11-08T19:58:26.744167Z [warning  ] Rate limit warning: Only 0.0/10 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 0.0/10 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.744210Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestTokenBucket::test_get_available_tokens 2025-11-08T19:58:26.744797Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.744891Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestTokenBucket::test_thread_safety 2025-11-08T19:58:26.745446Z [info     ] TokenBucket initialized: capacity=100, refill_rate=10.00 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=10.00 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.745575Z"}
+2025-11-08T19:58:26.755336Z [warning  ] Rate limit warning: Only 19.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 19.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.755492Z"}
+2025-11-08T19:58:26.755702Z [warning  ] Rate limit warning: Only 18.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 18.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.755817Z"}
+2025-11-08T19:58:26.755962Z [warning  ] Rate limit warning: Only 17.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 17.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.756080Z"}
+2025-11-08T19:58:26.756289Z [warning  ] Rate limit warning: Only 16.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 16.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.756434Z"}
+2025-11-08T19:58:26.756596Z [warning  ] Rate limit warning: Only 15.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 15.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.756711Z"}
+2025-11-08T19:58:26.756850Z [warning  ] Rate limit warning: Only 14.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 14.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.756949Z"}
+2025-11-08T19:58:26.757083Z [warning  ] Rate limit warning: Only 13.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 13.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.757232Z"}
+2025-11-08T19:58:26.757433Z [warning  ] Rate limit warning: Only 12.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 12.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.757538Z"}
+2025-11-08T19:58:26.757680Z [warning  ] Rate limit warning: Only 11.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 11.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.757779Z"}
+2025-11-08T19:58:26.757922Z [warning  ] Rate limit warning: Only 10.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 10.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.758034Z"}
+2025-11-08T19:58:26.758203Z [warning  ] Rate limit warning: Only 9.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 9.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.758303Z"}
+2025-11-08T19:58:26.758440Z [warning  ] Rate limit warning: Only 8.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 8.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.758543Z"}
+2025-11-08T19:58:26.758647Z [warning  ] Rate limit warning: Only 7.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 7.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.758750Z"}
+2025-11-08T19:58:26.758957Z [warning  ] Rate limit warning: Only 6.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 6.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.759096Z"}
+2025-11-08T19:58:26.759304Z [warning  ] Rate limit warning: Only 5.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 5.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.759392Z"}
+2025-11-08T19:58:26.759530Z [warning  ] Rate limit warning: Only 4.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 4.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.759605Z"}
+2025-11-08T19:58:26.759744Z [warning  ] Rate limit warning: Only 3.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 3.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.759811Z"}
+2025-11-08T19:58:26.759945Z [warning  ] Rate limit warning: Only 2.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 2.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.760041Z"}
+2025-11-08T19:58:26.760194Z [warning  ] Rate limit warning: Only 1.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 1.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.760290Z"}
+2025-11-08T19:58:26.760441Z [warning  ] Rate limit warning: Only 0.1/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 0.1/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.760515Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestRateLimiter::test_initialization 2025-11-08T19:58:26.761436Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.761536Z"}
+2025-11-08T19:58:26.761619Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.761666Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestRateLimiter::test_initialization_with_custom_burst_size 2025-11-08T19:58:26.762236Z [info     ] TokenBucket initialized: capacity=50, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=50, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.762323Z"}
+2025-11-08T19:58:26.762410Z [info     ] RateLimiter initialized: 100 req/min (burst: 50) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 50)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.762458Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestRateLimiter::test_wait_if_needed_acquires_token 2025-11-08T19:58:26.762997Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.763081Z"}
+2025-11-08T19:58:26.763160Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.763205Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestRateLimiter::test_handle_rate_limit_error_with_retry_after 2025-11-08T19:58:26.763738Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.763831Z"}
+2025-11-08T19:58:26.763916Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.763962Z"}
+2025-11-08T19:58:26.764144Z [warning  ] Rate limit (429) error, waiting 30s before retry [api_connectors.rate_limiter]
+{"event": "Rate limit (429) error, waiting 30s before retry", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.764236Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestRateLimiter::test_handle_rate_limit_error_without_retry_after 2025-11-08T19:58:26.764978Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.765093Z"}
+2025-11-08T19:58:26.765187Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.765239Z"}
+2025-11-08T19:58:26.765408Z [warning  ] Rate limit (429) error, waiting 60s before retry [api_connectors.rate_limiter]
+{"event": "Rate limit (429) error, waiting 60s before retry", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.765464Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestRateLimiter::test_get_utilization_empty_bucket 2025-11-08T19:58:26.766175Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.766273Z"}
+2025-11-08T19:58:26.766356Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.766404Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestRateLimiter::test_get_utilization_half_used 2025-11-08T19:58:26.766949Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.767038Z"}
+2025-11-08T19:58:26.767124Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.767172Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestRateLimiter::test_get_utilization_fully_used 2025-11-08T19:58:26.767815Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.767899Z"}
+2025-11-08T19:58:26.767985Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.768030Z"}
+2025-11-08T19:58:26.768225Z [warning  ] Rate limit warning: Only 19.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 19.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.768282Z"}
+2025-11-08T19:58:26.768357Z [warning  ] Rate limit warning: Only 18.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 18.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.768405Z"}
+2025-11-08T19:58:26.768482Z [warning  ] Rate limit warning: Only 17.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 17.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.768525Z"}
+2025-11-08T19:58:26.768702Z [warning  ] Rate limit warning: Only 16.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 16.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.768750Z"}
+2025-11-08T19:58:26.768821Z [warning  ] Rate limit warning: Only 15.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 15.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.768863Z"}
+2025-11-08T19:58:26.768937Z [warning  ] Rate limit warning: Only 14.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 14.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.768978Z"}
+2025-11-08T19:58:26.769046Z [warning  ] Rate limit warning: Only 13.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 13.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.769088Z"}
+2025-11-08T19:58:26.769165Z [warning  ] Rate limit warning: Only 12.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 12.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.769206Z"}
+2025-11-08T19:58:26.769275Z [warning  ] Rate limit warning: Only 11.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 11.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.769317Z"}
+2025-11-08T19:58:26.769390Z [warning  ] Rate limit warning: Only 10.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 10.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.769431Z"}
+2025-11-08T19:58:26.769501Z [warning  ] Rate limit warning: Only 9.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 9.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.769542Z"}
+2025-11-08T19:58:26.769613Z [warning  ] Rate limit warning: Only 8.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 8.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.769655Z"}
+2025-11-08T19:58:26.769726Z [warning  ] Rate limit warning: Only 7.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 7.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.769769Z"}
+2025-11-08T19:58:26.769840Z [warning  ] Rate limit warning: Only 6.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 6.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.769882Z"}
+2025-11-08T19:58:26.769950Z [warning  ] Rate limit warning: Only 5.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 5.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.769992Z"}
+2025-11-08T19:58:26.770064Z [warning  ] Rate limit warning: Only 4.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 4.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.770111Z"}
+2025-11-08T19:58:26.770183Z [warning  ] Rate limit warning: Only 3.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 3.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.770226Z"}
+2025-11-08T19:58:26.770297Z [warning  ] Rate limit warning: Only 2.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 2.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.770341Z"}
+2025-11-08T19:58:26.770413Z [warning  ] Rate limit warning: Only 1.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 1.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.770460Z"}
+2025-11-08T19:58:26.770533Z [warning  ] Rate limit warning: Only 0.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 0.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.770587Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestRateLimiter::test_burst_behavior 2025-11-08T19:58:26.771237Z [info     ] TokenBucket initialized: capacity=10, refill_rate=1.00 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=10, refill_rate=1.00 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.771344Z"}
+2025-11-08T19:58:26.771430Z [info     ] RateLimiter initialized: 60 req/min (burst: 10) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 60 req/min (burst: 10)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.771481Z"}
+2025-11-08T19:58:26.771578Z [warning  ] Rate limit warning: Only 1.0/10 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 1.0/10 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.771628Z"}
+2025-11-08T19:58:26.771737Z [warning  ] Rate limit warning: Only 0.0/10 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 0.0/10 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.771790Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestRateLimiter::test_rate_limiting_over_time 2025-11-08T19:58:26.772356Z [info     ] TokenBucket initialized: capacity=60, refill_rate=1.00 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=60, refill_rate=1.00 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.772441Z"}
+2025-11-08T19:58:26.772523Z [info     ] RateLimiter initialized: 60 req/min (burst: 60) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 60 req/min (burst: 60)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.772581Z"}
+2025-11-08T19:58:26.772730Z [warning  ] Rate limit warning: Only 11.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 11.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.772777Z"}
+2025-11-08T19:58:26.772850Z [warning  ] Rate limit warning: Only 10.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 10.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.772893Z"}
+2025-11-08T19:58:26.772964Z [warning  ] Rate limit warning: Only 9.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 9.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.773009Z"}
+2025-11-08T19:58:26.773082Z [warning  ] Rate limit warning: Only 8.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 8.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.773124Z"}
+2025-11-08T19:58:26.773193Z [warning  ] Rate limit warning: Only 7.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 7.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.773234Z"}
+2025-11-08T19:58:26.773304Z [warning  ] Rate limit warning: Only 6.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 6.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.773345Z"}
+2025-11-08T19:58:26.773416Z [warning  ] Rate limit warning: Only 5.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 5.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.773457Z"}
+2025-11-08T19:58:26.773527Z [warning  ] Rate limit warning: Only 4.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 4.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.773570Z"}
+2025-11-08T19:58:26.773640Z [warning  ] Rate limit warning: Only 3.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 3.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.773682Z"}
+2025-11-08T19:58:26.773755Z [warning  ] Rate limit warning: Only 2.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 2.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.773797Z"}
+2025-11-08T19:58:26.773867Z [warning  ] Rate limit warning: Only 1.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 1.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.773909Z"}
+2025-11-08T19:58:26.773977Z [warning  ] Rate limit warning: Only 0.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 0.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.774018Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestIntegration::test_rate_limiter_prevents_exceeding_limit 2025-11-08T19:58:26.774672Z [info     ] TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=100, refill_rate=1.67 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.774772Z"}
+2025-11-08T19:58:26.774858Z [info     ] RateLimiter initialized: 100 req/min (burst: 100) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 100 req/min (burst: 100)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.774906Z"}
+2025-11-08T19:58:26.775099Z [warning  ] Rate limit warning: Only 19.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 19.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.775148Z"}
+2025-11-08T19:58:26.775232Z [warning  ] Rate limit warning: Only 18.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 18.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.775277Z"}
+2025-11-08T19:58:26.775351Z [warning  ] Rate limit warning: Only 17.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 17.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.775399Z"}
+2025-11-08T19:58:26.775473Z [warning  ] Rate limit warning: Only 16.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 16.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.775518Z"}
+2025-11-08T19:58:26.775591Z [warning  ] Rate limit warning: Only 15.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 15.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.775634Z"}
+2025-11-08T19:58:26.775708Z [warning  ] Rate limit warning: Only 14.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 14.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.775751Z"}
+2025-11-08T19:58:26.775820Z [warning  ] Rate limit warning: Only 13.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 13.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.775862Z"}
+2025-11-08T19:58:26.775931Z [warning  ] Rate limit warning: Only 12.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 12.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.775970Z"}
+2025-11-08T19:58:26.776044Z [warning  ] Rate limit warning: Only 11.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 11.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.776086Z"}
+2025-11-08T19:58:26.776157Z [warning  ] Rate limit warning: Only 10.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 10.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.776199Z"}
+2025-11-08T19:58:26.776269Z [warning  ] Rate limit warning: Only 9.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 9.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.776311Z"}
+2025-11-08T19:58:26.776378Z [warning  ] Rate limit warning: Only 8.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 8.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.776419Z"}
+2025-11-08T19:58:26.776486Z [warning  ] Rate limit warning: Only 7.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 7.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.776526Z"}
+2025-11-08T19:58:26.776867Z [warning  ] Rate limit warning: Only 6.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 6.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.776941Z"}
+2025-11-08T19:58:26.777025Z [warning  ] Rate limit warning: Only 5.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 5.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.777071Z"}
+2025-11-08T19:58:26.777147Z [warning  ] Rate limit warning: Only 4.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 4.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.777190Z"}
+2025-11-08T19:58:26.777269Z [warning  ] Rate limit warning: Only 3.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 3.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.777313Z"}
+2025-11-08T19:58:26.777381Z [warning  ] Rate limit warning: Only 2.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 2.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.777422Z"}
+2025-11-08T19:58:26.777492Z [warning  ] Rate limit warning: Only 1.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 1.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.777534Z"}
+2025-11-08T19:58:26.777604Z [warning  ] Rate limit warning: Only 0.0/100 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 0.0/100 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.777645Z"}
+PASSED
+tests/unit/api_connectors/test_rate_limiter.py::TestIntegration::test_rate_limiter_allows_requests_after_refill 2025-11-08T19:58:26.778314Z [info     ] TokenBucket initialized: capacity=60, refill_rate=1.00 tokens/sec [api_connectors.rate_limiter]
+
+-------------------------------- live log call --------------------------------
+{"event": "TokenBucket initialized: capacity=60, refill_rate=1.00 tokens/sec", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.778410Z"}
+2025-11-08T19:58:26.778675Z [info     ] RateLimiter initialized: 60 req/min (burst: 60) [api_connectors.rate_limiter]
+{"event": "RateLimiter initialized: 60 req/min (burst: 60)", "level": "info", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.778742Z"}
+2025-11-08T19:58:26.778898Z [warning  ] Rate limit warning: Only 11.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 11.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.778946Z"}
+2025-11-08T19:58:26.779027Z [warning  ] Rate limit warning: Only 10.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 10.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.779070Z"}
+2025-11-08T19:58:26.779141Z [warning  ] Rate limit warning: Only 9.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 9.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.779182Z"}
+2025-11-08T19:58:26.779255Z [warning  ] Rate limit warning: Only 8.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 8.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.779297Z"}
+2025-11-08T19:58:26.779364Z [warning  ] Rate limit warning: Only 7.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 7.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.779407Z"}
+2025-11-08T19:58:26.779476Z [warning  ] Rate limit warning: Only 6.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 6.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.779517Z"}
+2025-11-08T19:58:26.779584Z [warning  ] Rate limit warning: Only 5.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 5.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.779623Z"}
+2025-11-08T19:58:26.779693Z [warning  ] Rate limit warning: Only 4.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 4.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.779735Z"}
+2025-11-08T19:58:26.779802Z [warning  ] Rate limit warning: Only 3.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 3.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.779843Z"}
+2025-11-08T19:58:26.779912Z [warning  ] Rate limit warning: Only 2.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 2.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.779953Z"}
+2025-11-08T19:58:26.780021Z [warning  ] Rate limit warning: Only 1.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 1.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.780062Z"}
+2025-11-08T19:58:26.780131Z [warning  ] Rate limit warning: Only 0.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 0.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.780174Z"}
+2025-11-08T19:58:26.780460Z [warning  ] Rate limit warning: Only 9.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 9.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.780533Z"}
+2025-11-08T19:58:26.780627Z [warning  ] Rate limit warning: Only 8.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 8.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.780675Z"}
+2025-11-08T19:58:26.780758Z [warning  ] Rate limit warning: Only 7.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 7.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.780802Z"}
+2025-11-08T19:58:26.780884Z [warning  ] Rate limit warning: Only 6.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 6.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.780928Z"}
+2025-11-08T19:58:26.781016Z [warning  ] Rate limit warning: Only 5.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 5.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.781059Z"}
+2025-11-08T19:58:26.781137Z [warning  ] Rate limit warning: Only 4.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 4.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.781181Z"}
+2025-11-08T19:58:26.781256Z [warning  ] Rate limit warning: Only 3.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 3.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.781299Z"}
+2025-11-08T19:58:26.781376Z [warning  ] Rate limit warning: Only 2.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 2.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.781419Z"}
+2025-11-08T19:58:26.781493Z [warning  ] Rate limit warning: Only 1.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 1.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.781540Z"}
+2025-11-08T19:58:26.781616Z [warning  ] Rate limit warning: Only 0.0/60 tokens remaining [api_connectors.rate_limiter]
+{"event": "Rate limit warning: Only 0.0/60 tokens remaining", "level": "warning", "logger": "api_connectors.rate_limiter", "timestamp": "2025-11-08T19:58:26.781660Z"}
+PASSED
+tests/unit/test_main.py::TestFetchBalance::test_fetch_balance_success_demo 2025-11-08T19:58:26.786157Z [info     ] Balance fetched successfully: 1234.5678 [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Balance fetched successfully: 1234.5678", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.786157Z"}
+PASSED
+tests/unit/test_main.py::TestFetchBalance::test_fetch_balance_success_prod 2025-11-08T19:58:26.790072Z [info     ] Balance fetched successfully: 5432.1234 [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Balance fetched successfully: 5432.1234", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.790072Z"}
+PASSED
+tests/unit/test_main.py::TestFetchBalance::test_fetch_balance_dry_run 2025-11-08T19:58:26.793898Z [info     ] Balance fetched successfully: 1000.0000 [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Balance fetched successfully: 1000.0000", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.793898Z"}
+PASSED
+tests/unit/test_main.py::TestFetchBalance::test_fetch_balance_verbose 2025-11-08T19:58:26.796955Z [info     ] Verbose mode enabled           [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Verbose mode enabled", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.796955Z"}
+2025-11-08T19:58:26.797398Z [info     ] Balance fetched successfully: 2468.1357 [main]
+{"event": "Balance fetched successfully: 2468.1357", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.797398Z"}
+PASSED
+tests/unit/test_main.py::TestFetchBalance::test_fetch_balance_decimal_precision 2025-11-08T19:58:26.800518Z [info     ] Balance fetched successfully: 0.4975 [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Balance fetched successfully: 0.4975", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.800518Z"}
+PASSED
+tests/unit/test_main.py::TestFetchBalance::test_fetch_balance_missing_credentials PASSED
+tests/unit/test_main.py::TestFetchBalance::test_fetch_balance_api_error PASSED
+tests/unit/test_main.py::TestFetchMarkets::test_fetch_markets_empty 2025-11-08T19:58:26.804729Z [info     ] Fetched 0 markets              [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 0 markets", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.804729Z"}
+PASSED
+tests/unit/test_main.py::TestFetchMarkets::test_fetch_markets_single 2025-11-08T19:58:26.807469Z [info     ] Fetched 1 markets              [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 1 markets", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.807469Z"}
+PASSED
+tests/unit/test_main.py::TestFetchMarkets::test_fetch_markets_multiple 2025-11-08T19:58:26.811486Z [info     ] Fetched 3 markets              [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 3 markets", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.811486Z"}
+PASSED
+tests/unit/test_main.py::TestFetchMarkets::test_fetch_markets_filter_by_series 2025-11-08T19:58:26.816417Z [info     ] Fetched 1 markets              [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 1 markets", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.816417Z"}
+PASSED
+tests/unit/test_main.py::TestFetchMarkets::test_fetch_markets_filter_by_event 2025-11-08T19:58:26.820340Z [info     ] Fetched 1 markets              [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 1 markets", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.820340Z"}
+PASSED
+tests/unit/test_main.py::TestFetchMarkets::test_fetch_markets_custom_limit 2025-11-08T19:58:26.824253Z [info     ] Fetched 10 markets             [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 10 markets", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.824253Z"}
+PASSED
+tests/unit/test_main.py::TestFetchMarkets::test_fetch_markets_title_truncation 2025-11-08T19:58:26.830934Z [info     ] Fetched 2 markets              [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 2 markets", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.830934Z"}
+PASSED
+tests/unit/test_main.py::TestFetchMarkets::test_fetch_markets_dry_run 2025-11-08T19:58:26.835929Z [info     ] Fetched 1 markets              [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 1 markets", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.835929Z"}
+PASSED
+tests/unit/test_main.py::TestFetchMarkets::test_fetch_markets_verbose 2025-11-08T19:58:26.839426Z [info     ] Verbose mode enabled           [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Verbose mode enabled", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.839426Z"}
+2025-11-08T19:58:26.840030Z [info     ] Fetched 1 markets              [main]
+{"event": "Fetched 1 markets", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.840030Z"}
+PASSED
+tests/unit/test_main.py::TestFetchMarkets::test_fetch_markets_decimal_prices 2025-11-08T19:58:26.843707Z [info     ] Fetched 1 markets              [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 1 markets", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.843707Z"}
+PASSED
+tests/unit/test_main.py::TestFetchMarkets::test_fetch_markets_api_error PASSED
+tests/unit/test_main.py::TestFetchPositions::test_fetch_positions_empty 2025-11-08T19:58:26.848222Z [info     ] Fetched 0 positions            [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 0 positions", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.848222Z"}
+PASSED
+tests/unit/test_main.py::TestFetchPositions::test_fetch_positions_single 2025-11-08T19:58:26.850659Z [info     ] Fetched 1 positions            [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 1 positions", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.850659Z"}
+PASSED
+tests/unit/test_main.py::TestFetchPositions::test_fetch_positions_multiple 2025-11-08T19:58:26.854576Z [info     ] Fetched 3 positions            [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 3 positions", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.854576Z"}
+PASSED
+tests/unit/test_main.py::TestFetchPositions::test_fetch_positions_dry_run 2025-11-08T19:58:26.858727Z [info     ] Fetched 1 positions            [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 1 positions", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.858727Z"}
+PASSED
+tests/unit/test_main.py::TestFetchPositions::test_fetch_positions_verbose 2025-11-08T19:58:26.861952Z [info     ] Verbose mode enabled           [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Verbose mode enabled", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.861952Z"}
+2025-11-08T19:58:26.862392Z [info     ] Fetched 1 positions            [main]
+{"event": "Fetched 1 positions", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.862392Z"}
+PASSED
+tests/unit/test_main.py::TestFetchPositions::test_fetch_positions_decimal_prices 2025-11-08T19:58:26.865951Z [info     ] Fetched 1 positions            [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 1 positions", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.865951Z"}
+PASSED
+tests/unit/test_main.py::TestFetchPositions::test_fetch_positions_api_error PASSED
+tests/unit/test_main.py::TestFetchFills::test_fetch_fills_empty 2025-11-08T19:58:26.870215Z [info     ] Fetched 0 fills                [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 0 fills", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.870215Z"}
+PASSED
+tests/unit/test_main.py::TestFetchFills::test_fetch_fills_single 2025-11-08T19:58:26.872804Z [info     ] Fetched 1 fills                [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 1 fills", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.872804Z"}
+PASSED
+tests/unit/test_main.py::TestFetchFills::test_fetch_fills_multiple 2025-11-08T19:58:26.879573Z [info     ] Fetched 3 fills                [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 3 fills", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.879573Z"}
+PASSED
+tests/unit/test_main.py::TestFetchFills::test_fetch_fills_pagination 2025-11-08T19:58:26.884230Z [info     ] Fetched 15 fills               [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 15 fills", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.884230Z"}
+PASSED
+tests/unit/test_main.py::TestFetchFills::test_fetch_fills_dry_run 2025-11-08T19:58:26.891661Z [info     ] Fetched 1 fills                [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 1 fills", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.891661Z"}
+PASSED
+tests/unit/test_main.py::TestFetchFills::test_fetch_fills_decimal_prices 2025-11-08T19:58:26.895595Z [info     ] Fetched 1 fills                [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 1 fills", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.895595Z"}
+PASSED
+tests/unit/test_main.py::TestFetchFills::test_fetch_fills_api_error PASSED
+tests/unit/test_main.py::TestFetchSettlements::test_fetch_settlements_empty 2025-11-08T19:58:26.901162Z [info     ] Fetched 0 settlements          [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 0 settlements", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.901162Z"}
+PASSED
+tests/unit/test_main.py::TestFetchSettlements::test_fetch_settlements_single 2025-11-08T19:58:26.904895Z [info     ] Fetched 1 settlements          [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 1 settlements", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.904895Z"}
+PASSED
+tests/unit/test_main.py::TestFetchSettlements::test_fetch_settlements_multiple 2025-11-08T19:58:26.908889Z [info     ] Fetched 3 settlements          [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 3 settlements", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.908889Z"}
+PASSED
+tests/unit/test_main.py::TestFetchSettlements::test_fetch_settlements_dry_run 2025-11-08T19:58:26.913437Z [info     ] Fetched 1 settlements          [main]
+
+-------------------------------- live log call --------------------------------
+{"event": "Fetched 1 settlements", "level": "info", "logger": "main", "timestamp": "2025-11-08T19:58:26.913437Z"}
+PASSED
+tests/unit/test_main.py::TestFetchSettlements::test_fetch_settlements_api_error PASSED
+tests/unit/test_main.py::TestGetKalshiClient::test_get_kalshi_client_demo PASSED
+tests/unit/test_main.py::TestGetKalshiClient::test_get_kalshi_client_prod PASSED
+tests/unit/test_main.py::TestGetKalshiClient::test_get_kalshi_client_missing_credentials PASSED
+tests/unit/test_main.py::TestGetKalshiClient::test_get_kalshi_client_invalid_environment PASSED
+tests/unit/test_main.py::TestErrorHandling::test_missing_credentials_error_message PASSED
+tests/unit/test_main.py::TestErrorHandling::test_api_error_handling PASSED
+tests/unit/test_main.py::TestErrorHandling::test_verbose_mode_shows_details PASSED2025-11-08T19:58:26.919617Z [info     ] Connection pool closed         [database.connection]
+
+------------------------------ live log teardown ------------------------------
+{"event": "Connection pool closed", "level": "info", "logger": "database.connection", "timestamp": "2025-11-08T19:58:26.919617Z"}
+
+
+============================== warnings summary ===============================
+..\..\AppData\Roaming\Python\Python314\site-packages\pytest_asyncio\plugin.py:179
+..\..\AppData\Roaming\Python\Python314\site-packages\pytest_asyncio\plugin.py:179
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\pytest_asyncio\plugin.py:179: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    return asyncio.iscoroutinefunction(obj) or inspect.isasyncgenfunction(obj)
+
+..\..\AppData\Roaming\Python\Python314\site-packages\pytest_asyncio\plugin.py:450
+..\..\AppData\Roaming\Python\Python314\site-packages\pytest_asyncio\plugin.py:450
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\pytest_asyncio\plugin.py:450: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    return asyncio.iscoroutinefunction(func)
+
+..\..\AppData\Roaming\Python\Python314\site-packages\pytest_asyncio\plugin.py:515
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\pytest_asyncio\plugin.py:515: DeprecationWarning: 'asyncio.iscoroutinefunction' is deprecated and slated for removal in Python 3.16; use inspect.iscoroutinefunction() instead
+    and asyncio.iscoroutinefunction(func.hypothesis.inner_test)
+
+tests/property/test_edge_detection_properties.py::test_edge_formula_correctness
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\pytest_asyncio\plugin.py:1056: DeprecationWarning: 'asyncio.get_event_loop_policy' is deprecated and slated for removal in Python 3.16
+    return asyncio.get_event_loop_policy()
+
+tests/property/test_edge_detection_properties.py::test_edge_formula_correctness
+tests/property/test_edge_detection_properties.py::test_edge_above_threshold_recommends_trade
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1777: HypothesisDeprecationWarning: 0.15 cannot be exactly represented as a decimal with places=4
+    max_value = _as_finite_decimal(max_value, "max_value", allow_infinity, places)
+
+tests/property/test_edge_detection_properties.py::test_fees_always_reduce_edge
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1776: HypothesisDeprecationWarning: 0.1 cannot be exactly represented as a decimal with places=4
+    min_value = _as_finite_decimal(min_value, "min_value", allow_infinity, places)
+
+tests/property/test_edge_detection_properties.py::test_fees_always_reduce_edge
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1777: HypothesisDeprecationWarning: 0.9 cannot be exactly represented as a decimal with places=4
+    max_value = _as_finite_decimal(max_value, "max_value", allow_infinity, places)
+
+tests/property/test_edge_detection_properties.py::test_spread_reduces_realizable_edge
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1776: HypothesisDeprecationWarning: 0.3 cannot be exactly represented as a decimal with places=4
+    min_value = _as_finite_decimal(min_value, "min_value", allow_infinity, places)
+
+tests/property/test_edge_detection_properties.py::test_spread_reduces_realizable_edge
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1777: HypothesisDeprecationWarning: 0.7 cannot be exactly represented as a decimal with places=4
+    max_value = _as_finite_decimal(max_value, "max_value", allow_infinity, places)
+
+tests/property/test_edge_detection_properties.py::test_spread_reduces_realizable_edge
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1776: HypothesisDeprecationWarning: 0.001 cannot be exactly represented as a decimal with places=4
+    min_value = _as_finite_decimal(min_value, "min_value", allow_infinity, places)
+
+tests/property/test_edge_detection_properties.py::test_spread_reduces_realizable_edge
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1777: HypothesisDeprecationWarning: 0.05 cannot be exactly represented as a decimal with places=4
+    max_value = _as_finite_decimal(max_value, "max_value", allow_infinity, places)
+
+tests/property/test_edge_detection_properties.py::test_realizable_edge_uses_ask_price
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1776: HypothesisDeprecationWarning: 0.4 cannot be exactly represented as a decimal with places=4
+    min_value = _as_finite_decimal(min_value, "min_value", allow_infinity, places)
+
+tests/property/test_edge_detection_properties.py::test_realizable_edge_uses_ask_price
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1777: HypothesisDeprecationWarning: 0.6 cannot be exactly represented as a decimal with places=4
+    max_value = _as_finite_decimal(max_value, "max_value", allow_infinity, places)
+
+tests/property/test_edge_detection_properties.py::test_realizable_edge_uses_ask_price
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1776: HypothesisDeprecationWarning: 0.35 cannot be exactly represented as a decimal with places=4
+    min_value = _as_finite_decimal(min_value, "min_value", allow_infinity, places)
+
+tests/property/test_edge_detection_properties.py::test_realizable_edge_uses_ask_price
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1777: HypothesisDeprecationWarning: 0.55 cannot be exactly represented as a decimal with places=4
+    max_value = _as_finite_decimal(max_value, "max_value", allow_infinity, places)
+
+tests/property/test_edge_detection_properties.py::test_realizable_edge_uses_ask_price
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1776: HypothesisDeprecationWarning: 0.45 cannot be exactly represented as a decimal with places=4
+    min_value = _as_finite_decimal(min_value, "min_value", allow_infinity, places)
+
+tests/property/test_edge_detection_properties.py::test_realizable_edge_uses_ask_price
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1777: HypothesisDeprecationWarning: 0.65 cannot be exactly represented as a decimal with places=4
+    max_value = _as_finite_decimal(max_value, "max_value", allow_infinity, places)
+
+tests/property/test_edge_detection_properties.py::test_edge_above_threshold_recommends_trade
+tests/property/test_kelly_criterion_properties.py::test_kelly_fraction_reduces_position_proportionally
+tests/property/test_kelly_criterion_properties.py::test_position_size_reasonable_bounds
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1776: HypothesisDeprecationWarning: 0.01 cannot be exactly represented as a decimal with places=4
+    min_value = _as_finite_decimal(min_value, "min_value", allow_infinity, places)
+
+tests/property/test_kelly_criterion_properties.py::test_negative_edge_means_zero_position
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1777: HypothesisDeprecationWarning: -0.01 cannot be exactly represented as a decimal with places=4
+    max_value = _as_finite_decimal(max_value, "max_value", allow_infinity, places)
+
+tests/property/test_kelly_criterion_properties.py::test_position_size_scales_linearly_with_bankroll
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1776: HypothesisDeprecationWarning: 0.1 cannot be exactly represented as a decimal with places=2
+    min_value = _as_finite_decimal(min_value, "min_value", allow_infinity, places)
+
+tests/property/test_kelly_criterion_properties.py::test_position_size_reasonable_bounds
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1777: HypothesisDeprecationWarning: 0.3 cannot be exactly represented as a decimal with places=4
+    max_value = _as_finite_decimal(max_value, "max_value", allow_infinity, places)
+
+tests/property/test_kelly_criterion_properties.py::test_position_size_reasonable_bounds
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\hypothesis\strategies\_internal\core.py:1776: HypothesisDeprecationWarning: 0.2 cannot be exactly represented as a decimal with places=2
+    min_value = _as_finite_decimal(min_value, "min_value", allow_infinity, places)
+
+tests/test_logger.py::test_logger_initialization
+  C:\Users\emtol\repos\precog-repo\utils\logger.py:194: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_9fglm3_3\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+    logging.basicConfig(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_logger.py::test_decimal_precision_in_logs
+  C:\Users\emtol\repos\precog-repo\utils\logger.py:194: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_unr2rxi5\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+    logging.basicConfig(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_logger.py::test_log_trade_helper
+  C:\Users\emtol\repos\precog-repo\utils\logger.py:194: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_xfzzwd2q\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+    logging.basicConfig(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_logger.py::test_log_position_update_helper
+  C:\Users\emtol\repos\precog-repo\utils\logger.py:194: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_ivkx5fn5\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+    logging.basicConfig(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_logger.py::test_log_edge_detected_helper
+  C:\Users\emtol\repos\precog-repo\utils\logger.py:194: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_s9y8pxrp\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+    logging.basicConfig(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_logger.py::test_log_error_helper
+  C:\Users\emtol\repos\precog-repo\utils\logger.py:194: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_lw_xlaf2\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+    logging.basicConfig(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_logger.py::test_log_context_binding
+  C:\Users\emtol\repos\precog-repo\utils\logger.py:194: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_mwcejfao\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+    logging.basicConfig(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_logger.py::test_log_file_created
+  C:\Users\emtol\repos\precog-repo\utils\logger.py:194: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_ijdwyqek\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+    logging.basicConfig(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_logger.py::test_log_levels
+  C:\Users\emtol\repos\precog-repo\utils\logger.py:194: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_ku3d4sas\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+    logging.basicConfig(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_logger.py::test_logger_with_extra_context
+  C:\Users\emtol\repos\precog-repo\utils\logger.py:194: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_1_rfjnkn\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+    logging.basicConfig(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_logger.py::test_logger_handles_exceptions
+  C:\Users\emtol\repos\precog-repo\utils\logger.py:194: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_g68z1e8y\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+    logging.basicConfig(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_logger.py::test_logger_handles_exceptions
+  C:\Users\emtol\AppData\Roaming\Python\Python314\site-packages\structlog\stdlib.py:1160: UserWarning: Remove `format_exc_info` from your processor chain if you want pretty exceptions.
+    ed = p(logger, meth_name, ed)  # type: ignore[arg-type]
+
+tests/test_logger.py::test_concurrent_logging
+  C:\Users\emtol\repos\precog-repo\utils\logger.py:194: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs_xf8qorsq\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+    logging.basicConfig(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+tests/test_logger.py::test_log_with_none_values
+  C:\Users\emtol\repos\precog-repo\utils\logger.py:194: ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\emtol\\AppData\\Local\\Temp\\precog_logs__h9tx240\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+    logging.basicConfig(
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=============================== tests coverage ================================
+_______________ coverage: platform win32, python 3.14.0-final-0 _______________
+
+Name                          Stmts   Miss Branch BrPart   Cover   Missing
+--------------------------------------------------------------------------
+config\__init__.py                2      0      0      0 100.00%
+config\config_loader.py         152      0     42      2  98.97%   384->382, 418->424
+database\__init__.py              3      0      0      0 100.00%
+database\connection.py           85     13     14      5  81.82%   104-105, 115-117, 138, 158->exit, 316->exit, 340-344, 350-352
+database\crud_operations.py      91      6     12      3  91.26%   608-609, 644-645, 906-907
+utils\__init__.py                 2      0      0      0 100.00%
+utils\logger.py                  63      7     16      2  86.08%   159, 326->328, 334-343
+--------------------------------------------------------------------------
+TOTAL                           398     26     84     12  91.70%
+Coverage HTML written to dir tests/coverage_html
+Required test coverage of 80% reached. Total coverage: 91.70%
+=========================== short test summary info ===========================
+SKIPPED [1] tests\test_error_handling.py:34: Connection pool initialized at module import (connection.py:348-352); cannot control pool size in tests
+SKIPPED [1] tests\test_error_handling.py:46: Connection pool initialized at module import (connection.py:348-352); cannot reinitialize with test credentials
+SKIPPED [1] tests\test_error_handling.py:104: ConfigLoader.load() only loads from config/ directory; temp file testing not supported
+SKIPPED [1] tests\test_error_handling.py:132: ConfigLoader.load() only loads from config/ directory; temp file testing not supported
+SKIPPED [1] tests\test_error_handling.py:144: ConfigLoader.load() only loads from config/ directory; temp file testing not supported
+SKIPPED [1] tests\test_error_handling.py:161: get_logger() doesn't accept log_file parameter; logging configured globally
+SKIPPED [1] tests\test_error_handling.py:174: get_logger() doesn't accept log_file parameter; logging configured globally
+SKIPPED [1] tests\test_error_handling.py:189: event_id column allows NULL in database schema (see DATABASE_SCHEMA_SUMMARY_V1.7.md line 142); no NOT NULL constraint to test
+================ 248 passed, 8 skipped, 41 warnings in 12.18s =================

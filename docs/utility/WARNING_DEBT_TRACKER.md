@@ -1,10 +1,11 @@
 # Warning Debt Tracker
 
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-11-08
-**Last Updated:** 2025-11-08
+**Last Updated:** 2025-11-09
 **Purpose:** Track and manage technical debt in the form of warnings across the codebase
-**Related:** Phase 1 CLI Testing, Zero-Warning Policy
+**Related:** Phase 1.5 Warning Governance, Zero-Regression Policy
+**Changes in V1.1:** Baseline updated (429→312, -117 warnings), YAML warnings eliminated, ADR warnings reclassified (informational→actionable)
 
 ---
 
@@ -17,44 +18,48 @@ This document tracks all warnings in the codebase (test warnings, deprecation wa
 - **Multiplicative Effect:** 1 bug × 248 tests = 248 warnings (noise drowns signal)
 - **Zero-Warning Policy:** New warnings block PRs → Forces immediate action → Prevents debt accumulation
 
-**Warning Governance Model:**
-1. **Baseline Established:** 41 warnings on 2025-11-08 (post-structlog fix)
-2. **No Regression:** New warnings → CI fails → Must fix or update baseline with approval
-3. **Active Reduction:** Each phase targets 5-10 warning fixes
-4. **Zero Target:** Goal is 0 warnings by Phase 2 completion
+**Warning Governance Model (UPDATED 2025-11-09):**
+1. **Baseline:** 312 warnings (was 429, -117 improvement = -27%)
+2. **Zero Regression:** New warnings → pre-push hooks FAIL → THREE OPTIONS:
+   - **Option A:** Fix immediately (recommended)
+   - **Option B:** Defer with tracking (create WARN-XXX entry + update baseline)
+   - **Option C:** Update baseline only (NOT recommended - only for upstream/false positives)
+3. **Active Reduction:** Each phase targets 80-100 warning fixes (Phase 1.5: -117 ✅)
+4. **All Baseline Warnings Tracked:** 312 warnings = 7 WARN-XXX entries (WARN-001 through WARN-007)
+5. **Zero Target:** Goal is <100 warnings by Phase 2 completion
 
 ---
 
-## Current Baseline (2025-11-08)
+## Current Baseline (2025-11-09)
 
-**Total Warnings:** 429
-**Warning Sources:** pytest (41) + validate_docs (388)
-**Test Suite:** 248 passed, 8 skipped
-**Last Measured:** 2025-11-08T20:30:00Z
+**Total Warnings:** 312 (was 429, -117 improvement)
+**Warning Sources:** pytest (32) + validate_docs (280) + code quality (0)
+**Test Suite:** 323 passed, 9 skipped
+**Last Measured:** 2025-11-09T15:30:00Z
+**Major Changes:** YAML float warnings ELIMINATED (111→0), pytest warnings reduced (41→32), ADR warnings RECLASSIFIED (informational→actionable)
 
 ### Breakdown by Category
 
 | Category | Count | Severity | Priority | Target Phase | Est. Fix Time | Source |
 |----------|-------|----------|----------|--------------|---------------|--------|
-| **Documentation Validation (validate_docs.py)** | **388** | | | | | |
-| ADR Non-Sequential Numbering | 231 | 🟢 Low | **Informational** | N/A | N/A | validate_docs.py |
-| YAML Float Literals | 111 | 🟢 Low | Low | 1.5 | 2-3 hours | validate_docs.py |
-| MASTER_INDEX Missing Docs | 27 | 🟡 Medium | Medium | 1.5 | 1 hour | validate_docs.py |
-| MASTER_INDEX Deleted Docs | 11 | 🟡 Medium | Low | 1.5 | 30 min | validate_docs.py |
+| **Documentation Validation (validate_docs.py)** | **280** (was 388) | | | | | |
+| ADR Non-Sequential Numbering | 231 | 🟡 Medium | **Actionable** ⚠️ | 2.0 | 4-6 hours | validate_docs.py |
+| YAML Float Literals | 0 | - | **FIXED** ✅ | DONE | - | validate_docs.py |
+| MASTER_INDEX Missing Docs | 29 (was 27) | 🟡 Medium | Medium | 1.5 | 1 hour | validate_docs.py |
+| MASTER_INDEX Deleted Docs | 12 (was 11) | 🟡 Medium | Low | 1.5 | 30 min | validate_docs.py |
 | MASTER_INDEX Planned Docs | 8 | 🟢 Low | **Expected** | N/A | N/A | validate_docs.py |
-| **Test Warnings (pytest)** | **41** | | | | | |
-| Hypothesis Decimal Precision | 19 | 🟡 Low | Medium | 1.5 | 2-3 hours | pytest |
-| ResourceWarning (Unclosed Files) | 13 | 🟡 Medium | **High** | 1.5 | 1 hour | pytest |
+| **Test Warnings (pytest)** | **32** (was 41) | | | | | |
+| Hypothesis Decimal Precision | 17 (was 19) | 🟡 Low | Medium | 1.5 | 2-3 hours | pytest |
+| ResourceWarning (Unclosed Files) | 11 (was 13) | 🟡 Medium | **High** | 1.5 | 1 hour | pytest |
 | pytest-asyncio Deprecation | 4 | 🟡 Medium | Low | N/A (upstream) | N/A | pytest |
-| structlog UserWarning | 1 | 🟢 Low | Low | 1.5 | 15 min | pytest |
-| Coverage Warning | 1 | 🟢 Low | Low | N/A (expected) | N/A | pytest |
-| **Actionable Warnings** | **182** | - | - | **1.5** | **~9 hours** | Both |
+| structlog UserWarning | 1 | 🟢 Low | Low | DONE | - | pytest |
+| **Actionable Warnings** | **313** (was 182) | - | - | **1.5-2.0** | **~13 hours** | Both |
 
-**Breakdown by Actionability:**
-- **Informational (not fixable):** 231 (ADR non-sequential)
-- **Expected (not errors):** 8 (planned docs) + 1 (coverage) = 9
-- **Upstream (not our code):** 4 (pytest-asyncio)
-- **Actionable (our code):** 182 (fixes tracked below)
+**Breakdown by Actionability (UPDATED 2025-11-09):**
+- **Informational:** 0 (was 231 - ADR warnings RECLASSIFIED to actionable)
+- **Expected (intentional):** 8 (planned docs only)
+- **Upstream (not our code):** 4 (pytest-asyncio - will fix when dependency updates)
+- **Actionable (must fix or defer):** 313 (was 182, +131 from ADR reclassification - ALL tracked as WARN-XXX below)
 
 **Three Warning Sources:**
 1. **pytest warnings (41)**: Test execution warnings (`python -m pytest -W default`)

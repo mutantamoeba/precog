@@ -255,10 +255,64 @@ Related ADR: ADR-019 (Historical Data Versioning Strategy)
 Related Guide: docs/guides/VERSIONING_GUIDE_V1.0.md
 """
 
+import json
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, cast
 
 from .connection import fetch_all, fetch_one, get_cursor
+
+# =============================================================================
+# TYPE VALIDATION HELPERS
+# =============================================================================
+
+
+def validate_decimal(value: Any, param_name: str) -> Decimal:
+    """
+    Validate that value is a Decimal type (runtime type enforcement).
+
+    Args:
+        value: Value to validate
+        param_name: Parameter name for error message
+
+    Returns:
+        The value if it's a Decimal
+
+    Raises:
+        TypeError: If value is not a Decimal
+
+    Educational Note:
+        Python type hints (e.g., `price: Decimal`) are annotations only.
+        They provide IDE autocomplete and mypy static analysis, but do NOT
+        enforce types at runtime.
+
+        Without runtime validation:
+        >>> create_market(yes_price=0.5)  # ✅ Executes (float contamination!)
+
+        With runtime validation:
+        >>> create_market(yes_price=0.5)  # ❌ TypeError: yes_price must be Decimal
+
+        Why this matters:
+        - Prevents float contamination (0.5 != Decimal("0.5"))
+        - Ensures sub-penny precision preserved (0.4975 stored exactly)
+        - Catches type errors early (at function call, not database INSERT)
+
+    Example:
+        >>> price = validate_decimal(Decimal("0.5200"), "yes_price")
+        >>> # ✅ Returns Decimal("0.5200")
+
+        >>> price = validate_decimal(0.5200, "yes_price")
+        >>> # ❌ TypeError: yes_price must be Decimal, got float
+        >>> #    Use Decimal("0.5200"), not 0.5200
+    """
+    if not isinstance(value, Decimal):
+        raise TypeError(
+            f"{param_name} must be Decimal, got {type(value).__name__}. "
+            f"Use Decimal('{value}'), not {value} ({type(value).__name__}). "
+            f"See Pattern 1 in CLAUDE.md for Decimal precision guidance."
+        )
+    return value
+
 
 # =============================================================================
 # MARKET OPERATIONS
@@ -312,6 +366,12 @@ def create_market(
         ...     no_price=Decimal("0.4800")
         ... )
     """
+    # Runtime type validation (enforces Decimal precision)
+    yes_price = validate_decimal(yes_price, "yes_price")
+    no_price = validate_decimal(no_price, "no_price")
+    if spread is not None:
+        spread = validate_decimal(spread, "spread")
+
     # Generate market_id if needed (using ticker as base)
     market_id = f"MKT-{ticker}"
 
@@ -341,7 +401,7 @@ def create_market(
         volume,
         open_interest,
         spread,
-        metadata,
+        json.dumps(metadata) if metadata else None,
     )
 
     with get_cursor(commit=True) as cur:
@@ -408,6 +468,12 @@ def update_market_with_versioning(
         ...     no_price=Decimal("0.4500")
         ... )
     """
+    # Runtime type validation (enforces Decimal precision)
+    if yes_price is not None:
+        yes_price = validate_decimal(yes_price, "yes_price")
+    if no_price is not None:
+        no_price = validate_decimal(no_price, "no_price")
+
     # Get current version
     current = get_current_market(ticker)
     if not current:
@@ -462,7 +528,7 @@ def update_market_with_versioning(
                 new_volume,
                 new_open_interest,
                 current["spread"],
-                new_metadata,
+                json.dumps(new_metadata) if new_metadata else None,
             ),
         )
 
@@ -910,3 +976,524 @@ def get_recent_trades(strategy_id: int | None = None, limit: int = 100) -> list[
     params.append(limit)
 
     return fetch_all(query, tuple(params))
+
+
+# =============================================================================
+# Account Balance Operations (SCD Type 2)
+# =============================================================================
+
+
+def create_account_balance(
+    platform_id: str,
+    balance: Decimal,
+    currency: str = "USD",
+) -> int | None:
+    """
+    Create new account balance snapshot with row_current_ind = TRUE.
+
+    Account balance uses SCD Type 2 versioning to track balance changes over time.
+    Each balance fetch creates a new snapshot.
+
+    Args:
+        platform_id: Foreign key to platforms table (e.g., "kalshi")
+        balance: Account balance as DECIMAL(10,4) - NEVER use float!
+        currency: Currency code (default: "USD")
+
+    Returns:
+        balance_id of newly created record
+
+    Raises:
+        ValueError: If balance is float (not Decimal)
+        psycopg2.Error: If database operation fails
+
+    Educational Note:
+        Account balance stored as DECIMAL(10,4) for exact precision.
+        NEVER use float for financial calculations!
+
+        Why this matters:
+        - Float arithmetic introduces rounding errors
+        - Example: float(1234.5678) + float(0.0001) may not equal 1234.5679
+        - Decimal: Decimal("1234.5678") + Decimal("0.0001") = Decimal("1234.5679") ✅
+
+        SCD Type 2 Pattern:
+        - Every balance fetch creates NEW row with row_current_ind=TRUE
+        - Enables balance history tracking without losing data
+        - Query current balance: WHERE row_current_ind = TRUE
+
+    Example:
+        >>> from decimal import Decimal
+        >>> balance_id = create_account_balance(
+        ...     platform_id="kalshi",
+        ...     balance=Decimal("1234.5678"),
+        ...     currency="USD"
+        ... )
+        >>> print(balance_id)  # 42
+
+        >>> # ❌ WRONG - Float contamination
+        >>> balance = 1234.5678  # float type
+        >>> # Will raise ValueError
+
+    Related:
+        - REQ-SYS-003: Decimal Precision for All Prices
+        - ADR-002: Decimal-Only Financial Calculations
+        - Pattern 1 in CLAUDE.md: Decimal Precision
+        - Pattern 2 in CLAUDE.md: SCD Type 2 Versioning
+    """
+    if not isinstance(balance, Decimal):
+        raise ValueError(f"Balance must be Decimal, got {type(balance).__name__}")
+
+    query = """
+        INSERT INTO account_balance (
+            platform_id, balance, currency, row_current_ind, created_at
+        )
+        VALUES (%s, %s, %s, TRUE, NOW())
+        RETURNING balance_id
+    """
+
+    params = (platform_id, balance, currency)
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, params)
+        result = cur.fetchone()
+        return result["balance_id"] if result else None
+
+
+def update_account_balance_with_versioning(
+    platform_id: str,
+    new_balance: Decimal,
+    currency: str = "USD",
+) -> int | None:
+    """
+    Update account balance using SCD Type 2 versioning (insert new row, mark old as historical).
+
+    This implements Slowly Changing Dimension Type 2 pattern:
+    1. Find current balance record (row_current_ind = TRUE)
+    2. Set row_current_ind = FALSE on old record
+    3. Insert new record with row_current_ind = TRUE
+
+    Args:
+        platform_id: Platform identifier (e.g., "kalshi")
+        new_balance: New balance as DECIMAL(10,4)
+        currency: Currency code (default: "USD")
+
+    Returns:
+        balance_id of newly created record
+
+    Raises:
+        ValueError: If new_balance is float (not Decimal)
+
+    Educational Note:
+        SCD Type 2 Versioning Pattern:
+        - Preserves full history of balance changes
+        - Old balances remain in database (row_current_ind=FALSE)
+        - Current balance always WHERE row_current_ind=TRUE
+        - Enables time-series analysis of account growth
+
+        Why not UPDATE balance column?
+        - Loses historical data (can't track balance over time)
+        - Can't analyze when balance changed
+        - Can't correlate balance with trades/positions
+
+        With SCD Type 2:
+        - Query: "What was my balance on 2024-01-15?" → Filter by created_at
+        - Query: "How has balance changed this month?" → Aggregate by day
+        - Query: "Current balance?" → WHERE row_current_ind=TRUE
+
+    Example:
+        >>> # First balance fetch
+        >>> balance_id_1 = create_account_balance("kalshi", Decimal("1000.0000"))
+        >>> # balance_id_1 has row_current_ind=TRUE
+
+        >>> # Second balance fetch (after trading)
+        >>> balance_id_2 = update_account_balance_with_versioning(
+        ...     "kalshi", Decimal("1050.0000")
+        ... )
+        >>> # balance_id_1 now has row_current_ind=FALSE (historical)
+        >>> # balance_id_2 now has row_current_ind=TRUE (current)
+
+        >>> # Query current balance
+        >>> query = "SELECT balance FROM account_balance WHERE platform_id = %s AND row_current_ind = TRUE"
+        >>> # Returns 1050.0000
+
+        >>> # Query balance history
+        >>> query = "SELECT balance, created_at FROM account_balance WHERE platform_id = %s ORDER BY created_at"
+        >>> # Returns [(1000.0000, '2024-01-15 10:00'), (1050.0000, '2024-01-15 14:30')]
+
+    Related:
+        - Pattern 2 in CLAUDE.md: Dual Versioning System (SCD Type 2)
+        - docs/guides/VERSIONING_GUIDE_V1.0.md
+        - REQ-DB-004: SCD Type 2 for Frequently-Changing Data
+    """
+    if not isinstance(new_balance, Decimal):
+        raise ValueError(f"Balance must be Decimal, got {type(new_balance).__name__}")
+
+    # Step 1: Mark current balance as historical (row_current_ind = FALSE)
+    update_query = """
+        UPDATE account_balance
+        SET row_current_ind = FALSE
+        WHERE platform_id = %s AND row_current_ind = TRUE
+    """
+
+    # Step 2: Insert new balance record
+    insert_query = """
+        INSERT INTO account_balance (
+            platform_id, balance, currency, row_current_ind, created_at
+        )
+        VALUES (%s, %s, %s, TRUE, NOW())
+        RETURNING balance_id
+    """
+
+    with get_cursor(commit=True) as cur:
+        # Mark old balance as historical
+        cur.execute(update_query, (platform_id,))
+
+        # Insert new balance
+        cur.execute(insert_query, (platform_id, new_balance, currency))
+        result = cur.fetchone()
+        return result["balance_id"] if result else None
+
+
+# =============================================================================
+# Settlement Operations (Append-Only)
+# =============================================================================
+
+
+def create_settlement(
+    market_id: str,
+    platform_id: str,
+    outcome: str,
+    payout: Decimal,
+) -> int | None:
+    """
+    Create settlement record for a resolved market.
+
+    Settlements are append-only (no versioning) because they are final.
+    Once a market settles, the outcome and payout never change.
+
+    Args:
+        market_id: Foreign key to markets table
+        platform_id: Foreign key to platforms table
+        outcome: Settlement outcome ("yes", "no", or other)
+        payout: Payout amount as DECIMAL(10,4)
+
+    Returns:
+        settlement_id of newly created record
+
+    Raises:
+        ValueError: If payout is float (not Decimal)
+        psycopg2.Error: If database operation fails
+
+    Educational Note:
+        Settlements are FINAL - no versioning needed:
+        - Market settles once (outcome determined)
+        - Payout calculated once (never changes)
+        - row_current_ind NOT NEEDED (settlements don't update)
+
+        Why Decimal for payouts?
+        - Market resolution: YES position pays $1.00 per contract
+        - Fractional payouts possible (e.g., $0.5000 for 50/50 split)
+        - Must be exact (no float rounding errors)
+
+    Example:
+        >>> # Market resolved YES, position pays $1 per contract
+        >>> settlement_id = create_settlement(
+        ...     market_id="MKT-NFL-KC-YES",
+        ...     platform_id="kalshi",
+        ...     outcome="yes",
+        ...     payout=Decimal("1.0000")  # $1.00 per contract
+        ... )
+
+        >>> # Market resolved NO, YES position pays $0
+        >>> settlement_id = create_settlement(
+        ...     market_id="MKT-NFL-BUF-YES",
+        ...     platform_id="kalshi",
+        ...     outcome="no",
+        ...     payout=Decimal("0.0000")  # Worthless
+        ... )
+
+    Related:
+        - REQ-SYS-003: Decimal Precision for All Prices
+        - Pattern 1 in CLAUDE.md: Decimal Precision
+        - Settlements table schema: database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+    """
+    if not isinstance(payout, Decimal):
+        raise ValueError(f"Payout must be Decimal, got {type(payout).__name__}")
+
+    query = """
+        INSERT INTO settlements (
+            market_id, platform_id, outcome, payout, created_at
+        )
+        VALUES (%s, %s, %s, %s, NOW())
+        RETURNING settlement_id
+    """
+
+    params = (market_id, platform_id, outcome, payout)
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, params)
+        result = cur.fetchone()
+        return result["settlement_id"] if result else None
+
+
+# =============================================================================
+# STRATEGY CRUD OPERATIONS (Immutable Versioning Pattern)
+# =============================================================================
+
+
+def create_strategy(
+    strategy_name: str,
+    strategy_version: str,
+    category: str,
+    config: dict,
+    status: str = "draft",
+    platform_id: str | None = None,
+    subcategory: str | None = None,
+    notes: str | None = None,
+) -> int | None:
+    """
+    Create new strategy version with IMMUTABLE config.
+
+    Args:
+        strategy_name: Strategy name (e.g., "halftime_entry")
+        strategy_version: Semantic version (e.g., "v1.0", "v1.1")
+        category: Strategy category (e.g., "momentum", "mean_reversion")
+        config: Strategy configuration (IMMUTABLE after creation)
+        status: Strategy status ("draft", "testing", "active", "deprecated")
+        platform_id: Platform ID (optional, for platform-specific strategies)
+        subcategory: Strategy subcategory (optional)
+        notes: Additional notes (optional)
+
+    Returns:
+        int: strategy_id from database
+
+    Raises:
+        IntegrityError: If (strategy_name, strategy_version) already exists
+
+    Educational Note:
+        Strategy configs are IMMUTABLE for A/B testing integrity:
+        - v1.0 config NEVER changes (preserves test results)
+        - To modify config, create NEW version (v1.0 → v1.1)
+        - Status is MUTABLE (draft → testing → active → deprecated)
+
+        Why immutability matters:
+        - A/B testing: Need to know EXACTLY which config generated each trade
+        - Trade attribution: Trades link to specific immutable versions
+        - Backtesting: Can replay historical strategies with original configs
+
+        Mutable vs Immutable:
+        - config (IMMUTABLE): Create new version to change
+        - status (MUTABLE): Can update in-place
+        - activated_at, deactivated_at (MUTABLE): Timestamps
+
+    Example:
+        >>> # Create initial version
+        >>> v1_0 = create_strategy(
+        ...     strategy_name="halftime_entry",
+        ...     strategy_version="v1.0",
+        ...     category="momentum",
+        ...     config={"min_lead": 7, "min_time_remaining_mins": 5},
+        ...     status="draft"
+        ... )
+        >>> # ✅ Can update status
+        >>> update_strategy_status(v1_0, "active")
+        >>> # ❌ CANNOT update config - must create v1.1
+        >>> v1_1 = create_strategy(
+        ...     strategy_name="halftime_entry",
+        ...     strategy_version="v1.1",
+        ...     config={"min_lead": 10, "min_time_remaining_mins": 5}  # Different
+        ... )
+
+    Related:
+        - Pattern 2 in CLAUDE.md: Dual Versioning System
+        - docs/guides/VERSIONING_GUIDE_V1.0.md
+        - ADR-018, ADR-019, ADR-020
+    """
+    query = """
+        INSERT INTO strategies (
+            platform_id, strategy_name, strategy_version, category, subcategory,
+            config, status, notes, created_at, updated_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        RETURNING strategy_id
+    """
+
+    params = (
+        platform_id,
+        strategy_name,
+        strategy_version,
+        category,
+        subcategory,
+        json.dumps(config),  # Convert dict to JSON string
+        status,
+        notes,
+    )
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, params)
+        result = cur.fetchone()
+        return cast("int", result["strategy_id"]) if result else None
+
+
+def get_strategy(strategy_id: int) -> dict[str, Any] | None:
+    """
+    Get strategy by strategy_id.
+
+    Args:
+        strategy_id: Strategy ID
+
+    Returns:
+        Strategy dict or None if not found
+
+    Example:
+        >>> strategy = get_strategy(42)
+        >>> print(strategy["strategy_name"], strategy["strategy_version"])
+        halftime_entry v1.0
+    """
+    query = "SELECT * FROM strategies WHERE strategy_id = %s"
+
+    with get_cursor() as cur:
+        cur.execute(query, (strategy_id,))
+        return cast("dict[str, Any] | None", cur.fetchone())
+
+
+def get_strategy_by_name_and_version(
+    strategy_name: str, strategy_version: str
+) -> dict[str, Any] | None:
+    """
+    Get strategy by name and version.
+
+    Args:
+        strategy_name: Strategy name
+        strategy_version: Strategy version (e.g., "v1.0")
+
+    Returns:
+        Strategy dict or None if not found
+
+    Example:
+        >>> v1_0 = get_strategy_by_name_and_version("halftime_entry", "v1.0")
+        >>> v1_1 = get_strategy_by_name_and_version("halftime_entry", "v1.1")
+    """
+    query = """
+        SELECT * FROM strategies
+        WHERE strategy_name = %s AND strategy_version = %s
+    """
+
+    with get_cursor() as cur:
+        cur.execute(query, (strategy_name, strategy_version))
+        return cast("dict[str, Any] | None", cur.fetchone())
+
+
+def get_active_strategy_version(strategy_name: str) -> dict[str, Any] | None:
+    """
+    Get active version of a strategy (status = 'active').
+
+    Args:
+        strategy_name: Strategy name
+
+    Returns:
+        Active strategy dict or None if no active version
+
+    Example:
+        >>> active = get_active_strategy_version("halftime_entry")
+        >>> print(active["strategy_version"], active["status"])
+        v1.1 active
+    """
+    query = """
+        SELECT * FROM strategies
+        WHERE strategy_name = %s AND status = 'active'
+        ORDER BY created_at DESC
+        LIMIT 1
+    """
+
+    with get_cursor() as cur:
+        cur.execute(query, (strategy_name,))
+        return cast("dict[str, Any] | None", cur.fetchone())
+
+
+def get_all_strategy_versions(strategy_name: str) -> list[dict[str, Any]]:
+    """
+    Get all versions of a strategy (for history view).
+
+    Args:
+        strategy_name: Strategy name
+
+    Returns:
+        List of strategy dicts, sorted by created_at DESC
+
+    Example:
+        >>> versions = get_all_strategy_versions("halftime_entry")
+        >>> for v in versions:
+        ...     print(v["strategy_version"], v["status"])
+        v1.2 active
+        v1.1 deprecated
+        v1.0 deprecated
+    """
+    query = """
+        SELECT * FROM strategies
+        WHERE strategy_name = %s
+        ORDER BY created_at DESC
+    """
+
+    with get_cursor() as cur:
+        cur.execute(query, (strategy_name,))
+        return cast("list[dict[str, Any]]", cur.fetchall())
+
+
+def update_strategy_status(
+    strategy_id: int,
+    new_status: str,
+    activated_at: datetime | None = None,
+    deactivated_at: datetime | None = None,
+) -> bool:
+    """
+    Update strategy status (MUTABLE field - does NOT create new version).
+
+    Args:
+        strategy_id: Strategy ID
+        new_status: New status ("draft", "testing", "active", "deprecated")
+        activated_at: Timestamp when activated (optional)
+        deactivated_at: Timestamp when deactivated (optional)
+
+    Returns:
+        bool: True if updated, False if strategy not found
+
+    Educational Note:
+        Status is MUTABLE (can change in-place):
+        - draft → testing → active → deprecated (normal lifecycle)
+        - active → deprecated (when superseded by new version)
+
+        Config is IMMUTABLE (cannot change in-place):
+        - To change config, create NEW version (v1.0 → v1.1)
+
+    Example:
+        >>> # Move from draft to testing
+        >>> update_strategy_status(strategy_id=42, new_status="testing")
+        >>> # Activate strategy
+        >>> update_strategy_status(
+        ...     strategy_id=42,
+        ...     new_status="active",
+        ...     activated_at=datetime.now()
+        ... )
+        >>> # Deprecate old version
+        >>> update_strategy_status(
+        ...     strategy_id=41,
+        ...     new_status="deprecated",
+        ...     deactivated_at=datetime.now()
+        ... )
+    """
+    query = """
+        UPDATE strategies
+        SET status = %s,
+            activated_at = %s,
+            deactivated_at = %s,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE strategy_id = %s
+        RETURNING strategy_id
+    """
+
+    params = (new_status, activated_at, deactivated_at, strategy_id)
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, params)
+        result = cur.fetchone()
+        return result is not None
