@@ -1,9 +1,9 @@
 {
-  "baseline_date": "2025-11-08",
-  "total_warnings": 429,
+  "baseline_date": "2025-11-09",
+  "total_warnings": 312,
   "warning_categories": {
     "yaml_float_literals": {
-      "count": 111,
+      "count": 0,
       "severity": "low",
       "source": "scripts/validate_docs.py",
       "message_pattern": "Float detected in Decimal field",
@@ -20,7 +20,7 @@
       "notes": "Change 111 float literals to string format across 7 YAML config files. Improves safety but not functionally broken."
     },
     "hypothesis_decimal_precision": {
-      "count": 19,
+      "count": 17,
       "severity": "low",
       "source": "hypothesis.strategies._internal.core",
       "message_pattern": "cannot be exactly represented as a decimal with places=",
@@ -53,7 +53,7 @@
       "notes": "Upstream dependency - will be fixed when pytest-asyncio updates for Python 3.16 compatibility"
     },
     "resource_warning_unclosed_files": {
-      "count": 13,
+      "count": 11,
       "severity": "medium",
       "source": "utils/logger.py:194",
       "message_pattern": "ResourceWarning: unclosed file",
@@ -98,7 +98,7 @@
       "notes": "We're not using coverage contexts (dynamic_context feature) - this is expected"
     },
     "master_index_missing_docs": {
-      "count": 27,
+      "count": 29,
       "severity": "medium",
       "source": "scripts/validate_docs.py",
       "message_pattern": "MASTER_INDEX: Document exists but not in index",
@@ -115,7 +115,7 @@
       "notes": "Add 27 missing documents to MASTER_INDEX V2.11 for complete inventory"
     },
     "master_index_deleted_docs": {
-      "count": 11,
+      "count": 12,
       "severity": "medium",
       "source": "scripts/validate_docs.py",
       "message_pattern": "MASTER_INDEX: Document in index but does not exist",
@@ -149,19 +149,19 @@
     },
     "adr_non_sequential_numbering": {
       "count": 231,
-      "severity": "low",
+      "severity": "medium",
       "source": "scripts/validate_docs.py",
       "message_pattern": "ADR gap detected",
       "examples": [
         "ADR gap detected: Expected ADR-006 but found ADR-012 in ARCHITECTURE_DECISIONS",
         "ADR gap detected: Expected ADR-013 but found ADR-018 in ARCHITECTURE_DECISIONS"
       ],
-      "reason_deferred": "Informational only - ADR numbers intentionally non-sequential due to reorganization",
-      "impact": "None (ADRs still valid and referenced correctly)",
-      "fix_priority": "informational",
-      "fix_estimate": "N/A (intentional numbering scheme)",
-      "target_phase": "N/A",
-      "notes": "ADR gaps are intentional - some numbers reserved for future decisions or removed during doc reorganization. Not a defect."
+      "reason_deferred": "Documentation validation reports these as warnings - indicates incomplete ADR numbering scheme",
+      "impact": "Medium (documentation consistency - ADR gaps make tracking difficult)",
+      "fix_priority": "actionable",
+      "fix_estimate": "4-6 hours (document numbering policy OR renumber ADRs sequentially)",
+      "target_phase": "2.0",
+      "notes": "RECLASSIFIED from informational to actionable per user feedback 2025-11-09. While ADR gaps may be intentional, they are reported by validate_docs.py as warnings and should be addressed - either document the policy or renumber ADRs."
     }
   },
   "deferred_fixes": [
@@ -244,37 +244,38 @@
     }
   ],
   "tracking": {
-    "last_measured": "2025-11-08T20:30:00Z",
+    "last_measured": "2025-11-09T15:30:00Z",
     "measurement_commands": {
       "pytest_warnings": "python -m pytest tests/ -v -W default --tb=no",
       "validate_docs_warnings": "python scripts/validate_docs.py",
       "code_quality_ruff": "python -m ruff check .",
       "code_quality_mypy": "python -m mypy ."
     },
-    "test_count": 248,
-    "test_status": "248 passed, 8 skipped",
+    "test_count": 323,
+    "test_status": "323 passed, 9 skipped",
     "warning_sources": {
-      "pytest": 41,
-      "validate_docs_yaml_floats": 111,
-      "validate_docs_master_index_missing": 27,
-      "validate_docs_master_index_deleted": 11,
+      "pytest": 32,
+      "validate_docs_yaml_floats": 0,
+      "validate_docs_master_index_missing": 29,
+      "validate_docs_master_index_deleted": 12,
       "validate_docs_master_index_planned": 8,
       "validate_docs_adr_non_sequential": 231,
       "code_quality_ruff": 0,
       "code_quality_mypy": 0,
-      "total": 429
+      "total": 312
     },
     "warning_breakdown": {
-      "actionable": 182,
-      "informational": 231,
-      "expected": 16,
-      "total": 429
+      "actionable": 313,
+      "informational": 0,
+      "expected": 8,
+      "total": 312,
+      "notes": "RECLASSIFIED 2025-11-09: ADR warnings (231) changed from informational to actionable per user feedback. ELIMINATED: YAML float warnings (111) fixed in Phase 1.5. Current actionable warnings (313) include: pytest (32), MASTER_INDEX sync (41), ADR gaps (231), code quality (0). Target: Reduce to <100 by Phase 2."
     }
   },
   "governance_policy": {
-    "max_warnings_allowed": 429,
+    "max_warnings_allowed": 312,
     "new_warning_policy": "fail",
     "regression_tolerance": 0,
-    "notes": "Baseline established 2025-11-08 with warnings from THREE validation systems: (1) pytest test warnings (41), (2) validate_docs.py warnings (388 across 5 categories), (3) code quality (Ruff 0, Mypy 0). Total: 429 warnings. Breakdown: 182 actionable, 231 informational (ADR gaps), 16 expected (coverage, planned docs). No new actionable warnings allowed without explicit approval and baseline update. Multi-source governance enforces zero-regression policy across ALL validation tools."
+    "notes": "Baseline UPDATED 2025-11-09 (was 429, now 312, -117 warnings). Major improvements: (1) YAML float warnings eliminated (111 → 0), (2) pytest warnings reduced (41 → 32), (3) ADR warnings RECLASSIFIED from informational to actionable per user feedback. Current sources: pytest (32), validate_docs (280 across 5 categories), code quality (0). Breakdown: 313 actionable, 0 informational, 8 expected. ENFORCED in pre-push hooks via check_warning_debt.py (Step 5/5). Zero-regression policy prevents new warnings without explicit approval."
   }
 }

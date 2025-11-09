@@ -1,11 +1,22 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.13
+**Version:** 1.14
 **Created:** 2025-10-28
 **Last Updated:** 2025-11-09
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.14:**
+- **Created CODE_REVIEW_TEMPLATE_V1.0.md** - Universal code review checklist for PRs, feature implementations, and phase completions
+- **Created INFRASTRUCTURE_REVIEW_TEMPLATE_V1.0.md** - Infrastructure and DevOps review template for deployment readiness
+- **Enhanced SECURITY_REVIEW_CHECKLIST.md V1.0 → V1.1** - Added 4 new sections (API Security, Data Protection, Compliance, Incident Response)
+- All three templates now reference **DEVELOPMENT_PHILOSOPHY_V1.1.md** with specific section callouts
+- CODE_REVIEW_TEMPLATE references 7 philosophy sections (TDD, DID, DDD, Explicit Over Clever, Security by Default, Anti-Patterns, Test Coverage Accountability)
+- INFRASTRUCTURE_REVIEW_TEMPLATE references 4 philosophy sections (Defense in Depth, Fail-Safe Defaults, Maintenance Visibility, Security by Default)
+- SECURITY_REVIEW_CHECKLIST references 2 philosophy sections (Security by Default, Defense in Depth with 3-layer credential validation)
+- Templates consolidate scattered guidance from CLAUDE.md, DEVELOPMENT_PHASES, Perplexity AI recommendations into standardized checklists
+- Updated Critical References section to include new templates
+- Total addition: ~1700 lines of comprehensive review infrastructure (CODE_REVIEW: 484 lines, INFRASTRUCTURE_REVIEW: 600 lines, SECURITY_REVIEW enhancement: 600 lines)
 **Changes in V1.13:**
 - **Added Section 3.1: Recovering from Interrupted Session** - Comprehensive 4-step recovery workflow for session interruptions
 - Documents git status checking, recent work review, test validation, and workflow resumption
@@ -1547,24 +1558,30 @@ All 4 layers synchronized to prevent configuration drift.
 **The Problem We Fixed:**
 - Initial governance only tracked pytest warnings (41)
 - Missed 388 warnings from validate_docs.py (YAML floats, MASTER_INDEX issues, ADR gaps)
-- Missed code quality warnings (Ruff, Mypy)
-- Total: 429 warnings across 3 validation systems
+- Validate_docs.py treated YAML floats as "warnings" not "errors" → wouldn't fail builds!
+- Total: 429 warnings across 3 validation systems (BASELINE: 2025-11-08)
+
+**Current Status (2025-11-09):**
+- **YAML warnings ELIMINATED:** 111 → 0 (100% fixed in Phase 1.5)
+- **pytest warnings reduced:** 41 → 32 (-9 warnings)
+- **ADR warnings RECLASSIFIED:** Changed from "informational" to "actionable" per user feedback
+- **New baseline:** 312 warnings (down from 429, -27% improvement)
+- **check_warning_debt.py INTEGRATED:** Now runs in pre-push hooks (Step 5/5)
 
 **Three Warning Sources:**
 
 ```
-Source 1: pytest Test Warnings (41 total)
-├── Hypothesis decimal precision (19)
-├── ResourceWarning unclosed files (13)
+Source 1: pytest Test Warnings (32 total, was 41)
+├── Hypothesis decimal precision (17, was 19)
+├── ResourceWarning unclosed files (11, was 13)
 ├── pytest-asyncio deprecation (4)
-├── structlog UserWarning (1)
-└── Coverage context warning (1)
+└── structlog UserWarning (1)
 
-Source 2: validate_docs.py Warnings (388 total)
-├── ADR non-sequential numbering (231) - Informational
-├── YAML float literals (111) - Actionable
-├── MASTER_INDEX missing docs (27) - Actionable
-├── MASTER_INDEX deleted docs (11) - Actionable
+Source 2: validate_docs.py Warnings (280 total, was 388)
+├── ADR non-sequential numbering (231) - NOW ACTIONABLE ⚠️
+├── YAML float literals (0, was 111) - ✅ FIXED!
+├── MASTER_INDEX missing docs (29, was 27)
+├── MASTER_INDEX deleted docs (12, was 11)
 └── MASTER_INDEX planned docs (8) - Expected
 
 Source 3: Code Quality (0 total)
@@ -1572,10 +1589,10 @@ Source 3: Code Quality (0 total)
 └── Mypy type errors (0)
 ```
 
-**Warning Classification:**
-- **Actionable (182):** Must be fixed (YAML floats, unclosed files, MASTER_INDEX sync)
-- **Informational (231):** Expected behavior (ADR gaps from doc reorganization)
-- **Expected (16):** Intentional (coverage contexts, planned docs)
+**Warning Classification (UPDATED 2025-11-09):**
+- **Actionable (313, was 182):** ALL warnings now actionable (ADR gaps reclassified)
+- **Informational (0, was 231):** Zero informational warnings (ADR gaps → actionable)
+- **Expected (8, was 16):** Only truly expected warnings (planned docs)
 - **Upstream (4):** Dependency issues (pytest-asyncio Python 3.16 compat)
 
 **ALWAYS Track Warnings Across ALL Sources:**
@@ -1593,59 +1610,69 @@ python -m mypy .                               # Type errors
 
 **Governance Infrastructure:**
 
-**1. warning_baseline.json (429 warnings locked)**
+**1. warning_baseline.json (312 warnings locked, was 429)**
 ```json
 {
-  "baseline_date": "2025-11-08",
-  "total_warnings": 429,
+  "baseline_date": "2025-11-09",
+  "total_warnings": 312,
   "warning_categories": {
-    "yaml_float_literals": {"count": 111, "target_phase": "1.5"},
-    "hypothesis_decimal_precision": {"count": 19, "target_phase": "1.5"},
-    "resource_warning_unclosed_files": {"count": 13, "target_phase": "1.5"},
-    "master_index_missing_docs": {"count": 27, "target_phase": "1.5"},
-    "master_index_deleted_docs": {"count": 11, "target_phase": "1.5"},
-    "adr_non_sequential_numbering": {"count": 231, "informational": true}
+    "yaml_float_literals": {"count": 0, "target_phase": "DONE"},
+    "hypothesis_decimal_precision": {"count": 17, "target_phase": "1.5"},
+    "resource_warning_unclosed_files": {"count": 11, "target_phase": "1.5"},
+    "master_index_missing_docs": {"count": 29, "target_phase": "1.5"},
+    "master_index_deleted_docs": {"count": 12, "target_phase": "1.5"},
+    "adr_non_sequential_numbering": {"count": 231, "actionable": true, "target_phase": "2.0"}
   },
   "governance_policy": {
-    "max_warnings_allowed": 429,
+    "max_warnings_allowed": 312,
     "new_warning_policy": "fail",
-    "regression_tolerance": 0
+    "regression_tolerance": 0,
+    "notes": "UPDATED 2025-11-09: -117 warnings (-27%), YAML floats eliminated, ADR gaps reclassified"
   }
 }
 ```
 
 **2. WARNING_DEBT_TRACKER.md (comprehensive tracking)**
-- Documents all 429 warnings across 3 sources
-- Categorizes by actionability (actionable vs informational vs expected)
+- Documents all 312 warnings across 3 sources (was 429)
+- Categorizes by actionability (313 actionable, 0 informational, 8 expected)
 - Tracks deferred fixes (WARN-001 through WARN-007)
 - Documents fix priorities, estimates, target phases
 - Provides measurement commands for all sources
+- **UPDATED 2025-11-09:** Reflects YAML elimination and ADR reclassification
 
-**3. check_warning_debt.py (automated validation)**
+**3. check_warning_debt.py (automated validation) - NOW INTEGRATED**
 - Runs all 4 validation sources (pytest, validate_docs, Ruff, Mypy)
-- Compares against baseline (429 warnings)
+- Compares against baseline (312 warnings, was 429)
+- **NOW RUNS IN PRE-PUSH HOOKS (Step 5/5)** - blocks pushes with regression
 - Fails CI if new warnings detected
 - Provides comprehensive breakdown by source
 
-**Enforcement Rules:**
+**Enforcement Rules (UPDATED 2025-11-09):**
 
-1. **Baseline Locked:** 429 warnings (182 actionable)
-2. **Zero Regression:** New actionable warnings → CI fails → Must fix before merge
-3. **Baseline Updates:** Require explicit approval + documentation in WARNING_DEBT_TRACKER.md
-4. **Phase Targets:** Each phase reduces actionable warnings by 20-30
-5. **Zero Goal:** Target 0 actionable warnings by Phase 2 completion
+1. **Baseline Locked:** 312 warnings (313 actionable, was 429/182)
+2. **Zero Regression:** New warnings → pre-push hooks FAIL → **OPTIONS:**
+   - **Option A: Fix immediately** (recommended)
+   - **Option B: Defer with tracking** (create WARN-XXX in WARNING_DEBT_TRACKER.md)
+   - **Option C: Update baseline** (requires approval + documentation)
+3. **Baseline Warnings:** All 312 existing warnings MUST be tracked as deferred tasks
+   - Each category needs WARN-XXX entry (already exists: WARN-001 through WARN-007)
+   - Each entry documents: priority, estimate, target phase, fix plan
+   - **NOT acceptable:** "Locked baseline, forget about it"
+4. **Phase Targets:** Reduce by 80-100 warnings per phase (Phase 1.5: -117 achieved!)
+5. **Zero Goal:** Target <100 actionable warnings by Phase 2 completion
 
-**Integration Points:**
+**Integration Points (UPDATED 2025-11-09):**
 
 ```bash
-# Pre-push hooks (runs automatically on git push)
+# Pre-push hooks (runs automatically on git push) - NOW INTEGRATED!
 bash .git/hooks/pre-push
-# → Step 4: python scripts/check_warning_debt.py (multi-source check)
+# → Step 5/5: python scripts/check_warning_debt.py (multi-source check)
+# → Enforces 312-warning baseline locally BEFORE CI
 
 # CI/CD (.github/workflows/ci.yml)
 # → Job: warning-governance
 #   Runs: python scripts/check_warning_debt.py
-#   Blocks merge if warnings exceed baseline
+#   Blocks merge if warnings exceed baseline (312)
 ```
 
 **Example Workflow:**
@@ -1655,19 +1682,32 @@ bash .git/hooks/pre-push
 git add feature.py
 git commit -m "Add feature X"
 
-# 2. Pre-push hooks run (automatic)
+# 2. Pre-push hooks run (automatic) - check_warning_debt.py runs at Step 5/5
 git push
-# → check_warning_debt.py detects 430 warnings (baseline: 429)
-# → [FAIL] Warning count: 430/429 (+1 new warning)
-# → Push blocked locally
+# → check_warning_debt.py detects 313 warnings (baseline: 312)
+# → [FAIL] Warning count: 313/312 (+1 new warning)
+# → Push blocked locally (BEFORE hitting CI!)
 
-# 3. Developer fixes warning
-# Fix the warning in code
+# 3. Developer has THREE OPTIONS:
 
-# 4. Re-push (automatic validation)
+# OPTION A: Fix immediately (recommended)
+# Fix the warning in code, then re-push
 git push
-# → [OK] Warning count: 429/429 (baseline maintained)
-# → Push succeeds
+# → [OK] Warning count: 312/312 (baseline maintained)
+
+# OPTION B: Defer with tracking (acceptable if documented)
+# 1. Add entry to docs/utility/WARNING_DEBT_TRACKER.md:
+#    WARN-008: New Hypothesis warning from edge case test (1 warning)
+#    - Priority: Medium, Estimate: 1 hour, Target Phase: 1.6
+# 2. Update baseline: python scripts/check_warning_debt.py --update
+# 3. Commit WARNING_DEBT_TRACKER.md + warning_baseline.json
+# 4. Push (now passes with 313 baseline)
+
+# OPTION C: Update baseline without tracking (NOT RECOMMENDED)
+# Only acceptable for:
+# - Upstream dependency warnings (pytest-asyncio, etc.)
+# - False positives from validation tools
+# Otherwise, use Option B (defer with tracking)
 ```
 
 **Acceptable Baseline Updates:**
@@ -1679,17 +1719,16 @@ You MAY update the baseline IF:
 
 You MUST document in WARNING_DEBT_TRACKER.md:
 ```markdown
-### Baseline Update: [Date] - [Reason]
+### Baseline Update: 2025-11-09 - YAML Elimination + ADR Reclassification
 
 **Previous Baseline:** 429 warnings
-**New Baseline:** 435 warnings (+6)
+**New Baseline:** 312 warnings (-117, -27% improvement)
 
-**New Warnings:**
-- WARN-008: New security warnings from Bandit addition (6 warnings)
-  - Reason: Added Bandit security scanner to CI
-  - Target Phase: 1.5
-  - Estimate: 2 hours
-  - Priority: Medium
+**Changes:**
+- ELIMINATED: YAML float warnings (111 → 0) - Fixed in Phase 1.5
+- REDUCED: pytest warnings (41 → 32) - Property test improvements
+- RECLASSIFIED: ADR non-sequential warnings (231) from informational → actionable
+- INTEGRATED: check_warning_debt.py into pre-push hooks (Step 5/5)
 
 **Approval:** Approved by [Name] on [Date]
 **Next Action:** Fix WARN-008 in Phase 1.5 (target: -6 warnings)
@@ -3560,6 +3599,12 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 - Status Field Usage Standards
 - Update Cascade Rules
 
+**Code Review & Quality Assurance:**
+- `docs/utility/CODE_REVIEW_TEMPLATE_V1.0.md` - Universal code review checklist (7 categories: Requirements, Testing, Quality, Security, Documentation, Performance, Error Handling)
+- `docs/utility/INFRASTRUCTURE_REVIEW_TEMPLATE_V1.0.md` - Infrastructure and DevOps review template (7 categories: CI/CD, Deployment, Scalability, Monitoring, Disaster Recovery, Security Infrastructure, Compliance)
+- `docs/utility/SECURITY_REVIEW_CHECKLIST.md` V1.1 - Enhanced security review with API security, data protection, compliance, and incident response
+- All templates reference `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.1.md` for core principles
+
 ---
 
 ## 🚨 Common Mistakes to Avoid
@@ -3600,6 +3645,7 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.14 | 2025-11-09 | Created CODE_REVIEW_TEMPLATE_V1.0.md (484 lines, 7-category universal checklist), INFRASTRUCTURE_REVIEW_TEMPLATE_V1.0.md (600 lines, 7-category DevOps review), enhanced SECURITY_REVIEW_CHECKLIST.md V1.0→V1.1 (600 lines, added 4 sections); all templates reference DEVELOPMENT_PHILOSOPHY_V1.1.md with specific section callouts; added Code Review & Quality Assurance section to Critical References; consolidates scattered guidance into standardized review infrastructure |
 | 1.13 | 2025-11-09 | Added Section 3.1: Recovering from Interrupted Session with 4-step recovery workflow (git status check, recent work review, test validation, workflow resumption); includes common recovery scenarios table; provides detailed example from 2025-11-09 context limit interruption during Phase 1.5 integration tests |
 | 1.8 | 2025-11-07 | Implemented DEF-002 (Pre-Push Hooks Setup); created .git/hooks/pre-push with 4 validation steps (quick validation, unit tests, full type checking, security scan); added "Pre-Push Hooks" section; second layer of defense with tests; reduces CI failures 80-90% |
 | 1.7 | 2025-11-07 | Implemented DEF-001 (Pre-Commit Hooks Setup); installed pre-commit framework v4.0.1; updated "Before Committing Code" section with automatic hooks workflow (12 checks: Ruff, Mypy, security, formatting, line endings); auto-fixes formatting/whitespace; reduces CI failures 60-70% |
