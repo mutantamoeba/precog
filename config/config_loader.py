@@ -273,6 +273,9 @@ class ConfigLoader:
                 "max_position_size_dollars",
                 "min_trade_size_dollars",
                 "max_trade_size_dollars",
+                "min_position_dollars",
+                "max_position_dollars",
+                "threshold_dollars",
                 "initial_capital",
                 "balance",
                 # Prices and spreads
@@ -293,14 +296,21 @@ class ConfigLoader:
                 "threshold",
                 "min_ev_threshold",
                 "kelly_fraction",
+                "default_fraction",
                 "max_kelly_fraction",
                 "confidence",
                 "min_edge",
-                # Percentages
+                "min_edge_threshold",
+                "min_edge_to_hold",
+                # Percentages and fractions
                 "trailing_stop_percent",
                 "stop_loss_percent",
                 "target_profit_percent",
                 "max_drawdown_percent",
+                "loss_threshold_pct",
+                "gain_threshold_pct",
+                "max_position_pct",
+                "max_correlation",
             }
 
         if isinstance(obj, dict):
