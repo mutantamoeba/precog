@@ -1,0 +1,268 @@
+============================================================
+Documentation Validation Suite - Phase 0.6c (Enhanced)
+============================================================
+
+Running validation checks...
+
+
+[OK] ADR Consistency (72 ADRs)
+   [WARN] Non-sequential ADR numbering - missing: ADR-046, ADR-055, ADR-056, ADR-057, ADR-058, ADR-059, ADR-060, ADR-061, ADR-062, ADR-063, ADR-064, ADR-065, ADR-066, ADR-067, ADR-068, ADR-069, ADR-070, ADR-071, ADR-072, ADR-073, ADR-075, ADR-076, ADR-077, ADR-078, ADR-079, ADR-080, ADR-081, ADR-082, ADR-083, ADR-084, ADR-085, ADR-086, ADR-087, ADR-088, ADR-089, ADR-090, ADR-091, ADR-092, ADR-093, ADR-094, ADR-095, ADR-096, ADR-097, ADR-098, ADR-099, ADR-105, ADR-106, ADR-107, ADR-108, ADR-109, ADR-113, ADR-114, ADR-115, ADR-116, ADR-117, ADR-118, ADR-119, ADR-122, ADR-123, ADR-124, ADR-125, ADR-126, ADR-127, ADR-128, ADR-129, ADR-130, ADR-131, ADR-132, ADR-133, ADR-134, ADR-135, ADR-136, ADR-137, ADR-138, ADR-139, ADR-140, ADR-141, ADR-142, ADR-143, ADR-144, ADR-145, ADR-146, ADR-147, ADR-148, ADR-149, ADR-150, ADR-151, ADR-152, ADR-153, ADR-154, ADR-155, ADR-156, ADR-157, ADR-158, ADR-159, ADR-160, ADR-161, ADR-162, ADR-163, ADR-164, ADR-165, ADR-166, ADR-167, ADR-168, ADR-169, ADR-170, ADR-171, ADR-172, ADR-173, ADR-174, ADR-175, ADR-176, ADR-177, ADR-178, ADR-179, ADR-180, ADR-181, ADR-182, ADR-183, ADR-184, ADR-185, ADR-186, ADR-187, ADR-188, ADR-189, ADR-190, ADR-191, ADR-192, ADR-193, ADR-194, ADR-195, ADR-196, ADR-197, ADR-198, ADR-199, ADR-204, ADR-205, ADR-206, ADR-207, ADR-208, ADR-209, ADR-210, ADR-211, ADR-212, ADR-213, ADR-214, ADR-215, ADR-216, ADR-217, ADR-218, ADR-219, ADR-220, ADR-221, ADR-222, ADR-223, ADR-224, ADR-225, ADR-226, ADR-227, ADR-228, ADR-229, ADR-230, ADR-231, ADR-232, ADR-233, ADR-234, ADR-235, ADR-236, ADR-237, ADR-238, ADR-239, ADR-240, ADR-241, ADR-242, ADR-243, ADR-244, ADR-245, ADR-246, ADR-247, ADR-248, ADR-249, ADR-250, ADR-251, ADR-252, ADR-253, ADR-254, ADR-255, ADR-256, ADR-257, ADR-258, ADR-259, ADR-260, ADR-261, ADR-262, ADR-263, ADR-264, ADR-265, ADR-266, ADR-267, ADR-268, ADR-269, ADR-270, ADR-271, ADR-272, ADR-273, ADR-274, ADR-275, ADR-276, ADR-277, ADR-278, ADR-279, ADR-280, ADR-281, ADR-282, ADR-283, ADR-284, ADR-285, ADR-286, ADR-287, ADR-288, ADR-289, ADR-290, ADR-291, ADR-292, ADR-293, ADR-294, ADR-295, ADR-296, ADR-297, ADR-298, ADR-299
+
+[OK] Requirement Consistency (114 requirements)
+
+[OK] MASTER_INDEX Validation (30 docs listed)
+   [WARN] 8 planned documents ([PLANNED]) not yet created - this is expected
+   [WARN] 27 documents exist but not in MASTER_INDEX: CLAUDE_CODE_HANDOFF_UPDATED_V1_0.md, CLAUDE_CODE_READING_GUIDE_V1_0.md, CONFIGURATION_GUIDE_UPDATE_SPEC_V1_0.md, DOCUMENTATION_REFACTORING_PLAN_V1.0.md, DOCUMENTATION_V2_REVIEW_GUIDE.md, ELO_AND_SETTLEMENTS_ARCHITECTURE_ANALYSIS_V1.0.md, FILENAME_VERSION_REPORT.md, HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md, Handoff_Protocol_V1_1.md, KALSHI_API_STRUCTURE_COMPREHENSIVE_V2.0.md, ORDER_EXECUTION_ARCHITECTURE_ASSESSMENT_V1_0.md, PHASE_0.7_DEFERRED_TASKS_V1.3.md, PHASE_0_5_COMPREHENSIVE_HANDOFF_V1_0.md, PHASE_1_TASK_PLAN_V1.0.md, PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md, PHASE_TEST_PLANNING_TEMPLATE_V1.0.md, SCHEMA_DESIGN_QUESTIONS_ANALYSIS_V1.0.md, SESSION_HANDOFF_2025-10-29_v0.md, SESSION_HANDOFF_2025-10-30_v0.md, SESSION_HANDOFF_2025-10-30_v1.md, SESSION_HANDOFF_2025-10-30_v2.md, SESSION_HANDOFF_TEMPLATE_V1.0.md, SETTLEMENTS_AND_ELO_CLARIFICATION_V1.0.md, TWO_SESSION_IMPLEMENTATION_PLAN_V1.0.md, VERSION_HEADERS_GUIDE_V2_1.md, YAML_AND_DOCS_CONSISTENCY_ANALYSIS_V1.0.md, YAML_CONSISTENCY_AUDIT_V1_0.md
+
+[OK] Cross-Reference Validation
+
+[OK] Version Header Validation (11 docs checked)
+
+[OK] New Docs Enforcement (Check #6) - 32 docs, 43 listed
+   [WARN] 11 documents listed in MASTER_INDEX but no longer exist:
+   [WARN]   - BACKTESTING_PROTOCOL_V1.0.md
+   [WARN]   - DEPLOYMENT_GUIDE_V1.0.md
+   [WARN]   - DEVELOPER_ONBOARDING_V1.0.md
+   [WARN]   - EDGE_DETECTION_ALGORITHM_V1.0.md
+   [WARN]   - KELLY_CRITERION_GUIDE_V1.0.md
+   [WARN]   - MODEL_VALIDATION_V1.0.md
+   [WARN]   - PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md
+   [WARN]   - PROJECT_KNOWLEDGE_STRATEGY_V1.0.md
+   [WARN]   - RISK_MANAGEMENT_PLAN_V1.0.md
+   [WARN]   - SESSION_HANDOFF_TEMPLATE_V1.0.md
+   [WARN]   - USER_GUIDE_V1.0.md
+   [WARN] Consider removing these entries or moving to _archive/
+
+[OK] Git Version Bump Detection (Check #7) - No renames detected
+
+[OK] Phase Completion Status (Check #8) - 18 phases checked
+
+[OK] YAML Configuration Validation (Check #9) - 7 files checked
+   [WARN] DECIMAL SAFETY: Found 111 potential float contamination issues
+   [WARN] Float values in price/probability fields can cause rounding errors - use string format
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.rate_limit_buffer': 0.8
+   [WARN]   RECOMMENDATION: Change to string format: rate_limit_buffer: "0.8"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.fees.maker_fee_percent': 0.0
+   [WARN]   RECOMMENDATION: Change to string format: maker_fee_percent: "0.0"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.fees.taker_fee_percent': 0.07
+   [WARN]   RECOMMENDATION: Change to string format: taker_fee_percent: "0.07"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.fees.withdrawal_fee': 0.0
+   [WARN]   RECOMMENDATION: Change to string format: withdrawal_fee: "0.0"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.nfl.max_spread': 0.05
+   [WARN]   RECOMMENDATION: Change to string format: max_spread: "0.05"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.nfl.kelly_fraction': 0.25
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction: "0.25"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.nfl.min_edge': 0.05
+   [WARN]   RECOMMENDATION: Change to string format: min_edge: "0.05"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.ncaaf.max_spread': 0.06
+   [WARN]   RECOMMENDATION: Change to string format: max_spread: "0.06"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.ncaaf.kelly_fraction': 0.2
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction: "0.2"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.ncaaf.min_edge': 0.06
+   [WARN]   RECOMMENDATION: Change to string format: min_edge: "0.06"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.nba.max_spread': 0.05
+   [WARN]   RECOMMENDATION: Change to string format: max_spread: "0.05"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.nba.kelly_fraction': 0.22
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction: "0.22"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.nba.min_edge': 0.05
+   [WARN]   RECOMMENDATION: Change to string format: min_edge: "0.05"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.mlb.max_spread': 0.05
+   [WARN]   RECOMMENDATION: Change to string format: max_spread: "0.05"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.mlb.kelly_fraction': 0.2
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction: "0.2"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.mlb.min_edge': 0.06
+   [WARN]   RECOMMENDATION: Change to string format: min_edge: "0.06"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.tennis.max_spread': 0.07
+   [WARN]   RECOMMENDATION: Change to string format: max_spread: "0.07"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.tennis.kelly_fraction': 0.18
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction: "0.18"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.sports.leagues.tennis.min_edge': 0.07
+   [WARN]   RECOMMENDATION: Change to string format: min_edge: "0.07"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.politics.max_spread': 0.04
+   [WARN]   RECOMMENDATION: Change to string format: max_spread: "0.04"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.politics.kelly_fraction': 0.15
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction: "0.15"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.politics.min_edge': 0.08
+   [WARN]   RECOMMENDATION: Change to string format: min_edge: "0.08"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.entertainment.max_spread': 0.06
+   [WARN]   RECOMMENDATION: Change to string format: max_spread: "0.06"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.entertainment.kelly_fraction': 0.18
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction: "0.18"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.entertainment.min_edge': 0.07
+   [WARN]   RECOMMENDATION: Change to string format: min_edge: "0.07"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.economics.max_spread': 0.04
+   [WARN]   RECOMMENDATION: Change to string format: max_spread: "0.04"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.economics.kelly_fraction': 0.15
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction: "0.15"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.kalshi.categories.economics.min_edge': 0.08
+   [WARN]   RECOMMENDATION: Change to string format: min_edge: "0.08"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.polymarket.fees.protocol_fee_percent': 0.02
+   [WARN]   RECOMMENDATION: Change to string format: protocol_fee_percent: "0.02"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.polymarket.categories.crypto.max_spread': 0.05
+   [WARN]   RECOMMENDATION: Change to string format: max_spread: "0.05"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.polymarket.categories.crypto.kelly_fraction': 0.2
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction: "0.2"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.polymarket.categories.crypto.min_edge': 0.06
+   [WARN]   RECOMMENDATION: Change to string format: min_edge: "0.06"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.polymarket.categories.politics.max_spread': 0.03
+   [WARN]   RECOMMENDATION: Change to string format: max_spread: "0.03"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.polymarket.categories.politics.kelly_fraction': 0.15
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction: "0.15"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.polymarket.categories.politics.min_edge': 0.08
+   [WARN]   RECOMMENDATION: Change to string format: min_edge: "0.08"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.polymarket.categories.sports.max_spread': 0.05
+   [WARN]   RECOMMENDATION: Change to string format: max_spread: "0.05"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.polymarket.categories.sports.kelly_fraction': 0.25
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction: "0.25"
+   [WARN] markets.yaml: Float detected in Decimal field 'platforms.polymarket.categories.sports.min_edge': 0.05
+   [WARN]   RECOMMENDATION: Change to string format: min_edge: "0.05"
+   [WARN] markets.yaml: Float detected in Decimal field 'watchlists.alerts.price_move_percent': 0.05
+   [WARN]   RECOMMENDATION: Change to string format: price_move_percent: "0.05"
+   [WARN] markets.yaml: Float detected in Decimal field 'prioritization.weights.edge_weight': 0.5
+   [WARN]   RECOMMENDATION: Change to string format: edge_weight: "0.5"
+   [WARN] markets.yaml: Float detected in Decimal field 'prioritization.weights.liquidity_weight': 0.25
+   [WARN]   RECOMMENDATION: Change to string format: liquidity_weight: "0.25"
+   [WARN] markets.yaml: Float detected in Decimal field 'prioritization.weights.confidence_weight': 0.25
+   [WARN]   RECOMMENDATION: Change to string format: confidence_weight: "0.25"
+   [WARN] markets.yaml: Float detected in Decimal field 'special_events.playoffs.multipliers.kelly_fraction': 0.5
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction: "0.5"
+   [WARN] markets.yaml: Float detected in Decimal field 'special_events.championships.multipliers.kelly_fraction': 0.3
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction: "0.3"
+   [WARN] markets.yaml: Float detected in Decimal field 'special_events.championships.multipliers.min_edge': 1.5
+   [WARN]   RECOMMENDATION: Change to string format: min_edge: "1.5"
+   [WARN] position_management.yaml: Float detected in Decimal field 'monitoring.urgent_conditions.near_stop_loss_pct': 0.02
+   [WARN]   RECOMMENDATION: Change to string format: near_stop_loss_pct: "0.02"
+   [WARN] position_management.yaml: Float detected in Decimal field 'monitoring.urgent_conditions.near_profit_target_pct': 0.02
+   [WARN]   RECOMMENDATION: Change to string format: near_profit_target_pct: "0.02"
+   [WARN] position_management.yaml: Float detected in Decimal field 'monitoring.urgent_conditions.near_trailing_stop_pct': 0.02
+   [WARN]   RECOMMENDATION: Change to string format: near_trailing_stop_pct: "0.02"
+   [WARN] position_management.yaml: Float detected in Decimal field 'monitoring.health_score.factors.edge_remaining': 0.4
+   [WARN]   RECOMMENDATION: Change to string format: edge_remaining: "0.4"
+   [WARN] position_management.yaml: Float detected in Decimal field 'liquidity.max_spread': 0.03
+   [WARN]   RECOMMENDATION: Change to string format: max_spread: "0.03"
+   [WARN] position_management.yaml: Float detected in Decimal field 'exit_rules.mandatory.negative_edge.threshold': -0.03
+   [WARN]   RECOMMENDATION: Change to string format: threshold: "-0.03"
+   [WARN] position_management.yaml: Float detected in Decimal field 'exit_rules.mandatory.late_game_loss.loss_threshold_pct': 0.2
+   [WARN]   RECOMMENDATION: Change to string format: loss_threshold_pct: "0.2"
+   [WARN] position_management.yaml: Float detected in Decimal field 'exit_rules.discretionary.profit_target.by_strategy.pre_game_entry.target_gain_pct': 0.5
+   [WARN]   RECOMMENDATION: Change to string format: target_gain_pct: "0.5"
+   [WARN] position_management.yaml: Float detected in Decimal field 'exit_rules.discretionary.profit_target.by_strategy.halftime_entry.target_gain_pct': 0.75
+   [WARN]   RECOMMENDATION: Change to string format: target_gain_pct: "0.75"
+   [WARN] position_management.yaml: Float detected in Decimal field 'exit_rules.discretionary.profit_target.by_strategy.live_trading.target_gain_pct': 0.4
+   [WARN]   RECOMMENDATION: Change to string format: target_gain_pct: "0.4"
+   [WARN] position_management.yaml: Float detected in Decimal field 'exit_rules.discretionary.profit_target.by_strategy.settlement_arbitrage.target_gain_pct': 1.0
+   [WARN]   RECOMMENDATION: Change to string format: target_gain_pct: "1.0"
+   [WARN] position_management.yaml: Float detected in Decimal field 'exit_rules.discretionary.trailing_stop.activation_threshold': 0.1
+   [WARN]   RECOMMENDATION: Change to string format: activation_threshold: "0.1"
+   [WARN] position_management.yaml: Float detected in Decimal field 'exit_rules.discretionary.trailing_stop.tightening_rate': 0.01
+   [WARN]   RECOMMENDATION: Change to string format: tightening_rate: "0.01"
+   [WARN] position_management.yaml: Float detected in Decimal field 'exit_rules.discretionary.partial_exits.stages[0].profit_threshold': 0.15
+   [WARN]   RECOMMENDATION: Change to string format: profit_threshold: "0.15"
+   [WARN] position_management.yaml: Float detected in Decimal field 'exit_rules.discretionary.partial_exits.stages[1].profit_threshold': 0.25
+   [WARN]   RECOMMENDATION: Change to string format: profit_threshold: "0.25"
+   [WARN] position_management.yaml: Float detected in Decimal field 'correlation.actions.reject_on_high_correlation.threshold': 0.85
+   [WARN]   RECOMMENDATION: Change to string format: threshold: "0.85"
+   [WARN] position_management.yaml: Float detected in Decimal field 'correlation.actions.alert_on_portfolio_correlation.threshold': 0.7
+   [WARN]   RECOMMENDATION: Change to string format: threshold: "0.7"
+   [WARN] position_management.yaml: Float detected in Decimal field 'rebalancing.triggers.edge_increase.threshold': 0.05
+   [WARN]   RECOMMENDATION: Change to string format: threshold: "0.05"
+   [WARN] position_management.yaml: Float detected in Decimal field 'rebalancing.triggers.probability_change.threshold': 0.1
+   [WARN]   RECOMMENDATION: Change to string format: threshold: "0.1"
+   [WARN] position_management.yaml: Float detected in Decimal field 'rebalancing.method.incremental.min_edge_for_increase': 0.08
+   [WARN]   RECOMMENDATION: Change to string format: min_edge_for_increase: "0.08"
+   [WARN] position_management.yaml: Float detected in Decimal field 'rebalancing.min_edge_improvement': 0.03
+   [WARN]   RECOMMENDATION: Change to string format: min_edge_improvement: "0.03"
+   [WARN] position_management.yaml: Float detected in Decimal field 'sizing_adjustments.volatility_adjustment.high_volatility_threshold': 2.0
+   [WARN]   RECOMMENDATION: Change to string format: high_volatility_threshold: "2.0"
+   [WARN] position_management.yaml: Float detected in Decimal field 'sizing_adjustments.spread_adjustment.wide_spread_threshold': 0.04
+   [WARN]   RECOMMENDATION: Change to string format: wide_spread_threshold: "0.04"
+   [WARN] position_management.yaml: Float detected in Decimal field 'sizing_adjustments.confidence_adjustment.low_confidence_threshold': 0.7
+   [WARN]   RECOMMENDATION: Change to string format: low_confidence_threshold: "0.7"
+   [WARN] position_management.yaml: Float detected in Decimal field 'optimization.reallocate_capital.min_edge_improvement': 0.1
+   [WARN]   RECOMMENDATION: Change to string format: min_edge_improvement: "0.1"
+   [WARN] position_management.yaml: Float detected in Decimal field 'risk_metrics.alerts.var_threshold': 0.1
+   [WARN]   RECOMMENDATION: Change to string format: var_threshold: "0.1"
+   [WARN] position_management.yaml: Float detected in Decimal field 'risk_metrics.alerts.correlation_threshold': 0.75
+   [WARN]   RECOMMENDATION: Change to string format: correlation_threshold: "0.75"
+   [WARN] position_management.yaml: Float detected in Decimal field 'risk_metrics.alerts.max_drawdown_threshold': 0.15
+   [WARN]   RECOMMENDATION: Change to string format: max_drawdown_threshold: "0.15"
+   [WARN] probability_models.yaml: Float detected in Decimal field 'architecture.ensemble.weights.elo': 0.4
+   [WARN]   RECOMMENDATION: Change to string format: elo: "0.4"
+   [WARN] probability_models.yaml: Float detected in Decimal field 'ml.hyperparameters.learning_rate': 0.05
+   [WARN]   RECOMMENDATION: Change to string format: learning_rate: "0.05"
+   [WARN] probability_models.yaml: Float detected in Decimal field 'edge_detection.transaction_costs.taker_fee': 0.01
+   [WARN]   RECOMMENDATION: Change to string format: taker_fee: "0.01"
+   [WARN] probability_models.yaml: Float detected in Decimal field 'market_efficiency.efficiency_adjustment.edge_increase_per_0.1_efficiency': 0.01
+   [WARN]   RECOMMENDATION: Change to string format: edge_increase_per_0.1_efficiency: "0.01"
+   [WARN] probability_models.yaml: Float detected in Decimal field 'situational_adjustments.weather.factors.rain.threshold_inches': 0.25
+   [WARN]   RECOMMENDATION: Change to string format: threshold_inches: "0.25"
+   [WARN] probability_models.yaml: Float detected in Decimal field 'monitoring.metrics.calibration_error.alert_threshold': 0.08
+   [WARN]   RECOMMENDATION: Change to string format: alert_threshold: "0.08"
+   [WARN] probability_models.yaml: Float detected in Decimal field 'monitoring.metrics.edge_profitability.alert_threshold': 0.5
+   [WARN]   RECOMMENDATION: Change to string format: alert_threshold: "0.5"
+   [WARN] probability_models.yaml: Float detected in Decimal field 'monitoring.metrics.accuracy.alert_threshold': 0.52
+   [WARN]   RECOMMENDATION: Change to string format: alert_threshold: "0.52"
+   [WARN] probability_models.yaml: Float detected in Decimal field 'monitoring.auto_retrain.performance_threshold': 0.9
+   [WARN]   RECOMMENDATION: Change to string format: performance_threshold: "0.9"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'halftime_entry.sports_config.nfl.analysis_factors.weight_possession_yardage': 0.4
+   [WARN]   RECOMMENDATION: Change to string format: weight_possession_yardage: "0.4"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'halftime_entry.sports_config.nfl.analysis_factors.weight_score_differential': 0.2
+   [WARN]   RECOMMENDATION: Change to string format: weight_score_differential: "0.2"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'halftime_entry.sports_config.nfl.analysis_factors.weight_turnover_margin': 0.2
+   [WARN]   RECOMMENDATION: Change to string format: weight_turnover_margin: "0.2"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'halftime_entry.sports_config.nfl.analysis_factors.weight_time_of_possession': 0.2
+   [WARN]   RECOMMENDATION: Change to string format: weight_time_of_possession: "0.2"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'halftime_entry.sports_config.nba.analysis_factors.weight_shooting_percentage': 0.3
+   [WARN]   RECOMMENDATION: Change to string format: weight_shooting_percentage: "0.3"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'halftime_entry.sports_config.nba.analysis_factors.weight_turnover_margin': 0.25
+   [WARN]   RECOMMENDATION: Change to string format: weight_turnover_margin: "0.25"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'halftime_entry.sports_config.nba.analysis_factors.weight_rebounding': 0.25
+   [WARN]   RECOMMENDATION: Change to string format: weight_rebounding: "0.25"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'halftime_entry.sports_config.nba.analysis_factors.weight_free_throws': 0.2
+   [WARN]   RECOMMENDATION: Change to string format: weight_free_throws: "0.2"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'live_trading.min_edge_live': 0.1
+   [WARN]   RECOMMENDATION: Change to string format: min_edge_live: "0.1"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'live_trading.sports_config.nfl.situations.late_game.weight_recent_score': 0.5
+   [WARN]   RECOMMENDATION: Change to string format: weight_recent_score: "0.5"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'live_trading.sports_config.nfl.situations.late_game.weight_timeouts_remaining': 0.3
+   [WARN]   RECOMMENDATION: Change to string format: weight_timeouts_remaining: "0.3"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'live_trading.sports_config.nfl.situations.late_game.weight_field_position': 0.2
+   [WARN]   RECOMMENDATION: Change to string format: weight_field_position: "0.2"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'settlement_arbitrage.min_win_probability': 0.98
+   [WARN]   RECOMMENDATION: Change to string format: min_win_probability: "0.98"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'settlement_arbitrage.min_edge': 0.02
+   [WARN]   RECOMMENDATION: Change to string format: min_edge: "0.02"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'settlement_arbitrage.kelly_fraction_override': 0.5
+   [WARN]   RECOMMENDATION: Change to string format: kelly_fraction_override: "0.5"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'hedge_strategy.hedge_triggers.edge_flip_threshold': 0.1
+   [WARN]   RECOMMENDATION: Change to string format: edge_flip_threshold: "0.1"
+   [WARN] trade_strategies.yaml: Float detected in Decimal field 'selection_logic.min_edge_difference': 0.02
+   [WARN]   RECOMMENDATION: Change to string format: min_edge_difference: "0.02"
+   [WARN] trading.yaml: Float detected in Decimal field 'account.daily_loss_limit_dollars': 500.0
+   [WARN]   RECOMMENDATION: Change to string format: daily_loss_limit_dollars: "500.0"
+   [WARN] trading.yaml: Float detected in Decimal field 'account.weekly_loss_limit_dollars': 1500.0
+   [WARN]   RECOMMENDATION: Change to string format: weekly_loss_limit_dollars: "1500.0"
+   [WARN] trading.yaml: Float detected in Decimal field 'position_sizing.kelly.default_fraction': 0.25
+   [WARN]   RECOMMENDATION: Change to string format: default_fraction: "0.25"
+   [WARN] trading.yaml: Float detected in Decimal field 'position_sizing.kelly.min_edge_threshold': 0.05
+   [WARN]   RECOMMENDATION: Change to string format: min_edge_threshold: "0.05"
+   [WARN] trading.yaml: Float detected in Decimal field 'position_sizing.fixed_fraction.fraction_of_bankroll': 0.02
+   [WARN]   RECOMMENDATION: Change to string format: fraction_of_bankroll: "0.02"
+   [WARN] trading.yaml: Float detected in Decimal field 'market_filters.max_spread_pct': 0.05
+   [WARN]   RECOMMENDATION: Change to string format: max_spread_pct: "0.05"
+   [WARN] trading.yaml: Float detected in Decimal field 'position_management.early_exit.min_edge_to_hold': 0.02
+   [WARN]   RECOMMENDATION: Change to string format: min_edge_to_hold: "0.02"
+   [WARN] trading.yaml: Float detected in Decimal field 'position_management.stop_loss.loss_threshold_pct': 0.5
+   [WARN]   RECOMMENDATION: Change to string format: loss_threshold_pct: "0.5"
+   [WARN] trading.yaml: Float detected in Decimal field 'position_management.profit_target.gain_threshold_pct': 1.0
+   [WARN]   RECOMMENDATION: Change to string format: gain_threshold_pct: "1.0"
+   [WARN] trading.yaml: Float detected in Decimal field 'circuit_breakers.edge_anomaly.threshold_pct': 0.3
+   [WARN]   RECOMMENDATION: Change to string format: threshold_pct: "0.3"
+   [WARN] trading.yaml: Float detected in Decimal field 'alerts.on_loss_threshold.threshold_dollars': 100.0
+   [WARN]   RECOMMENDATION: Change to string format: threshold_dollars: "100.0"
+   [WARN] trading.yaml: Float detected in Decimal field 'alerts.on_gain_threshold.threshold_dollars': 500.0
+   [WARN]   RECOMMENDATION: Change to string format: threshold_dollars: "500.0"
+
+============================================================
+[OK] ALL VALIDATION CHECKS PASSED (9/9)
+============================================================

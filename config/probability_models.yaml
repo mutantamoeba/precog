@@ -11,7 +11,7 @@
 #          Our model says 60% chance.
 #          Edge = (0.60 × 2.0) - 1 = 0.20 = 20% edge
 #
-# Version: 2.0 (Phase 0.5 - Added Versioning Support)
+# Version: "2.0" (Phase 0.5 - Added Versioning Support)
 # Last Updated: 2025-10-21
 # ============================================
 
@@ -99,15 +99,15 @@ versioning:
     # Example: v1.0 (80%) vs v1.1 (20%)
     # WHY: Don't risk all capital on unproven v1.1
     default_traffic_split:
-      existing_version: 0.80  # 80% traffic
-      new_version: 0.20       # 20% traffic
+      existing_version: "0.80"  # 80% traffic
+      new_version: "0.20"       # 20% traffic
 
     # Evaluation criteria for promotion
     # WHY: Need objective criteria to promote v1.1 → ACTIVE
     promotion_criteria:
-      min_improvement_pct: 0.02  # 2% better edge accuracy
+      min_improvement_pct: "0.02"  # 2% better edge accuracy
       min_evaluation_period_days: 30
-      confidence_level: 0.95  # 95% statistical significance
+      confidence_level: "0.95"  # 95% statistical significance
 
 # ============================================
 
@@ -137,9 +137,9 @@ architecture:
       - regression
       - ml
     weights:  # How much to trust each model
-      elo: 0.40
-      regression: 0.35
-      ml: 0.25
+      elo: "0.40"
+      regression: "0.35"
+      ml: "0.25"
 
 # ============================================
 # ELO RATING SYSTEM
@@ -183,7 +183,7 @@ elo:
     enabled: true
     # Formula: multiplier = ln(MOV + 1) / 2
     # Capped at max_multiplier to prevent over-weighting blowouts
-    max_multiplier: 2.0
+    max_multiplier: "2.0"
 
   # Home field advantage
   # WHY: Home teams win more often across all sports
@@ -209,7 +209,7 @@ elo:
   regression:
     enabled: true
     # How much to regress (0 = none, 1 = full regression to mean)
-    factor: 0.20  # 20% regression
+    factor: "0.20"  # 20% regression
     # When to apply (typically off-season)
     apply_frequency: "off_season"
 
@@ -265,7 +265,7 @@ regression:
   # WHY: Prevents overfitting to training data
   regularization:
     type: "l2"  # Ridge regression
-    alpha: 0.01
+    alpha: "0.01"
 
   # Training parameters
   training:
@@ -278,7 +278,7 @@ regression:
 
     # Validation method
     validation: "time_series_split"  # Don't peek into future
-    validation_split: 0.20  # 20% for validation
+    validation_split: "0.20"  # 20% for validation
 
 # ============================================
 # MACHINE LEARNING MODELS
@@ -310,8 +310,8 @@ ml:
   hyperparameters:
     n_estimators: 100
     max_depth: 6
-    learning_rate: 0.05
-    subsample: 0.80
+    learning_rate: "0.05"
+    subsample: "0.80"
 
   # Model selection
   # WHY: Try multiple hyperparameters, pick best
@@ -339,16 +339,16 @@ edge_detection:
     enabled: true
     # Shrink probabilities toward 50% (maximum uncertainty)
     # Example: Model says 65%, discount to 62%
-    shrinkage_factor: 0.10  # 10% shrinkage
+    shrinkage_factor: "0.10"  # 10% shrinkage
 
   # Transaction cost adjustment
   # WHY: Kalshi charges fees, reduce effective edge
   transaction_costs:
     enabled: true
     # Kalshi: Maker rebate (get paid for providing liquidity)
-    maker_rebate: 0.01  # 1% rebate
+    maker_rebate: "0.01"  # 1% rebate
     # Kalshi: Taker fee (pay for taking liquidity)
-    taker_fee: 0.01  # 1% fee
+    taker_fee: "0.01"  # 1% fee
     # Conservative: assume we're taker (pay fee)
     assume_taker: true
 
@@ -357,15 +357,15 @@ edge_detection:
   slippage:
     enabled: true
     # Assume this much average slippage
-    expected_slippage_pct: 0.005  # 0.5%
+    expected_slippage_pct: "0.005"  # 0.5%
 
   # Minimum edge thresholds (by strategy)
   # WHY: Different strategies have different requirements
   min_edge:
-    pre_game: 0.08  # 8% minimum (more uncertainty)
-    halftime: 0.06  # 6% minimum (have actual game data)
-    live: 0.10  # 10% minimum (faster moving, riskier)
-    settlement: 0.02  # 2% minimum (near-certain outcomes)
+    pre_game: "0.08"  # 8% minimum (more uncertainty)
+    halftime: "0.06"  # 6% minimum (have actual game data)
+    live: "0.10"  # 10% minimum (faster moving, riskier)
+    settlement: "0.02"  # 2% minimum (near-certain outcomes)
 
 # ============================================
 # PROBABILITY CALIBRATION
@@ -390,7 +390,7 @@ calibration:
 
   # Training for calibration
   # WHY: Need separate validation set to avoid overfitting
-  calibration_set_size: 0.15  # 15% of data
+  calibration_set_size: "0.15"  # 15% of data
 
   # Calibration diagnostics
   # Track calibration quality over time
@@ -399,7 +399,7 @@ calibration:
     # Bin predictions and compare to actual outcomes
     bins: 10  # Divide [0%, 100%] into 10 bins
     # Alert if calibration error too high
-    max_calibration_error: 0.05  # 5%
+    max_calibration_error: "0.05"  # 5%
 
 # ============================================
 # MARKET EFFICIENCY ADJUSTMENT
@@ -415,17 +415,17 @@ market_efficiency:
   # Scale: 0 = completely random, 1 = perfectly efficient
   estimated_efficiency:
     nfl:
-      game_winner: 0.75  # Pretty efficient (Vegas lines)
-      player_props: 0.60  # Less efficient
-      live_trading: 0.55  # Even less efficient (fast-moving)
+      game_winner: "0.75"  # Pretty efficient (Vegas lines)
+      player_props: "0.60"  # Less efficient
+      live_trading: "0.55"  # Even less efficient (fast-moving)
 
     nba:
-      game_winner: 0.80  # Very efficient
-      player_props: 0.65
-      live_trading: 0.60
+      game_winner: "0.80"  # Very efficient
+      player_props: "0.65"
+      live_trading: "0.60"
 
     mlb:
-      game_winner: 0.70
+      game_winner: "0.70"
 
     # Lower efficiency = easier to find edges
 
@@ -434,7 +434,7 @@ market_efficiency:
   efficiency_adjustment:
     enabled: true
     # For each 0.10 increase in efficiency, require 1% more edge
-    edge_increase_per_0.1_efficiency: 0.01
+    edge_increase_per_0.1_efficiency: "0.01"
 
 # ============================================
 # SITUATIONAL ADJUSTMENTS
@@ -452,43 +452,43 @@ situational_adjustments:
       # Wind affects passing (NFL, MLB)
       wind:
         threshold_mph: 15
-        passing_adjustment: -0.05  # Reduce passing team prob by 5%
+        passing_adjustment: "-0.05"  # Reduce passing team prob by 5%
 
       # Rain affects ball handling
       rain:
-        threshold_inches: 0.25
-        turnover_increase: 0.15  # 15% more turnovers
+        threshold_inches: "0.25"
+        turnover_increase: "0.15"  # 15% more turnovers
 
       # Snow is chaos
       snow:
         # Discount model confidence by 20%
-        confidence_discount: 0.20
+        confidence_discount: "0.20"
 
       # Temperature extremes
       temperature:
         cold_threshold_f: 20
-        cold_adjustment: -0.03  # Slight disadvantage
+        cold_adjustment: "-0.03"  # Slight disadvantage
         hot_threshold_f: 95
-        hot_adjustment: -0.02
+        hot_adjustment: "-0.02"
 
   # Rest/schedule adjustments
   rest:
     enabled: true
     # Back-to-back games (NBA)
     back_to_back:
-      disadvantage: 0.03  # 3% probability decrease
+      disadvantage: "0.03"  # 3% probability decrease
 
     # Rest advantage (NFL)
     extra_rest_days:
-      advantage_per_day: 0.01  # 1% per extra day (max 3 days)
+      advantage_per_day: "0.01"  # 1% per extra day (max 3 days)
 
     # Travel distance (all sports)
     travel:
       enabled: true
       # Long cross-country flight
-      coast_to_coast: 0.02  # 2% disadvantage
+      coast_to_coast: "0.02"  # 2% disadvantage
       # Time zone changes
-      timezone_change_disadvantage: 0.01  # per hour
+      timezone_change_disadvantage: "0.01"  # per hour
 
   # Injury adjustments
   injuries:
@@ -496,20 +496,20 @@ situational_adjustments:
     # Automatic adjustment based on player importance
     # WHY: Losing your star QB is different than backup TE
     key_player_impact:
-      quarterback: 0.10  # 10% probability swing (NFL)
-      star_player: 0.08  # 8% (NBA, other sports)
-      starter: 0.03  # 3%
-      bench: 0.01  # 1%
+      quarterback: "0.10"  # 10% probability swing (NFL)
+      star_player: "0.08"  # 8% (NBA, other sports)
+      starter: "0.03"  # 3%
+      bench: "0.01"  # 1%
 
   # Motivation adjustments
   # WHY: Playoff races, rivalry games, etc. affect performance
   motivation:
     enabled: true
     factors:
-      playoff_implications: 0.03  # 3% boost if fighting for playoffs
-      rivalry_game: 0.02  # 2% boost
-      revenge_game: 0.02  # 2% boost (lost to this team last time)
-      tanking: -0.05  # 5% decrease if team tanking for draft picks
+      playoff_implications: "0.03"  # 3% boost if fighting for playoffs
+      rivalry_game: "0.02"  # 2% boost
+      revenge_game: "0.02"  # 2% boost (lost to this team last time)
+      tanking: "-0.05"  # 5% decrease if team tanking for draft picks
 
 # ============================================
 # LIVE GAME ADJUSTMENTS
@@ -541,11 +541,11 @@ live_updates:
 
   # Factors in live model
   factors:
-    score_differential: 0.35
-    time_remaining: 0.25
-    field_position: 0.15  # NFL
-    possession: 0.15
-    team_strength: 0.10  # Elo rating
+    score_differential: "0.35"
+    time_remaining: "0.25"
+    field_position: "0.15"  # NFL
+    possession: "0.15"
+    team_strength: "0.10"  # Elo rating
 
 # ============================================
 # BACKTESTING & VALIDATION
@@ -595,28 +595,28 @@ monitoring:
   metrics:
     # Calibration: Are 60% predictions winning 60%?
     calibration_error:
-      alert_threshold: 0.08  # 8% error
+      alert_threshold: "0.08"  # 8% error
 
     # Profit: Are edges translating to profit?
     edge_profitability:
-      alert_threshold: 0.50  # If edges only 50% profitable, issue
+      alert_threshold: "0.50"  # If edges only 50% profitable, issue
 
     # Accuracy: Are we predicting winners correctly?
     accuracy:
-      alert_threshold: 0.52  # Should beat 50% by some margin
+      alert_threshold: "0.52"  # Should beat 50% by some margin
 
   # Alert if model degrading
   degradation_alerts:
     enabled: true
     # Compare recent performance to historical
     lookback_window_days: 30
-    min_performance_pct: 0.85  # Alert if < 85% of historical
+    min_performance_pct: "0.85"  # Alert if < 85% of historical
 
   # Automatic model re-training
   auto_retrain:
     enabled: true
     # Retrain if performance drops
-    performance_threshold: 0.90  # 90% of historical
+    performance_threshold: "0.90"  # 90% of historical
     # Or retrain on schedule
     schedule: "weekly"
 
@@ -640,14 +640,14 @@ confidence_intervals:
 
   # Confidence level
   # WHY: 95% means we're 95% confident true value in this range
-  confidence_level: 0.95  # 95%
+  confidence_level: "0.95"  # 95%
 
   # Use in edge detection?
   # WHY: If confidence interval wide, reduce bet size
   use_in_sizing:
     enabled: true
     # Wider interval = smaller bet
-    size_reduction_per_pct_width: 0.02  # 2% per 1% width
+    size_reduction_per_pct_width: "0.02"  # 2% per 1% width
 
 # ============================================
 # NOTES FOR MODEL DEVELOPMENT

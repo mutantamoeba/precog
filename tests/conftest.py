@@ -236,7 +236,14 @@ def temp_log_dir():
 @pytest.fixture
 def test_logger(temp_log_dir):
     """Provide logger that writes to temp directory."""
-    return setup_logging(log_level="DEBUG", log_to_file=True, log_dir=str(temp_log_dir))
+    import logging
+
+    logger = setup_logging(log_level="DEBUG", log_to_file=True, log_dir=str(temp_log_dir))
+
+    yield logger
+
+    # Cleanup: Properly shutdown all logging handlers to prevent ResourceWarning
+    logging.shutdown()
 
 
 # =============================================================================

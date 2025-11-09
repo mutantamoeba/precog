@@ -4,7 +4,7 @@
 # Think of this as the "risk management headquarters" - every trade
 # must comply with these limits.
 #
-# Version: 1.0
+# Version: "1.0"
 # Last Updated: 2025-10-09
 # ============================================
 
@@ -29,21 +29,21 @@ account:
   # Maximum amount to have at risk across ALL positions
   # WHY: If you have $10k at risk and the market moves against you,
   # you could lose significant money. This caps your exposure.
-  max_total_exposure_dollars: 10000.00
+  max_total_exposure_dollars: "10000.00"
 
   # Maximum you're willing to lose in a single day
   # WHY: Prevents catastrophic losses. If you're down $500, something
   # is wrong - stop trading and investigate.
-  daily_loss_limit_dollars: 500.00
+  daily_loss_limit_dollars: "500.00"
 
   # Maximum you're willing to lose in a single week
   # WHY: Multiple bad days can compound. Weekly limit catches trends.
-  weekly_loss_limit_dollars: 1500.00
+  weekly_loss_limit_dollars: "1500.00"
 
   # Minimum account balance to keep trading
   # WHY: If balance drops below this, stop trading to prevent
   # complete account wipeout.
-  min_balance_to_trade_dollars: 1000.00
+  min_balance_to_trade_dollars: "1000.00"
 
   # Maximum number of trades per hour
   # WHY: Prevents runaway trading due to bugs or model errors.
@@ -86,7 +86,7 @@ position_sizing:
     # FORMULA: bet = (edge / odds) * fraction
     # Example: 10% edge at 2.0 odds with 0.25 fraction:
     #   bet = (0.10 / 2.0) * 0.25 = 0.0125 = 1.25% of bankroll
-    default_fraction: 0.25
+    default_fraction: "0.25"
 
     # Minimum edge required to place a trade
     # WHY: Small edges are risky due to:
@@ -95,7 +95,7 @@ position_sizing:
     # 3. Slippage (price moves between detection and execution)
     #
     # If edge < this value, don't trade.
-    min_edge_threshold: 0.05  # 5% minimum edge
+    min_edge_threshold: "0.05"  # 5% minimum edge
 
     # Maximum position size as a percentage of bankroll
     # WHY: Even with a huge edge, don't risk everything on one trade.
@@ -104,25 +104,25 @@ position_sizing:
     # Example: 20% edge at 2.0 odds with 0.25 fraction:
     #   Uncapped: (0.20 / 2.0) * 0.25 = 2.5% of bankroll
     #   If this exceeds max_position_pct, use max_position_pct instead
-    max_position_pct: 0.05  # 5% of bankroll maximum
+    max_position_pct: "0.05"  # 5% of bankroll maximum
 
     # Minimum position size in dollars
     # WHY: Trades smaller than this aren't worth the effort.
     # Transaction costs become too large relative to position size.
-    min_position_dollars: 10.00
+    min_position_dollars: "10.00"
 
     # Maximum position size in dollars
     # WHY: Hard cap regardless of Kelly calculation. Prevents
     # accidentally betting huge amounts due to calculation errors.
-    max_position_dollars: 500.00
+    max_position_dollars: "500.00"
 
   # Fixed Dollar Settings (if method = 'fixed')
   fixed:
-    position_size_dollars: 50.00
+    position_size_dollars: "50.00"
 
   # Fixed Fraction Settings (if method = 'fixed_fraction')
   fixed_fraction:
-    fraction_of_bankroll: 0.02  # 2% of bankroll per trade
+    fraction_of_bankroll: "0.02"  # 2% of bankroll per trade
 
 # ============================================
 # TRADE EXECUTION
@@ -150,7 +150,7 @@ execution:
   #
   # WHY: Allows some price movement while still controlling cost.
   # Too tight = orders never fill. Too loose = paying too much.
-  max_slippage_pct: 0.02  # 2% maximum slippage
+  max_slippage_pct: "0.02"  # 2% maximum slippage
 
   # Should we retry failed orders?
   # WHY: Network issues, temporary API errors, etc. can cause failures.
@@ -182,7 +182,7 @@ market_filters:
   # the spread every time you trade.
   #
   # CALCULATION: spread_pct = (ask - bid) / ask * 100
-  max_spread_pct: 0.05  # 5% maximum spread
+  max_spread_pct: "0.05"  # 5% maximum spread
 
   # Markets to exclude completely (even if they meet filters)
   # WHY: Some markets are too unpredictable, too manipulated,
@@ -242,12 +242,12 @@ position_management:
 
     # Exit if edge drops below this threshold
     # WHY: If edge was 8% and drops to 2%, might not be worth holding.
-    min_edge_to_hold: 0.02  # 2%
+    min_edge_to_hold: "0.02"  # 2%
 
     # Exit if correlation with other positions gets too high
     # WHY: Correlated positions = concentrated risk
     # Example: "Cowboys win" and "Cowboys score 30+" are correlated
-    max_correlation: 0.7
+    max_correlation: "0.7"
 
   # Stop-loss rules (exit on losses)
   stop_loss:
@@ -258,7 +258,7 @@ position_management:
     #
     # WHY: Prevents holding onto losers. Sometimes wrong = wrong,
     # and continuing to hold just increases losses.
-    loss_threshold_pct: 0.50  # 50% loss
+    loss_threshold_pct: "0.50"  # 50% loss
 
   # Profit-taking rules (exit on gains)
   profit_target:
@@ -269,7 +269,7 @@ position_management:
     #
     # WHY: Lock in gains. A bird in hand is worth two in the bush.
     # Don't get greedy - take profits when available.
-    gain_threshold_pct: 1.00  # 100% gain (double your money)
+    gain_threshold_pct: "1.00"  # 100% gain (double your money)
 
 # ============================================
 # DATA FRESHNESS
@@ -313,14 +313,14 @@ circuit_breakers:
   # Example: Suddenly finding 50% edges when normally 5-8%
   # WHY: Model might be broken. Better safe than sorry.
   edge_anomaly:
-    threshold_pct: 0.30  # 30% edges are suspicious
+    threshold_pct: "0.30"  # 30% edges are suspicious
     count: 3  # 3 suspicious edges in window
     window_minutes: 10
 
   # Stop trading if losing too fast
   # WHY: Rapid losses suggest something is fundamentally wrong.
   rapid_loss:
-    loss_dollars: 200.00
+    loss_dollars: "200.00"
     window_minutes: 15
 
   # Stop trading if unusual activity detected
@@ -376,12 +376,12 @@ alerts:
   # Alert on large losses
   on_loss_threshold:
     enabled: true
-    threshold_dollars: 100.00
+    threshold_dollars: "100.00"
 
   # Alert on large gains
   on_gain_threshold:
     enabled: true
-    threshold_dollars: 500.00
+    threshold_dollars: "500.00"
 
   # Alert on API issues
   on_api_failure: true
@@ -397,12 +397,12 @@ alerts:
 # 1. ALWAYS start with environment: demo (paper trading)
 #
 # 2. Start conservative:
-#    - kelly.default_fraction: 0.25 (quarter Kelly)
-#    - kelly.min_edge_threshold: 0.08 (8% minimum edge)
-#    - max_position_pct: 0.03 (3% max per position)
+#    - kelly.default_fraction: "0.25" (quarter Kelly)
+#    - kelly.min_edge_threshold: "0.08" (8% minimum edge)
+#    - max_position_pct: "0.03" (3% max per position)
 #
 # 3. Use tight circuit breakers:
-#    - daily_loss_limit_dollars: 200.00
+#    - daily_loss_limit_dollars: "200.00"
 #    - max_trades_per_day: 20
 #
 # 4. Once confident after 2 weeks paper trading:

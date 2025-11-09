@@ -5,7 +5,7 @@
 # placing trades, but actively managing them to maximize returns
 # and minimize risk.
 #
-# Version: 2.0 (Phase 0.5 Enhancements)
+# Version: "2.0" (Phase 0.5 Enhancements)
 # Last Updated: 2025-10-21
 # Major Changes: Added dynamic monitoring, exit priorities,
 #                urgency-based execution from Phase 5 design
@@ -26,27 +26,27 @@ portfolio:
 
   # Maximum total capital deployed across all positions
   # WHY: Even if Kelly says bet more, don't overextend
-  max_total_capital_deployed: 10000.00
+  max_total_capital_deployed: "10000.00"
 
   # Maximum correlated exposure (positions that move together)
   # WHY: If all positions tied to "Chiefs win", and Chiefs lose,
   # you lose everything. Diversification is key.
-  max_correlated_exposure: 3000.00  # Max $3k in correlated positions
+  max_correlated_exposure: "3000.00"  # Max $3k in correlated positions
 
   # Concentration limits by sport
   # WHY: Don't put all eggs in NFL basket
   max_exposure_by_sport:
-    nfl: 0.60  # 60% of portfolio max
-    nba: 0.40  # 40% of portfolio max
-    mlb: 0.30
-    nhl: 0.20
-    soccer: 0.20
-    tennis: 0.20
+    nfl: "0.60"  # 60% of portfolio max
+    nba: "0.40"  # 40% of portfolio max
+    mlb: "0.30"
+    nhl: "0.20"
+    soccer: "0.20"
+    tennis: "0.20"
 
   # Concentration limits by game
   # WHY: Don't have 5 positions all on same game
   max_positions_per_game: 3
-  max_exposure_per_game: 1500.00
+  max_exposure_per_game: "1500.00"
 
 # ============================================
 # POSITION MONITORING (Phase 5 Enhancement)
@@ -74,9 +74,9 @@ monitoring:
   # When to switch from 30s → 5s checking?
   # WHY: Don't want to miss stop loss or profit target by checking too slowly
   urgent_conditions:
-    near_stop_loss_pct: 0.02      # user-customizable: Within 2% of stop loss = urgent
-    near_profit_target_pct: 0.02  # user-customizable: Within 2% of profit target = urgent
-    near_trailing_stop_pct: 0.02  # user-customizable: Within 2% of trailing stop = urgent
+    near_stop_loss_pct: "0.02"      # user-customizable: Within 2% of stop loss = urgent
+    near_profit_target_pct: "0.02"  # user-customizable: Within 2% of profit target = urgent
+    near_trailing_stop_pct: "0.02"  # user-customizable: Within 2% of trailing stop = urgent
 
   # EXAMPLE: Position down 13%, stop loss at -15%
   #          → Within 2% of stop → Switch to 5s checks
@@ -106,18 +106,18 @@ monitoring:
   health_score:
     enabled: true
     factors:
-      edge_remaining: 0.40       # 40% weight
-      time_remaining: 0.20       # 20% weight
-      liquidity_depth: 0.20      # 20% weight
-      unrealized_pnl: 0.20       # 20% weight
+      edge_remaining: "0.40"       # 40% weight
+      time_remaining: "0.20"       # 20% weight
+      liquidity_depth: "0.20"      # 20% weight
+      unrealized_pnl: "0.20"       # 20% weight
 
     # Health thresholds
     # WHY: Trigger actions based on health
-    very_healthy: 0.80  # 80+ = great position
-    healthy: 0.60       # 60-80 = okay
-    concerning: 0.40    # 40-60 = watch closely
-    unhealthy: 0.20     # 20-40 = consider exit
-    critical: 0.00      # 0-20 = exit immediately
+    very_healthy: "0.80"  # 80+ = great position
+    healthy: "0.60"       # 60-80 = okay
+    concerning: "0.40"    # 40-60 = watch closely
+    unhealthy: "0.20"     # 20-40 = consider exit
+    critical: "0.00"      # 0-20 = exit immediately
 
 # ============================================
 # EXIT PRIORITY HIERARCHY (Phase 5 Enhancement)
@@ -259,7 +259,7 @@ exit_execution:
 #          → System exits aggressively before market completely freezes
 
 liquidity:
-  max_spread: 0.03          # user-customizable: 3¢ maximum spread (triggers liquidity_dried_up)
+  max_spread: "0.03"          # user-customizable: 3¢ maximum spread (triggers liquidity_dried_up)
   min_volume: 50            # user-customizable: 50 contracts minimum (triggers liquidity_dried_up)
 
   # WHY these thresholds?
@@ -280,7 +280,7 @@ exit_rules:
     # Example: Entered at +8% edge, now at -5% edge
     negative_edge:
       enabled: true
-      threshold: -0.03  # -3% edge (we're overpriced)
+      threshold: "-0.03"  # -3% edge (we're overpriced)
 
     # Exit if position health becomes critical
     # WHY: Multiple factors saying "this is bad"
@@ -292,14 +292,14 @@ exit_rules:
     # WHY: Position now correlated with others = concentrated risk
     correlation_breach:
       enabled: true
-      max_correlation: 0.75  # 75% correlation with portfolio
+      max_correlation: "0.75"  # 75% correlation with portfolio
 
     # Exit if approaching settlement with loss
     # WHY: Don't wait for settlement if losing
     late_game_loss:
       enabled: true
       minutes_remaining: 10
-      loss_threshold_pct: 0.20  # Down 20% or more
+      loss_threshold_pct: "0.20"  # Down 20% or more
 
   # OPTIONAL EXITS (discretionary, profit-taking)
   discretionary:
@@ -309,26 +309,26 @@ exit_rules:
       # Profit targets by strategy (some strategies hold longer)
       by_strategy:
         pre_game_entry:
-          target_gain_pct: 0.50  # Exit at 50% gain
+          target_gain_pct: "0.50"  # Exit at 50% gain
         halftime_entry:
-          target_gain_pct: 0.75  # Exit at 75% gain
+          target_gain_pct: "0.75"  # Exit at 75% gain
         live_trading:
-          target_gain_pct: 0.40  # Exit at 40% (faster churn)
+          target_gain_pct: "0.40"  # Exit at 40% (faster churn)
         settlement_arbitrage:
-          target_gain_pct: 1.00  # Hold until 100% (near-certain)
+          target_gain_pct: "1.00"  # Hold until 100% (near-certain)
 
     # Stop-loss if hit loss threshold
     stop_loss:
       enabled: true
       by_strategy:
         pre_game_entry:
-          max_loss_pct: 0.40  # Exit at 40% loss
+          max_loss_pct: "0.40"  # Exit at 40% loss
         halftime_entry:
-          max_loss_pct: 0.50  # Exit at 50% loss
+          max_loss_pct: "0.50"  # Exit at 50% loss
         live_trading:
-          max_loss_pct: 0.30  # Tighter stop (faster moving)
+          max_loss_pct: "0.30"  # Tighter stop (faster moving)
         settlement_arbitrage:
-          max_loss_pct: 0.10  # Very tight (should be low-risk)
+          max_loss_pct: "0.10"  # Very tight (should be low-risk)
 
     # Trailing stop (lock in gains as position appreciates)
     # WHY: Let winners run, but protect gains
@@ -347,10 +347,10 @@ exit_rules:
     #      Initial 5% trail → tightens to 2% at higher profits
     trailing_stop:
       enabled: true
-      activation_threshold: 0.10  # user-customizable: Activate after 10% profit
-      initial_distance: 0.05      # user-customizable: Start with 5% trail distance
-      tightening_rate: 0.01       # user-customizable: Tighten 1% per 5% additional gain
-      floor_distance: 0.02        # user-customizable: Minimum 2% trail (never tighter)
+      activation_threshold: "0.10"  # user-customizable: Activate after 10% profit
+      initial_distance: "0.05"      # user-customizable: Start with 5% trail distance
+      tightening_rate: "0.01"       # user-customizable: Tighten 1% per 5% additional gain
+      floor_distance: "0.02"        # user-customizable: Minimum 2% trail (never tighter)
 
       # TIGHTENING EXAMPLE:
       # Profit = 10% → Trail distance = 5% (initial)
@@ -411,13 +411,13 @@ exit_rules:
       stages:
         # STAGE 1: First profit target
         - name: "first_target"
-          profit_threshold: 0.15  # user-customizable: Exit when up 15%
+          profit_threshold: "0.15"  # user-customizable: Exit when up 15%
           exit_percentage: 50     # user-customizable: Exit 50% of position
           # WHY 50%? Captures meaningful profit while keeping skin in game
 
         # STAGE 2: Second profit target
         - name: "second_target"
-          profit_threshold: 0.25  # user-customizable: Exit when up 25%
+          profit_threshold: "0.25"  # user-customizable: Exit when up 25%
           exit_percentage: 25     # user-customizable: Exit 25% of remaining (25% of original)
           # WHY 25%? Further locks in gains, leaves 25% for moonshot
           # NOTE: This is 25% of REMAINING (50 contracts), not original
@@ -463,7 +463,7 @@ exit_rules:
 
     # Maximum slippage acceptable for exit
     # WHY: Sometimes must exit quickly, accept worse price
-    max_exit_slippage_pct: 0.03  # 3% max
+    max_exit_slippage_pct: "0.03"  # 3% max
 
 # ============================================
 # CORRELATION MANAGEMENT
@@ -491,10 +491,10 @@ correlation:
   # Correlation thresholds
   # WHY: High correlation = similar to having one large position
   levels:
-    low: 0.30       # 0-30% = independent
-    medium: 0.60    # 30-60% = somewhat related
-    high: 0.80      # 60-80% = highly related
-    very_high: 0.90 # 80%+ = basically same bet
+    low: "0.30"       # 0-30% = independent
+    medium: "0.60"    # 30-60% = somewhat related
+    high: "0.80"      # 60-80% = highly related
+    very_high: "0.90" # 80%+ = basically same bet
 
   # Actions based on correlation
   actions:
@@ -503,17 +503,17 @@ correlation:
       enabled: true
       # If new trade correlates at 0.70 with existing positions,
       # reduce size by 30% (0.70 * reduction_factor)
-      reduction_factor: 0.5
+      reduction_factor: "0.5"
 
     # Reject trade if too correlated?
     reject_on_high_correlation:
       enabled: true
-      threshold: 0.85  # Reject if 85%+ correlated
+      threshold: "0.85"  # Reject if 85%+ correlated
 
     # Alert if portfolio correlation increases
     alert_on_portfolio_correlation:
       enabled: true
-      threshold: 0.70  # Alert if avg correlation > 70%
+      threshold: "0.70"  # Alert if avg correlation > 70%
 
   # Sport-specific correlation rules
   # WHY: Different sports have different correlation patterns
@@ -549,12 +549,12 @@ rebalancing:
     # Rebalance if edge increases significantly
     edge_increase:
       enabled: true
-      threshold: 0.05  # Edge increased by 5%
+      threshold: "0.05"  # Edge increased by 5%
 
     # Rebalance if probability changes significantly
     probability_change:
       enabled: true
-      threshold: 0.10  # Probability changed by 10%
+      threshold: "0.10"  # Probability changed by 10%
 
     # Rebalance at specific times
     scheduled:
@@ -573,13 +573,13 @@ rebalancing:
 
     # For incremental: How much to adjust?
     incremental:
-      max_adjustment_pct: 0.25  # Max 25% size change
-      min_edge_for_increase: 0.08  # Need 8% edge to add
+      max_adjustment_pct: "0.25"  # Max 25% size change
+      min_edge_for_increase: "0.08"  # Need 8% edge to add
 
   # Costs
   # WHY: Rebalancing costs transaction fees
   consider_transaction_costs: true
-  min_edge_improvement: 0.03  # Need 3% better edge to justify cost
+  min_edge_improvement: "0.03"  # Need 3% better edge to justify cost
 
 # ============================================
 # SETTLEMENT MANAGEMENT
@@ -593,7 +593,7 @@ settlement:
   auto_exit_before_settlement:
     enabled: false  # Usually want to hold until settlement
     minutes_before_settlement: 60  # Exit 1 hour early if enabled
-    min_unrealized_gain_pct: 0.80  # Only if up 80%+
+    min_unrealized_gain_pct: "0.80"  # Only if up 80%+
 
   # Settlement verification
   # WHY: Verify we got paid correctly
@@ -619,8 +619,8 @@ sizing_adjustments:
   volatility_adjustment:
     enabled: true
     # If volatility is 2x normal, reduce size by 30%
-    high_volatility_threshold: 2.0
-    size_reduction_pct: 0.30
+    high_volatility_threshold: "2.0"
+    size_reduction_pct: "0.30"
 
   # Reduce size for illiquid markets
   # WHY: Hard to exit if needed
@@ -628,30 +628,30 @@ sizing_adjustments:
     enabled: true
     # If volume < min threshold, reduce size
     low_volume_threshold: 50  # contracts
-    size_reduction_pct: 0.50  # 50% reduction
+    size_reduction_pct: "0.50"  # 50% reduction
 
   # Reduce size for wide spreads
   # WHY: High transaction cost effectively reduces edge
   spread_adjustment:
     enabled: true
-    wide_spread_threshold: 0.04  # 4% spread
-    size_reduction_pct: 0.25  # 25% reduction
+    wide_spread_threshold: "0.04"  # 4% spread
+    size_reduction_pct: "0.25"  # 25% reduction
 
   # Adjust size based on time to settlement
   # WHY: More time = more uncertainty
   time_adjustment:
     enabled: true
     # Reduce size if > 3 hours to settlement
-    long_duration_hours: 3.0
-    size_reduction_pct: 0.20
+    long_duration_hours: "3.0"
+    size_reduction_pct: "0.20"
 
   # Adjust size based on model confidence
   # WHY: If model is less confident, bet less
   confidence_adjustment:
     enabled: true
     # If confidence < threshold, reduce size
-    low_confidence_threshold: 0.70  # 70%
-    size_reduction_pct: 0.40
+    low_confidence_threshold: "0.70"  # 70%
+    size_reduction_pct: "0.40"
 
 # ============================================
 # PORTFOLIO OPTIMIZATION
@@ -669,9 +669,9 @@ optimization:
   reallocate_capital:
     enabled: false
     # Only if new opportunity is significantly better
-    min_edge_improvement: 0.10  # 10% better edge
+    min_edge_improvement: "0.10"  # 10% better edge
     # And existing position is near profit target
-    existing_position_min_gain: 0.40  # Up 40%+
+    existing_position_min_gain: "0.40"  # Up 40%+
 
 # ============================================
 # RISK METRICS
@@ -697,13 +697,13 @@ risk_metrics:
   # Alert thresholds
   alerts:
     # Alert if VaR exceeds threshold
-    var_threshold: 0.10  # 10% of portfolio
+    var_threshold: "0.10"  # 10% of portfolio
 
     # Alert if correlation too high
-    correlation_threshold: 0.75
+    correlation_threshold: "0.75"
 
     # Alert if max drawdown increasing
-    max_drawdown_threshold: 0.15  # 15%
+    max_drawdown_threshold: "0.15"  # 15%
 
 # ============================================
 # POSITION LIFECYCLE TRACKING

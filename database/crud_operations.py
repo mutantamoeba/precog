@@ -256,10 +256,63 @@ Related Guide: docs/guides/VERSIONING_GUIDE_V1.0.md
 """
 
 import json
+from datetime import datetime
 from decimal import Decimal
 from typing import Any, cast
 
 from .connection import fetch_all, fetch_one, get_cursor
+
+# =============================================================================
+# TYPE VALIDATION HELPERS
+# =============================================================================
+
+
+def validate_decimal(value: Any, param_name: str) -> Decimal:
+    """
+    Validate that value is a Decimal type (runtime type enforcement).
+
+    Args:
+        value: Value to validate
+        param_name: Parameter name for error message
+
+    Returns:
+        The value if it's a Decimal
+
+    Raises:
+        TypeError: If value is not a Decimal
+
+    Educational Note:
+        Python type hints (e.g., `price: Decimal`) are annotations only.
+        They provide IDE autocomplete and mypy static analysis, but do NOT
+        enforce types at runtime.
+
+        Without runtime validation:
+        >>> create_market(yes_price=0.5)  # ✅ Executes (float contamination!)
+
+        With runtime validation:
+        >>> create_market(yes_price=0.5)  # ❌ TypeError: yes_price must be Decimal
+
+        Why this matters:
+        - Prevents float contamination (0.5 != Decimal("0.5"))
+        - Ensures sub-penny precision preserved (0.4975 stored exactly)
+        - Catches type errors early (at function call, not database INSERT)
+
+    Example:
+        >>> price = validate_decimal(Decimal("0.5200"), "yes_price")
+        >>> # ✅ Returns Decimal("0.5200")
+
+        >>> price = validate_decimal(0.5200, "yes_price")
+        >>> # ❌ TypeError: yes_price must be Decimal, got float
+        >>> #    Use Decimal("0.5200"), not 0.5200
+    """
+    if not isinstance(value, Decimal):
+        raise TypeError(
+            f"{param_name} must be Decimal, got {type(value).__name__}. "
+            f"Use Decimal('{value}'), not {value} ({type(value).__name__}). "
+            f"See Pattern 1 in CLAUDE.md for Decimal precision guidance."
+        )
+    return value
+
 
 # =============================================================================
 # MARKET OPERATIONS
@@ -313,6 +366,12 @@ def create_market(
         ...     no_price=Decimal("0.4800")
         ... )
     """
+    # Runtime type validation (enforces Decimal precision)
+    yes_price = validate_decimal(yes_price, "yes_price")
+    no_price = validate_decimal(no_price, "no_price")
+    if spread is not None:
+        spread = validate_decimal(spread, "spread")
+
     # Generate market_id if needed (using ticker as base)
     market_id = f"MKT-{ticker}"
 
@@ -409,6 +468,12 @@ def update_market_with_versioning(
         ...     no_price=Decimal("0.4500")
         ... )
     """
+    # Runtime type validation (enforces Decimal precision)
+    if yes_price is not None:
+        yes_price = validate_decimal(yes_price, "yes_price")
+    if no_price is not None:
+        no_price = validate_decimal(no_price, "no_price")
+
     # Get current version
     current = get_current_market(ticker)
     if not current:
@@ -1168,3 +1233,267 @@ def create_settlement(
         cur.execute(query, params)
         result = cur.fetchone()
         return result["settlement_id"] if result else None
+
+
+# =============================================================================
+# STRATEGY CRUD OPERATIONS (Immutable Versioning Pattern)
+# =============================================================================
+
+
+def create_strategy(
+    strategy_name: str,
+    strategy_version: str,
+    category: str,
+    config: dict,
+    status: str = "draft",
+    platform_id: str | None = None,
+    subcategory: str | None = None,
+    notes: str | None = None,
+) -> int | None:
+    """
+    Create new strategy version with IMMUTABLE config.
+
+    Args:
+        strategy_name: Strategy name (e.g., "halftime_entry")
+        strategy_version: Semantic version (e.g., "v1.0", "v1.1")
+        category: Strategy category (e.g., "momentum", "mean_reversion")
+        config: Strategy configuration (IMMUTABLE after creation)
+        status: Strategy status ("draft", "testing", "active", "deprecated")
+        platform_id: Platform ID (optional, for platform-specific strategies)
+        subcategory: Strategy subcategory (optional)
+        notes: Additional notes (optional)
+
+    Returns:
+        int: strategy_id from database
+
+    Raises:
+        IntegrityError: If (strategy_name, strategy_version) already exists
+
+    Educational Note:
+        Strategy configs are IMMUTABLE for A/B testing integrity:
+        - v1.0 config NEVER changes (preserves test results)
+        - To modify config, create NEW version (v1.0 → v1.1)
+        - Status is MUTABLE (draft → testing → active → deprecated)
+
+        Why immutability matters:
+        - A/B testing: Need to know EXACTLY which config generated each trade
+        - Trade attribution: Trades link to specific immutable versions
+        - Backtesting: Can replay historical strategies with original configs
+
+        Mutable vs Immutable:
+        - config (IMMUTABLE): Create new version to change
+        - status (MUTABLE): Can update in-place
+        - activated_at, deactivated_at (MUTABLE): Timestamps
+
+    Example:
+        >>> # Create initial version
+        >>> v1_0 = create_strategy(
+        ...     strategy_name="halftime_entry",
+        ...     strategy_version="v1.0",
+        ...     category="momentum",
+        ...     config={"min_lead": 7, "min_time_remaining_mins": 5},
+        ...     status="draft"
+        ... )
+        >>> # ✅ Can update status
+        >>> update_strategy_status(v1_0, "active")
+        >>> # ❌ CANNOT update config - must create v1.1
+        >>> v1_1 = create_strategy(
+        ...     strategy_name="halftime_entry",
+        ...     strategy_version="v1.1",
+        ...     config={"min_lead": 10, "min_time_remaining_mins": 5}  # Different
+        ... )
+
+    Related:
+        - Pattern 2 in CLAUDE.md: Dual Versioning System
+        - docs/guides/VERSIONING_GUIDE_V1.0.md
+        - ADR-018, ADR-019, ADR-020
+    """
+    query = """
+        INSERT INTO strategies (
+            platform_id, strategy_name, strategy_version, category, subcategory,
+            config, status, notes, created_at, updated_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        RETURNING strategy_id
+    """
+
+    params = (
+        platform_id,
+        strategy_name,
+        strategy_version,
+        category,
+        subcategory,
+        json.dumps(config),  # Convert dict to JSON string
+        status,
+        notes,
+    )
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, params)
+        result = cur.fetchone()
+        return cast("int", result["strategy_id"]) if result else None
+
+
+def get_strategy(strategy_id: int) -> dict[str, Any] | None:
+    """
+    Get strategy by strategy_id.
+
+    Args:
+        strategy_id: Strategy ID
+
+    Returns:
+        Strategy dict or None if not found
+
+    Example:
+        >>> strategy = get_strategy(42)
+        >>> print(strategy["strategy_name"], strategy["strategy_version"])
+        halftime_entry v1.0
+    """
+    query = "SELECT * FROM strategies WHERE strategy_id = %s"
+
+    with get_cursor() as cur:
+        cur.execute(query, (strategy_id,))
+        return cast("dict[str, Any] | None", cur.fetchone())
+
+
+def get_strategy_by_name_and_version(
+    strategy_name: str, strategy_version: str
+) -> dict[str, Any] | None:
+    """
+    Get strategy by name and version.
+
+    Args:
+        strategy_name: Strategy name
+        strategy_version: Strategy version (e.g., "v1.0")
+
+    Returns:
+        Strategy dict or None if not found
+
+    Example:
+        >>> v1_0 = get_strategy_by_name_and_version("halftime_entry", "v1.0")
+        >>> v1_1 = get_strategy_by_name_and_version("halftime_entry", "v1.1")
+    """
+    query = """
+        SELECT * FROM strategies
+        WHERE strategy_name = %s AND strategy_version = %s
+    """
+
+    with get_cursor() as cur:
+        cur.execute(query, (strategy_name, strategy_version))
+        return cast("dict[str, Any] | None", cur.fetchone())
+
+
+def get_active_strategy_version(strategy_name: str) -> dict[str, Any] | None:
+    """
+    Get active version of a strategy (status = 'active').
+
+    Args:
+        strategy_name: Strategy name
+
+    Returns:
+        Active strategy dict or None if no active version
+
+    Example:
+        >>> active = get_active_strategy_version("halftime_entry")
+        >>> print(active["strategy_version"], active["status"])
+        v1.1 active
+    """
+    query = """
+        SELECT * FROM strategies
+        WHERE strategy_name = %s AND status = 'active'
+        ORDER BY created_at DESC
+        LIMIT 1
+    """
+
+    with get_cursor() as cur:
+        cur.execute(query, (strategy_name,))
+        return cast("dict[str, Any] | None", cur.fetchone())
+
+
+def get_all_strategy_versions(strategy_name: str) -> list[dict[str, Any]]:
+    """
+    Get all versions of a strategy (for history view).
+
+    Args:
+        strategy_name: Strategy name
+
+    Returns:
+        List of strategy dicts, sorted by created_at DESC
+
+    Example:
+        >>> versions = get_all_strategy_versions("halftime_entry")
+        >>> for v in versions:
+        ...     print(v["strategy_version"], v["status"])
+        v1.2 active
+        v1.1 deprecated
+        v1.0 deprecated
+    """
+    query = """
+        SELECT * FROM strategies
+        WHERE strategy_name = %s
+        ORDER BY created_at DESC
+    """
+
+    with get_cursor() as cur:
+        cur.execute(query, (strategy_name,))
+        return cast("list[dict[str, Any]]", cur.fetchall())
+
+
+def update_strategy_status(
+    strategy_id: int,
+    new_status: str,
+    activated_at: datetime | None = None,
+    deactivated_at: datetime | None = None,
+) -> bool:
+    """
+    Update strategy status (MUTABLE field - does NOT create new version).
+
+    Args:
+        strategy_id: Strategy ID
+        new_status: New status ("draft", "testing", "active", "deprecated")
+        activated_at: Timestamp when activated (optional)
+        deactivated_at: Timestamp when deactivated (optional)
+
+    Returns:
+        bool: True if updated, False if strategy not found
+
+    Educational Note:
+        Status is MUTABLE (can change in-place):
+        - draft → testing → active → deprecated (normal lifecycle)
+        - active → deprecated (when superseded by new version)
+
+        Config is IMMUTABLE (cannot change in-place):
+        - To change config, create NEW version (v1.0 → v1.1)
+
+    Example:
+        >>> # Move from draft to testing
+        >>> update_strategy_status(strategy_id=42, new_status="testing")
+        >>> # Activate strategy
+        >>> update_strategy_status(
+        ...     strategy_id=42,
+        ...     new_status="active",
+        ...     activated_at=datetime.now()
+        ... )
+        >>> # Deprecate old version
+        >>> update_strategy_status(
+        ...     strategy_id=41,
+        ...     new_status="deprecated",
+        ...     deactivated_at=datetime.now()
+        ... )
+    """
+    query = """
+        UPDATE strategies
+        SET status = %s,
+            activated_at = %s,
+            deactivated_at = %s,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE strategy_id = %s
+        RETURNING strategy_id
+    """
+
+    params = (new_status, activated_at, deactivated_at, strategy_id)
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, params)
+        result = cur.fetchone()
+        return result is not None
