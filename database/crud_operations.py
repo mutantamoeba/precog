@@ -255,6 +255,7 @@ Related ADR: ADR-019 (Historical Data Versioning Strategy)
 Related Guide: docs/guides/VERSIONING_GUIDE_V1.0.md
 """
 
+import json
 from decimal import Decimal
 from typing import Any, cast
 
@@ -341,7 +342,7 @@ def create_market(
         volume,
         open_interest,
         spread,
-        metadata,
+        json.dumps(metadata) if metadata else None,
     )
 
     with get_cursor(commit=True) as cur:
@@ -462,7 +463,7 @@ def update_market_with_versioning(
                 new_volume,
                 new_open_interest,
                 current["spread"],
-                new_metadata,
+                json.dumps(new_metadata) if new_metadata else None,
             ),
         )
 
@@ -989,7 +990,7 @@ def create_account_balance(
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return result[0] if result else None
+        return result["balance_id"] if result else None
 
 
 def update_account_balance_with_versioning(
@@ -1084,7 +1085,7 @@ def update_account_balance_with_versioning(
         # Insert new balance
         cur.execute(insert_query, (platform_id, new_balance, currency))
         result = cur.fetchone()
-        return result[0] if result else None
+        return result["balance_id"] if result else None
 
 
 # =============================================================================
@@ -1166,4 +1167,4 @@ def create_settlement(
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return result[0] if result else None
+        return result["settlement_id"] if result else None
