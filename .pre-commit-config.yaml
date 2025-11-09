@@ -91,6 +91,79 @@ repos:
         files: '(database|api_connectors|trading|analytics|utils|config)/.*\.py$'
         description: "Prevents print() in production code (use structured logging instead)"
 
+      # CODE_REVIEW_TEMPLATE enforcement: Basic REQ traceability
+      - id: code-review-basics
+        name: Code Review Basics (REQ Traceability)
+        entry: bash
+        args:
+          - -c
+          - |
+            # Check new Python files have REQ-XXX-NNN references in docstrings/comments
+            new_files=$(git diff --cached --name-only --diff-filter=A | grep -E '(database|api_connectors|trading|analytics)/.*\.py$' || true)
+            if [ -n "$new_files" ]; then
+              missing_req=""
+              for file in $new_files; do
+                # Check if file has REQ-XXX-NNN pattern
+                if ! grep -q 'REQ-[A-Z]\+-[0-9]\+' "$file" 2>/dev/null; then
+                  missing_req="$missing_req\n  - $file"
+                fi
+              done
+              if [ -n "$missing_req" ]; then
+                echo ""
+                echo "[WARN] New files missing REQ-XXX-NNN traceability:"
+                echo -e "$missing_req"
+                echo ""
+                echo "Note: This is a warning (not blocking)"
+                echo "Recommendation: Add requirement references to docstrings/comments"
+                echo "Reference: CODE_REVIEW_TEMPLATE Section 1 (Requirements Traceability)"
+                # Warning only - don't fail
+              fi
+            fi
+            echo "REQ traceability check complete"
+        language: system
+        pass_filenames: false
+        files: '(database|api_connectors|trading|analytics)/.*\.py$'
+        description: "Checks new files have requirement traceability (REQ-XXX-NNN)"
+
+      # CLAUDE.md Pattern 1: Decimal precision enforcement
+      - id: decimal-precision-check
+        name: Decimal Precision Check (Pattern 1)
+        entry: bash
+        args:
+          - -c
+          - |
+            # Check for float usage in price/probability/financial code
+            staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.py$' || true)
+            violations=""
+            if [ -n "$staged_files" ]; then
+              for file in $staged_files; do
+                # Look for suspicious float patterns in financial contexts
+                # Pattern: variable names containing price/prob/amount/balance = float()
+                if grep -n -E '(price|prob|amount|balance|edge|kelly|spread|fee).*=.*float\(' "$file" 2>/dev/null; then
+                  violations="$violations\n  - $file: float() used in financial calculation"
+                fi
+                # Pattern: Column(Float, ...) in database models
+                if grep -n 'Column.*Float' "$file" 2>/dev/null | grep -v '#'; then
+                  violations="$violations\n  - $file: Column(Float) instead of DECIMAL"
+                fi
+              done
+              if [ -n "$violations" ]; then
+                echo ""
+                echo "[FAIL] Decimal precision violations (Pattern 1):"
+                echo -e "$violations"
+                echo ""
+                echo "Fix: Use Decimal('0.05') instead of float(0.05)"
+                echo "Fix: Use Column(DECIMAL(10,4)) instead of Column(Float)"
+                echo "Reference: CLAUDE.md Pattern 1 (Decimal Precision)"
+                exit 1
+              fi
+            fi
+            echo "Decimal precision check passed"
+        language: system
+        pass_filenames: false
+        types: [python]
+        description: "Enforces Decimal precision for financial calculations (CRITICAL)"
+
   # Standard pre-commit hooks
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
