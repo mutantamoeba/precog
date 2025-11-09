@@ -54,11 +54,24 @@ def show_latest(logs: list[dict]) -> None:
         timestamp = latest["timestamp"]
         warnings = latest["warnings"]
         passed = latest["passed"]
+        duration = latest.get("duration_seconds")
+        timeout = latest.get("timeout_seconds")
+        timed_out = latest.get("timed_out", False)
 
         # Format status
         status = "[OK]" if passed else "[FAIL]"
 
-        print(f"{source:15s} {status:8s} {warnings:3d} warnings   {timestamp}")
+        # Format timing info
+        timing_str = ""
+        if duration is not None:
+            timing_str = f"  ({duration:.2f}s"
+            if timeout is not None:
+                timing_str += f"/{timeout:.0f}s"
+            if timed_out:
+                timing_str += " TIMEOUT"
+            timing_str += ")"
+
+        print(f"{source:15s} {status:8s} {warnings:3d} warnings   {timestamp}{timing_str}")
 
         # Show additional details
         if source == "pytest" and "test_count" in latest:
@@ -107,15 +120,19 @@ def show_history(logs: list[dict], limit: int = 10, source: str | None = None) -
     for src in sorted(by_source.keys()):
         print(f"\n{src.upper()}")
         print("-" * 80)
-        print(f"{'Timestamp':<30s} {'Warnings':<10s} {'Status':<10s}")
+        print(f"{'Timestamp':<30s} {'Warnings':<10s} {'Duration':<12s} {'Status':<10s}")
         print("-" * 80)
 
         for log in by_source[src][-limit:]:
             timestamp = log["timestamp"][:19]  # Trim to YYYY-MM-DDTHH:MM:SS
             warnings = log["warnings"]
             status = "PASS" if log["passed"] else "FAIL"
+            duration = log.get("duration_seconds")
 
-            print(f"{timestamp:<30s} {warnings:<10d} {status:<10s}")
+            # Format duration
+            duration_str = f"{duration:.2f}s" if duration is not None else "N/A"
+
+            print(f"{timestamp:<30s} {warnings:<10d} {duration_str:<12s} {status:<10s}")
 
         print()
 
@@ -127,21 +144,23 @@ def show_trend(logs: list[dict]) -> None:
         return
 
     print("=" * 80)
-    print("WARNING TREND (Total warnings per validation run)")
+    print("WARNING TREND (Total warnings and performance per validation run)")
     print("=" * 80)
     print()
 
     # Group by timestamp (aggregate all sources at same time)
     by_timestamp: defaultdict[str, dict[str, Any]] = defaultdict(
-        lambda: {"warnings": 0, "sources": set()}
+        lambda: {"warnings": 0, "sources": set(), "durations": []}
     )
 
     for log in logs:
         timestamp = log["timestamp"][:19]  # Group by minute
         by_timestamp[timestamp]["warnings"] += log["warnings"]
         by_timestamp[timestamp]["sources"].add(log["source"])
+        if "duration_seconds" in log:
+            by_timestamp[timestamp]["durations"].append(log["duration_seconds"])
 
-    print(f"{'Timestamp':<30s} {'Total Warnings':<15s} {'Sources'}")
+    print(f"{'Timestamp':<30s} {'Warnings':<12s} {'Avg Duration':<15s} {'Sources'}")
     print("-" * 80)
 
     for timestamp in sorted(by_timestamp.keys()):
@@ -149,7 +168,14 @@ def show_trend(logs: list[dict]) -> None:
         warnings = data["warnings"]
         sources = ", ".join(sorted(data["sources"]))
 
-        print(f"{timestamp:<30s} {warnings:<15d} {sources}")
+        # Calculate average duration
+        if data["durations"]:
+            avg_duration = sum(data["durations"]) / len(data["durations"])
+            duration_str = f"{avg_duration:.2f}s"
+        else:
+            duration_str = "N/A"
+
+        print(f"{timestamp:<30s} {warnings:<12d} {duration_str:<15s} {sources}")
 
 
 def main():

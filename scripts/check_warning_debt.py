@@ -43,7 +43,10 @@ import json
 import re
 import subprocess
 import sys
+import time
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import Any
 
 
 def load_baseline() -> dict:
@@ -236,6 +239,67 @@ def extract_mypy_errors(output: str) -> int:
     return len(error_lines)
 
 
+def run_pytest_timed() -> tuple[str, int, int, dict[str, int], float]:
+    """Run pytest with timing measurement.
+
+    Returns:
+        tuple: (output, returncode, warning_count, categories, duration_seconds)
+    """
+    start_time = time.time()
+    output, returncode = run_pytest_with_warnings()
+    duration = time.time() - start_time
+
+    warning_count = extract_warning_count(output)
+    categories = categorize_warnings(output)
+
+    return output, returncode, warning_count, categories, duration
+
+
+def run_validate_docs_timed() -> tuple[str, int, dict[str, int], float]:
+    """Run validate_docs with timing measurement.
+
+    Returns:
+        tuple: (output, returncode, warnings_dict, duration_seconds)
+    """
+    start_time = time.time()
+    output, returncode = run_validate_docs()
+    duration = time.time() - start_time
+
+    warnings = extract_validate_docs_warnings(output)
+
+    return output, returncode, warnings, duration
+
+
+def run_ruff_timed() -> tuple[str, int, int, float]:
+    """Run Ruff with timing measurement.
+
+    Returns:
+        tuple: (output, returncode, error_count, duration_seconds)
+    """
+    start_time = time.time()
+    output, returncode = run_ruff()
+    duration = time.time() - start_time
+
+    errors = extract_ruff_errors(output)
+
+    return output, returncode, errors, duration
+
+
+def run_mypy_timed() -> tuple[str, int, int, float]:
+    """Run Mypy with timing measurement.
+
+    Returns:
+        tuple: (output, returncode, error_count, duration_seconds)
+    """
+    start_time = time.time()
+    output, returncode = run_mypy()
+    duration = time.time() - start_time
+
+    errors = extract_mypy_errors(output)
+
+    return output, returncode, errors, duration
+
+
 def categorize_warnings(output: str) -> dict[str, int]:
     """Categorize warnings by type."""
     categories = {
@@ -277,7 +341,10 @@ def categorize_warnings(output: str) -> dict[str, int]:
 
 
 def check_baseline(
-    current_counts: dict[str, int], baseline: dict, show_report: bool = False
+    current_counts: dict[str, int],
+    baseline: dict,
+    show_report: bool = False,
+    timings: dict[str, float] | None = None,
 ) -> bool:
     """Check if current warning counts exceed baseline across all sources."""
     baseline_count = baseline["total_warnings"]
@@ -294,6 +361,16 @@ def check_baseline(
     print(f"Current Total: {total_current}")
     print(f"Max Allowed: {max_allowed}")
     print(f"{'=' * 70}")
+
+    # Show timing breakdown if provided
+    if timings:
+        total_time = sum(timings.values())
+        print("\nPerformance Timing:")
+        for source, duration in sorted(timings.items(), key=lambda x: x[1], reverse=True):
+            percent = (duration / total_time * 100) if total_time > 0 else 0
+            print(f"  {source:15s}: {duration:6.2f}s ({percent:5.1f}%)")
+        print(f"  {'Total':15s}: {total_time:6.2f}s")
+        print(f"{'=' * 70}")
 
     # Show breakdown by source
     print("\nBreakdown by Source:")
@@ -411,25 +488,49 @@ def main():
     parser.add_argument("--create-baseline", action="store_true", help="Create initial baseline")
     args = parser.parse_args()
 
-    # Run all validation sources
-    print("\n[INFO] Running multi-source validation...\n")
+    # Run all validation sources in parallel
+    print("\n[INFO] Running multi-source validation (parallel execution)...\n")
 
-    # 1. Run pytest with warnings
-    pytest_output, _pytest_returncode = run_pytest_with_warnings()
-    pytest_count = extract_warning_count(pytest_output)
-    pytest_categories = categorize_warnings(pytest_output)
+    # Initialize result variables
+    pytest_count = 0
+    pytest_categories = {}
+    docs_warnings = {}
+    ruff_errors = 0
+    mypy_errors = 0
+    timings = {}
 
-    # 2. Run validate_docs.py
-    docs_output, _docs_returncode = run_validate_docs()
-    docs_warnings = extract_validate_docs_warnings(docs_output)
+    # Run all 4 validation sources concurrently
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        # Submit all validation tasks
+        future_to_source: dict[Future[Any], str] = {
+            executor.submit(run_pytest_timed): "pytest",
+            executor.submit(run_validate_docs_timed): "validate_docs",
+            executor.submit(run_ruff_timed): "ruff",
+            executor.submit(run_mypy_timed): "mypy",
+        }
 
-    # 3. Run Ruff
-    ruff_output, _ruff_returncode = run_ruff()
-    ruff_errors = extract_ruff_errors(ruff_output)
-
-    # 4. Run Mypy
-    mypy_output, _mypy_returncode = run_mypy()
-    mypy_errors = extract_mypy_errors(mypy_output)
+        # Collect results as they complete
+        future: Future[Any]
+        for future in as_completed(future_to_source):
+            source = future_to_source[future]
+            try:
+                if source == "pytest":
+                    _output, _returncode, pytest_count, pytest_categories, duration = (
+                        future.result()
+                    )
+                    timings["pytest"] = duration
+                elif source == "validate_docs":
+                    _output, _returncode, docs_warnings, duration = future.result()
+                    timings["validate_docs"] = duration
+                elif source == "ruff":
+                    _output, _returncode, ruff_errors, duration = future.result()
+                    timings["ruff"] = duration
+                elif source == "mypy":
+                    _output, _returncode, mypy_errors, duration = future.result()
+                    timings["mypy"] = duration
+            except Exception as e:
+                print(f"[ERROR] {source} validation failed: {e}")
+                sys.exit(2)
 
     # Combine all counts
     current_counts = {
@@ -480,7 +581,7 @@ def main():
         sys.exit(0)
 
     # Check against baseline
-    passed = check_baseline(current_counts, baseline, show_report=args.report)
+    passed = check_baseline(current_counts, baseline, show_report=args.report, timings=timings)
 
     # Print recommendation based on result
     if not passed:
