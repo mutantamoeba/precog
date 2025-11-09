@@ -707,7 +707,7 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 **REQ-ML-001: Phase 1-6 - Probability Matrices + Simple Models (CURRENT)**
 - Phase: 1-6
 - Priority: Critical
-- Status: ✅ In Progress
+- Status: 🔵 Planned
 - Description: Use probability_matrices for historical lookup tables and probability_models for model versioning. Elo (Phase 4) calculates on-the-fly without feature storage. Regression (Phase 4) uses basic stats from game_states table. Sport expansion (Phase 6) applies existing models to new sports.
 - Tables Required: probability_matrices, probability_models
 - **No ML feature storage needed for Phases 1-6**

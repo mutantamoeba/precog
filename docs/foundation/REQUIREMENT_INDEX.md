@@ -424,7 +424,7 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-ML-001 | Phase 1-6 - Probability Matrices + Simple Models | 1-6 | Critical | ✅ | MASTER_REQUIREMENTS_V2.9 |
+| REQ-ML-001 | Phase 1-6 - Probability Matrices + Simple Models | 1-6 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 | REQ-ML-002 | Phase 9 - Feature Storage for Advanced ML | 9 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 | REQ-ML-003 | Phase 9 - MLOps Infrastructure | 9 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 | REQ-ML-004 | Model Development Documentation | 1-10 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.9 |
@@ -463,8 +463,8 @@ This document provides a systematic index of all Precog requirements using categ
 ## Requirement Statistics
 
 **Total Requirements:** 103
-**Completed (✅):** 27 (Phase 0-0.6c + REQ-ML-001)
-**Planned (🔵):** 76 (Phase 0.7, 1-10)
+**Completed (✅):** 26 (Phase 0-0.6c)
+**Planned (🔵):** 77 (Phase 0.7, 1-10 including REQ-ML-001)
 
 **By Category:**
 - System (SYS): 6 requirements
@@ -498,7 +498,6 @@ This document provides a systematic index of all Precog requirements using categ
 - Phase 4-5: 15 requirements (0% complete) - methods system
 - Phase 5: 14 requirements (100% complete - documented)
 - Phase 6-9: 3 requirements (0% complete) - ML infrastructure
-- Phase 1-10: 1 requirement (in progress) - REQ-ML-001
 
 ---
 
