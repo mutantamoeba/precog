@@ -1,11 +1,17 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.12
+**Version:** 1.13
 **Created:** 2025-10-28
-**Last Updated:** 2025-11-08
+**Last Updated:** 2025-11-09
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.13:**
+- **Added Section 3.1: Recovering from Interrupted Session** - Comprehensive 4-step recovery workflow for session interruptions
+- Documents git status checking, recent work review, test validation, and workflow resumption
+- Includes common recovery scenarios table with 4 patterns (interrupted during coding, after commit, during PR, after merge)
+- Provides detailed example recovery from actual 2025-11-09 context limit interruption during Phase 1.5 integration tests
+- Total addition: ~100 lines of session recovery patterns
 **Changes in V1.12:**
 - **Added Pattern 9: Multi-Source Warning Governance (MANDATORY)** - Comprehensive governance across pytest + validate_docs + code quality tools
 - Documents discovery of 388 untracked warnings (90% blind spot from initial pytest-only governance)
@@ -495,6 +501,109 @@ TodoWrite([
     {"content": "Write API tests", "status": "pending"}
 ])
 ```
+
+### Recovering from Interrupted Session (5 minutes)
+
+**When to use:** Session interruption due to context limit, crash, network issue, or other disruption during active development work.
+
+**Step 1: Check Git Status (1 min)**
+```bash
+# Identify uncommitted changes and current branch
+git status
+git branch --show-current
+```
+
+**What to look for:**
+- Uncommitted changes (modified, staged, untracked files)
+- Current branch (feature/, bugfix/, etc.)
+- Untracked files that should be committed
+
+**Step 2: Review Recent Work (2 min)**
+```bash
+# Check recent commits to understand what was completed
+git log --oneline -10
+
+# Check if PR exists for current branch
+gh pr list --head $(git branch --show-current)
+```
+
+**What to verify:**
+- Last commit message indicates completed work
+- Understand what was in progress vs. completed
+- Check if PR already exists (avoid creating duplicates)
+
+**Step 3: Validate Tests Still Pass (1 min)**
+```bash
+# Quick test validation to ensure recovered state is clean
+python -m pytest tests/ -v --tb=short
+```
+
+**Why:** Interrupted sessions may have left code in partially-working state. Verify tests pass before continuing.
+
+**Step 4: Resume Normal Workflow (1 min)**
+
+Based on git status findings:
+
+**If uncommitted changes exist:**
+1. Review changes: `git diff` (unstaged) and `git diff --cached` (staged)
+2. Complete the work or commit as-is
+3. Follow normal "During Development" workflow from this point
+
+**If no uncommitted changes:**
+1. Check SESSION_HANDOFF.md for next priorities
+2. Create new todo list with TodoWrite
+3. Begin next task
+
+**If PR exists but not merged:**
+1. Check CI status: `gh pr view <PR#> --json statusCheckRollup`
+2. If CI passing: Merge PR
+3. If CI failing: Fix issues and push updates
+4. After merge: `git checkout main && git pull`
+
+**Common Recovery Scenarios:**
+
+| Scenario | Git Status | Action |
+|----------|------------|--------|
+| **Interrupted during coding** | Modified files, no commit | Review changes, complete work, commit |
+| **Interrupted after commit** | Clean working tree | Check if pushed; if not, push now |
+| **Interrupted during PR** | Clean, but PR exists | Check CI status, merge if passing |
+| **Interrupted after merge** | On feature branch | Switch to main, pull latest |
+
+**Example Recovery:**
+```bash
+# Scenario: Session interrupted while committing test updates
+$ git status
+# On branch feature/integration-tests
+# Changes not staged for commit:
+#   modified: pytest.ini
+#   modified: tests/fixtures/api_responses.py
+# Untracked files:
+#   tests/integration/api_connectors/__init__.py
+
+# Step 1: Review changes
+$ git diff pytest.ini  # Verify changes are intentional
+
+# Step 2: Stage and commit
+$ git add pytest.ini tests/fixtures/api_responses.py tests/integration/api_connectors/__init__.py
+$ git commit -m "Add api marker and fix test expectations"
+
+# Step 3: Check for existing PR
+$ gh pr list --head feature/integration-tests
+# PR #12 exists
+
+# Step 4: Push and update PR
+$ git push origin feature/integration-tested
+$ gh pr edit 12 --body "Updated description"
+
+# Step 5: Check CI and merge
+$ gh pr view 12 --json statusCheckRollup
+# All checks passing → merge
+$ gh pr merge 12 --squash --delete-branch
+```
+
+**Reference:** This pattern was successfully used to recover from context limit interruption on 2025-11-09 during Phase 1.5 integration test session.
+
+---
 
 ### During Development
 
@@ -3491,6 +3600,7 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.13 | 2025-11-09 | Added Section 3.1: Recovering from Interrupted Session with 4-step recovery workflow (git status check, recent work review, test validation, workflow resumption); includes common recovery scenarios table; provides detailed example from 2025-11-09 context limit interruption during Phase 1.5 integration tests |
 | 1.8 | 2025-11-07 | Implemented DEF-002 (Pre-Push Hooks Setup); created .git/hooks/pre-push with 4 validation steps (quick validation, unit tests, full type checking, security scan); added "Pre-Push Hooks" section; second layer of defense with tests; reduces CI failures 80-90% |
 | 1.7 | 2025-11-07 | Implemented DEF-001 (Pre-Commit Hooks Setup); installed pre-commit framework v4.0.1; updated "Before Committing Code" section with automatic hooks workflow (12 checks: Ruff, Mypy, security, formatting, line endings); auto-fixes formatting/whitespace; reduces CI failures 60-70% |
 | 1.6 | 2025-11-05 | Changed session archiving from docs/sessions/ (committed) to _sessions/ (local-only); added docs/sessions/ to .gitignore; updated Section 3 Step 0 workflow; prevents repository bloat while preserving local context |

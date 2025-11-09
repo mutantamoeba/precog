@@ -402,15 +402,16 @@ from rich.table import Table
 
 # Local imports
 from api_connectors.kalshi_client import KalshiClient
-from utils.logger import get_logger
 
-# TODO Phase 1.5: Add database CRUD operations
-# from database.connection import get_db_session
-# from database.crud_operations import (
-#     create_account_balance_record,
-#     update_position,
-#     create_trade_record,
-# )
+# Phase 1.5: Database CRUD operations
+from database.crud_operations import (
+    create_market,
+    create_settlement,
+    get_current_market,
+    update_account_balance_with_versioning,
+    update_market_with_versioning,
+)
+from utils.logger import get_logger
 
 # Load environment variables
 load_dotenv()
@@ -513,12 +514,23 @@ def fetch_balance(
 
         console.print(table)
 
-        # TODO Phase 1.5: Store in database
+        # Phase 1.5: Store balance in database
         if not dry_run:
-            console.print(
-                "\n[yellow]Note:[/yellow] Database persistence not yet implemented (Phase 1.5)"
-            )
-            console.print("  Balance fetched successfully from API")
+            try:
+                platform_id = "kalshi"  # Hardcoded for Phase 1 (single platform)
+                balance_id = update_account_balance_with_versioning(
+                    platform_id=platform_id, new_balance=balance, currency="USD"
+                )
+                logger.info(f"Balance stored in database (balance_id: {balance_id})")
+                console.print(
+                    f"\n[green]✓ Success:[/green] Balance saved to database (ID: {balance_id})"
+                )
+            except Exception as db_error:
+                logger.error(f"Failed to save balance to database: {db_error}", exc_info=verbose)
+                console.print(
+                    f"\n[yellow]Warning:[/yellow] Balance fetched but failed to save to database: {db_error}"
+                )
+                console.print("  Balance fetched successfully from API but not persisted")
         else:
             console.print("\n[yellow]Dry-run mode:[/yellow] Balance not saved to database")
 
@@ -641,12 +653,78 @@ def fetch_markets(
 
         console.print(table)
 
-        # TODO Phase 1.5: Store in database
+        # Phase 1.5: Store markets in database
         if not dry_run:
-            console.print(
-                "\n[yellow]Note:[/yellow] Database persistence not yet implemented (Phase 1.5)"
-            )
-            console.print(f"  Fetched {len(markets)} markets successfully from API")
+            try:
+                platform_id = "kalshi"  # Hardcoded for Phase 1 (single platform)
+                created_count = 0
+                updated_count = 0
+                error_count = 0
+
+                for market in markets:
+                    try:
+                        # Prepare metadata (extra fields not in main table)
+                        metadata = {
+                            "subtitle": market.get("subtitle"),
+                            "series_ticker": market.get("series_ticker"),
+                            "open_time": market.get("open_time"),
+                            "close_time": market.get("close_time"),
+                            "expiration_time": market.get("expiration_time"),
+                            "can_close_early": market.get("can_close_early"),
+                            "result": market.get("result"),
+                            "liquidity": market.get("liquidity"),
+                        }
+
+                        # Try to update first (market may already exist)
+                        try:
+                            update_market_with_versioning(
+                                ticker=market["ticker"],
+                                yes_price=market["yes_bid"],  # Use bid as current price
+                                no_price=market["no_bid"],
+                                status=market["status"],
+                                volume=market.get("volume"),
+                                open_interest=market.get("open_interest"),
+                                market_metadata=metadata,
+                            )
+                            updated_count += 1
+                        except ValueError:
+                            # Market doesn't exist, create it
+                            create_market(
+                                platform_id=platform_id,
+                                event_id=market["event_ticker"],
+                                external_id=market["ticker"],  # Use ticker as external_id
+                                ticker=market["ticker"],
+                                title=market["title"],
+                                yes_price=market["yes_bid"],
+                                no_price=market["no_bid"],
+                                market_type="binary",
+                                status=market["status"],
+                                volume=market.get("volume"),
+                                open_interest=market.get("open_interest"),
+                                spread=market["yes_ask"] - market["yes_bid"],  # Calculate spread
+                                metadata=metadata,
+                            )
+                            created_count += 1
+                    except Exception as market_error:
+                        logger.error(
+                            f"Failed to save market {market.get('ticker')}: {market_error}"
+                        )
+                        error_count += 1
+
+                logger.info(
+                    f"Markets saved: {created_count} created, {updated_count} updated, {error_count} errors"
+                )
+                console.print(
+                    f"\n[green]✓ Success:[/green] {created_count} markets created, {updated_count} updated"
+                )
+                if error_count > 0:
+                    console.print(f"[yellow]Warning:[/yellow] {error_count} markets failed to save")
+
+            except Exception as db_error:
+                logger.error(f"Failed to save markets to database: {db_error}", exc_info=verbose)
+                console.print(
+                    f"\n[yellow]Warning:[/yellow] Markets fetched but failed to save to database: {db_error}"
+                )
         else:
             console.print("\n[yellow]Dry-run mode:[/yellow] Markets not saved to database")
 
@@ -734,10 +812,17 @@ def fetch_positions(
         console.print(table)
         console.print(f"\n[bold]Total Exposure:[/bold] ${total_exposure:,.2f}")
 
-        # TODO Phase 1.5: Store in database with SCD Type 2 versioning
+        # Phase 1.5+: Store positions in database (DEFERRED)
+        # Why deferred: Positions table requires strategy_id and model_id for trade attribution
+        # Setup needed:
+        #   1. Create "manual" strategy record (for API-fetched positions not created by our system)
+        #   2. Create "manual" model record (placeholder for positions without ensemble predictions)
+        #   3. Add lookup logic: ticker → market_id
+        #   4. Use create_position() with strategy_id=1 (manual), model_id=1 (manual)
+        # Target: Phase 1.5+ (after strategy/model infrastructure exists)
         if not dry_run:
             console.print(
-                "\n[yellow]Note:[/yellow] Database persistence not yet implemented (Phase 1.5)"
+                "\n[yellow]Note:[/yellow] Database persistence deferred to Phase 1.5+ (requires strategy/model setup)"
             )
             console.print(f"  Fetched {len(positions)} positions successfully from API")
         else:
@@ -850,10 +935,18 @@ def fetch_fills(
 
         console.print(f"\n[bold]Total Volume:[/bold] {total_volume} contracts")
 
-        # TODO Phase 1.5: Store in database (append-only trades table)
+        # Phase 1.5+: Store fills in database (DEFERRED)
+        # Why deferred: Fills (trades) require position_id for linking to open positions
+        # Setup needed:
+        #   1. Positions must exist in database first (see fetch-positions deferral above)
+        #   2. Add lookup logic: ticker + side → position_id
+        #   3. Use create_trade() with proper position_id linking
+        #   4. Handle deduplication (don't insert same trade_id twice)
+        # Note: Trades table is append-only (no versioning), but requires position linkage
+        # Target: Phase 1.5+ (after position infrastructure exists)
         if not dry_run:
             console.print(
-                "\n[yellow]Note:[/yellow] Database persistence not yet implemented (Phase 1.5)"
+                "\n[yellow]Note:[/yellow] Database persistence deferred to Phase 1.5+ (requires position records)"
             )
             console.print(f"  Fetched {len(fills)} fills successfully from API")
         else:
@@ -951,10 +1044,73 @@ def fetch_settlements(
         console.print(f"[bold]Total Fees:[/bold] ${total_fees:,.2f}")
         console.print(f"[bold green]Net P&L:[/bold green] ${(total_revenue - total_fees):,.2f}")
 
-        # Store in database (unless dry-run)
+        # Phase 1.5: Store settlements in database and update market status
         if not dry_run:
-            console.print("\n[yellow]Note:[/yellow] Settlement database update not yet implemented")
-            console.print("  (Will update markets and positions tables in Phase 1.5)")
+            try:
+                platform_id = "kalshi"  # Hardcoded for Phase 1 (single platform)
+                settlement_count = 0
+                market_update_count = 0
+                error_count = 0
+
+                for settlement in settlements:
+                    try:
+                        settlement_ticker = settlement.get("ticker")
+                        if not settlement_ticker:
+                            logger.warning("Settlement missing ticker, skipping")
+                            error_count += 1
+                            continue
+
+                        # Get market_id from ticker
+                        market = get_current_market(settlement_ticker)
+                        if not market:
+                            logger.warning(
+                                f"Market not found for ticker {settlement_ticker}, skipping settlement"
+                            )
+                            error_count += 1
+                            continue
+
+                        market_id = market["market_id"]
+
+                        # Create settlement record
+                        create_settlement(
+                            market_id=market_id,
+                            platform_id=platform_id,
+                            outcome=settlement["market_result"],  # "yes" or "no"
+                            payout=settlement["settlement_value"],
+                        )
+                        settlement_count += 1
+
+                        # Update market status to "settled"
+                        update_market_with_versioning(
+                            ticker=settlement_ticker,
+                            status="settled",
+                        )
+                        market_update_count += 1
+
+                    except Exception as settlement_error:
+                        logger.error(
+                            f"Failed to process settlement for {settlement_ticker}: {settlement_error}"
+                        )
+                        error_count += 1
+
+                logger.info(
+                    f"Settlements processed: {settlement_count} settlements created, {market_update_count} markets updated, {error_count} errors"
+                )
+                console.print(
+                    f"\n[green]✓ Success:[/green] {settlement_count} settlements saved, {market_update_count} markets updated to 'settled'"
+                )
+                if error_count > 0:
+                    console.print(
+                        f"[yellow]Warning:[/yellow] {error_count} settlements failed to process"
+                    )
+
+            except Exception as db_error:
+                logger.error(
+                    f"Failed to save settlements to database: {db_error}", exc_info=verbose
+                )
+                console.print(
+                    f"\n[yellow]Warning:[/yellow] Settlements fetched but failed to save to database: {db_error}"
+                )
         else:
             console.print("\n[yellow]Dry-run mode:[/yellow] Settlements not saved to database")
 
