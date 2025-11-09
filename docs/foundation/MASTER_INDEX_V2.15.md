@@ -1,9 +1,21 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.14
-**Last Updated:** 2025-11-08
+**Version:** 2.15
+**Last Updated:** 2025-11-09
 **Status:** ✅ Current
+**Changes in v2.15:**
+- **PHASE 0.7C COMPLETE**: Template enforcement automation implemented with Defense in Depth architecture
+- Created scripts/validate_code_quality.py (314 lines) - enforces CODE_REVIEW_TEMPLATE (≥80% coverage, REQ test coverage, educational docstrings)
+- Created scripts/validate_security_patterns.py (413 lines) - enforces SECURITY_REVIEW_CHECKLIST (API auth, hardcoded secrets, encryption, logging)
+- Updated .pre-commit-config.yaml (2 new hooks: code-review-basics, decimal-precision-check)
+- Updated .git/hooks/pre-push (2 new steps: Step 6/7 code quality, Step 7/7 security patterns)
+- Updated MASTER_REQUIREMENTS V2.11 → V2.12 (added REQ-VALIDATION-005, REQ-VALIDATION-006)
+- Updated REQUIREMENT_INDEX V1.3 → V1.4 (added 2 new validation requirements, total now 105 requirements)
+- Updated DEVELOPMENT_PHASES V1.5 → V1.6 (added Phase 0.7c section with 8 success criteria)
+- Updated CLAUDE.md V1.14 → V1.15 (updated pre-commit/pre-push hooks documentation with new validation steps)
+- Cross-platform compatibility: All scripts use ASCII output for Windows cp1252 compatibility
+- Defense in Depth: Pre-commit (~2-5s) → Pre-push (~60-90s) → CI/CD (~2-5min) multi-layer validation
 **Changes in v2.14:**
 - **PHASE 1.5 PROPERTY TESTING COMPLETE**: 40 property tests implemented (114% of 35-test target)
 - Added PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md (comprehensive roadmap for 74-91 additional property tests across Phases 1.5-4)
@@ -171,13 +183,13 @@ Core architecture, requirements, and system design documents.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.4** |
-| **MASTER_REQUIREMENTS_V2.11.md** | ✅ | v2.11 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.11** (Python 3.14 compatibility: Ruff security rules replace Bandit) |
-| **MASTER_INDEX_V2.14.md** | ✅ | v2.14 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.14** (Phase 1.5 property testing complete: 40 tests, deferred test roadmap) |
+| **MASTER_REQUIREMENTS_V2.12.md** | ✅ | v2.12 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.12** (added REQ-VALIDATION-005, REQ-VALIDATION-006 for template enforcement automation) |
+| **MASTER_INDEX_V2.15.md** | ✅ | v2.15 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.15** (Phase 0.7c complete: template enforcement automation with Defense in Depth) |
 | **ARCHITECTURE_DECISIONS_V2.12.md** | ✅ | v2.12 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (75 total) - **UPDATED V2.12** (ADR-075: Multi-Source Warning Governance Architecture) |
-| **REQUIREMENT_INDEX.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 114 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED** (added REQ-TEST-009, REQ-TEST-010, REQ-TEST-011) |
+| **REQUIREMENT_INDEX.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 105 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.4** (added REQ-VALIDATION-005, REQ-VALIDATION-006 for template enforcement) |
 | **ADR_INDEX_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (53 ADRs) - **UPDATED V1.6** (ADR-074 added for property-based testing POC) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
-| **DEVELOPMENT_PHASES_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, added Phase 0.6b/0.6c/0.7 - **UPDATED V1.4** (Phase 0.6c complete) |
+| **DEVELOPMENT_PHASES_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, added Phase 0.6b/0.6c/0.7/0.7c - **UPDATED V1.6** (Phase 0.7c complete: template enforcement automation) |
 | **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
 | **DEVELOPMENT_PHILOSOPHY_V1.1.md** | ✅ | v1.1 | `/docs/foundation/` | 0.7 | All phases | 🔴 Critical | Core development principles: TDD, Defense in Depth, DDD, Data-Driven Design, 10 sections (9 principles + anti-patterns) - **UPDATED V1.1** (added Section 10: Anti-Patterns to Avoid with 7 anti-patterns) |
@@ -289,6 +301,8 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **PROJECT_STATUS.md** | ✅ | v1.1 (header) | `/docs/utility/` | 0 | All phases | 🔴 Critical | **LIVING DOC** - upload every session, merged STATUS+README+QUICK_START |
 | **DOCUMENT_MAINTENANCE_LOG.md** | ✅ | v1.1 (header) | `/docs/utility/` | 0 | All phases | 🔴 Critical | **LIVING DOC** - upload every session, tracks changes with upstream/downstream impacts |
 | **SESSION_HANDOFF_TEMPLATE.md** | ✅ | template | `/docs/utility/` | 0 | All phases | 🔴 Critical | Streamlined ~1 page template, inline instructions |
+| **CODE_REVIEW_TEMPLATE_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0.7b | All phases | 🔴 Critical | **NEW (Phase 0.7b)** - Code review template with 3 sections: Requirements Traceability, Test Coverage (≥80%), Code Quality (Pattern 7 docstrings); enforced by validate_code_quality.py |
+| **SECURITY_REVIEW_CHECKLIST.md** | ✅ | v1.1 | `/docs/utility/` | 0.7b | All phases | 🔴 Critical | **NEW (Phase 0.7b)** - Security review checklist with 5 sections: Credential Management, Input Validation, API Security, Data Protection, Incident Response; enforced by validate_security_patterns.py |
 | **SESSION_7_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 7 | 🟡 High | Latest session handoff (session # is version) |
 | **SESSION_6_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 6 | 🟢 Medium | Previous session handoff |
 | **Handoff_Protocol_V1_1.md** | ✅ | v1.1 | `/docs/utility/` | 0 | All phases | 🔴 Critical | **UPDATED V1.1** - Merged 4 docs: HANDOFF_PROCESS + TOKEN_MONITORING + PHASE_COMPLETION + KNOWLEDGE_STRATEGY (V1.0 archived) |

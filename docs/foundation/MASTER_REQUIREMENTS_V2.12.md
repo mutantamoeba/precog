@@ -1,9 +1,17 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.11
-**Last Updated:** 2025-11-07
+**Version:** 2.12
+**Last Updated:** 2025-11-09
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.12:**
+- **TEMPLATE ENFORCEMENT**: Added 2 new automated enforcement requirements (REQ-VALIDATION-005, REQ-VALIDATION-006)
+- **NEW REQUIREMENTS**:
+  - REQ-VALIDATION-005: CODE_REVIEW_TEMPLATE enforcement via validate_code_quality.py
+  - REQ-VALIDATION-006: SECURITY_REVIEW_CHECKLIST enforcement via validate_security_patterns.py
+- **CROSS-REFERENCES**: Added references to CODE_REVIEW_TEMPLATE_V1.0.md, SECURITY_REVIEW_CHECKLIST.md V1.1, INFRASTRUCTURE_REVIEW_TEMPLATE_V1.0.md
+- **INTEGRATION**: Pre-commit hooks (2 lightweight checks), pre-push hooks (2 comprehensive checks)
+- **VALIDATION LAYERS**: Enforces requirements traceability (REQ-XXX-NNN), test coverage (≥80%), security patterns (API auth, hardcoded secrets)
 **Changes in v2.11:**
 - **PYTHON 3.14 COMPATIBILITY**: Updated REQ-TEST-006 and REQ-CICD-001 to replace Bandit with Ruff security rules (--select S)
 - **SECURITY SCANNING**: Bandit 1.8.6 incompatible with Python 3.14 (ast.Num removed), replaced with Ruff S-rules (equivalent coverage, 10-100x faster)
@@ -1980,6 +1988,75 @@ Comprehensive YAML configuration validation with 4 validation levels:
 - **Level 4 - Cross-file Consistency**: Validate references between files (e.g., strategy references valid model)
 - **Implementation**: Add to validate_docs.py as Check #9
 - **Integration**: validate_quick.sh (~3s), validate_all.sh (~60s), pre-commit hooks, GitHub Actions CI
+
+**REQ-VALIDATION-005: CODE_REVIEW_TEMPLATE Automated Enforcement**
+
+**Phase:** 0.7c
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** CODE_REVIEW_TEMPLATE_V1.0.md, validate_code_quality.py
+
+Automated enforcement of CODE_REVIEW_TEMPLATE requirements via validate_code_quality.py (314 lines):
+- **Check 1 - Module Coverage ≥80%**: Runs pytest with coverage, parses output, fails validation if any module below 80% threshold
+  - Scope: All production modules (database/, api_connectors/, trading/, analytics/, utils/, config/)
+  - Exclusions: Test files, _archive/, conftest.py, __init__.py
+  - Error Message: Lists all modules below 80% with actual percentages and fix instructions
+  - Coverage Target: Section 2 (Test Coverage) of CODE_REVIEW_TEMPLATE
+- **Check 2 - REQ Test Coverage**: Verifies all requirements with status Complete or In Progress have test coverage
+  - Extracts REQ-XXX-NNN from MASTER_REQUIREMENTS with status ✅ Complete or 🟡 In Progress
+  - Searches all test files for requirement IDs in comments/docstrings/test names
+  - Fails if any Complete/In Progress requirement missing from test content
+  - Traceability Target: Section 1 (Requirements Traceability) of CODE_REVIEW_TEMPLATE
+- **Check 3 - Educational Docstrings** (WARNING ONLY): Checks staged files for Pattern 7 components
+  - Validates Args, Returns, Educational Note sections in docstrings
+  - Only checks staged files (not entire codebase) to avoid flagging existing code
+  - Non-blocking validation (warning only) - subjective quality metric
+  - Code Quality Target: Section 3 (Code Quality) of CODE_REVIEW_TEMPLATE + CLAUDE.md Pattern 7
+- **Integration Points**:
+  - Pre-push hooks: Step 6/7 (runs before every push, ~20 seconds)
+  - CI/CD: GitHub Actions workflow (runs on all PRs)
+  - Manual: `python scripts/validate_code_quality.py` (developer testing)
+- **Cross-Platform Compatibility**: Uses ASCII output ([PASS]/[FAIL]/[WARN], >=) instead of Unicode (✅/❌/⚠️/≥) for Windows cp1252 compatibility
+- **Exit Codes**: 0 = all checks passed, 1 = validation failed (module coverage or REQ coverage violations)
+- **Defense in Depth**: Second layer validation (pre-commit checks basics, pre-push enforces coverage thresholds)
+
+**REQ-VALIDATION-006: SECURITY_REVIEW_CHECKLIST Automated Enforcement**
+
+**Phase:** 0.7c
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** SECURITY_REVIEW_CHECKLIST.md V1.1, validate_security_patterns.py
+
+Automated enforcement of SECURITY_REVIEW_CHECKLIST requirements via validate_security_patterns.py (413 lines):
+- **Check 1 - API Authentication**: Verifies API endpoints have authentication decorators
+  - Finds @app.route/@router decorators in staged Python files
+  - Checks for @require_auth, @login_required, @authenticate, check_auth(), verify_token() patterns
+  - Excludes health check endpoints (/health, /ping, /status, /version) - no auth required
+  - Fails validation if new API endpoint missing authentication check
+  - Security Target: Section 3 (API Security) of SECURITY_REVIEW_CHECKLIST
+- **Check 2 - Sensitive Data Encryption** (WARNING ONLY): Verifies database models encrypt sensitive fields
+  - Searches for password/token/secret/api_key/private_key/credential column definitions
+  - Checks for encryption patterns: EncryptedType, encrypt(), hash(), bcrypt, argon2, PasswordHash
+  - Warning only (not blocking) - subjective determination of "needs encryption"
+  - Data Protection Target: Section 4 (Data Protection) of SECURITY_REVIEW_CHECKLIST
+- **Check 3 - Security Logging** (WARNING ONLY): Verifies exception handlers in auth code use structured logging
+  - Finds exception handlers in authentication/authorization/login code
+  - Checks for logger.exception(), logger.error(), logger.warning(), logger.critical() calls
+  - Warning only (not blocking) - best practice, not security vulnerability
+  - Incident Response Target: Section 5 (Incident Response) of SECURITY_REVIEW_CHECKLIST
+- **Check 4 - Hardcoded Secrets** (BLOCKS): Scans for hardcoded credentials (defense in depth)
+  - Searches for password/secret/api_key/token assignments with string literals
+  - Excludes test placeholders (YOUR_, TEST_, EXAMPLE_, PLACEHOLDER, <>, os.getenv)
+  - Fails validation on any potential hardcoded secret detected
+  - Redundant with pre-commit 'security-credentials' hook (defense in depth)
+  - Credential Management Target: Section 1 (Credential Management) of SECURITY_REVIEW_CHECKLIST
+- **Integration Points**:
+  - Pre-push hooks: Step 7/7 (runs before every push, ~10 seconds)
+  - CI/CD: GitHub Actions workflow (runs on all PRs)
+  - Manual: `python scripts/validate_security_patterns.py` (developer testing)
+- **Cross-Platform Compatibility**: Uses ASCII output ([PASS]/[FAIL]/[WARN]) instead of Unicode for Windows cp1252 compatibility
+- **Exit Codes**: 0 = all checks passed, 1 = security violations found (API auth missing or hardcoded secrets)
+- **Defense in Depth**: Third layer validation (pre-commit checks credentials, pre-push checks patterns, CI/CD comprehensive scan)
 
 **REQ-API-007: API Response Validation with Pydantic**
 

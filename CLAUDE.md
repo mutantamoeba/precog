@@ -1,11 +1,20 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.14
+**Version:** 1.15
 **Created:** 2025-10-28
 **Last Updated:** 2025-11-09
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.15:**
+- **Automated Template Enforcement (Phase 0.7c)** - Created 2 enforcement scripts that run in pre-commit/pre-push hooks
+- **Created validate_code_quality.py** (314 lines) - Enforces CODE_REVIEW_TEMPLATE: module coverage ≥80%, REQ-XXX-NNN test coverage, educational docstrings (WARNING)
+- **Created validate_security_patterns.py** (413 lines) - Enforces SECURITY_REVIEW_CHECKLIST: API auth, hardcoded secrets (FAIL), encryption/logging (WARNING)
+- **Updated pre-commit hooks** - Added 2 new hooks: code-review-basics (REQ traceability), decimal-precision-check (Pattern 1 enforcement)
+- **Updated pre-push hooks** - Added steps 6/7 (code quality) and 7/7 (security patterns) for comprehensive template enforcement
+- Defense in Depth architecture: pre-commit (fast ~2-5s) → pre-push (thorough ~60-90s) → CI/CD (comprehensive ~2-5min)
+- Cross-platform compatibility: All scripts use ASCII output (no Unicode) for Windows cp1252 compatibility
+- Total addition: ~750 lines of automated template enforcement infrastructure
 **Changes in V1.14:**
 - **Created CODE_REVIEW_TEMPLATE_V1.0.md** - Universal code review checklist for PRs, feature implementations, and phase completions
 - **Created INFRASTRUCTURE_REVIEW_TEMPLATE_V1.0.md** - Infrastructure and DevOps review template for deployment readiness
@@ -650,14 +659,16 @@ git commit --no-verify
 2. ✅ Ruff formatter (auto-fix formatting)
 3. ✅ Mypy type checking
 4. ✅ Security scan (hardcoded credentials)
-5. ✅ Trailing whitespace (auto-fix)
-6. ✅ End-of-file newlines (auto-fix)
-7. ✅ Mixed line endings (auto-fix CRLF→LF)
-8. ✅ Large files check (>1MB)
-9. ✅ Merge conflict markers
-10. ✅ YAML/JSON syntax validation
-11. ✅ Python AST validation
-12. ✅ Debug statements (pdb, breakpoint)
+5. ✅ **Code review basics** (REQ-XXX-NNN traceability - WARNING ONLY)
+6. ✅ **Decimal precision check** (Pattern 1 enforcement - BLOCKS float usage in financial code)
+7. ✅ Trailing whitespace (auto-fix)
+8. ✅ End-of-file newlines (auto-fix)
+9. ✅ Mixed line endings (auto-fix CRLF→LF)
+10. ✅ Large files check (>1MB)
+11. ✅ Merge conflict markers
+12. ✅ YAML/JSON syntax validation
+13. ✅ Python AST validation
+14. ✅ Debug statements (pdb, breakpoint)
 
 ---
 
@@ -673,21 +684,29 @@ Pre-push hooks are installed and run automatically on `git push`. They provide a
 ```bash
 # Hooks run automatically on push (no action needed)
 git push origin main
-# → Pre-push hooks run (4 validation steps, ~30-60 sec)
-# → Step 1: Quick validation (Ruff + docs)
-# → Step 2: Fast unit tests
-# → Step 3: Full type checking (Mypy)
-# → Step 4: Security scan (Ruff security rules)
+# → Pre-push hooks run (7 validation steps, ~60-90 sec)
+# → Step 0/7: Branch name convention check
+# → Step 1/7: Quick validation (Ruff + docs)
+# → Step 2/7: Fast unit tests
+# → Step 3/7: Full type checking (Mypy)
+# → Step 4/7: Security scan (Ruff security rules)
+# → Step 5/7: Warning governance (multi-source baseline check)
+# → Step 6/7: Code quality validation (CODE_REVIEW_TEMPLATE enforcement)
+# → Step 7/7: Security pattern validation (SECURITY_REVIEW_CHECKLIST enforcement)
 
 # Bypass hooks (EMERGENCY ONLY - NOT RECOMMENDED)
 git push --no-verify
 ```
 
 **What the pre-push hooks check:**
-1. 📋 **Quick validation** - validate_quick.sh (Ruff, docs, ~3 sec)
-2. 🧪 **Unit tests** - pytest test_config_loader.py test_logger.py (~10 sec)
-3. 🔍 **Full type checking** - mypy on entire codebase (~5 sec)
-4. 🔒 **Security scan** - Ruff security rules (--select S, ~5 sec)
+1. 🌿 **Branch name convention** - Verifies feature/, bugfix/, refactor/, docs/, test/ naming
+2. 📋 **Quick validation** - validate_quick.sh (Ruff, docs, ~3 sec)
+3. 🧪 **Unit tests** - pytest test_config_loader.py test_logger.py (~10 sec)
+4. 🔍 **Full type checking** - mypy on entire codebase (~5 sec)
+5. 🔒 **Security scan** - Ruff security rules (--select S, ~5 sec)
+6. ⚠️  **Warning governance** - check_warning_debt.py (multi-source baseline, ~30 sec)
+7. 📋 **Code quality validation** - validate_code_quality.py (≥80% coverage, REQ test coverage, ~20 sec)
+8. 🔒 **Security pattern validation** - validate_security_patterns.py (API auth, hardcoded secrets, ~10 sec)
 
 **Why pre-push in addition to pre-commit?**
 - **Catches test failures** before CI (pre-commit doesn't run tests)
@@ -3538,11 +3557,15 @@ python -m pstats profile.stats
 ### Key Commands
 
 ```bash
-# Validation & Testing (Phase 0.6c)
+# Validation & Testing (Phase 0.6c+0.7c)
 ./scripts/validate_all.sh      # Complete validation (60s) - run before commits
 ./scripts/validate_quick.sh    # Fast validation (3s) - run during development
 ./scripts/test_full.sh         # All tests + coverage (30s)
 ./scripts/test_fast.sh         # Unit tests only (5s)
+
+# Template Enforcement (Phase 0.7c)
+python scripts/validate_code_quality.py    # CODE_REVIEW_TEMPLATE enforcement (≥80% coverage, REQ tests)
+python scripts/validate_security_patterns.py  # SECURITY_REVIEW_CHECKLIST enforcement (API auth, secrets)
 
 # Code Quality
 ruff check .           # Linting

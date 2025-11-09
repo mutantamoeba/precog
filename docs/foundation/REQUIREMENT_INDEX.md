@@ -1,10 +1,16 @@
 # Requirement Index
 
 ---
-**Version:** 1.3
-**Last Updated:** 2025-10-31
+**Version:** 1.4
+**Last Updated:** 2025-11-09
 **Status:** ✅ Current
 **Purpose:** Master index of all system requirements with systematic IDs
+**Changes in v1.4:**
+- **PHASE 0.7C COMPLETION**: Added template enforcement automation requirements
+- **NEW REQUIREMENTS**: REQ-VALIDATION-005 (CODE_REVIEW_TEMPLATE enforcement), REQ-VALIDATION-006 (SECURITY_REVIEW_CHECKLIST enforcement)
+- Updated document references from V2.10 to V2.12
+- Updated requirement statistics (103 → 105 total requirements)
+- Updated Validation section summary to include Phase 0.7c completion
 **Changes in v1.3:**
 - **PHASE 1 API BEST PRACTICES**: Added 4 new requirements for API integration best practices
 - **NEW REQUIREMENTS**: REQ-API-007 (Pydantic validation), REQ-OBSERV-001 (correlation IDs), REQ-SEC-009 (log masking), REQ-VALIDATION-004 (YAML validation)
@@ -312,12 +318,14 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-VALIDATION-001 | Automated Code Quality (Ruff) | 0.6c | High | ✅ | MASTER_REQUIREMENTS_V2.10 |
-| REQ-VALIDATION-002 | Documentation Validation Automation | 0.6c | Medium | ✅ | MASTER_REQUIREMENTS_V2.10 |
-| REQ-VALIDATION-003 | Layered Validation Architecture | 0.6c | High | ✅ | MASTER_REQUIREMENTS_V2.10 |
-| REQ-VALIDATION-004 | YAML Configuration Validation | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-VALIDATION-001 | Automated Code Quality (Ruff) | 0.6c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
+| REQ-VALIDATION-002 | Documentation Validation Automation | 0.6c | Medium | ✅ | MASTER_REQUIREMENTS_V2.12 |
+| REQ-VALIDATION-003 | Layered Validation Architecture | 0.6c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
+| REQ-VALIDATION-004 | YAML Configuration Validation | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.12 |
+| REQ-VALIDATION-005 | CODE_REVIEW_TEMPLATE Automated Enforcement | 0.7c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
+| REQ-VALIDATION-006 | SECURITY_REVIEW_CHECKLIST Automated Enforcement | 0.7c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
 
-**Summary:** Phase 0.6c implemented automated code quality and documentation validation. Phase 1 adds YAML configuration validation with 4-level checks (syntax, Decimal type safety, required keys, cross-file consistency).
+**Summary:** Phase 0.6c implemented automated code quality and documentation validation. Phase 0.7c added CODE_REVIEW_TEMPLATE and SECURITY_REVIEW_CHECKLIST enforcement via pre-commit/pre-push hooks. Phase 1 adds YAML configuration validation with 4-level checks (syntax, Decimal type safety, required keys, cross-file consistency).
 
 ---
 
