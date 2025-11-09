@@ -79,6 +79,8 @@ ignore = [
     "E501",   # Line too long (handled by formatter)
     "ISC001", # Conflicts with formatter
     "COM812", # Conflicts with formatter
+    "SIM117", # Nested with statements (acceptable in tests for readability)
+    "ARG005", # Unused lambda arguments in mocks (acceptable in test fixtures)
 
     # Phase 0.7: Temporarily disabled for pre-existing code (Phase 0-0.6)
     # TODO Phase 1: Fix these incrementally and re-enable
