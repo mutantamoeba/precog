@@ -807,7 +807,7 @@ def is_market_tradeable(m):
 
 2. **Cascade to:**
    - REQUIREMENT_INDEX.md (add to table)
-   - DEVELOPMENT_PHASES_V1.4.md (add to phase tasks)
+   - DEVELOPMENT_PHASES_V1.5.md (add to phase tasks)
    - MASTER_INDEX_V2.11.md (update version if renamed)
    - SESSION_HANDOFF.md (document change)
 
@@ -1767,7 +1767,7 @@ Logger module was Phase 1 deliverable but missing from coverage targets checklis
 **Related Documents:**
 - `CLAUDE.md` Section 3, Step 2 (Phase start coverage validation)
 - `CLAUDE.md` Section 9, Step 1 (Phase completion coverage verification)
-- `DEVELOPMENT_PHASES_V1.4.md` (Phase-specific coverage targets)
+- `DEVELOPMENT_PHASES_V1.5.md` (Phase-specific coverage targets)
 
 ---
 

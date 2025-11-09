@@ -24,7 +24,7 @@
 - Updated PHASE_0.7_DEFERRED_TASKS V1.1 → V1.2 (marked all 8 tasks complete: DEF-001 through DEF-008)
 - Added validation script maintenance reminders to CLAUDE.md (Pattern 1, Pattern 2, SESSION_HANDOFF template)
 - Updated PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md (8-step → 9-step: added validation scripts step)
-- Updated DEVELOPMENT_PHASES_V1.4.md (added validation reminders to all 6 phase test planning checklists)
+- Updated DEVELOPMENT_PHASES_V1.5.md (added validation reminders to all 6 phase test planning checklists)
 - Comprehensive Defense in Depth documentation (4-layer validation architecture)
 - Phase 0.7 status: 100% complete (pre-commit hooks, pre-push hooks, branch protection, schema validation, all deferred tasks done)
 **Changes in v2.11:**
@@ -177,7 +177,7 @@ Core architecture, requirements, and system design documents.
 | **REQUIREMENT_INDEX.md** | ✅ | v1.3 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 114 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED** (added REQ-TEST-009, REQ-TEST-010, REQ-TEST-011) |
 | **ADR_INDEX_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (53 ADRs) - **UPDATED V1.6** (ADR-074 added for property-based testing POC) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
-| **DEVELOPMENT_PHASES_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, added Phase 0.6b/0.6c/0.7 - **UPDATED V1.4** (Phase 0.6c complete) |
+| **DEVELOPMENT_PHASES_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, added Phase 0.6b/0.6c/0.7 - **UPDATED V1.4** (Phase 0.6c complete) |
 | **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
 | **DEVELOPMENT_PHILOSOPHY_V1.1.md** | ✅ | v1.1 | `/docs/foundation/` | 0.7 | All phases | 🔴 Critical | Core development principles: TDD, Defense in Depth, DDD, Data-Driven Design, 10 sections (9 principles + anti-patterns) - **UPDATED V1.1** (added Section 10: Anti-Patterns to Avoid with 7 anti-patterns) |
@@ -260,7 +260,7 @@ Roadmap, timelines, and project management.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DEVELOPMENT_PHASES_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 0.5 complete, Phase 5 split into 5a/5b - UPDATED Phase 0.7 |
+| **DEVELOPMENT_PHASES_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 0.5 complete, Phase 5 split into 5a/5b - UPDATED Phase 0.7 |
 | **DEPLOYMENT_GUIDE_V1.0.md** | 🔵 | - | `/docs/deployment/` | 1 | Phase 1 ✅ | 🟡 High | Local/AWS deployment stubs |
 | **USER_GUIDE_V1.0.md** | 🔵 | - | `/docs/guides/` | 5 | Phase 5 ✅ | 🟢 Medium | CLI examples (edges-list, trade-execute) |
 | **DEVELOPER_ONBOARDING_V1.0.md** | 🔵 | - | `/docs/utility/` | 0 | Phase 0 ✅ | 🟡 High | Merged with ENVIRONMENT_CHECKLIST, onboarding steps |
@@ -407,7 +407,7 @@ Additional guides, references, and supporting documentation.
 - ✅ ARCHITECTURE_DECISIONS_V2.5.md (ADR numbers added for all decisions)
 - ✅ ADR_INDEX.md (systematic ADR catalog)
 - ✅ PROJECT_OVERVIEW_V1.4.md
-- ✅ DEVELOPMENT_PHASES_V1.4.md (Phase 5 split into 5a/5b)
+- ✅ DEVELOPMENT_PHASES_V1.5.md (Phase 5 split into 5a/5b)
 - ✅ system.yaml (added comprehensive notifications configuration)
 - ✅ position_management.yaml V2.0 (10 exit conditions)
 - ✅ probability_models.yaml V2.0 (versioning)
@@ -454,7 +454,7 @@ Additional guides, references, and supporting documentation.
 - DATABASE_SCHEMA_SUMMARY_V1.6.md (schema - 25 tables including alerts + ML placeholders)
 - API_INTEGRATION_GUIDE_V1.0.md (API docs)
 - KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md (critical reference)
-- DEVELOPMENT_PHASES_V1.4.md (roadmap)
+- DEVELOPMENT_PHASES_V1.5.md (roadmap)
 - GLOSSARY.md (terminology)
 - Handoff_Protocol_V1.0.md (process reference)
 - VERSIONING_GUIDE_V1.0.md (versioning patterns)
