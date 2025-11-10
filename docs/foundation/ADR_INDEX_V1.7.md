@@ -1,9 +1,16 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.6
-**Last Updated:** 2025-11-08
+**Version:** 1.7
+**Last Updated:** 2025-11-09
 **Status:** ✅ Current
+**Changes in v1.7:**
+- **STRATEGIC RESEARCH PRIORITIES:** Added ADR-076 and ADR-077 (Open Questions Requiring Research)
+- Added Phase 4.5 section for strategic research priorities
+- Added ADR-076: Dynamic Ensemble Weights Architecture (Open Question - Research Required)
+- Added ADR-077: Strategy vs Method Separation (Open Question - HIGHEST PRIORITY Research)
+- Updated ARCHITECTURE_DECISIONS reference from V2.12 to V2.13
+- Total ADRs: 53 → 55 (2 new ADRs added)
 **Changes in v1.6:**
 - **PROPERTY-BASED TESTING INTEGRATION:** Added ADR-074 (Property-Based Testing Strategy with Hypothesis)
 - Added Phase 1.5 section for property-based testing integration
@@ -151,6 +158,13 @@ This document provides a systematic index of all Precog architecture decisions u
 |-----|-------|------|--------|-------|----------|
 | ADR-074 | Property-Based Testing Strategy (Hypothesis Framework) | 2025-11-08 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.12 |
 | ADR-075 | Multi-Source Warning Governance Architecture | 2025-11-08 | ✅ | 0.7/1 | ARCHITECTURE_DECISIONS_V2.12 |
+
+### Phase 4.5: Strategic Research Priorities (Open Questions)
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-076 | Dynamic Ensemble Weights Architecture | 2025-11-09 | 🔵 | 4.5 | ARCHITECTURE_DECISIONS_V2.13 |
+| ADR-077 | Strategy vs Method Separation (HIGHEST PRIORITY) | 2025-11-09 | 🔵 | 4.5 | ARCHITECTURE_DECISIONS_V2.13 |
 
 ### Phase 5: Trading MVP (Planned)
 

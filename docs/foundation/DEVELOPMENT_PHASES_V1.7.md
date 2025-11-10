@@ -1,9 +1,19 @@
 # Development Phases & Roadmap
 
 ---
-**Version:** 1.6
+**Version:** 1.7
 **Last Updated:** 2025-11-09
 **Status:** ✅ Current
+**Changes in v1.7:**
+- **STRATEGIC RESEARCH PRIORITIES DOCUMENTED**: Added comprehensive documentation of open architectural questions requiring deep research before Phase 4+ implementation
+- **Added CRITICAL RESEARCH PRIORITIES section** - Emphasizes strategies research as #1 priority (MOST IMPORTANT), models (#2), edge detection (#3)
+- **Added Phase 4.5: Ensemble Architecture & Dynamic Weights Research** (6-8 weeks, NEW phase inserted between Phase 4 and Phase 5)
+  - Resolves ADR-076 (Dynamic Ensemble Weights Architecture) and ADR-077 (Strategy vs Method Separation - HIGHEST PRIORITY)
+  - 11 deferred research tasks (DEF-009 through DEF-019) documented with priorities and estimates
+  - Research-then-implement approach: gather data from Phase 1-3 usage, research in Phase 4.5, implement in Phase 5+
+- **Updated Phase 4.0**: Added note that "Methods Implementation" (complete trading system bundles) is DEFERRED to Phase 5+ pending ADR-077 research completion
+- **Cross-references**: Links to new PHASE_4_DEFERRED_TASKS_V1.0.md and STRATEGIC_WORK_ROADMAP_V1.0.md documents
+- **Total addition**: ~250 lines documenting strategic research priorities and architectural decisions requiring deep research
 **Changes in v1.6:**
 - **PHASE 0.7C COMPLETION**: Added Phase 0.7c (Template Enforcement Automation) - Automated enforcement of CODE_REVIEW_TEMPLATE and SECURITY_REVIEW_CHECKLIST
 - Created 2 enforcement scripts (validate_code_quality.py 314 lines, validate_security_patterns.py 413 lines)
@@ -49,6 +59,111 @@
 **Total to Phase 10:** ~1.5-2 years (82 weeks @ 12 hours/week)
 **MVP Trading (Phase 5):** ~8 months from Phase 0 start (includes Phase 0.5, 0.6b, 0.6c, 0.7, 0.7b, 0.7c, and 1.5)
 **Current Status:** Phase 0.7c ✅ **100% COMPLETE** (Template enforcement automation complete; Phase 1 in progress)
+
+---
+
+## 🚨 CRITICAL RESEARCH PRIORITIES (Before Phase 4+) 🚨
+
+**⚠️ READ THIS SECTION BEFORE STARTING PHASE 4+ IMPLEMENTATION ⚠️**
+
+**Context:** During Phase 0.7c completion and strategic planning (November 2025), several **open architectural questions** were identified that require **deep research** before committing to final implementation approaches. These questions emerged from analyzing the versioning system, ensemble modeling architecture, and strategy/method separation.
+
+**Philosophy:** Rather than commit to potentially suboptimal architectural decisions now, we will:
+1. **Gather real-world data** from Phase 1-3 usage (6-9 months of development experience)
+2. **Conduct focused research** in dedicated Phase 4.5 (6-8 weeks)
+3. **Make informed architectural decisions** based on data, not speculation
+4. **Implement solutions** in Phase 5+ with confidence
+
+---
+
+### Research Priority #1: STRATEGIES (MOST IMPORTANT) 🔴
+
+**ADR-077: Strategy vs Method Separation (Phase 4.0 Research) - HIGHEST PRIORITY**
+
+**Problem:** Current architecture separates **strategies** (Phase 1-3 entry/exit logic) from **methods** (Phase 4+ complete trading system bundles), but boundaries are **ambiguous**. Strategy configs already contain position management logic (e.g., `hedge_strategy.profit_lock_percentage: "0.70"`). Where does "strategy logic" END and "position management" BEGIN?
+
+**Why This Matters:** This is the **foundation of our trading system**. Getting this wrong means:
+- Confusing config taxonomy (users don't know where to put settings)
+- A/B testing breaks (can't isolate strategy vs position management performance)
+- Version explosion (Strategy v1.0 + Model v2.0 + Position v1.5 + Risk v1.0 + Execution v1.0 = combinatorial nightmare)
+
+**Research Tasks (CRITICAL PRIORITY):**
+- **DEF-013:** Strategy Config Taxonomy (8-10h, 🔴 Critical) - Define clear boundaries: What belongs in `trade_strategies.yaml` vs `position_management.yaml`?
+- **DEF-014:** A/B Testing Workflows Validation (10-12h, 🔴 Critical) - Can we isolate strategy changes from position management changes?
+- **DEF-015:** User Customization Patterns Research (6-8h, 🟡 High) - How will users customize strategies? Separate configs or bundled methods?
+- **DEF-016:** Version Combinatorics Modeling (4-6h, 🟡 High) - How many combinations in real usage? (Strategy × Model × Position × Risk × Execution)
+
+**Decision Timeline:** Research in Phase 4.5 (after Phase 1-3 usage data available), decide before Phase 5 Methods Implementation
+
+**References:**
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.13.md` - ADR-077 (full analysis)
+- `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` - Section 1 (detailed task descriptions)
+- `config/trade_strategies.yaml` - Current strategy configs showing boundary ambiguity
+
+---
+
+### Research Priority #2: MODELS (High Priority) 🟡
+
+**ADR-076: Dynamic Ensemble Weights Architecture (Phase 4.5 Research)**
+
+**Problem:** Current ensemble configuration uses **STATIC weights** hardcoded in `probability_models.yaml` (elo: 0.40, regression: 0.35, ml: 0.25). This creates a **fundamental architectural tension**:
+1. **Versioning System Requires Immutability** - Model configs MUST NOT change (ADR-019: Immutable Versions)
+2. **Performance Requires Dynamic Weights** - Best weights change over time as models improve/degrade
+
+**Why This Matters:** Suboptimal weights mean **leaving money on the table**. If Elo is performing better than ML, but we're stuck with static weights, we're not maximizing edge.
+
+**Research Tasks:**
+- **DEF-009:** Backtest Static vs Dynamic Performance (15-20h, 🟡 High) - Quantify gains from dynamic weights vs static baseline
+- **DEF-010:** Weight Calculation Methods Comparison (10-15h, 🟡 High) - Sharpe-weighted, performance-weighted, Kelly-weighted, Bayesian updating
+- **DEF-011:** Version Explosion Analysis (5-8h, 🟢 Medium) - How many ensemble versions created with dynamic weights? Daily? Weekly?
+- **DEF-012:** Ensemble Versioning Strategy Documentation (6-8h, 🟢 Medium) - Separate mutable weights table? Hybrid periodic rebalancing?
+
+**Decision Timeline:** Research in Phase 4.5, decide based on backtest data
+
+**References:**
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.13.md` - ADR-076 (full analysis)
+- `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` - Section 2 (detailed task descriptions)
+- `config/probability_models.yaml` - Current static ensemble config
+
+---
+
+### Research Priority #3: EDGE DETECTION (Medium Priority) 🟢
+
+**Open Questions:**
+- **Fee Impact Modeling:** How do Kalshi's 7% taker fees affect edge thresholds? (Current: min_edge = 5%, but is this optimal?)
+- **Confidence Intervals:** Should we use confidence intervals for edge detection? (Current: fixed threshold, no uncertainty quantification)
+- **Correlation Filtering:** Should we filter correlated markets (same game, different props)? How to quantify correlation?
+
+**Research Tasks (Quick Wins):**
+- **DEF-017:** Fee Impact Sensitivity Analysis (3-4h, 🟢 Medium) - Backtest min_edge from 3% to 10%, find optimal threshold
+- **DEF-018:** Confidence Interval Methods Research (4-5h, 🟢 Medium) - Bootstrap, Bayesian credible intervals, ensemble agreement as proxy
+- **DEF-019:** Market Correlation Analysis (3-4h, 🟢 Medium) - Quantify correlation between same-game markets, propose filtering strategy
+
+**Decision Timeline:** Research in Phase 4.5, implement in Phase 4
+
+**References:**
+- `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` - Section 3 (detailed task descriptions)
+- `config/markets.yaml` - Current edge thresholds and filtering rules
+- `config/trading.yaml` - Position sizing and risk management configs
+
+---
+
+### How to Use This Section
+
+**When starting Phase 4+:**
+1. **DO NOT immediately implement** strategies, methods, or dynamic weights
+2. **READ the referenced ADRs** (ADR-076, ADR-077 in ARCHITECTURE_DECISIONS_V2.13.md)
+3. **READ the deferred tasks document** (PHASE_4_DEFERRED_TASKS_V1.0.md)
+4. **GATHER DATA from Phase 1-3** (real-world usage patterns, config complexity, user feedback)
+5. **SCHEDULE Phase 4.5 research phase** (6-8 weeks dedicated to resolving these questions)
+6. **MAKE INFORMED DECISIONS** based on research findings, not speculation
+
+**Do not skip this research.** These are **foundational architectural decisions** that affect **every Phase 5+ component** (position monitoring, exit evaluation, execution, reporting).
+
+**See Also:**
+- `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` - Comprehensive deferred task documentation (11 research tasks)
+- `docs/utility/STRATEGIC_WORK_ROADMAP_V1.0.md` - 25 strategic tasks organized by category with research dependencies
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.13.md` - ADR-076 and ADR-077 (full analysis of open questions)
 
 ---
 
@@ -1424,6 +1539,247 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 - [  ] Backtesting shows positive expectancy (Sharpe >1.0)
 - [  ] Models handle rare situations gracefully (no crashes)
 - [  ] **Ready to feed trade signals to Phase 5 trading engine**
+- [  ] **⚠️ IMPORTANT:** Phase 4 implements models/ensemble/edge detection with STATIC configs. "Methods Implementation" (complete trading system bundles) is **DEFERRED to Phase 5+** pending ADR-077 research completion in Phase 4.5.
+
+---
+
+## Phase 4.5: Ensemble Architecture & Dynamic Weights Research (Codename: "Architect")
+
+**Duration:** 6-8 weeks
+**Target:** April-May 2026 (INSERTED between Phase 4 and Phase 5)
+**Status:** 🔵 Planned - **RESEARCH PHASE** (No implementation, pure research)
+**Goal:** Resolve open architectural questions (ADR-076, ADR-077) through focused research before Phase 5+ implementation
+
+### Dependencies
+- Requires Phase 4: Models/ensemble/edge detection implemented with STATIC configs
+- Requires 6-9 months of Phase 1-3 usage data (real-world config complexity, user feedback)
+
+### ⚠️ Why This Phase Exists
+
+**Problem:** During strategic planning (November 2025), we identified **two critical open architectural questions** that require deep research before committing to implementation:
+1. **ADR-076:** Dynamic Ensemble Weights Architecture - Immutability vs Performance tension
+2. **ADR-077:** Strategy vs Method Separation (**HIGHEST PRIORITY**) - Ambiguous boundaries, A/B testing integrity
+
+**Philosophy:** Rather than guess at solutions now, we will:
+1. **Implement Phase 1-4** with STATIC configs (simple, proven patterns)
+2. **Gather real-world data** from Phase 1-4 usage (6-9 months)
+3. **Conduct focused research** in Phase 4.5 (THIS phase - 6-8 weeks dedicated research)
+4. **Make informed architectural decisions** based on data, not speculation
+5. **Implement optimal solutions** in Phase 5+ with confidence
+
+**This is NOT implementation.** This is **pure research** to inform Phase 5+ architecture.
+
+---
+
+### Research Tasks
+
+#### 1. STRATEGY RESEARCH (HIGHEST PRIORITY - 4 tasks, 28-36 hours) 🔴
+
+**Reference:** ADR-077 in ARCHITECTURE_DECISIONS_V2.13.md
+
+- **DEF-013: Strategy Config Taxonomy** (8-10 hours, 🔴 Critical Priority)
+  - Define clear boundaries: What belongs in `trade_strategies.yaml` vs `position_management.yaml`?
+  - Create decision tree: "Should this setting be a strategy parameter or position management parameter?"
+  - Document 5-10 example scenarios with rationale
+  - Propose updated config structure if needed
+  - **Output:** STRATEGY_CONFIG_TAXONOMY_V1.0.md with clear decision criteria
+
+- **DEF-014: A/B Testing Workflows Validation** (10-12 hours, 🔴 Critical Priority)
+  - Can we isolate strategy changes from position management changes in A/B tests?
+  - Design A/B testing workflows for 3 scenarios: strategy-only change, position-only change, combined change
+  - Validate statistical attribution: Can we confidently say "Strategy v1.1 increased Sharpe by 0.15"?
+  - Identify conflicts with current versioning system
+  - **Output:** A_B_TESTING_WORKFLOWS_V1.0.md with validation results
+
+- **DEF-015: User Customization Patterns Research** (6-8 hours, 🟡 High Priority)
+  - How will users customize strategies? Separate configs (Strategy + Position + Risk) or bundled methods?
+  - Interview 3-5 target users: "If you want to test a new exit rule, do you expect to create a new strategy version or a new position management version?"
+  - Research industry patterns: How do TradingView, QuantConnect, Zipline handle this?
+  - Evaluate usability trade-offs
+  - **Output:** USER_CUSTOMIZATION_PATTERNS_V1.0.md with recommendations
+
+- **DEF-016: Version Combinatorics Modeling** (4-6 hours, 🟡 High Priority)
+  - How many combinations will we realistically have? (Strategy × Model × Position × Risk × Execution)
+  - Model 3 scenarios: conservative (10 strategies, 5 models), moderate (30 strategies, 10 models), aggressive (100 strategies, 20 models)
+  - Calculate database storage implications, query performance, UI complexity
+  - Determine if version explosion is a real problem or theoretical concern
+  - **Output:** VERSION_COMBINATORICS_ANALYSIS_V1.0.md with projections
+
+**Decision Criteria:**
+- If strategy/position boundaries are clear → Keep current separation
+- If boundaries are ambiguous → Consider "Methods" approach (bundled configs)
+- If A/B testing breaks → Redesign versioning system
+- If user feedback favors bundling → Adopt "Methods" architecture
+- If version explosion is real (>1000 combinations) → Simplify config structure
+
+---
+
+#### 2. MODEL RESEARCH (4 tasks, 36-51 hours) 🟡
+
+**Reference:** ADR-076 in ARCHITECTURE_DECISIONS_V2.13.md
+
+- **DEF-009: Backtest Static vs Dynamic Performance** (15-20 hours, 🟡 High Priority)
+  - Implement 3 dynamic weight strategies: Sharpe-weighted, performance-weighted, Kelly-weighted
+  - Backtest on 2019-2024 NFL data (1000+ games)
+  - Compare Sharpe ratio, max drawdown, Calmar ratio vs static baseline
+  - Quantify gains: "Dynamic weights improve Sharpe by X%, worth the complexity?"
+  - **Output:** DYNAMIC_WEIGHTS_BACKTEST_REPORT_V1.0.md with performance metrics
+
+- **DEF-010: Weight Calculation Methods Comparison** (10-15 hours, 🟡 High Priority)
+  - Research 5 methods: Sharpe-weighted, performance-weighted, Kelly-weighted, Bayesian updating, exponential moving average
+  - Evaluate complexity (implementation time), stability (how often weights change), performance (backtest Sharpe)
+  - Rank methods by cost/benefit ratio
+  - **Output:** WEIGHT_CALCULATION_METHODS_V1.0.md with recommendations
+
+- **DEF-011: Version Explosion Analysis** (5-8 hours, 🟢 Medium Priority)
+  - If dynamic weights update daily, how many ensemble versions created? 365/year?
+  - If weekly updates, 52/year? Monthly, 12/year?
+  - Calculate database storage (JSONB config size × versions), query performance impact
+  - Determine acceptable version creation frequency
+  - **Output:** ENSEMBLE_VERSION_EXPLOSION_ANALYSIS_V1.0.md with storage projections
+
+- **DEF-012: Ensemble Versioning Strategy Documentation** (6-8 hours, 🟢 Medium Priority)
+  - Option 1: Static weights (current) - Simple, suboptimal performance
+  - Option 2: Dynamic weights + separate mutable table - Complex, optimal performance
+  - Option 3: Hybrid periodic rebalancing (monthly/quarterly) - Balance simplicity and performance
+  - Document pros/cons, implementation complexity, backtest performance
+  - **Output:** ENSEMBLE_VERSIONING_STRATEGY_V1.0.md with recommendation
+
+**Decision Criteria:**
+- If dynamic weights improve Sharpe <5% → Keep static weights (not worth complexity)
+- If dynamic weights improve Sharpe 5-15% → Consider hybrid periodic rebalancing
+- If dynamic weights improve Sharpe >15% → Implement full dynamic weights system
+- If version explosion is problematic (>100 versions/year) → Use periodic rebalancing
+
+---
+
+#### 3. EDGE DETECTION RESEARCH (3 tasks, 10-13 hours) 🟢
+
+**Quick Wins - Lower Priority**
+
+- **DEF-017: Fee Impact Sensitivity Analysis** (3-4 hours, 🟢 Medium Priority)
+  - Backtest min_edge thresholds from 3% to 10% (8 values)
+  - Calculate trade frequency, Sharpe ratio, max drawdown for each threshold
+  - Find optimal threshold balancing edge size and trade frequency
+  - Account for Kalshi's 7% taker fees
+  - **Output:** FEE_IMPACT_ANALYSIS_V1.0.md with optimal threshold
+
+- **DEF-018: Confidence Interval Methods Research** (4-5 hours, 🟢 Medium Priority)
+  - Research 4 methods: Bootstrap, Bayesian credible intervals, ensemble agreement (std dev), Monte Carlo simulation
+  - Implement proof-of-concept for each method
+  - Evaluate complexity vs utility trade-off
+  - **Output:** CONFIDENCE_INTERVAL_METHODS_V1.0.md with recommendation
+
+- **DEF-019: Market Correlation Analysis** (3-4 hours, 🟢 Medium Priority)
+  - Quantify correlation between same-game markets (spread vs total points vs halftime winner)
+  - Calculate correlation matrix for 10 sample games
+  - Propose correlation filtering strategy: "Don't trade >2 markets from same game if correlation >0.70"
+  - **Output:** MARKET_CORRELATION_ANALYSIS_V1.0.md with filtering rules
+
+**Decision Criteria:**
+- If fee impact analysis shows 5% is optimal → Keep current threshold
+- If different threshold (e.g., 6%) improves Sharpe >10% → Update config
+- If confidence intervals add <5% utility → Skip implementation (not worth complexity)
+- If market correlation filtering improves Sharpe >5% → Implement in Phase 5
+
+---
+
+### Deliverables
+
+#### Research Reports (8 reports)
+- STRATEGY_CONFIG_TAXONOMY_V1.0.md
+- A_B_TESTING_WORKFLOWS_V1.0.md
+- USER_CUSTOMIZATION_PATTERNS_V1.0.md
+- VERSION_COMBINATORICS_ANALYSIS_V1.0.md
+- DYNAMIC_WEIGHTS_BACKTEST_REPORT_V1.0.md
+- WEIGHT_CALCULATION_METHODS_V1.0.md
+- ENSEMBLE_VERSION_EXPLOSION_ANALYSIS_V1.0.md
+- ENSEMBLE_VERSIONING_STRATEGY_V1.0.md
+
+#### Quick Win Reports (3 reports)
+- FEE_IMPACT_ANALYSIS_V1.0.md
+- CONFIDENCE_INTERVAL_METHODS_V1.0.md
+- MARKET_CORRELATION_ANALYSIS_V1.0.md
+
+#### Architecture Decision Updates
+- ARCHITECTURE_DECISIONS_V2.14.md (resolve ADR-076 from 🔵 Open Question to ✅ Accepted)
+- ARCHITECTURE_DECISIONS_V2.15.md (resolve ADR-077 from 🔵 Open Question to ✅ Accepted)
+
+#### Updated Planning Documents
+- DEVELOPMENT_PHASES_V1.8.md (update Phase 5+ with finalized architecture)
+- MASTER_REQUIREMENTS_V2.11.md (add any new requirements identified during research)
+
+### Success Criteria
+- [  ] ALL 11 research tasks completed (DEF-009 through DEF-019)
+- [  ] ADR-076 resolved: Clear decision on dynamic vs static ensemble weights
+- [  ] ADR-077 resolved: Clear strategy/method separation with decision criteria
+- [  ] Backtest data validates architectural decisions (not speculation)
+- [  ] Phase 5+ implementation plan updated with finalized architecture
+- [  ] No ambiguity remaining: Developers know exactly where to put config settings
+- [  ] A/B testing workflows validated: Can isolate strategy changes from position changes
+- [  ] User customization patterns documented: Clear path for user-facing config changes
+- [  ] **Ready to implement Phase 5+ with confidence (no architectural rework needed)**
+
+### Timeline Estimate
+
+**Week 1-2: Strategy Research (HIGHEST PRIORITY)**
+- DEF-013: Strategy Config Taxonomy (8-10h)
+- DEF-014: A/B Testing Workflows Validation (10-12h)
+- Total: ~20 hours
+
+**Week 3-4: Strategy Research (continued) + Model Research (start)**
+- DEF-015: User Customization Patterns Research (6-8h)
+- DEF-016: Version Combinatorics Modeling (4-6h)
+- DEF-009: Backtest Static vs Dynamic Performance (15-20h START)
+- Total: ~20 hours
+
+**Week 5-6: Model Research (continued)**
+- DEF-009: Backtest completion (remaining hours)
+- DEF-010: Weight Calculation Methods Comparison (10-15h)
+- Total: ~20 hours
+
+**Week 6-7: Model Research (final) + Edge Detection Research**
+- DEF-011: Version Explosion Analysis (5-8h)
+- DEF-012: Ensemble Versioning Strategy Documentation (6-8h)
+- DEF-017: Fee Impact Sensitivity Analysis (3-4h)
+- Total: ~15 hours
+
+**Week 7-8: Edge Detection Research (final) + Documentation**
+- DEF-018: Confidence Interval Methods Research (4-5h)
+- DEF-019: Market Correlation Analysis (3-4h)
+- Update ARCHITECTURE_DECISIONS (resolve ADR-076, ADR-077)
+- Update DEVELOPMENT_PHASES, MASTER_REQUIREMENTS
+- Total: ~15 hours
+
+**Total Effort:** 74-92 hours (6-8 weeks @ 12 hours/week)
+
+---
+
+### After Phase 4.5: What Changes in Phase 5+?
+
+**Scenario 1: Keep Static Weights (ADR-076 → Static)**
+- Phase 5+ implements position monitoring/exit with current static ensemble
+- No architecture changes needed
+
+**Scenario 2: Adopt Dynamic Weights (ADR-076 → Dynamic)**
+- Phase 5+ adds `ensemble_weights` table (mutable weights, separate from configs)
+- Ensemble model updated to query latest weights dynamically
+- Backtesting updated to handle time-varying weights
+
+**Scenario 3: Keep Strategy/Method Separation (ADR-077 → Separate)**
+- Phase 5+ implements position management as separate configs (current plan)
+- A/B testing isolates strategy changes from position changes
+
+**Scenario 4: Adopt Methods Architecture (ADR-077 → Bundled)**
+- Phase 5+ implements "Methods" as complete trading system bundles
+- User creates "Method v1.0" containing Strategy v1.0 + Model v2.0 + Position v1.5 + Risk v1.0 + Execution v1.0
+- Simplified user experience, but loses fine-grained A/B testing
+
+**Decision will be data-driven.** We will choose the approach that maximizes:
+1. **Performance** (Sharpe ratio, max drawdown)
+2. **Usability** (user feedback, config complexity)
+3. **A/B testing integrity** (can we confidently attribute performance to specific changes?)
+4. **Maintainability** (code complexity, version management overhead)
 
 ---
 
