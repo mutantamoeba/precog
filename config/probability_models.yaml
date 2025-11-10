@@ -5,11 +5,11 @@
 # good bet and what's not.
 #
 # The fundamental equation:
-#   Edge = (True Probability × Payout) - 1
+#   Edge = (True Probability * Payout) - 1
 #
 # Example: Market says Team A 50% chance ($0.50 price).
 #          Our model says 60% chance.
-#          Edge = (0.60 × 2.0) - 1 = 0.20 = 20% edge
+#          Edge = (0.60 * 2.0) - 1 = 0.20 = 20% edge
 #
 # Version: "2.0" (Phase 0.5 - Added Versioning Support)
 # Last Updated: 2025-10-21
@@ -233,7 +233,7 @@ elo:
 #
 # HOW IT WORKS:
 # 1. Collect features (team stats, player stats, matchup info)
-# 2. Train logistic regression: P(win) = logistic(β₀ + β₁×feature₁ + ...)
+# 2. Train logistic regression: P(win) = logistic(b_0 + b_1*feature_1 + ...)
 # 3. Use trained model to predict new games
 
 regression:
@@ -297,7 +297,7 @@ ml:
 
   # Feature engineering
   feature_engineering:
-    # Create interaction features (e.g., offense_rank × defense_rank)
+    # Create interaction features (e.g., offense_rank * defense_rank)
     interactions: true
 
     # Create polynomial features (e.g., stat²)
@@ -328,7 +328,7 @@ ml:
 edge_detection:
   # Edge calculation method
   # Options:
-  # - 'simple': Edge = (TrueProb × Payout) - 1
+  # - 'simple': Edge = (TrueProb * Payout) - 1
   # - 'kelly': Calculate optimal Kelly bet size
   # - 'expected_value': E[return] accounting for all outcomes
   method: simple

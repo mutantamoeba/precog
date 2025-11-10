@@ -25,9 +25,9 @@
 # - Old versions stay in database for historical analysis
 #
 # SEMANTIC VERSIONING:
-# - v1.0 → v1.1: Minor update (parameter adjustment)
+# - v1.0 -> v1.1: Minor update (parameter adjustment)
 #   Example: Change required_confidence from 0.08 to 0.10
-# - v1.0 → v2.0: Major update (significant logic change)
+# - v1.0 -> v2.0: Major update (significant logic change)
 #   Example: Change from pre-game to live-only strategy
 #
 # LIFECYCLE STATES:
@@ -37,9 +37,9 @@
 # 4. DEPRECATED: Replaced by newer version, kept for records
 #
 # EXAMPLE LIFECYCLE:
-# pre_game_nfl_v1.0 (ACTIVE)   → Deployed, making trades
+# pre_game_nfl_v1.0 (ACTIVE)   -> Deployed, making trades
 #     ↓ (found required_confidence too low, too many losses)
-# pre_game_nfl_v1.1 (TESTING)  → Testing with required_confidence 0.10
+# pre_game_nfl_v1.1 (TESTING)  -> Testing with required_confidence 0.10
 #     ↓ (v1.1 performs 5% better over 60 days)
 # pre_game_nfl_v1.0 (DEPRECATED) + pre_game_nfl_v1.1 (ACTIVE)
 #
@@ -62,7 +62,7 @@
 # - strategy_id: 42 (pre_game_nfl_v1.1)
 # - model_id: 17 (elo_nfl_v2.0)
 # - method_id: 8 (combines strategy + model + position mgmt)
-# → Full attribution chain!
+# -> Full attribution chain!
 
 versioning:
   # Enable strategy versioning?
@@ -108,7 +108,7 @@ versioning:
       new_version: "0.30"       # 30% of capital
 
     # Evaluation criteria for promotion
-    # WHY: Need objective criteria to promote v1.1 → ACTIVE
+    # WHY: Need objective criteria to promote v1.1 -> ACTIVE
     promotion_criteria:
       min_improvement_pct: "0.05"  # 5% better Sharpe ratio
       min_evaluation_period_days: 60
@@ -498,7 +498,7 @@ hedge_strategy:
   # When to consider hedging?
   hedge_triggers:
     # Hedge if position has gained this much
-    # Example: $100 bet now worth $150 → 50% gain
+    # Example: $100 bet now worth $150 -> 50% gain
     min_unrealized_gain_pct: "0.40"  # 40% unrealized gain
 
     # Hedge if edge has flipped this much
@@ -648,7 +648,7 @@ validation:
 #
 # STRATEGY EFFECTIVENESS (rough estimates):
 # - Pre-game: 3-6% ROI, 52-55% win rate
-# - Halftime: 8-12% ROI, 55-60% win rate ⭐ BEST
+# - Halftime: 8-12% ROI, 55-60% win rate [BEST]
 # - Live: 10-15% ROI, 60-65% win rate (but harder to execute)
 # - Settlement: 2-4% ROI, 95%+ win rate (but rare opportunities)
 #

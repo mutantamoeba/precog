@@ -392,9 +392,12 @@ Related ADR: ADR-051 (CLI Framework Choice - Typer)
 Related Guide: docs/guides/CONFIGURATION_GUIDE_V3.1.md (Environment variables)
 """
 
+import os
 from datetime import datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
+import psycopg2
 import typer
 from dotenv import load_dotenv
 from rich.console import Console
@@ -402,6 +405,9 @@ from rich.table import Table
 
 # Local imports
 from api_connectors.kalshi_client import KalshiClient
+
+# Config loader
+from config.config_loader import ConfigLoader
 
 # Phase 1.5: Database CRUD operations
 from database.crud_operations import (
@@ -1118,6 +1124,891 @@ def fetch_settlements(
         logger.error(f"Failed to fetch settlements: {e}", exc_info=verbose)
         console.print(f"\n[red]Error:[/red] Failed to fetch settlements: {e}")
         raise typer.Exit(code=1) from e
+
+
+@app.command()
+def db_init(
+    environment: str = typer.Option(
+        "dev", "--env", "-e", help="Database environment (dev, test, prod)"
+    ),
+    apply_migrations: bool = typer.Option(
+        True,
+        "--migrations/--no-migrations",
+        help="Apply numbered migrations after base schema",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+):
+    """
+    Initialize database schema with base tables and migrations.
+
+    This command applies the complete database schema in the correct order:
+    1. Base schema (schema_enhanced.sql v1.7)
+    2. Version migrations (v1.3->v1.4, v1.4->v1.5)
+    3. Numbered migrations (001-010 from database/migrations/)
+
+    Educational Note:
+        Database initialization MUST happen in this exact order because:
+        - Base schema creates foundational tables (platforms, markets, trades)
+        - Version migrations add new tables (strategies, probability_models)
+        - Numbered migrations add columns and constraints to existing tables
+
+        Why this matters:
+        - Migration 003 adds strategy_id FK -> Requires strategies table (v1.3->v1.4)
+        - Migration 009 changes markets PK -> Must come after base schema
+        - Order violation = "relation does not exist" errors
+
+    Examples:
+        # Initialize dev database (default)
+        python main.py db-init
+
+        # Initialize test database
+        python main.py db-init --env test
+
+        # Base schema only (no numbered migrations)
+        python main.py db-init --no-migrations
+
+        # Verbose output for debugging
+        python main.py db-init --env dev --verbose
+
+    Related:
+        - REQ-DB-001: Database Schema Design
+        - ADR-003: PostgreSQL Schema Migration Strategy
+        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+
+    **WARNING:** This drops and recreates ALL tables. Use with caution!
+    """
+    logger.info(f"Starting db-init for environment: {environment}")
+
+    # Determine environment-specific variables
+    env_prefix_map = {"dev": "", "test": "TEST_", "prod": "PROD_"}
+
+    if environment not in env_prefix_map:
+        console.print(
+            f"\n[red]Error:[/red] Invalid environment '{environment}'. Use dev, test, or prod."
+        )
+        raise typer.Exit(code=1)
+
+    env_prefix = env_prefix_map[environment]
+
+    # Build database configuration
+    db_config = {
+        "host": os.getenv(f"{env_prefix}DB_HOST", "localhost"),
+        "port": os.getenv(f"{env_prefix}DB_PORT", "5432"),
+        "dbname": os.getenv(
+            f"{env_prefix}DB_NAME",
+            f"precog_{environment if environment != 'prod' else 'production'}",
+        ),
+        "user": os.getenv(f"{env_prefix}DB_USER", "postgres"),
+        "password": os.getenv(f"{env_prefix}DB_PASSWORD"),
+    }
+
+    # Validate password exists
+    if not db_config["password"]:
+        console.print(
+            f"\n[red]Error:[/red] {env_prefix}DB_PASSWORD not set in environment.\n"
+            f"Please set it in your .env file or export it."
+        )
+        logger.error(f"{env_prefix}DB_PASSWORD not set")
+        raise typer.Exit(code=1)
+
+    console.print(
+        f"\n[bold cyan]Database Initialization - {environment.upper()} Environment[/bold cyan]"
+    )
+    console.print("=" * 60)
+
+    # Connect to database
+    console.print("\n[yellow]→[/yellow] Connecting to database...")
+    if verbose:
+        console.print(f"  Host: {db_config['host']}:{db_config['port']}")
+        console.print(f"  Database: {db_config['dbname']}")
+        console.print(f"  User: {db_config['user']}")
+
+    try:
+        conn = psycopg2.connect(**db_config)
+        conn.autocommit = True
+        cursor = conn.cursor()
+        console.print(f"[green]✓[/green] Connected to {db_config['dbname']}")
+        logger.info(f"Connected to {db_config['dbname']}")
+    except Exception as e:
+        console.print(f"\n[red]Error:[/red] Database connection failed: {e}")
+        logger.error(f"Database connection failed: {e}", exc_info=verbose)
+        raise typer.Exit(code=1) from e
+
+    # Define schema files in correct order
+    repo_root = Path(__file__).parent
+    schema_files = [
+        # 1. Base schema (v1.7)
+        repo_root / "src" / "database" / "schema_enhanced.sql",
+        # 2. v1.3 → v1.4 migration (adds strategies, probability_models)
+        repo_root / "src" / "database" / "migrations" / "schema_v1.3_to_v1.4_migration.sql",
+        # 3. v1.4 → v1.5 migration
+        repo_root / "src" / "database" / "migrations" / "schema_v1.4_to_v1.5_migration.sql",
+    ]
+
+    # Apply base schemas and version migrations
+    console.print(
+        "\n[bold yellow]Phase 1:[/bold yellow] Applying base schema and version migrations..."
+    )
+
+    for i, schema_file in enumerate(schema_files, 1):
+        if not schema_file.exists():
+            console.print(
+                f"  [{i}/{len(schema_files)}] [yellow]Skipped:[/yellow] {schema_file.name} (file not found)"
+            )
+            if verbose:
+                logger.warning(f"Schema file not found: {schema_file}")
+            continue
+
+        console.print(
+            f"  [{i}/{len(schema_files)}] [yellow]→[/yellow] Applying {schema_file.name}..."
+        )
+
+        try:
+            with open(schema_file, encoding="utf-8") as f:
+                schema_sql = f.read()
+
+            cursor.execute(schema_sql)
+            console.print(
+                f"  [{i}/{len(schema_files)}] [green]✓[/green] {schema_file.name} applied"
+            )
+            logger.info(f"Applied schema: {schema_file.name}")
+
+        except psycopg2.Error as e:
+            console.print(f"\n[red]Error:[/red] Failed to apply {schema_file.name}")
+            console.print(f"[red]Database Error:[/red] {e}")
+            logger.error(f"Failed to apply {schema_file.name}: {e}", exc_info=verbose)
+            conn.rollback()
+            cursor.close()
+            conn.close()
+            raise typer.Exit(code=1) from e
+
+    # Find and apply numbered migrations
+    if apply_migrations:
+        console.print("\n[bold yellow]Phase 2:[/bold yellow] Applying numbered migrations...")
+        migrations_dir = repo_root / "database" / "migrations"
+        migration_files = sorted(migrations_dir.glob("[0-9]*.sql"))
+
+        if not migration_files:
+            console.print(
+                f"[yellow]Info:[/yellow] No numbered migrations found in {migrations_dir}"
+            )
+            logger.info(f"No numbered migrations found in {migrations_dir}")
+        else:
+            console.print(f"[green]✓[/green] Found {len(migration_files)} numbered migrations")
+
+            for i, migration_file in enumerate(migration_files, 1):
+                console.print(
+                    f"  [{i}/{len(migration_files)}] [yellow]→[/yellow] Applying {migration_file.name}..."
+                )
+
+                try:
+                    with open(migration_file, encoding="utf-8") as f:
+                        migration_sql = f.read()
+
+                    cursor.execute(migration_sql)
+                    console.print(
+                        f"  [{i}/{len(migration_files)}] [green]✓[/green] {migration_file.name} applied"
+                    )
+                    logger.info(f"Applied migration: {migration_file.name}")
+
+                except psycopg2.Error as e:
+                    console.print(f"\n[red]Error:[/red] Failed to apply {migration_file.name}")
+                    console.print(f"[red]Database Error:[/red] {e}")
+                    logger.error(f"Failed to apply {migration_file.name}: {e}", exc_info=verbose)
+                    conn.rollback()
+                    cursor.close()
+                    conn.close()
+                    raise typer.Exit(code=1) from e
+    else:
+        console.print("\n[yellow]Info:[/yellow] Numbered migrations skipped (--no-migrations)")
+
+    # Verify schema
+    console.print("\n[bold yellow]Verification:[/bold yellow] Checking schema...")
+    try:
+        cursor.execute(
+            """
+            SELECT table_name
+            FROM information_schema.tables
+            WHERE table_schema = 'public'
+            ORDER BY table_name
+        """
+        )
+        tables = cursor.fetchall()
+        console.print(f"[green]✓[/green] Database has {len(tables)} tables")
+
+        # Check for critical tables
+        critical_tables = [
+            "platforms",
+            "series",
+            "events",
+            "markets",
+            "strategies",
+            "probability_models",
+            "positions",
+            "trades",
+            "teams",
+            "team_elo_ratings",
+        ]
+        existing_table_names = [table[0] for table in tables]
+        missing_tables = [t for t in critical_tables if t not in existing_table_names]
+
+        if missing_tables:
+            console.print(
+                f"\n[yellow]Warning:[/yellow] Missing critical tables: {', '.join(missing_tables)}"
+            )
+            logger.warning(f"Missing critical tables: {', '.join(missing_tables)}")
+        else:
+            console.print(f"[green]✓[/green] All {len(critical_tables)} critical tables present")
+
+        # Display tables in a nice table format
+        if verbose:
+            console.print("\n[bold]Created Tables:[/bold]")
+            table_display = Table(show_header=True, header_style="bold cyan")
+            table_display.add_column("#", style="dim", width=6)
+            table_display.add_column("Table Name", style="green")
+
+            for idx, table in enumerate(tables, 1):
+                table_display.add_row(str(idx), table[0])
+
+            console.print(table_display)
+
+    except psycopg2.Error as e:
+        console.print(f"\n[red]Error:[/red] Schema verification failed: {e}")
+        logger.error(f"Schema verification failed: {e}", exc_info=verbose)
+
+    # Close connection
+    cursor.close()
+    conn.close()
+
+    console.print("\n" + "=" * 60)
+    console.print(
+        f"[bold green]✓ Success![/bold green] Schema initialized for {environment} database"
+    )
+    console.print("=" * 60)
+
+    if environment == "test":
+        console.print("\n[cyan]Next step:[/cyan] python -m pytest tests/test_crud_operations.py -v")
+
+    logger.info(f"db-init completed successfully for {environment}")
+
+
+@app.command()
+def health_check(
+    environment: str = typer.Option(
+        "dev", "--env", "-e", help="Environment to check (dev, test, prod)"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+):
+    """
+    Perform system health checks for database, configs, and environment.
+
+    This command verifies:
+    1. Database connectivity and basic query execution
+    2. Required environment variables are set
+    3. Configuration files exist and are valid YAML
+    4. Logs directory exists and is writable
+    5. Critical Python packages are importable
+
+    Educational Note:
+        Health checks are CRITICAL before starting trading operations because:
+        - Database connection failure during trade execution = lost opportunity
+        - Missing API credentials = authentication errors (blocked for hours)
+        - Invalid config files = wrong Kelly fraction (over-betting risk)
+        - Unwritable logs directory = no audit trail (compliance issue)
+
+        Why this matters:
+        - Catching issues BEFORE trading prevents costly failures
+        - 5-second health check vs. hours of debugging during live trading
+        - Validates entire pipeline: configs -> database -> API credentials
+
+    Examples:
+        # Check dev environment health (default)
+        python main.py health-check
+
+        # Check test environment
+        python main.py health-check --env test
+
+        # Verbose output with detailed diagnostics
+        python main.py health-check --env dev --verbose
+
+    Related:
+        - REQ-SYS-001: System Health Monitoring
+        - ADR-051: CLI Framework with Typer
+        - docs/guides/CONFIGURATION_GUIDE_V3.1.md
+
+    Returns exit code 0 if all checks pass, 1 if any check fails.
+    """
+    logger.info(f"Starting health-check for environment: {environment}")
+
+    console.print(
+        f"\n[bold cyan]System Health Check - {environment.upper()} Environment[/bold cyan]"
+    )
+    console.print("=" * 60)
+
+    # Track overall health status
+    all_checks_passed = True
+    check_results = []
+
+    # Determine environment prefix
+    env_prefix_map = {"dev": "", "test": "TEST_", "prod": "PROD_"}
+    env_prefix = env_prefix_map.get(environment, "")
+
+    # CHECK 1: Database Connectivity
+    console.print("\n[bold yellow]1. Database Connectivity[/bold yellow]")
+    try:
+        db_config = {
+            "host": os.getenv(f"{env_prefix}DB_HOST", "localhost"),
+            "port": os.getenv(f"{env_prefix}DB_PORT", "5432"),
+            "dbname": os.getenv(
+                f"{env_prefix}DB_NAME",
+                f"precog_{environment if environment != 'prod' else 'production'}",
+            ),
+            "user": os.getenv(f"{env_prefix}DB_USER", "postgres"),
+            "password": os.getenv(f"{env_prefix}DB_PASSWORD"),
+        }
+
+        if not db_config["password"]:
+            console.print(f"  [red]✗[/red] Database password not set ({env_prefix}DB_PASSWORD)")
+            check_results.append(("Database Password", False))
+            all_checks_passed = False
+        else:
+            if verbose:
+                console.print(
+                    f"  Connecting to: {db_config['host']}:{db_config['port']}/{db_config['dbname']}"
+                )
+
+            conn = psycopg2.connect(**db_config, connect_timeout=5)
+            cursor = conn.cursor()
+
+            # Test basic query
+            cursor.execute("SELECT version();")
+            version = cursor.fetchone()[0]
+
+            console.print(f"  [green]✓[/green] Connected to database: {db_config['dbname']}")
+            if verbose:
+                console.print(f"    PostgreSQL version: {version[:50]}...")
+
+            # Check table count
+            cursor.execute(
+                "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'public'"
+            )
+            table_count = cursor.fetchone()[0]
+            console.print(f"  [green]✓[/green] Database has {table_count} tables")
+
+            cursor.close()
+            conn.close()
+            check_results.append(("Database Connectivity", True))
+
+    except psycopg2.OperationalError as e:
+        console.print(f"  [red]✗[/red] Database connection failed: {e}")
+        if verbose:
+            logger.error(f"Database connection failed: {e}", exc_info=True)
+        check_results.append(("Database Connectivity", False))
+        all_checks_passed = False
+    except Exception as e:
+        console.print(f"  [red]✗[/red] Unexpected error: {e}")
+        if verbose:
+            logger.error(f"Unexpected database error: {e}", exc_info=True)
+        check_results.append(("Database Connectivity", False))
+        all_checks_passed = False
+
+    # CHECK 2: Environment Variables
+    console.print("\n[bold yellow]2. Environment Variables[/bold yellow]")
+    required_env_vars = {
+        "Database": [
+            f"{env_prefix}DB_HOST",
+            f"{env_prefix}DB_PORT",
+            f"{env_prefix}DB_NAME",
+            f"{env_prefix}DB_USER",
+            f"{env_prefix}DB_PASSWORD",
+        ],
+        "Kalshi API": ["KALSHI_API_KEY_ID", "KALSHI_PRIVATE_KEY_PATH"],
+    }
+
+    env_check_passed = True
+    for category, vars_list in required_env_vars.items():
+        missing_vars = [var for var in vars_list if not os.getenv(var)]
+
+        if missing_vars:
+            console.print(f"  [red]✗[/red] {category}: Missing {len(missing_vars)} variables")
+            if verbose:
+                for var in missing_vars:
+                    console.print(f"    - {var}")
+            env_check_passed = False
+        else:
+            console.print(f"  [green]✓[/green] {category}: All {len(vars_list)} variables set")
+
+    check_results.append(("Environment Variables", env_check_passed))
+    if not env_check_passed:
+        all_checks_passed = False
+
+    # CHECK 3: Configuration Files
+    console.print("\n[bold yellow]3. Configuration Files[/bold yellow]")
+    config_dir = Path("config")
+    required_configs = [
+        "database.yaml",
+        "markets.yaml",
+        "trading.yaml",
+        "probability_models.yaml",
+        "trade_strategies.yaml",
+        "position_management.yaml",
+        "logging.yaml",
+    ]
+
+    config_check_passed = True
+    for config_file in required_configs:
+        config_path = config_dir / config_file
+
+        if not config_path.exists():
+            console.print(f"  [red]✗[/red] Missing: {config_file}")
+            config_check_passed = False
+        else:
+            try:
+                # Try to load and parse YAML
+                import yaml
+
+                with open(config_path, encoding="utf-8") as f:
+                    yaml.safe_load(f)
+                console.print(f"  [green]✓[/green] Valid: {config_file}")
+                if verbose:
+                    console.print(f"    Size: {config_path.stat().st_size} bytes")
+            except yaml.YAMLError as e:
+                console.print(f"  [red]✗[/red] Invalid YAML: {config_file}")
+                if verbose:
+                    console.print(f"    Error: {e}")
+                config_check_passed = False
+            except Exception as e:
+                console.print(f"  [red]✗[/red] Error reading: {config_file}")
+                if verbose:
+                    console.print(f"    Error: {e}")
+                config_check_passed = False
+
+    check_results.append(("Configuration Files", config_check_passed))
+    if not config_check_passed:
+        all_checks_passed = False
+
+    # CHECK 4: Logs Directory
+    console.print("\n[bold yellow]4. Logs Directory[/bold yellow]")
+    logs_dir = Path("logs")
+
+    if not logs_dir.exists():
+        console.print("  [yellow]![/yellow] Logs directory doesn't exist, attempting to create...")
+        try:
+            logs_dir.mkdir(exist_ok=True)
+            console.print("  [green]✓[/green] Created logs directory")
+            check_results.append(("Logs Directory", True))
+        except Exception as e:
+            console.print(f"  [red]✗[/red] Failed to create logs directory: {e}")
+            check_results.append(("Logs Directory", False))
+            all_checks_passed = False
+    else:
+        # Check if writable
+        test_file = logs_dir / ".health_check_test"
+        try:
+            test_file.write_text("test", encoding="utf-8")
+            test_file.unlink()
+            console.print("  [green]✓[/green] Logs directory exists and is writable")
+            if verbose:
+                console.print(f"    Location: {logs_dir.absolute()}")
+            check_results.append(("Logs Directory", True))
+        except Exception as e:
+            console.print(f"  [red]✗[/red] Logs directory not writable: {e}")
+            check_results.append(("Logs Directory", False))
+            all_checks_passed = False
+
+    # CHECK 5: Critical Python Packages
+    console.print("\n[bold yellow]5. Critical Python Packages[/bold yellow]")
+    critical_packages = [
+        ("psycopg2", "Database driver"),
+        ("typer", "CLI framework"),
+        ("yaml", "Config parsing"),
+        ("dotenv", "Environment variables"),
+        ("requests", "HTTP client (Kalshi API)"),
+        ("cryptography", "RSA-PSS authentication"),
+    ]
+
+    packages_check_passed = True
+    for package_name, description in critical_packages:
+        try:
+            __import__(package_name.replace("-", "_"))
+            console.print(f"  [green]✓[/green] {package_name}: {description}")
+        except ImportError:
+            console.print(f"  [red]✗[/red] {package_name}: Not installed ({description})")
+            packages_check_passed = False
+
+    check_results.append(("Python Packages", packages_check_passed))
+    if not packages_check_passed:
+        all_checks_passed = False
+
+    # Summary
+    console.print("\n" + "=" * 60)
+    console.print("[bold]Health Check Summary[/bold]")
+    console.print("=" * 60)
+
+    # Display results table
+    summary_table = Table(show_header=True, header_style="bold cyan")
+    summary_table.add_column("Check", style="white")
+    summary_table.add_column("Status", width=10)
+
+    for check_name, passed in check_results:
+        status = "[green]✓ PASS[/green]" if passed else "[red]✗ FAIL[/red]"
+        summary_table.add_row(check_name, status)
+
+    console.print(summary_table)
+
+    # Overall status
+    console.print("\n" + "=" * 60)
+    if all_checks_passed:
+        console.print("[bold green]✓ All Checks Passed[/bold green]")
+        console.print(f"System is healthy and ready for {environment} operations.")
+        console.print("=" * 60)
+        logger.info(f"Health check passed for {environment}")
+    else:
+        failed_count = sum(1 for _, passed in check_results if not passed)
+        console.print(f"[bold red]✗ {failed_count}/{len(check_results)} Checks Failed[/bold red]")
+        console.print(f"System is NOT ready for {environment} operations.")
+        console.print("=" * 60)
+        logger.error(f"Health check failed for {environment}: {failed_count} checks failed")
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def config_show(
+    config_type: str = typer.Argument(
+        ...,
+        help="Config type to display: system, trading, markets, strategies, models, position_management, data_sources, or 'all'",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show full nested configuration"),
+):
+    """
+    Display current configuration values from YAML files.
+
+    This command loads and displays configuration values with:
+    - Decimal conversion applied (string "0.05" -> Decimal("0.05"))
+    - Environment variable substitution (if applicable)
+    - Nested structure visualization
+    - Type information (Decimal, str, int, bool, dict, list)
+
+    Educational Note:
+        Configuration visibility is CRITICAL for debugging because:
+        - Wrong Kelly fraction (0.5 vs 0.25) = 2x position size = double risk
+        - Misread min_edge (0.05 vs 0.50) = no trades vs aggressive trading
+        - Database connection string typo = hours of "connection refused" errors
+        - API credentials pointing to wrong environment = demo trades on prod!
+
+        Why this matters:
+        - Quick verification before starting trading session
+        - Confirms YAML changes are actually loaded
+        - Validates Decimal precision (0.05 not 0.050000000001)
+
+    Examples:
+        # Show all configurations
+        python main.py config-show all
+
+        # Show specific config
+        python main.py config-show system
+        python main.py config-show trading
+        python main.py config-show markets
+
+        # Verbose mode (full nested structure)
+        python main.py config-show system --verbose
+
+    Related:
+        - REQ-CONFIG-001: YAML Configuration System
+        - Pattern 1 in CLAUDE.md: Decimal Precision
+        - docs/guides/CONFIGURATION_GUIDE_V3.1.md
+    """
+    logger.info(f"Showing configuration: {config_type}")
+
+    console.print(f"\n[bold cyan]Configuration Display - {config_type.upper()}[/bold cyan]")
+    console.print("=" * 60)
+
+    # Initialize config loader
+    config_loader = ConfigLoader()
+
+    # Define filename mapping (lazy evaluation - don't load yet)
+    config_filenames = {
+        "system": "system.yaml",
+        "trading": "trading.yaml",
+        "markets": "markets.yaml",
+        "strategies": "trade_strategies.yaml",
+        "models": "probability_models.yaml",
+        "position_management": "position_management.yaml",
+        "data_sources": "data_sources.yaml",
+    }
+
+    config_loaders = {
+        "system": "system",
+        "trading": "trading",
+        "markets": "markets",
+        "strategies": "trade_strategies",
+        "models": "probability_models",
+        "position_management": "position_management",
+        "data_sources": "data_sources",
+    }
+
+    # Determine which configs to show
+    configs_to_show = {}
+    if config_type == "all":
+        config_types_list = list(config_filenames.keys())
+    elif config_type in config_filenames:
+        config_types_list = [config_type]
+    else:
+        console.print(f"\n[red]Error:[/red] Unknown config type '{config_type}'")
+        console.print(
+            f"[yellow]Available types:[/yellow] {', '.join(config_filenames.keys())}, all"
+        )
+        raise typer.Exit(code=1)
+
+    # Load only the requested configs (lazy loading)
+    for name in config_types_list:
+        filename = config_filenames[name]
+        loader_key = config_loaders[name]
+        try:
+            config_data = config_loader.get(loader_key)
+            configs_to_show[name] = (filename, config_data)
+        except Exception as e:
+            console.print(f"\n[red]Error loading {filename}:[/red] {e}")
+            configs_to_show[name] = (filename, None)
+
+    # Display each config
+    for name, (filename, config_data) in configs_to_show.items():
+        console.print(f"\n[bold yellow]{name.upper()}[/bold yellow] (from {filename})")
+        console.print("-" * 60)
+
+        if config_data is None:
+            console.print("  [red][FAIL][/red] Configuration not loaded (file missing or error)")
+            continue
+
+        # Display configuration
+        if verbose:
+            # Verbose mode: Show full nested structure
+            import json
+
+            from rich.syntax import Syntax
+
+            # Convert Decimals to strings for JSON serialization
+            def decimal_to_str(obj):
+                from decimal import Decimal
+
+                if isinstance(obj, Decimal):
+                    return f"Decimal('{obj}')"
+                if isinstance(obj, dict):
+                    return {k: decimal_to_str(v) for k, v in obj.items()}
+                if isinstance(obj, list):
+                    return [decimal_to_str(item) for item in obj]
+                return obj
+
+            config_str = json.dumps(decimal_to_str(config_data), indent=2, default=str)
+            syntax = Syntax(config_str, "json", theme="monokai", line_numbers=False)
+            console.print(syntax)
+        else:
+            # Compact mode: Show top-level keys and types
+            table = Table(show_header=True, header_style="bold cyan")
+            table.add_column("Key", style="green", width=30)
+            table.add_column("Type", style="yellow", width=15)
+            table.add_column("Preview", style="white", width=40)
+
+            for key, value in config_data.items():
+                value_type = type(value).__name__
+
+                # Generate preview
+                if isinstance(value, dict):
+                    preview = f"{{... {len(value)} keys}}"
+                elif isinstance(value, list):
+                    preview = f"[... {len(value)} items]"
+                elif isinstance(value, str) and len(value) > 40:
+                    preview = value[:37] + "..."
+                else:
+                    preview = str(value)
+
+                table.add_row(key, value_type, preview)
+
+            console.print(table)
+
+    console.print("\n" + "=" * 60)
+    console.print("[green][OK][/green] Configuration display complete")
+    console.print("=" * 60)
+    logger.info(f"Configuration display complete: {config_type}")
+
+
+@app.command()
+def config_validate(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed validation output"),
+):
+    """
+    Validate all configuration YAML files for syntax and common issues.
+
+    This command checks:
+    1. YAML syntax correctness (no parsing errors)
+    2. Required files exist
+    3. No float contamination (0.05 should be "0.05" string)
+    4. Required top-level keys present
+    5. Decimal precision preserved after loading
+
+    Educational Note:
+        Configuration validation is MANDATORY before trading because:
+        - Invalid YAML = application crash on startup
+        - Float contamination (0.05 vs "0.05") = rounding errors in position sizing
+        - Missing min_edge config = undefined behavior (might not trade at all!)
+        - Wrong Decimal type = TypeError during Kelly calculation
+
+        Why this matters:
+        - Catches typos BEFORE they cause production failures
+        - Validates Pattern 1 (Decimal Precision) compliance
+        - Prevents "worked in dev, broke in prod" config issues
+
+    Examples:
+        # Basic validation
+        python main.py config-validate
+
+        # Verbose mode with detailed checks
+        python main.py config-validate --verbose
+
+    Related:
+        - REQ-CONFIG-001: YAML Configuration System
+        - Pattern 1 in CLAUDE.md: Decimal Precision
+        - Pattern 8 in CLAUDE.md: Configuration File Synchronization
+        - scripts/validate_docs.py (Check #9 validates YAML files)
+    """
+    logger.info("Starting configuration validation")
+
+    console.print("\n[bold cyan]Configuration Validation[/bold cyan]")
+    console.print("=" * 60)
+
+    # Required config files with their actual top-level keys
+    config_dir = Path("config")
+    required_configs = {
+        "system.yaml": ["environment", "database", "logging"],
+        "markets.yaml": ["platforms"],
+        "trading.yaml": ["circuit_breakers", "position_sizing"],
+        "probability_models.yaml": ["versioning", "architecture", "elo"],
+        "trade_strategies.yaml": ["versioning", "strategy_priority"],
+        "position_management.yaml": ["portfolio", "monitoring", "exit_rules"],
+        "data_sources.yaml": ["live_stats", "historical_data"],
+    }
+
+    all_valid = True
+    validation_results = []
+
+    for config_file, required_keys in required_configs.items():
+        config_path = config_dir / config_file
+        console.print(f"\n[bold yellow]Validating {config_file}[/bold yellow]")
+
+        # CHECK 1: File exists
+        if not config_path.exists():
+            console.print(f"  [red][FAIL][/red] File not found: {config_path}")
+            validation_results.append((config_file, False, "File not found"))
+            all_valid = False
+            continue
+
+        # CHECK 2: YAML syntax
+        try:
+            import yaml
+
+            with open(config_path, encoding="utf-8") as f:
+                config_data = yaml.safe_load(f)
+            console.print("  [green][OK][/green] YAML syntax valid")
+            if verbose:
+                console.print(f"    File size: {config_path.stat().st_size} bytes")
+        except yaml.YAMLError as e:
+            console.print(f"  [red][FAIL][/red] YAML syntax error: {e}")
+            validation_results.append((config_file, False, f"YAML error: {e}"))
+            all_valid = False
+            continue
+        except Exception as e:
+            console.print(f"  [red][FAIL][/red] Error reading file: {e}")
+            validation_results.append((config_file, False, f"Read error: {e}"))
+            all_valid = False
+            continue
+
+        # CHECK 3: Required keys present
+        missing_keys = [key for key in required_keys if key not in config_data]
+        if missing_keys:
+            console.print(f"  [red][FAIL][/red] Missing required keys: {', '.join(missing_keys)}")
+            validation_results.append((config_file, False, f"Missing keys: {missing_keys}"))
+            all_valid = False
+        else:
+            console.print(f"  [green][OK][/green] All {len(required_keys)} required keys present")
+
+        # CHECK 4: Float contamination check (basic)
+        def check_float_contamination(obj, path=""):
+            """Recursively check for float values that should be Decimal strings."""
+            issues = []
+            if isinstance(obj, dict):
+                for key, value in obj.items():
+                    issues.extend(
+                        check_float_contamination(value, f"{path}.{key}" if path else key)
+                    )
+            elif isinstance(obj, list):
+                for idx, item in enumerate(obj):
+                    issues.extend(check_float_contamination(item, f"{path}[{idx}]"))
+            elif isinstance(obj, float) and 0 < obj < 10:
+                # Check if this looks like a financial value (small decimal)
+                issues.append((path, obj))
+            return issues
+
+        float_issues = check_float_contamination(config_data)
+        if float_issues:
+            console.print(
+                f"  [yellow]![/yellow] Potential float contamination detected ({len(float_issues)} values)"
+            )
+            if verbose:
+                for path, value in float_issues[:5]:  # Show first 5
+                    console.print(f'    - {path}: {value} (should be "{value}" string)')
+                if len(float_issues) > 5:
+                    console.print(f"    ... and {len(float_issues) - 5} more")
+        else:
+            console.print("  [green][OK][/green] No float contamination detected")
+
+        # CHECK 5: Decimal conversion test
+        try:
+            config_loader = ConfigLoader()
+            config_loader_data = config_loader.get(config_file.replace(".yaml", ""))
+
+            if config_loader_data:
+                console.print("  [green][OK][/green] ConfigLoader successfully loaded and parsed")
+                validation_results.append((config_file, True, "Valid"))
+            else:
+                console.print(
+                    "  [yellow]![/yellow] ConfigLoader returned None (file might be empty)"
+                )
+                validation_results.append((config_file, True, "Valid but empty"))
+
+        except Exception as e:
+            console.print(f"  [red][FAIL][/red] ConfigLoader error: {e}")
+            validation_results.append((config_file, False, f"Loader error: {e}"))
+            all_valid = False
+
+    # Summary
+    console.print("\n" + "=" * 60)
+    console.print("[bold]Validation Summary[/bold]")
+    console.print("=" * 60)
+
+    summary_table = Table(show_header=True, header_style="bold cyan")
+    summary_table.add_column("Config File", style="white", width=30)
+    summary_table.add_column("Status", width=15)
+    summary_table.add_column("Details", width=30)
+
+    for config_file, passed, details in validation_results:
+        status = "[green][OK] VALID[/green]" if passed else "[red][FAIL] INVALID[/red]"
+        summary_table.add_row(config_file, status, details)
+
+    console.print(summary_table)
+
+    console.print("\n" + "=" * 60)
+    if all_valid:
+        console.print("[bold green][OK] All Configuration Files Valid[/bold green]")
+        console.print("=" * 60)
+        logger.info("Configuration validation passed")
+    else:
+        failed_count = sum(1 for _, passed, _ in validation_results if not passed)
+        console.print(
+            f"[bold red][FAIL] {failed_count}/{len(validation_results)} Configuration Files Invalid[/bold red]"
+        )
+        console.print("=" * 60)
+        logger.error(f"Configuration validation failed: {failed_count} files invalid")
+        raise typer.Exit(code=1)
 
 
 def main():
