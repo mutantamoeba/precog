@@ -1,9 +1,17 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.15
+**Version:** 2.16
 **Last Updated:** 2025-11-09
 **Status:** ✅ Current
+**Changes in v2.16:**
+- **STRATEGIC RESEARCH PRIORITIES DOCUMENTED**: Open architectural questions requiring research before Phase 4+ implementation
+- Updated ARCHITECTURE_DECISIONS V2.12 → V2.13 (added ADR-076 Dynamic Ensemble Weights, ADR-077 Strategy vs Method Separation - HIGHEST PRIORITY)
+- Updated DEVELOPMENT_PHASES V1.6 → V1.7 (added CRITICAL RESEARCH PRIORITIES section, Phase 4.5 Ensemble Architecture Research)
+- Created PHASE_4_DEFERRED_TASKS_V1.0.md (11 research tasks: DEF-009 to DEF-019, strategies #1 MOST IMPORTANT)
+- Created STRATEGIC_WORK_ROADMAP_V1.0.md (25 strategic tasks organized by category, research dependencies documented)
+- Research emphasis: Strategies (#1 MOST IMPORTANT), Models (#2), Edge Detection (#3)
+- Data-driven approach: gather data (Phase 1-3) → research (Phase 4.5) → decide → implement (Phase 5+)
 **Changes in v2.15:**
 - **PHASE 0.7C COMPLETE**: Template enforcement automation implemented with Defense in Depth architecture
 - Created scripts/validate_code_quality.py (314 lines) - enforces CODE_REVIEW_TEMPLATE (≥80% coverage, REQ test coverage, educational docstrings)
@@ -184,12 +192,12 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.4** |
 | **MASTER_REQUIREMENTS_V2.12.md** | ✅ | v2.12 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.12** (added REQ-VALIDATION-005, REQ-VALIDATION-006 for template enforcement automation) |
-| **MASTER_INDEX_V2.15.md** | ✅ | v2.15 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.15** (Phase 0.7c complete: template enforcement automation with Defense in Depth) |
-| **ARCHITECTURE_DECISIONS_V2.12.md** | ✅ | v2.12 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (75 total) - **UPDATED V2.12** (ADR-075: Multi-Source Warning Governance Architecture) |
+| **MASTER_INDEX_V2.16.md** | ✅ | v2.16 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.16** (Strategic research priorities documented: ADR-076, ADR-077, Phase 4.5) |
+| **ARCHITECTURE_DECISIONS_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (77 total) - **UPDATED V2.13** (ADR-076: Dynamic Ensemble Weights, ADR-077: Strategy vs Method Separation - HIGHEST PRIORITY open questions) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 105 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.4** (added REQ-VALIDATION-005, REQ-VALIDATION-006 for template enforcement) |
-| **ADR_INDEX_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (53 ADRs) - **UPDATED V1.6** (ADR-074 added for property-based testing POC) |
+| **ADR_INDEX_V1.7.md** | ✅ | v1.7 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (55 ADRs) - **UPDATED V1.7** (ADR-076, ADR-077 added for strategic research priorities - Phase 4.5) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
-| **DEVELOPMENT_PHASES_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, added Phase 0.6b/0.6c/0.7/0.7c - **UPDATED V1.6** (Phase 0.7c complete: template enforcement automation) |
+| **DEVELOPMENT_PHASES_V1.7.md** | ✅ | v1.7 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, added Phase 4.5 - **UPDATED V1.7** (CRITICAL RESEARCH PRIORITIES section, Phase 4.5: Ensemble Architecture & Dynamic Weights Research) |
 | **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
 | **DEVELOPMENT_PHILOSOPHY_V1.1.md** | ✅ | v1.1 | `/docs/foundation/` | 0.7 | All phases | 🔴 Critical | Core development principles: TDD, Defense in Depth, DDD, Data-Driven Design, 10 sections (9 principles + anti-patterns) - **UPDATED V1.1** (added Section 10: Anti-Patterns to Avoid with 7 anti-patterns) |
@@ -311,6 +319,8 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **GITHUB_BRANCH_PROTECTION_CONFIG.md** | ✅ | v1.0 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **NEW** - Complete GitHub branch protection configuration (completes DEF-003) |
 | **PHASE_1_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1 | 🟡 High | **NEW** - Tracks deferred enhancements from Phase 1 (extended docstrings, pre-commit hooks, branch protection) |
 | **PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 1.5-4 | 🟡 High | **NEW** - Comprehensive property-based testing roadmap (74-91 tests deferred to Phases 1.5-4: database CRUD, strategy versioning, position lifecycle, async handling, ensemble predictions) |
+| **PHASE_4_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 4.5 | Phase 4.5 | 🔴 Critical | **NEW** - Comprehensive research task documentation (11 tasks: DEF-009 to DEF-019, strategies HIGHEST PRIORITY, models, edge detection) - ~2800 lines, 74-92 hour total effort |
+| **STRATEGIC_WORK_ROADMAP_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1-10 | All phases | 🔴 Critical | **NEW** - Master roadmap of 25 strategic tasks organized by category (5 categories, research dependencies documented, strategies #1 MOST IMPORTANT) - ~1500 lines |
 | **ENVIRONMENT_CHECKLIST_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0 | Phase 0 ✅ | 🔴 Critical | Windows 11 setup, Parts 1-7, dependencies verification (**FIXED** filename from V1.1 → V1.0) |
 | **CONSISTENCY_REVIEW.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Phase 0 consistency validation, all discrepancies fixed |
 | **FILENAME_VERSION_REPORT.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Filename-version consistency validation |

@@ -1,9 +1,24 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.12
-**Last Updated:** November 8, 2025
+**Version:** 2.13
+**Last Updated:** November 9, 2025
 **Status:** ✅ Current
+**Changes in v2.13:**
+- **STRATEGIC RESEARCH PRIORITIES - OPEN QUESTIONS:** Added Decisions #76-77/ADR-076-077 (Critical Architecture Research for Phase 4+)
+- **ADR-076: Dynamic Ensemble Weights Architecture (Phase 4.5 Research)** - Documents immutability vs performance tension for ensemble weights
+  - 3 architecture options: static weights, dynamic weights with separate storage, hybrid periodic rebalancing
+  - 4 research tasks (DEF-009 through DEF-012): backtest performance, weight calculation methods, version explosion analysis, versioning strategy
+  - Decision timeline: Research in Phase 4.5 (~40h), decide based on backtest data
+  - References model research needs per user requirement
+- **ADR-077: Strategy vs Method Separation (Phase 4.0 Research) - HIGHEST PRIORITY** - Documents ambiguous boundaries between strategies and position management
+  - 3 architecture options: strategies-only, strategy+method layers, hybrid (defer to Phase 4)
+  - 4 research tasks (DEF-013 through DEF-016 - CRITICAL PRIORITY): config taxonomy, A/B testing workflows, user customization patterns, version combinatorics
+  - Identifies boundary ambiguity (profit_lock_percentage in hedge_strategy - is this strategy or position management?)
+  - Decision timeline: Use strategies-only for Phase 1-3, research in Phase 4.0 (~30h), decide based on real-world usage data
+  - **Explicitly addresses user's requirement for deep strategy research (MOST IMPORTANT)**
+- Both ADRs document open questions requiring research before final architectural decisions
+- Defers complex architectural decisions until data available from earlier phases (data-driven approach)
 **Changes in v2.12:**
 - **MULTI-SOURCE WARNING GOVERNANCE:** Added Decision #75/ADR-075 (Multi-Source Warning Governance Architecture)
 - Establishes comprehensive governance across 3 validation sources: pytest (41 warnings), validate_docs (388 warnings), code quality tools (0 warnings)
@@ -4270,6 +4285,381 @@ This custom scan is **Python 3.14 compatible** and remains unchanged.
 - ✅ No SQL injection vulnerabilities (S608)
 
 **Reference:** `.git/hooks/pre-push`, `.github/workflows/ci.yml`, `pyproject.toml`, ADR-043 (Security Testing Integration)
+
+---
+
+## Decision #76/ADR-076: Dynamic Ensemble Weights Architecture (Phase 4.5 - Open Question)
+
+**Decision #76**
+**Phase:** 4.5 (Research Phase)
+**Status:** 🔵 Open Question - **RESEARCH REQUIRED**
+
+**Problem Statement:**
+
+Current ensemble configuration uses **STATIC weights** hardcoded in `probability_models.yaml`:
+```yaml
+ensemble:
+  models: [elo, regression, ml]
+  weights:
+    elo: "0.40"        # STATIC - never changes
+    regression: "0.35"  # STATIC - never changes
+    ml: "0.25"         # STATIC - never changes
+```
+
+This creates a **fundamental architectural tension**:
+
+1. **Versioning System Requires Immutability**: Model configs must be IMMUTABLE once deployed (v1.0 config never changes) for:
+   - Trade attribution (know EXACTLY which config generated each trade)
+   - A/B testing integrity (configs don't change mid-test)
+   - Audit trail (can reproduce any historical trade)
+
+2. **Performance Requires Dynamic Weights**: Ensemble weights SHOULD adapt based on model performance:
+   - If Elo model performs better this season → increase elo weight
+   - If regression underperforms → decrease regression weight
+   - Adaptive weights → better overall ensemble performance
+
+**Where does immutability END and mutability BEGIN?**
+
+**Option A: Static Weights (Current Implementation)**
+
+**Pros:**
+- ✅ Simple - no special logic needed
+- ✅ Preserves immutability completely
+- ✅ Easy to reason about - weights never change
+- ✅ No version explosion
+
+**Cons:**
+- ❌ Suboptimal performance - can't adapt to model performance changes
+- ❌ Manual rebalancing - requires human to create new version
+- ❌ Slow to respond - new version deployment takes time
+
+**Option B: Dynamic Weights with Separate Storage**
+
+Store weights in separate `ensemble_weight_history` table:
+```sql
+CREATE TABLE ensemble_weight_history (
+    weight_id SERIAL PRIMARY KEY,
+    ensemble_model_id INT REFERENCES probability_models(model_id),
+    elo_weight DECIMAL(5,4),
+    regression_weight DECIMAL(5,4),
+    ml_weight DECIMAL(5,4),
+    effective_date TIMESTAMP,
+    reason VARCHAR  -- "Performance-based adjustment"
+);
+```
+
+**Pros:**
+- ✅ Optimal performance - weights adapt to model performance
+- ✅ Preserves immutability - `probability_models.config` never changes
+- ✅ Trade attribution - snapshot weights at trade time
+- ✅ Complete audit trail - weight history table
+
+**Cons:**
+- ❌ More complex - need weight calculation logic
+- ❌ Harder to reason about - weights change over time
+- ❌ Version management - when do weights become "new version"?
+- ❌ Testing overhead - must test weight adaptation logic
+
+**Option C: Hybrid - Static with Periodic Rebalancing**
+
+Keep static weights but create new versions periodically (e.g., every month):
+- `ensemble_v1.0`: `{elo: 0.40, regression: 0.35, ml: 0.25}` (Oct 2025)
+- `ensemble_v1.1`: `{elo: 0.45, regression: 0.30, ml: 0.25}` (Nov 2025) - adjusted after 1 month data
+- `ensemble_v1.2`: `{elo: 0.43, regression: 0.32, ml: 0.25}` (Dec 2025)
+
+**Pros:**
+- ✅ Preserves immutability completely
+- ✅ Adapts to performance (just slower)
+- ✅ Clear version boundaries
+- ✅ Simple implementation
+
+**Cons:**
+- ❌ Manual process - requires human review
+- ❌ Slow adaptation - only rebalances periodically
+- ❌ Version proliferation - many versions over time
+
+**Research Tasks Required (Phase 4.5):**
+
+**DEF-009: Backtest Static vs Dynamic Performance (15-20h, 🟡 High Priority)**
+- Backtest Phase 2-3 data with static weights vs dynamic weights
+- Calculate performance difference (ROI, Sharpe ratio, max drawdown)
+- Quantify benefit: Is dynamic weighting worth the complexity?
+- Target: If <2% performance difference → use static (simpler)
+
+**DEF-010: Weight Calculation Methods Comparison (10-15h, 🟡 High Priority)**
+- Test 4 weight calculation methods:
+  - Sharpe-weighted (higher Sharpe → higher weight)
+  - Performance-weighted (better recent performance → higher weight)
+  - Kelly-weighted (optimal Kelly allocation)
+  - Bayesian updating (posterior probability weights)
+- Compare stability, responsiveness, computational cost
+- Recommendation: Which method balances performance vs stability?
+
+**DEF-011: Version Explosion Analysis (5-8h, 🟢 Medium Priority)**
+- Model version combinatorics: If ensemble weights are immutable, how many versions?
+- Scenario: 3 models × 4 weight updates/year = 12 ensemble versions/year
+- Over 3 years = 36 versions - is this manageable?
+- Compare vs dynamic weights (1 version, weight history table)
+
+**DEF-012: Ensemble Versioning Strategy Documentation (6-8h, 🟢 Medium Priority)**
+- Document final decision on ensemble weight architecture
+- Create implementation plan (database schema, code changes)
+- Update VERSIONING_GUIDE with ensemble patterns
+- Design trade attribution for ensemble trades
+
+**Decision Timeline:**
+- **Phase 4.0**: Document open question (✅ this ADR)
+- **Phase 4.5**: Conduct research (4 tasks above, ~40h total)
+- **Phase 4.5 Completion**: Make final decision based on research findings
+- **Phase 4.5+**: Implement chosen architecture
+
+**Alternatives Considered:**
+
+**1. Ignore the problem - always use static weights**
+- ❌ Leaves performance on the table
+- ❌ Requires manual rebalancing
+- ✅ Simplest implementation
+
+**2. Make ensemble configs mutable (violate immutability principle)**
+- ❌ Breaks trade attribution
+- ❌ Makes A/B testing unreliable
+- ❌ Violates core versioning principle
+
+**3. Don't use ensemble models - single model only**
+- ❌ Ensemble models typically outperform single models
+- ❌ Reduces robustness (single point of failure)
+- ❌ Misses diversification benefits
+
+**Current Recommendation:**
+**DEFER decision to Phase 4.5 pending research.** Use static weights for Phase 1-4 (simpler), gather performance data, then make informed decision in Phase 4.5 based on backtest results.
+
+**Documentation:**
+- Updated in PHASE_4_DEFERRED_TASKS_V1.0.md (4 research tasks)
+- Referenced in STRATEGIC_WORK_ROADMAP_V1.0.md (Task 1.5 marked ⚠️ PENDING ADR-076)
+- Will update VERSIONING_GUIDE after Phase 4.5 research
+
+**Related Requirements:**
+- REQ-MODEL-003: Ensemble Model Framework (Phase 4)
+- REQ-MODEL-006: Model Versioning System (Phase 0.5 - Complete)
+
+**Related ADRs:**
+- ADR-018: Immutable Versions Pattern (Phase 0.5 - foundational)
+- ADR-019: Strategy and Model Versioning (Phase 0.5)
+
+**References:**
+- `config/probability_models.yaml` (current static weights)
+- `docs/guides/VERSIONING_GUIDE_V1.0.md` (immutability principle)
+- `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` (research tasks DEF-009 through DEF-012)
+
+---
+
+## Decision #77/ADR-077: Strategy vs Method Separation (Phase 4 - Open Question) **HIGHEST PRIORITY RESEARCH**
+
+**Decision #77**
+**Phase:** 4.0 (Strategy Architecture Review)
+**Status:** 🔵 Open Question - **CRITICAL RESEARCH REQUIRED** (HIGHEST PRIORITY)
+
+**Problem Statement:**
+
+Current architecture separates **strategies** (Phase 1-3) from **methods** (Phase 4+):
+- **Strategy**: Entry/exit logic and timing rules (WHEN to trade, WHAT conditions)
+- **Method**: Complete trading system bundle (Strategy + Model + Position Management + Risk + Execution)
+
+**However, boundaries are AMBIGUOUS.** Example from `trade_strategies.yaml`:
+```yaml
+hedge_strategy:
+  hedge_sizing_method: partial_lock
+  partial_lock:
+    profit_lock_percentage: "0.70"  # Is this "strategy logic" or "position management"?
+```
+
+**The problem:** Strategies ALREADY contain position management parameters. Where does "strategy logic" END and "position management" BEGIN?
+
+**Critical Questions:**
+
+1. **Boundary Ambiguity**: Which config params are "strategy logic" vs "position management"?
+   - `profit_lock_percentage`: Strategy or position management?
+   - `trailing_stop_percentage`: Strategy or position management?
+   - `min_edge_threshold`: Strategy or edge detection?
+   - `kelly_fraction_override`: Strategy or risk management?
+
+2. **Real-World Usage**: After Phase 1-3, will users ACTUALLY need methods?
+   - Hypothesis: Most users will use 1-2 strategies, not customize 45 method combinations
+   - YAGNI violation: Designing for multi-user customization before Phase 1 proves need
+
+3. **Version Explosion Risk**: Methods multiply versions combinatorially:
+   - 5 strategies × 3 models × 3 risk profiles = **45 method versions**
+   - Each A/B test: comparing 45 methods vs 5 strategies (9x overhead)
+   - Is this complexity justified?
+
+4. **A/B Testing Workflows**: How do we test strategy vs model vs risk changes independently?
+   - Current design: Change strategy version, keep model/risk constant
+   - Method design: Change method version (but what changed? strategy? model? risk?)
+   - Harder to isolate what caused performance difference
+
+**Option A: Strategies-Only Architecture (Recommended)**
+
+**No separate "methods" table.** Strategies contain ALL config:
+```yaml
+halftime_entry_strategy_v1:
+  # Entry logic (clearly strategy)
+  min_halftime_lead: 10
+
+  # Position management (ambiguous - but keep in strategy)
+  profit_lock_percentage: "0.70"
+  trailing_stop_percentage: "0.05"
+
+  # Edge thresholds (ambiguous - but keep in strategy)
+  min_edge_threshold: "0.08"
+
+  # Risk management (ambiguous - but keep in strategy)
+  kelly_fraction_override: "0.25"
+```
+
+**Pros:**
+- ✅ **Simpler** - one config layer instead of two
+- ✅ **Clearer boundaries** - everything in one place
+- ✅ **Easier A/B testing** - compare strategies directly
+- ✅ **Less version explosion** - 5 strategy versions vs 45 method versions
+- ✅ **YAGNI compliant** - don't build multi-user customization until proven need
+
+**Cons:**
+- ❌ **Less flexible** - can't mix-and-match strategy + risk + model independently
+- ❌ **Harder user customization** - must create new strategy version to change risk profile
+- ❌ **Some duplication** - same risk profile repeated across strategies
+
+**Option B: Strategy + Method Architecture (Current Plan)**
+
+Separate layers:
+```yaml
+# strategies table - ONLY entry/exit logic
+strategies:
+  halftime_entry_v1:
+    min_halftime_lead: 10
+
+# methods table - BUNDLES strategy + model + position management + risk
+methods:
+  conservative_halftime_v1:
+    strategy_id: halftime_entry_v1
+    model_id: ensemble_v1
+    position_management_id: conservative_pm_v1
+    risk_profile_id: conservative_risk_v1
+```
+
+**Pros:**
+- ✅ **Flexible** - mix-and-match components independently
+- ✅ **Better user customization** - users create methods from strategies + risk profiles
+- ✅ **DRY principle** - risk profiles defined once, reused across strategies
+
+**Cons:**
+- ❌ **More complex** - 4 config layers instead of 1
+- ❌ **Version explosion** - combinatorial growth (5 × 3 × 3 = 45 versions)
+- ❌ **Ambiguous boundaries** - which params go in strategies vs position_management?
+- ❌ **Harder A/B testing** - must isolate which component caused performance change
+- ❌ **Premature abstraction** - building for multi-user customization before need proven
+
+**Option C: Hybrid - Strategies Now, Methods Later**
+
+**DEFER methods implementation to Phase 4.**
+- **Phase 1-3**: Use strategies-only architecture (simpler)
+- **Phase 1-3**: Gather real-world usage data
+- **Phase 4**: Re-evaluate based on actual user needs
+- **Phase 4+**: Add methods IF real-world data shows need
+
+**Pros:**
+- ✅ **Pragmatic** - start simple, add complexity only if needed
+- ✅ **Data-driven** - make decision based on real usage, not speculation
+- ✅ **Reversible** - can add methods layer later if needed
+- ✅ **Lower risk** - avoids building unused abstraction
+
+**Research Tasks Required (Phase 4.0):** **HIGHEST PRIORITY PER USER**
+
+**DEF-013: Strategy Config Taxonomy (8-10h, 🔴 Critical Priority)**
+- **Categorize ALL strategy config params** from `trade_strategies.yaml`:
+  - Which params are pure "strategy logic" (entry/exit rules)?
+  - Which params are "position management" (profit targets, stop losses)?
+  - Which params are "risk management" (Kelly fractions, position sizing)?
+  - Which params are "edge detection" (min_edge thresholds)?
+- Create clear taxonomy: 4 categories with explicit boundary definitions
+- **Deliverable:** Decision matrix for where each param type belongs
+
+**DEF-014: A/B Testing Workflows Validation (10-12h, 🔴 Critical Priority)**
+- Design A/B test scenarios for both architectures:
+  - **Strategies-only**: How to test "same strategy, different risk profile"?
+  - **Methods**: How to isolate which component caused performance change?
+- Validate workflow complexity:
+  - How many steps to change risk profile in each architecture?
+  - How many database queries to retrieve trade attribution?
+- **Deliverable:** Workflow comparison report + recommendation
+
+**DEF-015: User Customization Patterns Research (6-8h, 🟡 High Priority)**
+- Research prediction market trading patterns:
+  - Do traders typically use 1-2 strategies or 10+ strategies?
+  - Do traders customize risk profiles per-strategy or globally?
+  - What's the typical method/strategy ratio in similar systems?
+- Survey analogous systems (crypto trading bots, stock trading platforms)
+- **Deliverable:** User customization requirements document
+
+**DEF-016: Version Combinatorics Modeling (4-6h, 🟡 High Priority)**
+- Model version growth over 3 years for both architectures:
+  - **Strategies-only**: 5 strategies × 4 versions each = 20 total versions
+  - **Methods**: 5 strategies × 3 models × 3 risks = 45 combinations × 4 versions = 180 versions
+- Calculate overhead: database size, A/B test complexity, trade attribution queries
+- **Deliverable:** Version growth forecast + complexity analysis
+
+**Decision Timeline:**
+- **Phase 1-3**: Use strategies-only architecture (✅ already implemented)
+- **Phase 4.0**: Conduct research (4 tasks above, ~30h total) **HIGHEST PRIORITY**
+- **Phase 4.0 Completion**: Make final decision based on:
+  - Real-world usage data from Phase 1-3
+  - Research findings from DEF-013 through DEF-016
+  - User feedback on strategy customization needs
+- **Phase 4.0+**: Implement chosen architecture
+
+**Alternatives Considered:**
+
+**1. Build methods layer now (original plan)**
+- ❌ Premature abstraction - don't know if users need it
+- ❌ High complexity cost upfront
+- ❌ Harder to reverse if wrong choice
+
+**2. Never implement methods - strategies-only forever**
+- ✅ Simplest
+- ❌ May limit power users if customization need proven
+- ❌ May require strategy duplication if risk profiles vary
+
+**3. Make strategies mutable - adjust params without new versions**
+- ❌ Violates immutability principle (ADR-018)
+- ❌ Breaks trade attribution
+- ❌ Makes A/B testing unreliable
+
+**Current Recommendation:**
+**DEFER methods implementation to Phase 4.** Use strategies-only for Phase 1-3, gather real-world usage data, then make informed decision in Phase 4 based on:
+1. Do users actually need method-level customization?
+2. Can we define clear boundaries for strategy vs position management params?
+3. Is the version explosion justified by flexibility gains?
+
+**If research shows methods are NOT needed → stay with strategies-only (YAGNI principle).**
+**If research shows methods ARE needed → implement in Phase 4+ with clear boundaries.**
+
+**Documentation:**
+- Updated in PHASE_4_DEFERRED_TASKS_V1.0.md (4 research tasks - **HIGHEST PRIORITY**)
+- Referenced in STRATEGIC_WORK_ROADMAP_V1.0.md (Task 3.X marked ⚠️ PENDING ADR-077)
+- Will update VERSIONING_GUIDE and USER_CUSTOMIZATION_STRATEGY after Phase 4 research
+
+**Related Requirements:**
+- REQ-STRATEGY-001: Strategy Definition System (Phase 0.5 - Complete)
+- REQ-STRATEGY-005: Method Templates (Phase 4 - Deferred)
+
+**Related ADRs:**
+- ADR-018: Immutable Versions Pattern (Phase 0.5 - foundational, cannot violate)
+- ADR-019: Strategy and Model Versioning (Phase 0.5)
+
+**References:**
+- `config/trade_strategies.yaml` (hedge_strategy.profit_lock_percentage boundary ambiguity)
+- `docs/supplementary/USER_CUSTOMIZATION_STRATEGY_V1.0.md` (methods evolution plan)
+- `docs/guides/VERSIONING_GUIDE_V1.0.md` (immutability principle)
+- `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` (research tasks DEF-013 through DEF-016)
 
 ---
 
