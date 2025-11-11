@@ -1,9 +1,31 @@
 # Database Schema Summary
 
 ---
-**Version:** 1.7
-**Last Updated:** 2025-10-24
-**Status:** ✅ Current - Migrations 001-010 Applied
+**Version:** 1.8
+**Last Updated:** 2025-11-09
+**Status:** ✅ Current - Analytics Infrastructure Added
+**Changes in v1.8:**
+- **NEW SECTION 8**: Performance Tracking & Analytics - 7 new tables + 2 materialized views
+- **NEW**: performance_metrics table - Unified tracking for strategies, models, methods, edges, ensembles
+  - Multi-entity support with time-series aggregation (trade → hourly → daily → monthly → yearly → all_time)
+  - Historical tracking with retention strategy: Hot (0-18mo), Warm (18-42mo), Cold (42+ mo)
+  - Dual data sources: Live trading + backtesting/validation
+  - Supports 16 metric types (ROI, win rate, Sharpe ratio, accuracy, Brier score, calibration ECE, etc.)
+- **NEW**: evaluation_runs table - Model validation/backtesting tracking
+- **NEW**: predictions table - **UNIFIED** table for individual + ensemble predictions (consolidated design)
+  - Replaces separate model_predictions and ensemble_predictions tables
+  - Individual model predictions (Phase 1.5-2): is_ensemble=FALSE, ensemble fields NULL
+  - Ensemble member predictions (Phase 4+): is_ensemble=TRUE, ensemble fields populated
+  - Design rationale: Simpler schema, unified calibration pipeline, easier comparisons, less maintenance
+- **NEW**: ab_test_groups table (Phase 9 placeholder) - A/B testing configuration
+- **NEW**: ab_test_results table (Phase 9 placeholder) - A/B test outcomes per trade
+- **NEW**: performance_metrics_archive table (Phase 2+ cold storage) - Archival table for 42+ month old data
+- **NEW SECTION 9**: Materialized Views for Analytics
+  - strategy_performance_summary (refreshed hourly) - Pre-aggregated strategy metrics for dashboard (<50ms queries)
+  - model_calibration_summary (refreshed daily) - Pre-aggregated model calibration for validation dashboard
+- **Implementation Plan**: Phase 1.5-2 (core tracking), Phase 6-7 (dashboard integration), Phase 9 (A/B testing)
+- Updated table count: 33 tables (27 operational + 6 analytics/ML) + 2 materialized views
+- Addresses user requirements: (1) Detailed historical performance tracking with database tables, (2) Unified predictions table for simpler schema
 **Changes in v1.7:**
 - **CRITICAL**: Completed SCD Type 2 implementation - All tables now have `row_end_ts` (migrations 005, 007)
 - **CRITICAL**: Markets table PRIMARY KEY refactored - Surrogate key (id SERIAL) replaces business key (migration 009)
@@ -1111,6 +1133,757 @@ ORDER BY metrics->>'accuracy' DESC;
 - **Phase 9**: Implement XGBoost/LSTM → Create these 4 tables
 - **Phase 9**: Populate features_historical with DVOA, EPA, SP+
 - **Phase 9**: Train first ML model using training_datasets
+
+### 8. Performance Tracking & Analytics (Phase 1.5-2, 6-7, 9 - NEW in v1.8)
+
+**Note:** These tables support comprehensive performance tracking, model validation, and A/B testing infrastructure. Unlike ML Infrastructure tables (Phase 9), these tables are implemented incrementally:
+- **Phase 1.5-2**: Core performance_metrics + evaluation_runs (model validation)
+- **Phase 6-7**: Enhanced metrics collection, dashboard integration
+- **Phase 9**: A/B testing infrastructure, ensemble tracking
+
+**Why Needed:**
+- **Live Performance Tracking**: Real-time ROI, win rate, Sharpe ratio for strategies/models
+- **Model Validation**: Backtesting with accuracy, calibration (Brier score, ECE)
+- **Historical Analysis**: Time-series performance with retention strategy (hot/warm/cold storage)
+- **A/B Testing**: Statistical comparison of strategy/model versions
+- **Reporting**: Dashboard metrics, performance reports, alerts
+
+#### performance_metrics (Phase 1.5-2)
+```sql
+-- Core performance tracking table supporting:
+-- 1. LIVE trading data (updated every trade)
+-- 2. MODEL VALIDATION data (from backtesting)
+-- 3. Historical time-series tracking
+-- 4. Multi-entity tracking (strategies, models, methods, edges, ensembles)
+
+CREATE TABLE performance_metrics (
+    metric_id SERIAL PRIMARY KEY,
+
+    -- Entity Reference (what we're measuring)
+    entity_type VARCHAR NOT NULL,           -- 'strategy', 'model', 'method', 'edge', 'ensemble'
+    entity_id INT NOT NULL,                 -- strategy_id, model_id, method_id, edge_id
+    entity_version VARCHAR,                 -- Version string (e.g., 'v1.0', 'v2.3')
+
+    -- Metric Details
+    metric_name VARCHAR NOT NULL,           -- 'roi', 'win_rate', 'sharpe_ratio', 'accuracy', 'brier_score', 'calibration_ece'
+    metric_value DECIMAL(12,6),             -- The measured value
+
+    -- Time-Series Tracking (USER'S CONCERN: Historical tracking)
+    aggregation_period VARCHAR NOT NULL,    -- 'trade', 'hourly', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'all_time'
+    period_start TIMESTAMP,                 -- Start of aggregation period
+    period_end TIMESTAMP,                   -- End of aggregation period
+    sample_size INT,                        -- Number of data points in aggregation
+
+    -- Statistical Context
+    confidence_interval_lower DECIMAL(12,6), -- Lower bound (95% CI)
+    confidence_interval_upper DECIMAL(12,6), -- Upper bound (95% CI)
+    standard_deviation DECIMAL(12,6),       -- Volatility measure
+    standard_error DECIMAL(12,6),           -- Standard error of mean
+
+    -- Data Source (live vs validation)
+    data_source VARCHAR NOT NULL,           -- 'live_trading', 'backtesting', 'paper_trading'
+    evaluation_run_id INT,                  -- FK to evaluation_runs (if from backtesting)
+
+    -- Retention Strategy (USER'S CONCERN: Historical storage)
+    storage_tier VARCHAR DEFAULT 'hot',     -- 'hot', 'warm', 'cold'
+    archived_at TIMESTAMP,                  -- When moved to warm/cold storage
+    archival_reason VARCHAR,                -- 'age_threshold', 'performance_degraded', 'manual'
+
+    -- Metadata
+    timestamp TIMESTAMP DEFAULT NOW() NOT NULL,
+    metadata JSONB,                         -- Flexible additional context
+
+    -- Constraints
+    CHECK (entity_type IN ('strategy', 'model', 'method', 'edge', 'ensemble')),
+    CHECK (aggregation_period IN ('trade', 'hourly', 'daily', 'weekly', 'monthly', 'quarterly', 'yearly', 'all_time')),
+    CHECK (storage_tier IN ('hot', 'warm', 'cold')),
+    CHECK (data_source IN ('live_trading', 'backtesting', 'paper_trading'))
+);
+
+-- Indexes for time-series queries
+CREATE INDEX idx_performance_timeseries ON performance_metrics(entity_type, entity_id, metric_name, aggregation_period, timestamp DESC);
+CREATE INDEX idx_performance_entity ON performance_metrics(entity_type, entity_id);
+CREATE INDEX idx_performance_metric_name ON performance_metrics(metric_name);
+CREATE INDEX idx_performance_period ON performance_metrics(period_start, period_end);
+CREATE INDEX idx_performance_data_source ON performance_metrics(data_source);
+CREATE INDEX idx_performance_evaluation_run ON performance_metrics(evaluation_run_id) WHERE evaluation_run_id IS NOT NULL;
+CREATE INDEX idx_performance_archived ON performance_metrics(archived_at) WHERE archived_at IS NOT NULL;
+CREATE INDEX idx_performance_storage_tier ON performance_metrics(storage_tier);
+```
+
+**Purpose:** Unified performance tracking for all entity types with historical time-series data
+
+**Key Features:**
+- **Multi-Entity Support**: Tracks strategies, models, methods, edges, ensembles
+- **Time-Series Aggregation**: 8 aggregation levels from trade-level to all-time
+- **Statistical Context**: Confidence intervals, standard deviation, standard error
+- **Retention Strategy**: Hot (0-18 months), Warm (18-42 months), Cold (42+ months)
+- **Dual Data Sources**: Live trading + backtesting/validation
+
+**Retention Policy (REQ-ANALYTICS-004):**
+```sql
+-- HOT STORAGE (0-18 months)
+-- - All aggregation levels available
+-- - Stored in PostgreSQL main tables
+-- - Query performance: <100ms
+-- - Auto-archive after 18 months
+
+-- WARM STORAGE (18-42 months)
+-- - Daily+ aggregation only (hourly/trade archived)
+-- - Stored in PostgreSQL compressed tables
+-- - Query performance: <500ms
+-- - Auto-archive after 42 months
+
+-- COLD STORAGE (42+ months)
+-- - Monthly+ aggregation only (daily archived)
+-- - Stored in S3/Parquet format
+-- - Query performance: <5s (acceptable for historical analysis)
+-- - Retained indefinitely for compliance
+```
+
+**Metric Definitions:**
+```sql
+-- Trading Performance Metrics (LIVE DATA from trades/positions)
+-- 'roi'              - Return on Investment (%)
+-- 'win_rate'         - Percentage of profitable trades
+-- 'sharpe_ratio'     - Risk-adjusted return
+-- 'sortino_ratio'    - Downside risk-adjusted return
+-- 'max_drawdown'     - Maximum peak-to-trough decline
+-- 'avg_trade_size'   - Average position size
+-- 'total_pnl'        - Total profit/loss
+-- 'unrealized_pnl'   - Current open position P&L
+
+-- Model Validation Metrics (BACKTESTING DATA from evaluation_runs)
+-- 'accuracy'         - Classification accuracy
+-- 'precision'        - Precision score
+-- 'recall'           - Recall score
+-- 'f1_score'         - Harmonic mean of precision/recall
+-- 'auc_roc'          - Area under ROC curve
+-- 'brier_score'      - Mean squared error for probabilities (0=perfect, 1=worst)
+-- 'calibration_ece'  - Expected Calibration Error (how well probabilities match reality)
+-- 'log_loss'         - Logarithmic loss (penalizes confident incorrect predictions)
+```
+
+**Example Queries:**
+```sql
+-- Get live ROI trend for strategy v1.0 (last 30 days, daily aggregation)
+SELECT
+    period_start,
+    metric_value as roi,
+    confidence_interval_lower,
+    confidence_interval_upper,
+    sample_size
+FROM performance_metrics
+WHERE entity_type = 'strategy'
+  AND entity_id = 1
+  AND entity_version = 'v1.0'
+  AND metric_name = 'roi'
+  AND aggregation_period = 'daily'
+  AND data_source = 'live_trading'
+  AND period_start >= NOW() - INTERVAL '30 days'
+ORDER BY period_start DESC;
+
+-- Get model calibration metrics from latest backtesting run
+SELECT
+    metric_name,
+    metric_value,
+    sample_size,
+    standard_error
+FROM performance_metrics
+WHERE entity_type = 'model'
+  AND entity_id = 2
+  AND metric_name IN ('accuracy', 'brier_score', 'calibration_ece')
+  AND data_source = 'backtesting'
+  AND evaluation_run_id = 42
+ORDER BY metric_name;
+
+-- Archive old trade-level metrics to warm storage
+UPDATE performance_metrics
+SET storage_tier = 'warm', archived_at = NOW(), archival_reason = 'age_threshold'
+WHERE aggregation_period = 'trade'
+  AND period_start < NOW() - INTERVAL '18 months'
+  AND storage_tier = 'hot';
+```
+
+#### evaluation_runs (Phase 1.5-2)
+```sql
+-- Track model validation/backtesting runs
+-- Links to performance_metrics for detailed metrics
+-- Links to model_predictions for prediction-level analysis
+
+CREATE TABLE evaluation_runs (
+    run_id SERIAL PRIMARY KEY,
+
+    -- Model Reference
+    model_id INT NOT NULL REFERENCES probability_models(model_id),
+    model_version VARCHAR NOT NULL,         -- Version string (e.g., 'v1.0')
+
+    -- Dataset Details
+    dataset_name VARCHAR NOT NULL,          -- 'nfl_2024_q4_holdout', 'nba_2023_validation'
+    sport VARCHAR NOT NULL,                 -- 'nfl', 'nba', 'mlb'
+    start_date TIMESTAMP NOT NULL,          -- Evaluation period start
+    end_date TIMESTAMP NOT NULL,            -- Evaluation period end
+    sample_count INT NOT NULL,              -- Number of predictions evaluated
+
+    -- Run Details
+    run_type VARCHAR NOT NULL,              -- 'backtesting', 'cross_validation', 'holdout_validation'
+    run_started_at TIMESTAMP NOT NULL,
+    run_completed_at TIMESTAMP,
+    run_duration_seconds INT,
+
+    -- Evaluation Configuration
+    evaluation_config JSONB,                -- Holdout %, cross-validation folds, etc.
+
+    -- Summary Metrics (denormalized for quick access)
+    accuracy DECIMAL(6,4),                  -- Overall accuracy
+    brier_score DECIMAL(6,4),               -- Mean squared error for probabilities
+    calibration_ece DECIMAL(6,4),           -- Expected Calibration Error
+    log_loss DECIMAL(8,4),                  -- Logarithmic loss
+
+    -- Status
+    status VARCHAR DEFAULT 'running',       -- 'running', 'completed', 'failed', 'cancelled'
+    error_message TEXT,                     -- If status = 'failed'
+
+    -- Metadata
+    notes TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    created_by VARCHAR,
+
+    -- Constraints
+    CHECK (run_type IN ('backtesting', 'cross_validation', 'holdout_validation')),
+    CHECK (status IN ('running', 'completed', 'failed', 'cancelled'))
+);
+
+CREATE INDEX idx_evaluation_runs_model ON evaluation_runs(model_id, model_version);
+CREATE INDEX idx_evaluation_runs_sport ON evaluation_runs(sport);
+CREATE INDEX idx_evaluation_runs_dates ON evaluation_runs(start_date, end_date);
+CREATE INDEX idx_evaluation_runs_status ON evaluation_runs(status);
+CREATE INDEX idx_evaluation_runs_started ON evaluation_runs(run_started_at DESC);
+```
+
+**Purpose:** Track model validation runs with summary metrics
+
+**Key Features:**
+- **Validation Types**: Backtesting, cross-validation, holdout validation
+- **Dataset Tracking**: Links to specific evaluation datasets
+- **Summary Metrics**: Quick access to key calibration metrics
+- **Run Lifecycle**: Track start/end times, errors, status
+
+**Integration:**
+```python
+# Example: Run model validation
+run = create_evaluation_run(
+    model_id=2,
+    model_version='v1.0',
+    dataset_name='nfl_2024_q4_holdout',
+    sport='nfl',
+    start_date='2024-10-01',
+    end_date='2024-12-31',
+    run_type='backtesting'
+)
+
+# Make predictions on holdout set
+for game in holdout_games:
+    prediction = model.predict(game)
+    create_model_prediction(run_id=run.run_id, game=game, prediction=prediction)
+
+# Calculate metrics and store in performance_metrics
+metrics = calculate_calibration_metrics(run_id=run.run_id)
+for metric_name, value in metrics.items():
+    create_performance_metric(
+        entity_type='model',
+        entity_id=2,
+        metric_name=metric_name,
+        metric_value=value,
+        data_source='backtesting',
+        evaluation_run_id=run.run_id
+    )
+
+# Update evaluation_runs with summary
+update_evaluation_run(run_id=run.run_id, status='completed', accuracy=0.72, brier_score=0.18)
+```
+
+#### predictions (Phase 1.5-2, Phase 4+ for ensembles)
+```sql
+-- UNIFIED TABLE: Store predictions for both individual models and ensemble members
+-- Consolidates model_predictions and ensemble_predictions into single schema
+-- Supports calibration analysis, ensemble member tracking, and weight optimization
+-- NULL ensemble fields for individual model predictions (Phase 1.5-2)
+-- Populated ensemble fields for ensemble member predictions (Phase 4+)
+
+CREATE TABLE predictions (
+    prediction_id SERIAL PRIMARY KEY,
+
+    -- Evaluation Run Reference
+    evaluation_run_id INT NOT NULL REFERENCES evaluation_runs(run_id),
+    model_id INT NOT NULL REFERENCES probability_models(model_id), -- The predicting model
+
+    -- Prediction Details
+    market_id VARCHAR NOT NULL,             -- Which market was predicted
+    event_id VARCHAR NOT NULL,              -- Which event was predicted
+    prediction_timestamp TIMESTAMP NOT NULL, -- When prediction was made
+
+    -- Predicted Probabilities (ALL predictions)
+    predicted_prob DECIMAL(6,4) NOT NULL,   -- Model's predicted win probability
+    market_price DECIMAL(10,4),             -- Market price at prediction time (for comparison)
+    edge DECIMAL(6,4),                      -- predicted_prob - market_price
+
+    -- Actual Outcome (ALL predictions)
+    actual_outcome BOOLEAN,                 -- TRUE = win, FALSE = loss, NULL = not yet resolved
+    settlement_timestamp TIMESTAMP,         -- When outcome was resolved
+
+    -- Calibration Bins (for ECE calculation - ALL predictions)
+    probability_bin VARCHAR,                -- '0.0-0.1', '0.1-0.2', ..., '0.9-1.0'
+
+    -- Prediction Metadata (ALL predictions)
+    confidence DECIMAL(6,4),                -- Model confidence score
+    features_used JSONB,                    -- Features used for this prediction (Phase 9+)
+
+    -- Error Analysis (ALL predictions after settlement)
+    prediction_error DECIMAL(6,4),          -- |predicted_prob - actual_outcome|
+    squared_error DECIMAL(8,6),             -- (predicted_prob - actual_outcome)^2 (Brier component)
+
+    -- ENSEMBLE-SPECIFIC FIELDS (Phase 4+ only, NULL for individual models)
+    is_ensemble BOOLEAN DEFAULT FALSE,      -- TRUE if this is an ensemble member prediction
+    ensemble_model_id INT REFERENCES probability_models(model_id), -- Parent ensemble (if is_ensemble=TRUE)
+    member_weight DECIMAL(6,4),             -- Weight in ensemble (if is_ensemble=TRUE)
+    ensemble_predicted_prob DECIMAL(6,4),   -- Final ensemble prediction (if is_ensemble=TRUE)
+    ensemble_error DECIMAL(6,4),            -- |ensemble_predicted_prob - actual_outcome| (if is_ensemble=TRUE)
+    improved_ensemble BOOLEAN,              -- Did member improve ensemble? (if is_ensemble=TRUE)
+
+    -- Metadata (ALL predictions)
+    metadata JSONB,
+
+    -- Constraints
+    CHECK (
+        -- If is_ensemble=TRUE, ensemble fields must be populated
+        (is_ensemble = FALSE) OR
+        (is_ensemble = TRUE AND ensemble_model_id IS NOT NULL AND member_weight IS NOT NULL)
+    )
+);
+
+-- Indexes for ALL predictions (individual + ensemble)
+CREATE INDEX idx_predictions_run ON predictions(evaluation_run_id);
+CREATE INDEX idx_predictions_model ON predictions(model_id);
+CREATE INDEX idx_predictions_market ON predictions(market_id);
+CREATE INDEX idx_predictions_outcome ON predictions(actual_outcome) WHERE actual_outcome IS NOT NULL;
+CREATE INDEX idx_predictions_bin ON predictions(probability_bin);
+CREATE INDEX idx_predictions_timestamp ON predictions(prediction_timestamp DESC);
+
+-- Indexes for ENSEMBLE predictions only
+CREATE INDEX idx_predictions_ensemble ON predictions(ensemble_model_id) WHERE ensemble_model_id IS NOT NULL;
+CREATE INDEX idx_predictions_is_ensemble ON predictions(is_ensemble) WHERE is_ensemble = TRUE;
+```
+
+**Purpose:** Unified storage for all predictions (individual models + ensemble members)
+
+**Key Features:**
+- **Single Schema**: Consolidates model_predictions and ensemble_predictions
+- **Phase Support**: Individual models (Phase 1.5-2), ensembles (Phase 4+)
+- **Calibration Analysis**: Brier score, ECE, reliability diagrams
+- **Ensemble Tracking**: Member weights, ensemble agreement/disagreement analysis
+- **Sparse Columns**: Ensemble fields NULL for 90%+ rows (individual predictions)
+
+**Design Rationale:**
+- **Simpler Schema**: One table vs two separate tables
+- **Unified Calibration**: Single pipeline for both individual and ensemble predictions
+- **Easier Comparisons**: Can compare individual vs ensemble performance in one query
+- **Maintenance**: Less code duplication, fewer migration scripts
+
+**Calibration Analysis Queries (Individual Models - Phase 1.5-2):**
+```sql
+-- Calculate Brier score for evaluation run (individual model)
+SELECT
+    AVG(squared_error) as brier_score,
+    COUNT(*) as sample_size
+FROM predictions
+WHERE evaluation_run_id = 42
+  AND is_ensemble = FALSE  -- Individual model predictions only
+  AND actual_outcome IS NOT NULL;
+
+-- Calculate Expected Calibration Error (ECE)
+SELECT
+    probability_bin,
+    AVG(predicted_prob) as avg_predicted_prob,
+    AVG(CAST(actual_outcome AS INT)) as avg_actual_outcome,
+    ABS(AVG(predicted_prob) - AVG(CAST(actual_outcome AS INT))) as calibration_error,
+    COUNT(*) as bin_count
+FROM predictions
+WHERE evaluation_run_id = 42
+  AND is_ensemble = FALSE
+  AND actual_outcome IS NOT NULL
+GROUP BY probability_bin
+ORDER BY probability_bin;
+
+-- Identify worst predictions (highest errors)
+SELECT
+    market_id,
+    predicted_prob,
+    actual_outcome,
+    prediction_error,
+    confidence
+FROM predictions
+WHERE evaluation_run_id = 42
+  AND is_ensemble = FALSE
+  AND actual_outcome IS NOT NULL
+ORDER BY prediction_error DESC
+LIMIT 10;
+```
+
+**Ensemble Analysis Queries (Phase 4+):**
+```sql
+-- Compare ensemble vs member predictions for same market
+SELECT
+    p.market_id,
+    p.prediction_timestamp,
+
+    -- Individual member predictions
+    p.model_id as member_model_id,
+    p.predicted_prob as member_predicted_prob,
+    p.member_weight,
+
+    -- Ensemble prediction
+    p.ensemble_model_id,
+    p.ensemble_predicted_prob,
+
+    -- Actual outcome
+    p.actual_outcome,
+
+    -- Error comparison
+    p.prediction_error as member_error,
+    p.ensemble_error,
+    p.improved_ensemble
+FROM predictions p
+WHERE p.is_ensemble = TRUE
+  AND p.market_id = 'KALSHI-MARKET-NFL-2024-CHI-GB-H2'
+ORDER BY p.member_weight DESC;
+
+-- Identify best/worst ensemble members
+SELECT
+    p.model_id as member_model_id,
+    m.model_name,
+    AVG(p.member_weight) as avg_weight,
+    AVG(p.prediction_error) as avg_member_error,
+    AVG(p.ensemble_error) as avg_ensemble_error,
+    COUNT(*) FILTER (WHERE p.improved_ensemble = TRUE) as improvements_count,
+    COUNT(*) FILTER (WHERE p.improved_ensemble = FALSE) as degradations_count,
+    COUNT(*) as total_predictions
+FROM predictions p
+JOIN probability_models m ON p.model_id = m.model_id
+WHERE p.is_ensemble = TRUE
+  AND p.ensemble_model_id = 7  -- Specific ensemble
+  AND p.actual_outcome IS NOT NULL
+GROUP BY p.model_id, m.model_name
+ORDER BY avg_member_error ASC;
+
+-- Ensemble agreement analysis (how much do members disagree?)
+SELECT
+    p.market_id,
+    p.ensemble_predicted_prob,
+    STDDEV(p.predicted_prob) as member_disagreement,
+    MAX(p.predicted_prob) - MIN(p.predicted_prob) as member_range,
+    COUNT(*) as member_count
+FROM predictions p
+WHERE p.is_ensemble = TRUE
+  AND p.ensemble_model_id = 7
+GROUP BY p.market_id, p.ensemble_predicted_prob
+HAVING STDDEV(p.predicted_prob) > 0.10  -- High disagreement (>10% stddev)
+ORDER BY member_disagreement DESC;
+```
+
+#### ab_test_groups (Phase 9 - PLACEHOLDER)
+```sql
+-- Define A/B test configurations for strategy/model comparison
+-- Supports randomized controlled trials
+
+CREATE TABLE ab_test_groups (
+    test_id SERIAL PRIMARY KEY,
+
+    -- Test Configuration
+    test_name VARCHAR NOT NULL UNIQUE,      -- 'conservative_vs_aggressive_nfl'
+    test_type VARCHAR NOT NULL,             -- 'strategy_comparison', 'model_comparison', 'method_comparison'
+    description TEXT,
+
+    -- Entities Being Tested
+    control_entity_type VARCHAR NOT NULL,   -- 'strategy', 'model', 'method'
+    control_entity_id INT NOT NULL,         -- ID of control group entity
+    treatment_entity_type VARCHAR NOT NULL,
+    treatment_entity_id INT NOT NULL,       -- ID of treatment group entity
+
+    -- Test Parameters
+    allocation_ratio DECIMAL(4,2) DEFAULT 0.5,  -- 0.5 = 50/50 split
+    min_sample_size INT NOT NULL,           -- Minimum samples for statistical significance
+    confidence_level DECIMAL(4,2) DEFAULT 0.95, -- 95% confidence level
+
+    -- Test Window
+    start_date TIMESTAMP NOT NULL,
+    end_date TIMESTAMP,
+
+    -- Status
+    status VARCHAR DEFAULT 'draft',         -- 'draft', 'running', 'completed', 'stopped_early'
+    stopped_reason VARCHAR,                 -- 'significant_difference', 'no_difference', 'safety_concern'
+
+    -- Results (denormalized for quick access)
+    control_roi DECIMAL(10,4),
+    treatment_roi DECIMAL(10,4),
+    roi_difference DECIMAL(10,4),          -- treatment - control
+    p_value DECIMAL(8,6),                  -- Statistical significance
+    winner VARCHAR,                        -- 'control', 'treatment', 'no_difference'
+
+    -- Metadata
+    created_at TIMESTAMP DEFAULT NOW(),
+    created_by VARCHAR,
+    notes TEXT,
+
+    CHECK (test_type IN ('strategy_comparison', 'model_comparison', 'method_comparison')),
+    CHECK (status IN ('draft', 'running', 'completed', 'stopped_early')),
+    CHECK (allocation_ratio >= 0 AND allocation_ratio <= 1)
+);
+
+CREATE INDEX idx_ab_test_groups_status ON ab_test_groups(status);
+CREATE INDEX idx_ab_test_groups_dates ON ab_test_groups(start_date, end_date);
+CREATE INDEX idx_ab_test_groups_control ON ab_test_groups(control_entity_type, control_entity_id);
+CREATE INDEX idx_ab_test_groups_treatment ON ab_test_groups(treatment_entity_type, treatment_entity_id);
+```
+
+**Purpose:** Configure A/B tests for strategy/model comparison
+
+**Phase 9 Implementation**
+
+#### ab_test_results (Phase 9 - PLACEHOLDER)
+```sql
+-- Store per-trade results for A/B tests
+-- Links trades to test groups for statistical analysis
+
+CREATE TABLE ab_test_results (
+    result_id SERIAL PRIMARY KEY,
+
+    -- Test Reference
+    test_id INT NOT NULL REFERENCES ab_test_groups(test_id),
+
+    -- Trade Reference
+    trade_id INT NOT NULL REFERENCES trades(trade_id),
+
+    -- Group Assignment
+    assignment VARCHAR NOT NULL,            -- 'control', 'treatment'
+    assignment_timestamp TIMESTAMP NOT NULL,
+
+    -- Trade Outcome
+    roi DECIMAL(10,4),                      -- Return on investment
+    pnl DECIMAL(12,2),                      -- Profit/loss
+    trade_duration_hours INT,               -- How long position was held
+
+    -- Metadata
+    metadata JSONB
+);
+
+CREATE INDEX idx_ab_test_results_test ON ab_test_results(test_id);
+CREATE INDEX idx_ab_test_results_trade ON ab_test_results(trade_id);
+CREATE INDEX idx_ab_test_results_assignment ON ab_test_results(assignment);
+```
+
+**Purpose:** Link trades to A/B tests for statistical comparison
+
+**Phase 9 Implementation**
+
+#### performance_metrics_archive (Phase 2+ - COLD STORAGE)
+```sql
+-- Archive table for cold storage (42+ months old)
+-- Identical schema to performance_metrics but optimized for archival
+-- Stored in separate tablespace or S3/Parquet
+
+CREATE TABLE performance_metrics_archive (
+    -- Identical columns to performance_metrics
+    metric_id SERIAL PRIMARY KEY,
+    entity_type VARCHAR NOT NULL,
+    entity_id INT NOT NULL,
+    entity_version VARCHAR,
+    metric_name VARCHAR NOT NULL,
+    metric_value DECIMAL(12,6),
+    aggregation_period VARCHAR NOT NULL,
+    period_start TIMESTAMP,
+    period_end TIMESTAMP,
+    sample_size INT,
+    confidence_interval_lower DECIMAL(12,6),
+    confidence_interval_upper DECIMAL(12,6),
+    standard_deviation DECIMAL(12,6),
+    standard_error DECIMAL(12,6),
+    data_source VARCHAR NOT NULL,
+    evaluation_run_id INT,
+    storage_tier VARCHAR DEFAULT 'cold',
+    archived_at TIMESTAMP NOT NULL,
+    archival_reason VARCHAR,
+    timestamp TIMESTAMP NOT NULL,
+    metadata JSONB,
+
+    CHECK (storage_tier = 'cold'),
+    CHECK (aggregation_period IN ('monthly', 'quarterly', 'yearly', 'all_time'))
+);
+
+-- Minimal indexes for archival table (optimized for bulk queries)
+CREATE INDEX idx_performance_archive_entity ON performance_metrics_archive(entity_type, entity_id);
+CREATE INDEX idx_performance_archive_period ON performance_metrics_archive(period_start, period_end);
+CREATE INDEX idx_performance_archive_timestamp ON performance_metrics_archive(timestamp);
+```
+
+**Purpose:** Cold storage for metrics older than 42 months
+
+**Archival Strategy:**
+```sql
+-- Move 42+ month old monthly+ metrics to archive table
+INSERT INTO performance_metrics_archive
+SELECT * FROM performance_metrics
+WHERE period_start < NOW() - INTERVAL '42 months'
+  AND aggregation_period IN ('monthly', 'quarterly', 'yearly', 'all_time')
+  AND storage_tier = 'warm';
+
+-- Delete from main table after successful archive
+DELETE FROM performance_metrics
+WHERE metric_id IN (
+    SELECT metric_id FROM performance_metrics_archive
+    WHERE archived_at > NOW() - INTERVAL '1 day'
+);
+```
+
+### 9. Materialized Views for Analytics (Phase 6-7 - NEW in v1.8)
+
+**Note:** Materialized views provide pre-aggregated performance summaries for dashboard queries. Refreshed hourly/daily depending on usage patterns.
+
+#### strategy_performance_summary (Phase 6-7)
+```sql
+-- Aggregated strategy performance metrics
+-- Refreshed hourly for dashboard real-time queries
+
+CREATE MATERIALIZED VIEW strategy_performance_summary AS
+SELECT
+    s.strategy_id,
+    s.strategy_name,
+    s.strategy_version,
+    s.status,
+
+    -- Live Performance (last 30 days)
+    pm_roi.metric_value as roi_30d,
+    pm_win_rate.metric_value as win_rate_30d,
+    pm_sharpe.metric_value as sharpe_ratio_30d,
+    pm_trades.sample_size as total_trades_30d,
+
+    -- All-Time Performance
+    pm_roi_all.metric_value as roi_all_time,
+    pm_win_rate_all.metric_value as win_rate_all_time,
+
+    -- Metadata
+    s.created_at,
+    s.activated_at,
+    NOW() as last_refreshed
+FROM strategies s
+LEFT JOIN LATERAL (
+    SELECT metric_value FROM performance_metrics
+    WHERE entity_type = 'strategy' AND entity_id = s.strategy_id
+      AND metric_name = 'roi' AND aggregation_period = 'monthly'
+      AND period_start >= NOW() - INTERVAL '30 days'
+    ORDER BY period_start DESC LIMIT 1
+) pm_roi ON TRUE
+LEFT JOIN LATERAL (
+    SELECT metric_value FROM performance_metrics
+    WHERE entity_type = 'strategy' AND entity_id = s.strategy_id
+      AND metric_name = 'win_rate' AND aggregation_period = 'monthly'
+      AND period_start >= NOW() - INTERVAL '30 days'
+    ORDER BY period_start DESC LIMIT 1
+) pm_win_rate ON TRUE
+LEFT JOIN LATERAL (
+    SELECT metric_value FROM performance_metrics
+    WHERE entity_type = 'strategy' AND entity_id = s.strategy_id
+      AND metric_name = 'sharpe_ratio' AND aggregation_period = 'monthly'
+      AND period_start >= NOW() - INTERVAL '30 days'
+    ORDER BY period_start DESC LIMIT 1
+) pm_sharpe ON TRUE
+LEFT JOIN LATERAL (
+    SELECT sample_size FROM performance_metrics
+    WHERE entity_type = 'strategy' AND entity_id = s.strategy_id
+      AND metric_name = 'roi' AND aggregation_period = 'monthly'
+      AND period_start >= NOW() - INTERVAL '30 days'
+    ORDER BY period_start DESC LIMIT 1
+) pm_trades ON TRUE
+LEFT JOIN LATERAL (
+    SELECT metric_value FROM performance_metrics
+    WHERE entity_type = 'strategy' AND entity_id = s.strategy_id
+      AND metric_name = 'roi' AND aggregation_period = 'all_time'
+    ORDER BY timestamp DESC LIMIT 1
+) pm_roi_all ON TRUE
+LEFT JOIN LATERAL (
+    SELECT metric_value FROM performance_metrics
+    WHERE entity_type = 'strategy' AND entity_id = s.strategy_id
+      AND metric_name = 'win_rate' AND aggregation_period = 'all_time'
+    ORDER BY timestamp DESC LIMIT 1
+) pm_win_rate_all ON TRUE
+WHERE s.status IN ('active', 'testing');
+
+-- Refresh hourly for dashboard
+CREATE INDEX idx_strategy_performance_summary ON strategy_performance_summary(strategy_id, strategy_version);
+```
+
+**Purpose:** Pre-aggregated strategy metrics for dashboard queries (<50ms response time)
+
+**Refresh Schedule:**
+```sql
+-- Refresh every hour (Phase 6+)
+REFRESH MATERIALIZED VIEW strategy_performance_summary;
+```
+
+#### model_calibration_summary (Phase 6-7)
+```sql
+-- Aggregated model calibration metrics
+-- Refreshed daily (backtesting runs less frequently than trades)
+
+CREATE MATERIALIZED VIEW model_calibration_summary AS
+SELECT
+    pm.model_id,
+    pm.model_name,
+    pm.model_version,
+    pm.status,
+
+    -- Latest Evaluation Run
+    er.run_id as latest_run_id,
+    er.run_completed_at as latest_run_date,
+    er.dataset_name as latest_dataset,
+    er.sample_count as latest_sample_size,
+
+    -- Calibration Metrics
+    er.accuracy,
+    er.brier_score,
+    er.calibration_ece,
+    er.log_loss,
+
+    -- Performance Trend (last 5 runs)
+    LAG(er.brier_score, 1) OVER (PARTITION BY pm.model_id ORDER BY er.run_completed_at) as prev_brier_score,
+    LAG(er.calibration_ece, 1) OVER (PARTITION BY pm.model_id ORDER BY er.run_completed_at) as prev_calibration_ece,
+
+    -- Metadata
+    NOW() as last_refreshed
+FROM probability_models pm
+LEFT JOIN LATERAL (
+    SELECT * FROM evaluation_runs
+    WHERE model_id = pm.model_id AND status = 'completed'
+    ORDER BY run_completed_at DESC LIMIT 1
+) er ON TRUE
+WHERE pm.status IN ('active', 'testing');
+
+-- Refresh daily
+CREATE INDEX idx_model_calibration_summary ON model_calibration_summary(model_id, model_version);
+```
+
+**Purpose:** Pre-aggregated model calibration metrics for validation dashboard
+
+**Refresh Schedule:**
+```sql
+-- Refresh daily (Phase 6+)
+REFRESH MATERIALIZED VIEW model_calibration_summary;
+```
+
+**Implementation Timeline:**
+- **Phase 1.5-2**: Implement performance_metrics, evaluation_runs, model_predictions (core tracking)
+- **Phase 6-7**: Implement materialized views, enhance metrics collection, dashboard integration
+- **Phase 9**: Implement ensemble_predictions, ab_test_groups, ab_test_results (advanced features)
 
 ## Helper Views (NEW in v1.4)
 

@@ -1,9 +1,23 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.12
+**Version:** 2.13
 **Last Updated:** 2025-11-09
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.13:**
+- **ANALYTICS & PERFORMANCE TRACKING**: Added 7 new requirements for comprehensive performance tracking and model validation (Phase 1.5-2, 6-7, 9)
+- **NEW SECTION 4.11**: Analytics & Performance Tracking (REQ-ANALYTICS-001 through REQ-ANALYTICS-004, REQ-REPORTING-001)
+  - REQ-ANALYTICS-001: Performance Metrics Collection (16 metric types: ROI, win_rate, Sharpe ratio, Brier score, ECE, etc.)
+  - REQ-ANALYTICS-002: Time-Series Performance Storage (8 aggregation levels: trade → hourly → daily → monthly → yearly → all_time)
+  - REQ-ANALYTICS-003: Metrics Aggregation Pipeline (real-time + batch collection with materialized views)
+  - REQ-ANALYTICS-004: Historical Performance Retention (hot/warm/cold storage with automated archival)
+  - REQ-REPORTING-001: Performance Dashboard (React + Next.js UI with FastAPI backend, 4 dashboard pages)
+- **SECTION 4.9 EXTENDED**: Added model validation requirements (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
+  - REQ-MODEL-EVAL-001: Model Validation Framework (backtesting, cross-validation, holdout validation with activation criteria)
+  - REQ-MODEL-EVAL-002: Calibration Testing (Brier score ≤0.20, ECE ≤0.10, log loss ≤0.50, reliability diagrams)
+- **CROSS-REFERENCES**: Added references to DATABASE_SCHEMA_SUMMARY_V1.8.md (7 new tables + 2 materialized views), ADR-078, ADR-080, ADR-081, ADR-082, DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md, MODEL_EVALUATION_GUIDE_V1.0.md
+- **DATABASE INTEGRATION**: References new performance_metrics, evaluation_runs, model_predictions, performance_metrics_archive tables and strategy_performance_summary, model_calibration_summary materialized views
+- **USER REQUIREMENTS**: Addresses user's concerns (1) detailed historical performance tracking with database tables, (2) JSONB config storage decision (ADR-078)
 **Changes in v2.12:**
 - **TEMPLATE ENFORCEMENT**: Added 2 new automated enforcement requirements (REQ-VALIDATION-005, REQ-VALIDATION-006)
 - **NEW REQUIREMENTS**:
@@ -739,6 +753,62 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
   - MACHINE_LEARNING_ROADMAP.md (Phase 9)
   - MODEL_EVALUATION_GUIDE.md (Phase 9)
 
+**REQ-MODEL-EVAL-001: Model Validation Framework**
+- Phase: 1.5-2
+- Priority: Critical
+- Status: 🔵 Planned
+- Reference: DATABASE_SCHEMA_SUMMARY_V1.8.md (evaluation_runs, predictions tables), ADR-082 (Model Evaluation Framework)
+- Description: Comprehensive framework for validating probability model performance before deployment to live trading
+- Validation Types:
+  - **Backtesting**: Test model on historical data (2019-2024 archives) with known outcomes
+  - **Cross-Validation**: K-fold validation (k=5) for temporal data (preserve chronological order)
+  - **Holdout Validation**: Reserve recent data (e.g., 2024 Q4) for final validation before activation
+- Evaluation Runs Tracking:
+  - Store run metadata in evaluation_runs table (model_id, model_version, dataset_name, run_type, run_started_at, run_completed_at)
+  - Track summary metrics (accuracy, brier_score, calibration_ece, log_loss) for quick reference
+  - Support multiple datasets per model (NFL 2023, NFL 2024 Q1-Q3, NBA 2023, etc.)
+- Individual Predictions Storage:
+  - Store each prediction in predictions table (predicted_prob, actual_outcome, market_price, edge, is_ensemble=FALSE)
+  - Enable detailed error analysis (prediction_error, squared_error)
+  - Support calibration analysis (probability bins for ECE calculation)
+  - Unified table supports both individual model predictions (Phase 1.5-2) and ensemble predictions (Phase 4+)
+- Activation Criteria:
+  - **Minimum Sample Size**: ≥100 predictions for statistical significance
+  - **Accuracy Threshold**: ≥52% correct predictions (better than coin flip + margin)
+  - **Brier Score**: ≤0.20 (lower is better, <0.20 indicates good calibration)
+  - **Calibration ECE**: ≤0.10 (Expected Calibration Error <10% indicates well-calibrated probabilities)
+- Status Lifecycle: Models remain 'draft' until validation criteria met, then eligible for 'testing' (paper trading) status
+
+**REQ-MODEL-EVAL-002: Calibration Testing**
+- Phase: 1.5-2
+- Priority: Critical
+- Status: 🔵 Planned
+- Reference: DATABASE_SCHEMA_SUMMARY_V1.8.md (predictions table), MODEL_EVALUATION_GUIDE_V1.0.md
+- Description: Validate model probability calibration to ensure predicted probabilities match actual outcome frequencies
+- Calibration Metrics:
+  - **Brier Score**: Mean squared error between predicted probabilities and actual outcomes (0 = perfect, 1 = worst)
+    - Formula: `(1/N) * Σ(predicted_prob - actual_outcome)²`
+    - Target: ≤0.20 for deployment
+  - **Expected Calibration Error (ECE)**: Average gap between predicted probability and observed frequency across bins
+    - Bins: [0.0-0.1], [0.1-0.2], ..., [0.9-1.0] (10 bins)
+    - Formula: `Σ (|bin_accuracy - bin_confidence| * bin_weight)`
+    - Target: ≤0.10 for deployment
+  - **Log Loss**: Penalizes confident incorrect predictions heavily
+    - Formula: `-(1/N) * Σ(actual * log(pred) + (1-actual) * log(1-pred))`
+    - Target: ≤0.50 for deployment
+- Reliability Diagrams:
+  - Plot predicted probability (x-axis) vs. observed frequency (y-axis)
+  - Perfect calibration = 45-degree diagonal line
+  - Store probability bins in predictions table (probability_bin column)
+  - Generate plots during evaluation runs (Phase 6-7 dashboard integration)
+- Calibration Validation Process:
+  1. Run model on validation dataset (100+ predictions)
+  2. Store predictions in predictions table with probability bins (is_ensemble=FALSE)
+  3. Calculate Brier score, ECE, log loss from stored predictions
+  4. Store summary metrics in evaluation_runs table
+  5. Compare against thresholds to determine if model is well-calibrated
+- Integration: Calibration metrics displayed in model_calibration_summary materialized view (Phase 6-7)
+
 **Elo Timeline Clarification:**
 - **Phase 4 (Weeks 7-9)**: Initial Elo implementation for NFL (`elo_nfl v1.0`)
 - **Phase 6 (Weeks 15-16)**: Extend Elo to new sports (`elo_nba v1.0`, `elo_mlb v1.0`)
@@ -799,6 +869,156 @@ Command-line interface for interacting with Kalshi API and managing local databa
 - Comprehensive error handling with user-friendly messages
 - Verbose flag (`--verbose`) for debugging
 - Dry-run flag (`--dry-run`) for testing without database writes
+
+---
+
+### 4.11 Analytics & Performance Tracking (Phase 1.5-2, 6-7, 9)
+
+Comprehensive performance tracking, model validation, and analytics infrastructure for measuring strategy effectiveness, model calibration, and A/B testing.
+
+**REQ-ANALYTICS-001: Performance Metrics Collection**
+- Phase: 1.5-2
+- Priority: Critical
+- Status: 🔵 Planned
+- Reference: ADR-078 (Config Storage), DATABASE_SCHEMA_SUMMARY_V1.8.md (Section 8)
+- Description: Collect and store performance metrics for strategies, models, methods, edges, and ensembles across multiple time-series aggregation periods
+- Metrics Tracked:
+  - **Trading Performance**: ROI, win_rate, sharpe_ratio, sortino_ratio, max_drawdown, avg_trade_size, total_pnl, unrealized_pnl
+  - **Model Validation**: accuracy, precision, recall, f1_score, auc_roc, brier_score, calibration_ece, log_loss
+- Data Sources:
+  - **Live trading metrics**: Calculated from trades and positions tables
+  - **Backtesting metrics**: Calculated from evaluation_runs and model_predictions tables
+  - **Unified storage**: performance_metrics table supports both data sources
+- Statistical Context: Store confidence intervals (95% CI), standard deviation, standard error for all metrics
+- Implementation: Real-time collection during trading (after each trade) + batch aggregation pipelines (hourly, daily, monthly)
+
+**REQ-ANALYTICS-002: Time-Series Performance Storage**
+- Phase: 1.5-2
+- Priority: Critical
+- Status: 🔵 Planned
+- Reference: DATABASE_SCHEMA_SUMMARY_V1.8.md (performance_metrics table)
+- Description: Store performance metrics at 8 aggregation levels with automated retention policies
+- Aggregation Periods:
+  1. **trade**: Individual trade-level metrics (sample_size = 1)
+  2. **hourly**: 1-hour rolling windows
+  3. **daily**: Calendar day aggregations
+  4. **weekly**: Calendar week aggregations
+  5. **monthly**: Calendar month aggregations
+  6. **quarterly**: Calendar quarter aggregations
+  7. **yearly**: Calendar year aggregations
+  8. **all_time**: Lifetime performance (no time bounds)
+- Period Tracking: Store period_start and period_end timestamps for all aggregations except trade-level
+- Retention Tiers:
+  - **Hot Storage (0-18 months)**: All aggregation levels, <100ms query performance, PostgreSQL main tables
+  - **Warm Storage (18-42 months)**: Daily+ only (hourly/trade archived), <500ms query performance, PostgreSQL compressed tables
+  - **Cold Storage (42+ months)**: Monthly+ only (daily archived), <5s query performance, S3/Parquet format
+- Archival Strategy: Automated archival based on age thresholds with configurable policies
+
+**REQ-ANALYTICS-003: Metrics Aggregation Pipeline**
+- Phase: 1.5-2
+- Priority: High
+- Status: 🔵 Planned
+- Reference: ADR-080 (Metrics Collection Strategy - Real-time + Batch)
+- Description: Implement dual-mode aggregation for real-time and batch metric calculations
+- Real-Time Collection (Phase 1.5-2):
+  - Trigger: After each trade execution
+  - Scope: Calculate trade-level metrics immediately (ROI, realized_pnl)
+  - Update: Update all_time aggregation (rolling lifetime stats)
+  - Performance Target: <50ms overhead per trade
+- Batch Aggregation (Phase 2):
+  - Schedule: Hourly (at :00), daily (at 00:00 UTC), weekly (Sunday 00:00), monthly (1st 00:00)
+  - Scope: Calculate aggregated metrics for completed periods
+  - Data Sources: Query trades and positions tables for period-specific data
+  - Statistical Calculations: Compute confidence intervals, standard deviation, standard error for each metric
+  - Performance Target: <5 minutes for daily aggregation, <30 minutes for monthly
+- Materialized Views (Phase 6-7):
+  - strategy_performance_summary: Pre-aggregated dashboard metrics (refresh hourly)
+  - model_calibration_summary: Pre-aggregated validation metrics (refresh daily)
+  - Performance Target: <50ms dashboard query response
+
+**REQ-ANALYTICS-004: Historical Performance Retention**
+- Phase: 2+
+- Priority: High
+- Status: 🔵 Planned
+- Reference: DATABASE_SCHEMA_SUMMARY_V1.8.md (performance_metrics_archive table)
+- Description: Implement automated archival and retrieval for historical performance data
+- Archival Triggers:
+  - **Age-Based**: Metrics older than 18 months (hot → warm), 42 months (warm → cold)
+  - **Performance-Based**: Deprecated strategies/models moved to cold storage immediately
+  - **Manual**: Administrative command to archive specific entities
+- Archival Process:
+  1. Identify metrics meeting archival criteria
+  2. Copy to archive table (performance_metrics_archive for warm, S3/Parquet for cold)
+  3. Delete trade/hourly aggregations (keep daily+ for warm, monthly+ for cold)
+  4. Update storage_tier, archived_at, archival_reason columns
+  5. Log archival activity to alerts table
+- Retrieval Process:
+  - Query combines hot + warm tables automatically (via UNION view)
+  - Cold storage requires explicit S3/Parquet query (Phase 7+)
+  - Performance Target: <500ms for hot+warm queries, <5s for cold queries
+- Retention Policy:
+  - Hot: 18 months (configurable)
+  - Warm: 24 months (18-42 months total)
+  - Cold: Indefinite (compliance requirement)
+- Compliance: Historical data retained for 5+ years for regulatory and audit purposes
+
+**REQ-REPORTING-001: Performance Dashboard**
+- Phase: 6-7
+- Priority: High
+- Status: 🔵 Planned
+- Reference: ADR-081 (Dashboard Architecture), DATABASE_SCHEMA_SUMMARY_V1.8.md (materialized views), DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md
+- Description: Web-based performance dashboard for visualizing strategy/model performance, calibration, and system health
+- Technology Stack:
+  - **Frontend**: React + Next.js (TypeScript)
+  - **UI Framework**: Tailwind CSS + shadcn/ui components
+  - **Charts**: Recharts or Chart.js for time-series and calibration plots
+  - **Data Fetching**: React Query for caching and server state management
+  - **Backend**: FastAPI (Python) REST API
+  - **Authentication**: OAuth 2.0 + JWT tokens (Phase 7+)
+- Dashboard Pages:
+  1. **Strategy Performance**:
+     - 30-day and all-time ROI, win rate, Sharpe ratio per strategy version
+     - Time-series charts (daily aggregation) showing P&L trends
+     - Top 5 best/worst performing strategies
+     - Filter by strategy name, version, status (active/testing/deprecated)
+     - Data Source: strategy_performance_summary materialized view (<50ms queries)
+  2. **Model Calibration**:
+     - Latest evaluation run metrics (accuracy, Brier score, ECE, log loss) per model
+     - Reliability diagrams (predicted probability vs. observed frequency)
+     - Calibration trend over time (track if model degrading)
+     - Filter by model name, version, sport
+     - Data Source: model_calibration_summary materialized view (<50ms queries)
+  3. **Live Trading Status**:
+     - Current open positions with unrealized P&L
+     - Recent trades (last 24 hours) with execution details
+     - Account balance and exposure metrics
+     - System health indicators (API connectivity, database status, circuit breakers)
+     - Data Source: Direct queries to positions, trades, account_balance, system_health tables
+  4. **Historical Analysis** (Phase 7):
+     - Query historical performance metrics with custom date ranges
+     - Compare strategy/model versions (A/B test results)
+     - Drill-down from aggregated to trade-level details
+     - Export data as CSV/JSON for external analysis
+     - Data Source: performance_metrics table (hot+warm storage), optional S3/Parquet (cold)
+- Performance Requirements:
+  - **Dashboard Load Time**: <2s for all pages
+  - **Chart Render Time**: <500ms for time-series charts
+  - **Data Refresh**: Auto-refresh every 30s for live data, manual refresh for historical
+  - **Query Performance**: Leverage materialized views for sub-50ms dashboard queries
+- Security:
+  - Authentication required (no anonymous access)
+  - Role-based access control (admin, trader, viewer)
+  - API rate limiting (100 req/min per user)
+  - HTTPS only (no HTTP)
+- Deployment:
+  - Containerized (Docker) for easy deployment
+  - Reverse proxy (nginx) for SSL termination
+  - CI/CD pipeline for automated deployment (Phase 7+)
+
+**Integration Notes:**
+- **Phase 1.5-2**: Core tracking implementation (performance_metrics, evaluation_runs, model_predictions tables)
+- **Phase 6-7**: Dashboard integration (materialized views, enhanced collection, reporting UI)
+- **Phase 9**: Advanced analytics (A/B testing, ensemble tracking, feature importance)
 
 ---
 

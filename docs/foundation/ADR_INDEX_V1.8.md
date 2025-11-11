@@ -1,9 +1,22 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.7
-**Last Updated:** 2025-11-09
+**Version:** 1.8
+**Last Updated:** 2025-11-10
 **Status:** ✅ Current
+**Changes in v1.8:**
+- **PHASES 6-9 ANALYTICS INFRASTRUCTURE:** Added ADR-078 through ADR-085 (Complete Analytics Foundation)
+- Added Phases 6-9 section for analytics infrastructure (performance tracking, dashboards, A/B testing)
+- Added ADR-078: Model Configuration Storage Architecture (JSONB vs Dedicated Tables)
+- Added ADR-079: Performance Tracking Architecture (8-level time-series aggregation)
+- Added ADR-080: Metrics Collection Strategy (Real-time + Batch Pipeline)
+- Added ADR-081: Dashboard Architecture (React + Next.js with WebSocket)
+- Added ADR-082: Model Evaluation Framework (Backtesting, Cross-Validation, Calibration)
+- Added ADR-083: Analytics Data Model (Materialized Views for 158x-683x Speedup)
+- Added ADR-084: A/B Testing Infrastructure (Stratified Random Assignment)
+- Added ADR-085: JSONB vs Normalized Hybrid Strategy (Materialized Views)
+- Updated ARCHITECTURE_DECISIONS reference from V2.13 to V2.13 (same version, added ADRs)
+- Total ADRs: 55 → 63 (8 new ADRs added)
 **Changes in v1.7:**
 - **STRATEGIC RESEARCH PRIORITIES:** Added ADR-076 and ADR-077 (Open Questions Requiring Research)
 - Added Phase 4.5 section for strategic research priorities
@@ -165,6 +178,19 @@ This document provides a systematic index of all Precog architecture decisions u
 |-----|-------|------|--------|-------|----------|
 | ADR-076 | Dynamic Ensemble Weights Architecture | 2025-11-09 | 🔵 | 4.5 | ARCHITECTURE_DECISIONS_V2.13 |
 | ADR-077 | Strategy vs Method Separation (HIGHEST PRIORITY) | 2025-11-09 | 🔵 | 4.5 | ARCHITECTURE_DECISIONS_V2.13 |
+
+### Phases 6-9: Analytics Infrastructure (Performance Tracking, Dashboards, A/B Testing)
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-078 | Model Configuration Storage Architecture (JSONB vs Dedicated Tables) | 2025-11-10 | ✅ | 1 | ARCHITECTURE_DECISIONS_V2.13 |
+| ADR-079 | Performance Tracking Architecture (8-level time-series aggregation) | 2025-11-10 | ✅ | 1.5-2 | ARCHITECTURE_DECISIONS_V2.13 |
+| ADR-080 | Metrics Collection Strategy (Real-time + Batch Pipeline) | 2025-11-10 | ✅ | 6 | ARCHITECTURE_DECISIONS_V2.13 |
+| ADR-081 | Dashboard Architecture (React + Next.js with WebSocket) | 2025-11-10 | ✅ | 7 | ARCHITECTURE_DECISIONS_V2.13 |
+| ADR-082 | Model Evaluation Framework (Backtesting, Cross-Validation, Calibration) | 2025-11-10 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.13 |
+| ADR-083 | Analytics Data Model (Materialized Views for 158x-683x Speedup) | 2025-11-10 | ✅ | 6 | ARCHITECTURE_DECISIONS_V2.13 |
+| ADR-084 | A/B Testing Infrastructure (Stratified Random Assignment) | 2025-11-10 | ✅ | 8 | ARCHITECTURE_DECISIONS_V2.13 |
+| ADR-085 | JSONB vs Normalized Hybrid Strategy (Materialized Views) | 2025-11-10 | ✅ | 6 | ARCHITECTURE_DECISIONS_V2.13 |
 
 ### Phase 5: Trading MVP (Planned)
 
