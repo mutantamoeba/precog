@@ -20,7 +20,7 @@
   - 11 deferred research tasks (DEF-009 through DEF-019) documented with priorities and estimates
   - Research-then-implement approach: gather data from Phase 1-3 usage, research in Phase 4.5, implement in Phase 5+
 - **Updated Phase 4.0**: Added note that "Methods Implementation" (complete trading system bundles) is DEFERRED to Phase 5+ pending ADR-077 research completion
-- **Cross-references**: Links to new PHASE_4_DEFERRED_TASKS_V1.0.md and STRATEGIC_WORK_ROADMAP_V1.0.md documents
+- **Cross-references**: Links to new PHASE_4_DEFERRED_TASKS_V1.0.md and STRATEGIC_WORK_ROADMAP_V1.1.md documents
 - **Total addition**: ~250 lines documenting strategic research priorities and architectural decisions requiring deep research
 **Changes in v1.6:**
 - **PHASE 0.7C COMPLETION**: Added Phase 0.7c (Template Enforcement Automation) - Automated enforcement of CODE_REVIEW_TEMPLATE and SECURITY_REVIEW_CHECKLIST
@@ -170,7 +170,7 @@
 
 **See Also:**
 - `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` - Comprehensive deferred task documentation (11 research tasks)
-- `docs/utility/STRATEGIC_WORK_ROADMAP_V1.0.md` - 25 strategic tasks organized by category with research dependencies
+- `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` - 25 strategic tasks organized by category with research dependencies
 - `docs/foundation/ARCHITECTURE_DECISIONS_V2.13.md` - ADR-076 and ADR-077 (full analysis of open questions)
 
 ---

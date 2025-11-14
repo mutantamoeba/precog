@@ -231,11 +231,11 @@ precog/
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.4.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.12.md` - This document (requirements through Phase 10)
-  3. `MASTER_INDEX_V2.16.md` - Complete document inventory
+  2. `MASTER_REQUIREMENTS_V2.13.md` - This document (requirements through Phase 10)
+  3. `MASTER_INDEX_V2.18.md` - Complete document inventory
   4. `ARCHITECTURE_DECISIONS_V2.13.md` - All 77 ADRs with design rationale (Phase 0-4.5)
   5. `REQUIREMENT_INDEX.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.7.md` - Architecture decision index
+  6. `ADR_INDEX_V1.8.md` - Architecture decision index
   7. `TESTING_STRATEGY_V2.0.md` - Test cases, coverage requirements, future enhancements
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
@@ -460,7 +460,7 @@ precog/
 
 **Total Tables:** 21 operational + 4 ML placeholders = 25 tables
 
-**Detailed schema with indexes, constraints, and sample queries**: See `DATABASE_SCHEMA_SUMMARY_V1.7.md`
+**Detailed schema with indexes, constraints, and sample queries**: See `DATABASE_SCHEMA_SUMMARY_V1.8.md`
 
 ### 4.3 Critical Database Rules
 
@@ -606,7 +606,7 @@ Trading methods bundle complete trading approaches (strategy + model + position 
 - Status: 🔵 Planned
 - Description: Track paper_roi, live_roi, sharpe_ratio, win_rate, total_trades per method version
 
-**Implementation Note:** Methods table designed in Phase 0.5 (ADR-021) but implementation deferred to Phase 4-5 when strategy and model versioning systems are fully operational. See DATABASE_SCHEMA_SUMMARY_V1.7.md for complete schema.
+**Implementation Note:** Methods table designed in Phase 0.5 (ADR-021) but implementation deferred to Phase 4-5 when strategy and model versioning systems are fully operational. See DATABASE_SCHEMA_SUMMARY_V1.8.md for complete schema.
 
 ---
 
@@ -710,7 +710,7 @@ Centralized alert and notification system for critical events, errors, and syste
 - **MEDIUM**: gain_threshold, system_warning → console + file + database
 - **LOW**: informational → file + database
 
-**Implementation:** See DATABASE_SCHEMA_SUMMARY_V1.7.md for alerts table schema. Configuration in system.yaml (notifications section). Implementation in utils/notification_manager.py and utils/alert_manager.py.
+**Implementation:** See DATABASE_SCHEMA_SUMMARY_V1.8.md for alerts table schema. Configuration in system.yaml (notifications section). Implementation in utils/notification_manager.py and utils/alert_manager.py.
 
 ---
 
@@ -1083,7 +1083,7 @@ Comprehensive performance tracking, model validation, and analytics infrastructu
   - ✅ MASTER_INDEX V2.3 updated
 
 **Documentation**:
-- `DATABASE_SCHEMA_SUMMARY_V1.7.md`
+- `DATABASE_SCHEMA_SUMMARY_V1.8.md`
 - `VERSIONING_GUIDE_V1.0.md`
 - `TRAILING_STOP_GUIDE_V1.0.md`
 - `POSITION_MANAGEMENT_GUIDE_V1.0.md`
@@ -1231,7 +1231,7 @@ Comprehensive performance tracking, model validation, and analytics infrastructu
 - CLI commands: `main.py fetch-series`, `fetch-events`, `fetch-markets`
 - Unit tests for pagination, market data CRUD, and decimal precision
 
-**Documentation**: `API_INTEGRATION_GUIDE.md` (Kalshi pagination), `DATABASE_SCHEMA_SUMMARY_V1.7.md` (relationships)
+**Documentation**: `API_INTEGRATION_GUIDE.md` (Kalshi pagination), `DATABASE_SCHEMA_SUMMARY_V1.8.md` (relationships)
 
 ---
 
@@ -2516,7 +2516,7 @@ Automatic masking of sensitive data in all log output for GDPR/PCI compliance:
 
 **Reference Documentation:**
 6. `API_INTEGRATION_GUIDE.md` - Detailed API specifications
-7. `DATABASE_SCHEMA_SUMMARY_V1.7.md` - Full schema with versioning tables
+7. `DATABASE_SCHEMA_SUMMARY_V1.8.md` - Full schema with versioning tables
 8. `EDGE_DETECTION_SPEC.md` - Mathematical formulas
 9. `CONFIGURATION_GUIDE.md` - YAML configuration reference (includes versioning configs)
 10. `ARCHITECTURE_DECISIONS.md` - Design rationale and trade-offs
