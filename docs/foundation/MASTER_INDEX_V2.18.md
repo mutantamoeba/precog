@@ -1,9 +1,16 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.17
-**Last Updated:** 2025-11-10
+**Version:** 2.18
+**Last Updated:** 2025-11-13
 **Status:** ✅ Current
+**Changes in v2.18:**
+- **PHASES 6-9 IMPLEMENTATION GUIDES COMPLETE**: Added 4 comprehensive implementation guides (~2,100 lines total)
+- Created PERFORMANCE_TRACKING_GUIDE_V1.0.md (487 lines, 8-level time-series aggregation with SQL/Python code)
+- Created ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md (625 lines, 4-layer architecture: Collection → Storage → Aggregation → Presentation)
+- Created DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md (528 lines, React 18 + Next.js 14 + TypeScript + Socket.IO real-time integration)
+- Created AB_TESTING_GUIDE_V1.0.md (460 lines, statistical methodology: Welch's t-test, Chi-square, sample size calculation)
+- All guides support analytics infrastructure (ADR-078 through ADR-085) and strategic roadmap tasks
 **Changes in v2.17:**
 - **PHASES 6-9 ANALYTICS INFRASTRUCTURE DOCUMENTATION COMPLETE**: Added 8 ADRs (ADR-078 through ADR-085), 5 requirements (REQ-ANALYTICS-001-004, REQ-REPORTING-001), and MODEL_EVALUATION_GUIDE
 - Updated ARCHITECTURE_DECISIONS V2.13 (same version, added 8 ADRs: model config storage, performance tracking, metrics collection, dashboard architecture, model evaluation, materialized views, A/B testing, hybrid JSONB strategy)
@@ -203,7 +210,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.4** |
 | **MASTER_REQUIREMENTS_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.13** (added REQ-ANALYTICS-001-004, REQ-REPORTING-001 for Phases 6-9 analytics infrastructure) |
-| **MASTER_INDEX_V2.17.md** | ✅ | v2.17 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.17** (Phases 6-9 analytics infrastructure: 8 ADRs, 5 requirements, MODEL_EVALUATION_GUIDE) |
+| **MASTER_INDEX_V2.18.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.18** (Phases 6-9 implementation guides: PERFORMANCE_TRACKING, ANALYTICS_ARCHITECTURE, AB_TESTING, DASHBOARD_DEVELOPMENT) |
 | **ARCHITECTURE_DECISIONS_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (85 total) - **UPDATED V2.13** (ADR-078-085: Analytics infrastructure - materialized views, performance tracking, dashboards, A/B testing) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 110 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.5** (added REQ-ANALYTICS-001-004, REQ-REPORTING-001 for analytics infrastructure) |
 | **ADR_INDEX_V1.8.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (63 ADRs) - **UPDATED V1.8** (ADR-078-085 added for Phases 6-9 analytics infrastructure) |
@@ -308,6 +315,10 @@ Phase-specific implementation guides created in Phase 0.5.
 | **TRAILING_STOP_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phases 1, 4, 5 | 🔴 Critical | **MOVED** from /supplementary/ - Trailing stop loss implementation guide |
 | **POSITION_MANAGEMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phase 5 | 🔴 Critical | **MOVED** from /supplementary/ - Position lifecycle, 10 exit conditions, monitoring, execution |
 | **MODEL_EVALUATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5, 4, 9 | 🔴 Critical | **NEW** - 3-stage model evaluation framework: backtesting, cross-validation, holdout validation; calibration metrics (Brier score, ECE, log loss); systematic evaluation protocol |
+| **PERFORMANCE_TRACKING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 6 | Phase 6 | 🔴 Critical | **NEW** - 8-level time-series aggregation (trade→hourly→daily→weekly→monthly→quarterly→yearly→all_time), SQL UPSERT patterns, pg_cron scheduling, 158x-683x query speedup |
+| **ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 6-9 | Phases 6-9 | 🔴 Critical | **NEW** - End-to-end analytics architecture: 4-layer design (Collection→Storage→Aggregation→Presentation), dual processing (real-time <200ms + batch), 6 materialized views |
+| **AB_TESTING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 8 | Phase 8 | 🟡 High | **NEW** - Statistical methodology for strategy/model evaluation: Welch's t-test, Chi-square, sample size calculation (64 trades/variant), Bayesian analysis, experiment lifecycle |
+| **DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 9 | Phase 9 | 🟡 High | **NEW** - React 18 + Next.js 14 trading dashboard: component library (MetricCard, PositionCard), Socket.IO real-time (<200ms), SWR data fetching, Plotly.js charts, deployment |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
 
 ---
