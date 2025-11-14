@@ -2140,7 +2140,8 @@ class TestConfigShow:
             "risk_limits": {"max_total_exposure": "1000.00"},
             "enabled": True,
         }
-        mock_config_loader.return_value.load.return_value = mock_config
+        # config-show uses .get(), not .load()
+        mock_config_loader.return_value.get.return_value = mock_config
 
         # Run command
         result = runner.invoke(app, ["config-show", "trading_config.yaml"])
@@ -2169,12 +2170,9 @@ class TestConfigShow:
             - Only requested key value shown
             - Dot-separated path works (e.g., 'kelly_criterion.max_bet_size')
         """
-        # Mock config data
-        mock_config = {
-            "kelly_criterion": {"max_bet_size": "0.05", "min_edge": "0.02"},
-            "risk_limits": {"max_total_exposure": "1000.00"},
-        }
-        mock_config_loader.return_value.load.return_value = mock_config
+        # config-show uses .get(config_file, key_path) to retrieve nested value
+        # Mock the .get() method to return the nested value directly
+        mock_config_loader.return_value.get.return_value = "0.05"
 
         # Run command with --key parameter
         result = runner.invoke(
@@ -2198,11 +2196,11 @@ class TestConfigShow:
             - Top-level key access works
             - Nested object displayed in YAML format
         """
-        # Mock config data
-        mock_config = {
-            "kelly_criterion": {"max_bet_size": "0.05", "min_edge": "0.02"},
+        # config-show uses .get(config_file, key_path) which returns the nested dict for top-level keys
+        mock_config_loader.return_value.get.return_value = {
+            "max_bet_size": "0.05",
+            "min_edge": "0.02",
         }
-        mock_config_loader.return_value.load.return_value = mock_config
 
         # Run command with top-level key
         result = runner.invoke(
@@ -2224,10 +2222,8 @@ class TestConfigShow:
             - Exit code 1
             - Error message about missing file
         """
-        # Mock file not found
-        mock_config_loader.return_value.load.side_effect = FileNotFoundError(
-            "Config file not found"
-        )
+        # config-show uses .get() which raises FileNotFoundError for missing files
+        mock_config_loader.return_value.get.side_effect = FileNotFoundError("Config file not found")
 
         # Run command
         result = runner.invoke(app, ["config-show", "nonexistent.yaml"])
@@ -2247,11 +2243,14 @@ class TestConfigShow:
             - Error message about key not found
             - Helpful message showing available keys
         """
-        # Mock config data
-        mock_config = {
-            "kelly_criterion": {"max_bet_size": "0.05"},
-        }
-        mock_config_loader.return_value.load.return_value = mock_config
+        # config-show calls .get() twice:
+        # 1st call: .get(config_file, invalid_key) raises KeyError
+        # 2nd call: .get(config_file) returns full config to show available keys
+        mock_loader_instance = mock_config_loader.return_value
+        mock_loader_instance.get.side_effect = [
+            KeyError("nonexistent.key"),  # First call with key_path
+            {"kelly_criterion": {"max_bet_size": "0.05"}},  # Second call without key_path
+        ]
 
         # Run command with invalid key
         result = runner.invoke(
@@ -2275,9 +2274,9 @@ class TestConfigShow:
             - Verbose mode enabled
             - Config still displayed
         """
-        # Mock config data
+        # config-show uses .get() to retrieve config
         mock_config = {"enabled": True}
-        mock_config_loader.return_value.load.return_value = mock_config
+        mock_config_loader.return_value.get.return_value = mock_config
 
         # Run command with --verbose
         result = runner.invoke(app, ["config-show", "trading_config.yaml", "--verbose"])
