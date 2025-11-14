@@ -1521,7 +1521,7 @@ api_key = "sk_live_abc123"
 
 ## 🎯 Phase Completion Protocol
 
-**At the end of EVERY phase**, run this **8-Step Assessment** (~40 minutes total):
+**At the end of EVERY phase**, run this **10-Step Assessment** (~50 minutes total):
 
 ---
 
@@ -1668,7 +1668,32 @@ api_key = "sk_live_abc123"
 
 ---
 
-### Step 7: Archive & Version Management (5 min)
+### Step 7: AI Code Review Analysis (10 min)
+
+**Purpose:** Analyze Claude Code's PR review comments from phase to identify improvements and learning opportunities
+
+**Quick Checklist:**
+- [ ] Collect AI review comments from all phase PRs
+- [ ] Categorize by priority (🔴 Critical, 🟡 High, 🟢 Medium, 🔵 Low)
+- [ ] Triage actions (Fix immediately, Defer, Reject with rationale)
+- [ ] Document decisions and identify patterns
+
+**How to collect:**
+```bash
+# List PRs from this phase
+gh pr list --state merged --search "merged:>=2025-10-28" --limit 20
+
+# View PR review comments
+gh pr view <PR#> --json reviews,comments
+```
+
+**Output:** AI review triage report documenting suggestions (implemented/deferred/rejected) with rationale
+
+**Full details:** `docs/utility/PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md` Step 7
+
+---
+
+### Step 8: Archive & Version Management (5 min)
 
 - [ ] Old document versions archived to `_archive/`?
 - [ ] MASTER_INDEX updated with new versions?
@@ -1681,7 +1706,7 @@ api_key = "sk_live_abc123"
 
 ---
 
-### Step 8: Security Review (5 min) ⚠️ **CRITICAL**
+### Step 9: Security Review (5 min) ⚠️ **CRITICAL**
 
 **Hardcoded Credentials Check:**
 ```bash
@@ -1714,7 +1739,7 @@ git grep -E "(postgres://|mysql://).*:.*@" -- '*'
 
 ---
 
-### Step 8a: Performance Profiling (Phase 5+ Only) ⚡ **OPTIONAL**
+### Step 10: Performance Profiling (Phase 5+ Only) ⚡ **OPTIONAL**
 
 **When to profile:**
 - **Phase 5+ ONLY:** Trading execution, order walking, position monitoring
@@ -1802,8 +1827,9 @@ python -m pstats profile.stats
 | 4. Quality Standards | ✅ | 0 | Quality checks passed |
 | 5. Testing & Validation | ✅ | 0 | 66/66 tests passing, 87% coverage |
 | 6. Gaps & Risks | ✅ | 2 | 2 minor risks documented |
-| 7. Archive & Version Management | ✅ | 0 | All versions updated |
-| 8. Security Review | ✅ | 0 | No credentials in code |
+| 7. AI Code Review Analysis | ✅ | 0 | 5 suggestions triaged |
+| 8. Archive & Version Management | ✅ | 0 | All versions updated |
+| 9. Security Review | ✅ | 0 | No credentials in code |
 
 ---
 
@@ -1815,7 +1841,7 @@ python -m pstats profile.stats
 ### Step 2: Internal Consistency
 [Details...]
 
-[... continue for all 8 steps ...]
+[... continue for all 9 steps ...]
 
 ---
 

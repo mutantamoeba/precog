@@ -449,7 +449,7 @@ def update_baseline(current_count: int, categories: dict[str, int]):
     old_count = baseline["total_warnings"]
     delta = current_count - old_count
 
-    print(f"\n[WARNING] Updating baseline: {old_count} → {current_count} ({delta:+d} warnings)")
+    print(f"\n[WARNING] Updating baseline: {old_count} -> {current_count} ({delta:+d} warnings)")
     print("[ACTION] You MUST document this change in WARNING_DEBT_TRACKER.md")
     print("[ACTION] Include:")
     print("  1. Reason for new warnings")
@@ -472,7 +472,7 @@ def update_baseline(current_count: int, categories: dict[str, int]):
     with open(baseline_path, "w", encoding="utf-8") as f:
         json.dump(baseline, f, indent=2)
 
-    print(f"[OK] Baseline updated: {old_count} → {current_count}")
+    print(f"[OK] Baseline updated: {old_count} -> {current_count}")
     print("[NEXT] Update docs/utility/WARNING_DEBT_TRACKER.md with new warnings")
 
 

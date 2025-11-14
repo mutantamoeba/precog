@@ -306,7 +306,7 @@ def test_fee_percentage_reasonable_range(fee_pct):
     assert validate_fee_percentage(fee_pct), f"Invalid fee percentage: {fee_pct}"
 
 
-@given(fee_pct=st.decimals(min_value=0.51, max_value=2.0, places=2))
+@given(fee_pct=st.decimals(min_value=Decimal("0.51"), max_value=Decimal("2.00"), places=2))
 def test_fee_percentage_rejects_unreasonable_values(fee_pct):
     """
     PROPERTY: Fee percentages > 50% MUST be rejected.
@@ -326,7 +326,9 @@ def test_fee_percentage_rejects_unreasonable_values(fee_pct):
 
 
 @given(
-    loss_pct=st.decimals(min_value=0.01, max_value=1.0, places=2)  # Valid range
+    loss_pct=st.decimals(
+        min_value=Decimal("0.01"), max_value=Decimal("1.00"), places=2
+    )  # Valid range
 )
 def test_loss_threshold_valid_range(loss_pct):
     """
@@ -342,7 +344,9 @@ def test_loss_threshold_valid_range(loss_pct):
 
 
 @given(
-    loss_pct=st.decimals(min_value=1.01, max_value=2.0, places=2)  # Invalid (> 100%)
+    loss_pct=st.decimals(
+        min_value=Decimal("1.01"), max_value=Decimal("2.00"), places=2
+    )  # Invalid (> 100%)
 )
 def test_loss_threshold_rejects_above_100_percent(loss_pct):
     """
@@ -360,7 +364,7 @@ def test_loss_threshold_rejects_above_100_percent(loss_pct):
         assert "must be in (0, 1]" in str(e)
 
 
-@given(profit_pct=st.decimals(min_value=0.01, max_value=10.0, places=2))
+@given(profit_pct=st.decimals(min_value=Decimal("0.01"), max_value=Decimal("10.00"), places=2))
 def test_profit_target_positive(profit_pct):
     """
     PROPERTY: Profit target MUST be > 0.
@@ -374,7 +378,7 @@ def test_profit_target_positive(profit_pct):
     assert validate_profit_target(profit_pct), f"Invalid profit target: {profit_pct}"
 
 
-@given(profit_pct=st.decimals(min_value=-1.0, max_value=0, places=2))
+@given(profit_pct=st.decimals(min_value=Decimal("-1.00"), max_value=Decimal("0.00"), places=2))
 def test_profit_target_rejects_zero_or_negative(profit_pct):
     """
     PROPERTY: Profit target <= 0 MUST be rejected.
@@ -407,7 +411,7 @@ def test_correlation_threshold_valid_range(corr):
     assert validate_correlation_threshold(corr), f"Invalid correlation threshold: {corr}"
 
 
-@given(corr=st.decimals(min_value=1.01, max_value=2.0, places=2))
+@given(corr=st.decimals(min_value=Decimal("1.01"), max_value=Decimal("2.00"), places=2))
 def test_correlation_threshold_rejects_above_1(corr):
     """
     PROPERTY: Correlation > 1.0 MUST be rejected.

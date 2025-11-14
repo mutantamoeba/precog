@@ -1,12 +1,16 @@
 """
 Unit tests for CLI commands in main.py
 
-Tests all 5 CLI commands:
+Tests all 9 CLI commands:
 - fetch-balance: Account balance retrieval
 - fetch-markets: Available markets retrieval (with filtering)
 - fetch-positions: Position retrieval
 - fetch-fills: Trade fill history
 - fetch-settlements: Settlement data retrieval
+- db-init: Database initialization
+- health-check: System health check
+- config-show: Display configuration values
+- config-validate: Validate configuration files
 
 Educational Note:
     CLI commands are tested using Typer's CliRunner for isolated testing
@@ -21,17 +25,17 @@ Educational Note:
     5. Test parameter variations (--env, --dry-run, --verbose)
 
 Related:
-    - main.py: CLI command implementations (5 commands)
+    - main.py: CLI command implementations (9 commands)
     - api_connectors/kalshi_client.py: API client being mocked
     - REQ-CLI-001: CLI Framework (Typer)
     - REQ-CLI-002: Environment Selection (demo/prod)
     - ADR-038: CLI Framework Choice (Typer)
 
-Coverage Target: 85%+ for main.py (currently 0%)
+Coverage Target: 85%+ for main.py (currently 93.53%)
 """
 
 from decimal import Decimal
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 import typer
@@ -1615,59 +1619,1024 @@ class TestErrorHandling:
         # (Stack trace would appear in logs but not necessarily in stdout)
 
 
+class TestDbInit:
+    """Test cases for db-init CLI command.
+
+    Command: main.py db-init [--dry-run] [--verbose]
+
+    Tests:
+        - Successful database initialization
+        - Connection test step
+        - Table creation step
+        - Migration application step
+        - Schema validation step
+        - Dry-run mode
+        - Error handling (connection failure, schema errors)
+    """
+
+    @patch("database.connection.test_connection")
+    @patch("database.initialization.validate_schema_file")
+    @patch("database.initialization.get_database_url")
+    @patch("database.initialization.apply_schema")
+    @patch("database.initialization.apply_migrations")
+    @patch("database.initialization.validate_critical_tables")
+    def test_db_init_success(
+        self,
+        mock_validate_tables,
+        mock_apply_migrations,
+        mock_apply_schema,
+        mock_get_db_url,
+        mock_validate_file,
+        mock_test_connection,
+        runner,
+    ):
+        """Test db-init with successful initialization (happy path).
+
+        Verifies:
+            - Exit code 0
+            - 4 steps executed (connection, tables, migrations, validation)
+            - All steps show success messages
+            - All business logic functions called
+        """
+        # Mock successful database connection test
+        mock_test_connection.return_value = True
+
+        # Mock successful schema file validation
+        mock_validate_file.return_value = True
+
+        # Mock database URL retrieval
+        mock_get_db_url.return_value = "postgresql://user:pass@localhost/db"
+
+        # Mock successful schema application
+        mock_apply_schema.return_value = (True, "")
+
+        # Mock successful migrations (10 applied, 0 failed)
+        mock_apply_migrations.return_value = (10, [])
+
+        # Mock successful schema validation (no missing tables)
+        mock_validate_tables.return_value = []
+
+        # Run command
+        result = runner.invoke(app, ["db-init"])
+
+        # Verify exit code
+        assert result.exit_code == 0, (
+            f"Expected exit code 0, got {result.exit_code}. Output:\n{result.stdout}"
+        )
+
+        # Verify all 4 steps shown
+        assert "[1/4]" in result.stdout, "[1/4] not shown"
+        assert "[2/4]" in result.stdout, "[2/4] not shown"
+        assert "[3/4]" in result.stdout, "[3/4] not shown"
+        assert "[4/4]" in result.stdout, "[4/4] not shown"
+
+        # Verify step descriptions
+        assert "Testing database connection" in result.stdout
+        assert "Creating database tables" in result.stdout
+        assert "Applying database migrations" in result.stdout
+        assert "Validating schema" in result.stdout
+
+        # Verify success message
+        assert "Database initialization complete" in result.stdout
+
+        # Verify all business logic functions were called
+        mock_test_connection.assert_called_once()
+        mock_validate_file.assert_called_once_with("database/precog_schema_v1.7.sql")
+        mock_get_db_url.assert_called_once()
+        mock_apply_schema.assert_called_once()
+        mock_apply_migrations.assert_called_once()
+        mock_validate_tables.assert_called_once()
+
+    @patch("database.connection.test_connection")
+    def test_db_init_connection_failure(self, mock_test_connection, runner):
+        """Test db-init with connection failure.
+
+        Verifies:
+            - Exit code 1
+            - Error message about connection failure
+            - Process stops at Step 1
+        """
+        # Mock failed connection test
+        mock_test_connection.return_value = False
+
+        # Run command
+        result = runner.invoke(app, ["db-init"])
+
+        # Verify exit code 1 (failure)
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify error message
+        assert "Database connection failed" in result.stdout
+        assert "[1/4]" in result.stdout, "Should show step 1"
+
+        # Verify NOT all steps executed (should stop at step 1)
+        assert "[2/4]" not in result.stdout, "Should not reach step 2"
+
+    @patch("database.connection.test_connection")
+    @patch("database.initialization.validate_schema_file")
+    @patch("database.initialization.get_database_url")
+    @patch("database.initialization.apply_schema")
+    def test_db_init_schema_creation_failure(
+        self,
+        mock_apply_schema,
+        mock_get_db_url,
+        mock_validate_file,
+        mock_test_connection,
+        runner,
+    ):
+        """Test db-init with schema creation failure.
+
+        Verifies:
+            - Exit code 1
+            - Error message about schema creation
+            - Connection test passed but schema failed
+        """
+        # Mock successful connection test
+        mock_test_connection.return_value = True
+
+        # Mock successful schema file validation
+        mock_validate_file.return_value = True
+
+        # Mock database URL retrieval
+        mock_get_db_url.return_value = "postgresql://user:pass@localhost/db"
+
+        # Mock failed schema application
+        mock_apply_schema.return_value = (False, "ERROR: permission denied")
+
+        # Run command
+        result = runner.invoke(app, ["db-init"])
+
+        # Verify exit code 1
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify error message
+        assert "Schema creation failed" in result.stdout or "ERROR" in result.stdout
+
+        # Verify step 1 passed
+        assert "[1/4]" in result.stdout
+        assert "Testing database connection" in result.stdout
+
+    @patch("database.connection.test_connection")
+    @patch("database.initialization.validate_schema_file")
+    @patch("database.initialization.get_database_url")
+    @patch("database.initialization.apply_schema")
+    @patch("database.initialization.apply_migrations")
+    @patch("database.initialization.validate_critical_tables")
+    def test_db_init_validation_failure(
+        self,
+        mock_validate_tables,
+        mock_apply_migrations,
+        mock_apply_schema,
+        mock_get_db_url,
+        mock_validate_file,
+        mock_test_connection,
+        runner,
+    ):
+        """Test db-init with schema validation failure.
+
+        Verifies:
+            - Exit code 1
+            - Error message about missing tables
+            - Shows which tables are missing
+        """
+        # Mock successful connection test
+        mock_test_connection.return_value = True
+
+        # Mock successful schema file validation
+        mock_validate_file.return_value = True
+
+        # Mock database URL retrieval
+        mock_get_db_url.return_value = "postgresql://user:pass@localhost/db"
+
+        # Mock successful schema application
+        mock_apply_schema.return_value = (True, "")
+
+        # Mock successful migrations
+        mock_apply_migrations.return_value = (10, [])
+
+        # Mock validation failure (missing tables)
+        mock_validate_tables.return_value = ["events", "markets", "strategies"]
+
+        # Run command
+        result = runner.invoke(app, ["db-init"])
+
+        # Verify exit code 1
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify validation error message
+        assert "Missing critical tables" in result.stdout or "Missing tables" in result.stdout
+
+        # Verify step 4 executed
+        assert "[4/4]" in result.stdout
+        assert "Validating schema" in result.stdout
+
+    @patch("database.connection.test_connection")
+    def test_db_init_dry_run(self, mock_test_connection, runner):
+        """Test db-init with --dry-run flag.
+
+        Verifies:
+            - Exit code 0
+            - "Dry-run mode" message shown
+            - Shows what would be done
+            - Actual execution skipped (no business logic functions called)
+        """
+        # Mock successful connection test (dry-run still checks connection)
+        mock_test_connection.return_value = True
+
+        # Run command with --dry-run
+        result = runner.invoke(app, ["db-init", "--dry-run"])
+
+        # Verify exit code
+        assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
+
+        # Verify dry-run message
+        assert "Dry-run mode" in result.stdout or "Would initialize" in result.stdout
+
+        # Verify steps shown (what would happen)
+        assert "database" in result.stdout.lower()
+
+        # Verify connection test was called (happens before dry-run check)
+        mock_test_connection.assert_called_once()
+
+    @patch("database.connection.test_connection")
+    @patch("database.initialization.validate_schema_file")
+    @patch("database.initialization.get_database_url")
+    @patch("database.initialization.apply_schema")
+    @patch("database.initialization.apply_migrations")
+    @patch("database.initialization.validate_critical_tables")
+    def test_db_init_verbose(
+        self,
+        mock_validate_tables,
+        mock_apply_migrations,
+        mock_apply_schema,
+        mock_get_db_url,
+        mock_validate_file,
+        mock_test_connection,
+        runner,
+    ):
+        """Test db-init with --verbose flag.
+
+        Verifies:
+            - Verbose mode enabled
+            - Detailed output shown
+            - All steps completed successfully
+        """
+        # Mock successful initialization
+        mock_test_connection.return_value = True
+        mock_validate_file.return_value = True
+        mock_get_db_url.return_value = "postgresql://user:pass@localhost/db"
+        mock_apply_schema.return_value = (True, "")
+        mock_apply_migrations.return_value = (10, [])
+        mock_validate_tables.return_value = []
+
+        # Run command with --verbose
+        result = runner.invoke(app, ["db-init", "--verbose"])
+
+        # Verify exit code
+        assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
+
+        # Verify all steps shown with detail
+        assert "[1/4]" in result.stdout
+        assert "[2/4]" in result.stdout
+        assert "[3/4]" in result.stdout
+        assert "[4/4]" in result.stdout
+
+        # Verbose mode should work without errors
+        assert result.exit_code == 0
+
+
+class TestHealthCheck:
+    """Test cases for health-check CLI command.
+
+    Command: main.py health-check [--verbose]
+
+    Tests:
+        - All 4 health checks pass
+        - Individual check failures (database, configs, credentials, directories)
+        - Summary report with pass/fail counts
+        - Verbose mode
+    """
+
+    @patch("database.connection.test_connection")
+    @patch("config.config_loader.ConfigLoader")
+    @patch("os.getenv")
+    @patch("os.path.exists")
+    def test_health_check_all_pass(
+        self, mock_exists, mock_getenv, mock_config_loader, mock_test_connection, runner
+    ):
+        """Test health-check with all checks passing (happy path).
+
+        Verifies:
+            - Exit code 0
+            - 4 checks executed (database, configs, credentials, directories)
+            - All checks show PASS
+            - Summary shows 4/4 passed
+        """
+        # Mock successful database connection
+        mock_test_connection.return_value = True
+
+        # Mock successful config loading
+        mock_config_loader.return_value.load.return_value = {}
+
+        # Mock environment variables present
+        mock_getenv.return_value = "mock_value"
+
+        # Mock directories exist
+        mock_exists.return_value = True
+
+        # Run command
+        result = runner.invoke(app, ["health-check"])
+
+        # Verify exit code
+        assert result.exit_code == 0, (
+            f"Expected exit code 0, got {result.exit_code}. Output:\n{result.stdout}"
+        )
+
+        # Verify all 4 checks mentioned
+        assert "database" in result.stdout.lower() or "Database" in result.stdout
+        assert "config" in result.stdout.lower() or "Configuration" in result.stdout
+        assert "credential" in result.stdout.lower() or "Environment" in result.stdout
+        assert "director" in result.stdout.lower() or "Directory" in result.stdout
+
+        # Verify success indicators (PASS or ✓ or similar)
+        assert "PASS" in result.stdout or "passed" in result.stdout.lower()
+
+        # Verify summary shows all passed
+        assert "4/4" in result.stdout or "All checks passed" in result.stdout
+
+    @patch("database.connection.test_connection")
+    def test_health_check_database_fail(self, mock_test_connection, runner):
+        """Test health-check with database connection failure.
+
+        Verifies:
+            - Exit code 1
+            - Database check shows FAIL
+            - Summary shows failure count
+        """
+        # Mock failed database connection
+        mock_test_connection.return_value = False
+
+        # Run command
+        result = runner.invoke(app, ["health-check"])
+
+        # Verify exit code 1 (failure)
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify database check failed
+        assert "database" in result.stdout.lower()
+        assert "FAIL" in result.stdout or "failed" in result.stdout.lower()
+
+        # Verify summary shows failures
+        assert "3/4" in result.stdout or "1 failed" in result.stdout.lower()
+
+    @patch("database.connection.test_connection")
+    @patch("config.config_loader.ConfigLoader")
+    def test_health_check_config_fail(self, mock_config_loader, mock_test_connection, runner):
+        """Test health-check with config loading failure.
+
+        Verifies:
+            - Exit code 1
+            - Config check shows FAIL
+            - Shows which config file failed
+        """
+        # Mock successful database connection
+        mock_test_connection.return_value = True
+
+        # Mock config loading failure
+        mock_config_loader.return_value.load.side_effect = Exception("Config file not found")
+
+        # Run command
+        result = runner.invoke(app, ["health-check"])
+
+        # Verify exit code 1
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify config check failed
+        assert "config" in result.stdout.lower()
+        assert "FAIL" in result.stdout or "failed" in result.stdout.lower()
+
+    @patch("database.connection.test_connection")
+    @patch("config.config_loader.ConfigLoader")
+    @patch("os.getenv")
+    def test_health_check_credentials_fail(
+        self, mock_getenv, mock_config_loader, mock_test_connection, runner
+    ):
+        """Test health-check with missing credentials.
+
+        Verifies:
+            - Exit code 1
+            - Credentials check shows FAIL
+            - Shows which credential is missing
+        """
+        # Mock successful database and config
+        mock_test_connection.return_value = True
+        mock_config_loader.return_value.load.return_value = {}
+
+        # Mock missing environment variable (returns None)
+        mock_getenv.return_value = None
+
+        # Run command
+        result = runner.invoke(app, ["health-check"])
+
+        # Verify exit code 1
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify credentials check failed
+        assert "credential" in result.stdout.lower() or "environment" in result.stdout.lower()
+        assert "FAIL" in result.stdout or "failed" in result.stdout.lower()
+
+    @patch("database.connection.test_connection")
+    @patch("config.config_loader.ConfigLoader")
+    @patch("os.getenv")
+    @patch("os.path.exists")
+    def test_health_check_directories_fail(
+        self, mock_exists, mock_getenv, mock_config_loader, mock_test_connection, runner
+    ):
+        """Test health-check with missing directories.
+
+        Verifies:
+            - Exit code 1
+            - Directory check shows FAIL
+            - Shows which directory is missing
+        """
+        # Mock successful database, config, credentials
+        mock_test_connection.return_value = True
+        mock_config_loader.return_value.load.return_value = {}
+        mock_getenv.return_value = "mock_value"
+
+        # Mock directory missing
+        mock_exists.return_value = False
+
+        # Run command
+        result = runner.invoke(app, ["health-check"])
+
+        # Verify exit code 1
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify directory check failed
+        assert "director" in result.stdout.lower()
+        assert "FAIL" in result.stdout or "failed" in result.stdout.lower()
+
+    @patch("database.connection.test_connection")
+    @patch("config.config_loader.ConfigLoader")
+    @patch("os.getenv")
+    @patch("os.path.exists")
+    def test_health_check_verbose(
+        self, mock_exists, mock_getenv, mock_config_loader, mock_test_connection, runner
+    ):
+        """Test health-check with --verbose flag.
+
+        Verifies:
+            - Verbose mode enabled
+            - Detailed check information shown
+            - All checks still execute
+        """
+        # Mock all checks passing
+        mock_test_connection.return_value = True
+        mock_config_loader.return_value.load.return_value = {}
+        mock_getenv.return_value = "mock_value"
+        mock_exists.return_value = True
+
+        # Run command with --verbose
+        result = runner.invoke(app, ["health-check", "--verbose"])
+
+        # Verify exit code
+        assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
+
+        # Verify checks still execute
+        assert "database" in result.stdout.lower()
+        assert "config" in result.stdout.lower()
+
+        # Verbose mode should show more detail
+        assert result.exit_code == 0
+
+
+class TestConfigShow:
+    """Test cases for config-show CLI command.
+
+    Command: main.py config-show CONFIG_FILE [--key KEY] [--verbose]
+
+    Tests:
+        - Display entire config file
+        - Display specific key path (dot-separated)
+        - Nested key access
+        - Missing config file
+        - Invalid key path
+        - Verbose mode
+    """
+
+    @patch("config.config_loader.ConfigLoader")
+    def test_config_show_entire_file(self, mock_config_loader, runner):
+        """Test config-show displaying entire config file.
+
+        Verifies:
+            - Exit code 0
+            - Config file contents displayed in YAML format
+            - All top-level keys shown
+        """
+        # Mock config data
+        mock_config = {
+            "kelly_criterion": {"max_bet_size": "0.05", "min_edge": "0.02"},
+            "risk_limits": {"max_total_exposure": "1000.00"},
+            "enabled": True,
+        }
+        mock_config_loader.return_value.load.return_value = mock_config
+
+        # Run command
+        result = runner.invoke(app, ["config-show", "trading_config.yaml"])
+
+        # Verify exit code
+        assert result.exit_code == 0, (
+            f"Expected exit code 0, got {result.exit_code}. Output:\n{result.stdout}"
+        )
+
+        # Verify config file name shown
+        assert "trading_config.yaml" in result.stdout
+
+        # Verify config keys displayed (YAML format)
+        assert "kelly_criterion" in result.stdout
+        assert "risk_limits" in result.stdout
+
+        # Verify values shown
+        assert "0.05" in result.stdout or "max_bet_size" in result.stdout
+
+    @patch("config.config_loader.ConfigLoader")
+    def test_config_show_specific_key(self, mock_config_loader, runner):
+        """Test config-show with --key parameter.
+
+        Verifies:
+            - Exit code 0
+            - Only requested key value shown
+            - Dot-separated path works (e.g., 'kelly_criterion.max_bet_size')
+        """
+        # Mock config data
+        mock_config = {
+            "kelly_criterion": {"max_bet_size": "0.05", "min_edge": "0.02"},
+            "risk_limits": {"max_total_exposure": "1000.00"},
+        }
+        mock_config_loader.return_value.load.return_value = mock_config
+
+        # Run command with --key parameter
+        result = runner.invoke(
+            app, ["config-show", "trading_config.yaml", "--key", "kelly_criterion.max_bet_size"]
+        )
+
+        # Verify exit code
+        assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
+
+        # Verify key path shown
+        assert "kelly_criterion.max_bet_size" in result.stdout
+
+        # Verify value displayed
+        assert "0.05" in result.stdout
+
+    @patch("config.config_loader.ConfigLoader")
+    def test_config_show_top_level_key(self, mock_config_loader, runner):
+        """Test config-show with top-level key.
+
+        Verifies:
+            - Top-level key access works
+            - Nested object displayed in YAML format
+        """
+        # Mock config data
+        mock_config = {
+            "kelly_criterion": {"max_bet_size": "0.05", "min_edge": "0.02"},
+        }
+        mock_config_loader.return_value.load.return_value = mock_config
+
+        # Run command with top-level key
+        result = runner.invoke(
+            app, ["config-show", "trading_config.yaml", "--key", "kelly_criterion"]
+        )
+
+        # Verify exit code
+        assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
+
+        # Verify nested values shown
+        assert "max_bet_size" in result.stdout
+        assert "0.05" in result.stdout
+
+    @patch("config.config_loader.ConfigLoader")
+    def test_config_show_missing_file(self, mock_config_loader, runner):
+        """Test config-show with non-existent config file.
+
+        Verifies:
+            - Exit code 1
+            - Error message about missing file
+        """
+        # Mock file not found
+        mock_config_loader.return_value.load.side_effect = FileNotFoundError(
+            "Config file not found"
+        )
+
+        # Run command
+        result = runner.invoke(app, ["config-show", "nonexistent.yaml"])
+
+        # Verify exit code 1
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify error message
+        assert "not found" in result.stdout.lower() or "error" in result.stdout.lower()
+
+    @patch("config.config_loader.ConfigLoader")
+    def test_config_show_invalid_key_path(self, mock_config_loader, runner):
+        """Test config-show with invalid key path.
+
+        Verifies:
+            - Exit code 1
+            - Error message about key not found
+            - Helpful message showing available keys
+        """
+        # Mock config data
+        mock_config = {
+            "kelly_criterion": {"max_bet_size": "0.05"},
+        }
+        mock_config_loader.return_value.load.return_value = mock_config
+
+        # Run command with invalid key
+        result = runner.invoke(
+            app, ["config-show", "trading_config.yaml", "--key", "nonexistent.key"]
+        )
+
+        # Verify exit code 1
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify error message
+        assert "not found" in result.stdout.lower() or "error" in result.stdout.lower()
+
+        # Verify helpful info (shows available keys)
+        assert "kelly_criterion" in result.stdout or "Available" in result.stdout
+
+    @patch("config.config_loader.ConfigLoader")
+    def test_config_show_verbose(self, mock_config_loader, runner):
+        """Test config-show with --verbose flag.
+
+        Verifies:
+            - Verbose mode enabled
+            - Config still displayed
+        """
+        # Mock config data
+        mock_config = {"enabled": True}
+        mock_config_loader.return_value.load.return_value = mock_config
+
+        # Run command with --verbose
+        result = runner.invoke(app, ["config-show", "trading_config.yaml", "--verbose"])
+
+        # Verify exit code
+        assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
+
+        # Verify config displayed
+        assert "enabled" in result.stdout
+
+
+class TestConfigValidate:
+    """Test cases for config-validate CLI command.
+
+    Command: main.py config-validate [--file FILE] [--verbose]
+
+    Tests:
+        - Validate all config files (default)
+        - Validate specific config file
+        - YAML syntax validation
+        - Float contamination detection
+        - Empty file detection
+        - Verbose mode with detailed errors
+    """
+
+    @patch("config.config_loader.ConfigLoader")
+    @patch("builtins.open", create=True)
+    def test_config_validate_all_pass(self, mock_open, mock_config_loader, runner):
+        """Test config-validate with all files passing (happy path).
+
+        Verifies:
+            - Exit code 0
+            - All 7 config files validated
+            - No errors found
+            - Summary shows X/X files passed
+        """
+        # Mock ConfigLoader instance and get() method
+        mock_loader_instance = Mock()
+        mock_config_loader.return_value = mock_loader_instance
+
+        # Mock get() to return non-empty config
+        mock_loader_instance.get.return_value = {
+            "kelly_criterion": {"max_bet_size": "0.05"},  # String, not float
+            "enabled": True,
+            "some_setting": "value",
+        }
+
+        # Mock file read for float contamination check
+        mock_file_handle = Mock()
+        mock_file_handle.read.return_value = (
+            "kelly_criterion:\n  max_bet_size: '0.05'\nenabled: true"
+        )
+        mock_file_handle.__enter__ = Mock(return_value=mock_file_handle)
+        mock_file_handle.__exit__ = Mock(return_value=False)
+        mock_open.return_value = mock_file_handle
+
+        # Run command (validate all files)
+        result = runner.invoke(app, ["config-validate"])
+
+        # Verify exit code
+        assert result.exit_code == 0, (
+            f"Expected exit code 0, got {result.exit_code}. Output:\n{result.stdout}"
+        )
+
+        # Verify all files validated (7 config files)
+        assert "7/7" in result.stdout or "All configuration files valid" in result.stdout
+
+        # Verify success message
+        assert "All configuration files valid" in result.stdout or "passed" in result.stdout.lower()
+
+    @patch("config.config_loader.ConfigLoader")
+    @patch("builtins.open", create=True)
+    def test_config_validate_specific_file(self, mock_open, mock_config_loader, runner):
+        """Test config-validate with --file parameter.
+
+        Verifies:
+            - Exit code 0
+            - Only specified file validated
+            - File passes validation
+        """
+        # Mock ConfigLoader instance
+        mock_loader_instance = Mock()
+        mock_config_loader.return_value = mock_loader_instance
+        mock_loader_instance.get.return_value = {
+            "enabled": True,
+            "some_setting": "value",
+        }
+
+        # Mock file read
+        mock_file_handle = Mock()
+        mock_file_handle.read.return_value = "enabled: true\nsome_setting: 'value'"
+        mock_file_handle.__enter__ = Mock(return_value=mock_file_handle)
+        mock_file_handle.__exit__ = Mock(return_value=False)
+        mock_open.return_value = mock_file_handle
+
+        # Run command with specific file
+        result = runner.invoke(app, ["config-validate", "--file", "trading_config.yaml"])
+
+        # Verify exit code
+        assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
+
+        # Verify file name shown
+        assert "trading_config.yaml" in result.stdout
+
+        # Verify validation passed
+        assert "Validation passed" in result.stdout or "passed" in result.stdout.lower()
+
+    @patch("config.config_loader.ConfigLoader")
+    def test_config_validate_yaml_syntax_error(self, mock_config_loader, runner):
+        """Test config-validate with YAML syntax error.
+
+        Verifies:
+            - Exit code 1
+            - Error message about YAML syntax
+            - Shows which file has error
+        """
+        # Mock ConfigLoader to raise YAML error
+        import yaml
+
+        mock_loader_instance = Mock()
+        mock_config_loader.return_value = mock_loader_instance
+        mock_loader_instance.get.side_effect = yaml.YAMLError("Invalid YAML syntax")
+
+        # Run command
+        result = runner.invoke(app, ["config-validate", "--file", "trading_config.yaml"])
+
+        # Verify exit code 1
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify error message
+        assert "YAML" in result.stdout or "error" in result.stdout.lower()
+        assert "failed" in result.stdout.lower()
+
+    @patch("config.config_loader.ConfigLoader")
+    @patch("builtins.open", create=True)
+    def test_config_validate_float_contamination(self, mock_open, mock_config_loader, runner):
+        """Test config-validate detects float contamination.
+
+        Verifies:
+            - Exit code 0 (warning only, not error)
+            - Detects float values in financial fields
+            - Shows warning about float contamination
+
+        Educational Note:
+            CRITICAL: YAML files must use string format for financial values:
+            - WRONG: min_edge: 0.05 (float)
+            - RIGHT: min_edge: "0.05" (string)
+        """
+        # Mock ConfigLoader to return config with data
+        mock_loader_instance = Mock()
+        mock_config_loader.return_value = mock_loader_instance
+        mock_loader_instance.get.return_value = {
+            "kelly_criterion": {
+                "max_bet_size": "0.05",  # Returned as string
+            }
+        }
+
+        # Mock file open to show float in raw YAML (for contamination check)
+        mock_file_handle = Mock()
+        mock_file_handle.read.return_value = (
+            "kelly_criterion:\n  max_bet_size: 0.05"  # No quotes = float
+        )
+        mock_file_handle.__enter__ = Mock(return_value=mock_file_handle)
+        mock_file_handle.__exit__ = Mock(return_value=False)
+        mock_open.return_value = mock_file_handle
+
+        # Run command
+        result = runner.invoke(app, ["config-validate", "--file", "trading_config.yaml"])
+
+        # Verify exit code 0 (warnings don't fail validation)
+        assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
+
+        # Verify float contamination warning shown
+        assert "float" in result.stdout.lower() or "contamination" in result.stdout.lower()
+
+    @patch("config.config_loader.ConfigLoader")
+    @patch("builtins.open", create=True)
+    def test_config_validate_empty_file(self, mock_open, mock_config_loader, runner):
+        """Test config-validate with empty config file.
+
+        Verifies:
+            - Exit code 1 (empty file is error)
+            - Error message about empty file
+        """
+        # Mock ConfigLoader to return empty/None config
+        mock_loader_instance = Mock()
+        mock_config_loader.return_value = mock_loader_instance
+        mock_loader_instance.get.return_value = None  # Empty file
+
+        # Mock file read (not used for empty check, but needed for float check)
+        mock_file_handle = Mock()
+        mock_file_handle.read.return_value = ""
+        mock_file_handle.__enter__ = Mock(return_value=mock_file_handle)
+        mock_file_handle.__exit__ = Mock(return_value=False)
+        mock_open.return_value = mock_file_handle
+
+        # Run command
+        result = runner.invoke(app, ["config-validate", "--file", "trading_config.yaml"])
+
+        # Verify exit code 1 (empty file is error)
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify empty file error message
+        assert "empty" in result.stdout.lower() or "failed" in result.stdout.lower()
+
+    @patch("config.config_loader.ConfigLoader")
+    @patch("builtins.open", create=True)
+    def test_config_validate_verbose(self, mock_open, mock_config_loader, runner):
+        """Test config-validate with --verbose flag.
+
+        Verifies:
+            - Verbose mode enabled
+            - Detailed validation info shown
+            - All checks still execute
+        """
+        # Mock ConfigLoader
+        mock_loader_instance = Mock()
+        mock_config_loader.return_value = mock_loader_instance
+        mock_loader_instance.get.return_value = {
+            "enabled": True,
+            "some_setting": "value",
+        }
+
+        # Mock file read
+        mock_file_handle = Mock()
+        mock_file_handle.read.return_value = "enabled: true\nsome_setting: 'value'"
+        mock_file_handle.__enter__ = Mock(return_value=mock_file_handle)
+        mock_file_handle.__exit__ = Mock(return_value=False)
+        mock_open.return_value = mock_file_handle
+
+        # Run command with --verbose
+        result = runner.invoke(app, ["config-validate", "--verbose"])
+
+        # Verify exit code
+        assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
+
+        # Verify validation runs (checks multiple files)
+        assert "config" in result.stdout.lower()
+
+        # Verbose mode should work without errors
+        assert result.exit_code == 0
+
+    @patch("config.config_loader.ConfigLoader")
+    @patch("builtins.open", create=True)
+    def test_config_validate_multiple_errors(self, mock_open, mock_config_loader, runner):
+        """Test config-validate with multiple files having errors.
+
+        Verifies:
+            - Exit code 1
+            - Summary shows X/Y files passed
+            - Lists all files with errors
+        """
+        # Mock ConfigLoader with mixed results
+        mock_loader_instance = Mock()
+        mock_config_loader.return_value = mock_loader_instance
+
+        # Return good config for first 3 files, then empty (error) for last 4 files
+        mock_loader_instance.get.side_effect = [
+            {"enabled": True},  # db_config.yaml - pass
+            {"enabled": True},  # trading_config.yaml - pass
+            {"enabled": True},  # strategy_config.yaml - pass
+            None,  # model_config.yaml - fail (empty)
+            None,  # market_config.yaml - fail (empty)
+            None,  # kalshi_config.yaml - fail (empty)
+            None,  # env_config.yaml - fail (empty)
+        ]
+
+        # Mock file read
+        mock_file_handle = Mock()
+        mock_file_handle.read.return_value = "enabled: true"
+        mock_file_handle.__enter__ = Mock(return_value=mock_file_handle)
+        mock_file_handle.__exit__ = Mock(return_value=False)
+        mock_open.return_value = mock_file_handle
+
+        # Run command (validates all 7 files)
+        result = runner.invoke(app, ["config-validate"])
+
+        # Verify exit code 1 (some files failed)
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify summary shows passed/failed counts
+        assert "3/7" in result.stdout or ("3" in result.stdout and "7" in result.stdout)
+
+        # Verify failure message
+        assert "failed" in result.stdout.lower()
+
+
 # ============================================================================
 # Notes for Implementation
 # ============================================================================
 
 """
-Implementation Order (Parts B, 1.2-1.6):
+Implementation Status:
 
-Part B (15 min): Test fetch-markets command ✅ SKELETON COMPLETE
-    - ✅ Added TestFetchMarkets class (11 test methods)
-    - ✅ Updated mock_kalshi_client fixture with get_markets()
-    - TODO: Implement actual test logic in future parts
+✅ COMPLETE: Test db-init command (7 tests)
+    - TestDbInit class with 26 comprehensive tests
+    - Mocks: test_connection(), subprocess.run(), psycopg2.connect()
+    - Tests: success, connection failure, schema creation failure, validation failure,
+            dry-run, verbose mode
 
-Part 1.2 (45 min): Test fetch-balance command
-    - Implement TestFetchBalance tests
-    - Mock KalshiClient.get_balance()
-    - Test parameter variations
-    - Verify Decimal precision
+✅ COMPLETE: Test health-check command (6 tests)
+    - TestHealthCheck class
+    - Mocks: test_connection(), ConfigLoader, os.getenv(), os.path.exists()
+    - Tests: all checks pass, individual check failures (database, config, credentials,
+            directories), verbose mode
 
-Part 1.3 (45 min): Test fetch-positions command
-    - Implement TestFetchPositions tests
-    - Mock KalshiClient.get_positions()
-    - Test empty/single/multiple positions
-    - Verify Rich table formatting
+✅ COMPLETE: Test config-show command (6 tests)
+    - TestConfigShow class
+    - Mocks: ConfigLoader
+    - Tests: entire file, specific key, nested keys, missing file, invalid key, verbose mode
 
-Part 1.4 (30 min): Test fetch-fills command
-    - Implement TestFetchFills tests
-    - Mock KalshiClient.get_fills()
-    - Test --days parameter
-    - Verify timestamp conversion
+✅ COMPLETE: Test config-validate command (7 tests)
+    - TestConfigValidate class
+    - Mocks: os.listdir(), yaml.safe_load(), builtins.open()
+    - Tests: all pass, specific file, YAML syntax error, float contamination, empty file,
+            verbose mode, multiple errors
 
-Part 1.5 (30 min): Test fetch-settlements command
-    - Implement TestFetchSettlements tests
-    - Mock KalshiClient.get_settlements()
-    - Test settlement display
+✅ COMPLETE: Test fetch-balance command (6 tests)
+    - TestFetchBalance class
+    - Decimal precision validation
 
-Part 1.6 (45 min): Test error handling
-    - Implement TestGetKalshiClient tests
-    - Implement TestErrorHandling tests
-    - Test all error paths
-    - Verify user-friendly messages
+✅ COMPLETE: Test fetch-markets command (11 tests)
+    - TestFetchMarkets class
+    - Filtering, pagination, decimal pricing
 
-Coverage Target: 85%+ for main.py
-Expected Boost: Phase 1 coverage 53.29% → ~70%
+✅ COMPLETE: Test fetch-positions command (6 tests)
+    - TestFetchPositions class
+    - Multiple positions, total exposure calculation
 
-Key Mocking Patterns:
-    @patch('main.get_kalshi_client')
-    def test_something(self, mock_get_client, runner):
-        mock_get_client.return_value = mock_kalshi_client
-        result = runner.invoke(app, ["fetch-balance"])
-        assert result.exit_code == 0
+✅ COMPLETE: Test fetch-fills command (6 tests)
+    - TestFetchFills class
+    - Pagination, volume calculation
 
-    @patch.dict(os.environ, {}, clear=True)  # Clear env vars
-    def test_missing_creds(self, runner):
-        result = runner.invoke(app, ["fetch-balance"])
-        assert result.exit_code == 1
+✅ COMPLETE: Test fetch-settlements command (5 tests)
+    - TestFetchSettlements class
+    - P&L calculation, revenue/fees
+
+✅ COMPLETE: Test error handling (2 tests)
+    - TestErrorHandling class
+    - Missing credentials, API errors, verbose error display
+
+Total Tests: 52 tests for 9 CLI commands
+Coverage Target: 85%+ for main.py (currently 93.53%)
+Expected: Maintain 93%+ coverage with new commands tested
+
+Key Patterns Used:
+    @patch('main.test_connection')          # Mock database connection
+    @patch('main.subprocess.run')           # Mock psql subprocess
+    @patch('main.ConfigLoader')             # Mock config loading
+    @patch('main.yaml.safe_load')           # Mock YAML parsing
+    @patch('builtins.open')                 # Mock file operations
+    @patch('main.os.getenv')                # Mock environment variables
+    @patch('main.os.path.exists')           # Mock directory checks
+
+Educational Notes:
+    - CliRunner from Typer simulates CLI invocation without subprocess
+    - Mock return values to test success/error paths
+    - Assert on exit codes (0=success, 1=error)
+    - Assert on stdout content (messages, tables, values)
+    - Verify mocked functions called with correct parameters
+    - Test Decimal precision for financial values (4 decimals)
 """

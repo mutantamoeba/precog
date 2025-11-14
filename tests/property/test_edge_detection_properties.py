@@ -434,8 +434,8 @@ def test_realizable_edge_uses_ask_price(true_prob, bid, ask, fee):
 
 
 @given(
-    edge=st.decimals(min_value=-0.5, max_value=0.5, places=4),
-    threshold=st.decimals(min_value=0.01, max_value=0.15, places=4),
+    edge=st.decimals(min_value=Decimal("-0.5000"), max_value=Decimal("0.5000"), places=4),
+    threshold=st.decimals(min_value=Decimal("0.0100"), max_value=Decimal("0.1500"), places=4),
 )
 def test_edge_above_threshold_recommends_trade(edge, threshold):
     """
