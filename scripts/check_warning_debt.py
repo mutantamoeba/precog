@@ -149,14 +149,14 @@ def run_mypy() -> tuple[str, int]:
             ["python", "-m", "mypy", "."],
             capture_output=True,
             text=True,
-            timeout=60,  # 1 minute timeout
+            timeout=120,  # 2 minute timeout (increased for parallel execution)
         )
 
         output = result.stdout + result.stderr
         return output, result.returncode
 
     except subprocess.TimeoutExpired:
-        print("[ERROR] Mypy timed out after 1 minute")
+        print("[ERROR] Mypy timed out after 2 minutes")
         sys.exit(2)
     except FileNotFoundError:
         print("[ERROR] Mypy not found - is it installed?")
