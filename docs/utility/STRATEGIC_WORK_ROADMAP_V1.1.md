@@ -1,17 +1,42 @@
 # Strategic Work Roadmap - Precog Project
 
 ---
-**Document:** STRATEGIC_WORK_ROADMAP_V1.0.md
-**Version:** 1.0
+**Document:** STRATEGIC_WORK_ROADMAP_V1.1.md
+**Version:** 1.1
 **Created:** 2025-11-09
-**Last Updated:** 2025-11-09
+**Last Updated:** 2025-11-10
 **Status:** ✅ Current
-**Purpose:** Master roadmap of 25 strategic tasks organized by category with research dependencies
+**Purpose:** Master roadmap of 28 strategic tasks organized by category with research dependencies
 **Target Audience:** Product owner, development team, future contributors
 **Related Documents:**
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.13.md` (ADR-076, ADR-077 open questions)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.13.md` (ADR-076, ADR-077 open questions, ADR-078, ADR-085 analytics)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.7.md` (Phase 4.5 research phase)
 - `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` (11 detailed research tasks)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Performance tracking & analytics schema)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.13.md` (REQ-ANALYTICS-001 through 004, REQ-MODEL-EVAL-001/002)
+
+**Changes in V1.1:**
+- **ANALYTICS INFRASTRUCTURE TASKS ADDED:** Added 3 new strategic tasks to Category 4: Analytics & Reporting (now 7 tasks, was 4)
+- **STRAT-026:** Performance Metrics Infrastructure Implementation (Phase 1.5-2, 🔴 Critical, 18-22h)
+  - 16-metric tracking system (ROI, Sharpe, Brier, ECE, etc.) with 8-level time-series aggregation (trade → hourly → daily → weekly → monthly → quarterly → yearly → all_time)
+  - 3-tier retention strategy (Hot 0-18mo, Warm 18-42mo, Cold 42+mo with automatic archival)
+  - Dual data sources (live trading + backtesting metrics) in unified performance_metrics table
+  - Bootstrap confidence intervals (1000 samples) for statistical rigor
+  - References: REQ-ANALYTICS-001 (Performance Metrics Collection), REQ-ANALYTICS-002 (Time-Series Aggregation), ADR-078 (JSONB Config Storage), ADR-085 (Materialized Views)
+- **STRAT-027:** Model Evaluation Framework Implementation (Phase 1.5-2, 🔴 Critical, 20-25h)
+  - Three validation types: Backtesting (historical 2019-2024), Cross-validation (k=5 temporal), Holdout validation (2024 Q4)
+  - Calibration metrics: Brier Score ≤0.20 (MSE for probabilities), ECE ≤0.10 (10 bins, weighted absolute difference), Log Loss ≤0.50
+  - Activation criteria: ≥100 predictions, ≥52% accuracy, meets all calibration thresholds
+  - Reliability diagrams (predicted vs observed frequency, 45-degree line = perfect calibration)
+  - References: REQ-MODEL-EVAL-001 (Model Validation Framework), REQ-MODEL-EVAL-002 (Activation Criteria), ADR-082 (to be created)
+- **STRAT-028:** Materialized Views for Analytics & Dashboards (Phase 1.5-2, 🟡 High, 12-15h)
+  - PostgreSQL materialized views extract JSONB fields to columns for BI tool compatibility (Tableau, PowerBI, Grafana)
+  - 80-97% query performance improvement (500ms complex JSONB queries → 15-100ms materialized view queries)
+  - Three refresh strategies: Hourly (real-time dashboards), Daily (historical analysis), On-Demand (bulk loads)
+  - No schema migrations needed - preserves operational JSONB flexibility while enabling SQL-friendly analytics
+  - References: REQ-ANALYTICS-003 (Materialized Views), REQ-REPORTING-001 (Dashboard Performance), ADR-085 (JSONB vs Normalized Hybrid), ADR-083 (to be created)
+- **Total addition:** ~650 lines of detailed implementation guidance with code examples, database schemas, success criteria, cross-references
+- **Task count:** 25 → 28 strategic tasks across 5 categories
 
 ---
 
@@ -23,7 +48,7 @@
    - [Architecture & Infrastructure (5 tasks)](#category-1-architecture--infrastructure-5-tasks)
    - [Modeling & Edge Detection (6 tasks)](#category-2-modeling--edge-detection-6-tasks)
    - [Strategy & Position Management (7 tasks)](#category-3-strategy--position-management-7-tasks)
-   - [Analytics & Reporting (4 tasks)](#category-4-analytics--reporting-4-tasks)
+   - [Analytics & Reporting (7 tasks)](#category-4-analytics--reporting-7-tasks)
    - [Platform & Deployment (3 tasks)](#category-5-platform--deployment-3-tasks)
 4. [Timeline & Dependencies](#timeline--dependencies)
 5. [Success Metrics](#success-metrics)
@@ -34,7 +59,7 @@
 
 ### Purpose
 
-This document provides a **strategic roadmap** of 25 high-value tasks spanning Phases 1-10 of the Precog project. Unlike `DEVELOPMENT_PHASES_V1.7.md` (which provides chronological implementation details), this roadmap organizes work by **strategic category** and **priority**.
+This document provides a **strategic roadmap** of 28 high-value tasks spanning Phases 1-10 of the Precog project. Unlike `DEVELOPMENT_PHASES_V1.7.md` (which provides chronological implementation details), this roadmap organizes work by **strategic category** and **priority**.
 
 ### Philosophy
 
@@ -49,7 +74,7 @@ This document provides a **strategic roadmap** of 25 high-value tasks spanning P
 **For Product Owners:**
 - Review RESEARCH REQUIREMENTS section to understand open architectural questions
 - Prioritize tasks within each category based on business value
-- Track progress using task IDs (STRAT-001 through STRAT-025)
+- Track progress using task IDs (STRAT-001 through STRAT-028)
 
 **For Developers:**
 - Check task dependencies before starting work (many tasks depend on ADR-076/ADR-077 research)
@@ -2178,7 +2203,657 @@ profit_factor = sum(returns[returns > 0]) / abs(sum(returns[returns < 0]))
 
 ---
 
-## Category 4: Analytics & Reporting (4 tasks)
+## Category 4: Analytics & Reporting (7 tasks)
+
+### STRAT-026: Performance Metrics Infrastructure Implementation (Phase 1.5-2, 🔴 Critical Priority)
+
+**Task ID:** STRAT-026
+**Priority:** 🔴 Critical
+**Estimated Effort:** 18-22 hours
+**Target Phase:** 1.5-2 (Model Validation & Analytics, December 2025-February 2026)
+**Dependencies:** Phase 1 database schema complete, evaluation_runs table (STRAT-027)
+**Related Requirements:** REQ-ANALYTICS-001 (Performance Metrics Collection), REQ-ANALYTICS-002 (Time-Series Aggregation)
+**Related ADRs:** ADR-078 (Config Storage - JSONB), ADR-085 (Materialized Views Strategy)
+
+#### Problem
+Current system (Phase 0-1) tracks individual trades and positions but **does not aggregate performance metrics** over time. Without historical performance tracking, we cannot:
+- **Answer basic questions:** "What's my ROI over the last 30 days?" "Which strategy has the best Sharpe ratio?"
+- **Monitor degradation:** Model performance may degrade over time (concept drift) without detection
+- **Compare versions:** Can't compare strategy v1.0 vs v1.1 unless we track metrics
+- **Build dashboards:** Real-time dashboards (Phase 6-7) require pre-aggregated metrics
+
+**Performance metrics infrastructure** provides:
+- **Unified tracking:** Strategies, models, methods, edges, ensembles in single table
+- **Time-series aggregation:** Trade-level → hourly → daily → weekly → monthly → yearly → all-time
+- **3-tier retention:** Hot (0-18mo), Warm (18-42mo), Cold (42+mo) archival
+- **Dual data sources:** Live trading + backtesting metrics in unified storage
+
+#### Research Objectives
+1. **Define metric calculation logic** (ROI, Sharpe, Sortino, Brier, ECE - 16 metrics total)
+2. **Design aggregation pipeline** (real-time vs batch, PostgreSQL aggregation vs Python)
+3. **Implement retention strategy** (automatic archival triggers, cold storage)
+4. **Add statistical context** (confidence intervals, standard deviation, standard error)
+
+#### Implementation Tasks
+
+**Task 1: Database Schema Implementation (4-5 hours)**
+- Create `performance_metrics` table (already documented in DATABASE_SCHEMA_SUMMARY_V1.8)
+- Add indexes for time-series queries (entity_type, entity_id, metric_name, timestamp)
+- Create `performance_metrics_archive` table (cold storage)
+- Add migration script
+
+**Schema:**
+```sql
+CREATE TABLE performance_metrics (
+    metric_id SERIAL PRIMARY KEY,
+    entity_type VARCHAR NOT NULL,  -- 'strategy', 'model', 'method', 'edge', 'ensemble'
+    entity_id INT NOT NULL,
+    entity_version VARCHAR,
+    metric_name VARCHAR NOT NULL,  -- 'roi', 'sharpe_ratio', 'brier_score', etc.
+    metric_value DECIMAL(12,6),
+    aggregation_period VARCHAR NOT NULL,  -- 'trade', 'hourly', 'daily', ..., 'all_time'
+    period_start TIMESTAMP,
+    period_end TIMESTAMP,
+    sample_size INT,
+    confidence_interval_lower DECIMAL(12,6),
+    confidence_interval_upper DECIMAL(12,6),
+    standard_deviation DECIMAL(12,6),
+    standard_error DECIMAL(12,6),
+    data_source VARCHAR NOT NULL,  -- 'live_trading', 'backtesting', 'paper_trading'
+    evaluation_run_id INT,
+    storage_tier VARCHAR DEFAULT 'hot',
+    metadata JSONB,
+    timestamp TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+-- Indexes
+CREATE INDEX idx_performance_timeseries ON performance_metrics(
+    entity_type, entity_id, metric_name, aggregation_period, timestamp DESC
+);
+CREATE INDEX idx_performance_entity ON performance_metrics(entity_type, entity_id);
+CREATE INDEX idx_performance_metric_name ON performance_metrics(metric_name);
+```
+
+**Task 2: Metric Calculation Implementation (6-8 hours)**
+- Implement 16 metric calculations in `analytics/metrics/metric_calculator.py`:
+  - **Trading Performance:** roi, win_rate, sharpe_ratio, sortino_ratio, max_drawdown, avg_trade_size, total_pnl, unrealized_pnl
+  - **Model Validation:** accuracy, precision, recall, f1_score, auc_roc, brier_score, calibration_ece, log_loss
+- Add statistical context (confidence intervals, std dev, std error)
+- Unit tests (each metric)
+
+**Example implementation (Sharpe Ratio):**
+```python
+from decimal import Decimal
+import numpy as np
+
+def calculate_sharpe_ratio(
+    returns: list[Decimal],
+    risk_free_rate: Decimal = Decimal("0.03"),  # 3% annualized
+    annualization_factor: int = 252  # Trading days
+) -> dict:
+    """
+    Calculate Sharpe ratio with statistical context.
+
+    Returns:
+        dict with metric_value, confidence_interval, std_dev, std_error
+    """
+    if len(returns) < 30:
+        return None  # Insufficient data
+
+    # Convert to numpy
+    returns_array = np.array([float(r) for r in returns])
+
+    # Calculate Sharpe
+    excess_returns = returns_array - (float(risk_free_rate) / annualization_factor)
+    sharpe = np.mean(excess_returns) / np.std(excess_returns) * np.sqrt(annualization_factor)
+
+    # Calculate 95% confidence interval (bootstrap)
+    bootstrap_sharpes = []
+    for _ in range(1000):
+        sample = np.random.choice(excess_returns, size=len(excess_returns), replace=True)
+        bootstrap_sharpes.append(np.mean(sample) / np.std(sample) * np.sqrt(annualization_factor))
+
+    ci_lower = np.percentile(bootstrap_sharpes, 2.5)
+    ci_upper = np.percentile(bootstrap_sharpes, 97.5)
+
+    return {
+        "metric_value": Decimal(str(sharpe)),
+        "confidence_interval_lower": Decimal(str(ci_lower)),
+        "confidence_interval_upper": Decimal(str(ci_upper)),
+        "standard_deviation": Decimal(str(np.std(returns_array))),
+        "standard_error": Decimal(str(np.std(returns_array) / np.sqrt(len(returns_array))))
+    }
+```
+
+**Task 3: Aggregation Pipeline Implementation (4-5 hours)**
+- Implement batch aggregation (hourly, daily, weekly, monthly cron jobs)
+- Implement real-time aggregation (after each trade/settlement)
+- Add aggregation logic for all 8 time periods (trade → all_time)
+- Error handling and logging
+
+**Example aggregation (Daily ROI):**
+```python
+def aggregate_daily_roi(strategy_id: int, date: str):
+    """Aggregate ROI for a strategy on a specific date."""
+    # Get all trades for this strategy on this date
+    trades = session.query(Trade).filter(
+        Trade.strategy_id == strategy_id,
+        func.date(Trade.created_at) == date,
+        Trade.settlement_status == 'settled'
+    ).all()
+
+    if not trades:
+        return  # No data
+
+    # Calculate ROI
+    total_invested = sum(t.quantity * t.price for t in trades)
+    total_profit = sum(t.profit_loss for t in trades)
+    roi = (total_profit / total_invested) if total_invested > 0 else Decimal("0")
+
+    # Calculate confidence interval (bootstrap)
+    individual_rois = [(t.profit_loss / (t.quantity * t.price)) for t in trades if (t.quantity * t.price) > 0]
+    ci_lower, ci_upper = bootstrap_confidence_interval(individual_rois)
+
+    # Insert into performance_metrics
+    session.add(PerformanceMetric(
+        entity_type='strategy',
+        entity_id=strategy_id,
+        metric_name='roi',
+        metric_value=roi,
+        aggregation_period='daily',
+        period_start=f"{date} 00:00:00",
+        period_end=f"{date} 23:59:59",
+        sample_size=len(trades),
+        confidence_interval_lower=ci_lower,
+        confidence_interval_upper=ci_upper,
+        data_source='live_trading'
+    ))
+    session.commit()
+```
+
+**Task 4: Retention Strategy Implementation (3-4 hours)**
+- Implement automatic archival (18-month threshold → warm, 42-month → cold)
+- Create archival cron job (monthly)
+- Test archival logic (does NOT delete data, moves to archive table)
+
+**Task 5: Testing & Validation (2-3 hours)**
+- Unit tests (16 metric calculations)
+- Integration tests (aggregation pipeline end-to-end)
+- Load testing (10k trades, 100k metrics - does it scale?)
+- Validate statistical correctness (confidence intervals, bootstrap)
+
+#### Deliverable
+- **Database:** Migration script `database/migrations/0XX_add_performance_metrics_tables.sql`
+- **Code:** `analytics/metrics/metric_calculator.py` (~500 lines, 16 metrics)
+- **Code:** `analytics/aggregation/aggregation_pipeline.py` (~400 lines, batch + real-time)
+- **Code:** `analytics/retention/archival_jobs.py` (~200 lines, automatic archival)
+- **Tests:** `tests/unit/analytics/test_metrics.py` (16 metric tests)
+- **Tests:** `tests/integration/analytics/test_aggregation_pipeline.py`
+
+#### Success Criteria
+- [ ] performance_metrics table created with all indexes
+- [ ] All 16 metrics implemented with unit tests (100% passing)
+- [ ] Aggregation pipeline working (8 time periods: trade → all_time)
+- [ ] Real-time aggregation working (after each trade)
+- [ ] Batch aggregation working (hourly, daily, weekly, monthly cron jobs)
+- [ ] Confidence intervals calculated correctly (bootstrap validation)
+- [ ] Retention strategy working (18-month archival threshold)
+- [ ] Load testing passed (10k trades, 100k metrics)
+
+---
+
+### STRAT-027: Model Evaluation Framework Implementation (Phase 1.5-2, 🔴 Critical Priority)
+
+**Task ID:** STRAT-027
+**Priority:** 🔴 Critical
+**Estimated Effort:** 20-25 hours
+**Target Phase:** 1.5-2 (Model Validation & Analytics, December 2025-February 2026)
+**Dependencies:** Phase 1 probability_models table, Phase 2 historical data
+**Related Requirements:** REQ-MODEL-EVAL-001 (Model Validation Framework), REQ-MODEL-EVAL-002 (Activation Criteria)
+**Related ADRs:** ADR-082 (Model Evaluation Framework - to be created)
+
+#### Problem
+Current system (Phase 0-1) has **no validation framework** for probability models. Models transition from 'draft' → 'testing' → 'active' without **rigorous evaluation**:
+- **No activation criteria:** How do we know a model is "good enough" to use in live trading?
+- **No calibration metrics:** Are predicted probabilities well-calibrated? (predicted 70% = 70% observed frequency)
+- **No prediction storage:** Can't analyze model errors or improvement over time
+- **No dataset management:** Which historical data was used for validation?
+
+**Model evaluation framework** provides:
+- **Validation types:** Backtesting, cross-validation (k=5), holdout validation
+- **Calibration metrics:** Brier score ≤0.20, ECE ≤0.10, Log Loss ≤0.50
+- **Activation criteria:** ≥100 predictions, ≥52% accuracy, meets calibration thresholds
+- **Detailed prediction storage:** Individual predictions for error analysis
+
+#### Research Objectives
+1. **Define validation datasets** (NFL 2019-2024 archives, train/val/test splits)
+2. **Implement calibration metrics** (Brier score, Expected Calibration Error, Log Loss)
+3. **Design activation workflow** (draft → validation → testing → active)
+4. **Create reliability diagrams** (visualize calibration quality)
+
+#### Implementation Tasks
+
+**Task 1: Database Schema Implementation (3-4 hours)**
+- Create `evaluation_runs` table (track validation runs)
+- Create `predictions` table (unified for individual + ensemble predictions - already in DATABASE_SCHEMA_SUMMARY_V1.8)
+- Add indexes for calibration queries (probability_bin, actual_outcome)
+- Migration script
+
+**Schema (evaluation_runs):**
+```sql
+CREATE TABLE evaluation_runs (
+    run_id SERIAL PRIMARY KEY,
+    model_id INT NOT NULL REFERENCES probability_models(model_id),
+    model_version VARCHAR NOT NULL,
+    dataset_name VARCHAR NOT NULL,  -- 'nfl_2023', 'nfl_2024_q1', 'nba_2023'
+    run_type VARCHAR NOT NULL,  -- 'backtesting', 'cross_validation', 'holdout'
+    run_started_at TIMESTAMP NOT NULL,
+    run_completed_at TIMESTAMP,
+    evaluation_config JSONB,  -- k-fold settings, dataset splits, etc.
+
+    -- Summary Metrics
+    total_predictions INT,
+    accuracy DECIMAL(6,4),
+    brier_score DECIMAL(8,6),
+    calibration_ece DECIMAL(6,4),
+    log_loss DECIMAL(8,6),
+
+    -- Activation Criteria Results
+    meets_sample_size BOOLEAN,  -- ≥100 predictions
+    meets_accuracy BOOLEAN,  -- ≥52%
+    meets_brier BOOLEAN,  -- ≤0.20
+    meets_calibration BOOLEAN,  -- ECE ≤0.10
+    eligible_for_activation BOOLEAN,  -- All criteria met
+
+    metadata JSONB,
+    timestamp TIMESTAMP DEFAULT NOW() NOT NULL
+);
+```
+
+**Task 2: Calibration Metrics Implementation (5-6 hours)**
+- Implement Brier Score calculation
+- Implement Expected Calibration Error (ECE) with probability binning
+- Implement Log Loss calculation
+- Implement reliability diagram generation (predicted vs observed frequency)
+- Unit tests for each metric
+
+**Example implementation (Expected Calibration Error):**
+```python
+from decimal import Decimal
+
+def calculate_expected_calibration_error(predictions: list[dict], num_bins: int = 10) -> Decimal:
+    """
+    Calculate Expected Calibration Error (ECE).
+
+    Args:
+        predictions: List of dicts with 'predicted_prob' and 'actual_outcome'
+        num_bins: Number of probability bins (default 10: 0.0-0.1, 0.1-0.2, ..., 0.9-1.0)
+
+    Returns:
+        ECE as Decimal (lower is better, ≤0.10 is well-calibrated)
+    """
+    # Group predictions into bins
+    bins = {i: [] for i in range(num_bins)}
+    for pred in predictions:
+        prob = float(pred['predicted_prob'])
+        bin_idx = min(int(prob * num_bins), num_bins - 1)
+        bins[bin_idx].append(pred['actual_outcome'])
+
+    # Calculate ECE
+    ece = Decimal("0")
+    total_predictions = len(predictions)
+
+    for bin_idx, outcomes in bins.items():
+        if not outcomes:
+            continue  # Empty bin
+
+        # Bin midpoint (expected probability)
+        bin_midpoint = (bin_idx + 0.5) / num_bins
+
+        # Observed frequency (actual win rate in this bin)
+        observed_freq = sum(outcomes) / len(outcomes)
+
+        # Weighted absolute difference
+        bin_weight = len(outcomes) / total_predictions
+        ece += Decimal(str(bin_weight * abs(bin_midpoint - observed_freq)))
+
+    return ece
+```
+
+**Task 3: Validation Workflows Implementation (6-8 hours)**
+- Implement backtesting workflow (run model on historical data)
+- Implement k-fold cross-validation (temporal splits, k=5)
+- Implement holdout validation (reserve recent data)
+- Add dataset management (NFL 2019-2024 splits, NBA datasets)
+- Progress tracking and logging
+
+**Example workflow (Backtesting):**
+```python
+def run_backtest_evaluation(model_id: int, dataset_name: str) -> int:
+    """
+    Run backtesting evaluation on historical dataset.
+
+    Returns:
+        evaluation_run_id (can query evaluation_runs table for results)
+    """
+    # Create evaluation run
+    eval_run = EvaluationRun(
+        model_id=model_id,
+        model_version=model.model_version,
+        dataset_name=dataset_name,  # 'nfl_2023'
+        run_type='backtesting',
+        run_started_at=datetime.now(),
+        evaluation_config={'dataset': dataset_name, 'markets_count': 0}
+    )
+    session.add(eval_run)
+    session.flush()  # Get run_id
+
+    # Load historical markets from dataset
+    markets = load_historical_markets(dataset_name)  # NFL 2023 markets
+
+    # Run predictions
+    predictions = []
+    for market in markets:
+        predicted_prob = model.predict(market)
+        prediction = Prediction(
+            evaluation_run_id=eval_run.run_id,
+            model_id=model_id,
+            market_id=market.market_id,
+            predicted_prob=predicted_prob,
+            actual_outcome=market.actual_outcome,  # Known from historical data
+            market_price=market.final_price,
+            is_ensemble=False
+        )
+        session.add(prediction)
+        predictions.append(prediction)
+
+    session.commit()
+
+    # Calculate summary metrics
+    accuracy = sum(1 for p in predictions if (p.predicted_prob >= 0.5) == p.actual_outcome) / len(predictions)
+    brier_score = sum((p.predicted_prob - p.actual_outcome)**2 for p in predictions) / len(predictions)
+    ece = calculate_expected_calibration_error(predictions)
+    log_loss = calculate_log_loss(predictions)
+
+    # Check activation criteria
+    meets_sample_size = len(predictions) >= 100
+    meets_accuracy = accuracy >= 0.52
+    meets_brier = brier_score <= 0.20
+    meets_calibration = ece <= 0.10
+    eligible = meets_sample_size and meets_accuracy and meets_brier and meets_calibration
+
+    # Update evaluation run
+    eval_run.run_completed_at = datetime.now()
+    eval_run.total_predictions = len(predictions)
+    eval_run.accuracy = accuracy
+    eval_run.brier_score = brier_score
+    eval_run.calibration_ece = ece
+    eval_run.log_loss = log_loss
+    eval_run.meets_sample_size = meets_sample_size
+    eval_run.meets_accuracy = meets_accuracy
+    eval_run.meets_brier = meets_brier
+    eval_run.meets_calibration = meets_calibration
+    eval_run.eligible_for_activation = eligible
+    session.commit()
+
+    return eval_run.run_id
+```
+
+**Task 4: Reliability Diagram Implementation (2-3 hours)**
+- Generate reliability diagrams (predicted probability vs observed frequency)
+- Save to files (PNG/SVG)
+- Add to evaluation report
+
+**Example diagram:**
+```python
+import matplotlib.pyplot as plt
+
+def generate_reliability_diagram(predictions: list[dict], output_path: str):
+    """Generate reliability diagram for calibration visualization."""
+    num_bins = 10
+    bins = {i: {'predicted': [], 'observed': []} for i in range(num_bins)}
+
+    # Group by bins
+    for pred in predictions:
+        prob = float(pred['predicted_prob'])
+        bin_idx = min(int(prob * num_bins), num_bins - 1)
+        bins[bin_idx]['predicted'].append(prob)
+        bins[bin_idx]['observed'].append(int(pred['actual_outcome']))
+
+    # Calculate bin statistics
+    bin_midpoints = []
+    observed_frequencies = []
+    for bin_idx, data in bins.items():
+        if data['observed']:
+            bin_midpoint = (bin_idx + 0.5) / num_bins
+            observed_freq = sum(data['observed']) / len(data['observed'])
+            bin_midpoints.append(bin_midpoint)
+            observed_frequencies.append(observed_freq)
+
+    # Plot
+    plt.figure(figsize=(8, 8))
+    plt.plot([0, 1], [0, 1], 'k--', label='Perfect calibration')  # 45-degree line
+    plt.scatter(bin_midpoints, observed_frequencies, s=100, label='Model calibration')
+    plt.xlabel('Predicted Probability')
+    plt.ylabel('Observed Frequency')
+    plt.title('Reliability Diagram')
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(output_path)
+```
+
+**Task 5: Testing & Documentation (3-4 hours)**
+- Unit tests (calibration metrics)
+- Integration tests (full backtesting workflow)
+- Create evaluation report template (accuracy, Brier, ECE, reliability diagram)
+- Document activation workflow
+
+#### Deliverable
+- **Database:** Migration script `database/migrations/0XX_add_evaluation_tables.sql`
+- **Code:** `analytics/evaluation/calibration_metrics.py` (~300 lines, 3 metrics)
+- **Code:** `analytics/evaluation/validation_workflows.py` (~500 lines, backtesting, cross-validation, holdout)
+- **Code:** `analytics/evaluation/reliability_diagram.py` (~150 lines, matplotlib)
+- **Code:** `analytics/evaluation/activation_checker.py` (~200 lines, criteria validation)
+- **Tests:** `tests/unit/analytics/test_calibration_metrics.py`
+- **Tests:** `tests/integration/analytics/test_validation_workflows.py`
+- **Document:** Evaluation report template
+
+#### Success Criteria
+- [ ] evaluation_runs and predictions tables created
+- [ ] Brier Score implemented and validated (unit test)
+- [ ] Expected Calibration Error implemented and validated (unit test)
+- [ ] Log Loss implemented and validated (unit test)
+- [ ] Backtesting workflow working (end-to-end test)
+- [ ] K-fold cross-validation working (k=5, temporal splits)
+- [ ] Holdout validation working (reserve 2024 Q4 data)
+- [ ] Reliability diagrams generated correctly
+- [ ] Activation criteria validated (≥100 predictions, ≥52% accuracy, Brier ≤0.20, ECE ≤0.10)
+- [ ] Documentation complete with example reports
+
+---
+
+### STRAT-028: Materialized Views for Analytics & Dashboards (Phase 1.5-2, 🟡 High Priority)
+
+**Task ID:** STRAT-028
+**Priority:** 🟡 High
+**Estimated Effort:** 12-15 hours
+**Target Phase:** 1.5-2 (Model Validation & Analytics, December 2025-February 2026)
+**Dependencies:** STRAT-026 (performance_metrics table), STRAT-027 (evaluation_runs table)
+**Related Requirements:** REQ-ANALYTICS-003 (Materialized Views), REQ-REPORTING-001 (Dashboard Performance)
+**Related ADRs:** ADR-085 (JSONB vs Normalized - Hybrid Strategy with Materialized Views), ADR-083 (Analytics Data Model - to be created)
+
+#### Problem
+Current database schema (V1.8) uses **JSONB extensively** for operational flexibility:
+- `strategies.config` (JSONB) - Strategy parameters (min_edge, kelly_fraction, etc.)
+- `probability_models.config` (JSONB) - Model parameters (k_factor, learning_rate, etc.)
+- `predictions.features_used` (JSONB) - Feature values for each prediction (Phase 9+)
+
+**This creates a queryability problem for analytics/dashboards:**
+- **BI tools** (Tableau, PowerBI, Grafana) don't support JSONB operators (`->`, `->>`)
+- **Complex queries** required to filter by config parameters: `WHERE (config->>'min_edge')::DECIMAL > 0.05`
+- **Slow performance** for dashboard queries (JSONB extraction + filtering on every query)
+
+**Materialized views solve this problem** (per ADR-085):
+- **Extract JSONB fields into columns** for BI tool compatibility
+- **Pre-aggregate summaries** for <50ms dashboard queries
+- **No schema migrations needed** - operational tables keep JSONB flexibility
+
+#### Research Objectives
+1. **Identify most-queried JSONB fields** for materialization
+2. **Design materialized view schemas** (what columns to extract)
+3. **Define refresh strategy** (hourly, daily, on-demand)
+4. **Benchmark query performance** (before/after materialization)
+
+#### Implementation Tasks
+
+**Task 1: Materialized View Design (3-4 hours)**
+- Define 2 critical materialized views:
+  - `strategy_performance_summary` - Combines strategies + performance_metrics for dashboard
+  - `model_calibration_summary` - Combines probability_models + evaluation_runs for validation dashboard
+- Document extracted columns (what JSONB fields become columns)
+- Design refresh strategy (hourly vs daily)
+
+**Schema (strategy_performance_summary):**
+```sql
+CREATE MATERIALIZED VIEW strategy_performance_summary AS
+SELECT
+    s.strategy_id,
+    s.strategy_name,
+    s.strategy_version,
+    s.status,
+
+    -- Extract common config fields as columns
+    (s.config->>'min_edge')::DECIMAL(6,4) as min_edge,
+    (s.config->>'kelly_fraction')::DECIMAL(6,4) as kelly_fraction,
+    (s.config->>'max_position_size')::INT as max_position_size,
+
+    -- Live Performance (last 30 days)
+    pm_roi.metric_value as roi_30d,
+    pm_roi.confidence_interval_lower as roi_30d_ci_lower,
+    pm_roi.confidence_interval_upper as roi_30d_ci_upper,
+    pm_win_rate.metric_value as win_rate_30d,
+    pm_sharpe.metric_value as sharpe_ratio_30d,
+    pm_trades.sample_size as total_trades_30d,
+
+    -- All-Time Performance
+    pm_roi_all.metric_value as roi_all_time,
+    pm_win_rate_all.metric_value as win_rate_all_time,
+    pm_sharpe_all.metric_value as sharpe_ratio_all_time,
+
+    -- Metadata
+    s.created_at,
+    s.activated_at,
+    NOW() as last_refreshed
+FROM strategies s
+LEFT JOIN LATERAL (
+    SELECT metric_value, confidence_interval_lower, confidence_interval_upper
+    FROM performance_metrics
+    WHERE entity_type = 'strategy' AND entity_id = s.strategy_id
+      AND metric_name = 'roi' AND aggregation_period = 'monthly'
+      AND period_start >= NOW() - INTERVAL '30 days'
+    ORDER BY period_start DESC LIMIT 1
+) pm_roi ON TRUE
+-- [Additional LEFT JOIN LATERAL for other metrics]
+WHERE s.status IN ('active', 'testing');
+
+-- Indexes for dashboard queries
+CREATE INDEX idx_strategy_performance_summary_roi ON strategy_performance_summary(roi_30d DESC);
+CREATE INDEX idx_strategy_performance_summary_version ON strategy_performance_summary(strategy_name, strategy_version);
+```
+
+**Benefits:**
+- **BI Tool Compatible:** No JSONB operators needed (`SELECT * FROM strategy_performance_summary WHERE min_edge > 0.05`)
+- **Pre-Aggregated:** Joins already computed (strategies + performance_metrics)
+- **Fast Queries:** <50ms for dashboard (vs 500ms+ for complex JSONB queries)
+
+**Task 2: Implementation (4-5 hours)**
+- Create `strategy_performance_summary` materialized view
+- Create `model_calibration_summary` materialized view
+- Add indexes for dashboard queries
+- Migration script
+
+**Task 3: Refresh Strategy Implementation (2-3 hours)**
+- Implement automatic refresh (PostgreSQL cron extension)
+- Hourly refresh for real-time dashboards (strategy_performance_summary)
+- Daily refresh for historical analysis (model_calibration_summary)
+- On-demand refresh for bulk data loads
+- Add refresh monitoring (last_refreshed timestamp)
+
+**Example refresh automation:**
+```sql
+-- PostgreSQL pg_cron extension
+SELECT cron.schedule(
+    'refresh-strategy-performance',
+    '0 * * * *',  -- Hourly (top of hour)
+    'REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary'
+);
+
+SELECT cron.schedule(
+    'refresh-model-calibration',
+    '0 2 * * *',  -- Daily at 2 AM
+    'REFRESH MATERIALIZED VIEW CONCURRENTLY model_calibration_summary'
+);
+```
+
+**Task 4: Benchmarking (2-3 hours)**
+- Benchmark complex JSONB queries (before materialization)
+- Benchmark materialized view queries (after materialization)
+- Document performance improvements (execution time reduction %)
+- Validate query results (materialized view matches source tables)
+
+**Example benchmark:**
+```sql
+-- BEFORE (Complex JSONB query): ~500ms
+SELECT
+    s.strategy_name,
+    (s.config->>'min_edge')::DECIMAL as min_edge,
+    pm.metric_value as roi_30d
+FROM strategies s
+JOIN performance_metrics pm ON pm.entity_id = s.strategy_id
+WHERE pm.entity_type = 'strategy'
+  AND pm.metric_name = 'roi'
+  AND pm.aggregation_period = 'monthly'
+  AND pm.period_start >= NOW() - INTERVAL '30 days'
+  AND (s.config->>'min_edge')::DECIMAL > 0.05  -- JSONB extraction + cast
+ORDER BY pm.metric_value DESC
+LIMIT 10;
+
+-- AFTER (Materialized view): ~15ms
+SELECT strategy_name, min_edge, roi_30d
+FROM strategy_performance_summary
+WHERE min_edge > 0.05
+ORDER BY roi_30d DESC
+LIMIT 10;
+
+-- Performance improvement: 97% faster (500ms → 15ms)
+```
+
+**Task 5: Testing & Documentation (2-3 hours)**
+- Unit tests (materialized view queries)
+- Integration tests (refresh automation)
+- Validate data consistency (materialized view matches source tables)
+- Document refresh strategy and query patterns
+
+#### Deliverable
+- **Database:** Migration script `database/migrations/0XX_add_materialized_views.sql`
+- **Materialized Views:**
+  - `strategy_performance_summary` (combines strategies + performance_metrics)
+  - `model_calibration_summary` (combines probability_models + evaluation_runs)
+- **Code:** `analytics/materialized_views/refresh_manager.py` (~150 lines, automatic refresh)
+- **Benchmark Report:** Query performance comparison (before/after)
+- **Tests:** `tests/integration/analytics/test_materialized_views.py`
+
+#### Success Criteria
+- [ ] strategy_performance_summary materialized view created
+- [ ] model_calibration_summary materialized view created
+- [ ] Indexes created for dashboard queries
+- [ ] Automatic refresh working (hourly + daily cron jobs)
+- [ ] Benchmark shows ≥80% query performance improvement (500ms → <100ms)
+- [ ] Data consistency validated (materialized views match source tables)
+- [ ] BI tool compatibility confirmed (simple SQL queries, no JSONB operators)
+- [ ] Documentation complete with query examples
+
+---
 
 ### STRAT-019: Trade Attribution Analytics (Phase 6-7, 🔴 Critical Priority) ⚠️ PENDING ADR-077
 

@@ -1,9 +1,27 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.16
-**Last Updated:** 2025-11-09
+**Version:** 2.18
+**Last Updated:** 2025-11-13
 **Status:** ✅ Current
+**Changes in v2.18:**
+- **PHASES 6-9 IMPLEMENTATION GUIDES COMPLETE**: Added 4 comprehensive implementation guides (~2,100 lines total)
+- Created PERFORMANCE_TRACKING_GUIDE_V1.0.md (487 lines, 8-level time-series aggregation with SQL/Python code)
+- Created ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md (625 lines, 4-layer architecture: Collection → Storage → Aggregation → Presentation)
+- Created DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md (528 lines, React 18 + Next.js 14 + TypeScript + Socket.IO real-time integration)
+- Created AB_TESTING_GUIDE_V1.0.md (460 lines, statistical methodology: Welch's t-test, Chi-square, sample size calculation)
+- All guides support analytics infrastructure (ADR-078 through ADR-085) and strategic roadmap tasks
+**Changes in v2.17:**
+- **PHASES 6-9 ANALYTICS INFRASTRUCTURE DOCUMENTATION COMPLETE**: Added 8 ADRs (ADR-078 through ADR-085), 5 requirements (REQ-ANALYTICS-001-004, REQ-REPORTING-001), and MODEL_EVALUATION_GUIDE
+- Updated ARCHITECTURE_DECISIONS V2.13 (same version, added 8 ADRs: model config storage, performance tracking, metrics collection, dashboard architecture, model evaluation, materialized views, A/B testing, hybrid JSONB strategy)
+- Updated ADR_INDEX V1.7 → V1.8 (55 → 63 ADRs, added Phases 6-9 Analytics Infrastructure section)
+- Updated REQUIREMENT_INDEX V1.4 → V1.5 (105 → 110 requirements, added ANALYTICS and REPORTING categories)
+- Updated MASTER_REQUIREMENTS V2.12 → V2.13 (added analytics and reporting requirements)
+- Updated DEVELOPMENT_PHASES V1.7 → V1.8 (added Phase 1.5 model evaluation framework tasks)
+- Updated DATABASE_SCHEMA_SUMMARY V1.7 → V1.8 (25 → 34 tables, added 6 materialized views + 3 A/B testing tables)
+- Updated STRATEGIC_WORK_ROADMAP V1.0 → V1.1 (added Phases 6-9 analytics tasks)
+- Created MODEL_EVALUATION_GUIDE_V1.0.md (3-stage evaluation: backtesting, cross-validation, holdout validation)
+- Total additions: ~7,150 lines of analytics infrastructure documentation
 **Changes in v2.16:**
 - **STRATEGIC RESEARCH PRIORITIES DOCUMENTED**: Open architectural questions requiring research before Phase 4+ implementation
 - Updated ARCHITECTURE_DECISIONS V2.12 → V2.13 (added ADR-076 Dynamic Ensemble Weights, ADR-077 Strategy vs Method Separation - HIGHEST PRIORITY)
@@ -191,13 +209,13 @@ Core architecture, requirements, and system design documents.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.4** |
-| **MASTER_REQUIREMENTS_V2.12.md** | ✅ | v2.12 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.12** (added REQ-VALIDATION-005, REQ-VALIDATION-006 for template enforcement automation) |
-| **MASTER_INDEX_V2.16.md** | ✅ | v2.16 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.16** (Strategic research priorities documented: ADR-076, ADR-077, Phase 4.5) |
-| **ARCHITECTURE_DECISIONS_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (77 total) - **UPDATED V2.13** (ADR-076: Dynamic Ensemble Weights, ADR-077: Strategy vs Method Separation - HIGHEST PRIORITY open questions) |
-| **REQUIREMENT_INDEX.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 105 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.4** (added REQ-VALIDATION-005, REQ-VALIDATION-006 for template enforcement) |
-| **ADR_INDEX_V1.7.md** | ✅ | v1.7 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (55 ADRs) - **UPDATED V1.7** (ADR-076, ADR-077 added for strategic research priorities - Phase 4.5) |
+| **MASTER_REQUIREMENTS_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.13** (added REQ-ANALYTICS-001-004, REQ-REPORTING-001 for Phases 6-9 analytics infrastructure) |
+| **MASTER_INDEX_V2.18.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.18** (Phases 6-9 implementation guides: PERFORMANCE_TRACKING, ANALYTICS_ARCHITECTURE, AB_TESTING, DASHBOARD_DEVELOPMENT) |
+| **ARCHITECTURE_DECISIONS_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (85 total) - **UPDATED V2.13** (ADR-078-085: Analytics infrastructure - materialized views, performance tracking, dashboards, A/B testing) |
+| **REQUIREMENT_INDEX.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 110 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.5** (added REQ-ANALYTICS-001-004, REQ-REPORTING-001 for analytics infrastructure) |
+| **ADR_INDEX_V1.8.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (63 ADRs) - **UPDATED V1.8** (ADR-078-085 added for Phases 6-9 analytics infrastructure) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
-| **DEVELOPMENT_PHASES_V1.7.md** | ✅ | v1.7 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10, added Phase 4.5 - **UPDATED V1.7** (CRITICAL RESEARCH PRIORITIES section, Phase 4.5: Ensemble Architecture & Dynamic Weights Research) |
+| **DEVELOPMENT_PHASES_V1.8.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **UPDATED V1.8** (Added Phase 1.5 model evaluation framework tasks, updated Phase 1 test coverage status to 94.71%) |
 | **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
 | **DEVELOPMENT_PHILOSOPHY_V1.1.md** | ✅ | v1.1 | `/docs/foundation/` | 0.7 | All phases | 🔴 Critical | Core development principles: TDD, Defense in Depth, DDD, Data-Driven Design, 10 sections (9 principles + anti-patterns) - **UPDATED V1.1** (added Section 10: Anti-Patterns to Avoid with 7 anti-patterns) |
@@ -223,7 +241,7 @@ Schema design, data models, and database architecture.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DATABASE_SCHEMA_SUMMARY_V1.7.md** | ✅ | v1.7 | `/docs/database/` | 0.5-1 | Phases 1-10 | 🔴 Critical | **UPDATED V1.7** - Complete schema with migrations 001-010, 25 tables including alerts + ML placeholders |
+| **DATABASE_SCHEMA_SUMMARY_V1.8.md** | ✅ | v1.8 | `/docs/database/` | 0.5-1 | Phases 1-10 | 🔴 Critical | **UPDATED V1.8** - Complete schema with migrations 001-010, 34 tables (25 operational + 6 materialized views + 3 A/B testing tables) |
 | **DATABASE_TABLES_REFERENCE.md** | ✅ | v1.0 | `/docs/database/` | 1 | Phases 1-10 | 🟡 High | Quick lookup for all tables, common queries (Phase 1) |
 | **ODDS_RESEARCH_COMPREHENSIVE.md** | ✅ | v1.0 | `/docs/database/` | 4 | Phase 4, 9 | 🟡 High | Historical odds methodology, merged into models |
 | **DATA_DICTIONARY.md** | 🔵 | - | `/docs/database/` | 6-7 | Phases 6-10 | 🟡 High | Comprehensive data dictionary - all columns documented (planned Phase 6-7) |
@@ -296,6 +314,11 @@ Phase-specific implementation guides created in Phase 0.5.
 | **VERSIONING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phases 4-9 | 🔴 Critical | **MOVED** from /supplementary/ - Immutable versioning for strategies and models |
 | **TRAILING_STOP_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phases 1, 4, 5 | 🔴 Critical | **MOVED** from /supplementary/ - Trailing stop loss implementation guide |
 | **POSITION_MANAGEMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 0.5 | Phase 5 | 🔴 Critical | **MOVED** from /supplementary/ - Position lifecycle, 10 exit conditions, monitoring, execution |
+| **MODEL_EVALUATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5, 4, 9 | 🔴 Critical | **NEW** - 3-stage model evaluation framework: backtesting, cross-validation, holdout validation; calibration metrics (Brier score, ECE, log loss); systematic evaluation protocol |
+| **PERFORMANCE_TRACKING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 6 | Phase 6 | 🔴 Critical | **NEW** - 8-level time-series aggregation (trade→hourly→daily→weekly→monthly→quarterly→yearly→all_time), SQL UPSERT patterns, pg_cron scheduling, 158x-683x query speedup |
+| **ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 6-9 | Phases 6-9 | 🔴 Critical | **NEW** - End-to-end analytics architecture: 4-layer design (Collection→Storage→Aggregation→Presentation), dual processing (real-time <200ms + batch), 6 materialized views |
+| **AB_TESTING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 8 | Phase 8 | 🟡 High | **NEW** - Statistical methodology for strategy/model evaluation: Welch's t-test, Chi-square, sample size calculation (64 trades/variant), Bayesian analysis, experiment lifecycle |
+| **DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 9 | Phase 9 | 🟡 High | **NEW** - React 18 + Next.js 14 trading dashboard: component library (MetricCard, PositionCard), Socket.IO real-time (<200ms), SWR data fetching, Plotly.js charts, deployment |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
 
 ---
@@ -320,7 +343,7 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **PHASE_1_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1 | 🟡 High | **NEW** - Tracks deferred enhancements from Phase 1 (extended docstrings, pre-commit hooks, branch protection) |
 | **PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 1.5-4 | 🟡 High | **NEW** - Comprehensive property-based testing roadmap (74-91 tests deferred to Phases 1.5-4: database CRUD, strategy versioning, position lifecycle, async handling, ensemble predictions) |
 | **PHASE_4_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 4.5 | Phase 4.5 | 🔴 Critical | **NEW** - Comprehensive research task documentation (11 tasks: DEF-009 to DEF-019, strategies HIGHEST PRIORITY, models, edge detection) - ~2800 lines, 74-92 hour total effort |
-| **STRATEGIC_WORK_ROADMAP_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1-10 | All phases | 🔴 Critical | **NEW** - Master roadmap of 25 strategic tasks organized by category (5 categories, research dependencies documented, strategies #1 MOST IMPORTANT) - ~1500 lines |
+| **STRATEGIC_WORK_ROADMAP_V1.1.md** | ✅ | v1.1 | `/docs/utility/` | 1-10 | All phases | 🔴 Critical | **UPDATED V1.1** - Master roadmap of 25 strategic tasks + Phases 6-9 analytics tasks (performance tracking, dashboards, A/B testing) organized by category |
 | **ENVIRONMENT_CHECKLIST_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0 | Phase 0 ✅ | 🔴 Critical | Windows 11 setup, Parts 1-7, dependencies verification (**FIXED** filename from V1.1 → V1.0) |
 | **CONSISTENCY_REVIEW.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Phase 0 consistency validation, all discrepancies fixed |
 | **FILENAME_VERSION_REPORT.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Filename-version consistency validation |

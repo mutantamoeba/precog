@@ -1,10 +1,17 @@
 # Requirement Index
 
 ---
-**Version:** 1.4
-**Last Updated:** 2025-11-09
+**Version:** 1.5
+**Last Updated:** 2025-11-10
 **Status:** ✅ Current
 **Purpose:** Master index of all system requirements with systematic IDs
+**Changes in v1.5:**
+- **PHASES 6-9 ANALYTICS INFRASTRUCTURE**: Added analytics and reporting requirements
+- **NEW CATEGORIES**: ANALYTICS (Analytics infrastructure), REPORTING (Dashboards and reporting)
+- **NEW REQUIREMENTS**: REQ-ANALYTICS-001 through REQ-ANALYTICS-004 (materialized views, refresh automation), REQ-REPORTING-001 (dashboard architecture)
+- Updated document references from V2.12 to V2.13
+- Updated requirement statistics (105 → 110 total requirements)
+- Added Analytics and Reporting sections for Phase 6-9 infrastructure
 **Changes in v1.4:**
 - **PHASE 0.7C COMPLETION**: Added template enforcement automation requirements
 - **NEW REQUIREMENTS**: REQ-VALIDATION-005 (CODE_REVIEW_TEMPLATE enforcement), REQ-VALIDATION-006 (SECURITY_REVIEW_CHECKLIST enforcement)
@@ -66,6 +73,8 @@ This document provides a systematic index of all Precog requirements using categ
 | CI/CD | CICD | Continuous integration and deployment | 0.7 |
 | Observability | OBSERV | Request tracing and distributed system observability | 1 |
 | Security | SEC | Security and compliance requirements | 1-10 |
+| Analytics | ANALYTICS | Analytics infrastructure (materialized views, performance tracking) | 6-9 |
+| Reporting | REPORTING | Dashboards, reports, and data visualization | 7-9 |
 
 ---
 
@@ -460,11 +469,74 @@ This document provides a systematic index of all Precog requirements using categ
 
 ---
 
+## Analytics Requirements (ANALYTICS)
+
+**Overview:** Analytics infrastructure for performance tracking, materialized views, and data aggregation (Phases 6-9).
+
+| ID | Title | Phase | Priority | Status | Document |
+|----|-------|-------|----------|--------|----------|
+| REQ-ANALYTICS-001 | Materialized View Implementation for Dashboard Queries | 6 | 🟡 High | 🔵 | MASTER_REQUIREMENTS_V2.13, ADR-083 |
+| REQ-ANALYTICS-002 | Automated Materialized View Refresh (pg_cron Hourly Schedule) | 6 | 🟡 High | 🔵 | MASTER_REQUIREMENTS_V2.13, ADR-083 |
+| REQ-ANALYTICS-003 | Performance Tracking Table (8-Level Time-Series Aggregation) | 1.5-2 | 🟡 High | 🔵 | MASTER_REQUIREMENTS_V2.13, ADR-079 |
+| REQ-ANALYTICS-004 | Metrics Collection Pipeline (Real-time + Batch Aggregation) | 6 | 🟡 High | 🔵 | MASTER_REQUIREMENTS_V2.13, ADR-080 |
+
+**Details:**
+
+**REQ-ANALYTICS-001: Materialized View Implementation**
+- Create 6 materialized views: mv_daily_model_performance, mv_strategy_profitability, mv_market_edge_distribution, mv_position_outcomes, mv_kelly_sizing_analysis, mv_exit_condition_effectiveness
+- 158x-683x query speedup (5-30s → 0.03-0.044s)
+- Unique indexes on (date, model_version) for REFRESH CONCURRENTLY
+- Related: ADR-083 (Analytics Data Model), PERFORMANCE_TRACKING_GUIDE_V1.0.md
+
+**REQ-ANALYTICS-002: Automated Refresh with pg_cron**
+- Install pg_cron extension (CREATE EXTENSION pg_cron)
+- Hourly refresh schedule: SELECT cron.schedule('refresh_analytics', '0 * * * *', $$REFRESH MATERIALIZED VIEW CONCURRENTLY...$$)
+- CONCURRENTLY mode for zero-downtime refreshes
+- Monitoring: cron.job_run_details table for status tracking
+- Related: ADR-083 (refresh strategy)
+
+**REQ-ANALYTICS-003: Performance Tracking Architecture**
+- Table: performance_metrics with 8 aggregation levels (trade, hourly, daily, weekly, monthly, quarterly, yearly, all_time)
+- Columns: win_rate, total_pnl, avg_pnl_per_trade, total_trades, kelly_accuracy, sharpe_ratio, max_drawdown, avg_position_duration_hours
+- SCD Type 2 versioning: row_current_ind, row_effective_date, row_expiration_date
+- Granularity: strategy_id + model_id + aggregation_period
+- Related: ADR-079 (table schema), ADR-080 (metrics collection)
+
+**REQ-ANALYTICS-004: Metrics Collection Strategy**
+- Real-time metrics: Update on every trade_executed event (trade-level aggregation)
+- Batch aggregation: Hourly cron job for daily/weekly/monthly rollups
+- Incremental updates: Only recompute changed time windows
+- Pipeline: Event → Trade Metrics → Hourly Rollup → Daily Rollup → Weekly/Monthly/Quarterly/Yearly/All-Time
+- Related: ADR-080 (collection pipeline), PERFORMANCE_TRACKING_GUIDE_V1.0.md
+
+---
+
+## Reporting Requirements (REPORTING)
+
+**Overview:** Dashboard architecture, data visualization, and reporting infrastructure (Phases 7-9).
+
+| ID | Title | Phase | Priority | Status | Document |
+|----|-------|-------|----------|--------|----------|
+| REQ-REPORTING-001 | Dashboard Architecture (React + Next.js with Real-time WebSocket) | 7 | 🟡 High | 🔵 | MASTER_REQUIREMENTS_V2.13, ADR-081 |
+
+**Details:**
+
+**REQ-REPORTING-001: Dashboard Architecture**
+- Frontend: React 18 + Next.js 14 (App Router) for server-side rendering
+- Real-time updates: WebSocket connection for live P&L, position updates (<500ms latency)
+- Charting: Plotly.js for interactive financial charts (candlesticks, P&L curves, calibration plots)
+- Data source: Materialized views (mv_daily_model_performance, etc.) for fast initial load
+- Authentication: NextAuth.js with read-only mode for live trading
+- Deployment: Vercel for frontend, PostgreSQL backend unchanged
+- Related: ADR-081 (dashboard stack), ADR-083 (data source), DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md
+
+---
+
 ## Requirement Statistics
 
-**Total Requirements:** 103
+**Total Requirements:** 110
 **Completed (✅):** 26 (Phase 0-0.6c)
-**Planned (🔵):** 77 (Phase 0.7, 1-10 including REQ-ML-001)
+**Planned (🔵):** 84 (Phase 0.7, 1-10 including REQ-ML-001, REQ-ANALYTICS-001-004, REQ-REPORTING-001)
 
 **By Category:**
 - System (SYS): 6 requirements
@@ -486,6 +558,8 @@ This document provides a systematic index of all Precog requirements using categ
 - **CI/CD (CICD): 3 requirements** (added in V1.2)
 - **Observability (OBSERV): 1 requirement** (NEW in V1.3)
 - **Security (SEC): 1 requirement** (NEW in V1.3)
+- **Analytics (ANALYTICS): 4 requirements** (NEW in V1.5 - materialized views, performance tracking)
+- **Reporting (REPORTING): 1 requirement** (NEW in V1.5 - dashboard architecture)
 
 **By Phase:**
 - Phase 0: 6 requirements (100% complete)
@@ -493,11 +567,14 @@ This document provides a systematic index of all Precog requirements using categ
 - **Phase 0.6c: 3 requirements (100% complete)** - validation infrastructure
 - **Phase 0.7: 7 requirements (0% complete)** - CI/CD and advanced testing
 - **Phase 1: 29 requirements (0% complete)** - API best practices, alerts, CLI
+- **Phase 1.5-2: 1 requirement (0% complete)** - performance tracking architecture (REQ-ANALYTICS-003)
 - Phase 2: 3 requirements (0% complete)
 - Phase 4: 5 requirements (0% complete)
 - Phase 4-5: 15 requirements (0% complete) - methods system
 - Phase 5: 14 requirements (100% complete - documented)
-- Phase 6-9: 3 requirements (0% complete) - ML infrastructure
+- **Phase 6: 3 requirements (0% complete)** - materialized views (REQ-ANALYTICS-001, 002, 004)
+- **Phase 7: 1 requirement (0% complete)** - dashboard architecture (REQ-REPORTING-001)
+- **Phase 6-9: 3 requirements (0% complete)** - ML infrastructure (REQ-ML-001, 002, 003)
 
 ---
 
@@ -515,8 +592,8 @@ This document provides a systematic index of all Precog requirements using categ
 
 ---
 
-**Document Version:** 1.1
-**Last Updated:** 2025-10-24
+**Document Version:** 1.5
+**Last Updated:** 2025-11-10
 **Created:** 2025-10-21
 **Purpose:** Systematic requirement tracking and traceability
 

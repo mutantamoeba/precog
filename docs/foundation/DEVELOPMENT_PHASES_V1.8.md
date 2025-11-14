@@ -1,9 +1,17 @@
 # Development Phases & Roadmap
 
 ---
-**Version:** 1.7
-**Last Updated:** 2025-11-09
+**Version:** 1.8
+**Last Updated:** 2025-11-10
 **Status:** ✅ Current
+**Changes in v1.8:**
+- **ANALYTICS INFRASTRUCTURE INTEGRATION**: Added analytics and performance tracking tasks to Phases 1.5, 2, 7, and 9
+- **Phase 1.5 Enhancement**: Added task #5 "Model Evaluation Framework Implementation" (backtesting, cross-validation, calibration metrics: Brier Score, ECE, Log Loss)
+- **Phase 2 Enhancement**: Added tasks #5 "Performance Metrics Infrastructure Implementation" (16 metrics, 8 aggregation levels, 3-tier retention) and #6 "Materialized Views for Analytics" (PostgreSQL views for BI compatibility, 80%+ query performance improvement)
+- **Phase 7 Enhancement**: Enhanced task #2 "Frontend Development" with detailed dashboard features (strategy_performance_summary, model_calibration_summary materialized views, time-series drill-down, bootstrap confidence intervals)
+- **Phase 9 Enhancement**: Enhanced task #3 "Model Integration & A/B Testing Infrastructure" with detailed A/B testing framework (ab_tests table, ab_test_assignments table, random assignment algorithm, statistical significance calculation with two-sample t-test and bootstrap CIs)
+- **Cross-references**: Links to STRAT-026 (Performance Metrics), STRAT-027 (Model Evaluation), STRAT-028 (Materialized Views), REQ-ANALYTICS-001 through 004, REQ-MODEL-EVAL-001/002, REQ-REPORTING-001, ADR-078, ADR-085, ADR-081 through ADR-084 (to be created)
+- **Total addition**: ~220 lines of analytics infrastructure implementation guidance with specific database schemas, metrics formulas, and success criteria
 **Changes in v1.7:**
 - **STRATEGIC RESEARCH PRIORITIES DOCUMENTED**: Added comprehensive documentation of open architectural questions requiring deep research before Phase 4+ implementation
 - **Added CRITICAL RESEARCH PRIORITIES section** - Emphasizes strategies research as #1 priority (MOST IMPORTANT), models (#2), edge detection (#3)
@@ -12,7 +20,7 @@
   - 11 deferred research tasks (DEF-009 through DEF-019) documented with priorities and estimates
   - Research-then-implement approach: gather data from Phase 1-3 usage, research in Phase 4.5, implement in Phase 5+
 - **Updated Phase 4.0**: Added note that "Methods Implementation" (complete trading system bundles) is DEFERRED to Phase 5+ pending ADR-077 research completion
-- **Cross-references**: Links to new PHASE_4_DEFERRED_TASKS_V1.0.md and STRATEGIC_WORK_ROADMAP_V1.0.md documents
+- **Cross-references**: Links to new PHASE_4_DEFERRED_TASKS_V1.0.md and STRATEGIC_WORK_ROADMAP_V1.1.md documents
 - **Total addition**: ~250 lines documenting strategic research priorities and architectural decisions requiring deep research
 **Changes in v1.6:**
 - **PHASE 0.7C COMPLETION**: Added Phase 0.7c (Template Enforcement Automation) - Automated enforcement of CODE_REVIEW_TEMPLATE and SECURITY_REVIEW_CHECKLIST
@@ -162,7 +170,7 @@
 
 **See Also:**
 - `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` - Comprehensive deferred task documentation (11 research tasks)
-- `docs/utility/STRATEGIC_WORK_ROADMAP_V1.0.md` - 25 strategic tasks organized by category with research dependencies
+- `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` - 25 strategic tasks organized by category with research dependencies
 - `docs/foundation/ARCHITECTURE_DECISIONS_V2.13.md` - ADR-076 and ADR-077 (full analysis of open questions)
 
 ---
@@ -1042,7 +1050,41 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
   - Test trailing stop config retrieval
   - Test override priority
 
-#### 5. Property-Based Testing Expansion (Week 2) ✅ COMPLETE
+#### 5. Model Evaluation Framework Implementation (Week 2)
+
+**Reference:** STRAT-027, REQ-MODEL-EVAL-001/002, ADR-082 (to be created), `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md`
+
+**Goal:** Establish validation framework for probability models before Phase 2 model usage
+
+- [  ] Create `analytics/model_evaluator.py`
+  - Backtesting workflow (historical data validation)
+  - Cross-validation workflow (k=5 temporal splits)
+  - Holdout validation workflow (2024 Q4 test set)
+  - Calibration metrics: Brier Score, Expected Calibration Error (ECE), Log Loss
+  - Reliability diagram generation (predicted vs observed frequency)
+- [  ] Create `database/evaluation_runs` table
+  - Store validation results per model version
+  - Track activation criteria (≥100 predictions, ≥52% accuracy, Brier ≤0.20, ECE ≤0.10)
+  - Store detailed prediction records for error analysis
+- [  ] Unit tests for model evaluation
+  - Test Brier Score calculation (mean squared error for probabilities)
+  - Test ECE calculation (10 bins, weighted absolute difference)
+  - Test Log Loss calculation (penalizes confident incorrect predictions)
+  - Test activation criteria validation
+- [  ] Integration tests for evaluation workflows
+  - End-to-end backtesting (historical 2019-2024 data)
+  - K-fold cross-validation (k=5 temporal splits)
+  - Holdout validation (2024 Q4 withheld data)
+
+**Success Criteria:**
+- [  ] Brier Score, ECE, Log Loss implemented and validated
+- [  ] Backtesting workflow working (end-to-end test with historical data)
+- [  ] K-fold cross-validation working (k=5, temporal splits preserve time ordering)
+- [  ] Activation criteria validated (≥100 predictions, ≥52% accuracy, Brier ≤0.20, ECE ≤0.10)
+- [  ] Reliability diagrams generated (matplotlib visualization, 45-degree line = perfect calibration)
+- [  ] All evaluation tests passing (>85% coverage for model_evaluator.py)
+
+#### 6. Property-Based Testing Expansion (Week 2) ✅ COMPLETE
 
 **Reference:** REQ-TEST-008 through REQ-TEST-011, ADR-074, `docs/testing/HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md`, `docs/utility/PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md`
 
@@ -1230,11 +1272,84 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 - Validate data quality: Check for completeness, outliers
 - **This historical data will be leveraged in Phase 4 for odds calculation**
 
+#### 5. Performance Metrics Infrastructure Implementation (Week 4)
+
+**Reference:** STRAT-026, REQ-ANALYTICS-001/002, ADR-078, ADR-085, `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md`
+
+**Goal:** Establish performance tracking infrastructure once live trading data becomes available
+
+- [  ] Create `database/performance_metrics` table
+  - 16-metric tracking system: ROI, Sharpe ratio, Brier score, ECE, log loss, win rate, etc.
+  - 8-level time-series aggregation: trade → hourly → daily → weekly → monthly → quarterly → yearly → all_time
+  - 3-tier retention strategy: Hot (0-18mo), Warm (18-42mo), Cold (42+mo) with automatic archival
+  - Bootstrap confidence intervals (1000 samples) for statistical rigor
+- [  ] Create `analytics/performance_tracker.py`
+  - Calculate 16 core metrics from live trading data
+  - Aggregate metrics across 8 time periods (trade, hourly, daily, weekly, monthly, quarterly, yearly, all_time)
+  - Store metrics in performance_metrics table with confidence intervals
+  - Support dual data sources: live_trading + backtesting
+- [  ] Unit tests for metric calculations
+  - Test ROI calculation: (total_pnl / capital_invested) * 100
+  - Test Sharpe ratio: (avg_returns - risk_free_rate) / std_dev_returns
+  - Test Brier score: mean((predicted_prob - actual_outcome)^2)
+  - Test Expected Calibration Error (ECE): weighted absolute difference across 10 bins
+  - Test bootstrap confidence intervals (1000 samples)
+- [  ] Integration tests for aggregation pipeline
+  - Test trade-level → hourly aggregation
+  - Test daily → weekly → monthly aggregation
+  - Test retention tier assignment (hot/warm/cold based on age)
+  - Test archival workflow (automatic cold tier migration)
+
+**Success Criteria:**
+- [  ] performance_metrics table created with all 16 metrics
+- [  ] All metric calculations validated (unit tests passing)
+- [  ] Time-series aggregation working (8 levels)
+- [  ] Retention strategy implemented (3-tier archival)
+- [  ] Bootstrap confidence intervals validated (1000 samples)
+- [  ] All performance tracking tests passing (>85% coverage for performance_tracker.py)
+
+#### 6. Materialized Views for Analytics (Week 4)
+
+**Reference:** STRAT-028, REQ-ANALYTICS-003, REQ-REPORTING-001, ADR-085, ADR-083 (to be created), `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md`
+
+**Goal:** Create PostgreSQL materialized views for BI tool compatibility and query performance
+
+- [  ] Create `strategy_performance_summary` materialized view
+  - Extract JSONB config fields to columns (min_edge, kelly_fraction)
+  - Join with performance_metrics for 30-day and all-time ROI, win rate, Sharpe ratio
+  - Filter: status IN ('active', 'testing') only
+  - Refresh: Hourly for real-time dashboards
+- [  ] Create `model_calibration_summary` materialized view
+  - Extract JSONB model features to columns
+  - Join with evaluation_runs for Brier score, ECE, log loss
+  - Calculate calibration status (meets_all_criteria boolean)
+  - Refresh: Daily for model monitoring
+- [  ] Implement refresh strategy
+  - Hourly refresh: Real-time dashboards (strategy_performance_summary)
+  - Daily refresh: Historical analysis (model_calibration_summary)
+  - On-demand refresh: Bulk loads or reporting requests
+  - Automated refresh jobs via APScheduler
+- [  ] Benchmark query performance
+  - Measure JSONB query time (baseline): SELECT with JSON extraction in WHERE clause
+  - Measure materialized view query time (optimized): Simple SELECT from view
+  - Target: 80%+ performance improvement (500ms JSONB query → <100ms view query)
+  - Document results in ADR-083
+
+**Success Criteria:**
+- [  ] strategy_performance_summary view created and working
+- [  ] model_calibration_summary view created and working
+- [  ] Hourly refresh working (automated via APScheduler)
+- [  ] Daily refresh working (automated via APScheduler)
+- [  ] Query performance benchmarked (≥80% improvement)
+- [  ] All materialized view tests passing (>80% coverage for view refresh logic)
+
 ### Deliverables
 - ESPN API client (`api_connectors/espn_client.py`)
 - APScheduler task scheduler (`schedulers/market_updater.py`)
 - Data quality validation module
 - Historical data backfill script (nflfastR)
+- Performance tracking system (`analytics/performance_tracker.py`)
+- Materialized views for analytics (strategy_performance_summary, model_calibration_summary)
 - Updated test suite
 - LIVE_DATA_INTEGRATION_GUIDE_V1.0.md
 
@@ -1245,6 +1360,8 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 - [  ] Historical data (2019-2024) loaded into `odds_matrices`
 - [  ] No data loss during extended polling sessions
 - [  ] APScheduler jobs run reliably
+- [  ] Performance metrics infrastructure operational (16 metrics, 8 aggregation levels)
+- [  ] Materialized views created and benchmarked (≥80% query performance improvement)
 
 ---
 
@@ -2232,12 +2349,29 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 - Authentication (JWT tokens)
 
 #### 2. Frontend Development (Weeks 3-6)
+
+**Reference:** STRAT-027, STRAT-028, REQ-REPORTING-001, ADR-081 (to be created), ADR-083 (to be created)
+
 - React + Next.js frontend
 - Real-time position monitoring (WebSocket updates)
 - P&L charts and visualizations (Recharts or Plotly)
 - System health indicators (API status, data freshness)
 - Manual trade execution interface (override automation)
-- Historical performance dashboard
+- **Historical performance dashboard:**
+  - Query `strategy_performance_summary` materialized view for fast dashboard loads (<2s)
+  - Display 30-day and all-time ROI, win rate, Sharpe ratio per strategy
+  - Filter by strategy version, status (active/testing)
+  - Compare performance across strategies (side-by-side charts)
+- **Model calibration dashboard:**
+  - Query `model_calibration_summary` materialized view
+  - Display Brier score, ECE, log loss per model version
+  - Reliability diagrams (predicted vs observed frequency)
+  - Activation status indicators (meets_all_criteria boolean)
+- **Performance chart component:**
+  - Time-series visualization of 8 aggregation levels (hourly → yearly)
+  - Drill-down from yearly → quarterly → monthly → daily
+  - Bootstrap confidence intervals (shaded area around line chart)
+  - Filter by data_source (live_trading, backtesting, paper_trading)
 
 #### 3. Deployment (Week 7)
 - Vercel for frontend (free tier)
@@ -2342,9 +2476,30 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 - Hyperparameter tuning (grid search, Bayesian optimization)
 - Cross-validation on historical data
 
-#### 3. Model Integration (Weeks 11-14)
+#### 3. Model Integration & A/B Testing Infrastructure (Weeks 11-14)
+
+**Reference:** STRAT-022, ADR-084 (to be created), REQ-ANALYTICS-004, `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md`
+
 - Blend ML predictions with statistical odds (Phase 4 ensemble)
-- A/B testing framework (baseline vs. ML-enhanced)
+- **A/B testing framework (baseline vs. ML-enhanced):**
+  - Create `ab_tests` table to track experiment configurations
+    - test_id, test_name, start_date, end_date, control_method, treatment_method
+    - target_sample_size, actual_sample_size, status (draft, running, completed, stopped)
+  - Create `ab_test_assignments` table to log trade assignments
+    - assignment_id, test_id, trade_id, group ('control', 'treatment')
+    - assigned_at, method_used, prediction_value
+  - Implement random assignment algorithm (50/50 split)
+    - Hash(trade_id + test_id) % 2 to ensure reproducible assignments
+    - Store assignments in ab_test_assignments for auditability
+  - Calculate statistical significance:
+    - Two-sample t-test for ROI comparison (control vs. treatment)
+    - Bootstrap confidence intervals (1000 samples) for robustness
+    - Minimum sample size: 100 trades per group (power analysis)
+    - Target p-value: <0.05 for statistical significance
+  - Performance tracking per group:
+    - Query performance_metrics filtered by ab_test_assignments.group
+    - Calculate ROI, Sharpe ratio, win rate for control vs. treatment
+    - Visualize results in dashboard (box plots, confidence intervals)
 - Continuous learning pipeline (retrain monthly)
 - Feature drift detection
 
