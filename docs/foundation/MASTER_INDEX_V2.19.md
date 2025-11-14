@@ -1,9 +1,16 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.18
-**Last Updated:** 2025-11-13
+**Version:** 2.19
+**Last Updated:** 2025-11-14
 **Status:** ✅ Current
+**Changes in v2.19:**
+- **CLAUDE.MD SIZE REDUCTION (48.3%)**: Reduced CLAUDE.md from 3,723 to 1,924 lines (~60 KB saved)
+- Created DEVELOPMENT_PATTERNS_V1.0.md (1,234 lines) - Extracted all 10 critical patterns with comprehensive examples
+- Created DOCUMENTATION_WORKFLOW_GUIDE_V1.0.md (858 lines) - Extracted document cohesion workflows and validation checklists
+- Patterns extracted: Decimal precision, dual versioning, trade attribution, security, cross-platform, TypedDict, educational docstrings, config sync, warning governance, property-based testing
+- Workflows extracted: Update Cascade Rules (6 scenarios), status field standards, consistency validation, document dependency map
+- Total extraction: 2,092 lines from CLAUDE.md to dedicated guides (improved maintainability and navigation)
 **Changes in v2.18:**
 - **PHASES 6-9 IMPLEMENTATION GUIDES COMPLETE**: Added 4 comprehensive implementation guides (~2,100 lines total)
 - Created PERFORMANCE_TRACKING_GUIDE_V1.0.md (487 lines, 8-level time-series aggregation with SQL/Python code)
@@ -210,7 +217,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.4** |
 | **MASTER_REQUIREMENTS_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.13** (added REQ-ANALYTICS-001-004, REQ-REPORTING-001 for Phases 6-9 analytics infrastructure) |
-| **MASTER_INDEX_V2.18.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.18** (Phases 6-9 implementation guides: PERFORMANCE_TRACKING, ANALYTICS_ARCHITECTURE, AB_TESTING, DASHBOARD_DEVELOPMENT) |
+| **MASTER_INDEX_V2.19.md** | ✅ | v2.19 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.19** (CLAUDE.md size reduction 48.3%, extracted DEVELOPMENT_PATTERNS and DOCUMENTATION_WORKFLOW guides) |
 | **ARCHITECTURE_DECISIONS_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (85 total) - **UPDATED V2.13** (ADR-078-085: Analytics infrastructure - materialized views, performance tracking, dashboards, A/B testing) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 110 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.5** (added REQ-ANALYTICS-001-004, REQ-REPORTING-001 for analytics infrastructure) |
 | **ADR_INDEX_V1.8.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (63 ADRs) - **UPDATED V1.8** (ADR-078-085 added for Phases 6-9 analytics infrastructure) |
@@ -319,6 +326,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 6-9 | Phases 6-9 | 🔴 Critical | **NEW** - End-to-end analytics architecture: 4-layer design (Collection→Storage→Aggregation→Presentation), dual processing (real-time <200ms + batch), 6 materialized views |
 | **AB_TESTING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 8 | Phase 8 | 🟡 High | **NEW** - Statistical methodology for strategy/model evaluation: Welch's t-test, Chi-square, sample size calculation (64 trades/variant), Bayesian analysis, experiment lifecycle |
 | **DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 9 | Phase 9 | 🟡 High | **NEW** - React 18 + Next.js 14 trading dashboard: component library (MetricCard, PositionCard), Socket.IO real-time (<200ms), SWR data fetching, Plotly.js charts, deployment |
+| **DEVELOPMENT_PATTERNS_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | All | All phases | 🔴 Critical | **NEW** - 10 critical patterns extracted from CLAUDE.md: Decimal precision, dual versioning, trade attribution, security, cross-platform, TypedDict, educational docstrings, config sync, warning governance, property-based testing; comprehensive ✅/❌ examples |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
 
 ---
@@ -334,6 +342,7 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **SESSION_HANDOFF_TEMPLATE.md** | ✅ | template | `/docs/utility/` | 0 | All phases | 🔴 Critical | Streamlined ~1 page template, inline instructions |
 | **CODE_REVIEW_TEMPLATE_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0.7b | All phases | 🔴 Critical | **NEW (Phase 0.7b)** - Code review template with 3 sections: Requirements Traceability, Test Coverage (≥80%), Code Quality (Pattern 7 docstrings); enforced by validate_code_quality.py |
 | **SECURITY_REVIEW_CHECKLIST.md** | ✅ | v1.1 | `/docs/utility/` | 0.7b | All phases | 🔴 Critical | **NEW (Phase 0.7b)** - Security review checklist with 5 sections: Credential Management, Input Validation, API Security, Data Protection, Incident Response; enforced by validate_security_patterns.py |
+| **DOCUMENTATION_WORKFLOW_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | All | All phases | 🔴 Critical | **NEW** - Document cohesion & consistency workflows extracted from CLAUDE.md: Update Cascade Rules (6 scenarios), status field standards, consistency validation checklists, document dependency map; prevents documentation drift |
 | **SESSION_7_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 7 | 🟡 High | Latest session handoff (session # is version) |
 | **SESSION_6_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 6 | 🟢 Medium | Previous session handoff |
 | **Handoff_Protocol_V1_1.md** | ✅ | v1.1 | `/docs/utility/` | 0 | All phases | 🔴 Critical | **UPDATED V1.1** - Merged 4 docs: HANDOFF_PROCESS + TOKEN_MONITORING + PHASE_COMPLETION + KNOWLEDGE_STRATEGY (V1.0 archived) |
