@@ -498,6 +498,43 @@ precog-repo/
 1. **CLAUDE.md** (this file) - Project context and patterns
 2. **SESSION_HANDOFF.md** - Recent work and immediate next steps
 
+**Step 1.5: Git Status Check (MANDATORY - 1 minute)**
+
+**⚠️ BEFORE doing ANY work, run these safety checks:**
+
+```bash
+# 1. Check current branch
+BRANCH=$(git branch --show-current)
+echo "Current branch: $BRANCH"
+
+# 2. Check for uncommitted changes
+git status
+
+# 3. Check for unpushed commits on current branch
+git log origin/$BRANCH..HEAD --oneline 2>/dev/null || echo "Branch not yet on remote"
+
+# 4. Check for unpushed commits on ALL local branches
+echo "Branches with unpushed commits:"
+git branch -vv | grep ahead || echo "All branches up-to-date"
+
+# 5. Check for unmerged work on remote feature branches
+echo "Remote feature branches (may have unmerged work):"
+git branch -r | grep -E "origin/(feature|bugfix|refactor|docs|test)/" || echo "No remote feature branches"
+```
+
+**What to look for:**
+- ✅ **Clean working tree** - "nothing to commit, working tree clean"
+- ✅ **On feature branch** - NOT on main (branch protection blocks direct pushes)
+- ⚠️ **Uncommitted changes** - Review with `git diff`, complete and commit before starting new work
+- ⚠️ **Unpushed commits** - Push to origin before starting new work
+- ⚠️ **Remote feature branches** - May have unmerged work from previous sessions (check with `gh pr list`)
+
+**If uncommitted/unpushed work found:**
+1. Review changes: `git diff` (unstaged) and `git diff --cached` (staged)
+2. Commit: `git commit -m "Description"`
+3. Push: `git push origin $(git branch --show-current)`
+4. Create PR if needed: `gh pr create --title "..." --body "..."`
+
 **Step 2: Check Current Phase**
 - Review phase objectives in `docs/foundation/DEVELOPMENT_PHASES_V1.4.md` if needed
 - Understand what's blocking vs. nice-to-have
@@ -692,9 +729,10 @@ Pre-push hooks are installed and run automatically on `git push`. They provide a
 
 ```bash
 # Hooks run automatically on push (no action needed)
-git push origin main
+# ⚠️ CRITICAL: NEVER push to main! Use feature branches.
+git push origin feature/my-feature
 # → Pre-push hooks run (7 validation steps, ~60-90 sec)
-# → Step 0/7: Branch name convention check
+# → Step 0/7: Branch name convention check (blocks push to main)
 # → Step 1/7: Quick validation (Ruff + docs)
 # → Step 2/7: Fast unit tests
 # → Step 3/7: Full type checking (Mypy)
@@ -830,6 +868,78 @@ git diff --cached --name-only | grep "\.env$"
 
 **If hooks fail, fix the issues before committing. DO NOT use `--no-verify` unless absolutely necessary.**
 
+---
+
+### Before Pushing (CRITICAL - 2 minutes)
+
+**⚠️ Run this checklist BEFORE `git push` to prevent common mistakes:**
+
+```bash
+# Safety Check Script - Run before EVERY push
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "🔒 Pre-Push Safety Checklist"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# 1. Verify NOT on main branch
+BRANCH=$(git branch --show-current)
+if [ "$BRANCH" = "main" ]; then
+    echo "❌ ERROR: On main branch! Create feature branch first."
+    echo "  git checkout -b feature/your-feature-name"
+    exit 1
+else
+    echo "✅ On branch: $BRANCH"
+fi
+
+# 2. Verify all changes committed
+if ! git diff-index --quiet HEAD --; then
+    echo "⚠️  WARNING: Uncommitted changes detected!"
+    echo ""
+    git status --short
+    echo ""
+    echo "Commit changes before pushing:"
+    echo "  git add ."
+    echo "  git commit -m \"Description\""
+    exit 1
+else
+    echo "✅ All changes committed"
+fi
+
+# 3. Verify tests pass (quick check)
+echo "🧪 Running fast tests..."
+if python -m pytest tests/ -v --tb=short -q 2>&1 | tail -10; then
+    echo "✅ Tests passing"
+else
+    echo "❌ Tests failing - fix before pushing"
+    exit 1
+fi
+
+# 4. Ready to push
+echo ""
+echo "✅ All safety checks passed!"
+echo "Ready to push to origin/$BRANCH"
+echo ""
+echo "Next steps:"
+echo "  git push origin $BRANCH"
+echo "  gh pr create --title \"...\" --body \"...\""
+```
+
+**Quick version (if you're confident):**
+
+```bash
+# Quick 3-step check
+git branch --show-current | grep -v "^main$" && \
+git diff-index --quiet HEAD -- && \
+python -m pytest tests/ -v --tb=short -q && \
+git push origin $(git branch --show-current)
+```
+
+**Common mistakes this prevents:**
+- ❌ Attempting to push to main (branch protection blocks it, but fails late)
+- ❌ Forgetting uncommitted changes (creates confusion later)
+- ❌ Pushing broken tests (fails CI, wastes time)
+
+---
+
 ### Ending a Session (10 minutes)
 
 **Step 0: Archive Current SESSION_HANDOFF.md**
@@ -908,10 +1018,25 @@ Phase 1: 50% → 65% complete
 Co-authored-by: Claude <noreply@anthropic.com>"
 ```
 
-**Step 3: Push to Remote**
+**Step 3: Verify Branch and Push to Remote**
 
 ```bash
-git push origin main
+# CRITICAL: Verify NOT on main branch (branch protection will block push to main)
+BRANCH=$(git branch --show-current)
+echo "Current branch: $BRANCH"
+
+# If on main, create feature branch first!
+if [ "$BRANCH" = "main" ]; then
+    echo "❌ ERROR: On main branch! Create feature branch first:"
+    echo "  git checkout -b feature/your-feature-name"
+    exit 1
+fi
+
+# Push to current feature branch
+git push origin $BRANCH
+
+# Then create PR (see Branch Protection & Pull Request Workflow section)
+# gh pr create --title "..." --body "..."
 ```
 
 ### Updating CLAUDE.md (Only When Needed)
