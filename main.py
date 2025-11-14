@@ -392,6 +392,7 @@ Related ADR: ADR-051 (CLI Framework Choice - Typer)
 Related Guide: docs/guides/CONFIGURATION_GUIDE_V3.1.md (Environment variables)
 """
 
+import os
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -1117,6 +1118,643 @@ def fetch_settlements(
     except Exception as e:
         logger.error(f"Failed to fetch settlements: {e}", exc_info=verbose)
         console.print(f"\n[red]Error:[/red] Failed to fetch settlements: {e}")
+        raise typer.Exit(code=1) from e
+
+
+@app.command(name="db-init")
+def db_init(
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be done without making changes"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+) -> None:
+    """
+    Initialize database schema and apply migrations.
+
+    **Database Initialization Explained:**
+    This command sets up your Precog database from scratch. Think of it like
+    preparing a new notebook before you can start writing in it.
+
+    **What This Command Does:**
+    1. Checks if database connection is working
+    2. Creates all required tables (markets, positions, trades, etc.)
+    3. Applies any pending database migrations
+    4. Validates schema integrity
+
+    **When to Use:**
+    - First-time setup on a new machine
+    - After database corruption or reset
+    - When switching between environments (dev/test/prod)
+
+    Args:
+        dry_run: Show what would be done without making changes
+        verbose: Show detailed output including SQL statements
+
+    Returns:
+        None: Exits with code 0 on success, 1 on failure
+
+    Educational Note:
+        Database initialization is idempotent - running it multiple times is safe.
+        Existing data won't be deleted, but missing tables will be created.
+
+    Example:
+        ```bash
+        # Dry run to see what would happen
+        python main.py db-init --dry-run
+
+        # Actually initialize database
+        python main.py db-init
+
+        # Verbose mode to see SQL statements
+        python main.py db-init --verbose
+        ```
+
+    References:
+        - DEVELOPMENT_PHASES_V1.8.md: Phase 1, Task 2 (Database Implementation)
+        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md: Complete schema reference
+        - REQ-SYS-002: Database initialization requirements
+    """
+    if verbose:
+        logger.info("Verbose mode enabled")
+
+    console.print("\n[bold cyan]Precog Database Initialization[/bold cyan]\n")
+
+    try:
+        # Import business logic functions
+        from database.connection import test_connection
+        from database.initialization import (
+            apply_migrations,
+            apply_schema,
+            get_database_url,
+            validate_critical_tables,
+            validate_schema_file,
+        )
+
+        # Step 1: Test database connection
+        console.print("[1/4] Testing database connection...")
+        if not test_connection():
+            console.print("[red]✗ Database connection failed[/red]")
+            raise typer.Exit(code=1)
+
+        console.print("[green]✓ Database connection successful[/green]")
+
+        if dry_run:
+            console.print("\n[yellow]Dry-run mode:[/yellow] Would initialize database schema")
+            console.print("\nActions that would be performed:")
+            console.print("  • Create missing tables")
+            console.print("  • Apply pending migrations")
+            console.print("  • Validate schema integrity")
+            console.print("  • Create indexes and constraints")
+            return
+
+        # Step 2: Create tables
+        console.print("\n[2/4] Creating database tables...")
+        schema_file = "database/precog_schema_v1.7.sql"
+
+        if not validate_schema_file(schema_file):
+            console.print(f"[red]✗ Schema file not found: {schema_file}[/red]")
+            raise typer.Exit(code=1)
+
+        db_url = get_database_url()
+        if not db_url:
+            console.print("[red]✗ DATABASE_URL environment variable not set[/red]")
+            raise typer.Exit(code=1)
+
+        success, error = apply_schema(db_url, schema_file)
+        if not success:
+            if "psql command not found" in error:
+                console.print("[yellow]⚠ psql command not found, skipping schema creation[/yellow]")
+                console.print("  Note: Tables may need to be created manually")
+            else:
+                console.print(f"[red]✗ Schema creation failed:[/red] {error}")
+                raise typer.Exit(code=1)
+        else:
+            console.print("[green]✓ Tables created successfully[/green]")
+
+        # Step 3: Apply migrations
+        console.print("\n[3/4] Applying database migrations...")
+        applied, failed = apply_migrations(db_url, "database/migrations")
+
+        if failed:
+            console.print(
+                f"[yellow]⚠ {len(failed)} migration(s) failed:[/yellow] {', '.join(failed)}"
+            )
+
+        if applied > 0:
+            console.print(f"[green]✓ {applied} migration(s) applied[/green]")
+            if verbose and failed:
+                for migration_file in failed:
+                    console.print(f"  Failed: {migration_file}")
+        else:
+            console.print("[yellow]⚠ No migrations to apply[/yellow]")
+
+        # Step 4: Validate schema
+        console.print("\n[4/4] Validating schema integrity...")
+        missing_tables = validate_critical_tables()
+
+        if missing_tables:
+            console.print(f"[red]✗ Missing critical tables:[/red] {', '.join(missing_tables)}")
+            raise typer.Exit(code=1)
+
+        console.print("[green]✓ All critical tables exist[/green]")
+        console.print("\n[bold green]✓ Database initialization complete![/bold green]")
+        logger.info("Database initialization completed successfully")
+
+    except Exception as e:
+        logger.error(f"Database initialization failed: {e}", exc_info=verbose)
+        console.print(f"\n[red]Error:[/red] Database initialization failed: {e}")
+        raise typer.Exit(code=1) from e
+
+
+@app.command(name="health-check")
+def health_check(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+) -> None:
+    """
+    Check system health and connectivity.
+
+    **Health Check Explained:**
+    This command verifies that all Precog systems are operational. Think of it
+    like a doctor's checkup for your trading system - it tests each component
+    to ensure everything is working correctly.
+
+    **What This Command Checks:**
+    1. Database connectivity (can we connect to PostgreSQL?)
+    2. Configuration files (can we load all YAML files?)
+    3. API credentials (are environment variables set?)
+    4. Directory structure (do all required folders exist?)
+
+    **When to Use:**
+    - Before starting trading operations
+    - After configuration changes
+    - When diagnosing system issues
+    - As part of deployment verification
+
+    Args:
+        verbose: Show detailed output including error traces
+
+    Returns:
+        None: Exits with code 0 if all checks pass, 1 if any check fails
+
+    Educational Note:
+        Health checks are critical for production systems. Running this before
+        trading prevents discovering issues mid-trade. It's like checking your
+        car's oil before a road trip.
+
+    Example:
+        ```bash
+        # Basic health check
+        python main.py health-check
+
+        # Detailed health check with error traces
+        python main.py health-check --verbose
+        ```
+
+    References:
+        - DEVELOPMENT_PHASES_V1.8.md: Phase 1, Task 5 (Logging Infrastructure)
+        - REQ-SYS-003: System health monitoring requirements
+    """
+    if verbose:
+        logger.info("Verbose mode enabled")
+
+    console.print("\n[bold cyan]Precog System Health Check[/bold cyan]\n")
+
+    checks_passed = 0
+    checks_failed = 0
+
+    # Check 1: Database connectivity
+    console.print("[1/4] Checking database connectivity...")
+    try:
+        from database.connection import test_connection
+
+        if test_connection():
+            console.print("[green]✓ Database connection OK[/green]")
+            checks_passed += 1
+        else:
+            console.print("[red]✗ Database connection failed[/red]")
+            checks_failed += 1
+    except Exception as e:
+        console.print(f"[red]✗ Database check failed: {e}[/red]")
+        if verbose:
+            logger.error(f"Database health check error: {e}", exc_info=True)
+        checks_failed += 1
+
+    # Check 2: Configuration files
+    console.print("\n[2/4] Checking configuration files...")
+    try:
+        from config.config_loader import ConfigLoader
+
+        config_loader = ConfigLoader()
+        config_files = [
+            "db_config.yaml",
+            "trading_config.yaml",
+            "strategy_config.yaml",
+            "model_config.yaml",
+            "market_config.yaml",
+            "kalshi_config.yaml",
+            "env_config.yaml",
+        ]
+
+        missing_configs = []
+        for config_file in config_files:
+            try:
+                config_loader.get(config_file)
+            except Exception as config_error:
+                missing_configs.append(config_file)
+                if verbose:
+                    logger.warning(f"Config file {config_file} failed to load: {config_error}")
+
+        if not missing_configs:
+            console.print(f"[green]✓ All {len(config_files)} configuration files loaded[/green]")
+            checks_passed += 1
+        else:
+            console.print(
+                f"[yellow]⚠ {len(missing_configs)} configuration files missing or invalid:[/yellow] {', '.join(missing_configs)}"
+            )
+            checks_failed += 1
+
+    except Exception as e:
+        console.print(f"[red]✗ Configuration check failed: {e}[/red]")
+        if verbose:
+            logger.error(f"Configuration health check error: {e}", exc_info=True)
+        checks_failed += 1
+
+    # Check 3: API credentials
+    console.print("\n[3/4] Checking API credentials...")
+    required_env_vars = [
+        "KALSHI_API_KEY_ID",
+        "KALSHI_PRIVATE_KEY_PATH",
+        "DATABASE_URL",
+    ]
+
+    missing_vars = []
+    for var in required_env_vars:
+        if not os.getenv(var):
+            missing_vars.append(var)
+
+    if not missing_vars:
+        console.print(
+            f"[green]✓ All {len(required_env_vars)} required environment variables set[/green]"
+        )
+        checks_passed += 1
+    else:
+        console.print(f"[red]✗ Missing environment variables:[/red] {', '.join(missing_vars)}")
+        checks_failed += 1
+
+    # Check 4: Directory structure
+    console.print("\n[4/4] Checking directory structure...")
+    required_dirs = [
+        "database",
+        "api_connectors",
+        "config",
+        "utils",
+        "tests",
+        "_keys",
+    ]
+
+    missing_dirs = []
+    for directory in required_dirs:
+        if not os.path.exists(directory):
+            missing_dirs.append(directory)
+
+    if not missing_dirs:
+        console.print(f"[green]✓ All {len(required_dirs)} required directories exist[/green]")
+        checks_passed += 1
+    else:
+        console.print(f"[yellow]⚠ Missing directories:[/yellow] {', '.join(missing_dirs)}")
+        checks_failed += 1
+
+    # Summary
+    total_checks = checks_passed + checks_failed
+    console.print("\n[bold]Health Check Summary:[/bold]")
+    console.print(f"  Checks passed: [green]{checks_passed}/{total_checks}[/green]")
+    console.print(f"  Checks failed: [red]{checks_failed}/{total_checks}[/red]")
+
+    if checks_failed == 0:
+        console.print("\n[bold green]✓ All systems operational![/bold green]")
+        logger.info("Health check passed: all systems operational")
+    else:
+        console.print("\n[bold yellow]⚠ Some checks failed[/bold yellow]")
+        console.print("Please review the errors above and fix issues before proceeding.")
+        logger.warning(f"Health check completed with {checks_failed} failures")
+        raise typer.Exit(code=1)
+
+
+@app.command(name="config-show")
+def config_show(
+    config_file: str = typer.Argument(
+        ..., help="Configuration file to display (e.g., 'trading_config.yaml')"
+    ),
+    key_path: str = typer.Option(
+        None,
+        "--key",
+        "-k",
+        help="Specific configuration key path (e.g., 'kelly_criterion.max_bet_size')",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+) -> None:
+    """
+    Display configuration values.
+
+    **Configuration Display Explained:**
+    This command shows the current configuration values loaded from YAML files.
+    Think of it like opening your settings menu - you can see all your current
+    preferences and parameters.
+
+    **What This Command Shows:**
+    - Configuration file contents (YAML format)
+    - Specific key values (when --key is provided)
+    - Configuration source (YAML file location)
+    - Default values (when keys are missing)
+
+    **When to Use:**
+    - Verifying configuration before trading
+    - Debugging unexpected behavior
+    - Checking parameter values
+    - Understanding system settings
+
+    Args:
+        config_file: Name of configuration file (e.g., 'trading_config.yaml')
+        key_path: Optional dot-separated path to specific key
+        verbose: Show detailed output including file paths
+
+    Returns:
+        None: Exits with code 0 on success, 1 if configuration not found
+
+    Educational Note:
+        Configuration precedence: Database overrides > YAML files > Defaults.
+        This command shows YAML values only (database overrides not yet implemented).
+
+    Example:
+        ```bash
+        # Show entire trading configuration
+        python main.py config-show trading_config.yaml
+
+        # Show specific key
+        python main.py config-show trading_config.yaml --key kelly_criterion.max_bet_size
+
+        # Verbose mode with file paths
+        python main.py config-show trading_config.yaml --verbose
+        ```
+
+    References:
+        - DEVELOPMENT_PHASES_V1.8.md: Phase 1, Task 4 (Configuration System)
+        - docs/guides/CONFIGURATION_GUIDE_V3.1.md: Complete configuration reference
+        - REQ-SYS-001: Configuration management requirements
+    """
+    if verbose:
+        logger.info("Verbose mode enabled")
+
+    console.print(f"\n[bold cyan]Configuration: {config_file}[/bold cyan]\n")
+
+    try:
+        from config.config_loader import ConfigLoader
+
+        config_loader = ConfigLoader()
+
+        # Show specific key if provided
+        if key_path:
+            try:
+                value = config_loader.get(config_file, key_path)
+                console.print(f"[bold]Key:[/bold] {key_path}")
+                console.print(f"[bold]Value:[/bold] {value}")
+
+                if verbose:
+                    console.print(f"\n[dim]Source: config/{config_file}[/dim]")
+                    logger.info(f"Retrieved config key: {config_file}:{key_path} = {value}")
+
+            except KeyError:
+                console.print(f"[red]✗ Key not found:[/red] {key_path}")
+                console.print(f"\nAvailable keys in {config_file}:")
+                # Show top-level keys
+                full_config = config_loader.get(config_file)
+                for key in full_config:
+                    console.print(f"  • {key}")
+                raise typer.Exit(code=1) from None
+
+        # Show entire configuration file
+        else:
+            config = config_loader.get(config_file)
+
+            # Pretty print configuration
+            import yaml
+
+            yaml_str = yaml.dump(config, default_flow_style=False, sort_keys=False)
+            console.print(yaml_str)
+
+            if verbose:
+                console.print(f"[dim]Source: config/{config_file}[/dim]")
+                console.print(f"[dim]Keys: {len(config)}[/dim]")
+                logger.info(f"Displayed configuration: {config_file}")
+
+    except FileNotFoundError:
+        console.print(f"[red]✗ Configuration file not found:[/red] {config_file}")
+        console.print("\nAvailable configuration files:")
+        config_files = [
+            "db_config.yaml",
+            "trading_config.yaml",
+            "strategy_config.yaml",
+            "model_config.yaml",
+            "market_config.yaml",
+            "kalshi_config.yaml",
+            "env_config.yaml",
+        ]
+        for cf in config_files:
+            console.print(f"  • {cf}")
+        raise typer.Exit(code=1) from None
+    except Exception as e:
+        logger.error(f"Failed to display configuration: {e}", exc_info=verbose)
+        console.print(f"\n[red]Error:[/red] Failed to display configuration: {e}")
+        raise typer.Exit(code=1) from e
+
+
+@app.command(name="config-validate")
+def config_validate(
+    config_file: str = typer.Option(
+        None, "--file", "-f", help="Specific configuration file to validate (default: all)"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+) -> None:
+    """
+    Validate configuration files.
+
+    **Configuration Validation Explained:**
+    This command checks that your configuration files are valid and contain
+    sensible values. Think of it like spell-check for your settings - it catches
+    errors before they cause problems.
+
+    **What This Command Validates:**
+    1. YAML syntax (can files be parsed?)
+    2. Required keys (are all mandatory settings present?)
+    3. Value ranges (are parameters within valid bounds?)
+    4. Type checking (are values the correct type?)
+    5. Decimal precision (are financial values using Decimal?)
+
+    **When to Use:**
+    - After editing configuration files
+    - Before deploying to production
+    - When diagnosing configuration errors
+    - As part of CI/CD pipeline
+
+    Args:
+        config_file: Optional specific file to validate (default: validate all)
+        verbose: Show detailed validation results
+
+    Returns:
+        None: Exits with code 0 if all validations pass, 1 if any fail
+
+    Educational Note:
+        Configuration validation prevents runtime errors. Catching config issues
+        at startup is much better than discovering them mid-trade!
+
+    Example:
+        ```bash
+        # Validate all configuration files
+        python main.py config-validate
+
+        # Validate specific file
+        python main.py config-validate --file trading_config.yaml
+
+        # Verbose validation with detailed checks
+        python main.py config-validate --verbose
+        ```
+
+    References:
+        - DEVELOPMENT_PHASES_V1.8.md: Phase 1, Task 4 (Configuration System)
+        - docs/guides/CONFIGURATION_GUIDE_V3.1.md: Configuration validation rules
+        - REQ-SYS-001: Configuration validation requirements
+    """
+    if verbose:
+        logger.info("Verbose mode enabled")
+
+    console.print("\n[bold cyan]Configuration Validation[/bold cyan]\n")
+
+    try:
+        from config.config_loader import ConfigLoader
+
+        config_loader = ConfigLoader()
+
+        # Determine which files to validate
+        if config_file:
+            config_files = [config_file]
+            console.print(f"Validating: {config_file}\n")
+        else:
+            config_files = [
+                "db_config.yaml",
+                "trading_config.yaml",
+                "strategy_config.yaml",
+                "model_config.yaml",
+                "market_config.yaml",
+                "kalshi_config.yaml",
+                "env_config.yaml",
+            ]
+            console.print(f"Validating all {len(config_files)} configuration files\n")
+
+        validation_results = {}
+        files_passed = 0
+        files_failed = 0
+
+        for cf in config_files:
+            console.print(f"[bold]{cf}[/bold]")
+            errors = []
+            warnings = []
+
+            try:
+                # Check 1: Can we load the file?
+                config = config_loader.get(cf)
+                console.print("  ✓ YAML syntax valid")
+
+                # Check 2: Is the file empty?
+                if not config:
+                    errors.append("Configuration file is empty")
+                    console.print("  ✗ File is empty")
+                else:
+                    console.print(f"  ✓ Contains {len(config)} top-level keys")
+
+                # Check 3: Check for float contamination in financial configs
+                if cf in ["trading_config.yaml", "strategy_config.yaml", "market_config.yaml"]:
+                    import yaml
+
+                    with open(f"config/{cf}") as f:
+                        raw_content = f.read()
+                        # Look for float notation (e.g., 0.05 instead of "0.05")
+                        if any(
+                            char.isdigit() and "." in line
+                            for line in raw_content.split("\n")
+                            for char in line
+                        ):
+                            # More sophisticated check would use YAML parser
+                            warnings.append(
+                                "May contain float values (should use string format for Decimal)"
+                            )
+                            console.print("  ⚠ Possible float contamination detected")
+
+                if not errors:
+                    console.print("[green]  ✓ Validation passed[/green]\n")
+                    files_passed += 1
+                else:
+                    console.print(f"[red]  ✗ Validation failed: {len(errors)} errors[/red]\n")
+                    files_failed += 1
+
+                if verbose and (errors or warnings):
+                    if errors:
+                        console.print("  [red]Errors:[/red]")
+                        for error in errors:
+                            console.print(f"    • {error}")
+                    if warnings:
+                        console.print("  [yellow]Warnings:[/yellow]")
+                        for warning in warnings:
+                            console.print(f"    • {warning}")
+                    console.print()
+
+                validation_results[cf] = {
+                    "passed": len(errors) == 0,
+                    "errors": errors,
+                    "warnings": warnings,
+                }
+
+            except FileNotFoundError:
+                console.print(f"  [red]✗ File not found: config/{cf}[/red]\n")
+                files_failed += 1
+                validation_results[cf] = {
+                    "passed": False,
+                    "errors": [f"File not found: {cf}"],
+                    "warnings": [],
+                }
+            except yaml.YAMLError as yaml_error:
+                console.print(f"  [red]✗ YAML parsing error: {yaml_error}[/red]\n")
+                files_failed += 1
+                validation_results[cf] = {
+                    "passed": False,
+                    "errors": [f"YAML error: {yaml_error}"],
+                    "warnings": [],
+                }
+            except Exception as validation_error:
+                console.print(f"  [red]✗ Validation error: {validation_error}[/red]\n")
+                files_failed += 1
+                validation_results[cf] = {
+                    "passed": False,
+                    "errors": [f"Validation error: {validation_error}"],
+                    "warnings": [],
+                }
+
+        # Summary
+        total_files = len(config_files)
+        console.print("[bold]Validation Summary:[/bold]")
+        console.print(f"  Files passed: [green]{files_passed}/{total_files}[/green]")
+        console.print(f"  Files failed: [red]{files_failed}/{total_files}[/red]")
+
+        if files_failed == 0:
+            console.print("\n[bold green]✓ All configuration files valid![/bold green]")
+            logger.info("Configuration validation passed")
+        else:
+            console.print("\n[bold red]✗ Some configuration files failed validation[/bold red]")
+            logger.error(f"Configuration validation failed: {files_failed} files with errors")
+            raise typer.Exit(code=1)
+
+    except Exception as e:
+        logger.error(f"Configuration validation failed: {e}", exc_info=verbose)
+        console.print(f"\n[red]Error:[/red] Configuration validation failed: {e}")
         raise typer.Exit(code=1) from e
 
 

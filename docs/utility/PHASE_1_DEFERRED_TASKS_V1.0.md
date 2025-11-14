@@ -1,9 +1,10 @@
 # Phase 1 Deferred Tasks
 
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-11-06
+**Last Updated:** 2025-11-14
 **Phase:** 1 (Database & API Connectivity)
-**Status:** 🟡 In Progress - Deferred to Phase 1.5
+**Status:** 🟡 In Progress - Deferred to Phase 1.5/2
 
 ---
 
@@ -28,8 +29,9 @@ This document tracks tasks that were identified during Phase 1 (Database & API C
 | DEF-P1-007 | Expand Security Scanning Patterns | 🔵 Low | 1 hour | 2+ |
 | DEF-P1-008 | Database Query Optimization | 🔵 Low | 4-6 hours | 2+ |
 | DEF-P1-009 | Comprehensive Integration Tests (Live API) | 🟡 High | 8-10 hours | 2 |
+| DEF-P1-010 | Migrate to src Layout (src/precog/) | 🟢 Medium | 3-4 hours | 2 |
 
-**Total Estimated Effort:** 26-33 hours (HIGH: 16-20h, MEDIUM: 5.5h, LOW: 5-7h)
+**Total Estimated Effort:** 29-37 hours (HIGH: 16-20h, MEDIUM: 8.5-9.5h, LOW: 5-7h)
 
 ---
 
@@ -711,6 +713,233 @@ jobs:
 
 ---
 
+## DEF-P1-010: Migrate to src Layout (src/precog/)
+
+### Description
+Reorganize the codebase from flat layout to `src/precog/` layout following Python packaging best practices (PEP 517/518).
+
+**Current Structure (Flat Layout):**
+```
+precog-repo/
+├── api_connectors/
+├── database/
+├── config/
+├── utils/
+├── tests/
+└── pyproject.toml
+```
+
+**Target Structure (src Layout):**
+```
+precog-repo/
+├── src/
+│   └── precog/              # Package namespace
+│       ├── __init__.py
+│       ├── api_connectors/
+│       ├── database/
+│       ├── config/
+│       ├── utils/
+│       └── ...
+├── tests/
+└── pyproject.toml
+```
+
+### Rationale
+
+**Why src Layout?**
+1. **Import Clarity**: Explicit package name in all imports
+   - ✅ `from precog.api_connectors import KalshiClient`
+   - ❌ `from api_connectors import KalshiClient` (looks like stdlib)
+
+2. **Namespace Protection**: Prevents conflicts with installed packages
+   - Without `src/precog/`: `src/database/` could conflict with installed `database` package
+   - With `src/precog/`: No conflicts possible (unique namespace)
+
+3. **Test Isolation**: Forces tests to import from installed package
+   - Without `src/`: Tests import from `.` (local files, not installed package)
+   - With `src/precog/`: Tests must use `from precog import ...` (proper isolation)
+   - Catches import errors that would only appear after `pip install`
+
+4. **Distribution Clarity**: Package name explicit when building wheels
+   - `pip install precog` → `site-packages/precog/`
+   - Easier to uninstall: `pip uninstall precog`
+
+5. **PEP 517/518 Best Practice**: Modern Python packaging standard
+
+**Why src/precog/ (Not Just src/)?**
+- Package name must match `pyproject.toml` name field (`precog`)
+- Creates proper namespace: `precog.api_connectors`, not just `api_connectors`
+- Standard Python packaging convention for all modern projects
+
+### Implementation Plan
+
+#### Step 1: Create src/precog/ Structure (30 min)
+```bash
+# 1. Create directory structure
+mkdir -p src/precog
+
+# 2. Move all source modules
+mv api_connectors database config utils analytics trading src/precog/
+
+# 3. Create package __init__.py
+cat > src/precog/__init__.py <<'EOF'
+"""
+Precog - Prediction Market Trading System
+
+Automated positive expected value (EV+) trading on prediction markets.
+
+Modules:
+    api_connectors: External API integrations (Kalshi, ESPN, Balldontlie)
+    database: PostgreSQL database layer (connection, CRUD, migrations)
+    config: YAML configuration management
+    utils: Utilities (logging, helpers)
+    analytics: Model evaluation and backtesting (Phase 1.5+)
+    trading: Strategy and position management (Phase 1.5+)
+
+Example:
+    >>> from precog.api_connectors import KalshiClient
+    >>> from precog.config import ConfigLoader
+    >>> from precog.database import get_connection
+"""
+
+__version__ = "0.1.0"  # Sync with pyproject.toml
+EOF
+```
+
+#### Step 2: Update pyproject.toml (15 min)
+```toml
+# Add package configuration
+[project]
+name = "precog"
+version = "0.1.0"
+
+[tool.setuptools]
+packages = ["precog"]
+package-dir = {"" = "src"}
+
+# Or use find: namespace packages
+[tool.setuptools.packages.find]
+where = ["src"]
+```
+
+#### Step 3: Update All Imports (2-3 hours)
+**Automated with script:**
+```bash
+# scripts/migrate_to_src_layout.py
+import os
+import re
+from pathlib import Path
+
+def update_imports(file_path):
+    """Update imports to use precog namespace."""
+    with open(file_path, 'r') as f:
+        content = f.read()
+
+    # Replace relative imports with absolute
+    patterns = [
+        (r'from api_connectors', 'from precog.api_connectors'),
+        (r'from database', 'from precog.database'),
+        (r'from config', 'from precog.config'),
+        (r'from utils', 'from precog.utils'),
+        (r'from analytics', 'from precog.analytics'),
+        (r'from trading', 'from precog.trading'),
+        (r'import api_connectors', 'import precog.api_connectors'),
+        # ... etc for all modules
+    ]
+
+    for old, new in patterns:
+        content = re.sub(old, new, content)
+
+    with open(file_path, 'w') as f:
+        f.write(content)
+
+# Update all .py files
+for file_path in Path('.').rglob('*.py'):
+    update_imports(file_path)
+```
+
+#### Step 4: Update Tests (30 min)
+```python
+# OLD (tests/test_kalshi_client.py):
+from api_connectors.kalshi_client import KalshiClient
+
+# NEW:
+from precog.api_connectors.kalshi_client import KalshiClient
+```
+
+#### Step 5: Update Configuration Files (15 min)
+```toml
+# pyproject.toml - Update coverage paths
+[tool.coverage.run]
+source = ["src/precog"]
+
+# pytest.ini - Update testpaths (already correct)
+[tool.pytest.ini_options]
+testpaths = ["tests"]  # No change needed
+```
+
+#### Step 6: Verification (30 min)
+```bash
+# 1. Run all tests
+pytest tests/ -v
+
+# 2. Verify imports work
+python -c "from precog.api_connectors import KalshiClient; print('OK')"
+
+# 3. Verify test isolation
+pip install -e .  # Editable install
+pytest tests/ -v  # Tests import from installed package
+
+# 4. Verify coverage
+pytest --cov=precog --cov-report=term
+
+# 5. Build package (smoke test)
+python -m build
+```
+
+### Files Affected
+- **All Python modules**: ~40 files (import statement updates)
+- **All tests**: ~20 files (import statement updates)
+- **pyproject.toml**: Package configuration
+- **README.md**: Usage examples
+- **.github/workflows/ci.yml**: CI paths (may need `pip install -e .`)
+
+### Benefits After Migration
+✅ **Import clarity**: `from precog.X import Y` (explicit package)
+✅ **Namespace protection**: No conflicts with installed packages
+✅ **Test isolation**: Tests import from installed package
+✅ **Professional structure**: Matches industry standard
+✅ **pip install works**: `pip install .` or `pip install -e .`
+
+### Risks & Mitigation
+- **Risk**: Large number of import changes (40+ files)
+  - **Mitigation**: Automated script (migrate_to_src_layout.py)
+  - **Mitigation**: Comprehensive test suite catches import errors
+
+- **Risk**: Tests fail after migration
+  - **Mitigation**: Verify tests pass before committing
+  - **Mitigation**: Run on feature branch first
+
+### Success Criteria
+- [ ] All modules in `src/precog/` directory
+- [ ] All imports updated to `from precog.X import Y`
+- [ ] All 175 tests passing
+- [ ] Coverage ≥80% maintained
+- [ ] `pip install -e .` works correctly
+- [ ] No import errors in any module
+
+### Dependencies
+- None (can be done anytime after Phase 1)
+
+### Timeline
+- 3-4 hours (automated script + verification)
+
+### Priority
+- 🟢 **Medium**: Not blocking, but important for professional codebase
+- **Recommended**: Phase 2 (after Phase 1 complete, before external users)
+
+---
+
 ## Priority Recommendations
 
 ### Start in Phase 1.5 (High Priority)
@@ -739,11 +968,15 @@ jobs:
 7. **DEF-P1-009: Integration Tests** (8-10 hours)
    - Critical for Phase 2 confidence
 
+8. **DEF-P1-010: Migrate to src Layout** (3-4 hours)
+   - Professional codebase structure
+   - Do before external users
+
 ### Start Later (Low Priority)
-8. **DEF-P1-007: Expand Security Scanning** (1 hour)
+9. **DEF-P1-007: Expand Security Scanning** (1 hour)
    - Nice-to-have, not blocking
 
-9. **DEF-P1-008: Database Optimization** (5-6 hours)
+10. **DEF-P1-008: Database Optimization** (5-6 hours)
    - Wait until Phase 2 (more data to test with)
 
 ---
@@ -767,7 +1000,8 @@ jobs:
 | Version | Date | Author | Changes |
 |---------|------|--------|---------|
 | 1.0 | 2025-11-06 | Claude | Initial creation - 9 deferred tasks identified |
+| 1.1 | 2025-11-14 | Claude | Added DEF-P1-010: Migrate to src Layout (src/precog/) - 3-4 hours, Medium priority |
 
 ---
 
-**END OF PHASE_1_DEFERRED_TASKS_V1.0.md**
+**END OF PHASE_1_DEFERRED_TASKS_V1.1.md**

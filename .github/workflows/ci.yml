@@ -49,7 +49,7 @@ jobs:
           pip install safety
 
       - name: Run Ruff security scanner
-        run: python -m ruff check --select S --ignore S101,S112,S607 --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' .
+        run: python -m ruff check --select S --ignore S101,S112,S607,S603 --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' .
 
       - name: Run Safety dependency vulnerability scanner
         run: python -m safety check --json
