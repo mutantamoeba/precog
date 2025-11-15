@@ -1,5 +1,5 @@
 """
-Tests for database/initialization.py module.
+Tests for precog.database.initialization module.
 
 This test suite provides comprehensive coverage for database initialization
 functions including schema validation, schema application, migrations, and
@@ -13,8 +13,8 @@ Educational Note:
 Coverage Target: ≥90% (critical infrastructure module)
 
 Reference:
-    database/initialization.py - Module under test
-    docs/guides/DEVELOPMENT_PATTERNS_V1.0.md - Pattern 11 (Test Mocking Patterns)
+    precog.database.initialization - Module under test
+    docs/guides/DEVELOPMENT_PATTERNS_V1.2.md - Pattern 11 (Test Mocking Patterns)
 """
 
 import os
@@ -23,7 +23,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from database.initialization import (
+
+from precog.database.initialization import (
     apply_migrations,
     apply_schema,
     get_database_url,
@@ -165,7 +166,7 @@ class TestValidateSchemaFile:
 class TestApplySchema:
     """Tests for apply_schema() function."""
 
-    @patch("database.initialization.subprocess.run")
+    @patch("precog.database.initialization.subprocess.run")
     def test_apply_schema_success(self, mock_run: MagicMock, temp_schema_file: str) -> None:
         """Test successful schema application.
 
@@ -183,7 +184,7 @@ class TestApplySchema:
         assert error == ""
         mock_run.assert_called_once()
 
-    @patch("database.initialization.subprocess.run")
+    @patch("precog.database.initialization.subprocess.run")
     def test_apply_schema_already_exists_is_ok(
         self, mock_run: MagicMock, temp_schema_file: str
     ) -> None:
@@ -202,7 +203,7 @@ class TestApplySchema:
         assert success is True  # Should succeed despite error
         assert error == ""
 
-    @patch("database.initialization.subprocess.run")
+    @patch("precog.database.initialization.subprocess.run")
     def test_apply_schema_fails_on_other_errors(
         self, mock_run: MagicMock, temp_schema_file: str
     ) -> None:
@@ -261,7 +262,7 @@ class TestApplySchema:
         assert success is False
         assert "not found" in error
 
-    @patch("database.initialization.subprocess.run")
+    @patch("precog.database.initialization.subprocess.run")
     def test_apply_schema_psql_not_installed(
         self, mock_run: MagicMock, temp_schema_file: str
     ) -> None:
@@ -278,7 +279,7 @@ class TestApplySchema:
         assert success is False
         assert "psql command not found" in error
 
-    @patch("database.initialization.subprocess.run")
+    @patch("precog.database.initialization.subprocess.run")
     def test_apply_schema_timeout(self, mock_run: MagicMock, temp_schema_file: str) -> None:
         """Test schema application fails on timeout.
 
@@ -304,7 +305,7 @@ class TestApplySchema:
 class TestApplyMigrations:
     """Tests for apply_migrations() function."""
 
-    @patch("database.initialization.subprocess.run")
+    @patch("precog.database.initialization.subprocess.run")
     def test_apply_migrations_success(self, mock_run: MagicMock, temp_migration_dir: str) -> None:
         """Test successful migration application.
 
@@ -321,7 +322,7 @@ class TestApplyMigrations:
         assert failed == []
         assert mock_run.call_count == 3
 
-    @patch("database.initialization.subprocess.run")
+    @patch("precog.database.initialization.subprocess.run")
     def test_apply_migrations_partial_failure(
         self, mock_run: MagicMock, temp_migration_dir: str
     ) -> None:
@@ -384,7 +385,7 @@ class TestApplyMigrations:
         assert applied == 0
         assert failed == []
 
-    @patch("database.initialization.subprocess.run")
+    @patch("precog.database.initialization.subprocess.run")
     def test_apply_migrations_psql_timeout(
         self, mock_run: MagicMock, temp_migration_dir: str
     ) -> None:
@@ -418,7 +419,7 @@ class TestApplyMigrations:
 class TestValidateCriticalTables:
     """Tests for validate_critical_tables() function."""
 
-    @patch("database.connection.fetch_all")
+    @patch("precog.database.connection.fetch_all")
     def test_validate_critical_tables_all_exist(self, mock_fetch_all: MagicMock) -> None:
         """Test validation succeeds when all critical tables exist.
 
@@ -435,7 +436,7 @@ class TestValidateCriticalTables:
 
         assert missing == []
 
-    @patch("database.connection.fetch_all")
+    @patch("precog.database.connection.fetch_all")
     def test_validate_critical_tables_some_missing(self, mock_fetch_all: MagicMock) -> None:
         """Test validation reports missing tables correctly.
 
@@ -461,7 +462,7 @@ class TestValidateCriticalTables:
         assert "series" in missing
         assert "markets" in missing
 
-    @patch("database.connection.fetch_all")
+    @patch("precog.database.connection.fetch_all")
     def test_validate_critical_tables_custom_list(self, mock_fetch_all: MagicMock) -> None:
         """Test validation works with custom table list.
 
@@ -480,7 +481,7 @@ class TestValidateCriticalTables:
         assert missing == ["orders"]
         assert mock_fetch_all.call_count == 2
 
-    @patch("database.connection.fetch_all")
+    @patch("precog.database.connection.fetch_all")
     def test_validate_critical_tables_empty_result(self, mock_fetch_all: MagicMock) -> None:
         """Test validation handles empty database response.
 
