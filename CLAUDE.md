@@ -463,29 +463,54 @@ python main.py execute-trades  # ❌ Not implemented
 
 ### Repository Structure
 
+**Note:** Migrated to src/ layout on 2025-11-14 (PEP 517/518 best practices)
+
 ```
 precog-repo/
-├── ✅ config/                    # 7 YAML configuration files
-├── ✅ database/                  # Schema, migrations, CRUD, seeds
-│   ├── connection.py            # ✅ Complete
-│   ├── crud_operations.py       # ✅ Complete (87% coverage)
-│   ├── migrations/              # ✅ Migrations 001-010
-│   └── seeds/                   # ✅ NFL team Elo data
+├── ✅ src/precog/                # Main package (modern src layout)
+│   ├── __init__.py              # ✅ Package initialization
+│   ├── api_connectors/          # ✅ API clients (Kalshi, ESPN, etc.)
+│   │   ├── kalshi_client.py     # ✅ Complete (97.91% coverage)
+│   │   ├── kalshi_auth.py       # ✅ RSA-PSS authentication
+│   │   ├── rate_limiter.py      # ✅ Token bucket rate limiting
+│   │   └── types.py             # ✅ TypedDict response types
+│   ├── config/                  # ✅ YAML configuration files
+│   │   ├── config_loader.py     # ✅ Complete (98.97% coverage)
+│   │   └── *.yaml               # ✅ 7 configuration files
+│   ├── database/                # ✅ Database layer
+│   │   ├── connection.py        # ✅ Connection pooling (81.82% coverage)
+│   │   ├── crud_operations.py   # ✅ CRUD operations (86.01% coverage)
+│   │   ├── initialization.py    # ✅ Schema initialization
+│   │   ├── migrations/          # ✅ Migrations 001-010
+│   │   └── seeds/               # ✅ NFL team Elo data
+│   └── utils/                   # ✅ Utilities
+│       └── logger.py            # ✅ Structured logging (86.08% coverage)
+├── ✅ tests/                     # Test suite (348 tests passing)
+│   ├── unit/                    # Unit tests
+│   ├── integration/             # Integration tests
+│   └── property/                # Property-based tests (Hypothesis)
+├── ✅ scripts/                   # Utility scripts
+│   ├── migrate_imports.py       # ✅ Import migration automation
+│   ├── check_warning_debt.py    # ✅ Warning governance
+│   └── validate_*.py            # ✅ Validation scripts
 ├── ✅ docs/                      # Comprehensive documentation
 │   ├── foundation/              # Core requirements, architecture
 │   ├── guides/                  # Implementation guides
 │   ├── supplementary/           # Detailed specifications
-│   ├── sessions/                # Session handoffs
 │   └── utility/                 # Process documents
-├── ✅ tests/                     # Test suite (66 tests passing)
-├── ✅ utils/                     # Utilities (logger.py complete)
-├── ✅ scripts/                   # Database utility scripts
-├── 🔵 api_connectors/           # NOT YET CREATED
-├── 🔵 analytics/                # NOT YET CREATED
-├── 🔵 trading/                  # NOT YET CREATED
-├── 🔵 main.py                   # NOT YET CREATED
-├── ✅ CLAUDE.md                 # This file!
-└── ✅ SESSION_HANDOFF.md        # Current session status
+├── ✅ main.py                    # CLI entry point (Typer)
+├── ✅ pyproject.toml             # Package configuration (PEP 517/518)
+├── ✅ CLAUDE.md                  # This file!
+└── ✅ SESSION_HANDOFF.md         # Current session status
+```
+
+**Import Example (after src/ layout migration):**
+```python
+# New import style (src/precog/ layout)
+from precog.api_connectors import KalshiClient
+from precog.config import ConfigLoader
+from precog.database import get_connection
+from precog.utils import get_logger
 ```
 
 ---
