@@ -1,9 +1,19 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.13
-**Last Updated:** November 9, 2025
+**Version:** 2.14
+**Last Updated:** November 14, 2025
 **Status:** ✅ Current
+**Changes in v2.14:**
+- **PRODUCTION MONITORING - HYBRID ARCHITECTURE:** Added Decision #49/ADR-055 (Sentry for Production Error Tracking - Phase 2)
+- Documents hybrid observability architecture integrating Sentry with existing infrastructure (logger.py, alerts table)
+- Addresses gap: logger.py writes to files only (no DB integration), alerts table exists but unused, no real-time error tracking
+- 3-layer architecture: Structured logging (audit trail) → Sentry (real-time visibility) → alerts table (permanent record)
+- Separation of concerns: Code errors (Sentry + DB), business alerts (DB only), INFO/DEBUG logs (files only)
+- Codecov integration: Sentry shows which untested code causes production errors (targeted test improvement)
+- Free tier sufficient Phase 0-2 (5K errors/month, 10K transactions/month), upgrade to $29/month in Phase 5+ (live trading)
+- Phase 2 implementation: 30min setup, 1h logger integration, 3h alert manager, 5h notification system
+- References REQ-OBSERV-002, ADR-049 (Correlation IDs), ADR-051 (Log Masking), ADR-010 (Structured Logging)
 **Changes in v2.13:**
 - **STRATEGIC RESEARCH PRIORITIES - OPEN QUESTIONS:** Added Decisions #76-77/ADR-076-077 (Critical Architecture Research for Phase 4+)
 - **ADR-076: Dynamic Ensemble Weights Architecture (Phase 4.5 Research)** - Documents immutability vs performance tension for ensemble weights
@@ -4288,6 +4298,383 @@ This custom scan is **Python 3.14 compatible** and remains unchanged.
 
 ---
 
+## Decision #49/ADR-055: Sentry for Production Error Tracking - Hybrid Architecture with Existing Observability (Phase 2)
+
+**Date:** November 14, 2025
+**Phase:** 2 (Live API Integration)
+**Status:** 🔵 Planned
+
+### Problem
+
+Production systems need **real-time error tracking and performance monitoring**, but Precog already has three observability layers that are **not connected**:
+
+1. **Structured logging** (`logger.py`) - Writes JSON to files, no database integration, no real-time alerts
+2. **Alerts table** (PostgreSQL) - Stores alerts with acknowledgement tracking, but **no code writes to it yet**
+3. **Notification system** - **Not implemented** (Phase 2+)
+
+**Gaps Identified:**
+- ❌ No real-time error alerting (errors sit in log files until manually reviewed)
+- ❌ No automatic error deduplication (same error logged 1000 times)
+- ❌ No production performance monitoring (can't detect slow API calls, DB queries)
+- ❌ No stack trace aggregation (hard to debug production issues)
+- ❌ No correlation between untested code and production errors
+- ❌ Alerts table exists but nothing uses it (orphaned schema)
+
+**Business Impact:**
+- API failures discovered hours later instead of immediately
+- Same error triggers 100+ notifications (alert fatigue)
+- No visibility into production performance degradation
+- Debugging production issues requires manual log file archaeology
+
+### Decision
+
+**Implement Sentry for real-time production error tracking and APM, using a HYBRID architecture that integrates with (not replaces) existing observability infrastructure.**
+
+#### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ Layer 1: Structured Logging (logger.py) - PRIMARY AUDIT TRAIL  │
+│ - Writes to logs/precog_YYYY-MM-DD.log (JSON format)           │
+│ - ALL events logged here (INFO, WARNING, ERROR, CRITICAL)      │
+│ - Permanent storage, never deleted (compliance requirement)    │
+│ - Optionally forwards ERROR/CRITICAL to Sentry                 │
+└─────────────────────────────────────────────────────────────────┘
+                               ↓ (ERROR/CRITICAL only)
+┌─────────────────────────────────────────────────────────────────┐
+│ Layer 2: Sentry (Cloud) - REAL-TIME ERROR VISIBILITY           │
+│ - Receives ERROR/CRITICAL logs from logger.py                  │
+│ - Automatic deduplication via fingerprinting                   │
+│ - Stack traces, local variables, user context                  │
+│ - Real-time alerts (Email/Slack/PagerDuty)                     │
+│ - APM: Track API latency, DB query performance                 │
+│ - 7-day retention (free tier), then archived                   │
+└─────────────────────────────────────────────────────────────────┘
+                               ↓ (ALSO write to DB)
+┌─────────────────────────────────────────────────────────────────┐
+│ Layer 3: alerts Table (PostgreSQL) - PERMANENT RECORD          │
+│ - Stores ALL alerts (business logic + code errors)             │
+│ - Tracks acknowledgement, resolution, notification delivery    │
+│ - Permanent audit trail (never deleted)                        │
+│ - Used for compliance, reporting, historical analysis          │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Separation of Concerns
+
+| **Alert Type** | **Log to File** | **Send to Sentry** | **Write to alerts Table** | **Notification** |
+|----------------|-----------------|-------------------|---------------------------|------------------|
+| **Code errors** (API failures, exceptions) | ✅ Always | ✅ If severity ≥ high | ✅ Always | Sentry → Email/Slack |
+| **Business alerts** (circuit breakers, loss limits) | ✅ Always | ❌ No (not code errors) | ✅ Always | Custom notification system |
+| **INFO/DEBUG logs** | ✅ Always | ❌ No | ❌ No | None |
+
+#### Implementation
+
+**1. Sentry Initialization (main.py)**
+
+```python
+import sentry_sdk
+from sentry_sdk.integrations.logging import LoggingIntegration
+import os
+
+# Initialize Sentry with comprehensive configuration
+sentry_sdk.init(
+    dsn=os.getenv("SENTRY_DSN"),  # From .env, excluded from git
+    release=f"precog@{__version__}",  # Tag errors by deployment version
+    environment=os.getenv("ENVIRONMENT", "demo"),  # demo/staging/prod
+
+    # Performance monitoring (APM)
+    traces_sample_rate=0.10,  # Sample 10% of transactions (free tier limit)
+    profiles_sample_rate=0.10,  # Profile 10% of sampled transactions
+
+    # Error tracking
+    send_default_pii=False,  # Don't send personally identifiable info
+    attach_stacktrace=True,  # Always include stack traces
+
+    # Integrations
+    integrations=[
+        LoggingIntegration(
+            level=logging.INFO,  # Breadcrumbs from INFO+
+            event_level=logging.ERROR  # Create events from ERROR+
+        ),
+    ],
+
+    # Performance overhead target: <500ms
+    shutdown_timeout=2,  # Max 2s to flush on exit
+)
+
+# Add global context (available in all error reports)
+sentry_sdk.set_context("trading_system", {
+    "version": __version__,
+    "python_version": sys.version,
+    "platform": sys.platform,
+})
+```
+
+**2. Logger Integration (logger.py)**
+
+```python
+# Add Sentry integration to existing log_error() helper
+def log_error(error_type: str, message: str, exception: Exception | None = None, **extra):
+    """
+    Log error to file AND optionally send to Sentry.
+
+    Hybrid behavior:
+    - ALWAYS logs to file (audit trail)
+    - If severity is high, ALSO sends to Sentry (real-time alert)
+    - If business alert, writes to alerts table (not implemented yet)
+    """
+    # ALWAYS log to file (existing behavior)
+    logger.error(
+        error_type,
+        message=message,
+        exception_type=type(exception).__name__ if exception else None,
+        exception_message=str(exception) if exception else None,
+        **extra,
+    )
+
+    # ALSO send to Sentry if code error (Phase 2+)
+    if error_type in ['api_failure', 'system_error', 'database_error']:
+        import sentry_sdk
+        if exception:
+            sentry_sdk.capture_exception(exception)
+        else:
+            sentry_sdk.capture_message(message, level='error')
+```
+
+**3. Alert Manager Integration (NEW - Phase 2)**
+
+```python
+# NEW: Alert manager that writes to database AND sends to Sentry
+def create_alert(
+    alert_type: str,
+    severity: str,
+    component: str,
+    message: str,
+    details: dict,
+) -> int:
+    """
+    Create alert with hybrid architecture:
+    1. ALWAYS write to alerts table (permanent record)
+    2. IF code error + high severity, send to Sentry (real-time)
+    3. Send notifications via notification_channels
+    """
+    from database.crud_operations import insert_alert
+    import sentry_sdk
+
+    # 1. ALWAYS write to database (audit trail)
+    alert_id = insert_alert(
+        alert_type=alert_type,
+        severity=severity,
+        component=component,
+        message=message,
+        details=details,
+        fingerprint=generate_fingerprint(alert_type, component, details),
+        environment=os.getenv("ENVIRONMENT", "demo"),
+    )
+
+    # 2. IF code error AND critical/high, send to Sentry
+    if severity in ['critical', 'high'] and alert_type in [
+        'api_failure', 'system_error', 'database_error', 'circuit_breaker'
+    ]:
+        sentry_sdk.capture_message(
+            message,
+            level='error',
+            extras=details,
+            fingerprint=[component, alert_type],  # Deduplication
+        )
+
+    # 3. Send notifications (email/SMS based on severity)
+    notification_channels = get_notification_channels(severity)
+    if notification_channels.get('email'):
+        send_email_notification(alert_id, message)
+    if notification_channels.get('sms') and severity == 'critical':
+        send_sms_notification(alert_id, message)
+
+    return alert_id
+
+# Usage in trading code
+if daily_loss > loss_limit:
+    create_alert(
+        alert_type='circuit_breaker',
+        severity='critical',
+        component='position_manager',
+        message=f'Daily loss limit exceeded: ${daily_loss} / ${loss_limit}',
+        details={'current_loss': float(daily_loss), 'limit': float(loss_limit)}
+    )
+```
+
+**4. Performance Instrumentation (APM)**
+
+```python
+# Automatic transaction tracing for critical operations
+from sentry_sdk import start_transaction
+
+def execute_trade(ticker: str, side: str, quantity: int):
+    """Execute trade with Sentry APM tracking."""
+    with start_transaction(op="trade_execution", name=f"execute_{side}_{ticker}"):
+        # Sentry automatically tracks:
+        # - Total execution time
+        # - Database queries (if using supported ORM)
+        # - HTTP requests to Kalshi API
+        # - Custom spans (see below)
+
+        with sentry_sdk.start_span(op="calculate_kelly", description="Kelly sizing"):
+            kelly_fraction = calculate_kelly_fraction(...)
+
+        with sentry_sdk.start_span(op="api_call", description="Submit order to Kalshi"):
+            response = kalshi_client.submit_order(...)
+
+        with sentry_sdk.start_span(op="db_write", description="Record trade"):
+            insert_trade(...)
+```
+
+### Rationale
+
+**1. Why Sentry instead of building our own alerting?**
+- **Time to value:** 30 min setup vs. weeks/months of custom development
+- **Proven reliability:** Used by 4M+ developers, battle-tested
+- **Superior features:** Smart deduplication, performance profiling, release tracking
+- **Free tier sufficient:** 5K errors/month, 10K transactions/month (Phase 0-2)
+- **Owned by Sentry (acquired Codecov 2022):** Designed to work together
+
+**2. Why hybrid architecture instead of Sentry-only?**
+- **Compliance:** Financial trading requires permanent audit trail (Sentry has 7-day retention)
+- **Business alerts:** Circuit breakers, loss limits are business logic, not code errors
+- **Cost control:** Sentry pricing scales with volume, DB storage is fixed cost
+- **Data sovereignty:** Keep sensitive data on-premise (PostgreSQL), send only errors to cloud
+
+**3. Why keep `alerts` table if Sentry has issue tracking?**
+- **Permanent storage:** Sentry free tier = 7 days, alerts table = forever
+- **Acknowledgement tracking:** Sentry has basic resolution, alerts table has `acknowledged_by`, `resolved_notes`, `resolution_action`
+- **Custom business logic:** Circuit breaker state, notification delivery tracking, deduplication history
+- **Reporting:** Historical analysis, compliance reports, incident postmortems
+
+**4. Why forward logs to Sentry instead of just using Sentry SDK?**
+- **Existing logging infrastructure:** `logger.py` already captures all events
+- **Consistency:** Same log format for local files and Sentry
+- **Gradual adoption:** Can add Sentry without rewriting existing log calls
+- **Fallback:** If Sentry is down, logs still go to files
+
+### Alternatives Considered
+
+**1. Build custom alerting system**
+- ❌ Weeks/months of development time (email/SMS/Slack integration, deduplication, web UI)
+- ❌ Ongoing maintenance burden (bug fixes, feature requests)
+- ❌ Inferior to proven solution (no APM, no release tracking, no ML-based grouping)
+- ✅ Full control over data (but not worth the cost)
+
+**2. Use DataDog APM**
+- ✅ More features (infrastructure monitoring, logs, metrics, APM all-in-one)
+- ❌ Much higher cost ($15-31/host/month, no free tier)
+- ❌ Overkill for Phase 0-2 (don't need Kubernetes/container monitoring yet)
+- ❌ Not owned by Codecov (less integration)
+
+**3. Use Rollbar**
+- ✅ Similar features to Sentry (error tracking, release tracking)
+- ❌ Less popular (150K users vs. Sentry's 4M)
+- ❌ No free tier (14-day trial only)
+- ❌ Weaker APM features
+
+**4. Use CloudWatch (AWS) or Azure Monitor**
+- ❌ Cloud vendor lock-in (not deployed to cloud yet)
+- ❌ More expensive ($0.50/GB ingestion + $0.03/GB storage)
+- ❌ Inferior error tracking (no smart grouping, no deduplication)
+- ✅ Native integration if we deploy to AWS/Azure (Phase 3+)
+
+**5. Self-host Sentry (open source)**
+- ✅ Free, unlimited usage
+- ❌ Infrastructure overhead (need dedicated server, PostgreSQL, Redis, Kafka)
+- ❌ Maintenance burden (upgrades, scaling, backups)
+- ❌ No free tier features (no AI-powered grouping, no priority support)
+- Consider for Phase 5+ if cost becomes issue
+
+### Integration with Existing Observability
+
+**1. Structured Logging (logger.py)**
+- Sentry receives ERROR+ logs via `LoggingIntegration`
+- Uses existing `decimal_serializer` for financial precision
+- Respects existing `LogContext` (request_id, strategy_id included in Sentry events)
+
+**2. B3 Correlation IDs (REQ-OBSERV-001, ADR-049)**
+- Sentry events tagged with `request_id` from log context
+- Enables tracing errors back to specific API requests, trades, or position updates
+- Correlation ID included in both log files AND Sentry events
+
+**3. Log Masking (REQ-SEC-009, ADR-051)**
+- Sentry respects existing `mask_sensitive_data` processor
+- API keys, tokens already masked before reaching Sentry
+- No credentials leaked to cloud service
+
+**4. Codecov Integration (REQ-OBSERV-001)**
+- Sentry shows **which untested code is causing production errors**
+- Upload coverage.xml to both Codecov AND Sentry
+- Sentry highlights errors from code with <80% coverage
+- Enables targeted test improvement (fix coverage gaps causing real errors)
+
+### Success Criteria
+
+**Phase 2 (MVP):**
+- ✅ <500ms performance overhead (measured with APM)
+- ✅ <5K errors/month (stay within free tier)
+- ✅ 100% of production errors captured within 60 seconds
+- ✅ Email alerts sent for critical errors (<5 min latency)
+- ✅ All errors written to both Sentry AND alerts table
+
+**Phase 3+ (Advanced):**
+- ✅ Integration with Slack (real-time error notifications)
+- ✅ Custom dashboard (show errors by strategy_id, model_id)
+- ✅ Release tracking (tag errors by deployment version)
+- ✅ Performance regression detection (alert if API latency >2x baseline)
+
+### Cost Analysis
+
+| **Tier** | **Cost** | **Limits** | **Phase** |
+|----------|----------|------------|-----------|
+| **Free** | $0/month | 5K errors/month, 10K transactions/month | Phase 0-2 |
+| **Team** | $29/month | 50K errors/month, 100K transactions/month | Phase 5+ (if live trading) |
+| **Business** | $99/month | 250K errors/month, 500K transactions/month | Future (if scaling) |
+
+**Estimated Usage:**
+- **Phase 0-1 (Demo):** ~100 errors/month, 1K transactions/month → FREE tier sufficient
+- **Phase 2 (Live API):** ~1K errors/month, 10K transactions/month → FREE tier sufficient
+- **Phase 5 (Live Trading):** ~10K errors/month, 50K transactions/month → **Upgrade to Team ($29/month)**
+
+### Migration Path
+
+**Phase 2.0: Initial Setup (30 min)**
+1. Add `sentry-sdk` to `requirements.txt`
+2. Initialize Sentry in `main.py` with `SENTRY_DSN` from `.env`
+3. Add `.env.template` entry: `SENTRY_DSN=https://...@sentry.io/...`
+4. Test with `sentry_sdk.capture_message("Test error")`
+
+**Phase 2.1: Logger Integration (1 hour)**
+1. Update `log_error()` helper to forward to Sentry
+2. Add `LoggingIntegration` to Sentry init
+3. Test: Trigger error, verify appears in Sentry dashboard
+
+**Phase 2.2: Alert Manager (3 hours)**
+1. Create `create_alert()` function (writes to DB + Sentry)
+2. Add CRUD operation `insert_alert()` (writes to `alerts` table)
+3. Implement `generate_fingerprint()` for deduplication
+4. Test: Create alert, verify in both DB and Sentry
+
+**Phase 2.3: Notification System (5 hours)**
+1. Implement `send_email_notification()` (SMTP integration)
+2. Implement `send_sms_notification()` (Twilio API)
+3. Add `get_notification_channels(severity)` routing logic
+4. Test: Critical alert triggers email + SMS
+
+**Phase 3+: Advanced Features**
+1. Slack integration (Sentry webhook → Slack channel)
+2. Custom Sentry dashboards (errors by strategy, model)
+3. Performance monitoring (APM for trade execution, API calls)
+4. Release tracking (tag errors by `precog@X.Y.Z` version)
+
+**Reference:** `api-integration/SENTRY_INTEGRATION_GUIDE_V1.0.md` (future), REQ-OBSERV-002, ADR-049 (Correlation IDs), ADR-051 (Log Masking), ADR-010 (Structured Logging)
+
+---
+
 ## Decision #76/ADR-076: Dynamic Ensemble Weights Architecture (Phase 4.5 - Open Question)
 
 **Decision #76**
@@ -5528,7 +5915,7 @@ CREATE TABLE brier_score_metrics (...);
 
 **References:**
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.8.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -6285,7 +6672,7 @@ Cons:
 ### References
 
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.8.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -7052,7 +7439,7 @@ WebSocket for Position Monitoring (real-time):
 
 ### References
 
-- `docs/foundation/DEVELOPMENT_PHASES_V1.8.md` (Phase 7 Task #2: Frontend Development)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 7 Task #2: Frontend Development)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Section 8.9: Materialized Views)
 - Next.js Documentation: https://nextjs.org/docs
 - Recharts Documentation: https://recharts.org/
@@ -7972,9 +8359,9 @@ def run_holdout_validation(
 ### Related Documentation
 
 - `docs/guides/MODEL_EVALUATION_GUIDE_V1.0.md` (implementation guide - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.13.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.14.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.8.md` (Phase 2 Task #3, Phase 6 Task #1)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 2 Task #3, Phase 6 Task #1)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Section 8.7: Evaluation Runs Table)
 
 ---
@@ -8695,9 +9082,9 @@ ON position_risk_by_strategy(league, strategy_name);
 
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (comprehensive analytics implementation guide - to be created)
 - `docs/guides/DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md` (React dashboard + API integration - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.13.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.14.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.8.md` (Phase 6 Task #3, Phase 7 Task #2)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 6 Task #3, Phase 7 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Section 8.8: Materialized Views Reference)
 
 ---
@@ -9526,9 +9913,9 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 
 - `docs/guides/AB_TESTING_GUIDE_V1.0.md` (comprehensive A/B testing guide - to be created)
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (includes A/B testing architecture)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.13.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.14.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.8.md` (Phase 7 Task #3, Phase 8 Task #2)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 7 Task #3, Phase 8 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Section 8.9: A/B Tests Table)
 
 ---
@@ -9964,7 +10351,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 
 **References:**
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (materialized views already defined)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.13.md` (analytics requirements)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.14.md` (analytics requirements)
 
 ---
 

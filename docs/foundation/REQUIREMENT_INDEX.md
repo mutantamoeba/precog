@@ -1,10 +1,16 @@
 # Requirement Index
 
 ---
-**Version:** 1.5
-**Last Updated:** 2025-11-10
+**Version:** 1.6
+**Last Updated:** 2025-11-14
 **Status:** ✅ Current
 **Purpose:** Master index of all system requirements with systematic IDs
+**Changes in v1.6:**
+- **PRODUCTION MONITORING INFRASTRUCTURE**: Added Sentry production error tracking requirement
+- **NEW REQUIREMENT**: REQ-OBSERV-002 (Sentry for real-time error tracking with hybrid architecture)
+- Updated document references from V2.13 to V2.14
+- Updated requirement statistics (110 → 111 total requirements)
+- Enhanced Observability section summary to explain hybrid architecture (logger.py + Sentry + alerts table)
 **Changes in v1.5:**
 - **PHASES 6-9 ANALYTICS INFRASTRUCTURE**: Added analytics and reporting requirements
 - **NEW CATEGORIES**: ANALYTICS (Analytics infrastructure), REPORTING (Dashboards and reporting)
@@ -354,9 +360,10 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-OBSERV-001 | Request Correlation IDs (B3 Standard) | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-OBSERV-001 | Request Correlation IDs (B3 Standard) | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.14 |
+| REQ-OBSERV-002 | Sentry Production Error Tracking (Hybrid Architecture) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.14 |
 
-**Summary:** Phase 1 implements distributed request tracing with B3 correlation IDs (OpenTelemetry/Zipkin compatible) for debugging distributed systems and performance analysis.
+**Summary:** Phase 1 implements distributed request tracing with B3 correlation IDs (OpenTelemetry/Zipkin compatible) for debugging distributed systems. Phase 2 adds Sentry for real-time production error tracking with hybrid architecture integrating logger.py (audit trail), Sentry (real-time alerts), and alerts table (permanent record).
 
 ---
 

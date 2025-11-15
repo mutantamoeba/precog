@@ -39,7 +39,7 @@ from pathlib import Path
 from hypothesis import given
 from hypothesis import strategies as st
 
-from config.config_loader import ConfigLoader
+from precog.config.config_loader import ConfigLoader
 
 # ==============================================================================
 # Custom Hypothesis Strategies for Configuration Domain
@@ -463,7 +463,7 @@ def test_config_loader_converts_money_to_decimal():
 
     Test verifies that loaded config values are Decimal, not float.
     """
-    loader = ConfigLoader(Path(__file__).parent.parent.parent / "config")
+    loader = ConfigLoader(Path(__file__).parent.parent.parent / "src/precog/config")
 
     # Load trading config
     trading_config = loader.load("trading")
@@ -504,7 +504,7 @@ def test_trading_config_has_required_fields():
     - execution.default_order_type
     - market_filters.min_volume_contracts
     """
-    loader = ConfigLoader(Path(__file__).parent.parent.parent / "config")
+    loader = ConfigLoader(Path(__file__).parent.parent.parent / "src/precog/config")
     trading_config = loader.load("trading")
 
     # Required top-level sections

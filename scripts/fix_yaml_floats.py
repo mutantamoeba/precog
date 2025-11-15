@@ -87,7 +87,7 @@ def main():
         "trade_strategies.yaml",
         "trading.yaml",
         "probability_models.yaml",
-        "database.yaml",  # Check this too
+        "precog.database.yaml",  # Check this too
         "logging.yaml",  # Check this too
     ]
 

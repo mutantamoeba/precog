@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from utils.logger import (
+from precog.utils.logger import (
     LogContext,
     decimal_serializer,
     get_logger,

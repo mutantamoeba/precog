@@ -91,7 +91,7 @@ from typing import Any, cast
 import yaml
 from dotenv import load_dotenv
 
-from utils.logger import get_logger
+from precog.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
@@ -362,7 +362,7 @@ class ConfigLoader:
             msg = f"Config file not found: {file_path}"
             raise FileNotFoundError(msg)
 
-        with open(file_path) as f:
+        with open(file_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
 
         # Convert money/price values to Decimal

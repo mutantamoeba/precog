@@ -10,7 +10,7 @@ Tests:
 
 import pytest
 
-from database.connection import (
+from precog.database.connection import (
     execute_query,
     fetch_all,
     fetch_one,
@@ -18,7 +18,7 @@ from database.connection import (
     get_cursor,
     release_connection,
 )
-from database.connection import test_connection as check_db_connection
+from precog.database.connection import test_connection as check_db_connection
 
 
 @pytest.mark.unit

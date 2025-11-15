@@ -26,11 +26,11 @@ from unittest.mock import MagicMock, patch
 import pytest
 from typer.testing import CliRunner
 
-# Import database CRUD functions for verification
-from database.crud_operations import get_current_market
-
 # Import CLI app
 from main import app
+
+# Import database CRUD functions for verification
+from precog.database.crud_operations import get_current_market
 
 # Import test fixtures
 
@@ -55,7 +55,7 @@ def setup_kalshi_platform(db_pool, clean_test_data):
 
     Note: This fixture depends on clean_test_data to ensure proper database setup.
     """
-    from database.connection import get_cursor
+    from precog.database.connection import get_cursor
 
     with get_cursor(commit=True) as cur:
         # Create platform if not exists
@@ -131,7 +131,7 @@ def test_fetch_balance_saves_to_database(
         assert "Balance saved to database" in result.stdout
 
     # Verify database record created
-    from database.connection import get_cursor
+    from precog.database.connection import get_cursor
 
     with get_cursor() as cur:
         cur.execute(
@@ -183,7 +183,7 @@ def test_fetch_balance_updates_with_scd_type2(
         assert result2.exit_code == 0
 
     # Verify two records exist
-    from database.connection import get_cursor
+    from precog.database.connection import get_cursor
 
     with get_cursor() as cur:
         # Check current balance (should be $1500)
@@ -321,7 +321,7 @@ def test_fetch_markets_upsert_pattern(cli_runner, db_pool, clean_test_data, setu
     assert market["volume"] == 20000
 
     # Verify historical version exists with old price
-    from database.connection import get_cursor
+    from precog.database.connection import get_cursor
 
     with get_cursor() as cur:
         cur.execute(
@@ -360,7 +360,7 @@ def test_fetch_settlements_creates_records_and_updates_market_status(
     - Market lookup by ticker works correctly
     """
     # First, create the market that will be settled
-    from database.crud_operations import create_market
+    from precog.database.crud_operations import create_market
 
     market_id = create_market(
         platform_id="kalshi",
@@ -395,7 +395,7 @@ def test_fetch_settlements_creates_records_and_updates_market_status(
         assert "1 markets updated to 'settled'" in result.stdout
 
     # Verify settlement record created
-    from database.connection import get_cursor
+    from precog.database.connection import get_cursor
 
     with get_cursor() as cur:
         cur.execute(
@@ -450,7 +450,7 @@ def test_fetch_settlements_skips_missing_markets(
         assert result.exit_code == 0
 
     # Verify no settlement record created
-    from database.connection import get_cursor
+    from precog.database.connection import get_cursor
 
     with get_cursor() as cur:
         cur.execute(

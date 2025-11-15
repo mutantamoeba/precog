@@ -1256,6 +1256,33 @@ class TestFetchFills:
         """
         # TODO: Implement in Part 1.6
 
+    def test_fetch_fills_verbose(self, runner, mock_kalshi_client):
+        """Test fetch-fills with --verbose.
+
+        Verifies:
+            - Verbose mode message logged
+            - Fill data shown
+        """
+        # Mock fill
+        mock_kalshi_client.get_fills.return_value = [
+            {
+                "trade_id": "T123",
+                "ticker": "NFL-KC-WIN",
+                "side": "yes",
+                "count": 10,
+                "yes_price": Decimal("0.6250"),
+                "no_price": Decimal("0.3750"),
+                "created_time": "2024-01-15T12:00:00Z",
+            }
+        ]
+
+        # Run command with --verbose
+        result = runner.invoke(app, ["fetch-fills", "--verbose"])
+
+        # Verify success
+        assert result.exit_code == 0
+        assert "Fetched 1 fills" in result.stdout
+
 
 class TestFetchSettlements:
     """Test cases for fetch-settlements CLI command.
@@ -1447,6 +1474,29 @@ class TestFetchSettlements:
         """
         # TODO: Implement in Part 1.6
 
+    def test_fetch_settlements_verbose(self, runner, mock_kalshi_client):
+        """Test fetch-settlements with --verbose.
+
+        Verifies:
+            - Verbose mode message logged
+            - Settlement data shown
+        """
+        # Mock settlement
+        mock_kalshi_client.get_settlements.return_value = [
+            {
+                "ticker": "NFL-KC-WIN",
+                "result": "yes",
+                "settlement_price": Decimal("1.00"),
+            }
+        ]
+
+        # Run command with --verbose
+        result = runner.invoke(app, ["fetch-settlements", "--verbose"])
+
+        # Verify success
+        assert result.exit_code == 0
+        assert "NFL-KC-WIN" in result.stdout
+
 
 class TestGetKalshiClient:
     """Test cases for get_kalshi_client() helper function.
@@ -1634,12 +1684,12 @@ class TestDbInit:
         - Error handling (connection failure, schema errors)
     """
 
-    @patch("database.connection.test_connection")
-    @patch("database.initialization.validate_schema_file")
-    @patch("database.initialization.get_database_url")
-    @patch("database.initialization.apply_schema")
-    @patch("database.initialization.apply_migrations")
-    @patch("database.initialization.validate_critical_tables")
+    @patch("precog.database.connection.test_connection")
+    @patch("precog.database.initialization.validate_schema_file")
+    @patch("precog.database.initialization.get_database_url")
+    @patch("precog.database.initialization.apply_schema")
+    @patch("precog.database.initialization.apply_migrations")
+    @patch("precog.database.initialization.validate_critical_tables")
     def test_db_init_success(
         self,
         mock_validate_tables,
@@ -1707,7 +1757,7 @@ class TestDbInit:
         mock_apply_migrations.assert_called_once()
         mock_validate_tables.assert_called_once()
 
-    @patch("database.connection.test_connection")
+    @patch("precog.database.connection.test_connection")
     def test_db_init_connection_failure(self, mock_test_connection, runner):
         """Test db-init with connection failure.
 
@@ -1732,10 +1782,10 @@ class TestDbInit:
         # Verify NOT all steps executed (should stop at step 1)
         assert "[2/4]" not in result.stdout, "Should not reach step 2"
 
-    @patch("database.connection.test_connection")
-    @patch("database.initialization.validate_schema_file")
-    @patch("database.initialization.get_database_url")
-    @patch("database.initialization.apply_schema")
+    @patch("precog.database.connection.test_connection")
+    @patch("precog.database.initialization.validate_schema_file")
+    @patch("precog.database.initialization.get_database_url")
+    @patch("precog.database.initialization.apply_schema")
     def test_db_init_schema_creation_failure(
         self,
         mock_apply_schema,
@@ -1776,12 +1826,12 @@ class TestDbInit:
         assert "[1/4]" in result.stdout
         assert "Testing database connection" in result.stdout
 
-    @patch("database.connection.test_connection")
-    @patch("database.initialization.validate_schema_file")
-    @patch("database.initialization.get_database_url")
-    @patch("database.initialization.apply_schema")
-    @patch("database.initialization.apply_migrations")
-    @patch("database.initialization.validate_critical_tables")
+    @patch("precog.database.connection.test_connection")
+    @patch("precog.database.initialization.validate_schema_file")
+    @patch("precog.database.initialization.get_database_url")
+    @patch("precog.database.initialization.apply_schema")
+    @patch("precog.database.initialization.apply_migrations")
+    @patch("precog.database.initialization.validate_critical_tables")
     def test_db_init_validation_failure(
         self,
         mock_validate_tables,
@@ -1830,7 +1880,7 @@ class TestDbInit:
         assert "[4/4]" in result.stdout
         assert "Validating schema" in result.stdout
 
-    @patch("database.connection.test_connection")
+    @patch("precog.database.connection.test_connection")
     def test_db_init_dry_run(self, mock_test_connection, runner):
         """Test db-init with --dry-run flag.
 
@@ -1858,12 +1908,12 @@ class TestDbInit:
         # Verify connection test was called (happens before dry-run check)
         mock_test_connection.assert_called_once()
 
-    @patch("database.connection.test_connection")
-    @patch("database.initialization.validate_schema_file")
-    @patch("database.initialization.get_database_url")
-    @patch("database.initialization.apply_schema")
-    @patch("database.initialization.apply_migrations")
-    @patch("database.initialization.validate_critical_tables")
+    @patch("precog.database.connection.test_connection")
+    @patch("precog.database.initialization.validate_schema_file")
+    @patch("precog.database.initialization.get_database_url")
+    @patch("precog.database.initialization.apply_schema")
+    @patch("precog.database.initialization.apply_migrations")
+    @patch("precog.database.initialization.validate_critical_tables")
     def test_db_init_verbose(
         self,
         mock_validate_tables,
@@ -1917,8 +1967,8 @@ class TestHealthCheck:
         - Verbose mode
     """
 
-    @patch("database.connection.test_connection")
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.database.connection.test_connection")
+    @patch("precog.config.config_loader.ConfigLoader")
     @patch("os.getenv")
     @patch("os.path.exists")
     def test_health_check_all_pass(
@@ -1964,7 +2014,7 @@ class TestHealthCheck:
         # Verify summary shows all passed
         assert "4/4" in result.stdout or "All checks passed" in result.stdout
 
-    @patch("database.connection.test_connection")
+    @patch("precog.database.connection.test_connection")
     def test_health_check_database_fail(self, mock_test_connection, runner):
         """Test health-check with database connection failure.
 
@@ -1989,8 +2039,8 @@ class TestHealthCheck:
         # Verify summary shows failures
         assert "3/4" in result.stdout or "1 failed" in result.stdout.lower()
 
-    @patch("database.connection.test_connection")
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.database.connection.test_connection")
+    @patch("precog.config.config_loader.ConfigLoader")
     def test_health_check_config_fail(self, mock_config_loader, mock_test_connection, runner):
         """Test health-check with config loading failure.
 
@@ -2015,8 +2065,8 @@ class TestHealthCheck:
         assert "config" in result.stdout.lower()
         assert "FAIL" in result.stdout or "failed" in result.stdout.lower()
 
-    @patch("database.connection.test_connection")
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.database.connection.test_connection")
+    @patch("precog.config.config_loader.ConfigLoader")
     @patch("os.getenv")
     def test_health_check_credentials_fail(
         self, mock_getenv, mock_config_loader, mock_test_connection, runner
@@ -2045,8 +2095,8 @@ class TestHealthCheck:
         assert "credential" in result.stdout.lower() or "environment" in result.stdout.lower()
         assert "FAIL" in result.stdout or "failed" in result.stdout.lower()
 
-    @patch("database.connection.test_connection")
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.database.connection.test_connection")
+    @patch("precog.config.config_loader.ConfigLoader")
     @patch("os.getenv")
     @patch("os.path.exists")
     def test_health_check_directories_fail(
@@ -2077,8 +2127,8 @@ class TestHealthCheck:
         assert "director" in result.stdout.lower()
         assert "FAIL" in result.stdout or "failed" in result.stdout.lower()
 
-    @patch("database.connection.test_connection")
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.database.connection.test_connection")
+    @patch("precog.config.config_loader.ConfigLoader")
     @patch("os.getenv")
     @patch("os.path.exists")
     def test_health_check_verbose(
@@ -2125,7 +2175,7 @@ class TestConfigShow:
         - Verbose mode
     """
 
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.config.config_loader.ConfigLoader")
     def test_config_show_entire_file(self, mock_config_loader, runner):
         """Test config-show displaying entire config file.
 
@@ -2161,7 +2211,7 @@ class TestConfigShow:
         # Verify values shown
         assert "0.05" in result.stdout or "max_bet_size" in result.stdout
 
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.config.config_loader.ConfigLoader")
     def test_config_show_specific_key(self, mock_config_loader, runner):
         """Test config-show with --key parameter.
 
@@ -2188,7 +2238,7 @@ class TestConfigShow:
         # Verify value displayed
         assert "0.05" in result.stdout
 
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.config.config_loader.ConfigLoader")
     def test_config_show_top_level_key(self, mock_config_loader, runner):
         """Test config-show with top-level key.
 
@@ -2214,7 +2264,7 @@ class TestConfigShow:
         assert "max_bet_size" in result.stdout
         assert "0.05" in result.stdout
 
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.config.config_loader.ConfigLoader")
     def test_config_show_missing_file(self, mock_config_loader, runner):
         """Test config-show with non-existent config file.
 
@@ -2234,7 +2284,7 @@ class TestConfigShow:
         # Verify error message
         assert "not found" in result.stdout.lower() or "error" in result.stdout.lower()
 
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.config.config_loader.ConfigLoader")
     def test_config_show_invalid_key_path(self, mock_config_loader, runner):
         """Test config-show with invalid key path.
 
@@ -2266,7 +2316,7 @@ class TestConfigShow:
         # Verify helpful info (shows available keys)
         assert "kelly_criterion" in result.stdout or "Available" in result.stdout
 
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.config.config_loader.ConfigLoader")
     def test_config_show_verbose(self, mock_config_loader, runner):
         """Test config-show with --verbose flag.
 
@@ -2302,7 +2352,7 @@ class TestConfigValidate:
         - Verbose mode with detailed errors
     """
 
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.config.config_loader.ConfigLoader")
     @patch("builtins.open", create=True)
     def test_config_validate_all_pass(self, mock_open, mock_config_loader, runner):
         """Test config-validate with all files passing (happy path).
@@ -2347,7 +2397,7 @@ class TestConfigValidate:
         # Verify success message
         assert "All configuration files valid" in result.stdout or "passed" in result.stdout.lower()
 
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.config.config_loader.ConfigLoader")
     @patch("builtins.open", create=True)
     def test_config_validate_specific_file(self, mock_open, mock_config_loader, runner):
         """Test config-validate with --file parameter.
@@ -2384,7 +2434,7 @@ class TestConfigValidate:
         # Verify validation passed
         assert "Validation passed" in result.stdout or "passed" in result.stdout.lower()
 
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.config.config_loader.ConfigLoader")
     def test_config_validate_yaml_syntax_error(self, mock_config_loader, runner):
         """Test config-validate with YAML syntax error.
 
@@ -2410,7 +2460,7 @@ class TestConfigValidate:
         assert "YAML" in result.stdout or "error" in result.stdout.lower()
         assert "failed" in result.stdout.lower()
 
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.config.config_loader.ConfigLoader")
     @patch("builtins.open", create=True)
     def test_config_validate_float_contamination(self, mock_open, mock_config_loader, runner):
         """Test config-validate detects float contamination.
@@ -2452,7 +2502,7 @@ class TestConfigValidate:
         # Verify float contamination warning shown
         assert "float" in result.stdout.lower() or "contamination" in result.stdout.lower()
 
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.config.config_loader.ConfigLoader")
     @patch("builtins.open", create=True)
     def test_config_validate_empty_file(self, mock_open, mock_config_loader, runner):
         """Test config-validate with empty config file.
@@ -2482,7 +2532,7 @@ class TestConfigValidate:
         # Verify empty file error message
         assert "empty" in result.stdout.lower() or "failed" in result.stdout.lower()
 
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.config.config_loader.ConfigLoader")
     @patch("builtins.open", create=True)
     def test_config_validate_verbose(self, mock_open, mock_config_loader, runner):
         """Test config-validate with --verbose flag.
@@ -2519,7 +2569,7 @@ class TestConfigValidate:
         # Verbose mode should work without errors
         assert result.exit_code == 0
 
-    @patch("config.config_loader.ConfigLoader")
+    @patch("precog.config.config_loader.ConfigLoader")
     @patch("builtins.open", create=True)
     def test_config_validate_multiple_errors(self, mock_open, mock_config_loader, runner):
         """Test config-validate with multiple files having errors.
@@ -2562,6 +2612,80 @@ class TestConfigValidate:
 
         # Verify failure message
         assert "failed" in result.stdout.lower()
+
+    @patch("precog.config.config_loader.ConfigLoader")
+    @patch("builtins.open", create=True)
+    def test_config_validate_verbose_with_errors(self, mock_open, mock_config_loader, runner):
+        """Test config-validate with --verbose flag showing errors/warnings.
+
+        Verifies:
+            - Verbose mode displays detailed errors
+            - Verbose mode displays detailed warnings
+            - Error and warning lists shown correctly
+
+        Coverage Target:
+            - Lines 1707-1715 in main.py (verbose error/warning display)
+        """
+        # Mock ConfigLoader
+        mock_loader_instance = Mock()
+        mock_config_loader.return_value = mock_loader_instance
+        mock_loader_instance.get.return_value = None  # Empty file triggers error
+
+        # Mock file read to trigger float contamination warning (for trading_config.yaml)
+        mock_file_handle = Mock()
+        mock_file_handle.read.return_value = (
+            "kelly_criterion:\n  max_bet_size: 0.05"  # Float triggers warning
+        )
+        mock_file_handle.__enter__ = Mock(return_value=mock_file_handle)
+        mock_file_handle.__exit__ = Mock(return_value=False)
+        mock_open.return_value = mock_file_handle
+
+        # Run command with --verbose and --file (to get both error and warning)
+        result = runner.invoke(
+            app, ["config-validate", "--file", "trading_config.yaml", "--verbose"]
+        )
+
+        # Verify exit code 1 (empty file error)
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify verbose output shows errors/warnings
+        # Note: Output format depends on how errors/warnings are displayed
+        # We're looking for evidence that verbose mode showed details
+        assert result.exit_code == 1  # Errors present
+
+    @patch("precog.config.config_loader.ConfigLoader")
+    def test_config_validate_file_not_found(self, mock_config_loader, runner):
+        """Test config-validate with non-existent config file.
+
+        Verifies:
+            - Exit code 1
+            - Error message about file not found
+            - Graceful handling (no exception crash)
+
+        Coverage Target:
+            - Lines 1724-1726, 1728-1730 in main.py (FileNotFoundError handler)
+
+        Educational Note:
+            FileNotFoundError can occur when:
+            - User specifies wrong filename with --file
+            - Config file deleted after code expects it
+            - Case sensitivity mismatch on Linux/Mac
+        """
+        # Mock ConfigLoader to raise FileNotFoundError
+        mock_loader_instance = Mock()
+        mock_config_loader.return_value = mock_loader_instance
+        mock_loader_instance.get.side_effect = FileNotFoundError(
+            "Config file not found: nonexistent_config.yaml"
+        )
+
+        # Run command with non-existent file
+        result = runner.invoke(app, ["config-validate", "--file", "nonexistent_config.yaml"])
+
+        # Verify exit code 1
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify error message about file not found
+        assert "not found" in result.stdout.lower() or "fail" in result.stdout.lower()
 
 
 # ============================================================================

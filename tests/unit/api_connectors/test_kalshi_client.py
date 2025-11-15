@@ -21,8 +21,8 @@ import pytest
 import requests
 
 # Import implementation modules
-from api_connectors.kalshi_auth import KalshiAuth, generate_signature, load_private_key
-from api_connectors.kalshi_client import KalshiClient
+from precog.api_connectors.kalshi_auth import KalshiAuth, generate_signature, load_private_key
+from precog.api_connectors.kalshi_client import KalshiClient
 
 # Import test fixtures
 from tests.fixtures.api_responses import (
@@ -65,7 +65,7 @@ def mock_private_key():
 @pytest.fixture
 def mock_load_private_key(mock_private_key):
     """Patch load_private_key to return mock key."""
-    with patch("api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key):
+    with patch("precog.api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key):
         yield mock_private_key
 
 
@@ -183,7 +183,9 @@ class TestKalshiAuthentication:
         api_key = "test-key-id-12345"
 
         # Mock load_private_key to return our mock
-        with patch("api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key):
+        with patch(
+            "precog.api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key
+        ):
             auth = KalshiAuth(api_key=api_key, private_key_path="/fake/path.pem")
 
             headers = auth.get_headers(method="GET", path="/trade-api/v2/markets")
@@ -204,7 +206,9 @@ class TestKalshiAuthentication:
     def test_is_token_expired_when_token_none(self, mock_private_key):
         """Test is_token_expired() returns True when token is None."""
 
-        with patch("api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key):
+        with patch(
+            "precog.api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key
+        ):
             auth = KalshiAuth(api_key="test-key", private_key_path="/fake/path.pem")
 
             # Initially token and expiry are None
@@ -218,7 +222,9 @@ class TestKalshiAuthentication:
     def test_is_token_expired_when_expiry_none(self, mock_private_key):
         """Test is_token_expired() returns True when expiry is None (even if token exists)."""
 
-        with patch("api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key):
+        with patch(
+            "precog.api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key
+        ):
             auth = KalshiAuth(api_key="test-key", private_key_path="/fake/path.pem")
 
             # Set token but leave expiry None
@@ -233,7 +239,9 @@ class TestKalshiAuthentication:
         """Test is_token_expired() returns True when token expiry is in the past."""
         import time
 
-        with patch("api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key):
+        with patch(
+            "precog.api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key
+        ):
             auth = KalshiAuth(api_key="test-key", private_key_path="/fake/path.pem")
 
             # Set token with expiry 1 hour in the past
@@ -249,7 +257,9 @@ class TestKalshiAuthentication:
         """Test is_token_expired() returns False when token expiry is in the future."""
         import time
 
-        with patch("api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key):
+        with patch(
+            "precog.api_connectors.kalshi_auth.load_private_key", return_value=mock_private_key
+        ):
             auth = KalshiAuth(api_key="test-key", private_key_path="/fake/path.pem")
 
             # Set token with expiry 1 hour in the future
@@ -272,9 +282,9 @@ class TestKalshiClient:
     @pytest.mark.unit
     def test_client_initialization_demo(self, mock_env_credentials):
         """Test KalshiClient initializes correctly with demo environment."""
-        from api_connectors.kalshi_client import KalshiClient
+        from precog.api_connectors.kalshi_client import KalshiClient
 
-        with patch("api_connectors.kalshi_auth.load_private_key"):
+        with patch("precog.api_connectors.kalshi_auth.load_private_key"):
             client = KalshiClient(environment="demo")
 
         assert client.environment == "demo"
@@ -283,9 +293,9 @@ class TestKalshiClient:
     @pytest.mark.unit
     def test_client_initialization_prod(self, mock_env_credentials):
         """Test KalshiClient initializes correctly with prod environment."""
-        from api_connectors.kalshi_client import KalshiClient
+        from precog.api_connectors.kalshi_client import KalshiClient
 
-        with patch("api_connectors.kalshi_auth.load_private_key"):
+        with patch("precog.api_connectors.kalshi_auth.load_private_key"):
             client = KalshiClient(environment="prod")
 
         assert client.environment == "prod"
@@ -294,7 +304,7 @@ class TestKalshiClient:
     @pytest.mark.unit
     def test_client_initialization_invalid_environment(self):
         """Test KalshiClient raises error for invalid environment."""
-        from api_connectors.kalshi_client import KalshiClient
+        from precog.api_connectors.kalshi_client import KalshiClient
 
         with pytest.raises(ValueError) as exc_info:
             KalshiClient(environment="staging")  # Invalid
@@ -304,7 +314,7 @@ class TestKalshiClient:
     @pytest.mark.unit
     def test_client_initialization_missing_credentials(self, monkeypatch):
         """Test KalshiClient raises error when credentials missing."""
-        from api_connectors.kalshi_client import KalshiClient
+        from precog.api_connectors.kalshi_client import KalshiClient
 
         # Clear environment variables
         monkeypatch.delenv("KALSHI_DEMO_KEY_ID", raising=False)

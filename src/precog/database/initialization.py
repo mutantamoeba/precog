@@ -218,7 +218,7 @@ def validate_critical_tables(required_tables: list[str] | None = None) -> list[s
     Reference:
         docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md - Complete table documentation
     """
-    from database.connection import fetch_all
+    from precog.database.connection import fetch_all
 
     if required_tables is None:
         required_tables = [

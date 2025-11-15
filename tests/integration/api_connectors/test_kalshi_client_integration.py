@@ -32,7 +32,7 @@ from unittest.mock import Mock, patch
 import pytest
 import requests
 
-from api_connectors.kalshi_client import KalshiClient
+from precog.api_connectors.kalshi_client import KalshiClient
 from tests.fixtures.api_responses import (
     DECIMAL_ARITHMETIC_TESTS,
     KALSHI_BALANCE_RESPONSE,
@@ -75,11 +75,12 @@ class TestKalshiClientIntegration:
 
         # Mock session.request to return our response
         with patch(
-            "api_connectors.kalshi_client.requests.Session.request", return_value=mock_response
+            "precog.api_connectors.kalshi_client.requests.Session.request",
+            return_value=mock_response,
         ):
             # Mock auth to skip RSA signature generation
             with patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ):
                 client = KalshiClient(environment="demo")
@@ -112,10 +113,11 @@ class TestKalshiClientIntegration:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request", return_value=mock_response
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                return_value=mock_response,
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -138,10 +140,11 @@ class TestKalshiClientIntegration:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request", return_value=mock_response
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                return_value=mock_response,
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -170,10 +173,11 @@ class TestKalshiClientIntegration:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request", return_value=mock_response
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                return_value=mock_response,
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -200,10 +204,11 @@ class TestKalshiClientIntegration:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request", return_value=mock_response
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                return_value=mock_response,
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -251,10 +256,11 @@ class TestKalshiClientErrorHandling:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request", return_value=mock_response
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                return_value=mock_response,
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -279,9 +285,11 @@ class TestKalshiClientErrorHandling:
         monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "test-key-id")
         monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "tests/fixtures/test_private_key.pem")
 
-        with patch("api_connectors.kalshi_client.requests.Session.request", return_value=mock_429):
+        with patch(
+            "precog.api_connectors.kalshi_client.requests.Session.request", return_value=mock_429
+        ):
             with patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ):
                 client = KalshiClient(environment="demo")
@@ -308,11 +316,11 @@ class TestKalshiClientErrorHandling:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request",
+                "precog.api_connectors.kalshi_client.requests.Session.request",
                 side_effect=[mock_500, mock_success],
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -334,10 +342,11 @@ class TestKalshiClientErrorHandling:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request", return_value=mock_response
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                return_value=mock_response,
             ) as mock_request,
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -357,11 +366,11 @@ class TestKalshiClientErrorHandling:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request",
+                "precog.api_connectors.kalshi_client.requests.Session.request",
                 side_effect=requests.Timeout("Connection timeout"),
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -378,11 +387,11 @@ class TestKalshiClientErrorHandling:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request",
+                "precog.api_connectors.kalshi_client.requests.Session.request",
                 side_effect=requests.ConnectionError("Connection refused"),
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -441,10 +450,11 @@ class TestKalshiClientDecimalPrecision:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request", return_value=mock_response
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                return_value=mock_response,
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -497,10 +507,11 @@ class TestKalshiClientDecimalPrecision:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request", return_value=mock_response
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                return_value=mock_response,
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -558,10 +569,11 @@ class TestKalshiClientRateLimiting:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request", side_effect=count_requests
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                side_effect=count_requests,
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -593,10 +605,11 @@ class TestKalshiClientRateLimiting:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request", return_value=mock_response
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                return_value=mock_response,
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -632,10 +645,11 @@ class TestKalshiClientRateLimiting:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request", return_value=mock_response
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                return_value=mock_response,
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -686,9 +700,11 @@ class TestKalshiClientRateLimiting:
         mock_429.headers = mock_headers
         mock_429.raise_for_status.side_effect = requests.HTTPError("429 Too Many Requests")
 
-        with patch("api_connectors.kalshi_client.requests.Session.request", return_value=mock_429):
+        with patch(
+            "precog.api_connectors.kalshi_client.requests.Session.request", return_value=mock_429
+        ):
             with patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ):
                 client = KalshiClient(environment="demo")
@@ -715,10 +731,11 @@ class TestKalshiClientRateLimiting:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request", return_value=mock_response
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                return_value=mock_response,
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ),
         ):
@@ -789,11 +806,11 @@ class TestKalshiClientAuthentication:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request",
+                "precog.api_connectors.kalshi_client.requests.Session.request",
                 side_effect=capture_signature,
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 wraps=lambda *args, **kwargs: {
                     "KALSHI-ACCESS-KEY": "test-key-id",
                     "KALSHI-ACCESS-TIMESTAMP": str(int(time.time() * 1000)),
@@ -842,10 +859,11 @@ class TestKalshiClientAuthentication:
 
         with (
             patch(
-                "api_connectors.kalshi_client.requests.Session.request", side_effect=capture_headers
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                side_effect=capture_headers,
             ),
             patch(
-                "api_connectors.kalshi_client.KalshiAuth.get_headers",
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 wraps=lambda method, path: {
                     "KALSHI-ACCESS-KEY": "test-key-id",
                     "KALSHI-ACCESS-TIMESTAMP": str(int(time.time() * 1000)),
@@ -877,7 +895,7 @@ class TestKalshiClientAuthentication:
         """
         import base64
 
-        from api_connectors.kalshi_auth import KalshiAuth
+        from precog.api_connectors.kalshi_auth import KalshiAuth
 
         # Create auth instance
         auth = KalshiAuth(
@@ -903,7 +921,7 @@ class TestKalshiClientAuthentication:
         Different endpoints should produce different signatures
         (even with same timestamp, which won't happen in practice).
         """
-        from api_connectors.kalshi_auth import KalshiAuth, generate_signature
+        from precog.api_connectors.kalshi_auth import KalshiAuth, generate_signature
 
         # Load test private key
         private_key = KalshiAuth(
@@ -928,7 +946,7 @@ class TestKalshiClientAuthentication:
 
         Note: Token management is Phase 1.5 feature (currently stub).
         """
-        from api_connectors.kalshi_auth import KalshiAuth
+        from precog.api_connectors.kalshi_auth import KalshiAuth
 
         auth = KalshiAuth(
             api_key="test-key-id", private_key_path="tests/fixtures/test_private_key.pem"

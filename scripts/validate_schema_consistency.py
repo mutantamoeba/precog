@@ -51,7 +51,7 @@ from typing import Any
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from database.connection import fetch_all, test_connection
+from precog.database.connection import fetch_all, test_connection
 
 
 # Color codes for terminal output (ASCII fallback for Windows)
