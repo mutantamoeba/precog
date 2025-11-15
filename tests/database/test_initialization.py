@@ -23,7 +23,6 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
 from database.initialization import (
     apply_migrations,
     apply_schema,
