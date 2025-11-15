@@ -1,13 +1,20 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.1
+**Version:** 1.2
 **Created:** 2025-11-13
 **Last Updated:** 2025-11-14
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.2:**
+- **Enhanced Pattern 5: Cross-Platform Compatibility**
+- Added comprehensive Unicode symbol mapping table (14 symbols documented)
+- Documented CLI symbols: ✓→[OK], ✗→[FAIL], ⚠→[WARN], •→-, →→->
+- Added Rich console library behavior on Windows cp1252
+- Included real-world example reference (commit 520c5dd - CLI Unicode fixes)
+- Clarified file I/O Unicode handling: always use `encoding="utf-8"`
 **Changes in V1.1:**
 - **Added Pattern 11: Test Mocking Patterns (Mock API Boundaries, Not Implementation)**
 - Documents mocking antipattern discovered in PR #19 and PR #20
