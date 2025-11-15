@@ -1642,13 +1642,13 @@ def config_validate(
             console.print(f"Validating: {config_file}\n")
         else:
             config_files = [
-                "db_config.yaml",
-                "trading_config.yaml",
-                "strategy_config.yaml",
-                "model_config.yaml",
-                "market_config.yaml",
-                "kalshi_config.yaml",
-                "env_config.yaml",
+                "trading",
+                "trade_strategies",
+                "position_management",
+                "probability_models",
+                "markets",
+                "data_sources",
+                "system",
             ]
             console.print(f"Validating all {len(config_files)} configuration files\n")
 
@@ -1664,20 +1664,20 @@ def config_validate(
             try:
                 # Check 1: Can we load the file?
                 config = config_loader.get(cf)
-                console.print("  ✓ YAML syntax valid")
+                console.print("  [OK] YAML syntax valid")
 
                 # Check 2: Is the file empty?
                 if not config:
                     errors.append("Configuration file is empty")
-                    console.print("  ✗ File is empty")
+                    console.print("  [FAIL] File is empty")
                 else:
-                    console.print(f"  ✓ Contains {len(config)} top-level keys")
+                    console.print(f"  [OK] Contains {len(config)} top-level keys")
 
                 # Check 3: Check for float contamination in financial configs
-                if cf in ["trading_config.yaml", "strategy_config.yaml", "market_config.yaml"]:
+                if cf in ["trading", "trade_strategies", "markets"]:
                     import yaml
 
-                    with open(f"config/{cf}") as f:
+                    with open(f"src/precog/config/{cf}.yaml", encoding="utf-8") as f:
                         raw_content = f.read()
                         # Look for float notation (e.g., 0.05 instead of "0.05")
                         if any(
@@ -1689,24 +1689,24 @@ def config_validate(
                             warnings.append(
                                 "May contain float values (should use string format for Decimal)"
                             )
-                            console.print("  ⚠ Possible float contamination detected")
+                            console.print("  [WARN] Possible float contamination detected")
 
                 if not errors:
-                    console.print("[green]  ✓ Validation passed[/green]\n")
+                    console.print("[green]  [OK] Validation passed[/green]\n")
                     files_passed += 1
                 else:
-                    console.print(f"[red]  ✗ Validation failed: {len(errors)} errors[/red]\n")
+                    console.print(f"[red]  [FAIL] Validation failed: {len(errors)} errors[/red]\n")
                     files_failed += 1
 
                 if verbose and (errors or warnings):
                     if errors:
                         console.print("  [red]Errors:[/red]")
                         for error in errors:
-                            console.print(f"    • {error}")
+                            console.print(f"    - {error}")
                     if warnings:
                         console.print("  [yellow]Warnings:[/yellow]")
                         for warning in warnings:
-                            console.print(f"    • {warning}")
+                            console.print(f"    - {warning}")
                     console.print()
 
                 validation_results[cf] = {
@@ -1716,7 +1716,7 @@ def config_validate(
                 }
 
             except FileNotFoundError:
-                console.print(f"  [red]✗ File not found: config/{cf}[/red]\n")
+                console.print(f"  [red][FAIL] File not found: config/{cf}[/red]\n")
                 files_failed += 1
                 validation_results[cf] = {
                     "passed": False,
@@ -1724,7 +1724,7 @@ def config_validate(
                     "warnings": [],
                 }
             except yaml.YAMLError as yaml_error:
-                console.print(f"  [red]✗ YAML parsing error: {yaml_error}[/red]\n")
+                console.print(f"  [red][FAIL] YAML parsing error: {yaml_error}[/red]\n")
                 files_failed += 1
                 validation_results[cf] = {
                     "passed": False,
@@ -1732,7 +1732,7 @@ def config_validate(
                     "warnings": [],
                 }
             except Exception as validation_error:
-                console.print(f"  [red]✗ Validation error: {validation_error}[/red]\n")
+                console.print(f"  [red][FAIL] Validation error: {validation_error}[/red]\n")
                 files_failed += 1
                 validation_results[cf] = {
                     "passed": False,
@@ -1747,10 +1747,12 @@ def config_validate(
         console.print(f"  Files failed: [red]{files_failed}/{total_files}[/red]")
 
         if files_failed == 0:
-            console.print("\n[bold green]✓ All configuration files valid![/bold green]")
+            console.print("\n[bold green][OK] All configuration files valid![/bold green]")
             logger.info("Configuration validation passed")
         else:
-            console.print("\n[bold red]✗ Some configuration files failed validation[/bold red]")
+            console.print(
+                "\n[bold red][FAIL] Some configuration files failed validation[/bold red]"
+            )
             logger.error(f"Configuration validation failed: {files_failed} files with errors")
             raise typer.Exit(code=1)
 
