@@ -8,7 +8,7 @@
 **Target Audience:** Claude Code AI assistant in all sessions
 **Changes in V1.16:**
 - **CLAUDE.md Size Reduction (48.7%)** - Reduced from 3,723 lines to 1,909 lines (~1,814 line reduction)
-- **Created DEVELOPMENT_PATTERNS_V1.0.md** (1,200+ lines) - Extracted all 10 critical patterns with comprehensive code examples from CLAUDE.md
+- **Created DEVELOPMENT_PATTERNS_V1.2.md** (1,200+ lines) - Extracted all 10 critical patterns with comprehensive code examples from CLAUDE.md
 - **Created DOCUMENTATION_WORKFLOW_GUIDE_V1.0.md** (850+ lines) - Extracted document cohesion workflows, update cascade rules, validation checklists
 - **Replaced detailed sections with concise summaries** - Critical Patterns section now 55 lines (was 1,100 lines), Document Cohesion section now 47 lines (was 820 lines)
 - **Preserved all cross-references** - All ADR, REQ, and file path references maintained in extracted documents
@@ -1088,7 +1088,7 @@ git push origin $BRANCH
 
 ## 🏗️ Critical Development Patterns
 
-**⚠️ COMPLETE REFERENCE:** See `docs/guides/DEVELOPMENT_PATTERNS_V1.0.md` for comprehensive patterns with code examples.
+**⚠️ COMPLETE REFERENCE:** See `docs/guides/DEVELOPMENT_PATTERNS_V1.2.md` for comprehensive patterns with code examples.
 
 This section provides quick reference to the 10 critical patterns. For full details, code examples showing ✅ CORRECT vs ❌ WRONG usage, and cross-references to ADRs/REQs, see the complete guide.
 
@@ -1097,50 +1097,50 @@ This section provides quick reference to the 10 critical patterns. For full deta
 1. **Decimal Precision (NEVER USE FLOAT)**
    - Use `Decimal("0.4975")` for all prices/probabilities
    - ❌ NEVER: `price = 0.4975` (float)
-   - Reference: Pattern 1 in DEVELOPMENT_PATTERNS_V1.0.md
+   - Reference: Pattern 1 in DEVELOPMENT_PATTERNS_V1.2.md
 
 2. **Dual Versioning System**
    - SCD Type 2 for markets/positions (`row_current_ind`)
    - Immutable versions for strategies/models (`version` field)
-   - Reference: Pattern 2 in DEVELOPMENT_PATTERNS_V1.0.md
+   - Reference: Pattern 2 in DEVELOPMENT_PATTERNS_V1.2.md
 
 3. **Trade Attribution**
    - Every trade links to exact `strategy_id` and `model_id`
-   - Reference: Pattern 3 in DEVELOPMENT_PATTERNS_V1.0.md
+   - Reference: Pattern 3 in DEVELOPMENT_PATTERNS_V1.2.md
 
 4. **Security (NO CREDENTIALS IN CODE)**
    - All credentials from `os.getenv()`, never hardcoded
    - Pre-commit hooks scan for secrets
-   - Reference: Pattern 4 in DEVELOPMENT_PATTERNS_V1.0.md
+   - Reference: Pattern 4 in DEVELOPMENT_PATTERNS_V1.2.md
 
 5. **Cross-Platform Compatibility**
    - ASCII output for console (Windows cp1252 compatibility)
    - Explicit UTF-8 for file I/O
-   - Reference: Pattern 5 in DEVELOPMENT_PATTERNS_V1.0.md
+   - Reference: Pattern 5 in DEVELOPMENT_PATTERNS_V1.2.md
 
 6. **TypedDict for API Responses**
    - Compile-time type safety, zero runtime overhead
    - Use until Phase 5+ (then Pydantic)
-   - Reference: Pattern 6 in DEVELOPMENT_PATTERNS_V1.0.md
+   - Reference: Pattern 6 in DEVELOPMENT_PATTERNS_V1.2.md
 
 7. **Educational Docstrings (ALWAYS)**
    - Description + Args/Returns + Educational Note + Examples + References
-   - Reference: Pattern 7 in DEVELOPMENT_PATTERNS_V1.0.md
+   - Reference: Pattern 7 in DEVELOPMENT_PATTERNS_V1.2.md
 
 8. **Configuration File Synchronization**
    - 4-layer config system must stay synchronized
    - Tool → Pipeline → Application → Documentation
-   - Reference: Pattern 8 in DEVELOPMENT_PATTERNS_V1.0.md
+   - Reference: Pattern 8 in DEVELOPMENT_PATTERNS_V1.2.md
 
 9. **Multi-Source Warning Governance**
    - Track warnings across pytest, validate_docs, Ruff, Mypy
    - Locked baseline: 312 warnings (zero regression policy)
-   - Reference: Pattern 9 in DEVELOPMENT_PATTERNS_V1.0.md
+   - Reference: Pattern 9 in DEVELOPMENT_PATTERNS_V1.2.md
 
 10. **Property-Based Testing with Hypothesis**
     - Test mathematical invariants with generated inputs
     - 100+ cases per property
-    - Reference: Pattern 10 in DEVELOPMENT_PATTERNS_V1.0.md
+    - Reference: Pattern 10 in DEVELOPMENT_PATTERNS_V1.2.md
 
 ---
 
@@ -1988,7 +1988,7 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 - `scripts/validate_all.sh` - Complete validation suite
 
 **Development Patterns:**
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.0.md` - Complete guide to 10 critical patterns with code examples
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.2.md` - Complete guide to 10 critical patterns with code examples
 - Section 4 above: Pattern Quick Reference (condensed)
 - Patterns: Decimal Precision, Versioning, Trade Attribution, Security, Cross-Platform, TypedDict, Educational Docstrings, Config Sync, Warning Governance, Property-Based Testing
 
@@ -2043,7 +2043,7 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 
 | Version | Date | Changes |
 |---------|------|---------|
-| 1.16 | 2025-11-13 | **CLAUDE.md Size Reduction (48.7%)** - Reduced from 3,723 lines to 1,909 lines (~1,814 line reduction); Created DEVELOPMENT_PATTERNS_V1.0.md (1,200+ lines) extracting all 10 critical patterns; Created DOCUMENTATION_WORKFLOW_GUIDE_V1.0.md (850+ lines) extracting document cohesion workflows; Replaced detailed sections with concise summaries + references; Context budget optimization: ~45,000 tokens → ~23,000 tokens (~50% reduction) |
+| 1.16 | 2025-11-13 | **CLAUDE.md Size Reduction (48.7%)** - Reduced from 3,723 lines to 1,909 lines (~1,814 line reduction); Created DEVELOPMENT_PATTERNS_V1.2.md (1,200+ lines) extracting all 10 critical patterns; Created DOCUMENTATION_WORKFLOW_GUIDE_V1.0.md (850+ lines) extracting document cohesion workflows; Replaced detailed sections with concise summaries + references; Context budget optimization: ~45,000 tokens → ~23,000 tokens (~50% reduction) |
 | 1.15 | 2025-11-09 | Automated Template Enforcement (Phase 0.7c) - Created validate_code_quality.py (314 lines) and validate_security_patterns.py (413 lines); Updated pre-commit hooks (2 new hooks: code-review-basics, decimal-precision-check); Updated pre-push hooks (added steps 6/7 and 7/7 for template enforcement); Defense in Depth architecture: pre-commit (~2-5s) → pre-push (~60-90s) → CI/CD (~2-5min); Total addition: ~750 lines of automated enforcement infrastructure |
 | 1.14 | 2025-11-09 | Created CODE_REVIEW_TEMPLATE_V1.0.md (484 lines, 7-category universal checklist), INFRASTRUCTURE_REVIEW_TEMPLATE_V1.0.md (600 lines, 7-category DevOps review), enhanced SECURITY_REVIEW_CHECKLIST.md V1.0→V1.1 (600 lines, added 4 sections); all templates reference DEVELOPMENT_PHILOSOPHY_V1.1.md with specific section callouts; added Code Review & Quality Assurance section to Critical References; consolidates scattered guidance into standardized review infrastructure |
 | 1.13 | 2025-11-09 | Added Section 3.1: Recovering from Interrupted Session with 4-step recovery workflow (git status check, recent work review, test validation, workflow resumption); includes common recovery scenarios table; provides detailed example from 2025-11-09 context limit interruption during Phase 1.5 integration tests |
