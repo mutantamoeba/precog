@@ -54,7 +54,7 @@ def apply_schema(db_url: str, schema_file: str, timeout: int = 30) -> tuple[bool
 
     Args:
         db_url: PostgreSQL connection URL (postgresql://user:pass@host:port/dbname)
-        schema_file: Path to SQL schema file
+        schema_file: Path to SQL schema file (must be within project directory)
         timeout: Maximum seconds to wait for psql command (default: 30)
 
     Returns:
@@ -62,13 +62,17 @@ def apply_schema(db_url: str, schema_file: str, timeout: int = 30) -> tuple[bool
         - (True, "") if schema applied successfully
         - (False, error_message) if schema application failed
 
+    Raises:
+        ValueError: If schema_file is outside project directory (path traversal attack)
+
     Educational Note:
         We use subprocess.run() instead of executing SQL directly through Python
         because psql has better handling of complex SQL scripts (comments,
         multi-statement transactions, etc.). The downside is we need psql installed.
 
-        Security: We validate db_url format and schema_file existence before
-        passing to subprocess to prevent command injection attacks.
+        Security: We validate db_url format, sanitize schema_file path to prevent
+        directory traversal (CWE-22), and validate file existence before passing
+        to subprocess to prevent command injection attacks.
 
     Example:
         >>> success, error = apply_schema("postgresql://localhost/precog", "schema.sql")
@@ -81,16 +85,27 @@ def apply_schema(db_url: str, schema_file: str, timeout: int = 30) -> tuple[bool
     if not db_url or not db_url.startswith(("postgresql://", "postgres://")):
         return False, "Invalid database URL format (must start with postgresql://)"
 
+    # Security validation: Prevent directory traversal (CWE-22)
+    schema_path = Path(schema_file).resolve()  # Resolve symlinks
+    project_root = Path.cwd().resolve()
+
+    # Validate file is within project directory
+    if not schema_path.is_relative_to(project_root):
+        return (
+            False,
+            f"Security: Schema file must be within project directory. Got: {schema_file}",
+        )
+
     # Security validation: Ensure schema_file exists and is a .sql file
-    if not schema_file.endswith(".sql"):
+    if not str(schema_path).endswith(".sql"):
         return False, "Schema file must be a .sql file"
 
-    if not os.path.exists(schema_file):
+    if not schema_path.exists():
         return False, f"Schema file not found: {schema_file}"
 
     try:
         result = subprocess.run(
-            ["psql", db_url, "-f", schema_file],
+            ["psql", db_url, "-f", str(schema_path)],  # Use sanitized path
             capture_output=True,
             text=True,
             timeout=timeout,
@@ -153,6 +168,9 @@ def apply_migrations(
     if not migration_files:
         return 0, []
 
+    # Security: Get project root for path validation (prevent directory traversal)
+    project_root = Path.cwd().resolve()
+
     applied = 0
     failed = []
 
@@ -163,13 +181,22 @@ def apply_migrations(
             continue
 
         migration_file_path = os.path.join(migration_dir, migration_file)
-        if not os.path.exists(migration_file_path):
+
+        # Security validation: Prevent directory traversal (CWE-22)
+        migration_path = Path(migration_file_path).resolve()  # Resolve symlinks
+
+        # Validate file is within project directory
+        if not migration_path.is_relative_to(project_root):
+            failed.append(migration_file)
+            continue
+
+        if not migration_path.exists():
             failed.append(migration_file)
             continue
 
         try:
             result = subprocess.run(
-                ["psql", db_url, "-f", migration_file_path],
+                ["psql", db_url, "-f", str(migration_path)],  # Use sanitized path
                 capture_output=True,
                 text=True,
                 timeout=timeout,

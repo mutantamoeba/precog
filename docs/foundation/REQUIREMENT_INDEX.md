@@ -1,10 +1,17 @@
 # Requirement Index
 
 ---
-**Version:** 1.6
-**Last Updated:** 2025-11-14
+**Version:** 1.7
+**Last Updated:** 2025-11-15
 **Status:** ✅ Current
 **Purpose:** Master index of all system requirements with systematic IDs
+**Changes in v1.7:**
+- **RETROACTIVE REQUIREMENTS CREATION**: Added REQ-CICD-004 (Pre-Commit Hooks) and REQ-CICD-005 (Pre-Push Hooks)
+- **TRACEABILITY GAP FIX**: Critical infrastructure implemented without formal requirements (DEF-001, DEF-002) now have proper REQ-CICD-* traceability
+- **CONSISTENCY ENFORCEMENT**: Updated REQ-CICD-003 status from 🔵 Planned → ✅ Complete (completed 2025-11-07)
+- Updated CI/CD section summary to reflect all Phase 0.7 infrastructure completion
+- Updated document references to V2.15
+- Updated requirement statistics (111 → 113 total requirements)
 **Changes in v1.6:**
 - **PRODUCTION MONITORING INFRASTRUCTURE**: Added Sentry production error tracking requirement
 - **NEW REQUIREMENT**: REQ-OBSERV-002 (Sentry for real-time error tracking with hybrid architecture)
@@ -350,9 +357,11 @@ This document provides a systematic index of all Precog requirements using categ
 |----|-------|-------|----------|--------|----------|
 | REQ-CICD-001 | GitHub Actions CI/CD Integration | 0.7 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
 | REQ-CICD-002 | Codecov Integration | 0.7 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.10 |
-| REQ-CICD-003 | Branch Protection Rules | 0.7 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-CICD-003 | Branch Protection Rules | 0.7 | High | ✅ | MASTER_REQUIREMENTS_V2.15 |
+| REQ-CICD-004 | Pre-Commit Hooks Infrastructure | 0.7 | High | ✅ | MASTER_REQUIREMENTS_V2.15 |
+| REQ-CICD-005 | Pre-Push Hooks Infrastructure | 0.7 | High | ✅ | MASTER_REQUIREMENTS_V2.15 |
 
-**Summary:** Phase 0.7 will integrate GitHub Actions for automated CI/CD, coverage tracking with Codecov, and branch protection for main branch.
+**Summary:** Phase 0.7 integrated GitHub Actions for automated CI/CD, coverage tracking with Codecov, branch protection for main branch, pre-commit hooks (14 checks, ~2-5s), and pre-push hooks (7 validation steps, ~60-90s). All infrastructure requirements completed 2025-11-07.
 
 ---
 

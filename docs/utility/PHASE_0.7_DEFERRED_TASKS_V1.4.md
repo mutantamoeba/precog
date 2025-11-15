@@ -1,10 +1,16 @@
 # Phase 0.7 Deferred Tasks
 
-**Version:** 1.3
+**Version:** 1.4
 **Created:** 2025-10-31
-**Last Updated:** 2025-11-08
+**Last Updated:** 2025-11-15
 **Phase:** 0.7 (CI/CD Infrastructure)
 **Status:** ✅ COMPLETE - 8/8 tasks complete (ALL TASKS DONE)
+**Changes in V1.4:**
+- **REQUIREMENTS TRACEABILITY FIX**: Added REQ-CICD-004 and REQ-CICD-005 references to DEF-001 and DEF-002
+- Marked all acceptance criteria as complete ([✅]) for DEF-001 and DEF-002
+- Added "Related Requirements" sections linking to MASTER_REQUIREMENTS_V2.15.md
+- Addresses gap identified in Phase 1 completion assessment - critical infrastructure now has formal requirements linkage
+- No functional changes - tasks completed 2025-11-07, retroactive documentation update for traceability
 **Changes in V1.3:**
 - Updated DEF-002 Pre-Push Hook documentation to reflect Ruff security scanning (replaced outdated Bandit command reference)
 - Updated branch protection status check description (Bandit & Safety → Ruff & Safety)
@@ -131,10 +137,17 @@ git commit -m "test"  # Hooks will run automatically
 - **Consistent**: Everyone on team has same hooks
 
 ### Acceptance Criteria
-- [ ] pre-commit installed and configured
-- [ ] Hooks run automatically on `git commit`
-- [ ] Test commit with unformatted code → hooks auto-fix it
-- [ ] Document in CLAUDE.md under "Development Workflow"
+- [✅] pre-commit installed and configured
+- [✅] Hooks run automatically on `git commit`
+- [✅] Test commit with unformatted code → hooks auto-fix it
+- [✅] Document in CLAUDE.md under "Development Workflow"
+
+### Related Requirements
+- **REQ-CICD-004**: Pre-Commit Hooks Infrastructure (MASTER_REQUIREMENTS_V2.15.md)
+- Links to CLAUDE.md Section 3 (Before Committing Code)
+- Implements 14 automated checks across 4 categories (code quality, security, file integrity)
+
+**Status:** ✅ Complete (2025-11-07) - All acceptance criteria met, REQ-CICD-004 created retroactively for traceability
 
 ---
 
@@ -202,11 +215,18 @@ git push --no-verify
 ```
 
 ### Acceptance Criteria
-- [ ] Pre-push hook installed in `.git/hooks/pre-push`
-- [ ] Hooks run automatically on `git push`
-- [ ] Test push with failing test → hook blocks push
-- [ ] Document bypass command for emergencies
-- [ ] Add setup instructions to CLAUDE.md
+- [✅] Pre-push hook installed in `.git/hooks/pre-push`
+- [✅] Hooks run automatically on `git push`
+- [✅] Test push with failing test → hook blocks push
+- [✅] Document bypass command for emergencies
+- [✅] Add setup instructions to CLAUDE.md
+
+### Related Requirements
+- **REQ-CICD-005**: Pre-Push Hooks Infrastructure (MASTER_REQUIREMENTS_V2.15.md)
+- Links to CLAUDE.md Section 3 (Before Pushing)
+- Implements 7 validation steps (~60-90s): branch check, validation, tests, type checking, security, warning governance, template enforcement
+
+**Status:** ✅ Complete (2025-11-07) - All acceptance criteria met, REQ-CICD-005 created retroactively for traceability
 
 ---
 

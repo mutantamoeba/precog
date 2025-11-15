@@ -1,11 +1,19 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.17
+**Version:** 1.18
 **Created:** 2025-10-28
 **Last Updated:** 2025-11-15
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.18:**
+- **CLAUDE.md Size Reduction - Section 3 (80%)** - Reduced Section 3 from ~700 lines to ~140 lines (~560 line reduction)
+- **Extracted SESSION_WORKFLOW_GUIDE_V1.0.md** - All detailed session workflows moved to comprehensive guide
+- **Added "When to Read the Complete Guide" section** - Clear triggers for when full workflows are needed (starting phases, recovery, multi-session coordination)
+- **Preserved essential quick reference** - Quick session start, development commands, session end workflows remain in CLAUDE.md
+- **Context budget optimization** - Frees ~560 lines (~7,000 tokens) for additional code context in conversations
+- **Follows V1.16 extraction pattern** - Concise summary + prominent link to extracted guide
+- Total: Section 3 condensed from ~700 lines to ~140 lines (80% reduction, following V1.16 extraction pattern)
 **Changes in V1.17:**
 - **Added Multi-Session Coordination section** - Comprehensive 7-step protocol for running multiple Claude Code sessions simultaneously
 - Documents session-specific branch naming (feature/X-sessionA, docs/Y-sessionB)
@@ -526,696 +534,122 @@ from precog.utils import get_logger
 
 ## 🔄 Session Handoff Workflow
 
-### Starting a New Session (5 minutes)
+**⚠️ COMPLETE REFERENCE:** See `docs/utility/SESSION_WORKFLOW_GUIDE_V1.0.md` for comprehensive session workflows.
 
-**Step 1: Read These Two Files**
-1. **CLAUDE.md** (this file) - Project context and patterns
-2. **SESSION_HANDOFF.md** - Recent work and immediate next steps
+This section provides quick reference for common session tasks. For detailed workflows including phase start protocols, git safety procedures, recovery patterns, multi-session coordination, and deferred task tracking, see the complete guide.
 
-**Step 1.5: Git Status Check (MANDATORY - 1 minute)**
+### When to Read the Complete Guide
 
-**⚠️ BEFORE doing ANY work, run these safety checks:**
+**Always read SESSION_WORKFLOW_GUIDE when:**
+- 🚨 **Starting a new phase** (Phase start protocol with 3-step checklist)
+- 🚨 **Recovering from session interruption** (4-step recovery workflow)
+- 🚨 **Multiple sessions active** (7-step multi-session coordination protocol)
+- 🚨 **Phase transitions** (comprehensive phase completion checklist)
+- 📋 **Managing deferred tasks** (dual-tracking system with GitHub issues)
 
+**This quick reference is sufficient for:**
+- Starting routine development sessions
+- Standard commit/push workflows
+- Ending sessions with handoff updates
+
+### Quick Session Start (5 minutes)
+
+**Step 1: Read Project Context**
+1. **CLAUDE.md** (this file) - Project overview, patterns, status
+2. **SESSION_HANDOFF.md** - Recent work, immediate priorities
+
+**Step 2: Git Safety Check**
 ```bash
-# 1. Check current branch
-BRANCH=$(git branch --show-current)
-echo "Current branch: $BRANCH"
-
-# 2. Check for uncommitted changes
-git status
-
-# 3. Check for unpushed commits on current branch
-git log origin/$BRANCH..HEAD --oneline 2>/dev/null || echo "Branch not yet on remote"
-
-# 4. Check for unpushed commits on ALL local branches
-echo "Branches with unpushed commits:"
-git branch -vv | grep ahead || echo "All branches up-to-date"
-
-# 5. Check for unmerged work on remote feature branches
-echo "Remote feature branches (may have unmerged work):"
-git branch -r | grep -E "origin/(feature|bugfix|refactor|docs|test)/" || echo "No remote feature branches"
-```
-
-**What to look for:**
-- ✅ **Clean working tree** - "nothing to commit, working tree clean"
-- ✅ **On feature branch** - NOT on main (branch protection blocks direct pushes)
-- ⚠️ **Uncommitted changes** - Review with `git diff`, complete and commit before starting new work
-- ⚠️ **Unpushed commits** - Push to origin before starting new work
-- ⚠️ **Remote feature branches** - May have unmerged work from previous sessions (check with `gh pr list`)
-
-**If uncommitted/unpushed work found:**
-1. Review changes: `git diff` (unstaged) and `git diff --cached` (staged)
-2. Commit: `git commit -m "Description"`
-3. Push: `git push origin $(git branch --show-current)`
-4. Create PR if needed: `gh pr create --title "..." --body "..."`
-
-**Step 2: Check Current Phase**
-- Review phase objectives in `docs/foundation/DEVELOPMENT_PHASES_V1.4.md` if needed
-- Understand what's blocking vs. nice-to-have
-
-**Step 2a: Verify Phase Prerequisites (MANDATORY)**
-- **⚠️ BEFORE CONTINUING ANY PHASE WORK:** Check DEVELOPMENT_PHASES for current phase's Dependencies section
-- Verify ALL "Requires Phase X: 100% complete" dependencies are met
-- Check that previous phase is marked ✅ Complete in DEVELOPMENT_PHASES
-- If dependencies NOT met: STOP and complete prerequisite phase first
-- **⚠️ IF STARTING NEW PHASE:** Complete "Before Starting This Phase - TEST PLANNING CHECKLIST" from DEVELOPMENT_PHASES before writing any production code
-- **⚠️ IF RESUMING PARTIALLY-COMPLETE PHASE:** Verify test planning checklist was completed
-  - If NOT completed: Complete it now before continuing any work
-  - If partially done: Update checklist for remaining work and document what testing exists for completed work
-  - **Critical:** Don't skip this - partially-complete phases are where test gaps hide!
-
-**Example - Phase 1:**
-```bash
-# Phase 1 Dependencies: Requires Phase 0.7: 100% complete
-# Check: Is Phase 0.7 marked ✅ Complete in DEVELOPMENT_PHASES?
-# If NO → Must complete Phase 0.7 before starting Phase 1
-# If YES → Can proceed with Phase 1 test planning checklist
-```
-
-**Step 3: Create Todo List**
-```python
-# Use TodoWrite tool to track progress
-TodoWrite([
-    {"content": "Implement Kalshi API auth", "status": "in_progress"},
-    {"content": "Add rate limiting", "status": "pending"},
-    {"content": "Write API tests", "status": "pending"}
-])
-```
-
-### Recovering from Interrupted Session (5 minutes)
-
-**When to use:** Session interruption due to context limit, crash, network issue, or other disruption during active development work.
-
-**Step 1: Check Git Status (1 min)**
-```bash
-# Identify uncommitted changes and current branch
-git status
+# Check branch and status
 git branch --show-current
-```
-
-**What to look for:**
-- Uncommitted changes (modified, staged, untracked files)
-- Current branch (feature/, bugfix/, etc.)
-- Untracked files that should be committed
-
-**Step 2: Review Recent Work (2 min)**
-```bash
-# Check recent commits to understand what was completed
-git log --oneline -10
-
-# Check if PR exists for current branch
-gh pr list --head $(git branch --show-current)
-```
-
-**What to verify:**
-- Last commit message indicates completed work
-- Understand what was in progress vs. completed
-- Check if PR already exists (avoid creating duplicates)
-
-**Step 3: Validate Tests Still Pass (1 min)**
-```bash
-# Quick test validation to ensure recovered state is clean
-python -m pytest tests/ -v --tb=short
-```
-
-**Why:** Interrupted sessions may have left code in partially-working state. Verify tests pass before continuing.
-
-**Step 4: Resume Normal Workflow (1 min)**
-
-Based on git status findings:
-
-**If uncommitted changes exist:**
-1. Review changes: `git diff` (unstaged) and `git diff --cached` (staged)
-2. Complete the work or commit as-is
-3. Follow normal "During Development" workflow from this point
-
-**If no uncommitted changes:**
-1. Check SESSION_HANDOFF.md for next priorities
-2. Create new todo list with TodoWrite
-3. Begin next task
-
-**If PR exists but not merged:**
-1. Check CI status: `gh pr view <PR#> --json statusCheckRollup`
-2. If CI passing: Merge PR
-3. If CI failing: Fix issues and push updates
-4. After merge: `git checkout main && git pull`
-
-**Common Recovery Scenarios:**
-
-| Scenario | Git Status | Action |
-|----------|------------|--------|
-| **Interrupted during coding** | Modified files, no commit | Review changes, complete work, commit |
-| **Interrupted after commit** | Clean working tree | Check if pushed; if not, push now |
-| **Interrupted during PR** | Clean, but PR exists | Check CI status, merge if passing |
-| **Interrupted after merge** | On feature branch | Switch to main, pull latest |
-
-**Example Recovery:**
-```bash
-# Scenario: Session interrupted while committing test updates
-$ git status
-# On branch feature/integration-tests
-# Changes not staged for commit:
-#   modified: pytest.ini
-#   modified: tests/fixtures/api_responses.py
-# Untracked files:
-#   tests/integration/api_connectors/__init__.py
-
-# Step 1: Review changes
-$ git diff pytest.ini  # Verify changes are intentional
-
-# Step 2: Stage and commit
-$ git add pytest.ini tests/fixtures/api_responses.py tests/integration/api_connectors/__init__.py
-$ git commit -m "Add api marker and fix test expectations"
-
-# Step 3: Check for existing PR
-$ gh pr list --head feature/integration-tests
-# PR #12 exists
-
-# Step 4: Push and update PR
-$ git push origin feature/integration-tested
-$ gh pr edit 12 --body "Updated description"
-
-# Step 5: Check CI and merge
-$ gh pr view 12 --json statusCheckRollup
-# All checks passing → merge
-$ gh pr merge 12 --squash --delete-branch
-```
-
-**Reference:** This pattern was successfully used to recover from context limit interruption on 2025-11-09 during Phase 1.5 integration test session.
-
----
-
-### Multi-Session Coordination (CRITICAL - When Running Parallel Sessions)
-
-**⚠️ READ THIS BEFORE STARTING A SESSION IF OTHER SESSIONS MAY BE ACTIVE ⚠️**
-
-**When to use:** Multiple Claude Code sessions working on the same repository simultaneously (e.g., one session on CLI features, another on documentation).
-
-**The Problem:** Multi-session work creates conflicts when both sessions modify the same files (especially foundation docs like MASTER_REQUIREMENTS, ARCHITECTURE_DECISIONS) or push to main without coordination.
-
-**Prevention Strategy:**
-
-**Step 1: Session-Specific Branch Naming (MANDATORY)**
-
-Each session MUST work on clearly-named feature branches that indicate the session's focus:
-
-```bash
-# Session A (working on CLI features):
-git checkout -b feature/cli-database-integration-sessionA
-
-# Session B (working on observability docs):
-git checkout -b docs/codecov-sentry-integration-sessionB
-
-# Session C (working on test infrastructure):
-git checkout -b test/property-based-testing-sessionC
-```
-
-**Why:** Makes it immediately obvious which branch belongs to which session, preventing accidental pushes to wrong branches.
-
-**Step 2: Check for Active Sessions Before Starting**
-
-```bash
-# 1. Check for active feature branches on remote
-git fetch
-git branch -r | grep -E "origin/(feature|bugfix|refactor|docs|test)/"
-
-# 2. Check for open PRs
-gh pr list
-
-# 3. Check for uncommitted/staged changes (might be from another session)
 git status
+
+# Check for unpushed work
+git branch -vv | grep ahead || echo "All up-to-date"
 ```
 
-**If you find active sessions:**
-- Note which branch they're working on
-- Check which files they've modified: `git diff origin/main...origin/<their-branch> --name-only`
-- **Avoid modifying the same files** until their PR is merged
+**Step 3: Check Phase Prerequisites**
+- Verify current phase in DEVELOPMENT_PHASES_V1.4.md
+- **IF STARTING NEW PHASE:** Read SESSION_WORKFLOW_GUIDE Section 2 (Phase Start Protocol)
+- **IF RESUMING WORK:** Create todo list with TodoWrite
 
-**Step 3: Foundation Document Coordination (CRITICAL)**
-
-**Foundation docs** (MASTER_REQUIREMENTS, ARCHITECTURE_DECISIONS, DEVELOPMENT_PHASES, MASTER_INDEX) are high-conflict files.
-
-**Rule:** Only ONE session should update foundation docs at a time.
-
-**Protocol:**
-1. **Before modifying foundation docs:**
-   - Check if other sessions have open PRs: `gh pr list`
-   - If yes: Wait for their PR to merge OR coordinate with user
-   - If no: Proceed, but create PR quickly
-
-2. **If you discover another session's uncommitted changes to foundation docs:**
-   - Use `git stash` to save them: `git stash save "Foundation docs from other session"`
-   - DO NOT use `git reset --hard` (destroys their work!)
-   - Wait for other session to commit and create PR
-   - After their PR merges: `git pull` and re-apply your stash if needed
-
-**Step 4: Communication via Git**
-
-**Leave breadcrumbs for other sessions:**
-
-```bash
-# If working on long-running feature, push early and often:
-git push origin feature/my-feature-sessionA
-
-# Create draft PR to signal work in progress:
-gh pr create --draft --title "[WIP] Feature X" --body "Session A working on this"
-
-# When pausing work, commit with clear message:
-git commit -m "WIP: Half-done implementation (Session A pausing, will resume)"
-```
-
-**Step 5: Conflict Resolution When Multiple Sessions Commit**
-
-**Scenario:** Session A commits `MASTER_REQUIREMENTS V2.13 → V2.14` (adds REQ-X), Session B commits `MASTER_REQUIREMENTS V2.13 → V2.14` (adds REQ-Y).
-
-**Problem:** Both incremented to V2.14, but with different content!
-
-**Solution:**
-1. First session to merge wins (their V2.14 goes to main)
-2. Second session must:
-   - Pull latest: `git pull origin main`
-   - Resolve conflict: Change their version to V2.15
-   - Merge both changes: REQ-X (from first session) + REQ-Y (from second session)
-   - Update version header: V2.14 → V2.15
-   - Push again
-
-**Step 6: What NOT To Do (Common Mistakes)**
-
-❌ **NEVER push directly to main** - Always use feature branches + PRs
-❌ **NEVER use `git reset --hard`** when other sessions are active - Use `git stash` instead
-❌ **NEVER assume you're the only session** - Always check `git status` and `gh pr list` first
-❌ **NEVER modify foundation docs without checking for conflicts** - Check open PRs first
-❌ **NEVER bypass pre-push hooks with `--no-verify`** - Hooks prevent multi-session conflicts
-
-**Step 7: Recovery from Multi-Session Conflicts**
-
-**If you discover conflicts:**
-
-```bash
-# 1. Save your work
-git stash save "My session work - conflicts with other session"
-
-# 2. Pull latest from main
-git checkout main
-git pull
-
-# 3. Create new branch with updated base
-git checkout -b feature/my-feature-v2
-
-# 4. Re-apply your work
-git stash pop
-
-# 5. Resolve conflicts manually
-# 6. Test, commit, push, create PR
-```
-
-**Best Practices Summary:**
-
-✅ **Session-specific branch names** (feature/X-sessionA, docs/Y-sessionB)
-✅ **Check for active sessions before starting** (`gh pr list`, `git branch -r`)
-✅ **Coordinate on foundation docs** (one session at a time)
-✅ **Use `git stash` to save others' work** (never `git reset --hard`)
-✅ **Push early and often** (signals work in progress)
-✅ **Create draft PRs** (shows other sessions what you're working on)
-
-**Real-World Example (2025-11-15):**
-
-- Session A: Working on CLI Windows compatibility
-- Session B: Working on Codecov/Sentry documentation
-- **Conflict:** Both modified `MASTER_REQUIREMENTS V2.13 → V2.14`
-- **Resolution:** Session A stashed changes, waited for Session B to create PR, will sync after merge
-
-**Reference:** This pattern emerged from 2025-11-15 multi-session coordination during Phase 1 completion.
-
----
-
-### During Development
-
-**Track Progress:**
-- Update todo status frequently (mark completed immediately)
-- Keep only ONE task as `in_progress` at a time
-- Break complex tasks into smaller todos
-
-**Before Committing Code:**
+### During Development Quick Reference
 
 **Pre-commit Hooks (Automatic):**
+- Run on `git commit` automatically (~2-5 seconds)
+- Auto-fix: formatting, line endings, whitespace
+- Block: linting errors, type errors, hardcoded credentials
+- 14 checks including Pattern 1 (Decimal precision) enforcement
 
-Pre-commit hooks are installed and run automatically on `git commit`. They will:
-- **Auto-fix** formatting, line endings, trailing whitespace
-- **Block commit** if linting, type checking, or security issues found
-- **Fast feedback** (~2-5 seconds)
+**Pre-push Hooks (Automatic):**
+- Run on `git push` automatically (~30-60 seconds)
+- 8 validation steps including tests, security, coverage
+- Reduces CI failures by 80-90%
 
+**Branch Protection (GitHub):**
+- Direct pushes to `main` blocked (must use PRs)
+- 6 required CI checks must pass before merge
+- Workflow: feature branch → commit → push → create PR → wait for CI → merge
+
+**Manual Commands (Optional):**
 ```bash
-# Hooks run automatically on commit (no action needed)
-git add .
-git commit -m "message"
-# → Hooks run automatically: Ruff, Mypy, security scan, formatting
-
-# Manual testing (optional, but recommended for large changes)
-python -m pre_commit run --all-files  # Run all hooks manually
-
-# Bypass hooks (EMERGENCY ONLY - NOT RECOMMENDED)
-git commit --no-verify
-```
-
-**What the hooks check:**
-1. ✅ Ruff linter (code quality)
-2. ✅ Ruff formatter (auto-fix formatting)
-3. ✅ Mypy type checking
-4. ✅ Security scan (hardcoded credentials)
-5. ✅ **Code review basics** (REQ-XXX-NNN traceability - WARNING ONLY)
-6. ✅ **Decimal precision check** (Pattern 1 enforcement - BLOCKS float usage in financial code)
-7. ✅ Trailing whitespace (auto-fix)
-8. ✅ End-of-file newlines (auto-fix)
-9. ✅ Mixed line endings (auto-fix CRLF→LF)
-10. ✅ Large files check (>1MB)
-11. ✅ Merge conflict markers
-12. ✅ YAML/JSON syntax validation
-13. ✅ Python AST validation
-14. ✅ Debug statements (pdb, breakpoint)
-
----
-
-**Pre-Push Hooks (Automatic):**
-
-Pre-push hooks are installed and run automatically on `git push`. They provide a **second layer of defense**:
-- **All pre-commit checks** (runs again on entire codebase)
-- **Unit tests** (fast tests only - config_loader, logger)
-- **Full type checking** (entire codebase, not just changed files)
-- **Deep security scan** (Ruff security rules - Python 3.14 compatible)
-- **Slower but thorough** (~30-60 seconds)
-
-```bash
-# Hooks run automatically on push (no action needed)
-# ⚠️ CRITICAL: NEVER push to main! Use feature branches.
-git push origin feature/my-feature
-# → Pre-push hooks run (7 validation steps, ~60-90 sec)
-# → Step 0/7: Branch name convention check (blocks push to main)
-# → Step 1/7: Quick validation (Ruff + docs)
-# → Step 2/7: Fast unit tests
-# → Step 3/7: Full type checking (Mypy)
-# → Step 4/7: Security scan (Ruff security rules)
-# → Step 5/7: Warning governance (multi-source baseline check)
-# → Step 6/7: Code quality validation (CODE_REVIEW_TEMPLATE enforcement)
-# → Step 7/7: Security pattern validation (SECURITY_REVIEW_CHECKLIST enforcement)
-
-# Bypass hooks (EMERGENCY ONLY - NOT RECOMMENDED)
-git push --no-verify
-```
-
-**What the pre-push hooks check:**
-1. 🌿 **Branch name convention** - Verifies feature/, bugfix/, refactor/, docs/, test/ naming
-2. 📋 **Quick validation** - validate_quick.sh (Ruff, docs, ~3 sec)
-3. 🧪 **Unit tests** - pytest test_config_loader.py test_logger.py (~10 sec)
-4. 🔍 **Full type checking** - mypy on entire codebase (~5 sec)
-5. 🔒 **Security scan** - Ruff security rules (--select S, ~5 sec)
-6. ⚠️  **Warning governance** - check_warning_debt.py (multi-source baseline, ~30 sec)
-7. 📋 **Code quality validation** - validate_code_quality.py (≥80% coverage, REQ test coverage, ~20 sec)
-8. 🔒 **Security pattern validation** - validate_security_patterns.py (API auth, hardcoded secrets, ~10 sec)
-
-**Why pre-push in addition to pre-commit?**
-- **Catches test failures** before CI (pre-commit doesn't run tests)
-- **Validates entire codebase** (pre-commit only checks changed files)
-- **Reduces CI failures by 80-90%** (catch issues locally)
-- **Faster than waiting for CI** (30-60 sec vs 2-5 min)
-- **Acceptable delay** (you push less frequently than you commit)
-
-**If hooks fail, fix the issues before pushing. Use `--no-verify` only in emergencies (CI will still catch issues).**
-
----
-
-**Branch Protection & Pull Request Workflow (GitHub):**
-
-The `main` branch is protected and **cannot be pushed to directly**. All changes must go through pull requests (PRs) with CI checks passing.
-
-**Branch Protection Rules (Configured):**
-- ✅ **Require pull requests** - Direct pushes to `main` blocked
-- ✅ **Require CI to pass** - 6 status checks must succeed:
-  - `pre-commit-checks` - Ruff, Mypy, security scan
-  - `security-scan` - Bandit & Safety vulnerability scanning
-  - `documentation-validation` - Doc consistency checks
-  - `test` - Full test suite (Python 3.12 & 3.13, Ubuntu & Windows)
-  - `validate-quick` - Quick validation suite
-  - `ci-summary` - Overall CI status
-- ✅ **Require up-to-date branches** - Must merge latest `main` before merging PR
-- ✅ **Require conversation resolution** - All review comments must be resolved
-- ✅ **No force pushes** - Prevents history rewriting
-- ✅ **No deletions** - Prevents accidental branch deletion
-- ✅ **Applies to administrators** - Rules enforce for everyone
-
-**Pull Request Workflow:**
-
-```bash
-# 1. Create feature branch
-git checkout -b feature/my-feature
-
-# 2. Make changes and commit (pre-commit hooks run)
-git add .
-git commit -m "Implement feature X"
-
-# 3. Push to feature branch (pre-push hooks run)
-git push origin feature/my-feature
-
-# 4. Create PR via GitHub CLI or web UI
-gh pr create --title "Add feature X" --body "Description of changes"
-
-# 5. Wait for CI checks to pass (2-5 minutes)
-#    - All 6 status checks must succeed
-#    - Fix any failures and push updates
-#    - CI re-runs automatically on new commits
-
-# 6. Merge PR (once CI passes)
-gh pr merge --squash  # Squash merge (recommended)
-# OR: Merge via GitHub web UI
-
-# 7. Delete feature branch (cleanup)
-gh pr close --delete-branch
-```
-
-**PR Best Practices:**
-- **Small, focused PRs** - Easier to review, faster to merge
-- **Descriptive titles** - Clearly state what the PR does
-- **Link to issues/requirements** - Reference REQ-XXX, ADR-XXX, or DEF-XXX IDs
-- **Test locally first** - Pre-push hooks catch most issues before CI
-- **Watch CI results** - Fix failures quickly
-
-**If CI fails:**
-```bash
-# View CI logs
-gh pr checks
-
-# Fix issues locally
-# ... make fixes ...
-
-# Commit and push (CI re-runs automatically)
-git commit -am "Fix CI failures"
-git push
-```
-
-**Emergency bypass (LAST RESORT - not recommended):**
-```bash
-# If you absolutely must push to main (CI will still run)
-git push --no-verify origin main
-# WARNING: Branch protection will still block this!
-# Only works if branch protection is temporarily disabled
-```
-
-**Why this workflow matters:**
-- 🛡️ **Third layer of defense** - Pre-commit → Pre-push → CI/CD → Branch protection
-- 🔒 **Enforces code quality** - No way to bypass CI checks
-- 📝 **Code review ready** - PRs provide review context
-- 🚀 **Faster iterations** - Local hooks catch 80-90% of issues before CI
-
----
-
-**Manual Pre-Commit Testing (Optional):**
-
-```bash
-# 1. Run tests (not in pre-commit hooks)
+# Run tests
 python -m pytest tests/ -v
 
-# 2. Check coverage
+# Check coverage
 python -m pytest tests/ --cov=. --cov-report=term-missing
 
-# 3. Manual security scan (already in hooks, but useful for verification)
+# Security scan
 git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.py' '*.yaml' '*.sql'
-
-# 4. Verify no .env file staged
-git diff --cached --name-only | grep "\.env$"
 ```
 
-**If hooks fail, fix the issues before committing. DO NOT use `--no-verify` unless absolutely necessary.**
-
----
-
-### Before Pushing (CRITICAL - 2 minutes)
-
-**⚠️ Run this checklist BEFORE `git push` to prevent common mistakes:**
-
-```bash
-# Safety Check Script - Run before EVERY push
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "🔒 Pre-Push Safety Checklist"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-# 1. Verify NOT on main branch
-BRANCH=$(git branch --show-current)
-if [ "$BRANCH" = "main" ]; then
-    echo "❌ ERROR: On main branch! Create feature branch first."
-    echo "  git checkout -b feature/your-feature-name"
-    exit 1
-else
-    echo "✅ On branch: $BRANCH"
-fi
-
-# 2. Verify all changes committed
-if ! git diff-index --quiet HEAD --; then
-    echo "⚠️  WARNING: Uncommitted changes detected!"
-    echo ""
-    git status --short
-    echo ""
-    echo "Commit changes before pushing:"
-    echo "  git add ."
-    echo "  git commit -m \"Description\""
-    exit 1
-else
-    echo "✅ All changes committed"
-fi
-
-# 3. Verify tests pass (quick check)
-echo "🧪 Running fast tests..."
-if python -m pytest tests/ -v --tb=short -q 2>&1 | tail -10; then
-    echo "✅ Tests passing"
-else
-    echo "❌ Tests failing - fix before pushing"
-    exit 1
-fi
-
-# 4. Ready to push
-echo ""
-echo "✅ All safety checks passed!"
-echo "Ready to push to origin/$BRANCH"
-echo ""
-echo "Next steps:"
-echo "  git push origin $BRANCH"
-echo "  gh pr create --title \"...\" --body \"...\""
-```
-
-**Quick version (if you're confident):**
-
-```bash
-# Quick 3-step check
-git branch --show-current | grep -v "^main$" && \
-git diff-index --quiet HEAD -- && \
-python -m pytest tests/ -v --tb=short -q && \
-git push origin $(git branch --show-current)
-```
-
-**Common mistakes this prevents:**
-- ❌ Attempting to push to main (branch protection blocks it, but fails late)
-- ❌ Forgetting uncommitted changes (creates confusion later)
-- ❌ Pushing broken tests (fails CI, wastes time)
-
----
-
-### Ending a Session (10 minutes)
-
-**Step 0: Archive Current SESSION_HANDOFF.md**
-
-```bash
-# Archive current session handoff before overwriting (local-only, not committed)
-cp SESSION_HANDOFF.md "_sessions/SESSION_HANDOFF_$(date +%Y-%m-%d).md"
-
-# Note: _sessions/ is in .gitignore (local archives, not committed to git)
-# Historical archives (2025-10-28 through 2025-11-05) remain in docs/sessions/ git history
-```
-
-**Why:** Preserves session context locally during active development. Archives are local-only (excluded from git) to prevent repository bloat. Git commit messages and foundation documents provide permanent context.
+### Quick Session End (10 minutes)
 
 **Step 1: Update SESSION_HANDOFF.md**
-
-Use this structure:
-```markdown
-# Session Handoff
-
-**Session Date:** 2025-10-XX
-**Phase:** Phase 1 (50% → 65%)
-**Duration:** X hours
-
-## This Session Completed
-- ✅ Implemented Kalshi API authentication
-- ✅ Added rate limiting (100 req/min)
-- ✅ Created 15 API client tests (all passing)
-
-## Previous Session Completed
-- ✅ Database schema V1.7
-- ✅ All migrations applied
-- ✅ Tests passing (66/66)
-
-## Current Status
-- **Tests:** 81/81 passing (89% coverage)
-- **Blockers:** None
-- **Phase Progress:** Phase 1 at 65%
-
-## Next Session Priorities
-1. Implement CLI commands with Typer
-2. Add config loader (YAML + .env)
-3. Write integration tests (live demo API)
-
-## Files Modified
-- Created: `api_connectors/kalshi_client.py`
-- Created: `tests/test_kalshi_client.py`
-- Updated: `requirements.txt` (added requests)
-
-## Validation Script Updates (if applicable)
-- [ ] Schema validation updated? (new price/versioned tables added to `validate_schema_consistency.py`)
-- [ ] Documentation validation updated? (new doc types added to `validate_docs.py`)
-- [ ] Test coverage config updated? (new modules added)
-- [ ] All validation scripts tested successfully?
-
-## Notes
-- API auth uses RSA-PSS (not HMAC-SHA256)
-- All prices parsed as Decimal from *_dollars fields
-- Rate limiter working correctly
-```
+- Document completed work, current status, next priorities
+- Include test results, phase progress percentage
+- List modified files
 
 **Step 2: Commit Changes**
-
 ```bash
 git add .
-git commit -m "Implement Kalshi API client with RSA-PSS auth
+git commit -m "Descriptive commit message
 
-- Add api_connectors/kalshi_client.py
-- Implement authentication, rate limiting, error handling
-- Parse all prices as Decimal from *_dollars fields
-- Add 15 unit tests with mock responses (all passing)
-- Coverage: 87% → 89%
+- Detail 1
+- Detail 2
+- Detail 3
 
-Phase 1: 50% → 65% complete
+Phase X: Y% → Z% complete
 
 Co-authored-by: Claude <noreply@anthropic.com>"
 ```
 
-**Step 3: Verify Branch and Push to Remote**
-
+**Step 3: Push to Feature Branch**
 ```bash
-# CRITICAL: Verify NOT on main branch (branch protection will block push to main)
+# Verify NOT on main
 BRANCH=$(git branch --show-current)
 echo "Current branch: $BRANCH"
 
-# If on main, create feature branch first!
-if [ "$BRANCH" = "main" ]; then
-    echo "❌ ERROR: On main branch! Create feature branch first:"
-    echo "  git checkout -b feature/your-feature-name"
-    exit 1
-fi
-
-# Push to current feature branch
+# Push to feature branch
 git push origin $BRANCH
 
-# Then create PR (see Branch Protection & Pull Request Workflow section)
-# gh pr create --title "..." --body "..."
+# Create PR if ready
+gh pr create --title "..." --body "..."
 ```
+
+### Special Situations → Read Complete Guide
+
+**Session interrupted mid-work?**
+→ Read SESSION_WORKFLOW_GUIDE Section 5 (Recovering from Interrupted Sessions)
+
+**Multiple sessions running?**
+→ Read SESSION_WORKFLOW_GUIDE Section 6 (Multi-Session Coordination)
+
+**Phase complete?**
+→ Read PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md (10-step assessment)
+
+**Tasks deferred to next phase?**
+→ Read SESSION_WORKFLOW_GUIDE Section 9 (Deferred Task Tracking)
 
 ### Updating CLAUDE.md (Only When Needed)
 
@@ -1818,9 +1252,18 @@ api_key = "sk_live_abc123"
    - Add entry for deferred tasks document
    - Category: Utility document
 
-4. **Optional: Promote critical tasks to requirements**
-   - If task is critical infrastructure (pre-commit hooks, branch protection), consider adding REQ-TOOL-* IDs
-   - Only do this if task will definitely be implemented in next 1-2 phases
+4. **MANDATORY: Create requirements for critical infrastructure** ⚠️
+   - **Critical infrastructure MUST have formal REQ-CICD-*/REQ-TOOL-* requirements**
+   - Examples requiring REQs: pre-commit hooks, pre-push hooks, branch protection, CI/CD pipelines
+   - Documentation/process tasks do NOT need REQs (DEF-XXX only)
+   - **Decision Tree:** See `PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md` Step 6 for complete decision tree covering:
+     - Critical Infrastructure → REQ-CICD-XXX or REQ-TOOL-XXX
+     - Database Features → REQ-DB-XXX
+     - API Integration → REQ-API-XXX
+     - Testing Infrastructure → REQ-TEST-XXX
+     - Security Enhancements → REQ-SEC-XXX
+     - Documentation/Process → No REQ needed
+   - **Why:** Audit traceability, consistency enforcement, prevents gaps (Phase 1 lesson learned)
 
 **Deferred Task Numbering Convention:**
 - `DEF-001`, `DEF-002`, etc. (sequential within phase)
@@ -1851,23 +1294,27 @@ api_key = "sk_live_abc123"
 **Purpose:** Analyze Claude Code's PR review comments from phase to identify improvements and learning opportunities
 
 **Quick Checklist:**
+- [ ] **⚠️ VERIFY PR COVERAGE FIRST** - Identify first/last PR numbers for phase, ensure ALL PRs analyzed (no gaps)
+  - Phase 1 lesson learned: Only analyzed 5/26 PRs (19% coverage) → missed 80% of AI feedback
+  - **Red flag:** Analyzing only recent PRs (#22-#27) when phase started at PR #2 (recency bias)
+  - Must document justification for any skipped PRs (e.g., merged before phase, documentation-only)
 - [ ] Collect AI review comments from all phase PRs
 - [ ] Categorize by priority (🔴 Critical, 🟡 High, 🟢 Medium, 🔵 Low)
 - [ ] Triage actions (Fix immediately, Defer, Reject with rationale)
 - [ ] Document decisions and identify patterns
 
-**How to collect:**
+**How to verify PR coverage:**
 ```bash
-# List PRs from this phase
-gh pr list --state merged --search "merged:>=2025-10-28" --limit 20
+# List ALL PRs from phase start date
+gh pr list --state merged --search "merged:>=2025-10-28" --limit 50 --json number,title,mergedAt
 
-# View PR review comments
-gh pr view <PR#> --json reviews,comments
+# Identify range: First PR = #2, Last PR = #28 → Must analyze ALL 27 PRs
+# Document any skipped PRs with justification
 ```
 
 **Output:** AI review triage report documenting suggestions (implemented/deferred/rejected) with rationale
 
-**Full details:** `docs/utility/PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md` Step 7
+**Full details:** `docs/utility/PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md` Step 7 (includes PR coverage verification checklist)
 
 ---
 

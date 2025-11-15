@@ -1,9 +1,32 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.20
-**Last Updated:** 2025-11-14
+**Version:** 2.22
+**Last Updated:** 2025-11-15
 **Status:** ✅ Current
+**Changes in v2.22:**
+- **CLAUDE.md SIZE REDUCTION (80%) + PR REVIEW DEFERRED TASK TRACKING**: Section 3 extraction + dual-tracking system for 45 deferred tasks from Phase 1 PR analysis
+- Created SESSION_WORKFLOW_GUIDE_V1.0.md (extracted from CLAUDE.md V1.17 Section 3) - comprehensive session workflows including phase start protocol, recovery patterns, multi-session coordination
+- Created PHASE_1_PR_REVIEW_DEFERRED_TASKS_V1.0.md - documents 45 actionable items from PRs #2-#21 with dual-tracking system (documentation + GitHub issues #29-#73)
+- Updated CLAUDE.md V1.17 → V1.18 (condensed Section 3 from ~700 lines to ~140 lines, 80% reduction; frees ~7,000 tokens for code context)
+- Created 45 GitHub issues (#29-#73) with bi-directional links (documentation → issue #, issue → doc line number)
+- Created 8 custom GitHub labels for deferred task tracking (deferred-task, phase-1.5, priority-critical/high/medium/low, pattern-violation, security)
+- Dual-tracking system prevents "4 out of 7 tasks lost" problem from Phase 0.7 (visibility + persistence)
+- PR analysis identified 3 critical issues: float usage in property tests (Pattern 1 violation), zero test coverage for database/initialization.py (274 lines), path sanitization for security (CWE-22)
+- **Context:** CLAUDE.md Section 3 had grown to ~700 lines (detailed workflows); Phase 1 PR analysis identified 45 actionable suggestions requiring formal tracking
+- **Impact:** Context budget optimization (~7,000 tokens freed), comprehensive deferred task tracking with GitHub visibility, formal documentation of all Phase 1 PR review suggestions
+**Changes in v2.21:**
+- **REQUIREMENTS TRACEABILITY FIX + PHASE COMPLETION PROTOCOL ENHANCEMENTS**: Retroactive requirements creation for critical infrastructure + comprehensive protocol improvements to prevent future gaps
+- Created REQ-CICD-004 (Pre-Commit Hooks Infrastructure) and REQ-CICD-005 (Pre-Push Hooks Infrastructure) retroactively for traceability
+- Updated MASTER_REQUIREMENTS V2.14 → V2.15 (added REQ-CICD-004, REQ-CICD-005; updated REQ-CICD-003 status to Complete; 111 → 113 total requirements)
+- Updated REQUIREMENT_INDEX V1.6 → V1.7 (added 2 new CI/CD requirements, updated statistics and cross-references)
+- Updated PHASE_0.7_DEFERRED_TASKS V1.2 → V1.4 (linked REQ-CICD-004/005 to DEF-001/002, marked acceptance criteria complete)
+- Enhanced PHASE_COMPLETION_ASSESSMENT_PROTOCOL V1.0 Step 6 with mandatory REQ creation decision tree (9 categories: Critical Infrastructure, Database, API, Testing, Security, Business Logic, Documentation)
+- Enhanced PHASE_COMPLETION_ASSESSMENT_PROTOCOL V1.0 Step 7 with PR coverage verification (prevents recency bias - Phase 1 only analyzed 5/26 PRs = 19% coverage)
+- Updated CLAUDE.md Section 9 (Phase Completion Protocol) with Step 6 and Step 7 enhancements
+- Analyzed PRs #2-#21 for missed AI suggestions (80% coverage gap from Phase 1 completion) - identified 2 actionable items from PR #2 (verification script, ADR-054)
+- **Context:** Phase 1 completion assessment gap - pre-commit/pre-push hooks (DEF-001/002) lacked formal requirements despite being critical infrastructure; branch protection (DEF-003) had REQ-CICD-003 creating inconsistency
+- **Impact:** Complete requirements traceability for all Phase 0.7 infrastructure (audit-ready), prevents future gaps via mandatory decision tree, ensures 100% PR coverage in future phase completions
 **Changes in v2.20:**
 - **CODECOV + SENTRY INTEGRATION DOCUMENTATION**: Complete observability infrastructure documentation for pre-release coverage tracking and post-release error monitoring
 - Created .codecov.yml (Codecov configuration for PR comments, 80% coverage thresholds, AI suggestions)
@@ -227,11 +250,11 @@ Core architecture, requirements, and system design documents.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
-| **MASTER_REQUIREMENTS_V2.14.md** | ✅ | v2.14 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.14** (added REQ-OBSERV-002: Sentry Production Error Tracking with hybrid architecture) |
-| **MASTER_INDEX_V2.20.md** | ✅ | v2.20 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.20** (Codecov + Sentry integration documentation, 8 documents updated for observability infrastructure) |
-| **ARCHITECTURE_DECISIONS_V2.14.md** | ✅ | v2.14 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (86 total) - **UPDATED V2.14** (ADR-055: Sentry Production Error Tracking with hybrid architecture integrating logger.py + Sentry + alerts table) |
-| **REQUIREMENT_INDEX.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 111 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.6** (added REQ-OBSERV-002: Sentry Production Error Tracking) |
-| **ADR_INDEX_V1.9.md** | ✅ | v1.9 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (64 ADRs) - **UPDATED V1.9** (ADR-055: Sentry for Production Error Tracking added to Phase 2) |
+| **MASTER_REQUIREMENTS_V2.15.md** | ✅ | v2.15 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.15** (added REQ-CICD-004: Pre-Commit Hooks, REQ-CICD-005: Pre-Push Hooks retroactively for Phase 0.7 traceability; updated REQ-CICD-003 status to Complete; 111 → 113 total requirements) |
+| **MASTER_INDEX_V2.22.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.22** (CLAUDE.md V1.17 → V1.18: Section 3 extraction to SESSION_WORKFLOW_GUIDE, 80% reduction; added PHASE_1_PR_REVIEW_DEFERRED_TASKS tracking 45 items from PRs #2-#21 with GitHub issues #29-#73) |
+| **ARCHITECTURE_DECISIONS_V2.15.md** | ✅ | v2.15 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (86 total) - **UPDATED V2.15** (ADR-046: Branch Protection Strategy added retroactively for Phase 0.7 traceability; ADR-055: Sentry Production Error Tracking) |
+| **REQUIREMENT_INDEX.md** | ✅ | v1.7 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 113 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.7** (added REQ-CICD-004: Pre-Commit Hooks, REQ-CICD-005: Pre-Push Hooks; updated REQ-CICD-003 status to Complete) |
+| **ADR_INDEX_V1.10.md** | ✅ | v1.10 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 65 architecture decisions - **UPDATED V1.10** (ADR-046: Branch Protection Strategy added retroactively for Phase 0.7) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.9.md** | ✅ | v1.9 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **UPDATED V1.9** (Added Phase 2 Task #7: Sentry + Alert System Integration, 9.5h timeline) |
 | **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |
@@ -355,13 +378,15 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **CODE_REVIEW_TEMPLATE_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0.7b | All phases | 🔴 Critical | **NEW (Phase 0.7b)** - Code review template with 3 sections: Requirements Traceability, Test Coverage (≥80%), Code Quality (Pattern 7 docstrings); enforced by validate_code_quality.py |
 | **SECURITY_REVIEW_CHECKLIST.md** | ✅ | v1.1 | `/docs/utility/` | 0.7b | All phases | 🔴 Critical | **NEW (Phase 0.7b)** - Security review checklist with 5 sections: Credential Management, Input Validation, API Security, Data Protection, Incident Response; enforced by validate_security_patterns.py |
 | **DOCUMENTATION_WORKFLOW_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | All | All phases | 🔴 Critical | **NEW** - Document cohesion & consistency workflows extracted from CLAUDE.md: Update Cascade Rules (6 scenarios), status field standards, consistency validation checklists, document dependency map; prevents documentation drift |
+| **SESSION_WORKFLOW_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | All | All phases | 🔴 Critical | **NEW** - Comprehensive session workflows extracted from CLAUDE.md V1.17 Section 3 (9 sections): starting sessions, phase start protocol, git safety, recovery patterns, multi-session coordination, pre-commit/pre-push hooks, ending sessions, phase transitions, deferred task tracking; follows V1.16 extraction pattern |
 | **SESSION_7_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 7 | 🟡 High | Latest session handoff (session # is version) |
 | **SESSION_6_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 6 | 🟢 Medium | Previous session handoff |
 | **Handoff_Protocol_V1_1.md** | ✅ | v1.1 | `/docs/utility/` | 0 | All phases | 🔴 Critical | **UPDATED V1.1** - Merged 4 docs: HANDOFF_PROCESS + TOKEN_MONITORING + PHASE_COMPLETION + KNOWLEDGE_STRATEGY (V1.0 archived) |
 | **VERSION_HEADERS_GUIDE_V2_1.md** | ✅ | v2.1 | `/docs/utility/` | 0 | All phases | 🟡 High | Version control standards, references Handoff_Protocol (**FIXED** filename from V2.1 → V2_1) |
-| **PHASE_0.7_DEFERRED_TASKS_V1.3.md** | ✅ | v1.3 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **PHASE 0.7 COMPLETE** - All 8/8 tasks complete (DEF-001 through DEF-008: pre-commit, pre-push, branch protection, schema validation, all hooks) - **UPDATED V1.3** (fixed Bandit→Ruff documentation references) |
+| **PHASE_0.7_DEFERRED_TASKS_V1.4.md** | ✅ | v1.4 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **PHASE 0.7 COMPLETE** - All 8/8 tasks complete (DEF-001 through DEF-008: pre-commit, pre-push, branch protection, schema validation, all hooks) - **UPDATED V1.4** (linked REQ-CICD-004/005 to DEF-001/002 for requirements traceability, marked acceptance criteria complete) |
 | **GITHUB_BRANCH_PROTECTION_CONFIG.md** | ✅ | v1.0 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **NEW** - Complete GitHub branch protection configuration (completes DEF-003) |
 | **PHASE_1_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1 | 🟡 High | **NEW** - Tracks deferred enhancements from Phase 1 (extended docstrings, pre-commit hooks, branch protection) |
+| **PHASE_1_PR_REVIEW_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1.5 | 🔴 Critical | **NEW** - Dual-tracking system for 45 actionable items from PRs #2-#21 AI reviews: 3 critical (float usage/Pattern 1, zero test coverage, path sanitization), 8 high, 18 medium, 16 low priority; GitHub issues #29-#73 with bi-directional links; prevents "4 out of 7 tasks lost" problem |
 | **PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 1.5-4 | 🟡 High | **NEW** - Comprehensive property-based testing roadmap (74-91 tests deferred to Phases 1.5-4: database CRUD, strategy versioning, position lifecycle, async handling, ensemble predictions) |
 | **PHASE_4_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 4.5 | Phase 4.5 | 🔴 Critical | **NEW** - Comprehensive research task documentation (11 tasks: DEF-009 to DEF-019, strategies HIGHEST PRIORITY, models, edge detection) - ~2800 lines, 74-92 hour total effort |
 | **STRATEGIC_WORK_ROADMAP_V1.1.md** | ✅ | v1.1 | `/docs/utility/` | 1-10 | All phases | 🔴 Critical | **UPDATED V1.1** - Master roadmap of 25 strategic tasks + Phases 6-9 analytics tasks (performance tracking, dashboards, A/B testing) organized by category |

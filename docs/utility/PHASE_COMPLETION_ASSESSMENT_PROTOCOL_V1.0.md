@@ -393,6 +393,90 @@ Phase 2 needs live game data, so Phase 1 must have:
   - [ ] Performance concerns noted? (if applicable)
   - [ ] Security findings documented? (even if not critical)
 
+- [ ] **Requirements & Architecture Traceability for Deferred Tasks** ⚠️ **MANDATORY**
+  - [ ] **For EACH deferred task, determine if formal requirement needed:**
+
+    **Decision Tree:**
+
+    ```
+    Is this task...
+
+    ┌─ Critical Infrastructure? (CI/CD, hooks, branch protection)
+    │  → YES: Create REQ-CICD-XXX or REQ-TOOL-XXX
+    │
+    ├─ Database Feature? (new tables, schema changes, migrations)
+    │  → YES: Create REQ-DB-XXX
+    │
+    ├─ API Integration? (new endpoints, auth changes, rate limiting)
+    │  → YES: Create REQ-API-XXX
+    │
+    ├─ Testing Infrastructure? (new test frameworks, property testing, fixtures)
+    │  → YES: Create REQ-TEST-XXX
+    │
+    ├─ Security Enhancement? (encryption, credential management, audit logging)
+    │  → YES: Create REQ-SEC-XXX
+    │
+    ├─ Core Business Logic? (trading algorithms, position management, risk controls)
+    │  → YES: Create REQ-TRADING-XXX or appropriate domain REQ
+    │
+    ├─ Documentation/Process Only? (style guides, templates, workflow docs)
+    │  → NO: DEF-XXX task only, no formal requirement needed
+    │
+    └─ Does it enforce a NEW system-wide requirement?
+       → YES: Create REQ-XXX (appropriate category)
+       → NO: DEF-XXX task only
+    ```
+
+  - [ ] **Verify all critical infrastructure deferred tasks have REQs:**
+    - Pre-commit hooks → REQ-CICD-XXX
+    - Pre-push hooks → REQ-CICD-XXX
+    - Branch protection → REQ-CICD-XXX
+    - Database migrations → REQ-DB-XXX
+    - API authentication → REQ-API-XXX + REQ-SEC-XXX
+    - Test frameworks → REQ-TEST-XXX
+
+  - [ ] **ADR Creation (if architectural decision made):**
+    - Technology choice (e.g., "Use Hypothesis for property testing") → Create ADR
+    - Pattern adoption (e.g., "TypedDict vs Pydantic for API responses") → Create ADR
+    - Security approach (e.g., "RSA-PSS authentication for Kalshi") → Create ADR
+    - Infrastructure design (e.g., "Token bucket rate limiting") → Create ADR
+
+  - [ ] **Cross-Reference Linkage:**
+    - REQ created? → Update MASTER_REQUIREMENTS and REQUIREMENT_INDEX
+    - ADR created? → Update ARCHITECTURE_DECISIONS and ADR_INDEX
+    - Link REQ ↔ DEF task (bidirectional references)
+    - Update MASTER_INDEX with new document versions
+
+**Example (Phase 0.7):**
+```markdown
+Deferred Task: DEF-001 (Pre-Commit Hooks Setup)
+├─ Decision: Critical Infrastructure? YES
+├─ Requirement: REQ-CICD-004 created
+├─ Cross-Reference:
+│  ├─ MASTER_REQUIREMENTS V2.14 → V2.15 (added REQ-CICD-004)
+│  ├─ REQUIREMENT_INDEX V1.6 → V1.7 (added entry)
+│  └─ PHASE_0.7_DEFERRED_TASKS V1.3 → V1.4 (linked REQ-CICD-004)
+└─ Status: ✅ Complete traceability
+
+Deferred Task: DEF-004 (Line Ending Edge Cases)
+├─ Decision: Documentation/Process Only? YES
+├─ Requirement: None needed (cosmetic CI improvement)
+├─ Cross-Reference: DEF-004 only
+└─ Status: ✅ Appropriate (no REQ needed)
+```
+
+**Why This Matters:**
+- **Audit Trail:** Critical infrastructure needs formal requirements for compliance/auditing
+- **Prevents Gaps:** Phase 1 completion found pre-commit/pre-push hooks lacked REQs (fixed retroactively)
+- **Consistency:** Branch protection had REQ-CICD-003, but hooks didn't → inconsistent traceability
+- **Future Reference:** REQs provide single source of truth for "what system must do"
+
+**Red Flags:**
+- ❌ Critical infrastructure deferred without REQ (e.g., "pre-commit hooks → DEF-001 only")
+- ❌ "We'll add the REQ later" → No, create it NOW (takes 5-10 minutes)
+- ❌ Inconsistent application (some tasks have REQs, similar tasks don't)
+- ❌ No decision tree justification ("Why does X need REQ but Y doesn't?")
+
 **How to Check:**
 ```bash
 # Schema validation
@@ -445,8 +529,48 @@ Analyzing this feedback systematically helps:
 
 **Checklist:**
 
+- [ ] **Verify PR Coverage** ⚠️ **MANDATORY - DO THIS FIRST**
+  - [ ] **Identify first and last PR numbers for this phase:**
+    ```bash
+    # Find phase start date (from DEVELOPMENT_PHASES or previous completion report)
+    # Example: Phase 1 started 2025-11-01
+
+    # List ALL PRs merged during phase
+    gh pr list --state merged --search "merged:>=2025-11-01" --limit 50 --json number,title,mergedAt
+
+    # Identify range: First PR = #2, Last PR = #28 → Expected 27 PRs
+    ```
+
+  - [ ] **Verify ALL PRs in range are analyzed:**
+    - [ ] First PR number: ______ (e.g., #2)
+    - [ ] Last PR number: ______ (e.g., #28)
+    - [ ] Expected total: ______ PRs (e.g., 27 PRs from #2 to #28)
+    - [ ] **Review EVERY PR in range** (no gaps allowed)
+
+  - [ ] **Document any skipped PRs with justification:**
+    ```markdown
+    Example justifications for skipping:
+    ✅ PR #5: Merged before phase started (2025-10-30, phase start 2025-11-01)
+    ✅ PR #12: Documentation-only (typo fix, no code changes)
+    ✅ PR #19: Reverted immediately (2 commits: merge + revert)
+    ❌ PR #15: No justification → MUST analyze
+    ```
+
+  - [ ] **Red Flags - GAP INDICATORS:**
+    - ❌ "Analyzed PRs #22-#27 only" when first PR is #2 (missing #2-#21 = 77% gap!)
+    - ❌ No documentation of WHY earlier PRs were skipped
+    - ❌ "Phase had 26 PRs, analyzed 5" (19% coverage)
+    - ❌ Assuming recent PRs represent all phase work (recency bias)
+    - ❌ "We'll review old PRs later" → No, review ALL now (takes 10-15 min)
+
+**Why PR Coverage Verification Matters:**
+- **Phase 1 Gap Example:** Only analyzed 5/26 PRs (19% coverage) - missed 80% of AI feedback
+- **Early PRs Often Critical:** First PRs set architectural patterns for entire phase
+- **No Recency Bias:** Recent PRs may be polish/cleanup, early PRs have core decisions
+- **Complete Audit Trail:** All phase decisions documented, not just final commits
+
 - [ ] **Collect AI Review Comments**
-  - [ ] Review all PRs merged during this phase
+  - [ ] Review all PRs merged during this phase (verified above ✅)
   - [ ] Extract Claude Code's review comments/suggestions
   - [ ] Group by category (architecture, security, performance, etc.)
   - [ ] Note which suggestions were implemented vs. deferred vs. rejected

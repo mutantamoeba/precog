@@ -1,9 +1,14 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.9
-**Last Updated:** 2025-11-14
+**Version:** 1.10
+**Last Updated:** 2025-11-15
 **Status:** ✅ Current
+**Changes in v1.10:**
+- **BRANCH PROTECTION INFRASTRUCTURE:** Added ADR-046 (Branch Protection Strategy - Phase 0.7 Retroactive)
+- Added ADR-046: Branch Protection Strategy (GitHub Branch Protection with 6 required CI checks)
+- Updated ARCHITECTURE_DECISIONS reference from V2.14 to V2.15
+- Total ADRs: 64 → 65 (1 new ADR added retroactively for Phase 0.7)
 **Changes in v1.9:**
 - **PRODUCTION MONITORING INFRASTRUCTURE:** Added ADR-055 (Sentry for Production Error Tracking - Hybrid Architecture)
 - Added Phase 2 section for production monitoring infrastructure
@@ -158,6 +163,7 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR-043 | Security Testing Integration | 2025-10-29 | 🔵 | 0.7 | ARCHITECTURE_DECISIONS_V2.11 |
 | ADR-044 | Mutation Testing Strategy | 2025-10-29 | 🔵 | 0.7 | ARCHITECTURE_DECISIONS_V2.11 |
 | ADR-045 | Property-Based Testing with Hypothesis | 2025-10-29 | 🔵 | 0.7 | ARCHITECTURE_DECISIONS_V2.11 |
+| ADR-046 | Branch Protection Strategy (GitHub Branch Protection) | 2025-11-15 | ✅ | 0.7 | ARCHITECTURE_DECISIONS_V2.15 |
 | ADR-054 | Ruff Security Rules Instead of Bandit (Python 3.14 Compatibility) | 2025-11-07 | ✅ | 0.7 | ARCHITECTURE_DECISIONS_V2.11 |
 
 ### Phase 1: API Integration Best Practices (Planned)
@@ -432,9 +438,9 @@ Implement 4-level priority hierarchy:
 
 ## ADR Statistics
 
-**Total ADRs:** 53
-**Accepted (✅):** 36 (Phase 0-1.5 partial)
-**Proposed (🔵):** 17 (Phase 0.7, 1, 2-10)
+**Total ADRs:** 65
+**Accepted (✅):** 37 (Phase 0-1.5 partial)
+**Proposed (🔵):** 28 (Phase 0.7, 1, 2-10)
 **Rejected (❌):** 0
 **Superseded (⚠️):** 0
 
@@ -444,7 +450,7 @@ Implement 4-level priority hierarchy:
 - Phase 1: 12 ADRs (6 accepted for DB completion + 6 planned for API best practices)
 - Phase 1.5: 1 ADR (100% accepted - property-based testing POC)
 - Phase 0.6c: 5 ADRs (100% accepted - includes cross-platform standards)
-- Phase 0.7: 5 ADRs (1 accepted: Python 3.14 compatibility + 4 planned)
+- Phase 0.7: 6 ADRs (2 accepted: Python 3.14 compatibility + Branch Protection + 4 planned)
 - Phase 2: 3 ADRs (0% - planned)
 - Phase 3: 2 ADRs (0% - planned)
 - Phase 4: 4 ADRs (0% - planned)
@@ -461,17 +467,18 @@ Implement 4-level priority hierarchy:
 
 ---
 
-**Document Version:** 1.6
+**Document Version:** 1.10
 **Created:** 2025-10-21
-**Last Updated:** 2025-11-08
+**Last Updated:** 2025-11-15
 **Purpose:** Systematic architecture decision tracking and reference
 **Critical Changes:**
+- v1.10: Added ADR-046 for branch protection strategy (Phase 0.7 retroactive, GitHub branch protection with 6 required CI checks)
+- v1.9: Added ADR-055 for production monitoring infrastructure (Sentry hybrid architecture)
+- v1.8: Added ADR-078 through ADR-085 for Phases 6-9 analytics infrastructure
+- v1.7: Added ADR-076 and ADR-077 for strategic research priorities
 - v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
-- v1.4: Added ADR-053 for cross-platform development standards (Windows/Linux compatibility)
-- v1.3: Added 6 new ADRs (ADR-047 through ADR-052) for Phase 1 API Integration best practices
-- v1.2: Added 8 new ADRs (ADR-038 through ADR-045) for Phase 0.6c completion and Phase 0.7 planning
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.11.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.15.md
 
-**END OF ADR INDEX V1.6**
+**END OF ADR INDEX V1.10**

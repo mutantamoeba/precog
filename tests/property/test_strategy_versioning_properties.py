@@ -36,6 +36,7 @@ Usage:
 """
 
 import uuid
+from decimal import Decimal
 
 import pytest
 from hypothesis import HealthCheck, assume, given, settings
@@ -76,8 +77,12 @@ def strategy_config_dict(draw):
     return {
         "min_lead": draw(st.integers(min_value=1, max_value=20)),
         "min_time_remaining_mins": draw(st.integers(min_value=1, max_value=30)),
-        "max_edge": draw(st.floats(min_value=0.05, max_value=0.50)),
-        "kelly_fraction": draw(st.floats(min_value=0.10, max_value=1.00)),
+        "max_edge": draw(
+            st.decimals(min_value=Decimal("0.05"), max_value=Decimal("0.50"), places=4)
+        ),
+        "kelly_fraction": draw(
+            st.decimals(min_value=Decimal("0.10"), max_value=Decimal("1.00"), places=4)
+        ),
     }
 
 

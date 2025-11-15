@@ -262,6 +262,92 @@ from typing import Any, cast
 
 from .connection import fetch_all, fetch_one, get_cursor
 
+
+class DecimalEncoder(json.JSONEncoder):
+    """Custom JSON encoder that converts Decimal to string.
+
+    This encoder is required because Python's json module doesn't natively
+    support Decimal serialization. We convert Decimal to string to preserve
+    precision (Pattern 1: NEVER USE FLOAT).
+
+    Educational Note:
+        Why not convert to float? Because float introduces rounding errors!
+        Example:
+            Decimal("0.4975") → float → 0.49750000000000005 ❌ WRONG
+            Decimal("0.4975") → str → "0.4975" ✅ CORRECT
+
+    Example:
+        >>> config = {"max_edge": Decimal("0.05"), "kelly_fraction": Decimal("0.10")}
+        >>> json.dumps(config, cls=DecimalEncoder)
+        '{"max_edge": "0.05", "kelly_fraction": "0.10"}'
+
+    Reference:
+        - Pattern 1 (Decimal Precision): docs/guides/DEVELOPMENT_PATTERNS_V1.2.md
+        - ADR-002: Decimal precision for all financial calculations
+    """
+
+    def default(self, obj: Any) -> Any:
+        """Convert Decimal to string, otherwise use default encoding.
+
+        Args:
+            obj: Object to encode
+
+        Returns:
+            String representation for Decimal, default encoding for others
+        """
+        if isinstance(obj, Decimal):
+            return str(obj)
+        return super().default(obj)
+
+
+def _convert_config_strings_to_decimal(config: dict[str, Any]) -> dict[str, Any]:
+    """Convert string values to Decimal for known financial fields.
+
+    When configs are stored as JSON in the database, Decimal values are
+    serialized as strings. This helper converts them back to Decimal objects
+    for fields that should use Decimal precision (Pattern 1).
+
+    Educational Note:
+        We only convert specific known fields (max_edge, kelly_fraction, etc.)
+        rather than converting all numeric-looking strings, because some
+        fields like 'min_lead' should remain as integers.
+
+    Args:
+        config: Strategy config dict (may have string Decimal values)
+
+    Returns:
+        Config dict with Decimal values restored
+
+    Example:
+        >>> config = {"max_edge": "0.05", "kelly_fraction": "0.10", "min_lead": 5}
+        >>> _convert_config_strings_to_decimal(config)
+        {"max_edge": Decimal("0.05"), "kelly_fraction": Decimal("0.10"), "min_lead": 5}
+
+    Reference:
+        - Pattern 1 (Decimal Precision): docs/guides/DEVELOPMENT_PATTERNS_V1.2.md
+        - ADR-002: Decimal precision for all financial calculations
+    """
+    # Fields that should be Decimal (financial calculations)
+    decimal_fields = {
+        "max_edge",
+        "min_edge",
+        "kelly_fraction",
+        "max_position_size",
+        "max_exposure",
+        "stop_loss_threshold",
+        "profit_target",
+        "trailing_stop_activation",
+        "trailing_stop_distance",
+    }
+
+    result = config.copy()
+    for field in decimal_fields:
+        if field in result and isinstance(result[field], str):
+            result[field] = Decimal(result[field])
+
+    return result
+
+
 # =============================================================================
 # TYPE VALIDATION HELPERS
 # =============================================================================
@@ -1323,7 +1409,7 @@ def create_strategy(
         strategy_version,
         category,
         subcategory,
-        json.dumps(config),  # Convert dict to JSON string
+        json.dumps(config, cls=DecimalEncoder),  # Convert dict to JSON string (handles Decimal)
         status,
         notes,
     )
@@ -1343,17 +1429,26 @@ def get_strategy(strategy_id: int) -> dict[str, Any] | None:
 
     Returns:
         Strategy dict or None if not found
+        Config field will have Decimal values restored from JSON strings
 
     Example:
         >>> strategy = get_strategy(42)
         >>> print(strategy["strategy_name"], strategy["strategy_version"])
         halftime_entry v1.0
+        >>> print(type(strategy["config"]["max_edge"]))
+        <class 'decimal.Decimal'>
     """
     query = "SELECT * FROM strategies WHERE strategy_id = %s"
 
     with get_cursor() as cur:
         cur.execute(query, (strategy_id,))
-        return cast("dict[str, Any] | None", cur.fetchone())
+        result = cast("dict[str, Any] | None", cur.fetchone())
+
+        # Convert config string values back to Decimal
+        if result and "config" in result:
+            result["config"] = _convert_config_strings_to_decimal(result["config"])
+
+        return result
 
 
 def get_strategy_by_name_and_version(
@@ -1368,10 +1463,13 @@ def get_strategy_by_name_and_version(
 
     Returns:
         Strategy dict or None if not found
+        Config field will have Decimal values restored from JSON strings
 
     Example:
         >>> v1_0 = get_strategy_by_name_and_version("halftime_entry", "v1.0")
         >>> v1_1 = get_strategy_by_name_and_version("halftime_entry", "v1.1")
+        >>> print(type(v1_0["config"]["kelly_fraction"]))
+        <class 'decimal.Decimal'>
     """
     query = """
         SELECT * FROM strategies
@@ -1380,7 +1478,13 @@ def get_strategy_by_name_and_version(
 
     with get_cursor() as cur:
         cur.execute(query, (strategy_name, strategy_version))
-        return cast("dict[str, Any] | None", cur.fetchone())
+        result = cast("dict[str, Any] | None", cur.fetchone())
+
+        # Convert config string values back to Decimal
+        if result and "config" in result:
+            result["config"] = _convert_config_strings_to_decimal(result["config"])
+
+        return result
 
 
 def get_active_strategy_version(strategy_name: str) -> dict[str, Any] | None:
@@ -1392,11 +1496,14 @@ def get_active_strategy_version(strategy_name: str) -> dict[str, Any] | None:
 
     Returns:
         Active strategy dict or None if no active version
+        Config field will have Decimal values restored from JSON strings
 
     Example:
         >>> active = get_active_strategy_version("halftime_entry")
         >>> print(active["strategy_version"], active["status"])
         v1.1 active
+        >>> print(type(active["config"]["kelly_fraction"]))
+        <class 'decimal.Decimal'>
     """
     query = """
         SELECT * FROM strategies
@@ -1407,7 +1514,13 @@ def get_active_strategy_version(strategy_name: str) -> dict[str, Any] | None:
 
     with get_cursor() as cur:
         cur.execute(query, (strategy_name,))
-        return cast("dict[str, Any] | None", cur.fetchone())
+        result = cast("dict[str, Any] | None", cur.fetchone())
+
+        # Convert config string values back to Decimal
+        if result and "config" in result:
+            result["config"] = _convert_config_strings_to_decimal(result["config"])
+
+        return result
 
 
 def get_all_strategy_versions(strategy_name: str) -> list[dict[str, Any]]:
@@ -1419,6 +1532,7 @@ def get_all_strategy_versions(strategy_name: str) -> list[dict[str, Any]]:
 
     Returns:
         List of strategy dicts, sorted by created_at DESC
+        Config fields will have Decimal values restored from JSON strings
 
     Example:
         >>> versions = get_all_strategy_versions("halftime_entry")
@@ -1427,6 +1541,8 @@ def get_all_strategy_versions(strategy_name: str) -> list[dict[str, Any]]:
         v1.2 active
         v1.1 deprecated
         v1.0 deprecated
+        >>> print(type(versions[0]["config"]["kelly_fraction"]))
+        <class 'decimal.Decimal'>
     """
     query = """
         SELECT * FROM strategies
@@ -1436,7 +1552,14 @@ def get_all_strategy_versions(strategy_name: str) -> list[dict[str, Any]]:
 
     with get_cursor() as cur:
         cur.execute(query, (strategy_name,))
-        return cast("list[dict[str, Any]]", cur.fetchall())
+        results = cast("list[dict[str, Any]]", cur.fetchall())
+
+        # Convert config string values back to Decimal for each version
+        for result in results:
+            if "config" in result:
+                result["config"] = _convert_config_strings_to_decimal(result["config"])
+
+        return results
 
 
 def update_strategy_status(
