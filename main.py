@@ -524,7 +524,7 @@ def fetch_balance(
                 )
                 logger.info(f"Balance stored in database (balance_id: {balance_id})")
                 console.print(
-                    f"\n[green]✓ Success:[/green] Balance saved to database (ID: {balance_id})"
+                    f"\n[green][OK] Success:[/green] Balance saved to database (ID: {balance_id})"
                 )
             except Exception as db_error:
                 logger.error(f"Failed to save balance to database: {db_error}", exc_info=verbose)
@@ -716,7 +716,7 @@ def fetch_markets(
                     f"Markets saved: {created_count} created, {updated_count} updated, {error_count} errors"
                 )
                 console.print(
-                    f"\n[green]✓ Success:[/green] {created_count} markets created, {updated_count} updated"
+                    f"\n[green][OK] Success:[/green] {created_count} markets created, {updated_count} updated"
                 )
                 if error_count > 0:
                     console.print(f"[yellow]Warning:[/yellow] {error_count} markets failed to save")
@@ -1098,7 +1098,7 @@ def fetch_settlements(
                     f"Settlements processed: {settlement_count} settlements created, {market_update_count} markets updated, {error_count} errors"
                 )
                 console.print(
-                    f"\n[green]✓ Success:[/green] {settlement_count} settlements saved, {market_update_count} markets updated to 'settled'"
+                    f"\n[green][OK] Success:[/green] {settlement_count} settlements saved, {market_update_count} markets updated to 'settled'"
                 )
                 if error_count > 0:
                     console.print(
@@ -1193,18 +1193,18 @@ def db_init(
         # Step 1: Test database connection
         console.print("[1/4] Testing database connection...")
         if not test_connection():
-            console.print("[red]✗ Database connection failed[/red]")
+            console.print("[red][FAIL] Database connection failed[/red]")
             raise typer.Exit(code=1)
 
-        console.print("[green]✓ Database connection successful[/green]")
+        console.print("[green][OK] Database connection successful[/green]")
 
         if dry_run:
             console.print("\n[yellow]Dry-run mode:[/yellow] Would initialize database schema")
             console.print("\nActions that would be performed:")
-            console.print("  • Create missing tables")
-            console.print("  • Apply pending migrations")
-            console.print("  • Validate schema integrity")
-            console.print("  • Create indexes and constraints")
+            console.print("  - Create missing tables")
+            console.print("  - Apply pending migrations")
+            console.print("  - Validate schema integrity")
+            console.print("  - Create indexes and constraints")
             return
 
         # Step 2: Create tables
@@ -1212,24 +1212,26 @@ def db_init(
         schema_file = "database/precog_schema_v1.7.sql"
 
         if not validate_schema_file(schema_file):
-            console.print(f"[red]✗ Schema file not found: {schema_file}[/red]")
+            console.print(f"[red][FAIL] Schema file not found: {schema_file}[/red]")
             raise typer.Exit(code=1)
 
         db_url = get_database_url()
         if not db_url:
-            console.print("[red]✗ DATABASE_URL environment variable not set[/red]")
+            console.print("[red][FAIL] DATABASE_URL environment variable not set[/red]")
             raise typer.Exit(code=1)
 
         success, error = apply_schema(db_url, schema_file)
         if not success:
             if "psql command not found" in error:
-                console.print("[yellow]⚠ psql command not found, skipping schema creation[/yellow]")
+                console.print(
+                    "[yellow][WARN] psql command not found, skipping schema creation[/yellow]"
+                )
                 console.print("  Note: Tables may need to be created manually")
             else:
-                console.print(f"[red]✗ Schema creation failed:[/red] {error}")
+                console.print(f"[red][FAIL] Schema creation failed:[/red] {error}")
                 raise typer.Exit(code=1)
         else:
-            console.print("[green]✓ Tables created successfully[/green]")
+            console.print("[green][OK] Tables created successfully[/green]")
 
         # Step 3: Apply migrations
         console.print("\n[3/4] Applying database migrations...")
@@ -1237,27 +1239,27 @@ def db_init(
 
         if failed:
             console.print(
-                f"[yellow]⚠ {len(failed)} migration(s) failed:[/yellow] {', '.join(failed)}"
+                f"[yellow][WARN] {len(failed)} migration(s) failed:[/yellow] {', '.join(failed)}"
             )
 
         if applied > 0:
-            console.print(f"[green]✓ {applied} migration(s) applied[/green]")
+            console.print(f"[green][OK] {applied} migration(s) applied[/green]")
             if verbose and failed:
                 for migration_file in failed:
                     console.print(f"  Failed: {migration_file}")
         else:
-            console.print("[yellow]⚠ No migrations to apply[/yellow]")
+            console.print("[yellow][WARN] No migrations to apply[/yellow]")
 
         # Step 4: Validate schema
         console.print("\n[4/4] Validating schema integrity...")
         missing_tables = validate_critical_tables()
 
         if missing_tables:
-            console.print(f"[red]✗ Missing critical tables:[/red] {', '.join(missing_tables)}")
+            console.print(f"[red][FAIL] Missing critical tables:[/red] {', '.join(missing_tables)}")
             raise typer.Exit(code=1)
 
-        console.print("[green]✓ All critical tables exist[/green]")
-        console.print("\n[bold green]✓ Database initialization complete![/bold green]")
+        console.print("[green][OK] All critical tables exist[/green]")
+        console.print("\n[bold green][OK] Database initialization complete![/bold green]")
         logger.info("Database initialization completed successfully")
 
     except Exception as e:
@@ -1328,13 +1330,13 @@ def health_check(
         from precog.database.connection import test_connection
 
         if test_connection():
-            console.print("[green]✓ Database connection OK[/green]")
+            console.print("[green][OK] Database connection OK[/green]")
             checks_passed += 1
         else:
-            console.print("[red]✗ Database connection failed[/red]")
+            console.print("[red][FAIL] Database connection failed[/red]")
             checks_failed += 1
     except Exception as e:
-        console.print(f"[red]✗ Database check failed: {e}[/red]")
+        console.print(f"[red][FAIL] Database check failed: {e}[/red]")
         if verbose:
             logger.error(f"Database health check error: {e}", exc_info=True)
         checks_failed += 1
@@ -1365,16 +1367,16 @@ def health_check(
                     logger.warning(f"Config file {config_file} failed to load: {config_error}")
 
         if not missing_configs:
-            console.print(f"[green]✓ All {len(config_files)} configuration files loaded[/green]")
+            console.print(f"[green][OK] All {len(config_files)} configuration files loaded[/green]")
             checks_passed += 1
         else:
             console.print(
-                f"[yellow]⚠ {len(missing_configs)} configuration files missing or invalid:[/yellow] {', '.join(missing_configs)}"
+                f"[yellow][WARN] {len(missing_configs)} configuration files missing or invalid:[/yellow] {', '.join(missing_configs)}"
             )
             checks_failed += 1
 
     except Exception as e:
-        console.print(f"[red]✗ Configuration check failed: {e}[/red]")
+        console.print(f"[red][FAIL] Configuration check failed: {e}[/red]")
         if verbose:
             logger.error(f"Configuration health check error: {e}", exc_info=True)
         checks_failed += 1
@@ -1394,20 +1396,20 @@ def health_check(
 
     if not missing_vars:
         console.print(
-            f"[green]✓ All {len(required_env_vars)} required environment variables set[/green]"
+            f"[green][OK] All {len(required_env_vars)} required environment variables set[/green]"
         )
         checks_passed += 1
     else:
-        console.print(f"[red]✗ Missing environment variables:[/red] {', '.join(missing_vars)}")
+        console.print(f"[red][FAIL] Missing environment variables:[/red] {', '.join(missing_vars)}")
         checks_failed += 1
 
     # Check 4: Directory structure
     console.print("\n[4/4] Checking directory structure...")
     required_dirs = [
-        "database",
-        "api_connectors",
-        "config",
-        "utils",
+        "src/precog/database",
+        "src/precog/api_connectors",
+        "src/precog/config",
+        "src/precog/utils",
         "tests",
         "_keys",
     ]
@@ -1418,10 +1420,10 @@ def health_check(
             missing_dirs.append(directory)
 
     if not missing_dirs:
-        console.print(f"[green]✓ All {len(required_dirs)} required directories exist[/green]")
+        console.print(f"[green][OK] All {len(required_dirs)} required directories exist[/green]")
         checks_passed += 1
     else:
-        console.print(f"[yellow]⚠ Missing directories:[/yellow] {', '.join(missing_dirs)}")
+        console.print(f"[yellow][WARN] Missing directories:[/yellow] {', '.join(missing_dirs)}")
         checks_failed += 1
 
     # Summary
@@ -1431,10 +1433,10 @@ def health_check(
     console.print(f"  Checks failed: [red]{checks_failed}/{total_checks}[/red]")
 
     if checks_failed == 0:
-        console.print("\n[bold green]✓ All systems operational![/bold green]")
+        console.print("\n[bold green][OK] All systems operational![/bold green]")
         logger.info("Health check passed: all systems operational")
     else:
-        console.print("\n[bold yellow]⚠ Some checks failed[/bold yellow]")
+        console.print("\n[bold yellow][WARN] Some checks failed[/bold yellow]")
         console.print("Please review the errors above and fix issues before proceeding.")
         logger.warning(f"Health check completed with {checks_failed} failures")
         raise typer.Exit(code=1)
@@ -1443,13 +1445,13 @@ def health_check(
 @app.command(name="config-show")
 def config_show(
     config_file: str = typer.Argument(
-        ..., help="Configuration file to display (e.g., 'trading_config.yaml')"
+        ..., help="Configuration file to display (e.g., 'trading' without .yaml extension)"
     ),
     key_path: str = typer.Option(
         None,
         "--key",
         "-k",
-        help="Specific configuration key path (e.g., 'kelly_criterion.max_bet_size')",
+        help="Specific configuration key path (e.g., 'account.max_total_exposure_dollars')",
     ),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
 ) -> None:
@@ -1474,7 +1476,7 @@ def config_show(
     - Understanding system settings
 
     Args:
-        config_file: Name of configuration file (e.g., 'trading_config.yaml')
+        config_file: Name of configuration file WITHOUT .yaml extension (e.g., 'trading', 'markets')
         key_path: Optional dot-separated path to specific key
         verbose: Show detailed output including file paths
 
@@ -1488,13 +1490,13 @@ def config_show(
     Example:
         ```bash
         # Show entire trading configuration
-        python main.py config-show trading_config.yaml
+        python main.py config-show trading
 
         # Show specific key
-        python main.py config-show trading_config.yaml --key kelly_criterion.max_bet_size
+        python main.py config-show trading --key account.max_total_exposure_dollars
 
         # Verbose mode with file paths
-        python main.py config-show trading_config.yaml --verbose
+        python main.py config-show trading --verbose
         ```
 
     References:
@@ -1524,12 +1526,12 @@ def config_show(
                     logger.info(f"Retrieved config key: {config_file}:{key_path} = {value}")
 
             except KeyError:
-                console.print(f"[red]✗ Key not found:[/red] {key_path}")
+                console.print(f"[red][FAIL] Key not found:[/red] {key_path}")
                 console.print(f"\nAvailable keys in {config_file}:")
                 # Show top-level keys
                 full_config = config_loader.get(config_file)
                 for key in full_config:
-                    console.print(f"  • {key}")
+                    console.print(f"  - {key}")
                 raise typer.Exit(code=1) from None
 
         # Show entire configuration file
@@ -1548,19 +1550,19 @@ def config_show(
                 logger.info(f"Displayed configuration: {config_file}")
 
     except FileNotFoundError:
-        console.print(f"[red]✗ Configuration file not found:[/red] {config_file}")
-        console.print("\nAvailable configuration files:")
+        console.print(f"[red][FAIL] Configuration file not found:[/red] {config_file}")
+        console.print("\nAvailable configuration files (use name without .yaml extension):")
         config_files = [
-            "db_config.yaml",
-            "trading_config.yaml",
-            "strategy_config.yaml",
-            "model_config.yaml",
-            "market_config.yaml",
-            "kalshi_config.yaml",
-            "env_config.yaml",
+            "trading",
+            "trade_strategies",
+            "position_management",
+            "probability_models",
+            "markets",
+            "data_sources",
+            "system",
         ]
         for cf in config_files:
-            console.print(f"  • {cf}")
+            console.print(f"  - {cf}")
         raise typer.Exit(code=1) from None
     except Exception as e:
         logger.error(f"Failed to display configuration: {e}", exc_info=verbose)
