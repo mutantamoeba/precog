@@ -1,0 +1,73 @@
+# Codecov Configuration
+# ======================
+# Configures code coverage reporting and PR comments
+#
+# Reference: https://docs.codecov.com/docs/codecov-yaml
+# Integration: .github/workflows/ci.yml uploads coverage.xml to Codecov
+#
+# Educational Note:
+#   Codecov provides centralized coverage tracking across multiple CI runs.
+#   We test on 6 platforms (Ubuntu+Windows × Py3.12/3.13/3.14), and Codecov
+#   automatically merges coverage from all platforms into a single report.
+
+# Coverage thresholds (align with pyproject.toml and pytest.ini)
+coverage:
+  status:
+    project:
+      default:
+        target: 80%              # Overall project coverage must be ≥80%
+        threshold: 1%            # Allow 1% drop without failing (prevents flaky failures)
+        if_no_uploads: error     # Fail if no coverage uploaded
+    patch:
+      default:
+        target: 80%              # New code in PR must be ≥80% covered
+        threshold: 1%            # Allow 1% variance
+        if_no_uploads: success   # Don't fail if patch has no coverage (e.g., docs-only PRs)
+
+# Pull request comments
+comment:
+  layout: "reach,diff,flags,tree,footer"
+  behavior: default              # Update existing comment instead of creating new ones
+  require_changes: false         # Always comment, even if coverage unchanged
+  require_base: false            # Comment on PRs even without base branch coverage
+  require_head: true             # Only comment if head coverage exists
+
+# Ignore paths (don't include in coverage calculations)
+ignore:
+  - "tests/"                     # Test files themselves (we measure src/precog/)
+  - "scripts/"                   # Utility scripts (not production code)
+  - "_archive/"                  # Archived code
+  - "venv/"                      # Virtual environment
+  - ".venv/"                     # Virtual environment (alternate name)
+  - "htmlcov/"                   # Coverage HTML reports
+  - "docs/"                      # Documentation
+  - "_sessions/"                 # Session handoff archives
+  - "**/__pycache__/"            # Python bytecode
+  - "**/*.pyc"                   # Compiled Python files
+  - "**/migrations/"             # Database migrations (data scripts, not logic)
+  - "**/seeds/"                  # Seed data scripts
+
+# Flags (for tracking coverage by category)
+# Usage: codecov --flag unittests
+# Our CI uploads with flag "unittests" (see .github/workflows/ci.yml:113)
+flags:
+  unittests:
+    paths:
+      - src/precog/              # Only measure src/precog/ directory
+    carryforward: false          # Don't carry forward coverage from previous uploads
+
+# GitHub Checks integration
+github_checks:
+  annotations: true              # Show coverage annotations on PR files
+
+# Codecov AI suggestions (experimental - 2025 feature)
+# Suggests which lines to test based on coverage gaps
+ai_suggestions:
+  enabled: true                  # Enable AI-powered test suggestions
+
+# Performance optimizations
+codecov:
+  max_report_age: 24h            # Reject coverage reports older than 24 hours
+  require_ci_to_pass: false      # Don't require CI to pass before processing coverage
+  notify:
+    wait_for_ci: false           # Process coverage immediately, don't wait for CI

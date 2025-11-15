@@ -1661,6 +1661,9 @@ def config_validate(
             errors = []
             warnings = []
 
+            # Normalize config file name (strip .yaml extension, handle _config suffix)
+            cf_normalized = cf.replace(".yaml", "").replace("_config", "")
+
             try:
                 # Check 1: Can we load the file?
                 config = config_loader.get(cf)
@@ -1674,10 +1677,12 @@ def config_validate(
                     console.print(f"  [OK] Contains {len(config)} top-level keys")
 
                 # Check 3: Check for float contamination in financial configs
-                if cf in ["trading", "trade_strategies", "markets"]:
+                if cf_normalized in ["trading", "trade_strategies", "markets"]:
                     import yaml
 
-                    with open(f"src/precog/config/{cf}.yaml", encoding="utf-8") as f:
+                    # Build correct file path (handle both "trading" and "trading.yaml" inputs)
+                    file_path = f"src/precog/config/{cf_normalized}.yaml"
+                    with open(file_path, encoding="utf-8") as f:
                         raw_content = f.read()
                         # Look for float notation (e.g., 0.05 instead of "0.05")
                         if any(
