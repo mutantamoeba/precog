@@ -402,17 +402,17 @@ from rich.console import Console
 from rich.table import Table
 
 # Local imports
-from api_connectors.kalshi_client import KalshiClient
+from precog.api_connectors.kalshi_client import KalshiClient
 
 # Phase 1.5: Database CRUD operations
-from database.crud_operations import (
+from precog.database.crud_operations import (
     create_market,
     create_settlement,
     get_current_market,
     update_account_balance_with_versioning,
     update_market_with_versioning,
 )
-from utils.logger import get_logger
+from precog.utils.logger import get_logger
 
 # Load environment variables
 load_dotenv()
@@ -1181,8 +1181,8 @@ def db_init(
 
     try:
         # Import business logic functions
-        from database.connection import test_connection
-        from database.initialization import (
+        from precog.database.connection import test_connection
+        from precog.database.initialization import (
             apply_migrations,
             apply_schema,
             get_database_url,
@@ -1325,7 +1325,7 @@ def health_check(
     # Check 1: Database connectivity
     console.print("[1/4] Checking database connectivity...")
     try:
-        from database.connection import test_connection
+        from precog.database.connection import test_connection
 
         if test_connection():
             console.print("[green]✓ Database connection OK[/green]")
@@ -1342,7 +1342,7 @@ def health_check(
     # Check 2: Configuration files
     console.print("\n[2/4] Checking configuration files...")
     try:
-        from config.config_loader import ConfigLoader
+        from precog.config.config_loader import ConfigLoader
 
         config_loader = ConfigLoader()
         config_files = [
@@ -1508,7 +1508,7 @@ def config_show(
     console.print(f"\n[bold cyan]Configuration: {config_file}[/bold cyan]\n")
 
     try:
-        from config.config_loader import ConfigLoader
+        from precog.config.config_loader import ConfigLoader
 
         config_loader = ConfigLoader()
 
@@ -1630,7 +1630,7 @@ def config_validate(
     console.print("\n[bold cyan]Configuration Validation[/bold cyan]\n")
 
     try:
-        from config.config_loader import ConfigLoader
+        from precog.config.config_loader import ConfigLoader
 
         config_loader = ConfigLoader()
 

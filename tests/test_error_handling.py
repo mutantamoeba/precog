@@ -16,8 +16,8 @@ Target: 90%+ coverage before Phase 2
 import psycopg2
 import pytest
 
-from config.config_loader import ConfigLoader
-from database.connection import get_connection
+from precog.config.config_loader import ConfigLoader
+from precog.database.connection import get_connection
 
 # ============================================================================
 # Connection Pool Error Handling (HIGH PRIORITY)
@@ -201,7 +201,7 @@ def test_crud_operation_with_foreign_key_violation():
     # Attempt to create market with nonexistent foreign key
     from decimal import Decimal
 
-    from database.crud_operations import create_market
+    from precog.database.crud_operations import create_market
 
     with pytest.raises(psycopg2.IntegrityError) as exc_info:
         create_market(

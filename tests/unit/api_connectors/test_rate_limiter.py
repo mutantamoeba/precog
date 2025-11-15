@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 import pytest
 
-from api_connectors.rate_limiter import RateLimiter, TokenBucket
+from precog.api_connectors.rate_limiter import RateLimiter, TokenBucket
 
 
 class TestTokenBucket:
@@ -333,7 +333,7 @@ class TestIntegration:
         assert limiter.bucket.acquire(tokens=1, block=False) is False
 
         # Simulate 10 seconds passing and make requests
-        with patch("api_connectors.rate_limiter.time.time") as mock_time:
+        with patch("precog.api_connectors.rate_limiter.time.time") as mock_time:
             # Initial time
             start_time = limiter.bucket.last_refill
             # Return advanced time for all subsequent calls

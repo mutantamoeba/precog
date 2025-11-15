@@ -8,13 +8,20 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "precog"
-version = "0.6.3"
+version = "0.1.0"
 description = "Prediction market trading system with automated edge detection"
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
     {name = "Precog Development Team"},
 ]
+
+# Package configuration (src layout)
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 # ==============================================================================
 # RUFF CONFIGURATION (Formatter + Linter)
@@ -141,7 +148,7 @@ line-ending = "lf"
 
 [tool.ruff.lint.isort]
 # Import sorting configuration
-known-first-party = ["database", "config", "utils", "api_connectors", "trading", "analytics"]
+known-first-party = ["precog"]
 
 # ==============================================================================
 # MYPY CONFIGURATION (Type Checking)
@@ -217,7 +224,7 @@ addopts = [
     "--strict-markers",               # Enforce marker registration
     "--strict-config",                # Enforce config correctness
     "--tb=short",                     # Shorter tracebacks
-    "--cov=.",                        # Coverage on all code
+    "--cov=src/precog",               # Coverage on precog package
     "--cov-report=term-missing",      # Show missing lines in terminal
     "--cov-report=html:htmlcov",      # HTML coverage report
     "--cov-report=xml:coverage.xml",  # XML coverage (for CI/CD)
@@ -257,7 +264,7 @@ filterwarnings = [
 
 [tool.coverage.run]
 # Source code to measure
-source = ["."]
+source = ["src/precog"]
 
 # Omit files/directories from coverage
 omit = [
@@ -323,10 +330,10 @@ output = "coverage.xml"
 
 [tool.mutmut]
 # Directories to mutate
-paths_to_mutate = ["database/", "utils/"]
+paths_to_mutate = ["src/precog/database/", "src/precog/utils/"]
 
 # Test command (must exit with 0 for pass, non-zero for fail)
-runner = "python -m pytest tests/ --cov=. --cov-fail-under=80 -x"
+runner = "python -m pytest tests/ --cov=src/precog --cov-fail-under=80 -x"
 
 # Mutation score target: 60%+ (Phase 0.7 baseline)
 # Higher is better - 60% means 60% of mutants are caught by tests

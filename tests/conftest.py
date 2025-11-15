@@ -12,11 +12,11 @@ from pathlib import Path
 
 import pytest
 
-from config.config_loader import ConfigLoader
+from precog.config.config_loader import ConfigLoader
 
 # Import modules to test
-from database.connection import close_pool, get_cursor, initialize_pool
-from utils.logger import setup_logging
+from precog.database.connection import close_pool, get_cursor, initialize_pool
+from precog.utils.logger import setup_logging
 
 # =============================================================================
 # DATABASE FIXTURES

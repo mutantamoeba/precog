@@ -39,7 +39,7 @@ from pathlib import Path
 from hypothesis import given
 from hypothesis import strategies as st
 
-from config.config_loader import ConfigLoader
+from precog.config.config_loader import ConfigLoader
 
 # ==============================================================================
 # Custom Hypothesis Strategies for Configuration Domain
