@@ -1256,6 +1256,33 @@ class TestFetchFills:
         """
         # TODO: Implement in Part 1.6
 
+    def test_fetch_fills_verbose(self, runner, mock_kalshi_client):
+        """Test fetch-fills with --verbose.
+
+        Verifies:
+            - Verbose mode message logged
+            - Fill data shown
+        """
+        # Mock fill
+        mock_kalshi_client.get_fills.return_value = [
+            {
+                "trade_id": "T123",
+                "ticker": "NFL-KC-WIN",
+                "side": "yes",
+                "count": 10,
+                "yes_price": Decimal("0.6250"),
+                "no_price": Decimal("0.3750"),
+                "created_time": "2024-01-15T12:00:00Z",
+            }
+        ]
+
+        # Run command with --verbose
+        result = runner.invoke(app, ["fetch-fills", "--verbose"])
+
+        # Verify success
+        assert result.exit_code == 0
+        assert "Fetched 1 fills" in result.stdout
+
 
 class TestFetchSettlements:
     """Test cases for fetch-settlements CLI command.
@@ -1446,6 +1473,29 @@ class TestFetchSettlements:
             - Error message
         """
         # TODO: Implement in Part 1.6
+
+    def test_fetch_settlements_verbose(self, runner, mock_kalshi_client):
+        """Test fetch-settlements with --verbose.
+
+        Verifies:
+            - Verbose mode message logged
+            - Settlement data shown
+        """
+        # Mock settlement
+        mock_kalshi_client.get_settlements.return_value = [
+            {
+                "ticker": "NFL-KC-WIN",
+                "result": "yes",
+                "settlement_price": Decimal("1.00"),
+            }
+        ]
+
+        # Run command with --verbose
+        result = runner.invoke(app, ["fetch-settlements", "--verbose"])
+
+        # Verify success
+        assert result.exit_code == 0
+        assert "NFL-KC-WIN" in result.stdout
 
 
 class TestGetKalshiClient:
