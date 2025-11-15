@@ -1,9 +1,15 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.8
-**Last Updated:** 2025-11-10
+**Version:** 1.9
+**Last Updated:** 2025-11-14
 **Status:** ✅ Current
+**Changes in v1.9:**
+- **PRODUCTION MONITORING INFRASTRUCTURE:** Added ADR-055 (Sentry for Production Error Tracking - Hybrid Architecture)
+- Added Phase 2 section for production monitoring infrastructure
+- Added ADR-055: Sentry for Production Error Tracking (Hybrid Architecture integrating logger.py + Sentry + alerts table)
+- Updated ARCHITECTURE_DECISIONS reference from V2.13 to V2.14
+- Total ADRs: 63 → 64 (1 new ADR added)
 **Changes in v1.8:**
 - **PHASES 6-9 ANALYTICS INFRASTRUCTURE:** Added ADR-078 through ADR-085 (Complete Analytics Foundation)
 - Added Phases 6-9 section for analytics infrastructure (performance tracking, dashboards, A/B testing)
@@ -171,6 +177,12 @@ This document provides a systematic index of all Precog architecture decisions u
 |-----|-------|------|--------|-------|----------|
 | ADR-074 | Property-Based Testing Strategy (Hypothesis Framework) | 2025-11-08 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.12 |
 | ADR-075 | Multi-Source Warning Governance Architecture | 2025-11-08 | ✅ | 0.7/1 | ARCHITECTURE_DECISIONS_V2.12 |
+
+### Phase 2: Production Monitoring Infrastructure (Planned)
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-055 | Sentry for Production Error Tracking (Hybrid Architecture) | 2025-11-14 | 🔵 | 2 | ARCHITECTURE_DECISIONS_V2.14 |
 
 ### Phase 4.5: Strategic Research Priorities (Open Questions)
 

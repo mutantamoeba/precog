@@ -1,9 +1,10 @@
 # Project Overview: Precog
 
 ---
-**Version:** 1.4
-**Last Updated:** 2025-10-19
+**Version:** 1.5
+**Last Updated:** 2025-11-14
 **Status:** ✅ Current
+**Changes in v1.5:** Added Observability & Monitoring section to Technology Stack (Codecov for code coverage, Sentry for production error tracking); added sentry-sdk==2.0.0 to requirements; documented 3-layer hybrid observability architecture integrating Sentry (real-time), logger.py (audit trail), and alerts table (permanent record); addresses gap where alerts table exists but no code writes to it yet
 **Changes in v1.4:** Added Phase 0.5 (Foundation Enhancement) and Phase 1.5 (Foundation Validation); updated system description to include strategy/model versioning and trailing stop loss; updated database schema to V1.4; added versioning system for A/B testing and trade attribution
 **Changes in v1.3:** Updated terminology (odds → probability); updated system description to reference probability calculations instead of odds calculations
 **Changes in v1.2:** Added testing/CI-CD section, budget estimates, phase dependencies table, clarified Phases 3/4 sequencing (live data Phase 2 → processing Phase 3 → odds/edges Phase 4), updated directory tree (data_storers/ → database/), merged comprehensive reqs.txt into Technology Stack.
@@ -183,6 +184,9 @@ black==23.12.1
 flake8==6.1.0
 mypy==1.7.1
 pre-commit==3.5.0
+
+# Observability & Monitoring (Phase 2+)
+sentry-sdk==2.0.0  # Production error tracking and APM
 ```
 
 **NLP & Sentiment (Phase 3-4):**
