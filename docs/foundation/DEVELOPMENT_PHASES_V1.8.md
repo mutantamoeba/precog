@@ -984,8 +984,8 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 - [✅] Database stores versioned market updates (SCD Type 2 working - 20 integration tests passing)
 - [✅] Config system loads YAML and applies DB overrides correctly (98.97% coverage)
 - [✅] Logging captures all API calls and errors (87.84% coverage)
-- [⏸️] CLI commands work and provide helpful output (not yet implemented - Phase 1 continuation)
-- [✅] Test coverage >80% **(EXCEEDED: 94.71% for Phase 1 modules)**
+- [✅] CLI commands work and provide helpful output (9 commands implemented: db-init, health-check, config-show, config-validate, fetch-balance, fetch-markets, fetch-positions, fetch-fills, fetch-settlements - verified working with src/ layout, Windows cp1252 compatible)
+- [✅] Test coverage >80% **(EXCEEDED: 94.71% for Phase 1 modules)** ⚠️ Note: main.py CLI coverage 0% (Phase 1 final task: add CLI unit tests)
 - [✅] No float types used for prices (all DECIMAL - validated by Hypothesis property tests)
 
 ---
