@@ -1,9 +1,16 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.13
-**Last Updated:** 2025-11-09
+**Version:** 2.14
+**Last Updated:** 2025-11-14
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.14:**
+- **PRODUCTION MONITORING**: Added REQ-OBSERV-002 for Sentry error tracking and performance monitoring (Phase 2)
+- **OBSERVABILITY STACK**: Documented Codecov (pre-release coverage) + Sentry (post-release monitoring) complementary integration
+- **SECTION 7.5 EXTENDED**: Added Production Error Tracking requirement after Request Correlation IDs
+- **CROSS-REFERENCES**: Added ADR-TBD (Sentry architectural decision), SENTRY_INTEGRATION_GUIDE_V1.0.md (future)
+- **INTEGRATION**: Sentry uses existing B3 correlation IDs (REQ-OBSERV-001) and log masking (REQ-SEC-009)
+- **FREE TIER**: 5K errors/month, 10K transactions/month sufficient for Phase 0-2 development
 **Changes in v2.13:**
 - **ANALYTICS & PERFORMANCE TRACKING**: Added 7 new requirements for comprehensive performance tracking and model validation (Phase 1.5-2, 6-7, 9)
 - **NEW SECTION 4.11**: Analytics & Performance Tracking (REQ-ANALYTICS-001 through REQ-ANALYTICS-004, REQ-REPORTING-001)
@@ -230,12 +237,12 @@ precog/
 ### 2.4 Documentation Structure
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
-  1. `PROJECT_OVERVIEW_V1.4.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.13.md` - This document (requirements through Phase 10)
-  3. `MASTER_INDEX_V2.19.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.13.md` - All 77 ADRs with design rationale (Phase 0-4.5)
+  1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
+  2. `MASTER_REQUIREMENTS_V2.14.md` - This document (requirements through Phase 10)
+  3. `MASTER_INDEX_V2.20.md` - Complete document inventory
+  4. `ARCHITECTURE_DECISIONS_V2.14.md` - All 77 ADRs with design rationale (Phase 0-4.5)
   5. `REQUIREMENT_INDEX.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.8.md` - Architecture decision index
+  6. `ADR_INDEX_V1.9.md` - Architecture decision index
   7. `TESTING_STRATEGY_V2.0.md` - Test cases, coverage requirements, future enhancements
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
@@ -2318,6 +2325,70 @@ Implement distributed request tracing with B3 correlation ID propagation:
   - Pass request_id parameter through all method calls
   - Configure structlog to always include request_id field
 - **Future**: Migrate to full OpenTelemetry with trace/span IDs (Phase 3+)
+
+**REQ-OBSERV-002: Production Error Tracking with Sentry**
+
+**Phase:** 2
+**Priority:** High
+**Status:** 🔵 Planned
+**Reference:** ADR-TBD, SENTRY_INTEGRATION_GUIDE_V1.0.md (future)
+
+Implement real-time production error tracking, crash reporting, and performance monitoring using Sentry:
+
+- **Error Tracking**:
+  - Automatic exception capture with full stack traces and local variables
+  - User context (if applicable), environment tags (production/staging/dev)
+  - Breadcrumbs: Last 100 events leading to error (API calls, DB queries, function calls)
+  - Error grouping by fingerprint, deduplication of identical errors
+  - Release tracking: Tag errors by deployment version (precog@X.Y.Z)
+
+- **Performance Monitoring (APM)**:
+  - Transaction tracing: Measure latency of API endpoints, trade execution, position updates
+  - Database query performance: Identify slow queries (>500ms threshold)
+  - External API calls: Track Kalshi, ESPN, Balldontlie response times
+  - Custom instrumentation: Measure edge calculation, Kelly sizing, exit evaluation
+
+- **Structured Logging Integration (2025 feature)**:
+  - Send structlog events to Sentry (ERROR and above)
+  - Search logs by strategy_id, ticker, trade_id
+  - Log-based alerts (e.g., "Alert when quantity > 1000")
+
+- **Alerting**:
+  - Real-time alerts for error rate spikes (>10 errors/minute)
+  - Slow transaction alerts (>5s response time)
+  - New error type alerts (never seen before)
+  - Slack/Email/PagerDuty integration
+
+- **Integration with Existing Observability**:
+  - Use B3 correlation IDs from REQ-OBSERV-001 for distributed tracing
+  - Respect log masking from REQ-SEC-009 (sensitive data already masked)
+  - Complement Codecov (pre-release) with post-release monitoring
+  - Shows untested code causing production errors (Codecov integration)
+
+- **Implementation**:
+  - Add sentry-sdk to requirements.txt
+  - Initialize Sentry in main.py entry point
+  - Configure SENTRY_DSN in .env (excluded from git)
+  - Set release tag: `sentry_sdk.init(release="precog@{version}")`
+  - Add custom context: strategy_id, model_id, trade_id
+  - Configure sampling rates: 100% errors, 10% transactions (free tier)
+
+- **Success Criteria**:
+  - <500ms performance overhead (measured with APM)
+  - <5K errors/month (free tier limit)
+  - <10K transactions/month (free tier limit)
+  - 100% of production errors captured and alerted within 60 seconds
+
+- **Cost**:
+  - Free tier: 5K errors/month, 10K transactions/month (sufficient for Phase 0-2)
+  - Paid tier: $29/month if exceeding free tier (likely Phase 5+ with live trading)
+
+- **Benefits**:
+  - Real-time visibility into production issues
+  - Faster debugging with full error context
+  - Performance regression detection
+  - Proactive alerting (catch issues before users report)
+  - Integration with Codecov: See which untested code is causing errors
 
 **REQ-SEC-009: Sensitive Data Masking in Logs**
 

@@ -1,9 +1,20 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.19
+**Version:** 2.20
 **Last Updated:** 2025-11-14
 **Status:** ✅ Current
+**Changes in v2.20:**
+- **CODECOV + SENTRY INTEGRATION DOCUMENTATION**: Complete observability infrastructure documentation for pre-release coverage tracking and post-release error monitoring
+- Created .codecov.yml (Codecov configuration for PR comments, 80% coverage thresholds, AI suggestions)
+- Updated MASTER_REQUIREMENTS V2.13 → V2.14 (added REQ-OBSERV-002: Sentry Production Error Tracking with hybrid architecture)
+- Updated ARCHITECTURE_DECISIONS V2.13 → V2.14 (added ADR-055: Sentry for Production Error Tracking - 380 lines documenting hybrid architecture integrating logger.py + Sentry + alerts table)
+- Updated DEVELOPMENT_PHASES V1.8 → V1.9 (added Phase 2 Task #7: Sentry + Alert System Integration, 9.5h timeline)
+- Updated PROJECT_OVERVIEW V1.4 → V1.5 (added Observability & Monitoring section to tech stack, sentry-sdk==2.0.0 to requirements)
+- Updated REQUIREMENT_INDEX V1.5 → V1.6 (111 total requirements, added REQ-OBSERV-002 entry)
+- Updated ADR_INDEX V1.8 → V1.9 (64 total ADRs, added Phase 2 Production Monitoring Infrastructure section with ADR-055)
+- Hybrid architecture addresses orphaned infrastructure: logger.py (files only), alerts table (exists but unused), no real-time alerting
+- 3-layer observability: Structured logging (audit trail) → Sentry (real-time) → alerts table (permanent record)
 **Changes in v2.19:**
 - **CLAUDE.MD SIZE REDUCTION (48.3%)**: Reduced CLAUDE.md from 3,723 to 1,924 lines (~60 KB saved)
 - Created DEVELOPMENT_PATTERNS_V1.0.md (1,234 lines) - Extracted all 10 critical patterns with comprehensive examples
@@ -215,14 +226,14 @@ Core architecture, requirements, and system design documents.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **PROJECT_OVERVIEW_V1.4.md** | ✅ | v1.4 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.4** |
-| **MASTER_REQUIREMENTS_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.13** (added REQ-ANALYTICS-001-004, REQ-REPORTING-001 for Phases 6-9 analytics infrastructure) |
-| **MASTER_INDEX_V2.19.md** | ✅ | v2.19 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.19** (CLAUDE.md size reduction 48.3%, extracted DEVELOPMENT_PATTERNS and DOCUMENTATION_WORKFLOW guides) |
-| **ARCHITECTURE_DECISIONS_V2.13.md** | ✅ | v2.13 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (85 total) - **UPDATED V2.13** (ADR-078-085: Analytics infrastructure - materialized views, performance tracking, dashboards, A/B testing) |
-| **REQUIREMENT_INDEX.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 110 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.5** (added REQ-ANALYTICS-001-004, REQ-REPORTING-001 for analytics infrastructure) |
-| **ADR_INDEX_V1.8.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (63 ADRs) - **UPDATED V1.8** (ADR-078-085 added for Phases 6-9 analytics infrastructure) |
+| **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
+| **MASTER_REQUIREMENTS_V2.14.md** | ✅ | v2.14 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.14** (added REQ-OBSERV-002: Sentry Production Error Tracking with hybrid architecture) |
+| **MASTER_INDEX_V2.20.md** | ✅ | v2.20 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.20** (Codecov + Sentry integration documentation, 8 documents updated for observability infrastructure) |
+| **ARCHITECTURE_DECISIONS_V2.14.md** | ✅ | v2.14 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (86 total) - **UPDATED V2.14** (ADR-055: Sentry Production Error Tracking with hybrid architecture integrating logger.py + Sentry + alerts table) |
+| **REQUIREMENT_INDEX.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 111 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.6** (added REQ-OBSERV-002: Sentry Production Error Tracking) |
+| **ADR_INDEX_V1.9.md** | ✅ | v1.9 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all architecture decisions (64 ADRs) - **UPDATED V1.9** (ADR-055: Sentry for Production Error Tracking added to Phase 2) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
-| **DEVELOPMENT_PHASES_V1.8.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **UPDATED V1.8** (Added Phase 1.5 model evaluation framework tasks, updated Phase 1 test coverage status to 94.71%) |
+| **DEVELOPMENT_PHASES_V1.9.md** | ✅ | v1.9 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **UPDATED V1.9** (Added Phase 2 Task #7: Sentry + Alert System Integration, 9.5h timeline) |
 | **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
 | **DEVELOPMENT_PHILOSOPHY_V1.1.md** | ✅ | v1.1 | `/docs/foundation/` | 0.7 | All phases | 🔴 Critical | Core development principles: TDD, Defense in Depth, DDD, Data-Driven Design, 10 sections (9 principles + anti-patterns) - **UPDATED V1.1** (added Section 10: Anti-Patterns to Avoid with 7 anti-patterns) |
@@ -327,6 +338,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **AB_TESTING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 8 | Phase 8 | 🟡 High | **NEW** - Statistical methodology for strategy/model evaluation: Welch's t-test, Chi-square, sample size calculation (64 trades/variant), Bayesian analysis, experiment lifecycle |
 | **DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 9 | Phase 9 | 🟡 High | **NEW** - React 18 + Next.js 14 trading dashboard: component library (MetricCard, PositionCard), Socket.IO real-time (<200ms), SWR data fetching, Plotly.js charts, deployment |
 | **DEVELOPMENT_PATTERNS_V1.2.md** | ✅ | v1.2 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.2** - 11 critical patterns: Decimal precision, dual versioning, trade attribution, security, cross-platform (enhanced with 14 Unicode symbols), TypedDict, educational docstrings, config sync, warning governance, property-based testing, test mocking; comprehensive ✅/❌ examples |
+| **SENTRY_INTEGRATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | Phase 2 | 🟡 High | **NEW** - 3-layer hybrid observability architecture: logger.py (audit trail) + Sentry (real-time) + alerts table (permanent record); implementation guide with code examples, testing procedures, troubleshooting |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
 
 ---

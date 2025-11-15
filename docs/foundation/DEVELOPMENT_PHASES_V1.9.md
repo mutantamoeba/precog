@@ -1,9 +1,18 @@
 # Development Phases & Roadmap
 
 ---
-**Version:** 1.8
-**Last Updated:** 2025-11-10
+**Version:** 1.9
+**Last Updated:** 2025-11-14
 **Status:** ✅ Current
+**Changes in v1.9:**
+- **PRODUCTION MONITORING INFRASTRUCTURE**: Added Task #7 to Phase 2 (Sentry + Alert System Integration)
+- Documents hybrid observability architecture: Sentry (real-time) + alerts table (permanent audit trail) + notification system (email/SMS)
+- Addresses orphaned infrastructure: logger.py has no DB integration, alerts table exists but unused (migration 002), no notification system
+- 3-phase implementation: Sentry setup (30min) → Logger integration (1h) → Alert manager (3h) → Notifications (5h) = 9.5h total
+- Integration points: ESPN API errors, APScheduler failures, data quality issues → create_alert() → DB + Sentry + email/SMS
+- Free tier sufficient for Phase 2-3 (5K errors/month, 10K transactions/month), upgrade to $29/month in Phase 5+ if needed
+- Deliverables: utils/alert_manager.py, utils/notifications.py, database/crud_operations.py insert_alert(), SENTRY_INTEGRATION_GUIDE_V1.0.md
+- Cross-references: REQ-OBSERV-002, ADR-055 (Sentry Hybrid Architecture), ADR-049 (Correlation IDs), ADR-051 (Log Masking)
 **Changes in v1.8:**
 - **ANALYTICS INFRASTRUCTURE INTEGRATION**: Added analytics and performance tracking tasks to Phases 1.5, 2, 7, and 9
 - **Phase 1.5 Enhancement**: Added task #5 "Model Evaluation Framework Implementation" (backtesting, cross-validation, calibration metrics: Brier Score, ECE, Log Loss)
@@ -104,7 +113,7 @@
 **Decision Timeline:** Research in Phase 4.5 (after Phase 1-3 usage data available), decide before Phase 5 Methods Implementation
 
 **References:**
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.13.md` - ADR-077 (full analysis)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.14.md` - ADR-077 (full analysis)
 - `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` - Section 1 (detailed task descriptions)
 - `config/trade_strategies.yaml` - Current strategy configs showing boundary ambiguity
 
@@ -129,7 +138,7 @@
 **Decision Timeline:** Research in Phase 4.5, decide based on backtest data
 
 **References:**
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.13.md` - ADR-076 (full analysis)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.14.md` - ADR-076 (full analysis)
 - `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` - Section 2 (detailed task descriptions)
 - `config/probability_models.yaml` - Current static ensemble config
 
@@ -160,7 +169,7 @@
 
 **When starting Phase 4+:**
 1. **DO NOT immediately implement** strategies, methods, or dynamic weights
-2. **READ the referenced ADRs** (ADR-076, ADR-077 in ARCHITECTURE_DECISIONS_V2.13.md)
+2. **READ the referenced ADRs** (ADR-076, ADR-077 in ARCHITECTURE_DECISIONS_V2.14.md)
 3. **READ the deferred tasks document** (PHASE_4_DEFERRED_TASKS_V1.0.md)
 4. **GATHER DATA from Phase 1-3** (real-world usage patterns, config complexity, user feedback)
 5. **SCHEDULE Phase 4.5 research phase** (6-8 weeks dedicated to resolving these questions)
@@ -171,7 +180,7 @@
 **See Also:**
 - `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` - Comprehensive deferred task documentation (11 research tasks)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` - 25 strategic tasks organized by category with research dependencies
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.13.md` - ADR-076 and ADR-077 (full analysis of open questions)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.14.md` - ADR-076 and ADR-077 (full analysis of open questions)
 
 ---
 
@@ -1343,6 +1352,102 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 - [  ] Query performance benchmarked (≥80% improvement)
 - [  ] All materialized view tests passing (>80% coverage for view refresh logic)
 
+#### 7. Production Monitoring Infrastructure - Sentry + Alert System Integration (Week 4)
+
+**Reference:** REQ-OBSERV-002, ADR-055, ADR-049 (Correlation IDs), ADR-051 (Log Masking), `api-integration/SENTRY_INTEGRATION_GUIDE_V1.0.md`
+
+**Goal:** Implement hybrid observability architecture: Sentry (real-time error tracking) + alerts table (permanent audit trail) + notification system (email/SMS)
+
+**Timeline:** 9.5 hours total (spread across Week 4)
+
+**Context - Current State:**
+- ✅ `logger.py` writes JSON logs to files (audit trail, no DB integration)
+- ✅ `alerts` table exists in database (migration 002) but **no code writes to it yet**
+- ❌ No real-time error alerting (errors sit in log files)
+- ❌ No automatic error deduplication
+- ❌ No notification system (email/SMS)
+
+**What We're Building:**
+3-layer hybrid architecture:
+1. **Layer 1:** Structured logging (logger.py) → files (audit trail, compliance)
+2. **Layer 2:** Sentry (cloud) → real-time error tracking, APM, deduplication
+3. **Layer 3:** alerts table (PostgreSQL) → permanent record, acknowledgement tracking
+
+**Tasks:**
+
+- [  ] **Phase 2.0: Sentry Initial Setup (30 min)**
+  - Add `sentry-sdk` to `requirements.txt`
+  - Initialize Sentry in `main.py` with `SENTRY_DSN` from `.env` (excluded from git)
+  - Add `.env.template` entry: `SENTRY_DSN=https://...@sentry.io/...`
+  - Configure release tracking: `release=f"precog@{__version__}"`
+  - Configure environment tagging: `environment=os.getenv("ENVIRONMENT", "demo")`
+  - Set sampling rates: `traces_sample_rate=0.10` (10% transactions for free tier)
+  - Test with `sentry_sdk.capture_message("Test error")` and verify appears in Sentry dashboard
+  - Reference: ADR-055 Section "1. Sentry Initialization"
+
+- [  ] **Phase 2.1: Logger Integration with Sentry (1 hour)**
+  - Update `logger.py` helper `log_error()` to forward ERROR+ to Sentry
+  - Add `LoggingIntegration` to Sentry init (breadcrumbs from INFO+, events from ERROR+)
+  - Respect existing `mask_sensitive_data` processor (no credentials to Sentry)
+  - Forward `request_id` from `LogContext` to Sentry events (correlation)
+  - Test: Trigger API error, verify appears in both log file AND Sentry dashboard
+  - Reference: ADR-055 Section "2. Logger Integration", ADR-049 (Correlation IDs), ADR-051 (Log Masking)
+
+- [  ] **Phase 2.2: Alert Manager Implementation (3 hours)**
+  - Create `utils/alert_manager.py` with `create_alert()` function
+  - Add CRUD operation `insert_alert()` in `database/crud_operations.py` (writes to alerts table)
+  - Implement `generate_fingerprint()` for deduplication (MD5 of alert_type + component + details)
+  - Hybrid behavior:
+    - **ALWAYS** write to alerts table (permanent audit trail)
+    - **IF** code error + severity ≥ high → send to Sentry (real-time visibility)
+    - **IF** severity = critical → send email + SMS notifications
+  - Separation of concerns:
+    - Code errors (API failures, database errors) → Sentry + DB
+    - Business alerts (circuit breakers, loss limits) → DB only (not code errors)
+  - Unit tests: Test fingerprint generation, deduplication logic, Sentry forwarding logic
+  - Integration tests: Create alert, verify in both PostgreSQL AND Sentry
+  - Reference: ADR-055 Section "3. Alert Manager Integration"
+
+- [  ] **Phase 2.3: Notification System (5 hours)**
+  - Implement `send_email_notification()` in `utils/notifications.py` (SMTP integration)
+    - Use `EMAIL_SMTP_HOST`, `EMAIL_SMTP_PORT`, `EMAIL_FROM`, `EMAIL_TO` from `.env`
+    - HTML email template with alert details (type, severity, component, message)
+    - Track delivery in `alerts.notification_sent`, `notification_sent_at`
+  - Implement `send_sms_notification()` (Twilio API integration)
+    - Use `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`, `TWILIO_TO` from `.env`
+    - Only for severity = critical (avoid SMS spam)
+    - Track delivery in `alerts.notification_channels` JSONB
+  - Implement `get_notification_channels(severity)` routing logic:
+    - critical → email + SMS
+    - high → email only
+    - medium → log only
+    - low → log only
+  - Track notification attempts, errors in `alerts.notification_attempts`, `notification_errors`
+  - Unit tests: Mock SMTP/Twilio, test notification routing, error handling
+  - Integration tests: Send test notifications, verify delivery tracking in DB
+  - Reference: ADR-055 Section "Migration Path - Phase 2.3"
+
+**Success Criteria:**
+- [  ] Sentry SDK initialized, test error appears in dashboard
+- [  ] ERROR+ logs forward to Sentry (with correlation IDs, masked credentials)
+- [  ] `create_alert()` function works, writes to both DB and Sentry
+- [  ] Fingerprint deduplication prevents duplicate alerts
+- [  ] Email notifications send successfully (SMTP working)
+- [  ] SMS notifications send for critical alerts (Twilio working)
+- [  ] All errors logged to files (audit trail) + DB (permanent record) + Sentry (real-time)
+- [  ] <500ms performance overhead from Sentry APM
+- [  ] All alert system tests passing (≥80% coverage for alert_manager.py, notifications.py)
+
+**Integration Points:**
+- **ESPN API errors** → `create_alert(alert_type='api_failure', severity='high')` → Sentry + DB
+- **APScheduler job failures** → `create_alert(alert_type='scheduler_failure', severity='high')` → Sentry + DB
+- **Data quality issues** → `create_alert(alert_type='data_quality', severity='medium')` → DB only (business alert)
+- **Performance degradation** → Sentry APM tracks automatically (no manual alerts needed)
+
+**Cost:**
+- **Free tier:** 5K errors/month, 10K transactions/month (sufficient for Phase 2-3)
+- **Upgrade trigger:** If >5K errors/month in Phase 5+ (live trading), upgrade to Team tier ($29/month)
+
 ### Deliverables
 - ESPN API client (`api_connectors/espn_client.py`)
 - APScheduler task scheduler (`schedulers/market_updater.py`)
@@ -1350,8 +1455,12 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 - Historical data backfill script (nflfastR)
 - Performance tracking system (`analytics/performance_tracker.py`)
 - Materialized views for analytics (strategy_performance_summary, model_calibration_summary)
+- **Sentry integration (`main.py` initialization, `logger.py` forwarding)**
+- **Alert manager (`utils/alert_manager.py`, `database/crud_operations.py` insert_alert)**
+- **Notification system (`utils/notifications.py` - email/SMS)**
 - Updated test suite
 - LIVE_DATA_INTEGRATION_GUIDE_V1.0.md
+- **SENTRY_INTEGRATION_GUIDE_V1.0.md**
 
 ### Success Criteria
 - [  ] Can fetch live NFL game data every 15 seconds
@@ -1692,7 +1801,7 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 
 #### 1. STRATEGY RESEARCH (HIGHEST PRIORITY - 4 tasks, 28-36 hours) 🔴
 
-**Reference:** ADR-077 in ARCHITECTURE_DECISIONS_V2.13.md
+**Reference:** ADR-077 in ARCHITECTURE_DECISIONS_V2.14.md
 
 - **DEF-013: Strategy Config Taxonomy** (8-10 hours, 🔴 Critical Priority)
   - Define clear boundaries: What belongs in `trade_strategies.yaml` vs `position_management.yaml`?
@@ -1733,7 +1842,7 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 
 #### 2. MODEL RESEARCH (4 tasks, 36-51 hours) 🟡
 
-**Reference:** ADR-076 in ARCHITECTURE_DECISIONS_V2.13.md
+**Reference:** ADR-076 in ARCHITECTURE_DECISIONS_V2.14.md
 
 - **DEF-009: Backtest Static vs Dynamic Performance** (15-20 hours, 🟡 High Priority)
   - Implement 3 dynamic weight strategies: Sharpe-weighted, performance-weighted, Kelly-weighted
