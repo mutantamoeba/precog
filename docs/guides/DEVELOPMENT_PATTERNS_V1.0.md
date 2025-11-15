@@ -302,13 +302,29 @@ with open("output.json", "w", encoding="utf-8") as f:
 
 # ✅ CORRECT - Sanitize Unicode when reading from markdown
 def sanitize_unicode(text: str) -> str:
-    """Replace emoji with ASCII equivalents for Windows console."""
+    """Replace Unicode symbols with ASCII equivalents for Windows console.
+
+    Comprehensive mapping table for all Unicode symbols used in project.
+    """
     replacements = {
+        # Status emoji (used in documentation)
         "✅": "[COMPLETE]",
         "🔵": "[PLANNED]",
         "🟡": "[IN PROGRESS]",
         "❌": "[FAILED]",
         "⚠️": "[WARNING]",
+
+        # CLI output symbols (used in main.py)
+        "✓": "[OK]",        # U+2713 - Check mark
+        "✗": "[FAIL]",      # U+2717 - Ballot X
+        "⚠": "[WARN]",      # U+26A0 - Warning sign (no variation selector)
+        "•": "-",           # U+2022 - Bullet point
+        "→": "->",          # U+2192 - Right arrow
+
+        # Progress indicators
+        "▶": "[>]",         # U+25B6 - Play symbol
+        "⏸": "[||]",        # U+23F8 - Pause symbol
+        "⏹": "[#]",         # U+23F9 - Stop symbol
     }
     for unicode_char, ascii_replacement in replacements.items():
         text = text.replace(unicode_char, ascii_replacement)
@@ -329,12 +345,29 @@ with open("file.md", "r") as f:  # cp1252 on Windows, UTF-8 on Linux
     content = f.read()
 ```
 
-**Where Emoji is OK:**
+**Where Unicode is OK:**
 - **Markdown files (.md)**: ✅ Yes (GitHub/VS Code render correctly)
 - **Script `print()` output**: ❌ No (use ASCII equivalents)
 - **Error messages**: ❌ No (may be printed to console - sanitize first)
+- **File contents (YAML, JSON, Python source)**: ✅ Yes (but always use `encoding="utf-8"` when reading)
 
-**Reference:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.10.md` (ADR-053), `scripts/validate_docs.py` (lines 57-82 for sanitization example)
+**Rich Console Library (main.py CLI):**
+The Rich library used in main.py attempts to handle Unicode, but still fails on Windows cp1252 terminals:
+```python
+# ❌ WRONG - Rich still crashes with Unicode on Windows cp1252
+console.print("[green]✓ Success[/green]")  # UnicodeEncodeError
+
+# ✅ CORRECT - Use ASCII equivalents even with Rich
+console.print("[green][OK] Success[/green]")  # Works on all platforms
+```
+
+**Real-World Example:**
+Fixed in commit 520c5dd (2025-11-14): All CLI commands (db-init, health-check, config-show, config-validate) had Unicode symbols replaced with ASCII equivalents to support Windows cp1252.
+
+**Reference:**
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.10.md` (ADR-053)
+- `scripts/validate_docs.py` (lines 57-82 for sanitization example)
+- `main.py` (lines 1196-1753 for CLI ASCII output examples)
 
 ---
 
