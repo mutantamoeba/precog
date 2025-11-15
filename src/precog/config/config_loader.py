@@ -91,7 +91,7 @@ from typing import Any, cast
 import yaml
 from dotenv import load_dotenv
 
-from utils.logger import get_logger
+from precog.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

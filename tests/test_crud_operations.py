@@ -12,7 +12,7 @@ from decimal import Decimal
 
 import pytest
 
-from database import (
+from precog.database import (
     close_position,
     create_market,
     create_position,

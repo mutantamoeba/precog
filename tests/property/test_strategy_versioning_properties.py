@@ -43,7 +43,7 @@ from hypothesis import strategies as st
 from psycopg2 import IntegrityError
 
 # Import strategy CRUD operations
-from database.crud_operations import (
+from precog.database.crud_operations import (
     create_strategy,
     get_active_strategy_version,
     get_all_strategy_versions,
@@ -521,7 +521,7 @@ def test_at_most_one_active_version(db_pool, clean_test_data, strat_name):
     assert active["strategy_version"] == "v1.1"
 
     # Verify exactly ONE active version
-    from database.connection import get_cursor
+    from precog.database.connection import get_cursor
 
     with get_cursor() as cur:
         cur.execute(

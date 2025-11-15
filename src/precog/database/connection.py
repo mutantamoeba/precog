@@ -48,7 +48,7 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2 import extras, pool
 
-from utils.logger import get_logger
+from precog.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

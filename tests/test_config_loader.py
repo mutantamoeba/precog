@@ -14,7 +14,7 @@ from decimal import Decimal
 import pytest
 import yaml
 
-from config.config_loader import ConfigLoader
+from precog.config.config_loader import ConfigLoader
 
 
 @pytest.mark.unit
@@ -619,7 +619,7 @@ def test_load_all_propagates_yaml_error(temp_config_dir):
 def test_get_trading_config_global_function(monkeypatch):
     """Test get_trading_config() global convenience function."""
     # Use actual config directory (or skip if trading.yaml doesn't exist)
-    import config.config_loader as config_module
+    import precog.config.config_loader as config_module
 
     try:
         trading_config = config_module.get_trading_config()
@@ -648,7 +648,7 @@ strategies:
 """)
 
     # Import and patch the global config instance
-    import config.config_loader as config_module
+    import precog.config.config_loader as config_module
 
     # Replace global config instance with one using temp directory
     original_config = config_module.config
@@ -686,7 +686,7 @@ models:
 """)
 
     # Import and patch the global config instance
-    import config.config_loader as config_module
+    import precog.config.config_loader as config_module
 
     original_config = config_module.config
     config_module.config = ConfigLoader(config_dir=str(temp_config_dir))
@@ -724,7 +724,7 @@ markets:
 """)
 
     # Import and patch the global config instance
-    import config.config_loader as config_module
+    import precog.config.config_loader as config_module
 
     original_config = config_module.config
     config_module.config = ConfigLoader(config_dir=str(temp_config_dir))
@@ -756,7 +756,7 @@ def test_get_db_config_global_function(monkeypatch):
     monkeypatch.setenv("TEST_DB_PASSWORD", "test_pass")
 
     # Import and patch the global config instance
-    import config.config_loader as config_module
+    import precog.config.config_loader as config_module
 
     # Need to recreate config after monkeypatch
     config_module.config = ConfigLoader()
@@ -779,7 +779,7 @@ def test_get_kalshi_config_global_function(monkeypatch):
     monkeypatch.setenv("TEST_KALSHI_BASE_URL", "https://test-api.kalshi.co")
 
     # Import and patch the global config instance
-    import config.config_loader as config_module
+    import precog.config.config_loader as config_module
 
     # Need to recreate config after monkeypatch
     config_module.config = ConfigLoader()
@@ -798,7 +798,7 @@ def test_get_env_global_function(monkeypatch):
     monkeypatch.setenv("DEVELOPMENT_TEST_VAR", "test_value")
 
     # Import and patch the global config instance
-    import config.config_loader as config_module
+    import precog.config.config_loader as config_module
 
     # Need to recreate config after monkeypatch
     config_module.config = ConfigLoader()
@@ -817,7 +817,7 @@ def test_get_environment_global_function(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "staging")
 
     # Import and patch the global config instance
-    import config.config_loader as config_module
+    import precog.config.config_loader as config_module
 
     # Need to recreate config after monkeypatch
     config_module.config = ConfigLoader()
@@ -832,7 +832,7 @@ def test_is_production_global_function(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "production")
 
     # Import and patch the global config instance
-    import config.config_loader as config_module
+    import precog.config.config_loader as config_module
 
     config_module.config = ConfigLoader()
 
@@ -845,7 +845,7 @@ def test_is_development_global_function(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "development")
 
     # Import and patch the global config instance
-    import config.config_loader as config_module
+    import precog.config.config_loader as config_module
 
     config_module.config = ConfigLoader()
 
@@ -858,7 +858,7 @@ def test_is_staging_global_function(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "staging")
 
     # Import and patch the global config instance
-    import config.config_loader as config_module
+    import precog.config.config_loader as config_module
 
     config_module.config = ConfigLoader()
 
@@ -871,7 +871,7 @@ def test_is_test_global_function(monkeypatch):
     monkeypatch.setenv("ENVIRONMENT", "test")
 
     # Import and patch the global config instance
-    import config.config_loader as config_module
+    import precog.config.config_loader as config_module
 
     config_module.config = ConfigLoader()
 

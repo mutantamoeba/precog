@@ -39,7 +39,7 @@ from hypothesis import strategies as st
 from psycopg2 import IntegrityError
 
 # Import CRUD operations
-from database.crud_operations import (
+from precog.database.crud_operations import (
     create_market,
     get_current_market,
     update_market_with_versioning,
@@ -61,7 +61,7 @@ def setup_kalshi_platform(db_pool, clean_test_data):
     Property tests need platform/series/events for foreign key constraints
     when testing database CRUD operations on markets.
     """
-    from database.connection import get_cursor
+    from precog.database.connection import get_cursor
 
     with get_cursor(commit=True) as cur:
         # Create platform
@@ -285,7 +285,7 @@ def test_scd_type2_at_most_one_current_row(db_pool, clean_test_data, setup_kalsh
     assert market_id is not None
 
     # Verify exactly ONE current row initially
-    from database.connection import get_cursor
+    from precog.database.connection import get_cursor
 
     with get_cursor() as cur:
         cur.execute(
@@ -425,7 +425,7 @@ def test_scd_type2_update_creates_new_row(
     assert updated_market["row_current_ind"] is True
 
     # Verify old row marked FALSE and price preserved
-    from database.connection import get_cursor
+    from precog.database.connection import get_cursor
 
     with get_cursor() as cur:
         cur.execute(
@@ -801,7 +801,7 @@ def test_transaction_rollback_on_constraint_violation(
         >>> assert market is not None
         >>> assert market["yes_price"] == 0.62  # Original still valid
     """
-    from database.connection import get_cursor
+    from precog.database.connection import get_cursor
 
     # Create initial market (should succeed)
     market_id = create_market(
@@ -981,7 +981,7 @@ def test_cascade_delete_integrity(db_pool, clean_test_data, setup_kalshi_platfor
         >>> markets = query(Market).filter(platform_id="test-platform").all()
         >>> assert len(markets) == 0  # Both markets deleted automatically
     """
-    from database.connection import get_cursor
+    from precog.database.connection import get_cursor
 
     # Create a temporary test platform (separate from kalshi fixture)
     test_platform_id = f"TEST-PLATFORM-{ticker[:5]}"
