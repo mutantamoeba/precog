@@ -543,6 +543,74 @@ class TestFetchMarkets:
         # Verify table title shows correct count
         assert "10 total" in result.stdout, "Custom limit count not shown correctly"
 
+    def test_fetch_markets_limit_below_minimum(self, runner, mock_kalshi_client):
+        """Test fetch-markets rejects limit < 1.
+
+        Verifies:
+            - Exit code 1 (error)
+            - Clear error message shown
+            - API not called
+        """
+        # Run command with limit = 0
+        result = runner.invoke(app, ["fetch-markets", "--limit", "0"])
+
+        # Verify command failed
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify error message shown
+        assert "Error:" in result.stdout, "Error label not shown"
+        assert "Limit must be at least 1" in result.stdout, "Error message not clear"
+        assert "Tip:" in result.stdout, "Tip not provided"
+
+        # Verify API not called (fast-fail before network call)
+        mock_kalshi_client.get_markets.assert_not_called()
+
+    def test_fetch_markets_limit_above_maximum(self, runner, mock_kalshi_client):
+        """Test fetch-markets rejects limit > 200.
+
+        Verifies:
+            - Exit code 1 (error)
+            - Clear error message mentioning Kalshi API limit
+            - API not called (fails before network call)
+        """
+        # Run command with limit = 1000
+        result = runner.invoke(app, ["fetch-markets", "--limit", "1000"])
+
+        # Verify command failed
+        assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
+
+        # Verify error message shown
+        assert "Error:" in result.stdout, "Error label not shown"
+        assert "cannot exceed 200" in result.stdout, "Maximum limit not mentioned"
+        assert "Kalshi API maximum" in result.stdout, "Kalshi API context not provided"
+        assert "Tip:" in result.stdout, "Tip not provided"
+        assert "--limit 200" in result.stdout, "Suggested limit not shown"
+
+        # Verify API not called
+        mock_kalshi_client.get_markets.assert_not_called()
+
+    def test_fetch_markets_limit_boundary_valid(self, runner, mock_kalshi_client):
+        """Test fetch-markets accepts limit = 200 (maximum valid).
+
+        Verifies:
+            - Boundary value 200 is accepted
+            - No validation error
+            - API called correctly
+        """
+        # Mock API response
+        mock_kalshi_client.get_markets.return_value = []
+
+        # Run command with limit = 200 (maximum valid)
+        result = runner.invoke(app, ["fetch-markets", "--limit", "200"])
+
+        # Verify command succeeded
+        assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
+
+        # Verify API called with limit = 200
+        mock_kalshi_client.get_markets.assert_called_once()
+        call_kwargs = mock_kalshi_client.get_markets.call_args.kwargs
+        assert call_kwargs["limit"] == 200, f"Expected limit=200, got {call_kwargs['limit']}"
+
     def test_fetch_markets_title_truncation(self, runner, mock_kalshi_client):
         """Test market titles truncated to 50 characters.
 
