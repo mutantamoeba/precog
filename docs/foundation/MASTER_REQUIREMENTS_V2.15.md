@@ -1,9 +1,16 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.14
-**Last Updated:** 2025-11-14
+**Version:** 2.15
+**Last Updated:** 2025-11-15
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.15:**
+- **RETROACTIVE REQ CREATION**: Added REQ-CICD-004 (Pre-Commit Hooks) and REQ-CICD-005 (Pre-Push Hooks) for traceability
+- **REQUIREMENTS TRACEABILITY GAP FIX**: Critical infrastructure (pre-commit/pre-push hooks) was implemented without formal requirements (DEF-001, DEF-002 completed 2025-11-07)
+- **CONSISTENCY ENFORCEMENT**: Updated REQ-CICD-003 (Branch Protection) status from Planned → Complete to match DEF-003 completion
+- **CROSS-REFERENCES**: REQ-CICD-004 links to DEF-001 and CLAUDE.md Section 3, REQ-CICD-005 links to DEF-002 and CLAUDE.md Section 3
+- **IMPLEMENTATION DETAILS**: Both REQs include comprehensive implementation details (14 pre-commit checks, 7 pre-push validation steps)
+- **PHASE COMPLETION PROTOCOL ENHANCEMENT**: This change addresses gap identified in Phase 1 completion assessment - critical infrastructure MUST have formal requirements for audit traceability
 **Changes in v2.14:**
 - **PRODUCTION MONITORING**: Added REQ-OBSERV-002 for Sentry error tracking and performance monitoring (Phase 2)
 - **OBSERVABILITY STACK**: Documented Codecov (pre-release coverage) + Sentry (post-release monitoring) complementary integration
@@ -238,11 +245,11 @@ precog/
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.14.md` - This document (requirements through Phase 10)
-  3. `MASTER_INDEX_V2.20.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.14.md` - All 77 ADRs with design rationale (Phase 0-4.5)
+  2. `MASTER_REQUIREMENTS_V2.15.md` - This document (requirements through Phase 10)
+  3. `MASTER_INDEX_V2.22.md` - Complete document inventory
+  4. `ARCHITECTURE_DECISIONS_V2.15.md` - All 77 ADRs with design rationale (Phase 0-4.5)
   5. `REQUIREMENT_INDEX.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.9.md` - Architecture decision index
+  6. `ADR_INDEX_V1.10.md` - Architecture decision index
   7. `TESTING_STRATEGY_V2.0.md` - Test cases, coverage requirements, future enhancements
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
@@ -2185,8 +2192,8 @@ Integrate Codecov for coverage tracking and visualization:
 
 **Phase:** 0.7
 **Priority:** High
-**Status:** 🔵 Planned
-**Reference:** ADR-042
+**Status:** ✅ Complete
+**Reference:** ADR-042, DEF-003
 
 Configure GitHub branch protection for main branch:
 - **Required Checks**: All CI jobs must pass
@@ -2195,6 +2202,66 @@ Configure GitHub branch protection for main branch:
 - **Force Push**: Disabled
 - **Delete**: Branch deletion disabled
 - **Status Checks**: Codecov, all tests, security scans
+
+**Implementation:** Completed 2025-11-07 via PR #2. See docs/utility/GITHUB_BRANCH_PROTECTION_CONFIG.md for configuration details.
+
+**REQ-CICD-004: Pre-Commit Hooks Infrastructure**
+
+**Phase:** 0.7
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** DEF-001, CLAUDE.md Section 3
+
+Implement pre-commit hooks framework to auto-fix code issues before each commit:
+- **Framework**: pre-commit v4.0.1 with .pre-commit-config.yaml
+- **Code Quality Checks**:
+  - Ruff linter with auto-fix (--fix, --exit-non-zero-on-fix)
+  - Ruff formatter (automatic code formatting)
+  - Mypy type checking (staged files only)
+- **Security Checks**:
+  - Hardcoded credentials scan (blocks commits with secrets)
+  - Decimal precision check (Pattern 1 enforcement, blocks float usage)
+  - Code review basics (REQ-XXX-NNN traceability, warning only)
+- **File Integrity Checks**:
+  - Mixed line ending detection and auto-fix (CRLF→LF)
+  - Trailing whitespace removal
+  - End-of-file newline enforcement
+  - Large file check (>500KB blocked)
+  - Merge conflict marker detection
+  - YAML/JSON syntax validation
+  - Python AST validation
+  - Debug statement detection (pdb, breakpoint)
+- **Performance**: ~2-5 seconds per commit
+- **Integration**: Runs automatically on `git commit`, optional bypass with `--no-verify`
+- **Benefits**: Catches issues immediately (60-70% reduction in CI failures), faster feedback loop than waiting for CI
+
+**Implementation:** Completed 2025-11-07. Pre-commit hooks installed and configured with 14 checks across 4 categories.
+
+**REQ-CICD-005: Pre-Push Hooks Infrastructure**
+
+**Phase:** 0.7
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** DEF-002, CLAUDE.md Section 3
+
+Implement pre-push hooks to provide comprehensive validation before code reaches GitHub:
+- **Validation Layers** (7 steps, ~60-90 seconds total):
+  - Step 0/7: Branch name convention check (blocks push to main)
+  - Step 1/7: Quick validation (Ruff + docs via validate_quick.sh, ~3 sec)
+  - Step 2/7: Fast unit tests (pytest for config_loader, logger, ~10 sec)
+  - Step 3/7: Full type checking (mypy on entire codebase, ~5 sec)
+  - Step 4/7: Security scan (Ruff security rules --select S, ~5 sec)
+  - Step 5/7: Warning governance (multi-source baseline check via check_warning_debt.py, ~30 sec)
+  - Step 6/7: Code quality validation (≥80% coverage, REQ test coverage via validate_code_quality.py, ~20 sec)
+  - Step 7/7: Security pattern validation (API auth, hardcoded secrets via validate_security_patterns.py, ~10 sec)
+- **Test Coverage**: Enforces ≥80% overall coverage threshold (pre-commit doesn't run tests)
+- **Codebase-Wide Validation**: Validates entire codebase, not just changed files
+- **Branch Protection**: Blocks direct pushes to main, requires feature/* branch naming
+- **Performance**: ~60-90 seconds (acceptable delay since pushes less frequent than commits)
+- **Integration**: Runs automatically on `git push`, optional bypass with `--no-verify` (CI will still catch issues)
+- **Benefits**: Catches test failures before CI (80-90% reduction in CI failures), validates entire codebase impact
+
+**Implementation:** Completed 2025-11-07. Pre-push hooks installed with 7 comprehensive validation steps including tests, type checking, security scanning, and template enforcement.
 
 **REQ-VALIDATION-004: YAML Configuration Validation**
 

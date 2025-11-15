@@ -113,7 +113,7 @@
 **Decision Timeline:** Research in Phase 4.5 (after Phase 1-3 usage data available), decide before Phase 5 Methods Implementation
 
 **References:**
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.14.md` - ADR-077 (full analysis)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.15.md` - ADR-077 (full analysis)
 - `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` - Section 1 (detailed task descriptions)
 - `config/trade_strategies.yaml` - Current strategy configs showing boundary ambiguity
 
@@ -138,7 +138,7 @@
 **Decision Timeline:** Research in Phase 4.5, decide based on backtest data
 
 **References:**
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.14.md` - ADR-076 (full analysis)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.15.md` - ADR-076 (full analysis)
 - `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` - Section 2 (detailed task descriptions)
 - `config/probability_models.yaml` - Current static ensemble config
 
@@ -169,7 +169,7 @@
 
 **When starting Phase 4+:**
 1. **DO NOT immediately implement** strategies, methods, or dynamic weights
-2. **READ the referenced ADRs** (ADR-076, ADR-077 in ARCHITECTURE_DECISIONS_V2.14.md)
+2. **READ the referenced ADRs** (ADR-076, ADR-077 in ARCHITECTURE_DECISIONS_V2.15.md)
 3. **READ the deferred tasks document** (PHASE_4_DEFERRED_TASKS_V1.0.md)
 4. **GATHER DATA from Phase 1-3** (real-world usage patterns, config complexity, user feedback)
 5. **SCHEDULE Phase 4.5 research phase** (6-8 weeks dedicated to resolving these questions)
@@ -180,7 +180,7 @@
 **See Also:**
 - `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` - Comprehensive deferred task documentation (11 research tasks)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` - 25 strategic tasks organized by category with research dependencies
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.14.md` - ADR-076 and ADR-077 (full analysis of open questions)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.15.md` - ADR-076 and ADR-077 (full analysis of open questions)
 
 ---
 
@@ -1798,7 +1798,7 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 
 #### 1. STRATEGY RESEARCH (HIGHEST PRIORITY - 4 tasks, 28-36 hours) 🔴
 
-**Reference:** ADR-077 in ARCHITECTURE_DECISIONS_V2.14.md
+**Reference:** ADR-077 in ARCHITECTURE_DECISIONS_V2.15.md
 
 - **DEF-013: Strategy Config Taxonomy** (8-10 hours, 🔴 Critical Priority)
   - Define clear boundaries: What belongs in `trade_strategies.yaml` vs `position_management.yaml`?
@@ -1839,7 +1839,7 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 
 #### 2. MODEL RESEARCH (4 tasks, 36-51 hours) 🟡
 
-**Reference:** ADR-076 in ARCHITECTURE_DECISIONS_V2.14.md
+**Reference:** ADR-076 in ARCHITECTURE_DECISIONS_V2.15.md
 
 - **DEF-009: Backtest Static vs Dynamic Performance** (15-20 hours, 🟡 High Priority)
   - Implement 3 dynamic weight strategies: Sharpe-weighted, performance-weighted, Kelly-weighted
@@ -1925,7 +1925,7 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 - MARKET_CORRELATION_ANALYSIS_V1.0.md
 
 #### Architecture Decision Updates
-- ARCHITECTURE_DECISIONS_V2.14.md (resolve ADR-076 from 🔵 Open Question to ✅ Accepted)
+- ARCHITECTURE_DECISIONS_V2.15.md (resolve ADR-076 from 🔵 Open Question to ✅ Accepted)
 - ARCHITECTURE_DECISIONS_V2.15.md (resolve ADR-077 from 🔵 Open Question to ✅ Accepted)
 
 #### Updated Planning Documents
