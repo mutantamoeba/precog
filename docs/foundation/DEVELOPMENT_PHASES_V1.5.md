@@ -8,7 +8,7 @@
 - **PHASE 0.7B COMPLETION**: Added Phase 0.7b (Code Review & Quality Assurance Templates) - Standardized review infrastructure complete
 - Created 3 comprehensive review templates with DEVELOPMENT_PHILOSOPHY_V1.1.md integration
 - CODE_REVIEW_TEMPLATE_V1.0.md (484 lines, 7-category universal checklist)
-- INFRASTRUCTURE_REVIEW_TEMPLATE_V1.0.md (600 lines, 7-category DevOps review)
+- INFRASTRUCTURE_REVIEW_TEMPLATE_V1.0.md (600 lines, 7-category DevOps review) [archived]
 - SECURITY_REVIEW_CHECKLIST.md enhanced V1.0 → V1.1 (600 lines, added 4 sections)
 - All templates reference DEVELOPMENT_PHILOSOPHY principles (TDD, Defense in Depth, Security by Default, etc.)
 - Templates consolidate scattered guidance from CLAUDE.md, Perplexity AI recommendations, Phase Completion Protocol
@@ -492,7 +492,7 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 
 ### Deliverables
 - [✅] docs/utility/CODE_REVIEW_TEMPLATE_V1.0.md (484 lines)
-- [✅] docs/utility/INFRASTRUCTURE_REVIEW_TEMPLATE_V1.0.md (600 lines)
+- [✅] INFRASTRUCTURE_REVIEW_TEMPLATE_V1.0.md (600 lines) [archived]
 - [✅] docs/utility/SECURITY_REVIEW_CHECKLIST.md V1.1 (enhanced from V1.0, +600 lines to 773 lines total)
 - [✅] Updated CLAUDE.md V1.13 → V1.14 (Critical References section)
 - [✅] Updated DEVELOPMENT_PHASES V1.4 → V1.5 (this changelog)
@@ -532,7 +532,7 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 
 **MANDATORY: Complete this checklist BEFORE writing any Phase 1 code**
 
-**Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
+**Reference:** Phase-specific test planning checklist (template archived)
 
 **⚠️ CURRENT STATUS (2025-11-07):** Partially complete (~45-50%)
 - ✅ **Done:** Kalshi API client with 45 tests (93.19% coverage ✅ EXCEEDS 90% target)
@@ -929,7 +929,7 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 
 **MANDATORY: Complete this checklist BEFORE writing any Phase 2 code**
 
-**Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
+**Reference:** Phase-specific test planning checklist (template archived)
 
 **Output:** Update SESSION_HANDOFF.md with "Phase 2 test planning complete" (detailed test plan to be created when Phase 2 starts)
 
@@ -1063,7 +1063,7 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 
 **MANDATORY: Complete this checklist BEFORE writing any Phase 3 code**
 
-**Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
+**Reference:** Phase-specific test planning checklist (template archived)
 
 **Output:** Update SESSION_HANDOFF.md with "Phase 3 test planning complete" (detailed test plan to be created when Phase 3 starts)
 
@@ -1201,7 +1201,7 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 
 **MANDATORY: Complete this checklist BEFORE writing any Phase 4 code**
 
-**Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
+**Reference:** Phase-specific test planning checklist (template archived)
 
 **Output:** Update SESSION_HANDOFF.md with "Phase 4 test planning complete" (detailed test plan to be created when Phase 4 starts)
 
@@ -1377,7 +1377,7 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 
 **MANDATORY: Complete this checklist BEFORE writing any Phase 5a code**
 
-**Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
+**Reference:** Phase-specific test planning checklist (template archived)
 
 **Output:** Update SESSION_HANDOFF.md with "Phase 5a test planning complete" (detailed test plan to be created when Phase 5a starts)
 
@@ -1549,7 +1549,7 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 
 **MANDATORY: Complete this checklist BEFORE writing any Phase 5b code**
 
-**Reference:** `docs/testing/PHASE_TEST_PLANNING_TEMPLATE_V1.0.md`
+**Reference:** Phase-specific test planning checklist (template archived)
 
 **Output:** Update SESSION_HANDOFF.md with "Phase 5b test planning complete" (detailed test plan to be created when Phase 5b starts)
 
