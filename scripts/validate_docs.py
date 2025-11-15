@@ -795,10 +795,10 @@ def validate_yaml_configuration() -> ValidationResult:
             warnings=warnings,
         )
 
-    config_dir = PROJECT_ROOT / "config"
+    config_dir = PROJECT_ROOT / "src" / "precog" / "config"
 
     if not config_dir.exists():
-        warnings.append("config/ directory not found - skipping YAML validation")
+        warnings.append("src/precog/config/ directory not found - skipping YAML validation")
         return ValidationResult(
             name="YAML Configuration Validation (Check #9)",
             passed=True,
@@ -809,7 +809,7 @@ def validate_yaml_configuration() -> ValidationResult:
     yaml_files = list(config_dir.glob("*.yaml")) + list(config_dir.glob("*.yml"))
 
     if not yaml_files:
-        warnings.append("No YAML files found in config/ - skipping validation")
+        warnings.append("No YAML files found in src/precog/config/ - skipping validation")
         return ValidationResult(
             name="YAML Configuration Validation (Check #9)",
             passed=True,
