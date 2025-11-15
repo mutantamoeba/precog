@@ -325,11 +325,12 @@ def test_strategy_version_unique(db_pool, clean_test_data, version):
 @given(versions=st.lists(semver_string(), min_size=3, max_size=10, unique=True))
 def test_semantic_versioning_ordering(versions):
     """
-    PROPERTY: Semantic versions sort correctly (v1.0 < v1.1 < v2.0).
+    PROPERTY: Semantic versions sort correctly (v1.0 <= v1.0.0 < v1.1 < v2.0).
 
     Validates:
     - Semantic version strings sort in correct order
     - Major.Minor.Patch comparison works
+    - Handles equivalent versions (v1.0 == v1.0.0)
     - No database required (pure logic test)
 
     Why This Matters:
@@ -343,24 +344,26 @@ def test_semantic_versioning_ordering(versions):
 
         We use packaging.version.Version for correct semver parsing.
 
+        Note: v1.0 == v1.0.0 in semantic versioning (equivalent versions).
+
     Example:
         >>> from packaging.version import Version
-        >>> versions = ["v1.10", "v1.2", "v2.0", "v1.1"]
+        >>> versions = ["v1.10", "v1.2", "v2.0", "v1.1", "v1.0.0"]
         >>> sorted_versions = sorted(versions, key=lambda v: Version(v.lstrip('v')))
         >>> print(sorted_versions)
-        ['v1.1', 'v1.2', 'v1.10', 'v2.0']  # ✅ Correct order
+        ['v1.0.0', 'v1.1', 'v1.2', 'v1.10', 'v2.0']  # ✅ Correct order
     """
     from packaging.version import Version
 
     # Sort versions using semantic versioning
     sorted_versions = sorted(versions, key=lambda v: Version(v.lstrip("v")))
 
-    # Verify each version < next version
+    # Verify each version <= next version (allows for equivalent versions like v1.0 == v1.0.0)
     for i in range(len(sorted_versions) - 1):
         v1 = Version(sorted_versions[i].lstrip("v"))
         v2 = Version(sorted_versions[i + 1].lstrip("v"))
 
-        assert v1 < v2, f"Semantic versioning failed: {v1} should be < {v2}"
+        assert v1 <= v2, f"Semantic versioning failed: {v1} should be <= {v2}"
 
 
 # =============================================================================
