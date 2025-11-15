@@ -530,7 +530,7 @@ def validate_git_version_bumps() -> ValidationResult:
     CHECK #7: Git-aware version bump detection (MANDATORY).
 
     Uses git to detect renamed versioned documents and verifies that version
-    numbers were incremented correctly (e.g., V2.8 → V2.9, not V2.8 → V2.8).
+    numbers were incremented correctly (e.g., V2.8 -> V2.9, not V2.8 -> V2.8).
 
     Returns ERROR if file renamed but version didn't increment.
     Gracefully skips if git is not available or not a git repository.
@@ -647,19 +647,21 @@ def validate_git_version_bumps() -> ValidationResult:
         )
 
         if not version_incremented:
-            errors.append(f"VERSION NOT INCREMENTED: {Path(old_path).name} → {Path(new_path).name}")
+            errors.append(
+                f"VERSION NOT INCREMENTED: {Path(old_path).name} -> {Path(new_path).name}"
+            )
             errors.append(
                 f"  Old version: V{old_major}.{old_minor}, New version: V{new_major}.{new_minor}"
             )
             errors.append("  ACTION REQUIRED: Version must increment when renaming documents")
 
-        # Warn if version jumped too much (e.g., V2.8 → V3.0 without justification)
+        # Warn if version jumped too much (e.g., V2.8 -> V3.0 without justification)
         if new_major > old_major + 1:
             warnings.append(
-                f"Large version jump detected: {Path(old_path).name} → {Path(new_path).name}"
+                f"Large version jump detected: {Path(old_path).name} -> {Path(new_path).name}"
             )
             warnings.append(
-                f"  V{old_major}.{old_minor} → V{new_major}.{new_minor} (skipped {new_major - old_major - 1} major versions)"
+                f"  V{old_major}.{old_minor} -> V{new_major}.{new_minor} (skipped {new_major - old_major - 1} major versions)"
             )
 
     passed = len(errors) == 0

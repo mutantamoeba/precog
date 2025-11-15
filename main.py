@@ -592,6 +592,17 @@ def fetch_markets(
     if verbose:
         logger.info("Verbose mode enabled")
 
+    # Validate limit parameter (Kalshi API maximum is 200)
+    if limit < 1:
+        console.print("[red]Error:[/red] Limit must be at least 1")
+        console.print("[dim]Tip:[/dim] Use --limit between 1 and 200")
+        raise typer.Exit(code=1)
+
+    if limit > 200:
+        console.print("[red]Error:[/red] Limit cannot exceed 200 (Kalshi API maximum)")
+        console.print("[dim]Tip:[/dim] Use --limit 200 for maximum results")
+        raise typer.Exit(code=1)
+
     console.print(f"\n[bold cyan]Fetching markets from Kalshi {environment} API...[/bold cyan]")
 
     # Initialize Kalshi client
