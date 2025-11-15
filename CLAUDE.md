@@ -1,11 +1,20 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.16
+**Version:** 1.17
 **Created:** 2025-10-28
-**Last Updated:** 2025-11-13
+**Last Updated:** 2025-11-15
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.17:**
+- **Added Multi-Session Coordination section** - Comprehensive 7-step protocol for running multiple Claude Code sessions simultaneously
+- Documents session-specific branch naming (feature/X-sessionA, docs/Y-sessionB)
+- Foundation document coordination protocol (one session at a time for MASTER_REQUIREMENTS, ARCHITECTURE_DECISIONS, etc.)
+- Prevention strategies: Check for active sessions (`gh pr list`, `git branch -r`), use `git stash` instead of `git reset --hard`
+- Conflict resolution workflow for version number collisions (V2.13→V2.14 from both sessions)
+- Communication via git (draft PRs, early pushes, WIP commits)
+- Real-world example from 2025-11-15 multi-session coordination (CLI Windows compatibility + Codecov/Sentry docs)
+- Total addition: ~150 lines of multi-session coordination protocols
 **Changes in V1.16:**
 - **CLAUDE.md Size Reduction (48.7%)** - Reduced from 3,723 lines to 1,909 lines (~1,814 line reduction)
 - **Created DEVELOPMENT_PATTERNS_V1.2.md** (1,200+ lines) - Extracted all 10 critical patterns with comprehensive code examples from CLAUDE.md
@@ -693,6 +702,150 @@ $ gh pr merge 12 --squash --delete-branch
 ```
 
 **Reference:** This pattern was successfully used to recover from context limit interruption on 2025-11-09 during Phase 1.5 integration test session.
+
+---
+
+### Multi-Session Coordination (CRITICAL - When Running Parallel Sessions)
+
+**⚠️ READ THIS BEFORE STARTING A SESSION IF OTHER SESSIONS MAY BE ACTIVE ⚠️**
+
+**When to use:** Multiple Claude Code sessions working on the same repository simultaneously (e.g., one session on CLI features, another on documentation).
+
+**The Problem:** Multi-session work creates conflicts when both sessions modify the same files (especially foundation docs like MASTER_REQUIREMENTS, ARCHITECTURE_DECISIONS) or push to main without coordination.
+
+**Prevention Strategy:**
+
+**Step 1: Session-Specific Branch Naming (MANDATORY)**
+
+Each session MUST work on clearly-named feature branches that indicate the session's focus:
+
+```bash
+# Session A (working on CLI features):
+git checkout -b feature/cli-database-integration-sessionA
+
+# Session B (working on observability docs):
+git checkout -b docs/codecov-sentry-integration-sessionB
+
+# Session C (working on test infrastructure):
+git checkout -b test/property-based-testing-sessionC
+```
+
+**Why:** Makes it immediately obvious which branch belongs to which session, preventing accidental pushes to wrong branches.
+
+**Step 2: Check for Active Sessions Before Starting**
+
+```bash
+# 1. Check for active feature branches on remote
+git fetch
+git branch -r | grep -E "origin/(feature|bugfix|refactor|docs|test)/"
+
+# 2. Check for open PRs
+gh pr list
+
+# 3. Check for uncommitted/staged changes (might be from another session)
+git status
+```
+
+**If you find active sessions:**
+- Note which branch they're working on
+- Check which files they've modified: `git diff origin/main...origin/<their-branch> --name-only`
+- **Avoid modifying the same files** until their PR is merged
+
+**Step 3: Foundation Document Coordination (CRITICAL)**
+
+**Foundation docs** (MASTER_REQUIREMENTS, ARCHITECTURE_DECISIONS, DEVELOPMENT_PHASES, MASTER_INDEX) are high-conflict files.
+
+**Rule:** Only ONE session should update foundation docs at a time.
+
+**Protocol:**
+1. **Before modifying foundation docs:**
+   - Check if other sessions have open PRs: `gh pr list`
+   - If yes: Wait for their PR to merge OR coordinate with user
+   - If no: Proceed, but create PR quickly
+
+2. **If you discover another session's uncommitted changes to foundation docs:**
+   - Use `git stash` to save them: `git stash save "Foundation docs from other session"`
+   - DO NOT use `git reset --hard` (destroys their work!)
+   - Wait for other session to commit and create PR
+   - After their PR merges: `git pull` and re-apply your stash if needed
+
+**Step 4: Communication via Git**
+
+**Leave breadcrumbs for other sessions:**
+
+```bash
+# If working on long-running feature, push early and often:
+git push origin feature/my-feature-sessionA
+
+# Create draft PR to signal work in progress:
+gh pr create --draft --title "[WIP] Feature X" --body "Session A working on this"
+
+# When pausing work, commit with clear message:
+git commit -m "WIP: Half-done implementation (Session A pausing, will resume)"
+```
+
+**Step 5: Conflict Resolution When Multiple Sessions Commit**
+
+**Scenario:** Session A commits `MASTER_REQUIREMENTS V2.13 → V2.14` (adds REQ-X), Session B commits `MASTER_REQUIREMENTS V2.13 → V2.14` (adds REQ-Y).
+
+**Problem:** Both incremented to V2.14, but with different content!
+
+**Solution:**
+1. First session to merge wins (their V2.14 goes to main)
+2. Second session must:
+   - Pull latest: `git pull origin main`
+   - Resolve conflict: Change their version to V2.15
+   - Merge both changes: REQ-X (from first session) + REQ-Y (from second session)
+   - Update version header: V2.14 → V2.15
+   - Push again
+
+**Step 6: What NOT To Do (Common Mistakes)**
+
+❌ **NEVER push directly to main** - Always use feature branches + PRs
+❌ **NEVER use `git reset --hard`** when other sessions are active - Use `git stash` instead
+❌ **NEVER assume you're the only session** - Always check `git status` and `gh pr list` first
+❌ **NEVER modify foundation docs without checking for conflicts** - Check open PRs first
+❌ **NEVER bypass pre-push hooks with `--no-verify`** - Hooks prevent multi-session conflicts
+
+**Step 7: Recovery from Multi-Session Conflicts**
+
+**If you discover conflicts:**
+
+```bash
+# 1. Save your work
+git stash save "My session work - conflicts with other session"
+
+# 2. Pull latest from main
+git checkout main
+git pull
+
+# 3. Create new branch with updated base
+git checkout -b feature/my-feature-v2
+
+# 4. Re-apply your work
+git stash pop
+
+# 5. Resolve conflicts manually
+# 6. Test, commit, push, create PR
+```
+
+**Best Practices Summary:**
+
+✅ **Session-specific branch names** (feature/X-sessionA, docs/Y-sessionB)
+✅ **Check for active sessions before starting** (`gh pr list`, `git branch -r`)
+✅ **Coordinate on foundation docs** (one session at a time)
+✅ **Use `git stash` to save others' work** (never `git reset --hard`)
+✅ **Push early and often** (signals work in progress)
+✅ **Create draft PRs** (shows other sessions what you're working on)
+
+**Real-World Example (2025-11-15):**
+
+- Session A: Working on CLI Windows compatibility
+- Session B: Working on Codecov/Sentry documentation
+- **Conflict:** Both modified `MASTER_REQUIREMENTS V2.13 → V2.14`
+- **Resolution:** Session A stashed changes, waited for Session B to create PR, will sync after merge
+
+**Reference:** This pattern emerged from 2025-11-15 multi-session coordination during Phase 1 completion.
 
 ---
 
@@ -2043,6 +2196,7 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.17 | 2025-11-15 | **Multi-Session Coordination** - Added comprehensive 7-step protocol for running multiple Claude Code sessions simultaneously (~150 lines); Session-specific branch naming (feature/X-sessionA); Foundation document coordination (one session at a time); Prevention strategies (git stash vs git reset --hard); Conflict resolution for version collisions; Communication via draft PRs; Real-world example from 2025-11-15 multi-session work |
 | 1.16 | 2025-11-13 | **CLAUDE.md Size Reduction (48.7%)** - Reduced from 3,723 lines to 1,909 lines (~1,814 line reduction); Created DEVELOPMENT_PATTERNS_V1.2.md (1,200+ lines) extracting all 10 critical patterns; Created DOCUMENTATION_WORKFLOW_GUIDE_V1.0.md (850+ lines) extracting document cohesion workflows; Replaced detailed sections with concise summaries + references; Context budget optimization: ~45,000 tokens → ~23,000 tokens (~50% reduction) |
 | 1.15 | 2025-11-09 | Automated Template Enforcement (Phase 0.7c) - Created validate_code_quality.py (314 lines) and validate_security_patterns.py (413 lines); Updated pre-commit hooks (2 new hooks: code-review-basics, decimal-precision-check); Updated pre-push hooks (added steps 6/7 and 7/7 for template enforcement); Defense in Depth architecture: pre-commit (~2-5s) → pre-push (~60-90s) → CI/CD (~2-5min); Total addition: ~750 lines of automated enforcement infrastructure |
 | 1.14 | 2025-11-09 | Created CODE_REVIEW_TEMPLATE_V1.0.md (484 lines, 7-category universal checklist), INFRASTRUCTURE_REVIEW_TEMPLATE_V1.0.md (600 lines, 7-category DevOps review), enhanced SECURITY_REVIEW_CHECKLIST.md V1.0→V1.1 (600 lines, added 4 sections); all templates reference DEVELOPMENT_PHILOSOPHY_V1.1.md with specific section callouts; added Code Review & Quality Assurance section to Critical References; consolidates scattered guidance into standardized review infrastructure |
