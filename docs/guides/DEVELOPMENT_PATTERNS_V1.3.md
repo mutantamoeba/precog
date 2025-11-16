@@ -1,13 +1,21 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.2
+**Version:** 1.3
 **Created:** 2025-11-13
-**Last Updated:** 2025-11-14
+**Last Updated:** 2025-11-15
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.3:**
+- **Added Pattern 12: Test Fixture Security Compliance (MANDATORY)**
+- Documents project-relative test fixture pattern for security-validated functions
+- Provides real-world example from PR #79 (test fixture fixes for path traversal protection)
+- Includes Generator pattern with yield/finally, UUID for unique filenames, cleanup strategy
+- Covers when to use project-relative vs tmp_path fixtures
+- Impact: 9/25 tests failing → 25/25 passing, coverage 68.32% → 89.11% (+20.79pp)
+- Cross-references: PR #79, PR #76 (CWE-22 path traversal protection), DEVELOPMENT_PHILOSOPHY Security-First Testing
 **Changes in V1.2:**
 - **Enhanced Pattern 5: Cross-Platform Compatibility**
 - Added comprehensive Unicode symbol mapping table (14 symbols documented)
@@ -43,8 +51,9 @@
 10. [Pattern 9: Multi-Source Warning Governance (MANDATORY)](#pattern-9-multi-source-warning-governance-mandatory)
 11. [Pattern 10: Property-Based Testing with Hypothesis (ALWAYS for Trading Logic)](#pattern-10-property-based-testing-with-hypothesis-always-for-trading-logic)
 12. [Pattern 11: Test Mocking Patterns (Mock API Boundaries, Not Implementation)](#pattern-11-test-mocking-patterns-mock-api-boundaries-not-implementation)
-13. [Pattern Quick Reference](#pattern-quick-reference)
-14. [Related Documentation](#related-documentation)
+13. [Pattern 12: Test Fixture Security Compliance (MANDATORY)](#pattern-12-test-fixture-security-compliance-mandatory)
+14. [Pattern Quick Reference](#pattern-quick-reference)
+15. [Related Documentation](#related-documentation)
 
 ---
 
@@ -1454,6 +1463,167 @@ Q: Should I mock this method?
 
 ---
 
+## Pattern 12: Test Fixture Security Compliance (MANDATORY)
+
+**When to Use:** When writing test fixtures for functions that include security validations (path traversal protection, file extension validation, etc.)
+
+**The Problem:**
+When production code adds security validations, existing test fixtures using `tmp_path` (system temp) can break because they create files outside the project directory.
+
+**Example from PR #79:**
+- PR #76 added path traversal protection to `apply_schema()` and `apply_migrations()`
+- Security validation rejects files outside project: `is_relative_to(project_root)`
+- Tests using `tmp_path` failed: files created in `C:\Users\...\AppData\Local\Temp\...`
+- Error: `'Security: Schema file must be within project directory'`
+
+### ✅ CORRECT Pattern: Project-Relative Test Files
+
+```python
+import uuid
+from collections.abc import Generator
+from pathlib import Path
+
+import pytest
+
+
+@pytest.fixture
+def temp_schema_file() -> Generator[str, None, None]:
+    """Create temporary schema file within project for testing.
+
+    Returns:
+        Path to temporary schema file (project-relative for security validation)
+
+    Educational Note:
+        We create temp files WITHIN the project directory to pass security
+        validation that prevents path traversal attacks. The file is cleaned
+        up after the test via yield/finally pattern.
+    """
+    # Create project-relative temp directory
+    project_root = Path.cwd()
+    temp_dir = project_root / "tests" / ".tmp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create unique schema file
+    unique_id = uuid.uuid4().hex[:8]
+    schema_file = temp_dir / f"test_schema_{unique_id}.sql"
+    schema_file.write_text("CREATE TABLE test_table (id SERIAL PRIMARY KEY);")
+
+    try:
+        yield str(schema_file)
+    finally:
+        # Cleanup
+        if schema_file.exists():
+            schema_file.unlink()
+        # Clean up temp_dir if empty
+        try:
+            temp_dir.rmdir()
+        except OSError:
+            pass  # Directory not empty or doesn't exist
+```
+
+### ❌ WRONG Pattern: Using tmp_path with Security-Validated Functions
+
+```python
+@pytest.fixture
+def temp_schema_file(tmp_path: Path) -> str:
+    """Creates file in system temp - FAILS security validation!"""
+    schema_file = tmp_path / "test_schema.sql"  # Outside project!
+    schema_file.write_text("CREATE TABLE test_table (id SERIAL PRIMARY KEY);")
+    return str(schema_file)
+    # Security validation fails: file not within project directory
+```
+
+### Key Implementation Details
+
+**1. Use Generator Pattern with yield/finally**
+- Type: `Generator[str, None, None]` (not `str`)
+- `yield` provides fixture value to test
+- `finally` ensures cleanup even if test fails
+
+**2. UUID for Unique Filenames**
+- `uuid.uuid4().hex[:8]` creates short unique IDs
+- Prevents file collisions when tests run in parallel
+- Example: `test_schema_a3f2b8c1.sql`
+
+**3. Project-Relative Paths**
+- Use `Path.cwd()` to get project root
+- Create files in `tests/.tmp/` subdirectory
+- Passes `is_relative_to(project_root)` security check
+
+**4. Cleanup Strategy**
+- Delete created files in `finally` block
+- Try to remove temp_dir (may fail if other tests using it - that's OK)
+- Graceful handling with `try/except OSError`
+
+### When to Use This Pattern
+
+**✅ Use project-relative fixtures when:**
+- Function validates file paths (path traversal protection)
+- Function checks file extensions (.sql, .yaml, etc.)
+- Function uses `Path.resolve()` and `is_relative_to()`
+- Function executes external commands with file paths (subprocess)
+
+**❌ Use tmp_path when:**
+- Testing file I/O operations (read/write/parse)
+- No security validations on file location
+- Function doesn't care where file is located
+- Testing path manipulation itself
+
+### Real-World Impact (PR #79)
+
+**Before (using tmp_path):**
+- 9/25 tests failing
+- Coverage: 68.32%
+- Error: "Security: Schema file must be within project directory"
+
+**After (using project-relative):**
+- 25/25 tests passing
+- Coverage: 89.11% (+20.79pp)
+- Security validation works correctly
+
+### Common Mistakes
+
+**Mistake 1: Forgetting to import Generator**
+```python
+# ❌ WRONG
+def temp_schema_file() -> str:  # Missing Generator type
+
+# ✅ CORRECT
+from collections.abc import Generator
+
+def temp_schema_file() -> Generator[str, None, None]:
+```
+
+**Mistake 2: Not using uuid (file collisions)**
+```python
+# ❌ WRONG (parallel tests collide)
+schema_file = temp_dir / "test_schema.sql"
+
+# ✅ CORRECT (unique per test)
+unique_id = uuid.uuid4().hex[:8]
+schema_file = temp_dir / f"test_schema_{unique_id}.sql"
+```
+
+**Mistake 3: Cleanup without error handling**
+```python
+# ❌ WRONG (fails if directory not empty)
+temp_dir.rmdir()
+
+# ✅ CORRECT (graceful handling)
+try:
+    temp_dir.rmdir()
+except OSError:
+    pass  # Directory not empty or doesn't exist
+```
+
+### Cross-References
+- **PR #79:** Test initialization fixture fixes for security validation compatibility
+- **PR #76:** Added path traversal protection (CWE-22) to `apply_schema()` and `apply_migrations()`
+- **DEVELOPMENT_PHILOSOPHY_V1.2.md:** Security-First Testing principle
+- **Pattern 4:** Security (NO CREDENTIALS IN CODE) - Related security best practices
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -1469,6 +1639,7 @@ Q: Should I mock this method?
 | **9. Warning Governance** | Pre-push hook (Step 5/5) | `python scripts/check_warning_debt.py` | ADR-054 |
 | **10. Property Testing** | Pytest (pre-push hook) | `pytest tests/property/ -v` | ADR-074, REQ-TEST-008 |
 | **11. Test Mocking** | Code review | `git grep "return_value\.load" tests/` | PR #19, PR #20 |
+| **12. Test Fixture Security** | Code review | `git grep "tmp_path.*\.sql" tests/` | PR #79, PR #76, CWE-22 |
 
 ---
 
@@ -1504,7 +1675,7 @@ Q: Should I mock this method?
 
 ---
 
-**END OF DEVELOPMENT_PATTERNS_V1.0.md**
+**END OF DEVELOPMENT_PATTERNS_V1.3.md**
 
 ★ Insight ─────────────────────────────────────
 This extraction serves two critical purposes:
@@ -1512,4 +1683,6 @@ This extraction serves two critical purposes:
 2. **Improved Usability:** Patterns are now in a dedicated, searchable reference guide rather than buried in a 3,700-line master document
 
 The preservation of all cross-references (ADRs, REQs, file paths) ensures developers can navigate from patterns to detailed implementation guides without information loss.
+
+V1.3 Update: Added Pattern 12 (Test Fixture Security Compliance) documenting project-relative test fixture pattern from PR #79, ensuring test fixtures comply with path traversal protection (CWE-22) implemented in PR #76.
 ─────────────────────────────────────────────────

@@ -257,9 +257,9 @@ Core architecture, requirements, and system design documents.
 | **ADR_INDEX_V1.10.md** | ✅ | v1.10 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 65 architecture decisions - **UPDATED V1.10** (ADR-046: Branch Protection Strategy added retroactively for Phase 0.7) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.5** |
-| **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |
+| **TESTING_STRATEGY_V2.1.md** | ✅ | v2.1 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.1** - Added Coverage Target Workflow: tier-based targets (Critical ≥90%, Business ≥85%, Infrastructure ≥80%), PR tracking template, acceptable gap criteria, phase completion validation checklist |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
-| **DEVELOPMENT_PHILOSOPHY_V1.1.md** | ✅ | v1.1 | `/docs/foundation/` | 0.7 | All phases | 🔴 Critical | Core development principles: TDD, Defense in Depth, DDD, Data-Driven Design, 10 sections (9 principles + anti-patterns) - **UPDATED V1.1** (added Section 10: Anti-Patterns to Avoid with 7 anti-patterns) |
+| **DEVELOPMENT_PHILOSOPHY_V1.2.md** | ✅ | v1.2 | `/docs/foundation/` | 0.7 | All phases | 🔴 Critical | **UPDATED V1.2** - Added Section 10: Security-First Testing (tests validate security works, not bypassed); renumbered Anti-Patterns → Section 11, Test Coverage Accountability → Section 12; cross-references Pattern 12 and PR #79 |
 
 ---
 
@@ -325,7 +325,7 @@ Test specifications, validation protocols, and quality assurance.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **TESTING_STRATEGY_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.0** - Pytest strategy, 80% coverage, future enhancements (mutation, property-based, CI/CD) |
+| **TESTING_STRATEGY_V2.1.md** | ✅ | v2.1 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.1** - Added Coverage Target Workflow: tier-based targets, PR tracking template, acceptable gap criteria, phase completion validation |
 | **PHASE_1_TEST_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1 | Phase 1 | 🟡 High | **NEW** - Comprehensive test plan for Phase 1 (database, API, CLI) with test cases, fixtures, and success criteria |
 | **HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🟡 High | **NEW** - Property-based testing strategy with Hypothesis framework (3 test suites: Kelly Criterion, Edge Detection, Configuration Validation; 35+ tests implemented) |
 | **MODEL_VALIDATION_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4 ✅ | 🟡 High | Elo vs. research, backtesting benchmarks |
@@ -360,7 +360,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 6-9 | Phases 6-9 | 🔴 Critical | **NEW** - End-to-end analytics architecture: 4-layer design (Collection→Storage→Aggregation→Presentation), dual processing (real-time <200ms + batch), 6 materialized views |
 | **AB_TESTING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 8 | Phase 8 | 🟡 High | **NEW** - Statistical methodology for strategy/model evaluation: Welch's t-test, Chi-square, sample size calculation (64 trades/variant), Bayesian analysis, experiment lifecycle |
 | **DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 9 | Phase 9 | 🟡 High | **NEW** - React 18 + Next.js 14 trading dashboard: component library (MetricCard, PositionCard), Socket.IO real-time (<200ms), SWR data fetching, Plotly.js charts, deployment |
-| **DEVELOPMENT_PATTERNS_V1.2.md** | ✅ | v1.2 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.2** - 11 critical patterns: Decimal precision, dual versioning, trade attribution, security, cross-platform (enhanced with 14 Unicode symbols), TypedDict, educational docstrings, config sync, warning governance, property-based testing, test mocking; comprehensive ✅/❌ examples |
+| **DEVELOPMENT_PATTERNS_V1.3.md** | ✅ | v1.3 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.3** - Added Pattern 12: Test Fixture Security Compliance (project-relative fixtures for security-validated functions); documents Generator pattern, UUID for unique filenames, when to use project-relative vs tmp_path; real-world example from PR #79 (9/25 failing → 25/25 passing, 68.32% → 89.11% coverage) |
 | **SENTRY_INTEGRATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | Phase 2 | 🟡 High | **NEW** - 3-layer hybrid observability architecture: logger.py (audit trail) + Sentry (real-time) + alerts table (permanent record); implementation guide with code examples, testing procedures, troubleshooting |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
 
