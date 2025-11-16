@@ -1,11 +1,20 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.19
+**Version:** 1.20
 **Created:** 2025-10-28
-**Last Updated:** 2025-11-15
+**Last Updated:** 2025-11-16
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.20:**
+- **Parallel Branch Update Pattern** - Added efficient workflow for merging multiple PRs with branch protection enabled
+- Documents pattern discovered during Phase 1.5 completion work (PRs #79, #80, #81, #82)
+- **Problem Addressed:** "Require up-to-date" branch protection blocks merging after each PR merge, requiring repeated updates
+- **Solution:** Update ALL PR branches in parallel FIRST, wait for CI, THEN merge sequentially
+- **Time Savings:** 10-15 min with 3+ PRs (5-7 min parallel vs 15-20 min sequential)
+- Added to Section 3 "During Development Quick Reference" → "Merging Multiple PRs Efficiently"
+- Explains tradeoffs: Keep rule (recommended), Disable rule (risky), Merge Queue (not available free tier)
+- Total addition: ~40 lines explaining parallel update workflow pattern
 **Changes in V1.19:**
 - **Issue Tracking Protocol** - Added standardized issue closure protocol to "During Development" section
 - **Reconciliation Script** - Created scripts/reconcile_issue_tracking.sh (270 lines) to verify GitHub issues match documentation status
@@ -596,7 +605,39 @@ git branch -vv | grep ahead || echo "All up-to-date"
 **Branch Protection (GitHub):**
 - Direct pushes to `main` blocked (must use PRs)
 - 6 required CI checks must pass before merge
+- **"Require up-to-date" rule enabled:** PRs must be current with main before merging
 - Workflow: feature branch → commit → push → create PR → wait for CI → merge
+
+**Merging Multiple PRs Efficiently:**
+
+When you have multiple PRs ready to merge, use this pattern to save time (avoids repeated sequential updates):
+
+```bash
+# 1. Update ALL PR branches in parallel (BEFORE merging any):
+for branch in test/improve-coverage-initialization docs/phase-workflow-automation-enhancements docs/issue-tracking-protocol; do
+  (git checkout $branch && git fetch origin main && git merge origin/main && git push origin $branch) &
+done
+wait
+
+# 2. Wait for CI checks to complete on ALL branches (~2-3 min)
+# Check status: gh pr checks 79 && gh pr checks 80 && gh pr checks 81
+
+# 3. Merge sequentially (all branches already up-to-date, no further updates needed):
+gh pr merge 79 --squash
+gh pr merge 80 --squash
+gh pr merge 81 --squash
+```
+
+**Why This Pattern Matters:**
+- **"Require up-to-date" rule:** After each merge, main advances → other PRs become out-of-date
+- **Sequential approach:** Update PR #1 → merge → Update PR #2 → merge → Update PR #3 → merge (15-20 min)
+- **Parallel approach:** Update ALL PRs first → merge ALL sequentially (5-7 min)
+- **Time savings:** ~10-15 min with 3+ PRs
+
+**Tradeoffs:**
+- **Keep rule enabled (recommended for production):** Prevents "worked alone, broken together" bugs
+- **Disable rule (faster but riskier):** Allows merging outdated branches, possible integration issues
+- **GitHub Merge Queue (not available on free tier):** Automates this pattern
 
 **Manual Commands (Optional):**
 ```bash
