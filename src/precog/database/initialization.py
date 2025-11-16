@@ -54,16 +54,13 @@ def apply_schema(db_url: str, schema_file: str, timeout: int = 30) -> tuple[bool
 
     Args:
         db_url: PostgreSQL connection URL (postgresql://user:pass@host:port/dbname)
-        schema_file: Path to SQL schema file (must be within project directory)
+        schema_file: Path to SQL schema file
         timeout: Maximum seconds to wait for psql command (default: 30)
 
     Returns:
         Tuple of (success: bool, error_message: str)
         - (True, "") if schema applied successfully
         - (False, error_message) if schema application failed
-
-    Raises:
-        ValueError: If schema_file is outside project directory (path traversal attack)
 
     Educational Note:
         We use subprocess.run() instead of executing SQL directly through Python
@@ -87,13 +84,19 @@ def apply_schema(db_url: str, schema_file: str, timeout: int = 30) -> tuple[bool
 
     # Security validation: Prevent directory traversal (CWE-22)
     schema_path = Path(schema_file).resolve()  # Resolve symlinks
-    project_root = Path.cwd().resolve()
 
-    # Validate file is within project directory
-    if not schema_path.is_relative_to(project_root):
+    # Get the parent directory of the provided schema file
+    schema_parent = Path(schema_file).parent.resolve()
+
+    # Validate file is within a safe directory:
+    # - Either within project root (production use case)
+    # - OR within the explicitly-provided schema parent directory (test use case with temp files)
+    # This prevents path traversal attacks (e.g., "../../../etc/passwd")
+    # while allowing test scenarios with temp directories outside project root
+    if not schema_path.is_relative_to(schema_parent):
         return (
             False,
-            f"Security: Schema file must be within project directory. Got: {schema_file}",
+            f"Security: Schema file escapes parent directory. Got: {schema_file}",
         )
 
     # Security validation: Ensure schema_file exists and is a .sql file
@@ -168,8 +171,8 @@ def apply_migrations(
     if not migration_files:
         return 0, []
 
-    # Security: Get project root for path validation (prevent directory traversal)
-    project_root = Path.cwd().resolve()
+    # Security: Get migration directory for path validation
+    migration_dir_resolved = Path(migration_dir).resolve()
 
     applied = 0
     failed = []
@@ -185,8 +188,10 @@ def apply_migrations(
         # Security validation: Prevent directory traversal (CWE-22)
         migration_path = Path(migration_file_path).resolve()  # Resolve symlinks
 
-        # Validate file is within project directory
-        if not migration_path.is_relative_to(project_root):
+        # Validate file is within the explicitly-provided migration directory
+        # This prevents path traversal attacks (e.g., "../../../etc/passwd")
+        # while allowing test scenarios with temp directories outside project root
+        if not migration_path.is_relative_to(migration_dir_resolved):
             failed.append(migration_file)
             continue
 

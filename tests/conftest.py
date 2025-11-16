@@ -68,7 +68,10 @@ def clean_test_data(db_cursor):
     db_cursor.execute("DELETE FROM markets WHERE market_id LIKE 'MKT-TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
-    db_cursor.execute("DELETE FROM platforms WHERE platform_id LIKE 'test_%'")
+    # Delete both uppercase TEST-PLATFORM- and lowercase test_ platforms
+    db_cursor.execute(
+        "DELETE FROM platforms WHERE platform_id LIKE 'test_%' OR platform_id LIKE 'TEST-PLATFORM-%'"
+    )
 
     # Create test platform if not exists
     db_cursor.execute("""
