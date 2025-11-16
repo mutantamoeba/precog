@@ -1,9 +1,13 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.23
+**Version:** 2.24
 **Last Updated:** 2025-11-16
 **Status:** ✅ Current
+**Changes in v2.24:**
+- **PHASE 1.5 TEST PLAN DOCUMENTATION**: Added PHASE_1.5_TEST_PLAN_V1.0.md to testing & quality documents section
+- Documents comprehensive test plan for Phase 1.5 deliverables (Strategy Manager, Model Manager, Position Manager enhancements)
+- Includes test scenarios, success criteria, and coverage targets for versioned configuration managers
 **Changes in v2.23:**
 - **DEVELOPER ONBOARDING DOCUMENTATION**: Comprehensive setup guide for new developers
 - Created DEVELOPER_SETUP_GUIDE_V1.0.md (500+ lines) - Complete developer onboarding (Python 3.12+, PostgreSQL 15+, Git, GitHub CLI, pre-commit hooks); platform-specific instructions (Windows/macOS/Linux); 6-step verification checklist; troubleshooting guide
@@ -258,7 +262,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.15.md** | ✅ | v2.15 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.15** (added REQ-CICD-004: Pre-Commit Hooks, REQ-CICD-005: Pre-Push Hooks retroactively for Phase 0.7 traceability; updated REQ-CICD-003 status to Complete; 111 → 113 total requirements) |
-| **MASTER_INDEX_V2.23.md** | ✅ | v2.23 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.23** (Added DEVELOPER_SETUP_GUIDE_V1.0.md for comprehensive developer onboarding; addresses gh CLI dependency risk from Phase Completion assessment) |
+| **MASTER_INDEX_V2.24.md** | ✅ | v2.24 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.24** (Added PHASE_1.5_TEST_PLAN_V1.0.md to testing & quality documents section) |
 | **ARCHITECTURE_DECISIONS_V2.15.md** | ✅ | v2.15 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (86 total) - **UPDATED V2.15** (ADR-046: Branch Protection Strategy added retroactively for Phase 0.7 traceability; ADR-055: Sentry Production Error Tracking) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.7 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 113 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.7** (added REQ-CICD-004: Pre-Commit Hooks, REQ-CICD-005: Pre-Push Hooks; updated REQ-CICD-003 status to Complete) |
 | **ADR_INDEX_V1.10.md** | ✅ | v1.10 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 65 architecture decisions - **UPDATED V1.10** (ADR-046: Branch Protection Strategy added retroactively for Phase 0.7) |
@@ -334,6 +338,7 @@ Test specifications, validation protocols, and quality assurance.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **TESTING_STRATEGY_V2.1.md** | ✅ | v2.1 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.1** - Added Coverage Target Workflow: tier-based targets, PR tracking template, acceptable gap criteria, phase completion validation |
 | **PHASE_1_TEST_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1 | Phase 1 | 🟡 High | **NEW** - Comprehensive test plan for Phase 1 (database, API, CLI) with test cases, fixtures, and success criteria |
+| **PHASE_1.5_TEST_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🟡 High | **NEW** - Test plan for Phase 1.5 (Strategy Manager, Model Manager, Position Manager enhancements) with comprehensive test scenarios and success criteria |
 | **HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🟡 High | **NEW** - Property-based testing strategy with Hypothesis framework (3 test suites: Kelly Criterion, Edge Detection, Configuration Validation; 35+ tests implemented) |
 | **MODEL_VALIDATION_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4 ✅ | 🟡 High | Elo vs. research, backtesting benchmarks |
 | **BACKTESTING_PROTOCOL_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4-5 ✅ | 🟡 High | Walk-forward validation, train/test splits |
