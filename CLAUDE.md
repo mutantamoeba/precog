@@ -1,11 +1,18 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.18
+**Version:** 1.19
 **Created:** 2025-10-28
 **Last Updated:** 2025-11-15
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.19:**
+- **Issue Tracking Protocol** - Added standardized issue closure protocol to "During Development" section
+- **Reconciliation Script** - Created scripts/reconcile_issue_tracking.sh (270 lines) to verify GitHub issues match documentation status
+- **Three-Method Approach**: Closing via PR (preferred, auto-closes issue), manual closure (with comment), reconciliation check (phase completion)
+- **Dual-Tracking Consistency**: Prevents "I thought we completed that" confusion by maintaining GitHub + documentation synchronization
+- **Audit Trail**: Clear tracking of which PR/commit closed each issue
+- Total addition: ~320 lines (script: 270, CLAUDE.md: 50)
 **Changes in V1.18:**
 - **CLAUDE.md Size Reduction - Section 3 (80%)** - Reduced Section 3 from ~700 lines to ~140 lines (~560 line reduction)
 - **Extracted SESSION_WORKFLOW_GUIDE_V1.0.md** - All detailed session workflows moved to comprehensive guide
@@ -602,6 +609,58 @@ python -m pytest tests/ --cov=. --cov-report=term-missing
 # Security scan
 git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.py' '*.yaml' '*.sql'
 ```
+
+**Issue Tracking Protocol:**
+
+When closing GitHub issues, follow this standardized protocol to maintain tracking consistency:
+
+**1. Closing via PR (Preferred Method):**
+```bash
+# In PR description, include one of these keywords:
+# - "Closes #123"
+# - "Fixes #123"
+# - "Resolves #123"
+
+# Example PR description:
+gh pr create --title "Add retry logic to API client" --body "
+Implements exponential backoff with configurable max retries.
+
+Closes #37
+
+**Testing:**
+- Added 5 new tests for retry scenarios
+- All 25 API client tests passing
+"
+```
+
+When PR merges, GitHub automatically:
+- Closes the linked issue
+- Adds comment linking issue → PR
+- **You must also:** Update documentation status in the PR (e.g., mark issue as Complete in PHASE_X_DEFERRED_TASKS)
+
+**2. Closing Manually (When No PR):**
+```bash
+# Close with explanatory comment
+gh issue close 42 --comment "Completed in commit abc1234. Updated database schema to include retry_count field."
+
+# Then update documentation
+# Example: Mark DEF-P1-008 as Complete in docs/utility/PHASE_1_PR_REVIEW_DEFERRED_TASKS_V1.0.md
+```
+
+**3. Reconciliation Check (Phase Completion):**
+```bash
+# Run at end of phase to verify synchronization
+bash scripts/reconcile_issue_tracking.sh
+
+# Outputs:
+# - Issues closed in GitHub but marked "Open" in docs → Update docs
+# - Issues open in GitHub but marked "Complete" in docs → Close issue or revert docs
+```
+
+**Why This Matters:**
+- Prevents "I thought we completed that" confusion
+- Maintains dual-tracking consistency (GitHub + documentation)
+- Provides clear audit trail (which PR/commit closed each issue)
 
 ### Quick Session End (10 minutes)
 
@@ -1643,6 +1702,8 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.19 | 2025-11-15 | **Issue Tracking Protocol** - Added standardized issue closure protocol to "During Development" section; Created scripts/reconcile_issue_tracking.sh (270 lines) to verify GitHub issues match documentation status; Three-method approach (PR auto-close, manual closure, reconciliation check); Prevents "I thought we completed that" confusion; Maintains dual-tracking consistency (GitHub + documentation); Total addition: ~320 lines |
+| 1.18 | 2025-11-15 | **CLAUDE.md Size Reduction - Section 3 (80%)** - Reduced Section 3 from ~700 lines to ~140 lines; Extracted SESSION_WORKFLOW_GUIDE_V1.0.md; Added "When to Read the Complete Guide" section; Context budget optimization: ~7,000 tokens freed |
 | 1.17 | 2025-11-15 | **Multi-Session Coordination** - Added comprehensive 7-step protocol for running multiple Claude Code sessions simultaneously (~150 lines); Session-specific branch naming (feature/X-sessionA); Foundation document coordination (one session at a time); Prevention strategies (git stash vs git reset --hard); Conflict resolution for version collisions; Communication via draft PRs; Real-world example from 2025-11-15 multi-session work |
 | 1.16 | 2025-11-13 | **CLAUDE.md Size Reduction (48.7%)** - Reduced from 3,723 lines to 1,909 lines (~1,814 line reduction); Created DEVELOPMENT_PATTERNS_V1.2.md (1,200+ lines) extracting all 10 critical patterns; Created DOCUMENTATION_WORKFLOW_GUIDE_V1.0.md (850+ lines) extracting document cohesion workflows; Replaced detailed sections with concise summaries + references; Context budget optimization: ~45,000 tokens → ~23,000 tokens (~50% reduction) |
 | 1.15 | 2025-11-09 | Automated Template Enforcement (Phase 0.7c) - Created validate_code_quality.py (314 lines) and validate_security_patterns.py (413 lines); Updated pre-commit hooks (2 new hooks: code-review-basics, decimal-precision-check); Updated pre-push hooks (added steps 6/7 and 7/7 for template enforcement); Defense in Depth architecture: pre-commit (~2-5s) → pre-push (~60-90s) → CI/CD (~2-5min); Total addition: ~750 lines of automated enforcement infrastructure |
