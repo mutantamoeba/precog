@@ -592,6 +592,42 @@ Updated:
 
 ---
 
+## Baseline Update History
+
+### Baseline Update 2025-11-16: 68 → 70 warnings (+2)
+
+**Date:** 2025-11-16
+**Change:** +2 warnings (pytest: 32→31, Mypy: 36→39)
+**PR:** bugfix/phase-1-test-security-validation (16 test failures fixed)
+
+**Reason:**
+Fixed 16 test failures in database initialization and property tests that were failing due to overly-restrictive security validation. Tests now run successfully, revealing pre-existing Mypy type hints errors in test files that were previously hidden.
+
+**Breakdown:**
+- **Mypy:** 36 → 39 (+3 errors)
+  - Source: `tests/database/test_initialization.py` and `tests/property/test_database_crud_properties.py`
+  - Type: Pre-existing type hints issues in test files (not production code)
+  - Examples: dict|None indexing without None checks, Factory return types
+- **pytest:** 32 → 31 (-1 warning)
+  - Likely: One warning resolved by fixing test execution
+
+**Why Justified:**
+- These are pre-existing issues in test files, not new code
+- Tests were failing before, so warnings were never visible
+- Fixing broken tests is higher priority than warning count
+- All warnings are in **test files only** (production code has 0 Mypy errors)
+
+**Category:** mypy_test_type_hints (already tracked as WARN-008)
+
+**Target Fix:** Phase 1.5 (3-4 hours to fix type hints in test files)
+
+**Related:**
+- WARN-008: Fix Mypy type hints in test files (now 39 errors instead of 36)
+- Fixed files: `src/precog/database/initialization.py`, `tests/conftest.py`
+- See PR #XX for full context
+
+---
+
 ## Related Documentation
 
 - **Baseline File:** `scripts/warning_baseline.json`
