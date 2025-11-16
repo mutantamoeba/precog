@@ -1,9 +1,16 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.22
-**Last Updated:** 2025-11-15
+**Version:** 2.23
+**Last Updated:** 2025-11-16
 **Status:** ✅ Current
+**Changes in v2.23:**
+- **DEVELOPER ONBOARDING DOCUMENTATION**: Comprehensive setup guide for new developers
+- Created DEVELOPER_SETUP_GUIDE_V1.0.md (500+ lines) - Complete developer onboarding (Python 3.12+, PostgreSQL 15+, Git, GitHub CLI, pre-commit hooks); platform-specific instructions (Windows/macOS/Linux); 6-step verification checklist; troubleshooting guide
+- Updated scripts/reconcile_issue_tracking.sh - Added comprehensive dependency documentation (lines 27-39) for GitHub CLI requirement (installation, authentication, verification)
+- Addresses gh CLI dependency risk identified in Phase Completion assessment Step 6
+- **Context:** Issue tracking protocol (PR #81) requires GitHub CLI but lacked dependency documentation; no centralized developer setup guide existed
+- **Impact:** Improved developer onboarding experience, documented gh CLI dependency risk, provided troubleshooting for common setup issues
 **Changes in v2.22:**
 - **CLAUDE.md SIZE REDUCTION (80%) + PR REVIEW DEFERRED TASK TRACKING**: Section 3 extraction + dual-tracking system for 45 deferred tasks from Phase 1 PR analysis
 - Created SESSION_WORKFLOW_GUIDE_V1.0.md (extracted from CLAUDE.md V1.17 Section 3) - comprehensive session workflows including phase start protocol, recovery patterns, multi-session coordination
@@ -251,7 +258,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.15.md** | ✅ | v2.15 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.15** (added REQ-CICD-004: Pre-Commit Hooks, REQ-CICD-005: Pre-Push Hooks retroactively for Phase 0.7 traceability; updated REQ-CICD-003 status to Complete; 111 → 113 total requirements) |
-| **MASTER_INDEX_V2.22.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.22** (CLAUDE.md V1.17 → V1.18: Section 3 extraction to SESSION_WORKFLOW_GUIDE, 80% reduction; added PHASE_1_PR_REVIEW_DEFERRED_TASKS tracking 45 items from PRs #2-#21 with GitHub issues #29-#73) |
+| **MASTER_INDEX_V2.23.md** | ✅ | v2.23 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.23** (Added DEVELOPER_SETUP_GUIDE_V1.0.md for comprehensive developer onboarding; addresses gh CLI dependency risk from Phase Completion assessment) |
 | **ARCHITECTURE_DECISIONS_V2.15.md** | ✅ | v2.15 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (86 total) - **UPDATED V2.15** (ADR-046: Branch Protection Strategy added retroactively for Phase 0.7 traceability; ADR-055: Sentry Production Error Tracking) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.7 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 113 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.7** (added REQ-CICD-004: Pre-Commit Hooks, REQ-CICD-005: Pre-Push Hooks; updated REQ-CICD-003 status to Complete) |
 | **ADR_INDEX_V1.10.md** | ✅ | v1.10 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 65 architecture decisions - **UPDATED V1.10** (ADR-046: Branch Protection Strategy added retroactively for Phase 0.7) |
@@ -363,6 +370,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **DEVELOPMENT_PATTERNS_V1.3.md** | ✅ | v1.3 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.3** - Added Pattern 12: Test Fixture Security Compliance (project-relative fixtures for security-validated functions); documents Generator pattern, UUID for unique filenames, when to use project-relative vs tmp_path; real-world example from PR #79 (9/25 failing → 25/25 passing, 68.32% → 89.11% coverage) |
 | **SENTRY_INTEGRATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | Phase 2 | 🟡 High | **NEW** - 3-layer hybrid observability architecture: logger.py (audit trail) + Sentry (real-time) + alerts table (permanent record); implementation guide with code examples, testing procedures, troubleshooting |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
+| **DEVELOPER_SETUP_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1 | Phase 1.5 | 🟡 High | **NEW** - Comprehensive developer onboarding guide (Python 3.12+, PostgreSQL 15+, Git, GitHub CLI, pre-commit hooks); platform-specific instructions (Windows/macOS/Linux); addresses gh CLI dependency risk from Phase Completion assessment |
 
 ---
 
