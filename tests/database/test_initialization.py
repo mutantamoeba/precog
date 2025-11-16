@@ -424,8 +424,8 @@ class TestValidateCriticalTables:
         """Test validation succeeds when all critical tables exist.
 
         Educational Note:
-            We mock fetch_all() at database.connection (where it's defined)
-            not database.initialization (where it's imported). This is because
+            We mock fetch_all() at precog.database.connection (where it's defined)
+            not precog.database.initialization (where it's imported). This is because
             the import happens inside the function, so we need to mock at the
             source location. Pattern 11 - mock at the right boundary.
         """
