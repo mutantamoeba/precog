@@ -8,23 +8,30 @@ Critical tests:
 - Transaction rollback on error
 """
 
+import json
 from decimal import Decimal
 
 import pytest
 
 from precog.database import (
     close_position,
+    create_account_balance,
     create_market,
     create_position,
+    create_settlement,
+    create_strategy,
     create_trade,
     get_current_market,
     get_current_positions,
     get_market_history,
     get_recent_trades,
+    get_strategy_by_name_and_version,
     get_trades_by_market,
+    update_account_balance_with_versioning,
     update_market_with_versioning,
     update_position_price,
 )
+from precog.database.crud_operations import DecimalEncoder
 
 # =============================================================================
 # MARKET CRUD TESTS
@@ -381,3 +388,300 @@ def test_close_nonexistent_position_raises_error(db_pool, clean_test_data):
             exit_reason="test",
             realized_pnl=Decimal("0.00"),
         )
+
+
+# =============================================================================
+# ACCOUNT BALANCE TESTS
+# =============================================================================
+
+
+@pytest.mark.integration
+def test_create_account_balance_with_decimal(db_pool, clean_test_data):
+    """Test creating account balance with Decimal precision.
+
+    Coverage: Lines 1128-1144 (create_account_balance function)
+    """
+    from precog.database.connection import get_cursor
+
+    # Setup: Create platform
+    with get_cursor(commit=True) as cur:
+        cur.execute(
+            """
+            INSERT INTO platforms (platform_id, platform_type, display_name, base_url, status)
+            VALUES ('test-platform', 'trading', 'Test Platform', 'https://test.example.com', 'active')
+            ON CONFLICT (platform_id) DO NOTHING
+        """
+        )
+
+    # Test: Create account balance
+    balance_id = create_account_balance(
+        platform_id="test-platform", balance=Decimal("1234.5678"), currency="USD"
+    )
+
+    assert balance_id is not None
+    assert isinstance(balance_id, int)
+
+    # Verify: Check balance was created correctly
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT * FROM account_balance WHERE balance_id = %s AND row_current_ind = TRUE",
+            (balance_id,),
+        )
+        result = cur.fetchone()
+        assert result is not None
+        assert result["platform_id"] == "test-platform"
+        assert result["balance"] == Decimal("1234.5678")
+        assert result["currency"] == "USD"
+
+
+@pytest.mark.integration
+def test_create_account_balance_rejects_float(db_pool, clean_test_data):
+    """Test that create_account_balance rejects float values.
+
+    Coverage: Line 1129 (type validation)
+    """
+    from precog.database.connection import get_cursor
+
+    # Setup: Create platform
+    with get_cursor(commit=True) as cur:
+        cur.execute(
+            """
+            INSERT INTO platforms (platform_id, platform_type, display_name, base_url, status)
+            VALUES ('test-platform2', 'trading', 'Test Platform 2', 'https://test.example.com', 'active')
+            ON CONFLICT (platform_id) DO NOTHING
+        """
+        )
+
+    # Test: Create account balance with float (should raise ValueError)
+    with pytest.raises(ValueError, match="Balance must be Decimal"):
+        create_account_balance(
+            platform_id="test-platform2",
+            balance=1234.5678,
+            currency="USD",  # type: ignore[arg-type]  # Float not Decimal
+        )
+
+
+@pytest.mark.integration
+def test_update_account_balance_rejects_float(db_pool, clean_test_data):
+    """Test that update_account_balance_with_versioning rejects float values.
+
+    Coverage: Line 1214 (type validation)
+    """
+    from precog.database.connection import get_cursor
+
+    # Setup: Create platform
+    with get_cursor(commit=True) as cur:
+        cur.execute(
+            """
+            INSERT INTO platforms (platform_id, platform_type, display_name, base_url, status)
+            VALUES ('test-platform3', 'trading', 'Test Platform 3', 'https://test.example.com', 'active')
+            ON CONFLICT (platform_id) DO NOTHING
+        """
+        )
+
+    # Test: Update with float (should raise ValueError)
+    with pytest.raises(ValueError, match="Balance must be Decimal"):
+        update_account_balance_with_versioning(
+            platform_id="test-platform3",
+            new_balance=5678.1234,  # type: ignore[arg-type]  # Float not Decimal
+        )
+
+
+# =============================================================================
+# STRATEGY TESTS
+# =============================================================================
+
+
+@pytest.mark.integration
+def test_get_strategy_by_name_and_version(db_pool, clean_test_data):
+    """Test retrieving strategy by name and version.
+
+    Coverage: Lines 1474-1487 (get_strategy_by_name_and_version function)
+    """
+    import uuid
+
+    # Use unique strategy name to avoid collisions across test runs
+    unique_name = f"test_strategy_{uuid.uuid4().hex[:8]}"
+
+    # Setup: Create a strategy
+    strategy_id = create_strategy(
+        strategy_name=unique_name,
+        strategy_version="v1.0",
+        category="sports",
+        config={"kelly_fraction": Decimal("0.25"), "min_edge": Decimal("0.05")},
+    )
+
+    # Test: Retrieve strategy by name and version
+    strategy = get_strategy_by_name_and_version(unique_name, "v1.0")
+
+    assert strategy is not None
+    assert strategy["strategy_id"] == strategy_id
+    assert strategy["strategy_name"] == unique_name
+    assert strategy["strategy_version"] == "v1.0"
+
+    # Verify Decimal values restored from config
+    assert isinstance(strategy["config"]["kelly_fraction"], Decimal)
+    assert strategy["config"]["kelly_fraction"] == Decimal("0.25")
+    assert isinstance(strategy["config"]["min_edge"], Decimal)
+    assert strategy["config"]["min_edge"] == Decimal("0.05")
+
+
+@pytest.mark.integration
+def test_get_strategy_by_name_and_version_not_found(db_pool, clean_test_data):
+    """Test retrieving non-existent strategy returns None."""
+    strategy = get_strategy_by_name_and_version("nonexistent_strategy", "v1.0")
+    assert strategy is None
+
+
+# =============================================================================
+# POSITION FILTER TESTS
+# =============================================================================
+
+
+@pytest.mark.integration
+def test_get_current_positions_with_market_id_filter(
+    db_pool, clean_test_data, sample_market_data, sample_position_data
+):
+    """Test get_current_positions with market_id filter.
+
+    Coverage: Lines 760-761 (market_id filter)
+    """
+    # Setup: Create market and positions
+    market_id1 = create_market(**sample_market_data)
+    sample_market_data["ticker"] = "TEST-MARKET2"
+    market_id2 = create_market(**sample_market_data)
+
+    # Create positions for both markets
+    sample_position_data["market_id"] = market_id1
+    position1 = create_position(**sample_position_data)
+
+    sample_position_data["market_id"] = market_id2
+    _position2 = create_position(**sample_position_data)  # Intentionally unused - testing filter
+
+    # Test: Get positions filtered by market_id1
+    positions = get_current_positions(market_id=market_id1)
+
+    # Should only return position1
+    assert len(positions) == 1
+    assert positions[0]["position_id"] == position1
+
+
+# =============================================================================
+# TRADE FILTER TESTS
+# =============================================================================
+
+
+@pytest.mark.integration
+def test_get_recent_trades_with_strategy_filter(
+    db_pool, clean_test_data, sample_market_data, sample_trade_data
+):
+    """Test get_recent_trades with strategy_id filter.
+
+    Coverage: Lines 1058-1059 (strategy_id filter)
+    """
+    import uuid
+
+    # Use unique strategy names to avoid collisions across test runs
+    unique_name1 = f"strategy1_{uuid.uuid4().hex[:8]}"
+    unique_name2 = f"strategy2_{uuid.uuid4().hex[:8]}"
+
+    # Setup: Create market and strategies
+    market_id = create_market(**sample_market_data)
+
+    strategy_id1 = create_strategy(
+        strategy_name=unique_name1,
+        strategy_version="v1.0",
+        category="sports",
+        config={},
+    )
+    strategy_id2 = create_strategy(
+        strategy_name=unique_name2,
+        strategy_version="v1.0",
+        category="sports",
+        config={},
+    )
+
+    # Create trades for both strategies
+    sample_trade_data["market_id"] = market_id
+    sample_trade_data["strategy_id"] = strategy_id1
+    trade1 = create_trade(**sample_trade_data)
+
+    sample_trade_data["strategy_id"] = strategy_id2
+    _trade2 = create_trade(**sample_trade_data)  # Intentionally unused - testing filter
+
+    # Test: Get trades filtered by strategy_id1
+    trades = get_recent_trades(strategy_id=strategy_id1, limit=10)
+
+    # Should only return trade1
+    assert len(trades) == 1
+    assert trades[0]["trade_id"] == trade1
+
+
+# =============================================================================
+# SETTLEMENT TESTS
+# =============================================================================
+
+
+@pytest.mark.integration
+def test_create_settlement_rejects_float(db_pool, clean_test_data, sample_market_data):
+    """Test that create_settlement rejects float values.
+
+    Coverage: Line 1306 (type validation)
+    """
+    # Setup: Create market
+    market_id = create_market(**sample_market_data)
+
+    # Test: Create settlement with float (should raise ValueError)
+    with pytest.raises(ValueError, match="Payout must be Decimal"):
+        create_settlement(
+            market_id=market_id,
+            platform_id="kalshi",
+            outcome="YES",
+            payout=123.45,  # type: ignore[arg-type]  # Float not Decimal
+        )
+
+
+# =============================================================================
+# POSITION UPDATE ERROR TESTS
+# =============================================================================
+
+
+@pytest.mark.integration
+def test_update_position_price_position_not_found(db_pool, clean_test_data):
+    """Test updating non-existent position raises ValueError.
+
+    Coverage: Lines 796-797 (error case)
+    """
+    with pytest.raises(ValueError, match="Position not found"):
+        update_position_price(
+            position_id=999999,  # Doesn't exist
+            current_price=Decimal("0.5000"),
+        )
+
+
+# =============================================================================
+# DECIMAL ENCODER TESTS
+# =============================================================================
+
+
+@pytest.mark.unit
+def test_decimal_encoder_handles_decimal():
+    """Test DecimalEncoder serializes Decimal to string."""
+    data = {"price": Decimal("0.4975"), "amount": Decimal("100.00")}
+    json_str = json.dumps(data, cls=DecimalEncoder)
+    assert json_str == '{"price": "0.4975", "amount": "100.00"}'
+
+
+@pytest.mark.unit
+def test_decimal_encoder_fallback_for_non_decimal():
+    """Test DecimalEncoder falls back to default encoder for non-Decimal objects.
+
+    Coverage: Line 300 (super().default() fallback)
+    """
+    data = {"price": Decimal("0.4975"), "count": 42, "active": True}
+    json_str = json.dumps(data, cls=DecimalEncoder)
+    # Should serialize Decimal to string, int/bool normally
+    parsed = json.loads(json_str)
+    assert parsed["price"] == "0.4975"
+    assert parsed["count"] == 42
+    assert parsed["active"] is True
