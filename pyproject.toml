@@ -126,10 +126,16 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 [tool.ruff.lint.per-file-ignores]
 # Allow unused imports in __init__.py
 "__init__.py" = ["F401"]
-# Allow assert statements and unused pytest fixtures in tests
-"tests/**/*.py" = ["S101", "ARG002"]
+
+# Test-specific ignores (patterns acceptable in tests but not production code)
+"tests/**/*.py" = [
+    "S101",   # assert statements (pytest uses assert, not production-safe)
+    "ARG002", # Unused method arguments (pytest fixtures auto-injected by name)
+]
+
 # Allow print statements in scripts
 "scripts/**/*.py" = ["T201"]
+
 # Allow regex patterns in security validation script (not actual hardcoded passwords)
 "scripts/validate_security_patterns.py" = ["S105"]
 

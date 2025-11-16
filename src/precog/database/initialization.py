@@ -62,14 +62,29 @@ def apply_schema(db_url: str, schema_file: str, timeout: int = 30) -> tuple[bool
         - (True, "") if schema applied successfully
         - (False, error_message) if schema application failed
 
-    Educational Note:
-        We use subprocess.run() instead of executing SQL directly through Python
-        because psql has better handling of complex SQL scripts (comments,
-        multi-statement transactions, etc.). The downside is we need psql installed.
+    Trade-offs:
+        **subprocess.run() chosen over SQLAlchemy/psycopg2 for schema application**
 
-        Security: We validate db_url format, sanitize schema_file path to prevent
-        directory traversal (CWE-22), and validate file existence before passing
-        to subprocess to prevent command injection attacks.
+        Pros:
+            - Supports full PostgreSQL DDL (CREATE TABLE IF NOT EXISTS, ALTER TABLE, etc.)
+            - Handles migrations natively (idempotent CREATE statements)
+            - Better error messages (psql's native output)
+            - Handles complex SQL scripts (comments, multi-statement transactions)
+
+        Cons:
+            - Requires psql installed (external dependency)
+            - Harder to mock in tests (subprocess vs Python function)
+            - Platform-specific behavior (PATH resolution on Windows/Linux)
+
+        Rationale:
+            - Schema is applied once at setup/migration time (not performance-critical)
+            - psql's robustness outweighs testability concerns
+            - Production environments already have psql (comes with PostgreSQL server)
+
+        Security:
+            - Validate db_url format (prevent injection)
+            - Sanitize schema_file path to prevent directory traversal (CWE-22)
+            - Validate file existence before passing to subprocess
 
     Example:
         >>> success, error = apply_schema("postgresql://localhost/precog", "schema.sql")

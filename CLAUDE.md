@@ -121,7 +121,7 @@
 - Pull request workflow documented: create feature branch, commit (pre-commit hooks), push (pre-push hooks), create PR, wait for CI, merge when green
 - PR best practices: small focused PRs, descriptive titles, link to requirements, test locally first, watch CI results
 - Repository changed from private to public to enable branch protection via API
-- Completes three-layer local + remote validation: pre-commit (2-5s, auto-fix) → pre-push (30-60s, tests) → CI/CD (2-5min, coverage) → branch protection (enforced merge gate)
+- Completes three-layer local + remote validation: pre-commit (2-5s, checks + partial auto-fix) → pre-push (30-60s, tests) → CI/CD (2-5min, coverage) → branch protection (enforced merge gate)
 **Changes in V1.8:**
 - **Implemented DEF-002: Pre-Push Hooks Setup** - Created .git/hooks/pre-push script with 4 validation steps (quick validation, unit tests, full type checking, security scan)
 - **Added "Pre-Push Hooks" section** - Documents second layer of defense, runs automatically on `git push`, ~30-60 second validation, includes tests (first time tests run in local workflow)
@@ -132,8 +132,9 @@
 - **Implemented DEF-001: Pre-Commit Hooks Setup** - Installed pre-commit framework (v4.0.1) with 12 comprehensive checks
 - **Updated "Before Committing Code" section** - Documents automatic pre-commit hooks workflow, 12 checks (Ruff, Mypy, security, formatting, line endings), auto-fix capabilities, manual testing commands, bypass instructions
 - Pre-commit hooks run automatically on `git commit` with ~2-5 second feedback (vs 2+ minutes for CI)
-- Auto-fixes: formatting, line endings (CRLF→LF), trailing whitespace, end-of-file newlines
-- Blocks commits for: linting errors, type errors, hardcoded credentials, large files, merge conflicts
+- Auto-fixes: line endings (CRLF→LF), trailing whitespace, end-of-file newlines
+- Check-only (no auto-fix): code formatting (Ruff --check), linting, type checking
+- Blocks commits for: formatting issues, linting errors, type errors, hardcoded credentials, large files, merge conflicts
 - Reduces CI failures by 60-70% through early detection
 **Changes in V1.6:**
 - Changed session archiving from `docs/sessions/` (committed) to `_sessions/` (local-only, excluded from git)
@@ -611,9 +612,11 @@ git branch -vv | grep ahead || echo "All up-to-date"
 
 **Pre-commit Hooks (Automatic):**
 - Run on `git commit` automatically (~2-5 seconds)
-- Auto-fix: formatting, line endings, whitespace
-- Block: linting errors, type errors, hardcoded credentials
+- Auto-fix: line endings (CRLF→LF), trailing whitespace, end-of-file newlines
+- Check-only (no auto-fix): code formatting (Ruff), linting, type checking
+- Block: formatting issues, linting errors, type errors, hardcoded credentials
 - 14 checks including Pattern 1 (Decimal precision) enforcement
+- **To fix formatting:** Run `python -m ruff format .` manually before committing
 
 **Pre-push Hooks (Automatic):**
 - Run on `git push` automatically (~30-60 seconds)
@@ -659,6 +662,9 @@ gh pr merge 81 --squash
 
 **Manual Commands (Optional):**
 ```bash
+# Fix code formatting (if pre-commit hook reports formatting issues)
+python -m ruff format .
+
 # Run tests
 python -m pytest tests/ -v
 

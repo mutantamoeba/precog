@@ -60,7 +60,7 @@ from precog.database.crud_operations import (
 
 
 @st.composite
-def strategy_config_dict(draw):
+def strategy_config_dict(draw) -> dict[str, any]:
     """
     Generate strategy configuration dict (IMMUTABLE after creation).
 
@@ -73,6 +73,9 @@ def strategy_config_dict(draw):
     Why custom strategy:
         Strategy configs must be realistic and valid for trading. Random dicts
         could generate invalid configs (negative values, impossible combinations).
+
+    Returns:
+        Dictionary with strategy configuration parameters (mixed types: int, Decimal)
     """
     return {
         "min_lead": draw(st.integers(min_value=1, max_value=20)),
@@ -350,6 +353,11 @@ def test_semantic_versioning_ordering(versions):
         We use packaging.version.Version for correct semver parsing.
 
         Note: v1.0 == v1.0.0 in semantic versioning (equivalent versions).
+
+    Reference:
+        Semantic Versioning Specification: https://semver.org/
+        Valid format: MAJOR.MINOR.PATCH (e.g., 1.2.3)
+        Precedence: MAJOR > MINOR > PATCH (1.0.0 < 2.0.0 < 2.1.0 < 2.1.1)
 
     Example:
         >>> from packaging.version import Version

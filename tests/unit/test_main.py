@@ -2251,6 +2251,11 @@ class TestConfigShow:
             - Exit code 0
             - Config file contents displayed in YAML format
             - All top-level keys shown
+
+        IMPORTANT - Regression Prevention:
+            The config-show command uses ConfigLoader.get() (no file loading),
+            NOT ConfigLoader.load(). Do not mock .load() - it won't be called!
+            Mock .get() to return config dict directly.
         """
         # Mock config data
         mock_config = {
@@ -2287,6 +2292,11 @@ class TestConfigShow:
             - Exit code 0
             - Only requested key value shown
             - Dot-separated path works (e.g., 'kelly_criterion.max_bet_size')
+
+        IMPORTANT - Regression Prevention:
+            The config-show command uses ConfigLoader.get(config_file, key_path),
+            NOT ConfigLoader.load(). Do not mock .load() - it won't be called!
+            Mock .get() to return the specific key value directly.
         """
         # config-show uses .get(config_file, key_path) to retrieve nested value
         # Mock the .get() method to return the nested value directly

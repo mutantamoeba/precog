@@ -84,25 +84,30 @@ class ValidationResult:
 
 
 def find_latest_version(pattern: str) -> Path | None:
-    """Find latest version of a document matching pattern."""
+    """Find latest version of a document matching pattern.
+
+    Supports both V1.0 and V1.0.1 version formats (semantic versioning).
+    """
     matching_files = list(FOUNDATION_DIR.glob(pattern))
     if not matching_files:
         return None
 
-    # Extract version numbers and sort
+    # Extract version numbers and sort (supports patch versions: V1.0.1)
     versioned = []
     for file in matching_files:
-        match = re.search(r"V(\d+)\.(\d+)", file.name)
+        match = re.search(r"V(\d+)\.(\d+)(?:\.(\d+))?", file.name)
         if match:
-            major, minor = int(match.group(1)), int(match.group(2))
-            versioned.append((major, minor, file))
+            major = int(match.group(1))
+            minor = int(match.group(2))
+            patch = int(match.group(3)) if match.group(3) else 0
+            versioned.append((major, minor, patch, file))
 
     if not versioned:
         return matching_files[0]  # Return first if no version found
 
-    # Sort by version (descending)
+    # Sort by version (descending) - Python sorts tuples lexicographically
     versioned.sort(reverse=True)
-    return versioned[0][2]
+    return versioned[0][3]
 
 
 def extract_adr_numbers(content: str) -> set[str]:
@@ -274,7 +279,8 @@ def validate_master_index() -> ValidationResult:
     # Extract document listings (format: | **FILENAME** | [STATUS] | vX.Y | /path/ | ...)
     # Regex accounts for bold markdown markers (**) around filenames
     # Capture both filename and status emoji to skip planned documents (🔵)
-    doc_pattern = r"\|\s+\*\*([A-Z_0-9]+_V\d+\.\d+\.md)\*\*\s+\|\s+(✅|🔵|📦|🚧)"
+    # Supports both V1.0 and V1.0.1 version formats (semantic versioning)
+    doc_pattern = r"\|\s+\*\*([A-Z_0-9]+_V\d+\.\d+(?:\.\d+)?\.md)\*\*\s+\|\s+(✅|🔵|📦|🚧)"
     all_matches = re.findall(doc_pattern, content)
 
     # Only check documents with ✅ status (existing), skip 🔵 (planned), 📦 (archived), 🚧 (draft)
@@ -346,10 +352,11 @@ def validate_cross_references() -> ValidationResult:
 
         # Find references to other markdown files
         # Patterns: "docs/path/FILE.md", "supplementary/FILE.md", "foundation/FILE.md"
+        # Supports both V1.0 and V1.0.1 version formats (semantic versioning)
         ref_patterns = [
-            r"docs/([a-z_/]+/[A-Z_0-9]+(?:_V\d+\.\d+)?\.md)",  # Full path
-            r"([a-z_]+/[A-Z_0-9]+(?:_V\d+\.\d+)?\.md)",  # Relative path
-            r"`([A-Z_0-9]+_V\d+\.\d+\.md)`",  # Inline code reference
+            r"docs/([a-z_/]+/[A-Z_0-9]+(?:_V\d+\.\d+(?:\.\d+)?)?\.md)",  # Full path
+            r"([a-z_]+/[A-Z_0-9]+(?:_V\d+\.\d+(?:\.\d+)?)?\.md)",  # Relative path
+            r"`([A-Z_0-9]+_V\d+\.\d+(?:\.\d+)?\.md)`",  # Inline code reference
         ]
 
         for pattern in ref_patterns:

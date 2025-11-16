@@ -359,6 +359,50 @@ class TestKalshiClientErrorHandling:
         # Should NOT retry (only 1 attempt for 4xx errors)
         assert mock_request.call_count == 1
 
+    @pytest.mark.parametrize(
+        ("status_code", "error_message"),
+        [
+            (401, "401 Unauthorized"),
+            (400, "400 Bad Request"),
+            (403, "403 Forbidden"),
+            (404, "404 Not Found"),
+        ],
+        ids=["401-unauthorized", "400-bad-request", "403-forbidden", "404-not-found"],
+    )
+    def test_client_error_codes_raise_http_error(self, status_code, error_message, monkeypatch):
+        """Test that HTTP client error codes (4xx) raise HTTPError.
+
+        Parametrized test covering multiple error codes with same behavior.
+        For detailed behavior tests (retry logic, headers, etc.), see individual test functions.
+
+        Args:
+            status_code: HTTP status code to test (401, 400, 403, 404)
+            error_message: Expected error message substring
+        """
+        mock_response = Mock()
+        mock_response.status_code = status_code
+        mock_response.json.return_value = {"error": f"Error {status_code}"}
+        mock_response.raise_for_status.side_effect = requests.HTTPError(error_message)
+
+        monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "test-key-id")
+        monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "tests/fixtures/test_private_key.pem")
+
+        with (
+            patch(
+                "precog.api_connectors.kalshi_client.requests.Session.request",
+                return_value=mock_response,
+            ),
+            patch(
+                "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
+                return_value={"Authorization": "Bearer mock"},
+            ),
+        ):
+            client = KalshiClient(environment="demo")
+
+            # Should raise HTTPError with appropriate status code
+            with pytest.raises(requests.HTTPError, match=str(status_code)):
+                client.get_balance()
+
     def test_network_timeout_raises_error(self, monkeypatch):
         """Test network timeout raises Timeout error (no automatic retry)."""
         monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "test-key-id")
@@ -629,11 +673,16 @@ class TestKalshiClientRateLimiting:
             "Rate limit warning" in msg or "tokens remaining" in msg for msg in warning_messages
         ), f"Expected rate limit warning, got: {warning_messages}"
 
+    @pytest.mark.slow
     def test_rate_limiter_refills_tokens_over_time(self, monkeypatch):
         """
         Test that token bucket refills tokens over time.
 
         After consuming tokens, waiting should allow refill and more requests.
+
+        Note: This test uses time.sleep(6.0) and is marked as slow.
+              Run with: pytest -m slow (only slow tests)
+              Skip with: pytest -m "not slow" (fast tests only)
         """
         monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "test-key-id")
         monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "tests/fixtures/test_private_key.pem")
