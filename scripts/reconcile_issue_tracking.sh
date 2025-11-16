@@ -24,6 +24,20 @@
 #   - CLAUDE.md V1.18 - Issue Closure Protocol
 #   - PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md
 #
+# Dependencies:
+#   - GitHub CLI (gh): Required for fetching issue data
+#     Installation:
+#       Windows: winget install GitHub.cli
+#       macOS:   brew install gh
+#       Linux:   See https://cli.github.com/ for distribution-specific instructions
+#     Authentication:
+#       Run 'gh auth login' before first use
+#     Verification:
+#       gh --version (should show: gh version 2.x.x)
+#
+#   Note: Script will exit with error code 1 if gh CLI not installed.
+#         See docs/guides/DEVELOPER_SETUP_GUIDE_V1.0.md for full setup instructions.
+#
 # Example Output:
 #   Issue Tracking Reconciliation Report
 #   =====================================
