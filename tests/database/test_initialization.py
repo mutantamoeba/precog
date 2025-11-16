@@ -1,5 +1,5 @@
 """
-Tests for database/initialization.py module.
+Tests for precog.database.initialization module.
 
 This test suite provides comprehensive coverage for database initialization
 functions including schema validation, schema application, migrations, and
@@ -13,8 +13,8 @@ Educational Note:
 Coverage Target: ≥90% (critical infrastructure module)
 
 Reference:
-    database/initialization.py - Module under test
-    docs/guides/DEVELOPMENT_PATTERNS_V1.0.md - Pattern 11 (Test Mocking Patterns)
+    precog.database.initialization - Module under test
+    docs/guides/DEVELOPMENT_PATTERNS_V1.2.md - Pattern 11 (Test Mocking Patterns)
 """
 
 import os
