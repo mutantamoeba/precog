@@ -8,9 +8,40 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Detect which files changed to optimize CI runs
+  detect-changes:
+    name: Detect Changed Files
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.filter.outputs.code }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check changed files
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            code:
+              - 'src/**'
+              - 'tests/**'
+              - 'requirements.txt'
+              - 'pyproject.toml'
+              - '.github/workflows/**'
+            docs:
+              - 'docs/**'
+              - '**.md'
+              - 'scripts/validate_docs.py'
+              - 'scripts/fix_docs.py'
+
   pre-commit-checks:
     name: Pre-commit Validation (Ruff, Mypy, Security)
     runs-on: ubuntu-latest
+    needs: detect-changes
+    # Run if code changed OR if manually triggered
+    if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -20,6 +51,14 @@ jobs:
         with:
           python-version: '3.14'
           allow-prereleases: true
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
@@ -33,6 +72,9 @@ jobs:
   security-scan:
     name: Security Scanning (Ruff & Safety)
     runs-on: ubuntu-latest
+    needs: detect-changes
+    # Run if code changed OR if manually triggered
+    if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -41,6 +83,14 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: '3.14'
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install security tools
         run: |
@@ -58,6 +108,8 @@ jobs:
   documentation-validation:
     name: Documentation Validation
     runs-on: ubuntu-latest
+    needs: detect-changes
+    # Always run docs validation (fast and important for all changes)
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -78,6 +130,9 @@ jobs:
   test:
     name: Tests (Python ${{ matrix.python-version }} on ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    needs: detect-changes
+    # Only run expensive test suite if code changed
+    if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest]
@@ -93,6 +148,17 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
           allow-prereleases: true
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-${{ matrix.python-version }}-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-${{ matrix.python-version }}-
+            ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
@@ -129,6 +195,9 @@ jobs:
   validate-quick:
     name: Quick Validation Suite
     runs-on: ubuntu-latest
+    needs: detect-changes
+    # Run if code changed OR if manually triggered
+    if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -138,6 +207,14 @@ jobs:
         with:
           python-version: '3.14'
           allow-prereleases: true
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
 
       - name: Install dependencies
         run: |
@@ -156,19 +233,39 @@ jobs:
     steps:
       - name: Check all jobs status
         run: |
-          echo "Pre-commit Checks: ${{ needs.pre-commit-checks.result }}"
-          echo "Security Scan: ${{ needs.security-scan.result }}"
+          echo "=========================================="
+          echo "CI Pipeline Summary"
+          echo "=========================================="
+          echo "Pre-commit Checks:        ${{ needs.pre-commit-checks.result }}"
+          echo "Security Scan:            ${{ needs.security-scan.result }}"
           echo "Documentation Validation: ${{ needs.documentation-validation.result }}"
-          echo "Tests: ${{ needs.test.result }}"
-          echo "Quick Validation: ${{ needs.validate-quick.result }}"
+          echo "Tests:                    ${{ needs.test.result }}"
+          echo "Quick Validation:         ${{ needs.validate-quick.result }}"
+          echo "=========================================="
 
+          # Check if any job that actually ran failed (skipped jobs are OK)
           if [[ "${{ needs.pre-commit-checks.result }}" == "failure" ]] || \
              [[ "${{ needs.security-scan.result }}" == "failure" ]] || \
              [[ "${{ needs.documentation-validation.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
              [[ "${{ needs.validate-quick.result }}" == "failure" ]]; then
-            echo "CI FAILED: One or more checks failed"
+            echo ""
+            echo "❌ CI FAILED: One or more checks failed"
+            echo ""
             exit 1
           fi
 
-          echo "CI PASSED: All checks successful!"
+          # Count how many jobs were skipped (due to path filtering)
+          SKIPPED=0
+          [[ "${{ needs.pre-commit-checks.result }}" == "skipped" ]] && ((SKIPPED++))
+          [[ "${{ needs.security-scan.result }}" == "skipped" ]] && ((SKIPPED++))
+          [[ "${{ needs.test.result }}" == "skipped" ]] && ((SKIPPED++))
+          [[ "${{ needs.validate-quick.result }}" == "skipped" ]] && ((SKIPPED++))
+
+          echo ""
+          if [[ $SKIPPED -gt 0 ]]; then
+            echo "✅ CI PASSED: All required checks successful ($SKIPPED job(s) skipped due to path filtering)"
+          else
+            echo "✅ CI PASSED: All checks successful!"
+          fi
+          echo ""
