@@ -1,11 +1,19 @@
 # Precog Project Context for Claude Code
 
 ---
-**Version:** 1.20
+**Version:** 1.21
 **Created:** 2025-10-28
 **Last Updated:** 2025-11-16
 **Purpose:** Main source of truth for project context, architecture, and development workflow
 **Target Audience:** Claude Code AI assistant in all sessions
+**Changes in V1.21:**
+- **SESSION_HANDOFF.md Workflow Clarity** - Clarified that SESSION_HANDOFF.md is a historical record, not a task planner
+- **Added explicit warnings** in "Quick Session Start" Step 1 and Step 2 to verify current state from git/GitHub
+- **Problem Addressed:** AI assistants incorrectly using old SESSION_HANDOFF.md documents to determine pending tasks
+- **Solution:** Emphasize verifying actual current state (gh issue list, git status) before starting work
+- **Updated "Quick Session End"** Step 1 to clarify SESSION_HANDOFF.md is written at END to document completed work
+- **Real-world trigger:** Multiple instances of completing tasks DEF-P1-001 through DEF-P1-007, then incorrectly listing them as pending again
+- Total changes: ~30 lines of clarifying text + warnings
 **Changes in V1.20:**
 - **Parallel Branch Update Pattern** - Added efficient workflow for merging multiple PRs with branch protection enabled
 - Documents pattern discovered during Phase 1.5 completion work (PRs #79, #80, #81, #82)
@@ -572,17 +580,27 @@ This section provides quick reference for common session tasks. For detailed wor
 
 **Step 1: Read Project Context**
 1. **CLAUDE.md** (this file) - Project overview, patterns, status
-2. **SESSION_HANDOFF.md** - Recent work, immediate priorities
+2. **SESSION_HANDOFF.md** - Recent work context (HISTORICAL RECORD, not a task list)
 
-**Step 2: Git Safety Check**
+⚠️ **CRITICAL:** SESSION_HANDOFF.md shows what was done recently, but tasks listed as "Next Session Priorities" may have been completed after the handoff was written. **Always verify current state from git/GitHub in Step 2** before starting work.
+
+**Step 2: Verify Current State (MANDATORY)**
 ```bash
 # Check branch and status
 git branch --show-current
 git status
 
+# Check open issues (verify what's actually pending)
+gh issue list --state open --label deferred-task
+
+# Check open PRs
+gh pr list --state open
+
 # Check for unpushed work
 git branch -vv | grep ahead || echo "All up-to-date"
 ```
+
+⚠️ **Why:** SESSION_HANDOFF.md may list tasks as "Next Session Priorities" that were already completed. Verify actual current state from GitHub (source of truth) before starting work.
 
 **Step 3: Check Phase Prerequisites**
 - Verify current phase in DEVELOPMENT_PHASES_V1.4.md
@@ -706,7 +724,10 @@ bash scripts/reconcile_issue_tracking.sh
 ### Quick Session End (10 minutes)
 
 **Step 1: Update SESSION_HANDOFF.md**
-- Document completed work, current status, next priorities
+- **Purpose:** Record what was accomplished THIS session (historical record, not task planner)
+- Document completed work, current status
+- **Next priorities:** Suggest based on verified current state (gh issue list, phase objectives)
+- ⚠️ **Do NOT copy "Next Session Priorities" from old handoff** - determine them fresh from actual state
 - Include test results, phase progress percentage
 - List modified files
 
