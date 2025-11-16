@@ -480,7 +480,9 @@ class StrategyManager:
         cursor = conn.cursor()
 
         try:
-            update_sql = f"""
+            # Safe: updates list contains ONLY hardcoded column names (lines 462-475),
+            # never user input. All values use parameterized queries (%s placeholders).
+            update_sql = f"""  # noqa: S608
                 UPDATE strategies
                 SET {", ".join(updates)}
                 WHERE strategy_id = %s
