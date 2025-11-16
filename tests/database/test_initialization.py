@@ -19,6 +19,8 @@ Reference:
 
 import os
 import subprocess
+import uuid
+from collections.abc import Generator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -38,39 +40,63 @@ from precog.database.initialization import (
 
 
 @pytest.fixture
-def temp_schema_file(tmp_path: Path) -> str:
-    """Create temporary schema file for testing.
-
-    Args:
-        tmp_path: Pytest temporary directory fixture
+def temp_schema_file() -> Generator[str, None, None]:
+    """Create temporary schema file within project for testing.
 
     Returns:
-        Path to temporary schema file
+        Path to temporary schema file (project-relative for security validation)
 
     Educational Note:
-        Using tmp_path ensures test isolation - each test gets its own
-        temporary directory that's automatically cleaned up after the test.
+        We create temp files WITHIN the project directory to pass security
+        validation that prevents path traversal attacks. The file is cleaned
+        up after the test via yield/finally pattern.
     """
-    schema_file = tmp_path / "test_schema.sql"
+    # Create project-relative temp directory
+    project_root = Path.cwd()
+    temp_dir = project_root / "tests" / ".tmp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create unique schema file
+    unique_id = uuid.uuid4().hex[:8]
+    schema_file = temp_dir / f"test_schema_{unique_id}.sql"
     schema_file.write_text("CREATE TABLE test_table (id SERIAL PRIMARY KEY);")
-    return str(schema_file)
+
+    try:
+        yield str(schema_file)
+    finally:
+        # Cleanup
+        if schema_file.exists():
+            schema_file.unlink()
+        # Clean up temp_dir if empty
+        try:
+            temp_dir.rmdir()
+        except OSError:
+            pass  # Directory not empty or doesn't exist
 
 
 @pytest.fixture
-def temp_migration_dir(tmp_path: Path) -> str:
-    """Create temporary migration directory with sample migrations.
-
-    Args:
-        tmp_path: Pytest temporary directory fixture
+def temp_migration_dir() -> Generator[str, None, None]:
+    """Create temporary migration directory within project for testing.
 
     Returns:
-        Path to temporary migration directory
+        Path to temporary migration directory (project-relative for security validation)
 
     Educational Note:
+        We create migration files WITHIN the project directory to pass security
+        validation that prevents path traversal attacks. The directory is cleaned
+        up after the test via yield/finally pattern.
+
         We create realistic migration files (001_*.sql, 002_*.sql) to test
         alphabetical ordering and sequential application.
     """
-    migration_dir = tmp_path / "migrations"
+    # Create project-relative temp directory
+    project_root = Path.cwd()
+    temp_dir = project_root / "tests" / ".tmp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    # Create unique migration directory
+    unique_id = uuid.uuid4().hex[:8]
+    migration_dir = temp_dir / f"migrations_{unique_id}"
     migration_dir.mkdir()
 
     # Create 3 sample migration files
@@ -78,7 +104,20 @@ def temp_migration_dir(tmp_path: Path) -> str:
     (migration_dir / "002_add_index.sql").write_text("CREATE INDEX idx_users_id ON users(id);")
     (migration_dir / "003_add_column.sql").write_text("ALTER TABLE users ADD COLUMN name TEXT;")
 
-    return str(migration_dir)
+    try:
+        yield str(migration_dir)
+    finally:
+        # Cleanup migration files
+        for migration_file in migration_dir.glob("*.sql"):
+            migration_file.unlink()
+        # Remove migration directory
+        if migration_dir.exists():
+            migration_dir.rmdir()
+        # Clean up temp_dir if empty
+        try:
+            temp_dir.rmdir()
+        except OSError:
+            pass  # Directory not empty or doesn't exist
 
 
 # ==============================================================================
@@ -235,20 +274,35 @@ class TestApplySchema:
         assert success is False
         assert "Invalid database URL" in error
 
-    def test_apply_schema_non_sql_file(self, tmp_path: Path) -> None:
+    def test_apply_schema_non_sql_file(self) -> None:
         """Test schema application fails for non-.sql files.
 
         Educational Note:
             Security validation - we only allow .sql files to prevent
             accidentally executing arbitrary files via subprocess.
         """
-        non_sql_file = tmp_path / "schema.txt"
+        # Create non-.sql file within project directory
+        project_root = Path.cwd()
+        temp_dir = project_root / "tests" / ".tmp"
+        temp_dir.mkdir(parents=True, exist_ok=True)
+
+        unique_id = uuid.uuid4().hex[:8]
+        non_sql_file = temp_dir / f"schema_{unique_id}.txt"
         non_sql_file.write_text("CREATE TABLE test (id INT);")
 
-        success, error = apply_schema("postgresql://localhost/test_db", str(non_sql_file))
+        try:
+            success, error = apply_schema("postgresql://localhost/test_db", str(non_sql_file))
 
-        assert success is False
-        assert ".sql file" in error
+            assert success is False
+            assert ".sql file" in error
+        finally:
+            # Cleanup
+            if non_sql_file.exists():
+                non_sql_file.unlink()
+            try:
+                temp_dir.rmdir()
+            except OSError:
+                pass  # Directory not empty or doesn't exist
 
     def test_apply_schema_file_not_found(self) -> None:
         """Test schema application fails when schema file doesn't exist.
