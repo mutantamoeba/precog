@@ -1,11 +1,20 @@
 # Development Philosophy
 
 ---
-**Version:** 1.1
+**Version:** 1.2
 **Created:** 2025-11-07
-**Last Updated:** 2025-11-07
+**Last Updated:** 2025-11-15
+**Changes in V1.2:**
+- **Added Section 10: Security-First Testing** - Comprehensive principle for testing WITH security validations (not around them)
+- Documents "tests validate security works correctly, not that code works when security disabled"
+- Real-world example from PR #79 (9/25 tests failing → 25/25 passing after fixing fixtures to comply with path traversal protection)
+- Includes rules: never bypass security in tests, validate security boundaries, fix tests when security breaks them
+- Integration with development workflow (phase planning, during development, PR review, phase completion)
+- Cross-references: Pattern 4 (Security), Pattern 12 (Test Fixture Security Compliance), SECURITY_REVIEW_CHECKLIST, PR #76 (CWE-22 protection), PR #79 (test fixture updates)
+- Renumbered Section 10 → Section 11 (Anti-Patterns to Avoid)
+- Renumbered Section 11 → Section 12 (Test Coverage Accountability)
 **Changes in V1.1:**
-- **ANTI-PATTERNS SECTION ADDED:** New Section 10 - Anti-Patterns to Avoid (7 anti-patterns documented)
+- **ANTI-PATTERNS SECTION ADDED:** New Section 11 - Anti-Patterns to Avoid (7 anti-patterns documented)
 - Added real examples from Phase 1 test coverage work (Partial Thoroughness, Percentage Point Blindness, etc.)
 - Added Anti-Pattern Detection Checklist (run before marking work complete)
 - Added "Option B Development Approach" subsection (Test-Driven vs Feature-Driven)
@@ -45,8 +54,10 @@ This document defines the foundational development principles for Precog. These 
 7. [Cross-Document Consistency](#7-cross-document-consistency)
 8. [Maintenance Visibility](#8-maintenance-visibility)
 9. [Security by Default](#9-security-by-default)
-10. [Anti-Patterns to Avoid](#10-anti-patterns-to-avoid-) ⚠️ **NEW**
-11. [Summary Checklist](#summary-philosophy-checklist)
+10. [Security-First Testing](#10-security-first-testing) ⚠️ **NEW**
+11. [Anti-Patterns to Avoid](#11-anti-patterns-to-avoid-)
+12. [Test Coverage Accountability](#12-test-coverage-accountability)
+13. [Summary Checklist](#summary-philosophy-checklist)
 
 ---
 
@@ -261,7 +272,7 @@ BrPart: 414->416, 521->523, 569->571 (partial branches)
 ---
 
 **Related Documents:**
-- `docs/foundation/TESTING_STRATEGY_V2.0.md`
+- `docs/foundation/TESTING_STRATEGY_V2.1.md`
 - `CLAUDE.md` Section 7 (Common Tasks - Task 1)
 
 ---
@@ -980,7 +991,180 @@ git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.p
 
 ---
 
-## 10. Anti-Patterns to Avoid ⚠️
+## 10. Security-First Testing
+
+**Core Belief:** Tests validate that security works correctly, not that code works when security is disabled.
+
+**Rationale:**
+Security validations are not optional features that can be toggled off for testing convenience. They are critical safeguards that must be validated as part of normal test execution.
+
+**Problem Prevented:**
+- Tests pass with `git commit --no-verify` (bypassing pre-commit hooks)
+- Tests use mocked security validations that never execute
+- Production security fails silently because tests never exercised it
+
+**Solution:**
+Tests must work WITH security validations, not around them. If security breaks tests, fix tests (not security).
+
+### Rules
+
+**1. Never Bypass Security in Tests**
+
+❌ **WRONG:**
+```bash
+# Bypassing pre-commit hooks to make tests pass
+git commit --no-verify -m "Add tests (skipping security scan)"
+
+# Mocking out security validation
+@patch('precog.database.initialization.Path.is_relative_to')
+def test_apply_schema(mock_is_relative):
+    mock_is_relative.return_value = True  # Always pass security check
+    # Test never validates path traversal protection!
+```
+
+✅ **CORRECT:**
+```bash
+# Fix tests to comply with security requirements
+# Update fixtures to use project-relative paths
+
+# Test WITH security validation (not mocked)
+def test_apply_schema_rejects_external_files():
+    """Verify path traversal protection works."""
+    external_file = "/tmp/malicious.sql"
+    success, error = apply_schema("postgresql://localhost/test", external_file)
+
+    assert success is False
+    assert "must be within project directory" in error
+```
+
+**2. Tests Should Validate Security Boundaries**
+
+✅ **Security validations should have explicit tests:**
+
+```python
+def test_path_traversal_protection():
+    """Verify files outside project are rejected (CWE-22)."""
+    external_file = "/etc/passwd"
+    success, error = apply_schema(DB_URL, external_file)
+    assert success is False
+    assert "Security" in error
+
+def test_file_extension_validation():
+    """Verify only .sql files are accepted."""
+    txt_file = "tests/.tmp/schema.txt"  # Within project, wrong extension
+    success, error = apply_schema(DB_URL, txt_file)
+    assert success is False
+    assert ".sql file" in error
+
+def test_credential_scanning():
+    """Verify pre-commit hook blocks hardcoded credentials."""
+    # This test would run git grep for hardcoded secrets
+    result = subprocess.run(
+        ["git", "grep", "-E", "password\\s*=\\s*['\"]"],
+        capture_output=True
+    )
+    assert result.returncode != 0  # No matches = security passing
+```
+
+**3. When Security Breaks Tests, Fix Tests (Not Security)**
+
+**Example from PR #79:**
+
+**Problem:**
+- PR #76 added path traversal protection to `apply_schema()`
+- Security validation: `schema_path.is_relative_to(project_root)`
+- 9 tests failed: fixtures used `tmp_path` (system temp outside project)
+- Error: "Security: Schema file must be within project directory"
+
+**❌ WRONG Fix (disable security):**
+```python
+# DON'T DO THIS
+if os.getenv("TESTING"):
+    # Skip path traversal check during tests
+    pass
+else:
+    if not schema_path.is_relative_to(project_root):
+        return False, "Security error"
+```
+
+**✅ CORRECT Fix (update tests):**
+```python
+# Update fixtures to create files within project
+@pytest.fixture
+def temp_schema_file() -> Generator[str, None, None]:
+    """Create file in tests/.tmp/ (within project)."""
+    project_root = Path.cwd()
+    temp_dir = project_root / "tests" / ".tmp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    schema_file = temp_dir / f"test_schema_{uuid.uuid4().hex[:8]}.sql"
+    schema_file.write_text("CREATE TABLE test (id INT);")
+
+    try:
+        yield str(schema_file)
+    finally:
+        schema_file.unlink()
+```
+
+### Integration with Development Workflow
+
+**Phase Planning:**
+- [ ] Identify security requirements for phase (authentication, authorization, input validation)
+- [ ] Plan security tests BEFORE implementing features
+- [ ] Document security validations in ADRs (e.g., ADR-076: Path Traversal Protection)
+
+**During Development:**
+- [ ] Write security tests first (TDD for security)
+- [ ] Run security scan before every commit: `git grep "password\s*="`
+- [ ] Ensure pre-commit hooks are installed: `pre-commit install`
+
+**PR Review:**
+- [ ] Security validations have explicit tests?
+- [ ] Tests don't mock out security checks?
+- [ ] No `--no-verify` or `TESTING` bypasses in code?
+
+**Phase Completion:**
+- [ ] Run full security scan: `./scripts/validate_quick.sh`
+- [ ] Review SECURITY_REVIEW_CHECKLIST.md
+- [ ] Verify no credentials in code: `git grep -E "(password|secret|api_key)"`
+
+### Real-World Impact
+
+**PR #79 Results:**
+- **Before:** 9/25 tests failing (fixtures violated security)
+- **After:** 25/25 tests passing (fixtures comply with security)
+- **Coverage:** 68.32% → 89.11% (+20.79pp)
+- **Security:** Path traversal protection working correctly
+
+**Lesson:** Fixing tests to work with security (not disabling security) resulted in:
+1. Higher test coverage (security paths now tested)
+2. Confidence in security validations (actually exercised in tests)
+3. Better fixtures (project-relative, reusable pattern)
+
+### Anti-Patterns to Avoid
+
+**❌ Don't:**
+- Use `git commit --no-verify` except in absolute emergencies
+- Mock out security validations in tests
+- Add `if os.getenv("TESTING")` bypasses to production code
+- Disable pre-commit hooks "temporarily" (you'll forget to re-enable)
+
+**✅ Do:**
+- Update tests to comply with security requirements
+- Write explicit tests for security validations
+- Run pre-commit hooks on every commit (automatic after `pre-commit install`)
+- Treat security failures as bugs (fix immediately, don't bypass)
+
+### Cross-References
+- **Pattern 4:** Security (NO CREDENTIALS IN CODE)
+- **Pattern 12:** Test Fixture Security Compliance
+- **SECURITY_REVIEW_CHECKLIST.md:** Comprehensive security validation checklist
+- **PR #76:** Path traversal protection implementation (CWE-22)
+- **PR #79:** Test fixture updates for security compliance
+
+---
+
+## 11. Anti-Patterns to Avoid ⚠️
 
 ### Common Development Traps
 
@@ -1668,7 +1852,7 @@ User asked: "Should we continue with config loader or fix Kalshi coverage gaps f
 
 ---
 
-## 10. Test Coverage Accountability
+## 12. Test Coverage Accountability
 
 ### Every Deliverable Must Have Explicit Coverage Target
 
@@ -1794,7 +1978,7 @@ Before marking any feature complete, validate ALL principles followed:
 ## Related Documentation
 
 **Testing & Validation:**
-- `docs/foundation/TESTING_STRATEGY_V2.0.md` - Testing infrastructure
+- `docs/foundation/TESTING_STRATEGY_V2.1.md` - Testing infrastructure
 - `docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality
 
 **Process & Workflow:**
