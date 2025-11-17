@@ -68,6 +68,9 @@ def clean_test_data(db_cursor):
     db_cursor.execute("DELETE FROM markets WHERE market_id LIKE 'MKT-TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
+    # Clean up test models and strategies (models/strategies created during tests)
+    db_cursor.execute("DELETE FROM probability_models WHERE model_id > 1")  # Keep model_id=1 for FK
+    db_cursor.execute("DELETE FROM strategies WHERE strategy_id > 1")  # Keep strategy_id=1 for FK
     # Delete both uppercase TEST-PLATFORM- and lowercase test_ platforms
     db_cursor.execute(
         "DELETE FROM platforms WHERE platform_id LIKE 'test_%' OR platform_id LIKE 'TEST-PLATFORM-%'"
@@ -103,15 +106,15 @@ def clean_test_data(db_cursor):
 
     # Create test strategy (required parent record for positions and trades)
     db_cursor.execute("""
-        INSERT INTO strategies (strategy_id, strategy_name, strategy_version, category, config, status)
-        VALUES (1, 'test_strategy', 'v1.0', 'sports', '{"test": true}', 'active')
+        INSERT INTO strategies (strategy_id, strategy_name, strategy_version, approach, config, status)
+        VALUES (1, 'test_strategy', 'v1.0', 'value', '{"test": true}', 'active')
         ON CONFLICT (strategy_id) DO NOTHING
     """)
 
     # Create test probability model (required parent record for positions and trades)
     db_cursor.execute("""
-        INSERT INTO probability_models (model_id, model_name, model_version, category, config, status)
-        VALUES (1, 'test_model', 'v1.0', 'sports', '{"test": true}', 'active')
+        INSERT INTO probability_models (model_id, model_name, model_version, approach, config, status)
+        VALUES (1, 'test_model', 'v1.0', 'elo', '{"test": true}', 'active')
         ON CONFLICT (model_id) DO NOTHING
     """)
 
@@ -125,6 +128,9 @@ def clean_test_data(db_cursor):
     db_cursor.execute("DELETE FROM markets WHERE market_id LIKE 'MKT-TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
+    # Clean up test models and strategies (models/strategies created during tests)
+    db_cursor.execute("DELETE FROM probability_models WHERE model_id > 1")  # Keep model_id=1 for FK
+    db_cursor.execute("DELETE FROM strategies WHERE strategy_id > 1")  # Keep strategy_id=1 for FK
     # Don't delete test platform - keep it for other tests
     db_cursor.connection.commit()
 

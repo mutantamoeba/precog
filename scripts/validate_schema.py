@@ -145,20 +145,20 @@ def get_documented_schema(table_name: str) -> dict[str, str]:
     documented_schemas = {
         "probability_models": {
             "model_id": "integer",  # SERIAL → integer in information_schema
-            "model_name": "character varying",
-            "model_version": "character varying",
-            "approach": "character varying",  # HOW the model works (elo, regression, value)
-            "domain": "character varying",  # WHICH markets (nfl, elections, NULL=multi-domain)
+            "model_name": "character varying(100)",
+            "model_version": "character varying(20)",
+            "approach": "character varying(50)",  # HOW the model works (elo, regression, value)
+            "domain": "character varying(50)",  # WHICH markets (nfl, elections, NULL=multi-domain)
             "config": "jsonb",
             "training_start_date": "date",
             "training_end_date": "date",
             "training_sample_size": "integer",
-            "status": "character varying",
+            "status": "character varying(20)",
             "activated_at": "timestamp without time zone",
             "deactivated_at": "timestamp without time zone",
             "notes": "text",
-            "validation_accuracy": "numeric",
-            "validation_calibration": "numeric",
+            "validation_accuracy": "numeric(6,4)",
+            "validation_calibration": "numeric(6,4)",
             "validation_sample_size": "integer",
             "created_at": "timestamp without time zone",
             "description": "text",
