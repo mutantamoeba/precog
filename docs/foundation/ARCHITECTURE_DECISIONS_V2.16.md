@@ -1,9 +1,28 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.15
-**Last Updated:** November 15, 2025
+**Version:** 2.16
+**Last Updated:** November 17, 2025
 **Status:** ✅ Current
+**Changes in v2.16:**
+- **SCHEMA STANDARDIZATION - CLASSIFICATION FIELD NAMING:** Added Decision #86/ADR-086 (Schema Classification Field Naming - Phase 1.5)
+- Documents the approach/domain naming decision that resolved three-way schema mismatch blocking Model Manager implementation
+- **Problem:** Documentation expected model_type/sport, database had category/subcategory, manager code expected model_type/sport (inconsistency across 3 sources)
+- **Solution:** Standardized on approach/domain for both probability_models and strategies tables
+- **Rationale:** Semantically consistent (HOW it works / WHICH markets), future-proof for Phase 2+ expansion (elections, economics), more descriptive than generic "type" or "category"
+- **Implementation:** Migration 011 (4 renames + 4 new fields in ~2 seconds), DEF-P1-008 schema validation script (prevents future drift)
+- **Schema Changes:** Renamed category→approach, subcategory→domain, added description TEXT and created_by VARCHAR to both tables
+- **Schema Drift Prevention:** Automated validation via scripts/validate_schema.py using information_schema.columns
+- Comparison table analyzing 6 naming options (rejected: model_type/sport, category/subcategory, algorithm/domain, method/domain, type/domain)
+- Before/after schemas showing 19-field probability_models and 20-field strategies tables
+- References Migration 011, DATABASE_SCHEMA_SUMMARY V1.9, REQ-DB-006, ADR-002 (Decimal Precision)
+- **MANAGER COMPONENT ARCHITECTURE - NO EDGE MANAGER:** Added Decision #87/ADR-087 (No Edge Manager Component - Phase 1.5)
+- Documents decision to NOT create an Edge Manager component (edges are calculated outputs, not managed entities)
+- **Rationale:** Model Manager calculates edges (part of evaluate()), Strategy Manager queries edges (part of find_opportunities()), Database handles cleanup (TTL-based DELETE)
+- **Architecture:** Three manager components (Strategy Manager, Model Manager, Position Manager) - NOT four
+- **Benefits:** Simpler architecture, clearer responsibilities, less code (~200-300 lines saved), easier testing
+- **When to Reconsider:** Phase 3+ if ensemble aggregation logic, confidence scoring, or complex edge queries emerge
+- Includes code examples showing distributed responsibilities, analogy (weather forecasting service), and decision timeline
 **Changes in v2.15:**
 - **BRANCH PROTECTION STRATEGY - RETROACTIVE DOCUMENTATION:** Added Decision #46/ADR-046 (Branch Protection Strategy - Phase 0.7)
 - Documents 4th layer of Defense in Depth: unbypassed GitHub branch protection enforcing PR workflow and 6 CI status checks
@@ -5656,7 +5675,7 @@ CREATE TABLE model_config_params (
 - ADR-079: Performance Tracking Architecture (query patterns inform this decision)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (current JSONB schema)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (current JSONB schema)
 - `config/probability_models.yaml` (config examples)
 - `config/trade_strategies.yaml` (strategy config examples)
 
@@ -6113,7 +6132,7 @@ CREATE TABLE brier_score_metrics (...);
 - STRAT-026: Performance Metrics Infrastructure Implementation (Phase 1.5-2, 18-22h)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Section 8: Performance Tracking & Analytics)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8: Performance Tracking & Analytics)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
@@ -6870,7 +6889,7 @@ Cons:
 
 ### References
 
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Section 8: Performance Tracking & Analytics)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8: Performance Tracking & Analytics)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
@@ -7639,7 +7658,7 @@ WebSocket for Position Monitoring (real-time):
 ### References
 
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 7 Task #2: Frontend Development)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Section 8.9: Materialized Views)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8.9: Materialized Views)
 - Next.js Documentation: https://nextjs.org/docs
 - Recharts Documentation: https://recharts.org/
 - React Query Documentation: https://tanstack.com/query/latest
@@ -8561,7 +8580,7 @@ def run_holdout_validation(
 - `docs/foundation/MASTER_REQUIREMENTS_V2.15.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #3, Phase 6 Task #1)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Section 8.7: Evaluation Runs Table)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8.7: Evaluation Runs Table)
 
 ---
 
@@ -9284,7 +9303,7 @@ ON position_risk_by_strategy(league, strategy_name);
 - `docs/foundation/MASTER_REQUIREMENTS_V2.15.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 6 Task #3, Phase 7 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Section 8.8: Materialized Views Reference)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8.8: Materialized Views Reference)
 
 ---
 
@@ -10115,7 +10134,7 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 - `docs/foundation/MASTER_REQUIREMENTS_V2.15.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 7 Task #3, Phase 8 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Section 8.9: A/B Tests Table)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8.9: A/B Tests Table)
 
 ---
 
@@ -10365,7 +10384,7 @@ FROM prediction_features_analysis
 WHERE model_id = 7;
 ```
 
-**Example 3: Performance Metrics Rollups (Already Implemented in DATABASE_SCHEMA_SUMMARY_V1.8)**
+**Example 3: Performance Metrics Rollups (Already Implemented in DATABASE_SCHEMA_SUMMARY_V1.9)**
 ```sql
 -- Operational table (multi-entity tracking)
 CREATE TABLE performance_metrics (
@@ -10478,7 +10497,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 
 **Phase 1.5-2 (NOW):**
 - ✅ **Keep all JSONB columns as-is** (no migrations)
-- ✅ **Create 2 materialized views**: strategy_performance_summary, model_calibration_summary (already in DATABASE_SCHEMA_SUMMARY_V1.8)
+- ✅ **Create 2 materialized views**: strategy_performance_summary, model_calibration_summary (already in DATABASE_SCHEMA_SUMMARY_V1.9)
 - ✅ **Document hybrid strategy** in this ADR
 
 **Phase 5b (Advanced Execution):**
@@ -10549,8 +10568,490 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 - ADR-018: Immutable Versions Pattern (JSONB supports atomic config versioning)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (materialized views already defined)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (materialized views already defined)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.15.md` (analytics requirements)
+
+---
+
+## Decision #86/ADR-086: Schema Classification Field Naming (approach/domain)
+
+**Decision #86**
+**Phase:** 1.5 (Database Schema Standardization)
+**Status:** ✅ Complete (Migration 011 Applied, Validation Script Implemented)
+**Priority:** 🔴 Critical (blocked Model Manager implementation, affected 2 core tables)
+
+**Problem Statement:**
+
+Three-way schema mismatch between documentation, database, and manager code:
+- **Documentation**: `model_type`/`sport`, `strategy_type`/`sport`
+- **Database**: `category`/`subcategory`
+- **Manager Code**: Expected `model_type`/`sport` (from docs)
+
+**This mismatch blocked Model Manager implementation** - tests failed because:
+1. Integration tests expected `model_type`/`sport` columns (from reading documentation)
+2. Database had `category`/`subcategory` columns (actual schema)
+3. Strategy Manager used `strategy_type`/`sport` (from requirements specs)
+
+**Example of inconsistency:**
+```python
+# Documentation said:
+model = Model(model_type="elo", sport="nfl")
+
+# Database actually had:
+CREATE TABLE probability_models (
+    category VARCHAR,     -- What developers called "model_type" in docs
+    subcategory VARCHAR   -- What developers called "sport" in docs
+)
+
+# Manager code expected:
+model_data = crud.get_model(model_type="elo", sport="nfl")  # Column not found error!
+```
+
+**Root Cause:** Documentation and database evolved independently without automated validation. No schema drift detection until Phase 1.5 integration testing.
+
+---
+
+**Decision: Standardize on `approach`/`domain` for both tables**
+
+Rename fields in `probability_models` and `strategies` tables:
+- `category` → **`approach`**
+- `subcategory` → **`domain`**
+
+Apply same naming to both tables for semantic consistency.
+
+---
+
+**Why `approach`/`domain`? (vs. model_type/sport or category/subcategory)**
+
+| Naming Option | Semantics | Problems | Verdict |
+|---------------|-----------|----------|---------|
+| **model_type/sport** + **strategy_type/sport** | Inconsistent (different prefixes per table) | Repetitive prefix, not future-proof for elections/economics | ❌ Rejected |
+| **category/subcategory** | Generic, ambiguous | "Category" means different things (algorithm vs. strategy type) | ❌ Rejected |
+| **algorithm/domain** + **strategy_type/domain** | Partially inconsistent | Mixed prefixes, "algorithm" too ML-specific | ❌ Rejected |
+| **method/domain** + **approach/domain** | Partially inconsistent | "Method" conflicts with future Phase 4 methods layer | ❌ Rejected |
+| **type/domain** (both tables) | Too generic | "Type" is vague, doesn't explain WHAT type | ❌ Rejected |
+| **approach/domain** (both tables) | **Semantically consistent** | None identified | ✅ **ACCEPTED** |
+
+**Why `approach`/`domain` superior:**
+
+1. **Consistent Meaning Across Tables:**
+   - `approach`: HOW the model/strategy works (elo, regression, value, arbitrage)
+   - `domain`: WHICH markets it applies to (nfl, elections, economics, NULL=multi-domain)
+   - Same semantics for probability_models AND strategies
+
+2. **Future-Proof for Phase 2+ Expansion:**
+   - Phase 2: elections markets (domain=elections)
+   - Phase 3+: economics markets (domain=economics)
+   - Multi-domain models: domain=NULL (applies to all markets)
+
+3. **Semantically Superior to "category":**
+   - "Category" is generic (could mean anything)
+   - "Approach" is specific (describes methodology)
+   - Clearer intent: approach describes algorithm/strategy family
+
+4. **More Precise Than "market":**
+   - "Domain" refers to category of markets (nfl, elections)
+   - "Market" refers to individual betting market (INXD-25-JAN-T7700)
+   - Avoids overloading "market" term
+
+---
+
+**Implementation: Migration 011**
+
+**File:** `src/precog/database/migrations/migration_011_standardize_classification_fields.py`
+
+**Changes (8 operations total):**
+
+**probability_models table:**
+1. Rename `category` → `approach`
+2. Rename `subcategory` → `domain`
+3. Add `description TEXT` (nullable, audit field)
+4. Add `created_by VARCHAR` (nullable, audit trail)
+
+**strategies table:**
+5. Rename `category` → `approach`
+6. Rename `subcategory` → `domain`
+7. Add `description TEXT` (nullable, audit field)
+8. Add `created_by VARCHAR` (nullable, audit trail)
+
+**Migration Safety:**
+- ✅ **Metadata-only renames**: `ALTER TABLE ... RENAME COLUMN` doesn't copy data (~2 seconds)
+- ✅ **Nullable new columns**: No NOT NULL constraint (safe for existing rows)
+- ✅ **No foreign keys**: Renamed columns have no FK dependencies
+- ✅ **Rollback included**: `migration_011.py --rollback` reverses changes
+- ✅ **Verification**: `migration_011.py --verify-only` validates schema state
+
+**Execution:**
+```bash
+python src/precog/database/migrations/migration_011_standardize_classification_fields.py
+# Output: [SUCCESS] Migration 011 applied successfully! (~2 seconds)
+```
+
+**Verification:**
+```sql
+-- probability_models: 17 fields → 19 fields
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'probability_models' AND table_schema = 'public';
+-- Result: approach, domain, description, created_by present
+--         category, subcategory removed
+
+-- strategies: 17 fields → 20 fields
+SELECT column_name FROM information_schema.columns
+WHERE table_name = 'strategies' AND table_schema = 'public';
+-- Result: approach, domain, description, created_by present
+--         category, subcategory removed
+```
+
+---
+
+**Schema Drift Prevention: DEF-P1-008 Validation Script**
+
+**Problem:** How to prevent future schema mismatches?
+
+**Solution:** Automated schema validation script
+
+**File:** `scripts/validate_schema.py`
+
+**How It Works:**
+1. Queries actual database schema via `information_schema.columns` (ANSI SQL)
+2. Compares against documented expected schema (hardcoded for Phase 1)
+3. Detects 3 mismatch types:
+   - **Missing columns**: In docs but not in database → CRITICAL
+   - **Extra columns**: In database but not in docs → WARNING
+   - **Type mismatches**: Wrong data types → CRITICAL
+4. CI/CD integration: Exit code 0 (pass), exit code 1 (fail)
+
+**Example Usage:**
+```bash
+# Validate all tables
+python scripts/validate_schema.py
+# Output: [OK] probability_models: Schema matches documentation (19 columns)
+#         [OK] strategies: Schema matches documentation (20 columns)
+#         [SUCCESS] All 2 tables match documentation
+
+# Validate specific table
+python scripts/validate_schema.py --table probability_models
+
+# CI mode (terse output)
+python scripts/validate_schema.py --ci
+```
+
+**Future Expansion (Phase 2+):**
+- Parse DATABASE_SCHEMA_SUMMARY_V1.9.md directly (vs. hardcoded schemas)
+- Add more tables: markets, positions, trades, etc.
+- Integrate into CI/CD pipeline (blocks PRs if schema drift detected)
+
+---
+
+**Benefits:**
+
+1. **Unblocked Model Manager Implementation** - Tests now pass with consistent field names
+2. **Semantic Clarity** - `approach`/`domain` self-documenting (no comments needed)
+3. **Future-Proof** - Supports elections, economics, multi-domain models (Phase 2+)
+4. **Consistency** - Same naming convention for probability_models AND strategies
+5. **Automated Validation** - DEF-P1-008 prevents future schema drift
+6. **Audit Trail** - `description` and `created_by` fields enable better tracking
+
+---
+
+**Alternatives Considered:**
+
+**Option A: Keep Existing Mismatch, Update Docs**
+- Change documentation to match database (`category`/`subcategory`)
+- **Pros:** No migration needed
+- **Cons:** ❌ Generic names, not future-proof, semantically ambiguous
+- **Verdict:** Rejected - poor semantics
+
+**Option B: Migrate to Documentation Naming**
+- Change database to match docs (`model_type`/`sport`, `strategy_type`/`sport`)
+- **Pros:** Matches existing docs
+- **Cons:** ❌ Inconsistent prefixes across tables, not future-proof for elections
+- **Verdict:** Rejected - inconsistent semantics
+
+**Option C: Standardize on approach/domain (ACCEPTED)**
+- Rename both docs and database to `approach`/`domain`
+- **Pros:** ✅ Semantically consistent, future-proof, self-documenting
+- **Cons:** Requires both migration AND doc updates
+- **Verdict:** ✅ **ACCEPTED** - best long-term solution
+
+---
+
+**Schema Before Migration (V1.7 - Inconsistent):**
+
+```sql
+-- probability_models
+CREATE TABLE probability_models (
+    model_id SERIAL PRIMARY KEY,
+    model_name VARCHAR,
+    model_version VARCHAR,
+    category VARCHAR,        -- INCONSISTENT: Called "model_type" in docs
+    subcategory VARCHAR,     -- INCONSISTENT: Called "sport" in docs
+    config JSONB,
+    -- ... 12 more fields
+);
+
+-- strategies
+CREATE TABLE strategies (
+    strategy_id SERIAL PRIMARY KEY,
+    strategy_name VARCHAR,
+    strategy_version VARCHAR,
+    category VARCHAR,        -- INCONSISTENT: Called "strategy_type" in docs
+    subcategory VARCHAR,     -- INCONSISTENT: Called "sport" in docs
+    config JSONB,
+    -- ... 12 more fields
+);
+```
+
+**Schema After Migration (V1.9 - Consistent):**
+
+```sql
+-- probability_models
+CREATE TABLE probability_models (
+    model_id SERIAL PRIMARY KEY,
+    model_name VARCHAR,
+    model_version VARCHAR,
+    approach VARCHAR,        -- HOW: elo, regression, ensemble, neural_net
+    domain VARCHAR,          -- WHICH: nfl, elections, economics, NULL (multi-domain)
+    config JSONB,
+    description TEXT,        -- Audit field (nullable)
+    created_by VARCHAR,      -- Audit trail (nullable)
+    -- ... 12 more fields
+);
+
+-- strategies
+CREATE TABLE strategies (
+    strategy_id SERIAL PRIMARY KEY,
+    strategy_name VARCHAR,
+    strategy_version VARCHAR,
+    approach VARCHAR,        -- HOW: value, arbitrage, momentum, hedge
+    domain VARCHAR,          -- WHICH: nfl, elections, economics, NULL (multi-domain)
+    config JSONB,
+    description TEXT,        -- Audit field (nullable)
+    created_by VARCHAR,      -- Audit trail (nullable)
+    -- ... 13 more fields
+);
+```
+
+---
+
+**Example Values:**
+
+**probability_models table:**
+| model_name | approach | domain | description |
+|------------|----------|--------|-------------|
+| nfl_elo_v1.0 | elo | nfl | NFL Elo rating system with k-factor=32 |
+| ensemble_v2.0 | ensemble | NULL | Multi-sport ensemble (NBA + NFL + elections) |
+| regression_v1.0 | regression | nfl | Logistic regression on team stats |
+
+**strategies table:**
+| strategy_name | approach | domain | description |
+|--------------|----------|--------|-------------|
+| value_bet_v1.0 | value | nfl | Value betting when edge > 8% |
+| arbitrage_v1.0 | arbitrage | elections | Cross-platform arbitrage opportunities |
+| momentum_v1.0 | momentum | NULL | Multi-sport momentum trading |
+
+---
+
+**Related Requirements:**
+- REQ-DB-001: PostgreSQL 15+ Required (schema validation uses `information_schema`)
+- REQ-VER-001: Immutable Versions Pattern (approach/domain are immutable once model/strategy created)
+- REQ-TEST-001: Test Coverage ≥80% (validation script has unit tests)
+
+**Related ADRs:**
+- ADR-002: Decimal Precision (not affected by this change)
+- ADR-003: Database Versioning Strategy (SCD Type 2 still applies)
+- ADR-018: Immutable Versions Pattern (approach/domain immutable once set)
+- ADR-078: Model Configuration Storage (JSONB for config, normalized for classification)
+
+**Documentation Updates:**
+- DATABASE_SCHEMA_SUMMARY V1.8 → V1.9 (complete schemas with approach/domain)
+- REQUIREMENT_INDEX (any REQs referencing model_type/sport updated)
+- MASTER_INDEX V2.9 (updated references)
+
+**References:**
+- `src/precog/database/migrations/migration_011_standardize_classification_fields.py` (implementation)
+- `scripts/validate_schema.py` (automated validation)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (updated schemas)
+- `docs/utility/PHASE_1_DEFERRED_TASKS_V1.0.md` (DEF-P1-008 completed)
+
+---
+
+## Decision #87/ADR-087: No Edge Manager Component (Calculated Outputs Pattern)
+
+**Decision #87**
+**Phase:** 1.5 (Manager Components Architecture)
+**Status:** ✅ Complete (Decision Made, No Implementation Required)
+**Priority:** 🟢 Medium (architectural clarity, affects Phase 1.5 design)
+
+### Problem Statement
+
+**Question:** Should we create an "Edge Manager" component similar to Model Manager and Strategy Manager to handle edge calculations and queries?
+
+**Context:**
+- Phase 1.5 implements three manager components: **Strategy Manager**, **Model Manager**, **Position Manager**
+- Edges are stored in the `edges` table (market_uuid, model_id, edge_value, calculated_at, row_current_ind)
+- Edges represent the difference between model probability and market price (opportunity identification)
+- Initial architecture discussions considered whether edges need a dedicated manager component
+
+**Alternatives Considered:**
+
+1. **Create Edge Manager** (like Model Manager / Strategy Manager)
+   - Dedicated component with `calculate_edge()`, `get_active_edges()`, `find_best_edge()` methods
+   - Centralized edge business logic
+   - Consistent with other manager components
+   - **Problem:** Edges are calculated outputs, not managed entities requiring lifecycle management
+
+2. **No Edge Manager - Distribute Responsibilities** (CHOSEN)
+   - **Model Manager** calculates edges as part of `model.evaluate()` (model prediction → edge calculation → write to edges table)
+   - **Strategy Manager** queries edges as part of `strategy.find_opportunities()` (read from edges table → filter → rank)
+   - **Database** handles cleanup (DELETE old edges where `row_current_ind = FALSE` after TTL expires)
+   - **Benefit:** Edges treated as calculated outputs, not managed entities
+
+3. **Defer Edge Manager to Phase 3+** (ensemble aggregation)
+   - Phase 3+ might need edge aggregation logic (combine multiple model edges)
+   - Phase 3+ might need confidence scoring (how reliable is this edge?)
+   - Decision: Implement only if Phase 3+ requirements justify it
+
+### Decision: No Edge Manager (Phase 1-2)
+
+**We will NOT create an Edge Manager component for Phase 1-2.**
+
+**Rationale:**
+
+**Edges are Calculated Outputs, Not Managed Entities:**
+- **Model Manager calculates edges** - Part of `model.evaluate(market)`:
+  ```python
+  # Model Manager responsibility
+  def evaluate(self, model_id: int, market_uuid: str) -> Decimal:
+      """Evaluate model and calculate edge."""
+      model_prob = self._calculate_probability(model_id, market_uuid)
+      market_price = self._fetch_market_price(market_uuid)
+      edge = model_prob - market_price
+
+      # Write edge to database (calculated output)
+      self.crud.create_edge(market_uuid, model_id, edge)
+      return edge
+  ```
+
+- **Strategy Manager queries edges** - Part of `strategy.find_opportunities()`:
+  ```python
+  # Strategy Manager responsibility
+  def find_opportunities(self, strategy_id: int) -> list[dict]:
+      """Find positive edge opportunities matching strategy criteria."""
+      strategy = self.crud.get_strategy(strategy_id)
+      min_edge = strategy['config']['min_edge']  # e.g., 0.05
+
+      # Query edges table (read calculated outputs)
+      opportunities = self.crud.get_active_edges(
+          min_edge=min_edge,
+          domain=strategy['domain']
+      )
+      return opportunities
+  ```
+
+- **Database handles cleanup** - Automatic TTL-based deletion:
+  ```sql
+  -- Scheduled job (Phase 2): Delete old edges
+  DELETE FROM edges
+  WHERE row_current_ind = FALSE
+    AND row_end_ts < NOW() - INTERVAL '1 hour';
+  ```
+
+**No Lifecycle Management Needed:**
+- Edges have no status field (unlike strategies: draft/testing/active/deprecated)
+- Edges have no version field (unlike models: v1.0, v1.1, v2.0)
+- Edges have no activation/deactivation workflow (unlike strategies/models)
+- Edges are recalculated frequently (every model evaluation) - ephemeral outputs, not persistent managed entities
+
+**Clear Separation of Concerns:**
+- **Model Manager** - Owns probability calculation logic → produces edges as output
+- **Strategy Manager** - Owns opportunity selection logic → consumes edges as input
+- **Edge table** - Acts as message queue between Model Manager (producer) and Strategy Manager (consumer)
+
+**Analogy:**
+- **Model Manager** is like a weather forecasting service (produces predictions)
+- **Edges table** is like a weather dashboard (stores current predictions)
+- **Strategy Manager** is like a farmer (consumes predictions to make decisions)
+- **No "Prediction Manager" needed** - forecasting service handles production, dashboard stores results, farmer handles consumption
+
+### When to Reconsider (Phase 3+)
+
+**Create Edge Manager IF any of these requirements emerge:**
+
+1. **Ensemble Aggregation Logic** (Phase 4+):
+   - Combine multiple model edges into ensemble edge
+   - Weight edges by model confidence/accuracy
+   - Require edge normalization or scaling
+
+2. **Confidence Scoring** (Phase 3+):
+   - Calculate confidence intervals for edges
+   - Track edge prediction accuracy over time
+   - Adjust edge values based on model calibration
+
+3. **Complex Edge Queries** (Phase 5+):
+   - Multi-dimensional edge filtering (by domain, platform, model, strategy)
+   - Edge ranking algorithms (not just max edge, but opportunity prioritization)
+   - Edge lifecycle tracking (how long has this edge existed?)
+
+**Decision Timeline:**
+- **Phase 1-2:** No Edge Manager (edges are calculated outputs)
+- **Phase 3:** Reassess during ensemble design (might need aggregation logic)
+- **Phase 4+:** Implement Edge Manager ONLY if ensemble requirements justify it
+
+### Impact
+
+**Phase 1.5 Architecture:**
+- Three manager components: **Strategy Manager**, **Model Manager**, **Position Manager** (NOT four)
+- Edges handled via distributed responsibilities (Model Manager produces, Strategy Manager consumes)
+
+**Code Organization:**
+- No `src/precog/trading/edge_manager.py` file
+- Edge calculation logic in `ModelManager.evaluate()` method
+- Edge query logic in `StrategyManager.find_opportunities()` method
+
+**Testing:**
+- Edge calculation tested in Model Manager unit tests
+- Edge querying tested in Strategy Manager unit tests
+- No separate Edge Manager integration tests needed
+
+**Benefits:**
+- ✅ **Simpler architecture** - Fewer components to maintain (3 managers vs 4)
+- ✅ **Clearer responsibilities** - Model Manager owns calculation, Strategy Manager owns selection
+- ✅ **Less code** - No redundant Edge Manager component (~200-300 lines saved)
+- ✅ **Easier testing** - Edge behavior tested in context (model evaluation, strategy selection)
+
+### Alternatives Rejected
+
+| Alternative | Why Rejected |
+|-------------|--------------|
+| **Create Edge Manager (Phase 1.5)** | Edges are calculated outputs, not managed entities. No lifecycle management, no version control, no activation/deactivation workflow. Creating dedicated manager would add complexity without benefit. |
+| **Edge Manager for Cleanup** | Database handles cleanup via scheduled DELETE queries. No business logic needed - simple TTL-based deletion (DELETE WHERE row_end_ts < NOW() - INTERVAL '1 hour'). |
+| **Edge Manager for Queries** | Strategy Manager already queries edges as part of `find_opportunities()`. Edge queries are tightly coupled to strategy logic (min_edge threshold, domain filtering). Separating into Edge Manager would split cohesive logic. |
+
+### Related Requirements
+
+- REQ-TRADING-001: Strategy Execution (Strategy Manager finds opportunities by querying edges)
+- REQ-ML-001: Model Evaluation (Model Manager calculates edges as part of evaluation)
+- REQ-DB-007: Edge Tracking (Database stores edges as calculated outputs)
+
+### Related ADRs
+
+- ADR-018: Immutable Versions Pattern (edges have no versions - recalculated, not versioned)
+- ADR-003: Database Versioning Strategy (edges use SCD Type 2 for historical tracking, but no manager needed)
+- ADR-086: Schema Classification Field Naming (edges table has model_id FK, filtered by model.approach/domain)
+
+### Documentation Updates
+
+- DEVELOPMENT_PHASES V1.4 (Phase 1.5 deliverables: 3 managers, NOT 4)
+- MASTER_INDEX (no Edge Manager documentation to add)
+- SESSION_HANDOFF (clarify Edge Manager deferral decision)
+
+### References
+
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (edges table schema)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 1.5 manager components)
+- `src/precog/trading/model_manager.py` (edge calculation logic - Phase 1.5 implementation)
+- `src/precog/trading/strategy_manager.py` (edge query logic - Phase 1.5 implementation)
 
 ---
 
@@ -10594,7 +11095,7 @@ Decision to use pytest as the primary testing framework with coverage, async sup
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.8.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.9.md
 
 Decision to enforce referential integrity using PostgreSQL foreign key constraints on all relationship columns.
 
@@ -10602,7 +11103,7 @@ Decision to enforce referential integrity using PostgreSQL foreign key constrain
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.8.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.9.md
 
 Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key relationships.
 
@@ -10610,7 +11111,7 @@ Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.8.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.9.md
 
 Decision to create database views that filter for current rows (row_current_ind = TRUE) to simplify application queries.
 
@@ -10634,7 +11135,7 @@ Decision to implement 2-stage partial exits (50% at +15%, 25% at +25%, 25% with 
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.8.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.9.md
 
 Decision to use append-only table for position_exits to maintain complete exit event history.
 
@@ -10642,7 +11143,7 @@ Decision to use append-only table for position_exits to maintain complete exit e
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.8.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.9.md
 
 Decision to log all exit order attempts (filled and unfilled) to exit_attempts table for debugging "why didn't my exit fill?" issues.
 

@@ -1,9 +1,16 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.10
-**Last Updated:** 2025-11-15
+**Version:** 1.11
+**Last Updated:** 2025-11-17
 **Status:** ✅ Current
+**Changes in v1.11:**
+- **SCHEMA STANDARDIZATION (PHASE 1.5):** Added ADR-086 (Schema Classification Field Naming) and ADR-087 (No Edge Manager Component)
+- Added ADR-086: Schema Classification Field Naming (approach/domain standardization resolving three-way mismatch)
+- Added ADR-087: No Edge Manager Component (calculated outputs pattern - 3 managers not 4)
+- Updated ARCHITECTURE_DECISIONS reference from V2.15 to V2.16
+- Updated DATABASE_SCHEMA_SUMMARY reference from V1.8 to V1.9
+- Total ADRs: 65 → 67 (2 new ADRs added for Phase 1.5)
 **Changes in v1.10:**
 - **BRANCH PROTECTION INFRASTRUCTURE:** Added ADR-046 (Branch Protection Strategy - Phase 0.7 Retroactive)
 - Added ADR-046: Branch Protection Strategy (GitHub Branch Protection with 6 required CI checks)
@@ -436,10 +443,85 @@ Implement 4-level priority hierarchy:
 
 ---
 
+### ADR-086: Schema Classification Field Naming (approach/domain)
+
+**Date:** 2025-11-17
+**Status:** ✅ Complete
+**Phase:** 1.5
+**Stakeholders:** Development Team
+
+**Context:**
+Three-way schema mismatch blocked Model Manager implementation:
+- Documentation: model_type/sport, strategy_type/sport
+- Database: category/subcategory
+- Manager Code: Expected model_type/sport (from docs)
+
+**Decision:**
+Standardize on `approach`/`domain` for both probability_models and strategies tables:
+- **approach:** HOW it works (elo, regression, ensemble, value, arbitrage)
+- **domain:** WHICH markets (nfl, elections, economics, NULL for multi-domain)
+
+**Consequences:**
+- **Positive:**
+  - Semantically consistent across tables
+  - Future-proof for Phase 2+ expansion
+  - More descriptive than generic "type" or "category"
+  - Schema drift prevented via automated validation (DEF-P1-008)
+- **Negative:**
+  - Migration required (Migration 011)
+  - Documentation updates across 6+ files
+- **Neutral:**
+  - Migration 011 took ~2 seconds (metadata-only renames)
+
+**References:**
+- Migration 011 implementation
+- DATABASE_SCHEMA_SUMMARY_V1.9.md
+- scripts/validate_schema.py (DEF-P1-008)
+- REQ-DB-006
+
+---
+
+### ADR-087: No Edge Manager Component (Calculated Outputs Pattern)
+
+**Date:** 2025-11-17
+**Status:** ✅ Complete
+**Phase:** 1.5
+**Stakeholders:** Development Team
+
+**Context:**
+Phase 1.5 implements manager components. Question: Should we create an Edge Manager to handle edge calculations and queries?
+
+**Decision:**
+NO Edge Manager for Phase 1-2. Edges are calculated outputs, not managed entities:
+- **Model Manager** calculates edges (part of evaluate())
+- **Strategy Manager** queries edges (part of find_opportunities())
+- **Database** handles cleanup (TTL-based DELETE)
+
+Phase 1.5 architecture: **3 managers** (Strategy, Model, Position) - NOT 4
+
+**Consequences:**
+- **Positive:**
+  - Simpler architecture (3 components vs 4)
+  - Clearer responsibilities (Model produces, Strategy consumes)
+  - Less code (~200-300 lines saved)
+  - Easier testing (context-specific edge tests)
+- **Negative:**
+  - Distributed edge logic (not centralized)
+  - Reconsider if Phase 3+ needs ensemble aggregation
+- **Neutral:**
+  - Edge table acts as message queue between managers
+
+**References:**
+- DEVELOPMENT_PHASES_V1.4.md (Phase 1.5 deliverables)
+- DATABASE_SCHEMA_SUMMARY_V1.9.md (edges table)
+- REQ-TRADING-001, REQ-ML-001
+
+---
+
 ## ADR Statistics
 
-**Total ADRs:** 65
-**Accepted (✅):** 37 (Phase 0-1.5 partial)
+**Total ADRs:** 67
+**Accepted (✅):** 39 (Phase 0-1.5 partial)
 **Proposed (🔵):** 28 (Phase 0.7, 1, 2-10)
 **Rejected (❌):** 0
 **Superseded (⚠️):** 0
@@ -448,7 +530,7 @@ Implement 4-level priority hierarchy:
 - Phase 0: 17 ADRs (100% accepted)
 - Phase 0.5: 12 ADRs (100% accepted)
 - Phase 1: 12 ADRs (6 accepted for DB completion + 6 planned for API best practices)
-- Phase 1.5: 1 ADR (100% accepted - property-based testing POC)
+- Phase 1.5: 3 ADRs (100% accepted - property-based testing POC + schema standardization + no edge manager)
 - Phase 0.6c: 5 ADRs (100% accepted - includes cross-platform standards)
 - Phase 0.7: 6 ADRs (2 accepted: Python 3.14 compatibility + Branch Protection + 4 planned)
 - Phase 2: 3 ADRs (0% - planned)

@@ -257,10 +257,10 @@ jobs:
 
           # Count how many jobs were skipped (due to path filtering)
           SKIPPED=0
-          [[ "${{ needs.pre-commit-checks.result }}" == "skipped" ]] && ((SKIPPED++))
-          [[ "${{ needs.security-scan.result }}" == "skipped" ]] && ((SKIPPED++))
-          [[ "${{ needs.test.result }}" == "skipped" ]] && ((SKIPPED++))
-          [[ "${{ needs.validate-quick.result }}" == "skipped" ]] && ((SKIPPED++))
+          [[ "${{ needs.pre-commit-checks.result }}" == "skipped" ]] && ((SKIPPED+=1))
+          [[ "${{ needs.security-scan.result }}" == "skipped" ]] && ((SKIPPED+=1))
+          [[ "${{ needs.test.result }}" == "skipped" ]] && ((SKIPPED+=1))
+          [[ "${{ needs.validate-quick.result }}" == "skipped" ]] && ((SKIPPED+=1))
 
           echo ""
           if [[ $SKIPPED -gt 0 ]]; then
