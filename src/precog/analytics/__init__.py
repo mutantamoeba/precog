@@ -8,6 +8,10 @@ This module contains analytics-related functionality including:
 Reference: docs/foundation/DEVELOPMENT_PHASES_V1.5.md Phase 1.5
 """
 
-from precog.analytics.model_manager import ModelManager
+from precog.analytics.model_manager import (
+    ImmutabilityError,
+    InvalidStatusTransitionError,
+    ModelManager,
+)
 
-__all__ = ["ModelManager"]
+__all__ = ["ImmutabilityError", "InvalidStatusTransitionError", "ModelManager"]
