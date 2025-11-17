@@ -71,17 +71,17 @@ repos:
         args:
           - -c
           - |
-            # Check for print() in production code paths (excludes scripts/ and tests/)
+            # Check for print() in production code paths (excludes scripts/, tests/, migrations/)
             # Production paths: database/, api_connectors/, trading/, analytics/, utils/, config/
-            # Excludes docstring examples (>>> print(...) and ... print(...))
-            staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '(database|api_connectors|trading|analytics|utils|config)/.*\.py$' || true)
+            # Excludes: migrations/ (standalone scripts), docstring examples (>>> print(...))
+            staged_files=$(git diff --cached --name-only --diff-filter=ACM | grep -E '(database|api_connectors|trading|analytics|utils|config)/.*\.py$' | grep -v 'migrations/' || true)
             if [ -n "$staged_files" ]; then
               # Use grep to find print() but exclude docstring examples (lines with >>> or ...)
               if echo "$staged_files" | xargs grep -n 'print(' 2>/dev/null | grep -v -E '(>>>|\.\.\.)' ; then
                 echo ""
                 echo "ERROR: Found print() statements in production code!"
                 echo "Fix: Use logger.info(), logger.debug(), or logger.error() instead"
-                echo "Allowed: print() in scripts/ and tests/ directories"
+                echo "Allowed: print() in scripts/, tests/, and migrations/ directories"
                 exit 1
               fi
             fi
@@ -89,6 +89,7 @@ repos:
         language: system
         pass_filenames: false
         files: '(database|api_connectors|trading|analytics|utils|config)/.*\.py$'
+        exclude: 'migrations/.*\.py$'
         description: "Prevents print() in production code (use structured logging instead)"
 
       # CODE_REVIEW_TEMPLATE enforcement: Basic REQ traceability
