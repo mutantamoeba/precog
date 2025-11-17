@@ -19,7 +19,7 @@ References:
     - ADR-018: Immutable Strategy Versions (applies to models too)
     - ADR-019: Semantic Versioning for Strategies (applies to models too)
     - docs/guides/VERSIONING_GUIDE_V1.0.md
-    - docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md (lines 351-395)
+    - docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md (probability_models table with approach/domain fields)
 
 Phase: 1.5 (Foundation Validation)
 """
@@ -74,14 +74,14 @@ class ModelManager:
         - model_id (PK, SERIAL)
         - model_name (VARCHAR, e.g., 'elo_nfl')
         - model_version (VARCHAR, e.g., 'v1.0', 'v1.1', 'v2.0')
-        - model_type (VARCHAR, e.g., 'elo', 'ensemble', 'ml')
-        - sport (VARCHAR, nullable, e.g., 'nfl', 'ncaaf', 'nba')
+        - approach (VARCHAR, e.g., 'elo', 'ensemble', 'ml', 'hybrid')
+        - domain (VARCHAR, nullable, e.g., 'nfl', 'ncaaf', 'nba')
         - config (JSONB, IMMUTABLE)
         - description (TEXT, nullable)
         - status (VARCHAR, MUTABLE, default 'draft')
-        - calibration_score (DECIMAL, MUTABLE, nullable)
-        - accuracy (DECIMAL, MUTABLE, nullable)
-        - predictions_count (INTEGER, MUTABLE, default 0)
+        - validation_calibration (DECIMAL, MUTABLE, nullable)
+        - validation_accuracy (DECIMAL, MUTABLE, nullable)
+        - validation_sample_size (INTEGER, MUTABLE, nullable)
         - created_at (TIMESTAMP, auto)
         - created_by (VARCHAR, nullable)
         - notes (TEXT, nullable)
@@ -90,16 +90,16 @@ class ModelManager:
     References:
         - REQ-VER-001: Immutable Version Configs
         - REQ-VER-004: Version Lifecycle Management
-        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md (lines 351-395)
+        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md (probability_models table with approach/domain fields)
     """
 
     def create_model(
         self,
         model_name: str,
         model_version: str,
-        model_type: str,
+        approach: str,
         config: dict[str, Any],
-        sport: str | None = None,
+        domain: str | None = None,
         description: str | None = None,
         status: str = "draft",
         created_by: str | None = None,
@@ -110,9 +110,9 @@ class ModelManager:
         Args:
             model_name: Model identifier (e.g., 'elo_nfl')
             model_version: Semantic version (e.g., 'v1.0', 'v1.1', 'v2.0')
-            model_type: Type of model ('elo', 'ensemble', 'ml', 'hybrid')
+            approach: HOW model works ('elo', 'ensemble', 'ml', 'hybrid', 'regression')
             config: Model parameters (IMMUTABLE once created!)
-            sport: Sport this model applies to (optional, e.g., 'nfl', 'ncaaf')
+            domain: WHICH markets ('nfl', 'ncaaf', 'nba', etc.) or None for multi-domain
             description: Human-readable description (optional)
             status: Initial status (default 'draft')
             created_by: Creator identifier (optional)
@@ -141,13 +141,13 @@ class ModelManager:
             >>> model = manager.create_model(
             ...     model_name="elo_nfl",
             ...     model_version="v1.0",
-            ...     model_type="elo",
+            ...     approach="elo",
             ...     config={
             ...         "k_factor": Decimal("32.0"),
             ...         "home_advantage": Decimal("55.0"),
             ...         "mean_reversion": Decimal("0.33")
             ...     },
-            ...     sport="nfl",
+            ...     domain="nfl",
             ...     description="NFL Elo model with home field advantage"
             ... )
             >>> model['model_id']  # Returns generated ID
@@ -171,13 +171,13 @@ class ModelManager:
         try:
             insert_sql = """
                 INSERT INTO probability_models (
-                    model_name, model_version, model_type, sport, config,
+                    model_name, model_version, approach, domain, config,
                     description, status, created_by, notes
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING model_id, model_name, model_version, model_type,
-                          sport, config, description, status, calibration_score, accuracy,
-                          predictions_count, created_at, created_by, notes
+                RETURNING model_id, model_name, model_version, approach,
+                          domain, config, description, status, validation_calibration, validation_accuracy,
+                          validation_sample_size, created_at, created_by, notes
             """
 
             cursor.execute(
@@ -185,8 +185,8 @@ class ModelManager:
                 (
                     model_name,
                     model_version,
-                    model_type,
-                    sport,
+                    approach,
+                    domain,
                     config_jsonb,
                     description,
                     status,
@@ -217,32 +217,65 @@ class ModelManager:
             cursor.close()
             conn.close()
 
-    def get_model(self, model_id: int) -> dict[str, Any] | None:
-        """Retrieve model by ID.
+    def get_model(
+        self,
+        model_id: int | None = None,
+        model_name: str | None = None,
+        model_version: str | None = None,
+    ) -> dict[str, Any] | None:
+        """Retrieve model by ID or by name+version.
 
         Args:
-            model_id: Model primary key
+            model_id: Model primary key (exclusive with model_name+model_version)
+            model_name: Model identifier (requires model_version)
+            model_version: Model version (requires model_name)
 
         Returns:
             Model as dict, or None if not found
 
+        Raises:
+            ValueError: If neither ID nor name+version provided, or if only one of name/version provided
+
         Educational Note:
             Config returned as dict with Decimal values (Pattern 1 compliance).
             Database stores as JSONB strings, we convert back to Decimal.
+
+        Example:
+            >>> model = manager.get_model(model_id=1)
+            >>> model = manager.get_model(model_name='nfl_elo_v1', model_version='1.0')
         """
+        # Validate parameters
+        if model_id is not None and (model_name is not None or model_version is not None):
+            raise ValueError("Provide either model_id OR model_name+model_version, not both")
+
+        if model_id is None and (model_name is None or model_version is None):
+            raise ValueError("Provide either model_id OR both model_name and model_version")
+
         conn = get_connection()
         cursor = conn.cursor()
 
         try:
-            select_sql = """
-                SELECT model_id, model_name, model_version, model_type,
-                       sport, config, description, status, calibration_score, accuracy,
-                       predictions_count, created_at, created_by, notes
-                FROM probability_models
-                WHERE model_id = %s
-            """
+            if model_id is not None:
+                # Query by ID
+                select_sql = """
+                    SELECT model_id, model_name, model_version, approach,
+                           domain, config, description, status, validation_calibration, validation_accuracy,
+                           validation_sample_size, created_at, created_by, notes
+                    FROM probability_models
+                    WHERE model_id = %s
+                """
+                cursor.execute(select_sql, (model_id,))
+            else:
+                # Query by name+version
+                select_sql = """
+                    SELECT model_id, model_name, model_version, approach,
+                           domain, config, description, status, validation_calibration, validation_accuracy,
+                           validation_sample_size, created_at, created_by, notes
+                    FROM probability_models
+                    WHERE model_name = %s AND model_version = %s
+                """
+                cursor.execute(select_sql, (model_name, model_version))
 
-            cursor.execute(select_sql, (model_id,))
             row = cursor.fetchone()
 
             if not row:
@@ -270,7 +303,7 @@ class ModelManager:
         Example:
             >>> models = manager.get_models_by_name('elo_nfl')
             >>> for model in models:
-            ...     print(f"{model['model_version']}: {model['calibration_score']}")
+            ...     print(f"{model['model_version']}: {model['validation_calibration']}")
             v1.1: 0.0523
             v1.0: 0.0687
         """
@@ -279,9 +312,9 @@ class ModelManager:
 
         try:
             select_sql = """
-                SELECT model_id, model_name, model_version, model_type,
-                       sport, config, description, status, calibration_score, accuracy,
-                       predictions_count, created_at, created_by, notes
+                SELECT model_id, model_name, model_version, approach,
+                       domain, config, description, status, validation_calibration, validation_accuracy,
+                       validation_sample_size, created_at, created_by, notes
                 FROM probability_models
                 WHERE model_name = %s
                 ORDER BY created_at DESC
@@ -312,9 +345,9 @@ class ModelManager:
 
         try:
             select_sql = """
-                SELECT model_id, model_name, model_version, model_type,
-                       sport, config, description, status, calibration_score, accuracy,
-                       predictions_count, created_at, created_by, notes
+                SELECT model_id, model_name, model_version, approach,
+                       domain, config, description, status, validation_calibration, validation_accuracy,
+                       validation_sample_size, created_at, created_by, notes
                 FROM probability_models
                 WHERE status = 'active'
                 ORDER BY model_name, created_at DESC
@@ -378,9 +411,9 @@ class ModelManager:
                 UPDATE probability_models
                 SET status = %s
                 WHERE model_id = %s
-                RETURNING model_id, model_name, model_version, model_type,
-                          sport, config, description, status, calibration_score, accuracy,
-                          predictions_count, created_at, created_by, notes
+                RETURNING model_id, model_name, model_version, approach,
+                          domain, config, description, status, validation_calibration, validation_accuracy,
+                          validation_sample_size, created_at, created_by, notes
             """
 
             cursor.execute(update_sql, (new_status, model_id))
@@ -398,17 +431,17 @@ class ModelManager:
     def update_metrics(
         self,
         model_id: int,
-        calibration_score: Decimal | None = None,
-        accuracy: Decimal | None = None,
-        predictions_count: int | None = None,
+        validation_calibration: Decimal | None = None,
+        validation_accuracy: Decimal | None = None,
+        validation_sample_size: int | None = None,
     ) -> dict[str, Any]:
         """Update model performance metrics (MUTABLE fields).
 
         Args:
             model_id: Model to update
-            calibration_score: Brier score / log loss (optional)
-            accuracy: Overall accuracy (optional)
-            predictions_count: Number of predictions made (optional)
+            validation_calibration: Brier score / log loss (optional)
+            validation_accuracy: Overall accuracy (optional)
+            validation_sample_size: Number of samples made (optional)
 
         Returns:
             Updated model as dict
@@ -428,32 +461,34 @@ class ModelManager:
         Example:
             >>> model = manager.update_metrics(
             ...     model_id=1,
-            ...     calibration_score=Decimal("0.0523"),
-            ...     accuracy=Decimal("0.6789"),
-            ...     predictions_count=1000
+            ...     validation_calibration=Decimal("0.0523"),
+            ...     validation_accuracy=Decimal("0.6789"),
+            ...     validation_sample_size=1000
             ... )
 
         References:
             - REQ-VER-005: A/B Testing Support
         """
-        if all(v is None for v in [calibration_score, accuracy, predictions_count]):
+        if all(
+            v is None for v in [validation_calibration, validation_accuracy, validation_sample_size]
+        ):
             raise ValueError("At least one metric must be provided")
 
         # Build dynamic UPDATE
         updates: list[str] = []
         params: list[Decimal | int] = []
 
-        if calibration_score is not None:
-            updates.append("calibration_score = %s")
-            params.append(calibration_score)
+        if validation_calibration is not None:
+            updates.append("validation_calibration = %s")
+            params.append(validation_calibration)
 
-        if accuracy is not None:
-            updates.append("accuracy = %s")
-            params.append(accuracy)
+        if validation_accuracy is not None:
+            updates.append("validation_accuracy = %s")
+            params.append(validation_accuracy)
 
-        if predictions_count is not None:
-            updates.append("predictions_count = %s")
-            params.append(predictions_count)
+        if validation_sample_size is not None:
+            updates.append("validation_sample_size = %s")
+            params.append(validation_sample_size)
 
         params.append(model_id)
 
@@ -467,9 +502,9 @@ class ModelManager:
                 UPDATE probability_models
                 SET {", ".join(updates)}
                 WHERE model_id = %s
-                RETURNING model_id, model_name, model_version, model_type,
-                          sport, config, description, status, calibration_score, accuracy,
-                          predictions_count, created_at, created_by, notes
+                RETURNING model_id, model_name, model_version, approach,
+                          domain, config, description, status, validation_calibration, validation_accuracy,
+                          validation_sample_size, created_at, created_by, notes
             """
 
             cursor.execute(update_sql, params)
@@ -485,8 +520,8 @@ class ModelManager:
                 extra={
                     k: v
                     for k, v in zip(
-                        ["calibration", "accuracy", "predictions"],
-                        [calibration_score, accuracy, predictions_count],
+                        ["calibration", "accuracy", "sample_size"],
+                        [validation_calibration, validation_accuracy, validation_sample_size],
                         strict=False,
                     )
                     if v is not None
