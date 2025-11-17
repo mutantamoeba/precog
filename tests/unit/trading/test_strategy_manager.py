@@ -46,8 +46,8 @@ def strategy_factory() -> dict[str, Any]:
     return {
         "strategy_name": "value_betting_v1",
         "strategy_version": "1.0",
-        "strategy_type": "value_betting",
-        "sport": "nfl",
+        "approach": "value_betting",
+        "domain": "nfl",
         "config": {
             "min_edge": Decimal("0.0500"),  # 5% minimum edge
             "max_position_size": Decimal("100.00"),  # $100 max per position
@@ -80,8 +80,8 @@ def mock_cursor():
         ("strategy_id",),
         ("strategy_name",),
         ("strategy_version",),
-        ("strategy_type",),
-        ("sport",),
+        ("approach",),
+        ("domain",),
         ("config",),
         ("description",),
         ("status",),
@@ -240,8 +240,8 @@ class TestStrategyManagerCreate:
             1,  # strategy_id
             "value_betting_v1",  # strategy_name
             "1.0",  # strategy_version
-            "value_betting",  # strategy_type
-            "nfl",  # sport
+            "value_betting",  # approach
+            "nfl",  # domain
             {  # config (JSONB → dict, automatic conversion by psycopg2)
                 "min_edge": "0.0500",
                 "max_position_size": "100.00",
@@ -269,8 +269,8 @@ class TestStrategyManagerCreate:
         assert result["strategy_id"] == 1
         assert result["strategy_name"] == "value_betting_v1"
         assert result["strategy_version"] == "1.0"
-        assert result["strategy_type"] == "value_betting"
-        assert result["sport"] == "nfl"
+        assert result["approach"] == "value_betting"
+        assert result["domain"] == "nfl"
         assert result["status"] == "draft"
         assert result["created_by"] == "test_user"
 
