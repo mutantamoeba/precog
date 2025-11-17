@@ -262,10 +262,10 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.15.md** | ✅ | v2.15 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.15** (added REQ-CICD-004: Pre-Commit Hooks, REQ-CICD-005: Pre-Push Hooks retroactively for Phase 0.7 traceability; updated REQ-CICD-003 status to Complete; 111 → 113 total requirements) |
-| **MASTER_INDEX_V2.24.md** | ✅ | v2.24 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.24** (Added PHASE_1.5_TEST_PLAN_V1.0.md to testing & quality documents section) |
-| **ARCHITECTURE_DECISIONS_V2.15.md** | ✅ | v2.15 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (86 total) - **UPDATED V2.15** (ADR-046: Branch Protection Strategy added retroactively for Phase 0.7 traceability; ADR-055: Sentry Production Error Tracking) |
+| **MASTER_INDEX_V2.24.md** | ✅ | v2.24 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.24** (Added PHASE_1.5_TEST_PLAN_V1.0.md; merged schema standardization docs from V2.23) |
+| **ARCHITECTURE_DECISIONS_V2.16.md** | ✅ | v2.16 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (87 total) - **UPDATED V2.16** (ADR-086: Schema Classification Field Naming - approach/domain standardization; ADR-087: No Edge Manager Component - calculated outputs pattern) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.7 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 113 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.7** (added REQ-CICD-004: Pre-Commit Hooks, REQ-CICD-005: Pre-Push Hooks; updated REQ-CICD-003 status to Complete) |
-| **ADR_INDEX_V1.10.md** | ✅ | v1.10 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 65 architecture decisions - **UPDATED V1.10** (ADR-046: Branch Protection Strategy added retroactively for Phase 0.7) |
+| **ADR_INDEX_V1.11.md** | ✅ | v1.11 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 67 architecture decisions - **UPDATED V1.11** (ADR-086: Schema Classification Field Naming - approach/domain; ADR-087: No Edge Manager Component - Phase 1.5) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.5** |
 | **TESTING_STRATEGY_V2.1.md** | ✅ | v2.1 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V2.1** - Added Coverage Target Workflow: tier-based targets (Critical ≥90%, Business ≥85%, Infrastructure ≥80%), PR tracking template, acceptable gap criteria, phase completion validation checklist |
@@ -293,7 +293,7 @@ Schema design, data models, and database architecture.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DATABASE_SCHEMA_SUMMARY_V1.8.md** | ✅ | v1.8 | `/docs/database/` | 0.5-1 | Phases 1-10 | 🔴 Critical | **UPDATED V1.8** - Complete schema with migrations 001-010, 34 tables (25 operational + 6 materialized views + 3 A/B testing tables) |
+| **DATABASE_SCHEMA_SUMMARY_V1.9.md** | ✅ | v1.9 | `/docs/database/` | 0.5-1 | Phases 1-10 | 🔴 Critical | **UPDATED V1.9** - Schema standardization (Migration 011: category→approach, subcategory→domain, added 7 fields each to probability_models + strategies, 34 tables total) |
 | **DATABASE_TABLES_REFERENCE.md** | ✅ | v1.0 | `/docs/database/` | 1 | Phases 1-10 | 🟡 High | Quick lookup for all tables, common queries (Phase 1) |
 | **ODDS_RESEARCH_COMPREHENSIVE.md** | ✅ | v1.0 | `/docs/database/` | 4 | Phase 4, 9 | 🟡 High | Historical odds methodology, merged into models |
 | **DATA_DICTIONARY.md** | 🔵 | - | `/docs/database/` | 6-7 | Phases 6-10 | 🟡 High | Comprehensive data dictionary - all columns documented (planned Phase 6-7) |

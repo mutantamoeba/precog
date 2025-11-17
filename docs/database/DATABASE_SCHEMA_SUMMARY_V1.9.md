@@ -1,9 +1,30 @@
 # Database Schema Summary
 
 ---
-**Version:** 1.8
-**Last Updated:** 2025-11-09
-**Status:** ✅ Current - Analytics Infrastructure Added
+**Version:** 1.9
+**Last Updated:** 2025-11-17
+**Status:** ✅ Current - Schema Standardization (approach/domain)
+**Changes in v1.9:**
+- **SCHEMA STANDARDIZATION**: Renamed classification fields across probability_models and strategies tables (Migration 011)
+- **probability_models changes:**
+  - Renamed `model_type` → `approach` (HOW the model works: elo, regression, ensemble, neural_net)
+  - Renamed `sport` → `domain` (WHICH markets: nfl, nba, elections, economics, NULL for multi-domain)
+  - Added 7 new fields: `training_start_date`, `training_end_date`, `training_sample_size`, `activated_at`, `deactivated_at`, `description`, `created_by`
+  - Total fields: 19 (was 15 documented in V1.8)
+  - Added index: `idx_probability_models_approach_domain` for efficient filtering
+- **strategies changes:**
+  - Renamed `strategy_type` → `approach` (HOW the strategy works: value, arbitrage, momentum, mean_reversion)
+  - Renamed `sport` → `domain` (WHICH markets: nfl, nba, elections, economics, NULL for multi-domain)
+  - Added 7 new fields: `platform_id`, `activated_at`, `deactivated_at`, `updated_at`, `description`, `created_by`
+  - Total fields: 20 (was 15 documented in V1.8)
+  - Added indexes: `idx_strategies_approach_domain`, `idx_strategies_platform` for efficient filtering
+- **Rationale for approach/domain naming:**
+  - Semantically consistent across both tables (HOW it works / WHICH markets)
+  - Future-proof for Phase 2+ expansion (elections, economics markets)
+  - More descriptive than generic "type" or "category"
+  - See ADR-086 for detailed decision analysis and alternatives considered
+- **Schema Drift Prevention:** Added DEF-P1-008 automated schema validation script (scripts/validate_schema.py)
+- **Migration Safe:** Migration 011 uses metadata-only renames (~2 seconds, no data copying), all new fields nullable
 **Changes in v1.8:**
 - **NEW SECTION 8**: Performance Tracking & Analytics - 7 new tables + 2 materialized views
 - **NEW**: performance_metrics table - Unified tracking for strategies, models, methods, edges, ensembles
@@ -253,30 +274,36 @@ SET
 WHERE category = 'sports' AND subcategory = 'nfl' AND state_descriptor = 'halftime';
 ```
 
-#### probability_models (NEW in v1.4)
+#### probability_models (NEW in v1.4, UPDATED in v1.9)
 ```sql
 CREATE TABLE probability_models (
     model_id SERIAL PRIMARY KEY,
-    model_name VARCHAR NOT NULL,         -- 'elo_nfl', 'regression_nba', 'ensemble_v1'
-    model_version VARCHAR NOT NULL,      -- 'v1.0', 'v1.1', 'v2.0' (semantic versioning)
-    model_type VARCHAR NOT NULL,         -- 'elo', 'regression', 'ensemble', 'ml'
-    sport VARCHAR,                       -- 'nfl', 'nba', 'mlb' (NULL for multi-sport)
-    config JSONB NOT NULL,               -- ⚠️ IMMUTABLE: Model parameters/hyperparameters
-    description TEXT,
-    status VARCHAR DEFAULT 'draft',      -- ✅ MUTABLE: 'draft', 'training', 'validating', 'active', 'deprecated'
-    validation_accuracy DECIMAL(10,4),   -- ✅ MUTABLE: Accuracy on validation set
-    validation_calibration DECIMAL(10,4),-- ✅ MUTABLE: Calibration score
-    validation_sample_size INT,          -- ✅ MUTABLE: Number of validation samples
+    model_name VARCHAR NOT NULL,              -- 'elo_nfl', 'regression_nba', 'ensemble_v1'
+    model_version VARCHAR NOT NULL,           -- 'v1.0', 'v1.1', 'v2.0' (semantic versioning)
+    approach VARCHAR NOT NULL,                -- ✅ V1.9: HOW it works: 'elo', 'regression', 'ensemble', 'neural_net'
+    domain VARCHAR,                           -- ✅ V1.9: WHICH markets: 'nfl', 'nba', 'elections', 'economics' (NULL for multi-domain)
+    config JSONB NOT NULL,                    -- ⚠️ IMMUTABLE: Model parameters/hyperparameters
+    training_start_date DATE,                 -- ✅ V1.9: Training period start
+    training_end_date DATE,                   -- ✅ V1.9: Training period end
+    training_sample_size INT,                 -- ✅ V1.9: Number of training samples
+    status VARCHAR DEFAULT 'draft',           -- ✅ MUTABLE: 'draft', 'training', 'validating', 'active', 'deprecated'
+    activated_at TIMESTAMP,                   -- ✅ V1.9: When model was activated for production
+    deactivated_at TIMESTAMP,                 -- ✅ V1.9: When model was deactivated
+    notes TEXT,                               -- ✅ MUTABLE: Notes on model lifecycle
+    validation_accuracy DECIMAL(10,4),        -- ✅ MUTABLE: Accuracy on validation set
+    validation_calibration DECIMAL(10,4),     -- ✅ MUTABLE: Calibration score
+    validation_sample_size INT,               -- ✅ MUTABLE: Number of validation samples
     created_at TIMESTAMP DEFAULT NOW(),
-    created_by VARCHAR,
-    notes TEXT,
-    UNIQUE(model_name, model_version)    -- Enforce unique versions per model
+    description TEXT,                         -- ✅ V1.9: Audit field - Model purpose/methodology
+    created_by VARCHAR,                       -- ✅ V1.9: Audit trail - Who created this model version
+    UNIQUE(model_name, model_version)         -- Enforce unique versions per model
     -- ❌ NO row_current_ind (versions are IMMUTABLE)
 );
 
 CREATE INDEX idx_probability_models_name ON probability_models(model_name);
 CREATE INDEX idx_probability_models_status ON probability_models(status);
 CREATE INDEX idx_probability_models_active ON probability_models(status) WHERE status = 'active';
+CREATE INDEX idx_probability_models_approach_domain ON probability_models(approach, domain);  -- ✅ V1.9: Filter by approach+domain
 ```
 
 **Immutable Version Pattern:**
@@ -286,45 +313,97 @@ CREATE INDEX idx_probability_models_active ON probability_models(status) WHERE s
 - `status` field is MUTABLE (lifecycle: draft → training → validating → active → deprecated)
 - Validation metrics are MUTABLE (updated as model is evaluated)
 
+**V1.9 Schema Changes (Migration 011):**
+- **Renamed:** `model_type` → `approach` (HOW the model works)
+- **Renamed:** `sport` → `domain` (WHICH markets it applies to)
+- **Added:** `training_start_date`, `training_end_date`, `training_sample_size` (training metadata)
+- **Added:** `activated_at`, `deactivated_at` (lifecycle tracking)
+- **Added:** `description` (audit field for model purpose/methodology)
+- **Added:** `created_by` (audit trail)
+- **Added Index:** `idx_probability_models_approach_domain` for efficient filtering
+
+**Rationale for approach/domain Naming:**
+- **approach**: Semantically consistent across tables (HOW it works: elo, regression, neural_net)
+- **domain**: Future-proof for Phase 2+ expansion (nfl, elections, economics, NULL for multi-domain)
+- **Superiority**: More descriptive than generic "type" or "category", consistent meaning across both probability_models and strategies
+- **See:** ADR-086 for detailed decision rationale and alternatives considered
+
 **Example:**
 ```sql
--- Original model
-INSERT INTO probability_models (model_name, model_version, model_type, sport, config, status)
-VALUES ('elo_nfl', 'v1.0', 'elo', 'nfl', '{"k_factor": 28, "initial_rating": 1500}', 'active');
+-- Original model (V1.9 schema)
+INSERT INTO probability_models (
+    model_name, model_version, approach, domain, config, status,
+    training_start_date, training_end_date, training_sample_size,
+    description, created_by
+)
+VALUES (
+    'elo_nfl', 'v1.0', 'elo', 'nfl',
+    '{"k_factor": 28, "initial_rating": 1500}', 'active',
+    '2023-09-01', '2024-01-31', 2847,
+    'Baseline Elo model for NFL regular season + playoffs', 'data_science_team'
+);
 
 -- Bug fix: k_factor should be 30 → Create v1.1
-INSERT INTO probability_models (model_name, model_version, model_type, sport, config, status)
-VALUES ('elo_nfl', 'v1.1', 'elo', 'nfl', '{"k_factor": 30, "initial_rating": 1500}', 'active');
+INSERT INTO probability_models (
+    model_name, model_version, approach, domain, config, status,
+    training_start_date, training_end_date, training_sample_size,
+    description, created_by
+)
+VALUES (
+    'elo_nfl', 'v1.1', 'elo', 'nfl',
+    '{"k_factor": 30, "initial_rating": 1500}', 'active',
+    '2023-09-01', '2024-01-31', 2847,
+    'Tuned k_factor based on validation set performance', 'data_science_team'
+);
 
 -- Update v1.0 status (config stays unchanged)
-UPDATE probability_models SET status = 'deprecated' WHERE model_name = 'elo_nfl' AND model_version = 'v1.0';
+UPDATE probability_models
+SET status = 'deprecated', deactivated_at = NOW()
+WHERE model_name = 'elo_nfl' AND model_version = 'v1.0';
+
+-- Multi-domain example (Phase 2+)
+INSERT INTO probability_models (
+    model_name, model_version, approach, domain, config, status,
+    description, created_by
+)
+VALUES (
+    'ensemble_all_sports', 'v1.0', 'ensemble', NULL,  -- NULL domain = multi-domain
+    '{"weights": {"elo": 0.4, "regression": 0.3, "neural_net": 0.3}}', 'draft',
+    'Multi-sport ensemble combining 3 model approaches', 'ml_team'
+);
 ```
 
-#### strategies (NEW in v1.4)
+#### strategies (NEW in v1.4, UPDATED in v1.9)
 ```sql
 CREATE TABLE strategies (
     strategy_id SERIAL PRIMARY KEY,
-    strategy_name VARCHAR NOT NULL,      -- 'halftime_entry', 'underdog_fade', 'momentum_scalp'
-    strategy_version VARCHAR NOT NULL,   -- 'v1.0', 'v1.1', 'v2.0' (semantic versioning)
-    strategy_type VARCHAR NOT NULL,      -- 'entry', 'exit', 'sizing', 'hedging'
-    sport VARCHAR,                       -- 'nfl', 'nba', 'mlb' (NULL for multi-sport)
-    config JSONB NOT NULL,               -- ⚠️ IMMUTABLE: Strategy parameters/rules
-    description TEXT,
-    status VARCHAR DEFAULT 'draft',      -- ✅ MUTABLE: 'draft', 'testing', 'active', 'inactive', 'deprecated'
-    paper_roi DECIMAL(10,4),             -- ✅ MUTABLE: ROI from paper trading
-    live_roi DECIMAL(10,4),              -- ✅ MUTABLE: ROI from live trading
-    paper_trades_count INT DEFAULT 0,    -- ✅ MUTABLE: Number of paper trades executed
-    live_trades_count INT DEFAULT 0,     -- ✅ MUTABLE: Number of live trades executed
+    platform_id VARCHAR,                      -- ✅ V1.9: Platform identifier (e.g., 'kalshi', 'polymarket')
+    strategy_name VARCHAR NOT NULL,           -- 'halftime_entry', 'underdog_fade', 'momentum_scalp'
+    strategy_version VARCHAR NOT NULL,        -- 'v1.0', 'v1.1', 'v2.0' (semantic versioning)
+    approach VARCHAR NOT NULL,                -- ✅ V1.9: HOW it works: 'value', 'arbitrage', 'momentum', 'mean_reversion'
+    domain VARCHAR,                           -- ✅ V1.9: WHICH markets: 'nfl', 'nba', 'elections', 'economics' (NULL for multi-domain)
+    config JSONB NOT NULL,                    -- ⚠️ IMMUTABLE: Strategy parameters/rules
+    status VARCHAR DEFAULT 'draft',           -- ✅ MUTABLE: 'draft', 'testing', 'active', 'inactive', 'deprecated'
+    activated_at TIMESTAMP,                   -- ✅ V1.9: When strategy was activated for production
+    deactivated_at TIMESTAMP,                 -- ✅ V1.9: When strategy was deactivated
+    notes TEXT,                               -- ✅ MUTABLE: Notes on strategy lifecycle
+    paper_trades_count INT DEFAULT 0,         -- ✅ MUTABLE: Number of paper trades executed
+    paper_roi DECIMAL(10,4),                  -- ✅ MUTABLE: ROI from paper trading
+    live_trades_count INT DEFAULT 0,          -- ✅ MUTABLE: Number of live trades executed
+    live_roi DECIMAL(10,4),                   -- ✅ MUTABLE: ROI from live trading
     created_at TIMESTAMP DEFAULT NOW(),
-    created_by VARCHAR,
-    notes TEXT,
-    UNIQUE(strategy_name, strategy_version)  -- Enforce unique versions per strategy
+    updated_at TIMESTAMP,                     -- ✅ V1.9: Last update timestamp (for metrics)
+    description TEXT,                         -- ✅ V1.9: Audit field - Strategy purpose/logic
+    created_by VARCHAR,                       -- ✅ V1.9: Audit trail - Who created this strategy version
+    UNIQUE(strategy_name, strategy_version)   -- Enforce unique versions per strategy
     -- ❌ NO row_current_ind (versions are IMMUTABLE)
 );
 
 CREATE INDEX idx_strategies_name ON strategies(strategy_name);
 CREATE INDEX idx_strategies_status ON strategies(status);
 CREATE INDEX idx_strategies_active ON strategies(status) WHERE status = 'active';
+CREATE INDEX idx_strategies_approach_domain ON strategies(approach, domain);  -- ✅ V1.9: Filter by approach+domain
+CREATE INDEX idx_strategies_platform ON strategies(platform_id);              -- ✅ V1.9: Filter by platform
 ```
 
 **Immutable Version Pattern:**
@@ -334,19 +413,66 @@ CREATE INDEX idx_strategies_active ON strategies(status) WHERE status = 'active'
 - `status` field is MUTABLE (lifecycle: draft → testing → active → inactive → deprecated)
 - Performance metrics are MUTABLE (paper_roi, live_roi accumulate over time)
 
+**V1.9 Schema Changes (Migration 011):**
+- **Renamed:** `strategy_type` → `approach` (HOW the strategy works)
+- **Renamed:** `sport` → `domain` (WHICH markets it applies to)
+- **Added:** `platform_id` (multi-platform support for Phase 2+)
+- **Added:** `activated_at`, `deactivated_at` (lifecycle tracking)
+- **Added:** `updated_at` (last metrics update timestamp)
+- **Added:** `description` (audit field for strategy purpose/logic)
+- **Added:** `created_by` (audit trail)
+- **Added Indexes:** `idx_strategies_approach_domain`, `idx_strategies_platform` for efficient filtering
+
+**Rationale for approach/domain Naming:**
+- **approach**: Semantically consistent across tables (HOW it works: value, arbitrage, momentum)
+- **domain**: Future-proof for Phase 2+ expansion (nfl, elections, economics, NULL for multi-domain)
+- **Superiority**: More descriptive than generic "type" or "category", consistent meaning across both probability_models and strategies
+- **See:** ADR-086 for detailed decision rationale and alternatives considered
+
 **Example:**
 ```sql
--- Original strategy
-INSERT INTO strategies (strategy_name, strategy_version, strategy_type, sport, config, status)
-VALUES ('halftime_entry', 'v1.0', 'entry', 'nfl', '{"min_lead": 7, "max_spread": 0.08}', 'testing');
+-- Original strategy (V1.9 schema)
+INSERT INTO strategies (
+    platform_id, strategy_name, strategy_version, approach, domain, config, status,
+    description, created_by
+)
+VALUES (
+    'kalshi', 'halftime_entry', 'v1.0', 'value', 'nfl',
+    '{"min_lead": 7, "max_spread": 0.08, "min_edge": 0.05}', 'testing',
+    'Entry strategy for NFL games at halftime with positive edge', 'trading_team'
+);
 
 -- Bug fix: min_lead should be 10 → Create v1.1
-INSERT INTO strategies (strategy_name, strategy_version, strategy_type, sport, config, status)
-VALUES ('halftime_entry', 'v1.1', 'entry', 'nfl', '{"min_lead": 10, "max_spread": 0.08}', 'testing');
+INSERT INTO strategies (
+    platform_id, strategy_name, strategy_version, approach, domain, config, status,
+    description, created_by
+)
+VALUES (
+    'kalshi', 'halftime_entry', 'v1.1', 'value', 'nfl',
+    '{"min_lead": 10, "max_spread": 0.08, "min_edge": 0.05}', 'testing',
+    'Tuned min_lead based on paper trading results', 'trading_team'
+);
 
 -- Update metrics for v1.1 as trades execute (config stays unchanged)
-UPDATE strategies SET paper_roi = 0.15, paper_trades_count = 42
+UPDATE strategies
+SET paper_roi = 0.15, paper_trades_count = 42, updated_at = NOW()
 WHERE strategy_name = 'halftime_entry' AND strategy_version = 'v1.1';
+
+-- Activate strategy after successful paper trading
+UPDATE strategies
+SET status = 'active', activated_at = NOW()
+WHERE strategy_name = 'halftime_entry' AND strategy_version = 'v1.1';
+
+-- Multi-domain arbitrage example (Phase 2+)
+INSERT INTO strategies (
+    platform_id, strategy_name, strategy_version, approach, domain, config, status,
+    description, created_by
+)
+VALUES (
+    'kalshi', 'cross_market_arb', 'v1.0', 'arbitrage', NULL,  -- NULL domain = multi-domain
+    '{"min_spread": 0.02, "max_position_size": 100}', 'draft',
+    'Cross-market arbitrage across NFL, NBA, and elections markets', 'quant_team'
+);
 ```
 
 #### edges
