@@ -30,7 +30,7 @@ from typing import Any, cast
 
 from sqlalchemy.exc import IntegrityError
 
-from precog.database.connection import get_connection
+from precog.database.connection import get_connection, release_connection
 from precog.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -240,7 +240,7 @@ class StrategyManager:
 
         finally:
             cursor.close()
-            conn.close()
+            release_connection(conn)
 
     def get_strategy(self, strategy_id: int) -> dict[str, Any] | None:
         """Retrieve strategy by ID.
@@ -276,7 +276,7 @@ class StrategyManager:
 
         finally:
             cursor.close()
-            conn.close()
+            release_connection(conn)
 
     def get_strategies_by_name(self, strategy_name: str) -> list[dict[str, Any]]:
         """Get all versions of a strategy.
@@ -311,7 +311,7 @@ class StrategyManager:
 
         finally:
             cursor.close()
-            conn.close()
+            release_connection(conn)
 
     def get_active_strategies(self) -> list[dict[str, Any]]:
         """Get all active strategies.
@@ -351,7 +351,7 @@ class StrategyManager:
 
         finally:
             cursor.close()
-            conn.close()
+            release_connection(conn)
 
     def update_status(self, strategy_id: int, new_status: str) -> dict[str, Any]:
         """Update strategy status (MUTABLE field).
@@ -414,7 +414,7 @@ class StrategyManager:
 
         finally:
             cursor.close()
-            conn.close()
+            release_connection(conn)
 
     def update_metrics(
         self,
@@ -516,7 +516,7 @@ class StrategyManager:
 
         finally:
             cursor.close()
-            conn.close()
+            release_connection(conn)
 
     # Private helper methods
 

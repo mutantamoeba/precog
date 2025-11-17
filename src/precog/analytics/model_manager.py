@@ -30,7 +30,7 @@ from typing import Any, cast
 
 from sqlalchemy.exc import IntegrityError
 
-from precog.database.connection import get_connection
+from precog.database.connection import get_connection, release_connection
 from precog.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -215,7 +215,7 @@ class ModelManager:
 
         finally:
             cursor.close()
-            conn.close()
+            release_connection(conn)
 
     def get_model(
         self,
@@ -285,7 +285,7 @@ class ModelManager:
 
         finally:
             cursor.close()
-            conn.close()
+            release_connection(conn)
 
     def get_models_by_name(self, model_name: str) -> list[dict[str, Any]]:
         """Get all versions of a model by name.
@@ -327,7 +327,7 @@ class ModelManager:
 
         finally:
             cursor.close()
-            conn.close()
+            release_connection(conn)
 
     def get_active_models(self) -> list[dict[str, Any]]:
         """Get all active models (status='active').
@@ -360,7 +360,78 @@ class ModelManager:
 
         finally:
             cursor.close()
-            conn.close()
+            release_connection(conn)
+
+    def list_models(
+        self,
+        status: str | None = None,
+        domain: str | None = None,
+        approach: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List models with optional filters.
+
+        Args:
+            status: Filter by status (optional)
+            domain: Filter by domain (optional)
+            approach: Filter by approach (optional)
+
+        Returns:
+            List of models matching filters, ordered by created_at DESC
+
+        Educational Note:
+            This method supports flexible querying for models.
+            - No filters: Returns ALL models
+            - Single filter: Returns models matching that filter
+            - Multiple filters: Returns models matching ALL filters (AND logic)
+
+        Example:
+            >>> # Get all active NFL Elo models
+            >>> models = manager.list_models(status='active', domain='nfl', approach='elo')
+            >>> # Get all models (no filters)
+            >>> all_models = manager.list_models()
+        """
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Build dynamic WHERE clause
+            where_clauses: list[str] = []
+            params: list[str] = []
+
+            if status is not None:
+                where_clauses.append("status = %s")
+                params.append(status)
+
+            if domain is not None:
+                where_clauses.append("domain = %s")
+                params.append(domain)
+
+            if approach is not None:
+                where_clauses.append("approach = %s")
+                params.append(approach)
+
+            # Construct SQL
+            where_sql = ""
+            if where_clauses:
+                where_sql = "WHERE " + " AND ".join(where_clauses)
+
+            select_sql = f"""
+                SELECT model_id, model_name, model_version, approach,
+                       domain, config, description, status, validation_calibration, validation_accuracy,
+                       validation_sample_size, created_at, created_by, notes
+                FROM probability_models
+                {where_sql}
+                ORDER BY created_at DESC
+            """
+
+            cursor.execute(select_sql, params)
+            rows = cursor.fetchall()
+
+            return [self._row_to_dict(cursor, row) for row in rows]
+
+        finally:
+            cursor.close()
+            release_connection(conn)
 
     def update_status(self, model_id: int, new_status: str) -> dict[str, Any]:
         """Update model status (MUTABLE field) with transition validation.
@@ -426,7 +497,7 @@ class ModelManager:
 
         finally:
             cursor.close()
-            conn.close()
+            release_connection(conn)
 
     def update_metrics(
         self,
@@ -498,7 +569,7 @@ class ModelManager:
         try:
             # Safe: updates list contains ONLY hardcoded column names (lines 480-488),
             # never user input. All values use parameterized queries (%s placeholders).
-            update_sql = f"""  # noqa: S608
+            update_sql = f"""
                 UPDATE probability_models
                 SET {", ".join(updates)}
                 WHERE model_id = %s
@@ -532,7 +603,7 @@ class ModelManager:
 
         finally:
             cursor.close()
-            conn.close()
+            release_connection(conn)
 
     def _prepare_config_for_db(self, config: dict[str, Any]) -> str:
         """Convert config dict to JSONB-safe format (Decimal → string).

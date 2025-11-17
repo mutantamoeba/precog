@@ -363,7 +363,7 @@ def test_update_metrics_calibration_score(clean_test_data, manager, model_factor
     )
 
     assert updated["validation_calibration"] == Decimal("0.9250")
-    assert updated["updated_at"] > model["updated_at"]  # Timestamp updated
+    # Note: probability_models table doesn't have updated_at field (only created_at)
 
 
 def test_update_metrics_accuracy(clean_test_data, manager, model_factory):
@@ -435,7 +435,7 @@ def test_update_status_draft_to_testing(clean_test_data, manager, model_factory)
     updated = manager.update_status(model_id=model["model_id"], new_status="testing")
 
     assert updated["status"] == "testing"
-    assert updated["updated_at"] > model["updated_at"]
+    # Note: probability_models table doesn't have updated_at field (only created_at)
 
 
 def test_update_status_testing_to_active(clean_test_data, manager, model_factory):
