@@ -1454,7 +1454,7 @@ pytest --cov=module tests/unit/test_new_feature.py
 - **Factories:** `tests/fixtures/factories.py` - Test data factories
 - **Scripts:** `scripts/test_*.sh`, `scripts/validate_*.sh` - Execution scripts
 - **Requirements:** `docs/foundation/MASTER_REQUIREMENTS_V2.15.md` - REQ-TEST-* requirements
-- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.15.md` - ADR-048 through ADR-077
+- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.16.md` - ADR-048 through ADR-077
 - **Validation:** `docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Overall quality infrastructure
 
 ---
