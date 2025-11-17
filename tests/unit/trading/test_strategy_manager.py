@@ -881,23 +881,25 @@ class TestStrategyManagerIntegration:
         manager = StrategyManager()
 
         # 1. Create strategy (draft)
-        mock_cursor.fetchone.return_value = (
-            1,
-            "value_betting_v1",
-            "1.0",
-            "value_betting",
-            "nfl",
-            {"min_edge": "0.0500"},
-            "Test strategy",
-            "draft",
-            None,
-            None,
-            0,
-            0,
-            "2025-11-16 12:00:00",
-            "test_user",
-            "Notes",
-        )
+        mock_cursor.fetchone.side_effect = [
+            (
+                1,
+                "value_betting_v1",
+                "1.0",
+                "value_betting",
+                "nfl",
+                {"min_edge": "0.0500"},
+                "Test strategy",
+                "draft",
+                None,
+                None,
+                0,
+                0,
+                "2025-11-16 12:00:00",
+                "test_user",
+                "Notes",
+            )
+        ]
 
         strategy = manager.create_strategy(**strategy_factory)
         assert strategy["status"] == "draft"
@@ -946,23 +948,25 @@ class TestStrategyManagerIntegration:
         assert strategy["config"] == original_config  # Config unchanged
 
         # 3. Add paper trading metrics
-        mock_cursor.fetchone.return_value = (
-            1,
-            "value_betting_v1",
-            "1.0",
-            "value_betting",
-            "nfl",
-            {"min_edge": "0.0500"},
-            "Test strategy",
-            "testing",
-            Decimal("0.1234"),  # paper_roi
-            None,
-            25,  # paper_trades_count
-            0,
-            "2025-11-16 12:00:00",
-            "test_user",
-            "Notes",
-        )
+        mock_cursor.fetchone.side_effect = [
+            (
+                1,
+                "value_betting_v1",
+                "1.0",
+                "value_betting",
+                "nfl",
+                {"min_edge": "0.0500"},
+                "Test strategy",
+                "testing",
+                Decimal("0.1234"),  # paper_roi
+                None,
+                25,  # paper_trades_count
+                0,
+                "2025-11-16 12:00:00",
+                "test_user",
+                "Notes",
+            )
+        ]
 
         strategy = manager.update_metrics(
             strategy_id=1, paper_roi=Decimal("0.1234"), paper_trades_count=25
@@ -1012,23 +1016,25 @@ class TestStrategyManagerIntegration:
         assert strategy["status"] == "active"
 
         # 5. Add live trading metrics
-        mock_cursor.fetchone.return_value = (
-            1,
-            "value_betting_v1",
-            "1.0",
-            "value_betting",
-            "nfl",
-            {"min_edge": "0.0500"},
-            "Test strategy",
-            "active",
-            Decimal("0.1234"),
-            Decimal("0.0987"),  # live_roi
-            25,
-            15,  # live_trades_count
-            "2025-11-16 12:00:00",
-            "test_user",
-            "Notes",
-        )
+        mock_cursor.fetchone.side_effect = [
+            (
+                1,
+                "value_betting_v1",
+                "1.0",
+                "value_betting",
+                "nfl",
+                {"min_edge": "0.0500"},
+                "Test strategy",
+                "active",
+                Decimal("0.1234"),
+                Decimal("0.0987"),  # live_roi
+                25,
+                15,  # live_trades_count
+                "2025-11-16 12:00:00",
+                "test_user",
+                "Notes",
+            )
+        ]
 
         strategy = manager.update_metrics(
             strategy_id=1, live_roi=Decimal("0.0987"), live_trades_count=15
