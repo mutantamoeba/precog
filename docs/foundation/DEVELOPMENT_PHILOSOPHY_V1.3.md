@@ -435,13 +435,13 @@ def test_connection_pool_concurrent_stress(db_pool):
 ---
 
 **Related Documents:**
-- `docs/foundation/TESTING_STRATEGY_V2.1.md` (will be updated to V3.0)
+- `docs/foundation/TESTING_STRATEGY_V3.0.md` (will be updated to V3.0)
 - `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md` - REQ-TEST-012 through REQ-TEST-019
 - `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Detailed post-mortem
 - `TESTING_GAPS_ANALYSIS.md` - Current test coverage gaps
 - `CLAUDE.md` Section 7 (Common Tasks - Task 1)
 **Related Documents:**
-- `docs/foundation/TESTING_STRATEGY_V2.1.md`
+- `docs/foundation/TESTING_STRATEGY_V3.0.md`
 - `CLAUDE.md` Section 7 (Common Tasks - Task 1)
 
 ---
@@ -2147,7 +2147,7 @@ Before marking any feature complete, validate ALL principles followed:
 ## Related Documentation
 
 **Testing & Validation:**
-- `docs/foundation/TESTING_STRATEGY_V2.1.md` - Testing infrastructure
+- `docs/foundation/TESTING_STRATEGY_V3.0.md` - Testing infrastructure
 - `docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality
 
 **Process & Workflow:**

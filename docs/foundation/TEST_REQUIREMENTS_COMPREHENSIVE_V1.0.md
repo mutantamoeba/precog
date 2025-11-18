@@ -639,7 +639,7 @@ E2E tests provide **user-level confidence**.
 **Related Documents:**
 - `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Why we need these requirements
 - `TESTING_GAPS_ANALYSIS.md` - Current test coverage analysis
-- `docs/foundation/TESTING_STRATEGY_V2.1.md` - Current version (will be updated to V3.0 with 8 test types)
+- `docs/foundation/TESTING_STRATEGY_V3.0.md` - Current version (will be updated to V3.0 with 8 test types)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` - Current version (will add these REQs in V2.16)
 
 **Related ADRs:**

@@ -3224,7 +3224,7 @@ test_results/
 - pytest-html generates HTML reports
 - .gitignore excludes timestamped runs (keeps README.md)
 
-**Reference:** `foundation/TESTING_STRATEGY_V2.1.md`
+**Reference:** `foundation/TESTING_STRATEGY_V3.0.md`
 
 ---
 
@@ -3402,7 +3402,7 @@ safety check --full-report
 - CI workflow fails on high/critical findings
 - Weekly dependency scans via scheduled workflow
 
-**Reference:** `foundation/TESTING_STRATEGY_V2.1.md`, REQ-TEST-008
+**Reference:** `foundation/TESTING_STRATEGY_V3.0.md`, REQ-TEST-008
 
 ---
 
@@ -3444,7 +3444,7 @@ Target: >80% mutation score on critical modules
 - Run weekly on critical modules
 - Track mutation score trends
 
-**Reference:** `foundation/TESTING_STRATEGY_V2.1.md`, REQ-TEST-009
+**Reference:** `foundation/TESTING_STRATEGY_V3.0.md`, REQ-TEST-009
 
 ---
 
@@ -3489,7 +3489,7 @@ def test_spread_always_positive(price):
 - Focus on financial calculations (decimal precision critical)
 - Integrate into test suite (pytest-hypothesis plugin)
 
-**Reference:** `foundation/TESTING_STRATEGY_V2.1.md`, REQ-TEST-010
+**Reference:** `foundation/TESTING_STRATEGY_V3.0.md`, REQ-TEST-010
 
 ---
 
@@ -11087,7 +11087,7 @@ Decision to use Python's standard logging library with structlog for structured 
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** pyproject.toml, TESTING_STRATEGY_V2.1.md
+**Documented in:** pyproject.toml, TESTING_STRATEGY_V3.0.md
 
 Decision to use pytest as the primary testing framework with coverage, async support, and HTML reporting.
 
