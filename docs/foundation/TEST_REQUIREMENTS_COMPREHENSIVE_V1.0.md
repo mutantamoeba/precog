@@ -640,7 +640,7 @@ E2E tests provide **user-level confidence**.
 - `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Why we need these requirements
 - `TESTING_GAPS_ANALYSIS.md` - Current test coverage analysis
 - `docs/foundation/TESTING_STRATEGY_V2.1.md` - Current version (will be updated to V3.0 with 8 test types)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.15.md` - Current version (will add these REQs in V2.16)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` - Current version (will add these REQs in V2.16)
 
 **Related ADRs:**
 - ADR-074: Property-Based Testing with Hypothesis
@@ -654,7 +654,7 @@ E2E tests provide **user-level confidence**.
 
 **Sign-off:** Claude Code - 2025-11-17
 
-**Note:** These requirements will be integrated into MASTER_REQUIREMENTS_V2.15.md (updating to V2.16) in next session.
+**Note:** These requirements will be integrated into MASTER_REQUIREMENTS_V2.16.md (updating to V2.16) in next session.
 
 ---
 

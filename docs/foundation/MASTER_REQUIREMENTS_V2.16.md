@@ -1,9 +1,22 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.15
-**Last Updated:** 2025-11-15
+**Version:** 2.16
+**Last Updated:** 2025-11-17
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.16:**
+- **TEST COVERAGE STANDARDS**: Added REQ-TEST-012 through REQ-TEST-019 (8 comprehensive test coverage requirements)
+- **TDD FAILURE RESPONSE**: Requirements address Phase 1.5 TDD failure root cause analysis (Strategy Manager: 17/17 tests passing with mocks → 13/17 failing with real database = 77% failure rate)
+- **8 TEST TYPE FRAMEWORK**: REQ-TEST-012 establishes comprehensive test type coverage (Unit, Property, Integration, E2E, Stress, Race Condition, Performance, Chaos)
+- **MOCK USAGE RESTRICTIONS**: REQ-TEST-013 prohibits mocking internal infrastructure (database, config, logging) - MUST use real test fixtures
+- **MANDATORY TEST FIXTURES**: REQ-TEST-014 requires ALWAYS using conftest.py fixtures (clean_test_data, db_pool, db_cursor) instead of creating mocks
+- **COVERAGE PERCENTAGE STANDARDS**: REQ-TEST-015 establishes tiered coverage targets (Critical Path ≥90%, Manager ≥85%, Infrastructure ≥80%)
+- **STRESS TESTING**: REQ-TEST-016 requires testing infrastructure limits (connection pool exhaustion, API rate limits, concurrent operations)
+- **INTEGRATION TESTING**: REQ-TEST-017 mandates integration tests with real dependencies for manager layer
+- **PROPERTY-BASED TESTING**: REQ-TEST-018 requires Hypothesis framework for mathematical invariants (100+ auto-generated test cases)
+- **END-TO-END TESTING**: REQ-TEST-019 requires complete workflow tests for user-facing features
+- **CROSS-REFERENCES**: All requirements link to ADR-074 (Property-Based Testing), ADR-076 (Test Type Categories), Pattern 13 (Test Coverage Quality)
+- **PREVENTION STRATEGY**: These requirements prevent future false confidence from mock-based tests (core development philosophy enhancement)
 **Changes in v2.15:**
 - **RETROACTIVE REQ CREATION**: Added REQ-CICD-004 (Pre-Commit Hooks) and REQ-CICD-005 (Pre-Push Hooks) for traceability
 - **REQUIREMENTS TRACEABILITY GAP FIX**: Critical infrastructure (pre-commit/pre-push hooks) was implemented without formal requirements (DEF-001, DEF-002 completed 2025-11-07)
@@ -245,7 +258,7 @@ precog/
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.15.md` - This document (requirements through Phase 10)
+  2. `MASTER_REQUIREMENTS_V2.16.md` - This document (requirements through Phase 10)
   3. `MASTER_INDEX_V2.24.md` - Complete document inventory
   4. `ARCHITECTURE_DECISIONS_V2.16.md` - All 87 ADRs with design rationale (Phase 0-4.5)
   5. `REQUIREMENT_INDEX.md` - Systematic requirement catalog
@@ -1989,6 +2002,659 @@ Implement property-based testing for position and exit management:
 - All position management invariants validated
 - All exit optimization constraints enforced
 - Zero false negatives on stop loss triggers
+
+---
+
+**REQ-TEST-012: Test Type Coverage Requirements (All Phases)**
+
+**Phase:** 1.5+ (ongoing)
+**Priority:** 🔴 Critical
+**Status:** ✅ Complete
+**Reference:** ADR-074 (Property-Based Testing), ADR-076 (Test Type Categories), Pattern 13 (Test Coverage Quality), `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md`
+
+Establish comprehensive test type coverage requirements to prevent false confidence from insufficient testing. Addresses Phase 1.5 TDD failure lesson: Strategy Manager had 17/17 tests passing with mocks but 13/17 tests failed (77% failure rate) when refactored to use real database fixtures.
+
+**8 Required Test Types:**
+
+1. **Unit Tests** - Isolated function logic with mocked external dependencies
+2. **Property Tests** - Mathematical invariants with Hypothesis (100+ auto-generated test cases)
+3. **Integration Tests** - Components with REAL infrastructure (database, config, logging) - NOT mocks
+4. **End-to-End Tests** - Complete user workflows (fetch → analyze → execute → monitor → exit)
+5. **Stress Tests** - Infrastructure limits (connection pool exhaustion, API rate limits, concurrent operations)
+6. **Race Condition Tests** - Concurrent operations validation (position updates, WebSocket handling)
+7. **Performance Tests** - Latency/throughput benchmarks (Phase 5+)
+8. **Chaos Tests** - Failure recovery scenarios (Phase 5+)
+
+**Test Type Requirements Matrix:**
+
+| Module Type | Unit | Property | Integration | E2E | Stress | Race | Performance | Chaos |
+|-------------|------|----------|-------------|-----|--------|------|-------------|-------|
+| **Critical Path** (trading execution, position monitoring) | ✅ Req | ✅ Req | ✅ Req | ✅ Req | ✅ Req | ✅ Req | ⚠️ Phase 5+ | ⚠️ Phase 5+ |
+| **Manager Layer** (strategy, model, position) | ✅ Req | ✅ Req | ✅ Req | ⚠️ Recommended | ⚠️ Recommended | ❌ N/A | ❌ N/A | ❌ N/A |
+| **Infrastructure** (database, logging, config) | ✅ Req | ⚠️ If math | ✅ Req | ❌ N/A | ✅ Req | ⚠️ If concurrent | ❌ N/A | ❌ N/A |
+| **API Clients** (Kalshi, ESPN) | ✅ Req | ❌ N/A | ⚠️ Mocked only | ✅ Req | ✅ Req | ❌ N/A | ⚠️ Phase 5+ | ⚠️ Phase 5+ |
+| **Utilities** (helpers, formatters) | ✅ Req | ⚠️ If math | ❌ N/A | ❌ N/A | ❌ N/A | ❌ N/A | ❌ N/A | ❌ N/A |
+
+**Success Criteria:**
+- All modules have required test types implemented
+- Test review checklist (Pattern 13) passes before marking work complete
+- Zero "tests passing but code broken" incidents
+
+---
+
+**REQ-TEST-013: Mock Usage Restrictions (All Phases)**
+
+**Phase:** 1.5+ (ongoing)
+**Priority:** 🔴 Critical
+**Status:** ✅ Complete
+**Reference:** ADR-076, Pattern 13, `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md`
+
+Establish strict rules for when mocks are appropriate vs. prohibited. Over-reliance on mocks creates false confidence by testing "did we call the right function?" instead of "does the system work correctly?".
+
+**✅ Mocks are APPROPRIATE for:**
+
+- **External APIs** (Kalshi, ESPN, Polymarket) - expensive, rate-limited, flaky, require network access
+- **Time-dependent code** (`datetime.now()`, `time.sleep()`) - non-deterministic, difficult to test otherwise
+- **Random number generation** (`random.random()`, `uuid.uuid4()`) - non-deterministic
+- **Network requests** - expensive, unreliable, require external services
+- **File I/O in some cases** - when testing error handling, not core functionality
+
+**❌ Mocks are FORBIDDEN for:**
+
+- **Database** (MUST use test database with `clean_test_data` fixture from conftest.py)
+- **Internal application logic** (strategy manager, model manager, position manager)
+- **Configuration loading** (MUST use test configs, not mocks)
+- **Logging** (MUST use test logger, capture output)
+- **Connection pooling** (MUST use `db_pool` fixture with real pool)
+- **Any infrastructure we control** (our code, our database, our config files)
+
+**Rationale:**
+
+Mocking internal infrastructure creates tight coupling to implementation details and misses integration bugs. Example: Strategy Manager tests mocked `get_connection()` and passed 17/17 tests, but had critical connection pool leak bug that went undetected. When refactored to use real database fixtures, 13/17 tests failed (77% failure rate).
+
+**Enforcement:**
+
+- Pre-commit code review checks for `@patch("get_connection")` or `mock_connection` fixtures (automatic warning)
+- Test review checklist (Pattern 13) includes "Tests use real infrastructure?" validation
+- All database tests MUST use `clean_test_data` fixture (NO exceptions)
+
+**Success Criteria:**
+- Zero database tests using `@patch` decorators for internal infrastructure
+- All tests using appropriate mocking strategy (external only)
+- Test review checklist validation passes
+
+---
+
+**REQ-TEST-014: Test Fixture Usage Requirements (All Phases)**
+
+**Phase:** 1.5+ (ongoing)
+**Priority:** 🔴 Critical
+**Status:** ✅ Complete
+**Reference:** ADR-076, Pattern 13, `tests/conftest.py`
+
+Mandate use of established test fixtures from conftest.py instead of creating ad-hoc mocks. Test infrastructure exists for a reason - bypassing fixtures leads to reinventing the wheel poorly and missing bugs.
+
+**MANDATORY Test Fixtures (ALWAYS use these):**
+
+```python
+# tests/conftest.py provides these fixtures - ALWAYS USE THEM
+
+@pytest.fixture
+def clean_test_data(db_pool):
+    """Cleans database before/after each test.
+
+    MANDATORY for ALL database tests. Ensures:
+    - Clean slate for each test (no pollution)
+    - Automatic cleanup after test
+    - Connection pool management
+    - Transaction rollback on errors
+    """
+
+@pytest.fixture
+def db_pool():
+    """Provides real connection pool.
+
+    Use for:
+    - Connection pool exhaustion tests
+    - Concurrent connection tests
+    - Pool configuration validation
+    """
+
+@pytest.fixture
+def db_cursor(db_pool):
+    """Provides real database cursor.
+
+    Use for:
+    - Direct SQL execution tests
+    - Schema validation tests
+    - Constraint enforcement tests
+    """
+```
+
+**FORBIDDEN Fixtures (NEVER create these):**
+
+```python
+# ❌ NEVER create these - use real fixtures instead
+
+@pytest.fixture
+def mock_connection():
+    """FORBIDDEN - use clean_test_data instead"""
+
+@pytest.fixture
+def mock_cursor():
+    """FORBIDDEN - use db_cursor instead"""
+
+@pytest.fixture
+def mock_pool():
+    """FORBIDDEN - use db_pool instead"""
+```
+
+**Comparison - What We Did Wrong (Strategy Manager) vs. What We Should Do:**
+
+```python
+# ❌ WRONG - What we did (mock-based testing)
+@patch("precog.trading.strategy_manager.get_connection")
+def test_create_strategy(self, mock_get_connection, mock_connection, mock_cursor):
+    """Test creating strategy."""
+    mock_get_connection.return_value = mock_connection
+    mock_cursor.fetchone.return_value = (1, "strategy_v1", "1.0", ...)  # Fake response
+
+    manager = StrategyManager()
+    result = manager.create_strategy(...)  # Calls mock, not real DB
+
+    assert result["strategy_id"] == 1  # ✅ Test passes!
+    # But implementation has connection pool leak - not caught!
+
+# ✅ CORRECT - What we should do (real database testing)
+def test_create_strategy(clean_test_data, manager, strategy_factory):
+    """Test creating strategy."""
+    result = manager.create_strategy(**strategy_factory)  # Calls REAL database
+
+    assert result["strategy_id"] is not None  # ✅ Test passes
+    # If connection pool leak exists → test fails with pool exhausted error ✅
+```
+
+**Evidence - Why This Matters:**
+
+- **Model Manager**: ALL 37 tests use `clean_test_data` fixture ✅ → Zero integration bugs found
+- **Strategy Manager**: 0/17 tests use `clean_test_data` fixture ❌ → 77% test failure rate when refactored
+
+**Success Criteria:**
+- 100% of database tests use `clean_test_data` fixture
+- Zero tests creating `mock_connection` or `mock_cursor` fixtures
+- Test review checklist validation passes
+
+---
+
+**REQ-TEST-015: Coverage Percentage Standards (All Phases)**
+
+**Phase:** 1.5+ (ongoing)
+**Priority:** 🔴 Critical
+**Status:** ✅ Complete
+**Reference:** ADR-076, Pattern 13, `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md`
+
+Establish tiered coverage percentage targets based on module criticality. Coverage percentage alone is insufficient (Strategy Manager had tests but they were mocked), but it remains a necessary baseline metric.
+
+**Coverage Tiers:**
+
+| Module Category | Coverage Target | Rationale | Examples |
+|-----------------|-----------------|-----------|----------|
+| **Critical Path** | ≥90% | Trading execution, position monitoring - bugs = lost money | Order execution, exit evaluation, position lifecycle |
+| **Manager Layer** | ≥85% | Business logic coordination - bugs = incorrect decisions | StrategyManager, ModelManager, PositionManager |
+| **Infrastructure** | ≥80% | Database, logging, config - bugs = system failures | connection.py, logger.py, config_loader.py |
+| **API Clients** | ≥80% | External integration - bugs = missed opportunities | kalshi_client.py, espn_client.py |
+| **Utilities** | ≥75% | Helper functions - bugs = minor issues | formatters, validators, converters |
+
+**Current Coverage Status (Phase 1.5):**
+
+```
+Critical Path: N/A (Phase 5+)
+Manager Layer:
+  - ModelManager: 25.75% ❌ (target 85%) - GAP: 59.25%
+  - StrategyManager: 19.96% ❌ (target 85%) - GAP: 65.04%
+Infrastructure:
+  - connection.py: 81.82% ✅ (target 80%)
+  - logger.py: 86.08% ✅ (target 80%)
+  - config_loader.py: 98.97% ✅ (target 80%)
+  - crud_operations.py: 86.01% ✅ (target 80%)
+API Clients:
+  - kalshi_client.py: 97.91% ✅ (target 80%)
+```
+
+**Phase 1.5 Targets:**
+
+- Manager Layer: Increase ModelManager from 25.75% → ≥85% (add ~230 test cases)
+- Manager Layer: Increase StrategyManager from 19.96% → ≥85% (add ~260 test cases, refactor from mocks to real database)
+
+**Coverage Quality Requirements:**
+
+Coverage percentage MUST meet these quality standards:
+- ✅ Tests use real infrastructure (database, NOT mocks) - see REQ-TEST-013
+- ✅ Tests use conftest.py fixtures (clean_test_data, db_pool) - see REQ-TEST-014
+- ✅ Tests cover edge cases (pool exhaustion, null values, race conditions)
+- ✅ Tests cover failure modes (what happens when database fails?)
+- ✅ Tests validate business logic (not just "did we call the function?")
+
+**Success Criteria:**
+- All modules meet or exceed coverage targets
+- Coverage measured with real infrastructure tests (not mocks)
+- Test quality validation passes (Pattern 13 checklist)
+
+---
+
+**REQ-TEST-016: Stress Test Requirements (Phase 1.5+)**
+
+**Phase:** 1.5+ (infrastructure stress tests), Phase 5+ (trading stress tests)
+**Priority:** 🟡 High
+**Status:** 🔵 Planned
+**Reference:** ADR-076, Pattern 13, `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md`
+
+Require stress testing of infrastructure limits to detect resource exhaustion bugs. Strategy Manager connection pool leak was missed because tests never stressed the pool limit (maxconn=5, tests used ≤5 connections).
+
+**Phase 1.5 Stress Tests (Infrastructure):**
+
+**1. Connection Pool Exhaustion Tests**
+```python
+def test_connection_pool_exhaustion_recovery(db_pool):
+    """Test pool exhaustion detection and recovery.
+
+    Scenario: Acquire maxconn+1 connections
+    Expected: Pool exhaustion error raised, system recovers gracefully
+    """
+    # Acquire maxconn connections (5)
+    # Attempt maxconn+1 connection (6)
+    # Verify PoolExhausted error raised
+    # Release 1 connection
+    # Verify new connection acquisition succeeds
+```
+
+**2. Concurrent Connection Tests**
+```python
+def test_concurrent_database_operations(db_pool, clean_test_data):
+    """Test 10+ concurrent database operations.
+
+    Scenario: 10 threads executing database operations simultaneously
+    Expected: All operations succeed, no deadlocks, no connection leaks
+    """
+    # Launch 10 threads
+    # Each thread: create strategy, update metrics, fetch data
+    # Verify all 10 operations succeed
+    # Verify connection pool size unchanged (no leaks)
+```
+
+**3. API Rate Limit Tests**
+```python
+def test_api_rate_limit_enforcement(kalshi_client):
+    """Test rate limiter prevents exceeding 100 req/min.
+
+    Scenario: Attempt 150 requests in 1 minute
+    Expected: Only 100 requests sent, 50 delayed to next minute
+    """
+    # Attempt 150 rapid requests
+    # Verify rate limiter blocks requests 101-150
+    # Verify requests resume after 60 seconds
+```
+
+**Phase 5+ Stress Tests (Trading):**
+
+**4. Position Monitoring Stress**
+- 100+ positions monitored simultaneously
+- Exit conditions evaluated every second
+- Verify no position updates missed
+
+**5. WebSocket Connection Stress**
+- 10,000+ market update events per minute
+- Verify all events processed
+- Verify no memory leaks
+
+**6. 24-Hour Stability Tests**
+- Run trading system for 24 hours
+- Monitor memory usage, CPU usage, connection pool
+- Verify no resource leaks
+
+**Success Criteria:**
+- All infrastructure stress tests passing (Phase 1.5)
+- Connection pool exhaustion detected and handled gracefully
+- API rate limiting prevents exceeding 100 req/min
+- Trading stress tests passing (Phase 5+)
+
+---
+
+**REQ-TEST-017: Integration Test Requirements (Phase 1.5+)**
+
+**Phase:** 1.5+ (manager layer integration)
+**Priority:** 🔴 Critical
+**Status:** 🔵 Planned
+**Reference:** ADR-076, Pattern 13, `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md`
+
+Require integration tests with real dependencies for manager layer. Unit tests in isolation are insufficient - must test components working together with real infrastructure.
+
+**Manager Layer Integration Tests (Phase 1.5):**
+
+**1. Strategy Manager + Database Integration**
+```python
+def test_strategy_manager_crud_lifecycle(clean_test_data, manager, strategy_factory):
+    """Test complete strategy CRUD lifecycle with real database.
+
+    Workflow:
+    1. Create strategy with real database
+    2. Fetch strategy and verify data integrity
+    3. Update strategy metrics
+    4. Verify SCD Type 2 versioning (row_current_ind)
+    5. Soft delete strategy
+    6. Verify historical data preserved
+    """
+```
+
+**2. Model Manager + Database Integration**
+```python
+def test_model_manager_versioning_integration(clean_test_data, manager, model_factory):
+    """Test model versioning with real database.
+
+    Workflow:
+    1. Create model v1.0 with real database
+    2. Create model v1.1 (different weights)
+    3. Verify both versions exist in database
+    4. Verify immutability (v1.0 weights unchanged)
+    5. Verify version comparison queries work
+    """
+```
+
+**3. Position Manager + Strategy Manager + Model Manager Integration** (Phase 2+)
+```python
+def test_position_attribution_integration(clean_test_data, position_mgr, strategy_mgr, model_mgr):
+    """Test trade attribution across 3 managers.
+
+    Workflow:
+    1. Create strategy v1.0 and model v1.0
+    2. Open position attributed to strategy v1.0 + model v1.0
+    3. Update strategy to v1.1 (different config)
+    4. Open new position attributed to strategy v1.1 + model v1.0
+    5. Verify both positions correctly attributed
+    6. Verify performance metrics segmented by version
+    """
+```
+
+**API Integration Tests:**
+
+**4. Kalshi Client + Database Integration**
+```python
+def test_kalshi_market_sync_integration(clean_test_data, kalshi_client, mock_kalshi_api):
+    """Test syncing Kalshi markets to database.
+
+    Workflow:
+    1. Fetch markets from (mocked) Kalshi API
+    2. Parse Decimal prices from *_dollars fields
+    3. Insert into database with real connection
+    4. Verify all Decimal precision preserved
+    5. Verify no float contamination
+    """
+```
+
+**Config + Database Integration:**
+
+**5. Config Loader + Database Schema Integration**
+```python
+def test_config_database_schema_consistency(clean_test_data, config_loader):
+    """Test configuration matches database schema constraints.
+
+    Workflow:
+    1. Load strategy config from YAML
+    2. Attempt to insert strategy with config values
+    3. Verify all config parameters within database constraints
+    4. Verify Decimal precision requirements met
+    """
+```
+
+**Success Criteria:**
+- All manager layer integration tests passing
+- Zero mock usage for internal infrastructure (database, config, logging)
+- All tests use `clean_test_data` fixture
+- Integration tests catch bugs missed by unit tests
+
+---
+
+**REQ-TEST-018: Property-Based Test Requirements (Phase 1+)**
+
+**Phase:** 1+ (infrastructure properties), 4-5 (trading properties)
+**Priority:** 🔴 Critical
+**Status:** ✅ Complete (Phase 1 proof-of-concept)
+**Reference:** ADR-074, Pattern 13, `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md`
+
+Require property-based testing with Hypothesis framework for mathematical invariants and business rules. Property tests generate 100+ test cases automatically, providing far broader coverage than example-based tests.
+
+**Hypothesis Framework:**
+- pytest plugin: `pytest-hypothesis`
+- Current version: 6.92+
+- Configuration: `pyproject.toml` [tool.hypothesis] settings
+
+**ALWAYS Use Property Tests For:**
+
+**1. Mathematical Invariants**
+```python
+from hypothesis import given
+from hypothesis.strategies import decimals
+from decimal import Decimal
+
+@given(
+    price=decimals(min_value=Decimal("0.01"), max_value=Decimal("0.99"), places=4),
+    quantity=decimals(min_value=Decimal("1"), max_value=Decimal("10000"), places=2)
+)
+def test_trade_value_calculation_property(price, quantity):
+    """Property: trade_value = price × quantity (exact Decimal arithmetic)."""
+    trade_value = price * quantity
+
+    # Invariant: Reverse calculation recovers original price
+    recovered_price = trade_value / quantity
+    assert recovered_price == price  # Exact equality with Decimal
+```
+
+**2. Business Rules**
+```python
+@given(
+    edge=decimals(min_value=Decimal("0.0"), max_value=Decimal("1.0"), places=4),
+    kelly_fraction=decimals(min_value=Decimal("0.1"), max_value=Decimal("0.25"), places=2)
+)
+def test_kelly_bet_sizing_property(edge, kelly_fraction):
+    """Property: Kelly bet size ∈ [0, kelly_fraction] for all edges."""
+    bet_size = calculate_kelly_bet(edge, kelly_fraction)
+
+    # Invariant: Bet size never exceeds Kelly fraction
+    assert Decimal("0") <= bet_size <= kelly_fraction
+```
+
+**3. State Transitions**
+```python
+@given(
+    stop_price=decimals(min_value=Decimal("0.01"), max_value=Decimal("0.99"), places=4),
+    market_price=decimals(min_value=Decimal("0.01"), max_value=Decimal("0.99"), places=4)
+)
+def test_trailing_stop_property(stop_price, market_price):
+    """Property: Trailing stop NEVER loosens (one-way ratchet)."""
+    new_stop = update_trailing_stop(stop_price, market_price)
+
+    # Invariant: Stop price only tightens or stays same, NEVER loosens
+    assert new_stop >= stop_price
+```
+
+**4. Data Validation**
+```python
+@given(
+    probability=decimals(min_value=Decimal("0.0"), max_value=Decimal("1.0"), places=4)
+)
+def test_probability_bounds_property(probability):
+    """Property: All probabilities ∈ [0, 1]."""
+    result = calculate_win_probability(probability)
+
+    # Invariant: Probability never outside [0, 1]
+    assert Decimal("0") <= result <= Decimal("1")
+```
+
+**Custom Hypothesis Strategies (Trading Domain):**
+
+```python
+# tests/strategies.py - Custom strategies for trading domain
+
+from hypothesis.strategies import composite, decimals
+
+@composite
+def probability(draw, min_value=Decimal("0.0"), max_value=Decimal("1.0")):
+    """Generate valid probability values ∈ [0, 1]."""
+    return draw(decimals(min_value=min_value, max_value=max_value, places=4))
+
+@composite
+def bid_ask_spread(draw, min_spread=Decimal("0.01"), max_spread=Decimal("0.10")):
+    """Generate valid bid-ask spreads with bid < ask."""
+    bid = draw(decimals(min_value=Decimal("0.01"), max_value=Decimal("0.89"), places=4))
+    spread = draw(decimals(min_value=min_spread, max_value=max_spread, places=4))
+    ask = bid + spread
+    return {"bid": bid, "ask": ask}
+
+@composite
+def price_series(draw, length=100, volatility=Decimal("0.05")):
+    """Generate realistic price movement series."""
+    initial_price = draw(decimals(min_value=Decimal("0.10"), max_value=Decimal("0.90"), places=4))
+    # Generate random walk with bounded volatility
+    # ... implementation details ...
+    return price_series
+```
+
+**Phase 1 Proof-of-Concept Results:**
+- 26 property tests implemented
+- 2,600+ test cases generated automatically (100 examples × 26 properties)
+- 0 failures
+- 3.32 second execution time
+- Hypothesis shrinking: Failed case minimized from 473,821 to 0.5 (edge case discovery)
+
+**Success Criteria:**
+- ≥20 property tests for Phase 1 infrastructure (Decimal precision, data validation)
+- ≥40 property tests for Phase 4 (strategy, model, features)
+- ≥60 property tests for Phase 5 (position lifecycle, trailing stops, exit priority)
+- All mathematical invariants tested with property tests
+- <15 second total property test execution time
+
+---
+
+**REQ-TEST-019: End-to-End Test Requirements (Phase 2+)**
+
+**Phase:** 2+ (complete workflows), 5+ (trading lifecycle)
+**Priority:** 🟡 High
+**Status:** 🔵 Planned
+**Reference:** ADR-076, Pattern 13, `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md`
+
+Require end-to-end tests for complete user workflows. E2E tests validate that all components work together correctly in realistic scenarios.
+
+**Phase 2 E2E Tests (Data Pipeline):**
+
+**1. Market Data Ingestion E2E**
+```python
+def test_market_data_ingestion_e2e(clean_test_data, kalshi_client, config_loader):
+    """E2E: Fetch market data from Kalshi → Parse → Store → Validate.
+
+    Workflow:
+    1. Fetch markets from (mocked) Kalshi API
+    2. Parse Decimal prices from *_dollars fields
+    3. Store in database with SCD Type 2 versioning
+    4. Verify no float contamination
+    5. Verify price history queryable
+    """
+```
+
+**Phase 4 E2E Tests (Strategy Evaluation):**
+
+**2. Strategy Evaluation E2E**
+```python
+def test_strategy_evaluation_e2e(clean_test_data, strategy_mgr, model_mgr):
+    """E2E: Load strategy → Load model → Calculate features → Predict probability.
+
+    Workflow:
+    1. Create strategy v1.0 with config
+    2. Create model v1.0 with weights
+    3. Fetch market data
+    4. Calculate model features
+    5. Generate win probability prediction
+    6. Calculate edge (true_prob - market_price)
+    7. Verify all Decimal precision preserved
+    """
+```
+
+**Phase 5 E2E Tests (Trading Lifecycle):**
+
+**3. Complete Trading Lifecycle E2E**
+```python
+def test_trading_lifecycle_e2e(
+    clean_test_data,
+    kalshi_client,
+    strategy_mgr,
+    model_mgr,
+    position_mgr
+):
+    """E2E: Complete trading workflow from market fetch to position exit.
+
+    Workflow:
+    1. Fetch market data (mocked Kalshi API)
+    2. Load strategy v1.0 + model v1.0
+    3. Calculate features and predict probability
+    4. Identify edge > min_edge threshold
+    5. Calculate Kelly bet size
+    6. Execute trade (mocked API)
+    7. Open position with attribution (strategy_id, model_id)
+    8. Monitor position with trailing stop
+    9. Trigger exit condition (target profit reached)
+    10. Execute exit trade (mocked API)
+    11. Close position with P&L calculation
+    12. Verify trade attribution maintained
+    13. Verify performance metrics updated
+    14. Verify all Decimal precision preserved throughout
+
+    Success: Complete workflow executes without errors, all data validated
+    """
+```
+
+**4. Multi-Strategy Multi-Position E2E**
+```python
+def test_multi_strategy_multi_position_e2e(clean_test_data, managers):
+    """E2E: Multiple strategies with different models managing multiple positions.
+
+    Workflow:
+    1. Create strategy v1.0 (conservative) + model v1.0
+    2. Create strategy v2.0 (aggressive) + model v1.1
+    3. Open 5 positions with strategy v1.0 + model v1.0
+    4. Open 5 positions with strategy v2.0 + model v1.1
+    5. Monitor all 10 positions simultaneously
+    6. Exit positions based on different strategies
+    7. Verify attribution correct for all positions
+    8. Verify performance metrics segmented by strategy version
+    """
+```
+
+**Phase 5+ E2E Tests (Failure Scenarios):**
+
+**5. Database Failure Recovery E2E**
+```python
+def test_database_failure_recovery_e2e(clean_test_data, position_mgr):
+    """E2E: System recovers gracefully from database failures.
+
+    Workflow:
+    1. Open 3 positions
+    2. Simulate database connection loss
+    3. Verify system detects failure
+    4. Verify system attempts retry with exponential backoff
+    5. Restore database connection
+    6. Verify system recovers and resumes monitoring
+    7. Verify no position data lost
+    """
+```
+
+**Success Criteria:**
+- ≥5 E2E tests for Phase 2 (data ingestion workflows)
+- ≥10 E2E tests for Phase 4 (strategy evaluation workflows)
+- ≥15 E2E tests for Phase 5 (complete trading lifecycle)
+- All E2E tests use real infrastructure (database, config, logging)
+- External APIs mocked (Kalshi, ESPN) for deterministic testing
+- E2E tests catch integration bugs missed by unit/integration tests
+
+---
 
 - **Unit Tests**: >80% code coverage
 - **Integration Tests**: All API → DB workflows
