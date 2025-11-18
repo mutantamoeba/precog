@@ -28,7 +28,7 @@ import json
 from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy.exc import IntegrityError
+import psycopg2
 
 from precog.database.connection import get_connection, release_connection
 from precog.utils.logger import get_logger
@@ -122,7 +122,7 @@ class ModelManager:
             Created model as dict with all fields
 
         Raises:
-            IntegrityError: If model_name + model_version already exists
+            psycopg2.IntegrityError: If model_name + model_version already exists
             ValueError: If config is invalid
 
         Educational Note:
@@ -205,7 +205,7 @@ class ModelManager:
 
             return self._row_to_dict(cursor, row)
 
-        except IntegrityError as e:
+        except psycopg2.IntegrityError as e:
             conn.rollback()
             logger.error(
                 f"Model {model_name} {model_version} already exists",

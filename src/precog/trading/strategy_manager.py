@@ -28,7 +28,7 @@ import json
 from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy.exc import IntegrityError
+import psycopg2
 
 from precog.database.connection import get_connection, release_connection
 from precog.utils.logger import get_logger
@@ -167,7 +167,7 @@ class StrategyManager:
             Dictionary containing created strategy with all fields
 
         Raises:
-            IntegrityError: If (strategy_name, strategy_version) already exists
+            psycopg2.IntegrityError: If (strategy_name, strategy_version) already exists
             ValueError: If config is empty or None
 
         Educational Note:
@@ -230,7 +230,7 @@ class StrategyManager:
 
             return self._row_to_dict(cursor, row)
 
-        except IntegrityError as e:
+        except psycopg2.IntegrityError as e:
             conn.rollback()
             logger.error(
                 f"Strategy {strategy_name} {strategy_version} already exists",
