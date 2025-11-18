@@ -1,10 +1,24 @@
-# Testing Strategy V3.0
+# Testing Strategy V3.1
 
 **Document Type:** Foundation
 **Status:** ✅ Active
-**Version:** 3.0
+**Version:** 3.1
 **Created:** 2025-10-23
 **Last Updated:** 2025-11-17
+**Changes in V3.1:**
+- **Enhanced Coverage Tier Classification** - Updated tier framework based on TDD/security/accuracy emphasis
+- **Position Manager**: Business Logic (85%) → Critical Path (90%)
+  - Rationale: Handles money (P&L tracking), real-time decisions (exit hierarchy), high blast radius (affects ALL positions)
+- **Kalshi Client**: Integration Points (75%) → Critical Path (90%)
+  - Rationale: Handles money (trade execution), security (API auth)
+  - Current coverage: 97.91% (already exceeds new target)
+- **ESPN Client**: Removed from critical path (remains 75%)
+  - Rationale: Read-only data fetching, no money/security impact
+- **Added Risk-Based Classification Framework**:
+  - Clear decision criteria: Financial impact, security impact, real-time impact, blast radius
+  - Classification examples table showing WHY modules are in each tier
+  - Rationales for EACH module in coverage targets table
+- **Emphasis on TDD Philosophy**: Coverage targets now explicitly tied to risk factors (money, security, real-time)
 **Changes in V3.0:**
 - **Comprehensive 8 Test Type Framework** - Expanded from 4 test categories to 8 comprehensive test types addressing Phase 1.5 TDD failure root cause
 - **Test Type Coverage Requirements (REQ-TEST-012)** - Matrix of module tier × test type coverage (Critical Path needs all 8, Infrastructure needs 5)
@@ -1574,23 +1588,43 @@ def test_strategy_manager(db_pool, db_cursor, clean_test_data):
 **Enforced by:** pyproject.toml `fail_under = 80.0`
 **Command:** `pytest --cov --cov-fail-under=80`
 
-### Per-Module Targets (Updated Phase 1.5)
+### Per-Module Targets (Updated Phase 1.5 - TDD/Security/Accuracy Emphasis)
 
-| Module | Tier | Target | Critical |
-|--------|------|--------|----------|
-| `execution_engine.py` | Critical Path | 90%+ | ✅ Yes |
-| `position_monitor.py` | Critical Path | 90%+ | ✅ Yes |
-| `kalshi_auth.py` | Critical Path | 90%+ | ✅ Yes |
-| `strategy_manager.py` | Business Logic | 85%+ | ✅ Yes |
-| `model_manager.py` | Business Logic | 85%+ | ✅ Yes |
-| `position_manager.py` | Business Logic | 85%+ | ✅ Yes |
-| `crud_operations.py` | Business Logic | 85%+ | ✅ Yes |
-| `connection.py` | Infrastructure | 80%+ | 🟡 Medium |
-| `config_loader.py` | Infrastructure | 80%+ | 🟡 Medium |
-| `logger.py` | Infrastructure | 80%+ | 🟡 Medium |
-| `rate_limiter.py` | Infrastructure | 80%+ | 🟡 Medium |
-| `kalshi_client.py` | Integration Points | 75%+ | 🟡 Medium |
-| `espn_client.py` | Integration Points | 75%+ | 🟡 Medium |
+**Classification Rationale:**
+- **Critical Path (90%+)**: Handles money, security, or real-time decisions (high blast radius)
+- **Business Logic (85%+)**: Core domain logic, moderate complexity (medium blast radius)
+- **Infrastructure (80%+)**: Support code, well-tested libraries (low blast radius)
+
+| Module | Tier | Target | Critical | Rationale |
+|--------|------|--------|----------|-----------|
+| `execution_engine.py` | Critical Path | 90%+ | ✅ Yes | **💰 Handles money**: Order execution, real trading |
+| `position_monitor.py` | Critical Path | 90%+ | ✅ Yes | **💰 Handles money + 🎯 Real-time**: Exit decisions every second |
+| `position_manager.py` | Critical Path | 90%+ | ✅ Yes | **💰 Handles money + 🎯 Real-time**: P&L tracking, trailing stops, 10-condition exit hierarchy |
+| `kalshi_auth.py` | Critical Path | 90%+ | ✅ Yes | **🔒 Security**: RSA-PSS authentication, API access control |
+| `kalshi_client.py` | Critical Path | 90%+ | ✅ Yes | **💰 Handles money + 🔒 Security**: Trade execution, account balance, API auth |
+| `strategy_manager.py` | Business Logic | 85%+ | ✅ Yes | Config storage, status transitions (no real-time decisions) |
+| `model_manager.py` | Business Logic | 85%+ | ✅ Yes | Config storage, validation metrics (no real-time decisions) |
+| `crud_operations.py` | Business Logic | 85%+ | ✅ Yes | Data access layer, SCD Type 2 logic |
+| `connection.py` | Infrastructure | 80%+ | 🟡 Medium | Database pooling, uses well-tested psycopg2 library |
+| `config_loader.py` | Infrastructure | 80%+ | 🟡 Medium | YAML loading, uses well-tested PyYAML library |
+| `logger.py` | Infrastructure | 80%+ | 🟡 Medium | Logging wrapper, uses well-tested logging library |
+| `rate_limiter.py` | Infrastructure | 80%+ | 🟡 Medium | Token bucket rate limiting, non-critical if fails |
+| `espn_client.py` | Infrastructure | 75%+ | 🟡 Medium | External API wrapper, read-only data fetching |
+
+**Key Changes from Previous Version:**
+1. **Position Manager**: Business Logic (85%) → Critical Path (90%)
+   - **Reason**: Handles real money (P&L), real-time exit decisions, trailing stops
+   - **Impact**: Bug in exit logic = lose money, bug in trailing stop = miss profits
+   - **Blast Radius**: Affects EVERY open position (100+ positions in production)
+
+2. **Kalshi Client**: Integration Points (75%) → Critical Path (90%)
+   - **Reason**: Handles money (trade execution, balance), security (API auth)
+   - **Current Coverage**: 97.91% (already exceeds 90% target)
+   - **Impact**: Bug in execution = wrong trade, bug in auth = unauthorized access
+
+3. **Removed ESPN Client from Critical Path**:
+   - **Reason**: Read-only data fetching, no money/security impact
+   - **Failure Mode**: Stale data (graceful degradation), not financial loss
 
 ### Coverage Reports
 
@@ -1632,14 +1666,45 @@ Explicit targets set during planning, tracked during implementation, validated d
 
 ### 1. Set Module Targets (During Phase Planning)
 
-**Tier-Based Target Framework:**
+**Tier-Based Target Framework (TDD/Security/Accuracy Emphasis):**
 
-| Module Tier | Coverage Target | Rationale | Examples |
-|-------------|----------------|-----------|----------|
-| **Critical Path** | ≥90% | User-facing functionality, security, financial operations | API auth, trade execution, risk management, position monitoring |
-| **Business Logic** | ≥85% | Core domain logic, data processing, calculations | CRUD operations, model predictions, edge detection, kelly sizing |
-| **Infrastructure** | ≥80% | Supporting functionality, utilities, configuration | Logger, config loader, connection pooling, rate limiting |
-| **Integration Points** | ≥75% | External API wrappers, I/O operations | API clients, database migrations, file parsers |
+| Module Tier | Coverage Target | Risk Factors | Blast Radius | Examples |
+|-------------|----------------|--------------|--------------|----------|
+| **Critical Path** | ≥90% | **💰 Handles money**, **🔒 Security**, **🎯 Real-time decisions** | HIGH - Affects ALL users/positions | Trade execution, position manager, API auth, Kalshi client |
+| **Business Logic** | ≥85% | Core domain logic, moderate complexity | MEDIUM - Affects specific features | CRUD operations, strategy/model managers, edge detection |
+| **Infrastructure** | ≥80% | Support code, uses well-tested libraries | LOW - Graceful degradation | Logger, config loader, connection pooling, rate limiting |
+
+**Key Decision Criteria:**
+
+**Critical Path (90%+)** - Requires ALL of:
+- **Financial Impact**: Handles money (trades, balances, P&L) OR
+- **Security Impact**: Handles authentication, authorization, credentials OR
+- **Real-Time Impact**: Makes time-sensitive decisions (exits, entries)
+- **Blast Radius**: Bug affects multiple users/positions simultaneously
+
+**Business Logic (85%+)** - Requires:
+- Core domain logic (not infrastructure)
+- Moderate complexity (not trivial wrappers)
+- Medium blast radius (affects specific features, not all users)
+
+**Infrastructure (80%+)** - Characteristics:
+- Support code (logging, config, connections)
+- Uses well-tested third-party libraries (psycopg2, PyYAML)
+- Low blast radius (graceful degradation if fails)
+
+**Classification Examples:**
+
+| Module | Why Critical Path (90%) | Why NOT Lower Tier |
+|--------|-------------------------|-------------------|
+| `position_manager.py` | 💰 Handles money (P&L tracking) + 🎯 Real-time (exit decisions every second) + Blast radius (affects ALL positions) | NOT Business Logic: Real-time decisions, not just config storage |
+| `kalshi_client.py` | 💰 Handles money (trade execution) + 🔒 Security (API auth) | NOT Infrastructure: Executes trades, not just API wrapper |
+| `execution_engine.py` | 💰 Handles money (order execution) + 🎯 Real-time (price walking, circuit breakers) | NOT Business Logic: Direct financial transactions |
+
+| Module | Why Business Logic (85%) | Why NOT Higher Tier |
+|--------|--------------------------|-------------------|
+| `strategy_manager.py` | Core domain logic (strategy lifecycle), moderate complexity | NOT Critical Path: No real-time decisions, just config storage |
+| `model_manager.py` | Core domain logic (model lifecycle), moderate complexity | NOT Critical Path: No real-time decisions, just validation metrics |
+| `crud_operations.py` | Core domain logic (data access), SCD Type 2 complexity | NOT Critical Path: No direct financial transactions |
 
 **Document Targets in DEVELOPMENT_PHASES:**
 
