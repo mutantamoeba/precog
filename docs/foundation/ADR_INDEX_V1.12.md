@@ -1,9 +1,17 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.11
+**Version:** 1.12
 **Last Updated:** 2025-11-17
 **Status:** ✅ Current
+**Changes in v1.12:**
+- **TESTING ARCHITECTURE (PHASE 1.5):** Added ADR-088 (Test Type Categories - Comprehensive 8 Test Type Framework)
+- Added ADR-088: Test Type Categories (addresses Phase 1.5 TDD failure - 17/17 tests passed with mocks → 13/17 failed with real DB)
+- Documents 8 test types: Unit, Property, Integration, E2E, Stress, Race, Performance, Chaos
+- Mock usage policy: ✅ APPROPRIATE for external APIs/time/randomness, ❌ FORBIDDEN for internal infrastructure
+- Test type requirements matrix (REQ-TEST-012), mock usage restrictions (REQ-TEST-013)
+- Updated ARCHITECTURE_DECISIONS reference from V2.16 to V2.17
+- Total ADRs: 67 → 68 (1 new ADR added for Phase 1.5 testing architecture)
 **Changes in v1.11:**
 - **SCHEMA STANDARDIZATION (PHASE 1.5):** Added ADR-086 (Schema Classification Field Naming) and ADR-087 (No Edge Manager Component)
 - Added ADR-086: Schema Classification Field Naming (approach/domain standardization resolving three-way mismatch)
@@ -518,9 +526,56 @@ Phase 1.5 architecture: **3 managers** (Strategy, Model, Position) - NOT 4
 
 ---
 
+
+### ADR-088: Test Type Categories (Comprehensive Testing Framework)
+
+**Date:** 2025-11-17
+**Status:** ✅ Complete
+**Phase:** 1.5
+**Stakeholders:** Development Team, QA
+
+**Context:**
+Phase 1.5 TDD failure exposed testing blind spots. Strategy Manager tests: 17/17 passed with mocks →  13/17 failed with real DB (77% failure rate). Mocking internal infrastructure (get_connection()) created false confidence.
+
+**Decision:**
+Establish 8 Test Type Framework for comprehensive coverage:
+1. **Unit Tests** - Isolated logic (mock external dependencies)
+2. **Property Tests** - Hypothesis mathematical invariants
+3. **Integration Tests** - REAL infrastructure (database/config/logging) - ❌ FORBIDDEN to mock
+4. **End-to-End Tests** - Complete workflows
+5. **Stress Tests** - Infrastructure limits (connection pools, rate limiters)
+6. **Race Condition Tests** - Concurrent operations
+7. **Performance Tests** - Latency/throughput benchmarks (Phase 5+)
+8. **Chaos Tests** - Failure recovery scenarios (Phase 5+)
+
+**Mock Usage Policy:**
+- ✅ APPROPRIATE: External APIs, time, randomness, network
+- ❌ FORBIDDEN: Internal infrastructure (database, config, logging, connection pools)
+
+**Consequences:**
+- **Positive:**
+  - Prevents false confidence from mocks
+  - Comprehensive coverage (8 types catch different bug categories)
+  - Clear guidance (mock usage decision tree)
+  - Phase-based implementation roadmap
+- **Negative:**
+  - Increased test execution time (integration/stress tests slower)
+  - Steeper learning curve (Hypothesis, threading, stress testing)
+  - More test infrastructure (db_pool, clean_test_data fixtures)
+- **Neutral:**
+  - Test type requirements matrix (REQ-TEST-012)
+  - 8 test directories in tests/ structure
+
+**References:**
+- TESTING_STRATEGY_V3.0.md (1,462 lines)
+- REQ-TEST-012 through REQ-TEST-019
+- ADR-074 (Property-Based Testing)
+- ADR-075 (Multi-Source Warning Governance)
+
+---
 ## ADR Statistics
 
-**Total ADRs:** 67
+**Total ADRs:** 68
 **Accepted (✅):** 39 (Phase 0-1.5 partial)
 **Proposed (🔵):** 28 (Phase 0.7, 1, 2-10)
 **Rejected (❌):** 0
@@ -530,7 +585,7 @@ Phase 1.5 architecture: **3 managers** (Strategy, Model, Position) - NOT 4
 - Phase 0: 17 ADRs (100% accepted)
 - Phase 0.5: 12 ADRs (100% accepted)
 - Phase 1: 12 ADRs (6 accepted for DB completion + 6 planned for API best practices)
-- Phase 1.5: 3 ADRs (100% accepted - property-based testing POC + schema standardization + no edge manager)
+- Phase 1.5: 4 ADRs (100% accepted - property-based testing POC + schema standardization + no edge manager + 8 test type framework)
 - Phase 0.6c: 5 ADRs (100% accepted - includes cross-platform standards)
 - Phase 0.7: 6 ADRs (2 accepted: Python 3.14 compatibility + Branch Protection + 4 planned)
 - Phase 2: 3 ADRs (0% - planned)
@@ -549,9 +604,9 @@ Phase 1.5 architecture: **3 managers** (Strategy, Model, Position) - NOT 4
 
 ---
 
-**Document Version:** 1.10
+**Document Version:** 1.12
 **Created:** 2025-10-21
-**Last Updated:** 2025-11-15
+**Last Updated:** 2025-11-17
 **Purpose:** Systematic architecture decision tracking and reference
 **Critical Changes:**
 - v1.10: Added ADR-046 for branch protection strategy (Phase 0.7 retroactive, GitHub branch protection with 6 required CI checks)
@@ -561,6 +616,6 @@ Phase 1.5 architecture: **3 managers** (Strategy, Model, Position) - NOT 4
 - v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.15.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.17.md
 
-**END OF ADR INDEX V1.10**
+**END OF ADR INDEX V1.12**
