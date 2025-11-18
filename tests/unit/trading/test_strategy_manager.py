@@ -12,7 +12,6 @@ Related ADRs: ADR-018, ADR-019, ADR-020
 import json
 from decimal import Decimal
 from typing import Any
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -46,7 +45,7 @@ def strategy_factory() -> dict[str, Any]:
     return {
         "strategy_name": "value_betting_v1",
         "strategy_version": "1.0",
-        "approach": "value_betting",
+        "approach": "value",  # FIXED: was "value_betting", must be 'value', 'arbitrage', 'momentum', or 'mean_reversion'
         "domain": "nfl",
         "config": {
             "min_edge": Decimal("0.0500"),  # 5% minimum edge
@@ -62,59 +61,15 @@ def strategy_factory() -> dict[str, Any]:
     }
 
 
-@pytest.fixture
-def mock_cursor():
-    """Mock database cursor for testing.
-
-    Returns:
-        MagicMock cursor with common database operations
-
-    Educational Note:
-        - Mocks psycopg2 cursor interface
-        - fetchone() returns single row tuple
-        - fetchall() returns list of row tuples
-        - description provides column metadata
-    """
-    cursor = MagicMock()
-    cursor.description = [
-        ("strategy_id",),
-        ("strategy_name",),
-        ("strategy_version",),
-        ("approach",),
-        ("domain",),
-        ("config",),
-        ("description",),
-        ("status",),
-        ("paper_roi",),
-        ("live_roi",),
-        ("paper_trades_count",),
-        ("live_trades_count",),
-        ("created_at",),
-        ("created_by",),
-        ("notes",),
-    ]
-    return cursor
-
-
-@pytest.fixture
-def mock_connection(mock_cursor):
-    """Mock database connection for testing.
-
-    Args:
-        mock_cursor: Mocked cursor fixture
-
-    Returns:
-        MagicMock connection with cursor() method
-
-    Educational Note:
-        - Connection provides cursor factory
-        - commit() and rollback() are no-ops in tests
-        - Used with patch('precog.database.get_connection')
-        - cursor() returns mock_cursor directly (not using context manager)
-    """
-    connection = MagicMock()
-    connection.cursor.return_value = mock_cursor  # Direct return, not __enter__
-    return connection
+# Database fixtures imported from conftest.py:
+# - db_pool: Session-scoped connection pool (created once, shared across all tests)
+# - db_cursor: Function-scoped cursor with automatic rollback (fresh per test)
+# - clean_test_data: Cleans test data before/after each test
+#
+# Educational Note (ADR-088):
+#   - ❌ FORBIDDEN: Mocking get_connection(), database, config, logging
+#   - ✅ REQUIRED: Use REAL infrastructure fixtures
+#   - Phase 1.5 lesson: 17/17 tests passed with mocks → 13/17 failed with real DB
 
 
 # ============================================================================
@@ -218,10 +173,7 @@ def assert_version_format(version: str):
 class TestStrategyManagerCreate:
     """Test suite for strategy creation operations."""
 
-    @patch("precog.trading.strategy_manager.get_connection")
-    def test_create_strategy(
-        self, mock_get_connection, mock_connection, mock_cursor, strategy_factory
-    ):
+    def test_create_strategy(self, clean_test_data, db_cursor, strategy_factory):
         """Test creating a new strategy version.
 
         Validates:
@@ -234,42 +186,16 @@ class TestStrategyManagerCreate:
         Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Critical Scenario 1
         """
         # Setup
-        mock_get_connection.return_value = mock_connection
-        # Note: PostgreSQL returns JSONB as dict (psycopg2 automatic conversion)
-        mock_cursor.fetchone.return_value = (
-            1,  # strategy_id
-            "value_betting_v1",  # strategy_name
-            "1.0",  # strategy_version
-            "value_betting",  # approach
-            "nfl",  # domain
-            {  # config (JSONB → dict, automatic conversion by psycopg2)
-                "min_edge": "0.0500",
-                "max_position_size": "100.00",
-                "kelly_fraction": "0.2500",
-                "min_probability": "0.3000",
-                "max_probability": "0.7000",
-            },
-            "Basic value betting strategy for NFL markets",  # description
-            "draft",  # status
-            None,  # paper_roi
-            None,  # live_roi
-            0,  # paper_trades_count
-            0,  # live_trades_count
-            "2025-11-16 12:00:00",  # created_at
-            "test_user",  # created_by
-            "Test strategy for unit testing",  # notes
-        )
-
         manager = StrategyManager()
 
-        # Execute
+        # Execute - Create strategy with REAL database
         result = manager.create_strategy(**strategy_factory)
 
-        # Verify
-        assert result["strategy_id"] == 1
+        # Verify returned data
+        assert result["strategy_id"] is not None  # Auto-generated ID
         assert result["strategy_name"] == "value_betting_v1"
         assert result["strategy_version"] == "1.0"
-        assert result["approach"] == "value_betting"
+        assert result["approach"] == "value"  # Valid approach from migration_013
         assert result["domain"] == "nfl"
         assert result["status"] == "draft"
         assert result["created_by"] == "test_user"
@@ -285,16 +211,19 @@ class TestStrategyManagerCreate:
         # Verify version format
         assert_version_format(result["strategy_version"])
 
-        # Verify SQL execution
-        mock_cursor.execute.assert_called_once()
-        sql = mock_cursor.execute.call_args[0][0]
-        assert "INSERT INTO strategies" in sql
-        assert "config" in sql  # JSONB field
+        # Verify database persistence - Query REAL database
+        db_cursor.execute(
+            "SELECT strategy_name, strategy_version, config, status FROM strategies WHERE strategy_id = %s",
+            (result["strategy_id"],),
+        )
+        row = db_cursor.fetchone()
+        assert row is not None, "Strategy not found in database"
+        assert row["strategy_name"] == "value_betting_v1"
+        assert row["strategy_version"] == "1.0"
+        assert row["config"]["min_edge"] == "0.0500"  # config JSONB
+        assert row["status"] == "draft"
 
-    @patch("precog.trading.strategy_manager.get_connection")
-    def test_create_strategy_version(
-        self, mock_get_connection, mock_connection, mock_cursor, strategy_factory
-    ):
+    def test_create_strategy_version(self, clean_test_data, db_cursor, strategy_factory):
         """Test creating new version (v1.1) from existing strategy (v1.0).
 
         Validates:
@@ -306,59 +235,21 @@ class TestStrategyManagerCreate:
         Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Critical Scenario 2
         """
         # Setup
-        mock_get_connection.return_value = mock_connection
-
-        # First call: Create v1.0
-        mock_cursor.fetchone.return_value = (
-            1,
-            "value_betting_v1",
-            "1.0",
-            "value_betting",
-            "nfl",
-            {"min_edge": "0.0500", "max_position_size": "100.00"},
-            "Version 1.0",
-            "draft",
-            None,
-            None,
-            0,
-            0,
-            "2025-11-16 12:00:00",
-            "test_user",
-            "Original version",
-        )
-
         manager = StrategyManager()
+
+        # Create v1.0 with REAL database
         v1_0 = manager.create_strategy(**strategy_factory)
 
-        # Second call: Create v1.1 with different config
+        # Create v1.1 with different config (REAL database)
         strategy_factory["strategy_version"] = "1.1"
         strategy_factory["config"]["min_edge"] = Decimal("0.0600")  # Increased edge
         strategy_factory["description"] = "Version 1.1 - increased min edge"
         strategy_factory["notes"] = "Updated version"
 
-        mock_cursor.fetchone.return_value = (
-            2,  # Different ID
-            "value_betting_v1",
-            "1.1",  # Different version
-            "value_betting",
-            "nfl",
-            {"min_edge": "0.0600", "max_position_size": "100.00"},  # Different config
-            "Version 1.1 - increased min edge",
-            "draft",
-            None,
-            None,
-            0,
-            0,
-            "2025-11-16 13:00:00",
-            "test_user",
-            "Updated version",
-        )
-
         v1_1 = manager.create_strategy(**strategy_factory)
 
         # Verify both versions exist with different IDs
-        assert v1_0["strategy_id"] == 1
-        assert v1_1["strategy_id"] == 2
+        assert v1_0["strategy_id"] != v1_1["strategy_id"], "IDs must be different"
 
         # Verify versions are different
         assert v1_0["strategy_version"] == "1.0"
@@ -372,10 +263,19 @@ class TestStrategyManagerCreate:
         assert_version_format(v1_0["strategy_version"])
         assert_version_format(v1_1["strategy_version"])
 
-    @patch("precog.trading.strategy_manager.get_connection")
-    def test_unique_constraint(
-        self, mock_get_connection, mock_connection, mock_cursor, strategy_factory
-    ):
+        # Verify database persistence - Both versions exist
+        db_cursor.execute(
+            "SELECT strategy_version, config FROM strategies WHERE strategy_name = %s ORDER BY strategy_version",
+            ("value_betting_v1",),
+        )
+        rows = db_cursor.fetchall()
+        assert len(rows) == 2, "Should have 2 versions in database"
+        assert rows[0]["strategy_version"] == "1.0"
+        assert rows[0]["config"]["min_edge"] == "0.0500"
+        assert rows[1]["strategy_version"] == "1.1"
+        assert rows[1]["config"]["min_edge"] == "0.0600"
+
+    def test_unique_constraint(self, clean_test_data, db_cursor, strategy_factory):
         """Test that duplicate (name, version) pairs raise error.
 
         Validates:
@@ -386,37 +286,14 @@ class TestStrategyManagerCreate:
         Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Edge Case 7
         """
         # Setup
-        mock_get_connection.return_value = mock_connection
-
-        # First creation succeeds
-        mock_cursor.fetchone.return_value = (
-            1,
-            "value_betting_v1",
-            "1.0",
-            "value_betting",
-            "nfl",
-            {"min_edge": "0.0500"},
-            "Version 1.0",
-            "draft",
-            None,
-            None,
-            0,
-            0,
-            "2025-11-16 12:00:00",
-            "test_user",
-            "Original",
-        )
-
         manager = StrategyManager()
+
+        # First creation succeeds (REAL database)
         first = manager.create_strategy(**strategy_factory)
-        assert first["strategy_id"] == 1
+        assert first["strategy_id"] is not None
 
-        # Second creation with same (name, version) fails
+        # Second creation with same (name, version) fails (REAL database constraint)
         import psycopg2
-
-        mock_cursor.execute.side_effect = psycopg2.IntegrityError(
-            "duplicate key value violates unique constraint"
-        )
 
         with pytest.raises(psycopg2.IntegrityError, match="duplicate key"):
             manager.create_strategy(**strategy_factory)  # Same name + version
@@ -425,8 +302,7 @@ class TestStrategyManagerCreate:
 class TestStrategyManagerRetrieval:
     """Test suite for strategy retrieval operations."""
 
-    @patch("precog.trading.strategy_manager.get_connection")
-    def test_get_strategy(self, mock_get_connection, mock_connection, mock_cursor):
+    def test_get_strategy(self, clean_test_data, db_cursor, strategy_factory):
         """Test retrieving strategy by ID.
 
         Validates:
@@ -438,34 +314,28 @@ class TestStrategyManagerRetrieval:
 
         Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Critical Scenario 3
         """
-        # Setup
-        mock_get_connection.return_value = mock_connection
-        mock_cursor.fetchone.return_value = (
-            1,
-            "value_betting_v1",
-            "1.0",
-            "value_betting",
-            "nfl",
-            {"min_edge": "0.0500", "max_position_size": "100.00"},
-            "Test strategy",
-            "active",
-            Decimal("0.1234"),  # paper_roi
-            Decimal("0.0987"),  # live_roi
-            25,  # paper_trades_count
-            10,  # live_trades_count
-            "2025-11-16 12:00:00",
-            "test_user",
-            "Test notes",
-        )
-
+        # Setup - Create strategy first (REAL database)
         manager = StrategyManager()
+        created = manager.create_strategy(**strategy_factory)
 
-        # Execute
-        result = manager.get_strategy(strategy_id=1)
+        # Update strategy with metrics using REAL database
+        db_cursor.execute(
+            """
+            UPDATE strategies
+            SET paper_roi = %s, live_roi = %s, paper_trades_count = %s,
+                live_trades_count = %s, status = %s
+            WHERE strategy_id = %s
+            """,
+            (Decimal("0.1234"), Decimal("0.0987"), 25, 10, "active", created["strategy_id"]),
+        )
+        db_cursor.connection.commit()
+
+        # Execute - Retrieve strategy (REAL database)
+        result = manager.get_strategy(strategy_id=created["strategy_id"])
 
         # Verify
         assert result is not None
-        assert result["strategy_id"] == 1
+        assert result["strategy_id"] == created["strategy_id"]
         assert result["strategy_name"] == "value_betting_v1"
         assert result["strategy_version"] == "1.0"
         assert result["status"] == "active"
@@ -481,14 +351,7 @@ class TestStrategyManagerRetrieval:
         assert result["config"]["min_edge"] == Decimal("0.0500")
         assert_decimal_fields(result["config"])
 
-        # Verify SQL execution
-        mock_cursor.execute.assert_called_once()
-        sql = mock_cursor.execute.call_args[0][0]
-        assert "FROM strategies" in sql
-        assert "WHERE strategy_id = %s" in sql
-
-    @patch("precog.trading.strategy_manager.get_connection")
-    def test_get_strategy_not_found(self, mock_get_connection, mock_connection, mock_cursor):
+    def test_get_strategy_not_found(self, clean_test_data, db_cursor):
         """Test retrieving non-existent strategy returns None.
 
         Validates:
@@ -498,19 +361,15 @@ class TestStrategyManagerRetrieval:
         Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Edge Case 9
         """
         # Setup
-        mock_get_connection.return_value = mock_connection
-        mock_cursor.fetchone.return_value = None  # No rows found
-
         manager = StrategyManager()
 
-        # Execute
-        result = manager.get_strategy(strategy_id=999)
+        # Execute - Query non-existent ID (REAL database)
+        result = manager.get_strategy(strategy_id=999999)
 
         # Verify
         assert result is None
 
-    @patch("precog.trading.strategy_manager.get_connection")
-    def test_get_active_strategies(self, mock_get_connection, mock_connection, mock_cursor):
+    def test_get_active_strategies(self, clean_test_data, db_cursor, strategy_factory):
         """Test retrieving only active strategies.
 
         Validates:
@@ -520,68 +379,40 @@ class TestStrategyManagerRetrieval:
 
         Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Critical Scenario 4
         """
-        # Setup
-        mock_get_connection.return_value = mock_connection
-        mock_cursor.fetchall.return_value = [
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Active strategy 1",
-                "active",
-                Decimal("0.1234"),
-                None,
-                10,
-                0,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes 1",
-            ),
-            (
-                3,
-                "value_betting_v2",
-                "2.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0600"},
-                "Active strategy 2",
-                "active",
-                Decimal("0.0987"),
-                Decimal("0.0654"),
-                15,
-                5,
-                "2025-11-16 13:00:00",
-                "test_user",
-                "Notes 2",
-            ),
-        ]
-
+        # Setup - Create multiple strategies with different statuses (REAL database)
         manager = StrategyManager()
 
-        # Execute
+        # Create active strategy v1.0
+        strategy_factory["status"] = "active"
+        active1 = manager.create_strategy(**strategy_factory)
+
+        # Create draft strategy v1.1
+        strategy_factory["strategy_version"] = "1.1"
+        strategy_factory["status"] = "draft"
+        draft = manager.create_strategy(**strategy_factory)
+
+        # Create another active strategy v2.0
+        strategy_factory["strategy_name"] = "value_betting_v2"
+        strategy_factory["strategy_version"] = "2.0"
+        strategy_factory["status"] = "active"
+        active2 = manager.create_strategy(**strategy_factory)
+
+        # Execute - Get only active strategies (REAL database)
         result = manager.get_active_strategies()
 
         # Verify
-        assert len(result) == 2
+        assert len(result) >= 2, "Should have at least 2 active strategies"
+        active_ids = [s["strategy_id"] for s in result]
+        assert active1["strategy_id"] in active_ids
+        assert active2["strategy_id"] in active_ids
+        assert draft["strategy_id"] not in active_ids
         assert all(s["status"] == "active" for s in result)
-        assert result[0]["strategy_id"] == 1
-        assert result[1]["strategy_id"] == 3
-
-        # Verify SQL execution
-        mock_cursor.execute.assert_called_once()
-        sql = mock_cursor.execute.call_args[0][0]
-        assert "FROM strategies" in sql
-        assert "status =" in sql  # Could be parameterized or hardcoded
 
 
 class TestStrategyManagerUpdates:
     """Test suite for strategy update operations (mutable fields only)."""
 
-    @patch("precog.trading.strategy_manager.get_connection")
-    def test_update_strategy_status(self, mock_get_connection, mock_connection, mock_cursor):
+    def test_update_strategy_status(self, clean_test_data, db_cursor, strategy_factory):
         """Test updating strategy status with transition validation.
 
         Validates:
@@ -592,97 +423,32 @@ class TestStrategyManagerUpdates:
 
         Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Critical Scenario 5
         """
-        # Setup
-        mock_get_connection.return_value = mock_connection
-
+        # Setup - Create strategy (REAL database)
         manager = StrategyManager()
+        strategy = manager.create_strategy(**strategy_factory)
+        assert strategy["status"] == "draft"
 
-        # Valid transition: draft → testing (2 fetchone calls)
-        mock_cursor.fetchone.side_effect = [
-            # First call: get current status (draft)
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "draft",
-                None,
-                None,
-                0,
-                0,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            ),
-            # Second call: return updated strategy (testing)
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "testing",
-                None,
-                None,
-                0,
-                0,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            ),
-            # Third call: get current status (testing) for next transition
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "testing",
-                None,
-                None,
-                0,
-                0,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            ),
-            # Fourth call: return updated strategy (active)
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "active",
-                None,
-                None,
-                0,
-                0,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            ),
-        ]
-
-        # Execute first transition: draft → testing
-        result = manager.update_status(strategy_id=1, new_status="testing")
+        # Execute first transition: draft → testing (REAL database)
+        result = manager.update_status(strategy_id=strategy["strategy_id"], new_status="testing")
         assert result["status"] == "testing"
 
-        # Execute second transition: testing → active
-        result = manager.update_status(strategy_id=1, new_status="active")
+        # Verify database persistence
+        db_cursor.execute(
+            "SELECT status FROM strategies WHERE strategy_id = %s", (strategy["strategy_id"],)
+        )
+        assert db_cursor.fetchone()["status"] == "testing"
+
+        # Execute second transition: testing → active (REAL database)
+        result = manager.update_status(strategy_id=strategy["strategy_id"], new_status="active")
         assert result["status"] == "active"
 
-    @patch("precog.trading.strategy_manager.get_connection")
-    def test_invalid_status_transitions(self, mock_get_connection, mock_connection, mock_cursor):
+        # Verify database persistence
+        db_cursor.execute(
+            "SELECT status FROM strategies WHERE strategy_id = %s", (strategy["strategy_id"],)
+        )
+        assert db_cursor.fetchone()["status"] == "active"
+
+    def test_invalid_status_transitions(self, clean_test_data, db_cursor, strategy_factory):
         """Test that invalid status transitions raise error.
 
         Validates:
@@ -692,36 +458,22 @@ class TestStrategyManagerUpdates:
 
         Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Edge Case 10
         """
-        # Setup
-        mock_get_connection.return_value = mock_connection
-
-        # Current state: deprecated
-        mock_cursor.fetchone.return_value = (
-            1,
-            "value_betting_v1",
-            "1.0",
-            "value_betting",
-            "nfl",
-            {"min_edge": "0.0500"},
-            "Test strategy",
-            "deprecated",  # Terminal state
-            None,
-            None,
-            0,
-            0,
-            "2025-11-16 12:00:00",
-            "test_user",
-            "Notes",
-        )
-
+        # Setup - Create strategy and set to deprecated (REAL database)
         manager = StrategyManager()
+        strategy = manager.create_strategy(**strategy_factory)
 
-        # Invalid transition: deprecated → active
+        # Manually set to deprecated status (bypass transition logic for test setup)
+        db_cursor.execute(
+            "UPDATE strategies SET status = %s WHERE strategy_id = %s",
+            ("deprecated", strategy["strategy_id"]),
+        )
+        db_cursor.connection.commit()
+
+        # Invalid transition: deprecated → active (REAL database)
         with pytest.raises(InvalidStatusTransitionError, match=r"deprecated.*active"):
-            manager.update_status(strategy_id=1, new_status="active")
+            manager.update_status(strategy_id=strategy["strategy_id"], new_status="active")
 
-    @patch("precog.trading.strategy_manager.get_connection")
-    def test_update_strategy_metrics(self, mock_get_connection, mock_connection, mock_cursor):
+    def test_update_strategy_metrics(self, clean_test_data, db_cursor, strategy_factory):
         """Test updating strategy performance metrics.
 
         Validates:
@@ -732,33 +484,14 @@ class TestStrategyManagerUpdates:
 
         Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Critical Scenario 6
         """
-        # Setup
-        mock_get_connection.return_value = mock_connection
-
-        # Updated strategy with new metrics
-        mock_cursor.fetchone.return_value = (
-            1,
-            "value_betting_v1",
-            "1.0",
-            "value_betting",
-            "nfl",
-            {"min_edge": "0.0500"},  # Config unchanged
-            "Test strategy",
-            "active",
-            Decimal("0.1500"),  # paper_roi updated
-            Decimal("0.1200"),  # live_roi updated
-            30,  # paper_trades_count updated
-            15,  # live_trades_count updated
-            "2025-11-16 12:00:00",
-            "test_user",
-            "Notes",
-        )
-
+        # Setup - Create strategy (REAL database)
         manager = StrategyManager()
+        strategy = manager.create_strategy(**strategy_factory)
+        original_config = strategy["config"].copy()
 
-        # Execute
+        # Execute - Update metrics (REAL database)
         result = manager.update_metrics(
-            strategy_id=1,
+            strategy_id=strategy["strategy_id"],
             paper_roi=Decimal("0.1500"),
             live_roi=Decimal("0.1200"),
             paper_trades_count=30,
@@ -773,9 +506,22 @@ class TestStrategyManagerUpdates:
 
         # Verify config unchanged (immutability)
         assert result["config"]["min_edge"] == Decimal("0.0500")
+        assert result["config"] == original_config
 
-        # Verify SQL execution
-        assert mock_cursor.execute.call_count >= 1
+        # Verify database persistence
+        db_cursor.execute(
+            "SELECT paper_roi, live_roi, paper_trades_count, live_trades_count, config FROM strategies WHERE strategy_id = %s",
+            (strategy["strategy_id"],),
+        )
+        row = db_cursor.fetchone()
+        assert row["paper_roi"] == Decimal("0.1500")
+        assert row["live_roi"] == Decimal("0.1200")
+        assert row["paper_trades_count"] == 30
+        assert row["live_trades_count"] == 15
+        # Config stored in JSONB as strings, verify numeric equality
+        assert set(row["config"].keys()) == set(original_config.keys())
+        for key in original_config:
+            assert Decimal(row["config"][key]) == original_config[key]
 
 
 class TestStrategyManagerImmutability:
@@ -801,10 +547,7 @@ class TestStrategyManagerImmutability:
         assert not hasattr(manager, "modify_config")
         assert not hasattr(manager, "set_config")
 
-    @patch("precog.trading.strategy_manager.get_connection")
-    def test_decimal_precision_in_config(
-        self, mock_get_connection, mock_connection, mock_cursor, strategy_factory
-    ):
+    def test_decimal_precision_in_config(self, clean_test_data, db_cursor, strategy_factory):
         """Test that all numeric config fields use Decimal (not float).
 
         Validates:
@@ -815,32 +558,9 @@ class TestStrategyManagerImmutability:
         Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Critical Scenario 7
         """
         # Setup
-        mock_get_connection.return_value = mock_connection
-        mock_cursor.fetchone.return_value = (
-            1,
-            "value_betting_v1",
-            "1.0",
-            "value_betting",
-            "nfl",
-            {
-                "min_edge": "0.0500",
-                "max_position_size": "100.00",
-                "kelly_fraction": "0.2500",
-            },
-            "Test strategy",
-            "draft",
-            None,
-            None,
-            0,
-            0,
-            "2025-11-16 12:00:00",
-            "test_user",
-            "Notes",
-        )
-
         manager = StrategyManager()
 
-        # Execute
+        # Execute - Create strategy (REAL database)
         result = manager.create_strategy(**strategy_factory)
 
         # Verify all numeric fields are Decimal
@@ -852,6 +572,16 @@ class TestStrategyManagerImmutability:
         assert isinstance(result["config"]["max_position_size"], Decimal)
         assert isinstance(result["config"]["kelly_fraction"], Decimal)
 
+        # Verify database storage preserves Decimal (JSONB stores as strings)
+        db_cursor.execute(
+            "SELECT config FROM strategies WHERE strategy_id = %s", (result["strategy_id"],)
+        )
+        row = db_cursor.fetchone()
+        db_config = row["config"]
+        # JSONB stores Decimals as strings to preserve precision
+        assert db_config["min_edge"] == "0.0500"
+        assert db_config["max_position_size"] == "100.00"
+
 
 # ============================================================================
 # INTEGRATION TESTS
@@ -861,10 +591,7 @@ class TestStrategyManagerImmutability:
 class TestStrategyManagerIntegration:
     """Integration tests for end-to-end strategy lifecycle."""
 
-    @patch("precog.trading.strategy_manager.get_connection")
-    def test_strategy_lifecycle_end_to_end(
-        self, mock_get_connection, mock_connection, mock_cursor, strategy_factory
-    ):
+    def test_strategy_lifecycle_end_to_end(self, clean_test_data, db_cursor, strategy_factory):
         """Test complete strategy lifecycle: create → testing → active → inactive → deprecated.
 
         Validates:
@@ -875,260 +602,64 @@ class TestStrategyManagerIntegration:
 
         Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Integration Test 1
         """
-        # Setup
-        mock_get_connection.return_value = mock_connection
-
+        # Setup - Create strategy (REAL database)
         manager = StrategyManager()
-
-        # 1. Create strategy (draft)
-        mock_cursor.fetchone.side_effect = [
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "draft",
-                None,
-                None,
-                0,
-                0,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            )
-        ]
-
         strategy = manager.create_strategy(**strategy_factory)
         assert strategy["status"] == "draft"
         original_config = strategy["config"].copy()
+        strategy_id = strategy["strategy_id"]
 
-        # 2. Transition to testing
-        mock_cursor.fetchone.side_effect = [
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "draft",
-                None,
-                None,
-                0,
-                0,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            ),
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "testing",
-                None,
-                None,
-                0,
-                0,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            ),
-        ]
-
-        strategy = manager.update_status(strategy_id=1, new_status="testing")
+        # 2. Transition to testing (REAL database)
+        strategy = manager.update_status(strategy_id=strategy_id, new_status="testing")
         assert strategy["status"] == "testing"
         assert strategy["config"] == original_config  # Config unchanged
 
-        # 3. Add paper trading metrics
-        mock_cursor.fetchone.side_effect = [
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "testing",
-                Decimal("0.1234"),  # paper_roi
-                None,
-                25,  # paper_trades_count
-                0,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            )
-        ]
-
+        # 3. Add paper trading metrics (REAL database)
         strategy = manager.update_metrics(
-            strategy_id=1, paper_roi=Decimal("0.1234"), paper_trades_count=25
+            strategy_id=strategy_id, paper_roi=Decimal("0.1234"), paper_trades_count=25
         )
         assert strategy["paper_roi"] == Decimal("0.1234")
         assert strategy["paper_trades_count"] == 25
 
-        # 4. Transition to active
-        mock_cursor.fetchone.side_effect = [
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "testing",
-                Decimal("0.1234"),
-                None,
-                25,
-                0,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            ),
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "active",
-                Decimal("0.1234"),
-                None,
-                25,
-                0,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            ),
-        ]
-
-        strategy = manager.update_status(strategy_id=1, new_status="active")
+        # 4. Transition to active (REAL database)
+        strategy = manager.update_status(strategy_id=strategy_id, new_status="active")
         assert strategy["status"] == "active"
 
-        # 5. Add live trading metrics
-        mock_cursor.fetchone.side_effect = [
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "active",
-                Decimal("0.1234"),
-                Decimal("0.0987"),  # live_roi
-                25,
-                15,  # live_trades_count
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            )
-        ]
-
+        # 5. Add live trading metrics (REAL database)
         strategy = manager.update_metrics(
-            strategy_id=1, live_roi=Decimal("0.0987"), live_trades_count=15
+            strategy_id=strategy_id, live_roi=Decimal("0.0987"), live_trades_count=15
         )
         assert strategy["live_roi"] == Decimal("0.0987")
         assert strategy["live_trades_count"] == 15
 
-        # 6. Transition to inactive
-        mock_cursor.fetchone.side_effect = [
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "active",
-                Decimal("0.1234"),
-                Decimal("0.0987"),
-                25,
-                15,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            ),
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "inactive",
-                Decimal("0.1234"),
-                Decimal("0.0987"),
-                25,
-                15,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            ),
-        ]
-
-        strategy = manager.update_status(strategy_id=1, new_status="inactive")
+        # 6. Transition to inactive (REAL database)
+        strategy = manager.update_status(strategy_id=strategy_id, new_status="inactive")
         assert strategy["status"] == "inactive"
 
-        # 7. Final transition to deprecated
-        mock_cursor.fetchone.side_effect = [
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "inactive",
-                Decimal("0.1234"),
-                Decimal("0.0987"),
-                25,
-                15,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            ),
-            (
-                1,
-                "value_betting_v1",
-                "1.0",
-                "value_betting",
-                "nfl",
-                {"min_edge": "0.0500"},
-                "Test strategy",
-                "deprecated",
-                Decimal("0.1234"),
-                Decimal("0.0987"),
-                25,
-                15,
-                "2025-11-16 12:00:00",
-                "test_user",
-                "Notes",
-            ),
-        ]
-
-        strategy = manager.update_status(strategy_id=1, new_status="deprecated")
+        # 7. Final transition to deprecated (REAL database)
+        strategy = manager.update_status(strategy_id=strategy_id, new_status="deprecated")
         assert strategy["status"] == "deprecated"
 
         # Verify config NEVER changed throughout lifecycle
         assert strategy["config"] == original_config
 
-    @patch("precog.trading.strategy_manager.get_connection")
-    def test_multiple_versions_coexist(self, mock_get_connection, mock_connection, mock_cursor):
+        # Verify final database state
+        db_cursor.execute(
+            "SELECT status, paper_roi, live_roi, paper_trades_count, live_trades_count, config FROM strategies WHERE strategy_id = %s",
+            (strategy_id,),
+        )
+        row = db_cursor.fetchone()
+        assert row["status"] == "deprecated"
+        assert row["paper_roi"] == Decimal("0.1234")
+        assert row["live_roi"] == Decimal("0.0987")
+        assert row["paper_trades_count"] == 25
+        assert row["live_trades_count"] == 15
+        # Config stored in JSONB as strings, verify numeric equality
+        assert set(row["config"].keys()) == set(original_config.keys())
+        for key in original_config:
+            assert Decimal(row["config"][key]) == original_config[key]
+
+    def test_multiple_versions_coexist(self, clean_test_data, db_cursor, strategy_factory):
         """Test that multiple strategy versions coexist independently.
 
         Validates:
@@ -1140,73 +671,43 @@ class TestStrategyManagerIntegration:
 
         Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Integration Test 2
         """
-        # Setup
-        mock_get_connection.return_value = mock_connection
-
+        # Setup - Create three versions (REAL database)
         manager = StrategyManager()
 
-        # Create v1.0
-        mock_cursor.fetchone.return_value = (
-            1,
-            "value_betting_v1",
-            "1.0",
-            "value_betting",
-            "nfl",
-            {"min_edge": "0.0500"},
-            "Version 1.0",
-            "active",
-            Decimal("0.1000"),
-            Decimal("0.0800"),
-            10,
-            5,
-            "2025-11-16 12:00:00",
-            "test_user",
-            "Original version",
+        # Create v1.0 and set to active with metrics
+        v1_0 = manager.create_strategy(**strategy_factory)
+        db_cursor.execute(
+            """
+            UPDATE strategies
+            SET status = %s, paper_roi = %s, live_roi = %s,
+                paper_trades_count = %s, live_trades_count = %s
+            WHERE strategy_id = %s
+            """,
+            ("active", Decimal("0.1000"), Decimal("0.0800"), 10, 5, v1_0["strategy_id"]),
         )
+        db_cursor.connection.commit()
 
-        v1_0 = manager.get_strategy(strategy_id=1)
-
-        # Create v1.1
-        mock_cursor.fetchone.return_value = (
-            2,
-            "value_betting_v1",
-            "1.1",
-            "value_betting",
-            "nfl",
-            {"min_edge": "0.0600"},  # Different config
-            "Version 1.1",
-            "testing",  # Different status
-            Decimal("0.1500"),  # Different metrics
-            None,
-            15,
-            0,
-            "2025-11-16 13:00:00",
-            "test_user",
-            "Bug fix version",
+        # Create v1.1 with different config and status
+        strategy_factory["strategy_version"] = "1.1"
+        strategy_factory["config"]["min_edge"] = Decimal("0.0600")
+        v1_1 = manager.create_strategy(**strategy_factory)
+        db_cursor.execute(
+            "UPDATE strategies SET status = %s, paper_roi = %s, paper_trades_count = %s WHERE strategy_id = %s",
+            ("testing", Decimal("0.1500"), 15, v1_1["strategy_id"]),
         )
+        db_cursor.connection.commit()
 
-        v1_1 = manager.get_strategy(strategy_id=2)
+        # Create v2.0 with major config change
+        strategy_factory["strategy_version"] = "2.0"
+        strategy_factory["config"]["min_edge"] = Decimal("0.0700")
+        strategy_factory["config"]["new_param"] = Decimal("10.00")
+        v2_0 = manager.create_strategy(**strategy_factory)
+        # v2.0 stays in draft with no metrics
 
-        # Create v2.0
-        mock_cursor.fetchone.return_value = (
-            3,
-            "value_betting_v1",
-            "2.0",
-            "value_betting",
-            "nfl",
-            {"min_edge": "0.0700", "new_param": "10.00"},  # Major change
-            "Version 2.0",
-            "draft",  # Different status
-            None,  # No metrics yet
-            None,
-            0,
-            0,
-            "2025-11-16 14:00:00",
-            "test_user",
-            "Major rewrite",
-        )
-
-        v2_0 = manager.get_strategy(strategy_id=3)
+        # Retrieve all versions (REAL database)
+        v1_0 = manager.get_strategy(strategy_id=v1_0["strategy_id"])
+        v1_1 = manager.get_strategy(strategy_id=v1_1["strategy_id"])
+        v2_0 = manager.get_strategy(strategy_id=v2_0["strategy_id"])
 
         # Verify all 3 versions exist independently
         assert v1_0["strategy_version"] == "1.0"

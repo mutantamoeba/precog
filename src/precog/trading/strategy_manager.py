@@ -482,7 +482,7 @@ class StrategyManager:
         try:
             # Safe: updates list contains ONLY hardcoded column names (lines 462-475),
             # never user input. All values use parameterized queries (%s placeholders).
-            update_sql = f"""  # noqa: S608
+            update_sql = f"""
                 UPDATE strategies
                 SET {", ".join(updates)}
                 WHERE strategy_id = %s
