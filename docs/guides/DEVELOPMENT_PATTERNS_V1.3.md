@@ -1624,6 +1624,344 @@ except OSError:
 
 ---
 
+## Pattern 13: Test Coverage Quality (Mock Sparingly, Integrate Thoroughly) - CRITICAL
+
+**WHY:** Tests can pass with 100% test pass rate yet miss critical bugs. Phase 1.5 discovery: Strategy Manager had 17/17 tests passing with mocks, but 13/17 tests failed (77% failure rate) when refactored to use real database fixtures. Connection pool exhaustion bugs went completely undetected.
+
+**The Critical Lesson:** "Tests passing" ≠ "Tests sufficient" ≠ "Code works correctly"
+
+### The Problem: Over-Reliance on Mocks
+
+**What went wrong:**
+
+```python
+# ❌ WRONG - Strategy Manager tests (17/17 passing, but implementation broken)
+@patch("precog.trading.strategy_manager.get_connection")
+def test_create_strategy(self, mock_get_connection, mock_connection, mock_cursor):
+    """Test creates strategy - BUT DOESN'T TEST CONNECTION POOL!"""
+    mock_get_connection.return_value = mock_connection
+    mock_cursor.fetchone.return_value = (1, "strategy_v1", "1.0", ...)  # Fake response
+
+    manager = StrategyManager()
+    result = manager.create_strategy(...)  # Calls mock, not real DB
+
+    assert result["strategy_id"] == 1  # ✅ Test passes!
+    # But implementation has connection pool leak - not caught!
+```
+
+**Why this is catastrophic:**
+- Mocks test "did we call the right function?" NOT "does the system work?"
+- Mocks bypass integration bugs (connection pool exhaustion, transaction handling, constraint violations)
+- Mocks provide false confidence - green tests, broken code
+- In production: System crashes after 5 creates (connection pool exhausted)
+
+### ✅ CORRECT Pattern: Real Infrastructure with Test Fixtures
+
+```python
+# ✅ CORRECT - Use real database with conftest.py fixtures
+def test_create_strategy(clean_test_data, manager, strategy_factory):
+    """Test creates strategy - TESTS REAL DATABASE!"""
+    result = manager.create_strategy(**strategy_factory)  # Calls REAL database
+
+    assert result["strategy_id"] is not None  # ✅ Test passes
+    # If connection pool leak exists → test fails with pool exhausted error
+    # If SQL syntax wrong → test fails with database error
+    # If constraints violated → test fails with constraint error
+```
+
+### When to Use Mocks vs. Real Infrastructure
+
+**✅ Mocks are APPROPRIATE for:**
+- **External APIs** (Kalshi, ESPN, Polymarket) - expensive, rate-limited, flaky
+- **Time-dependent code** (`datetime.now()`, `time.sleep()`)
+- **Random number generation** (`random.random()`, `uuid.uuid4()`)
+- **File I/O** (in some cases - when testing file handling logic, not content)
+- **Network requests** (HTTP, WebSocket) - unreliable, slow
+
+**❌ Mocks are NOT APPROPRIATE for:**
+- **Database** (use test database with `clean_test_data` fixture)
+- **Internal application logic** (strategy manager, model manager, position manager)
+- **Configuration loading** (use test configs, not mocks)
+- **Logging** (use test logger, capture output)
+- **Connection pooling** (use `db_pool` fixture with real pool)
+
+### ALWAYS Use Test Fixtures from conftest.py
+
+**MANDATORY fixtures for database tests:**
+
+```python
+# conftest.py provides these fixtures - ALWAYS USE THEM
+@pytest.fixture
+def clean_test_data(db_pool):
+    """Cleans database before/after each test. ALWAYS USE THIS."""
+    # Deletes all test data before test runs
+    # Ensures clean state
+    # Automatically rolls back after test
+
+@pytest.fixture
+def db_pool():
+    """Provides real connection pool. Use for pool-related tests."""
+    # Real SimpleConnectionPool with minconn=2, maxconn=5
+    # Tests pool exhaustion scenarios
+    # Automatically cleans up connections
+
+@pytest.fixture
+def db_cursor(db_pool):
+    """Provides real database cursor. Use for SQL execution tests."""
+    # Real psycopg2 cursor
+    # Automatically commits/rolls back
+    # Cleans up cursor after test
+```
+
+**Example usage:**
+
+```python
+# ✅ CORRECT - All manager tests use clean_test_data
+def test_create_strategy(clean_test_data, manager, strategy_factory):
+    """Uses real database, real connection pool, real SQL."""
+    result = manager.create_strategy(**strategy_factory)
+    assert result["strategy_id"] is not None
+    # Database automatically cleaned up after test
+
+def test_connection_pool_exhaustion(clean_test_data, db_pool):
+    """Tests connection pool limits with REAL pool."""
+    manager = StrategyManager()
+
+    # Create 6 strategies (pool maxconn=5)
+    for i in range(6):
+        result = manager.create_strategy(
+            strategy_name=f"test_strategy_{i}",
+            strategy_version="1.0",
+            approach="value",
+            config={"test": True},
+        )
+        assert result["strategy_id"] is not None
+
+    # If connection pool leak exists → test fails here
+```
+
+### 8 Required Test Types (Not Just Unit Tests)
+
+**CRITICAL:** Trading applications need multiple test types, not just unit tests.
+
+| Test Type | Purpose | When Required | Example |
+|-----------|---------|---------------|---------|
+| **Unit** | Isolated function logic | ✅ ALWAYS | `test_calculate_kelly_fraction()` |
+| **Property** | Mathematical invariants | ✅ CRITICAL PATH | `test_decimal_precision_preserved()` |
+| **Integration** | Components together | ✅ MANAGER LAYER | `test_strategy_manager_database()` |
+| **End-to-End** | Complete workflows | ⚠️ PHASE 2+ | `test_trading_lifecycle()` |
+| **Stress** | Infrastructure limits | ✅ CRITICAL | `test_connection_pool_exhaustion()` |
+| **Race Condition** | Concurrent operations | ⚠️ PHASE 3+ | `test_concurrent_position_updates()` |
+| **Performance** | Latency/throughput | ⏸️ PHASE 5+ | `test_order_execution_latency()` |
+| **Chaos** | Failure recovery | ⏸️ PHASE 5+ | `test_database_failure_recovery()` |
+
+**Phase 1.5 Requirements:**
+- ✅ Unit tests (isolated logic)
+- ✅ Property tests (Hypothesis for Kelly criterion, edge detection)
+- ✅ Integration tests (manager layer + database)
+- ✅ Stress tests (connection pool exhaustion)
+
+### Coverage Standards: Percentage ≠ Quality
+
+**The Aggregate Coverage Trap:**
+
+```
+Overall Coverage: 86.25% ✅ (looks good!)
+
+But module breakdown reveals gaps:
+├── Model Manager: 25.75% ❌ (target: ≥85%, gap: -59.25%)
+├── Strategy Manager: 19.96% ❌ (target: ≥85%, gap: -65.04%)
+├── Position Manager: 0% ❌ (not implemented yet)
+├── Database Layer: 86.32% ✅ (target: ≥80%)
+└── API Clients: 93.19% ✅ (target: ≥80%)
+```
+
+**Module-Level Coverage Targets:**
+- **Critical Path** (trading execution, position monitoring): ≥90%
+- **Manager Layer** (strategy, model, position managers): ≥85%
+- **Infrastructure** (database, logging, config): ≥80%
+- **API Clients** (Kalshi, ESPN): ≥80%
+- **Utilities** (helpers, formatters): ≥75%
+
+### Test Review Checklist (MANDATORY Before Marking Work Complete)
+
+Run this checklist before marking any feature complete:
+
+```markdown
+## Test Quality Checklist
+
+- [ ] **Tests use real infrastructure (database, not mocks)?**
+  - ✅ Uses `clean_test_data` fixture
+  - ✅ Uses `db_pool` fixture for pool tests
+  - ❌ NO `@patch("get_connection")` mocks
+
+- [ ] **Tests use fixtures from conftest.py?**
+  - ✅ ALL database tests use `clean_test_data`
+  - ✅ NO manual `mock_connection` or `mock_cursor` fixtures
+  - ✅ Fixtures handle cleanup automatically
+
+- [ ] **Tests cover happy path AND edge cases?**
+  - ✅ Happy path (normal create/update/delete)
+  - ✅ Edge cases (null values, empty strings, boundary conditions)
+  - ✅ Failure modes (database errors, connection pool exhausted)
+
+- [ ] **Tests cover failure modes?**
+  - ✅ What happens when database fails?
+  - ✅ What happens when connection pool exhausted?
+  - ✅ What happens when invalid data provided?
+
+- [ ] **Coverage percentage ≥ target for this module?**
+  - ✅ Manager modules: ≥85%
+  - ✅ Infrastructure modules: ≥80%
+  - ✅ Critical path: ≥90%
+
+- [ ] **Tests written BEFORE implementation (TDD)?**
+  - ✅ Test written first (red)
+  - ✅ Implementation written second (green)
+  - ✅ Refactored (clean)
+
+- [ ] **Multiple test types present?**
+  - ✅ Unit tests (isolated logic)
+  - ✅ Integration tests (database + application)
+  - ✅ Property tests (if mathematical invariants)
+  - ✅ Stress tests (if touches infrastructure limits)
+```
+
+### Real-World Impact: Strategy Manager Example
+
+**Before (using mocks):**
+- Tests: 17/17 passing (100% pass rate) ✅
+- Coverage: 19.96% ❌
+- Bugs found: 0 ✅
+- **Production behavior:** System crashes after 5 creates (connection pool exhausted)
+
+**After (using real infrastructure):**
+- Tests: 13/17 failing (77% failure rate) ❌
+- Coverage: TBD (to be increased to ≥85%)
+- Bugs found: 1 critical (connection pool leak) ✅
+- **Production behavior:** Would have been caught before deployment
+
+**Key Learning:** 77% of Strategy Manager tests were providing false confidence. They passed because they never touched real infrastructure.
+
+### Prevention: Multi-Layer Test Strategy
+
+```python
+# Layer 1: Unit tests (fast, isolated)
+def test_calculate_edge_unit():
+    """Tests edge calculation math (no database)."""
+    from precog.trading.strategy_manager import calculate_edge
+
+    true_prob = Decimal("0.6")
+    market_price = Decimal("0.5")
+    edge = calculate_edge(true_prob, market_price)
+
+    assert edge == Decimal("0.1")  # 60% - 50% = 10% edge
+
+# Layer 2: Integration tests (real database)
+def test_create_strategy_integration(clean_test_data, manager, strategy_factory):
+    """Tests strategy creation with REAL database."""
+    result = manager.create_strategy(**strategy_factory)
+
+    assert result["strategy_id"] is not None
+    # Verifies:
+    # - SQL syntax correct
+    # - Connection pool works
+    # - Transactions commit
+    # - Constraints enforced
+
+# Layer 3: Stress tests (infrastructure limits)
+def test_connection_pool_stress(clean_test_data):
+    """Tests connection pool exhaustion with 10 concurrent creates."""
+    import concurrent.futures
+
+    def create_strategy(i):
+        manager = StrategyManager()
+        return manager.create_strategy(
+            strategy_name=f"stress_test_{i}",
+            strategy_version="1.0",
+            approach="value",
+            config={"test": True},
+        )
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+        futures = [executor.submit(create_strategy, i) for i in range(10)]
+        results = [f.result() for f in concurrent.futures.as_completed(futures)]
+
+    assert len(results) == 10  # All creates succeeded
+    # If connection pool leak → this fails with pool exhausted error
+
+# Layer 4: Property tests (mathematical invariants)
+from hypothesis import given
+from hypothesis import strategies as st
+
+@given(
+    true_prob=st.decimals(min_value="0.01", max_value="0.99", places=4),
+    market_price=st.decimals(min_value="0.01", max_value="0.99", places=4),
+)
+def test_edge_always_decimal(true_prob, market_price):
+    """Edge calculation NEVER produces float (test with 100+ cases)."""
+    edge = calculate_edge(true_prob, market_price)
+
+    assert isinstance(edge, Decimal)  # NEVER float
+    # Hypothesis generates 100+ test cases automatically
+```
+
+### Common Mistakes to Avoid
+
+**Mistake 1: Mocking internal infrastructure**
+```python
+# ❌ WRONG
+@patch("precog.database.connection.get_connection")
+def test_create_strategy(mock_get_connection):
+    # Don't mock internal infrastructure!
+
+# ✅ CORRECT
+def test_create_strategy(clean_test_data, manager, strategy_factory):
+    # Use real database with fixtures
+```
+
+**Mistake 2: Not using conftest.py fixtures**
+```python
+# ❌ WRONG
+def test_create_strategy():
+    conn = psycopg2.connect(...)  # Manual connection
+    cursor = conn.cursor()
+    # Manual cleanup required
+
+# ✅ CORRECT
+def test_create_strategy(clean_test_data, db_cursor):
+    # Fixtures handle connection + cleanup
+```
+
+**Mistake 3: Aggregate coverage hiding gaps**
+```python
+# ❌ WRONG
+# "Overall coverage: 86% ✅ - ship it!"
+
+# ✅ CORRECT
+# "Model Manager: 25% ❌ - below 85% target, not ready"
+```
+
+**Mistake 4: Only unit tests, no integration/stress tests**
+```python
+# ❌ WRONG
+# 30 unit tests, 0 integration tests, 0 stress tests
+
+# ✅ CORRECT
+# 30 unit tests + 15 integration tests + 5 stress tests
+```
+
+### Cross-References
+- **TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md:** Post-mortem documenting Strategy Manager test failure
+- **TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md:** REQ-TEST-012 through REQ-TEST-019 (8 test types, coverage standards, mock restrictions)
+- **TESTING_GAPS_ANALYSIS.md:** Current coverage gaps and remediation plan
+- **DEVELOPMENT_PHILOSOPHY_V1.3.md:** Section 1 - Test Quality: When Tests Pass But Aren't Sufficient
+- **Pattern 11:** Test Mocking Patterns (HOW to mock public APIs vs implementation)
+- **Pattern 12:** Test Fixture Security Compliance (project-relative test fixtures)
+- **tests/conftest.py:** Test fixture infrastructure (`clean_test_data`, `db_pool`, `db_cursor`)
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -1640,6 +1978,7 @@ except OSError:
 | **10. Property Testing** | Pytest (pre-push hook) | `pytest tests/property/ -v` | ADR-074, REQ-TEST-008 |
 | **11. Test Mocking** | Code review | `git grep "return_value\.load" tests/` | PR #19, PR #20 |
 | **12. Test Fixture Security** | Code review | `git grep "tmp_path.*\.sql" tests/` | PR #79, PR #76, CWE-22 |
+| **13. Test Coverage Quality** | Code review + test checklist | `git grep "@patch.*get_connection" tests/` | REQ-TEST-012 thru REQ-TEST-019, TDD_FAILURE_ROOT_CAUSE |
 
 ---
 
@@ -1684,5 +2023,7 @@ This extraction serves two critical purposes:
 
 The preservation of all cross-references (ADRs, REQs, file paths) ensures developers can navigate from patterns to detailed implementation guides without information loss.
 
-V1.3 Update: Added Pattern 12 (Test Fixture Security Compliance) documenting project-relative test fixture pattern from PR #79, ensuring test fixtures comply with path traversal protection (CWE-22) implemented in PR #76.
+V1.3 Updates:
+- Added Pattern 12 (Test Fixture Security Compliance) documenting project-relative test fixture pattern from PR #79, ensuring test fixtures comply with path traversal protection (CWE-22) implemented in PR #76.
+- Added Pattern 13 (Test Coverage Quality - Mock Sparingly, Integrate Thoroughly) documenting critical lessons from TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md: when to use mocks vs real infrastructure, ALWAYS use conftest.py fixtures, 8 required test types, coverage standards, test review checklist. Prevents false confidence from mock-based tests that pass despite critical bugs (Strategy Manager: 17/17 tests passing with mocks, 13/17 failing with real database).
 ─────────────────────────────────────────────────
