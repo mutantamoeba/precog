@@ -20,8 +20,8 @@ Related:
 
 from decimal import Decimal
 
+import psycopg2
 import pytest
-from sqlalchemy.exc import IntegrityError
 
 from precog.analytics import InvalidStatusTransitionError, ModelManager
 
@@ -211,7 +211,9 @@ def test_get_model_not_found_by_name(clean_test_data, manager):
 
 def test_get_model_requires_identifier(clean_test_data, manager):
     """Test get_model raises ValueError without any identifier."""
-    with pytest.raises(ValueError, match="model_id or both model_name and model_version"):
+    with pytest.raises(
+        ValueError, match="Provide either model_id OR both model_name and model_version"
+    ):
         manager.get_model()
 
 
@@ -418,7 +420,7 @@ def test_update_metrics_no_fields_provided(clean_test_data, manager, model_facto
 
 def test_update_metrics_model_not_found(clean_test_data, manager):
     """Test update_metrics raises ValueError when model doesn't exist."""
-    with pytest.raises(ValueError, match="Model not found"):
+    with pytest.raises(ValueError, match="Model 99999 not found"):
         manager.update_metrics(model_id=99999, validation_calibration=Decimal("0.90"))
 
 
@@ -481,7 +483,7 @@ def test_update_status_invalid_transition_draft_to_active(clean_test_data, manag
     """
     model = manager.create_model(**model_factory)
 
-    with pytest.raises(InvalidStatusTransitionError, match="Invalid status transition"):
+    with pytest.raises(InvalidStatusTransitionError, match="Invalid transition: draft → active"):
         manager.update_status(model_id=model["model_id"], new_status="active")
 
 
@@ -497,13 +499,15 @@ def test_update_status_invalid_transition_deprecated_to_active(
     """
     model = manager.create_model(**{**model_factory, "status": "deprecated"})
 
-    with pytest.raises(InvalidStatusTransitionError, match="Invalid status transition"):
+    with pytest.raises(
+        InvalidStatusTransitionError, match="Invalid transition: deprecated → active"
+    ):
         manager.update_status(model_id=model["model_id"], new_status="active")
 
 
 def test_update_status_model_not_found(clean_test_data, manager):
     """Test update_status raises ValueError when model doesn't exist."""
-    with pytest.raises(ValueError, match="Model not found"):
+    with pytest.raises(ValueError, match="Model 99999 not found"):
         manager.update_status(model_id=99999, new_status="testing")
 
 
@@ -626,13 +630,29 @@ def test_error_handling_invalid_model_type(clean_test_data, manager, model_facto
 
 def test_error_handling_duplicate_name_version(clean_test_data, manager, model_factory):
     """Test creating duplicate model (same name + version) raises error."""
+    # Use unique model name to avoid collision with other tests
+    unique_config = model_factory.copy()
+    unique_config["model_name"] = "duplicate_test_model"  # Unique name for this test
+
+    # Ensure clean state using dedicated connection with commit=True
+    from precog.database.connection import get_connection, release_connection
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute("DELETE FROM probability_models WHERE model_name = 'duplicate_test_model'")
+        conn.commit()
+    finally:
+        cursor.close()
+        release_connection(conn)
+
     # Create first model
-    manager.create_model(**model_factory)
+    manager.create_model(**unique_config)
 
     # Attempt to create duplicate (same name + version)
-    # Database unique constraint should reject
-    with pytest.raises(IntegrityError):  # UNIQUE constraint violation
-        manager.create_model(**model_factory)
+    # Database unique constraint should reject (psycopg2.IntegrityError)
+    with pytest.raises(psycopg2.IntegrityError):  # UNIQUE constraint violation
+        manager.create_model(**unique_config)
 
 
 # ============================================================================
