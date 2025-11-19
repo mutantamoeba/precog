@@ -333,6 +333,14 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-TEST-009 | Property-Based Testing - Phase 1.5 Expansion | 1.5 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.11 |
 | REQ-TEST-010 | Property-Based Testing - Phases 2-4 Expansion | 2-4 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.11 |
 | REQ-TEST-011 | Property-Based Testing - Phase 5 Expansion | 5 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.11 |
+| REQ-TEST-012 | Test Type Coverage Requirements | 1.5+ | Critical | ✅ | MASTER_REQUIREMENTS_V2.16 |
+| REQ-TEST-013 | Mock Usage Restrictions | 1.5+ | Critical | ✅ | MASTER_REQUIREMENTS_V2.16 |
+| REQ-TEST-014 | Test Fixture Usage Requirements | 1.5+ | Critical | ✅ | MASTER_REQUIREMENTS_V2.16 |
+| REQ-TEST-015 | Coverage Percentage Standards | 1.5+ | Critical | ✅ | MASTER_REQUIREMENTS_V2.16 |
+| REQ-TEST-016 | Stress Test Requirements | 1.5+ | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
+| REQ-TEST-017 | Integration Test Requirements | 1.5+ | Critical | 🔵 | MASTER_REQUIREMENTS_V2.16 |
+| REQ-TEST-018 | Property-Based Test Requirements | 1+ | Critical | ✅ | MASTER_REQUIREMENTS_V2.16 |
+| REQ-TEST-019 | End-to-End Test Requirements | 2+ | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
 
 ---
 
@@ -357,9 +365,9 @@ This document provides a systematic index of all Precog requirements using categ
 |----|-------|-------|----------|--------|----------|
 | REQ-CICD-001 | GitHub Actions CI/CD Integration | 0.7 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
 | REQ-CICD-002 | Codecov Integration | 0.7 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.10 |
-| REQ-CICD-003 | Branch Protection Rules | 0.7 | High | ✅ | MASTER_REQUIREMENTS_V2.15 |
-| REQ-CICD-004 | Pre-Commit Hooks Infrastructure | 0.7 | High | ✅ | MASTER_REQUIREMENTS_V2.15 |
-| REQ-CICD-005 | Pre-Push Hooks Infrastructure | 0.7 | High | ✅ | MASTER_REQUIREMENTS_V2.15 |
+| REQ-CICD-003 | Branch Protection Rules | 0.7 | High | ✅ | MASTER_REQUIREMENTS_V2.16 |
+| REQ-CICD-004 | Pre-Commit Hooks Infrastructure | 0.7 | High | ✅ | MASTER_REQUIREMENTS_V2.16 |
+| REQ-CICD-005 | Pre-Push Hooks Infrastructure | 0.7 | High | ✅ | MASTER_REQUIREMENTS_V2.16 |
 
 **Summary:** Phase 0.7 integrated GitHub Actions for automated CI/CD, coverage tracking with Codecov, branch protection for main branch, pre-commit hooks (14 checks, ~2-5s), and pre-push hooks (7 validation steps, ~60-90s). All infrastructure requirements completed 2025-11-07.
 

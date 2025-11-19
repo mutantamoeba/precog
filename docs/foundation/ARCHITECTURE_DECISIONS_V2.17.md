@@ -1,9 +1,21 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.16
+**Version:** 2.17
 **Last Updated:** November 17, 2025
 **Status:** ✅ Current
+**Changes in v2.17:**
+- **TESTING ARCHITECTURE - 8 TEST TYPE FRAMEWORK:** Added Decision #88/ADR-088 (Test Type Categories - Phase 1.5)
+- Documents comprehensive 8 test type framework addressing Phase 1.5 TDD failure (Strategy Manager: 17/17 tests passed with mocks → 13/17 failed with real DB, 77% failure rate)
+- **8 Test Types:** Unit (isolated logic), Property (Hypothesis mathematical invariants), Integration (REAL infrastructure NOT mocks), E2E (complete workflows), Stress (infrastructure limits), Race (concurrent operations), Performance (Phase 5+), Chaos (Phase 5+)
+- **Mock Usage Policy:** ✅ APPROPRIATE for external APIs/time/randomness, ❌ FORBIDDEN for internal infrastructure (database/config/logging)
+- **Root Cause:** Mocking get_connection() hid connection pool leak bugs that only manifest with real database
+- **Test Type Requirements Matrix (REQ-TEST-012):** Module tier × test type coverage requirements (Critical Path ≥90% needs all 8 types)
+- **Mock Usage Restrictions (REQ-TEST-013):** Decision tree for when mocks appropriate vs. forbidden
+- **Implementation:** Test organization structure (8 test directories), phase-based roadmap (Phase 1-5), fixture requirements (db_pool, clean_test_data)
+- **Benefits:** Prevents false confidence, comprehensive coverage (8 types catch different bug categories), clear guidance (mock usage decision tree)
+- **Costs:** Increased test execution time (integration/stress tests slower), steeper learning curve (Hypothesis, threading), more test infrastructure
+- References TESTING_STRATEGY_V3.1.md, REQ-TEST-012 through REQ-TEST-019, ADR-074 (Property-Based Testing), ADR-075 (Multi-Source Warning Governance)
 **Changes in v2.16:**
 - **SCHEMA STANDARDIZATION - CLASSIFICATION FIELD NAMING:** Added Decision #86/ADR-086 (Schema Classification Field Naming - Phase 1.5)
 - Documents the approach/domain naming decision that resolved three-way schema mismatch blocking Model Manager implementation
@@ -3224,7 +3236,7 @@ test_results/
 - pytest-html generates HTML reports
 - .gitignore excludes timestamped runs (keeps README.md)
 
-**Reference:** `foundation/TESTING_STRATEGY_V2.1.md`
+**Reference:** `foundation/TESTING_STRATEGY_V3.1.md`
 
 ---
 
@@ -3402,7 +3414,7 @@ safety check --full-report
 - CI workflow fails on high/critical findings
 - Weekly dependency scans via scheduled workflow
 
-**Reference:** `foundation/TESTING_STRATEGY_V2.1.md`, REQ-TEST-008
+**Reference:** `foundation/TESTING_STRATEGY_V3.1.md`, REQ-TEST-008
 
 ---
 
@@ -3444,7 +3456,7 @@ Target: >80% mutation score on critical modules
 - Run weekly on critical modules
 - Track mutation score trends
 
-**Reference:** `foundation/TESTING_STRATEGY_V2.1.md`, REQ-TEST-009
+**Reference:** `foundation/TESTING_STRATEGY_V3.1.md`, REQ-TEST-009
 
 ---
 
@@ -3489,7 +3501,7 @@ def test_spread_always_positive(price):
 - Focus on financial calculations (decimal precision critical)
 - Integrate into test suite (pytest-hypothesis plugin)
 
-**Reference:** `foundation/TESTING_STRATEGY_V2.1.md`, REQ-TEST-010
+**Reference:** `foundation/TESTING_STRATEGY_V3.1.md`, REQ-TEST-010
 
 ---
 
@@ -8577,7 +8589,7 @@ def run_holdout_validation(
 ### Related Documentation
 
 - `docs/guides/MODEL_EVALUATION_GUIDE_V1.0.md` (implementation guide - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.15.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #3, Phase 6 Task #1)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8.7: Evaluation Runs Table)
@@ -9300,7 +9312,7 @@ ON position_risk_by_strategy(league, strategy_name);
 
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (comprehensive analytics implementation guide - to be created)
 - `docs/guides/DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md` (React dashboard + API integration - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.15.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 6 Task #3, Phase 7 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8.8: Materialized Views Reference)
@@ -10131,7 +10143,7 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 
 - `docs/guides/AB_TESTING_GUIDE_V1.0.md` (comprehensive A/B testing guide - to be created)
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (includes A/B testing architecture)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.15.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 7 Task #3, Phase 8 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8.9: A/B Tests Table)
@@ -10569,7 +10581,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 
 **References:**
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (materialized views already defined)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.15.md` (analytics requirements)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` (analytics requirements)
 
 ---
 
@@ -11053,6 +11065,524 @@ CREATE TABLE strategies (
 - `src/precog/trading/model_manager.py` (edge calculation logic - Phase 1.5 implementation)
 - `src/precog/trading/strategy_manager.py` (edge query logic - Phase 1.5 implementation)
 
+
+## Decision #88/ADR-088: Test Type Categories (Comprehensive Testing Framework)
+
+**Decision #88**
+**Phase:** 1.5 (Testing Infrastructure Enhancement)
+**Status:** ✅ Complete (Decision Made and Documented)
+**Priority:** 🔴 Critical (foundational testing architecture, prevents false confidence from mocks)
+
+### Problem Statement
+
+**Context: Phase 1.5 TDD Failure Exposed Testing Blind Spots**
+
+Strategy Manager implementation revealed critical testing gaps:
+
+**Initial Test Suite (Mock-Based):**
+- 17 tests written with `@patch('get_connection')` mocking database connections
+- **Result:** 17/17 tests passed ✅
+- **Confidence:** HIGH - "100% test pass rate, ship it!"
+
+**Refactored Test Suite (Real Infrastructure):**
+- Removed ALL mocks, added real database fixtures (`db_pool`, `db_cursor`, `clean_test_data`)
+- **Result:** 13/17 tests FAILED ❌ (77% failure rate)
+- **Confidence:** DESTROYED - mocking internal infrastructure created false confidence
+
+**Root Cause Analysis:**
+
+Mocking `get_connection()` hid **connection pool leak bugs** that only manifest with real database:
+```python
+# ❌ WRONG - Mock passes, real database fails
+@patch('precog.database.get_connection')
+def test_create_strategy(mock_connection):
+    """Test passes because mock never checks connection pool exhaustion."""
+    manager = StrategyManager(mock_connection)
+    # Test logic here...
+    # Mock doesn't detect: manager forgot to release connection back to pool
+
+# ✅ CORRECT - Real database detects connection leak
+def test_create_strategy(db_pool, db_cursor, clean_test_data):
+    """Test fails if connection not released - pool exhausts after 10 calls."""
+    manager = StrategyManager(db_pool)
+    # Test logic here...
+    # Real pool throws: PoolTimeout error after 10 unclosed connections
+```
+
+**The Decision Question:**
+
+**How do we prevent this false confidence pattern across ALL future testing?**
+
+Need:
+1. Clear categorization: When are mocks appropriate vs. forbidden?
+2. Comprehensive test type framework: What kinds of tests do we need?
+3. Implementation guidance: How to write each test type correctly?
+
+### Decision: Establish 8 Test Type Framework
+
+**We will use 8 distinct test type categories for comprehensive coverage:**
+
+#### 1. Unit Tests - Isolated Function Logic
+**Purpose:** Test pure business logic in isolation (no external dependencies)
+**Infrastructure:** None (pure functions only)
+**Mock Policy:** ✅ Mock ALL external dependencies (APIs, time, randomness)
+**Example:**
+```python
+def test_calculate_kelly_fraction():
+    """Test Kelly criterion calculation (pure math, no dependencies)."""
+    edge = Decimal("0.05")  # 5% edge
+    win_prob = Decimal("0.55")  # 55% win probability
+
+    kelly = calculate_kelly_fraction(edge, win_prob)
+
+    assert kelly == Decimal("0.0909")  # 9.09% Kelly fraction
+```
+
+#### 2. Property Tests - Mathematical Invariants
+**Purpose:** Test mathematical properties with auto-generated inputs (Hypothesis framework)
+**Infrastructure:** None (pure functions)
+**Mock Policy:** ✅ Mock external dependencies only
+**Example:**
+```python
+@given(
+    true_prob=st.decimals(min_value='0.01', max_value='0.99', places=4),
+    market_price=st.decimals(min_value='0.01', max_value='0.99', places=4)
+)
+def test_edge_calculation_commutative(true_prob, market_price):
+    """Edge calculation should satisfy: edge(p, m) = -(edge(1-p, 1-m))."""
+    edge_yes = calculate_edge(true_prob, market_price)
+    edge_no = calculate_edge(Decimal('1.0000') - true_prob,
+                            Decimal('1.0000') - market_price)
+
+    assert abs(edge_yes + edge_no) < Decimal('0.0001')
+    # Hypothesis auto-generates 100+ test cases
+```
+
+#### 3. Integration Tests - REAL Infrastructure
+**Purpose:** Test components with REAL database, config, logging (NOT mocks)
+**Infrastructure:** PostgreSQL test database, YAML config files, file system
+**Mock Policy:** ❌ FORBIDDEN to mock internal infrastructure (database, config, logging)
+**Example:**
+```python
+@pytest.mark.integration
+@pytest.mark.database
+def test_strategy_manager_crud(db_pool, db_cursor, clean_test_data):
+    """Test Strategy Manager with REAL database (NOT mocks)."""
+    manager = StrategyManager(db_pool)
+
+    # REAL database insert
+    strategy_id = manager.create_strategy(
+        strategy_name="halftime_entry",
+        strategy_version="v1.0",
+        config_data={"min_edge": Decimal("0.05")}
+    )
+
+    # REAL database query
+    strategy = manager.get_strategy(strategy_id)
+
+    # Verify REAL data integrity
+    assert strategy['strategy_name'] == "halftime_entry"
+```
+
+#### 4. End-to-End Tests - Complete Workflows
+**Purpose:** Test complete user workflows across multiple components
+**Infrastructure:** Full system (database, config, logging, API mocks)
+**Mock Policy:** ✅ Mock ONLY external APIs (Kalshi, ESPN)
+**Example:**
+```python
+@pytest.mark.e2e
+def test_complete_trade_workflow(db_pool, mock_kalshi_api):
+    """Test: Fetch markets → Analyze → Execute → Monitor → Exit."""
+    # 1. Fetch markets (mock Kalshi API)
+    markets = fetch_active_markets()
+
+    # 2. Analyze with real Model Manager
+    model_manager = ModelManager(db_pool)
+    edges = model_manager.evaluate_markets(markets)
+
+    # 3. Find opportunities with real Strategy Manager
+    strategy_manager = StrategyManager(db_pool)
+    opportunities = strategy_manager.find_opportunities(edges)
+
+    # 4. Execute trades (mock Kalshi API)
+    position_manager = PositionManager(db_pool)
+    positions = position_manager.execute_trades(opportunities)
+
+    # 5. Monitor and exit (real database, mock API)
+    assert len(positions) > 0
+```
+
+#### 5. Stress Tests - Infrastructure Limits
+**Purpose:** Test infrastructure behavior under extreme load
+**Infrastructure:** Real database, connection pools, rate limiters
+**Mock Policy:** ❌ FORBIDDEN (defeats purpose of stress testing)
+**Example:**
+```python
+@pytest.mark.stress
+def test_connection_pool_exhaustion(db_pool):
+    """Test behavior when connection pool exhausts (10 connections)."""
+    managers = []
+
+    # Create 10 managers (should consume all connections)
+    for i in range(10):
+        manager = StrategyManager(db_pool)
+        managers.append(manager)
+
+    # 11th manager should raise PoolTimeout error
+    with pytest.raises(PoolTimeout):
+        manager_11 = StrategyManager(db_pool)
+```
+
+#### 6. Race Condition Tests - Concurrent Operations
+**Purpose:** Test thread-safety and concurrent access patterns
+**Infrastructure:** Real database, threading/multiprocessing
+**Mock Policy:** ❌ FORBIDDEN (mocks can't detect race conditions)
+**Example:**
+```python
+@pytest.mark.race_condition
+def test_concurrent_strategy_updates(db_pool):
+    """Test two threads updating same strategy simultaneously."""
+    def update_strategy(strategy_id, field, value):
+        manager = StrategyManager(db_pool)
+        manager.update_strategy(strategy_id, {field: value})
+
+    # Two threads update different fields simultaneously
+    thread1 = threading.Thread(target=update_strategy,
+                              args=(1, 'status', 'active'))
+    thread2 = threading.Thread(target=update_strategy,
+                              args=(1, 'description', 'Updated'))
+
+    thread1.start()
+    thread2.start()
+    thread1.join()
+    thread2.join()
+
+    # Verify both updates applied (no lost update)
+    strategy = StrategyManager(db_pool).get_strategy(1)
+    assert strategy['status'] == 'active'
+    assert strategy['description'] == 'Updated'
+```
+
+#### 7. Performance Tests - Latency/Throughput (Phase 5+)
+**Purpose:** Benchmark critical path performance (order execution speed)
+**Infrastructure:** Real database, real API connections
+**Mock Policy:** ❌ FORBIDDEN (mocks distort timing measurements)
+**Example:**
+```python
+@pytest.mark.performance
+def test_order_execution_latency(db_pool, live_kalshi_api):
+    """Order execution must complete in <500ms (Phase 5 requirement)."""
+    position_manager = PositionManager(db_pool)
+
+    start = time.time()
+    position_manager.execute_order(market_uuid="abc123", quantity=10)
+    latency = time.time() - start
+
+    assert latency < 0.5  # Must complete in <500ms
+```
+
+#### 8. Chaos Tests - Failure Recovery (Phase 5+)
+**Purpose:** Test system behavior under failure conditions
+**Infrastructure:** Real infrastructure with induced failures
+**Mock Policy:** ✅ Use mocks/fault injection to simulate failures
+**Example:**
+```python
+@pytest.mark.chaos
+def test_database_connection_failure_recovery(db_pool):
+    """Test graceful degradation when database connection fails."""
+    manager = StrategyManager(db_pool)
+
+    # Simulate connection failure
+    with patch.object(db_pool, 'acquire', side_effect=DatabaseError):
+        result = manager.get_strategy(1)
+
+    # Should return cached data or graceful error (not crash)
+    assert result is None or 'error' in result
+```
+
+### Rationale: Different Test Types Catch Different Bugs
+
+**Bug Category Mapping:**
+
+| Bug Type | Caught By | Example |
+|----------|-----------|---------|
+| **Logic Errors** | Unit Tests | Kelly calculation off by 0.01 |
+| **Mathematical Invariants** | Property Tests | Edge calculation violates commutative property |
+| **Connection Pool Leaks** | Integration Tests | ❌ MISSED by mocks, ✅ caught by real DB |
+| **Workflow Gaps** | End-to-End Tests | Market fetch succeeds but no edge calculation |
+| **Resource Exhaustion** | Stress Tests | API rate limit exceeded (429 error) |
+| **Race Conditions** | Race Condition Tests | Lost update when two threads modify same row |
+| **Performance Regressions** | Performance Tests | Order execution slows from 200ms → 800ms |
+| **Failure Modes** | Chaos Tests | System crashes when database unavailable |
+
+**Mock Usage Decision Tree:**
+
+```
+Is it an external dependency (API, network, time)?
+├─ YES → ✅ Mock is APPROPRIATE
+└─ NO → Is it infrastructure we control?
+    ├─ YES → ❌ Mock is FORBIDDEN (use test fixtures)
+    └─ NO → ✅ Mock is APPROPRIATE (external system)
+```
+
+**Examples:**
+- Kalshi API → External dependency → ✅ Mock
+- Our database → We control it → ❌ Use test database
+- ESPN API → External dependency → ✅ Mock
+- Our config files → We control them → ❌ Use test YAML files
+- `datetime.now()` → Non-deterministic → ✅ Mock
+- Our logging → We control it → ❌ Use test logger fixture
+- `random.random()` → Non-deterministic → ✅ Mock
+- Our connection pool → We control it → ❌ Use `db_pool` fixture
+
+### Implementation: Test Type Requirements Matrix
+
+**REQ-TEST-012: Test Type Requirements by Module Tier**
+
+| Module Tier | Unit | Property | Integration | E2E | Stress | Race | Perf | Chaos |
+|-------------|------|----------|-------------|-----|--------|------|------|-------|
+| **Critical Path** (≥90%) | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Phase 5+ | ✅ Phase 5+ |
+| **Business Logic** (≥85%) | ✅ Required | ✅ Required | ✅ Required | ✅ Required | Optional | Optional | Optional | Optional |
+| **Infrastructure** (≥80%) | ✅ Required | Optional | ✅ Required | Optional | ✅ Required | Optional | Optional | Optional |
+| **Integration Points** (≥75%) | ✅ Required | Optional | ✅ Required | ✅ Required | Optional | Optional | Optional | Optional |
+
+**Critical Path:** Order execution, position monitoring, exit evaluation
+**Business Logic:** Strategy Manager, Model Manager, Position Manager
+**Infrastructure:** Database connection, config loader, logger
+**Integration Points:** Kalshi API client, ESPN API client
+
+### Mock Usage Restrictions (REQ-TEST-013)
+
+**✅ APPROPRIATE - Mock These:**
+- External APIs (Kalshi, ESPN, Balldontlie)
+- Time-dependent code (`datetime.now()`, `time.sleep()`)
+- Random generation (`random.random()`, `uuid.uuid4()`)
+- Network requests (`requests.get()`, `httpx.get()`)
+
+**❌ FORBIDDEN - Use Real Fixtures:**
+- Database (`get_connection()` → use `db_pool` fixture)
+- Internal application logic (Strategy Manager, Model Manager)
+- Configuration (`ConfigLoader` → use test YAML files)
+- Logging (`logger.info()` → use test logger fixture)
+- Connection pooling (`ConnectionPool` → use real pool with cleanup)
+
+**Example - Strategy Manager Tests:**
+
+```python
+# ❌ WRONG - Mocking internal infrastructure
+@patch('precog.database.get_connection')
+def test_create_strategy_mocked(mock_connection):
+    """FALSE CONFIDENCE - Connection pool leak NOT detected."""
+    manager = StrategyManager(mock_connection)
+    # Test logic...
+    # ❌ Mock never detects: manager forgot to release connection
+
+# ✅ CORRECT - Real infrastructure
+@pytest.mark.integration
+def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
+    """REAL CONFIDENCE - Connection pool leak DETECTED."""
+    manager = StrategyManager(db_pool)
+    # Test logic...
+    # ✅ Real pool throws PoolTimeout if connection not released
+```
+
+### Impact
+
+**Benefits:**
+
+✅ **Prevents False Confidence**
+- Integration tests with real infrastructure catch bugs mocks miss
+- 77% failure rate when refactoring Strategy Manager tests proves this
+
+✅ **Comprehensive Coverage**
+- 8 test types ensure bugs have nowhere to hide
+- Each test type targets specific bug category
+
+✅ **Clear Guidance**
+- Developers know EXACTLY when to use each test type
+- Mock usage decision tree prevents incorrect mock usage
+
+✅ **Phase-Based Implementation**
+- Phase 1-2: Unit, Property, Integration, E2E (immediate)
+- Phase 3: + Stress, Race (async processing)
+- Phase 5: + Performance, Chaos (production readiness)
+
+**Costs:**
+
+❌ **Increased Test Execution Time**
+- Integration tests slower than unit tests (database I/O)
+- Property tests run 100+ cases per property (10x more cases)
+- Stress tests can take 30-60 seconds (connection pool exhaustion scenarios)
+
+❌ **Steeper Learning Curve**
+- Hypothesis framework requires understanding strategies and properties
+- Stress testing requires understanding connection pools, rate limiters
+- Race condition testing requires threading/multiprocessing knowledge
+
+❌ **More Test Infrastructure**
+- Need `db_pool`, `db_cursor`, `clean_test_data` fixtures
+- Need test YAML config files
+- Need test database (PostgreSQL)
+
+**Mitigation:**
+- Run unit tests fast (~5s) during development via `./scripts/test_fast.sh`
+- Run full suite (~30s) before commits via pre-push hooks
+- Provide comprehensive examples in TESTING_STRATEGY_V3.1.md
+
+### When to Use Each Test Type
+
+**Quick Reference:**
+
+| Scenario | Use This Test Type |
+|----------|-------------------|
+| Pure business logic (Kelly, edge calculation) | Unit Tests |
+| Mathematical properties (commutative, associative) | Property Tests |
+| Database operations (CRUD, queries) | Integration Tests |
+| Complete workflows (fetch → analyze → execute) | End-to-End Tests |
+| Connection pool limits, API rate limits | Stress Tests |
+| Concurrent updates, thread-safety | Race Condition Tests |
+| Order execution speed, latency benchmarks | Performance Tests (Phase 5+) |
+| Database failures, API outages | Chaos Tests (Phase 5+) |
+
+### Alternatives Considered
+
+**Alternative 1: Continue with Mocks for All Tests**
+- ❌ **Rejected:** Phase 1.5 Strategy Manager proved this creates false confidence (77% failure rate when refactored to real DB)
+- ❌ **Risk:** Ship code that passes all tests but fails in production
+- ❌ **Example:** Connection pool leak not detected by mocks → production system exhausts connections → downtime
+
+**Alternative 2: Use Real Infrastructure for All Tests**
+- ❌ **Rejected:** Too slow for development iteration (every test run takes 30+ seconds)
+- ❌ **Risk:** Developers skip tests due to slow feedback loop
+- ❌ **Example:** External API call in unit test → 500ms per test → 100 tests = 50 seconds
+
+**Alternative 3: Only Unit Tests + Integration Tests (No Property/Stress/Race)**
+- ❌ **Rejected:** Insufficient coverage for critical trading system
+- ❌ **Risk:** Edge cases missed (property tests), infrastructure bugs missed (stress tests), race conditions missed
+- ❌ **Example:** Concurrent position updates cause lost update → incorrect position tracking → bad trades
+
+**Alternative 4: Use pytest-mock Everywhere (Simpler API)**
+- ✅ **Partially Accepted:** Use `pytest-mock` for APPROPRIATE mocks (external APIs, time, randomness)
+- ❌ **Rejected for Internal Infrastructure:** Still violates "don't mock what you own" principle
+- ✅ **Result:** Use `pytest-mock` for external dependencies, real fixtures for internal infrastructure
+
+### Related Requirements
+
+**Primary Requirements:**
+- REQ-TEST-012: Test Type Requirements Matrix (which test types required for each module tier)
+- REQ-TEST-013: Mock Usage Restrictions (when mocks appropriate vs. forbidden)
+- REQ-TEST-014: Integration Test Coverage (≥80% for all infrastructure modules)
+- REQ-TEST-015: Property Test Coverage (mathematical invariants for all trading logic)
+- REQ-TEST-016: Stress Test Coverage (connection pools, rate limiters, concurrent operations)
+- REQ-TEST-017: Race Condition Test Coverage (all concurrent access patterns)
+- REQ-TEST-018: Property-Based Testing Strategy (Hypothesis framework adoption)
+- REQ-TEST-019: Test Fixture Requirements (db_pool, clean_test_data, test configs)
+
+**Supporting Requirements:**
+- REQ-TESTING-001: Overall Coverage Standards (≥80% line coverage baseline)
+- REQ-TESTING-002: Test Organization (tests/ directory structure)
+- REQ-TESTING-003: Test Documentation (educational docstrings)
+
+### Related ADRs
+
+- ADR-074: Property-Based Testing Strategy (Hypothesis framework, custom strategies)
+- ADR-075: Multi-Source Warning Governance (pytest warnings tracked alongside validate_docs)
+- ADR-011: pytest for Testing Framework (foundational testing infrastructure)
+- ADR-002: Decimal Precision Pattern (property tests verify Decimal invariants)
+
+### Documentation Updates
+
+**Primary Documentation:**
+- TESTING_STRATEGY_V3.1.md (comprehensive 8 test type framework, 1,462 lines)
+- TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md (REQ-TEST-012 through REQ-TEST-019)
+- MASTER_REQUIREMENTS_V2.16.md (added 8 new test requirements)
+- REQUIREMENT_INDEX.md (added REQ-TEST-012 through REQ-TEST-019)
+
+**Supporting Documentation:**
+- DEVELOPMENT_PHILOSOPHY_V1.3.md (updated TDD section with Phase 1.5 lesson learned)
+- DEVELOPMENT_PATTERNS_V1.3.md (added Pattern 13: Test Coverage Quality)
+- PHASE_1.5_TEST_PLAN_V1.0.md (test planning for manager components)
+
+**Development Guides:**
+- CLAUDE.md V1.21 (Pattern 13: Test Coverage Quality quick reference)
+- SESSION_WORKFLOW_GUIDE_V1.0.md (test planning checklist for new phases)
+
+### Phase-Based Test Type Roadmap
+
+**Phase 1 (Database & API Connectivity):**
+- ✅ Unit Tests (CRUD operations, API parsing)
+- ✅ Integration Tests (database connections, API clients with REAL infrastructure)
+
+**Phase 1.5 (Manager Components):**
+- ✅ Unit Tests (manager business logic)
+- ✅ Property Tests (edge calculations, Kelly fractions)
+- ✅ Integration Tests (manager CRUD with real database)
+- ✅ Stress Tests (connection pool exhaustion, concurrent manager operations)
+
+**Phase 2 (Live Data Integration):**
+- ✅ End-to-End Tests (fetch → parse → store workflows)
+- ✅ Integration Tests (ESPN API with real responses)
+
+**Phase 3 (Async Processing):**
+- ✅ Race Condition Tests (WebSocket concurrent updates, event loop thread-safety)
+- ✅ Stress Tests (WebSocket connection limits, event queue exhaustion)
+
+**Phase 5 (Trading Execution):**
+- ✅ Performance Tests (order execution latency <500ms, position monitoring <100ms)
+- ✅ Chaos Tests (database failures, API outages, network partitions)
+
+### Test Organization Structure
+
+```
+tests/
+├── unit/                  # Fast unit tests (no external dependencies)
+│   ├── test_kelly.py
+│   ├── test_edge_calculation.py
+│   └── test_strategy_config.py
+├── property/              # Property-based tests (Hypothesis) ⭐ NEW
+│   ├── test_edge_properties.py
+│   ├── test_kelly_properties.py
+│   └── test_price_properties.py
+├── integration/           # Integration tests (REAL infrastructure, NOT mocks)
+│   ├── test_strategy_manager.py  # Real DB
+│   ├── test_model_manager.py     # Real DB
+│   └── test_kalshi_client.py     # Real HTTP (test API endpoint)
+├── e2e/                   # End-to-end workflow tests ⭐ NEW
+│   ├── test_trade_workflow.py
+│   └── test_data_ingestion_workflow.py
+├── stress/                # Stress and race condition tests ⭐ NEW
+│   ├── test_connection_pool.py
+│   ├── test_api_rate_limits.py
+│   └── test_concurrent_updates.py
+├── performance/           # Performance benchmarks (Phase 5+) ⭐ NEW
+│   └── test_execution_latency.py
+├── chaos/                 # Chaos engineering tests (Phase 5+) ⭐ NEW
+│   └── test_failure_recovery.py
+├── fixtures/              # Shared fixtures and test data factories
+│   ├── database_fixtures.py      # db_pool, db_cursor, clean_test_data
+│   ├── api_fixtures.py            # mock_kalshi_api, mock_espn_api
+│   └── config_fixtures.py         # test_config, test_yaml_files
+└── conftest.py            # Pytest configuration (db_pool, clean_test_data REQUIRED)
+```
+
+### References
+
+**Documentation:**
+- `docs/foundation/TESTING_STRATEGY_V3.1.md` (comprehensive 8 test type framework)
+- `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md` (REQ-TEST-012 through REQ-TEST-019)
+- `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md` (TDD section with Phase 1.5 lessons)
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.3.md` (Pattern 13: Test Coverage Quality)
+
+**Code:**
+- `tests/conftest.py` (db_pool, clean_test_data fixtures)
+- `tests/integration/test_strategy_manager.py` (refactored from mocks to real DB)
+- `tests/property/test_edge_properties.py` (Hypothesis property tests)
+
+**Proof-of-Concept:**
+- Phase 1.5 Strategy Manager refactoring: 17/17 tests passed with mocks → 13/17 failed with real DB (77% failure rate)
+- Property-based testing POC: 26 property tests → 2,600+ auto-generated test cases, 0 failures, 3.32s execution
+
+---
 ---
 
 ## Distributed Architecture Decisions
@@ -11087,7 +11617,7 @@ Decision to use Python's standard logging library with structlog for structured 
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** pyproject.toml, TESTING_STRATEGY_V2.1.md
+**Documented in:** pyproject.toml, TESTING_STRATEGY_V3.1.md
 
 Decision to use pytest as the primary testing framework with coverage, async support, and HTML reporting.
 

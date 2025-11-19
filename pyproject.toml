@@ -127,6 +127,10 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # Allow unused imports in __init__.py
 "__init__.py" = ["F401"]
 
+# Allow dynamic SQL in managers (false positive - uses parameterized queries)
+"src/precog/trading/strategy_manager.py" = ["S608"]
+"src/precog/analytics/model_manager.py" = ["S608"]
+
 # Test-specific ignores (patterns acceptable in tests but not production code)
 "tests/**/*.py" = [
     "S101",   # assert statements (pytest uses assert, not production-safe)

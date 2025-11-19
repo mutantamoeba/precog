@@ -877,6 +877,34 @@ This section provides critical principles for maintaining documentation consiste
 5. **Completing Phase Tasks** → Mark complete in DEVELOPMENT_PHASES, update requirement statuses, update indexes
 6. **Planning Future Work** → Add to DEVELOPMENT_PHASES, create REQs/ADRs if needed, update indexes
 
+### Todo List Best Practices
+
+**⚠️ CRITICAL:** When creating new requirements or ADRs, create **SEPARATE todo items** for EACH location:
+
+**✅ CORRECT:**
+```markdown
+Creating REQ-TEST-012 through REQ-TEST-019:
+- [ ] Create in TEST_REQUIREMENTS_COMPREHENSIVE
+- [ ] Add to MASTER_REQUIREMENTS (V2.15→V2.16)
+- [ ] Add to REQUIREMENT_INDEX (113→121)
+- [ ] Update MASTER_INDEX (2 entries)
+- [ ] Update cross-references (find V2.15 refs)
+```
+
+**❌ WRONG:**
+```markdown
+- [ ] Create REQ-TEST-012 through REQ-TEST-019
+```
+
+**Why:** Single todo creates false completion. Phase 1.5 lesson: Marked todo complete after creating spec, nearly forgot MASTER_REQUIREMENTS + REQUIREMENT_INDEX updates. Only caught by user question.
+
+**Multi-Layer Defense:**
+1. **Layer 1 (Best):** Granular todos prevent forgetting
+2. **Layer 2:** User/reviewer questions catch oversights
+3. **Layer 3:** Pre-commit validation catches orphaned requirements
+
+**Full templates and examples:** DOCUMENTATION_WORKFLOW_GUIDE Section "Todo List Best Practices"
+
 ### Status Field Standards
 
 Use consistent status indicators:

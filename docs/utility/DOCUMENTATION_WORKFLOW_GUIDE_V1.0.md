@@ -443,6 +443,180 @@ Use consistent status indicators across all documentation:
 
 ---
 
+## Todo List Best Practices for Documentation Updates
+
+**Problem Identified:** Phase 1.5 (2025-11-17)
+
+Creating requirements or ADRs without explicit todo items for EACH update location leads to orphaned documentation. Human memory alone is insufficient for tracking multi-location updates.
+
+**Real-World Example:**
+
+In Phase 1.5, when creating REQ-TEST-012 through REQ-TEST-019:
+1. ✅ Created TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md with 8 detailed requirements
+2. ✅ Marked todo as "Create REQ-TEST-012 through REQ-TEST-019" COMPLETE
+3. ❌ **Nearly forgot** to add them to MASTER_REQUIREMENTS_V2.16
+4. ❌ **Nearly forgot** to add them to REQUIREMENT_INDEX
+5. ❌ **Nearly forgot** to update MASTER_INDEX
+6. 🚨 **Caught by:** User question ("was master requirements updated?")
+7. ✅ **Would have been caught by:** Pre-commit validation (Check #2: Requirement Consistency)
+
+**Root Cause:** Single todo item covering multi-location update created false sense of completion.
+
+### Solution: Granular Todo Items
+
+When creating new requirements or ADRs, create **SEPARATE todo items** for EACH location requiring updates:
+
+**✅ CORRECT Approach (Granular Todos):**
+
+```markdown
+Creating 8 new test requirements:
+- [ ] Create REQ-TEST-012 through REQ-TEST-019 in TEST_REQUIREMENTS_COMPREHENSIVE
+- [ ] Add REQ-TEST-012 through REQ-TEST-019 to MASTER_REQUIREMENTS (update V2.15→V2.16)
+- [ ] Add REQ-TEST-012 through REQ-TEST-019 to REQUIREMENT_INDEX (update count 113→121)
+- [ ] Update MASTER_INDEX entry for MASTER_REQUIREMENTS (V2.15→V2.16)
+- [ ] Update MASTER_INDEX entry for REQUIREMENT_INDEX (113→121 requirements)
+- [ ] Update cross-references in related documents (find all V2.15 references)
+```
+
+**❌ INCORRECT Approach (Single Todo):**
+
+```markdown
+Creating 8 new test requirements:
+- [ ] Create REQ-TEST-012 through REQ-TEST-019
+```
+
+This single todo creates false completion when only the first step is done.
+
+### Template: New Requirement Todos
+
+Copy this template when creating new requirements:
+
+```markdown
+Creating [REQ-XXX-NNN through REQ-XXX-NNN]:
+- [ ] Create detailed requirement specification in [DOCUMENT_NAME]
+- [ ] Add to MASTER_REQUIREMENTS (update VX.Y→VX.Z)
+- [ ] Add to REQUIREMENT_INDEX (update count N→M)
+- [ ] Update MASTER_INDEX entry for MASTER_REQUIREMENTS (version change)
+- [ ] Update MASTER_INDEX entry for REQUIREMENT_INDEX (count change)
+- [ ] Update cross-references in related documents (grep for old version references)
+- [ ] Update related ADRs if applicable
+```
+
+### Template: New ADR Todos
+
+Copy this template when creating new ADRs:
+
+```markdown
+Creating ADR-XXX [Decision Name]:
+- [ ] Create detailed ADR in ARCHITECTURE_DECISIONS (update VX.Y→VX.Z)
+- [ ] Add to ADR_INDEX (update count N→M)
+- [ ] Update MASTER_INDEX entry for ARCHITECTURE_DECISIONS (version change)
+- [ ] Update MASTER_INDEX entry for ADR_INDEX (count change)
+- [ ] Update related requirements in MASTER_REQUIREMENTS (add cross-reference)
+- [ ] Update cross-references in related documents
+```
+
+### Why This Matters
+
+**Multi-Layer Defense:**
+
+1. **Layer 1: Human Planning** - Granular todos prevent forgetting steps
+2. **Layer 2: Human Oversight** - User/reviewer questions ("was X updated?")
+3. **Layer 3: Automated Validation** - Pre-commit hooks catch orphaned requirements/ADRs
+
+**Validation would catch this, but prevention is better:**
+
+Without granular todos, you rely on Layer 3 (validation failure) instead of Layer 1 (correct planning). Validation failures require:
+- Interrupting commit flow
+- Context switching back to documentation
+- Re-running validation after fixes
+- Lost momentum
+
+**With granular todos:**
+- All updates planned upfront
+- No validation surprises
+- Smooth commit workflow
+- Clear progress tracking
+
+### Common Mistake Patterns
+
+**Mistake 1: Scope Creep in Single Todo**
+
+```markdown
+❌ BAD:
+- [ ] Add test coverage requirements
+
+This expands to:
+- Create 8 requirements in detailed spec
+- Add to MASTER_REQUIREMENTS
+- Add to REQUIREMENT_INDEX
+- Update MASTER_INDEX (2 entries)
+- Update 7 cross-references
+
+Marking this single todo "complete" after creating the spec leaves 80% of work undone.
+```
+
+**Mistake 2: "I'll remember to update X"**
+
+```markdown
+❌ BAD:
+- [ ] Create REQ-TEST-012 in TEST_REQUIREMENTS_COMPREHENSIVE
+  (I'll remember to add it to MASTER_REQUIREMENTS later)
+
+REALITY:
+- Session interrupted
+- Context lost
+- Requirement orphaned
+- Validation catches it (or worse, it's missed)
+```
+
+**Mistake 3: Assuming Validation is Sufficient**
+
+```markdown
+❌ BAD MINDSET:
+"Pre-commit validation will catch missing updates, so I don't need detailed todos"
+
+PROBLEMS:
+1. Validation interrupts flow (fix → re-run → fix → re-run)
+2. Multiple validation failures = multiple interruptions
+3. Context switching reduces productivity
+4. Granular todos prevent the problem vs. detecting it
+```
+
+### Success Metrics
+
+**You're doing it right if:**
+- ✅ Each major documentation update has 3-6 separate todos
+- ✅ Todos are marked complete only when THAT SPECIFIC update is done
+- ✅ No validation failures due to missing updates
+- ✅ Clear progress tracking (5/6 todos done = 83% progress)
+
+**You're doing it wrong if:**
+- ❌ Single todo covers multi-location updates
+- ❌ Validation frequently catches missing updates
+- ❌ You mark todos complete prematurely
+- ❌ You frequently ask yourself "did I update X?"
+
+### Integration with Update Cascade Rules
+
+This best practice complements the **Update Cascade Rules** (Section 3):
+
+- **Update Cascade Rules** = WHAT documents to update (the map)
+- **Todo List Best Practices** = HOW to track those updates (the checklist)
+
+Together, they prevent documentation drift:
+1. Cascade rules tell you: "Adding REQ requires updating MASTER_REQUIREMENTS, REQUIREMENT_INDEX, MASTER_INDEX"
+2. Todo best practices tell you: "Create separate todo for each of those 3 updates"
+
+### Cross-References
+
+- **Section 3: Update Cascade Rules** - Defines WHAT to update
+- **Section 5: Consistency Validation Checklist** - Validates updates completed
+- **CLAUDE.md Section 5** - Quick reference for document cohesion
+- **Real-world example:** Phase 1.5 test requirements (REQ-TEST-012 through REQ-TEST-019)
+
+---
+
 ## Consistency Validation Checklist
 
 **Run this checklist BEFORE committing any documentation changes:**
