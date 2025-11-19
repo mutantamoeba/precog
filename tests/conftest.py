@@ -31,9 +31,9 @@ def db_pool():
     Scope: session - created once, shared across all tests
     """
     # Initialize pool
-    initialize_pool(minconn=2, maxconn=5)
+    pool = initialize_pool(minconn=2, maxconn=5)
 
-    yield  # Tests run here
+    yield pool  # Return pool object to tests
 
     # Cleanup: close pool after all tests complete
     close_pool()
