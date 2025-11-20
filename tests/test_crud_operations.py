@@ -197,9 +197,9 @@ def test_get_current_positions_filters_open(
     # Get open positions
     positions = get_current_positions(status="open")
 
-    # Should include our test position
+    # Should include our test position (compare using surrogate id)
     assert len(positions) > 0
-    assert any(p["position_id"] == position_id for p in positions)
+    assert any(p["id"] == position_id for p in positions)
 
 
 @pytest.mark.integration
@@ -235,9 +235,9 @@ def test_close_position(db_pool, clean_test_data, sample_market_data, sample_pos
         realized_pnl=Decimal("8.00"),
     )
 
-    # Get updated position
+    # Get updated position (compare using surrogate id)
     positions = get_current_positions()
-    closed_pos = next((p for p in positions if p["position_id"] == closed_id), None)
+    closed_pos = next((p for p in positions if p["id"] == closed_id), None)
 
     assert closed_pos is not None
     assert closed_pos["status"] == "closed"
@@ -503,11 +503,12 @@ def test_get_strategy_by_name_and_version(db_pool, clean_test_data):
     # Use unique strategy name to avoid collisions across test runs
     unique_name = f"test_strategy_{uuid.uuid4().hex[:8]}"
 
-    # Setup: Create a strategy
+    # Setup: Create a strategy (use 'value' for approach, 'nfl' for domain after Migration 011+013)
     strategy_id = create_strategy(
         strategy_name=unique_name,
         strategy_version="v1.0",
-        category="sports",
+        category="value",  # Maps to 'approach' column (trading methodology)
+        subcategory="nfl",  # Maps to 'domain' column (market type)
         config={"kelly_fraction": Decimal("0.25"), "min_edge": Decimal("0.05")},
     )
 
@@ -561,9 +562,9 @@ def test_get_current_positions_with_market_id_filter(
     # Test: Get positions filtered by market_id1
     positions = get_current_positions(market_id=market_id1)
 
-    # Should only return position1
+    # Should only return position1 (compare using surrogate id)
     assert len(positions) == 1
-    assert positions[0]["position_id"] == position1
+    assert positions[0]["id"] == position1
 
 
 # =============================================================================
@@ -585,19 +586,21 @@ def test_get_recent_trades_with_strategy_filter(
     unique_name1 = f"strategy1_{uuid.uuid4().hex[:8]}"
     unique_name2 = f"strategy2_{uuid.uuid4().hex[:8]}"
 
-    # Setup: Create market and strategies
+    # Setup: Create market and strategies (use 'value'/'arbitrage' for approach after Migration 013)
     market_id = create_market(**sample_market_data)
 
     strategy_id1 = create_strategy(
         strategy_name=unique_name1,
         strategy_version="v1.0",
-        category="sports",
+        category="value",  # Maps to 'approach' column (trading methodology)
+        subcategory="nfl",  # Maps to 'domain' column (market type)
         config={},
     )
     strategy_id2 = create_strategy(
         strategy_name=unique_name2,
         strategy_version="v1.0",
-        category="sports",
+        category="arbitrage",  # Different approach for testing filter
+        subcategory="nfl",
         config={},
     )
 

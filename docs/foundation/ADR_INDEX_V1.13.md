@@ -1,9 +1,16 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.12
-**Last Updated:** 2025-11-17
+**Version:** 1.13
+**Last Updated:** 2025-11-19
 **Status:** ✅ Current
+**Changes in v1.13:**
+- **DUAL-KEY SCHEMA PATTERN (PHASE 1.5):** Added ADR-089 (Dual-Key Schema Pattern for SCD Type 2 Tables)
+- Added ADR-089: Dual-Key Schema Pattern for SCD Type 2 (addresses PostgreSQL FK limitation with SCD Type 2)
+- Documents dual-key pattern: Surrogate PRIMARY KEY + business key for SCD Type 2 tables
+- Partial unique index for "one current version" constraint
+- Updated ARCHITECTURE_DECISIONS reference from V2.17 to V2.18
+- Total ADRs: 68 → 69 (1 new ADR added for Phase 1.5 schema standardization)
 **Changes in v1.12:**
 - **TESTING ARCHITECTURE (PHASE 1.5):** Added ADR-088 (Test Type Categories - Comprehensive 8 Test Type Framework)
 - Added ADR-088: Test Type Categories (addresses Phase 1.5 TDD failure - 17/17 tests passed with mocks → 13/17 failed with real DB)
@@ -573,10 +580,79 @@ Establish 8 Test Type Framework for comprehensive coverage:
 - ADR-075 (Multi-Source Warning Governance)
 
 ---
+
+### ADR-089: Dual-Key Schema Pattern for SCD Type 2 Tables
+
+**Date:** 2025-11-19
+**Status:** ✅ Complete
+**Phase:** 1.5
+**Stakeholders:** Development Team, Database Team
+
+**Context:**
+PostgreSQL foreign keys can only reference full UNIQUE constraints, not partial indexes. This creates a conflict with SCD Type 2 tables that use `row_current_ind = TRUE` partial unique indexes to enforce "one current version" constraint.
+
+**Problem:**
+- SCD Type 2 tables need `position_id VARCHAR UNIQUE WHERE row_current_ind = TRUE`
+- But PostgreSQL FKs can't reference partial indexes
+- This breaks foreign key relationships to SCD Type 2 tables
+
+**Decision:**
+Implement dual-key schema pattern for all SCD Type 2 tables:
+
+1. **Surrogate PRIMARY KEY:** `id SERIAL PRIMARY KEY`
+   - Auto-incrementing integer, unique across ALL versions
+   - Referenced by foreign keys from child tables
+   - Never reused across versions
+
+2. **Business Key:** `{table}_id VARCHAR NOT NULL`
+   - User-facing identifier (e.g., `position_id = 'POS-123'`)
+   - REUSED across all versions of the same entity
+   - Partial unique index: `UNIQUE WHERE row_current_ind = TRUE`
+
+**Pattern:**
+```sql
+-- Parent table (SCD Type 2)
+CREATE TABLE positions (
+    id SERIAL PRIMARY KEY,              -- Surrogate key for FKs
+    position_id VARCHAR NOT NULL,        -- Business key (reused)
+    -- ... other columns ...
+    row_current_ind BOOLEAN DEFAULT TRUE,
+    CONSTRAINT uc_position_current UNIQUE (position_id) WHERE (row_current_ind = TRUE)
+);
+
+-- Child table references surrogate key
+CREATE TABLE trades (
+    id SERIAL PRIMARY KEY,
+    position_id INTEGER REFERENCES positions(id),  -- FK to surrogate key
+    -- ... other columns ...
+);
+```
+
+**Consequences:**
+- **Positive:**
+  - Solves PostgreSQL FK limitation completely
+  - Preserves SCD Type 2 "one current version" constraint
+  - Foreign keys work correctly
+  - Simpler queries (no position_id ambiguity)
+- **Negative:**
+  - Requires INSERT → UPDATE pattern for new positions
+  - Slightly more complex CRUD operations
+  - Business key derived from surrogate key (`POS-{id}`)
+- **Neutral:**
+  - Pattern 14 documents mandatory CRUD workflow
+  - Migration 011 implements for positions/trades tables
+
+**References:**
+- ARCHITECTURE_DECISIONS_V2.18.md (full ADR-089 with 433 lines of details)
+- DEVELOPMENT_PATTERNS_V1.4.md (Pattern 14: Schema Migration → CRUD Workflow)
+- SCHEMA_MIGRATION_WORKFLOW_V1.0.md (comprehensive migration guide)
+- DATABASE_SCHEMA_SUMMARY_V1.9.md (Migration 011 implementation)
+
+---
 ## ADR Statistics
 
-**Total ADRs:** 68
-**Accepted (✅):** 39 (Phase 0-1.5 partial)
+**Total ADRs:** 69
+**Accepted (✅):** 40 (Phase 0-1.5 partial)
 **Proposed (🔵):** 28 (Phase 0.7, 1, 2-10)
 **Rejected (❌):** 0
 **Superseded (⚠️):** 0
@@ -585,7 +661,7 @@ Establish 8 Test Type Framework for comprehensive coverage:
 - Phase 0: 17 ADRs (100% accepted)
 - Phase 0.5: 12 ADRs (100% accepted)
 - Phase 1: 12 ADRs (6 accepted for DB completion + 6 planned for API best practices)
-- Phase 1.5: 4 ADRs (100% accepted - property-based testing POC + schema standardization + no edge manager + 8 test type framework)
+- Phase 1.5: 5 ADRs (100% accepted - property-based testing POC + schema standardization + no edge manager + 8 test type framework + dual-key pattern)
 - Phase 0.6c: 5 ADRs (100% accepted - includes cross-platform standards)
 - Phase 0.7: 6 ADRs (2 accepted: Python 3.14 compatibility + Branch Protection + 4 planned)
 - Phase 2: 3 ADRs (0% - planned)
@@ -616,6 +692,6 @@ Establish 8 Test Type Framework for comprehensive coverage:
 - v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.17.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.18.md
 
 **END OF ADR INDEX V1.12**

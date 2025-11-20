@@ -63,8 +63,12 @@ def clean_test_data(db_cursor):
     Deletes any test records (IDs starting with 'TEST-')
     """
     # Cleanup before test (in reverse FK order)
+    # Delete child records first (trades and positions reference strategies/models/markets)
     db_cursor.execute("DELETE FROM trades WHERE market_id LIKE 'MKT-TEST-%'")
-    db_cursor.execute("DELETE FROM positions WHERE market_id LIKE 'MKT-TEST-%'")
+    db_cursor.execute(
+        "DELETE FROM positions WHERE market_id LIKE 'MKT-TEST-%' OR market_id LIKE 'KALSHI-%' OR strategy_id > 1 OR model_id > 1"
+    )
+    # Then delete parent records
     db_cursor.execute("DELETE FROM markets WHERE market_id LIKE 'MKT-TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
@@ -123,8 +127,12 @@ def clean_test_data(db_cursor):
     yield  # Test runs here
 
     # Cleanup after test (in reverse FK order)
+    # Delete child records first (trades and positions reference strategies/models/markets)
     db_cursor.execute("DELETE FROM trades WHERE market_id LIKE 'MKT-TEST-%'")
-    db_cursor.execute("DELETE FROM positions WHERE market_id LIKE 'MKT-TEST-%'")
+    db_cursor.execute(
+        "DELETE FROM positions WHERE market_id LIKE 'MKT-TEST-%' OR market_id LIKE 'KALSHI-%' OR strategy_id > 1 OR model_id > 1"
+    )
+    # Then delete parent records
     db_cursor.execute("DELETE FROM markets WHERE market_id LIKE 'MKT-TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")

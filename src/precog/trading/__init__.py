@@ -8,6 +8,16 @@ This module contains trading-related functionality including:
 Reference: docs/foundation/DEVELOPMENT_PHASES_V1.5.md Phase 1.5
 """
 
+from precog.trading.position_manager import (
+    InsufficientMarginError,
+    InvalidPositionStateError,
+    PositionManager,
+)
 from precog.trading.strategy_manager import StrategyManager
 
-__all__ = ["StrategyManager"]
+__all__ = [
+    "InsufficientMarginError",
+    "InvalidPositionStateError",
+    "PositionManager",
+    "StrategyManager",
+]

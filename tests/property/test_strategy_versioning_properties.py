@@ -174,7 +174,7 @@ def test_strategy_config_immutable_via_database(db_pool, clean_test_data, config
     strategy_id = create_strategy(
         strategy_name=strategy_name_val,
         strategy_version=version,
-        category="sports",
+        category="value",
         config=config,
         status="draft",
     )
@@ -246,7 +246,7 @@ def test_strategy_status_mutable(db_pool, clean_test_data, status_sequence):
     strategy_id = create_strategy(
         strategy_name=strategy_name_val,
         strategy_version=version,
-        category="sports",
+        category="value",
         config=original_config,
         status="draft",
     )
@@ -305,7 +305,7 @@ def test_strategy_version_unique(db_pool, clean_test_data, version):
     strategy_id = create_strategy(
         strategy_name=strategy_name_val,
         strategy_version=version,
-        category="sports",
+        category="value",
         config={"min_lead": 7},
         status="draft",
     )
@@ -317,7 +317,7 @@ def test_strategy_version_unique(db_pool, clean_test_data, version):
         create_strategy(
             strategy_name=strategy_name_val,
             strategy_version=version,  # Same name + version!
-            category="sports",
+            category="value",
             config={"min_lead": 10},  # Different config doesn't matter
             status="draft",
         )
@@ -421,7 +421,7 @@ def test_config_change_creates_new_version(db_pool, clean_test_data, original_co
     v1_0_id = create_strategy(
         strategy_name=strategy_name_val,
         strategy_version="v1.0",
-        category="sports",
+        category="value",
         config=original_config,
         status="draft",
     )
@@ -432,7 +432,7 @@ def test_config_change_creates_new_version(db_pool, clean_test_data, original_co
     v1_1_id = create_strategy(
         strategy_name=strategy_name_val,
         strategy_version="v1.1",
-        category="sports",
+        category="value",
         config=new_config,
         status="draft",
     )
@@ -503,7 +503,7 @@ def test_at_most_one_active_version(db_pool, clean_test_data, strat_name):
     v1_0_id = create_strategy(
         strategy_name=strategy_name_val,
         strategy_version="v1.0",
-        category="sports",
+        category="value",
         config={"min_lead": 7},
         status="draft",
     )
@@ -511,7 +511,7 @@ def test_at_most_one_active_version(db_pool, clean_test_data, strat_name):
     v1_1_id = create_strategy(
         strategy_name=strategy_name_val,
         strategy_version="v1.1",
-        category="sports",
+        category="value",
         config={"min_lead": 10},
         status="draft",
     )
@@ -587,7 +587,7 @@ def test_all_versions_preserved(db_pool, clean_test_data, num_versions):
         create_strategy(
             strategy_name=strategy_name_val,
             strategy_version=f"v1.{i}",
-            category="sports",
+            category="value",
             config={"min_lead": 7 + i},  # Slightly different configs
             status="draft",
         )
