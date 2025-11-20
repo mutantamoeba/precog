@@ -931,13 +931,13 @@ def close_position(
             """
             INSERT INTO positions (
                 position_id, market_id, strategy_id, model_id, side,
-                quantity, entry_price, exit_price,
+                quantity, entry_price, exit_price, current_price,
                 realized_pnl,
                 target_price, stop_loss_price,
                 trailing_stop_state, position_metadata,
                 status, entry_time, exit_time
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'closed', %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'closed', %s, NOW())
             RETURNING id
         """,
             (
@@ -949,6 +949,7 @@ def close_position(
                 current["quantity"],
                 current["entry_price"],
                 exit_price,
+                exit_price,  # Set current_price to exit_price for closed positions
                 realized_pnl,
                 current["target_price"],
                 current["stop_loss_price"],

@@ -884,7 +884,7 @@ kelly_fraction = config['kelly_fraction']
 # → Decimal('0.25'), not float(0.25)!
 ```
 
-**Reference:** ADR-002 (Decimal Precision), Pattern 1 (DEVELOPMENT_PATTERNS_V1.3.md)
+**Reference:** ADR-002 (Decimal Precision), Pattern 1 (DEVELOPMENT_PATTERNS_V1.4.md)
 
 ---
 
@@ -911,7 +911,7 @@ kelly_fraction = config['kelly_fraction']
 - **`docs/guides/CONFIGURATION_GUIDE_V3.1.md`** - YAML configuration reference
 - **`docs/guides/VERSIONING_GUIDE_V1.0.md`** - Strategy/model versioning patterns
 - **`docs/guides/POSITION_MANAGEMENT_GUIDE_V1.0.md`** - Position lifecycle management
-- **`docs/guides/DEVELOPMENT_PATTERNS_V1.3.md`** - Critical development patterns
+- **`docs/guides/DEVELOPMENT_PATTERNS_V1.4.md`** - Critical development patterns
 
 ### **Requirements**
 - **Model Manager**: REQ-MODEL-001 through REQ-MODEL-005

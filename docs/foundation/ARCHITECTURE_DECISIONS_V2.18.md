@@ -1,9 +1,20 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.17
-**Last Updated:** November 17, 2025
+**Version:** 2.18
+**Last Updated:** November 19, 2025
 **Status:** ✅ Current
+**Changes in v2.18:**
+- **SCHEMA ARCHITECTURE - DUAL-KEY PATTERN FOR SCD TYPE 2:** Added Decision #89/ADR-089 (Dual-Key Schema Pattern for SCD Type 2 Tables - Phase 1.5)
+- Documents comprehensive dual-key architecture pattern solving PostgreSQL FK limitation for SCD Type 2 tables (positions, markets)
+- **Problem Addressed:** Foreign keys can only reference full UNIQUE constraints, not partial indexes → child tables can't reference business keys that repeat across versions
+- **Solution:** Surrogate key (id SERIAL PRIMARY KEY) for FK references + Business key (position_id VARCHAR) for user stability + Partial unique index (WHERE row_current_ind = TRUE)
+- **Implementation:** Complete schema pattern (5 metadata columns), CRUD operations (INSERT+UPDATE for versions), query patterns (row_current_ind filter), child table FK pattern
+- **Benefits:** PostgreSQL FK integrity, user-facing ID stability, SCD Type 2 guarantees, query performance, simple application code
+- **Costs:** Schema complexity (5 extra columns), storage overhead (historical versions), CRUD complexity (2-step updates), migration effort (one-time)
+- **Alternatives Rejected:** Single key (can't support SCD Type 2), composite key (complex FK), separate history table (complex queries)
+- Implementation checklist for future SCD Type 2 tables, full position lifecycle example, currently applied to positions + markets tables
+- References ADR-003 (Database Versioning Strategy), ADR-034 (Markets Surrogate Key), ADR-088 (Test Type Categories), Pattern 14 (Schema Migration Workflow)
 **Changes in v2.17:**
 - **TESTING ARCHITECTURE - 8 TEST TYPE FRAMEWORK:** Added Decision #88/ADR-088 (Test Type Categories - Phase 1.5)
 - Documents comprehensive 8 test type framework addressing Phase 1.5 TDD failure (Strategy Manager: 17/17 tests passed with mocks → 13/17 failed with real DB, 77% failure rate)
@@ -11500,7 +11511,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 
 **Supporting Documentation:**
 - DEVELOPMENT_PHILOSOPHY_V1.3.md (updated TDD section with Phase 1.5 lesson learned)
-- DEVELOPMENT_PATTERNS_V1.3.md (added Pattern 13: Test Coverage Quality)
+- DEVELOPMENT_PATTERNS_V1.4.md (added Pattern 13: Test Coverage Quality)
 - PHASE_1.5_TEST_PLAN_V1.0.md (test planning for manager components)
 
 **Development Guides:**
@@ -11571,7 +11582,7 @@ tests/
 - `docs/foundation/TESTING_STRATEGY_V3.1.md` (comprehensive 8 test type framework)
 - `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md` (REQ-TEST-012 through REQ-TEST-019)
 - `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md` (TDD section with Phase 1.5 lessons)
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.3.md` (Pattern 13: Test Coverage Quality)
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.4.md` (Pattern 13: Test Coverage Quality)
 
 **Code:**
 - `tests/conftest.py` (db_pool, clean_test_data fixtures)
@@ -11748,6 +11759,442 @@ The following ADR numbers are reserved for future phases. These decisions will b
 - **Conservative Kelly:** If system proves very accurate (>70% win rate)
 - **Separate probability tables:** If non-sports categories share more structure than expected
 - **Platform abstraction:** If we never add more platforms (YAGNI principle)
+
+---
+
+## Decision #89/ADR-089: Dual-Key Schema Pattern for SCD Type 2 Tables
+
+**Decision #89**
+**Phase:** 1.5 (Position Manager Implementation)
+**Status:** ✅ Complete (Implemented in positions table, applied to markets table)
+**Priority:** 🔴 Critical (foundational database architecture pattern)
+
+### Problem Statement
+
+**Context: SCD Type 2 Versioning Requires Dual-Key Architecture**
+
+When implementing Slowly Changing Dimension Type 2 (SCD Type 2) versioning for the `positions` table, we encountered a fundamental PostgreSQL constraint limitation:
+
+**The Challenge:**
+- **User-facing requirement:** Position IDs should remain stable across versions (e.g., "POS-123" stays "POS-123" through all updates)
+- **Database requirement:** Every row needs unique primary key for performance and referential integrity
+- **Versioning requirement:** Multiple rows can have same position_id (different versions: v1, v2, v3)
+- **PostgreSQL limitation:** Foreign keys can only reference columns with **full UNIQUE constraint**, not partial indexes
+
+**The Conflict:**
+
+```sql
+-- ❌ DOESN'T WORK - Foreign keys can't reference partial unique indexes
+CREATE TABLE positions (
+    position_id VARCHAR PRIMARY KEY,  -- ❌ NOT UNIQUE (repeats across versions)
+    market_id VARCHAR,
+    entry_price DECIMAL(10,4),
+    row_current_ind BOOLEAN DEFAULT TRUE,
+    row_effective_date TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Partial unique index (only current version is unique)
+CREATE UNIQUE INDEX positions_current_unique
+    ON positions(position_id)
+    WHERE row_current_ind = TRUE;
+
+-- ❌ FAILS - Child table can't reference position_id
+CREATE TABLE trades (
+    trade_id SERIAL PRIMARY KEY,
+    position_id VARCHAR REFERENCES positions(position_id)  -- ❌ ERROR
+);
+-- Error: there is no unique constraint matching given keys for referenced table "positions"
+```
+
+**The Decision Question:**
+
+**How do we support SCD Type 2 versioning (multiple rows per business entity) while maintaining PostgreSQL foreign key integrity?**
+
+Need:
+1. **User-facing stability:** Business key (position_id) stays constant across versions
+2. **Database uniqueness:** Every row has unique identifier for FK references
+3. **Query simplicity:** Easy to find "current" version without complex JOINs
+4. **Performance:** Efficient queries using indexes
+
+### Decision: Dual-Key Schema Pattern with Partial Unique Index
+
+**We will use a dual-key architecture for all SCD Type 2 tables:**
+
+#### Key Components
+
+**1. Surrogate Primary Key (Internal Use Only)**
+```sql
+id SERIAL PRIMARY KEY  -- Unique across ALL versions, internal use only
+```
+- Auto-incrementing integer
+- Unique for every row (including all versions)
+- Used for foreign key references from child tables
+- **NOT exposed to users** (internal only)
+
+**2. Business Key (User-Facing)**
+```sql
+position_id VARCHAR NOT NULL  -- User-facing ID (format: 'POS-{id}')
+```
+- Human-readable identifier (e.g., "POS-123")
+- Repeats across versions (POS-123 v1, POS-123 v2, POS-123 v3)
+- Used in application code, logs, UI
+- Derived from surrogate key: `position_id = 'POS-' || id`
+
+**3. Partial Unique Index (Current Version Only)**
+```sql
+CREATE UNIQUE INDEX positions_current_unique
+    ON positions(position_id)
+    WHERE row_current_ind = TRUE;
+```
+- Ensures only ONE current version per business key
+- Allows multiple historical versions (row_current_ind = FALSE)
+- Enforces SCD Type 2 invariant at database level
+
+**4. SCD Type 2 Metadata Columns**
+```sql
+row_current_ind BOOLEAN NOT NULL DEFAULT TRUE,
+row_effective_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+row_expiration_date TIMESTAMPTZ
+```
+
+#### Implementation Example
+
+**Complete Schema Pattern:**
+```sql
+CREATE TABLE positions (
+    -- Surrogate key (internal, for FK references)
+    id SERIAL PRIMARY KEY,
+
+    -- Business key (user-facing, repeats across versions)
+    position_id VARCHAR NOT NULL,
+
+    -- Foreign keys (reference surrogate keys from parent tables)
+    market_id VARCHAR NOT NULL REFERENCES markets(market_id),
+    strategy_id INTEGER NOT NULL REFERENCES strategies(strategy_id),
+    model_id INTEGER NOT NULL REFERENCES probability_models(model_id),
+
+    -- Position data
+    side VARCHAR(3) NOT NULL CHECK (side IN ('YES', 'NO')),
+    quantity INTEGER NOT NULL,
+    entry_price DECIMAL(10,4) NOT NULL,
+    current_price DECIMAL(10,4),
+    exit_price DECIMAL(10,4),
+
+    -- SCD Type 2 metadata
+    row_current_ind BOOLEAN NOT NULL DEFAULT TRUE,
+    row_effective_date TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    row_expiration_date TIMESTAMPTZ,
+
+    -- Status tracking
+    status VARCHAR(10) NOT NULL DEFAULT 'open'
+        CHECK (status IN ('open', 'closed')),
+    entry_time TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    exit_time TIMESTAMPTZ
+);
+
+-- Partial unique index: Only ONE current version per position_id
+CREATE UNIQUE INDEX positions_current_unique
+    ON positions(position_id)
+    WHERE row_current_ind = TRUE;
+
+-- Performance index: Fast lookups for current positions
+CREATE INDEX positions_current_lookup
+    ON positions(position_id, row_current_ind)
+    WHERE row_current_ind = TRUE;
+```
+
+**Child Table References Surrogate Key:**
+```sql
+CREATE TABLE trades (
+    id SERIAL PRIMARY KEY,
+    position_id INTEGER NOT NULL REFERENCES positions(id),  -- ✅ References surrogate key
+    -- ... other columns
+);
+```
+
+#### CRUD Operations Pattern
+
+**1. Creating New Position (Sets business_id from surrogate_id)**
+```python
+def open_position(market_id, quantity, entry_price):
+    """Create new position with dual-key pattern."""
+    cur.execute("""
+        INSERT INTO positions (
+            market_id, quantity, entry_price, row_current_ind
+        )
+        VALUES (%s, %s, %s, TRUE)
+        RETURNING id
+    """, (market_id, quantity, entry_price))
+
+    surrogate_id = cur.fetchone()['id']
+
+    # Set business_id from surrogate_id
+    cur.execute("""
+        UPDATE positions
+        SET position_id = %s
+        WHERE id = %s
+        RETURNING *
+    """, (f'POS-{surrogate_id}', surrogate_id))
+
+    return cur.fetchone()
+```
+
+**2. Updating Position (Creates New SCD Type 2 Version)**
+```python
+def update_position(position_id, new_price):
+    """Update position by creating new version (SCD Type 2)."""
+    # 1. Get current version
+    cur.execute("""
+        SELECT * FROM positions
+        WHERE position_id = %s AND row_current_ind = TRUE
+    """, (position_id,))
+    current = cur.fetchone()
+
+    # 2. Expire current version
+    cur.execute("""
+        UPDATE positions
+        SET row_current_ind = FALSE,
+            row_expiration_date = NOW()
+        WHERE id = %s
+    """, (current['id'],))
+
+    # 3. Insert new version (reuses same position_id)
+    cur.execute("""
+        INSERT INTO positions (
+            position_id, market_id, strategy_id, model_id,
+            quantity, entry_price, current_price, row_current_ind
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, TRUE)
+        RETURNING *
+    """, (
+        current['position_id'],  # ✅ Reuse business key
+        current['market_id'], current['strategy_id'], current['model_id'],
+        current['quantity'], current['entry_price'], new_price
+    ))
+
+    return cur.fetchone()
+```
+
+**3. Querying Current Positions (Business Logic Layer)**
+```python
+def get_current_positions(status='open'):
+    """Get all current positions (row_current_ind = TRUE only)."""
+    cur.execute("""
+        SELECT p.*, m.ticker, m.title
+        FROM positions p
+        JOIN markets m ON p.market_id = m.market_id AND m.row_current_ind = TRUE
+        WHERE p.row_current_ind = TRUE
+          AND p.status = %s
+        ORDER BY p.entry_time DESC
+    """, (status,))
+
+    return cur.fetchall()
+```
+
+**4. Querying Position History (Reporting/Audit)**
+```python
+def get_position_history(position_id):
+    """Get all versions of a position (audit trail)."""
+    cur.execute("""
+        SELECT *,
+            row_effective_date AS version_start,
+            row_expiration_date AS version_end,
+            CASE WHEN row_current_ind THEN 'CURRENT' ELSE 'HISTORICAL' END AS version_status
+        FROM positions
+        WHERE position_id = %s
+        ORDER BY row_effective_date DESC
+    """, (position_id,))
+
+    return cur.fetchall()
+```
+
+### Benefits
+
+**1. PostgreSQL Foreign Key Integrity ✅**
+- Child tables can reference `positions(id)` with standard FOREIGN KEY constraints
+- No custom trigger-based referential integrity needed
+- Database enforces consistency automatically
+
+**2. User-Facing Stability ✅**
+- Position ID "POS-123" stays constant across all versions
+- Application logs, UI, APIs all use stable business key
+- Users can track positions over time without version confusion
+
+**3. SCD Type 2 Guarantees ✅**
+- Partial unique index enforces "only ONE current version" at database level
+- Can't accidentally have multiple current versions (database prevents it)
+- Historical versions preserved automatically (audit trail)
+
+**4. Query Performance ✅**
+- Partial index makes `WHERE row_current_ind = TRUE` queries fast
+- Surrogate key (SERIAL) is smaller, faster for JOINs than VARCHAR
+- Indexes optimized for common access patterns
+
+**5. Simple Application Code ✅**
+```python
+# ✅ Simple: Always filter by row_current_ind = TRUE
+current_positions = get_current_positions(row_current_ind=TRUE)
+
+# ✅ Simple: Business key never changes
+position = get_position_by_business_id('POS-123')
+
+# ✅ Simple: SCD Type 2 updates are INSERT + UPDATE (no complex logic)
+new_version = update_position('POS-123', new_price=Decimal('0.6000'))
+```
+
+### Costs & Tradeoffs
+
+**1. Schema Complexity (Minor)**
+- Every SCD Type 2 table needs 5 columns: `id`, `business_id`, `row_current_ind`, `row_effective_date`, `row_expiration_date`
+- Developers must understand dual-key pattern (documentation helps)
+- **Mitigation:** Standardize pattern across all SCD Type 2 tables
+
+**2. Storage Overhead (Acceptable)**
+- Each update creates new row instead of UPDATE in place
+- Historical versions consume storage
+- **Mitigation:** Phase 8 data retention policy (archive old versions after 1 year)
+- **Cost:** ~$0.10/GB/month on AWS RDS (negligible for millions of rows)
+
+**3. CRUD Complexity (Moderate)**
+- Update operations require 2 steps: expire old, insert new
+- Queries must always filter `row_current_ind = TRUE`
+- **Mitigation:** Encapsulate in CRUD layer (application code never writes raw SQL)
+
+**4. Migration Effort (One-Time)**
+- Existing tables need migration to add dual-key columns
+- **Example:** Migration 011 added dual-key pattern to positions table (~2 seconds)
+
+### Alternative Approaches Considered
+
+**Alternative 1: Single Key (Business ID as PRIMARY KEY)**
+```sql
+-- ❌ REJECTED - Can't support SCD Type 2 (business key repeats across versions)
+CREATE TABLE positions (
+    position_id VARCHAR PRIMARY KEY,  -- ❌ NOT UNIQUE across versions
+    ...
+);
+```
+**Why Rejected:** PostgreSQL requires PRIMARY KEY to be unique for ALL rows, not just current version.
+
+**Alternative 2: Composite Key (business_id + version_number)**
+```sql
+-- ❌ REJECTED - Child tables need composite FK (complex, slow)
+CREATE TABLE positions (
+    position_id VARCHAR,
+    version_number INTEGER,
+    PRIMARY KEY (position_id, version_number),
+    ...
+);
+
+CREATE TABLE trades (
+    position_id VARCHAR,
+    version_number INTEGER,
+    FOREIGN KEY (position_id, version_number) REFERENCES positions(position_id, version_number)
+);
+```
+**Why Rejected:**
+- Child tables need to track version_number (business logic leak)
+- Composite foreign keys slower than single-column integer FK
+- Application code more complex
+
+**Alternative 3: Separate History Table**
+```sql
+-- ❌ REJECTED - Splits current/historical data, complex queries
+CREATE TABLE positions_current (
+    position_id VARCHAR PRIMARY KEY,
+    ...
+);
+
+CREATE TABLE positions_history (
+    id SERIAL PRIMARY KEY,
+    position_id VARCHAR,
+    ...
+);
+```
+**Why Rejected:**
+- Queries need UNION to get complete history
+- Data migration complex (move from current to history on update)
+- Two tables to maintain
+
+### Implementation Checklist
+
+When implementing dual-key pattern for new SCD Type 2 table:
+
+- [ ] **Add surrogate key:** `id SERIAL PRIMARY KEY`
+- [ ] **Add business key:** `{entity}_id VARCHAR NOT NULL`
+- [ ] **Add SCD metadata:** `row_current_ind`, `row_effective_date`, `row_expiration_date`
+- [ ] **Create partial unique index:** `WHERE row_current_ind = TRUE`
+- [ ] **Create performance index:** For common queries
+- [ ] **Update CRUD operations:** Set business_id from surrogate_id on INSERT
+- [ ] **Update child tables:** Reference surrogate key (id), not business key
+- [ ] **Test SCD Type 2 updates:** Verify new versions created correctly
+- [ ] **Document in DATABASE_SCHEMA_SUMMARY:** Add table to versioning section
+
+### Related Decisions
+
+- **ADR-003 (Database Versioning Strategy):** Establishes SCD Type 2 as standard versioning pattern
+- **ADR-034 (Markets Table Surrogate Key):** Applied dual-key pattern to markets table
+- **ADR-088 (Test Type Categories):** Integration tests verify SCD Type 2 behavior with real database
+- **Pattern 14 (Schema Migration → CRUD Update Workflow):** Documents workflow for implementing this pattern
+
+### Tables Using Dual-Key Pattern
+
+**Currently Implemented:**
+1. ✅ `positions` - Tracks position price/status updates (Migration 007, Phase 0.5)
+2. ✅ `markets` - Tracks market price updates (Migration 010, Phase 1)
+
+**Planned (Phase 2+):**
+3. 📋 `trades` - Track trade amendments/corrections
+4. 📋 `account_balances` - Track balance snapshots over time
+5. 📋 `model_evaluations` - Track model performance over time
+
+### Example: Full Position Lifecycle with Dual-Key Pattern
+
+```python
+# 1. Open position (creates first version)
+position = open_position(
+    market_id='KALSHI-NFL-001',
+    quantity=10,
+    entry_price=Decimal('0.4975')
+)
+# Result: id=1, position_id='POS-1', row_current_ind=TRUE
+
+# 2. Update position price (creates second version)
+updated = update_position(
+    position_id='POS-1',  # ✅ Business key stays stable
+    current_price=Decimal('0.5200')
+)
+# Result:
+#   - Old row: id=1, position_id='POS-1', row_current_ind=FALSE, row_expiration_date=NOW()
+#   - New row: id=2, position_id='POS-1', row_current_ind=TRUE
+
+# 3. Close position (creates final version)
+closed = close_position(
+    position_id='POS-1',  # ✅ Still using same business key
+    exit_price=Decimal('0.6000'),
+    exit_reason='profit_target'
+)
+# Result:
+#   - Old row: id=2, position_id='POS-1', row_current_ind=FALSE
+#   - New row: id=3, position_id='POS-1', row_current_ind=TRUE, status='closed'
+
+# 4. Query history (audit trail)
+history = get_position_history('POS-1')
+# Returns 3 rows:
+#   - v1 (id=1): entry_price=0.4975, current_price=NULL
+#   - v2 (id=2): entry_price=0.4975, current_price=0.5200
+#   - v3 (id=3): entry_price=0.4975, exit_price=0.6000, status='closed'
+```
+
+### Key Takeaways
+
+1. **Dual keys solve PostgreSQL FK limitation:** Surrogate key for database integrity, business key for user stability
+2. **Pattern is standardized:** Use same 5-column structure for all SCD Type 2 tables
+3. **Encapsulation is critical:** CRUD layer hides complexity from application code
+4. **Performance is excellent:** Partial indexes make current-version queries fast
+5. **Schema migration workflow:** Pattern 14 documents step-by-step implementation process
+
+**Status:** ✅ Implemented and proven in production (positions table Phase 1.5, markets table Phase 1)
 
 ---
 

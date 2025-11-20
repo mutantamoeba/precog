@@ -1,13 +1,24 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.3
+**Version:** 1.4
 **Created:** 2025-11-13
-**Last Updated:** 2025-11-15
+**Last Updated:** 2025-11-19
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.4:**
+- **Added Pattern 14: Schema Migration → CRUD Operations Update Workflow (CRITICAL)**
+- Documents mandatory workflow when database schema changes require CRUD operation updates
+- Covers dual-key pattern implementation (surrogate PRIMARY KEY + business key with partial unique index)
+- Step-by-step workflow: Migration → CRUD update → Test update → Integration test verification
+- Explains SCD Type 2 versioning pattern (UPDATE old + INSERT new with row_current_ind)
+- Common patterns: Setting business_id from surrogate_id, WHERE row_current_ind filtering
+- Testing requirements: Integration tests must use real database (NO mocks for CRUD/connection)
+- Real-world examples from Migration 011 (positions dual-key schema) and Position Manager implementation
+- Cross-references: ADR-089 (Dual-Key Schema Pattern), ADR-088 (Test Type Categories), Pattern 13 (Test Coverage Quality)
+- Total addition: ~450 lines documenting critical schema-to-CRUD synchronization workflow
 **Changes in V1.3:**
 - **Added Pattern 12: Test Fixture Security Compliance (MANDATORY)**
 - Documents project-relative test fixture pattern for security-validated functions
@@ -52,23 +63,26 @@
 11. [Pattern 10: Property-Based Testing with Hypothesis (ALWAYS for Trading Logic)](#pattern-10-property-based-testing-with-hypothesis-always-for-trading-logic)
 12. [Pattern 11: Test Mocking Patterns (Mock API Boundaries, Not Implementation)](#pattern-11-test-mocking-patterns-mock-api-boundaries-not-implementation)
 13. [Pattern 12: Test Fixture Security Compliance (MANDATORY)](#pattern-12-test-fixture-security-compliance-mandatory)
-14. [Pattern Quick Reference](#pattern-quick-reference)
-15. [Related Documentation](#related-documentation)
+14. [Pattern 13: Test Coverage Quality (Mock Sparingly, Integrate Thoroughly)](#pattern-13-test-coverage-quality-mock-sparingly-integrate-thoroughly---critical)
+15. [Pattern 14: Schema Migration → CRUD Operations Update Workflow (CRITICAL)](#pattern-14-schema-migration--crud-operations-update-workflow-critical)
+16. [Pattern Quick Reference](#pattern-quick-reference)
+17. [Related Documentation](#related-documentation)
 
 ---
 
 ## Introduction
 
-This guide contains **11 critical development patterns** that must be followed throughout the Precog project. These patterns address:
+This guide contains **14 critical development patterns** that must be followed throughout the Precog project. These patterns address:
 
 - **Financial Precision:** Decimal-only arithmetic for sub-penny pricing
 - **Data Versioning:** Dual versioning system for mutable vs. immutable data
 - **Security:** Zero-tolerance for hardcoded credentials
 - **Cross-Platform:** Windows/Linux compatibility
 - **Type Safety:** TypedDict for compile-time validation
-- **Testing:** Property-based testing for trading logic + robust test mocking
+- **Testing:** Property-based testing for trading logic + robust test mocking + integration test requirements
 - **Configuration:** Multi-layer config synchronization
 - **Quality:** Multi-source warning governance
+- **Schema Management:** Database schema migration → CRUD operations synchronization workflow
 
 **Why These Patterns Matter:**
 
@@ -1962,6 +1976,701 @@ def test_create_strategy(clean_test_data, db_cursor):
 
 ---
 
+## Pattern 14: Schema Migration → CRUD Operations Update Workflow (CRITICAL)
+
+**WHY:** When database schema changes (especially for SCD Type 2 tables with dual-key pattern), CRUD operations MUST be updated to match. Forgetting to update CRUD operations causes:
+- Insert failures (missing required columns)
+- Query failures (column doesn't exist)
+- Business logic bugs (expecting field that doesn't exist)
+- SCD Type 2 violations (forgetting row_current_ind filter)
+
+**The Problem:** Database schema and CRUD operations can drift out of sync across multiple locations.
+
+**Phase 1.5 Example:**
+- Migration 011 added dual-key schema to positions table (surrogate `id` + business `position_id`)
+- Required updates to 4 CRUD functions: `open_position()`, `update_position()`, `close_position()`, `get_current_positions()`
+- Missed update in `close_position()` → missing `current_price` column → test assertion failure
+
+### When This Pattern Applies
+
+**✅ ALWAYS use this workflow when:**
+- Adding new columns to SCD Type 2 tables (positions, markets, edges, balances)
+- Changing column types (VARCHAR → DECIMAL, INTEGER → BIGINT)
+- Adding/changing constraints (UNIQUE, FOREIGN KEY, CHECK)
+- Implementing dual-key schema pattern (surrogate + business key)
+- Changing SCD Type 2 metadata columns (row_current_ind, row_effective_date)
+
+**Tables Using SCD Type 2 + Dual-Key Pattern:**
+- ✅ `positions` (Migration 011 - IMPLEMENTED)
+- ✅ `markets` (Migration 004 - IMPLEMENTED)
+- 📋 `trades` (Planned - Phase 2)
+- 📋 `account_balance` (Planned - Phase 2)
+- 📋 `edges` (Planned - Phase 4)
+
+### 5-Step Mandatory Workflow
+
+#### Step 1: Create Database Migration (10-30 min)
+
+```sql
+-- Migration 011: Add dual-key schema to positions table
+-- File: src/precog/database/migrations/011_add_positions_dual_key.sql
+
+-- 1. Add position_id business key column (nullable initially)
+ALTER TABLE positions ADD COLUMN position_id VARCHAR(50);
+
+-- 2. Populate position_id from id (surrogate key)
+UPDATE positions SET position_id = 'POS-' || id::TEXT WHERE position_id IS NULL;
+
+-- 3. Make position_id NOT NULL
+ALTER TABLE positions ALTER COLUMN position_id SET NOT NULL;
+
+-- 4. Create partial UNIQUE index (one current version per position_id)
+CREATE UNIQUE INDEX positions_position_id_current_unique
+ON positions (position_id)
+WHERE row_current_ind = TRUE;
+
+-- 5. Add comment documenting dual-key pattern
+COMMENT ON COLUMN positions.position_id IS 'Business key (repeats across versions), format: POS-{id}';
+COMMENT ON COLUMN positions.id IS 'Surrogate PRIMARY KEY (unique across all versions, used for FK references)';
+```
+
+**Migration Checklist:**
+- [ ] Added new column with correct type
+- [ ] Populated existing rows if NOT NULL
+- [ ] Created indexes if needed (partial unique for SCD Type 2)
+- [ ] Added comments documenting pattern
+- [ ] Tested migration on local database
+- [ ] Verified rollback script (if applicable)
+
+#### Step 2: Update CRUD Operations (30-60 min)
+
+**CRITICAL: Update ALL functions that touch the modified table.**
+
+**Example: positions table has 4 CRUD functions to update:**
+
+**2a. open_position() - Set business_id from surrogate_id**
+
+```python
+# src/precog/database/crud_operations.py
+
+def open_position(
+    market_id: str,
+    strategy_id: int,
+    model_id: int,
+    side: str,
+    quantity: int,
+    entry_price: Decimal,
+    target_price: Decimal | None = None,
+    stop_loss_price: Decimal | None = None,
+    trailing_stop_config: dict[str, Any] | None = None,
+    position_metadata: dict[str, Any] | None = None,
+) -> str:
+    """Open new position with dual-key pattern.
+
+    Returns:
+        position_id (business key, format: 'POS-{id}')
+
+    Educational Note:
+        Dual-key pattern: surrogate PRIMARY KEY (id) + business key (position_id).
+        Business key is set from surrogate key after INSERT to guarantee uniqueness.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Step 1: INSERT without business_id (generates surrogate id)
+            cur.execute("""
+                INSERT INTO positions (
+                    market_id, strategy_id, model_id, side,
+                    quantity, entry_price, current_price,
+                    target_price, stop_loss_price,
+                    trailing_stop_state, position_metadata,
+                    status, row_current_ind
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'open', TRUE)
+                RETURNING id
+            """, (
+                market_id, strategy_id, model_id, side,
+                quantity, entry_price, entry_price,
+                target_price, stop_loss_price,
+                Json(trailing_stop_config) if trailing_stop_config else None,
+                Json(position_metadata) if position_metadata else None,
+            ))
+
+            surrogate_id = cur.fetchone()['id']
+
+            # Step 2: UPDATE to set business_id from surrogate_id
+            cur.execute("""
+                UPDATE positions
+                SET position_id = %s
+                WHERE id = %s
+                RETURNING position_id
+            """, (f'POS-{surrogate_id}', surrogate_id))
+
+            position_id = cur.fetchone()['position_id']
+            conn.commit()
+            return position_id
+    finally:
+        release_connection(conn)
+```
+
+**2b. update_position() - SCD Type 2 versioning**
+
+```python
+def update_position(
+    position_id: int,  # Surrogate key (NOT business key!)
+    current_price: Decimal,
+) -> int:
+    """Update position - creates new SCD Type 2 version.
+
+    Args:
+        position_id: Surrogate key (id column, unique across all versions)
+        current_price: New market price
+
+    Returns:
+        New surrogate id for updated version
+
+    Educational Note:
+        SCD Type 2 pattern: UPDATE old row (set row_current_ind=FALSE),
+        then INSERT new row (same position_id, new surrogate id).
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Step 1: Get current version (must filter by row_current_ind!)
+            cur.execute("""
+                SELECT * FROM positions
+                WHERE id = %s AND row_current_ind = TRUE
+            """, (position_id,))
+
+            current = cur.fetchone()
+            if not current:
+                raise ValueError(f"Position {position_id} not found or not current")
+
+            # Step 2: Expire current version
+            cur.execute("""
+                UPDATE positions
+                SET row_current_ind = FALSE, row_expiration_date = NOW()
+                WHERE id = %s
+            """, (position_id,))
+
+            # Step 3: Insert new version (REUSE same position_id business key)
+            cur.execute("""
+                INSERT INTO positions (
+                    position_id, market_id, strategy_id, model_id, side,
+                    quantity, entry_price, current_price,
+                    target_price, stop_loss_price,
+                    trailing_stop_state, position_metadata,
+                    status, entry_time, row_current_ind
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE)
+                RETURNING id
+            """, (
+                current['position_id'],  # Reuse business key!
+                current['market_id'], current['strategy_id'], current['model_id'],
+                current['side'], current['quantity'], current['entry_price'],
+                current_price,  # Updated field
+                current['target_price'], current['stop_loss_price'],
+                current['trailing_stop_state'], current['position_metadata'],
+                current['status'], current['entry_time'],
+            ))
+
+            new_id = cur.fetchone()['id']
+            conn.commit()
+            return new_id
+    finally:
+        release_connection(conn)
+```
+
+**2c. close_position() - Final SCD Type 2 version**
+
+```python
+def close_position(
+    position_id: int,
+    exit_price: Decimal,
+    exit_reason: str,
+    realized_pnl: Decimal,
+) -> int:
+    """Close position - creates final SCD Type 2 version with status='closed'.
+
+    CRITICAL: Must set current_price to exit_price for closed positions.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            # Get current version
+            cur.execute("""
+                SELECT * FROM positions
+                WHERE id = %s AND row_current_ind = TRUE
+            """, (position_id,))
+
+            current = cur.fetchone()
+            if not current:
+                raise ValueError(f"Position {position_id} not found")
+
+            # Expire current version
+            cur.execute("""
+                UPDATE positions
+                SET row_current_ind = FALSE, row_expiration_date = NOW()
+                WHERE id = %s
+            """, (position_id,))
+
+            # Insert closed version (MUST include ALL columns!)
+            cur.execute("""
+                INSERT INTO positions (
+                    position_id, market_id, strategy_id, model_id, side,
+                    quantity, entry_price, exit_price, current_price,
+                    realized_pnl,
+                    target_price, stop_loss_price,
+                    trailing_stop_state, position_metadata,
+                    status, entry_time, exit_time, row_current_ind
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'closed', %s, NOW(), TRUE)
+                RETURNING id
+            """, (
+                current['position_id'], current['market_id'], current['strategy_id'],
+                current['model_id'], current['side'], current['quantity'],
+                current['entry_price'], exit_price,
+                exit_price,  # ⚠️ CRITICAL: Set current_price to exit_price!
+                realized_pnl,
+                current['target_price'], current['stop_loss_price'],
+                current['trailing_stop_state'], current['position_metadata'],
+                current['entry_time'],
+            ))
+
+            final_id = cur.fetchone()['id']
+            conn.commit()
+            return final_id
+    finally:
+        release_connection(conn)
+```
+
+**2d. get_current_positions() - ALWAYS filter by row_current_ind**
+
+```python
+def get_current_positions(status: str | None = None, market_id: str | None = None) -> list[dict]:
+    """Get current positions (filters by row_current_ind = TRUE).
+
+    Educational Note:
+        CRITICAL: ALWAYS filter SCD Type 2 tables by row_current_ind = TRUE
+        to get only current versions, not historical versions.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            query = """
+                SELECT
+                    p.*,
+                    m.ticker, m.yes_price, m.no_price, m.market_type
+                FROM positions p
+                JOIN markets m ON p.market_id = m.market_id AND m.row_current_ind = TRUE
+                WHERE p.row_current_ind = TRUE  -- ⚠️ CRITICAL: Filter current versions
+            """
+            params = []
+
+            if status:
+                query += " AND p.status = %s"
+                params.append(status)
+
+            if market_id:
+                query += " AND p.market_id = %s"
+                params.append(market_id)
+
+            query += " ORDER BY p.entry_time DESC"
+
+            cur.execute(query, params)
+            return cur.fetchall()
+    finally:
+        release_connection(conn)
+```
+
+**CRUD Update Checklist:**
+- [ ] Updated ALL INSERT statements to include new columns
+- [ ] Updated ALL UPDATE statements to handle new columns
+- [ ] Updated ALL SELECT statements to include new columns (if needed)
+- [ ] Set business_id from surrogate_id on initial INSERT (dual-key pattern)
+- [ ] ALWAYS filter by `row_current_ind = TRUE` in queries (SCD Type 2)
+- [ ] Reuse business key when creating new SCD Type 2 versions
+- [ ] Include ALL columns when inserting new versions (don't forget new columns!)
+
+#### Step 3: Update Tests (30-60 min)
+
+**CRITICAL: Tests must use REAL database, not mocks (Pattern 13).**
+
+```python
+# tests/unit/trading/test_position_manager.py
+
+def test_open_position_sets_business_id(clean_test_data, manager, position_params):
+    """Verify open_position sets position_id from surrogate id."""
+    result = manager.open_position(**position_params)
+
+    # Verify business_id format
+    assert result['position_id'].startswith('POS-')
+    assert result['id'] is not None  # Surrogate key
+
+    # Verify business_id matches surrogate_id
+    expected_position_id = f"POS-{result['id']}"
+    assert result['position_id'] == expected_position_id
+
+
+def test_update_position_creates_new_version_with_same_business_id(
+    clean_test_data, manager, position_params
+):
+    """Verify SCD Type 2: new version reuses same position_id."""
+    # Open position
+    position = manager.open_position(**position_params)
+    original_id = position['id']
+    original_position_id = position['position_id']
+
+    # Update position (creates new SCD Type 2 version)
+    updated = manager.update_position(
+        position_id=original_id,
+        current_price=Decimal("0.6000"),
+    )
+
+    # Verify new version has DIFFERENT surrogate id
+    assert updated['id'] != original_id
+
+    # Verify new version has SAME business key
+    assert updated['position_id'] == original_position_id
+
+    # Verify old version is expired
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute("""
+                SELECT row_current_ind FROM positions WHERE id = %s
+            """, (original_id,))
+            old_version = cur.fetchone()
+            assert old_version['row_current_ind'] is False  # Expired
+    finally:
+        release_connection(conn)
+
+
+def test_close_position_sets_current_price(clean_test_data, manager, position_params):
+    """Verify close_position sets current_price to exit_price."""
+    # Open position
+    position = manager.open_position(**position_params)
+
+    # Close position
+    closed = manager.close_position(
+        position_id=position['id'],
+        exit_price=Decimal("0.7500"),
+        exit_reason="profit_target",
+    )
+
+    # Verify current_price equals exit_price
+    assert closed['current_price'] == Decimal("0.7500")
+    assert closed['exit_price'] == Decimal("0.7500")
+    assert closed['status'] == 'closed'
+
+
+def test_get_current_positions_filters_by_row_current_ind(
+    clean_test_data, manager, position_params
+):
+    """Verify get_current_positions only returns row_current_ind=TRUE."""
+    # Open position
+    position = manager.open_position(**position_params)
+    original_id = position['id']
+
+    # Update twice (creates 2 new versions, expires 2 old versions)
+    manager.update_position(original_id, Decimal("0.5500"))
+    manager.update_position(original_id, Decimal("0.6000"))
+
+    # Should return 1 position (only current version)
+    current_positions = manager.get_open_positions()
+    assert len(current_positions) == 1
+
+    # Verify returned position is the latest version
+    assert current_positions[0]['current_price'] == Decimal("0.6000")
+
+    # Verify database has 3 versions total (1 current + 2 expired)
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT COUNT(*) FROM positions WHERE position_id = %s
+            """, (position['position_id'],))
+            total_versions = cur.fetchone()[0]
+            assert total_versions == 3
+    finally:
+        release_connection(conn)
+```
+
+**Test Update Checklist:**
+- [ ] Tests use `clean_test_data` fixture (real database)
+- [ ] Tests verify business_id set correctly on INSERT
+- [ ] Tests verify SCD Type 2 versioning (UPDATE + INSERT pattern)
+- [ ] Tests verify row_current_ind filtering works
+- [ ] Tests verify ALL new columns populated correctly
+- [ ] Tests verify old versions expired (row_current_ind=FALSE)
+- [ ] NO mocks for `get_connection()`, `ConfigLoader`, or internal CRUD
+
+#### Step 4: Run Integration Tests (5-10 min)
+
+```bash
+# Run position manager tests
+python -m pytest tests/unit/trading/test_position_manager.py -v
+
+# Expected: All tests passing
+# 23/23 tests passing (from Phase 1.5 example)
+
+# Run full test suite
+python -m pytest tests/ -v
+
+# Check coverage
+python -m pytest tests/ --cov=precog.database.crud_operations --cov-report=term-missing
+```
+
+**Integration Test Checklist:**
+- [ ] All position manager tests passing
+- [ ] All CRUD operation tests passing
+- [ ] No SQL syntax errors
+- [ ] No missing column errors
+- [ ] Coverage ≥85% for CRUD operations
+- [ ] Coverage ≥87% for position manager
+
+#### Step 5: Update Documentation (10-20 min)
+
+**Update 3 locations:**
+
+**5a. DATABASE_SCHEMA_SUMMARY_V*.md**
+```markdown
+### positions Table (Dual-Key SCD Type 2)
+
+**Purpose:** Track position lifecycle with historical versioning
+
+**Dual-Key Pattern:**
+- `id SERIAL PRIMARY KEY` - Surrogate key (unique across all versions, used for FK references)
+- `position_id VARCHAR(50) NOT NULL` - Business key (repeats across versions, format: 'POS-{id}')
+- Partial UNIQUE index: `CREATE UNIQUE INDEX ... ON positions (position_id) WHERE row_current_ind = TRUE`
+
+**Key Columns:**
+- `id` - Surrogate PRIMARY KEY
+- `position_id` - Business key (user-facing, stable across versions)
+- `market_id` - FK to markets (business key)
+- `strategy_id` - FK to strategies
+- `model_id` - FK to probability_models
+- `entry_price DECIMAL(10,4)` - Original entry price
+- `current_price DECIMAL(10,4)` - Latest market price
+- `exit_price DECIMAL(10,4)` - Exit price (NULL until closed)
+- `row_current_ind BOOLEAN` - TRUE = current version, FALSE = historical
+- `row_effective_date TIMESTAMP` - Version start time
+- `row_expiration_date TIMESTAMP` - Version end time (NULL for current)
+
+**SCD Type 2 Behavior:**
+- Updates create new row with same position_id, new surrogate id
+- Old row: row_current_ind → FALSE, row_expiration_date → NOW()
+- New row: row_current_ind → TRUE, row_effective_date → NOW()
+
+**Migration:** Migration 011 (2025-11-19) - Added dual-key pattern
+```
+
+**5b. ADR-089 Cross-Reference**
+
+Add positions table to "Tables Using This Pattern" section in ADR-089.
+
+**5c. Pattern 14 (this document)**
+
+You're reading it! 😊
+
+**Documentation Update Checklist:**
+- [ ] Updated DATABASE_SCHEMA_SUMMARY with dual-key columns
+- [ ] Updated ADR-089 table list
+- [ ] Updated MASTER_INDEX if new docs created
+- [ ] Added migration number to documentation
+
+### Common Mistakes to Avoid
+
+**Mistake 1: Forgetting to set business_id from surrogate_id**
+
+```python
+# ❌ WRONG - business_id remains NULL
+cur.execute("""
+    INSERT INTO positions (market_id, strategy_id, ..., row_current_ind)
+    VALUES (%s, %s, ..., TRUE)
+    RETURNING id
+""", (...))
+# Missing UPDATE to set position_id!
+
+# ✅ CORRECT - Set business_id after INSERT
+surrogate_id = cur.fetchone()['id']
+cur.execute("""
+    UPDATE positions SET position_id = %s WHERE id = %s
+""", (f'POS-{surrogate_id}', surrogate_id))
+```
+
+**Mistake 2: Forgetting row_current_ind filter in queries**
+
+```python
+# ❌ WRONG - Returns ALL versions (current + historical)
+cur.execute("SELECT * FROM positions WHERE market_id = %s", (market_id,))
+
+# ✅ CORRECT - Returns only current versions
+cur.execute("""
+    SELECT * FROM positions
+    WHERE market_id = %s AND row_current_ind = TRUE
+""", (market_id,))
+```
+
+**Mistake 3: Not reusing business key when creating new version**
+
+```python
+# ❌ WRONG - Generates NEW position_id (violates SCD Type 2)
+cur.execute("""
+    INSERT INTO positions (position_id, market_id, ...)
+    VALUES ('POS-NEW-ID', %s, ...)  -- Wrong!
+""", (...))
+
+# ✅ CORRECT - Reuse same position_id from old version
+cur.execute("""
+    INSERT INTO positions (position_id, market_id, ...)
+    VALUES (%s, %s, ...)  -- Reuse current['position_id']
+""", (current['position_id'], ...))
+```
+
+**Mistake 4: Forgetting new columns in INSERT**
+
+```python
+# ❌ WRONG - Missing current_price in close_position INSERT
+cur.execute("""
+    INSERT INTO positions (
+        position_id, market_id, ..., exit_price, status
+    )
+    VALUES (%s, %s, ..., %s, 'closed')
+""", (position_id, market_id, ..., exit_price))
+# Missing current_price! Causes assertion failure in tests.
+
+# ✅ CORRECT - Include ALL columns
+cur.execute("""
+    INSERT INTO positions (
+        position_id, market_id, ..., exit_price, current_price, status
+    )
+    VALUES (%s, %s, ..., %s, %s, 'closed')
+""", (position_id, market_id, ..., exit_price, exit_price))
+```
+
+**Mistake 5: Using mocks instead of real database**
+
+```python
+# ❌ WRONG - Mock hides real database issues
+@patch("precog.database.connection.get_connection")
+def test_open_position(mock_get_connection):
+    mock_get_connection.return_value.cursor.return_value.fetchone.return_value = {...}
+    # Test passes but doesn't validate SQL syntax, constraints, or business_id logic!
+
+# ✅ CORRECT - Use real database with fixtures
+def test_open_position(clean_test_data, manager, position_params):
+    result = manager.open_position(**position_params)
+    # Validates SQL syntax, constraints, business_id generation, everything!
+```
+
+### Decision Tree: When to Update CRUD
+
+```
+Q: Did database schema change?
+├─ NO → No CRUD updates needed
+└─ YES → Continue
+
+Q: Does change affect SCD Type 2 table?
+├─ NO → Update CRUD for new columns (simpler workflow)
+└─ YES → Continue (use full 5-step workflow)
+
+Q: Which operations are affected?
+├─ INSERT → Update to include new columns
+├─ UPDATE → Update to include new columns
+├─ SELECT → Update to return new columns
+└─ SCD Type 2 versioning → Update UPDATE + INSERT pattern
+
+Q: Did you update tests to verify changes?
+├─ NO → STOP! Write integration tests first (Pattern 13)
+└─ YES → Continue
+
+Q: Did tests pass on first try?
+├─ YES → Excellent! Proceed to documentation
+└─ NO → Debug integration tests, fix CRUD, repeat
+
+Q: Did you update documentation?
+├─ NO → STOP! Update DATABASE_SCHEMA_SUMMARY, ADR-089
+└─ YES → ✅ COMPLETE - Schema and CRUD synchronized
+```
+
+### Quick Reference: SCD Type 2 CRUD Patterns
+
+| Operation | Pattern | row_current_ind | Business Key |
+|-----------|---------|-----------------|--------------|
+| **INSERT (new record)** | Single INSERT | Set to TRUE | Set from surrogate id |
+| **UPDATE (new version)** | UPDATE old + INSERT new | Old→FALSE, New→TRUE | Reuse from old version |
+| **DELETE (soft delete)** | UPDATE + INSERT | Old→FALSE, New→TRUE | Reuse from old version |
+| **SELECT (current only)** | WHERE filter | Filter `= TRUE` | Any value |
+| **SELECT (all versions)** | No filter | Any value | Group by business key |
+
+### Real-World Impact: Position Manager Example
+
+**Phase 1.5 Schema Migration (Migration 011):**
+- Added `position_id` business key to positions table
+- Required updates to 4 CRUD functions
+- Caught 1 critical bug (missing current_price in close_position)
+- 23 integration tests created, all passing
+- Coverage: Position Manager 87.50%, CRUD operations 91.26%
+
+**Without this workflow:**
+- Bug would have gone undetected until production
+- Tests would pass (mocks don't validate SQL)
+- Runtime error: "column current_price does not exist"
+- Emergency hotfix required
+
+**With this workflow:**
+- Bug caught during Step 4 (integration tests)
+- Fixed in 5 minutes (added current_price to INSERT)
+- High confidence in deployment
+
+### Performance Considerations
+
+**SCD Type 2 + Dual-Key Impact:**
+- Storage: ~2-3x data size (multiple versions per record)
+- Query speed: Fast with partial unique index (row_current_ind = TRUE)
+- Write speed: 2x slower (UPDATE + INSERT instead of single UPDATE)
+
+**Mitigation:**
+- Archive old versions (row_current_ind = FALSE) after 90 days
+- Separate "hot" (current) and "cold" (historical) partitions
+- Index on (position_id, row_current_ind) for fast current version lookup
+
+**When to Archive:**
+- Phase 5+ (not Phase 1-2) - Premature optimization
+- Only when query performance degrades (>100ms for current positions)
+- Keep at least 30 days of history for debugging
+
+### Cross-References
+
+**Architecture Decisions:**
+- **ADR-089:** Dual-Key Schema Pattern for SCD Type 2 Tables (comprehensive pattern documentation)
+- **ADR-034:** SCD Type 2 for Slowly Changing Dimensions (original SCD Type 2 decision)
+- **ADR-003:** Database Schema Versioning Strategy (migration workflow)
+- **ADR-088:** Test Type Categories and Coverage Standards (test requirements)
+
+**Development Patterns:**
+- **Pattern 1:** Decimal Precision (use Decimal for all price columns)
+- **Pattern 2:** Dual Versioning System (SCD Type 2 vs immutable versions)
+- **Pattern 13:** Test Coverage Quality (NO mocks for database/CRUD, use real fixtures)
+
+**Implementation Examples:**
+- **Migration 011:** `src/precog/database/migrations/011_add_positions_dual_key.sql`
+- **CRUD Operations:** `src/precog/database/crud_operations.py` (lines 800-1000: position CRUD functions)
+- **Position Manager:** `src/precog/trading/position_manager.py` (business layer using CRUD)
+- **Integration Tests:** `tests/unit/trading/test_position_manager.py` (23 tests)
+
+**Testing Infrastructure:**
+- **tests/conftest.py:** Fixture infrastructure (clean_test_data, db_pool, db_cursor)
+- **TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md:** Why mocks hide bugs (Strategy Manager lesson)
+- **TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md:** REQ-TEST-012 through REQ-TEST-019
+
+**Documentation:**
+- **DATABASE_SCHEMA_SUMMARY_V1.7.md:** Complete schema reference
+- **SCHEMA_MIGRATION_WORKFLOW_V1.0.md:** Detailed workflow guide (to be created)
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -1979,6 +2688,7 @@ def test_create_strategy(clean_test_data, db_cursor):
 | **11. Test Mocking** | Code review | `git grep "return_value\.load" tests/` | PR #19, PR #20 |
 | **12. Test Fixture Security** | Code review | `git grep "tmp_path.*\.sql" tests/` | PR #79, PR #76, CWE-22 |
 | **13. Test Coverage Quality** | Code review + test checklist | `git grep "@patch.*get_connection" tests/` | REQ-TEST-012 thru REQ-TEST-019, TDD_FAILURE_ROOT_CAUSE |
+| **14. Schema Migration → CRUD** | Manual (5-step checklist) | `git log -- src/precog/database/migrations/` | ADR-089, ADR-034, ADR-003, Pattern 13 |
 
 ---
 
