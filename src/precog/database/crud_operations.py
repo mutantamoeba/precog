@@ -681,7 +681,14 @@ def create_position(
         position_metadata: Additional metadata
 
     Returns:
-        position_id of newly created position
+        id (surrogate key) of newly created position
+
+    Educational Note:
+        After Migration 015, positions table uses dual-key structure:
+        - id SERIAL (surrogate key) - returned by this function
+        - position_id VARCHAR (business key) - auto-generated as POS-{id}
+
+        This enables SCD Type 2 versioning (multiple versions of same position).
 
     Example:
         >>> pos_id = create_position(
@@ -693,17 +700,19 @@ def create_position(
         ...     entry_price=Decimal("0.5200"),
         ...     stop_loss_price=Decimal("0.4800")
         ... )
+        >>> # Returns surrogate id (e.g., 1), position_id auto-set to 'POS-1'
     """
-    query = """
+    # Step 1: INSERT with placeholder position_id (will be updated immediately)
+    insert_query = """
         INSERT INTO positions (
-            market_id, strategy_id, model_id, side,
+            position_id, market_id, strategy_id, model_id, side,
             quantity, entry_price,
             target_price, stop_loss_price,
             trailing_stop_state, position_metadata,
             status, row_current_ind, entry_time
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'open', TRUE, NOW())
-        RETURNING position_id
+        VALUES ('TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'open', TRUE, NOW())
+        RETURNING id
     """
 
     params = (
@@ -720,9 +729,20 @@ def create_position(
     )
 
     with get_cursor(commit=True) as cur:
-        cur.execute(query, params)
+        # Get surrogate id
+        cur.execute(insert_query, params)
         result = cur.fetchone()
-        return cast("int", result["position_id"])
+        surrogate_id = cast("int", result["id"])
+
+        # Step 2: UPDATE to set correct position_id (POS-{id} format)
+        update_query = """
+            UPDATE positions
+            SET position_id = %s
+            WHERE id = %s
+        """
+        cur.execute(update_query, (f"POS-{surrogate_id}", surrogate_id))
+
+        return surrogate_id
 
 
 def get_current_positions(
@@ -774,23 +794,35 @@ def update_position_price(
     Used for monitoring price changes and updating trailing stops.
 
     Args:
-        position_id: Position to update
+        position_id: Position surrogate id (int) to update
         current_price: Current market price
         trailing_stop_state: Updated trailing stop state
 
     Returns:
-        position_id of newly created version
+        id (surrogate key) of newly created version
+
+    Educational Note:
+        SCD Type 2 versioning creates NEW rows instead of updating:
+        - Mark current version as historical (row_current_ind = FALSE)
+        - INSERT new version with same position_id (business key)
+        - New version gets new surrogate id but keeps same position_id
+
+        Example: Position POS-1 price update
+        Before: id=1, position_id='POS-1', price=0.52, row_current_ind=TRUE
+        After:  id=1, position_id='POS-1', price=0.52, row_current_ind=FALSE (historical)
+                id=2, position_id='POS-1', price=0.58, row_current_ind=TRUE (current)
 
     Example:
         >>> new_id = update_position_price(
-        ...     position_id=42,
+        ...     position_id=1,  # Surrogate id
         ...     current_price=Decimal("0.5800"),
         ...     trailing_stop_state={"peak": "0.5800", "stop": "0.5500"}
         ... )
+        >>> # Returns new surrogate id (e.g., 2)
     """
-    # Get current version
+    # Get current version using surrogate id
     current = fetch_one(
-        "SELECT * FROM positions WHERE position_id = %s AND row_current_ind = TRUE", (position_id,)
+        "SELECT * FROM positions WHERE id = %s AND row_current_ind = TRUE", (position_id,)
     )
     if not current:
         msg = f"Position not found: {position_id}"
@@ -801,33 +833,34 @@ def update_position_price(
     )
 
     with get_cursor(commit=True) as cur:
-        # Mark current as historical
+        # Mark current as historical using surrogate id
         cur.execute(
             """
             UPDATE positions
             SET row_current_ind = FALSE,
                 row_end_ts = NOW()
-            WHERE position_id = %s
+            WHERE id = %s
               AND row_current_ind = TRUE
         """,
             (position_id,),
         )
 
-        # Insert new version with updated price
+        # Insert new version with same position_id (business key) but new id (surrogate)
         cur.execute(
             """
             INSERT INTO positions (
-                market_id, strategy_id, model_id, side,
+                position_id, market_id, strategy_id, model_id, side,
                 quantity, entry_price,
                 current_price, unrealized_pnl,
                 target_price, stop_loss_price,
                 trailing_stop_state, position_metadata,
                 status, entry_time, last_check_time
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-            RETURNING position_id
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            RETURNING id
         """,
             (
+                current["position_id"],  # Copy business key from current version
                 current["market_id"],
                 current["strategy_id"],
                 current["model_id"],
@@ -846,7 +879,7 @@ def update_position_price(
         )
 
         result = cur.fetchone()
-        return cast("int", result["position_id"])
+        return cast("int", result["id"])  # Return new surrogate id
 
 
 def close_position(
@@ -856,58 +889,59 @@ def close_position(
     Close position by updating status to 'closed'.
 
     Args:
-        position_id: Position to close
+        position_id: Position surrogate id (int) to close
         exit_price: Final exit price
         exit_reason: Reason for exit (e.g., 'target_hit', 'stop_loss', 'manual')
         realized_pnl: Realized profit/loss
 
     Returns:
-        position_id of closed version
+        id (surrogate key) of closed version
 
     Example:
         >>> closed_id = close_position(
-        ...     position_id=42,
+        ...     position_id=1,  # Surrogate id
         ...     exit_price=Decimal("0.6000"),
         ...     exit_reason='target_hit',
         ...     realized_pnl=Decimal("8.00")
         ... )
     """
-    # Get current version
+    # Get current version using surrogate id
     current = fetch_one(
-        "SELECT * FROM positions WHERE position_id = %s AND row_current_ind = TRUE", (position_id,)
+        "SELECT * FROM positions WHERE id = %s AND row_current_ind = TRUE", (position_id,)
     )
     if not current:
         msg = f"Position not found: {position_id}"
         raise ValueError(msg)
 
     with get_cursor(commit=True) as cur:
-        # Mark current as historical
+        # Mark current as historical using surrogate id
         cur.execute(
             """
             UPDATE positions
             SET row_current_ind = FALSE,
                 row_end_ts = NOW()
-            WHERE position_id = %s
+            WHERE id = %s
               AND row_current_ind = TRUE
         """,
             (position_id,),
         )
 
-        # Insert closed version
+        # Insert closed version with same position_id (business key)
         cur.execute(
             """
             INSERT INTO positions (
-                market_id, strategy_id, model_id, side,
+                position_id, market_id, strategy_id, model_id, side,
                 quantity, entry_price, exit_price,
                 realized_pnl,
                 target_price, stop_loss_price,
                 trailing_stop_state, position_metadata,
                 status, entry_time, exit_time
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'closed', %s, NOW())
-            RETURNING position_id
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'closed', %s, NOW())
+            RETURNING id
         """,
             (
+                current["position_id"],  # Copy business key from current version
                 current["market_id"],
                 current["strategy_id"],
                 current["model_id"],
@@ -925,7 +959,7 @@ def close_position(
         )
 
         result = cur.fetchone()
-        return cast("int", result["position_id"])
+        return cast("int", result["id"])  # Return new surrogate id
 
 
 # =============================================================================
@@ -976,7 +1010,7 @@ def create_trade(
         INSERT INTO trades (
             market_id, strategy_id, model_id,
             side, quantity, price,
-            position_id, order_type,
+            position_internal_id, order_type,
             trade_metadata, execution_time
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
@@ -1396,7 +1430,7 @@ def create_strategy(
     """
     query = """
         INSERT INTO strategies (
-            platform_id, strategy_name, strategy_version, category, subcategory,
+            platform_id, strategy_name, strategy_version, approach, domain,
             config, status, notes, created_at, updated_at
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -1407,8 +1441,8 @@ def create_strategy(
         platform_id,
         strategy_name,
         strategy_version,
-        category,
-        subcategory,
+        category,  # Maps to 'approach' column (parameter name not changed for backward compat)
+        subcategory,  # Maps to 'domain' column
         json.dumps(config, cls=DecimalEncoder),  # Convert dict to JSON string (handles Decimal)
         status,
         notes,
