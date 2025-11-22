@@ -49,7 +49,7 @@
 - Total addition: ~150 lines of multi-session coordination protocols
 **Changes in V1.16:**
 - **CLAUDE.md Size Reduction (48.7%)** - Reduced from 3,723 lines to 1,909 lines (~1,814 line reduction)
-- **Created DEVELOPMENT_PATTERNS_V1.2.md** (1,200+ lines) - Extracted all 10 critical patterns with comprehensive code examples from CLAUDE.md
+- **Created DEVELOPMENT_PATTERNS_V1.5.md** (1,200+ lines) - Extracted all 10 critical patterns with comprehensive code examples from CLAUDE.md
 - **Created DOCUMENTATION_WORKFLOW_GUIDE_V1.0.md** (850+ lines) - Extracted document cohesion workflows, update cascade rules, validation checklists
 - **Replaced detailed sections with concise summaries** - Critical Patterns section now 55 lines (was 1,100 lines), Document Cohesion section now 47 lines (was 820 lines)
 - **Preserved all cross-references** - All ADR, REQ, and file path references maintained in extracted documents
@@ -351,7 +351,7 @@ Tasks get overlooked because they're scattered across multiple documents:
 - Deferred tasks in `docs/utility/PHASE_*_DEFERRED_TASKS_V1.0.md`
 - Phase checklist in `DEVELOPMENT_PHASES_V1.4.md`
 - Requirements in `MASTER_REQUIREMENTS_V2.10.md`
-- ADRs in `ARCHITECTURE_DECISIONS_V2.10.md`
+- ADRs in `ARCHITECTURE_DECISIONS_V2.19.md`
 
 ### Solution: 3-Step Phase Start Protocol
 
@@ -729,6 +729,17 @@ bash scripts/reconcile_issue_tracking.sh
 
 ### Quick Session End (10 minutes)
 
+**Step 0: Archive Current SESSION_HANDOFF.md (BEFORE overwriting)**
+```bash
+# Archive with current date stamp
+cp SESSION_HANDOFF.md "_sessions/SESSION_HANDOFF_$(date +%Y-%m-%d).md"
+
+# Verify archive created
+ls -lh _sessions/ | tail -5
+```
+
+**⚠️ CRITICAL:** This step MUST happen BEFORE Step 1. If you overwrite SESSION_HANDOFF.md without archiving first, the previous session context is lost forever (SESSION_HANDOFF.md is in .gitignore, not recoverable from git history).
+
 **Step 1: Update SESSION_HANDOFF.md**
 - **Purpose:** Record what was accomplished THIS session (historical record, not task planner)
 - Document completed work, current status
@@ -802,7 +813,7 @@ gh pr create --title "..." --body "..."
 
 ## 🏗️ Critical Development Patterns
 
-**⚠️ COMPLETE REFERENCE:** See `docs/guides/DEVELOPMENT_PATTERNS_V1.2.md` for comprehensive patterns with code examples.
+**⚠️ COMPLETE REFERENCE:** See `docs/guides/DEVELOPMENT_PATTERNS_V1.5.md` for comprehensive patterns with code examples.
 
 This section provides quick reference to the 10 critical patterns. For full details, code examples showing ✅ CORRECT vs ❌ WRONG usage, and cross-references to ADRs/REQs, see the complete guide.
 
@@ -811,50 +822,50 @@ This section provides quick reference to the 10 critical patterns. For full deta
 1. **Decimal Precision (NEVER USE FLOAT)**
    - Use `Decimal("0.4975")` for all prices/probabilities
    - ❌ NEVER: `price = 0.4975` (float)
-   - Reference: Pattern 1 in DEVELOPMENT_PATTERNS_V1.2.md
+   - Reference: Pattern 1 in DEVELOPMENT_PATTERNS_V1.5.md
 
 2. **Dual Versioning System**
    - SCD Type 2 for markets/positions (`row_current_ind`)
    - Immutable versions for strategies/models (`version` field)
-   - Reference: Pattern 2 in DEVELOPMENT_PATTERNS_V1.2.md
+   - Reference: Pattern 2 in DEVELOPMENT_PATTERNS_V1.5.md
 
 3. **Trade Attribution**
    - Every trade links to exact `strategy_id` and `model_id`
-   - Reference: Pattern 3 in DEVELOPMENT_PATTERNS_V1.2.md
+   - Reference: Pattern 3 in DEVELOPMENT_PATTERNS_V1.5.md
 
 4. **Security (NO CREDENTIALS IN CODE)**
    - All credentials from `os.getenv()`, never hardcoded
    - Pre-commit hooks scan for secrets
-   - Reference: Pattern 4 in DEVELOPMENT_PATTERNS_V1.2.md
+   - Reference: Pattern 4 in DEVELOPMENT_PATTERNS_V1.5.md
 
 5. **Cross-Platform Compatibility**
    - ASCII output for console (Windows cp1252 compatibility)
    - Explicit UTF-8 for file I/O
-   - Reference: Pattern 5 in DEVELOPMENT_PATTERNS_V1.2.md
+   - Reference: Pattern 5 in DEVELOPMENT_PATTERNS_V1.5.md
 
 6. **TypedDict for API Responses**
    - Compile-time type safety, zero runtime overhead
    - Use until Phase 5+ (then Pydantic)
-   - Reference: Pattern 6 in DEVELOPMENT_PATTERNS_V1.2.md
+   - Reference: Pattern 6 in DEVELOPMENT_PATTERNS_V1.5.md
 
 7. **Educational Docstrings (ALWAYS)**
    - Description + Args/Returns + Educational Note + Examples + References
-   - Reference: Pattern 7 in DEVELOPMENT_PATTERNS_V1.2.md
+   - Reference: Pattern 7 in DEVELOPMENT_PATTERNS_V1.5.md
 
 8. **Configuration File Synchronization**
    - 4-layer config system must stay synchronized
    - Tool → Pipeline → Application → Documentation
-   - Reference: Pattern 8 in DEVELOPMENT_PATTERNS_V1.2.md
+   - Reference: Pattern 8 in DEVELOPMENT_PATTERNS_V1.5.md
 
 9. **Multi-Source Warning Governance**
    - Track warnings across pytest, validate_docs, Ruff, Mypy
    - Locked baseline: 312 warnings (zero regression policy)
-   - Reference: Pattern 9 in DEVELOPMENT_PATTERNS_V1.2.md
+   - Reference: Pattern 9 in DEVELOPMENT_PATTERNS_V1.5.md
 
 10. **Property-Based Testing with Hypothesis**
     - Test mathematical invariants with generated inputs
     - 100+ cases per property
-    - Reference: Pattern 10 in DEVELOPMENT_PATTERNS_V1.2.md
+    - Reference: Pattern 10 in DEVELOPMENT_PATTERNS_V1.5.md
 
 ---
 
@@ -1221,7 +1232,7 @@ Add to SESSION_HANDOFF.md:
 
 **Reference:**
 - MASTER_REQUIREMENTS_V2.10.md - All requirements
-- ARCHITECTURE_DECISIONS_V2.10.md - All ADRs
+- ARCHITECTURE_DECISIONS_V2.19.md - All ADRs
 - DEVELOPMENT_PHASES_V1.4.md - Phase deliverables
 - Phase Completion Protocol (Section 9) - 8-step assessment
 
@@ -1743,7 +1754,7 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 - `scripts/validate_all.sh` - Complete validation suite
 
 **Development Patterns:**
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.2.md` - Complete guide to 10 critical patterns with code examples
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.5.md` - Complete guide to 10 critical patterns with code examples
 - Section 4 above: Pattern Quick Reference (condensed)
 - Patterns: Decimal Precision, Versioning, Trade Attribution, Security, Cross-Platform, TypedDict, Educational Docstrings, Config Sync, Warning Governance, Property-Based Testing
 
@@ -1801,7 +1812,7 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 | 1.19 | 2025-11-15 | **Issue Tracking Protocol** - Added standardized issue closure protocol to "During Development" section; Created scripts/reconcile_issue_tracking.sh (270 lines) to verify GitHub issues match documentation status; Three-method approach (PR auto-close, manual closure, reconciliation check); Prevents "I thought we completed that" confusion; Maintains dual-tracking consistency (GitHub + documentation); Total addition: ~320 lines |
 | 1.18 | 2025-11-15 | **CLAUDE.md Size Reduction - Section 3 (80%)** - Reduced Section 3 from ~700 lines to ~140 lines; Extracted SESSION_WORKFLOW_GUIDE_V1.0.md; Added "When to Read the Complete Guide" section; Context budget optimization: ~7,000 tokens freed |
 | 1.17 | 2025-11-15 | **Multi-Session Coordination** - Added comprehensive 7-step protocol for running multiple Claude Code sessions simultaneously (~150 lines); Session-specific branch naming (feature/X-sessionA); Foundation document coordination (one session at a time); Prevention strategies (git stash vs git reset --hard); Conflict resolution for version collisions; Communication via draft PRs; Real-world example from 2025-11-15 multi-session work |
-| 1.16 | 2025-11-13 | **CLAUDE.md Size Reduction (48.7%)** - Reduced from 3,723 lines to 1,909 lines (~1,814 line reduction); Created DEVELOPMENT_PATTERNS_V1.2.md (1,200+ lines) extracting all 10 critical patterns; Created DOCUMENTATION_WORKFLOW_GUIDE_V1.0.md (850+ lines) extracting document cohesion workflows; Replaced detailed sections with concise summaries + references; Context budget optimization: ~45,000 tokens → ~23,000 tokens (~50% reduction) |
+| 1.16 | 2025-11-13 | **CLAUDE.md Size Reduction (48.7%)** - Reduced from 3,723 lines to 1,909 lines (~1,814 line reduction); Created DEVELOPMENT_PATTERNS_V1.5.md (1,200+ lines) extracting all 10 critical patterns; Created DOCUMENTATION_WORKFLOW_GUIDE_V1.0.md (850+ lines) extracting document cohesion workflows; Replaced detailed sections with concise summaries + references; Context budget optimization: ~45,000 tokens → ~23,000 tokens (~50% reduction) |
 | 1.15 | 2025-11-09 | Automated Template Enforcement (Phase 0.7c) - Created validate_code_quality.py (314 lines) and validate_security_patterns.py (413 lines); Updated pre-commit hooks (2 new hooks: code-review-basics, decimal-precision-check); Updated pre-push hooks (added steps 6/7 and 7/7 for template enforcement); Defense in Depth architecture: pre-commit (~2-5s) → pre-push (~60-90s) → CI/CD (~2-5min); Total addition: ~750 lines of automated enforcement infrastructure |
 | 1.14 | 2025-11-09 | Created CODE_REVIEW_TEMPLATE_V1.0.md (484 lines, 7-category universal checklist), INFRASTRUCTURE_REVIEW_TEMPLATE_V1.0.md (600 lines, 7-category DevOps review), enhanced SECURITY_REVIEW_CHECKLIST.md V1.0→V1.1 (600 lines, added 4 sections); all templates reference DEVELOPMENT_PHILOSOPHY_V1.1.md with specific section callouts; added Code Review & Quality Assurance section to Critical References; consolidates scattered guidance into standardized review infrastructure |
 | 1.13 | 2025-11-09 | Added Section 3.1: Recovering from Interrupted Session with 4-step recovery workflow (git status check, recent work review, test validation, workflow resumption); includes common recovery scenarios table; provides detailed example from 2025-11-09 context limit interruption during Phase 1.5 integration tests |
@@ -1837,7 +1848,7 @@ git grep -E "password\s*=" -- '*.py'  # Scan for hardcoded credentials
 4. Check coverage: `pytest --cov`
 
 **End Session (10 min):**
-0. Archive `SESSION_HANDOFF.md` to `docs/sessions/` (preserves history)
+0. Archive `SESSION_HANDOFF.md` to `_sessions/` (preserves history - BEFORE overwriting)
 1. Update `SESSION_HANDOFF.md`
 2. Commit with descriptive message (list all doc updates)
 3. Push to remote

@@ -9,6 +9,7 @@ import shutil
 import tempfile
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -16,6 +17,7 @@ from precog.config.config_loader import ConfigLoader
 
 # Import modules to test
 from precog.database.connection import close_pool, get_cursor, initialize_pool
+from precog.database.crud_operations import create_strategy
 from precog.utils.logger import setup_logging
 
 # =============================================================================
@@ -110,14 +112,14 @@ def clean_test_data(db_cursor):
 
     # Create test strategy (required parent record for positions and trades)
     db_cursor.execute("""
-        INSERT INTO strategies (strategy_id, strategy_name, strategy_version, approach, config, status)
+        INSERT INTO strategies (strategy_id, strategy_name, strategy_version, strategy_type, config, status)
         VALUES (1, 'test_strategy', 'v1.0', 'value', '{"test": true}', 'active')
         ON CONFLICT (strategy_id) DO NOTHING
     """)
 
     # Create test probability model (required parent record for positions and trades)
     db_cursor.execute("""
-        INSERT INTO probability_models (model_id, model_name, model_version, approach, config, status)
+        INSERT INTO probability_models (model_id, model_name, model_version, model_class, config, status)
         VALUES (1, 'test_model', 'v1.0', 'elo', '{"test": true}', 'active')
         ON CONFLICT (model_id) DO NOTHING
     """)
@@ -323,6 +325,198 @@ def assert_decimal_precision():
 # =============================================================================
 # MARKER HELPERS
 # =============================================================================
+
+
+# =============================================================================
+# ATTRIBUTION TEST FIXTURES
+# =============================================================================
+
+
+@pytest.fixture
+def sample_strategy_config_nested() -> dict[str, Any]:
+    """
+    Strategy configuration with nested entry/exit versioning (ADR-090).
+
+    Educational Note:
+        This represents the NEW nested versioning strategy where:
+        - entry.version tracks entry rule version independently
+        - exit.version tracks exit rule version independently
+        - Enables A/B testing: "Did entry v1.5 outperform entry v1.6?"
+    """
+    return {
+        "entry": {
+            "version": "1.5",
+            "rules": {
+                "min_lead": 10,
+                "max_spread": "0.08",
+                "min_edge": "0.05",
+                "min_probability": "0.55",
+            },
+        },
+        "exit": {
+            "version": "2.3",
+            "rules": {
+                "profit_target": "0.25",
+                "stop_loss": "-0.10",
+                "trailing_stop_activation": "0.15",
+                "trailing_stop_distance": "0.05",
+            },
+        },
+    }
+
+
+@pytest.fixture
+def sample_platform(db_pool, clean_test_data) -> str:
+    """Create sample platform for testing."""
+    from precog.database.connection import execute_query
+
+    query = """
+        INSERT INTO platforms (platform_id, platform_type, display_name, base_url)
+        VALUES ('kalshi', 'trading', 'Kalshi', 'https://api.elections.kalshi.com/trade-api/v2')
+        ON CONFLICT (platform_id) DO NOTHING
+        RETURNING platform_id
+    """
+    execute_query(query)
+    return "kalshi"
+
+
+@pytest.fixture
+def sample_series(db_pool, clean_test_data, sample_platform) -> str:
+    """Create sample series for testing."""
+    from precog.database.connection import execute_query
+
+    query = """
+        INSERT INTO series (series_id, platform_id, external_id, category, subcategory, title, frequency)
+        VALUES ('NFL-2025', 'kalshi', 'NFL-2025-ext', 'sports', 'nfl', 'NFL 2025 Season', 'recurring')
+        ON CONFLICT (series_id) DO NOTHING
+        RETURNING series_id
+    """
+    execute_query(query)
+    return "NFL-2025"
+
+
+@pytest.fixture
+def sample_event(db_pool, clean_test_data, sample_platform, sample_series) -> str:
+    """Create sample event for testing."""
+    from precog.database.connection import execute_query
+
+    query = """
+        INSERT INTO events (event_id, platform_id, series_id, external_id, category, subcategory, title, status)
+        VALUES ('HIGHTEST', 'kalshi', 'NFL-2025', 'HIGHTEST-ext', 'sports', 'nfl', 'Super Bowl LIX', 'scheduled')
+        ON CONFLICT (event_id) DO NOTHING
+        RETURNING event_id
+    """
+    execute_query(query)
+    return "HIGHTEST"
+
+
+@pytest.fixture
+def sample_market(db_pool, clean_test_data, sample_platform, sample_event) -> str:
+    """Create sample market for testing."""
+    from precog.database.connection import fetch_one
+
+    # Check if market already exists
+    existing = fetch_one(
+        "SELECT market_id FROM markets WHERE market_id = %s AND row_current_ind = TRUE",
+        ("MKT-HIGHTEST-25FEB05",),
+    )
+    if existing:
+        return "MKT-HIGHTEST-25FEB05"
+
+    # Create new market
+    query = """
+        INSERT INTO markets (
+            market_id, platform_id, event_id, external_id, ticker, title,
+            market_type, yes_price, no_price, status, metadata, row_current_ind, updated_at
+        )
+        VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW()
+        )
+        RETURNING market_id
+    """
+    from precog.database.connection import get_cursor
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(
+            query,
+            (
+                "MKT-HIGHTEST-25FEB05",
+                "kalshi",
+                "HIGHTEST",
+                "HIGHTEST-25FEB05-ext",
+                "HIGHTEST-25FEB05",
+                "Will HIGHTEST win Super Bowl?",
+                "binary",
+                0.5200,
+                0.4800,
+                "open",
+                '{"market_category": "sports", "event_category": "nfl", "expected_expiry": "2025-02-05 18:00:00"}',
+            ),
+        )
+        result = cur.fetchone()
+        return result["market_id"] if result else "MKT-HIGHTEST-25FEB05"
+
+
+@pytest.fixture
+def sample_model(db_pool, clean_test_data) -> int:
+    """
+    Create sample probability models for testing.
+
+    Educational Note:
+        Creates two models (Model A and Model B) for attribution analytics tests.
+        Models are immutable records with unique model_id values.
+        Used to test ROI comparison between different models.
+
+    Returns:
+        model_id of first model (Model A)
+    """
+    from precog.database.connection import execute_query
+
+    # Create Model A (model_id=1)
+    query_a = """
+        INSERT INTO probability_models (
+            model_id, model_name, model_version, model_class, domain,
+            config, status, description
+        )
+        VALUES (
+            1, 'Test Model A', 'v1.0', 'elo', 'nfl',
+            '{"k_factor": 32, "initial_rating": 1500}', 'active',
+            'Elo-based model for testing'
+        )
+        ON CONFLICT (model_id) DO NOTHING
+    """
+    execute_query(query_a)
+
+    # Create Model B (model_id=2)
+    query_b = """
+        INSERT INTO probability_models (
+            model_id, model_name, model_version, model_class, domain,
+            config, status, description
+        )
+        VALUES (
+            2, 'Test Model B', 'v1.0', 'ensemble', 'nfl',
+            '{"models": ["elo", "power_rankings"], "weights": [0.6, 0.4]}', 'active',
+            'Ensemble model for testing'
+        )
+        ON CONFLICT (model_id) DO NOTHING
+    """
+    execute_query(query_b)
+
+    return 1
+
+
+@pytest.fixture
+def sample_strategy(db_pool, clean_test_data, sample_strategy_config_nested) -> int:  # type: ignore[return]
+    """Create sample strategy with nested versioning for testing."""
+    return create_strategy(  # type: ignore[return-value]
+        strategy_name="NFL Model Ensemble",
+        strategy_version="v1.0",
+        strategy_type="value",
+        config=sample_strategy_config_nested,
+        status="active",
+        subcategory="nfl",
+        notes="Ensemble of Elo + ESPN Power Rankings",
+    )
 
 
 def pytest_configure(config):

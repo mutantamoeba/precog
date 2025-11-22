@@ -1,9 +1,40 @@
 # Database Schema Summary
 
 ---
-**Version:** 1.9
-**Last Updated:** 2025-11-17
-**Status:** ✅ Current - Schema Standardization (approach/domain)
+**Version:** 1.10
+**Last Updated:** 2025-11-21
+**Status:** ✅ Current - Trade & Position Attribution Architecture (Phase 1.5)
+**Changes in v1.10:**
+- **TRADE & POSITION ATTRIBUTION ARCHITECTURE**: Added 3 comprehensive migrations (018-020) enabling performance analytics
+- **Migration 018: Trade Source Tracking**
+  - Added PostgreSQL ENUM type: `trade_source_type AS ENUM ('automated', 'manual')`
+  - Added `trades.trade_source` column (trade_source_type NOT NULL DEFAULT 'automated')
+  - Added index: `idx_trades_source` for analytics queries (filter automated vs manual performance)
+  - **Use Case:** Separate automated strategy performance from manual interventions
+  - **Benefits:** Performance attribution, reconciliation workflow (Kalshi trade download), ROI analysis by source
+- **Migration 019: Trade Attribution Enrichment**
+  - Added `trades.model_id` INTEGER (FK to probability_models) - Links trade to specific model version
+  - Added `trades.calculated_probability` DECIMAL(10,4) - Model prediction at execution (snapshot for analytics)
+  - Added `trades.market_price` DECIMAL(10,4) - Kalshi price at execution (snapshot from API)
+  - Added `trades.edge_value` DECIMAL(10,4) - Calculated edge (calculated_probability - market_price)
+  - Added 3 partial indexes (only for NOT NULL rows) + CHECK constraints (probability range 0.0-1.0)
+  - **Performance:** 20-100x faster than JSONB for analytics (B-tree index vs GIN index)
+  - **Use Cases:** Model performance ("Which model has highest ROI?"), edge quality analysis, model calibration
+- **Migration 020: Position Attribution**
+  - Added `positions.model_id` INTEGER (FK to probability_models) - Model that generated entry signal
+  - Added `positions.calculated_probability` DECIMAL(10,4) - Model prediction at position entry (immutable)
+  - Added `positions.edge_at_entry` DECIMAL(10,4) - Edge when position opened (immutable, can be negative)
+  - Added `positions.market_price_at_entry` DECIMAL(10,4) - Kalshi price at entry (immutable snapshot)
+  - Added 4 partial indexes + CHECK constraints
+  - **Immutability:** Entry snapshots NEVER change (ADR-018 Immutable Versioning) - enables A/B testing
+  - **Use Cases:** Strategy evaluation ("v1.5 vs v2.0 - which enters at better edge?"), entry vs exit analysis
+- **Architecture Decision Records:**
+  - ADR-090: Strategy Contains Entry + Exit Rules with Nested Versioning (strategy scope definition)
+  - ADR-091: Explicit Columns for Trade/Position Attribution (20-100x faster than JSONB)
+  - ADR-092: Trade Source Tracking and Manual Trade Reconciliation (automated vs manual performance)
+- **Total Columns Added:** 9 columns (trades: 4, positions: 4, plus strategy_id already existed from Migration 003)
+- **Migration Safe:** All columns nullable (backfill not required), partial indexes avoid overhead, rollback scripts included
+- **Next Steps:** Update CRUD operations (create_trade/create_position with attribution), create attribution tests
 **Changes in v1.9:**
 - **SCHEMA STANDARDIZATION**: Renamed classification fields across probability_models and strategies tables (Migration 011)
 - **probability_models changes:**
@@ -510,6 +541,7 @@ CREATE TABLE positions (
     position_id SERIAL PRIMARY KEY,
     market_id VARCHAR REFERENCES markets(market_id),            -- FK to markets
     platform_id VARCHAR REFERENCES platforms(platform_id),      -- FK to platforms
+    strategy_id INT REFERENCES strategies(strategy_id),         -- FK to strategies (Migration 003, enhanced in v1.10)
     side VARCHAR NOT NULL,               -- 'yes', 'no'
     entry_price DECIMAL(10,4) NOT NULL,  -- EXACT PRECISION: $0.0000-$1.0000
     quantity INT NOT NULL,
@@ -532,6 +564,12 @@ CREATE TABLE positions (
     exit_reason VARCHAR(50),             -- stop_loss, trailing_stop, profit_target, etc.
     exit_priority VARCHAR(20),           -- CRITICAL, HIGH, MEDIUM, LOW
 
+    -- ⭐ ATTRIBUTION ARCHITECTURE (NEW in v1.10 - Migration 020)
+    model_id INT REFERENCES probability_models(model_id),       -- Model that generated entry signal (IMMUTABLE)
+    calculated_probability DECIMAL(10,4) CHECK (calculated_probability IS NULL OR (calculated_probability >= 0 AND calculated_probability <= 1)),  -- Model prediction at entry (IMMUTABLE snapshot)
+    edge_at_entry DECIMAL(10,4),         -- Edge when position opened (calculated_probability - market_price_at_entry), IMMUTABLE, can be negative
+    market_price_at_entry DECIMAL(10,4) CHECK (market_price_at_entry IS NULL OR (market_price_at_entry >= 0 AND market_price_at_entry <= 1)),  -- Kalshi price at entry (IMMUTABLE API snapshot)
+
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     row_current_ind BOOLEAN DEFAULT TRUE  -- ✅ VERSIONED DATA (quantity/price/stop changes)
@@ -539,10 +577,22 @@ CREATE TABLE positions (
 
 CREATE INDEX idx_positions_market ON positions(market_id);
 CREATE INDEX idx_positions_platform ON positions(platform_id);
+CREATE INDEX idx_positions_strategy ON positions(strategy_id);  -- Migration 003
 CREATE INDEX idx_positions_status ON positions(status);
 CREATE INDEX idx_positions_current ON positions(row_current_ind) WHERE row_current_ind = TRUE;
 CREATE INDEX idx_positions_last_update ON positions(last_update);  -- NEW v1.5: Monitor loop queries
+-- ⭐ ATTRIBUTION INDEXES (NEW in v1.10)
+CREATE INDEX idx_positions_model_id ON positions(model_id) WHERE model_id IS NOT NULL;  -- NEW in v1.10 - Partial index
+CREATE INDEX idx_positions_calculated_probability ON positions(calculated_probability) WHERE calculated_probability IS NOT NULL;  -- NEW in v1.10 - Partial index
+CREATE INDEX idx_positions_edge_at_entry ON positions(edge_at_entry) WHERE edge_at_entry IS NOT NULL;  -- NEW in v1.10 - Partial index
+CREATE INDEX idx_positions_market_price_at_entry ON positions(market_price_at_entry) WHERE market_price_at_entry IS NOT NULL;  -- NEW in v1.10 - Partial index
 ```
+
+**Attribution Architecture (v1.10):**
+- **Entry Snapshots are IMMUTABLE** (ADR-018 Immutable Versioning): model_id, calculated_probability, edge_at_entry, market_price_at_entry NEVER change
+- **Strategy A/B Testing:** "Strategy v1.5 vs v2.0 - which enters at better edge?" → `SELECT strategy_id, AVG(edge_at_entry), AVG(realized_pnl) FROM positions WHERE row_current_ind = TRUE GROUP BY strategy_id`
+- **Model Evaluation:** "Which model generates best entry signals?" → `SELECT model_id, AVG(calculated_probability), AVG(edge_at_entry), AVG(realized_pnl) FROM positions GROUP BY model_id`
+- **Entry vs Exit Analysis:** "Do high-edge entries correlate with profit?" → `SELECT edge_at_entry, AVG(realized_pnl) FROM positions WHERE edge_at_entry > 0.10 GROUP BY edge_at_entry ORDER BY edge_at_entry DESC`
 
 **Trailing Stop State (v1.4):**
 - `trailing_stop_state` is a JSONB field that stores dynamic trailing stop loss data
@@ -567,7 +617,7 @@ CREATE TABLE trades (
     position_id INT REFERENCES positions(position_id),          -- FK to positions
     edge_id INT REFERENCES edges(edge_id),                      -- FK to edges (what triggered trade)
     strategy_id INT REFERENCES strategies(strategy_id),         -- FK to strategies (NEW in v1.4)
-    model_id INT REFERENCES probability_models(model_id),       -- FK to probability_models (NEW in v1.4)
+    model_id INT REFERENCES probability_models(model_id),       -- FK to probability_models (NEW in v1.4, enhanced in v1.10)
     order_id VARCHAR,                    -- Platform's order ID
     side VARCHAR NOT NULL,               -- 'buy', 'sell'
     price DECIMAL(10,4) NOT NULL,        -- EXACT PRECISION: $0.0000-$1.0000
@@ -575,6 +625,11 @@ CREATE TABLE trades (
     fees DECIMAL(10,4),                  -- EXACT PRECISION for fee calculations
     edge_at_execution DECIMAL(10,4),     -- EXACT PRECISION for historical edge
     confidence_at_execution VARCHAR,
+    -- ⭐ ATTRIBUTION ARCHITECTURE (NEW in v1.10 - Migrations 018-019)
+    trade_source trade_source_type NOT NULL DEFAULT 'automated',  -- 'automated' (app) or 'manual' (Kalshi UI) - Migration 018
+    calculated_probability DECIMAL(10,4) CHECK (calculated_probability IS NULL OR (calculated_probability >= 0 AND calculated_probability <= 1)),  -- Model prediction at execution (snapshot) - Migration 019
+    market_price DECIMAL(10,4) CHECK (market_price IS NULL OR (market_price >= 0 AND market_price <= 1)),  -- Kalshi price at execution (API snapshot) - Migration 019
+    edge_value DECIMAL(10,4),            -- Calculated edge (calculated_probability - market_price), can be negative - Migration 019
     created_at TIMESTAMP DEFAULT NOW()
     -- ❌ NO row_current_ind (trades are immutable)
 );
@@ -586,7 +641,18 @@ CREATE INDEX idx_trades_edge ON trades(edge_id);
 CREATE INDEX idx_trades_strategy ON trades(strategy_id);      -- NEW in v1.4
 CREATE INDEX idx_trades_model ON trades(model_id);            -- NEW in v1.4
 CREATE INDEX idx_trades_created ON trades(created_at);
+-- ⭐ ATTRIBUTION INDEXES (NEW in v1.10)
+CREATE INDEX idx_trades_source ON trades(trade_source);       -- NEW in v1.10 - Filter by automated/manual
+CREATE INDEX idx_trades_calculated_probability ON trades(calculated_probability) WHERE calculated_probability IS NOT NULL;  -- NEW in v1.10 - Partial index
+CREATE INDEX idx_trades_market_price ON trades(market_price) WHERE market_price IS NOT NULL;                                -- NEW in v1.10 - Partial index
+CREATE INDEX idx_trades_edge_value ON trades(edge_value) WHERE edge_value IS NOT NULL;                                      -- NEW in v1.10 - Partial index
 ```
+
+**Attribution Architecture (v1.10):**
+- **trade_source**: Distinguishes automated (app-executed) vs manual (Kalshi UI) trades for performance analytics
+- **model_id + calculated_probability + market_price + edge_value**: Execution-time snapshots for performance attribution
+- **Performance Queries:** "Which model has highest ROI?" → `SELECT model_id, AVG(edge_value), AVG(realized_pnl) FROM trades WHERE trade_source = 'automated' GROUP BY model_id`
+- **Edge Quality Analysis:** "Do high-edge trades correlate with profit?" → `SELECT edge_value, AVG(realized_pnl) FROM trades GROUP BY edge_value ORDER BY edge_value DESC`
 
 #### position_exits (NEW in v1.5)
 ```sql

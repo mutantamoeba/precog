@@ -108,13 +108,13 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-API-001 | Kalshi API Integration | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-API-001 | Kalshi API Integration | 1 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.16 |
 | REQ-API-002 | RSA-PSS Authentication (Kalshi) | 1 | Critical | 🔵 | API_INTEGRATION_GUIDE_V1.0 |
-| REQ-API-003 | ESPN API Integration | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
-| REQ-API-004 | Balldontlie API Integration | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
-| REQ-API-005 | API Rate Limit Management | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
-| REQ-API-006 | API Error Handling | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
-| REQ-API-007 | API Response Validation with Pydantic | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-API-003 | ESPN API Integration | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
+| REQ-API-004 | Balldontlie API Integration | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
+| REQ-API-005 | API Rate Limit Management | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
+| REQ-API-006 | API Error Handling | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
+| REQ-API-007 | API Response Validation with Pydantic | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
 
 ---
 
@@ -363,8 +363,8 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-CICD-001 | GitHub Actions CI/CD Integration | 0.7 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
-| REQ-CICD-002 | Codecov Integration | 0.7 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-CICD-001 | GitHub Actions CI/CD Integration | 0.7 | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
+| REQ-CICD-002 | Codecov Integration | 0.7 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.16 |
 | REQ-CICD-003 | Branch Protection Rules | 0.7 | High | ✅ | MASTER_REQUIREMENTS_V2.16 |
 | REQ-CICD-004 | Pre-Commit Hooks Infrastructure | 0.7 | High | ✅ | MASTER_REQUIREMENTS_V2.16 |
 | REQ-CICD-005 | Pre-Push Hooks Infrastructure | 0.7 | High | ✅ | MASTER_REQUIREMENTS_V2.16 |
@@ -388,7 +388,7 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-SEC-009 | Sensitive Data Masking in Logs | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-SEC-009 | Sensitive Data Masking in Logs | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
 
 **Summary:** Phase 1 implements automatic masking of sensitive data (API keys, tokens, passwords) in all log output for GDPR/PCI-DSS compliance.
 
@@ -398,10 +398,10 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-PERF-001 | System Uptime 99%+ | 1-10 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
-| REQ-PERF-002 | Data Latency <5s | 1-10 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
-| REQ-PERF-003 | Edge Detection Accuracy 55%+ | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
-| REQ-PERF-004 | Execution Success >95% | 5 | High | 🔵 | MASTER_REQUIREMENTS_V2.10 |
+| REQ-PERF-001 | System Uptime 99%+ | 1-10 | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
+| REQ-PERF-002 | Data Latency <5s | 1-10 | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
+| REQ-PERF-003 | Edge Detection Accuracy 55%+ | 4-5 | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
+| REQ-PERF-004 | Execution Success >95% | 5 | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
 
 ---
 

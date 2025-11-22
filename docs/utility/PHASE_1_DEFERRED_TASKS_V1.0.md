@@ -249,7 +249,7 @@ Related ADR: ADR-048 (Logging Strategy)
 
 ### Description
 Fix 11 broken cross-references detected by `validate_docs.py`:
-- `MASTER_REQUIREMENTS_V2.10.md` references old versions (V2.9, V2.8)
+- `MASTER_REQUIREMENTS_V2.16.md` references old versions (V2.9, V2.8)
 - `TESTING_STRATEGY_V2.0.md` references `MASTER_REQUIREMENTS_V2.9.md` (should be V2.10)
 - `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` references old versions
 
@@ -264,7 +264,7 @@ Fix 11 broken cross-references detected by `validate_docs.py`:
 python scripts/validate_docs.py
 
 # 2. Update references in foundation documents
-# MASTER_REQUIREMENTS_V2.10.md:
+# MASTER_REQUIREMENTS_V2.16.md:
 #   - Update self-references V2.9 → V2.10
 #   - Update MASTER_INDEX V2.7 → V2.10
 #   - Update ARCHITECTURE_DECISIONS V2.8 → V2.10

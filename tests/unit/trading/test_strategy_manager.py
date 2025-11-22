@@ -45,7 +45,7 @@ def strategy_factory() -> dict[str, Any]:
     return {
         "strategy_name": "value_betting_v1",
         "strategy_version": "1.0",
-        "approach": "value",  # FIXED: was "value_betting", must be 'value', 'arbitrage', 'momentum', or 'mean_reversion'
+        "strategy_type": "value",  # FIXED: was "value_betting", must be 'value', 'arbitrage', 'momentum', or 'mean_reversion'
         "domain": "nfl",
         "config": {
             "min_edge": Decimal("0.0500"),  # 5% minimum edge
@@ -195,7 +195,7 @@ class TestStrategyManagerCreate:
         assert result["strategy_id"] is not None  # Auto-generated ID
         assert result["strategy_name"] == "value_betting_v1"
         assert result["strategy_version"] == "1.0"
-        assert result["approach"] == "value"  # Valid approach from migration_013
+        assert result["strategy_type"] == "value"  # Valid strategy_type from migration_021
         assert result["domain"] == "nfl"
         assert result["status"] == "draft"
         assert result["created_by"] == "test_user"

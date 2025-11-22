@@ -3,7 +3,7 @@
 Tests comprehensive CRUD operations, immutability enforcement, status lifecycle
 validation, and Decimal precision for versioned probability models.
 
-✅ UNBLOCKED: Migration 011 standardized schema to approach/domain fields.
+✅ UNBLOCKED: Migration 022 renamed approach to model_class column.
 Tests now enabled with updated field names matching database schema V1.9.
 
 Reference:
@@ -56,7 +56,7 @@ def model_factory() -> dict:
     return {
         "model_name": "nfl_elo_v1",
         "model_version": "1.0",
-        "approach": "elo",
+        "model_class": "elo",
         "domain": "nfl",
         "config": {
             "k_factor": Decimal("20.00"),  # Elo K-factor
@@ -83,7 +83,7 @@ def test_create_model_success(clean_test_data, manager, model_factory):
     # Verify model created with correct attributes
     assert model["model_name"] == "nfl_elo_v1"
     assert model["model_version"] == "1.0"
-    assert model["approach"] == "elo"
+    assert model["model_class"] == "elo"
     assert model["domain"] == "nfl"
     assert model["status"] == "draft"
     assert model["created_by"] == "test_user"
@@ -106,7 +106,7 @@ def test_create_model_minimal_fields(clean_test_data, manager):
     model = manager.create_model(
         model_name="minimal_model",
         model_version="1.0",
-        approach="elo",
+        model_class="elo",
         config={"k_factor": Decimal("20.00")},
     )
 
@@ -145,7 +145,7 @@ def test_create_model_ensemble_type(clean_test_data, manager):
     ensemble_config = {
         "model_name": "nfl_ensemble_v1",
         "model_version": "1.0",
-        "approach": "ensemble",
+        "model_class": "ensemble",
         "domain": "nfl",
         "config": {
             "weights": {
@@ -160,7 +160,7 @@ def test_create_model_ensemble_type(clean_test_data, manager):
 
     model = manager.create_model(**ensemble_config)
 
-    assert model["approach"] == "ensemble"
+    assert model["model_class"] == "ensemble"
     weights = model["config"]["weights"]
     assert isinstance(weights["elo"], Decimal)
     assert weights["elo"] + weights["ml"] + weights["market"] == Decimal("1.00")
@@ -240,7 +240,7 @@ def test_list_models_all(clean_test_data, manager, model_factory):
 
     model2_config = model_factory.copy()
     model2_config["model_name"] = "nfl_ml_v1"
-    model2_config["approach"] = "ml"
+    model2_config["model_class"] = "ml"
     model2 = manager.create_model(**model2_config)
 
     # List all models
@@ -302,11 +302,11 @@ def test_list_models_filter_by_model_type(clean_test_data, manager, model_factor
     # Create ML model
     ml_config = model_factory.copy()
     ml_config["model_name"] = "nfl_ml_v1"
-    ml_config["approach"] = "ml"
+    ml_config["model_class"] = "ml"
     ml_model = manager.create_model(**ml_config)
 
     # Filter by model_type = elo
-    elo_models = manager.list_models(approach="elo")
+    elo_models = manager.list_models(model_class="elo")
     elo_ids = {m["model_id"] for m in elo_models}
     assert elo_model["model_id"] in elo_ids
     assert ml_model["model_id"] not in elo_ids
@@ -326,11 +326,11 @@ def test_list_models_multiple_filters(clean_test_data, manager, model_factory):
     # Create NFL ML draft model (different type)
     ml_config = model_factory.copy()
     ml_config["model_name"] = "nfl_ml_v1"
-    ml_config["approach"] = "ml"
+    ml_config["model_class"] = "ml"
     manager.create_model(**ml_config)
 
     # Filter: NFL + draft + elo
-    filtered = manager.list_models(domain="nfl", status="draft", approach="elo")
+    filtered = manager.list_models(domain="nfl", status="draft", model_class="elo")
 
     # Should only return target_model
     filtered_ids = {m["model_id"] for m in filtered}
@@ -558,7 +558,7 @@ def test_config_immutability_requires_new_version(clean_test_data, manager, mode
     v1_1 = manager.create_model(
         model_name=v1_0["model_name"],
         model_version="1.1",  # New version
-        approach=v1_0["approach"],
+        model_class=v1_0["model_class"],
         domain=v1_0["domain"],
         config=new_config,  # New config
         description="Updated k_factor for better calibration",
@@ -621,7 +621,7 @@ def test_decimal_precision_no_float_contamination(clean_test_data, manager, mode
 def test_error_handling_invalid_model_type(clean_test_data, manager, model_factory):
     """Test creating model with invalid model_type."""
     invalid_config = model_factory.copy()
-    invalid_config["approach"] = "invalid_type"  # Not in [elo, ensemble, ml, hybrid]
+    invalid_config["model_class"] = "invalid_type"  # Not in [elo, ensemble, ml, hybrid]
 
     # Database constraint should reject invalid type
     # Skip this test for now - database doesn't have CHECK constraint for model_type yet

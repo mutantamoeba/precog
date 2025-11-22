@@ -1,9 +1,20 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.13
-**Last Updated:** 2025-11-19
+**Version:** 1.14
+**Last Updated:** 2025-11-21
 **Status:** ✅ Current
+**Changes in v1.14:**
+- **TRADE & POSITION ATTRIBUTION ARCHITECTURE (PHASE 1.5):** Added ADR-090, ADR-091, ADR-092 (Trade/Position Attribution & Strategy Scope)
+- Added ADR-090: Strategy Contains Entry + Exit Rules with Nested Versioning (addresses strategy scope ambiguity)
+- Added ADR-091: Explicit Columns for Trade/Position Attribution (20-100x faster than JSONB for analytics)
+- Added ADR-092: Trade Source Tracking and Manual Trade Reconciliation (separates automated vs manual performance)
+- Documents comprehensive attribution architecture enabling performance analytics
+- Strategy config structure with nested entry/exit versioning (prevents version explosion)
+- Explicit columns for strategy_id, model_id, calculated_probability, edge_value (trade/position attribution)
+- PostgreSQL ENUM for trade_source ('automated' vs 'manual') with reconciliation workflow
+- Updated ARCHITECTURE_DECISIONS reference from V2.18 to V2.19
+- Total ADRs: 69 → 72 (3 new ADRs added for Phase 1.5 attribution architecture)
 **Changes in v1.13:**
 - **DUAL-KEY SCHEMA PATTERN (PHASE 1.5):** Added ADR-089 (Dual-Key Schema Pattern for SCD Type 2 Tables)
 - Added ADR-089: Dual-Key Schema Pattern for SCD Type 2 (addresses PostgreSQL FK limitation with SCD Type 2)
@@ -490,7 +501,7 @@ Standardize on `approach`/`domain` for both probability_models and strategies ta
 
 **References:**
 - Migration 011 implementation
-- DATABASE_SCHEMA_SUMMARY_V1.9.md
+- DATABASE_SCHEMA_SUMMARY_V1.10.md
 - scripts/validate_schema.py (DEF-P1-008)
 - REQ-DB-006
 
@@ -528,7 +539,7 @@ Phase 1.5 architecture: **3 managers** (Strategy, Model, Position) - NOT 4
 
 **References:**
 - DEVELOPMENT_PHASES_V1.4.md (Phase 1.5 deliverables)
-- DATABASE_SCHEMA_SUMMARY_V1.9.md (edges table)
+- DATABASE_SCHEMA_SUMMARY_V1.10.md (edges table)
 - REQ-TRADING-001, REQ-ML-001
 
 ---
@@ -643,25 +654,222 @@ CREATE TABLE trades (
   - Migration 011 implements for positions/trades tables
 
 **References:**
-- ARCHITECTURE_DECISIONS_V2.18.md (full ADR-089 with 433 lines of details)
-- DEVELOPMENT_PATTERNS_V1.4.md (Pattern 14: Schema Migration → CRUD Workflow)
+- ARCHITECTURE_DECISIONS_V2.19.md (full ADR-089 with 433 lines of details)
+- DEVELOPMENT_PATTERNS_V1.5.md (Pattern 14: Schema Migration → CRUD Workflow)
 - SCHEMA_MIGRATION_WORKFLOW_V1.0.md (comprehensive migration guide)
-- DATABASE_SCHEMA_SUMMARY_V1.9.md (Migration 011 implementation)
+- DATABASE_SCHEMA_SUMMARY_V1.10.md (Migration 011 implementation)
+
+---
+
+### ADR-090: Strategy Contains Entry + Exit Rules with Nested Versioning
+
+**Date:** 2025-11-21
+**Status:** ✅ Approved (Implementation planned)
+**Phase:** 1.5 (Trade & Position Attribution Architecture)
+**Stakeholders:** Development Team, Trading Strategy Team
+
+**Context:**
+Strategy scope was ambiguous - unclear if strategies contain only entry rules OR both entry + exit rules. User expects frequent feedback-driven rule changes with entry/exit changing independently.
+
+**Problem:**
+- No documented structure for strategy config (entry vs exit rules unclear)
+- No versioning system for independent entry/exit changes
+- Version explosion risk (10 entry variants × 10 exit variants = 100 strategy versions?)
+- Position immutability unclear (how does position lock to strategy if exit rules change?)
+
+**Decision:**
+Strategies contain BOTH entry AND exit rules with nested versioning structure:
+
+```json
+{
+  "entry": {
+    "version": "1.5",
+    "rules": {
+      "min_lead": 10,
+      "max_spread": "0.08",
+      "min_edge": "0.05",
+      "min_probability": "0.55"
+    }
+  },
+  "exit": {
+    "version": "2.3",
+    "rules": {
+      "profit_target": "0.25",
+      "stop_loss": "-0.10",
+      "trailing_stop_activation": "0.15",
+      "trailing_stop_distance": "0.05"
+    }
+  }
+}
+```
+
+**Key Design Points:**
+- Strategy = complete trading plan (when to enter AND when to exit)
+- Nested versioning prevents version explosion (change exit → only exit.version increments)
+- Positions lock to strategy_id at entry (immutable per ADR-018)
+- Independent entry/exit tweaking without creating full new strategy version
+
+**Consequences:**
+- **Positive:**
+  - Semantic coherence (strategy = complete plan)
+  - Prevents version explosion (3 exit versions, not 3×3=9 combinations)
+  - Supports A/B testing (Entry v1.5 + Exit v2.3 vs Exit v2.4)
+  - Position immutability maintained (locked to strategy_id)
+- **Negative:**
+  - Config structure complexity (nested JSONB)
+  - Learning curve (users must understand entry vs exit distinction)
+  - Slight query complexity (JSONB path navigation)
+- **Neutral:**
+  - Min probability vs min edge distinction (absolute confidence vs market inefficiency)
+
+**References:**
+- ARCHITECTURE_DECISIONS_V2.19.md (full ADR-090 with nested versioning examples)
+- docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md (comprehensive architectural analysis)
+- VERSIONING_GUIDE_V1.0.md (strategy/model versioning patterns)
+- ADR-018 (Immutable Versioning - positions lock to strategy at entry)
+
+---
+
+### ADR-091: Explicit Columns for Trade/Position Attribution
+
+**Date:** 2025-11-21
+**Status:** ✅ Approved (Implementation planned)
+**Phase:** 1.5 (Trade & Position Attribution Architecture)
+**Stakeholders:** Development Team, Analytics Team
+
+**Context:**
+Current schema lacks attribution data linking trades/positions to exact strategy, model, probability, and edge at execution time. Need to answer analytics questions: "Which strategy/model generated this profit?"
+
+**Problem:**
+- **Trade Attribution Gap:** Can't answer "What did model predict?" without fragile JOIN through edges table (TTL cleanup destroys historical data)
+- **Position Attribution Gap:** No strategy_id or model_id foreign keys → can't query "All positions using Strategy A"
+- **Analytics Performance:** Must reconstruct attribution from trades table (complex, slow queries)
+- **Historical Data Loss:** Edges table cleaned up (TTL-based DELETE) → attribution lost forever
+
+**Decision:**
+Use EXPLICIT COLUMNS (not JSONB) for trade and position attribution fields.
+
+**Trade Attribution (3 new columns):**
+- `calculated_probability DECIMAL(10,4)` - Model prediction snapshot at execution
+- `market_price DECIMAL(10,4)` - Market price snapshot at execution
+- `edge_value DECIMAL(10,4)` - Calculated edge (probability - market_price)
+
+**Position Attribution (5 new columns):**
+- `strategy_id INTEGER` - Foreign key to strategies.id (locked at entry)
+- `model_id INTEGER` - Foreign key to probability_models.id (locked at entry)
+- `calculated_probability DECIMAL(10,4)` - Model prediction at entry
+- `edge_at_entry DECIMAL(10,4)` - Edge when position opened
+- `market_price_at_entry DECIMAL(10,4)` - Market price at entry
+
+**Performance Rationale:**
+- **Explicit columns:** 20-100x faster than JSONB for analytics queries
+- **B-tree indexes:** Efficient for filtering/aggregation (vs GIN indexes for JSONB)
+- **Type safety:** PostgreSQL enforces DECIMAL(10,4) precision
+- **Database constraints:** CHECK constraints validate probability ranges (0.0-1.0)
+
+**Consequences:**
+- **Positive:**
+  - Performance attribution analytics ("Which strategy generated most profit?")
+  - Model calibration analysis (predicted vs actual win rates)
+  - Edge materialization tracking (did calculated edges translate to profit?)
+  - Historical data preservation (survives edges table TTL cleanup)
+  - Type safety and validation (database-level constraints)
+- **Negative:**
+  - Storage overhead (24 bytes per trade, 40 bytes per position)
+  - Data duplication (calculated_probability duplicated from edges table)
+  - Write complexity (additional parameters to CRUD functions)
+  - Schema complexity (more columns to maintain)
+- **Neutral:**
+  - Rejected JSONB approach (20-100x slower, no type safety)
+  - Validation function validates position/trade attribution consistency
+
+**References:**
+- ARCHITECTURE_DECISIONS_V2.19.md (full ADR-091 with performance benchmarks)
+- docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md (JSONB vs explicit columns tradeoff analysis)
+- DATABASE_SCHEMA_SUMMARY_V1.10.md (current schema pre-attribution)
+- ADR-002 (Decimal Precision - all fields DECIMAL(10,4) not FLOAT)
+
+---
+
+### ADR-092: Trade Source Tracking and Manual Trade Reconciliation
+
+**Date:** 2025-11-21
+**Status:** ✅ Approved (Implementation planned)
+**Phase:** 1.5 (Trade & Position Attribution Architecture)
+**Stakeholders:** Development Team, Trading Operations
+
+**Context:**
+User's Kalshi account will be used for both automated trades (executed by app via API) and manual trades (executed through Kalshi web/mobile interface). Performance analytics must separate automated strategy performance from manual interventions.
+
+**Problem:**
+- No distinction between automated vs manual trades in database
+- Performance attribution contaminated (manual trades skew automated strategy metrics)
+- Can't answer "What's the P&L from automated trading only?"
+- Can't detect discrepancies (did all automated orders execute successfully?)
+- Can't identify manual trades conflicting with automated positions
+
+**Decision:**
+1. **Download ALL trades from Kalshi API** (both automated and manual)
+2. **Add `trade_source` enum column** to distinguish automated vs manual
+3. **Reconcile trades** by matching app-generated order_ids
+
+**Implementation:**
+```sql
+-- PostgreSQL ENUM (not boolean, not VARCHAR)
+CREATE TYPE trade_source_type AS ENUM ('automated', 'manual');
+
+ALTER TABLE trades ADD COLUMN trade_source trade_source_type NOT NULL DEFAULT 'automated';
+```
+
+**Reconciliation Workflow:**
+1. Fetch all trades from Kalshi API (paginated)
+2. For each trade: check if order_id exists in our database
+3. If YES → trade_source = 'automated' (we executed it)
+4. If NO → trade_source = 'manual' (executed via Kalshi UI)
+5. Log discrepancies (automated orders missing from API = failed/cancelled orders)
+
+**Why ENUM (Not Boolean)?**
+- Type safety (database enforces valid values)
+- Extensibility (can add 'algorithmic_hedging', 'emergency_override' in future)
+- Storage efficiency (4 bytes vs 10+ bytes for VARCHAR)
+- Query performance (faster than VARCHAR for filtering/grouping)
+
+**Consequences:**
+- **Positive:**
+  - Clean performance analytics (filter automated trades only)
+  - Complete audit trail (all account activity captured)
+  - Discrepancy detection (identify failed automated orders)
+  - Manual trade awareness (detect conflicts with automated positions)
+  - Future extensibility (can add more sources)
+- **Negative:**
+  - API quota consumption (download all trades, not just app-executed)
+  - Storage overhead (store manual trades user never intended to track)
+  - Reconciliation complexity (must match order_ids reliably)
+  - Sync lag handling (automated orders may not appear in API immediately)
+- **Neutral:**
+  - Incremental sync strategy (only fetch trades since last sync timestamp)
+  - Reconciliation validation function (validate source attribution consistency)
+
+**References:**
+- ARCHITECTURE_DECISIONS_V2.19.md (full ADR-092 with reconciliation workflow)
+- docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md (trade source tracking architectural analysis)
+- API_INTEGRATION_GUIDE_V2.0.md (Kalshi API trade download patterns)
+- ADR-091 (Explicit Columns - need attribution to filter automated vs manual)
 
 ---
 ## ADR Statistics
 
-**Total ADRs:** 69
-**Accepted (✅):** 40 (Phase 0-1.5 partial)
+**Total ADRs:** 72
+**Accepted (✅):** 43 (Phase 0-1.5 partial)
 **Proposed (🔵):** 28 (Phase 0.7, 1, 2-10)
 **Rejected (❌):** 0
-**Superseded (⚠️):** 0
+**Superseded (⚠️):** 1 (ADR-089 Dual-Key Pattern superseded by schema implementation)
 
 **By Phase:**
 - Phase 0: 17 ADRs (100% accepted)
 - Phase 0.5: 12 ADRs (100% accepted)
 - Phase 1: 12 ADRs (6 accepted for DB completion + 6 planned for API best practices)
-- Phase 1.5: 5 ADRs (100% accepted - property-based testing POC + schema standardization + no edge manager + 8 test type framework + dual-key pattern)
+- Phase 1.5: 8 ADRs (100% accepted - property-based testing POC + schema standardization + no edge manager + 8 test type framework + dual-key pattern + trade/position attribution architecture [3 ADRs])
 - Phase 0.6c: 5 ADRs (100% accepted - includes cross-platform standards)
 - Phase 0.7: 6 ADRs (2 accepted: Python 3.14 compatibility + Branch Protection + 4 planned)
 - Phase 2: 3 ADRs (0% - planned)
@@ -680,11 +888,12 @@ CREATE TABLE trades (
 
 ---
 
-**Document Version:** 1.12
+**Document Version:** 1.14
 **Created:** 2025-10-21
-**Last Updated:** 2025-11-17
+**Last Updated:** 2025-11-21
 **Purpose:** Systematic architecture decision tracking and reference
 **Critical Changes:**
+- v1.14: Added ADR-090, ADR-091, ADR-092 for trade/position attribution architecture (Phase 1.5 - strategy scope, explicit columns, trade source tracking)
 - v1.10: Added ADR-046 for branch protection strategy (Phase 0.7 retroactive, GitHub branch protection with 6 required CI checks)
 - v1.9: Added ADR-055 for production monitoring infrastructure (Sentry hybrid architecture)
 - v1.8: Added ADR-078 through ADR-085 for Phases 6-9 analytics infrastructure
@@ -692,6 +901,6 @@ CREATE TABLE trades (
 - v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.18.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.19.md
 
-**END OF ADR INDEX V1.12**
+**END OF ADR INDEX V1.14**
