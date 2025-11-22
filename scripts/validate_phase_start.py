@@ -36,6 +36,7 @@ Example usage:
 import re
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 try:
     import yaml
@@ -67,7 +68,7 @@ def load_phase_deliverables(phase: str) -> dict:
         with open(validation_config_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
             phase_deliverables = config.get("phase_deliverables", {})
-            return phase_deliverables.get(phase, {})
+            return cast("dict[Any, Any]", phase_deliverables.get(phase, {}))
     except Exception:
         return {}
 
@@ -168,15 +169,13 @@ def check_phase_dependencies(phase: str, verbose: bool = False) -> tuple[bool, l
         # For Phase 1.5, check Phase 1
         # For Phase 2, check Phase 1 and 1.5
 
-        if phase_num >= 2:
-            # Check Phase 1 complete
-            if not re.search(r"Phase\s+1[^.0-9].*?✅", content, re.IGNORECASE):
-                violations.append("Phase 1 not complete (required for Phase >= 2)")
+        # Check Phase 1 complete (required for Phase >= 2)
+        if phase_num >= 2 and not re.search(r"Phase\s+1[^.0-9].*?✅", content, re.IGNORECASE):
+            violations.append("Phase 1 not complete (required for Phase >= 2)")
 
-        if phase_num >= 1.5:
-            # Check Phase 1 partial/complete
-            if not re.search(r"Phase\s+1[^.]", content):
-                violations.append("Phase 1 not found in DEVELOPMENT_PHASES")
+        # Check Phase 1 partial/complete (required for Phase >= 1.5)
+        if phase_num >= 1.5 and not re.search(r"Phase\s+1[^.]", content):
+            violations.append("Phase 1 not found in DEVELOPMENT_PHASES")
 
     except Exception as e:
         violations.append(f"Error reading DEVELOPMENT_PHASES: {e}")

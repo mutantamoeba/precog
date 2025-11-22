@@ -34,6 +34,7 @@ Example usage:
 import re
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 try:
     import yaml
@@ -95,7 +96,9 @@ def load_property_test_requirements() -> dict:
     try:
         with open(validation_config_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
-            return config.get("property_test_requirements", default_requirements)
+            return cast(
+                "dict[Any, Any]", config.get("property_test_requirements", default_requirements)
+            )
     except Exception:
         return default_requirements
 
