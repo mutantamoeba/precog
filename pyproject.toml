@@ -130,6 +130,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 # Allow dynamic SQL in managers (false positive - uses parameterized queries)
 "src/precog/trading/strategy_manager.py" = ["S608"]
 "src/precog/analytics/model_manager.py" = ["S608"]
+"src/precog/database/lookup_helpers.py" = ["S608"]
 
 # Test-specific ignores (patterns acceptable in tests but not production code)
 "tests/**/*.py" = [
