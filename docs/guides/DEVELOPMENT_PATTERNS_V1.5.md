@@ -1,13 +1,23 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.6
+**Version:** 1.7
 **Created:** 2025-11-13
 **Last Updated:** 2025-11-22
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.7:**
+- **Added Pattern 18: Avoid Technical Debt - Fix Root Causes, Not Symptoms (ALWAYS)**
+- Documents formal technical debt tracking workflow with three-part process: Acknowledge → Schedule → Fix
+- Real-world context from Phase 1.5 completion (21 validation violations deferred to Phase 2 Week 1)
+- Covers debt classification system (🔴 Critical, 🟡 High, 🟢 Medium, 🔵 Low based on risk/impact)
+- Multi-location tracking strategy: GitHub issues + PHASE_X_DEFERRED_TASKS.md + scheduled resolution
+- When deferral is acceptable: non-blocking, formally tracked, scheduled fix, documented rationale
+- Common mistakes: "Will fix later" without tracking, quick hacks without root cause analysis, missing debt documentation
+- Cross-references: GitHub Issue #101, PHASE_1.5_DEFERRED_TASKS_V1.0.md (DEF-P1.5-002), Pattern 8 (Config Synchronization)
+- Total addition: ~320 lines documenting technical debt management best practices
 **Changes in V1.6:**
 - **Added Pattern 16: Type Safety with Dynamic Data - YAML/JSON Parsing (ALWAYS)**
 - Documents explicit `cast()` usage for YAML/JSON parsing to avoid Mypy no-any-return errors
@@ -3512,6 +3522,396 @@ else:
 
 ---
 
+## Pattern 18: Avoid Technical Debt - Fix Root Causes, Not Symptoms (ALWAYS)
+
+**Rule:** When you discover bugs or quality issues, fix the root cause and track any deferred work formally. Never use "will fix later" without GitHub issue + scheduled resolution + documented rationale.
+
+**Why:** Technical debt compounds exponentially. A quick hack today becomes 10x harder to fix in 6 months when:
+- Context is lost ("why did we do this?")
+- Code has evolved (breaking the hack breaks other things)
+- Team has changed (new developers don't know the hack exists)
+- Production depends on buggy behavior (can't change without breaking users)
+
+**Real-World Example:** Phase 1.5 completion discovered 21 validation violations (19 SCD queries missing row_current_ind filter + 2 integration tests missing real fixtures). Instead of:
+- ❌ Quick fix: Add `--no-verify` flag and forget about it (silent technical debt)
+- ❌ Comment: "TODO: Fix SCD queries later" (no tracking, no schedule)
+- ✅ Formal tracking: GitHub Issue #101 + PHASE_1.5_DEFERRED_TASKS.md + Phase 2 Week 1 scheduled fix
+
+### Technical Debt Classification System
+
+Classify all deferred work by priority based on risk and impact:
+
+| Priority | Symbol | Criteria | Timeline | Examples |
+|----------|--------|----------|----------|----------|
+| **Critical** | 🔴 | Could cause data corruption, security vulnerabilities, or production outages | Fix in next sprint | SCD queries (wrong data), security vulnerabilities, data integrity violations |
+| **High** | 🟡 | Affects code quality, test reliability, or developer productivity | Fix within 2-3 sprints | Missing test coverage, configuration drift, infrastructure gaps |
+| **Medium** | 🟢 | Nice-to-have improvements, refactoring, optimization | Fix within 3-6 months | Code cleanup, documentation gaps, minor UX issues |
+| **Low** | 🔵 | Cosmetic issues, future enhancements | Fix as time allows | Linting warnings, TODO comments, aspirational features |
+
+**Decision Tree:**
+
+```
+Is this blocking the next phase?
+├── YES → Fix immediately (not technical debt)
+└── NO → Is this a bug or quality issue?
+    ├── YES → Critical/High priority (defer with formal tracking)
+    └── NO → Enhancement (add to backlog, may not schedule)
+```
+
+### Three-Part Technical Debt Workflow
+
+#### Part 1: Acknowledge (5 minutes)
+
+**Create GitHub Issue with comprehensive documentation:**
+
+```markdown
+**Title:** Fix 21 validation violations discovered by Phase 1.5 pre-push hooks
+
+**Labels:** pattern-violation, priority-high, deferred-task
+
+**Description:**
+
+## Problem
+
+Pre-push hooks discovered 21 violations:
+1. **19 SCD Type 2 violations** (exact file:line references below)
+2. **2 Test fixture violations** (missing db_pool, db_cursor)
+
+## Part 1: SCD Type 2 Query Violations
+
+Pattern 2 (Dual Versioning) requires all queries on SCD Type 2 tables to
+filter by `row_current_ind = TRUE`. The following queries are missing this filter:
+
+```
+1. src/precog/database/crud_operations.py:625 (get_market_history)
+2. src/precog/trading/position_manager.py:142 (get_positions_by_status)
+... [list all 19 violations]
+```
+
+## Part 2: Test Fixture Violations
+
+Pattern 13 (Coverage Quality) requires integration tests to use real fixtures.
+The following tests use mocks instead:
+
+```
+1. tests/integration/test_strategy_manager_integration.py
+   Missing: db_pool, db_cursor fixtures
+
+2. tests/integration/test_model_manager_integration.py
+   Missing: db_pool, db_cursor fixtures
+```
+
+## Implementation Plan
+
+**Phase 2 Week 1 (5-6 hours):**
+1. Review all 19 SCD queries - add filters or exception comments (3-4h)
+2. Update 2 integration test files with real fixtures (1-2h)
+3. Validation and documentation (30min)
+
+## Success Criteria
+
+- [ ] All SCD queries have `row_current_ind = TRUE` OR documented exception
+- [ ] All integration tests use real fixtures (no mocks)
+- [ ] Validation scripts pass
+- [ ] Tests pass
+
+## Rationale for Deferral
+
+- ✅ Non-blocking (existing bugs, not new blockers for Phase 2)
+- ✅ Validation enhancement discovery (violations existed before, newly detected)
+- ✅ Pattern compliance, not functionality (code works, violates patterns)
+- ✅ Formally tracked (this issue + deferred tasks doc)
+- ✅ Scheduled (Phase 2 Week 1)
+```
+
+**Critical Elements:**
+- Exact file:line references (not "some files need fixing")
+- Implementation plan with time estimates
+- Success criteria (checkboxes for tracking)
+- Rationale for deferral (why not fixing now)
+
+#### Part 2: Schedule (5 minutes)
+
+**Add to PHASE_X_DEFERRED_TASKS.md:**
+
+```markdown
+### DEF-P1.5-002: Fix 21 Validation Violations (19 SCD + 2 fixtures)
+
+**Priority:** 🔴 Critical
+**Target Phase:** Phase 2 Week 1
+**Time Estimate:** 5-6 hours
+**Category:** Code Quality / Pattern Compliance
+**GitHub Issue:** #101
+
+#### Rationale
+
+These 21 violations were discovered by enhanced pre-push hooks and deferred because:
+
+1. **Non-blocking:** Existing bugs, not blockers for Phase 2 ESPN integration
+2. **Validation discovery:** New scripts found violations that existed before
+3. **Pattern compliance:** Code works but violates Pattern 2 (SCD) and Pattern 13 (fixtures)
+4. **Formally tracked:** GitHub issue + scheduled fix
+5. **User test:** Validates our tech debt workflow handles deferral properly
+
+**Why Critical Priority:**
+- Pattern 2 violations risk querying historical data (subtle bugs)
+- Pattern 13 violations mean tests may pass with bugs (false confidence)
+- Should fix BEFORE significant Phase 2 development
+
+#### Implementation Plan
+
+[Detailed 3-task breakdown from GitHub issue]
+
+#### Success Criteria
+
+- [ ] All SCD queries compliant
+- [ ] All integration tests use real fixtures
+- [ ] Validation scripts pass
+- [ ] Tests pass
+
+#### References
+
+- GitHub Issue #101
+- Pattern 2 (Dual Versioning)
+- Pattern 13 (Coverage Quality)
+- validate_scd_queries.py, validate_test_fixtures.py
+```
+
+**Multi-Location Tracking:**
+1. **GitHub Issues** - Searchable, trackable, linkable
+2. **PHASE_X_DEFERRED_TASKS.md** - Comprehensive documentation with rationale
+3. **DEVELOPMENT_PHASES.md** - Phase deliverables tracking (optional)
+
+#### Part 3: Fix (Scheduled)
+
+**When the scheduled phase arrives (Phase 2 Week 1):**
+
+1. **Review Context** - Re-read GitHub issue + deferred tasks doc
+2. **Implement Fixes** - Follow implementation plan from issue
+3. **Validate** - Run validation scripts (validate_scd_queries.py, validate_test_fixtures.py)
+4. **Test** - Verify all tests pass with fixes
+5. **Close Issue** - Update PHASE_X_DEFERRED_TASKS.md (mark complete), close GitHub issue
+6. **Document** - Add completion note to SESSION_HANDOFF.md
+
+**Time Tracking:** Compare actual vs estimated time → improve future estimates
+
+### When Deferral is Acceptable
+
+**✅ ACCEPTABLE to defer when ALL of:**
+- Non-blocking (next phase can start without fix)
+- Formally tracked (GitHub issue created)
+- Scheduled (specific phase/sprint assigned)
+- Documented rationale (why deferring, why not blocking)
+- Priority assigned (🔴/🟡/🟢/🔵)
+- Success criteria defined (checkbox list)
+
+**❌ NEVER ACCEPTABLE to defer:**
+- Data corruption risks (fix immediately)
+- Security vulnerabilities (fix immediately)
+- Production outages (fix immediately)
+- Blocking bugs (must fix to proceed)
+- "Will fix later" without tracking
+
+### Common Technical Debt Patterns
+
+#### Pattern 1: Configuration Drift (Pattern 8 Violation)
+
+**Symptom:** YAML config says one thing, Python code does another
+
+**Root Cause:** Updated code without updating config, or vice versa
+
+**Example from Phase 1.5:**
+```python
+# validation_config.yaml
+required_pattern: ".filter(table.c.row_current_ind == True)"  # ORM pattern
+
+# validate_scd_queries.py
+if "required_pattern" in scd_config:
+    # ❌ Code detects YAML exists, then ignores it and hardcodes different pattern
+    required_patterns = [
+        r"\.filter\([^)]*row_current_ind\s*==\s*True[^)]*\)",
+    ]
+```
+
+**Fix:** Make code actually read and use YAML pattern:
+```python
+if "required_pattern" in scd_config:
+    # ✅ Use pattern from YAML
+    required_patterns = [scd_config["required_pattern"]]
+```
+
+**Prevention:** Pattern 8 enforcement (synchronize tool configs, application configs, documentation)
+
+#### Pattern 2: Quick Hack Instead of Root Cause Fix
+
+**Symptom:** Validation failing → add `--no-verify` flag → forget about it
+
+**Root Cause:** Pressure to ship, lack of tracking system
+
+**Example:**
+```bash
+# ❌ WRONG: Bypass hook without tracking
+git push --no-verify origin feature-branch
+
+# No GitHub issue created
+# No deferred tasks document updated
+# 6 months later: "Why are we using --no-verify?"
+```
+
+**Fix:**
+```bash
+# ✅ CORRECT: Create formal tracking BEFORE bypass
+gh issue create --title "Fix 21 validation violations" --label "deferred-task"
+# Update PHASE_X_DEFERRED_TASKS.md with comprehensive plan
+# THEN use --no-verify with clear justification
+git push --no-verify origin feature-branch
+```
+
+**Prevention:** Mandatory GitHub issue creation before any `--no-verify` usage
+
+#### Pattern 3: False Positives Ignored Instead of Fixed
+
+**Symptom:** Validation script reports 100 violations → half are false positives → ignored
+
+**Root Cause:** Validation script too broad, didn't account for edge cases
+
+**Example from Phase 1.5:**
+```
+Initial: 78 SCD violations reported
+After fixing false positives: 19 genuine violations (76% reduction)
+
+False positive categories:
+- INSERT/UPDATE operations (32 violations - write ops don't need filter)
+- Docstring examples (17 violations - >>> examples in comments)
+- Migration files (6 violations - transform all versions intentionally)
+- Historical audit functions (3 violations - get_*_history fetches all versions)
+```
+
+**Fix:** Update validation script to exclude legitimate patterns:
+```python
+# Exclude write operations
+if any(re.search(rf"\b{op}\s+{table}\b", line) for op in ["INSERT", "UPDATE"]):
+    continue  # Write operations don't query, don't need row_current_ind filter
+
+# Exclude migrations
+if "migrations" in str(python_file):
+    continue  # Migrations transform all versions
+
+# Auto-detect history functions
+if re.search(r"def\s+\w*history\w*\s*\(", func_context):
+    continue  # Historical audit functions fetch all versions
+```
+
+**Prevention:** Iterative validation script improvement based on false positive analysis
+
+### Anti-Patterns (NEVER DO THIS)
+
+#### 1. "TODO: Fix later" Comments
+
+**❌ WRONG:**
+```python
+def get_positions_by_status(status: str):
+    # TODO: Add row_current_ind filter (violates Pattern 2)
+    query = "SELECT * FROM positions WHERE status = %s"
+    return fetch_all(query, (status,))
+```
+
+**Why wrong:** No tracking, no schedule, will be forgotten
+
+**✅ CORRECT:**
+```python
+def get_positions_by_status(status: str):
+    # DEBT: Missing row_current_ind filter (GitHub Issue #101, Phase 2 Week 1)
+    # See: docs/utility/PHASE_1.5_DEFERRED_TASKS.md (DEF-P1.5-002)
+    query = "SELECT * FROM positions WHERE status = %s"
+    return fetch_all(query, (status,))
+```
+
+**Better:** Fix immediately if <15 minutes, or defer with full tracking
+
+#### 2: Silent Bypasses
+
+**❌ WRONG:**
+```bash
+# Pre-push hook failing? Just bypass it
+git push --no-verify origin feature-branch
+# No issue created, no tracking, no schedule
+```
+
+**✅ CORRECT:**
+```bash
+# 1. Create GitHub issue documenting violations
+gh issue create --title "..." --label "deferred-task"
+
+# 2. Update PHASE_X_DEFERRED_TASKS.md with plan
+# Add comprehensive rationale, implementation plan, success criteria
+
+# 3. Bypass hook with clear justification
+git push --no-verify origin feature-branch
+
+# 4. Document bypass in commit message
+git commit --amend -m "...
+
+Bypassed pre-push hooks due to 21 deferred violations (Issue #101).
+Formal tracking: docs/utility/PHASE_1.5_DEFERRED_TASKS.md (DEF-P1.5-002)
+Scheduled fix: Phase 2 Week 1 (5-6 hours)"
+```
+
+#### 3: Vague Tracking
+
+**❌ WRONG:**
+```markdown
+- [ ] Fix some database queries
+- [ ] Improve test coverage
+```
+
+**✅ CORRECT:**
+```markdown
+- [ ] Fix 19 SCD queries missing row_current_ind filter (src/precog/database/crud_operations.py:625, +18 more)
+- [ ] Add db_pool, db_cursor fixtures to 2 integration tests (test_strategy_manager_integration.py, test_model_manager_integration.py)
+```
+
+**Why:** Specific file:line references enable quick fixes, vague tracking enables forgetting
+
+### Decision Matrix
+
+| Scenario | Priority | Action | Timeline |
+|----------|----------|--------|----------|
+| **Security vulnerability** | 🔴 N/A | Fix immediately | Before next commit |
+| **Data corruption risk** | 🔴 N/A | Fix immediately | Before next commit |
+| **Blocking bug** | N/A | Fix immediately | Before next phase |
+| **Pattern violation (critical)** | 🔴 Critical | Defer with tracking | Next sprint |
+| **Pattern violation (quality)** | 🟡 High | Defer with tracking | 2-3 sprints |
+| **Code cleanup** | 🟢 Medium | Defer with tracking | 3-6 months |
+| **TODO comment** | 🔵 Low | Create issue or delete | As time allows |
+
+### Real-World Validation
+
+**Phase 1.5 Example - User Test of Debt Workflow:**
+
+User explicitly chose Option B (defer with formal tracking) to validate our technical debt workflow:
+> "fine, let's do option B, it will help confirm that our workflow is handling tech debt and defect tracking and resolution satisfactorily"
+
+**What We Did:**
+1. ✅ Created GitHub Issue #101 with 21 violations (exact file:line references)
+2. ✅ Updated PHASE_1.5_DEFERRED_TASKS.md (V1.0 → V1.1) with comprehensive plan
+3. ✅ Assigned 🔴 Critical priority (Pattern 2/13 violations)
+4. ✅ Scheduled Phase 2 Week 1 fix (5-6 hours estimated)
+5. ✅ Documented rationale (non-blocking, formally tracked, scheduled)
+6. ✅ Used `--no-verify` with clear justification
+
+**Result:** Technical debt properly tracked, scheduled, and documented (Pattern 18 validated)
+
+### References
+
+- **GitHub Issue:** #101 (Fix 21 validation violations)
+- **Deferred Tasks:** docs/utility/PHASE_1.5_DEFERRED_TASKS_V1.0.md (DEF-P1.5-002)
+- **Related Patterns:** Pattern 2 (SCD Type 2 filtering), Pattern 8 (Config Synchronization), Pattern 13 (Real Fixtures)
+- **Validation Scripts:** scripts/validate_scd_queries.py, scripts/validate_test_fixtures.py
+- **Philosophy:** DEVELOPMENT_PHILOSOPHY_V1.1.md Section "Technical Debt Management"
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -3533,6 +3933,7 @@ else:
 | **15. Trade/Position Attribution** | Code review + pytest | `pytest tests/test_attribution.py -v` | ADR-090, ADR-091, ADR-092, Migration 018-020 |
 | **16. Type Safety (YAML/JSON)** | Mypy (pre-push hook) | `git grep "yaml.safe_load" -- '*.py'` | Pattern 6, Mypy no-any-return, Ruff TC006 |
 | **17. Avoid Nested Ifs** | Ruff (pre-commit hook) | `git grep -A2 "if.*:" -- '*.py' \| grep -A1 "if.*:"` | Ruff SIM102 |
+| **18. Avoid Technical Debt** | Manual (3-part workflow) | `gh issue list --label deferred-task` | GitHub Issue #101, PHASE_X_DEFERRED_TASKS.md |
 
 ---
 
