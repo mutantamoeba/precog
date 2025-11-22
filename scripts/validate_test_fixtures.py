@@ -162,7 +162,9 @@ def check_forbidden_patterns(
                         )
 
     except Exception:
-        pass
+        # Skip unreadable files - validation script should be resilient
+        # If file is genuinely corrupted, other checks will catch it
+        return violations
 
     return violations
 
