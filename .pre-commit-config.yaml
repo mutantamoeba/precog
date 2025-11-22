@@ -8,16 +8,19 @@ fail_fast: false  # Run all hooks, don't stop at first failure
 
 repos:
   # Local custom hooks (project-specific validation)
+  # Layer 1 (Pre-Commit): Fast checks (~2-5s total)
+  # Layer 2 (Pre-Push): Thorough validation (~60-90s, includes tests)
+  #   See .git/hooks/pre-push for Steps 8-10 (SCD queries, property tests, fixtures)
   - repo: local
     hooks:
-      # Documentation validation (9 comprehensive checks)
+      # Documentation validation (10 comprehensive checks - ENHANCED)
       - id: validate-docs
-        name: Documentation Validation (9 checks)
+        name: Documentation Validation (10 checks)
         entry: python scripts/validate_docs.py
         language: system
         pass_filenames: false
         files: \.(md|yaml|yml)$
-        description: "Validates documentation consistency, cross-references, versioning, phase status, and YAML configs"
+        description: "Validates docs consistency, cross-refs, versioning, phase status, YAML configs, and config sync (Pattern 8)"
 
       # Code quality: Ruff linter
       - id: ruff-check

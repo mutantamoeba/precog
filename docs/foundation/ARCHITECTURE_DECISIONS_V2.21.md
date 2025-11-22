@@ -1,9 +1,30 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.20
+**Version:** 2.21
 **Last Updated:** November 22, 2025
 **Status:** ✅ Current
+**Changes in v2.21:**
+- **WORKFLOW ENFORCEMENT ARCHITECTURE:** Added Decisions #94-97/ADR-304-307 (YAML-Driven Validation, Auto-Discovery, Parallel Execution, Tier-Specific Coverage)
+- **ADR-304: YAML-Driven Validation Architecture** - Documents decision to externalize all validation rules to validation_config.yaml
+  - **Problem:** Hardcoded validation rules create maintenance burden (e.g., SCD table lists, property test requirements)
+  - **Solution:** YAML-driven configuration with graceful degradation (all 7 validators load from validation_config.yaml, fallback to defaults)
+  - **Benefits:** Zero-maintenance updates (edit YAML, no code changes), single source of truth for validation rules, easy to audit and modify
+- **ADR-305: Auto-Discovery Pattern for Validators** - Documents decision to query authoritative sources instead of maintaining hardcoded lists
+  - **Pattern 1 - Database schema introspection:** validate_scd_queries.py queries information_schema for SCD Type 2 tables (zero maintenance when adding new SCD tables)
+  - **Pattern 2 - Filesystem glob:** validate_property_tests.py globs tests/property/**/*_properties.py (new property test modules automatically discovered)
+  - **Pattern 3 - Convention-based discovery:** validate_phase_start.py globs PHASE_*_DEFERRED_TASKS*.md (new deferred task documents auto-found)
+  - **Benefits:** Eliminates hardcoded lists, scales with codebase growth, zero code changes when adding modules/tables
+- **ADR-306: Parallel Execution in Git Hooks** - Documents decision to run Steps 2-10 in parallel in pre-push hook
+  - **Problem:** Adding Steps 8-10 would increase pre-push time significantly (sequential: 145 seconds)
+  - **Solution:** Bash background processes with PID tracking, parallel output capture, sequential result display
+  - **Performance:** 66% time savings (145s sequential → 40-50s parallel, limited by slowest step: warning governance ~30s)
+  - **Implementation:** All steps launch concurrently, wait for all to complete, then check exit codes and display results
+- **ADR-307: Tier-Specific Coverage Targets** - Documents decision to use risk-based testing approach with 3 coverage tiers
+  - **Problem:** Single 80% threshold treats all modules equally (authentication vs logging)
+  - **Solution:** Infrastructure 80%, Business Logic 85%, Critical Path 90% coverage targets
+  - **Auto-classification:** Uses fnmatch pattern matching for flexible tier assignment (patterns in validation_config.yaml)
+  - **Benefits:** Risk-based testing approach, clear expectations per module type, auto-classification scales with codebase
 **Changes in v2.20:**
 - **LOOKUP TABLES FOR BUSINESS ENUMS:** Added Decision #93/ADR-093 (Lookup Tables for Business Enums - Phase 1.5)
 - Documents decision to replace CHECK constraints with lookup tables for strategy_type and model_class enums
@@ -8635,7 +8656,7 @@ def run_holdout_validation(
 ### Related Documentation
 
 - `docs/guides/MODEL_EVALUATION_GUIDE_V1.0.md` (implementation guide - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.17.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #3, Phase 6 Task #1)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.7: Evaluation Runs Table)
@@ -9358,7 +9379,7 @@ ON position_risk_by_strategy(league, strategy_name);
 
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (comprehensive analytics implementation guide - to be created)
 - `docs/guides/DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md` (React dashboard + API integration - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.17.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 6 Task #3, Phase 7 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.8: Materialized Views Reference)
@@ -10189,7 +10210,7 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 
 - `docs/guides/AB_TESTING_GUIDE_V1.0.md` (comprehensive A/B testing guide - to be created)
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (includes A/B testing architecture)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.17.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 7 Task #3, Phase 8 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.9: A/B Tests Table)
@@ -10627,7 +10648,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 
 **References:**
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (materialized views already defined)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.17.md` (analytics requirements)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (analytics requirements)
 
 ---
 
@@ -11541,7 +11562,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 **Primary Documentation:**
 - TESTING_STRATEGY_V3.1.md (comprehensive 8 test type framework, 1,462 lines)
 - TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md (REQ-TEST-012 through REQ-TEST-019)
-- MASTER_REQUIREMENTS_V2.17.md (added 8 new test requirements)
+- MASTER_REQUIREMENTS_V2.18.md (added 8 new test requirements)
 - REQUIREMENT_INDEX.md (added REQ-TEST-012 through REQ-TEST-019)
 
 **Supporting Documentation:**
@@ -12490,7 +12511,7 @@ Result: Only enter when model confident AND market mispriced
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Comprehensive architectural analysis
 - `docs/guides/VERSIONING_GUIDE_V1.0.md` - Strategy/model versioning patterns
-- `MASTER_REQUIREMENTS_V2.17.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
+- `MASTER_REQUIREMENTS_V2.18.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -12910,7 +12931,7 @@ def validate_position_trade_attribution(position_id: str) -> bool:
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Attribution architecture analysis with tradeoffs
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` - Current schema (pre-attribution)
-- `MASTER_REQUIREMENTS_V2.17.md` - REQ-DB-006 (Decimal precision for all financial fields)
+- `MASTER_REQUIREMENTS_V2.18.md` - REQ-DB-006 (Decimal precision for all financial fields)
 
 **Status:** ✅ Decision approved, implementation in progress (Migrations 019-020 planned)
 
@@ -13285,7 +13306,7 @@ def sync_trades_full():
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Trade source tracking architectural analysis
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` - Kalshi API trade download patterns
-- `MASTER_REQUIREMENTS_V2.17.md` - REQ-API-001 (Kalshi API Integration)
+- `MASTER_REQUIREMENTS_V2.18.md` - REQ-API-001 (Kalshi API Integration)
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -13665,9 +13686,552 @@ def test_invalid_strategy_type_raises_foreign_key_error():
 - `src/precog/database/lookup_helpers.py` - Helper functions implementation
 - `tests/test_lookup_tables.py` - Comprehensive test suite (23 tests, 100% coverage)
 - `src/precog/database/migrations/migration_023_create_lookup_tables.py` - Migration script
-- `MASTER_REQUIREMENTS_V2.17.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
+- `MASTER_REQUIREMENTS_V2.18.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
 
 **Status:** ✅ Decision approved, implementation complete (Migration 023 applied, helper module created, 23 tests passing)
+
+---
+
+## Decision #94/ADR-304: YAML-Driven Validation Architecture (Phase 1.5)
+
+**Date:** November 22, 2025
+**Phase:** 1.5 (Enhanced Workflow Enforcement)
+**Status:** ✅ Complete
+
+### Problem
+Hardcoded validation rules in Python scripts create maintenance burden when patterns evolve. Adding new modules, coverage tiers, or validation rules requires code changes and understanding of validator internals.
+
+### Decision
+**Implement YAML-driven validation configuration with rules externalized to `validation_config.yaml`.**
+
+Centralized configuration file:
+```yaml
+# scripts/validation_config.yaml
+
+# Pattern 8: Configuration Synchronization
+config_layers:
+  tool_configs:
+    description: "Build tool and linter configurations"
+    patterns:
+      - "pyproject.toml"
+      - "ruff.toml"
+      - ".pre-commit-config.yaml"
+  application_configs:
+    description: "Application YAML configurations"
+    patterns:
+      - "src/precog/config/*.yaml"
+
+# Pattern 13: Coverage Target Validation
+coverage_tiers:
+  infrastructure: 80
+  business_logic: 85
+  critical_path: 90
+
+  tier_patterns:
+    infrastructure:
+      - "src/precog/database/connection.py"
+      - "src/precog/utils/logger.py"
+    business_logic:
+      - "src/precog/database/crud_operations.py"
+      - "src/precog/analytics/*.py"
+    critical_path:
+      - "src/precog/api_connectors/kalshi_client.py"
+      - "src/precog/database/migrations/*.py"
+
+# Pattern 10: Property-Based Testing Requirements
+property_test_requirements:
+  trading_logic:
+    description: "Financial calculations requiring mathematical invariants"
+    modules:
+      - "analytics/kelly.py"
+      - "analytics/probability.py"
+    required_properties:
+      - "Kelly fraction in [0, 1] for all inputs"
+      - "Edge detection is monotonic"
+
+# Pattern 13: Test Fixture Requirements
+test_fixture_requirements:
+  integration_tests:
+    required_fixtures:
+      - db_pool
+      - db_cursor
+      - clean_test_data
+    forbidden_mocks:
+      - ConnectionPool
+      - psycopg2.connect
+
+# Phase Deliverables (for validate_phase_start.py)
+phase_deliverables:
+  "1":
+    deliverables:
+      - name: "Kalshi API Client"
+        coverage_target: 90
+      - name: "Database CRUD Operations"
+        coverage_target: 87
+      - name: "CLI Commands"
+        coverage_target: 85
+```
+
+Validators load configuration with graceful degradation:
+```python
+def load_validation_config() -> dict:
+    """Load validation config from YAML, fallback to defaults."""
+    config_path = PROJECT_ROOT / "scripts" / "validation_config.yaml"
+
+    if not config_path.exists() or not YAML_AVAILABLE:
+        return DEFAULT_CONFIG  # Graceful degradation
+
+    try:
+        with open(config_path, encoding="utf-8") as f:
+            return yaml.safe_load(f)
+    except Exception:
+        return DEFAULT_CONFIG
+```
+
+### Rationale
+1. **Zero-Maintenance Updates**: Add new modules/tiers by editing YAML (no code changes)
+2. **Single Source of Truth**: All validation rules in one file
+3. **Graceful Degradation**: Falls back to defaults if YAML missing or PyYAML not installed
+4. **Self-Documenting**: YAML structure is human-readable with inline comments
+5. **Extensible**: Add new patterns/rules without modifying validator code
+6. **Testable**: YAML configuration can be validated independently
+
+### Alternatives Considered
+- **Hardcoded Rules**: Simple but high maintenance burden (requires code changes)
+- **Database Configuration**: Over-engineering for Phase 1.5, adds database dependency
+- **JSON Configuration**: Less readable than YAML, no inline comments support
+- **Python Configuration Files**: Requires code execution, security risk
+
+### Implementation
+- **Phase 1.5** (Workflow Enforcement): Create validation_config.yaml with 5 sections
+- All 7 validators load config via `load_validation_config()` with fallback to defaults
+- Config sections: coverage_tiers, config_layers, property_test_requirements, test_fixture_requirements, phase_deliverables
+- **Maintenance**: Update YAML when patterns evolve (no code changes)
+- **Documentation**: ENFORCEMENT_MAINTENANCE_GUIDE.md documents update workflows
+
+**Validators Using YAML Config:**
+- validate_code_quality.py (coverage tiers)
+- validate_docs.py (config layers)
+- validate_property_tests.py (property test requirements)
+- validate_test_fixtures.py (fixture requirements)
+- validate_phase_start.py (phase deliverables)
+- validate_phase_completion.py (phase deliverables)
+
+**Reference:** `docs/utility/ENFORCEMENT_MAINTENANCE_GUIDE.md`, REQ-VALIDATION-012, Pattern 8 (Configuration Synchronization)
+
+---
+
+## Decision #95/ADR-305: Auto-Discovery Pattern for Validators (Phase 1.5)
+
+**Date:** November 22, 2025
+**Phase:** 1.5 (Enhanced Workflow Enforcement)
+**Status:** ✅ Complete
+
+### Problem
+Validators with hardcoded lists of modules/tables become stale as codebase grows. Adding new SCD Type 2 tables or property test modules requires updating validator code.
+
+### Decision
+**Implement auto-discovery pattern: query authoritative sources instead of hardcoding lists.**
+
+**Pattern 1: Database Schema Auto-Discovery**
+
+Query PostgreSQL information_schema for SCD Type 2 tables:
+```python
+def discover_scd_tables(verbose: bool = False) -> Set[str]:
+    """
+    Auto-discover SCD Type 2 tables from database schema.
+    Queries information_schema for tables with row_current_ind column.
+    Zero maintenance - new SCD Type 2 tables automatically detected.
+    """
+    conn = psycopg2.connect(database_url)
+    cursor = conn.cursor()
+
+    query = """
+        SELECT DISTINCT table_name
+        FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND column_name = 'row_current_ind'
+        ORDER BY table_name
+    """
+    cursor.execute(query)
+    tables = {row[0] for row in cursor.fetchall()}
+
+    if verbose:
+        print(f"[DEBUG] Discovered {len(tables)} SCD Type 2 tables: {tables}")
+
+    return tables
+```
+
+**Pattern 2: Filesystem Auto-Discovery**
+
+Glob filesystem for property test files:
+```python
+def find_test_file_for_module(module_path: str) -> Path | None:
+    """
+    Find property test file for module using multiple strategies.
+
+    Tries (in order):
+    1. Nested structure: tests/property/analytics/test_kelly_properties.py
+    2. Flat structure: tests/property/test_kelly_properties.py
+    3. Naming variants: test_kelly_criterion_properties.py
+    """
+    parts = Path(module_path).parts
+    module_name = Path(module_path).stem
+
+    # Try nested structure first (preferred)
+    if len(parts) > 1:
+        test_file_nested = (
+            PROJECT_ROOT / "tests" / "property" / parts[0] / f"test_{module_name}_properties.py"
+        )
+        if test_file_nested.exists():
+            return test_file_nested
+
+    # Try flat structure (backward compatibility)
+    test_file_flat = PROJECT_ROOT / "tests" / "property" / f"test_{module_name}_properties.py"
+    if test_file_flat.exists():
+        return test_file_flat
+
+    # Try naming variants
+    naming_variants = {
+        "kelly": ["kelly_criterion", "kelly"],
+        "edge_detector": ["edge_detection", "edge_detector"],
+    }
+
+    if module_name in naming_variants:
+        for variant in naming_variants[module_name]:
+            test_file_variant = PROJECT_ROOT / "tests" / "property" / f"test_{variant}_properties.py"
+            if test_file_variant.exists():
+                return test_file_variant
+
+    return None
+```
+
+**Pattern 3: Convention-Based Discovery**
+
+Discover phase deliverables from YAML config + filesystem:
+```python
+def find_deferred_tasks(target_phase: str) -> List[str]:
+    """
+    Find all deferred tasks targeting specified phase.
+    Auto-discovers PHASE_*_DEFERRED_TASKS*.md documents.
+    """
+    deferred_docs = list((PROJECT_ROOT / "docs" / "utility").glob("PHASE_*_DEFERRED_TASKS*.md"))
+
+    deferred_tasks = []
+    for doc in deferred_docs:
+        content = doc.read_text(encoding="utf-8")
+        pattern = rf"Target Phase:\s*{re.escape(target_phase)}"
+
+        if re.search(pattern, content, re.IGNORECASE):
+            task_lines = re.findall(r"(DEF-[A-Z0-9]+-\d+:.*?)(?=\n\n|\Z)", content, re.DOTALL)
+            deferred_tasks.extend(task_lines)
+
+    return deferred_tasks
+```
+
+### Rationale
+1. **Zero-Maintenance**: New tables/modules automatically discovered
+2. **Single Source of Truth**: Database schema IS the source of truth (not validator code)
+3. **Convention Over Configuration**: Follow naming conventions → automatic discovery
+4. **Backward Compatible**: Fallback to alternative structures (nested vs. flat)
+5. **Resilient**: Doesn't break when new patterns added
+6. **Self-Documenting**: Discovery logic documents expected patterns
+
+### Alternatives Considered
+- **Hardcoded Lists**: Simple but requires maintenance for every new module/table
+- **Manual Registration**: Requires explicit registration in config file
+- **Decorator-Based**: Requires code changes in source files (couples validation to implementation)
+- **Import Introspection**: Fragile, requires importing all modules (slow startup)
+
+### Implementation
+- **Phase 1.5** (Workflow Enforcement): Implement in 7 validators
+- Auto-discovery functions: discover_scd_tables(), find_test_file_for_module(), find_deferred_tasks(), classify_module_tier()
+- **Performance**: All discovery operations <1 second (filesystem glob + database query)
+- **Compatibility**: Works regardless of codebase structure changes
+
+**Validators Using Auto-Discovery:**
+- validate_scd_queries.py (database schema introspection)
+- validate_property_tests.py (filesystem glob + naming variants)
+- validate_test_fixtures.py (pytest collection introspection)
+- validate_phase_start.py (document glob + pattern matching)
+- validate_code_quality.py (coverage.py report parsing)
+
+**Reference:** `docs/utility/ENFORCEMENT_MAINTENANCE_GUIDE.md`, REQ-VALIDATION-007 through REQ-VALIDATION-011, Pattern 13 (Convention Over Configuration)
+
+---
+
+## Decision #96/ADR-306: Parallel Execution in Git Hooks (Phase 1.5)
+
+**Date:** November 22, 2025
+**Phase:** 1.5 (Enhanced Workflow Enforcement)
+**Status:** ✅ Complete
+
+### Problem
+Pre-push hook validation time increases linearly as validators added. Sequential execution of Steps 2-10 would take 145 seconds (2m 25s), blocking developer workflow.
+
+### Decision
+**Implement parallel execution for independent validation steps in pre-push hook.**
+
+**Parallelization Strategy:**
+
+```bash
+#!/bin/bash
+# .git/hooks/pre-push
+
+# Step 0: Branch check (SEQUENTIAL - MUST run first)
+# Step 1: Quick validation (SEQUENTIAL - catches syntax errors)
+
+# Steps 2-10: PARALLEL EXECUTION
+run_parallel_check() {
+    local step_num=$1
+    local step_name=$2
+    local output_file="$TEMP_DIR/step_${step_num}.txt"
+
+    shift 2
+    "$@" > "$output_file" 2>&1
+    echo $? > "$output_file.exit"
+}
+
+# Launch all checks in parallel
+{
+    run_parallel_check 2 "Unit Tests" \
+        python -m pytest tests/test_config_loader.py tests/test_logger.py -v --no-cov --tb=short
+} &
+PIDS[2]=$!
+
+{
+    run_parallel_check 3 "Type Checking" \
+        python -m mypy . --exclude 'tests/' --ignore-missing-imports
+} &
+PIDS[3]=$!
+
+{
+    run_parallel_check 4 "Security Scan" \
+        python -m ruff check --select S --ignore S101,S112 --quiet .
+} &
+PIDS[4]=$!
+
+# ... Steps 5-10 launched in parallel ...
+
+# Wait for all background processes
+for step in 2 3 4 5 6 7 8 9 10; do
+    wait ${PIDS[$step]}
+done
+
+# Check exit codes and report failures
+for step in 2 3 4 5 6 7 8 9 10; do
+    exit_code=$(cat "${OUTPUTS[$step]}.exit")
+    if [ "$exit_code" -eq 0 ]; then
+        echo "✅ [${step}/10] ${NAMES[$step]} - PASSED"
+    else
+        echo "❌ [${step}/10] ${NAMES[$step]} - FAILED"
+        FAILED_CHECKS+=($step)
+    fi
+done
+```
+
+**Performance Analysis:**
+
+| Step | Time (Sequential) | Time (Parallel) |
+|------|-------------------|-----------------|
+| 2. Unit Tests | 10s | 10s |
+| 3. Type Checking | 20s | 20s |
+| 4. Security Scan | 10s | 10s |
+| 5. Warning Governance | 30s | 30s |
+| 6. Code Quality | 20s | 20s |
+| 7. Security Patterns | 10s | 10s |
+| 8. SCD Type 2 Queries | 15s | 15s |
+| 9. Property Tests | 20s | 20s |
+| 10. Test Fixtures | 10s | 10s |
+| **TOTAL** | **145s (2m 25s)** | **40-50s** |
+
+**Time Savings: 66% (95 seconds saved per push)**
+
+### Rationale
+1. **Developer Experience**: 40-50s tolerable, 145s frustrating
+2. **Independence**: Steps 2-10 are fully independent (no shared state)
+3. **Early Failure Detection**: All checks run regardless of individual failures
+4. **Resource Utilization**: Modern CPUs have 4-16 cores (use them!)
+5. **Scalable**: Adding Step 11 doesn't increase total time if <30s
+
+### Alternatives Considered
+- **Sequential Execution**: Simple but 145s is unacceptable
+- **Fail Fast**: Stop at first failure (wastes time, developers want all errors)
+- **Async Python Script**: More complex, requires asyncio rewrite
+- **Make Targets with -j**: Works but less portable (not default on Windows)
+
+### Implementation
+- **Phase 1.5** (Workflow Enforcement): Enhanced pre-push hook with Steps 8-10
+- Use bash background processes (&) with process ID tracking (PIDS array)
+- Capture output to temp files ($TEMP_DIR/step_N.txt)
+- Wait for all processes before checking exit codes
+- **Temp Directory**: mktemp -d with trap cleanup
+- **Exit Code Handling**: Check all exit codes, report all failures at once
+
+**Validation Steps (Parallel Execution):**
+- Step 2: Unit tests (10s)
+- Step 3: Type checking (20s)
+- Step 4: Security scan (10s)
+- Step 5: Warning governance (30s) ← Slowest step, determines total time
+- Step 6: Code quality (20s)
+- Step 7: Security patterns (10s)
+- Step 8: SCD Type 2 queries (15s) ← NEW (Pattern 2)
+- Step 9: Property tests (20s) ← NEW (Pattern 10)
+- Step 10: Test fixtures (10s) ← NEW (Pattern 13)
+
+**Sequential Steps (MUST run before parallel steps):**
+- Step 0: Branch name verification (blocks direct pushes to main)
+- Step 1: Quick validation (Ruff + docs, catches syntax errors)
+
+**Reference:** `.git/hooks/pre-push`, `docs/utility/ENFORCEMENT_MAINTENANCE_GUIDE.md`, REQ-VALIDATION-007 through REQ-VALIDATION-009
+
+---
+
+## Decision #97/ADR-307: Tier-Specific Coverage Targets (Phase 1.5)
+
+**Date:** November 22, 2025
+**Phase:** 1.5 (Enhanced Workflow Enforcement)
+**Status:** ✅ Complete
+
+### Problem
+Single global coverage threshold (80%) treats all modules equally. Critical path modules (API auth, trading execution) should have higher coverage than infrastructure modules (logging, connection pooling).
+
+### Decision
+**Implement tier-specific coverage targets: Infrastructure 80%, Business Logic 85%, Critical Path 90%.**
+
+**Tier Classification:**
+
+```yaml
+# scripts/validation_config.yaml
+
+coverage_tiers:
+  infrastructure: 80
+  business_logic: 85
+  critical_path: 90
+
+  tier_patterns:
+    infrastructure:
+      description: "Foundational modules (logging, config, connection pooling)"
+      patterns:
+        - "src/precog/database/connection.py"
+        - "src/precog/utils/logger.py"
+        - "src/precog/config/config_loader.py"
+
+    business_logic:
+      description: "Core domain logic (CRUD, analytics, managers)"
+      patterns:
+        - "src/precog/database/crud_operations.py"
+        - "src/precog/analytics/*.py"
+        - "src/precog/trading/*.py"
+
+    critical_path:
+      description: "Mission-critical code (API auth, execution, risk management)"
+      patterns:
+        - "src/precog/api_connectors/kalshi_client.py"
+        - "src/precog/api_connectors/kalshi_auth.py"
+        - "src/precog/trading/execution.py"
+        - "src/precog/trading/risk_manager.py"
+        - "src/precog/database/migrations/*.py"
+```
+
+**Validator Logic:**
+
+```python
+def classify_module_tier(module_path: str, tier_patterns: dict) -> tuple[str, int]:
+    """
+    Classify module into coverage tier.
+    Returns (tier_name, target_percentage) tuple.
+    """
+    normalized_path = module_path.replace("\\", "/")
+
+    # Check critical_path first (highest tier)
+    for pattern in tier_patterns.get("critical_path", []):
+        pattern_normalized = pattern.replace("\\", "/")
+        if pattern_normalized in normalized_path or fnmatch(normalized_path, pattern_normalized):
+            return ("critical_path", 90)
+
+    # Check business_logic next
+    for pattern in tier_patterns.get("business_logic", []):
+        pattern_normalized = pattern.replace("\\", "/")
+        if pattern_normalized in normalized_path or fnmatch(normalized_path, pattern_normalized):
+            return ("business_logic", 85)
+
+    # Default to infrastructure tier (80%)
+    return ("infrastructure", 80)
+
+def validate_coverage_targets(verbose: bool = False) -> tuple[bool, list[str]]:
+    """
+    Validate all modules meet tier-specific coverage targets.
+    """
+    violations = []
+
+    # Run pytest with coverage
+    result = subprocess.run(
+        ["python", "-m", "pytest", "tests/", "--cov=src/precog", "--cov-report=json"],
+        capture_output=True
+    )
+
+    # Parse coverage.py JSON output
+    with open("coverage.json") as f:
+        coverage_data = json.load(f)
+
+    # Check each module against its tier target
+    for module_path, coverage_info in coverage_data["files"].items():
+        tier_name, target_pct = classify_module_tier(module_path, tier_patterns)
+        actual_pct = coverage_info["summary"]["percent_covered"]
+
+        if actual_pct < target_pct:
+            violations.append(
+                f"{module_path}: {actual_pct:.1f}% coverage (tier: {tier_name}, target: {target_pct}%)"
+            )
+
+    return len(violations) == 0, violations
+```
+
+**Coverage Target Examples:**
+
+| Module | Tier | Target | Rationale |
+|--------|------|--------|-----------|
+| logger.py | Infrastructure | 80% | Utility module, straightforward logic |
+| config_loader.py | Infrastructure | 80% | Configuration parsing, low risk |
+| connection.py | Infrastructure | 80% | Connection pooling, well-tested library |
+| crud_operations.py | Business Logic | 85% | Core CRUD operations, moderate complexity |
+| strategy_manager.py | Business Logic | 85% | Domain logic, important but not critical |
+| analytics/kelly.py | Business Logic | 85% | Statistical calculations, testable |
+| kalshi_client.py | Critical Path | 90% | API integration, many edge cases |
+| kalshi_auth.py | Critical Path | 90% | RSA-PSS authentication, security critical |
+| trading/execution.py | Critical Path | 90% | Trade execution, financial impact |
+| risk_manager.py | Critical Path | 90% | Position sizing, prevents over-leverage |
+| migrations/*.py | Critical Path | 90% | Database schema changes, irreversible |
+
+### Rationale
+1. **Risk-Based Testing**: Focus testing effort where failures have highest impact
+2. **Realistic Expectations**: 90% coverage for all modules is unrealistic (diminishing returns)
+3. **Encourages Quality**: Critical path modules get extra scrutiny
+4. **Maintainable**: Easier to achieve 80% for infrastructure than 90% for everything
+5. **Self-Documenting**: Tier classification documents module importance
+
+### Alternatives Considered
+- **Single Global Threshold**: Simple but treats all modules equally (ignores risk)
+- **Per-Module Configuration**: Fine-grained but high maintenance burden
+- **Manual Tier Assignment**: Requires updating config for every new module
+- **No Coverage Targets**: Allows coverage to decay over time
+
+### Implementation
+- **Phase 1.5** (Workflow Enforcement): Implemented in validate_code_quality.py
+- Tier patterns in validation_config.yaml (YAML-driven, editable)
+- Auto-classification using fnmatch pattern matching
+- **Default Tier**: Infrastructure (80%) for unknown modules
+- **Reporting**: Show tier classification in validation output
+
+**Current Coverage Status (Phase 1.5):**
+- kalshi_client.py: 93.19% (Critical Path, target 90%) ✅ PASS
+- config_loader.py: 98.97% (Infrastructure, target 80%) ✅ PASS
+- crud_operations.py: 91.26% (Business Logic, target 85%) ✅ PASS
+- connection.py: 81.44% (Infrastructure, target 80%) ✅ PASS
+- logger.py: 87.84% (Infrastructure, target 80%) ✅ PASS
+
+**Reference:** `scripts/validate_code_quality.py`, `scripts/validation_config.yaml`, REQ-VALIDATION-012, Pattern 13 (Test Coverage Accountability)
 
 ---
 
@@ -13681,9 +14245,10 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.20
+**Document Version:** 2.21
 **Last Updated:** November 22, 2025
 **Critical Changes:**
+- v2.21: **WORKFLOW ENFORCEMENT ARCHITECTURE** - Added Decisions #94-97/ADR-304-307 (YAML-Driven Validation, Auto-Discovery Pattern, Parallel Execution in Git Hooks, Tier-Specific Coverage Targets - Phase 1.5)
 - v2.20: **LOOKUP TABLES FOR BUSINESS ENUMS** - Added Decision #93/ADR-093 (Lookup Tables for Business Enums - Phase 1.5)
 - v2.19: **TRADE & POSITION ATTRIBUTION ARCHITECTURE** - Added Decisions #90-92/ADR-090-092 (Trade/Position Attribution & Strategy Scope - Phase 1.5)
 - v2.11: **PROPERTY-BASED TESTING STRATEGY** - Added Decision #24/ADR-074 (Hypothesis framework adoption: 26 property tests POC, custom strategies, phased implementation roadmap, 165 properties planned)

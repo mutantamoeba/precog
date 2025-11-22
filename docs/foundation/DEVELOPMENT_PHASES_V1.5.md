@@ -528,6 +528,31 @@ The following tasks were identified during Phase 0.7 but deferred to Phase 0.8 o
 ### Dependencies
 - Requires Phase 0.7: 100% complete ✅
 
+### ⚠️ BEFORE STARTING - RUN PHASE START VALIDATION
+
+**MANDATORY: Run validation BEFORE any Phase 1 work:**
+
+```bash
+python scripts/validate_phase_start.py --phase 1
+```
+
+**This validator checks:**
+- ✅ Deferred tasks from previous phases targeting Phase 1
+- ✅ Phase dependencies met (Phase 0.7 complete)
+- ✅ Test planning checklist exists
+- ✅ Coverage targets defined for ALL deliverables
+
+**Exit codes:**
+- `0` = All prerequisites met, safe to start Phase 1
+- `1` = Critical prerequisites missing, **BLOCKED**
+- `2` = Configuration warning (non-blocking)
+
+**If validation FAILS (exit code 1):** Fix critical issues before starting phase implementation.
+
+**Reference:** `CLAUDE.md` Section "Phase Task Visibility System" (3-Step Phase Start Protocol)
+
+---
+
 ### Before Starting This Phase - TEST PLANNING CHECKLIST ⚠️
 
 **MANDATORY: Complete this checklist BEFORE writing any Phase 1 code**
@@ -925,6 +950,31 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 ### Dependencies
 - Requires Phase 1.5: Versioning system validated
 
+### ⚠️ BEFORE STARTING - RUN PHASE START VALIDATION
+
+**MANDATORY: Run validation BEFORE any Phase 2 work:**
+
+```bash
+python scripts/validate_phase_start.py --phase 2
+```
+
+**This validator checks:**
+- ✅ Deferred tasks from previous phases targeting Phase 2
+- ✅ Phase dependencies met (Phase 1.5 complete)
+- ✅ Test planning checklist exists
+- ✅ Coverage targets defined for ALL deliverables
+
+**Exit codes:**
+- `0` = All prerequisites met, safe to start Phase 2
+- `1` = Critical prerequisites missing, **BLOCKED**
+- `2` = Configuration warning (non-blocking)
+
+**If validation FAILS (exit code 1):** Fix critical issues before starting phase implementation.
+
+**Reference:** `CLAUDE.md` Section "Phase Task Visibility System" (3-Step Phase Start Protocol)
+
+---
+
 ### Before Starting This Phase - TEST PLANNING CHECKLIST ⚠️
 
 **MANDATORY: Complete this checklist BEFORE writing any Phase 2 code**
@@ -1058,6 +1108,31 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 
 ### Dependencies
 - Requires Phase 2: Live data integration operational
+
+### ⚠️ BEFORE STARTING - RUN PHASE START VALIDATION
+
+**MANDATORY: Run validation BEFORE any Phase 3 work:**
+
+```bash
+python scripts/validate_phase_start.py --phase 3
+```
+
+**This validator checks:**
+- ✅ Deferred tasks from previous phases targeting Phase 3
+- ✅ Phase dependencies met (Phase 2 complete)
+- ✅ Test planning checklist exists
+- ✅ Coverage targets defined for ALL deliverables
+
+**Exit codes:**
+- `0` = All prerequisites met, safe to start Phase 3
+- `1` = Critical prerequisites missing, **BLOCKED**
+- `2` = Configuration warning (non-blocking)
+
+**If validation FAILS (exit code 1):** Fix critical issues before starting phase implementation.
+
+**Reference:** `CLAUDE.md` Section "Phase Task Visibility System" (3-Step Phase Start Protocol)
+
+---
 
 ### Before Starting This Phase - TEST PLANNING CHECKLIST ⚠️
 
@@ -1196,6 +1271,31 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 ### Dependencies
 - Requires Phase 2: Historical data loaded (nflfastR)
 - Requires Phase 3: Data processing pipeline operational
+
+### ⚠️ BEFORE STARTING - RUN PHASE START VALIDATION
+
+**MANDATORY: Run validation BEFORE any Phase 4 work:**
+
+```bash
+python scripts/validate_phase_start.py --phase 4
+```
+
+**This validator checks:**
+- ✅ Deferred tasks from previous phases targeting Phase 4
+- ✅ Phase dependencies met (Phase 2 and 3 complete)
+- ✅ Test planning checklist exists
+- ✅ Coverage targets defined for ALL deliverables
+
+**Exit codes:**
+- `0` = All prerequisites met, safe to start Phase 4
+- `1` = Critical prerequisites missing, **BLOCKED**
+- `2` = Configuration warning (non-blocking)
+
+**If validation FAILS (exit code 1):** Fix critical issues before starting phase implementation.
+
+**Reference:** `CLAUDE.md` Section "Phase Task Visibility System" (3-Step Phase Start Protocol)
+
+---
 
 ### Before Starting This Phase - TEST PLANNING CHECKLIST ⚠️
 
@@ -1373,6 +1473,31 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 - Requires Phase 1: Core infrastructure
 - Requires Phase 4: Edge detection operational
 
+### ⚠️ BEFORE STARTING - RUN PHASE START VALIDATION
+
+**MANDATORY: Run validation BEFORE any Phase 5a work:**
+
+```bash
+python scripts/validate_phase_start.py --phase 5a
+```
+
+**This validator checks:**
+- ✅ Deferred tasks from previous phases targeting Phase 5a
+- ✅ Phase dependencies met (Phase 1 and 4 complete)
+- ✅ Test planning checklist exists
+- ✅ Coverage targets defined for ALL deliverables
+
+**Exit codes:**
+- `0` = All prerequisites met, safe to start Phase 5a
+- `1` = Critical prerequisites missing, **BLOCKED**
+- `2` = Configuration warning (non-blocking)
+
+**If validation FAILS (exit code 1):** Fix critical issues before starting phase implementation.
+
+**Reference:** `CLAUDE.md` Section "Phase Task Visibility System" (3-Step Phase Start Protocol)
+
+---
+
 ### Before Starting This Phase - TEST PLANNING CHECKLIST ⚠️
 
 **MANDATORY: Complete this checklist BEFORE writing any Phase 5a code**
@@ -1544,6 +1669,31 @@ All 6 critical Phase 1 modules **EXCEED** their coverage targets:
 
 ### Dependencies
 - Requires Phase 5a: Exit evaluation system operational
+
+### ⚠️ BEFORE STARTING - RUN PHASE START VALIDATION
+
+**MANDATORY: Run validation BEFORE any Phase 5b work:**
+
+```bash
+python scripts/validate_phase_start.py --phase 5b
+```
+
+**This validator checks:**
+- ✅ Deferred tasks from previous phases targeting Phase 5b
+- ✅ Phase dependencies met (Phase 5a complete)
+- ✅ Test planning checklist exists
+- ✅ Coverage targets defined for ALL deliverables
+
+**Exit codes:**
+- `0` = All prerequisites met, safe to start Phase 5b
+- `1` = Critical prerequisites missing, **BLOCKED**
+- `2` = Configuration warning (non-blocking)
+
+**If validation FAILS (exit code 1):** Fix critical issues before starting phase implementation.
+
+**Reference:** `CLAUDE.md` Section "Phase Task Visibility System" (3-Step Phase Start Protocol)
+
+---
 
 ### Before Starting This Phase - TEST PLANNING CHECKLIST ⚠️
 

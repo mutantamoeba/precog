@@ -1,0 +1,253 @@
+# Validation Configuration - YAML-Driven Enforcement
+# Version: 1.0
+# Purpose: Extensible configuration for validation scripts
+# Maintenance: Update when adding new config layers or coverage tiers
+# Reference: docs/guides/DEVELOPMENT_PATTERNS_V1.4.md (Pattern 8: Config Synchronization)
+
+# ============================================================================
+# Pattern 8: Configuration Synchronization (4-layer validation)
+# ============================================================================
+# These layers must stay synchronized. When adding/removing config options:
+# 1. Update tool_configs (pyproject.toml, ruff.toml, etc.)
+# 2. Update application_configs (YAML files)
+# 3. Update documentation (guides)
+# 4. Run validate_config_sync.py to verify
+
+config_layers:
+  tool_configs:
+    description: "Build tool and linter configurations"
+    patterns:
+      - "pyproject.toml"
+      - "ruff.toml"
+      - ".pre-commit-config.yaml"
+    validation_rules:
+      - "No float types for financial fields (use Decimal)"
+      - "Tool versions must match across configs"
+      - "Disabled rules must have documented rationale"
+
+  application_configs:
+    description: "Application runtime configurations"
+    patterns:
+      - "src/precog/config/*.yaml"
+      - "config/*.yaml"
+    validation_rules:
+      - "All numeric values in string format (no YAML floats)"
+      - "Required fields: min_edge, max_kelly_fraction, etc."
+      - "Cross-file consistency (risk limits, API settings)"
+
+  documentation:
+    description: "Configuration documentation"
+    patterns:
+      - "docs/guides/CONFIGURATION_GUIDE*.md"
+      - "docs/guides/DEVELOPMENT_PATTERNS*.md"
+    validation_rules:
+      - "Example configs match application_configs structure"
+      - "All config options documented"
+      - "Migration guides for breaking changes"
+
+  # Future layer (Phase 5+): Add when Terraform implemented
+  # infrastructure_configs:
+  #   description: "Infrastructure-as-code configurations"
+  #   patterns:
+  #     - "terraform/*.tf"
+  #   validation_rules:
+  #     - "Database connection limits match application config"
+  #     - "Resource names match application expectations"
+
+# ============================================================================
+# Pattern 13: Coverage Target Validation
+# ============================================================================
+# Three-tier system based on risk and complexity:
+# - Infrastructure (80%): Stable, well-defined behavior
+# - Business Logic (85%): Core domain logic, moderate complexity
+# - Critical Path (90%): Financial decisions, security, data integrity
+
+coverage_tiers:
+  infrastructure: 80      # Logger, connection pool, config loader
+  business_logic: 85      # CRUD operations, managers
+  critical_path: 90       # API authentication, schema migrations, trading execution
+
+  # Module classification patterns (auto-discovered by path)
+  tier_patterns:
+    infrastructure:
+      - "src/precog/database/connection.py"
+      - "src/precog/utils/logger.py"
+      - "src/precog/config/config_loader.py"
+
+    business_logic:
+      - "src/precog/database/crud_operations.py"
+      - "src/precog/analytics/model_manager.py"
+      - "src/precog/trading/strategy_manager.py"
+      - "src/precog/trading/position_manager.py"
+
+    critical_path:
+      - "src/precog/api_connectors/kalshi_client.py"
+      - "src/precog/api_connectors/kalshi_auth.py"
+      - "src/precog/database/migrations/*.py"
+      # Future: src/precog/trading/executor.py (Phase 5)
+
+# ============================================================================
+# Pattern 10: Property-Based Testing Requirements
+# ============================================================================
+# Trading logic MUST have Hypothesis property tests (thousands of auto-generated cases)
+# Reference: TESTING_STRATEGY_V3.1.md Section 3.2 (Property-Based Testing)
+
+property_test_requirements:
+  trading_logic:
+    description: "Financial calculations requiring mathematical invariants"
+    modules:
+      - "analytics/kelly.py"
+      - "analytics/probability.py"
+      - "trading/edge_detector.py"
+    required_properties:
+      - "Kelly fraction in [0, 1] for all inputs"
+      - "Edge detection is monotonic"
+      - "Probabilities sum to 1.0"
+
+  decimal_operations:
+    description: "Currency and probability operations (Pattern 1)"
+    modules:
+      - "utils/decimal_ops.py"
+    required_properties:
+      - "Decimal precision maintained across operations"
+      - "No float contamination"
+      - "Rounding behavior consistent"
+
+  api_parsing:
+    description: "API response parsing (TypedDict validation)"
+    modules:
+      - "api_connectors/kalshi_client.py"
+    required_properties:
+      - "All *_dollars fields parsed as Decimal"
+      - "TypedDict contracts enforced"
+      - "Invalid responses rejected"
+
+# ============================================================================
+# Pattern 13 (Part 2): Test Fixture Requirements
+# ============================================================================
+# Integration tests MUST use real fixtures, not mocks
+# Reference: TESTING_GAPS_ANALYSIS.md lines 36-42 (Strategy Manager lesson learned)
+
+test_fixture_requirements:
+  integration_tests:
+    description: "Tests requiring real database/API infrastructure"
+    required_fixtures:
+      - "db_pool"          # Real connection pool (not mocked)
+      - "db_cursor"        # Real database cursor
+      - "clean_test_data"  # Test data cleanup
+
+    forbidden_patterns:
+      - "unittest.mock.patch('psycopg2.pool')"  # Don't mock connection pool
+      - "mock_connection = Mock()"              # Don't mock database connections
+      - "monkeypatch.setattr('requests.post')"  # Don't mock API calls (use test fixtures)
+
+    allowed_exceptions:
+      - "External APIs in unit tests (ESPN, Balldontlie)"
+      - "Network failures for error handling tests"
+
+# ============================================================================
+# Phase-Specific Deliverables
+# ============================================================================
+# Used by validate_phase_completion.py to verify all deliverables meet targets
+# Add new phase sections as needed (10 min per phase)
+
+phase_deliverables:
+  "1.5":
+    name: "Manager Layer Implementation"
+    deliverables:
+      - name: "Model Manager"
+        file: "src/precog/analytics/model_manager.py"
+        coverage_target: 85
+        test_types: ["unit", "integration"]
+        test_file_patterns:
+          - "tests/unit/analytics/test_model_manager.py"
+          - "tests/integration/test_model_manager_integration.py"
+
+      - name: "Strategy Manager"
+        file: "src/precog/trading/strategy_manager.py"
+        coverage_target: 85
+        test_types: ["unit", "integration"]
+        test_file_patterns:
+          - "tests/unit/trading/test_strategy_manager.py"
+          - "tests/integration/test_strategy_manager_integration.py"
+
+      - name: "Position Manager"
+        file: "src/precog/trading/position_manager.py"
+        coverage_target: 85
+        test_types: ["unit", "integration"]
+        test_file_patterns:
+          - "tests/unit/trading/test_position_manager.py"
+          - "tests/integration/test_position_manager_integration.py"
+
+      - name: "Attribution Architecture"
+        file: "src/precog/database/crud_operations.py"
+        coverage_target: 80
+        test_types: ["unit", "integration"]
+        test_file_patterns:
+          - "tests/unit/database/test_crud_operations.py"
+
+  # Future phases: Add sections as implementation progresses
+  # "2.0":
+  #   name: "ESPN Integration & Live Data"
+  #   deliverables:
+  #     - name: "ESPN API Client"
+  #       file: "src/precog/api_connectors/espn_client.py"
+  #       coverage_target: 80
+  #       test_types: ["unit", "integration", "property"]
+  #       test_file_patterns:
+  #         - "tests/unit/api_connectors/test_espn_client.py"
+  #         - "tests/property/test_espn_client_properties.py"
+
+# ============================================================================
+# Pattern 2: SCD Type 2 Query Validation
+# ============================================================================
+# All queries on SCD Type 2 tables MUST filter by row_current_ind = TRUE
+# Reference: DEVELOPMENT_PATTERNS_V1.4.md Pattern 2 (Dual Versioning)
+
+scd_type2_validation:
+  description: "Slowly Changing Dimension Type 2 tables (immutable history)"
+
+  # Auto-discovered from database schema (zero maintenance)
+  discovery_method: "Query information_schema for tables with row_current_ind column"
+
+  required_pattern: |
+    .filter(table.c.row_current_ind == True)
+    # OR
+    .where(table.row_current_ind.is_(True))
+
+  forbidden_patterns:
+    - ".all()"                           # Missing filter (gets ALL versions)
+    - ".filter_by(id=123)"               # Missing row_current_ind
+    - "WHERE NOT row_current_ind"        # Querying historical records (usually wrong)
+
+  exceptions:
+    - "Historical audit queries (must have comment explaining why)"
+    - "Backfill scripts (migrations only)"
+
+# ============================================================================
+# Maintenance Notes
+# ============================================================================
+# This file requires updates in the following scenarios:
+#
+# 1. NEW CONFIG LAYER (Phase 5+):
+#    - Add section to config_layers
+#    - Update validate_config_sync.py auto-discovery logic (convention-over-configuration)
+#    - Time: 10 minutes
+#
+# 2. NEW COVERAGE TIER (unlikely):
+#    - Add tier to coverage_tiers
+#    - Update tier_patterns with module classification
+#    - Time: 15 minutes
+#
+# 3. NEW PHASE DELIVERABLES (every phase):
+#    - Add phase section to phase_deliverables
+#    - List all new modules with coverage targets
+#    - Time: 10 minutes per phase
+#
+# 4. NEW PROPERTY TEST REQUIREMENTS (Phase 2-4):
+#    - Add category to property_test_requirements
+#    - List modules requiring property tests
+#    - Time: 5 minutes
+#
+# TOTAL MAINTENANCE: ~12 minutes per phase (Phases 2-9)
+# ROI: 15x (380 hours saved / 25 hours invested over 9 phases)
