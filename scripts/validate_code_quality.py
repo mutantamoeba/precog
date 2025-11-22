@@ -3,11 +3,12 @@
 Code Quality Validation - CODE_REVIEW_TEMPLATE Enforcement
 
 Enforces CODE_REVIEW_TEMPLATE requirements before push:
-1. Module coverage ≥80% (Section 2: Test Coverage)
+1. Module coverage meets tier-specific targets (Pattern 13: Infrastructure 80%, Business Logic 85%, Critical Path 90%)
 2. REQ-XXX-NNN have test coverage (Section 1: Requirements Traceability)
 3. Educational docstrings present (Pattern 7, Section 3: Code Quality) - WARNING ONLY
 
 Reference: docs/utility/CODE_REVIEW_TEMPLATE_V1.0.md
+Reference: scripts/validation_config.yaml (coverage tier definitions)
 Related: DEVELOPMENT_PHILOSOPHY_V1.1.md Section 11 (Test Coverage Accountability)
 
 Exit codes:
@@ -24,10 +25,113 @@ import subprocess
 import sys
 from pathlib import Path
 
+try:
+    import yaml
+
+    YAML_AVAILABLE = True
+except ImportError:
+    YAML_AVAILABLE = False
+
+# Project root
+PROJECT_ROOT = Path(__file__).parent.parent
+
+
+def load_coverage_tiers() -> dict:
+    """
+    Load coverage tier definitions from validation_config.yaml.
+
+    Returns:
+        dict with coverage_tiers and tier_patterns, or default tiers if file not found
+    """
+    validation_config_path = PROJECT_ROOT / "scripts" / "validation_config.yaml"
+
+    if not validation_config_path.exists() or not YAML_AVAILABLE:
+        # Return default tiers if config not found
+        return {
+            "coverage_tiers": {
+                "infrastructure": 80,
+                "business_logic": 85,
+                "critical_path": 90,
+            },
+            "tier_patterns": {
+                "infrastructure": [
+                    "src/precog/database/connection.py",
+                    "src/precog/utils/logger.py",
+                    "src/precog/config/config_loader.py",
+                ],
+                "business_logic": [
+                    "src/precog/database/crud_operations.py",
+                    "src/precog/analytics/model_manager.py",
+                    "src/precog/trading/strategy_manager.py",
+                    "src/precog/trading/position_manager.py",
+                ],
+                "critical_path": [
+                    "src/precog/api_connectors/kalshi_client.py",
+                    "src/precog/api_connectors/kalshi_auth.py",
+                    "src/precog/database/migrations/*.py",
+                ],
+            },
+        }
+
+    try:
+        with open(validation_config_path, encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+            return {
+                "coverage_tiers": config.get("coverage_tiers", {}),
+                "tier_patterns": config["coverage_tiers"].get("tier_patterns", {}),
+            }
+    except Exception:
+        # Return default tiers if config parsing fails
+        return {
+            "coverage_tiers": {"infrastructure": 80, "business_logic": 85, "critical_path": 90},
+            "tier_patterns": {},
+        }
+
+
+def classify_module_tier(module_path: str, tier_patterns: dict) -> tuple[str, int]:
+    """
+    Classify a module into a coverage tier.
+
+    Args:
+        module_path: Path to Python module (e.g., "src/precog/database/connection.py")
+        tier_patterns: Dict of tier name -> list of patterns
+
+    Returns:
+        (tier_name, target_percentage) tuple
+    """
+    # Normalize path for comparison
+    normalized_path = module_path.replace("\\", "/")
+
+    # Check critical_path first (highest tier)
+    for pattern in tier_patterns.get("critical_path", []):
+        pattern_normalized = pattern.replace("\\", "/")
+        if pattern_normalized in normalized_path or normalized_path in pattern_normalized:
+            return ("critical_path", 90)
+
+    # Check business_logic next
+    for pattern in tier_patterns.get("business_logic", []):
+        pattern_normalized = pattern.replace("\\", "/")
+        if pattern_normalized in normalized_path or normalized_path in pattern_normalized:
+            return ("business_logic", 85)
+
+    # Check infrastructure last
+    for pattern in tier_patterns.get("infrastructure", []):
+        pattern_normalized = pattern.replace("\\", "/")
+        if pattern_normalized in normalized_path or normalized_path in pattern_normalized:
+            return ("infrastructure", 80)
+
+    # Default to infrastructure tier (80%) if not classified
+    return ("infrastructure", 80)
+
 
 def check_module_coverage(verbose: bool = False) -> tuple[bool, list[str]]:
     """
-    Verify all Python modules meet ≥80% coverage threshold.
+    Verify all Python modules meet tier-specific coverage thresholds (Pattern 13).
+
+    Coverage Tiers:
+    - Infrastructure (80%): Connection pool, logger, config loader
+    - Business Logic (85%): CRUD operations, managers
+    - Critical Path (90%): API auth, schema migrations, trading execution
 
     Args:
         verbose: If True, show detailed coverage breakdown
@@ -36,6 +140,19 @@ def check_module_coverage(verbose: bool = False) -> tuple[bool, list[str]]:
         (passed, violations) tuple
     """
     violations = []
+
+    # Load coverage tier definitions
+    tier_config = load_coverage_tiers()
+    coverage_tiers = tier_config["coverage_tiers"]
+    tier_patterns = tier_config["tier_patterns"]
+
+    if verbose:
+        print(f"\n[DEBUG] Loaded coverage tiers: {coverage_tiers}")
+        print(
+            f"[DEBUG] Tier patterns: {len(tier_patterns.get('infrastructure', []))} infrastructure, "
+            f"{len(tier_patterns.get('business_logic', []))} business_logic, "
+            f"{len(tier_patterns.get('critical_path', []))} critical_path"
+        )
 
     # Run pytest with coverage
     result = subprocess.run(
@@ -58,7 +175,7 @@ def check_module_coverage(verbose: bool = False) -> tuple[bool, list[str]]:
         print("\n[DEBUG] pytest coverage output:")
         print(result.stdout[:500])  # Show first 500 chars
 
-    # Parse coverage output for modules below 80%
+    # Parse coverage output for modules below tier-specific thresholds
     in_coverage_section = False
     for line in result.stdout.split("\n"):
         # Detect coverage section (starts after "TOTAL")
@@ -85,8 +202,13 @@ def check_module_coverage(verbose: bool = False) -> tuple[bool, list[str]]:
             if "__init__.py" in module:
                 continue
 
-            if coverage_pct < 80:
-                violations.append(f"{module}: {coverage_pct}% (minimum 80%)")
+            # Classify module and get tier-specific target
+            tier_name, target_pct = classify_module_tier(module, tier_patterns)
+
+            if coverage_pct < target_pct:
+                violations.append(
+                    f"{module}: {coverage_pct}% (target: {target_pct}%, tier: {tier_name})"
+                )
 
     return len(violations) == 0, violations
 
@@ -244,20 +366,22 @@ def main():
 
     all_passed = True
 
-    # Check 1: Module coverage >=80%
-    print("[1/3] Checking module coverage (>=80%)...")
+    # Check 1: Module coverage meets tier-specific targets (Pattern 13)
+    print("[1/3] Checking module coverage (tier-specific targets)...")
+    print("         Infrastructure: 80%, Business Logic: 85%, Critical Path: 90%")
     try:
         passed, violations = check_module_coverage(verbose)
         if not passed:
-            print("[FAIL] Modules below 80% coverage:")
+            print("[FAIL] Modules below tier-specific targets:")
             for v in violations:
                 print(f"  - {v}")
             print("")
-            print("Fix: Add tests to increase coverage above 80%")
-            print("Reference: CODE_REVIEW_TEMPLATE Section 2 (Test Coverage)")
+            print("Fix: Add tests to meet tier-specific coverage targets")
+            print("Reference: CODE_REVIEW_TEMPLATE Section 2, Pattern 13 (Coverage Quality)")
+            print("Tiers defined in: scripts/validation_config.yaml")
             all_passed = False
         else:
-            print("[PASS] All modules >=80% coverage")
+            print("[PASS] All modules meet tier-specific targets")
     except subprocess.TimeoutExpired:
         print("[WARN] Coverage check timed out (skipped)")
     except Exception as e:

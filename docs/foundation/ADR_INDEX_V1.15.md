@@ -1,9 +1,20 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.14
-**Last Updated:** 2025-11-21
+**Version:** 1.15
+**Last Updated:** 2025-11-22
 **Status:** ✅ Current
+**Changes in v1.15:**
+- **WORKFLOW ENFORCEMENT INFRASTRUCTURE (PHASE 1.5):** Added ADR-094, ADR-095, ADR-096, ADR-097 (Comprehensive Workflow Enforcement)
+- Added ADR-094: YAML-Driven Validation Architecture (externalized validation rules to validation_config.yaml)
+- Added ADR-095: Auto-Discovery Pattern for Validators (database introspection, filesystem glob, convention-based discovery)
+- Added ADR-096: Parallel Execution in Git Hooks (66% time savings: 145s sequential → 40-50s parallel)
+- Added ADR-097: Tier-Specific Coverage Targets (risk-based testing: Infrastructure 80%, Business Logic 85%, Critical Path 90%)
+- Documents 4-layer defense-in-depth architecture: Pre-commit (~2-5s) → Pre-push (~40-50s) → CI/CD (~2-5min) → Branch protection
+- 6 new validators + 2 enhanced validators enforce Pattern 2 (SCD Type 2), Pattern 8 (Config Sync), Pattern 10 (Property Tests), Pattern 13 (Test Fixtures)
+- Phase Start Protocol automation (3-step checklist) and Phase Completion Protocol automation (10-step assessment)
+- Updated ARCHITECTURE_DECISIONS reference from V2.20 to V2.21
+- Total ADRs: 72 → 76 (4 new ADRs added for Phase 1.5 workflow enforcement infrastructure)
 **Changes in v1.14:**
 - **TRADE & POSITION ATTRIBUTION ARCHITECTURE (PHASE 1.5):** Added ADR-090, ADR-091, ADR-092 (Trade/Position Attribution & Strategy Scope)
 - Added ADR-090: Strategy Contains Entry + Exit Rules with Nested Versioning (addresses strategy scope ambiguity)
@@ -216,6 +227,15 @@ This document provides a systematic index of all Precog architecture decisions u
 |-----|-------|------|--------|-------|----------|
 | ADR-074 | Property-Based Testing Strategy (Hypothesis Framework) | 2025-11-08 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.12 |
 | ADR-075 | Multi-Source Warning Governance Architecture | 2025-11-08 | ✅ | 0.7/1 | ARCHITECTURE_DECISIONS_V2.12 |
+
+### Phase 1.5: Workflow Enforcement Infrastructure
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-094 | YAML-Driven Validation Architecture | 2025-11-22 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.21 |
+| ADR-095 | Auto-Discovery Pattern for Validators | 2025-11-22 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.21 |
+| ADR-096 | Parallel Execution in Git Hooks | 2025-11-22 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.21 |
+| ADR-097 | Tier-Specific Coverage Targets | 2025-11-22 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.21 |
 
 ### Phase 2: Production Monitoring Infrastructure (Planned)
 
@@ -950,10 +970,277 @@ ALTER TABLE probability_models
 - tests/test_lookup_tables.py (23 tests, 100% coverage)
 
 ---
+
+### ADR-094: YAML-Driven Validation Architecture
+
+**Date:** 2025-11-22
+**Status:** ✅ Accepted (Implemented)
+**Phase:** 1.5 (Workflow Enforcement Infrastructure)
+**Stakeholders:** Development Team
+
+**Context:**
+Hardcoded validation rules create maintenance burden when adding new SCD Type 2 tables, property test modules, or phase deliverables. Developers must update validator code for every new entity.
+
+**Problem:**
+- **SCD Table Lists**: New SCD Type 2 tables require code changes in validate_scd_queries.py
+- **Property Test Requirements**: New property test modules require code changes in validate_property_tests.py
+- **Coverage Targets**: New module coverage targets require code changes in validate_code_quality.py
+- **No Single Source of Truth**: Validation rules scattered across 7+ validator files
+
+**Decision:**
+Externalize ALL validation rules to `scripts/validation_config.yaml` with graceful degradation:
+
+```yaml
+# Example: SCD Type 2 validation rules
+scd_type2_validation:
+  description: "Slowly Changing Dimension Type 2 tables (immutable history)"
+  discovery_method: "Query information_schema for tables with row_current_ind column"
+  required_pattern: ".filter(table.row_current_ind == True)"
+  exceptions: ["Historical audit query", "Backfill script", "Migration only"]
+
+# Example: Coverage tier patterns
+coverage_tiers:
+  infrastructure:
+    target: 80
+    patterns: ["**/connection.py", "**/logger.py", "**/config_loader.py"]
+  business_logic:
+    target: 85
+    patterns: ["**/crud_operations.py", "**/model_manager.py"]
+  critical_path:
+    target: 90
+    patterns: ["**/kalshi_client.py", "**/kalshi_auth.py"]
+```
+
+**Implementation:**
+- All 7 validators load from `validation_config.yaml`
+- Graceful degradation to hardcoded defaults if YAML missing/corrupt
+- Single function `load_validation_config()` for consistency
+
+**Consequences:**
+- **Positive:**
+  - **Zero-Maintenance Updates**: Edit YAML, no code changes needed
+  - **Single Source of Truth**: All validation rules in one file
+  - **Easy Auditing**: See all rules at a glance
+  - **Version Controlled**: YAML changes tracked in git
+  - **Graceful Degradation**: Works without YAML (hardcoded defaults)
+- **Negative:**
+  - **YAML Dependency**: Must install PyYAML library
+  - **Runtime Errors**: Invalid YAML caught at runtime, not compile-time
+  - **Learning Curve**: Developers must understand YAML structure
+- **Neutral:**
+  - **Migration Required**: Move existing hardcoded rules to YAML
+
+**References:**
+- ARCHITECTURE_DECISIONS_V2.21.md (full ADR-094 with YAML examples)
+- scripts/validation_config.yaml (227 lines of validation rules)
+- docs/utility/ENFORCEMENT_MAINTENANCE_GUIDE.md (validator update guide)
+
+---
+
+### ADR-095: Auto-Discovery Pattern for Validators
+
+**Date:** 2025-11-22
+**Status:** ✅ Accepted (Implemented)
+**Phase:** 1.5 (Workflow Enforcement Infrastructure)
+**Stakeholders:** Development Team
+
+**Context:**
+Validators with hardcoded lists (e.g., SCD table names, property test modules) become stale when codebase grows. New entities require manual validator updates.
+
+**Problem:**
+- **SCD Tables**: Adding new SCD Type 2 table requires updating validator code
+- **Property Tests**: New property test modules not automatically discovered
+- **Phase Deliverables**: New phases require manual validator configuration
+- **Maintenance Burden**: 3-5 code changes needed for each new entity
+
+**Decision:**
+Implement auto-discovery patterns that query authoritative sources instead of maintaining hardcoded lists:
+
+**Pattern 1 - Database Schema Introspection (SCD Tables):**
+```python
+# Query information_schema for tables with row_current_ind column
+query = """
+    SELECT DISTINCT table_name
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND column_name = 'row_current_ind'
+"""
+scd_tables = {row[0] for row in cursor.fetchall()}
+```
+
+**Pattern 2 - Filesystem Glob (Property Tests):**
+```python
+# Discover all property test modules
+property_test_files = Path("tests/property").rglob("*_properties.py")
+```
+
+**Pattern 3 - Convention-Based Discovery (Phase Documents):**
+```python
+# Find all deferred task documents
+deferred_docs = Path("docs/utility").glob("PHASE_*_DEFERRED_TASKS*.md")
+```
+
+**Consequences:**
+- **Positive:**
+  - **Zero Maintenance**: New entities automatically discovered
+  - **Scales with Codebase**: No manual updates as codebase grows
+  - **Authoritative Sources**: Query actual data, not hardcoded lists
+  - **Fail-Safe Fallback**: Use hardcoded lists if discovery fails
+- **Negative:**
+  - **Database Dependency**: SCD discovery requires database connection
+  - **Performance Overhead**: Filesystem glob slower than hardcoded list
+  - **Complexity**: More complex than simple hardcoded lists
+- **Neutral:**
+  - **Graceful Degradation**: Falls back to hardcoded lists if discovery fails
+
+**References:**
+- ARCHITECTURE_DECISIONS_V2.21.md (full ADR-095 with code examples)
+- scripts/validate_scd_queries.py (database introspection pattern)
+- scripts/validate_property_tests.py (filesystem glob pattern)
+- scripts/validate_phase_start.py (convention-based discovery pattern)
+
+---
+
+### ADR-096: Parallel Execution in Git Hooks
+
+**Date:** 2025-11-22
+**Status:** ✅ Accepted (Implemented)
+**Phase:** 1.5 (Workflow Enforcement Infrastructure)
+**Stakeholders:** Development Team
+
+**Context:**
+Adding Steps 8-10 to pre-push hook (SCD queries ~15s, Property tests ~20s, Test fixtures ~10s) would increase total time from 95s to 145s sequentially, creating developer friction.
+
+**Problem:**
+- **Sequential Execution**: 10 steps run one after another (~145 seconds total)
+- **Developer Friction**: >2 minute pre-push time discourages frequent pushes
+- **Independent Steps**: Most steps don't depend on each other
+- **Wasted Time**: CPU idle while waiting for I/O-bound operations
+
+**Decision:**
+Run Steps 2-10 in parallel using Bash background processes with PID tracking:
+
+```bash
+# Launch all steps in parallel
+python scripts/validate_quick.sh &
+PID_VALIDATE=$!
+
+python -m pytest tests/ --tb=no -q &
+PID_TESTS=$!
+
+python -m mypy . &
+PID_MYPY=$!
+
+# ... launch remaining steps ...
+
+# Wait for all to complete
+wait $PID_VALIDATE $PID_TESTS $PID_MYPY ...
+
+# Check exit codes sequentially
+if ! wait $PID_VALIDATE; then
+  echo "[FAIL] Validation failed"
+  exit 1
+fi
+```
+
+**Performance:**
+- **Sequential**: 145 seconds (sum of all step durations)
+- **Parallel**: 40-50 seconds (limited by slowest step: warning governance ~30s)
+- **Time Savings**: 66% reduction (145s → 40-50s)
+
+**Consequences:**
+- **Positive:**
+  - **66% Time Savings**: Developers save ~2 minutes per push
+  - **Better UX**: <1 minute pre-push time acceptable
+  - **Encourages Frequent Pushes**: Low friction promotes small commits
+  - **CPU Utilization**: Uses multiple cores efficiently
+- **Negative:**
+  - **Complexity**: Bash process management with PID tracking
+  - **Output Interleaving**: Must buffer output to display sequentially
+  - **Debugging Harder**: Parallel failures harder to diagnose
+- **Neutral:**
+  - **Exit Code Handling**: Must check all PIDs, fail on any non-zero exit
+
+**References:**
+- ARCHITECTURE_DECISIONS_V2.21.md (full ADR-096 with Bash implementation)
+- .git/hooks/pre-push (10-step parallel execution with PID tracking)
+- docs/utility/ENFORCEMENT_MAINTENANCE_GUIDE.md (hook maintenance guide)
+
+---
+
+### ADR-097: Tier-Specific Coverage Targets
+
+**Date:** 2025-11-22
+**Status:** ✅ Accepted (Implemented)
+**Phase:** 1.5 (Workflow Enforcement Infrastructure)
+**Stakeholders:** Development Team, QA
+
+**Context:**
+Single 80% coverage threshold treats all modules equally. API authentication logic (critical path) has same requirement as logging utilities (infrastructure), creating misaligned incentives.
+
+**Problem:**
+- **One-Size-Fits-All**: 80% coverage for logger.py and kalshi_auth.py
+- **Misaligned Risk**: Critical path bugs cost more than infrastructure bugs
+- **No Differentiation**: Can't express "authentication needs higher coverage than utilities"
+- **Manual Reviews**: Must manually assess if coverage adequate for module type
+
+**Decision:**
+Implement risk-based testing approach with 3 coverage tiers:
+
+**Tier 1 - Infrastructure (80% target):**
+- Utilities: logger.py, connection.py, config_loader.py
+- Low business logic complexity
+- Failures impact local operations, not trading
+
+**Tier 2 - Business Logic (85% target):**
+- Core operations: crud_operations.py, model_manager.py, strategy_manager.py
+- Moderate business logic complexity
+- Failures impact trading accuracy
+
+**Tier 3 - Critical Path (90% target):**
+- Trading execution: kalshi_client.py, kalshi_auth.py
+- Schema migrations: database/migrations/*.py
+- Failures cause financial loss or data corruption
+
+**Auto-Classification:**
+```yaml
+# validation_config.yaml
+coverage_tiers:
+  infrastructure:
+    target: 80
+    patterns: ["**/connection.py", "**/logger.py", "**/config_loader.py"]
+  business_logic:
+    target: 85
+    patterns: ["**/crud_operations.py", "**/model_manager.py"]
+  critical_path:
+    target: 90
+    patterns: ["**/kalshi_client.py", "**/kalshi_auth.py", "**/migrations/*.py"]
+```
+
+**Consequences:**
+- **Positive:**
+  - **Risk-Based Testing**: Higher coverage where failures cost more
+  - **Clear Expectations**: Developers know target for each module type
+  - **Auto-Classification**: fnmatch pattern matching assigns tiers
+  - **Scales with Codebase**: New modules auto-classified by path
+- **Negative:**
+  - **Configuration Complexity**: Must maintain tier patterns
+  - **Boundary Ambiguity**: Some modules don't fit clean tier categories
+  - **Higher Burden**: Critical path modules require 90% vs 80%
+- **Neutral:**
+  - **Tier Assignment**: Can override auto-classification in YAML
+
+**References:**
+- ARCHITECTURE_DECISIONS_V2.21.md (full ADR-097 with tier definitions)
+- scripts/validation_config.yaml (tier patterns and targets)
+- scripts/validate_code_quality.py (tier classification logic)
+- docs/utility/CODE_REVIEW_TEMPLATE_V1.0.md (Section 2: Testing Coverage)
+
+---
 ## ADR Statistics
 
-**Total ADRs:** 93
-**Accepted (✅):** 44 (Phase 0-1.5 complete)
+**Total ADRs:** 97
+**Accepted (✅):** 48 (Phase 0-1.5 complete)
 **Proposed (🔵):** 49 (Phase 1, 2-10)
 **Rejected (❌):** 0
 **Superseded (⚠️):** 1 (ADR-089 Dual-Key Pattern superseded by schema implementation)
@@ -962,7 +1249,7 @@ ALTER TABLE probability_models
 - Phase 0: 17 ADRs (100% accepted)
 - Phase 0.5: 12 ADRs (100% accepted)
 - Phase 1: 12 ADRs (6 accepted for DB completion + 6 planned for API best practices)
-- Phase 1.5: 8 ADRs (100% accepted - property-based testing POC + schema standardization + no edge manager + 8 test type framework + dual-key pattern + trade/position attribution architecture [3 ADRs])
+- Phase 1.5: 12 ADRs (100% accepted - property-based testing POC + schema standardization + no edge manager + 8 test type framework + dual-key pattern + trade/position attribution architecture [3 ADRs] + workflow enforcement infrastructure [4 ADRs])
 - Phase 0.6c: 5 ADRs (100% accepted - includes cross-platform standards)
 - Phase 0.7: 6 ADRs (2 accepted: Python 3.14 compatibility + Branch Protection + 4 planned)
 - Phase 2: 3 ADRs (0% - planned)
@@ -981,11 +1268,12 @@ ALTER TABLE probability_models
 
 ---
 
-**Document Version:** 1.14
+**Document Version:** 1.15
 **Created:** 2025-10-21
-**Last Updated:** 2025-11-21
+**Last Updated:** 2025-11-22
 **Purpose:** Systematic architecture decision tracking and reference
 **Critical Changes:**
+- v1.15: Added ADR-094, ADR-095, ADR-096, ADR-097 for workflow enforcement infrastructure (Phase 1.5 - YAML-driven validation, auto-discovery pattern, parallel execution in git hooks, tier-specific coverage targets)
 - v1.14: Added ADR-090, ADR-091, ADR-092 for trade/position attribution architecture (Phase 1.5 - strategy scope, explicit columns, trade source tracking)
 - v1.10: Added ADR-046 for branch protection strategy (Phase 0.7 retroactive, GitHub branch protection with 6 required CI checks)
 - v1.9: Added ADR-055 for production monitoring infrastructure (Sentry hybrid architecture)
@@ -994,6 +1282,6 @@ ALTER TABLE probability_models
 - v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.20.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.21.md
 
-**END OF ADR INDEX V1.14**
+**END OF ADR INDEX V1.15**

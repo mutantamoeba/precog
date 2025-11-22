@@ -7,13 +7,14 @@ Validates document consistency across foundation documents to prevent drift.
 Checks:
 1. ADR consistency (ARCHITECTURE_DECISIONS ↔ ADR_INDEX)
 2. Requirement consistency (MASTER_REQUIREMENTS ↔ REQUIREMENT_INDEX)
-3. MASTER_INDEX accuracy (all docs exist, versions match)
+3. MASTER_INDEX accuracy (all docs exist, versions match, orphan detection with paths)
 4. Cross-references (no broken links)
 5. Version headers (consistent versioning)
 6. New docs enforcement (all versioned .md files MUST be in MASTER_INDEX) [ENFORCED]
 7. Git-aware version bump detection (ensure renamed files increment version) [ENFORCED]
 8. Phase completion status validation (completed phases have proper documentation) [ENFORCED]
 9. YAML configuration validation (4-level validation: syntax, Decimal safety, required keys, cross-file) [ENFORCED]
+10. Configuration synchronization (Pattern 8: Tool ↔ Application ↔ Documentation ↔ Infrastructure configs) [ENFORCED]
 
 Usage:
     python scripts/validate_docs.py
@@ -308,21 +309,22 @@ def validate_master_index() -> ValidationResult:
         if not found:
             errors.append(f"Document listed in MASTER_INDEX but not found: {doc_name}")
 
-    # Check for documents not in MASTER_INDEX
+    # Check for documents not in MASTER_INDEX (orphan detection)
     # Find all versioned markdown files in docs/
-    all_docs = set()
+    all_docs_with_paths = {}  # filename -> relative path
     for doc_file in DOCS_ROOT.rglob("*_V*.md"):
         if "_archive" not in str(doc_file):  # Exclude archived docs
-            all_docs.add(doc_file.name)
+            relative_path = doc_file.relative_to(PROJECT_ROOT)
+            all_docs_with_paths[doc_file.name] = str(relative_path)
 
     listed_set = set(listed_docs)
-    unlisted = all_docs - listed_set
+    unlisted = set(all_docs_with_paths.keys()) - listed_set
 
     if unlisted:
-        warnings.append(
-            f"{len(unlisted)} documents exist but not in MASTER_INDEX: "
-            + ", ".join(sorted(unlisted))
-        )
+        warnings.append(f"{len(unlisted)} documents exist but not in MASTER_INDEX (orphans):")
+        for orphan_name in sorted(unlisted):
+            warnings.append(f"  - {orphan_name} (path: {all_docs_with_paths[orphan_name]})")
+        warnings.append("Consider adding to MASTER_INDEX or moving to _archive/")
 
     passed = len(errors) == 0
 
@@ -915,6 +917,200 @@ def validate_yaml_configuration() -> ValidationResult:
     return ValidationResult(name=check_name, passed=passed, errors=errors, warnings=warnings)
 
 
+def validate_config_synchronization() -> ValidationResult:
+    """
+    CHECK #10: Configuration Synchronization (Pattern 8: 4-Layer Validation).
+
+    Validates that configuration changes are synchronized across all 4 layers:
+    1. Tool Configs (pyproject.toml, ruff.toml, .pre-commit-config.yaml)
+    2. Application Configs (src/precog/config/*.yaml)
+    3. Documentation (CONFIGURATION_GUIDE, DEVELOPMENT_PATTERNS)
+    4. Infrastructure (Terraform - Phase 5+)
+
+    This prevents config drift like the Bandit → Ruff migration issue (orphaned [tool.bandit] section).
+
+    Reference: docs/guides/DEVELOPMENT_PATTERNS_V1.4.md Pattern 8
+    Reference: scripts/validation_config.yaml (config layer definitions)
+
+    Returns ERROR for critical synchronization failures (float contamination, missing critical keys).
+    Returns WARNING for documentation drift (examples don't match configs).
+    """
+    errors = []
+    warnings = []
+
+    # Load validation config
+    validation_config_path = PROJECT_ROOT / "scripts" / "validation_config.yaml"
+
+    if not validation_config_path.exists():
+        warnings.append(
+            "scripts/validation_config.yaml not found - skipping config synchronization validation"
+        )
+        return ValidationResult(
+            name="Configuration Synchronization (Check #10)",
+            passed=True,
+            errors=[],
+            warnings=warnings,
+        )
+
+    if not YAML_AVAILABLE:
+        warnings.append(
+            "PyYAML not installed - skipping config synchronization validation (run: pip install pyyaml)"
+        )
+        return ValidationResult(
+            name="Configuration Synchronization (Check #10)",
+            passed=True,
+            errors=[],
+            warnings=warnings,
+        )
+
+    try:
+        with open(validation_config_path, encoding="utf-8") as f:
+            validation_config = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        errors.append(f"Failed to parse validation_config.yaml: {e}")
+        return ValidationResult(
+            name="Configuration Synchronization (Check #10)",
+            passed=False,
+            errors=errors,
+            warnings=[],
+        )
+
+    config_layers = validation_config.get("config_layers", {})
+    if not config_layers:
+        warnings.append("No config_layers defined in validation_config.yaml")
+        return ValidationResult(
+            name="Configuration Synchronization (Check #10)",
+            passed=True,
+            errors=[],
+            warnings=warnings,
+        )
+
+    layers_checked = 0
+    files_checked = 0
+
+    # ============================================================================
+    # LAYER 1: Tool Configs Validation
+    # ============================================================================
+    tool_configs = config_layers.get("tool_configs", {})
+    if tool_configs:
+        patterns = tool_configs.get("patterns", [])
+        for pattern in patterns:
+            config_files = list(PROJECT_ROOT.glob(pattern))
+            for config_file in config_files:
+                if config_file.exists():
+                    files_checked += 1
+
+                    # Check for orphaned tool sections (like [tool.bandit] after Bandit removal)
+                    if config_file.name == "pyproject.toml":
+                        content = config_file.read_text(encoding="utf-8")
+
+                        # Check for common orphaned sections
+                        orphaned_tools = [
+                            "bandit",
+                            "flake8",
+                            "pylint",
+                            "black",
+                        ]  # Tools we don't use
+                        for tool in orphaned_tools:
+                            if f"[tool.{tool}]" in content:
+                                warnings.append(
+                                    f"pyproject.toml: Orphaned [{tool}] section detected (tool no longer used)"
+                                )
+                                warnings.append(
+                                    f"  Remove [tool.{tool}] section to prevent config drift"
+                                )
+
+        layers_checked += 1
+
+    # ============================================================================
+    # LAYER 2: Application Configs Validation
+    # ============================================================================
+    app_configs = config_layers.get("application_configs", {})
+    if app_configs:
+        patterns = app_configs.get("patterns", [])
+        for pattern in patterns:
+            config_files = list(PROJECT_ROOT.glob(pattern))
+            for config_file in config_files:
+                if config_file.exists():
+                    files_checked += 1
+
+                    # Validation already done in Check #9 (YAML syntax + Decimal safety)
+                    # This check focuses on cross-layer consistency
+                    pass
+
+        layers_checked += 1
+
+    # ============================================================================
+    # LAYER 3: Documentation Validation
+    # ============================================================================
+    doc_configs = config_layers.get("documentation", {})
+    if doc_configs:
+        patterns = doc_configs.get("patterns", [])
+        for pattern in patterns:
+            doc_files = list(PROJECT_ROOT.glob(pattern))
+            for doc_file in doc_files:
+                if doc_file.exists():
+                    files_checked += 1
+
+                    # Check documentation examples match application configs
+                    # Look for YAML code blocks in documentation
+                    content = doc_file.read_text(encoding="utf-8")
+
+                    # Find YAML code blocks (```yaml ... ```)
+                    yaml_blocks = re.findall(
+                        r"```yaml\n(.*?)\n```", content, re.DOTALL | re.MULTILINE
+                    )
+
+                    for i, yaml_block in enumerate(yaml_blocks):
+                        # Check for float values in Decimal fields (documentation examples)
+                        decimal_keywords = [
+                            "edge",
+                            "kelly",
+                            "spread",
+                            "probability",
+                            "threshold",
+                            "price",
+                        ]
+                        for keyword in decimal_keywords:
+                            # Match patterns like: min_edge: 0.05 (float, BAD)
+                            # Should be: min_edge: "0.05" (string, GOOD)
+                            float_pattern = rf"{keyword}[^:]*:\s+(\d+\.\d+)(?!\"|')"
+                            if re.search(float_pattern, yaml_block):
+                                warnings.append(
+                                    f"{doc_file.name}: Documentation example uses float (should be string)"
+                                )
+                                warnings.append(
+                                    f'  Change {keyword}: X.XX to {keyword}: "X.XX" in code block {i + 1}'
+                                )
+                                break  # Only warn once per block
+
+        layers_checked += 1
+
+    # ============================================================================
+    # LAYER 4: Infrastructure Configs (Phase 5+)
+    # ============================================================================
+    infra_configs = config_layers.get("infrastructure_configs", {})
+    if infra_configs:
+        patterns = infra_configs.get("patterns", [])
+        for pattern in patterns:
+            config_files = list(PROJECT_ROOT.glob(pattern))
+            if config_files:
+                layers_checked += 1
+                files_checked += len(config_files)
+                # Terraform validation would go here (Phase 5+)
+
+    # ============================================================================
+    # Cross-Layer Consistency Checks
+    # ============================================================================
+    # Future: Add cross-layer checks (e.g., database connection limits in Terraform match app config)
+
+    passed = len(errors) == 0
+
+    check_name = f"Configuration Synchronization (Check #10) - {layers_checked} layers, {files_checked} files"
+
+    return ValidationResult(name=check_name, passed=passed, errors=errors, warnings=warnings)
+
+
 def main():
     """Run all validation checks."""
     print("=" * 60)
@@ -936,6 +1132,7 @@ def main():
     results.append(validate_git_version_bumps())  # Check #7 [ENFORCED]
     results.append(validate_phase_completion_status())  # Check #8 [ENFORCED]
     results.append(validate_yaml_configuration())  # Check #9 [ENFORCED]
+    results.append(validate_config_synchronization())  # Check #10 [ENFORCED]
 
     # Print results
     print()

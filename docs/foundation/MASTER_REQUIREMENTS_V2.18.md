@@ -1,9 +1,17 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.17
+**Version:** 2.18
 **Last Updated:** 2025-11-22
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.18:**
+- **WORKFLOW ENFORCEMENT REQUIREMENTS**: Added REQ-VALIDATION-007 through REQ-VALIDATION-012 (6 comprehensive workflow enforcement requirements)
+- **PATTERN ENFORCEMENT**: Requirements enforce Pattern 2 (SCD Type 2 queries), Pattern 8 (Config Sync), Pattern 10 (Property-Based Testing), Pattern 13 (Test Coverage Quality)
+- **PHASE START/COMPLETION AUTOMATION**: REQ-VALIDATION-010 (Phase Start Protocol), REQ-VALIDATION-011 (Phase Completion Protocol) automate 3-step and 10-step assessment workflows
+- **VALIDATOR ARCHITECTURE**: All validators use YAML-driven configuration (validation_config.yaml), auto-discovery pattern (database introspection, filesystem glob), graceful degradation
+- **GIT HOOK INTEGRATION**: Pre-push hook Steps 8-10 (SCD queries ~15s, Property tests ~20s, Test fixtures ~10s) run in parallel with existing steps
+- **CROSS-REFERENCES**: Added ADR-094 (YAML-Driven Validation), ADR-095 (Auto-Discovery Pattern), ADR-096 (Parallel Execution), ADR-097 (Tier-Specific Coverage)
+- **ZERO MAINTENANCE**: New SCD Type 2 tables, property test modules, and phase deliverables auto-discovered (no code changes required)
 **Changes in v2.17:**
 - **LOOKUP TABLES FOR BUSINESS ENUMS**: Added REQ-DB-015 (Strategy Type Lookup Table) and REQ-DB-016 (Model Class Lookup Table)
 - **NO-MIGRATION ENUM EXTENSIBILITY**: Requirements document replacement of CHECK constraints with lookup tables for strategy_type and model_class
@@ -267,11 +275,11 @@ precog/
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.17.md` - This document (requirements through Phase 10)
+  2. `MASTER_REQUIREMENTS_V2.18.md` - This document (requirements through Phase 10)
   3. `MASTER_INDEX_V2.27.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.20.md` - All 87 ADRs with design rationale (Phase 0-4.5)
+  4. `ARCHITECTURE_DECISIONS_V2.21.md` - All 97 ADRs with design rationale (Phase 0-4.5)
   5. `REQUIREMENT_INDEX.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.14.md` - Architecture decision index
+  6. `ADR_INDEX_V1.15.md` - Architecture decision index
   7. `TESTING_STRATEGY_V3.1.md` - Test cases, coverage requirements, future enhancements
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
@@ -3113,6 +3121,157 @@ Automated enforcement of SECURITY_REVIEW_CHECKLIST requirements via validate_sec
 - **Cross-Platform Compatibility**: Uses ASCII output ([PASS]/[FAIL]/[WARN]) instead of Unicode for Windows cp1252 compatibility
 - **Exit Codes**: 0 = all checks passed, 1 = security violations found (API auth missing or hardcoded secrets)
 - **Defense in Depth**: Third layer validation (pre-commit checks credentials, pre-push checks patterns, CI/CD comprehensive scan)
+
+**REQ-VALIDATION-007: SCD Type 2 Query Validation (Pattern 2)**
+
+**Phase:** 1.5
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** ADR-094, ADR-095, validate_scd_queries.py, Pattern 2 (Dual Versioning)
+
+Automated validation that ALL queries on SCD Type 2 tables include `row_current_ind = TRUE` filter to prevent historical data bugs:
+- **Auto-Discovery**: Queries database schema (information_schema) to discover SCD Type 2 tables (zero maintenance)
+- **Query Analysis**: Scans all Python files for SQLAlchemy queries on discovered tables
+- **Violation Detection**: Reports queries missing `filter(table.row_current_ind == True)` or `.filter_by(row_current_ind=True)`
+- **Excludes Historical Queries**: Allows explicit historical queries with `# Historical query - intentionally includes all versions` comment
+- **Actionable Fixes**: Provides exact fix for each violation (e.g., "Add .filter(Markets.row_current_ind == True)")
+- **Integration Points**:
+  - Pre-push hooks: Step 8/10 (runs before every push, ~15 seconds, parallel execution)
+  - CI/CD: GitHub Actions workflow (runs on all PRs)
+  - Manual: `python scripts/validate_scd_queries.py` (developer testing)
+- **Exit Codes**: 0 = all queries valid, 1 = violations found, 2 = database connection failed (WARNING)
+- **Performance**: <15 seconds for full codebase scan (database introspection + file glob)
+- **Zero Maintenance**: New SCD Type 2 tables automatically detected (no code changes needed)
+
+**REQ-VALIDATION-008: Property-Based Test Coverage Validation (Pattern 10)**
+
+**Phase:** 1.5
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** ADR-094, ADR-095, validate_property_tests.py, Pattern 10 (Property-Based Testing), ADR-074
+
+Automated validation that ALL critical trading logic has Hypothesis property tests covering mathematical invariants:
+- **Module Categories**: Trading logic, decimal operations, API parsing (defined in validation_config.yaml)
+- **Auto-Discovery**: Uses filesystem glob with multiple naming strategies (nested, flat, variants)
+  - Example: analytics/kelly.py → tests/property/analytics/test_kelly_properties.py OR tests/property/test_kelly_criterion_properties.py
+- **Hypothesis Detection**: Verifies test files use `@given` decorator and import Hypothesis
+- **Property Coverage**: Checks test files cover required properties (e.g., "Kelly fraction in [0, 1] for all inputs")
+- **Naming Flexibility**: Supports multiple test file naming conventions (backward compatibility)
+- **Integration Points**:
+  - Pre-push hooks: Step 9/10 (runs before every push, ~20 seconds, parallel execution)
+  - CI/CD: GitHub Actions workflow (runs on all PRs)
+  - Manual: `python scripts/validate_property_tests.py` (developer testing)
+- **Exit Codes**: 0 = all modules have property tests, 1 = missing/incomplete tests, 2 = config error (WARNING)
+- **YAML-Driven**: Property test requirements in validation_config.yaml (add new modules without code changes)
+- **Graceful Degradation**: Falls back to defaults if validation_config.yaml missing
+
+**REQ-VALIDATION-009: Test Fixture Validation (Pattern 13)**
+
+**Phase:** 1.5
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** ADR-094, ADR-095, validate_test_fixtures.py, Pattern 13 (Real Fixtures Not Mocks)
+
+Automated validation that ALL integration tests use real fixtures (database connections, pools) instead of mocks:
+- **Required Fixtures**: Checks integration tests import required fixtures (db_pool, db_cursor, clean_test_data)
+- **Forbidden Mocks**: Blocks mocking of infrastructure (ConnectionPool, psycopg2.connect)
+- **Pytest Collection**: Uses pytest introspection to collect integration test files
+- **Pattern Detection**: Searches test files for mock patterns (`@patch`, `MagicMock`, `mocker.patch`)
+- **Actionable Fixes**: Reports exact fixture violations with suggested fixes
+- **Integration Points**:
+  - Pre-push hooks: Step 10/10 (runs before every push, ~10 seconds, parallel execution)
+  - CI/CD: GitHub Actions workflow (runs on all PRs)
+  - Manual: `python scripts/validate_test_fixtures.py` (developer testing)
+- **Exit Codes**: 0 = all tests use real fixtures, 1 = mock violations found, 2 = pytest collection failed (WARNING)
+- **YAML-Driven**: Fixture requirements in validation_config.yaml (extensible for Phase 2+ fixtures)
+- **Phase 1.5 Lesson Learned**: Prevents mocking connection pools (discovered during Manager implementation)
+
+**REQ-VALIDATION-010: Phase Start Protocol Automation**
+
+**Phase:** 1.5
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** ADR-094, ADR-095, validate_phase_start.py, CLAUDE.md (Phase Task Visibility System)
+
+Automated 3-Step Phase Start Protocol validation to block phase start until ALL prerequisites met:
+- **Step 1 - Deferred Tasks**: Auto-discovers PHASE_*_DEFERRED_TASKS*.md documents, finds tasks targeting current phase
+- **Step 2 - Phase Dependencies**: Checks DEVELOPMENT_PHASES.md for phase completion markers (✅ Complete)
+- **Step 3 - Test Planning**: Verifies "TEST PLANNING CHECKLIST" section exists for phase
+- **Step 4 - Coverage Targets**: Validates ALL deliverables have explicit coverage targets in validation_config.yaml
+- **Blocking Logic**: Exit code 1 (BLOCKED) if critical prerequisites missing
+  - Missing phase deliverables configuration
+  - Dependencies not met (previous phases incomplete)
+  - Coverage targets undefined for deliverables
+- **Warning Logic**: Exit code 0 (PASS with warnings) if non-critical issues found
+  - Deferred tasks targeting current phase (address before implementation)
+  - Test planning checklist missing (RECOMMENDED but not blocking)
+- **Integration Points**:
+  - Manual: `python scripts/validate_phase_start.py --phase 1.5` (run at start of EVERY phase)
+  - DEVELOPMENT_PHASES.md: "BEFORE STARTING - RUN PHASE START VALIDATION" section for all 6 phases
+- **Exit Codes**: 0 = safe to start phase, 1 = BLOCKED (fix issues first), 2 = config error (WARNING)
+- **YAML-Driven**: Phase deliverables and coverage targets in validation_config.yaml
+- **Purpose**: Prevents "task blindness" - ensures deferred tasks and test planning not forgotten
+
+**REQ-VALIDATION-011: Phase Completion Protocol Automation**
+
+**Phase:** 1.5
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** ADR-094, ADR-095, validate_phase_completion.py, PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md
+
+Automated validation for Steps 1, 5, and 9 of 10-Step Phase Completion Protocol:
+- **Step 1 - Deliverable Completeness**: Validates ALL deliverables meet tier-specific coverage targets
+  - Loads phase deliverables from validation_config.yaml
+  - Checks each deliverable's coverage against its target (e.g., Kalshi API Client: 93.19% vs. 90% target)
+  - Fails if ANY deliverable below target
+- **Step 5 - Testing & Validation**: Runs full test suite with coverage measurement
+  - Executes pytest with coverage reporting
+  - Validates total coverage meets threshold (80%+)
+  - Reports stats (tests passed/failed, coverage percentage)
+- **Step 9 - Security Review**: Automated hardcoded credentials scan
+  - Searches for password/secret/api_key assignments with string literals
+  - Excludes test placeholders (YOUR_, TEST_, EXAMPLE_)
+  - Fails if ANY hardcoded credentials found
+- **Manual Steps Checklist**: Provides checklist for 7 manual steps (Steps 2-4, 6-8, 10)
+  - Step 2: Internal Consistency (5 min)
+  - Step 3: Dependency Verification (5 min)
+  - Step 4: Quality Standards (5 min)
+  - Step 6: Gaps & Risks + Deferred Tasks (2 min)
+  - Step 7: AI Code Review Analysis (10 min)
+  - Step 8: Archive & Version Management (5 min)
+  - Step 10: Performance Profiling (Phase 5+ only)
+- **Integration Points**:
+  - Manual: `python scripts/validate_phase_completion.py --phase 1.5` (run at END of every phase)
+- **Exit Codes**: 0 = automated steps passed, 1 = violations found (fails phase completion)
+- **Purpose**: Automates 30% of Phase Completion Protocol (Steps 1, 5, 9), provides checklist for remaining 70%
+
+**REQ-VALIDATION-012: Configuration Synchronization Validation (Pattern 8)**
+
+**Phase:** 1.5
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** ADR-094, ADR-095, validate_docs.py (Check #10), Pattern 8 (Configuration Synchronization)
+
+Automated validation that configuration changes synchronized across ALL 4 layers:
+- **Layer 1 - Tool Configs**: pyproject.toml, ruff.toml, .pre-commit-config.yaml
+- **Layer 2 - Application Configs**: src/precog/config/*.yaml (7 config files)
+- **Layer 3 - Documentation**: CONFIGURATION_GUIDE, DEVELOPMENT_PATTERNS (code examples)
+- **Layer 4 - Infrastructure**: Terraform configs (Phase 5+)
+- **Float Contamination Detection**: Checks YAML files for float values in Decimal fields
+  - Decimal keywords: edge, kelly, spread, probability, threshold, price
+  - Invalid pattern: `min_edge: 0.05` (float)
+  - Valid pattern: `min_edge: "0.05"` (string, parsed as Decimal)
+- **Documentation Example Validation**: Scans documentation for YAML code blocks with float contamination
+  - Reports: "CONFIGURATION_GUIDE_V3.1.md: Documentation example uses float (should be string)"
+  - Actionable fix: "Change threshold: X.XX to threshold: \"X.XX\" in code block N"
+- **Tool Migration Detection**: Detects orphaned config sections (e.g., [tool.bandit] after migration to Ruff)
+- **Integration Points**:
+  - Pre-commit hooks: validate_docs.py Check #10 (runs on every commit, ~2-5 seconds)
+  - CI/CD: GitHub Actions workflow (runs on all PRs)
+  - Manual: `python scripts/validate_docs.py` (developer testing)
+- **Exit Codes**: 0 = all layers synchronized (warnings allowed), 1 = critical drift found
+- **YAML-Driven**: Config layer patterns in validation_config.yaml (4 layers defined)
+- **Phase 0.7c Lesson Learned**: Bandit → Ruff migration left orphaned [tool.bandit] in pyproject.toml (200+ errors)
 
 **REQ-API-007: API Response Validation with Pydantic**
 
