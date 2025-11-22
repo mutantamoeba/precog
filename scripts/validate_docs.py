@@ -1036,7 +1036,6 @@ def validate_config_synchronization() -> ValidationResult:
 
                     # Validation already done in Check #9 (YAML syntax + Decimal safety)
                     # This check focuses on cross-layer consistency
-                    pass
 
         layers_checked += 1
 

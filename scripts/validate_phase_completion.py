@@ -33,6 +33,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 try:
     import yaml
@@ -64,7 +65,7 @@ def load_phase_deliverables(phase: str) -> dict:
         with open(validation_config_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
             phase_deliverables = config.get("phase_deliverables", {})
-            return phase_deliverables.get(phase, {})
+            return cast("dict[Any, Any]", phase_deliverables.get(phase, {}))
     except Exception:
         return {}
 
