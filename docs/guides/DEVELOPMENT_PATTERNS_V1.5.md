@@ -3121,7 +3121,7 @@ calculated_probability = Decimal("0.6250")  # Decimal
 ## Related Documentation
 
 ### Foundation Documents
-- `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` - All requirements
+- `docs/foundation/MASTER_REQUIREMENTS_V2.17.md` - All requirements
 - `docs/foundation/ARCHITECTURE_DECISIONS_V2.10.md` - All ADRs (includes ADR-002, ADR-018-020, ADR-048, ADR-053-054, ADR-074)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.8.md` - Phase planning
 

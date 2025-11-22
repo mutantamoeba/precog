@@ -1,9 +1,20 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.26
-**Last Updated:** 2025-11-21
+**Version:** 2.27
+**Last Updated:** 2025-11-22
 **Status:** ✅ Current
+**Changes in v2.27:**
+- **LOOKUP TABLES FOR BUSINESS ENUMS (PHASE 1.5)**: Replaced CHECK constraints with lookup tables for strategy_type and model_class enums
+- Updated ARCHITECTURE_DECISIONS V2.19 → V2.20 (added ADR-093: Lookup Tables for Business Enums - 378 lines documenting extensible enum pattern, Migration 023, helper module, testing strategy)
+- Updated MASTER_REQUIREMENTS V2.16 → V2.17 (added REQ-DB-015: Strategy Type Lookup Table, REQ-DB-016: Model Class Lookup Table; 121 → 123 total requirements)
+- Updated DATABASE_SCHEMA_SUMMARY V1.10 → V1.11 (documented v1.11 FK constraint changes for strategies.approach and probability_models.model_class; added strategy_types and model_classes lookup tables)
+- Updated REQUIREMENT_INDEX (added REQ-DB-015 and REQ-DB-016 entries after REQ-DB-008)
+- **NO-MIGRATION EXTENSIBILITY**: Add new enum values via INSERT without schema migrations (e.g., INSERT INTO strategy_types VALUES ('hedging', ...))
+- **METADATA-RICH ENUMS**: Lookup tables store display_name, description, category, display_order, complexity_level, icon_name, help_text for UI-friendly queries
+- **HELPER MODULE**: Created lookup_helpers.py with validation/query functions (get_strategy_types(), validate_strategy_type(), add_strategy_type())
+- **COMPREHENSIVE TESTING**: 23 tests with 100% coverage for lookup table infrastructure
+- Cross-references: ADR-093 ↔ REQ-DB-015/016 ↔ Migration 023 ↔ DATABASE_SCHEMA_SUMMARY_V1.11 ↔ lookup_helpers.py
 **Changes in v2.26:**
 - **TRADE & POSITION ATTRIBUTION ARCHITECTURE (PHASE 1.5)**: Complete attribution system for performance analytics and strategy A/B testing
 - Created SCHEMA_ANALYSIS_2025-11-21.md (800+ lines) - Comprehensive architectural analysis identifying 5 schema gaps, design options & tradeoffs, user Q&A, final decisions for attribution architecture
@@ -283,10 +294,10 @@ Core architecture, requirements, and system design documents.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
-| **MASTER_REQUIREMENTS_V2.16.md** | ✅ | v2.16 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.16** (added REQ-TEST-012 through REQ-TEST-019: 8 comprehensive test coverage requirements addressing Phase 1.5 TDD failure; establishes 8 test type framework, mock usage restrictions, mandatory test fixtures, coverage percentage standards, stress/integration/property/E2E test requirements; 113 → 121 total requirements) |
-| **MASTER_INDEX_V2.26.md** | ✅ | v2.26 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.25** (Dual-key schema pattern documentation: ADR-089, Pattern 14, SCHEMA_MIGRATION_WORKFLOW_V1.0.md; version updates: ARCHITECTURE_DECISIONS V2.18, ADR_INDEX V1.13, DEVELOPMENT_PATTERNS V1.4) |
-| **ARCHITECTURE_DECISIONS_V2.19.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (72 total) - **UPDATED V2.18** (ADR-090: Nested Versioning, ADR-091: Explicit Columns vs JSONB, ADR-092: Trade Source Tracking - complete attribution architecture for performance analytics and strategy A/B testing) |
-| **REQUIREMENT_INDEX.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 121 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-TEST-012 through REQ-TEST-019: test type coverage, mock restrictions, fixture usage, coverage standards, stress/integration/property/E2E requirements; 113 → 121 total) |
+| **MASTER_REQUIREMENTS_V2.17.md** | ✅ | v2.17 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.17** (added REQ-DB-015: Strategy Type Lookup Table, REQ-DB-016: Model Class Lookup Table; lookup tables replace CHECK constraints for extensibility; 121 → 123 total requirements) |
+| **MASTER_INDEX_V2.27.md** | ✅ | v2.27 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.27** (Lookup tables for business enums: ADR-093, REQ-DB-015/016, DATABASE_SCHEMA_SUMMARY V1.11; version updates: ARCHITECTURE_DECISIONS V2.20, MASTER_REQUIREMENTS V2.17, REQUIREMENT_INDEX with 123 total requirements) |
+| **ARCHITECTURE_DECISIONS_V2.20.md** | ✅ | v2.20 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (93 total) - **UPDATED V2.20** (ADR-093: Lookup Tables for Business Enums - 378 lines documenting replacement of CHECK constraints with lookup tables for strategy_type and model_class; enables no-migration extensibility via INSERT; helper module with validation/query functions; 23 tests with 100% coverage) |
+| **REQUIREMENT_INDEX.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 123 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-DB-015: Strategy Type Lookup Table, REQ-DB-016: Model Class Lookup Table; 121 → 123 total) |
 | **ADR_INDEX_V1.14.md** | ✅ | v1.14 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 72 architecture decisions - **UPDATED V1.13** (ADR-089, ADR-090, ADR-091, ADR-092: Trade and Position Attribution Architecture - Phase 1.5) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.5** |
@@ -316,7 +327,7 @@ Schema design, data models, and database architecture.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DATABASE_SCHEMA_SUMMARY_V1.10.md** | ✅ | v1.10 | `/docs/database/` | 0.5-1 | Phases 1-10 | 🔴 Critical | **UPDATED V1.9** - Schema standardization + Attribution architecture (Migration 011: category→approach, subcategory→domain; Migrations 018-020: trade/position attribution with 9 new columns + 8 indexes) |
+| **DATABASE_SCHEMA_SUMMARY_V1.11.md** | ✅ | v1.11 | `/docs/database/` | 0.5-1 | Phases 1-10 | 🔴 Critical | **UPDATED V1.11** - Lookup tables for business enums (Migration 023: replaced CHECK constraints with FK constraints to strategy_types and model_classes lookup tables; enables no-migration extensibility; added v1.11 FK constraint notes to strategies and probability_models tables) |
 | **DATABASE_TABLES_REFERENCE.md** | ✅ | v1.0 | `/docs/database/` | 1 | Phases 1-10 | 🟡 High | Quick lookup for all tables, common queries (Phase 1) |
 | **ODDS_RESEARCH_COMPREHENSIVE.md** | ✅ | v1.0 | `/docs/database/` | 4 | Phase 4, 9 | 🟡 High | Historical odds methodology, merged into models |
 | **DATA_DICTIONARY.md** | 🔵 | - | `/docs/database/` | 6-7 | Phases 6-10 | 🟡 High | Comprehensive data dictionary - all columns documented (planned Phase 6-7) |

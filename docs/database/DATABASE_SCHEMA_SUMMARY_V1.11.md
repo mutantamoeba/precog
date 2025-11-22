@@ -1,9 +1,37 @@
 # Database Schema Summary
 
 ---
-**Version:** 1.10
-**Last Updated:** 2025-11-21
-**Status:** ✅ Current - Trade & Position Attribution Architecture (Phase 1.5)
+**Version:** 1.11
+**Last Updated:** 2025-11-22
+**Status:** ✅ Current - Lookup Tables for Business Enums (Phase 1.5)
+**Changes in v1.11:**
+- **LOOKUP TABLES INFRASTRUCTURE**: Added 2 lookup tables (Migration 023) replacing CHECK constraints with FK constraints
+- **Migration 023: Create Lookup Tables**
+  - Added `strategy_types` lookup table (4 initial values: value, arbitrage, momentum, mean_reversion)
+    - Fields: strategy_type_code (PK), display_name, description, category, is_active, display_order, icon_name, help_text
+    - Indexes: idx_strategy_types_active, idx_strategy_types_category, idx_strategy_types_order
+    - Categories: directional, arbitrage, risk_management, event_driven
+  - Added `model_classes` lookup table (7 initial values: elo, ensemble, ml, hybrid, regression, neural_net, baseline)
+    - Fields: model_class_code (PK), display_name, description, category, complexity_level, is_active, display_order, icon_name, help_text
+    - Indexes: idx_model_classes_active, idx_model_classes_category, idx_model_classes_complexity, idx_model_classes_order
+    - Categories: statistical, machine_learning, hybrid, baseline
+    - Complexity levels: simple, moderate, advanced
+  - **Replaced CHECK constraints with FK constraints:**
+    - `strategies.approach` now references `strategy_types.strategy_type_code` (was CHECK constraint)
+    - `probability_models.approach` now references `model_classes.model_class_code` (was CHECK constraint)
+  - **Benefits:**
+    - Add new enum values via INSERT (no migration required!)
+    - Store rich metadata (display_name, description, category)
+    - UI-friendly (query for dropdown options with metadata)
+    - Extensible (add fields like icon_name, help_text without schema changes)
+  - **Future Values:** Can add hedging, contrarian, xgboost, lstm, etc. without migrations
+- **New Helper Module:** `src/precog/database/lookup_helpers.py` - Query and validation functions for lookup tables
+- **Test Coverage:** 23 new tests in `tests/test_lookup_tables.py` (100% coverage of lookup_helpers module)
+- **Architecture Decision:** ADR-093: Lookup Tables for Business Enums (documents rationale and benefits)
+- **Requirements:** REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
+- **Migration Safe:** Lookup tables seeded with existing values before dropping CHECK constraints, atomic transaction, rollback script included
+- **Table Count:** 29 tables (was 27) - Added strategy_types, model_classes lookup tables
+- **Next Steps:** Use lookup tables in StrategyManager/ModelManager, update UI to query lookup tables for dropdowns
 **Changes in v1.10:**
 - **TRADE & POSITION ATTRIBUTION ARCHITECTURE**: Added 3 comprehensive migrations (018-020) enabling performance analytics
 - **Migration 018: Trade Source Tracking**
@@ -305,13 +333,157 @@ SET
 WHERE category = 'sports' AND subcategory = 'nfl' AND state_descriptor = 'halftime';
 ```
 
-#### probability_models (NEW in v1.4, UPDATED in v1.9)
+### 2. Lookup Tables for Business Enums (NEW in v1.11)
+
+**Purpose:** Replace CHECK constraints with lookup tables for business enums.
+
+**Benefits:**
+- **No migrations needed** to add new enum values (just INSERT)
+- **Rich metadata storage** (display_name, description, category)
+- **UI-friendly** (query for dropdown options with metadata)
+- **Extensible** (add fields like icon_name, help_text without schema changes)
+
+**Architecture Decision:** ADR-093: Lookup Tables for Business Enums
+**Requirements:** REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
+
+#### strategy_types (NEW in v1.11)
+```sql
+CREATE TABLE strategy_types (
+    strategy_type_code VARCHAR(50) PRIMARY KEY,  -- 'value', 'arbitrage', 'momentum', 'mean_reversion'
+    display_name VARCHAR(100) NOT NULL,          -- 'Value Trading', 'Arbitrage'
+    description TEXT NOT NULL,                   -- 'Exploit market mispricing by identifying...'
+    category VARCHAR(50) NOT NULL,               -- 'directional', 'arbitrage', 'risk_management', 'event_driven'
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,     -- Allow disabling without deleting
+    display_order INT DEFAULT 999 NOT NULL,      -- UI sort order (lower = first)
+    icon_name VARCHAR(50),                       -- Icon identifier for UI (optional)
+    help_text TEXT,                              -- Extended help for UI tooltips (optional)
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX idx_strategy_types_active ON strategy_types(is_active) WHERE is_active = TRUE;
+CREATE INDEX idx_strategy_types_category ON strategy_types(category);
+CREATE INDEX idx_strategy_types_order ON strategy_types(display_order);
+```
+
+**Initial Values (Migration 023):**
+- `value` (directional) - Exploit market mispricing by identifying edges
+- `arbitrage` (arbitrage) - Cross-platform arbitrage opportunities
+- `momentum` (directional) - Trend following strategies
+- `mean_reversion` (directional) - Capitalize on temporary deviations
+
+**Future Values (No Migration Required!):**
+```sql
+-- Add hedging strategy (Phase 2)
+INSERT INTO strategy_types (strategy_type_code, display_name, description, category, display_order)
+VALUES ('hedging', 'Hedging Strategy', 'Risk management through offsetting positions', 'risk_management', 50);
+
+-- Add contrarian strategy (Phase 3)
+INSERT INTO strategy_types (strategy_type_code, display_name, description, category, display_order)
+VALUES ('contrarian', 'Contrarian Trading', 'Fade public sentiment when market overreacts', 'directional', 45);
+```
+
+**UI Integration:**
+```sql
+-- Query for dropdown options
+SELECT strategy_type_code, display_name, description, category
+FROM strategy_types
+WHERE is_active = TRUE
+ORDER BY display_order;
+```
+
+**Helper Functions:** See `src/precog/database/lookup_helpers.py`
+- `get_strategy_types()` - Get all strategy types with metadata
+- `validate_strategy_type(code)` - Check if code is valid
+- `get_strategy_types_by_category()` - Group by category for UI
+- `add_strategy_type(...)` - Add new type without migration
+
+#### model_classes (NEW in v1.11)
+```sql
+CREATE TABLE model_classes (
+    model_class_code VARCHAR(50) PRIMARY KEY,   -- 'elo', 'ensemble', 'ml', 'neural_net', etc.
+    display_name VARCHAR(100) NOT NULL,         -- 'Elo Rating System', 'Neural Network'
+    description TEXT NOT NULL,                  -- 'Elo rating system based on...'
+    category VARCHAR(50) NOT NULL,              -- 'statistical', 'machine_learning', 'hybrid', 'baseline'
+    complexity_level VARCHAR(20) NOT NULL,      -- 'simple', 'moderate', 'advanced'
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+    display_order INT DEFAULT 999 NOT NULL,
+    icon_name VARCHAR(50),                      -- Icon identifier for UI (optional)
+    help_text TEXT,                             -- Extended help for UI tooltips (optional)
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX idx_model_classes_active ON model_classes(is_active) WHERE is_active = TRUE;
+CREATE INDEX idx_model_classes_category ON model_classes(category);
+CREATE INDEX idx_model_classes_complexity ON model_classes(complexity_level);
+CREATE INDEX idx_model_classes_order ON model_classes(display_order);
+```
+
+**Initial Values (Migration 023):**
+- `elo` (statistical, simple) - Dynamic rating system tracking team/competitor strength
+- `ensemble` (hybrid, moderate) - Weighted combination of multiple models
+- `ml` (machine_learning, moderate) - General machine learning algorithms
+- `hybrid` (hybrid, moderate) - Combines multiple modeling approaches
+- `regression` (statistical, simple) - Linear/logistic regression with feature engineering
+- `neural_net` (machine_learning, advanced) - Deep learning models with multiple hidden layers
+- `baseline` (baseline, simple) - Simple heuristic for benchmarking
+
+**Future Values (No Migration Required!):**
+```sql
+-- Add XGBoost model (Phase 4)
+INSERT INTO model_classes (model_class_code, display_name, description, category, complexity_level, display_order)
+VALUES ('xgboost', 'XGBoost', 'Gradient boosting decision trees with regularization', 'machine_learning', 'advanced', 65);
+
+-- Add market consensus baseline (Phase 2)
+INSERT INTO model_classes (model_class_code, display_name, description, category, complexity_level, display_order)
+VALUES ('market_consensus', 'Market Consensus', 'Aggregate market prices as probability estimate', 'baseline', 'simple', 75);
+```
+
+**UI Integration:**
+```sql
+-- Query for dropdown options grouped by complexity
+SELECT model_class_code, display_name, description, category, complexity_level
+FROM model_classes
+WHERE is_active = TRUE
+ORDER BY complexity_level, display_order;
+
+-- Query for category grouping
+SELECT category, json_agg(
+    json_build_object(
+        'code', model_class_code,
+        'name', display_name,
+        'description', description,
+        'complexity', complexity_level
+    ) ORDER BY display_order
+) as models
+FROM model_classes
+WHERE is_active = TRUE
+GROUP BY category
+ORDER BY category;
+```
+
+**Helper Functions:** See `src/precog/database/lookup_helpers.py`
+- `get_model_classes()` - Get all model classes with metadata
+- `validate_model_class(code)` - Check if code is valid
+- `get_model_classes_by_category()` - Group by category for UI
+- `get_model_classes_by_complexity()` - Group by complexity level
+- `add_model_class(...)` - Add new class without migration
+
+**Migration Impact:**
+- **strategies.approach**: Now references `strategy_types.strategy_type_code` (was CHECK constraint)
+- **probability_models.approach**: Now references `model_classes.model_class_code` (was CHECK constraint)
+- **Backward Compatible:** All existing enum values preserved in lookup tables
+- **Forward Compatible:** Add new values via INSERT, not ALTER TABLE
+
+#### probability_models (NEW in v1.4, UPDATED in v1.9, v1.11)
 ```sql
 CREATE TABLE probability_models (
     model_id SERIAL PRIMARY KEY,
     model_name VARCHAR NOT NULL,              -- 'elo_nfl', 'regression_nba', 'ensemble_v1'
     model_version VARCHAR NOT NULL,           -- 'v1.0', 'v1.1', 'v2.0' (semantic versioning)
     approach VARCHAR NOT NULL,                -- ✅ V1.9: HOW it works: 'elo', 'regression', 'ensemble', 'neural_net'
+                                              -- ✅ V1.11: FK to model_classes.model_class_code (was CHECK constraint)
     domain VARCHAR,                           -- ✅ V1.9: WHICH markets: 'nfl', 'nba', 'elections', 'economics' (NULL for multi-domain)
     config JSONB NOT NULL,                    -- ⚠️ IMMUTABLE: Model parameters/hyperparameters
     training_start_date DATE,                 -- ✅ V1.9: Training period start
@@ -404,7 +576,7 @@ VALUES (
 );
 ```
 
-#### strategies (NEW in v1.4, UPDATED in v1.9)
+#### strategies (NEW in v1.4, UPDATED in v1.9, v1.11)
 ```sql
 CREATE TABLE strategies (
     strategy_id SERIAL PRIMARY KEY,
@@ -412,6 +584,7 @@ CREATE TABLE strategies (
     strategy_name VARCHAR NOT NULL,           -- 'halftime_entry', 'underdog_fade', 'momentum_scalp'
     strategy_version VARCHAR NOT NULL,        -- 'v1.0', 'v1.1', 'v2.0' (semantic versioning)
     approach VARCHAR NOT NULL,                -- ✅ V1.9: HOW it works: 'value', 'arbitrage', 'momentum', 'mean_reversion'
+                                              -- ✅ V1.11: FK to strategy_types.strategy_type_code (was CHECK constraint)
     domain VARCHAR,                           -- ✅ V1.9: WHICH markets: 'nfl', 'nba', 'elections', 'economics' (NULL for multi-domain)
     config JSONB NOT NULL,                    -- ⚠️ IMMUTABLE: Strategy parameters/rules
     status VARCHAR DEFAULT 'draft',           -- ✅ MUTABLE: 'draft', 'testing', 'active', 'inactive', 'deprecated'

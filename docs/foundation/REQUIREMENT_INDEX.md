@@ -142,6 +142,8 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-DB-006 | Foreign Key Constraints | 0 | High | ✅ | DATABASE_SCHEMA_SUMMARY_V1.5 |
 | REQ-DB-007 | CHECK Constraints for Enums | 0 | High | ✅ | DATABASE_SCHEMA_SUMMARY_V1.5 |
 | REQ-DB-008 | Database Connection Pooling | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
+| REQ-DB-015 | Strategy Type Lookup Table | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.17 |
+| REQ-DB-016 | Model Class Lookup Table | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.17 |
 
 ---
 

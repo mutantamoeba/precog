@@ -14,7 +14,7 @@ This document provides a complete test plan for Phase 1.5 deliverables, created 
 
 **Reference Documents:**
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 1.5 specification, lines 786-915)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` (REQ-VER-001 through REQ-VER-005, REQ-TRAIL-001 through REQ-TRAIL-004)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.17.md` (REQ-VER-001 through REQ-VER-005, REQ-TRAIL-001 through REQ-TRAIL-004)
 - `docs/guides/VERSIONING_GUIDE_V1.0.md` (Immutable version pattern)
 - `docs/guides/TRAILING_STOP_GUIDE_V1.0.md` (Trailing stop implementation)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (strategies, probability_models, positions tables)
