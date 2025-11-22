@@ -654,3 +654,487 @@ class PositionManager:
             pnl = Decimal(str(quantity)) * (entry_price - current_price)
 
         return pnl
+
+    def initialize_trailing_stop(
+        self,
+        position_id: int,  # Surrogate key, NOT business key!
+        config: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Initialize trailing stop state for an existing position.
+
+        This method adds trailing stop functionality to a position that was
+        opened without trailing stops. It creates the initial trailing_stop_state
+        JSONB and updates the position via SCD Type 2 versioning.
+
+        Args:
+            position_id: Position surrogate key (int from positions.id)
+            config: Trailing stop configuration dict with keys:
+                - activation_threshold: Profit threshold to activate trailing (Decimal)
+                - initial_distance: Initial stop distance from highest price (Decimal)
+                - tightening_rate: Rate to tighten stop as profit increases (Decimal)
+                - floor_distance: Minimum stop distance (prevents over-tightening) (Decimal)
+
+        Returns:
+            Updated position dict with trailing_stop_state initialized
+
+        Raises:
+            ValueError: If position not found or already closed
+            ValueError: If config missing required keys
+
+        Educational Note:
+            **When to use this method vs. open_position with trailing_stop_config:**
+
+            Use open_position() with trailing_stop_config when:
+            - Opening NEW position with trailing stop from the start
+            - Strategy always uses trailing stops
+
+            Use initialize_trailing_stop() when:
+            - Adding trailing stop to EXISTING position
+            - Position opened without trailing stop, now want to add it
+            - Changing from static stop to trailing stop mid-position
+
+            Example workflow:
+            1. Open position WITHOUT trailing stop: entry $0.50, static stop $0.35
+            2. Price moves to $0.75 (+$0.25 profit)
+            3. Call initialize_trailing_stop() to protect gains
+            4. Trailing stop activates, begins tracking highest price
+
+        References:
+            - REQ-RISK-003: Trailing Stop Loss
+            - REQ-RISK-004: Trailing Stop Implementation
+            - ADR-025: Trailing Stop Implementation
+            - docs/guides/TRAILING_STOP_GUIDE_V1.0.md
+
+        Example:
+            >>> manager = PositionManager()
+            >>> # Position opened without trailing stop
+            >>> position = manager.open_position(...)
+            >>> # Later, add trailing stop to protect gains
+            >>> config = {
+            ...     "activation_threshold": Decimal("0.15"),
+            ...     "initial_distance": Decimal("0.05"),
+            ...     "tightening_rate": Decimal("0.10"),
+            ...     "floor_distance": Decimal("0.02")
+            ... }
+            >>> updated = manager.initialize_trailing_stop(position["id"], config)
+        """
+        # Validate config has required keys
+        required_keys = {
+            "activation_threshold",
+            "initial_distance",
+            "tightening_rate",
+            "floor_distance",
+        }
+        missing_keys = required_keys - set(config.keys())
+        if missing_keys:
+            raise ValueError(f"Config missing required keys: {missing_keys}")
+
+        # Get current position
+        conn = get_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT * FROM positions
+                    WHERE id = %s AND row_current_ind = TRUE
+                    """,
+                    (position_id,),
+                )
+                current_position = cur.fetchone()
+
+                if not current_position:
+                    raise ValueError(f"Position {position_id} not found or not current")
+
+                if current_position["status"] == "closed":
+                    raise ValueError(f"Position {position_id} is already closed")
+
+                # Create initial trailing stop state
+                trailing_stop_state = {
+                    "config": config,
+                    "activated": False,  # Not activated yet (waiting for threshold)
+                    "activation_price": None,  # Will be set when activated
+                    "current_stop_price": current_position[
+                        "stop_loss_price"
+                    ],  # Start with existing stop
+                    "highest_price": current_position[
+                        "current_price"
+                    ],  # Track highest price for trailing
+                }
+
+                # Update position with new trailing_stop_state (creates SCD Type 2 version)
+                cur.execute(
+                    """
+                    UPDATE positions
+                    SET row_current_ind = FALSE
+                    WHERE id = %s
+                    """,
+                    (position_id,),
+                )
+
+                cur.execute(
+                    """
+                    INSERT INTO positions (
+                        position_id, market_id, strategy_id, model_id, side, quantity,
+                        entry_price, current_price, target_price, stop_loss_price,
+                        unrealized_pnl, realized_pnl, status, exit_price, exit_reason,
+                        trailing_stop_state, position_metadata, row_current_ind
+                    )
+                    SELECT
+                        position_id, market_id, strategy_id, model_id, side, quantity,
+                        entry_price, current_price, target_price, stop_loss_price,
+                        unrealized_pnl, realized_pnl, status, exit_price, exit_reason,
+                        %s::jsonb, position_metadata, TRUE
+                    FROM positions
+                    WHERE id = %s
+                    RETURNING id
+                    """,
+                    (psycopg2.extras.Json(trailing_stop_state), position_id),
+                )
+
+                new_position_id = cur.fetchone()["id"]
+                conn.commit()
+
+                # Fetch full updated position
+                cur.execute(
+                    """
+                    SELECT * FROM positions
+                    WHERE id = %s
+                    """,
+                    (new_position_id,),
+                )
+                updated_position = cur.fetchone()
+
+                logger.info(
+                    f"Initialized trailing stop for position {updated_position['position_id']}",
+                    extra={
+                        "old_id": position_id,
+                        "new_id": new_position_id,
+                        "activation_threshold": str(config["activation_threshold"]),
+                        "initial_distance": str(config["initial_distance"]),
+                    },
+                )
+
+                return dict(updated_position)
+
+        finally:
+            release_connection(conn)
+
+    def update_trailing_stop(
+        self,
+        position_id: int,  # Surrogate key, NOT business key!
+        current_price: Decimal,
+    ) -> dict[str, Any]:
+        """Update trailing stop based on price movement.
+
+        This method updates the trailing stop state when price moves. It:
+        1. Checks if trailing stop should activate (profit >= activation_threshold)
+        2. Updates highest_price if new high reached
+        3. Calculates new stop price based on highest_price and distance formula
+        4. Updates position via SCD Type 2 versioning
+
+        Args:
+            position_id: Position surrogate key (int from positions.id)
+            current_price: Current market price (Decimal, NEVER float!)
+
+        Returns:
+            Updated position dict with new trailing_stop_state
+
+        Raises:
+            ValueError: If position not found, closed, or has no trailing stop
+            ValueError: If current_price outside valid range [0.01, 0.99]
+
+        Educational Note:
+            **Trailing Stop Lifecycle:**
+
+            Phase 1: INACTIVE (waiting for activation)
+            - Profit < activation_threshold
+            - Stop = static stop_loss_price
+            - Example: Entry $0.50, Static stop $0.35, Current $0.60 (+$0.10 profit)
+              Activation threshold $0.15 not reached yet → stop stays $0.35
+
+            Phase 2: ACTIVATION (threshold reached)
+            - Profit >= activation_threshold
+            - activated = TRUE, activation_price = current_price
+            - Calculate initial stop: highest_price - initial_distance
+            - Example: Price reaches $0.65 (+$0.15 profit) → ACTIVATE!
+              Stop = $0.65 - $0.05 = $0.60 (trailing begins)
+
+            Phase 3: TRAILING (following price up)
+            - Track highest_price
+            - Recalculate stop: highest_price - distance (with tightening)
+            - Stop only moves UP, never down
+            - Example: Price $0.75 → Stop $0.70 ($0.75 - $0.05)
+                      Price $0.72 → Stop stays $0.70 (doesn't move down)
+
+            **Distance Calculation with Tightening:**
+            ```
+            distance = max(
+                floor_distance,
+                initial_distance * (1 - tightening_rate * (unrealized_pnl / entry_price))
+            )
+            ```
+            As profit increases, distance shrinks (stop tightens), but never below floor.
+
+        References:
+            - REQ-RISK-003: Trailing Stop Loss
+            - ADR-025: Trailing Stop Implementation
+            - docs/guides/TRAILING_STOP_GUIDE_V1.0.md
+
+        Example:
+            >>> manager = PositionManager()
+            >>> # Position with trailing stop configured
+            >>> position = manager.open_position(..., trailing_stop_config={...})
+            >>> # Price moves up
+            >>> updated = manager.update_trailing_stop(position["id"], Decimal("0.75"))
+            >>> print(updated["trailing_stop_state"]["current_stop_price"])
+            Decimal('0.70')
+        """
+        # Validation: Price range
+        if not (Decimal("0.01") <= current_price <= Decimal("0.99")):
+            raise ValueError(f"Current price {current_price} outside valid range [0.01, 0.99]")
+
+        # Get current position
+        conn = get_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT * FROM positions
+                    WHERE id = %s AND row_current_ind = TRUE
+                    """,
+                    (position_id,),
+                )
+                current_position = cur.fetchone()
+
+                if not current_position:
+                    raise ValueError(f"Position {position_id} not found or not current")
+
+                if current_position["status"] == "closed":
+                    raise ValueError(f"Position {position_id} is already closed")
+
+                if not current_position["trailing_stop_state"]:
+                    raise ValueError(f"Position {position_id} has no trailing stop configured")
+
+                trailing_state = current_position["trailing_stop_state"]
+                config = trailing_state["config"]
+
+                # Calculate current P&L
+                unrealized_pnl = self.calculate_position_pnl(
+                    entry_price=current_position["entry_price"],
+                    current_price=current_price,
+                    quantity=current_position["quantity"],
+                    side=current_position["side"],
+                )
+
+                # Check if trailing stop should activate
+                if not trailing_state["activated"]:
+                    # Check if profit threshold reached
+                    if unrealized_pnl >= config["activation_threshold"]:
+                        # ACTIVATE trailing stop!
+                        trailing_state["activated"] = True
+                        trailing_state["activation_price"] = current_price
+                        trailing_state["highest_price"] = current_price
+
+                        # Calculate initial stop price
+                        initial_stop = current_price - config["initial_distance"]
+                        trailing_state["current_stop_price"] = max(
+                            initial_stop, current_position["stop_loss_price"] or Decimal("0")
+                        )
+
+                        logger.info(
+                            f"Trailing stop ACTIVATED for {current_position['position_id']}",
+                            extra={
+                                "activation_price": str(current_price),
+                                "activation_pnl": str(unrealized_pnl),
+                                "threshold": str(config["activation_threshold"]),
+                                "initial_stop": str(trailing_state["current_stop_price"]),
+                            },
+                        )
+                    else:
+                        # Not activated yet, keep existing stop
+                        trailing_state["current_stop_price"] = current_position["stop_loss_price"]
+
+                else:
+                    # Trailing stop already activated, update stop price
+                    # Update highest price if new high
+                    if current_price > trailing_state["highest_price"]:
+                        trailing_state["highest_price"] = current_price
+
+                    # Calculate distance with tightening
+                    # Formula: distance = max(floor, initial * (1 - tightening_rate * profit_ratio))
+                    profit_ratio = unrealized_pnl / current_position["entry_price"]
+                    distance_factor = Decimal("1") - (config["tightening_rate"] * profit_ratio)
+                    distance = max(
+                        config["floor_distance"],
+                        config["initial_distance"] * distance_factor,
+                    )
+
+                    # New stop = highest_price - distance
+                    new_stop = trailing_state["highest_price"] - distance
+
+                    # Trailing stop NEVER moves down, only up
+                    if new_stop > trailing_state["current_stop_price"]:
+                        trailing_state["current_stop_price"] = new_stop
+                        logger.debug(
+                            f"Trailing stop UPDATED for {current_position['position_id']}",
+                            extra={
+                                "highest_price": str(trailing_state["highest_price"]),
+                                "new_stop": str(new_stop),
+                                "distance": str(distance),
+                            },
+                        )
+
+                # Update position with new trailing_stop_state (SCD Type 2)
+                cur.execute(
+                    """
+                    UPDATE positions
+                    SET row_current_ind = FALSE
+                    WHERE id = %s
+                    """,
+                    (position_id,),
+                )
+
+                cur.execute(
+                    """
+                    INSERT INTO positions (
+                        position_id, market_id, strategy_id, model_id, side, quantity,
+                        entry_price, current_price, target_price, stop_loss_price,
+                        unrealized_pnl, realized_pnl, status, exit_price, exit_reason,
+                        trailing_stop_state, position_metadata, row_current_ind
+                    )
+                    SELECT
+                        position_id, market_id, strategy_id, model_id, side, quantity,
+                        entry_price, %s, target_price, stop_loss_price,
+                        %s, realized_pnl, status, exit_price, exit_reason,
+                        %s::jsonb, position_metadata, TRUE
+                    FROM positions
+                    WHERE id = %s
+                    RETURNING id
+                    """,
+                    (
+                        current_price,
+                        unrealized_pnl,
+                        psycopg2.extras.Json(trailing_state),
+                        position_id,
+                    ),
+                )
+
+                new_position_id = cur.fetchone()["id"]
+                conn.commit()
+
+                # Fetch full updated position
+                cur.execute(
+                    """
+                    SELECT * FROM positions
+                    WHERE id = %s
+                    """,
+                    (new_position_id,),
+                )
+                updated_position = cur.fetchone()
+
+                return dict(updated_position)
+
+        finally:
+            release_connection(conn)
+
+    def check_trailing_stop_trigger(self, position_id: int) -> bool:
+        """Check if trailing stop has been triggered.
+
+        This method compares current_price against trailing stop's current_stop_price
+        to determine if the stop has been triggered (price hit/crossed stop level).
+
+        Args:
+            position_id: Position surrogate key (int from positions.id)
+
+        Returns:
+            True if stop triggered (current_price <= stop), False otherwise
+
+        Raises:
+            ValueError: If position not found, closed, or has no trailing stop
+
+        Educational Note:
+            **Trigger Logic:**
+
+            YES position (profit when price goes UP):
+            - Stop triggered when price FALLS to/below stop level
+            - Trigger condition: current_price <= current_stop_price
+            - Example: Stop $0.70, Price drops to $0.68 → TRIGGERED!
+
+            NO position (profit when price goes DOWN):
+            - Stop triggered when price RISES to/above stop level
+            - Trigger condition: current_price >= (1.00 - current_stop_price)
+            - Example: Stop $0.30, Price rises to $0.72 → TRIGGERED!
+              (Because NO position's stop is inverse: $1.00 - $0.30 = $0.70)
+
+            **Why check in separate method?**
+            - update_trailing_stop() updates stop based on price movement
+            - check_trailing_stop_trigger() decides if exit needed
+            - Separation allows flexibility: check without updating, update without exiting
+
+        References:
+            - REQ-RISK-002: Stop Loss Enforcement
+            - REQ-RISK-003: Trailing Stop Loss
+            - docs/guides/TRAILING_STOP_GUIDE_V1.0.md
+
+        Example:
+            >>> manager = PositionManager()
+            >>> # Update trailing stop with new price
+            >>> updated = manager.update_trailing_stop(position_id, Decimal("0.72"))
+            >>> # Check if triggered
+            >>> if manager.check_trailing_stop_trigger(position_id):
+            ...     manager.close_position(position_id, Decimal("0.72"), "trailing_stop")
+        """
+        # Get current position
+        conn = get_connection()
+        try:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    """
+                    SELECT * FROM positions
+                    WHERE id = %s AND row_current_ind = TRUE
+                    """,
+                    (position_id,),
+                )
+                current_position = cur.fetchone()
+
+                if not current_position:
+                    raise ValueError(f"Position {position_id} not found or not current")
+
+                if current_position["status"] == "closed":
+                    raise ValueError(f"Position {position_id} is already closed")
+
+                if not current_position["trailing_stop_state"]:
+                    raise ValueError(f"Position {position_id} has no trailing stop configured")
+
+                trailing_state = current_position["trailing_stop_state"]
+
+                # If not activated yet, no trigger possible
+                if not trailing_state["activated"]:
+                    return False
+
+                current_price = current_position["current_price"]
+                stop_price = trailing_state["current_stop_price"]
+
+                # YES position: triggered when price drops to/below stop
+                triggered: bool  # Explicit type annotation for mypy
+                if current_position["side"] == "YES":
+                    triggered = current_price <= stop_price
+                else:  # NO position: triggered when price rises to/above inverse stop
+                    # NO position's stop is inverted: effective stop = 1.00 - stop_price
+                    effective_stop = Decimal("1.00") - stop_price
+                    triggered = current_price >= effective_stop
+
+                if triggered:
+                    logger.warning(
+                        f"Trailing stop TRIGGERED for {current_position['position_id']}",
+                        extra={
+                            "current_price": str(current_price),
+                            "stop_price": str(stop_price),
+                            "side": current_position["side"],
+                        },
+                    )
+
+                return triggered
+
+        finally:
+            release_connection(conn)
