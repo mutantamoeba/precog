@@ -1,9 +1,16 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.28
+**Version:** 2.29
 **Last Updated:** 2025-11-22
 **Status:** ✅ Current
+**Changes in v2.29:**
+- **PHASE 1.5 COMPLETION DOCUMENTATION**: Added Phase 1.5 completion report and deferred tasks documentation
+- Added PHASE_1.5_COMPLETION_REPORT.md to utility documents (24.4 KB, 10-step assessment protocol)
+- Added PHASE_1.5_DEFERRED_TASKS_V1.0.md to utility documents (DEF-P1.5-001: Configuration System Enhancement)
+- Updated Phase Completion Assessment section with Phase 1.5 status (⚠️ PASS WITH CONDITIONS - 3/4 deliverables complete, 93.83% coverage)
+- Phase 1.5 assessment: 550 tests passing, all coverage targets exceeded (Model Manager 92.66%, Strategy Manager 86.59%, Position Manager 91.04%)
+- 1 deliverable deferred to Phase 2 Week 1 (Configuration System Enhancement - version resolution + override handling)
 **Changes in v2.28:**
 - **ADDED PATTERN 16 & 17 TO DEVELOPMENT_PATTERNS (PHASE 1)**: Type safety and code quality patterns
 - Updated DEVELOPMENT_PATTERNS V1.5 → V1.6 (added Pattern 16: Type Safety with Dynamic Data - YAML/JSON Parsing + Pattern 17: Avoid Nested If Statements)
@@ -302,7 +309,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.18.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.28.md** | ✅ | v2.28 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.28** (Added Pattern 16 & 17 to DEVELOPMENT_PATTERNS: Type Safety with YAML/JSON Parsing + Avoid Nested If Statements; updated DEVELOPMENT_PATTERNS V1.5 → V1.6; total 17 patterns now) |
+| **MASTER_INDEX_V2.29.md** | ✅ | v2.29 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.29** (Added Phase 1.5 completion documentation: PHASE_1.5_COMPLETION_REPORT.md + PHASE_1.5_DEFERRED_TASKS_V1.0.md; updated Phase Completion Assessment section with Phase 1.5 status) |
 | **ARCHITECTURE_DECISIONS_V2.21.md** | ✅ | v2.21 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (97 total) - **UPDATED V2.21** (ADR-094 through 097: Workflow Enforcement Infrastructure - YAML-driven validation architecture, auto-discovery pattern for validators, parallel execution in git hooks (66% time savings: 145s → 40-50s), tier-specific coverage targets; 4-layer defense-in-depth: pre-commit (~2-5s) → pre-push (~40-50s) → CI/CD (~2-5min) → branch protection; 93 → 97 total ADRs) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
 | **ADR_INDEX_V1.15.md** | ✅ | v1.15 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 76 architecture decisions - **UPDATED V1.15** (ADR-094 through 097: Workflow Enforcement Infrastructure - YAML-driven validation, auto-discovery pattern, parallel execution in git hooks, tier-specific coverage targets; 72 → 76 total ADRs) |
@@ -444,7 +451,9 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **GITHUB_BRANCH_PROTECTION_CONFIG.md** | ✅ | v1.0 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **NEW** - Complete GitHub branch protection configuration (completes DEF-003) |
 | **PHASE_1_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1 | 🟡 High | **NEW** - Tracks deferred enhancements from Phase 1 (extended docstrings, pre-commit hooks, branch protection) |
 | **PHASE_1_PR_REVIEW_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1.5 | 🔴 Critical | **NEW** - Dual-tracking system for 45 actionable items from PRs #2-#21 AI reviews: 3 critical (float usage/Pattern 1, zero test coverage, path sanitization), 8 high, 18 medium, 16 low priority; GitHub issues #29-#73 with bi-directional links; prevents "4 out of 7 tasks lost" problem |
+| **PHASE_1.5_COMPLETION_REPORT.md** | ✅ | n/a | `/docs/phase-completion/` | 1.5 | Phase 1.5 | 🔴 Critical | **NEW** - Phase 1.5 completion assessment (10-step protocol): ⚠️ PASS WITH CONDITIONS - 3/4 deliverables complete, 550 tests passing, 93.83% overall coverage, all targets exceeded (Model Manager 92.66%, Strategy Manager 86.59%, Position Manager 91.04%); 1 deliverable deferred (DEF-P1.5-001) |
 | **PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 1.5-4 | 🟡 High | **NEW** - Comprehensive property-based testing roadmap (74-91 tests deferred to Phases 1.5-4: database CRUD, strategy versioning, position lifecycle, async handling, ensemble predictions) |
+| **PHASE_1.5_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 2 Week 1 | 🟡 High | **NEW** - Configuration System Enhancement deferred to Phase 2 (DEF-P1.5-001: version resolution + override handling, 6-8 hours implementation estimate, requires live database integration) |
 | **PHASE_4_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 4.5 | Phase 4.5 | 🔴 Critical | **NEW** - Comprehensive research task documentation (11 tasks: DEF-009 to DEF-019, strategies HIGHEST PRIORITY, models, edge detection) - ~2800 lines, 74-92 hour total effort |
 | **STRATEGIC_WORK_ROADMAP_V1.1.md** | ✅ | v1.1 | `/docs/utility/` | 1-10 | All phases | 🔴 Critical | **UPDATED V1.1** - Master roadmap of 25 strategic tasks + Phases 6-9 analytics tasks (performance tracking, dashboards, A/B testing) organized by category |
 | **ENVIRONMENT_CHECKLIST_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0 | Phase 0 ✅ | 🔴 Critical | Windows 11 setup, Parts 1-7, dependencies verification (**FIXED** filename from V1.1 → V1.0) |
@@ -705,6 +714,7 @@ Additional guides, references, and supporting documentation.
 
 **Phase 0 Assessment:** ✅ Complete (see SESSION_7_HANDOFF.md for results)
 **Phase 0.5 Assessment:** ✅ Complete (all Days 1-10 finished + standardization, ready for Phase 1)
+**Phase 1.5 Assessment:** ⚠️ PASS WITH CONDITIONS (see docs/phase-completion/PHASE_1.5_COMPLETION_REPORT.md - 3/4 deliverables complete, 93.83% coverage, 1 deferred task: DEF-P1.5-001)
 
 ---
 
