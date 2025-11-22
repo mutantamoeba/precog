@@ -1,12 +1,13 @@
 # Phase 1.5 Deferred Tasks
 
 ---
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-11-22
+**Updated:** 2025-11-22
 **Phase:** Phase 1.5 - Foundation Validation (Codename: "Verify")
 **Target Completion:** Phase 2 Week 1
-**Total Tasks:** 1
-**Total Time Estimate:** 6-8 hours
+**Total Tasks:** 2
+**Total Time Estimate:** 11-14 hours
 ---
 
 ## Purpose
@@ -28,6 +29,238 @@ This document tracks non-blocking tasks deferred from Phase 1.5 to future phases
 | Task ID | Description | Priority | Target Phase | Time Est. | Status |
 |---------|-------------|----------|--------------|-----------|--------|
 | DEF-P1.5-001 | Configuration System Enhancement | 🟡 High | Phase 2 Week 1 | 6-8h | 🔵 Pending |
+| DEF-P1.5-002 | Fix 21 Validation Violations (19 SCD + 2 fixtures) | 🔴 Critical | Phase 2 Week 1 | 5-6h | 🔵 Pending |
+
+---
+
+## Critical Priority Tasks (🔴)
+
+### DEF-P1.5-002: Fix 21 Validation Violations (19 SCD + 2 fixtures)
+
+**Priority:** 🔴 Critical
+**Target Phase:** Phase 2 Week 1
+**Time Estimate:** 5-6 hours
+**Category:** Code Quality / Pattern Compliance
+**GitHub Issue:** #101
+
+#### Rationale
+
+These 21 violations were discovered by enhanced pre-push hooks during Phase 1.5 completion and deferred to Phase 2 because:
+
+1. **Non-Blocking for Phase 2 Start:** These are existing code quality issues in Phase 1.5 deliverables, not blockers for Phase 2 ESPN integration
+2. **Validation Enhancement Discovery:** New validation scripts (validate_scd_queries.py, validate_test_fixtures.py) discovered violations that existed before but weren't detected
+3. **Pattern Compliance, Not Functionality:** Code works correctly but violates Pattern 2 (SCD Type 2 filtering) and Pattern 13 (Real Fixtures)
+4. **Follows Pattern 18 (Avoid Technical Debt):** Formally tracked in GitHub Issue #101, scheduled for Phase 2 Week 1, documented in deferred tasks
+5. **Testing Debt Workflow:** User explicitly chose this deferral to validate our technical debt tracking process
+
+**Why Critical Priority:**
+- Pattern 2 violations risk accidentally querying historical data (subtle bugs)
+- Pattern 13 violations mean integration tests may pass with bugs (false confidence)
+- Should be fixed BEFORE significant Phase 2 development to prevent propagation
+
+#### Violations Detail
+
+**Part 1: SCD Type 2 Query Violations (19 violations)**
+
+Pattern 2 (Dual Versioning) requires all queries on SCD Type 2 tables to filter by `row_current_ind = TRUE`. The following production code queries are missing this filter:
+
+```
+1. src/precog/database/crud_operations.py:625
+   Function: get_market_history()
+   Issue: Intentionally fetches all versions for audit (legitimate exception)
+   Fix: Add comment "# Historical audit query - intentionally fetches all versions"
+
+2-19. [Additional violations with exact file:line references in GitHub Issue #101]
+```
+
+**Part 2: Test Fixture Violations (2 violations)**
+
+Pattern 13 (Coverage Quality) requires integration tests to use real fixtures (db_pool, db_cursor), not mocks. The following tests are missing required fixtures:
+
+```
+1. tests/integration/test_strategy_manager_integration.py
+   Missing: db_pool, db_cursor fixtures
+   Fix: Add fixtures to test function signatures
+
+2. tests/integration/test_model_manager_integration.py
+   Missing: db_pool, db_cursor fixtures
+   Fix: Add fixtures to test function signatures
+```
+
+#### Implementation Plan
+
+**Phase 2 Week 1 Implementation (5-6 hours):**
+
+**Task 1: Fix SCD Type 2 Query Violations (3-4 hours)**
+
+For each of the 19 violations:
+
+1. **Review query context** - Determine if query should filter current versions or all versions
+2. **Add row_current_ind filter** - Add `AND row_current_ind = TRUE` to WHERE clause
+3. **OR add exception comment** - If intentionally querying all versions (audit/history functions), add comment explaining why
+4. **Verify fix** - Re-run `python scripts/validate_scd_queries.py` to confirm violation resolved
+
+**Example Fix (get_market_history):**
+```python
+# BEFORE:
+def get_market_history(ticker: str, limit: int = 100) -> list[dict[str, Any]]:
+    """Get price history for a market."""
+    query = """
+        SELECT *
+        FROM markets
+        WHERE ticker = %s
+        ORDER BY created_at DESC
+        LIMIT %s
+    """
+    return fetch_all(query, (ticker, limit))
+
+# AFTER:
+def get_market_history(ticker: str, limit: int = 100) -> list[dict[str, Any]]:
+    """Get price history for a market (all versions)."""
+    # Historical audit query - intentionally fetches all versions for analysis
+    query = """
+        SELECT *
+        FROM markets
+        WHERE ticker = %s
+        ORDER BY created_at DESC
+        LIMIT %s
+    """
+    return fetch_all(query, (ticker, limit))
+```
+
+**Task 2: Fix Test Fixture Violations (1-2 hours)**
+
+For each of the 2 integration test files:
+
+1. **Add db_pool and db_cursor fixtures** to test function signatures
+2. **Replace mock connections** with real fixtures from conftest.py
+3. **Update test setup** to use real database transactions
+4. **Verify tests still pass** with real fixtures
+5. **Re-run validation** - `python scripts/validate_test_fixtures.py`
+
+**Example Fix (test_strategy_manager_integration.py):**
+```python
+# BEFORE:
+def test_create_strategy_version():
+    mock_pool = MagicMock()
+    manager = StrategyManager(mock_pool)
+    # ... test code
+
+# AFTER:
+def test_create_strategy_version(db_pool, db_cursor):
+    """Test creating strategy version with real database."""
+    manager = StrategyManager(db_pool)
+    # ... test code using real fixtures
+```
+
+**Task 3: Validation and Documentation (30 min)**
+
+1. Run all validation scripts to confirm fixes:
+   ```bash
+   python scripts/validate_scd_queries.py
+   python scripts/validate_test_fixtures.py
+   ```
+2. Run full test suite to ensure no regressions:
+   ```bash
+   python -m pytest tests/ -v
+   ```
+3. Update this document (mark DEF-P1.5-002 as Complete)
+4. Close GitHub Issue #101 with summary of fixes
+
+#### Success Criteria
+
+**Functional Requirements:**
+- [  ] All 19 SCD Type 2 queries either include `row_current_ind = TRUE` filter OR have explicit exception comments
+- [  ] All 2 integration test files use real fixtures (db_pool, db_cursor) instead of mocks
+- [  ] All validation scripts pass (validate_scd_queries.py, validate_test_fixtures.py)
+- [  ] All tests pass with real fixtures (no regressions)
+
+**Testing Requirements:**
+- [  ] Integration tests using real fixtures still pass
+- [  ] SCD queries with exception comments tested and verified intentional
+- [  ] Full test suite passes (all 348 tests)
+
+**Documentation Requirements:**
+- [  ] All exception comments documented with rationale (e.g., "Historical audit query")
+- [  ] PHASE_1.5_DEFERRED_TASKS_V1.0.md updated (DEF-P1.5-002 marked Complete)
+- [  ] GitHub Issue #101 closed with summary
+
+**Quality Requirements:**
+- [  ] No new violations introduced
+- [  ] All pre-push hooks pass
+- [  ] Pattern 2 and Pattern 13 compliance achieved
+
+#### Dependencies
+
+**Required Before Implementation:**
+- ✅ Phase 2 Week 1 started (ESPN integration underway)
+- ✅ GitHub Issue #101 created (formal tracking)
+- ✅ PHASE_1.5_DEFERRED_TASKS_V1.0.md updated (documented)
+
+**Required During Implementation:**
+- Database connection available for integration test fixtures
+- Access to production code (crud_operations.py, position_manager.py, etc.)
+- Validation scripts working (validate_scd_queries.py, validate_test_fixtures.py)
+
+#### Timeline
+
+**Phase 2 Week 1 Schedule:**
+- Day 1: Fix SCD Type 2 violations (3-4 hours)
+  - Review all 19 violations
+  - Add filters or exception comments
+  - Validate fixes with script
+- Day 2: Fix test fixture violations (1-2 hours)
+  - Update 2 integration test files
+  - Replace mocks with real fixtures
+  - Validate tests pass
+- Day 3: Validation and close (30 min)
+  - Run all validation scripts
+  - Run full test suite
+  - Update documentation and close issue
+
+**Total Time:** 5-6 hours (includes validation and documentation)
+
+#### Acceptance Criteria
+
+**Code Complete When:**
+1. ✅ All 21 violations resolved (19 SCD + 2 fixtures)
+2. ✅ Validation scripts pass (validate_scd_queries.py, validate_test_fixtures.py)
+3. ✅ All tests passing (348 tests, ≥93% coverage maintained)
+4. ✅ Pre-push hooks pass (no regressions)
+5. ✅ Documentation updated (deferred tasks, GitHub issue)
+
+**Definition of Done:**
+- [  ] All SCD queries compliant with Pattern 2 (row_current_ind filter or documented exception)
+- [  ] All integration tests compliant with Pattern 13 (real fixtures, no mocks)
+- [  ] Validation scripts pass
+- [  ] Tests pass
+- [  ] Documentation updated
+- [  ] GitHub Issue #101 closed
+- [  ] DEF-P1.5-002 marked Complete in this document
+
+#### References
+
+**Patterns:**
+- Pattern 2 (Dual Versioning): docs/guides/DEVELOPMENT_PATTERNS_V1.6.md
+- Pattern 13 (Coverage Quality): docs/guides/DEVELOPMENT_PATTERNS_V1.6.md
+- Pattern 18 (Avoid Technical Debt): To be created (SESSION 2.4c)
+
+**Validation Scripts:**
+- scripts/validate_scd_queries.py (SCD Type 2 validation)
+- scripts/validate_test_fixtures.py (Real fixtures validation)
+- scripts/validation_config.yaml (Validation configuration)
+
+**Related Issues:**
+- GitHub Issue #101: "Fix 21 validation violations discovered by Phase 1.5 pre-push hooks"
+
+**Implementation:**
+- src/precog/database/crud_operations.py (SCD queries)
+- src/precog/trading/position_manager.py (SCD queries)
+- tests/integration/test_strategy_manager_integration.py (fixtures)
+- tests/integration/test_model_manager_integration.py (fixtures)
+
+**Related Tasks:**
+- DEF-P1.5-001: Configuration System Enhancement (parallel task in Phase 2 Week 1)
 
 ---
 
@@ -439,22 +672,25 @@ from precog.config.config_loader import ConfigLoader
 ## Statistics
 
 **Phase 1.5 Deferred Tasks:**
-- Total: 1
+- Total: 2
+- Critical Priority: 1 (DEF-P1.5-002)
 - High Priority: 1 (DEF-P1.5-001)
 - Medium Priority: 0
 - Low Priority: 0
 - Completed: 0
 
 **Time Estimates:**
-- Total Deferred: 6-8 hours
-- Target Phase 2 Week 1: 6-8 hours
+- Total Deferred: 11-14 hours
+- Target Phase 2 Week 1: 11-14 hours
 - Expected Completion: Phase 2 Week 1 (January 2026)
 
 **Deferral Rate:**
 - Phase 1.5 Deliverables: 4 planned
 - Completed: 3 (75%)
-- Deferred: 1 (25%)
-- Deferral justified: Configuration requires Phase 2 database integration
+- Deferred: 2 (50%)
+- Deferral justified:
+  - Configuration requires Phase 2 database integration (DEF-P1.5-001)
+  - Validation violations discovered post-implementation (DEF-P1.5-002)
 
 ---
 

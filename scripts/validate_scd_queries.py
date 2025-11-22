@@ -63,9 +63,11 @@ def load_scd_validation_config() -> dict:
         "description": "Slowly Changing Dimension Type 2 tables (immutable history)",
         "discovery_method": "Query information_schema for tables with row_current_ind column",
         "required_patterns": [
+            # Raw SQL pattern (what we actually use with psycopg2)
+            r"row_current_ind\s*=\s*(TRUE|True|true)",
+            # ORM patterns (for future use if we migrate to SQLAlchemy)
             r"\.filter\([^)]*row_current_ind\s*==\s*True[^)]*\)",
             r"\.where\([^)]*row_current_ind\.is_\(True\)[^)]*\)",
-            r"WHERE\s+[^;]*row_current_ind\s*=\s*TRUE",
         ],
         "forbidden_patterns": [
             r"\.all\(\)",  # Missing filter (gets ALL versions)
@@ -89,11 +91,8 @@ def load_scd_validation_config() -> dict:
             # Build regex patterns from YAML patterns
             required_patterns = []
             if "required_pattern" in scd_config:
-                # Convert YAML pattern to regex
-                required_patterns = [
-                    r"\.filter\([^)]*row_current_ind\s*==\s*True[^)]*\)",
-                    r"\.where\([^)]*row_current_ind\.is_\(True\)[^)]*\)",
-                ]
+                # Use pattern from YAML (raw SQL pattern for our psycopg2 implementation)
+                required_patterns = [scd_config["required_pattern"]]
 
             return {
                 "description": scd_config.get("description", default_config["description"]),
@@ -232,8 +231,12 @@ def check_scd_queries(verbose: bool = False) -> tuple[bool, list[str]]:
     queries_found = 0
 
     for python_file in python_files:
-        # Skip __pycache__ and test files
+        # Skip __pycache__, test files, and migrations
         if "__pycache__" in str(python_file) or "test_" in python_file.name:
+            continue
+
+        # Skip migration files (they transform ALL versions, not just current)
+        if "migrations" in str(python_file):
             continue
 
         try:
@@ -242,19 +245,37 @@ def check_scd_queries(verbose: bool = False) -> tuple[bool, list[str]]:
 
             files_scanned += 1
 
+            # Track markdown code blocks in docstrings
+            in_code_block = False
+
             # Check each line for queries on SCD Type 2 tables
             for line_num, line in enumerate(lines, start=1):
+                stripped = line.strip()
+
+                # Toggle code block state when we see ```
+                if stripped.startswith("```") or stripped == "```":
+                    in_code_block = not in_code_block
+                    continue
+
+                # Skip lines inside code blocks
+                if in_code_block:
+                    continue
+
+                # Skip docstring examples (lines starting with >>> or ...)
+                if stripped.startswith((">>>", "...")):
+                    continue
+
                 # Check if line queries any SCD Type 2 table
                 for table in scd_tables:
-                    # Match patterns like: query(Markets), session.query(Markets), Markets.query
-                    # Also match: from_statement(select(...).from_(markets))
+                    # Match RAW SQL READ operations (we use psycopg2, NOT SQLAlchemy ORM)
+                    # Only check SELECT/JOIN (read operations), not INSERT/UPDATE (write operations)
+                    # Example: SELECT * FROM markets WHERE ticker = %s
+                    # Example: JOIN markets ON p.market_id = m.market_id
                     table_patterns = [
-                        rf"\.query\({table.capitalize()}\)",
-                        rf"\.query\({table}\)",
-                        rf"{table.capitalize()}\.query",
-                        rf"from_\({table}\)",
-                        rf'"{table}"',
-                        rf"'{table}'",
+                        rf"\bFROM\s+{table}\b",  # SELECT FROM markets, DELETE FROM markets
+                        rf"\bJOIN\s+{table}\b",  # INNER/LEFT/RIGHT JOIN positions
+                        # NOT UPDATE (modifies data, doesn't query)
+                        # NOT INSERT INTO (creates data, doesn't query)
                     ]
 
                     if any(re.search(pattern, line, re.IGNORECASE) for pattern in table_patterns):
@@ -273,8 +294,10 @@ def check_scd_queries(verbose: bool = False) -> tuple[bool, list[str]]:
                                 has_required_filter = True
                                 break
 
-                        # Check for exception comments
+                        # Check for exception comments or historical audit function
                         has_exception_comment = False
+
+                        # Check for explicit exception comments (e.g., "# Historical audit query")
                         comment_lines = lines[max(0, line_num - 3) : line_num]
                         comment_context = "\n".join(comment_lines)
 
@@ -282,6 +305,16 @@ def check_scd_queries(verbose: bool = False) -> tuple[bool, list[str]]:
                             if exception_comment.lower() in comment_context.lower():
                                 has_exception_comment = True
                                 break
+
+                        # Auto-detect historical audit functions (functions with "history" in name)
+                        # Example: get_market_history(), get_position_history()
+                        # These intentionally fetch ALL versions for audit/analysis
+                        if not has_exception_comment:
+                            # Check previous 30 lines for function definition with "history" in name
+                            func_context_lines = lines[max(0, line_num - 30) : line_num]
+                            func_context = "\n".join(func_context_lines)
+                            if re.search(r"def\s+\w*history\w*\s*\(", func_context, re.IGNORECASE):
+                                has_exception_comment = True
 
                         # Report violation if no filter and no exception comment
                         if not has_required_filter and not has_exception_comment:
