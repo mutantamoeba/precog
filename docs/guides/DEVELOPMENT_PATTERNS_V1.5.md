@@ -1,13 +1,28 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.5
+**Version:** 1.6
 **Created:** 2025-11-13
-**Last Updated:** 2025-11-21
+**Last Updated:** 2025-11-22
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.6:**
+- **Added Pattern 16: Type Safety with Dynamic Data - YAML/JSON Parsing (ALWAYS)**
+- Documents explicit `cast()` usage for YAML/JSON parsing to avoid Mypy no-any-return errors
+- Real-world context from PR #98 (fixed 4 validation scripts with type safety issues)
+- Covers common patterns: nested dictionaries, list of dicts, JSON parsing with type expectations
+- Common mistakes: forgetting cast import, unquoted types in cast (Ruff TC006), using isinstance instead of cast
+- Cross-references: Pattern 6 (TypedDict), Mypy no-any-return error handling, Ruff TC006 violation
+- Total addition: ~184 lines documenting type-safe YAML/JSON parsing patterns
+- **Added Pattern 17: Avoid Nested If Statements - Use Combined Conditions (ALWAYS)**
+- Documents combining conditions with `and`/`or` instead of nesting if statements (Ruff SIM102)
+- Real-world context from PR #98 (validate_phase_start.py nested if refactoring)
+- Covers complex conditions: multiple AND, mixed AND/OR, early return pattern
+- When nested is better: different error messages per layer, resource cleanup paths
+- Cross-references: Ruff SIM102 violation, code readability best practices
+- Total addition: ~196 lines documenting flat control flow patterns
 **Changes in V1.5:**
 - **Added Pattern 15: Trade/Position Attribution Architecture (ALWAYS - Migrations 018-020)**
 - Documents comprehensive attribution for trades and positions (execution-time snapshots)
@@ -77,23 +92,26 @@
 13. [Pattern 12: Test Fixture Security Compliance (MANDATORY)](#pattern-12-test-fixture-security-compliance-mandatory)
 14. [Pattern 13: Test Coverage Quality (Mock Sparingly, Integrate Thoroughly)](#pattern-13-test-coverage-quality-mock-sparingly-integrate-thoroughly---critical)
 15. [Pattern 14: Schema Migration → CRUD Operations Update Workflow (CRITICAL)](#pattern-14-schema-migration--crud-operations-update-workflow-critical)
-16. [Pattern Quick Reference](#pattern-quick-reference)
-17. [Related Documentation](#related-documentation)
+16. [Pattern 15: Trade/Position Attribution Architecture (ALWAYS)](#pattern-15-tradeposition-attribution-architecture-always---migrations-018-020)
+17. [Pattern 16: Type Safety with Dynamic Data - YAML/JSON Parsing (ALWAYS)](#pattern-16-type-safety-with-dynamic-data---yamljson-parsing-always)
+18. [Pattern 17: Avoid Nested If Statements - Use Combined Conditions (ALWAYS)](#pattern-17-avoid-nested-if-statements---use-combined-conditions-always)
+19. [Pattern Quick Reference](#pattern-quick-reference)
+20. [Related Documentation](#related-documentation)
 
 ---
 
 ## Introduction
 
-This guide contains **14 critical development patterns** that must be followed throughout the Precog project. These patterns address:
+This guide contains **17 critical development patterns** that must be followed throughout the Precog project. These patterns address:
 
 - **Financial Precision:** Decimal-only arithmetic for sub-penny pricing
 - **Data Versioning:** Dual versioning system for mutable vs. immutable data
 - **Security:** Zero-tolerance for hardcoded credentials
 - **Cross-Platform:** Windows/Linux compatibility
-- **Type Safety:** TypedDict for compile-time validation
+- **Type Safety:** TypedDict for compile-time validation + explicit cast() for YAML/JSON parsing
 - **Testing:** Property-based testing for trading logic + robust test mocking + integration test requirements
 - **Configuration:** Multi-layer config synchronization
-- **Quality:** Multi-source warning governance
+- **Quality:** Multi-source warning governance + flat control flow (no nested ifs)
 - **Schema Management:** Database schema migration → CRUD operations synchronization workflow
 
 **Why These Patterns Matter:**
@@ -3096,6 +3114,404 @@ calculated_probability = Decimal("0.6250")  # Decimal
 
 ---
 
+## Pattern 16: Type Safety with Dynamic Data - YAML/JSON Parsing (ALWAYS)
+
+**Summary:** When parsing YAML/JSON files with `yaml.safe_load()` or `json.load()`, the return type is `Any`. To avoid Mypy `no-any-return` errors, use explicit `cast()` to declare the expected type structure.
+
+**Why This Matters:**
+- **Type Safety:** `yaml.safe_load()` returns `Any`, which defeats Mypy's type checking
+- **Recurring Issue:** This pattern occurred in 4 validation scripts (validate_phase_start.py, validate_phase_completion.py, validate_test_fixtures.py, validate_property_tests.py)
+- **Maintainability:** Explicit casts document the expected structure and catch type mismatches early
+- **No Runtime Cost:** `cast()` is a no-op at runtime, zero performance impact
+
+### ✅ CORRECT: Explicit Type Cast
+
+```python
+from typing import Any, cast
+import yaml
+
+def load_config() -> dict[str, Any]:
+    """
+    Load configuration from YAML file.
+
+    Returns:
+        Configuration dictionary
+
+    Educational Note:
+        yaml.safe_load() returns Any. We use cast() to explicitly
+        declare the expected structure for type safety.
+    """
+    with open("config.yaml", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+        # ✅ Explicit cast makes type expectations clear
+        return cast("dict[str, Any]", config.get("settings", {}))
+```
+
+### ❌ WRONG: No Type Cast (Mypy Error)
+
+```python
+import yaml
+
+def load_config() -> dict[str, Any]:  # ❌ Mypy error: no-any-return
+    """Load configuration from YAML file."""
+    with open("config.yaml", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+        # ❌ Mypy complains: returning Any from function declared to return dict
+        return config.get("settings", {})
+```
+
+**Mypy Error:**
+```
+error: Returning Any from function declared to return "dict[str, Any]"  [no-any-return]
+```
+
+### Common Patterns
+
+**1. Nested Dictionary Access:**
+```python
+from typing import Any, cast
+
+# ✅ Cast at each level of nesting
+def get_database_config() -> dict[str, str]:
+    with open("config.yaml", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+        db_config = cast("dict[str, Any]", config.get("database", {}))
+        return cast("dict[str, str]", db_config.get("connection", {}))
+```
+
+**2. List of Dictionaries:**
+```python
+from typing import Any, cast
+
+# ✅ Cast list structure
+def load_deliverables() -> list[dict[str, Any]]:
+    with open("phase_config.yaml", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+        phase_data = cast("dict[str, Any]", config.get("phase_1", {}))
+        return cast("list[dict[str, Any]]", phase_data.get("deliverables", []))
+```
+
+**3. JSON Parsing (Same Pattern):**
+```python
+import json
+from typing import Any, cast
+
+# ✅ Same pattern for JSON
+def load_api_response() -> dict[str, Any]:
+    with open("response.json", encoding="utf-8") as f:
+        data = json.load(f)  # Returns Any
+        return cast("dict[str, Any]", data)
+```
+
+### Real-World Example
+
+**Context:** PR #98 fixed Mypy errors in 4 validation scripts
+
+**Before (Mypy Errors):**
+```python
+# scripts/validate_phase_start.py:70
+def load_phase_deliverables(phase: str) -> dict:  # ❌ Missing type annotation
+    validation_config_path = PROJECT_ROOT / "scripts" / "validation_config.yaml"
+
+    try:
+        with open(validation_config_path, encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+            phase_deliverables = config.get("phase_deliverables", {})
+            # ❌ Mypy error: no-any-return
+            return phase_deliverables.get(phase, {})
+    except Exception:
+        return {}
+```
+
+**After (Type-Safe):**
+```python
+from typing import Any, cast
+
+def load_phase_deliverables(phase: str) -> dict[Any, Any]:  # ✅ Explicit type
+    validation_config_path = PROJECT_ROOT / "scripts" / "validation_config.yaml"
+
+    try:
+        with open(validation_config_path, encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+            phase_deliverables = config.get("phase_deliverables", {})
+            # ✅ Explicit cast makes type expectations clear
+            return cast("dict[Any, Any]", phase_deliverables.get(phase, {}))
+    except Exception:
+        return {}
+```
+
+### When to Use This Pattern
+
+| Scenario | Use Cast? | Rationale |
+|----------|-----------|-----------|
+| Loading YAML/JSON config | ✅ ALWAYS | `yaml.safe_load()` returns `Any` |
+| Accessing nested dictionaries from YAML | ✅ ALWAYS | Each `.get()` call returns `Any` |
+| Parsing API responses (TypedDict) | ❌ NO | Use TypedDict + validation instead (Pattern 6) |
+| Reading user input | ✅ ALWAYS | `input()` returns `str`, but structure is `Any` after parsing |
+| Database query results | ✅ DEPENDS | If using raw SQL with `fetchall()`, yes. ORM models, no. |
+
+### Common Mistakes
+
+**1. Forgetting to Import `cast`:**
+```python
+# ❌ WRONG: NameError
+return cast("dict[str, Any]", config.get("key", {}))  # cast not imported
+```
+
+**Fix:**
+```python
+from typing import Any, cast  # ✅ Import both
+```
+
+**2. Unquoted Type in `cast()` (Ruff TC006):**
+```python
+# ❌ WRONG: Ruff TC006 violation
+return cast(dict[str, Any], config.get("key", {}))
+```
+
+**Fix:**
+```python
+# ✅ CORRECT: Quoted type for better string interning
+return cast("dict[str, Any]", config.get("key", {}))
+```
+
+**3. Using `assert isinstance()` Instead:**
+```python
+# ❌ WRONG: Runtime overhead, doesn't help Mypy
+config = yaml.safe_load(f)
+assert isinstance(config, dict)  # Runtime check, not static
+return config.get("key", {})  # Still returns Any
+```
+
+**Fix:**
+```python
+# ✅ CORRECT: No runtime cost, Mypy understands
+config = yaml.safe_load(f)
+return cast("dict[str, Any]", config.get("key", {}))
+```
+
+### References
+
+- **Related Pattern:** Pattern 6 (TypedDict for API Response Types)
+- **Mypy Error:** `no-any-return` ([Mypy Docs](https://mypy.readthedocs.io/en/stable/error_code_list.html#check-that-function-does-not-return-any-value-no-any-return))
+- **Ruff Rule:** TC006 (Unquoted type in cast)
+- **Real-World Example:** PR #98 (Validation script Mypy fixes)
+- **Files Affected:** validate_phase_start.py (lines 71), validate_phase_completion.py (lines 68), validate_test_fixtures.py (lines 88-90), validate_property_tests.py (lines 99-101)
+
+---
+
+## Pattern 17: Avoid Nested If Statements - Use Combined Conditions (ALWAYS)
+
+**Summary:** Nested `if` statements reduce readability. Combine conditions using `and`/`or` operators to create flat, readable control flow. This follows Ruff rule SIM102.
+
+**Why This Matters:**
+- **Readability:** Flat conditions are easier to understand than nested blocks
+- **Maintainability:** Less indentation = easier to modify logic
+- **Cyclomatic Complexity:** Reduces complexity metrics for better code quality
+- **Tool Support:** Ruff SIM102 automatically detects nested if antipattern
+
+### ✅ CORRECT: Combined Conditions
+
+```python
+def check_phase_dependencies(phase_num: float, content: str) -> list[str]:
+    """Check if previous phases are complete."""
+    violations = []
+
+    # ✅ CORRECT: Combined condition (flat structure)
+    if phase_num >= 2 and not re.search(r"Phase\s+1[^.0-9].*?✅", content, re.IGNORECASE):
+        violations.append("Phase 1 not complete (required for Phase >= 2)")
+
+    # ✅ CORRECT: Another combined condition
+    if phase_num >= 1.5 and not re.search(r"Phase\s+1[^.]", content):
+        violations.append("Phase 1 not found in DEVELOPMENT_PHASES")
+
+    return violations
+```
+
+### ❌ WRONG: Nested If Statements (Ruff SIM102)
+
+```python
+def check_phase_dependencies(phase_num: float, content: str) -> list[str]:
+    """Check if previous phases are complete."""
+    violations = []
+
+    # ❌ WRONG: Nested if (harder to read, Ruff SIM102 violation)
+    if phase_num >= 2:
+        if not re.search(r"Phase\s+1[^.0-9].*?✅", content, re.IGNORECASE):
+            violations.append("Phase 1 not complete (required for Phase >= 2)")
+
+    # ❌ WRONG: Another nested if
+    if phase_num >= 1.5:
+        if not re.search(r"Phase\s+1[^.]", content):
+            violations.append("Phase 1 not found in DEVELOPMENT_PHASES")
+
+    return violations
+```
+
+**Ruff Error:**
+```
+SIM102 Use a single `if` statement instead of nested `if` statements
+```
+
+### Complex Conditions
+
+**Multiple AND Conditions:**
+```python
+# ✅ CORRECT: All conditions must be true
+if user.is_authenticated and user.has_permission("write") and not user.is_banned:
+    save_data(user)
+
+# ❌ WRONG: Nested structure
+if user.is_authenticated:
+    if user.has_permission("write"):
+        if not user.is_banned:
+            save_data(user)
+```
+
+**Mixed AND/OR Conditions:**
+```python
+# ✅ CORRECT: Use parentheses for clarity
+if (phase_num >= 2 and phase1_complete) or phase_num < 1.5:
+    proceed_to_next_phase()
+
+# ❌ WRONG: Nested if/else
+if phase_num >= 2:
+    if phase1_complete:
+        proceed_to_next_phase()
+else:
+    if phase_num < 1.5:
+        proceed_to_next_phase()
+```
+
+**Early Return Pattern:**
+```python
+# ✅ CORRECT: Early return avoids nesting
+def validate_config(config: dict) -> str | None:
+    if not config:
+        return "Config is empty"
+
+    if "database" not in config:
+        return "Missing database config"
+
+    if config["database"]["port"] < 1024:
+        return "Port must be >= 1024"
+
+    return None  # All checks passed
+
+# ❌ WRONG: Nested structure
+def validate_config(config: dict) -> str | None:
+    if config:
+        if "database" in config:
+            if config["database"]["port"] >= 1024:
+                return None
+            else:
+                return "Port must be >= 1024"
+        else:
+            return "Missing database config"
+    else:
+        return "Config is empty"
+```
+
+### Real-World Example
+
+**Context:** PR #98 fixed nested if statements in validate_phase_start.py
+
+**Before (Ruff SIM102 Violation):**
+```python
+# scripts/validate_phase_start.py:171-179
+def check_phase_dependencies(phase: str, verbose: bool = False) -> tuple[bool, list[str]]:
+    violations = []
+    phase_num = float(phase)
+
+    # Read DEVELOPMENT_PHASES content...
+
+    # ❌ Nested if (SIM102)
+    if phase_num >= 2:
+        if not re.search(r"Phase\s+1[^.0-9].*?✅", content, re.IGNORECASE):
+            violations.append("Phase 1 not complete (required for Phase >= 2)")
+
+    # ❌ Another nested if
+    if phase_num >= 1.5:
+        if not re.search(r"Phase\s+1[^.]", content):
+            violations.append("Phase 1 not found in DEVELOPMENT_PHASES")
+
+    return len(violations) == 0, violations
+```
+
+**After (Flat Structure):**
+```python
+# scripts/validate_phase_start.py:171-179
+def check_phase_dependencies(phase: str, verbose: bool = False) -> tuple[bool, list[str]]:
+    violations = []
+    phase_num = float(phase)
+
+    # Read DEVELOPMENT_PHASES content...
+
+    # ✅ Combined condition (flat, readable)
+    if phase_num >= 2 and not re.search(r"Phase\s+1[^.0-9].*?✅", content, re.IGNORECASE):
+        violations.append("Phase 1 not complete (required for Phase >= 2)")
+
+    # ✅ Another combined condition
+    if phase_num >= 1.5 and not re.search(r"Phase\s+1[^.]", content):
+        violations.append("Phase 1 not found in DEVELOPMENT_PHASES")
+
+    return len(violations) == 0, violations
+```
+
+### When to Use This Pattern
+
+| Scenario | Use Combined Conditions? | Rationale |
+|----------|--------------------------|-----------|
+| Two conditions both must be true | ✅ YES | `if A and B:` is clearer than `if A: if B:` |
+| Early validation checks | ✅ YES (early return) | Flat structure, easier to follow |
+| Complex boolean logic (>3 conditions) | ✅ YES (with parentheses) | Use parentheses for readability |
+| Mutually exclusive conditions | ❌ NO (use elif) | `if A: ... elif B: ...` is correct |
+| Different actions per condition | ❌ NO (use separate ifs) | Separate logic should be separate blocks |
+
+### When Nested If Is Actually Better
+
+**1. Different Error Messages Per Layer:**
+```python
+# ✅ Nested is clearer here (different messages)
+if user.is_authenticated:
+    if user.has_permission("write"):
+        save_data()
+    else:
+        raise PermissionError("User lacks write permission")
+else:
+    raise AuthenticationError("User not authenticated")
+
+# ❌ Combined is confusing (which error to raise?)
+if not user.is_authenticated:
+    raise AuthenticationError("User not authenticated")
+elif not user.has_permission("write"):
+    raise PermissionError("User lacks write permission")
+else:
+    save_data()
+```
+
+**2. Early Exit with Resource Cleanup:**
+```python
+# ✅ Nested is clearer (different cleanup paths)
+if file_exists(path):
+    with open(path) as f:
+        if validate_header(f):
+            process_file(f)
+        else:
+            log("Invalid header")
+else:
+    log("File not found")
+```
+
+### References
+
+- **Ruff Rule:** SIM102 ([Ruff Docs](https://docs.astral.sh/ruff/rules/collapsible-if/))
+- **Related:** Cyclomatic Complexity metrics ([Wikipedia](https://en.wikipedia.org/wiki/Cyclomatic_complexity))
+- **Real-World Example:** PR #98 (validate_phase_start.py nested if fixes)
+- **Files Affected:** validate_phase_start.py (lines 171-179)
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -3115,6 +3531,8 @@ calculated_probability = Decimal("0.6250")  # Decimal
 | **13. Test Coverage Quality** | Code review + test checklist | `git grep "@patch.*get_connection" tests/` | REQ-TEST-012 thru REQ-TEST-019, TDD_FAILURE_ROOT_CAUSE |
 | **14. Schema Migration → CRUD** | Manual (5-step checklist) | `git log -- src/precog/database/migrations/` | ADR-089, ADR-034, ADR-003, Pattern 13 |
 | **15. Trade/Position Attribution** | Code review + pytest | `pytest tests/test_attribution.py -v` | ADR-090, ADR-091, ADR-092, Migration 018-020 |
+| **16. Type Safety (YAML/JSON)** | Mypy (pre-push hook) | `git grep "yaml.safe_load" -- '*.py'` | Pattern 6, Mypy no-any-return, Ruff TC006 |
+| **17. Avoid Nested Ifs** | Ruff (pre-commit hook) | `git grep -A2 "if.*:" -- '*.py' \| grep -A1 "if.*:"` | Ruff SIM102 |
 
 ---
 
