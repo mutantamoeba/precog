@@ -700,8 +700,8 @@ class PositionManager:
             4. Trailing stop activates, begins tracking highest price
 
         References:
-            - REQ-RISK-003: Trailing Stop Loss
-            - REQ-RISK-004: Trailing Stop Implementation
+            - REQ-TRAIL-001: Dynamic Trailing Stops
+            - REQ-TRAIL-002: JSONB State Management
             - ADR-025: Trailing Stop Implementation
             - docs/guides/TRAILING_STOP_GUIDE_V1.0.md
 
@@ -728,6 +728,20 @@ class PositionManager:
         missing_keys = required_keys - set(config.keys())
         if missing_keys:
             raise ValueError(f"Config missing required keys: {missing_keys}")
+
+        # Validate config values are positive/reasonable (defensive programming)
+        if config["activation_threshold"] <= Decimal("0"):
+            raise ValueError(
+                f"activation_threshold must be positive, got {config['activation_threshold']}"
+            )
+        if config["initial_distance"] <= Decimal("0"):
+            raise ValueError(f"initial_distance must be positive, got {config['initial_distance']}")
+        if config["floor_distance"] < Decimal("0"):
+            raise ValueError(f"floor_distance must be non-negative, got {config['floor_distance']}")
+        if not (Decimal("0") <= config["tightening_rate"] <= Decimal("1")):
+            raise ValueError(
+                f"tightening_rate must be between 0 and 1, got {config['tightening_rate']}"
+            )
 
         # Get current position
         conn = get_connection()
@@ -807,6 +821,7 @@ class PositionManager:
                 logger.info(
                     f"Initialized trailing stop for position {updated_position['position_id']}",
                     extra={
+                        "position_id": updated_position["position_id"],  # Business key
                         "old_id": position_id,
                         "new_id": new_position_id,
                         "activation_threshold": str(config["activation_threshold"]),
@@ -876,7 +891,8 @@ class PositionManager:
             As profit increases, distance shrinks (stop tightens), but never below floor.
 
         References:
-            - REQ-RISK-003: Trailing Stop Loss
+            - REQ-TRAIL-003: Stop Price Updates
+            - REQ-TRAIL-004: Peak Price Tracking
             - ADR-025: Trailing Stop Implementation
             - docs/guides/TRAILING_STOP_GUIDE_V1.0.md
 
@@ -944,6 +960,7 @@ class PositionManager:
                         logger.info(
                             f"Trailing stop ACTIVATED for {current_position['position_id']}",
                             extra={
+                                "position_id": current_position["position_id"],  # Business key
                                 "activation_price": str(current_price),
                                 "activation_pnl": str(unrealized_pnl),
                                 "threshold": str(config["activation_threshold"]),
@@ -962,6 +979,9 @@ class PositionManager:
 
                     # Calculate distance with tightening
                     # Formula: distance = max(floor, initial * (1 - tightening_rate * profit_ratio))
+                    # Defensive programming: Validate entry_price before division
+                    if current_position["entry_price"] <= Decimal("0"):
+                        raise ValueError(f"Invalid entry_price: {current_position['entry_price']}")
                     profit_ratio = unrealized_pnl / current_position["entry_price"]
                     distance_factor = Decimal("1") - (config["tightening_rate"] * profit_ratio)
                     distance = max(
@@ -978,6 +998,7 @@ class PositionManager:
                         logger.debug(
                             f"Trailing stop UPDATED for {current_position['position_id']}",
                             extra={
+                                "position_id": current_position["position_id"],  # Business key
                                 "highest_price": str(trailing_state["highest_price"]),
                                 "new_stop": str(new_stop),
                                 "distance": str(distance),
@@ -1072,8 +1093,8 @@ class PositionManager:
             - Separation allows flexibility: check without updating, update without exiting
 
         References:
-            - REQ-RISK-002: Stop Loss Enforcement
-            - REQ-RISK-003: Trailing Stop Loss
+            - REQ-TRAIL-001: Dynamic Trailing Stops
+            - REQ-TRAIL-003: Stop Price Updates
             - docs/guides/TRAILING_STOP_GUIDE_V1.0.md
 
         Example:
@@ -1128,6 +1149,7 @@ class PositionManager:
                     logger.warning(
                         f"Trailing stop TRIGGERED for {current_position['position_id']}",
                         extra={
+                            "position_id": current_position["position_id"],  # Business key
                             "current_price": str(current_price),
                             "stop_price": str(stop_price),
                             "side": current_position["side"],
