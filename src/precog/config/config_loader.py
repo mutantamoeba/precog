@@ -311,6 +311,11 @@ class ConfigLoader:
                 "gain_threshold_pct",
                 "max_position_pct",
                 "max_correlation",
+                # Trailing stop parameters
+                "activation_threshold",
+                "initial_distance",
+                "tightening_rate",
+                "floor_distance",
             }
 
         if isinstance(obj, dict):
@@ -498,6 +503,255 @@ class ConfigLoader:
                 all_valid = False
 
         return all_valid
+
+    def get_active_strategy_version(self, strategy_name: str) -> dict[str, Any] | None:
+        """
+        Get active version configuration for a strategy.
+
+        This method queries the database for the active version of a strategy
+        and returns its configuration. If no active version exists in the database,
+        returns None (YAML config is just a template, not runtime config).
+
+        Args:
+            strategy_name: Strategy identifier (e.g., 'halftime_entry')
+
+        Returns:
+            Strategy configuration dict from database, or None if no active version
+
+        Educational Note:
+            **Configuration Hierarchy:**
+            1. Database (active version) = Source of truth (immutable, versioned)
+            2. YAML files = Templates for creating new versions
+
+            Why database takes precedence?
+            - Strategies use IMMUTABLE versions (ADR-018)
+            - Each version has frozen config in database
+            - YAML is template, NOT runtime config
+
+            Example flow:
+            1. YAML has template: halftime_entry with default min_edge: "0.06"
+            2. Create v1.0 in database: min_edge = Decimal("0.06")
+            3. Create v1.1 in database: min_edge = Decimal("0.08") (better backtest)
+            4. Set v1.1 to 'active' status
+            5. This method returns v1.1 config (min_edge = Decimal("0.08"))
+
+        References:
+            - REQ-VER-001: Immutable Version Configs
+            - REQ-VER-004: Version Lifecycle Management
+            - ADR-018: Immutable Strategy Versions
+            - Pattern 2 (CLAUDE.md): Dual Versioning System
+
+        Example:
+            >>> loader = ConfigLoader()
+            >>> halftime_config = loader.get_active_strategy_version('halftime_entry')
+            >>> if halftime_config:
+            ...     print(halftime_config['min_edge'])  # Decimal("0.08")
+            ... else:
+            ...     print("No active version in database")
+        """
+        # Import here to avoid circular dependency
+        from precog.trading.strategy_manager import StrategyManager
+
+        manager = StrategyManager()
+
+        # Get all active strategies
+        active_strategies = manager.get_active_strategies()
+
+        # Filter by strategy_name
+        matching_strategies = [s for s in active_strategies if s["strategy_name"] == strategy_name]
+
+        if not matching_strategies:
+            logger.warning(
+                f"No active version found for strategy '{strategy_name}' in database",
+                extra={"strategy_name": strategy_name},
+            )
+            return None
+
+        if len(matching_strategies) > 1:
+            # Multiple active versions (A/B testing scenario)
+            # Return highest version number (most recent)
+            matching_strategies.sort(key=lambda s: s["strategy_version"], reverse=True)
+            logger.info(
+                f"Multiple active versions for '{strategy_name}', returning latest: "
+                f"{matching_strategies[0]['strategy_version']}",
+                extra={"strategy_name": strategy_name, "count": len(matching_strategies)},
+            )
+
+        strategy = matching_strategies[0]
+        logger.info(
+            f"Retrieved active strategy config: {strategy_name} {strategy['strategy_version']}",
+            extra={
+                "strategy_id": strategy["strategy_id"],
+                "version": strategy["strategy_version"],
+                "status": strategy["status"],
+            },
+        )
+
+        # Return complete strategy dict (includes config, status, metrics, etc.)
+        return strategy
+
+    def get_active_model_version(self, model_name: str) -> dict[str, Any] | None:
+        """
+        Get active version configuration for a probability model.
+
+        This method queries the database for the active version of a model
+        and returns its configuration. If no active version exists in the database,
+        returns None (YAML config is just a template, not runtime config).
+
+        Args:
+            model_name: Model identifier (e.g., 'elo_nfl')
+
+        Returns:
+            Model configuration dict from database, or None if no active version
+
+        Educational Note:
+            **Model Versioning Pattern:**
+            Models follow same immutability pattern as strategies (ADR-019).
+            Each version has frozen config for A/B testing and attribution.
+
+            Example: elo_nfl_v1.0 (k_factor=32) vs elo_nfl_v1.1 (k_factor=35)
+            - Both can be 'active' simultaneously (A/B testing)
+            - Each trade records which model_id was used
+            - Enables comparing: "Did v1.1 improve accuracy?"
+
+        References:
+            - REQ-VER-001: Immutable Version Configs
+            - REQ-VER-005: A/B Testing Support
+            - ADR-019: Semantic Versioning for Models
+            - Pattern 2 (CLAUDE.md): Dual Versioning System
+
+        Example:
+            >>> loader = ConfigLoader()
+            >>> elo_config = loader.get_active_model_version('elo_nfl')
+            >>> if elo_config:
+            ...     print(elo_config['config']['k_factor'])  # Decimal("35")
+            ... else:
+            ...     print("No active version in database")
+        """
+        # Import here to avoid circular dependency
+        from precog.analytics.model_manager import ModelManager
+
+        manager = ModelManager()
+
+        # Get all active models
+        active_models = manager.get_active_models()
+
+        # Filter by model_name
+        matching_models = [m for m in active_models if m["model_name"] == model_name]
+
+        if not matching_models:
+            logger.warning(
+                f"No active version found for model '{model_name}' in database",
+                extra={"model_name": model_name},
+            )
+            return None
+
+        if len(matching_models) > 1:
+            # Multiple active versions (A/B testing scenario)
+            # Return highest version number (most recent)
+            matching_models.sort(key=lambda m: m["model_version"], reverse=True)
+            logger.info(
+                f"Multiple active versions for '{model_name}', returning latest: "
+                f"{matching_models[0]['model_version']}",
+                extra={"model_name": model_name, "count": len(matching_models)},
+            )
+
+        model = matching_models[0]
+        logger.info(
+            f"Retrieved active model config: {model_name} {model['model_version']}",
+            extra={
+                "model_id": model["model_id"],
+                "version": model["model_version"],
+                "status": model["status"],
+            },
+        )
+
+        # Return complete model dict (includes config, status, metrics, etc.)
+        return model
+
+    def get_trailing_stop_config(self, strategy_name: str | None = None) -> dict[str, Any]:
+        """
+        Get trailing stop configuration for a strategy.
+
+        This method retrieves trailing stop parameters from position_management.yaml.
+        If strategy_name is provided, returns strategy-specific overrides merged with
+        defaults. Otherwise, returns default trailing stop config.
+
+        Args:
+            strategy_name: Optional strategy identifier for strategy-specific overrides
+
+        Returns:
+            Trailing stop configuration dict
+
+        Educational Note:
+            **Trailing Stop Architecture:**
+            Trailing stops protect profits by adjusting stop-loss as price moves favorably.
+
+            Example: Buy YES at $0.52, set trailing stop:
+            - activation_threshold: "0.15" (activate when 15¢ profit)
+            - distance: "0.05" (trail 5¢ below highest price)
+
+            Price movement:
+            1. $0.52 → $0.67 (+15¢) → Trailing stop activates at $0.62
+            2. $0.67 → $0.75 (+23¢) → Trailing stop moves to $0.70
+            3. $0.75 → $0.72 (-3¢) → Triggered! Sell at $0.72 (20¢ profit locked in)
+
+            Configuration layers:
+            1. Default: position_management.yaml → trailing_stops
+            2. Strategy-specific: position_management.yaml → trailing_stops → strategies → {strategy_name}
+
+        References:
+            - REQ-RISK-003: Trailing Stop Loss
+            - ADR-025: Trailing Stop Implementation
+            - docs/guides/TRAILING_STOP_GUIDE_V1.0.md
+
+        Example:
+            >>> loader = ConfigLoader()
+            >>> # Get default config
+            >>> default = loader.get_trailing_stop_config()
+            >>> print(default['activation_threshold'])  # Decimal("0.15")
+            >>>
+            >>> # Get strategy-specific config
+            >>> halftime = loader.get_trailing_stop_config('halftime_entry')
+            >>> print(halftime['activation_threshold'])  # Decimal("0.10") (override)
+        """
+        # Load position management config
+        pos_mgmt = self.load("position_management")
+
+        # Get default trailing stop config
+        trailing_stops = pos_mgmt.get("trailing_stops", {})
+        default_config = trailing_stops.get("default", {})
+
+        if not default_config:
+            logger.warning("No default trailing_stops config found in position_management.yaml")
+            return {}
+
+        # If no strategy specified, return default
+        if strategy_name is None:
+            return dict(default_config) if isinstance(default_config, dict) else {}
+
+        # Get strategy-specific overrides
+        strategy_overrides = trailing_stops.get("strategies", {}).get(strategy_name, {})
+
+        if not strategy_overrides:
+            logger.info(
+                f"No strategy-specific trailing stop config for '{strategy_name}', using defaults",
+                extra={"strategy_name": strategy_name},
+            )
+            return dict(default_config) if isinstance(default_config, dict) else {}
+
+        # Merge: strategy overrides take precedence
+        merged_config = {**default_config, **strategy_overrides}
+
+        logger.info(
+            f"Merged trailing stop config for strategy '{strategy_name}'",
+            extra={
+                "strategy_name": strategy_name,
+                "overrides": list(strategy_overrides.keys()),
+            },
+        )
+
+        return merged_config
 
 
 # Global config loader instance

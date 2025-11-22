@@ -982,7 +982,7 @@ def is_market_tradeable(m):
 **The Workflow (Adding Requirement):**
 
 ```markdown
-1. **Canonical:** MASTER_REQUIREMENTS_V2.16.md
+1. **Canonical:** MASTER_REQUIREMENTS_V2.17.md
    Add REQ-XXX-NNN here FIRST
 
 2. **Cascade to:**

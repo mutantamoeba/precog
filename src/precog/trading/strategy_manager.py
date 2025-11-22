@@ -155,7 +155,10 @@ class StrategyManager:
         Args:
             strategy_name: Strategy identifier (e.g., 'halftime_entry')
             strategy_version: Semantic version (e.g., 'v1.0', 'v1.1', 'v2.0')
-            strategy_type: HOW strategy works ('entry', 'exit', 'sizing', 'hedging', 'value', 'arbitrage')
+            strategy_type: Valid strategy type code from strategy_types lookup table.
+                Initial values: 'value', 'arbitrage', 'momentum', 'mean_reversion'
+                Query available types: SELECT * FROM strategy_types WHERE is_active = TRUE
+                (Constraint enforced by FK - see Migration 023)
             config: Strategy parameters (IMMUTABLE once created!)
             domain: WHICH markets ('nfl', 'nba', etc.) or None for multi-domain
             description: Human-readable description
@@ -168,6 +171,7 @@ class StrategyManager:
 
         Raises:
             psycopg2.IntegrityError: If (strategy_name, strategy_version) already exists
+            psycopg2.ForeignKeyViolation: If strategy_type is not in strategy_types table
             ValueError: If config is empty or None
 
         Educational Note:
@@ -181,6 +185,7 @@ class StrategyManager:
             - REQ-VER-001: Immutable Version Configs
             - REQ-SYS-003: Decimal Precision (ALWAYS use Decimal for prices)
             - Pattern 1 (CLAUDE.md): Decimal Precision - NEVER USE FLOAT
+            - Migration 023: strategy_types lookup table and FK constraint
         """
         # Validation
         if not config:

@@ -1,9 +1,19 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.19
-**Last Updated:** November 21, 2025
+**Version:** 2.20
+**Last Updated:** November 22, 2025
 **Status:** ✅ Current
+**Changes in v2.20:**
+- **LOOKUP TABLES FOR BUSINESS ENUMS:** Added Decision #93/ADR-093 (Lookup Tables for Business Enums - Phase 1.5)
+- Documents decision to replace CHECK constraints with lookup tables for strategy_type and model_class enums
+- **Problem Addressed:** CHECK constraints require migrations to add new values, can't store metadata, not UI-friendly
+- **Solution:** Two lookup tables (strategy_types, model_classes) with foreign key constraints instead of CHECK constraints
+- **Benefits:** Add new enum values via INSERT (no migration), rich metadata (display_name, description, category), UI-friendly dropdown queries, extensible schema
+- **Implementation:** Migration 023 creates tables with 4 strategy types + 7 model classes, helper module (lookup_helpers.py) with validation functions, 23 comprehensive tests
+- **Migration Impact:** Replaces strategies_strategy_type_check and probability_models_model_class_check with FK constraints
+- Enables no-migration enum extensibility for future strategy types (hedging, contrarian, event-driven) and model classes (xgboost, lstm, random_forest)
+- References comprehensive design in docs/database/LOOKUP_TABLES_DESIGN.md, helper functions in src/precog/database/lookup_helpers.py
 **Changes in v2.19:**
 - **TRADE & POSITION ATTRIBUTION ARCHITECTURE:** Added Decisions #90-92/ADR-090-092 (Trade/Position Attribution & Strategy Scope - Phase 1.5)
 - **ADR-090: Strategy Contains Entry + Exit Rules with Nested Versioning** - Documents decision for strategies to contain both entry and exit rules with independent version tracking
@@ -5723,7 +5733,7 @@ CREATE TABLE model_config_params (
 - ADR-079: Performance Tracking Architecture (query patterns inform this decision)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (current JSONB schema)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (current JSONB schema)
 - `config/probability_models.yaml` (config examples)
 - `config/trade_strategies.yaml` (strategy config examples)
 
@@ -6180,7 +6190,7 @@ CREATE TABLE brier_score_metrics (...);
 - STRAT-026: Performance Metrics Infrastructure Implementation (Phase 1.5-2, 18-22h)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (Section 8: Performance Tracking & Analytics)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8: Performance Tracking & Analytics)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
@@ -6937,7 +6947,7 @@ Cons:
 
 ### References
 
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (Section 8: Performance Tracking & Analytics)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8: Performance Tracking & Analytics)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
@@ -7706,7 +7716,7 @@ WebSocket for Position Monitoring (real-time):
 ### References
 
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 7 Task #2: Frontend Development)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (Section 8.9: Materialized Views)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.9: Materialized Views)
 - Next.js Documentation: https://nextjs.org/docs
 - Recharts Documentation: https://recharts.org/
 - React Query Documentation: https://tanstack.com/query/latest
@@ -8625,10 +8635,10 @@ def run_holdout_validation(
 ### Related Documentation
 
 - `docs/guides/MODEL_EVALUATION_GUIDE_V1.0.md` (implementation guide - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.17.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #3, Phase 6 Task #1)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (Section 8.7: Evaluation Runs Table)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.7: Evaluation Runs Table)
 
 ---
 
@@ -9348,10 +9358,10 @@ ON position_risk_by_strategy(league, strategy_name);
 
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (comprehensive analytics implementation guide - to be created)
 - `docs/guides/DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md` (React dashboard + API integration - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.17.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 6 Task #3, Phase 7 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (Section 8.8: Materialized Views Reference)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.8: Materialized Views Reference)
 
 ---
 
@@ -10179,10 +10189,10 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 
 - `docs/guides/AB_TESTING_GUIDE_V1.0.md` (comprehensive A/B testing guide - to be created)
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (includes A/B testing architecture)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.17.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 7 Task #3, Phase 8 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (Section 8.9: A/B Tests Table)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.9: A/B Tests Table)
 
 ---
 
@@ -10616,8 +10626,8 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 - ADR-018: Immutable Versions Pattern (JSONB supports atomic config versioning)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (materialized views already defined)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` (analytics requirements)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (materialized views already defined)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.17.md` (analytics requirements)
 
 ---
 
@@ -10785,7 +10795,7 @@ python scripts/validate_schema.py --ci
 ```
 
 **Future Expansion (Phase 2+):**
-- Parse DATABASE_SCHEMA_SUMMARY_V1.10.md directly (vs. hardcoded schemas)
+- Parse DATABASE_SCHEMA_SUMMARY_V1.11.md directly (vs. hardcoded schemas)
 - Add more tables: markets, positions, trades, etc.
 - Integrate into CI/CD pipeline (blocks PRs if schema drift detected)
 
@@ -10919,7 +10929,7 @@ CREATE TABLE strategies (
 **References:**
 - `src/precog/database/migrations/migration_011_standardize_classification_fields.py` (implementation)
 - `scripts/validate_schema.py` (automated validation)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (updated schemas)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (updated schemas)
 - `docs/utility/PHASE_1_DEFERRED_TASKS_V1.0.md` (DEF-P1-008 completed)
 
 ---
@@ -11096,7 +11106,7 @@ CREATE TABLE strategies (
 
 ### References
 
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (edges table schema)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (edges table schema)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 1.5 manager components)
 - `src/precog/trading/model_manager.py` (edge calculation logic - Phase 1.5 implementation)
 - `src/precog/trading/strategy_manager.py` (edge query logic - Phase 1.5 implementation)
@@ -11531,7 +11541,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 **Primary Documentation:**
 - TESTING_STRATEGY_V3.1.md (comprehensive 8 test type framework, 1,462 lines)
 - TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md (REQ-TEST-012 through REQ-TEST-019)
-- MASTER_REQUIREMENTS_V2.16.md (added 8 new test requirements)
+- MASTER_REQUIREMENTS_V2.17.md (added 8 new test requirements)
 - REQUIREMENT_INDEX.md (added REQ-TEST-012 through REQ-TEST-019)
 
 **Supporting Documentation:**
@@ -11661,7 +11671,7 @@ Decision to use pytest as the primary testing framework with coverage, async sup
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.10.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
 
 Decision to enforce referential integrity using PostgreSQL foreign key constraints on all relationship columns.
 
@@ -11669,7 +11679,7 @@ Decision to enforce referential integrity using PostgreSQL foreign key constrain
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.10.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
 
 Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key relationships.
 
@@ -11677,7 +11687,7 @@ Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.10.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
 
 Decision to create database views that filter for current rows (row_current_ind = TRUE) to simplify application queries.
 
@@ -11701,7 +11711,7 @@ Decision to implement 2-stage partial exits (50% at +15%, 25% at +25%, 25% with 
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.10.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
 
 Decision to use append-only table for position_exits to maintain complete exit event history.
 
@@ -11709,7 +11719,7 @@ Decision to use append-only table for position_exits to maintain complete exit e
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.10.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
 
 Decision to log all exit order attempts (filled and unfilled) to exit_attempts table for debugging "why didn't my exit fill?" issues.
 
@@ -12480,7 +12490,7 @@ Result: Only enter when model confident AND market mispriced
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Comprehensive architectural analysis
 - `docs/guides/VERSIONING_GUIDE_V1.0.md` - Strategy/model versioning patterns
-- `MASTER_REQUIREMENTS_V2.16.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
+- `MASTER_REQUIREMENTS_V2.17.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -12899,8 +12909,8 @@ def validate_position_trade_attribution(position_id: str) -> bool:
 ### Related Documentation
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Attribution architecture analysis with tradeoffs
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` - Current schema (pre-attribution)
-- `MASTER_REQUIREMENTS_V2.16.md` - REQ-DB-006 (Decimal precision for all financial fields)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` - Current schema (pre-attribution)
+- `MASTER_REQUIREMENTS_V2.17.md` - REQ-DB-006 (Decimal precision for all financial fields)
 
 **Status:** ✅ Decision approved, implementation in progress (Migrations 019-020 planned)
 
@@ -13275,9 +13285,389 @@ def sync_trades_full():
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Trade source tracking architectural analysis
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` - Kalshi API trade download patterns
-- `MASTER_REQUIREMENTS_V2.16.md` - REQ-API-001 (Kalshi API Integration)
+- `MASTER_REQUIREMENTS_V2.17.md` - REQ-API-001 (Kalshi API Integration)
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
+
+---
+
+## Decision #93/ADR-093: Lookup Tables for Business Enums
+
+**Decision #93**
+**Phase:** 1.5 (Foundation Validation)
+**Status:** ✅ Approved (Implementation complete in Migration 023)
+**Priority:** 🟡 High (enables no-migration extensibility)
+
+### Problem Statement
+
+**Context: Business Enums via CHECK Constraints**
+
+Current implementation uses CHECK constraints for business enums:
+- `strategies.approach` - CHECK constraint with 4 values: 'value', 'arbitrage', 'momentum', 'mean_reversion'
+- `probability_models.approach` - CHECK constraint with 7 values: 'elo', 'ensemble', 'ml', 'hybrid', 'regression', 'neural_net', 'baseline'
+
+**Limitations of CHECK Constraints:**
+1. **Requires migrations to add new values** - Every new strategy type or model class requires schema migration
+2. **No metadata storage** - Can't store display names, descriptions, categories, or help text
+3. **Not UI-friendly** - Hard to query for dropdown options or grouping
+4. **Limited flexibility** - Can't disable values, add fields, or version enum metadata
+
+**Phase 2+ Extensibility Gap:**
+- User expects to add new strategy types (hedging, contrarian, event-driven) without schema changes
+- User expects to add new model classes (xgboost, lstm, random_forest) as experimentation evolves
+- Current CHECK constraint pattern requires migration for each new value
+
+### Decision
+
+**We decided to:**
+1. **Replace CHECK constraints with lookup tables** - Two new tables (strategy_types, model_classes)
+2. **Use foreign key constraints** - Replace strategies_strategy_type_check and probability_models_model_class_check with FK constraints
+3. **Store rich metadata** - display_name, description, category, complexity_level, display_order, icon_name, help_text
+4. **Enable no-migration enum extensibility** - Add new values via INSERT statements (no schema migration)
+
+**Rationale:**
+1. **No Migrations for New Values**: `INSERT INTO strategy_types VALUES ('hedging', ...)` - done in seconds
+2. **Rich Metadata**: Store descriptions, categories, UI sort order, icon identifiers
+3. **UI-Friendly**: Query for dropdown options with metadata for presentation
+4. **Extensible**: Add fields like tags, risk_level without schema changes (future migrations)
+5. **Better Error Messages**: FK violation includes table/column names (more helpful than CHECK violation)
+
+### Implementation Strategy
+
+**Migration 023: Create Lookup Tables and Replace CHECK Constraints**
+
+**Step 1: Create strategy_types Lookup Table**
+
+```sql
+CREATE TABLE strategy_types (
+    strategy_type_code VARCHAR(50) PRIMARY KEY,  -- 'value', 'arbitrage', 'momentum', 'mean_reversion'
+    display_name VARCHAR(100) NOT NULL,          -- 'Value Trading', 'Arbitrage'
+    description TEXT NOT NULL,                   -- 'Exploit market mispricing by identifying...'
+    category VARCHAR(50) NOT NULL,               -- 'directional', 'arbitrage', 'risk_management', 'event_driven'
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,     -- Allow disabling without deleting
+    display_order INT DEFAULT 999 NOT NULL,      -- UI sort order (lower = first)
+    icon_name VARCHAR(50),                       -- Icon identifier for UI (optional)
+    help_text TEXT,                              -- Extended help for UI tooltips (optional)
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX idx_strategy_types_active ON strategy_types(is_active) WHERE is_active = TRUE;
+CREATE INDEX idx_strategy_types_category ON strategy_types(category);
+CREATE INDEX idx_strategy_types_order ON strategy_types(display_order);
+```
+
+**Step 2: Create model_classes Lookup Table**
+
+```sql
+CREATE TABLE model_classes (
+    model_class_code VARCHAR(50) PRIMARY KEY,   -- 'elo', 'ensemble', 'ml', 'neural_net', etc.
+    display_name VARCHAR(100) NOT NULL,         -- 'Elo Rating System', 'Neural Network'
+    description TEXT NOT NULL,                  -- 'Elo rating system based on...'
+    category VARCHAR(50) NOT NULL,              -- 'statistical', 'machine_learning', 'hybrid', 'baseline'
+    complexity_level VARCHAR(20) NOT NULL,      -- 'simple', 'moderate', 'advanced'
+    is_active BOOLEAN DEFAULT TRUE NOT NULL,
+    display_order INT DEFAULT 999 NOT NULL,
+    icon_name VARCHAR(50),                      -- Icon identifier for UI (optional)
+    help_text TEXT,                             -- Extended help for UI tooltips (optional)
+    created_at TIMESTAMP DEFAULT NOW() NOT NULL,
+    updated_at TIMESTAMP DEFAULT NOW() NOT NULL
+);
+
+CREATE INDEX idx_model_classes_active ON model_classes(is_active) WHERE is_active = TRUE;
+CREATE INDEX idx_model_classes_category ON model_classes(category);
+CREATE INDEX idx_model_classes_complexity ON model_classes(complexity_level);
+CREATE INDEX idx_model_classes_order ON model_classes(display_order);
+```
+
+**Step 3: Seed Initial Values**
+
+```sql
+-- Seed strategy_types (4 initial values)
+INSERT INTO strategy_types (strategy_type_code, display_name, description, category, display_order) VALUES
+('value', 'Value Trading', 'Exploit market mispricing by identifying edges where true probability exceeds market price', 'directional', 10),
+('arbitrage', 'Arbitrage', 'Cross-platform arbitrage opportunities with identical event outcomes priced differently', 'arbitrage', 20),
+('momentum', 'Momentum Trading', 'Trend following strategies that capitalize on sustained price movements', 'directional', 30),
+('mean_reversion', 'Mean Reversion', 'Capitalize on temporary deviations from fundamental value by betting on reversion to mean', 'directional', 40);
+
+-- Seed model_classes (7 initial values)
+INSERT INTO model_classes (model_class_code, display_name, description, category, complexity_level, display_order) VALUES
+('elo', 'Elo Rating System', 'Dynamic rating system tracking team/competitor strength over time based on game outcomes', 'statistical', 'simple', 10),
+('ensemble', 'Ensemble Model', 'Weighted combination of multiple models for more robust and accurate predictions', 'hybrid', 'moderate', 20),
+('ml', 'Machine Learning', 'General machine learning algorithms (decision trees, random forests, SVM, etc.)', 'machine_learning', 'moderate', 30),
+('hybrid', 'Hybrid Approach', 'Combines multiple modeling approaches (statistical + machine learning) for best of both worlds', 'hybrid', 'moderate', 40),
+('regression', 'Statistical Regression', 'Linear or logistic regression models with feature engineering and interaction terms', 'statistical', 'simple', 50),
+('neural_net', 'Neural Network', 'Deep learning models with multiple hidden layers for complex pattern recognition', 'machine_learning', 'advanced', 60),
+('baseline', 'Baseline Model', 'Simple heuristic for benchmarking (moving average, market consensus, random guessing)', 'baseline', 'simple', 70);
+```
+
+**Step 4: Replace CHECK Constraints with Foreign Keys**
+
+```sql
+-- Drop existing CHECK constraints
+ALTER TABLE strategies DROP CONSTRAINT IF EXISTS strategies_strategy_type_check;
+ALTER TABLE probability_models DROP CONSTRAINT IF EXISTS probability_models_model_class_check;
+
+-- Add foreign key constraints
+ALTER TABLE strategies
+    ADD CONSTRAINT fk_strategies_strategy_type
+    FOREIGN KEY (strategy_type)
+    REFERENCES strategy_types(strategy_type_code);
+
+ALTER TABLE probability_models
+    ADD CONSTRAINT fk_probability_models_model_class
+    FOREIGN KEY (model_class)
+    REFERENCES model_classes(model_class_code);
+
+-- Create indexes on FK columns for query performance
+CREATE INDEX IF NOT EXISTS idx_strategies_strategy_type ON strategies(strategy_type);
+CREATE INDEX IF NOT EXISTS idx_probability_models_model_class ON probability_models(model_class);
+```
+
+### Helper Module Implementation
+
+**File:** `src/precog/database/lookup_helpers.py`
+
+**Query Functions:**
+```python
+def get_strategy_types(active_only: bool = True) -> list[dict[str, Any]]:
+    """Get all strategy types with metadata for UI dropdowns."""
+    where_clause = "WHERE is_active = TRUE" if active_only else ""
+    query = f"""
+        SELECT strategy_type_code, display_name, description, category, display_order, is_active
+        FROM strategy_types
+        {where_clause}
+        ORDER BY display_order
+    """
+    return fetch_all(query)
+
+def get_model_classes(active_only: bool = True) -> list[dict[str, Any]]:
+    """Get all model classes with metadata for UI dropdowns."""
+    where_clause = "WHERE is_active = TRUE" if active_only else ""
+    query = f"""
+        SELECT model_class_code, display_name, description, category, complexity_level, display_order, is_active
+        FROM model_classes
+        {where_clause}
+        ORDER BY display_order
+    """
+    return fetch_all(query)
+```
+
+**Validation Functions:**
+```python
+def validate_strategy_type(strategy_type: str, active_only: bool = True) -> bool:
+    """Check if strategy_type is valid and optionally active."""
+    where_clause = "AND is_active = TRUE" if active_only else ""
+    query = f"""
+        SELECT EXISTS(
+            SELECT 1 FROM strategy_types
+            WHERE strategy_type_code = %s {where_clause}
+        )
+    """
+    result = fetch_one(query, (strategy_type,))
+    return bool(result["exists"]) if result else False
+
+def validate_model_class(model_class: str, active_only: bool = True) -> bool:
+    """Check if model_class is valid and optionally active."""
+    where_clause = "AND is_active = TRUE" if active_only else ""
+    query = f"""
+        SELECT EXISTS(
+            SELECT 1 FROM model_classes
+            WHERE model_class_code = %s {where_clause}
+        )
+    """
+    result = fetch_one(query, (model_class,))
+    return bool(result["exists"]) if result else False
+```
+
+**Convenience Functions (No Migration Required!):**
+```python
+def add_strategy_type(
+    code: str,
+    display_name: str,
+    description: str,
+    category: str,
+    display_order: int | None = None,
+    icon_name: str | None = None,
+    help_text: str | None = None,
+) -> dict[str, Any]:
+    """Add new strategy type to lookup table (no migration required!)."""
+    # ... INSERT query with RETURNING clause
+    # Returns inserted row as dict
+
+def add_model_class(
+    code: str,
+    display_name: str,
+    description: str,
+    category: str,
+    complexity_level: str,
+    display_order: int | None = None,
+    icon_name: str | None = None,
+    help_text: str | None = None,
+) -> dict[str, Any]:
+    """Add new model class to lookup table (no migration required!)."""
+    # ... INSERT query with RETURNING clause
+    # Returns inserted row as dict
+```
+
+### Grouping Functions (UI Presentation)
+
+**By Category:**
+```python
+def get_strategy_types_by_category(active_only: bool = True) -> dict[str, list[dict[str, Any]]]:
+    """Get strategy types grouped by category.
+
+    Returns:
+        Dict mapping category names to lists of strategy type dicts.
+        Example: {'directional': [...], 'arbitrage': [...]}
+    """
+    types = get_strategy_types(active_only=active_only)
+    by_category: dict[str, list[dict[str, Any]]] = {}
+
+    for strategy_type in types:
+        category = strategy_type["category"]
+        if category not in by_category:
+            by_category[category] = []
+        by_category[category].append(strategy_type)
+
+    return by_category
+
+def get_model_classes_by_complexity(active_only: bool = True) -> dict[str, list[dict[str, Any]]]:
+    """Get model classes grouped by complexity level.
+
+    Returns:
+        Dict mapping complexity levels to lists of model class dicts.
+        Example: {'simple': [...], 'moderate': [...], 'advanced': [...]}
+    """
+    classes = get_model_classes(active_only=active_only)
+    by_complexity: dict[str, list[dict[str, Any]]] = {}
+
+    for model_class in classes:
+        complexity = model_class["complexity_level"]
+        if complexity not in by_complexity:
+            by_complexity[complexity] = []
+        by_complexity[complexity].append(model_class)
+
+    return by_complexity
+```
+
+### Future Extensibility Examples
+
+**Adding New Strategy Types (No Migration!):**
+
+```python
+# Phase 2: Add hedging strategy
+add_strategy_type(
+    code='hedging',
+    display_name='Hedging Strategy',
+    description='Risk management through offsetting positions',
+    category='risk_management',
+    display_order=50
+)
+
+# Phase 3: Add contrarian strategy
+add_strategy_type(
+    code='contrarian',
+    display_name='Contrarian Trading',
+    description='Fade public sentiment when market overreacts',
+    category='directional',
+    display_order=45
+)
+```
+
+**Adding New Model Classes (No Migration!):**
+
+```python
+# Phase 4: Add XGBoost model
+add_model_class(
+    code='xgboost',
+    display_name='XGBoost',
+    description='Gradient boosting decision trees with regularization',
+    category='machine_learning',
+    complexity_level='advanced',
+    display_order=65
+)
+
+# Phase 4: Add LSTM neural network
+add_model_class(
+    code='lstm',
+    display_name='LSTM Neural Network',
+    description='Long short-term memory recurrent neural network for sequential data',
+    category='machine_learning',
+    complexity_level='advanced',
+    display_order=68
+)
+```
+
+**Disabling Values (No Deletion!):**
+
+```sql
+-- Disable deprecated strategy type (preserves historical references)
+UPDATE strategy_types
+SET is_active = FALSE, updated_at = NOW()
+WHERE strategy_type_code = 'momentum';
+```
+
+### Testing Strategy
+
+**File:** `tests/test_lookup_tables.py` (23 tests, 100% coverage of lookup_helpers.py)
+
+**Test Categories:**
+1. **Lookup Table Verification** - Verify 4 initial strategy types and 7 initial model classes exist
+2. **Query Functions** - Test active_only filtering, metadata presence, sort order
+3. **Grouping Functions** - Test by_category and by_complexity grouping
+4. **Validation Functions** - Test valid/invalid codes, active/inactive filtering
+5. **FK Constraint Enforcement** - Verify invalid strategy_type/model_class raises psycopg2.ForeignKeyViolation
+6. **Convenience Functions** - Test add_strategy_type() and add_model_class()
+7. **Integration Tests** - Test StrategyManager and ModelManager with all valid types
+
+**Example Test:**
+```python
+def test_invalid_strategy_type_raises_foreign_key_error():
+    """Verify FK constraint prevents invalid strategy_type in strategies table."""
+    manager = StrategyManager()
+
+    with pytest.raises(psycopg2.errors.ForeignKeyViolation):
+        manager.create_strategy(
+            strategy_name="test_invalid_type",
+            strategy_version="v1.0",
+            strategy_type="invalid_type",  # ← Not in lookup table
+            domain="nfl",
+            config={"test": True},
+        )
+```
+
+### Benefits vs. Tradeoffs
+
+**✅ Benefits:**
+1. **No Migrations for New Values** - Add strategy types/model classes via INSERT (seconds vs. hours)
+2. **Rich Metadata** - Store display names, descriptions, categories, help text
+3. **UI-Friendly** - Query for dropdown options with metadata
+4. **Extensible** - Add fields (tags, risk_level) without affecting existing code
+5. **Better Error Messages** - FK violations more descriptive than CHECK violations
+6. **Progressive Disclosure** - Group by complexity (show simple models first in UI)
+7. **Flexible Deactivation** - Disable values without deleting (preserves historical references)
+
+**⚠️ Tradeoffs:**
+1. **Slightly More Complex** - FK instead of CHECK (negligible complexity increase)
+2. **Two More Tables** - 29 tables instead of 27 (minimal maintenance burden)
+3. **Join Overhead** - Tiny lookup tables with indexes (negligible performance impact)
+
+**Performance Analysis:**
+- Lookup tables have <10 rows each, fully cached in PostgreSQL memory
+- Indexes on FK columns (idx_strategies_strategy_type, idx_probability_models_model_class) make joins instant
+- Benefit/cost ratio: High extensibility benefit vs. negligible performance cost
+
+### Related Documentation
+
+- `docs/database/LOOKUP_TABLES_DESIGN.md` - Complete design specification with UI examples
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` - Updated schema documentation
+- `src/precog/database/lookup_helpers.py` - Helper functions implementation
+- `tests/test_lookup_tables.py` - Comprehensive test suite (23 tests, 100% coverage)
+- `src/precog/database/migrations/migration_023_create_lookup_tables.py` - Migration script
+- `MASTER_REQUIREMENTS_V2.17.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
+
+**Status:** ✅ Decision approved, implementation complete (Migration 023 applied, helper module created, 23 tests passing)
 
 ---
 
@@ -13291,9 +13681,11 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.11
-**Last Updated:** November 8, 2025
+**Document Version:** 2.20
+**Last Updated:** November 22, 2025
 **Critical Changes:**
+- v2.20: **LOOKUP TABLES FOR BUSINESS ENUMS** - Added Decision #93/ADR-093 (Lookup Tables for Business Enums - Phase 1.5)
+- v2.19: **TRADE & POSITION ATTRIBUTION ARCHITECTURE** - Added Decisions #90-92/ADR-090-092 (Trade/Position Attribution & Strategy Scope - Phase 1.5)
 - v2.11: **PROPERTY-BASED TESTING STRATEGY** - Added Decision #24/ADR-074 (Hypothesis framework adoption: 26 property tests POC, custom strategies, phased implementation roadmap, 165 properties planned)
 - v2.10: **CROSS-PLATFORM STANDARDS** - Added Decision #47/ADR-053 (Windows/Linux compatibility: ASCII-safe console output, explicit UTF-8 file I/O, Unicode sanitization)
 - v2.9: **PHASE 1 API BEST PRACTICES** - Added Decisions #41-46/ADR-047-052 (API Integration Best Practices: Pydantic validation, circuit breaker, correlation IDs, connection pooling, log masking, YAML validation)
@@ -13312,4 +13704,4 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 **For complete ADR catalog, see:** ADR_INDEX_V1.4.md
 
-**END OF ARCHITECTURE DECISIONS V2.10**
+**END OF ARCHITECTURE DECISIONS V2.20**

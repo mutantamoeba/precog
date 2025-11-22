@@ -138,7 +138,7 @@ TodoWrite([
 Tasks get overlooked because they're scattered across multiple documents:
 - Deferred tasks in `docs/utility/PHASE_*_DEFERRED_TASKS_V1.0.md`
 - Phase checklist in `DEVELOPMENT_PHASES_V1.4.md`
-- Requirements in `MASTER_REQUIREMENTS_V2.16.md`
+- Requirements in `MASTER_REQUIREMENTS_V2.17.md`
 - ADRs in `ARCHITECTURE_DECISIONS_V2.15.md`
 
 ### 3-Step Protocol (MANDATORY)

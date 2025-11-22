@@ -631,7 +631,7 @@ Together, they prevent documentation drift:
   ```
 
 - [ ] **Version numbers consistent?**
-  - Header version matches filename? (e.g., V2.10 in MASTER_REQUIREMENTS_V2.16.md)
+  - Header version matches filename? (e.g., V2.10 in MASTER_REQUIREMENTS_V2.17.md)
   - All references use correct version?
 
 - [ ] **MASTER_INDEX accurate?**
@@ -936,7 +936,7 @@ def validate_requirements():
     """Validate requirement IDs match across documents."""
     # Extract REQ IDs from MASTER_REQUIREMENTS
     master_reqs = set()
-    master_req_file = Path("docs/foundation/MASTER_REQUIREMENTS_V2.16.md")
+    master_req_file = Path("docs/foundation/MASTER_REQUIREMENTS_V2.17.md")
     content = master_req_file.read_text()
     master_reqs = set(re.findall(r'REQ-[A-Z]+-\d+', content))
 
@@ -1023,7 +1023,7 @@ python scripts/validate_doc_consistency.py
 - **DEVELOPMENT_PATTERNS_V1.0.md** - Technical implementation patterns (extracted from CLAUDE.md)
 - **CLAUDE.md** - Main project context file (now references this guide)
 - **SESSION_HANDOFF.md** - Session-specific updates
-- **MASTER_REQUIREMENTS_V2.16.md** - Requirements database
+- **MASTER_REQUIREMENTS_V2.17.md** - Requirements database
 - **ARCHITECTURE_DECISIONS_V2.10.md** - Architectural decisions
 - **DEVELOPMENT_PHASES_V1.8.md** - Phase roadmap
 

@@ -812,7 +812,7 @@ git add tests/database/test_initialization.py
 
 # Stage documentation updates
 git add docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
-git add docs/foundation/ARCHITECTURE_DECISIONS_V2.19.md
+git add docs/foundation/ARCHITECTURE_DECISIONS_V2.20.md
 git add docs/guides/DEVELOPMENT_PATTERNS_V1.5.md
 git add docs/utility/SCHEMA_MIGRATION_WORKFLOW_V1.0.md
 ```

@@ -876,3 +876,278 @@ def test_is_test_global_function(monkeypatch):
     config_module.config = ConfigLoader()
 
     assert config_module.is_test() is True
+
+
+# ============================================================================
+# Version Resolution Methods Tests (Phase 1.5 Enhancement)
+# ============================================================================
+
+
+@pytest.mark.integration
+def test_get_active_strategy_version_returns_active_strategy(db_pool, clean_test_data):
+    """Test get_active_strategy_version() retrieves active strategy from database."""
+    from decimal import Decimal
+
+    from precog.config.config_loader import ConfigLoader
+    from precog.trading.strategy_manager import StrategyManager
+
+    # Create active strategy in database
+    manager = StrategyManager()
+    _strategy = manager.create_strategy(
+        strategy_name="halftime_entry",
+        strategy_version="v1.0",
+        strategy_type="value",  # Valid: 'value', 'arbitrage', 'momentum', 'mean_reversion'
+        domain="nfl",
+        config={"min_edge": Decimal("0.06"), "max_spread": Decimal("0.08")},
+        description="Halftime entry strategy",
+        status="active",
+    )
+
+    # Get active version via ConfigLoader
+    loader = ConfigLoader()
+    active_strategy = loader.get_active_strategy_version("halftime_entry")
+
+    assert active_strategy is not None
+    assert active_strategy["strategy_name"] == "halftime_entry"
+    assert active_strategy["strategy_version"] == "v1.0"
+    assert active_strategy["status"] == "active"
+    assert active_strategy["config"]["min_edge"] == Decimal("0.06")
+
+
+@pytest.mark.integration
+def test_get_active_strategy_version_returns_none_when_no_active(db_pool, clean_test_data):
+    """Test get_active_strategy_version() returns None when no active strategy exists."""
+    from precog.config.config_loader import ConfigLoader
+
+    loader = ConfigLoader()
+    result = loader.get_active_strategy_version("nonexistent_strategy")
+
+    assert result is None
+
+
+@pytest.mark.integration
+def test_get_active_strategy_version_returns_latest_when_multiple_active(db_pool, clean_test_data):
+    """Test get_active_strategy_version() returns latest version when multiple active (A/B testing)."""
+    from decimal import Decimal
+
+    from precog.config.config_loader import ConfigLoader
+    from precog.trading.strategy_manager import StrategyManager
+
+    # Create multiple active versions (A/B testing scenario)
+    manager = StrategyManager()
+
+    # Create v1.0
+    manager.create_strategy(
+        strategy_name="live_entry",
+        strategy_version="v1.0",
+        strategy_type="value",  # Valid: 'value', 'arbitrage', 'momentum', 'mean_reversion'
+        domain="nfl",
+        config={"min_edge": Decimal("0.10")},
+        status="active",
+    )
+
+    # Create v1.1
+    manager.create_strategy(
+        strategy_name="live_entry",
+        strategy_version="v1.1",
+        strategy_type="value",
+        domain="nfl",
+        config={"min_edge": Decimal("0.12")},
+        status="active",
+    )
+
+    # Get active version - should return v1.1 (latest)
+    loader = ConfigLoader()
+    active_strategy = loader.get_active_strategy_version("live_entry")
+
+    assert active_strategy is not None
+    assert active_strategy["strategy_version"] == "v1.1"
+    assert active_strategy["config"]["min_edge"] == Decimal("0.12")
+
+
+@pytest.mark.integration
+def test_get_active_model_version_returns_active_model(db_pool, clean_test_data):
+    """Test get_active_model_version() retrieves active model from database."""
+    from decimal import Decimal
+
+    from precog.analytics.model_manager import ModelManager
+    from precog.config.config_loader import ConfigLoader
+
+    # Create active model in database
+    manager = ModelManager()
+    _model = manager.create_model(
+        model_name="elo_nfl",
+        model_version="v1.0",
+        model_class="elo",
+        domain="nfl",
+        config={"k_factor": Decimal("32"), "initial_rating": Decimal("1500")},
+        description="Elo rating model for NFL",
+        status="active",
+    )
+
+    # Get active version via ConfigLoader
+    loader = ConfigLoader()
+    active_model = loader.get_active_model_version("elo_nfl")
+
+    assert active_model is not None
+    assert active_model["model_name"] == "elo_nfl"
+    assert active_model["model_version"] == "v1.0"
+    assert active_model["status"] == "active"
+    assert active_model["config"]["k_factor"] == Decimal("32")
+
+
+@pytest.mark.integration
+def test_get_active_model_version_returns_none_when_no_active(db_pool, clean_test_data):
+    """Test get_active_model_version() returns None when no active model exists."""
+    from precog.config.config_loader import ConfigLoader
+
+    loader = ConfigLoader()
+    result = loader.get_active_model_version("nonexistent_model")
+
+    assert result is None
+
+
+@pytest.mark.integration
+def test_get_active_model_version_returns_latest_when_multiple_active(db_pool, clean_test_data):
+    """Test get_active_model_version() returns latest version when multiple active (A/B testing)."""
+    from decimal import Decimal
+
+    from precog.analytics.model_manager import ModelManager
+    from precog.config.config_loader import ConfigLoader
+
+    # Create multiple active versions (A/B testing scenario)
+    manager = ModelManager()
+
+    # Create v1.0
+    manager.create_model(
+        model_name="ensemble_nfl",
+        model_version="v1.0",
+        model_class="ensemble",
+        domain="nfl",
+        config={"weights": [Decimal("0.5"), Decimal("0.5")]},
+        status="active",
+    )
+
+    # Create v1.1
+    manager.create_model(
+        model_name="ensemble_nfl",
+        model_version="v1.1",
+        model_class="ensemble",
+        domain="nfl",
+        config={"weights": [Decimal("0.6"), Decimal("0.4")]},
+        status="active",
+    )
+
+    # Get active version - should return v1.1 (latest)
+    loader = ConfigLoader()
+    active_model = loader.get_active_model_version("ensemble_nfl")
+
+    assert active_model is not None
+    assert active_model["model_version"] == "v1.1"
+    assert active_model["config"]["weights"] == [Decimal("0.6"), Decimal("0.4")]
+
+
+@pytest.mark.integration
+def test_get_trailing_stop_config_returns_default_when_no_strategy(db_pool, temp_config_dir):
+    """Test get_trailing_stop_config() returns default config when no strategy specified."""
+    from precog.config.config_loader import ConfigLoader
+
+    # Create position_management.yaml with trailing stops config
+    pos_mgmt_file = temp_config_dir / "position_management.yaml"
+    pos_mgmt_file.write_text("""
+trailing_stops:
+  default:
+    activation_threshold: "0.15"
+    initial_distance: "0.05"
+    tightening_rate: "0.01"
+    floor_distance: "0.02"
+""")
+
+    loader = ConfigLoader(config_dir=str(temp_config_dir))
+    trailing_config = loader.get_trailing_stop_config()
+
+    # Should return default trailing stop config from position_management.yaml
+    assert trailing_config is not None
+    assert "activation_threshold" in trailing_config
+    assert "initial_distance" in trailing_config
+
+    # Values should be Decimal (auto-converted)
+    assert isinstance(trailing_config["activation_threshold"], Decimal)
+    assert isinstance(trailing_config["initial_distance"], Decimal)
+
+
+@pytest.mark.integration
+def test_get_trailing_stop_config_returns_strategy_specific_override(db_pool, temp_config_dir):
+    """Test get_trailing_stop_config() merges strategy-specific overrides with defaults."""
+    # Create position_management.yaml with trailing stops config
+    pos_mgmt_file = temp_config_dir / "position_management.yaml"
+    pos_mgmt_file.write_text("""
+trailing_stops:
+  default:
+    activation_threshold: "0.10"
+    initial_distance: "0.05"
+    tightening_rate: "0.01"
+    floor_distance: "0.02"
+  strategies:
+    halftime_entry:
+      activation_threshold: "0.08"  # Override: activate earlier
+      initial_distance: "0.03"      # Override: tighter stop
+      # tightening_rate and floor_distance use defaults
+""")
+
+    loader = ConfigLoader(config_dir=str(temp_config_dir))
+
+    # Get strategy-specific config
+    halftime_config = loader.get_trailing_stop_config("halftime_entry")
+
+    assert halftime_config is not None
+
+    # Overridden values
+    assert halftime_config["activation_threshold"] == Decimal("0.08")
+    assert halftime_config["initial_distance"] == Decimal("0.03")
+
+    # Default values (not overridden)
+    assert halftime_config["tightening_rate"] == Decimal("0.01")
+    assert halftime_config["floor_distance"] == Decimal("0.02")
+
+
+@pytest.mark.integration
+def test_get_trailing_stop_config_returns_default_when_strategy_not_found(db_pool, temp_config_dir):
+    """Test get_trailing_stop_config() returns defaults when strategy has no overrides."""
+    # Create position_management.yaml with no strategy-specific overrides
+    pos_mgmt_file = temp_config_dir / "position_management.yaml"
+    pos_mgmt_file.write_text("""
+trailing_stops:
+  default:
+    activation_threshold: "0.15"
+    initial_distance: "0.05"
+  strategies: {}  # No strategy-specific overrides
+""")
+
+    loader = ConfigLoader(config_dir=str(temp_config_dir))
+
+    # Get config for strategy that has no overrides
+    config = loader.get_trailing_stop_config("nonexistent_strategy")
+
+    # Should return default config
+    assert config["activation_threshold"] == Decimal("0.15")
+    assert config["initial_distance"] == Decimal("0.05")
+
+
+@pytest.mark.integration
+def test_get_trailing_stop_config_returns_empty_when_no_default(db_pool, temp_config_dir):
+    """Test get_trailing_stop_config() returns empty dict when no default config exists."""
+    # Create position_management.yaml without trailing_stops section
+    pos_mgmt_file = temp_config_dir / "position_management.yaml"
+    pos_mgmt_file.write_text("""
+portfolio:
+  max_open_positions: 10
+monitoring:
+  normal_frequency: 30
+""")
+
+    loader = ConfigLoader(config_dir=str(temp_config_dir))
+
+    # Should return empty dict with warning
+    config = loader.get_trailing_stop_config()
+    assert config == {}

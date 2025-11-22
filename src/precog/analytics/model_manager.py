@@ -110,7 +110,10 @@ class ModelManager:
         Args:
             model_name: Model identifier (e.g., 'elo_nfl')
             model_version: Semantic version (e.g., 'v1.0', 'v1.1', 'v2.0')
-            model_class: HOW model works ('elo', 'ensemble', 'ml', 'hybrid', 'regression')
+            model_class: Valid model class code from model_classes lookup table.
+                Initial values: 'elo', 'ensemble', 'ml', 'hybrid', 'regression', 'neural_net', 'baseline'
+                Query available classes: SELECT * FROM model_classes WHERE is_active = TRUE
+                (Constraint enforced by FK - see Migration 023)
             config: Model parameters (IMMUTABLE once created!)
             domain: WHICH markets ('nfl', 'ncaaf', 'nba', etc.) or None for multi-domain
             description: Human-readable description (optional)
@@ -123,6 +126,7 @@ class ModelManager:
 
         Raises:
             psycopg2.IntegrityError: If model_name + model_version already exists
+            psycopg2.ForeignKeyViolation: If model_class is not in model_classes table
             ValueError: If config is invalid
 
         Educational Note:
@@ -157,6 +161,7 @@ class ModelManager:
             - REQ-VER-001: Immutable Version Configs
             - REQ-VER-002: Semantic Versioning
             - Pattern 1 (CLAUDE.md): Decimal Precision
+            - Migration 023: model_classes lookup table and FK constraint
         """
         # Validate config is not empty
         if not config:

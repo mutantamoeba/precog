@@ -501,7 +501,7 @@ Standardize on `approach`/`domain` for both probability_models and strategies ta
 
 **References:**
 - Migration 011 implementation
-- DATABASE_SCHEMA_SUMMARY_V1.10.md
+- DATABASE_SCHEMA_SUMMARY_V1.11.md
 - scripts/validate_schema.py (DEF-P1-008)
 - REQ-DB-006
 
@@ -539,7 +539,7 @@ Phase 1.5 architecture: **3 managers** (Strategy, Model, Position) - NOT 4
 
 **References:**
 - DEVELOPMENT_PHASES_V1.4.md (Phase 1.5 deliverables)
-- DATABASE_SCHEMA_SUMMARY_V1.10.md (edges table)
+- DATABASE_SCHEMA_SUMMARY_V1.11.md (edges table)
 - REQ-TRADING-001, REQ-ML-001
 
 ---
@@ -654,10 +654,10 @@ CREATE TABLE trades (
   - Migration 011 implements for positions/trades tables
 
 **References:**
-- ARCHITECTURE_DECISIONS_V2.19.md (full ADR-089 with 433 lines of details)
+- ARCHITECTURE_DECISIONS_V2.20.md (full ADR-089 with 433 lines of details)
 - DEVELOPMENT_PATTERNS_V1.5.md (Pattern 14: Schema Migration → CRUD Workflow)
 - SCHEMA_MIGRATION_WORKFLOW_V1.0.md (comprehensive migration guide)
-- DATABASE_SCHEMA_SUMMARY_V1.10.md (Migration 011 implementation)
+- DATABASE_SCHEMA_SUMMARY_V1.11.md (Migration 011 implementation)
 
 ---
 
@@ -723,7 +723,7 @@ Strategies contain BOTH entry AND exit rules with nested versioning structure:
   - Min probability vs min edge distinction (absolute confidence vs market inefficiency)
 
 **References:**
-- ARCHITECTURE_DECISIONS_V2.19.md (full ADR-090 with nested versioning examples)
+- ARCHITECTURE_DECISIONS_V2.20.md (full ADR-090 with nested versioning examples)
 - docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md (comprehensive architectural analysis)
 - VERSIONING_GUIDE_V1.0.md (strategy/model versioning patterns)
 - ADR-018 (Immutable Versioning - positions lock to strategy at entry)
@@ -784,9 +784,9 @@ Use EXPLICIT COLUMNS (not JSONB) for trade and position attribution fields.
   - Validation function validates position/trade attribution consistency
 
 **References:**
-- ARCHITECTURE_DECISIONS_V2.19.md (full ADR-091 with performance benchmarks)
+- ARCHITECTURE_DECISIONS_V2.20.md (full ADR-091 with performance benchmarks)
 - docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md (JSONB vs explicit columns tradeoff analysis)
-- DATABASE_SCHEMA_SUMMARY_V1.10.md (current schema pre-attribution)
+- DATABASE_SCHEMA_SUMMARY_V1.11.md (current schema pre-attribution)
 - ADR-002 (Decimal Precision - all fields DECIMAL(10,4) not FLOAT)
 
 ---
@@ -851,17 +851,110 @@ ALTER TABLE trades ADD COLUMN trade_source trade_source_type NOT NULL DEFAULT 'a
   - Reconciliation validation function (validate source attribution consistency)
 
 **References:**
-- ARCHITECTURE_DECISIONS_V2.19.md (full ADR-092 with reconciliation workflow)
+- ARCHITECTURE_DECISIONS_V2.20.md (full ADR-092 with reconciliation workflow)
 - docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md (trade source tracking architectural analysis)
 - API_INTEGRATION_GUIDE_V2.0.md (Kalshi API trade download patterns)
 - ADR-091 (Explicit Columns - need attribution to filter automated vs manual)
 
 ---
+
+### ADR-093: Lookup Tables for Business Enums
+
+**Date:** 2025-11-22
+**Status:** ✅ Accepted (Implemented)
+**Phase:** 1.5 (Foundation Validation - Lookup Tables)
+**Stakeholders:** Development Team
+
+**Context:**
+Business enums (strategy_type, model_class) initially used CHECK constraints for validation. This approach has limitations:
+- **Migration Required**: Adding new enum values requires schema migrations
+- **No Metadata**: CHECK constraints can't store display names, descriptions, or categories
+- **Not UI-Friendly**: No support for grouping, ordering, or help text
+- **Limited Flexibility**: Can't add attributes like complexity_level, icon_name without schema changes
+
+**Decision:**
+Replace CHECK constraints with lookup tables (strategy_types, model_classes) referenced via foreign keys.
+
+**Implementation:**
+```sql
+-- Migration 023: Create lookup tables
+CREATE TABLE strategy_types (
+    strategy_type_code VARCHAR PRIMARY KEY,
+    display_name VARCHAR NOT NULL,
+    description TEXT,
+    category VARCHAR,
+    display_order INTEGER,
+    is_active BOOLEAN DEFAULT TRUE,
+    icon_name VARCHAR,
+    help_text TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE model_classes (
+    model_class_code VARCHAR PRIMARY KEY,
+    display_name VARCHAR NOT NULL,
+    description TEXT,
+    category VARCHAR,
+    complexity_level VARCHAR,
+    display_order INTEGER,
+    is_active BOOLEAN DEFAULT TRUE,
+    icon_name VARCHAR,
+    help_text TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Replace CHECK constraints with FK constraints
+ALTER TABLE strategies
+    DROP CONSTRAINT IF EXISTS strategies_approach_check,
+    ADD CONSTRAINT fk_strategies_strategy_type
+    FOREIGN KEY (approach) REFERENCES strategy_types(strategy_type_code);
+
+ALTER TABLE probability_models
+    DROP CONSTRAINT IF EXISTS probability_models_model_class_check,
+    ADD CONSTRAINT fk_probability_models_model_class
+    FOREIGN KEY (model_class) REFERENCES model_classes(model_class_code);
+```
+
+**Helper Module (lookup_helpers.py):**
+- get_strategy_types(), get_model_classes() - Fetch all with metadata
+- get_strategy_types_by_category(), get_model_classes_by_category() - Group for UI
+- get_model_classes_by_complexity() - Progressive disclosure support
+- validate_strategy_type(), validate_model_class() - Pre-insert validation
+- add_strategy_type(), add_model_class() - No-migration extensibility
+
+**Testing:**
+23 comprehensive tests with 100% coverage (test_lookup_tables.py)
+
+**Consequences:**
+- **Positive:**
+  - **No-Migration Extensibility**: Add new values via INSERT (no schema changes)
+  - **Metadata-Rich**: Store display_name, description, category, display_order, complexity_level, icon_name, help_text
+  - **UI-Friendly Queries**: Get values grouped by category or complexity for dropdowns
+  - **Helper Functions**: Centralized validation and query logic
+  - **Complete Traceability**: Migration 023 → ADR-093 → REQ-DB-015/016 → Schema Doc → Implementation
+- **Negative:**
+  - **Referential Integrity Overhead**: FK constraints add slight performance cost
+  - **Two-Table Pattern**: Must maintain lookup table in addition to main table
+  - **Migration Complexity**: One-time migration to convert CHECK → FK constraints
+- **Neutral:**
+  - **Seed Data Required**: Must populate lookup tables on initialization
+  - **Active Flag Pattern**: Use is_active instead of DELETE for retired values
+
+**References:**
+- ARCHITECTURE_DECISIONS_V2.20.md (full ADR-093 with 378 lines of implementation details)
+- MASTER_REQUIREMENTS_V2.17.md (REQ-DB-015: Strategy Type Lookup Table, REQ-DB-016: Model Class Lookup Table)
+- DATABASE_SCHEMA_SUMMARY_V1.11.md (FK constraint implementation details)
+- docs/database/LOOKUP_TABLES_DESIGN.md (complete design specification)
+- Migration 023: migration_023_create_lookup_tables.py
+- src/precog/database/lookup_helpers.py (helper functions)
+- tests/test_lookup_tables.py (23 tests, 100% coverage)
+
+---
 ## ADR Statistics
 
-**Total ADRs:** 72
-**Accepted (✅):** 43 (Phase 0-1.5 partial)
-**Proposed (🔵):** 28 (Phase 0.7, 1, 2-10)
+**Total ADRs:** 93
+**Accepted (✅):** 44 (Phase 0-1.5 complete)
+**Proposed (🔵):** 49 (Phase 1, 2-10)
 **Rejected (❌):** 0
 **Superseded (⚠️):** 1 (ADR-089 Dual-Key Pattern superseded by schema implementation)
 
@@ -901,6 +994,6 @@ ALTER TABLE trades ADD COLUMN trade_source trade_source_type NOT NULL DEFAULT 'a
 - v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.19.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.20.md
 
 **END OF ADR INDEX V1.14**
