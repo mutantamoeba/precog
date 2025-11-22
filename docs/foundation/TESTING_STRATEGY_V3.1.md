@@ -2626,8 +2626,8 @@ pytest --cov=module tests/unit/test_new_feature.py
 - **Fixtures:** `tests/conftest.py` - Shared fixtures (db_pool, db_cursor, clean_test_data REQUIRED)
 - **Factories:** `tests/fixtures/factories.py` - Test data factories
 - **Scripts:** `scripts/test_*.sh`, `scripts/validate_*.sh` - Execution scripts
-- **Requirements:** `docs/foundation/MASTER_REQUIREMENTS_V2.17.md` - REQ-TEST-012 through REQ-TEST-019
-- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.20.md` - ADR-074, ADR-076 (Test Type Categories)
+- **Requirements:** `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` - REQ-TEST-012 through REQ-TEST-019
+- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.21.md` - ADR-074, ADR-076 (Test Type Categories)
 - **Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.5.md` - Pattern 13 (Test Coverage Quality)
 - **Root Cause Analysis:** `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Phase 1.5 TDD failure lessons learned
 - **Validation:** `docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Overall quality infrastructure

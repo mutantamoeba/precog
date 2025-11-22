@@ -5,22 +5,22 @@
 **Last Updated:** November 22, 2025
 **Status:** ✅ Current
 **Changes in v2.21:**
-- **WORKFLOW ENFORCEMENT ARCHITECTURE:** Added Decisions #94-97/ADR-304-307 (YAML-Driven Validation, Auto-Discovery, Parallel Execution, Tier-Specific Coverage)
-- **ADR-304: YAML-Driven Validation Architecture** - Documents decision to externalize all validation rules to validation_config.yaml
+- **WORKFLOW ENFORCEMENT ARCHITECTURE:** Added Decisions #94-97/ADR-094-307 (YAML-Driven Validation, Auto-Discovery, Parallel Execution, Tier-Specific Coverage)
+- **ADR-094: YAML-Driven Validation Architecture** - Documents decision to externalize all validation rules to validation_config.yaml
   - **Problem:** Hardcoded validation rules create maintenance burden (e.g., SCD table lists, property test requirements)
   - **Solution:** YAML-driven configuration with graceful degradation (all 7 validators load from validation_config.yaml, fallback to defaults)
   - **Benefits:** Zero-maintenance updates (edit YAML, no code changes), single source of truth for validation rules, easy to audit and modify
-- **ADR-305: Auto-Discovery Pattern for Validators** - Documents decision to query authoritative sources instead of maintaining hardcoded lists
+- **ADR-095: Auto-Discovery Pattern for Validators** - Documents decision to query authoritative sources instead of maintaining hardcoded lists
   - **Pattern 1 - Database schema introspection:** validate_scd_queries.py queries information_schema for SCD Type 2 tables (zero maintenance when adding new SCD tables)
   - **Pattern 2 - Filesystem glob:** validate_property_tests.py globs tests/property/**/*_properties.py (new property test modules automatically discovered)
   - **Pattern 3 - Convention-based discovery:** validate_phase_start.py globs PHASE_*_DEFERRED_TASKS*.md (new deferred task documents auto-found)
   - **Benefits:** Eliminates hardcoded lists, scales with codebase growth, zero code changes when adding modules/tables
-- **ADR-306: Parallel Execution in Git Hooks** - Documents decision to run Steps 2-10 in parallel in pre-push hook
+- **ADR-096: Parallel Execution in Git Hooks** - Documents decision to run Steps 2-10 in parallel in pre-push hook
   - **Problem:** Adding Steps 8-10 would increase pre-push time significantly (sequential: 145 seconds)
   - **Solution:** Bash background processes with PID tracking, parallel output capture, sequential result display
   - **Performance:** 66% time savings (145s sequential → 40-50s parallel, limited by slowest step: warning governance ~30s)
   - **Implementation:** All steps launch concurrently, wait for all to complete, then check exit codes and display results
-- **ADR-307: Tier-Specific Coverage Targets** - Documents decision to use risk-based testing approach with 3 coverage tiers
+- **ADR-097: Tier-Specific Coverage Targets** - Documents decision to use risk-based testing approach with 3 coverage tiers
   - **Problem:** Single 80% threshold treats all modules equally (authentication vs logging)
   - **Solution:** Infrastructure 80%, Business Logic 85%, Critical Path 90% coverage targets
   - **Auto-classification:** Uses fnmatch pattern matching for flexible tier assignment (patterns in validation_config.yaml)
@@ -13692,7 +13692,7 @@ def test_invalid_strategy_type_raises_foreign_key_error():
 
 ---
 
-## Decision #94/ADR-304: YAML-Driven Validation Architecture (Phase 1.5)
+## Decision #94/ADR-094: YAML-Driven Validation Architecture (Phase 1.5)
 
 **Date:** November 22, 2025
 **Phase:** 1.5 (Enhanced Workflow Enforcement)
@@ -13821,7 +13821,7 @@ def load_validation_config() -> dict:
 
 ---
 
-## Decision #95/ADR-305: Auto-Discovery Pattern for Validators (Phase 1.5)
+## Decision #95/ADR-095: Auto-Discovery Pattern for Validators (Phase 1.5)
 
 **Date:** November 22, 2025
 **Phase:** 1.5 (Enhanced Workflow Enforcement)
@@ -13960,7 +13960,7 @@ def find_deferred_tasks(target_phase: str) -> List[str]:
 
 ---
 
-## Decision #96/ADR-306: Parallel Execution in Git Hooks (Phase 1.5)
+## Decision #96/ADR-096: Parallel Execution in Git Hooks (Phase 1.5)
 
 **Date:** November 22, 2025
 **Phase:** 1.5 (Enhanced Workflow Enforcement)
@@ -14087,7 +14087,7 @@ done
 
 ---
 
-## Decision #97/ADR-307: Tier-Specific Coverage Targets (Phase 1.5)
+## Decision #97/ADR-097: Tier-Specific Coverage Targets (Phase 1.5)
 
 **Date:** November 22, 2025
 **Phase:** 1.5 (Enhanced Workflow Enforcement)
@@ -14248,7 +14248,7 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 **Document Version:** 2.21
 **Last Updated:** November 22, 2025
 **Critical Changes:**
-- v2.21: **WORKFLOW ENFORCEMENT ARCHITECTURE** - Added Decisions #94-97/ADR-304-307 (YAML-Driven Validation, Auto-Discovery Pattern, Parallel Execution in Git Hooks, Tier-Specific Coverage Targets - Phase 1.5)
+- v2.21: **WORKFLOW ENFORCEMENT ARCHITECTURE** - Added Decisions #94-97/ADR-094-307 (YAML-Driven Validation, Auto-Discovery Pattern, Parallel Execution in Git Hooks, Tier-Specific Coverage Targets - Phase 1.5)
 - v2.20: **LOOKUP TABLES FOR BUSINESS ENUMS** - Added Decision #93/ADR-093 (Lookup Tables for Business Enums - Phase 1.5)
 - v2.19: **TRADE & POSITION ATTRIBUTION ARCHITECTURE** - Added Decisions #90-92/ADR-090-092 (Trade/Position Attribution & Strategy Scope - Phase 1.5)
 - v2.11: **PROPERTY-BASED TESTING STRATEGY** - Added Decision #24/ADR-074 (Hypothesis framework adoption: 26 property tests POC, custom strategies, phased implementation roadmap, 165 properties planned)

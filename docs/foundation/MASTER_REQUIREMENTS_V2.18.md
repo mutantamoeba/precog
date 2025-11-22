@@ -10,7 +10,7 @@
 - **PHASE START/COMPLETION AUTOMATION**: REQ-VALIDATION-010 (Phase Start Protocol), REQ-VALIDATION-011 (Phase Completion Protocol) automate 3-step and 10-step assessment workflows
 - **VALIDATOR ARCHITECTURE**: All validators use YAML-driven configuration (validation_config.yaml), auto-discovery pattern (database introspection, filesystem glob), graceful degradation
 - **GIT HOOK INTEGRATION**: Pre-push hook Steps 8-10 (SCD queries ~15s, Property tests ~20s, Test fixtures ~10s) run in parallel with existing steps
-- **CROSS-REFERENCES**: Added ADR-304 (YAML-Driven Validation), ADR-305 (Auto-Discovery Pattern), ADR-306 (Parallel Execution), ADR-307 (Tier-Specific Coverage)
+- **CROSS-REFERENCES**: Added ADR-094 (YAML-Driven Validation), ADR-095 (Auto-Discovery Pattern), ADR-096 (Parallel Execution), ADR-097 (Tier-Specific Coverage)
 - **ZERO MAINTENANCE**: New SCD Type 2 tables, property test modules, and phase deliverables auto-discovered (no code changes required)
 **Changes in v2.17:**
 - **LOOKUP TABLES FOR BUSINESS ENUMS**: Added REQ-DB-015 (Strategy Type Lookup Table) and REQ-DB-016 (Model Class Lookup Table)
@@ -3127,7 +3127,7 @@ Automated enforcement of SECURITY_REVIEW_CHECKLIST requirements via validate_sec
 **Phase:** 1.5
 **Priority:** High
 **Status:** ✅ Complete
-**Reference:** ADR-304, ADR-305, validate_scd_queries.py, Pattern 2 (Dual Versioning)
+**Reference:** ADR-094, ADR-095, validate_scd_queries.py, Pattern 2 (Dual Versioning)
 
 Automated validation that ALL queries on SCD Type 2 tables include `row_current_ind = TRUE` filter to prevent historical data bugs:
 - **Auto-Discovery**: Queries database schema (information_schema) to discover SCD Type 2 tables (zero maintenance)
@@ -3148,7 +3148,7 @@ Automated validation that ALL queries on SCD Type 2 tables include `row_current_
 **Phase:** 1.5
 **Priority:** High
 **Status:** ✅ Complete
-**Reference:** ADR-304, ADR-305, validate_property_tests.py, Pattern 10 (Property-Based Testing), ADR-074
+**Reference:** ADR-094, ADR-095, validate_property_tests.py, Pattern 10 (Property-Based Testing), ADR-074
 
 Automated validation that ALL critical trading logic has Hypothesis property tests covering mathematical invariants:
 - **Module Categories**: Trading logic, decimal operations, API parsing (defined in validation_config.yaml)
@@ -3170,7 +3170,7 @@ Automated validation that ALL critical trading logic has Hypothesis property tes
 **Phase:** 1.5
 **Priority:** High
 **Status:** ✅ Complete
-**Reference:** ADR-304, ADR-305, validate_test_fixtures.py, Pattern 13 (Real Fixtures Not Mocks)
+**Reference:** ADR-094, ADR-095, validate_test_fixtures.py, Pattern 13 (Real Fixtures Not Mocks)
 
 Automated validation that ALL integration tests use real fixtures (database connections, pools) instead of mocks:
 - **Required Fixtures**: Checks integration tests import required fixtures (db_pool, db_cursor, clean_test_data)
@@ -3191,7 +3191,7 @@ Automated validation that ALL integration tests use real fixtures (database conn
 **Phase:** 1.5
 **Priority:** High
 **Status:** ✅ Complete
-**Reference:** ADR-304, ADR-305, validate_phase_start.py, CLAUDE.md (Phase Task Visibility System)
+**Reference:** ADR-094, ADR-095, validate_phase_start.py, CLAUDE.md (Phase Task Visibility System)
 
 Automated 3-Step Phase Start Protocol validation to block phase start until ALL prerequisites met:
 - **Step 1 - Deferred Tasks**: Auto-discovers PHASE_*_DEFERRED_TASKS*.md documents, finds tasks targeting current phase
@@ -3217,7 +3217,7 @@ Automated 3-Step Phase Start Protocol validation to block phase start until ALL 
 **Phase:** 1.5
 **Priority:** High
 **Status:** ✅ Complete
-**Reference:** ADR-304, ADR-305, validate_phase_completion.py, PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md
+**Reference:** ADR-094, ADR-095, validate_phase_completion.py, PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md
 
 Automated validation for Steps 1, 5, and 9 of 10-Step Phase Completion Protocol:
 - **Step 1 - Deliverable Completeness**: Validates ALL deliverables meet tier-specific coverage targets
@@ -3250,7 +3250,7 @@ Automated validation for Steps 1, 5, and 9 of 10-Step Phase Completion Protocol:
 **Phase:** 1.5
 **Priority:** High
 **Status:** ✅ Complete
-**Reference:** ADR-304, ADR-305, validate_docs.py (Check #10), Pattern 8 (Configuration Synchronization)
+**Reference:** ADR-094, ADR-095, validate_docs.py (Check #10), Pattern 8 (Configuration Synchronization)
 
 Automated validation that configuration changes synchronized across ALL 4 layers:
 - **Layer 1 - Tool Configs**: pyproject.toml, ruff.toml, .pre-commit-config.yaml

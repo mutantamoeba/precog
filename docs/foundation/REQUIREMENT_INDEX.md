@@ -1,10 +1,19 @@
 # Requirement Index
 
 ---
-**Version:** 1.7
-**Last Updated:** 2025-11-15
+**Version:** 1.8
+**Last Updated:** 2025-11-22
 **Status:** ✅ Current
 **Purpose:** Master index of all system requirements with systematic IDs
+**Changes in v1.8:**
+- **WORKFLOW ENFORCEMENT INFRASTRUCTURE (PHASE 1.5)**: Added REQ-VALIDATION-007 through REQ-VALIDATION-012 (6 comprehensive workflow enforcement requirements)
+- **PATTERN ENFORCEMENT**: Requirements enforce Pattern 2 (SCD Type 2 queries), Pattern 8 (Config Sync), Pattern 10 (Property-Based Testing), Pattern 13 (Test Coverage Quality)
+- **PHASE START/COMPLETION AUTOMATION**: REQ-VALIDATION-010 (Phase Start Protocol), REQ-VALIDATION-011 (Phase Completion Protocol) automate 3-step and 10-step assessment workflows
+- **VALIDATOR ARCHITECTURE**: All validators use YAML-driven configuration (validation_config.yaml), auto-discovery pattern (database introspection, filesystem glob), graceful degradation
+- **GIT HOOK INTEGRATION**: Pre-push hook Steps 8-10 (SCD queries ~15s, Property tests ~20s, Test fixtures ~10s) run in parallel with existing steps
+- **CROSS-REFERENCES**: References ADR-094 (YAML-Driven Validation), ADR-095 (Auto-Discovery Pattern), ADR-096 (Parallel Execution), ADR-097 (Tier-Specific Coverage)
+- Updated document references to V2.18
+- Updated requirement statistics (113 → 119 total requirements)
 **Changes in v1.7:**
 - **RETROACTIVE REQUIREMENTS CREATION**: Added REQ-CICD-004 (Pre-Commit Hooks) and REQ-CICD-005 (Pre-Push Hooks)
 - **TRACEABILITY GAP FIX**: Critical infrastructure implemented without formal requirements (DEF-001, DEF-002) now have proper REQ-CICD-* traceability
@@ -356,8 +365,14 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-VALIDATION-004 | YAML Configuration Validation | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.12 |
 | REQ-VALIDATION-005 | CODE_REVIEW_TEMPLATE Automated Enforcement | 0.7c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
 | REQ-VALIDATION-006 | SECURITY_REVIEW_CHECKLIST Automated Enforcement | 0.7c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
+| REQ-VALIDATION-007 | SCD Type 2 Query Validation (Pattern 2) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.18 |
+| REQ-VALIDATION-008 | Property-Based Test Coverage (Pattern 10) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.18 |
+| REQ-VALIDATION-009 | Real Test Fixtures Enforcement (Pattern 13) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.18 |
+| REQ-VALIDATION-010 | Phase Start Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.18 |
+| REQ-VALIDATION-011 | Phase Completion Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.18 |
+| REQ-VALIDATION-012 | Configuration Synchronization (Pattern 8) | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.18 |
 
-**Summary:** Phase 0.6c implemented automated code quality and documentation validation. Phase 0.7c added CODE_REVIEW_TEMPLATE and SECURITY_REVIEW_CHECKLIST enforcement via pre-commit/pre-push hooks. Phase 1 adds YAML configuration validation with 4-level checks (syntax, Decimal type safety, required keys, cross-file consistency).
+**Summary:** Phase 0.6c implemented automated code quality and documentation validation. Phase 0.7c added CODE_REVIEW_TEMPLATE and SECURITY_REVIEW_CHECKLIST enforcement via pre-commit/pre-push hooks. Phase 1 adds YAML configuration validation with 4-level checks (syntax, Decimal type safety, required keys, cross-file consistency). Phase 1.5 adds comprehensive workflow enforcement infrastructure: SCD Type 2 query validation (Pattern 2), property-based test coverage enforcement (Pattern 10), real test fixtures validation (Pattern 13), phase start/completion protocol automation (3-step and 10-step assessments), and configuration synchronization checks (Pattern 8).
 
 ---
 
