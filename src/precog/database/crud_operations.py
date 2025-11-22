@@ -664,9 +664,12 @@ def create_position(
     stop_loss_price: Decimal | None = None,
     trailing_stop_state: dict | None = None,
     position_metadata: dict | None = None,
+    # ⭐ ATTRIBUTION ARCHITECTURE (Migration 020) - NEW parameters
+    calculated_probability: Decimal | None = None,
+    market_price_at_entry: Decimal | None = None,
 ) -> int:
     """
-    Create new position with status = 'open'.
+    Create new position with status = 'open' and immutable entry-time attribution.
 
     Args:
         market_id: Foreign key to markets
@@ -679,16 +682,25 @@ def create_position(
         stop_loss_price: Stop-loss price
         trailing_stop_state: Trailing stop configuration as JSONB
         position_metadata: Additional metadata
+        calculated_probability: Model's predicted win probability at entry (immutable snapshot)
+        market_price_at_entry: Kalshi market price at entry (immutable snapshot)
 
     Returns:
         id (surrogate key) of newly created position
 
     Educational Note:
-        After Migration 015, positions table uses dual-key structure:
+        Attribution Architecture (Migration 020):
+        - calculated_probability + market_price_at_entry are IMMUTABLE entry snapshots
+        - edge_at_entry automatically calculated: calculated_probability - market_price_at_entry
+        - Enables strategy A/B testing: "Did entry v1.5 outperform entry v1.6?"
+        - Performance analytics: "Which models have highest position ROI?"
+        - Immutability enforced by ADR-018 (no updates after position creation)
+        - 20-100x faster than JSONB for analytics (B-tree index vs GIN index)
+
+        Dual-Key Structure (Migration 015):
         - id SERIAL (surrogate key) - returned by this function
         - position_id VARCHAR (business key) - auto-generated as POS-{id}
-
-        This enables SCD Type 2 versioning (multiple versions of same position).
+        - Enables SCD Type 2 versioning (multiple versions of same position)
 
     Example:
         >>> pos_id = create_position(
@@ -698,10 +710,32 @@ def create_position(
         ...     side='YES',
         ...     quantity=100,
         ...     entry_price=Decimal("0.5200"),
-        ...     stop_loss_price=Decimal("0.4800")
+        ...     stop_loss_price=Decimal("0.4800"),
+        ...     calculated_probability=Decimal("0.6250"),  # Model prediction
+        ...     market_price_at_entry=Decimal("0.5200")    # Kalshi price
         ... )
         >>> # Returns surrogate id (e.g., 1), position_id auto-set to 'POS-1'
+        >>> # edge_at_entry automatically set to 0.1050 (0.6250 - 0.5200)
+
+    Validation:
+        - calculated_probability must be in [0.0, 1.0] range (CHECK constraint)
+        - market_price_at_entry must be in [0.0, 1.0] range (CHECK constraint)
+        - Both are optional (NULL allowed for legacy data or non-model positions)
+
+    Related ADRs:
+        - ADR-091: Explicit Columns for Trade/Position Attribution
+        - ADR-018: Immutable Versioning (positions locked to strategy/model version at entry)
+        - ADR-002: Decimal Precision for All Financial Data
+
+    References:
+        - Migration 020: Position Attribution
+        - docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md (Gap #2: Position Attribution)
     """
+    # ⭐ Calculate edge_at_entry if both probability and price provided
+    edge_at_entry: Decimal | None = None
+    if calculated_probability is not None and market_price_at_entry is not None:
+        edge_at_entry = calculated_probability - market_price_at_entry
+
     # Step 1: INSERT with placeholder position_id (will be updated immediately)
     insert_query = """
         INSERT INTO positions (
@@ -709,9 +743,10 @@ def create_position(
             quantity, entry_price,
             target_price, stop_loss_price,
             trailing_stop_state, position_metadata,
-            status, row_current_ind, entry_time
+            status, row_current_ind, entry_time,
+            calculated_probability, edge_at_entry, market_price_at_entry
         )
-        VALUES ('TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'open', TRUE, NOW())
+        VALUES ('TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'open', TRUE, NOW(), %s, %s, %s)
         RETURNING id
     """
 
@@ -726,6 +761,9 @@ def create_position(
         stop_loss_price,
         trailing_stop_state,
         position_metadata,
+        calculated_probability,
+        edge_at_entry,
+        market_price_at_entry,
     )
 
     with get_cursor(commit=True) as cur:
@@ -978,6 +1016,10 @@ def create_trade(
     position_id: int | None = None,
     order_type: str = "market",
     trade_metadata: dict | None = None,
+    # ⭐ ATTRIBUTION ARCHITECTURE (Migration 019) - NEW parameters
+    trade_source: str = "automated",
+    calculated_probability: Decimal | None = None,
+    market_price: Decimal | None = None,
 ) -> int:
     """
     Record executed trade with strategy and model attribution.
@@ -992,9 +1034,26 @@ def create_trade(
         position_id: Associated position (if any)
         order_type: Order type (default: 'market')
         trade_metadata: Additional metadata
+        trade_source: Trade origin ('automated' or 'manual') - default 'automated'
+        calculated_probability: Model-predicted win probability at execution (0.0-1.0)
+        market_price: Kalshi market price at execution (0.0-1.0)
 
     Returns:
         trade_id of newly created trade
+
+    Educational Note:
+        Attribution Architecture (Migrations 018-019):
+        - trade_source distinguishes automated (app) vs manual (Kalshi UI) trades
+        - calculated_probability + market_price enable performance analytics:
+          * "Which model has highest ROI?"
+          * "Do high-edge trades correlate with profit?"
+        - edge_value automatically calculated: calculated_probability - market_price
+        - 20-100x faster than JSONB for analytics (B-tree index vs GIN index)
+
+    Validation:
+        - If calculated_probability provided, market_price should also be provided
+        - Both must be in range [0.0, 1.0] (enforced by CHECK constraints)
+        - trade_source must be 'automated' or 'manual' (enforced by ENUM type)
 
     Example:
         >>> trade_id = create_trade(
@@ -1004,17 +1063,27 @@ def create_trade(
         ...     side='YES',
         ...     quantity=100,
         ...     price=Decimal("0.5200"),
-        ...     position_id=123
+        ...     position_id=123,
+        ...     trade_source='automated',
+        ...     calculated_probability=Decimal("0.6500"),
+        ...     market_price=Decimal("0.5800")
         ... )
+        >>> # edge_value automatically calculated: 0.6500 - 0.5800 = 0.0700
     """
+    # Calculate edge_value if both probability and price provided
+    edge_value: Decimal | None = None
+    if calculated_probability is not None and market_price is not None:
+        edge_value = calculated_probability - market_price
+
     query = """
         INSERT INTO trades (
             market_id, strategy_id, model_id,
             side, quantity, price,
             position_internal_id, order_type,
-            trade_metadata, execution_time
+            trade_metadata, execution_time,
+            trade_source, calculated_probability, market_price, edge_value
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s)
         RETURNING trade_id
     """
 
@@ -1028,6 +1097,10 @@ def create_trade(
         position_id,
         order_type,
         trade_metadata,
+        trade_source,
+        calculated_probability,
+        market_price,
+        edge_value,
     )
 
     with get_cursor(commit=True) as cur:
@@ -1364,7 +1437,7 @@ def create_settlement(
 def create_strategy(
     strategy_name: str,
     strategy_version: str,
-    category: str,
+    strategy_type: str,
     config: dict,
     status: str = "draft",
     platform_id: str | None = None,
@@ -1377,11 +1450,11 @@ def create_strategy(
     Args:
         strategy_name: Strategy name (e.g., "halftime_entry")
         strategy_version: Semantic version (e.g., "v1.0", "v1.1")
-        category: Strategy category (e.g., "momentum", "mean_reversion")
+        strategy_type: HOW you trade - trading style (e.g., "value", "momentum", "mean_reversion")
         config: Strategy configuration (IMMUTABLE after creation)
         status: Strategy status ("draft", "testing", "active", "deprecated")
         platform_id: Platform ID (optional, for platform-specific strategies)
-        subcategory: Strategy subcategory (optional)
+        subcategory: Strategy subcategory (optional, domain-specific like "nfl")
         notes: Additional notes (optional)
 
     Returns:
@@ -1411,7 +1484,7 @@ def create_strategy(
         >>> v1_0 = create_strategy(
         ...     strategy_name="halftime_entry",
         ...     strategy_version="v1.0",
-        ...     category="momentum",
+        ...     strategy_type="momentum",
         ...     config={"min_lead": 7, "min_time_remaining_mins": 5},
         ...     status="draft"
         ... )
@@ -1421,6 +1494,7 @@ def create_strategy(
         >>> v1_1 = create_strategy(
         ...     strategy_name="halftime_entry",
         ...     strategy_version="v1.1",
+        ...     strategy_type="momentum",
         ...     config={"min_lead": 10, "min_time_remaining_mins": 5}  # Different
         ... )
 
@@ -1431,7 +1505,7 @@ def create_strategy(
     """
     query = """
         INSERT INTO strategies (
-            platform_id, strategy_name, strategy_version, approach, domain,
+            platform_id, strategy_name, strategy_version, strategy_type, domain,
             config, status, notes, created_at, updated_at
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -1442,8 +1516,8 @@ def create_strategy(
         platform_id,
         strategy_name,
         strategy_version,
-        category,  # Maps to 'approach' column (parameter name not changed for backward compat)
-        subcategory,  # Maps to 'domain' column
+        strategy_type,  # HOW you trade (trading style)
+        subcategory,  # Maps to 'domain' column (market category like "nfl")
         json.dumps(config, cls=DecimalEncoder),  # Convert dict to JSON string (handles Decimal)
         status,
         notes,
@@ -1655,3 +1729,77 @@ def update_strategy_status(
         cur.execute(query, params)
         result = cur.fetchone()
         return result is not None
+
+
+def get_position_by_id(position_id: int) -> dict[str, Any] | None:
+    """
+    Get position by internal id (current version only).
+
+    Args:
+        position_id: Position internal id
+
+    Returns:
+        Position dictionary or None if not found
+
+    Educational Note:
+        Positions use SCD Type 2 versioning. This function returns ONLY
+        the current version (row_current_ind = TRUE). For position history,
+        query positions table directly with row_current_ind filtering.
+
+    Example:
+        >>> position = get_position_by_id(position_id=42)
+        >>> if position:
+        ...     print(f"Position {position['position_id']}: {position['status']}")
+
+    References:
+        - ADR-018: Position Immutable Versioning
+        - Pattern 2: Dual Versioning System (DEVELOPMENT_PATTERNS_V1.5.md)
+    """
+    query = """
+        SELECT p.*, m.ticker, s.strategy_name, pm.model_name
+        FROM positions p
+        JOIN markets m ON p.market_id = m.market_id
+        JOIN strategies s ON p.strategy_id = s.strategy_id
+        LEFT JOIN probability_models pm ON p.model_id = pm.model_id
+        WHERE p.id = %s
+          AND p.row_current_ind = TRUE
+          AND m.row_current_ind = TRUE
+    """
+    return fetch_one(query, (position_id,))
+
+
+def get_trade_by_id(trade_id: int) -> dict[str, Any] | None:
+    """
+    Get trade by trade_id.
+
+    Args:
+        trade_id: Trade ID
+
+    Returns:
+        Trade dictionary or None if not found
+
+    Educational Note:
+        Trades are immutable records (no SCD Type 2 versioning).
+        Each trade represents a single execution event with immutable
+        attribution fields (calculated_probability, market_price, edge_value).
+
+    Example:
+        >>> trade = get_trade_by_id(trade_id=42)
+        >>> if trade:
+        ...     print(f"Trade {trade['side']} {trade['quantity']} @ {trade['price']}")
+        ...     print(f"Attribution: edge={trade['edge_value']}, model={trade['model_id']}")
+
+    References:
+        - ADR-091: Explicit Columns vs JSONB for Trade Attribution
+        - Pattern 15: Trade/Position Attribution Architecture
+    """
+    query = """
+        SELECT t.*, m.ticker, s.strategy_name, pm.model_name
+        FROM trades t
+        JOIN markets m ON t.market_id = m.market_id
+        JOIN strategies s ON t.strategy_id = s.strategy_id
+        LEFT JOIN probability_models pm ON t.model_id = pm.model_id
+        WHERE t.trade_id = %s
+          AND m.row_current_ind = TRUE
+    """
+    return fetch_one(query, (trade_id,))

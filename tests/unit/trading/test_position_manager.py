@@ -52,8 +52,8 @@ def position_params(db_cursor, clean_test_data):
     strategy_id = create_strategy(
         strategy_name=f"test_strategy_{unique_suffix}",
         strategy_version="v1.0",
-        category="value",  # Maps to 'approach' column
-        subcategory="nfl",  # Maps to 'domain' column
+        strategy_type="value",  # HOW you trade (trading methodology)
+        subcategory="nfl",  # Maps to 'domain' column (market type)
         config={"min_edge": Decimal("0.05")},
     )
 
@@ -65,7 +65,7 @@ def position_params(db_cursor, clean_test_data):
             cur.execute(
                 """
                 INSERT INTO probability_models (
-                    model_name, model_version, approach, domain, config, status
+                    model_name, model_version, model_class, domain, config, status
                 )
                 VALUES (%s, %s, %s, %s, %s, %s)
                 RETURNING model_id
@@ -476,7 +476,7 @@ def test_get_open_positions_filter_by_strategy(db_cursor, clean_test_data, posit
     strategy_id_2 = create_strategy(
         strategy_name="test_strategy_2",
         strategy_version="v1.0",
-        category="arbitrage",
+        strategy_type="arbitrage",
         subcategory="nfl",
         config={"spread_threshold": Decimal("0.02")},
     )

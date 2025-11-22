@@ -1,10 +1,25 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.25
-**Last Updated:** 2025-11-19
+**Version:** 2.26
+**Last Updated:** 2025-11-21
 **Status:** ✅ Current
-**Changes in v2.25:**
+**Changes in v2.26:**
+- **TRADE & POSITION ATTRIBUTION ARCHITECTURE (PHASE 1.5)**: Complete attribution system for performance analytics and strategy A/B testing
+- Created SCHEMA_ANALYSIS_2025-11-21.md (800+ lines) - Comprehensive architectural analysis identifying 5 schema gaps, design options & tradeoffs, user Q&A, final decisions for attribution architecture
+- Updated ARCHITECTURE_DECISIONS V2.18 → V2.19 (added ADR-090, ADR-091, ADR-092 - 945 lines total documenting nested versioning, explicit columns vs JSONB, trade source tracking)
+- Updated ADR_INDEX V1.13 → V1.14 (added 3 ADRs with detailed summaries, updated statistics: 69 → 72 total ADRs, Phase 1.5: 5 → 8 ADRs)
+- Created migration_018_trade_source_tracking.py (360 lines) - PostgreSQL ENUM for automated vs manual trades, enables reconciliation workflow
+- Created migration_019_trade_attribution_enrichment.py (450 lines) - Adds calculated_probability, market_price, edge_value to trades table with CHECK constraints and partial indexes
+- Created migration_020_position_attribution.py (550 lines) - Adds 4 attribution columns to positions table with immutable entry-time snapshots (ADR-018)
+- Updated DATABASE_SCHEMA_SUMMARY V1.9 → V1.10 (documented Migrations 018-020: trades table +5 columns +4 indexes, positions table +4 columns +4 indexes)
+- Updated crud_operations.py - create_trade() and create_position() with automatic edge calculation (edge_value = calculated_probability - market_price)
+- Created test_attribution.py (670 lines) - 17 comprehensive tests for trade attribution, position attribution, strategy nested versioning, analytics queries
+- Updated DEVELOPMENT_PATTERNS V1.4 → V1.5 (added Pattern 15: Trade/Position Attribution Architecture - 412 lines documenting best practices, examples, common mistakes, enforcement)
+- Added "Future Enhancements" section to ADR-091 documenting hybrid approach (explicit columns + experimental JSONB) deferred to Phase 4+
+- **Key Architecture Decisions**: Explicit columns (20-100x faster than JSONB), nested versioning (independent entry.version + exit.version), trade source ENUM (automated vs manual), immutable position attribution
+- **Cross-references**: ADR-090 ↔ ADR-091 ↔ ADR-092 ↔ Pattern 15 ↔ Migration 018-020 ↔ SCHEMA_ANALYSIS_2025-11-21.md form integrated attribution documentation network
+**Changes in v2.26:**
 - **DUAL-KEY SCHEMA PATTERN DOCUMENTATION (PHASE 1.5)**: Complete documentation suite for Migration 011 and Pattern 14
 - Updated ARCHITECTURE_DECISIONS V2.17 → V2.18 (added ADR-089: Dual-Key Schema Pattern for SCD Type 2 Tables - 433 lines documenting PostgreSQL FK limitation solution)
 - Updated ADR_INDEX V1.12 → V1.13 (added ADR-089 entry, updated statistics: 68 → 69 total ADRs, Phase 1.5: 4 → 5 ADRs)
@@ -110,7 +125,7 @@
 **Changes in v2.13:**
 - **PYTHON 3.14 COMPATIBILITY**: Migrated from Bandit to Ruff security rules (--select S) for security scanning
 - Added ADR-054 (Ruff Security Rules Instead of Bandit) to ARCHITECTURE_DECISIONS_V2.10 → V2.11
-- Updated MASTER_REQUIREMENTS_V2.10 → V2.11 (REQ-TEST-006, REQ-CICD-001 updated for Ruff)
+- Updated MASTER_REQUIREMENTS_V2.16 → V2.11 (REQ-TEST-006, REQ-CICD-001 updated for Ruff)
 - Updated ADR_INDEX_V1.4 → V1.5 (added ADR-054, total ADRs: 52)
 - Updated .git/hooks/pre-push (replaced Bandit with Ruff security scan)
 - Updated .github/workflows/ci.yml (security-scan job now uses Ruff)
@@ -269,10 +284,10 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.16.md** | ✅ | v2.16 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.16** (added REQ-TEST-012 through REQ-TEST-019: 8 comprehensive test coverage requirements addressing Phase 1.5 TDD failure; establishes 8 test type framework, mock usage restrictions, mandatory test fixtures, coverage percentage standards, stress/integration/property/E2E test requirements; 113 → 121 total requirements) |
-| **MASTER_INDEX_V2.25.md** | ✅ | v2.25 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.25** (Dual-key schema pattern documentation: ADR-089, Pattern 14, SCHEMA_MIGRATION_WORKFLOW_V1.0.md; version updates: ARCHITECTURE_DECISIONS V2.18, ADR_INDEX V1.13, DEVELOPMENT_PATTERNS V1.4) |
-| **ARCHITECTURE_DECISIONS_V2.18.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (89 total) - **UPDATED V2.18** (ADR-089: Dual-Key Schema Pattern for SCD Type 2 Tables - addresses PostgreSQL FK limitation with partial indexes) |
+| **MASTER_INDEX_V2.26.md** | ✅ | v2.26 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.25** (Dual-key schema pattern documentation: ADR-089, Pattern 14, SCHEMA_MIGRATION_WORKFLOW_V1.0.md; version updates: ARCHITECTURE_DECISIONS V2.18, ADR_INDEX V1.13, DEVELOPMENT_PATTERNS V1.4) |
+| **ARCHITECTURE_DECISIONS_V2.19.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (72 total) - **UPDATED V2.18** (ADR-090: Nested Versioning, ADR-091: Explicit Columns vs JSONB, ADR-092: Trade Source Tracking - complete attribution architecture for performance analytics and strategy A/B testing) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 121 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-TEST-012 through REQ-TEST-019: test type coverage, mock restrictions, fixture usage, coverage standards, stress/integration/property/E2E requirements; 113 → 121 total) |
-| **ADR_INDEX_V1.13.md** | ✅ | v1.13 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 69 architecture decisions - **UPDATED V1.13** (ADR-089: Dual-Key Schema Pattern for SCD Type 2 Tables - Phase 1.5) |
+| **ADR_INDEX_V1.14.md** | ✅ | v1.14 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 72 architecture decisions - **UPDATED V1.13** (ADR-089, ADR-090, ADR-091, ADR-092: Trade and Position Attribution Architecture - Phase 1.5) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.5** |
 | **TESTING_STRATEGY_V3.1.md** | ✅ | v3.1 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V3.1** - Enhanced coverage tier classification based on TDD/security/accuracy emphasis; Position Manager 85%→90% (handles money+real-time); Kalshi Client 75%→90% (handles money+security); risk-based framework (financial impact, security impact, blast radius); classification examples table showing WHY each module is in its tier; V3.0: Comprehensive 8 test type framework addressing Phase 1.5 TDD failure (expanded from 4 types to: unit, property, integration, E2E, stress, race, performance, chaos); mock usage restrictions (REQ-TEST-013: APPROPRIATE for external APIs/time, FORBIDDEN for database/internal logic/config); integration testing philosophy "test with REAL infrastructure not mocks"; test type requirements matrix (module tier × test type); phase-based roadmap (when each type required Phases 1-5); property-based testing with Hypothesis (REQ-TEST-018) |
@@ -301,7 +316,7 @@ Schema design, data models, and database architecture.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DATABASE_SCHEMA_SUMMARY_V1.9.md** | ✅ | v1.9 | `/docs/database/` | 0.5-1 | Phases 1-10 | 🔴 Critical | **UPDATED V1.9** - Schema standardization (Migration 011: category→approach, subcategory→domain, added 7 fields each to probability_models + strategies, 34 tables total) |
+| **DATABASE_SCHEMA_SUMMARY_V1.10.md** | ✅ | v1.10 | `/docs/database/` | 0.5-1 | Phases 1-10 | 🔴 Critical | **UPDATED V1.9** - Schema standardization + Attribution architecture (Migration 011: category→approach, subcategory→domain; Migrations 018-020: trade/position attribution with 9 new columns + 8 indexes) |
 | **DATABASE_TABLES_REFERENCE.md** | ✅ | v1.0 | `/docs/database/` | 1 | Phases 1-10 | 🟡 High | Quick lookup for all tables, common queries (Phase 1) |
 | **ODDS_RESEARCH_COMPREHENSIVE.md** | ✅ | v1.0 | `/docs/database/` | 4 | Phase 4, 9 | 🟡 High | Historical odds methodology, merged into models |
 | **DATA_DICTIONARY.md** | 🔵 | - | `/docs/database/` | 6-7 | Phases 6-10 | 🟡 High | Comprehensive data dictionary - all columns documented (planned Phase 6-7) |
@@ -379,7 +394,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 6-9 | Phases 6-9 | 🔴 Critical | **NEW** - End-to-end analytics architecture: 4-layer design (Collection→Storage→Aggregation→Presentation), dual processing (real-time <200ms + batch), 6 materialized views |
 | **AB_TESTING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 8 | Phase 8 | 🟡 High | **NEW** - Statistical methodology for strategy/model evaluation: Welch's t-test, Chi-square, sample size calculation (64 trades/variant), Bayesian analysis, experiment lifecycle |
 | **DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 9 | Phase 9 | 🟡 High | **NEW** - React 18 + Next.js 14 trading dashboard: component library (MetricCard, PositionCard), Socket.IO real-time (<200ms), SWR data fetching, Plotly.js charts, deployment |
-| **DEVELOPMENT_PATTERNS_V1.4.md** | ✅ | v1.4 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.4** - Added Pattern 14 (Schema Migration → CRUD Operations Update Workflow - mandatory 5-step workflow for schema changes: Migration → CRUD → Test → Integration Test → Documentation); documents dual-key pattern implementation, SCD Type 2 versioning patterns, decision tree for when to update CRUD, real code examples from Position Manager Migration 011; cross-references ADR-089 (Dual-Key Schema Pattern) |
+| **DEVELOPMENT_PATTERNS_V1.5.md** | ✅ | v1.5 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.4** - Added Pattern 14 (Schema Migration → CRUD Workflow) + Pattern 15 (Trade/Position Attribution Architecture) - mandatory 5-step workflow for schema changes - mandatory 5-step workflow for schema changes: Migration → CRUD → Test → Integration Test → Documentation); documents dual-key pattern implementation, SCD Type 2 versioning patterns, decision tree for when to update CRUD, real code examples from Position Manager Migration 011; cross-references ADR-089 (Dual-Key Schema Pattern) |
 | **SENTRY_INTEGRATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | Phase 2 | 🟡 High | **NEW** - 3-layer hybrid observability architecture: logger.py (audit trail) + Sentry (real-time) + alerts table (permanent record); implementation guide with code examples, testing procedures, troubleshooting |
 | **MANAGER_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Comprehensive architecture guide for 4 core managers (Model, Strategy, Position, Config); database schemas with field-by-field explanations; status lifecycle diagrams; immutable vs SCD Type 2 versioning patterns; design principles (pure psycopg2, decimal precision, two-level configs); ~900 lines; addresses user request to document manager architecture summary |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
@@ -407,7 +422,7 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **SESSION_6_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 6 | 🟢 Medium | Previous session handoff |
 | **Handoff_Protocol_V1_1.md** | ✅ | v1.1 | `/docs/utility/` | 0 | All phases | 🔴 Critical | **UPDATED V1.1** - Merged 4 docs: HANDOFF_PROCESS + TOKEN_MONITORING + PHASE_COMPLETION + KNOWLEDGE_STRATEGY (V1.0 archived) |
 | **VERSION_HEADERS_GUIDE_V2_1.md** | ✅ | v2.1 | `/docs/utility/` | 0 | All phases | 🟡 High | Version control standards, references Handoff_Protocol (**FIXED** filename from V2.1 → V2_1) |
-| **PHASE_0.7_DEFERRED_TASKS_V1.4.md** | ✅ | v1.4 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **PHASE 0.7 COMPLETE** - All 8/8 tasks complete (DEF-001 through DEF-008: pre-commit, pre-push, branch protection, schema validation, all hooks) - **UPDATED V1.4** (linked REQ-CICD-004/005 to DEF-001/002 for requirements traceability, marked acceptance criteria complete) |
+| **PHASE_0.7_DEFERRED_TASKS_V1.4.md** | ✅ | v1.5 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **PHASE 0.7 COMPLETE** - All 8/8 tasks complete (DEF-001 through DEF-008: pre-commit, pre-push, branch protection, schema validation, all hooks) - **UPDATED V1.4** (linked REQ-CICD-004/005 to DEF-001/002 for requirements traceability, marked acceptance criteria complete) |
 | **GITHUB_BRANCH_PROTECTION_CONFIG.md** | ✅ | v1.0 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **NEW** - Complete GitHub branch protection configuration (completes DEF-003) |
 | **PHASE_1_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1 | 🟡 High | **NEW** - Tracks deferred enhancements from Phase 1 (extended docstrings, pre-commit hooks, branch protection) |
 | **PHASE_1_PR_REVIEW_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1.5 | 🔴 Critical | **NEW** - Dual-tracking system for 45 actionable items from PRs #2-#21 AI reviews: 3 critical (float usage/Pattern 1, zero test coverage, path sanitization), 8 high, 18 medium, 16 low priority; GitHub issues #29-#73 with bi-directional links; prevents "4 out of 7 tasks lost" problem |
@@ -436,6 +451,12 @@ Additional guides, references, and supporting documentation.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **USER_CUSTOMIZATION_STRATEGY_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 0.5 | Phases 1-10 | 🟡 High | User configuration and customization strategy |
 | **SPORTS_PROBABILITIES_RESEARCH_V1.0.md** | ✅ | v1.0 | `/docs/supplementary/` | 4 | Phases 4, 9 | 🟡 High | **RENAMED** - Historical win probability benchmarks for NFL, NBA, tennis |
+
+### Analysis Documents (Phase 1.5)
+
+| Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
+|----------|--------|---------|----------|-------|------------|----------|-------|
+| **SCHEMA_ANALYSIS_2025-11-21.md** | ✅ | n/a | `/docs/analysis/` | 1.5 | Phase 1.5 | 🔴 Critical | **NEW** - Comprehensive architectural analysis for trade/position attribution (800+ lines): current state analysis, gap identification (5 gaps), design options & tradeoffs, user Q&A, final decisions for nested versioning + explicit columns vs JSONB + trade source tracking |
 
 ### Supplementary Specifications (Phase 5+)
 

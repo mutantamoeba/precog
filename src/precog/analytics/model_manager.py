@@ -19,7 +19,7 @@ References:
     - ADR-018: Immutable Strategy Versions (applies to models too)
     - ADR-019: Semantic Versioning for Strategies (applies to models too)
     - docs/guides/VERSIONING_GUIDE_V1.0.md
-    - docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md (probability_models table with approach/domain fields)
+    - docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md (probability_models table with model_class/domain fields)
 
 Phase: 1.5 (Foundation Validation)
 """
@@ -90,14 +90,14 @@ class ModelManager:
     References:
         - REQ-VER-001: Immutable Version Configs
         - REQ-VER-004: Version Lifecycle Management
-        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md (probability_models table with approach/domain fields)
+        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md (probability_models table with model_class/domain fields)
     """
 
     def create_model(
         self,
         model_name: str,
         model_version: str,
-        approach: str,
+        model_class: str,
         config: dict[str, Any],
         domain: str | None = None,
         description: str | None = None,
@@ -110,7 +110,7 @@ class ModelManager:
         Args:
             model_name: Model identifier (e.g., 'elo_nfl')
             model_version: Semantic version (e.g., 'v1.0', 'v1.1', 'v2.0')
-            approach: HOW model works ('elo', 'ensemble', 'ml', 'hybrid', 'regression')
+            model_class: HOW model works ('elo', 'ensemble', 'ml', 'hybrid', 'regression')
             config: Model parameters (IMMUTABLE once created!)
             domain: WHICH markets ('nfl', 'ncaaf', 'nba', etc.) or None for multi-domain
             description: Human-readable description (optional)
@@ -141,7 +141,7 @@ class ModelManager:
             >>> model = manager.create_model(
             ...     model_name="elo_nfl",
             ...     model_version="v1.0",
-            ...     approach="elo",
+            ...     model_class="elo",
             ...     config={
             ...         "k_factor": Decimal("32.0"),
             ...         "home_advantage": Decimal("55.0"),
@@ -171,11 +171,11 @@ class ModelManager:
         try:
             insert_sql = """
                 INSERT INTO probability_models (
-                    model_name, model_version, approach, domain, config,
+                    model_name, model_version, model_class, domain, config,
                     description, status, created_by, notes
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING model_id, model_name, model_version, approach,
+                RETURNING model_id, model_name, model_version, model_class,
                           domain, config, description, status, validation_calibration, validation_accuracy,
                           validation_sample_size, created_at, created_by, notes
             """
@@ -185,7 +185,7 @@ class ModelManager:
                 (
                     model_name,
                     model_version,
-                    approach,
+                    model_class,
                     domain,
                     config_jsonb,
                     description,
@@ -258,7 +258,7 @@ class ModelManager:
             if model_id is not None:
                 # Query by ID
                 select_sql = """
-                    SELECT model_id, model_name, model_version, approach,
+                    SELECT model_id, model_name, model_version, model_class,
                            domain, config, description, status, validation_calibration, validation_accuracy,
                            validation_sample_size, created_at, created_by, notes
                     FROM probability_models
@@ -268,7 +268,7 @@ class ModelManager:
             else:
                 # Query by name+version
                 select_sql = """
-                    SELECT model_id, model_name, model_version, approach,
+                    SELECT model_id, model_name, model_version, model_class,
                            domain, config, description, status, validation_calibration, validation_accuracy,
                            validation_sample_size, created_at, created_by, notes
                     FROM probability_models
@@ -312,7 +312,7 @@ class ModelManager:
 
         try:
             select_sql = """
-                SELECT model_id, model_name, model_version, approach,
+                SELECT model_id, model_name, model_version, model_class,
                        domain, config, description, status, validation_calibration, validation_accuracy,
                        validation_sample_size, created_at, created_by, notes
                 FROM probability_models
@@ -345,7 +345,7 @@ class ModelManager:
 
         try:
             select_sql = """
-                SELECT model_id, model_name, model_version, approach,
+                SELECT model_id, model_name, model_version, model_class,
                        domain, config, description, status, validation_calibration, validation_accuracy,
                        validation_sample_size, created_at, created_by, notes
                 FROM probability_models
@@ -366,14 +366,14 @@ class ModelManager:
         self,
         status: str | None = None,
         domain: str | None = None,
-        approach: str | None = None,
+        model_class: str | None = None,
     ) -> list[dict[str, Any]]:
         """List models with optional filters.
 
         Args:
             status: Filter by status (optional)
             domain: Filter by domain (optional)
-            approach: Filter by approach (optional)
+            model_class: Filter by model class (optional)
 
         Returns:
             List of models matching filters, ordered by created_at DESC
@@ -386,7 +386,7 @@ class ModelManager:
 
         Example:
             >>> # Get all active NFL Elo models
-            >>> models = manager.list_models(status='active', domain='nfl', approach='elo')
+            >>> models = manager.list_models(status='active', domain='nfl', model_class='elo')
             >>> # Get all models (no filters)
             >>> all_models = manager.list_models()
         """
@@ -406,9 +406,9 @@ class ModelManager:
                 where_clauses.append("domain = %s")
                 params.append(domain)
 
-            if approach is not None:
-                where_clauses.append("approach = %s")
-                params.append(approach)
+            if model_class is not None:
+                where_clauses.append("model_class = %s")
+                params.append(model_class)
 
             # Construct SQL
             where_sql = ""
@@ -416,7 +416,7 @@ class ModelManager:
                 where_sql = "WHERE " + " AND ".join(where_clauses)
 
             select_sql = f"""
-                SELECT model_id, model_name, model_version, approach,
+                SELECT model_id, model_name, model_version, model_class,
                        domain, config, description, status, validation_calibration, validation_accuracy,
                        validation_sample_size, created_at, created_by, notes
                 FROM probability_models
@@ -482,7 +482,7 @@ class ModelManager:
                 UPDATE probability_models
                 SET status = %s
                 WHERE model_id = %s
-                RETURNING model_id, model_name, model_version, approach,
+                RETURNING model_id, model_name, model_version, model_class,
                           domain, config, description, status, validation_calibration, validation_accuracy,
                           validation_sample_size, created_at, created_by, notes
             """
@@ -573,7 +573,7 @@ class ModelManager:
                 UPDATE probability_models
                 SET {", ".join(updates)}
                 WHERE model_id = %s
-                RETURNING model_id, model_name, model_version, approach,
+                RETURNING model_id, model_name, model_version, model_class,
                           domain, config, description, status, validation_calibration, validation_accuracy,
                           validation_sample_size, created_at, created_by, notes
             """

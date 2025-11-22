@@ -19,7 +19,7 @@ References:
     - ADR-018: Immutable Strategy Versions
     - ADR-019: Semantic Versioning for Strategies
     - docs/guides/VERSIONING_GUIDE_V1.0.md
-    - docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md (strategies table with approach/domain fields)
+    - docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md (strategies table with strategy_type/domain fields)
 
 Phase: 1.5 (Foundation Validation)
 """
@@ -85,7 +85,7 @@ class StrategyManager:
         strategy = manager.create_strategy(
             strategy_name="halftime_entry",
             strategy_version="v1.0",
-            approach="entry",
+            strategy_type="entry",
             domain="nfl",
             config={"min_edge": Decimal("0.05"), "max_spread": Decimal("0.08")},
             description="Enter positions at halftime when leading by 7+ points"
@@ -108,7 +108,7 @@ class StrategyManager:
         v1_1 = manager.create_strategy(
             strategy_name="halftime_entry",
             strategy_version="v1.1",  # New version
-            approach="entry",
+            strategy_type="entry",
             domain="nfl",
             config={"min_edge": Decimal("0.10"), "max_spread": Decimal("0.08")},  # Different config
             description="Increased min_edge based on backtest results"
@@ -142,7 +142,7 @@ class StrategyManager:
         self,
         strategy_name: str,
         strategy_version: str,
-        approach: str,
+        strategy_type: str,
         config: dict[str, Any],
         domain: str | None = None,
         description: str | None = None,
@@ -155,7 +155,7 @@ class StrategyManager:
         Args:
             strategy_name: Strategy identifier (e.g., 'halftime_entry')
             strategy_version: Semantic version (e.g., 'v1.0', 'v1.1', 'v2.0')
-            approach: HOW strategy works ('entry', 'exit', 'sizing', 'hedging', 'value', 'arbitrage')
+            strategy_type: HOW strategy works ('entry', 'exit', 'sizing', 'hedging', 'value', 'arbitrage')
             config: Strategy parameters (IMMUTABLE once created!)
             domain: WHICH markets ('nfl', 'nba', etc.) or None for multi-domain
             description: Human-readable description
@@ -196,11 +196,11 @@ class StrategyManager:
         try:
             insert_sql = """
                 INSERT INTO strategies (
-                    strategy_name, strategy_version, approach, domain,
+                    strategy_name, strategy_version, strategy_type, domain,
                     config, description, status, created_by, notes
                 )
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING strategy_id, strategy_name, strategy_version, approach,
+                RETURNING strategy_id, strategy_name, strategy_version, strategy_type,
                           domain, config, description, status, paper_roi, live_roi,
                           paper_trades_count, live_trades_count, created_at, created_by, notes
             """
@@ -210,7 +210,7 @@ class StrategyManager:
                 (
                     strategy_name,
                     strategy_version,
-                    approach,
+                    strategy_type,
                     domain,
                     config_jsonb,
                     description,
@@ -260,7 +260,7 @@ class StrategyManager:
 
         try:
             select_sql = """
-                SELECT strategy_id, strategy_name, strategy_version, approach,
+                SELECT strategy_id, strategy_name, strategy_version, strategy_type,
                        domain, config, description, status, paper_roi, live_roi,
                        paper_trades_count, live_trades_count, created_at, created_by, notes
                 FROM strategies
@@ -296,7 +296,7 @@ class StrategyManager:
 
         try:
             select_sql = """
-                SELECT strategy_id, strategy_name, strategy_version, approach,
+                SELECT strategy_id, strategy_name, strategy_version, strategy_type,
                        domain, config, description, status, paper_roi, live_roi,
                        paper_trades_count, live_trades_count, created_at, created_by, notes
                 FROM strategies
@@ -335,7 +335,7 @@ class StrategyManager:
         try:
             # Use partial index for better performance (idx_strategies_active)
             select_sql = """
-                SELECT strategy_id, strategy_name, strategy_version, approach,
+                SELECT strategy_id, strategy_name, strategy_version, strategy_type,
                        domain, config, description, status, paper_roi, live_roi,
                        paper_trades_count, live_trades_count, created_at, created_by, notes
                 FROM strategies
@@ -399,7 +399,7 @@ class StrategyManager:
                 UPDATE strategies
                 SET status = %s
                 WHERE strategy_id = %s
-                RETURNING strategy_id, strategy_name, strategy_version, approach,
+                RETURNING strategy_id, strategy_name, strategy_version, strategy_type,
                           domain, config, description, status, paper_roi, live_roi,
                           paper_trades_count, live_trades_count, created_at, created_by, notes
             """
@@ -486,7 +486,7 @@ class StrategyManager:
                 UPDATE strategies
                 SET {", ".join(updates)}
                 WHERE strategy_id = %s
-                RETURNING strategy_id, strategy_name, strategy_version, approach,
+                RETURNING strategy_id, strategy_name, strategy_version, strategy_type,
                           domain, config, description, status, paper_roi, live_roi,
                           paper_trades_count, live_trades_count, created_at, created_by, notes
             """

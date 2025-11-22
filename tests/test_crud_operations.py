@@ -503,11 +503,11 @@ def test_get_strategy_by_name_and_version(db_pool, clean_test_data):
     # Use unique strategy name to avoid collisions across test runs
     unique_name = f"test_strategy_{uuid.uuid4().hex[:8]}"
 
-    # Setup: Create a strategy (use 'value' for approach, 'nfl' for domain after Migration 011+013)
+    # Setup: Create a strategy (use 'value' for strategy_type, 'nfl' for domain after Migration 021)
     strategy_id = create_strategy(
         strategy_name=unique_name,
         strategy_version="v1.0",
-        category="value",  # Maps to 'approach' column (trading methodology)
+        strategy_type="value",  # HOW you trade (trading methodology)
         subcategory="nfl",  # Maps to 'domain' column (market type)
         config={"kelly_fraction": Decimal("0.25"), "min_edge": Decimal("0.05")},
     )
@@ -586,20 +586,20 @@ def test_get_recent_trades_with_strategy_filter(
     unique_name1 = f"strategy1_{uuid.uuid4().hex[:8]}"
     unique_name2 = f"strategy2_{uuid.uuid4().hex[:8]}"
 
-    # Setup: Create market and strategies (use 'value'/'arbitrage' for approach after Migration 013)
+    # Setup: Create market and strategies (use 'value'/'arbitrage' for strategy_type after Migration 021)
     market_id = create_market(**sample_market_data)
 
     strategy_id1 = create_strategy(
         strategy_name=unique_name1,
         strategy_version="v1.0",
-        category="value",  # Maps to 'approach' column (trading methodology)
+        strategy_type="value",  # HOW you trade (trading methodology)
         subcategory="nfl",  # Maps to 'domain' column (market type)
         config={},
     )
     strategy_id2 = create_strategy(
         strategy_name=unique_name2,
         strategy_version="v1.0",
-        category="arbitrage",  # Different approach for testing filter
+        strategy_type="arbitrage",  # Different strategy_type for testing filter
         subcategory="nfl",
         config={},
     )

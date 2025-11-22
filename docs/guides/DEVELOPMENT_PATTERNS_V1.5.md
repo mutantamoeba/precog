@@ -1,13 +1,25 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.4
+**Version:** 1.5
 **Created:** 2025-11-13
-**Last Updated:** 2025-11-19
+**Last Updated:** 2025-11-21
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.5:**
+- **Added Pattern 15: Trade/Position Attribution Architecture (ALWAYS - Migrations 018-020)**
+- Documents comprehensive attribution for trades and positions (execution-time snapshots)
+- Covers trade source tracking (automated vs manual), attribution enrichment (calculated_probability, market_price, edge_value)
+- Explains automatic edge calculation (edge_value = calculated_probability - market_price)
+- Position attribution with immutability (ADR-018): Entry snapshots never updated
+- Includes negative edge handling, backward compatibility, CHECK constraint validation
+- Performance analytics queries: ROI by model, edge vs outcome analysis, strategy A/B testing
+- Testing best practices with test_attribution.py examples
+- Common mistakes: Missing attribution fields, violating immutability, using FLOAT instead of DECIMAL
+- Cross-references: ADR-090 (Nested Versioning), ADR-091 (Explicit Columns), ADR-092 (Trade Source), Migration 018-020
+- Total addition: ~412 lines documenting attribution architecture best practices
 **Changes in V1.4:**
 - **Added Pattern 14: Schema Migration → CRUD Operations Update Workflow (CRITICAL)**
 - Documents mandatory workflow when database schema changes require CRUD operation updates
@@ -2671,6 +2683,419 @@ Q: Did you update documentation?
 
 ---
 
+## Pattern 15: Trade/Position Attribution Architecture (ALWAYS - Migrations 018-020)
+
+**ALWAYS capture execution-time attribution for trades and positions (Migrations 018-020).**
+
+### Core Principle
+
+Every trade and position must record:
+1. **Trade Source**: Automated (app-executed) vs Manual (Kalshi UI)
+2. **Attribution Snapshots**: Model prediction, market price, calculated edge at execution
+3. **Immutability**: Position attribution locked at entry (ADR-018)
+
+This enables performance analytics: "Which models generate profits?" and "Do high-edge trades win more?"
+
+---
+
+### ✅ CORRECT: Trade with Full Attribution
+
+```python
+from decimal import Decimal
+from precog.database.crud_operations import create_trade
+
+trade_id = create_trade(
+    market_id="HIGHTEST-25FEB05",
+    strategy_id=1,  # Which strategy triggered trade
+    model_id=2,     # Which model provided prediction
+    side="YES",
+    quantity=50,
+    price=Decimal("0.5200"),
+    # ⭐ ATTRIBUTION FIELDS (Migration 019)
+    trade_source="automated",                      # App-executed trade
+    calculated_probability=Decimal("0.6250"),      # Model predicted 62.50% win probability
+    market_price=Decimal("0.5200"),                # Kalshi price was 52.00%
+    # edge_value automatically calculated: 0.6250 - 0.5200 = 0.1050
+)
+```
+
+**What happens:**
+- ✅ `edge_value` automatically calculated as `0.1050` (10.5% edge)
+- ✅ Attribution stored as immutable snapshots (won't change if market price moves)
+- ✅ Enables analytics: "Average ROI for trades with edge ≥ 10%?"
+
+---
+
+### ❌ WRONG: Trade Without Attribution
+
+```python
+# ❌ Missing attribution fields
+trade_id = create_trade(
+    market_id="HIGHTEST-25FEB05",
+    strategy_id=1,
+    model_id=2,
+    side="YES",
+    quantity=50,
+    price=Decimal("0.5200"),
+    # Missing: trade_source, calculated_probability, market_price
+)
+```
+
+**Problems:**
+- ❌ Can't determine if trade was automated or manual
+- ❌ Can't answer "What did model predict at execution?"
+- ❌ Can't calculate ROI by model or edge value
+- ❌ Lost opportunity for performance attribution
+
+---
+
+### ✅ CORRECT: Position with Full Attribution
+
+```python
+from decimal import Decimal
+from precog.database.crud_operations import create_position
+
+position_id = create_position(
+    market_id="HIGHTEST-25FEB05",
+    strategy_id=1,
+    model_id=2,
+    side="YES",
+    quantity=100,
+    entry_price=Decimal("0.5200"),
+    target_price=Decimal("0.7500"),
+    stop_loss_price=Decimal("0.4500"),
+    # ⭐ ATTRIBUTION FIELDS (Migration 020) - IMMUTABLE entry snapshots
+    calculated_probability=Decimal("0.6800"),      # Model predicted 68.00% at entry
+    market_price_at_entry=Decimal("0.5200"),       # Market priced at 52.00% at entry
+    # edge_at_entry automatically calculated: 0.6800 - 0.5200 = 0.1600
+)
+```
+
+**What happens:**
+- ✅ `edge_at_entry` automatically calculated as `0.1600` (16% edge)
+- ✅ Attribution fields are **IMMUTABLE** (ADR-018) - never updated
+- ✅ Enables strategy A/B testing: "Did entry v1.5 outperform entry v1.6?"
+- ✅ Enables edge analysis: "What was the edge at entry for winning positions?"
+
+**Immutability Example:**
+```python
+# Position opened at entry_price=0.5200, calculated_probability=0.6800, edge_at_entry=0.1600
+
+# ... market moves to 0.6500 ...
+
+# Position attribution UNCHANGED (immutable entry snapshot):
+position = get_position_by_id(position_id)
+assert position["calculated_probability"] == Decimal("0.6800")  # Still 0.6800 (not updated)
+assert position["market_price_at_entry"] == Decimal("0.5200")   # Still 0.5200 (not updated)
+assert position["edge_at_entry"] == Decimal("0.1600")           # Still 0.1600 (not updated)
+
+# This enables comparing entry prediction vs actual outcome:
+# "What was the edge when we entered?" vs "What happened after?"
+```
+
+---
+
+### ❌ WRONG: Manual Edge Calculation
+
+```python
+# ❌ Don't manually calculate edge_value or edge_at_entry
+edge_value = calculated_probability - market_price
+trade_id = create_trade(
+    ...,
+    calculated_probability=Decimal("0.6250"),
+    market_price=Decimal("0.5200"),
+    edge_value=edge_value,  # ❌ WRONG - let CRUD calculate automatically
+)
+```
+
+**Why wrong:**
+- ❌ Violates DRY principle (calculation duplicated across codebase)
+- ❌ Risk of inconsistency (what if someone forgets to calculate?)
+- ❌ CRUD layer already calculates automatically
+
+**✅ CORRECT:**
+```python
+# Let create_trade() calculate edge_value automatically
+trade_id = create_trade(
+    ...,
+    calculated_probability=Decimal("0.6250"),
+    market_price=Decimal("0.5200"),
+    # edge_value calculated automatically
+)
+```
+
+---
+
+### Trade Source Tracking (Migration 018)
+
+**Use Case: Separate automated vs manual trades**
+
+```python
+# ✅ Automated trade (app-executed)
+automated_trade_id = create_trade(
+    ...,
+    trade_source="automated",  # Default value
+)
+
+# ✅ Manual trade (Kalshi UI) - for reconciliation
+manual_trade_id = create_trade(
+    ...,
+    trade_source="manual",  # Mark as manually executed
+)
+```
+
+**Analytics Query: Automated-only performance**
+```sql
+-- ROI for automated trades only (exclude manual interventions)
+SELECT
+    model_id,
+    COUNT(*) AS num_trades,
+    AVG(edge_value) AS avg_edge,
+    AVG(realized_pnl) AS avg_pnl
+FROM trades
+WHERE trade_source = 'automated'  -- Filter out manual trades
+GROUP BY model_id
+ORDER BY AVG(realized_pnl) DESC;
+```
+
+---
+
+### Handling Negative Edges
+
+**Edge can be negative** (market overpriced relative to model):
+
+```python
+# Market overpriced scenario
+trade_id = create_trade(
+    ...,
+    calculated_probability=Decimal("0.6000"),  # Model: 60% win probability
+    market_price=Decimal("0.7500"),            # Market: 75% (overpriced!)
+    # edge_value calculated automatically: 0.6000 - 0.7500 = -0.1500 (NEGATIVE)
+)
+
+trade = get_trade_by_id(trade_id)
+assert trade["edge_value"] == Decimal("-0.1500")  # Negative edge
+```
+
+**When you might have negative edge:**
+- ✅ **Manual trades**: User manually took position despite negative edge
+- ✅ **Market moved**: Placed order at +edge, filled at -edge (slippage)
+- ✅ **Model wrong**: Model miscalibrated (overestimated probability)
+
+**Analytics Query: How often did we trade negative edges?**
+```sql
+SELECT
+    COUNT(*) AS negative_edge_trades,
+    AVG(realized_pnl) AS avg_pnl_negative_edge
+FROM trades
+WHERE edge_value < 0;
+```
+
+---
+
+### Backward Compatibility
+
+**Attribution fields are optional** (NULL allowed for legacy data):
+
+```python
+# ✅ Legacy trade without attribution (backward compatible)
+legacy_trade_id = create_trade(
+    market_id="OLD-MARKET",
+    strategy_id=1,
+    model_id=1,
+    side="YES",
+    quantity=50,
+    price=Decimal("0.5000"),
+    # No attribution fields provided - that's OK!
+)
+
+trade = get_trade_by_id(legacy_trade_id)
+assert trade["calculated_probability"] is None
+assert trade["market_price"] is None
+assert trade["edge_value"] is None
+assert trade["trade_source"] == "automated"  # Still has default
+```
+
+---
+
+### Database Validation (CHECK Constraints)
+
+**PostgreSQL enforces probability ranges [0.0, 1.0]:**
+
+```python
+# ❌ This will FAIL (probability > 1.0)
+create_trade(
+    ...,
+    calculated_probability=Decimal("1.5000"),  # Invalid: > 1.0
+    market_price=Decimal("0.5000"),
+)
+# psycopg2.errors.CheckViolation: new row violates check constraint
+
+# ❌ This will FAIL (probability < 0.0)
+create_position(
+    ...,
+    calculated_probability=Decimal("-0.2000"),  # Invalid: < 0.0
+    market_price_at_entry=Decimal("0.5000"),
+)
+# psycopg2.errors.CheckViolation: new row violates check constraint
+
+# ✅ Valid probability range
+create_trade(
+    ...,
+    calculated_probability=Decimal("0.6250"),  # Valid: [0.0, 1.0]
+    market_price=Decimal("0.5200"),            # Valid: [0.0, 1.0]
+)
+```
+
+---
+
+### Performance Analytics Queries
+
+**1. ROI by Model**
+```sql
+SELECT
+    m.model_name,
+    m.version,
+    COUNT(*) AS num_trades,
+    AVG(t.edge_value) AS avg_edge,
+    AVG(t.realized_pnl) AS avg_roi
+FROM trades t
+JOIN probability_models m ON t.model_id = m.model_id
+WHERE t.trade_source = 'automated'
+GROUP BY m.model_name, m.version
+ORDER BY AVG(t.realized_pnl) DESC;
+```
+
+**2. Edge vs Outcome Analysis**
+```sql
+SELECT
+    CASE
+        WHEN edge_value >= 0.15 THEN 'High Edge (≥15%)'
+        WHEN edge_value >= 0.05 THEN 'Medium Edge (5-15%)'
+        WHEN edge_value >= 0 THEN 'Low Edge (0-5%)'
+        ELSE 'Negative Edge'
+    END AS edge_bucket,
+    COUNT(*) AS trade_count,
+    AVG(realized_pnl) AS avg_pnl,
+    SUM(CASE WHEN realized_pnl > 0 THEN 1 ELSE 0 END)::FLOAT / COUNT(*) AS win_rate
+FROM trades
+WHERE edge_value IS NOT NULL
+GROUP BY edge_bucket
+ORDER BY AVG(realized_pnl) DESC;
+```
+
+**3. Strategy A/B Testing (Position Attribution)**
+```sql
+-- Compare ROI of Entry v1.5 vs Entry v1.6
+SELECT
+    s.version,
+    s.config->>'entry'->>'version' AS entry_version,
+    COUNT(*) AS num_positions,
+    AVG(p.edge_at_entry) AS avg_entry_edge,
+    AVG(p.realized_pnl) AS avg_roi
+FROM positions p
+JOIN strategies s ON p.strategy_id = s.strategy_id
+WHERE s.strategy_name = 'NFL Ensemble'
+GROUP BY s.version, entry_version
+ORDER BY AVG(p.realized_pnl) DESC;
+```
+
+---
+
+### Testing Best Practices
+
+**Test attribution fields in CRUD operations:**
+
+```python
+# tests/test_attribution.py
+def test_create_trade_with_attribution_fields(db_pool, clean_test_data, sample_market, sample_strategy):
+    """Verify trade attribution fields recorded correctly."""
+    trade_id = create_trade(
+        market_id=sample_market,
+        strategy_id=sample_strategy,
+        model_id=1,
+        side="YES",
+        quantity=75,
+        price=Decimal("0.5200"),
+        calculated_probability=Decimal("0.6250"),
+        market_price=Decimal("0.5200"),
+        trade_source="automated",
+    )
+
+    trade = get_trade_by_id(trade_id)
+
+    # Verify attribution fields
+    assert trade["calculated_probability"] == Decimal("0.6250")
+    assert trade["market_price"] == Decimal("0.5200")
+    assert trade["edge_value"] == Decimal("0.1050")  # Auto-calculated
+    assert trade["trade_source"] == "automated"
+```
+
+---
+
+### Common Mistakes
+
+**1. Forgetting attribution fields**
+```python
+# ❌ WRONG - No attribution
+create_trade(..., price=Decimal("0.5200"))
+
+# ✅ CORRECT - Full attribution
+create_trade(
+    ...,
+    price=Decimal("0.5200"),
+    calculated_probability=Decimal("0.6250"),
+    market_price=Decimal("0.5200"),
+)
+```
+
+**2. Updating position attribution (violates immutability)**
+```python
+# ❌ WRONG - Trying to update position attribution
+UPDATE positions
+SET calculated_probability = 0.7000  -- ❌ Violates ADR-018 immutability
+WHERE id = 123;
+
+# ✅ CORRECT - Position attribution is immutable, create new version instead
+```
+
+**3. Using FLOAT instead of DECIMAL**
+```python
+# ❌ WRONG - Float for probabilities
+calculated_probability = 0.6250  # float
+
+# ✅ CORRECT - Decimal for probabilities
+calculated_probability = Decimal("0.6250")  # Decimal
+```
+
+---
+
+### Related ADRs & Patterns
+
+- **ADR-090**: Strategy Contains Entry + Exit Rules with Nested Versioning
+- **ADR-091**: Explicit Columns for Trade/Position Attribution (vs JSONB)
+- **ADR-092**: Trade Source Tracking and Manual Trade Reconciliation
+- **ADR-018**: Immutable Versioning (positions locked to strategy/model version)
+- **ADR-002**: Decimal Precision for All Financial Data
+- **Pattern 1**: Decimal Precision (NEVER USE FLOAT)
+- **Pattern 3**: Trade Attribution (basic strategy_id/model_id linkage)
+- **Migration 018**: Trade Source Tracking (`trade_source` enum)
+- **Migration 019**: Trade Attribution Enrichment (calculated_probability, market_price, edge_value)
+- **Migration 020**: Position Attribution (immutable entry snapshots)
+
+---
+
+### Enforcement
+
+| Check | Enforcement | Command |
+|-------|-------------|---------|
+| Attribution fields present | Code review | Manual verification of create_trade/create_position calls |
+| Decimal precision | Pre-commit hook | `git grep "calculated_probability.*float" -- '*.py'` |
+| Immutability | Code review | `git grep "UPDATE positions SET calculated_probability" -- '*.py' '*.sql'` |
+| Tests exist | Pytest (pre-push hook) | `pytest tests/test_attribution.py -v` |
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -2689,13 +3114,14 @@ Q: Did you update documentation?
 | **12. Test Fixture Security** | Code review | `git grep "tmp_path.*\.sql" tests/` | PR #79, PR #76, CWE-22 |
 | **13. Test Coverage Quality** | Code review + test checklist | `git grep "@patch.*get_connection" tests/` | REQ-TEST-012 thru REQ-TEST-019, TDD_FAILURE_ROOT_CAUSE |
 | **14. Schema Migration → CRUD** | Manual (5-step checklist) | `git log -- src/precog/database/migrations/` | ADR-089, ADR-034, ADR-003, Pattern 13 |
+| **15. Trade/Position Attribution** | Code review + pytest | `pytest tests/test_attribution.py -v` | ADR-090, ADR-091, ADR-092, Migration 018-020 |
 
 ---
 
 ## Related Documentation
 
 ### Foundation Documents
-- `docs/foundation/MASTER_REQUIREMENTS_V2.10.md` - All requirements
+- `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` - All requirements
 - `docs/foundation/ARCHITECTURE_DECISIONS_V2.10.md` - All ADRs (includes ADR-002, ADR-018-020, ADR-048, ADR-053-054, ADR-074)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.8.md` - Phase planning
 

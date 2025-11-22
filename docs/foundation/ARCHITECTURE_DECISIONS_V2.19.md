@@ -1,9 +1,34 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.18
-**Last Updated:** November 19, 2025
+**Version:** 2.19
+**Last Updated:** November 21, 2025
 **Status:** ✅ Current
+**Changes in v2.19:**
+- **TRADE & POSITION ATTRIBUTION ARCHITECTURE:** Added Decisions #90-92/ADR-090-092 (Trade/Position Attribution & Strategy Scope - Phase 1.5)
+- **ADR-090: Strategy Contains Entry + Exit Rules with Nested Versioning** - Documents decision for strategies to contain both entry and exit rules with independent version tracking
+  - **Context:** User expects frequent feedback-driven rule changes with entry/exit rules changing independently
+  - **Solution:** Nested JSONB structure with `entry.version` and `exit.version` for independent versioning
+  - **Benefits:** Supports independent tweaking (change exit without changing entry), prevents version explosion, maintains flexibility
+  - **Entry Rules:** min_lead, max_spread, min_edge, min_probability (absolute confidence threshold)
+  - **Exit Rules:** profit_target, stop_loss, trailing_stop_activation, trailing_stop_distance
+  - **Position Immutability:** Positions locked to strategy version at entry time (ADR-018 Immutable Versioning)
+- **ADR-091: Explicit Columns for Trade/Position Attribution** - Documents decision to use explicit columns instead of JSONB for attribution fields
+  - **Context:** Need to link trades/positions to exact strategy, model, probability, and edge at execution time
+  - **Solution:** Add explicit columns (calculated_probability, market_price, edge_value) to trades; add 5 attribution columns to positions
+  - **Performance Rationale:** Explicit columns 20-100x faster than JSONB for analytics queries (frequent filtering/aggregation)
+  - **Trade Attribution:** strategy_id, model_id, calculated_probability, market_price, edge_value (snapshot at execution)
+  - **Position Attribution:** strategy_id, model_id, calculated_probability, edge_at_entry, market_price_at_entry
+  - **Validation:** Comprehensive CHECK constraints for probability ranges (0.0-1.0) and foreign key integrity
+- **ADR-092: Trade Source Tracking and Manual Trade Reconciliation** - Documents decision to download ALL trades from Kalshi API with source tracking
+  - **Context:** User's Kalshi account used for both manual trades (through Kalshi UI) and automated trades (through app)
+  - **Solution:** Download all trades via API, use `trade_source` enum ('automated' vs 'manual') to filter for performance analytics
+  - **Reconciliation Strategy:** Match app-generated order_ids to determine automated trades, mark others as manual
+  - **Benefits:** Complete audit trail, separates performance analytics (automated only), detects discrepancies
+  - **Implementation:** PostgreSQL ENUM type (trade_source_type), filtered analytics queries, reconciliation validation
+- All three ADRs address holistic architectural review identifying missing attribution and scope ambiguities
+- References comprehensive analysis in docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md
+- Enables performance attribution analytics ("Which strategy/model generated this profit?")
 **Changes in v2.18:**
 - **SCHEMA ARCHITECTURE - DUAL-KEY PATTERN FOR SCD TYPE 2:** Added Decision #89/ADR-089 (Dual-Key Schema Pattern for SCD Type 2 Tables - Phase 1.5)
 - Documents comprehensive dual-key architecture pattern solving PostgreSQL FK limitation for SCD Type 2 tables (positions, markets)
@@ -5698,7 +5723,7 @@ CREATE TABLE model_config_params (
 - ADR-079: Performance Tracking Architecture (query patterns inform this decision)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (current JSONB schema)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (current JSONB schema)
 - `config/probability_models.yaml` (config examples)
 - `config/trade_strategies.yaml` (strategy config examples)
 
@@ -6155,7 +6180,7 @@ CREATE TABLE brier_score_metrics (...);
 - STRAT-026: Performance Metrics Infrastructure Implementation (Phase 1.5-2, 18-22h)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8: Performance Tracking & Analytics)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (Section 8: Performance Tracking & Analytics)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
@@ -6912,7 +6937,7 @@ Cons:
 
 ### References
 
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8: Performance Tracking & Analytics)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (Section 8: Performance Tracking & Analytics)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
@@ -7681,7 +7706,7 @@ WebSocket for Position Monitoring (real-time):
 ### References
 
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 7 Task #2: Frontend Development)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8.9: Materialized Views)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (Section 8.9: Materialized Views)
 - Next.js Documentation: https://nextjs.org/docs
 - Recharts Documentation: https://recharts.org/
 - React Query Documentation: https://tanstack.com/query/latest
@@ -8603,7 +8628,7 @@ def run_holdout_validation(
 - `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #3, Phase 6 Task #1)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8.7: Evaluation Runs Table)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (Section 8.7: Evaluation Runs Table)
 
 ---
 
@@ -9326,7 +9351,7 @@ ON position_risk_by_strategy(league, strategy_name);
 - `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 6 Task #3, Phase 7 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8.8: Materialized Views Reference)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (Section 8.8: Materialized Views Reference)
 
 ---
 
@@ -10157,7 +10182,7 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 - `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 7 Task #3, Phase 8 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (Section 8.9: A/B Tests Table)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (Section 8.9: A/B Tests Table)
 
 ---
 
@@ -10407,7 +10432,7 @@ FROM prediction_features_analysis
 WHERE model_id = 7;
 ```
 
-**Example 3: Performance Metrics Rollups (Already Implemented in DATABASE_SCHEMA_SUMMARY_V1.9)**
+**Example 3: Performance Metrics Rollups (Already Implemented in DATABASE_SCHEMA_SUMMARY_V1.10)**
 ```sql
 -- Operational table (multi-entity tracking)
 CREATE TABLE performance_metrics (
@@ -10520,7 +10545,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 
 **Phase 1.5-2 (NOW):**
 - ✅ **Keep all JSONB columns as-is** (no migrations)
-- ✅ **Create 2 materialized views**: strategy_performance_summary, model_calibration_summary (already in DATABASE_SCHEMA_SUMMARY_V1.9)
+- ✅ **Create 2 materialized views**: strategy_performance_summary, model_calibration_summary (already in DATABASE_SCHEMA_SUMMARY_V1.10)
 - ✅ **Document hybrid strategy** in this ADR
 
 **Phase 5b (Advanced Execution):**
@@ -10591,7 +10616,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 - ADR-018: Immutable Versions Pattern (JSONB supports atomic config versioning)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (materialized views already defined)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (materialized views already defined)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.16.md` (analytics requirements)
 
 ---
@@ -10760,7 +10785,7 @@ python scripts/validate_schema.py --ci
 ```
 
 **Future Expansion (Phase 2+):**
-- Parse DATABASE_SCHEMA_SUMMARY_V1.9.md directly (vs. hardcoded schemas)
+- Parse DATABASE_SCHEMA_SUMMARY_V1.10.md directly (vs. hardcoded schemas)
 - Add more tables: markets, positions, trades, etc.
 - Integrate into CI/CD pipeline (blocks PRs if schema drift detected)
 
@@ -10894,7 +10919,7 @@ CREATE TABLE strategies (
 **References:**
 - `src/precog/database/migrations/migration_011_standardize_classification_fields.py` (implementation)
 - `scripts/validate_schema.py` (automated validation)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (updated schemas)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (updated schemas)
 - `docs/utility/PHASE_1_DEFERRED_TASKS_V1.0.md` (DEF-P1-008 completed)
 
 ---
@@ -11071,7 +11096,7 @@ CREATE TABLE strategies (
 
 ### References
 
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md` (edges table schema)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` (edges table schema)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 1.5 manager components)
 - `src/precog/trading/model_manager.py` (edge calculation logic - Phase 1.5 implementation)
 - `src/precog/trading/strategy_manager.py` (edge query logic - Phase 1.5 implementation)
@@ -11511,7 +11536,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 
 **Supporting Documentation:**
 - DEVELOPMENT_PHILOSOPHY_V1.3.md (updated TDD section with Phase 1.5 lesson learned)
-- DEVELOPMENT_PATTERNS_V1.4.md (added Pattern 13: Test Coverage Quality)
+- DEVELOPMENT_PATTERNS_V1.5.md (added Pattern 13: Test Coverage Quality)
 - PHASE_1.5_TEST_PLAN_V1.0.md (test planning for manager components)
 
 **Development Guides:**
@@ -11582,7 +11607,7 @@ tests/
 - `docs/foundation/TESTING_STRATEGY_V3.1.md` (comprehensive 8 test type framework)
 - `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md` (REQ-TEST-012 through REQ-TEST-019)
 - `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md` (TDD section with Phase 1.5 lessons)
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.4.md` (Pattern 13: Test Coverage Quality)
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.5.md` (Pattern 13: Test Coverage Quality)
 
 **Code:**
 - `tests/conftest.py` (db_pool, clean_test_data fixtures)
@@ -11636,7 +11661,7 @@ Decision to use pytest as the primary testing framework with coverage, async sup
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.9.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.10.md
 
 Decision to enforce referential integrity using PostgreSQL foreign key constraints on all relationship columns.
 
@@ -11644,7 +11669,7 @@ Decision to enforce referential integrity using PostgreSQL foreign key constrain
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.9.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.10.md
 
 Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key relationships.
 
@@ -11652,7 +11677,7 @@ Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.9.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.10.md
 
 Decision to create database views that filter for current rows (row_current_ind = TRUE) to simplify application queries.
 
@@ -11676,7 +11701,7 @@ Decision to implement 2-stage partial exits (50% at +15%, 25% at +25%, 25% with 
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.9.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.10.md
 
 Decision to use append-only table for position_exits to maintain complete exit event history.
 
@@ -11684,7 +11709,7 @@ Decision to use append-only table for position_exits to maintain complete exit e
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.9.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.10.md
 
 Decision to log all exit order attempts (filled and unfilled) to exit_attempts table for debugging "why didn't my exit fill?" issues.
 
@@ -12195,6 +12220,1064 @@ history = get_position_history('POS-1')
 5. **Schema migration workflow:** Pattern 14 documents step-by-step implementation process
 
 **Status:** ✅ Implemented and proven in production (positions table Phase 1.5, markets table Phase 1)
+
+---
+
+## Decision #90/ADR-090: Strategy Contains Entry + Exit Rules with Nested Versioning
+
+**Decision #90**
+**Phase:** 1.5 (Trade & Position Attribution Architecture)
+**Status:** ✅ Approved (Implementation planned for Migration 018-020)
+**Priority:** 🔴 Critical (foundational trading strategy architecture)
+
+### Problem Statement
+
+**Context: Strategy Scope and Independent Rule Versioning**
+
+During holistic architecture review, we identified ambiguity in strategy scope and versioning:
+
+**User Requirements:**
+- Expect frequent feedback-driven rule changes (weekly/monthly tweaking based on profitability analysis)
+- Entry and exit rules change **independently** (e.g., keep entry rules, adjust trailing stop distance)
+- Need to A/B test different combinations (Entry v1.5 + Exit v2.3 vs Entry v1.5 + Exit v2.4)
+- Positions must lock to strategy version at entry time (immutable for analytics)
+
+**Current State:**
+- Strategy table exists with `config JSONB` field
+- No documented structure for config (entry vs exit rules unclear)
+- No versioning system for independent entry/exit changes
+- Unclear if strategies contain entry-only or entry+exit rules
+
+**The Questions:**
+1. Should strategies contain ONLY entry rules or BOTH entry + exit rules?
+2. If both, how do we version entry/exit independently without version explosion?
+3. How do positions lock to strategy at entry if exit rules can change?
+
+### Decision
+
+**We decided that strategies contain BOTH entry AND exit rules with nested versioning.**
+
+**Rationale:**
+1. **Semantic Coherence:** A trading strategy is a complete plan (when to enter AND when to exit)
+2. **User Workflow:** User thinks in terms of "strategies" not separate "entry rules" and "exit rules"
+3. **Position Immutability:** Positions lock to strategy version at entry → must have complete entry+exit rules
+4. **Independent Versioning:** Nested structure allows changing entry without affecting exit (prevents version explosion)
+5. **A/B Testing:** Can test different exit rules while keeping entry consistent
+
+**Strategy Config Structure (JSONB):**
+
+```json
+{
+  "entry": {
+    "version": "1.5",
+    "rules": {
+      "min_lead": 10,
+      "max_spread": "0.08",
+      "min_edge": "0.05",
+      "min_probability": "0.55"
+    }
+  },
+  "exit": {
+    "version": "2.3",
+    "rules": {
+      "profit_target": "0.25",
+      "stop_loss": "-0.10",
+      "trailing_stop_activation": "0.15",
+      "trailing_stop_distance": "0.05"
+    }
+  }
+}
+```
+
+**Entry Rules (When to Open Position):**
+- `min_lead` - Minimum score lead required (game state filter)
+- `max_spread` - Maximum bid-ask spread (liquidity requirement)
+- `min_edge` - Minimum market inefficiency (calculated_probability - market_price)
+- `min_probability` - Minimum model confidence (absolute threshold, not relative to market)
+
+**Exit Rules (When to Close Position):**
+- `profit_target` - Take profit at X unrealized P&L
+- `stop_loss` - Cut losses at -X unrealized P&L
+- `trailing_stop_activation` - Activate trailing stop after X profit
+- `trailing_stop_distance` - Trail by X below peak price
+
+### Implementation Strategy
+
+**Database Schema (No Changes Required):**
+- `strategies.config` field already exists as JSONB
+- Nested structure fits within existing column
+- No migration needed for schema (only config standardization)
+
+**Version Tracking:**
+- Each strategy row has `strategies.version` (e.g., "v2.5")
+- Config has nested `entry.version` and `exit.version` for independent tracking
+- Example: Strategy v2.5 = Entry v1.5 + Exit v2.3
+
+**Position Locking (ADR-018 Immutable Versioning):**
+- When position opened, `positions.strategy_id` references strategies.id (surrogate key)
+- Position locked to specific strategy row (complete entry+exit rules immutable)
+- If user tweaks exit rules → creates new strategy row → new positions use new version
+- Old positions continue using old strategy version (enables clean A/B testing)
+
+**CRUD Operations:**
+```python
+def create_strategy(
+    name: str,
+    approach: str,  # 'elo_model', 'ensemble', etc.
+    domain: str,    # 'NFL', 'NCAAF', etc.
+    entry_rules: dict,  # {min_lead, max_spread, min_edge, min_probability}
+    exit_rules: dict,   # {profit_target, stop_loss, trailing_stop_activation, trailing_stop_distance}
+    entry_version: str = "1.0",
+    exit_version: str = "1.0"
+) -> dict:
+    """Create new strategy with nested versioning.
+
+    Args:
+        entry_rules: Entry rule configuration (when to open position)
+        exit_rules: Exit rule configuration (when to close position)
+        entry_version: Independent entry rules version
+        exit_version: Independent exit rules version
+
+    Returns:
+        Created strategy row with config {"entry": {...}, "exit": {...}}
+    """
+    config = {
+        "entry": {"version": entry_version, "rules": entry_rules},
+        "exit": {"version": exit_version, "rules": exit_rules}
+    }
+    # ... insert into strategies table with config JSONB
+```
+
+### Benefits
+
+1. **Prevents Version Explosion**
+   - Change exit without creating new strategy → only exit.version increments
+   - Example: Entry v1.5 + Exit v2.3, v2.4, v2.5 (3 versions, not 3×3=9)
+
+2. **Clear Semantics**
+   - Strategy = complete trading plan (entry + exit)
+   - No ambiguity about "Where do exit rules live?"
+
+3. **Flexible Tweaking**
+   - Can change entry rules independently (test different model thresholds)
+   - Can change exit rules independently (test different profit targets)
+
+4. **A/B Testing Support**
+   - Compare Entry v1.5 + Exit v2.3 vs Entry v1.5 + Exit v2.4
+   - Attribution analytics: "Which exit rules performed better?"
+
+5. **Position Immutability**
+   - Position references strategy_id → gets complete entry+exit rules
+   - Historical positions unaffected by future rule changes
+   - Clean P&L attribution per strategy version
+
+### Costs and Tradeoffs
+
+1. **Config Structure Complexity**
+   - Nested JSONB (entry/exit) more complex than flat structure
+   - Requires validation to ensure both sections exist
+
+2. **Learning Curve**
+   - Users must understand entry vs exit rules distinction
+   - Must track two version numbers (entry.version, exit.version)
+
+3. **Query Complexity (Slight)**
+   - Accessing rules requires JSONB path: `config->'entry'->'rules'->>'min_edge'`
+   - Not significant burden (JSONB indexing handles performance)
+
+### Alternatives Considered
+
+**Option A: Strategies Contain Entry Rules ONLY**
+- ❌ **Rejected**: Exit rules would live in separate table or position_management config
+- ❌ **Problem**: "Strategy" becomes incomplete concept (where are exit rules?)
+- ❌ **Problem**: Position immutability unclear (strategy_id doesn't include exit rules)
+
+**Option B: Separate Strategy and Method Tables**
+- ❌ **Rejected**: Too complex for Phase 1-3 needs
+- ⚠️ **Deferred**: See ADR-077 (Strategy vs Method Separation) for Phase 4+ research
+- ❌ **Problem**: Premature abstraction (no data to validate need)
+
+**Option C: Flat Config (No Entry/Exit Separation)**
+- ❌ **Rejected**: Can't version entry/exit independently
+- ❌ **Problem**: Changing trailing stop creates completely new strategy version
+- ❌ **Problem**: Version explosion (10 entry variants × 10 exit variants = 100 versions)
+
+### Validation
+
+**Config Validation (Phase 1.5):**
+```python
+def validate_strategy_config(config: dict) -> bool:
+    """Validate nested entry/exit structure.
+
+    Required structure:
+    {
+        "entry": {"version": str, "rules": {...}},
+        "exit": {"version": str, "rules": {...}}
+    }
+    """
+    assert "entry" in config, "Config must have 'entry' section"
+    assert "exit" in config, "Config must have 'exit' section"
+    assert "version" in config["entry"], "Entry must have version"
+    assert "version" in config["exit"], "Exit must have version"
+    assert "rules" in config["entry"], "Entry must have rules"
+    assert "rules" in config["exit"], "Exit must have rules"
+    # Additional rule validation...
+    return True
+```
+
+**Testing Strategy:**
+- Unit tests: Config structure validation
+- Integration tests: Create strategy → open position → verify locked config
+- Property tests: Hypothesis generates random entry/exit combinations
+
+### Related Decisions
+
+- **ADR-018 (Immutable Versioning):** Positions lock to strategy version at entry time
+- **ADR-019 (Strategy Versioning):** Establishes need for strategy version immutability
+- **ADR-077 (Strategy vs Method Separation):** Future research if complexity grows
+- **ADR-091 (Explicit Columns for Attribution):** Positions need strategy_id for attribution
+
+### Min Probability vs Min Edge
+
+**Important Distinction:**
+- `min_probability`: Absolute model confidence threshold (e.g., "Only enter if model says ≥55% win probability")
+- `min_edge`: Market inefficiency threshold (e.g., "Only enter if edge ≥5%" where edge = calculated_probability - market_price)
+
+**Why Both?**
+- `min_probability` filters low-confidence predictions (model says 51% → probably noise)
+- `min_edge` filters small advantages (52% calculated vs 50% market → 2% edge might not cover fees)
+- Independent thresholds allow nuanced strategies (high confidence + meaningful edge)
+
+**Example:**
+```json
+{
+  "entry": {
+    "rules": {
+      "min_probability": "0.55",  // Model must be confident (≥55% win probability)
+      "min_edge": "0.05"           // AND market must be inefficient (≥5% edge)
+    }
+  }
+}
+```
+
+Result: Only enter when model confident AND market mispriced
+
+### Implementation Checklist
+
+**Phase 1.5 (Current):**
+- [x] Document decision in ADR-090
+- [ ] Update Strategy Manager to use nested config structure
+- [ ] Add config validation to create_strategy()
+- [ ] Update tests to verify entry/exit structure
+- [ ] Document config schema in DATABASE_SCHEMA_SUMMARY
+
+**Phase 2+ (When Version Explosion Monitoring):**
+- [ ] Track version count (how many entry versions × exit versions?)
+- [ ] Monitor if version explosion occurs despite nested structure
+- [ ] Consider ADR-077 (methods table) if complexity unmanageable
+
+### Related Documentation
+
+- `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Comprehensive architectural analysis
+- `docs/guides/VERSIONING_GUIDE_V1.0.md` - Strategy/model versioning patterns
+- `MASTER_REQUIREMENTS_V2.16.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
+
+**Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
+
+---
+
+## Decision #91/ADR-091: Explicit Columns for Trade/Position Attribution
+
+**Decision #91**
+**Phase:** 1.5 (Trade & Position Attribution Architecture)
+**Status:** ✅ Approved (Implementation planned for Migration 019-020)
+**Priority:** 🔴 Critical (enables performance attribution analytics)
+
+### Problem Statement
+
+**Context: Trade and Position Attribution for Analytics**
+
+Current schema lacks attribution data linking trades/positions to exact strategy, model, probability, and edge at execution time:
+
+**Gap #1: Trade Attribution Missing**
+- `trades` table has `edge_id` foreign key → can JOIN to edges table
+- **Problem**: edge table might be cleaned up (TTL-based DELETE) → historical attribution lost
+- **Problem**: Can't answer "What did model predict?" without fragile JOIN through edges
+- **Problem**: Can't answer "What was market price at execution?" without API historical data
+- **Problem**: Can't separate performance by strategy/model without complex JOINs
+
+**Gap #2: Position Attribution Missing**
+- `positions` table has no `strategy_id` or `model_id` foreign keys
+- **Problem**: Can't query "All positions using Strategy A"
+- **Problem**: Can't analyze "Which strategy generated most profit?"
+- **Problem**: Can't track edge at entry vs edge at exit (profit attribution)
+- **Problem**: Must reconstruct attribution from trades table (complex, fragile)
+
+**User Analytics Requirements:**
+- "Which strategy/model combination generated this profit?"
+- "What was the calculated probability when we entered this position?"
+- "Did the edge we calculated at entry materialize?"
+- "Filter positions by minimum edge at entry (≥8%)"
+
+### Decision
+
+**We decided to use EXPLICIT COLUMNS (not JSONB) for trade and position attribution fields.**
+
+**Rationale:**
+1. **Performance**: Analytics queries filter/aggregate frequently → explicit columns 20-100x faster than JSONB
+2. **Type Safety**: PostgreSQL enforces DECIMAL(10,4) precision → prevents float contamination
+3. **Query Simplicity**: `WHERE calculated_probability >= 0.55` vs `WHERE (attribution->>'calculated_probability')::decimal >= 0.55`
+4. **Index Performance**: B-tree indexes on explicit columns far more efficient than GIN indexes on JSONB
+5. **Database Constraints**: CHECK constraints validate probability ranges (0.0-1.0) at write time
+
+**Trade Attribution (3 New Columns):**
+```sql
+ALTER TABLE trades ADD COLUMN calculated_probability DECIMAL(10,4) CHECK (calculated_probability >= 0 AND calculated_probability <= 1);
+ALTER TABLE trades ADD COLUMN market_price DECIMAL(10,4) CHECK (market_price >= 0 AND market_price <= 1);
+ALTER TABLE trades ADD COLUMN edge_value DECIMAL(10,4);  -- Can be negative if model wrong
+
+COMMENT ON COLUMN trades.calculated_probability IS 'Model-predicted win probability at trade execution (snapshot)';
+COMMENT ON COLUMN trades.market_price IS 'Market price at trade execution (snapshot from Kalshi API)';
+COMMENT ON COLUMN trades.edge_value IS 'Calculated edge (calculated_probability - market_price) at execution';
+```
+
+**Position Attribution (5 New Columns):**
+```sql
+ALTER TABLE positions ADD COLUMN strategy_id INTEGER REFERENCES strategies(id);
+ALTER TABLE positions ADD COLUMN model_id INTEGER REFERENCES probability_models(id);
+ALTER TABLE positions ADD COLUMN calculated_probability DECIMAL(10,4) CHECK (calculated_probability >= 0 AND calculated_probability <= 1);
+ALTER TABLE positions ADD COLUMN edge_at_entry DECIMAL(10,4);
+ALTER TABLE positions ADD COLUMN market_price_at_entry DECIMAL(10,4) CHECK (market_price_at_entry >= 0 AND market_price_at_entry <= 1);
+
+COMMENT ON COLUMN positions.strategy_id IS 'Strategy version used at position entry (immutable per ADR-018)';
+COMMENT ON COLUMN positions.model_id IS 'Probability model used at position entry (immutable per ADR-018)';
+COMMENT ON COLUMN positions.calculated_probability IS 'Model-predicted win probability at position entry';
+COMMENT ON COLUMN positions.edge_at_entry IS 'Calculated edge at position entry (tracks if edge materialized)';
+COMMENT ON COLUMN positions.market_price_at_entry IS 'Market price when position opened (entry price reference)';
+```
+
+### Implementation Strategy
+
+**Migration 019: Trade Attribution (3 columns)**
+- Add `calculated_probability`, `market_price`, `edge_value` to trades table
+- Backfill existing trades: JOIN to edges table, copy probability/edge data
+- Add CHECK constraints for probability ranges
+- Create partial indexes for NOT NULL values
+
+**Migration 020: Position Attribution (5 columns)**
+- Add `strategy_id`, `model_id`, `calculated_probability`, `edge_at_entry`, `market_price_at_entry` to positions table
+- Backfill existing positions: Reconstruct from trades table
+- Add foreign key constraints (strategies.id, probability_models.id)
+- Create indexes for analytics queries
+
+**CRUD Operations Updates:**
+```python
+def create_trade(
+    position_id: str,
+    action: str,  # 'buy' or 'sell'
+    quantity: int,
+    price: Decimal,
+    edge_id: Optional[int],  # Existing FK, keep for backward compatibility
+    calculated_probability: Decimal,  # NEW: Model prediction snapshot
+    market_price: Decimal,             # NEW: Market price snapshot
+    edge_value: Decimal,               # NEW: Calculated edge snapshot
+    strategy_id: int,                  # NEW: Which strategy triggered trade
+    model_id: int                      # NEW: Which model provided prediction
+) -> dict:
+    """Create trade with attribution fields.
+
+    Attribution Fields (NEW):
+        calculated_probability: Model-predicted win probability at execution
+        market_price: Market price from Kalshi API at execution
+        edge_value: Calculated edge (calculated_probability - market_price)
+        strategy_id: Strategy that triggered this trade
+        model_id: Probability model that provided prediction
+
+    Why Snapshots?
+        - Edges table cleaned up (TTL-based DELETE) → historical attribution lost
+        - Want to answer "What did model predict?" without relying on edges table
+        - Want to compare entry prediction vs actual outcome
+    """
+    # ... insert with all attribution fields
+
+def create_position(
+    market_id: str,
+    quantity: int,
+    entry_price: Decimal,
+    strategy_id: int,                  # NEW: Lock to strategy version
+    model_id: int,                     # NEW: Lock to model version
+    calculated_probability: Decimal,   # NEW: Model prediction at entry
+    edge_at_entry: Decimal,            # NEW: Edge when position opened
+    market_price_at_entry: Decimal     # NEW: Market price at entry
+) -> dict:
+    """Create position with attribution fields.
+
+    Attribution Fields (NEW):
+        strategy_id: Strategy version used (immutable per ADR-018)
+        model_id: Probability model version used (immutable per ADR-018)
+        calculated_probability: Model prediction at position entry
+        edge_at_entry: Calculated edge when position opened
+        market_price_at_entry: Market price when position opened
+
+    Immutability (ADR-018):
+        Position locked to strategy_id and model_id at entry time.
+        Even if strategy rules change, this position uses original version.
+        Enables clean A/B testing and P&L attribution.
+    """
+    # ... insert with all attribution fields
+```
+
+### Benefits
+
+1. **Performance Attribution Analytics**
+   ```sql
+   -- Which strategy generated most profit?
+   SELECT
+       s.name AS strategy_name,
+       s.version AS strategy_version,
+       COUNT(*) AS num_positions,
+       SUM(p.realized_pnl) AS total_profit
+   FROM positions p
+   JOIN strategies s ON p.strategy_id = s.id
+   WHERE p.status = 'closed'
+   GROUP BY s.name, s.version
+   ORDER BY total_profit DESC;
+
+   -- Performance: O(n) scan with GROUP BY (milliseconds)
+   -- Alternative (JSONB): Extract strategy_id from JSON → 20-100x slower
+   ```
+
+2. **Model Performance Tracking**
+   ```sql
+   -- Did model predictions materialize?
+   SELECT
+       model_id,
+       AVG(calculated_probability) AS avg_predicted_prob,
+       AVG(CASE WHEN outcome = 'win' THEN 1.0 ELSE 0.0 END) AS actual_win_rate,
+       AVG(calculated_probability - CASE WHEN outcome = 'win' THEN 1.0 ELSE 0.0 END) AS calibration_error
+   FROM positions
+   WHERE status = 'closed'
+   GROUP BY model_id;
+   ```
+
+3. **Edge Materialization Analysis**
+   ```sql
+   -- Did calculated edges translate to profit?
+   SELECT
+       CASE
+           WHEN edge_at_entry >= 0.10 THEN 'High Edge (≥10%)'
+           WHEN edge_at_entry >= 0.05 THEN 'Medium Edge (5-10%)'
+           ELSE 'Low Edge (<5%)'
+       END AS edge_category,
+       COUNT(*) AS num_positions,
+       AVG(realized_pnl) AS avg_profit
+   FROM positions
+   WHERE status = 'closed'
+   GROUP BY edge_category;
+   ```
+
+4. **Historical Data Preservation**
+   - Snapshots survive edges table cleanup (TTL-based DELETE)
+   - Can answer "What did we think?" years later
+   - Audit trail for regulatory compliance
+
+5. **Type Safety and Validation**
+   - PostgreSQL enforces DECIMAL(10,4) precision (Pattern 1)
+   - CHECK constraints prevent invalid probabilities (e.g., 1.5)
+   - Foreign keys enforce referential integrity (strategy_id → strategies.id)
+
+### Costs and Tradeoffs
+
+1. **Storage Overhead**
+   - Trade table: +3 columns × 8 bytes = 24 bytes per trade
+   - Position table: +5 columns × (8+8+8+8+8) = 40 bytes per position
+   - **Estimate**: 10,000 positions → 400KB additional storage (negligible)
+
+2. **Data Duplication**
+   - `trades.calculated_probability` duplicates `edges.calculated_probability`
+   - **Justification**: Edges table has TTL cleanup → historical attribution lost
+   - **Benefit**: Historical data preserved indefinitely
+
+3. **Write Complexity**
+   - Must pass additional parameters to create_trade() and create_position()
+   - **Mitigation**: CRUD layer encapsulates complexity, application code simple
+
+4. **Schema Complexity**
+   - More columns to maintain, document, test
+   - **Mitigation**: Clear column naming, comprehensive comments, validation tests
+
+### Alternatives Considered
+
+**Option A: JSONB Attribution Field**
+```sql
+ALTER TABLE trades ADD COLUMN attribution JSONB;
+-- attribution = {"strategy_id": 1, "model_id": 2, "probability": 0.65, "edge": 0.08}
+```
+- ✅ **Benefit**: Schema flexibility (easy to add new attribution fields)
+- ❌ **Cost**: 20-100x slower for analytics queries (frequent filtering/aggregation)
+- ❌ **Cost**: No type safety (could store "probability": "high" instead of 0.65)
+- ❌ **Cost**: No database-level constraints (can't enforce probability range)
+- ❌ **Rejected**: Performance penalty unacceptable for analytics use case
+
+**Option B: Hybrid (JSONB for Trades, Explicit for Positions)**
+- ⚠️ **Consideration**: Positions queried more frequently → explicit columns
+- ⚠️ **Consideration**: Trades less frequent analytics → JSONB acceptable
+- ❌ **Rejected**: Inconsistency between tables confusing, both tables need performance
+
+**Option C: No Attribution (Rely on Edges Table)**
+- ❌ **Rejected**: Edges table cleaned up (TTL) → historical attribution lost
+- ❌ **Rejected**: Can't answer "What did model predict 6 months ago?"
+
+### Future Enhancements
+
+**Option D: Hybrid (Explicit + Experimental JSONB) - DEFERRED to Phase 4+**
+
+```sql
+-- Explicit columns (proven attribution, 20-100x faster) - IMPLEMENTED Phase 1.5
+ALTER TABLE trades ADD COLUMN calculated_probability DECIMAL(10,4);
+ALTER TABLE trades ADD COLUMN market_price DECIMAL(10,4);
+ALTER TABLE trades ADD COLUMN edge_value DECIMAL(10,4);
+
+-- JSONB for experimental attribution (flexible schema) - DEFERRED to Phase 4+
+ALTER TABLE trades ADD COLUMN experimental_attrs JSONB;
+-- Example: {"kelly_fraction": 0.15, "confidence_interval": [0.55, 0.70],
+--           "ensemble_weights": [0.4, 0.3, 0.3], "feature_importance": {...}}
+
+ALTER TABLE positions ADD COLUMN experimental_attrs JSONB;
+-- Example: {"entry_confidence": 0.85, "model_agreement": 0.92,
+--           "volatility_regime": "low", "market_microstructure": {...}}
+```
+
+**Rationale:**
+- ✅ **Proven attributes**: Use explicit columns (fast queries, type safety, constraints)
+- ✅ **Experimental attributes**: Use JSONB (schema flexibility, no migrations needed)
+- ✅ **Migration path**: JSONB attribute proves useful → promote to explicit column in future migration
+
+**Use Case Examples:**
+1. **Phase 4 Model Ensemble**: Track experimental weighting schemes
+   - `{"ensemble_weights": [0.4, 0.3, 0.3], "weighting_method": "adaptive_beta"}`
+   - Test different weighting algorithms without schema changes
+   - Once we settle on optimal method → promote to explicit column
+
+2. **Phase 4 Confidence Intervals**: Track prediction uncertainty
+   - `{"confidence_interval": [0.55, 0.70], "ci_method": "bootstrap"}`
+   - A/B test different CI calculation methods
+   - Determine if CI adds value to decision-making → promote if useful
+
+3. **Phase 5 Kelly Criterion**: Track position sizing experiments
+   - `{"kelly_fraction": 0.15, "kelly_adjustment": "half_kelly", "volatility_adjusted": true}`
+   - Test fractional Kelly vs full Kelly vs fixed sizing
+   - Compare P&L across sizing methods → promote winning approach
+
+4. **Feature Importance Tracking**: Debug model predictions
+   - `{"feature_importance": {"elo_diff": 0.45, "home_adv": 0.30, "rest_days": 0.25}}`
+   - Understand which features drove high-confidence predictions
+   - Useful for model debugging, not for production queries → keep in JSONB
+
+**Migration Path (When We Need It):**
+1. **Add experimental attribute** to JSONB (no migration needed)
+   ```python
+   create_trade(
+       ...,
+       experimental_attrs={"kelly_fraction": 0.15, "confidence_interval": [0.55, 0.70]}
+   )
+   ```
+
+2. **Test in production** for 1-2 months
+   - Query: `SELECT AVG(realized_pnl) FROM trades WHERE experimental_attrs->>'kelly_fraction' = '0.15'`
+   - Slow queries acceptable for exploratory analysis (GIN index on JSONB)
+
+3. **If useful** → Promote to explicit column (Migration 021+)
+   ```sql
+   ALTER TABLE trades ADD COLUMN kelly_fraction DECIMAL(10,4);
+   UPDATE trades SET kelly_fraction = (experimental_attrs->>'kelly_fraction')::decimal;
+   CREATE INDEX idx_trades_kelly_fraction ON trades(kelly_fraction);
+   ```
+
+4. **If not useful** → Remove from JSONB (no migration needed)
+   ```python
+   # Just stop populating that key, old data harmless
+   ```
+
+**Why Deferred:**
+- ❌ No concrete experimental attributes identified yet (YAGNI principle)
+- ✅ Current explicit columns satisfy all Phase 1.5 analytics requirements
+- ✅ Easy to add later when needed (simple ALTER TABLE, no breaking changes)
+- ✅ Prevents scope creep during Phase 1.5 implementation
+
+**When to Implement:**
+- **Phase 4+ (Model Ensemble)**: Likely first use case for experimental_attrs
+- **Trigger criteria**: "We want to track X but we're still determining the exact format/calculation"
+- **Implementation**: Migration 021+ (add experimental_attrs JSONB to trades and positions tables)
+
+**Performance Trade-off:**
+- Explicit columns: 20-100x faster (B-tree indexes, native types)
+- JSONB experimental: Slower (GIN indexes, extract+cast) but acceptable for exploratory queries
+- Design philosophy: Optimize for production analytics (explicit), tolerate slow exploratory queries (JSONB)
+
+**Related Decisions:**
+- **ADR-002 (Decimal Precision)**: Experimental attrs in JSONB must be validated before promotion to DECIMAL columns
+- **ADR-090 (Strategy Versioning)**: Strategy config uses JSONB (acceptable, queried infrequently)
+- **Pattern 8 (Config Synchronization)**: Experimental attrs don't need synchronization (not configuration)
+
+### Validation
+
+**Data Consistency Validation (Phase 1.5):**
+```python
+def validate_position_trade_attribution(position_id: str) -> bool:
+    """Verify position and its trades have consistent attribution.
+
+    Checks:
+    1. All trades for position reference same strategy_id
+    2. All trades for position reference same model_id
+    3. Opening trade attribution matches position attribution
+
+    Raises:
+        ValueError: If attribution mismatch detected
+    """
+    position = get_position(position_id)
+    trades = get_trades_for_position(position_id)
+
+    # Check 1: All trades use same strategy
+    trade_strategies = {t['strategy_id'] for t in trades}
+    assert len(trade_strategies) == 1, f"Position {position_id} has trades with multiple strategies: {trade_strategies}"
+    assert position['strategy_id'] == trade_strategies.pop(), "Position strategy_id doesn't match trade strategy_id"
+
+    # Check 2: Opening trade attribution matches position
+    opening_trade = trades[0]  # Assume trades ordered chronologically
+    assert opening_trade['calculated_probability'] == position['calculated_probability'], "Opening trade probability mismatch"
+    assert opening_trade['edge_value'] == position['edge_at_entry'], "Opening trade edge mismatch"
+
+    return True
+```
+
+**Testing Strategy:**
+- Unit tests: CRUD operations with attribution fields
+- Integration tests: Create position → create trade → verify attribution consistency
+- Property tests: Hypothesis generates random attributions, validates constraints
+- Performance tests: Benchmark explicit columns vs JSONB (verify 20-100x speedup)
+
+### Performance Benchmarks
+
+**Query Performance (Estimated from PostgreSQL Documentation):**
+
+| Query Type | Explicit Columns | JSONB | Speedup |
+|------------|------------------|-------|---------|
+| Filter by probability | 10ms (B-tree index) | 200ms (GIN index) | 20x |
+| Aggregate AVG(edge) | 15ms (sequential scan) | 300ms (JSONB extract) | 20x |
+| GROUP BY strategy_id | 25ms (hash aggregate) | 2500ms (JSONB extract + GROUP) | 100x |
+| JOIN strategies table | 5ms (FK index) | 50ms (JSONB extract + JOIN) | 10x |
+
+**Why Such Large Differences?**
+- **Explicit columns**: PostgreSQL uses efficient B-tree indexes, native DECIMAL arithmetic
+- **JSONB**: Must extract values with `->>`operator, cast to DECIMAL, then filter/aggregate
+- **GIN indexes**: Less efficient for range queries (designed for containment queries)
+
+### Related Decisions
+
+- **ADR-002 (Decimal Precision):** All attribution fields use DECIMAL(10,4) not FLOAT
+- **ADR-018 (Immutable Versioning):** Positions lock to strategy/model version at entry
+- **ADR-090 (Strategy Entry+Exit Rules):** Positions reference strategy_id for complete rules
+- **ADR-092 (Trade Source Tracking):** Need attribution to filter automated vs manual trades
+
+### Implementation Checklist
+
+**Phase 1.5 (Current):**
+- [ ] Create Migration 019 (trade attribution - 3 columns)
+- [ ] Create Migration 020 (position attribution - 5 columns)
+- [ ] Update create_trade() to accept new parameters
+- [ ] Update create_position() to accept new parameters
+- [ ] Add validate_position_trade_attribution() validation function
+- [ ] Create indexes on strategy_id, model_id, calculated_probability
+- [ ] Update DATABASE_SCHEMA_SUMMARY V1.9 → V1.10
+
+**Phase 2+ (Analytics):**
+- [ ] Build performance attribution dashboard
+- [ ] Model calibration analysis (predicted vs actual win rates)
+- [ ] Edge materialization tracking (did calculated edges translate to profit?)
+
+### Related Documentation
+
+- `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Attribution architecture analysis with tradeoffs
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md` - Current schema (pre-attribution)
+- `MASTER_REQUIREMENTS_V2.16.md` - REQ-DB-006 (Decimal precision for all financial fields)
+
+**Status:** ✅ Decision approved, implementation in progress (Migrations 019-020 planned)
+
+---
+
+## Decision #92/ADR-092: Trade Source Tracking and Manual Trade Reconciliation
+
+**Decision #92**
+**Phase:** 1.5 (Trade & Position Attribution Architecture)
+**Status:** ✅ Approved (Implementation planned for Migration 018)
+**Priority:** 🟡 High (enables performance analytics separation)
+
+### Problem Statement
+
+**Context: Mixed Automated and Manual Trading**
+
+User's Kalshi account will be used for:
+1. **Automated trades** - Executed by this application via Kalshi API
+2. **Manual trades** - Executed directly through Kalshi web/mobile interface
+
+**Current State:**
+- No distinction between automated vs manual trades in database
+- Unclear if `trades` table populated from app actions only or downloaded from API
+
+**Analytics Implications:**
+- **Performance attribution contaminated**: Manual trades skew automated strategy performance metrics
+- **Can't answer**: "What's the P&L from automated trading only?"
+- **Can't answer**: "Did I execute manual trades that conflicted with automated strategy?"
+- **Can't answer**: "Reconcile: Did all automated orders execute successfully?"
+
+### Decision
+
+**We decided to:**
+1. **Download ALL trades from Kalshi API** (both automated and manual)
+2. **Add `trade_source` enum column** to distinguish automated vs manual
+3. **Reconcile trades** by matching app-generated order_ids
+
+**Rationale:**
+1. **Complete Audit Trail**: Capture all account activity in one place
+2. **Performance Analytics Separation**: Filter by trade_source='automated' for strategy metrics
+3. **Discrepancy Detection**: Identify missing/failed automated orders
+4. **Manual Trade Awareness**: See when manual trades might conflict with automated strategy
+
+### Implementation Strategy
+
+**Migration 018: Trade Source Tracking**
+
+```sql
+-- 1. Create ENUM type
+CREATE TYPE trade_source_type AS ENUM ('automated', 'manual');
+
+-- 2. Add column to trades table
+ALTER TABLE trades ADD COLUMN trade_source trade_source_type NOT NULL DEFAULT 'automated';
+
+-- 3. Add index for analytics queries (filter by source)
+CREATE INDEX idx_trades_source ON trades(trade_source);
+
+-- 4. Add comment
+COMMENT ON COLUMN trades.trade_source IS 'Trade origin: automated (app-executed) or manual (Kalshi UI)';
+```
+
+**Why PostgreSQL ENUM (Not Boolean, Not VARCHAR)?**
+- ✅ **Type Safety**: Database enforces valid values ('automated' or 'manual' only)
+- ✅ **Extensibility**: Can add 'algorithmic_hedging' or 'emergency_override' in future
+- ✅ **Storage Efficiency**: ENUM stored as 4-byte integer internally (vs 10+ bytes for VARCHAR)
+- ✅ **Query Performance**: Faster than VARCHAR for filtering/grouping
+- ❌ **Not Boolean**: 'is_automated' boolean less extensible (what if we add third source?)
+
+**Trade Reconciliation Workflow:**
+
+```python
+def download_and_reconcile_trades():
+    """Download all trades from Kalshi API and reconcile sources.
+
+    Workflow:
+    1. Fetch all trades from Kalshi API (paginated)
+    2. For each trade from API:
+       a. Check if order_id exists in our database
+       b. If YES → trade_source = 'automated' (we executed it)
+       c. If NO → trade_source = 'manual' (executed via Kalshi UI)
+    3. Insert/update trades table with source attribution
+    4. Log discrepancies (automated orders missing from API response)
+
+    Discrepancy Detection:
+        - App order_id NOT in Kalshi response → order failed/cancelled
+        - Kalshi trade NOT in our database → manual trade
+    """
+    # 1. Fetch all trades from Kalshi API
+    api_trades = kalshi_client.get_trades(since=last_sync_timestamp)
+
+    # 2. Get all order_ids we generated (automated trades)
+    our_order_ids = get_automated_order_ids()
+
+    # 3. Reconcile each API trade
+    for api_trade in api_trades:
+        if api_trade['order_id'] in our_order_ids:
+            trade_source = 'automated'
+        else:
+            trade_source = 'manual'
+
+        # Insert or update trade with source
+        upsert_trade(
+            order_id=api_trade['order_id'],
+            trade_source=trade_source,
+            # ... other trade fields
+        )
+
+    # 4. Detect missing automated trades
+    api_order_ids = {t['order_id'] for t in api_trades}
+    missing_orders = our_order_ids - api_order_ids
+    if missing_orders:
+        logger.warning(f"Automated orders missing from Kalshi API: {missing_orders}")
+        # Could indicate order cancellation, rejection, or API sync lag
+```
+
+**Analytics Queries (Filtered by Source):**
+
+```sql
+-- Strategy performance (automated trades only)
+SELECT
+    s.name AS strategy_name,
+    COUNT(*) AS num_trades,
+    SUM(t.realized_pnl) AS total_profit
+FROM trades t
+JOIN positions p ON t.position_id = p.position_id
+JOIN strategies s ON p.strategy_id = s.id
+WHERE t.trade_source = 'automated'  -- Filter out manual trades
+  AND p.status = 'closed'
+GROUP BY s.name;
+
+-- Manual trade activity (identify conflicts)
+SELECT
+    t.created_at,
+    t.action,
+    t.quantity,
+    t.price,
+    m.name AS market_name
+FROM trades t
+JOIN markets m ON t.market_id = m.market_id
+WHERE t.trade_source = 'manual'  -- Manual trades only
+ORDER BY t.created_at DESC;
+
+-- Reconciliation report (all trades with source)
+SELECT
+    trade_source,
+    COUNT(*) AS num_trades,
+    SUM(quantity * price) AS total_volume
+FROM trades
+WHERE created_at >= NOW() - INTERVAL '7 days'
+GROUP BY trade_source;
+```
+
+### Benefits
+
+1. **Clean Performance Analytics**
+   - Filter automated trades only → accurate strategy P&L attribution
+   - Exclude manual interventions from automated performance metrics
+
+2. **Complete Audit Trail**
+   - All account activity in one database (no missing trades)
+   - Can answer "What happened in my account?" comprehensively
+
+3. **Discrepancy Detection**
+   - Identify failed automated orders (app thought it executed, but Kalshi rejected)
+   - Identify unexpected manual trades (user intervention or account compromise)
+
+4. **Manual Trade Awareness**
+   - See when manual trades conflict with automated positions
+   - Example: Auto-strategy long NFL game, user manually shorted same game
+
+5. **Future Extensibility**
+   - ENUM allows adding more sources ('algorithmic_hedging', 'emergency_override')
+   - Can evolve to multi-source trading system
+
+### Costs and Tradeoffs
+
+1. **API Quota Consumption**
+   - Must download all trades from Kalshi API (not just app-executed trades)
+   - **Mitigation**: Incremental sync (only fetch trades since last sync timestamp)
+   - **Mitigation**: Cache API responses to minimize redundant calls
+
+2. **Storage Overhead**
+   - Store manual trades user never intended to track
+   - **Estimate**: If 80% trades automated, 20% manual → 25% storage increase
+   - **Judgment**: Negligible cost (trades table small, storage cheap)
+
+3. **Reconciliation Complexity**
+   - Must match app order_ids to Kalshi order_ids (requires reliable order_id generation)
+   - **Mitigation**: Use Kalshi-provided order_ids (don't generate custom IDs)
+
+4. **Sync Lag Handling**
+   - Automated order might not appear in Kalshi API immediately (eventual consistency)
+   - **Mitigation**: Retry reconciliation after delay, log persistent discrepancies
+
+### Alternatives Considered
+
+**Option A: Only Track App-Executed Trades**
+- ✅ **Benefit**: Simpler (no reconciliation needed)
+- ❌ **Cost**: Incomplete audit trail (manual trades invisible)
+- ❌ **Cost**: Can't detect account-level discrepancies
+- ❌ **Rejected**: User wants complete account visibility
+
+**Option B: Boolean `is_automated` Column**
+```sql
+ALTER TABLE trades ADD COLUMN is_automated BOOLEAN DEFAULT TRUE;
+```
+- ✅ **Benefit**: Simpler than ENUM (binary choice)
+- ❌ **Cost**: Not extensible (what if we add 'algorithmic_hedging' source?)
+- ❌ **Rejected**: ENUM provides better extensibility with minimal complexity increase
+
+**Option C: VARCHAR `source` Column**
+```sql
+ALTER TABLE trades ADD COLUMN source VARCHAR(50);
+```
+- ✅ **Benefit**: Maximum flexibility (any string value)
+- ❌ **Cost**: No type safety (typos: 'automated' vs 'automted')
+- ❌ **Cost**: Larger storage (10+ bytes vs 4 bytes for ENUM)
+- ❌ **Rejected**: ENUM provides type safety with same extensibility
+
+**Option D: Separate Manual Trades Table**
+```sql
+CREATE TABLE manual_trades (...);  -- Separate from automated trades
+```
+- ✅ **Benefit**: Clean separation (automated/manual in different tables)
+- ❌ **Cost**: Fragmentation (account-level queries need UNION)
+- ❌ **Cost**: Schema duplication (two similar tables)
+- ❌ **Rejected**: Single table with trade_source column more maintainable
+
+### Validation
+
+**Reconciliation Validation (Phase 1.5):**
+
+```python
+def validate_trade_reconciliation() -> dict:
+    """Validate trade source attribution is consistent.
+
+    Checks:
+    1. All automated trades have valid order_ids in our system
+    2. All manual trades do NOT have order_ids in our system
+    3. No orphaned order_ids (in our system but not in Kalshi API)
+
+    Returns:
+        Reconciliation report with counts and discrepancies
+    """
+    # Get all trades
+    automated_trades = get_trades(source='automated')
+    manual_trades = get_trades(source='manual')
+    our_order_ids = get_automated_order_ids()
+
+    # Check 1: Automated trades should have our order_ids
+    automated_order_ids = {t['order_id'] for t in automated_trades}
+    assert automated_order_ids.issubset(our_order_ids), "Automated trades with unknown order_ids"
+
+    # Check 2: Manual trades should NOT have our order_ids
+    manual_order_ids = {t['order_id'] for t in manual_trades}
+    assert manual_order_ids.isdisjoint(our_order_ids), "Manual trades with our order_ids (misclassification)"
+
+    # Check 3: Orphaned order_ids (we generated but not in trades table)
+    orphaned = our_order_ids - automated_order_ids
+    if orphaned:
+        logger.warning(f"Orphaned order_ids (order generated but trade not found): {orphaned}")
+
+    return {
+        'automated_count': len(automated_trades),
+        'manual_count': len(manual_trades),
+        'orphaned_orders': len(orphaned),
+        'status': 'ok' if not orphaned else 'discrepancies_detected'
+    }
+```
+
+**Testing Strategy:**
+- Unit tests: ENUM validation, CRUD operations with trade_source
+- Integration tests: Download API trades → reconcile → verify source attribution
+- Manual testing: Execute manual trade via Kalshi UI → verify appears as 'manual'
+
+### Order ID Management
+
+**Critical Requirement:** Reliable order_id generation and tracking
+
+```python
+# When creating automated order
+order_id = kalshi_client.place_order(
+    market_id='KALSHI-NFL-001',
+    action='buy',
+    quantity=10,
+    price=Decimal('0.55')
+)
+# Kalshi returns order_id, store in our database immediately
+store_order_id(order_id, source='automated')
+
+# Later, during reconciliation
+api_trades = kalshi_client.get_trades()
+for trade in api_trades:
+    if trade['order_id'] in our_stored_order_ids:
+        trade_source = 'automated'
+    else:
+        trade_source = 'manual'
+```
+
+**Why This Works:**
+- Kalshi API returns `order_id` immediately after order placement
+- We store order_id in database before order fills
+- Reconciliation matches stored order_ids to determine source
+
+### Related Decisions
+
+- **ADR-091 (Explicit Columns for Attribution):** Trade attribution requires separating automated vs manual trades
+- **ADR-090 (Strategy Entry+Exit Rules):** Strategy performance metrics must filter automated trades only
+- **Pattern 1 (Decimal Precision):** Trade prices stored as DECIMAL(10,4) regardless of source
+
+### Implementation Checklist
+
+**Phase 1.5 (Current):**
+- [ ] Create Migration 018 (trade_source enum column)
+- [ ] Implement download_and_reconcile_trades() function
+- [ ] Update create_trade() to accept trade_source parameter
+- [ ] Add reconciliation validation function
+- [ ] Create cron job for periodic reconciliation (hourly?)
+- [ ] Document reconciliation workflow in operational runbook
+
+**Phase 2+ (Monitoring):**
+- [ ] Dashboard: Automated vs manual trade volume
+- [ ] Alerts: Orphaned order_ids (automated orders missing from API)
+- [ ] Alerts: Unexpected manual trades (possible account compromise)
+
+### Sync Strategy
+
+**Incremental Sync (Recommended):**
+```python
+def sync_trades_incremental():
+    """Sync only new trades since last sync.
+
+    Benefits:
+        - Reduces API quota consumption
+        - Faster sync (fewer trades to process)
+        - Lower database write volume
+
+    Strategy:
+        - Store last_sync_timestamp in database
+        - Fetch trades WHERE created_at > last_sync_timestamp
+        - Update last_sync_timestamp after successful sync
+    """
+    last_sync = get_last_sync_timestamp()
+    new_trades = kalshi_client.get_trades(since=last_sync)
+
+    for trade in new_trades:
+        # Reconcile and store
+        reconcile_and_store_trade(trade)
+
+    set_last_sync_timestamp(datetime.now())
+```
+
+**Full Sync (Periodic Validation):**
+```python
+def sync_trades_full():
+    """Download all historical trades (validation/recovery).
+
+    When to use:
+        - Initial data load (first time setup)
+        - Periodic validation (weekly/monthly)
+        - Recovery after sync errors
+
+    Caution:
+        - High API quota consumption
+        - Long execution time for large trade history
+    """
+    all_trades = kalshi_client.get_all_trades()  # Paginated
+    # ... reconcile and store
+```
+
+### Related Documentation
+
+- `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Trade source tracking architectural analysis
+- `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` - Kalshi API trade download patterns
+- `MASTER_REQUIREMENTS_V2.16.md` - REQ-API-001 (Kalshi API Integration)
+
+**Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
 ---
 
