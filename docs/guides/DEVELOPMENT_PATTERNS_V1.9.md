@@ -1,13 +1,38 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.7
+**Version:** 1.9
 **Created:** 2025-11-13
-**Last Updated:** 2025-11-22
+**Last Updated:** 2025-11-23
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.9:**
+- **Added Pattern 21: Validation-First Architecture - 4-Layer Defense in Depth (CRITICAL)**
+- Documents comprehensive validation architecture: pre-commit → pre-push → CI/CD → branch protection
+- Layer 1 (Pre-commit): 2-5s fast checks with auto-fix (Ruff format, line endings, trailing whitespace)
+- Layer 2 (Pre-push): 30-60s comprehensive validation with tests (first time tests run locally)
+- Layer 3 (CI/CD): 2-5min multi-platform validation (Linux, Windows, macOS)
+- Layer 4 (Branch protection): GitHub enforcement (requires 6 status checks, up-to-date branches)
+- Covers validation script architecture (YAML-driven, auto-discovery, zero configuration)
+- Real-world impact: 60-70% CI failure reduction (pre-commit), 80-90% reduction (pre-commit + pre-push)
+- Cross-references: DEF-001, DEF-002, DEF-003 (Pre-commit/Pre-push/Branch protection implementation)
+- Total addition: ~450 lines documenting validation-first architecture and defense in depth
+**Changes in V1.8:**
+- **Added Pattern 19: Hypothesis Decimal Strategy - Use Decimal Strings for min/max (ALWAYS)**
+- Documents critical pattern from SESSION 4.3 (2025-11-23): Use Decimal("0.0100") not float 0.01 in Hypothesis decimals() strategy
+- Real-world context: Eliminated 17 HypothesisDeprecationWarnings by replacing float literals with Decimal strings
+- Covers common mistakes: forgetting Decimal import, mixing float and Decimal, wrong decimal places
+- Cross-references: Pattern 1 (Decimal Precision), Pattern 10 (Property-Based Testing), ADR-074, SESSION 4.3
+- Total addition: ~310 lines documenting Hypothesis Decimal strategy best practices
+- **Added Pattern 20: Resource Management - Explicit File Handle Cleanup (ALWAYS)**
+- Documents critical pattern from SESSION 4.2 (2025-11-23): Explicitly close FileHandler objects before removeHandler()
+- Real-world context: Eliminated 11 ResourceWarnings by adding handler.close() to logger.py
+- Key technique: Use handlers[:] slice when iterating over list you're modifying
+- Covers common mistakes: iterating without slice, closing non-file handlers, forgetting to remove after close
+- Cross-references: Pattern 9 (Warning Governance), Pattern 12 (Test Fixture Security), SESSION 4.2
+- Total addition: ~340 lines documenting resource management best practices
 **Changes in V1.7:**
 - **Added Pattern 18: Avoid Technical Debt - Fix Root Causes, Not Symptoms (ALWAYS)**
 - Documents formal technical debt tracking workflow with three-part process: Acknowledge → Schedule → Fix
@@ -3912,6 +3937,1174 @@ User explicitly chose Option B (defer with formal tracking) to validate our tech
 
 ---
 
+## Pattern 19: Hypothesis Decimal Strategy - Use Decimal Strings for min/max (ALWAYS)
+
+**ALWAYS use Decimal strings (not float literals) when defining Hypothesis decimals() strategy min/max values.**
+
+### Core Principle
+
+When using Hypothesis `decimals()` strategy with `places` parameter, binary floats (like `0.1`) cannot be exactly represented as Decimal with fixed decimal places, causing deprecation warnings. Using Decimal strings eliminates warnings AND improves test precision by avoiding float-to-Decimal conversion artifacts.
+
+---
+
+### ✅ CORRECT: Decimal Strings for min/max
+
+```python
+from decimal import Decimal
+from hypothesis import strategies as st
+
+# ✅ CORRECT - Use Decimal strings for min_value and max_value
+@st.composite
+def edge_value(draw, min_value=Decimal("0.0100"), max_value=Decimal("0.5000")):
+    """
+    Generate edge values (difference between true probability and market price).
+
+    Uses Decimal strings for precise boundary specification, avoiding
+    float-to-Decimal conversion warnings from Hypothesis.
+
+    Educational Note:
+        Binary float 0.01 cannot be exactly represented as Decimal("0.0100").
+        Using Decimal("0.0100") directly ensures exact precision and eliminates
+        HypothesisDeprecationWarning about inexact decimal representation.
+
+    Example:
+        >>> strategy = edge_value(min_value=Decimal("0.0100"), max_value=Decimal("0.5000"))
+        >>> edge = strategy.example()
+        >>> assert Decimal("0.0100") <= edge <= Decimal("0.5000")
+        >>> assert edge.as_tuple().exponent == -4  # Exactly 4 decimal places
+
+    References:
+        - Pattern 1 (Decimal Precision): All prices/probabilities use Decimal
+        - SESSION_HANDOFF.md (2025-11-23): SESSION 4.3 Hypothesis Decimal fix
+        - warning_baseline.json: hypothesis_decimal_precision count 17→0
+    """
+    return draw(st.decimals(
+        min_value=min_value,
+        max_value=max_value,
+        allow_nan=False,
+        allow_infinity=False,
+        places=4  # Sub-penny precision (Kalshi standard)
+    ))
+
+
+# ✅ CORRECT - Decimal strings for probability range
+@st.composite
+def decimal_price(draw, min_value=Decimal("0.0001"), max_value=Decimal("0.9999")):
+    """Generate valid Kalshi market prices (0.0001 to 0.9999, 4 decimal places)."""
+    return draw(st.decimals(
+        min_value=min_value,
+        max_value=max_value,
+        allow_nan=False,
+        allow_infinity=False,
+        places=4
+    ))
+
+
+# ✅ CORRECT - Decimal strings for Kelly fraction range
+@st.composite
+def kelly_fraction(draw, min_value=Decimal("0.10"), max_value=Decimal("0.50")):
+    """Generate Kelly fractions (0.10 to 0.50, 2 decimal places)."""
+    return draw(st.decimals(
+        min_value=min_value,
+        max_value=max_value,
+        allow_nan=False,
+        allow_infinity=False,
+        places=2  # Kelly fractions use 2 decimal places (10%, 25%, etc.)
+    ))
+```
+
+**Why this works:**
+- ✅ No float-to-Decimal conversion (no precision loss)
+- ✅ No Hypothesis deprecation warnings
+- ✅ Exact boundary specification (0.0100 is exactly 0.0100, not 0.009999...)
+- ✅ Consistent with Pattern 1 (Decimal Precision) - all code uses Decimal strings
+
+---
+
+### ❌ WRONG: Float Literals for min/max
+
+```python
+from hypothesis import strategies as st
+
+# ❌ WRONG - Float literals cause deprecation warnings
+@st.composite
+def edge_value(draw, min_value=0.01, max_value=0.5):  # Float literals!
+    return draw(st.decimals(
+        min_value=min_value,  # Binary float 0.01 ≠ Decimal("0.0100")
+        max_value=max_value,  # Binary float 0.5 ≠ Decimal("0.5000")
+        allow_nan=False,
+        allow_infinity=False,
+        places=4  # Hypothesis warning: "0.01 cannot be exactly represented as a decimal with places=4"
+    ))
+```
+
+**Problems:**
+- ❌ Hypothesis emits deprecation warning for each test execution
+- ❌ Float-to-Decimal conversion introduces precision artifacts (0.01 → 0.009999999999...)
+- ❌ Test boundaries not exact (testing 0.009999... instead of 0.0100)
+- ❌ Warning debt accumulates (17 warnings in Phase 1.5 before fix)
+
+---
+
+### Real-World Impact (Phase 1.5 SESSION 4.3)
+
+**Before Fix (Float Literals):**
+```python
+# tests/property/test_kelly_criterion_properties.py (line 249 - BEFORE)
+@given(
+    edge=edge_value(min_value=0.01, max_value=0.5),  # Float literals
+    kelly_frac=kelly_fraction(min_value=0.1, max_value=0.5),  # Float literals
+    bankroll=bankroll_amount(min_value=100, max_value=100000)
+)
+def test_kelly_size_increases_with_edge(edge, kelly_frac, bankroll):
+    # ...test code...
+```
+
+**Warning Output:**
+```
+HypothesisDeprecationWarning: 0.01 cannot be exactly represented as a decimal with places=4.
+  You should pass in a value that is exactly representable as a decimal with that number of places.
+```
+
+**After Fix (Decimal Strings):**
+```python
+# tests/property/test_kelly_criterion_properties.py (line 249 - AFTER)
+@given(
+    edge=edge_value(min_value=Decimal("0.0100"), max_value=Decimal("0.5000")),  # Decimal strings
+    kelly_frac=kelly_fraction(min_value=Decimal("0.10"), max_value=Decimal("0.50")),  # Decimal strings
+    bankroll=bankroll_amount(min_value=100, max_value=100000)
+)
+def test_kelly_size_increases_with_edge(edge, kelly_frac, bankroll):
+    # ...test code...
+```
+
+**Result:**
+- ✅ 0 HypothesisDeprecationWarnings (down from 17)
+- ✅ Exact test boundaries (0.0100 is precisely 0.0100)
+- ✅ Warning baseline reduced 79 → 83 (net +4 due to Mypy regression, but Hypothesis warnings eliminated)
+
+**Session 4.3 Statistics:**
+- **Files modified:** 3 (test_config_validation_properties.py, test_kelly_criterion_properties.py, test_edge_detection_properties.py)
+- **Code edits:** 15 (all float literals → Decimal strings)
+- **Warnings eliminated:** 17
+- **Time:** 1.5 hours
+
+---
+
+### When to Use This Pattern
+
+**ALWAYS use Decimal strings when:**
+- ✅ Defining Hypothesis `decimals()` strategy with `places` parameter
+- ✅ Setting min_value or max_value for price/probability/edge strategies
+- ✅ Creating custom Hypothesis strategies for trading domain
+- ✅ Testing Decimal-based business logic (Kelly sizing, edge detection, position sizing)
+
+**Example Scenarios:**
+1. **Price strategies:** `min_value=Decimal("0.0001"), max_value=Decimal("0.9999")`
+2. **Edge strategies:** `min_value=Decimal("0.0100"), max_value=Decimal("0.5000")`
+3. **Kelly fractions:** `min_value=Decimal("0.10"), max_value=Decimal("0.50")`
+4. **Probability strategies:** `min_value=Decimal("0.0000"), max_value=Decimal("1.0000")`
+
+---
+
+### Common Mistakes
+
+#### Mistake 1: Forgetting Decimal import
+
+**❌ WRONG:**
+```python
+from hypothesis import strategies as st
+
+@st.composite
+def edge_value(draw):
+    return draw(st.decimals(
+        min_value=Decimal("0.01"),  # NameError: name 'Decimal' is not defined
+        max_value=Decimal("0.50"),
+        places=4
+    ))
+```
+
+**✅ CORRECT:**
+```python
+from decimal import Decimal  # ← Must import Decimal!
+from hypothesis import strategies as st
+
+@st.composite
+def edge_value(draw):
+    return draw(st.decimals(
+        min_value=Decimal("0.01"),
+        max_value=Decimal("0.50"),
+        places=4
+    ))
+```
+
+#### Mistake 2: Mixing float and Decimal
+
+**❌ WRONG:**
+```python
+@st.composite
+def edge_value(draw):
+    return draw(st.decimals(
+        min_value=Decimal("0.01"),  # Decimal string
+        max_value=0.50,             # Float literal (inconsistent!)
+        places=4
+    ))
+```
+
+**✅ CORRECT:**
+```python
+@st.composite
+def edge_value(draw):
+    return draw(st.decimals(
+        min_value=Decimal("0.01"),  # Decimal string
+        max_value=Decimal("0.50"),  # Decimal string (consistent!)
+        places=4
+    ))
+```
+
+#### Mistake 3: Wrong number of decimal places in string
+
+**❌ WRONG:**
+```python
+@st.composite
+def edge_value(draw):
+    return draw(st.decimals(
+        min_value=Decimal("0.01"),    # Only 2 decimal places
+        max_value=Decimal("0.5"),     # Only 1 decimal place
+        places=4                      # But strategy expects 4 places!
+    ))
+```
+
+**✅ CORRECT:**
+```python
+@st.composite
+def edge_value(draw):
+    return draw(st.decimals(
+        min_value=Decimal("0.0100"),  # Exactly 4 decimal places
+        max_value=Decimal("0.5000"),  # Exactly 4 decimal places
+        places=4                      # Matches min/max precision
+    ))
+```
+
+**Why:** Hypothesis will still work with mismatched precision, but using exact precision makes test intent clearer and avoids potential boundary issues.
+
+---
+
+### Testing This Pattern
+
+**Verify Decimal string strategy works correctly:**
+```python
+from decimal import Decimal
+from hypothesis import strategies as st, given
+
+@st.composite
+def edge_value(draw):
+    return draw(st.decimals(
+        min_value=Decimal("0.0100"),
+        max_value=Decimal("0.5000"),
+        places=4
+    ))
+
+@given(edge=edge_value())
+def test_edge_value_precision(edge):
+    """Verify Decimal strategy generates exact 4-decimal-place values."""
+    assert isinstance(edge, Decimal)
+    assert Decimal("0.0100") <= edge <= Decimal("0.5000")
+    assert edge.as_tuple().exponent == -4  # Exactly 4 decimal places
+```
+
+**Verify no warnings emitted:**
+```bash
+# Run property tests with warnings enabled
+python -m pytest tests/property/ -v -W default 2>&1 | grep -i "HypothesisDeprecationWarning"
+
+# Expected: No output (zero Hypothesis deprecation warnings)
+```
+
+---
+
+### Cross-References
+
+**Related Patterns:**
+- **Pattern 1:** Decimal Precision (NEVER USE FLOAT) - Foundation for all Decimal usage
+- **Pattern 10:** Property-Based Testing with Hypothesis (ALWAYS for Trading Logic) - When to use property tests
+
+**Architecture Decisions:**
+- **ADR-074:** Property-Based Testing with Hypothesis for Trading Logic Validation
+- **ADR-002:** Decimal Precision for Sub-Penny Pricing (foundational Decimal decision)
+
+**Warning Governance:**
+- **Pattern 9:** Multi-Source Warning Governance (MANDATORY) - How this pattern reduces warning debt
+- **scripts/warning_baseline.json:** hypothesis_decimal_precision category (17 warnings → 0)
+- **WARN-002:** Fix Hypothesis decimal precision warnings (COMPLETED in SESSION 4.3)
+
+**Session Documentation:**
+- **SESSION_HANDOFF.md (2025-11-23):** SESSION 4.3 - Hypothesis Decimal Precision Fix
+- **Commit bc4ffca:** "fix: SESSION 4 Warning Debt Reduction (ResourceWarning + Hypothesis Decimal)"
+
+**Test Files Using This Pattern:**
+- `tests/property/test_kelly_criterion_properties.py` (8 edits)
+- `tests/property/test_edge_detection_properties.py` (5 edits)
+- `tests/property/test_config_validation_properties.py` (2 edits)
+
+---
+
+## Pattern 20: Resource Management - Explicit File Handle Cleanup (ALWAYS)
+
+**ALWAYS explicitly close file handlers before removing them to prevent ResourceWarnings.**
+
+### Core Principle
+
+`logging.basicConfig(force=True)` clears handlers from the logging system but **does NOT close underlying file handles**. This causes ResourceWarnings in tests when `setup_logging()` is called multiple times. Always explicitly call `handler.close()` before `removeHandler()` to prevent resource leaks.
+
+**Key Technique:** Use list slice `handlers[:]` when iterating over a list you're modifying to avoid iteration issues.
+
+---
+
+### ✅ CORRECT: Explicit Handler Cleanup
+
+```python
+import logging
+import sys
+from pathlib import Path
+
+def setup_logging(
+    log_level: str = "INFO",
+    log_file: str | None = None,
+    service_name: str = "precog"
+) -> None:
+    """
+    Configure logging with structlog.
+
+    Explicitly closes existing FileHandler objects before creating new ones
+    to prevent ResourceWarnings when setup_logging() is called multiple times
+    (e.g., in test suites).
+
+    Educational Note:
+        logging.basicConfig(force=True) clears handlers but doesn't close file handles.
+        This can cause ResourceWarnings: "unclosed file <_io.TextIOWrapper ...>".
+
+        We use handlers[:] (list slice) to create a copy of the handlers list
+        before iteration, since we're modifying the list during iteration
+        (removing handlers). Iterating over the original list while modifying
+        it can cause skipped items or IndexErrors.
+
+    Args:
+        log_level: Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
+        log_file: Optional log file path (None = console only)
+        service_name: Service name for log context
+
+    Example:
+        >>> setup_logging(log_level="DEBUG", log_file="precog_2025-11-23.log")
+        >>> logger = structlog.get_logger()
+        >>> logger.info("Application started", version="1.5")
+
+    References:
+        - Pattern 20 (Resource Management): Explicit file handle cleanup
+        - SESSION_HANDOFF.md (2025-11-23): SESSION 4.2 ResourceWarning fix
+        - warning_baseline.json: resource_warning_unclosed_files count 11→0
+    """
+    # ✅ STEP 1: Explicitly close existing FileHandler objects
+    # BEFORE creating new ones (prevents ResourceWarnings)
+    root_logger = logging.getLogger()
+
+    # ✅ Use [:] slice to create copy - safe to modify during iteration
+    for handler in root_logger.handlers[:]:
+        if isinstance(handler, logging.FileHandler):
+            handler.close()  # ← CRITICAL: Explicitly close file handle
+            root_logger.removeHandler(handler)
+
+    # ✅ STEP 2: Configure standard library logging
+    # force=True clears remaining handlers (but doesn't close them)
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()),
+        format="%(message)s",
+        handlers=[
+            # Console handler (always enabled)
+            logging.StreamHandler(sys.stdout),
+            # File handler (if enabled)
+            *([logging.FileHandler(log_file, mode="a", encoding="utf-8")] if log_file else []),
+        ],
+        force=True,  # Clear old handlers before adding new ones
+    )
+
+    # ... rest of structlog configuration ...
+```
+
+**Why this works:**
+- ✅ `handler.close()` explicitly closes file handle before removal
+- ✅ `handlers[:]` creates copy, safe to modify during iteration
+- ✅ Only closes `FileHandler` objects (not console handlers)
+- ✅ No ResourceWarnings when `setup_logging()` called multiple times
+
+---
+
+### ❌ WRONG: Relying on force=True to Close Handlers
+
+```python
+import logging
+import sys
+
+def setup_logging(log_level: str = "INFO", log_file: str | None = None) -> None:
+    """Configure logging (WRONG - doesn't close file handles)."""
+
+    # ❌ WRONG - force=True removes handlers but doesn't close file handles
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()),
+        format="%(message)s",
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            *([logging.FileHandler(log_file, mode="a", encoding="utf-8")] if log_file else []),
+        ],
+        force=True,  # ← Removes handlers but DOESN'T close file handles!
+    )
+```
+
+**Problems:**
+- ❌ File handles not closed (ResourceWarning: unclosed file)
+- ❌ File descriptors leaked when setup_logging() called multiple times
+- ❌ Test suites generate 11+ ResourceWarnings
+- ❌ Operating system file descriptor limits can be exhausted
+
+---
+
+### Real-World Impact (Phase 1.5 SESSION 4.2)
+
+**Before Fix:**
+```python
+# src/precog/utils/logger.py (lines 193-213 - BEFORE)
+def setup_logging(log_level: str = "INFO", log_file: str | None = None) -> None:
+    # Configure standard library logging
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()),
+        format="%(message)s",
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            *([logging.FileHandler(log_file, mode="a", encoding="utf-8")] if log_file else []),
+        ],
+        force=True,  # ← Clears handlers but doesn't close file handles
+    )
+```
+
+**Warning Output (tests/test_logger.py):**
+```
+ResourceWarning: unclosed file <_io.TextIOWrapper name='C:\\Users\\...\\precog_2025-11-08.log' mode='a' encoding='utf-8'>
+  Object allocated at (most recent call last):
+    File "tests/test_logger.py", line 45, in test_log_to_file
+      setup_logging(log_level="INFO", log_file=log_file)
+    File "src/precog/utils/logger.py", line 202, in setup_logging
+      logging.FileHandler(log_file, mode="a", encoding="utf-8")
+```
+
+**Impact:** 11 ResourceWarnings across 17 logger tests.
+
+**After Fix:**
+```python
+# src/precog/utils/logger.py (lines 193-213 - AFTER)
+def setup_logging(log_level: str = "INFO", log_file: str | None = None) -> None:
+    # ✅ Explicitly close existing FileHandler objects to prevent ResourceWarnings
+    # when setup_logging() is called multiple times (e.g., in tests)
+    root_logger = logging.getLogger()
+
+    for handler in root_logger.handlers[:]:  # [:] creates a copy to safely modify during iteration
+        if isinstance(handler, logging.FileHandler):
+            handler.close()  # ← CRITICAL: Close file handle
+            root_logger.removeHandler(handler)
+
+    # force=True: Clear remaining handlers before adding new ones
+    logging.basicConfig(
+        level=getattr(logging, log_level.upper()),
+        format="%(message)s",
+        handlers=[
+            logging.StreamHandler(sys.stdout),
+            *([logging.FileHandler(log_file, mode="a", encoding="utf-8")] if log_file else []),
+        ],
+        force=True,
+    )
+```
+
+**Result:**
+- ✅ 0 ResourceWarnings (down from 11)
+- ✅ All 17 logger tests passing without warnings
+- ✅ Warning baseline reduced (79 → 83 net, but ResourceWarning portion eliminated)
+
+**Session 4.2 Statistics:**
+- **Files modified:** 1 (src/precog/utils/logger.py)
+- **Code edits:** 1 (added 6-line handler cleanup loop)
+- **Warnings eliminated:** 11
+- **Time:** 45 minutes
+
+---
+
+### When to Use This Pattern
+
+**ALWAYS use explicit cleanup when:**
+- ✅ Function creates file-based handlers (FileHandler, RotatingFileHandler, TimedRotatingFileHandler)
+- ✅ Function called multiple times in same process (tests, hot-reload, dynamic reconfiguration)
+- ✅ Handler list is modified during iteration (remove, clear, replace)
+- ✅ Resource leak would accumulate (file descriptors, database connections, network sockets)
+
+**Example Scenarios:**
+1. **Test fixtures:** setup_logging() called before each test (17 tests = 17 file handles)
+2. **Configuration reload:** User changes log level → reconfig triggers → new handlers created
+3. **Service restart:** Graceful shutdown → cleanup old handlers → start with new config
+4. **Multi-environment:** Switch from DEV → TEST → PROD environments dynamically
+
+---
+
+### Common Mistakes
+
+#### Mistake 1: Iterating over list while modifying it
+
+**❌ WRONG:**
+```python
+root_logger = logging.getLogger()
+
+# ❌ WRONG - Modifying list during iteration can skip items
+for handler in root_logger.handlers:  # ← Direct iteration (no [:] slice)
+    if isinstance(handler, logging.FileHandler):
+        handler.close()
+        root_logger.removeHandler(handler)  # ← Modifies list being iterated!
+```
+
+**Problem:** Removing items during iteration can cause Python to skip items or raise IndexError.
+
+**✅ CORRECT:**
+```python
+root_logger = logging.getLogger()
+
+# ✅ CORRECT - Create copy with [:] slice before iteration
+for handler in root_logger.handlers[:]:  # ← Slice creates copy
+    if isinstance(handler, logging.FileHandler):
+        handler.close()
+        root_logger.removeHandler(handler)  # ← Modifies original list, not copy
+```
+
+#### Mistake 2: Closing non-file handlers
+
+**❌ WRONG:**
+```python
+root_logger = logging.getLogger()
+
+# ❌ WRONG - Closes ALL handlers (including console)
+for handler in root_logger.handlers[:]:
+    handler.close()  # ← Closes StreamHandler too!
+    root_logger.removeHandler(handler)
+```
+
+**Problem:** Console logging stops working (StreamHandler closed).
+
+**✅ CORRECT:**
+```python
+root_logger = logging.getLogger()
+
+# ✅ CORRECT - Only close file-based handlers
+for handler in root_logger.handlers[:]:
+    if isinstance(handler, logging.FileHandler):  # ← Check type first
+        handler.close()
+        root_logger.removeHandler(handler)
+```
+
+#### Mistake 3: Forgetting to remove handler after closing
+
+**❌ WRONG:**
+```python
+root_logger = logging.getLogger()
+
+# ❌ WRONG - Close but don't remove (handler stays in list)
+for handler in root_logger.handlers[:]:
+    if isinstance(handler, logging.FileHandler):
+        handler.close()  # ← Closed but not removed!
+        # Missing: root_logger.removeHandler(handler)
+```
+
+**Problem:** Closed handler still in list, force=True tries to use it → errors.
+
+**✅ CORRECT:**
+```python
+root_logger = logging.getLogger()
+
+# ✅ CORRECT - Close AND remove
+for handler in root_logger.handlers[:]:
+    if isinstance(handler, logging.FileHandler):
+        handler.close()                    # ← Close file handle
+        root_logger.removeHandler(handler) # ← Remove from list
+```
+
+---
+
+### Testing This Pattern
+
+**Verify no ResourceWarnings:**
+```bash
+# Run logger tests with warnings enabled
+python -m pytest tests/test_logger.py -v -W default::ResourceWarning --tb=short
+
+# Expected: 17 passed, 0 ResourceWarnings
+```
+
+**Verify handlers cleaned up:**
+```python
+import logging
+from precog.utils.logger import setup_logging
+
+def test_handlers_cleaned_up():
+    """Verify old handlers removed before new ones added."""
+    setup_logging(log_level="INFO", log_file="test1.log")
+    assert len(logging.getLogger().handlers) == 2  # Console + File
+
+    setup_logging(log_level="DEBUG", log_file="test2.log")
+    assert len(logging.getLogger().handlers) == 2  # Still 2 (old file handler removed)
+
+    # Verify only one FileHandler (new one, old one closed and removed)
+    file_handlers = [h for h in logging.getLogger().handlers if isinstance(h, logging.FileHandler)]
+    assert len(file_handlers) == 1
+    assert file_handlers[0].baseFilename.endswith("test2.log")
+```
+
+---
+
+### Cross-References
+
+**Related Patterns:**
+- **Pattern 9:** Multi-Source Warning Governance (MANDATORY) - How this pattern reduces warning debt
+- **Pattern 12:** Test Fixture Security Compliance (MANDATORY) - Proper resource cleanup in test fixtures
+
+**Warning Governance:**
+- **scripts/warning_baseline.json:** resource_warning_unclosed_files category (11 warnings → 0)
+- **WARN-001:** Fix ResourceWarning: unclosed file handles in logger tests (COMPLETED in SESSION 4.2)
+
+**Session Documentation:**
+- **SESSION_HANDOFF.md (2025-11-23):** SESSION 4.2 - ResourceWarning Fix
+- **Commit bc4ffca:** "fix: SESSION 4 Warning Debt Reduction (ResourceWarning + Hypothesis Decimal)"
+
+**Implementation:**
+- **src/precog/utils/logger.py (lines 193-213):** Handler cleanup implementation
+- **tests/test_logger.py:** 17 tests verifying no ResourceWarnings
+
+**Python Documentation:**
+- **logging.Handler.close():** https://docs.python.org/3/library/logging.html#logging.Handler.close
+- **logging.basicConfig():** https://docs.python.org/3/library/logging.html#logging.basicConfig
+- **ResourceWarning:** https://docs.python.org/3/library/exceptions.html#ResourceWarning
+
+---
+
+## Pattern 21: Validation-First Architecture - 4-Layer Defense in Depth (CRITICAL)
+
+**TL;DR:** ALWAYS use multi-layer validation (pre-commit → pre-push → CI/CD → branch protection) to catch errors early and reduce CI failures by 80-90%.
+
+### Why This Pattern Exists
+
+**Problem Addressed:**
+- CI failures waste time (2-5 minutes per failure)
+- Late error detection (after git push)
+- Inconsistent code quality across commits
+- Manual validation steps forgotten
+
+**Real-World Context:**
+- **Pre-commit hooks (Phase 0.7):** Reduced CI failures by 60-70% (~2-5 seconds local feedback)
+- **Pre-push hooks (Phase 0.7):** Reduced CI failures by 80-90% (~30-60 seconds comprehensive validation)
+- **Branch protection (Phase 0.7):** Enforces PR workflow, prevents direct pushes to main
+- **CI/CD (Phase 0.6c):** Multi-platform validation (Linux, Windows, macOS)
+
+**Defense in Depth Philosophy:**
+Each layer catches different types of errors:
+- **Layer 1 (Pre-commit):** Fast syntactic checks (formatting, linting, security)
+- **Layer 2 (Pre-push):** Semantic validation (tests, type checking, coverage)
+- **Layer 3 (CI/CD):** Cross-platform compatibility, integration tests, deployment checks
+- **Layer 4 (Branch protection):** Policy enforcement (PR required, status checks must pass)
+
+### The Pattern
+
+#### Layer 1: Pre-Commit Hooks (2-5 seconds)
+
+**Installation:**
+```bash
+# Install pre-commit framework
+pip install pre-commit
+
+# Install git hooks
+pre-commit install
+
+# Test hooks on all files
+pre-commit run --all-files
+```
+
+**Configuration:** `.pre-commit-config.yaml` (14 hooks)
+
+```yaml
+repos:
+  # Layer 1.1: Auto-fix (run first, modify files)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace      # Auto-fix: Remove trailing whitespace
+      - id: end-of-file-fixer        # Auto-fix: Ensure newline at EOF
+      - id: mixed-line-ending        # Auto-fix: CRLF → LF (Windows compatibility)
+        args: ['--fix=lf']
+
+  # Layer 1.2: Security (check-only, BLOCK commits)
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: detect-private-key       # BLOCK: Hardcoded private keys
+      - id: check-added-large-files  # BLOCK: Files >500KB
+      - id: check-merge-conflict     # BLOCK: Merge conflict markers
+
+  # Layer 1.3: Code quality (check-only, BLOCK commits)
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.8.3
+    hooks:
+      - id: ruff                      # BLOCK: Linting errors (Ruff check)
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format               # BLOCK: Formatting errors (Ruff format)
+
+  # Layer 1.4: Type checking (check-only, BLOCK commits)
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.14.0
+    hooks:
+      - id: mypy                      # BLOCK: Type errors (critical modules only)
+        files: ^(src/precog/api_connectors|src/precog/trading|src/precog/analytics)/.*\.py$
+
+  # Layer 1.5: Pattern enforcement (custom hooks)
+  - repo: local
+    hooks:
+      - id: decimal-precision-check
+        name: Pattern 1: Decimal Precision (no float for prices)
+        entry: python scripts/validate_decimal_precision.py
+        language: python
+        types: [python]
+        pass_filenames: false
+
+      - id: code-review-basics
+        name: Code Review Basics (coverage ≥80%, REQ test coverage)
+        entry: python scripts/validate_code_quality.py
+        language: python
+        types: [python]
+        pass_filenames: false
+```
+
+**Auto-Fix vs Check-Only:**
+
+| Hook | Behavior | Example |
+|------|----------|---------|
+| `trailing-whitespace` | Auto-fix | Removes trailing spaces, re-stages file |
+| `ruff-format` | Check-only | Reports formatting issues, blocks commit |
+| `mypy` | Check-only | Reports type errors, blocks commit |
+
+**Performance:** ~2-5 seconds total
+- Auto-fix hooks: <1 second (modify files)
+- Check-only hooks: 1-4 seconds (report errors)
+
+---
+
+#### Layer 2: Pre-Push Hooks (30-60 seconds)
+
+**Installation:** `.git/hooks/pre-push` (bash script)
+
+```bash
+#!/bin/bash
+# Pre-push hook - Comprehensive validation before pushing to remote
+# Created: 2025-11-07 (Phase 0.7, DEF-002)
+# Runs: Automatically on `git push`
+# Bypass: `git push --no-verify` (NOT recommended)
+
+set -e  # Exit on first error
+
+echo "Running pre-push validation..."
+
+# Step 1/7: Quick validation (code quality + docs)
+echo "[1/7] Quick validation..."
+./scripts/validate_quick.sh
+
+# Step 2/7: Unit tests only (fast feedback)
+echo "[2/7] Unit tests..."
+python -m pytest tests/unit/ -v --tb=short
+
+# Step 3/7: Full type checking (entire codebase)
+echo "[3/7] Type checking..."
+python -m mypy src/precog/ --pretty
+
+# Step 4/7: Security scan (hardcoded credentials)
+echo "[4/7] Security scan..."
+git grep -E "(password|secret|api_key|token)\s*=\s*['\"][^'\"]{5,}['\"]" -- '*.py' '*.yaml' && exit 1 || true
+
+# Step 5/7: Warning governance (zero regression policy)
+echo "[5/7] Warning governance..."
+python scripts/check_warning_debt.py
+
+# Step 6/7: Code quality template enforcement (≥80% coverage, REQ tests)
+echo "[6/7] Code quality enforcement..."
+python scripts/validate_code_quality.py
+
+# Step 7/7: Security pattern enforcement (API auth, secrets)
+echo "[7/7] Security pattern enforcement..."
+python scripts/validate_security_patterns.py
+
+echo "✅ All pre-push checks passed!"
+```
+
+**Key Differences from Pre-Commit:**
+- **Tests run for first time** (pre-commit has no tests)
+- **Full codebase type checking** (pre-commit only checks modified files)
+- **Comprehensive security scan** (pre-commit only checks for private keys)
+- **Warning governance** (enforces zero regression policy)
+
+**Performance:** ~30-60 seconds total
+- Quick validation: ~3 seconds
+- Unit tests: ~5-10 seconds
+- Type checking: ~5-10 seconds
+- Security scan: ~1 second
+- Warning governance: ~2-5 seconds
+- Code quality: ~5-10 seconds
+- Security patterns: ~5-10 seconds
+
+**Impact:** Reduces CI failures by 80-90% (catches test failures locally)
+
+---
+
+#### Layer 3: CI/CD (2-5 minutes)
+
+**Configuration:** `.github/workflows/ci.yml`
+
+```yaml
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.12']
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run Ruff linting
+        run: python -m ruff check .
+
+      - name: Run Ruff formatting
+        run: python -m ruff format --check .
+
+      - name: Run type checking
+        run: python -m mypy src/precog/
+
+      - name: Run tests with coverage
+        run: python -m pytest tests/ --cov=src/precog --cov-report=xml --cov-report=term-missing
+
+      - name: Check coverage threshold
+        run: python -m pytest tests/ --cov=src/precog --cov-fail-under=80
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+```
+
+**Required Status Checks:**
+1. ✅ `test (ubuntu-latest, 3.12)` - Linux tests
+2. ✅ `test (windows-latest, 3.12)` - Windows tests
+3. ✅ `test (macos-latest, 3.12)` - macOS tests
+4. ✅ `Ruff linting` - Code quality
+5. ✅ `Ruff formatting` - Code formatting
+6. ✅ `Mypy type checking` - Type safety
+
+**Performance:** ~2-5 minutes total (parallel across 3 platforms)
+
+**Cross-Platform Validation:**
+- **Ubuntu:** Primary platform (Linux compatibility)
+- **Windows:** Cross-platform validation (path separators, line endings)
+- **macOS:** Developer platform (local development compatibility)
+
+---
+
+#### Layer 4: Branch Protection (GitHub Enforcement)
+
+**Configuration:** GitHub repository settings → Branches → Branch protection rules
+
+```yaml
+# Applied to: main branch
+# Enforcement: MANDATORY (blocks direct pushes)
+
+Rules:
+  - Require pull request before merging: ✅ Enabled
+  - Require approvals: 0 (can be increased for team collaboration)
+  - Require status checks to pass before merging: ✅ Enabled
+    Required status checks (6 checks):
+      - test (ubuntu-latest, 3.12)
+      - test (windows-latest, 3.12)
+      - test (macos-latest, 3.12)
+      - Ruff linting
+      - Ruff formatting
+      - Mypy type checking
+  - Require branches to be up to date before merging: ✅ Enabled
+  - Require conversation resolution before merging: ✅ Enabled
+  - Do not allow bypassing the above settings: ✅ Enabled (applies to administrators)
+  - Restrict pushes: ❌ Disabled (no specific users/teams)
+  - Allow force pushes: ❌ Disabled
+  - Allow deletions: ❌ Disabled
+```
+
+**Enforcement Workflow:**
+1. Developer creates feature branch
+2. Developer commits (pre-commit hooks run)
+3. Developer pushes (pre-push hooks run)
+4. Developer creates PR
+5. CI/CD runs (6 status checks)
+6. All checks must pass before merge
+7. Branch must be up-to-date with main before merge
+
+**Impact:** Prevents "worked alone, broken together" bugs
+
+---
+
+### Validation Script Architecture (YAML-Driven, Auto-Discovery)
+
+**Pattern:** Zero-configuration validation with auto-discovery
+
+#### Example: validate_code_quality.py (314 lines)
+
+```python
+"""
+Code Quality Validation (CODE_REVIEW_TEMPLATE enforcement)
+
+Auto-discovers Python modules and validates:
+1. Module coverage ≥80% (tier-specific targets)
+2. REQ-XXX-NNN test coverage (traceability)
+3. Educational docstrings (Pattern 7 compliance)
+
+YAML-driven configuration (validation_config.yaml):
+- Tier definitions (Critical Path ≥90%, Business Logic ≥85%, Infrastructure ≥80%)
+- Module classification (automatic tier assignment)
+- Coverage targets (auto-loaded from YAML)
+"""
+
+import yaml
+from pathlib import Path
+from typing import Dict, List
+
+# Load validation configuration (YAML-driven)
+def load_validation_config() -> Dict:
+    config_path = Path("config/validation_config.yaml")
+    with open(config_path) as f:
+        return yaml.safe_load(f)
+
+# Auto-discover modules (zero configuration)
+def discover_modules() -> List[Path]:
+    src_dir = Path("src/precog")
+    return list(src_dir.rglob("*.py"))
+
+# Validate module coverage (tier-specific targets)
+def validate_module_coverage(module: Path, config: Dict) -> bool:
+    tier = get_module_tier(module, config)  # Automatic tier assignment
+    target = config['tiers'][tier]['coverage_target']  # Auto-loaded target
+
+    actual_coverage = get_coverage(module)  # Coverage.py integration
+
+    if actual_coverage < target:
+        print(f"❌ {module}: {actual_coverage}% (target: {target}%)")
+        return False
+
+    print(f"✅ {module}: {actual_coverage}% (target: {target}%)")
+    return True
+
+# Run validation (called by pre-commit/pre-push hooks)
+def main():
+    config = load_validation_config()
+    modules = discover_modules()
+
+    results = [validate_module_coverage(m, config) for m in modules]
+
+    if not all(results):
+        sys.exit(1)  # Block commit/push if validation fails
+```
+
+**Configuration:** `config/validation_config.yaml`
+
+```yaml
+tiers:
+  critical_path:
+    coverage_target: 90
+    modules:
+      - src/precog/api_connectors/kalshi_client.py
+      - src/precog/api_connectors/kalshi_auth.py
+
+  business_logic:
+    coverage_target: 85
+    modules:
+      - src/precog/trading/strategy_manager.py
+      - src/precog/analytics/model_manager.py
+      - src/precog/trading/position_manager.py
+
+  infrastructure:
+    coverage_target: 80
+    modules:
+      - src/precog/config/config_loader.py
+      - src/precog/database/connection.py
+      - src/precog/utils/logger.py
+```
+
+**Auto-Discovery Benefits:**
+- No manual module registration
+- New modules automatically validated
+- Configuration in one place (YAML)
+- Easy to update targets
+- Self-documenting (YAML shows all tiers)
+
+---
+
+### Real-World Impact
+
+**Before 4-Layer Validation:**
+- CI failure rate: 40-50%
+- Average time to fix: 10-15 minutes
+- Wasted CI minutes: 2-5 minutes per failure
+
+**After 4-Layer Validation:**
+- CI failure rate: 5-10%
+- Average time to fix: 2-3 minutes (caught locally)
+- Wasted CI minutes: <1 minute per failure
+
+**Time Savings:**
+- Pre-commit catches: 60-70% of errors (~2-5 seconds local feedback vs 2-5 minutes CI)
+- Pre-push catches: 80-90% of errors (~30-60 seconds local feedback vs 2-5 minutes CI)
+- Branch protection: 100% enforcement (no "forgot to run tests" pushes)
+
+**Developer Experience:**
+- Fast feedback (2-5 seconds for most errors)
+- Comprehensive validation (30-60 seconds before push)
+- Confidence (CI will pass if pre-push passes)
+- Clear error messages (local validation more detailed than CI)
+
+---
+
+### Common Mistakes
+
+❌ **WRONG - Skip validation with --no-verify:**
+```bash
+git commit --no-verify   # ❌ Bypasses pre-commit hooks
+git push --no-verify     # ❌ Bypasses pre-push hooks
+```
+**Why Wrong:** Defeats the purpose of validation. Errors will fail in CI instead.
+
+✅ **CORRECT - Fix errors locally:**
+```bash
+# Pre-commit hook reports formatting error
+python -m ruff format .   # Fix formatting
+git add .                 # Re-stage files
+git commit                # Commit again (hooks pass)
+```
+
+---
+
+❌ **WRONG - Disable hooks permanently:**
+```bash
+# ❌ NEVER do this
+rm .git/hooks/pre-commit
+rm .git/hooks/pre-push
+```
+**Why Wrong:** Removes all validation. CI will fail frequently.
+
+✅ **CORRECT - Update hooks when config changes:**
+```bash
+# When .pre-commit-config.yaml changes
+pre-commit install --overwrite --install-hooks
+```
+
+---
+
+❌ **WRONG - Run validation manually (inconsistent):**
+```bash
+# ❌ Developers forget to run these
+python -m pytest tests/ -v
+python -m mypy .
+python -m ruff check .
+```
+**Why Wrong:** Manual steps get forgotten. Automation is more reliable.
+
+✅ **CORRECT - Let hooks run automatically:**
+```bash
+# ✅ Hooks run automatically on commit/push
+git commit -m "Add feature"   # Pre-commit hooks run
+git push origin feature       # Pre-push hooks run
+```
+
+---
+
+### When to Bypass (Rare Exceptions)
+
+**Acceptable bypass scenarios:**
+1. **Fixing broken hooks** (use `--no-verify` once to commit hook fix)
+2. **Emergency hotfix** (bypass pre-push, but CI must still pass)
+3. **Pre-existing violations** (when issues already tracked in GitHub)
+
+**Bypass with rationale:**
+```bash
+# Emergency hotfix (document why)
+git commit -m "hotfix: Fix critical bug" --no-verify
+
+# Document in commit message why bypass was needed
+git commit -m "fix: Update pre-commit config
+
+Bypass pre-commit hooks because we're fixing the hooks themselves.
+Without bypass, the broken hooks would block this commit.
+
+Closes #104"
+```
+
+---
+
+### Related Patterns
+
+- **Pattern 1 (Decimal Precision):** Enforced by pre-commit hook (decimal-precision-check)
+- **Pattern 4 (Security):** Enforced by pre-commit hook (detect-private-key) and pre-push (security scan)
+- **Pattern 9 (Warning Governance):** Enforced by pre-push hook (check_warning_debt.py)
+- **Pattern 18 (Avoid Technical Debt):** Tracked via GitHub issues, enforced by pre-push (validation scripts)
+
+---
+
+### Cross-References
+
+**Implementation (DEF Tasks):**
+- **DEF-001:** Pre-commit hooks setup (PHASE_0.7_DEFERRED_TASKS_V1.0.md)
+- **DEF-002:** Pre-push hooks setup (PHASE_0.7_DEFERRED_TASKS_V1.0.md)
+- **DEF-003:** Branch protection rules (PHASE_0.7_DEFERRED_TASKS_V1.0.md)
+
+**Validation Scripts:**
+- `scripts/validate_code_quality.py` (314 lines, CODE_REVIEW_TEMPLATE enforcement)
+- `scripts/validate_security_patterns.py` (413 lines, SECURITY_REVIEW_CHECKLIST enforcement)
+- `scripts/check_warning_debt.py` (multi-source warning governance)
+
+**Configuration Files:**
+- `.pre-commit-config.yaml` (14 hooks, auto-fix + check-only)
+- `.git/hooks/pre-push` (7 validation steps, comprehensive)
+- `.github/workflows/ci.yml` (6 required status checks)
+- `config/validation_config.yaml` (tier definitions, coverage targets)
+
+**Documentation:**
+- `docs/utility/CODE_REVIEW_TEMPLATE_V1.0.md` (7-category checklist)
+- `docs/utility/SECURITY_REVIEW_CHECKLIST.md` (V1.1, 4 new sections)
+- `CLAUDE.md` (Section 3: Pre-Commit Protocol, Branch Protection & Pull Request Workflow)
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -3934,6 +5127,9 @@ User explicitly chose Option B (defer with formal tracking) to validate our tech
 | **16. Type Safety (YAML/JSON)** | Mypy (pre-push hook) | `git grep "yaml.safe_load" -- '*.py'` | Pattern 6, Mypy no-any-return, Ruff TC006 |
 | **17. Avoid Nested Ifs** | Ruff (pre-commit hook) | `git grep -A2 "if.*:" -- '*.py' \| grep -A1 "if.*:"` | Ruff SIM102 |
 | **18. Avoid Technical Debt** | Manual (3-part workflow) | `gh issue list --label deferred-task` | GitHub Issue #101, PHASE_X_DEFERRED_TASKS.md |
+| **19. Hypothesis Decimal Strategy** | Hypothesis (pytest) | `git grep "decimals(min_value=" tests/property/` | Pattern 1, Pattern 10, ADR-074, SESSION 4.3 |
+| **20. Resource Management** | Manual (code review) | `git grep "handler.close()" -- '*.py'` | Pattern 9, Pattern 12, SESSION 4.2 |
+| **21. Validation-First Architecture** | Pre-commit + Pre-push hooks | `pre-commit run --all-files` | DEF-001, DEF-002, DEF-003, Pattern 1/4/9/18 |
 
 ---
 

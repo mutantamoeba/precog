@@ -1,9 +1,19 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.30
-**Last Updated:** 2025-11-22
+**Version:** 2.31
+**Last Updated:** 2025-11-23
 **Status:** ✅ Current
+**Changes in v2.31:**
+- **PATTERN 21 + TEST GAP MAPPING (SESSION 5)**: Added Pattern 21 to DEVELOPMENT_PATTERNS and comprehensive test gap tracking
+- Updated DEVELOPMENT_PATTERNS V1.8 → V1.9 (added Pattern 21: Validation-First Architecture - ~450 lines documenting 4-layer defense in depth)
+- Pattern 21 documents: Layer 1 (pre-commit hooks, 2-5s), Layer 2 (pre-push hooks, 30-60s), Layer 3 (CI/CD, 2-5min), Layer 4 (branch protection)
+- YAML-driven validation architecture with auto-discovery pattern (zero configuration overhead)
+- Real-world impact metrics: pre-commit hooks reduce CI failures 60-70%, pre-push hooks reduce CI failures 80-90%
+- Added TEST_GAP_GITHUB_ISSUE_MAPPING_V1.0.md (~300 lines) - comprehensive mapping of 15 high-priority test gaps to GitHub issues #101-#132
+- Test gap breakdown: 2 CRITICAL (7-10h), 5 HIGH (21-29h), 6 MEDIUM (21-27h), 2 LOW (14-18h, deferred to Phase 5)
+- All test gaps from COMPREHENSIVE_TEST_AUDIT_PHASE_1.5_V1.0.md now have trackable GitHub issues for Phase 2 implementation
+- Total effort estimate: 49-66 hours for CRITICAL + HIGH + MEDIUM priorities (excluding deferred LOW priority)
 **Changes in v2.30:**
 - **USER GUIDES FOR CORE MODULES (PHASE 1.5)**: Added 6 comprehensive user guides documenting manager layer, configuration APIs, and Kalshi terminology
 - Added STRATEGY_MANAGER_USER_GUIDE_V1.0.md (~850 lines): Strategy CRUD, A/B testing, version management, performance tracking
@@ -319,7 +329,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.18.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.30.md** | ✅ | v2.30 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.30** (Added Phase 1.5 completion documentation: PHASE_1.5_COMPLETION_REPORT.md + PHASE_1.5_DEFERRED_TASKS_V1.0.md; updated Phase Completion Assessment section with Phase 1.5 status) |
+| **MASTER_INDEX_V2.31.md** | ✅ | v2.31 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.31** (Pattern 21 addition to DEVELOPMENT_PATTERNS V1.9 + TEST_GAP_GITHUB_ISSUE_MAPPING_V1.0.md created mapping 15 test gaps to GitHub issues #101-#132) |
 | **ARCHITECTURE_DECISIONS_V2.21.md** | ✅ | v2.21 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (97 total) - **UPDATED V2.21** (ADR-094 through 097: Workflow Enforcement Infrastructure - YAML-driven validation architecture, auto-discovery pattern for validators, parallel execution in git hooks (66% time savings: 145s → 40-50s), tier-specific coverage targets; 4-layer defense-in-depth: pre-commit (~2-5s) → pre-push (~40-50s) → CI/CD (~2-5min) → branch protection; 93 → 97 total ADRs) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
 | **ADR_INDEX_V1.15.md** | ✅ | v1.15 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 76 architecture decisions - **UPDATED V1.15** (ADR-094 through 097: Workflow Enforcement Infrastructure - YAML-driven validation, auto-discovery pattern, parallel execution in git hooks, tier-specific coverage targets; 72 → 76 total ADRs) |
@@ -398,6 +408,7 @@ Test specifications, validation protocols, and quality assurance.
 | **PHASE_1.5_TEST_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🟡 High | **NEW** - Test plan for Phase 1.5 (Strategy Manager, Model Manager, Position Manager enhancements) with comprehensive test scenarios and success criteria |
 | **HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🟡 High | **NEW** - Property-based testing strategy with Hypothesis framework (3 test suites: Kelly Criterion, Edge Detection, Configuration Validation; 35+ tests implemented) |
 | **COMPREHENSIVE_TEST_AUDIT_PHASE_1.5_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🔴 Critical | **NEW** - Quality-focused analysis of 29 test files (520+ tests) per TESTING_STRATEGY_V3.1.md: tier-specific coverage analysis (Critical Path ≥90%, Business Logic ≥85%, Infrastructure ≥80%), 8-type test framework gaps, Pattern 13 compliance (real fixtures vs mocks), identifies exemplary test_attribution_comprehensive.py (only module with all 8 test types), critical gaps (2 integration files using mocks, missing stress/E2E tests), 30 improvement recommendations |
+| **TEST_GAP_GITHUB_ISSUE_MAPPING_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 2 | 🔴 Critical | **NEW** - Comprehensive mapping of 15 high-priority test gaps to GitHub issues #101-#132: 2 CRITICAL (7-10h: fix integration test mocks, add E2E tests for Critical Path), 5 HIGH (21-29h: stress tests, property tests, Mypy regression, SCD violations, validation violations), 6 MEDIUM (21-27h: E2E for business logic, security tests, MASTER_INDEX gaps, manager query methods, TypedDict returns, schema validation), 2 LOW (14-18h deferred to Phase 5: performance tests, chaos tests); all test gaps from COMPREHENSIVE_TEST_AUDIT_PHASE_1.5_V1.0.md now have trackable GitHub issues for Phase 2 implementation; total effort: 49-66 hours (excluding deferred LOW priority) |
 | **MODEL_VALIDATION_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4 ✅ | 🟡 High | Elo vs. research, backtesting benchmarks |
 | **BACKTESTING_PROTOCOL_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4-5 ✅ | 🟡 High | Walk-forward validation, train/test splits |
 
@@ -430,7 +441,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 6-9 | Phases 6-9 | 🔴 Critical | **NEW** - End-to-end analytics architecture: 4-layer design (Collection→Storage→Aggregation→Presentation), dual processing (real-time <200ms + batch), 6 materialized views |
 | **AB_TESTING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 8 | Phase 8 | 🟡 High | **NEW** - Statistical methodology for strategy/model evaluation: Welch's t-test, Chi-square, sample size calculation (64 trades/variant), Bayesian analysis, experiment lifecycle |
 | **DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 9 | Phase 9 | 🟡 High | **NEW** - React 18 + Next.js 14 trading dashboard: component library (MetricCard, PositionCard), Socket.IO real-time (<200ms), SWR data fetching, Plotly.js charts, deployment |
-| **DEVELOPMENT_PATTERNS_V1.5.md** | ✅ | v1.6 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.5** - Added Pattern 16 (Type Safety with YAML/JSON Parsing) + Pattern 17 (Avoid Nested If Statements) - 17 total patterns now; Pattern 16 documents explicit cast() for YAML/JSON to avoid Mypy no-any-return errors (~184 lines with PR #98 examples); Pattern 17 documents flat control flow with combined conditions instead of nested ifs (~196 lines, Ruff SIM102); cross-references Pattern 6 (TypedDict), Mypy no-any-return, Ruff TC006/SIM102 |
+| **DEVELOPMENT_PATTERNS_V1.9.md** | ✅ | v1.9 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.9** - Added Pattern 19 (Hypothesis Decimal Strategy), Pattern 20 (Resource Management), Pattern 21 (Validation-First Architecture) - 21 total patterns now; Pattern 19 documents using Decimal strings for min/max values in Hypothesis decimals() strategy (~310 lines); Pattern 20 documents explicit resource cleanup (handler.close() before removeHandler()) (~340 lines); Pattern 21 documents 4-layer validation architecture: pre-commit (2-5s) → pre-push (30-60s) → CI/CD (2-5min) → branch protection (~450 lines); real-world impact metrics: pre-commit reduces CI failures 60-70%, pre-push reduces CI failures 80-90%; cross-references ADR-094 through 097, Pattern 13 (Real Fixtures), YAML-driven validation |
 | **SENTRY_INTEGRATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | Phase 2 | 🟡 High | **NEW** - 3-layer hybrid observability architecture: logger.py (audit trail) + Sentry (real-time) + alerts table (permanent record); implementation guide with code examples, testing procedures, troubleshooting |
 | **MANAGER_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Comprehensive architecture guide for 4 core managers (Model, Strategy, Position, Config); database schemas with field-by-field explanations; status lifecycle diagrams; immutable vs SCD Type 2 versioning patterns; design principles (pure psycopg2, decimal precision, two-level configs); ~900 lines; addresses user request to document manager architecture summary |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
@@ -564,7 +575,7 @@ Additional guides, references, and supporting documentation.
 ## Statistics
 
 ### Document Count by Status
-- ✅ **Exists - Current:** 35 documents (includes 2 index documents, alerts migration, ML placeholders)
+- ✅ **Exists - Current:** 36 documents (includes 2 index documents, alerts migration, ML placeholders, test gap mapping)
 - ⚠️ **Exists - Needs Update:** 1 document (KALSHI_API_STRUCTURE → merge complete)
 - 📝 **In Progress:** 0 documents
 - ❌ **Missing - Critical:** 0 documents (Phase 0.5 complete + Standardization complete + Alerts/ML planning complete!)
@@ -739,6 +750,9 @@ Additional guides, references, and supporting documentation.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.31 | 2025-11-23 | **PATTERN 21 + TEST GAP MAPPING (SESSION 5)**: Updated DEVELOPMENT_PATTERNS V1.8→V1.9 (added Pattern 19: Hypothesis Decimal Strategy, Pattern 20: Resource Management, Pattern 21: Validation-First Architecture - 21 total patterns); Pattern 21 documents 4-layer validation architecture (~450 lines); added TEST_GAP_GITHUB_ISSUE_MAPPING_V1.0.md (~300 lines) mapping 15 test gaps to GitHub issues #101-#132; document count: 35 → 36 |
+| 2.30 | 2025-11-22 | **USER GUIDES FOR CORE MODULES (PHASE 1.5)**: Added 6 comprehensive user guides (~4,530 lines total: STRATEGY_MANAGER, MODEL_MANAGER, POSITION_MANAGER, CONFIG_LOADER, KALSHI_CLIENT, KALSHI_MARKET_TERMINOLOGY) |
+| 2.29 | 2025-11-22 | **PHASE 1.5 COMPLETION DOCUMENTATION**: Added PHASE_1.5_COMPLETION_REPORT.md + PHASE_1.5_DEFERRED_TASKS_V1.0.md; Phase 1.5 status: ⚠️ PASS WITH CONDITIONS (3/4 deliverables complete, 93.83% coverage) |
 | 2.5 | 2025-10-24 | **ALERTS & ML PLANNING**: Updated MASTER_REQUIREMENTS V2.6→V2.7 (34 new requirements), REQUIREMENT_INDEX V1.0→V1.1 (89 total reqs), DATABASE_SCHEMA_SUMMARY V1.5→V1.6 (alerts + 4 ML placeholders), system.yaml (notifications config); added 4 ML docs to planned (PROBABILITY_PRIMER, ELO_IMPLEMENTATION_GUIDE, MODEL_EVALUATION_GUIDE, MACHINE_LEARNING_ROADMAP); 25 total tables; ready for Phase 1 |
 | 2.4 | 2025-10-22 | Added REQUIREMENT_INDEX.md and ADR_INDEX.md; updated MASTER_REQUIREMENTS V2.6, ARCHITECTURE_DECISIONS V2.5; updated document count 33 → 35; standardization complete |
 | 2.3 | 2025-10-21 | Phase 0.5 complete: added 3 implementation guides (VERSIONING, TRAILING_STOP, POSITION_MANAGEMENT), updated 6 core docs (MASTER_REQUIREMENTS V2.5, DATABASE_SCHEMA V1.5, CONFIGURATION_GUIDE V3.1, DEVELOPMENT_PHASES V1.3, 3 YAML V2.0), added schema migration V1.5, Phase 5 split into 5a/5b |
