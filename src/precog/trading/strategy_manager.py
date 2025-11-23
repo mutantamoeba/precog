@@ -358,6 +358,91 @@ class StrategyManager:
             cursor.close()
             release_connection(conn)
 
+    def list_strategies(
+        self,
+        status: str | None = None,
+        strategy_version: str | None = None,
+        strategy_type: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """List strategies with optional filters.
+
+        Args:
+            status: Filter by status (optional). Valid values: 'draft', 'testing', 'active', 'inactive', 'deprecated'
+            strategy_version: Filter by version (optional). Example: 'v1.0', 'v1.1', 'v2.0'
+            strategy_type: Filter by strategy type (optional). Valid values: 'value', 'arbitrage', 'momentum', 'mean_reversion'
+
+        Returns:
+            List of strategies matching filters, ordered by strategy_name, strategy_version
+
+        Educational Note:
+            This method supports flexible querying for strategies.
+            - No filters: Returns ALL strategies
+            - Single filter: Returns strategies matching that filter
+            - Multiple filters: Returns strategies matching ALL filters (AND logic)
+
+            This mirrors the list_models() API in model_manager.py for consistency.
+
+        Example:
+            >>> # Get all active value strategies
+            >>> strategies = manager.list_strategies(status='active', strategy_type='value')
+            >>> # Get all v1.0 strategies
+            >>> strategies = manager.list_strategies(strategy_version='v1.0')
+            >>> # Get all strategies (no filters)
+            >>> all_strategies = manager.list_strategies()
+
+        References:
+            - REQ-VER-004: Version Lifecycle Management
+            - REQ-VER-005: A/B Testing Support
+            - GitHub Issue #132: Add list_strategies() method
+        """
+        conn = get_connection()
+        cursor = conn.cursor()
+
+        try:
+            # Build dynamic WHERE clause
+            where_clauses: list[str] = []
+            params: list[str] = []
+
+            if status is not None:
+                where_clauses.append("status = %s")
+                params.append(status)
+
+            if strategy_version is not None:
+                where_clauses.append("strategy_version = %s")
+                params.append(strategy_version)
+
+            if strategy_type is not None:
+                where_clauses.append("strategy_type = %s")
+                params.append(strategy_type)
+
+            # Construct SQL
+            where_sql = ""
+            if where_clauses:
+                where_sql = "WHERE " + " AND ".join(where_clauses)
+
+            select_sql = f"""
+                SELECT strategy_id, strategy_name, strategy_version, strategy_type,
+                       domain, config, description, status, paper_roi, live_roi,
+                       paper_trades_count, live_trades_count, created_at, created_by, notes,
+                       activated_at, deactivated_at, updated_at
+                FROM strategies
+                {where_sql}
+                ORDER BY strategy_name, strategy_version
+            """
+
+            cursor.execute(select_sql, params)
+            rows = cursor.fetchall()
+
+            logger.info(
+                f"Retrieved {len(rows)} strategies with filters: "
+                f"status={status}, strategy_version={strategy_version}, strategy_type={strategy_type}"
+            )
+            return [self._row_to_dict(cursor, row) for row in rows]
+
+        finally:
+            cursor.close()
+            release_connection(conn)
+
     def update_status(self, strategy_id: int, new_status: str) -> dict[str, Any]:
         """Update strategy status (MUTABLE field).
 

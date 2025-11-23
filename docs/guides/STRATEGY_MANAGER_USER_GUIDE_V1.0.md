@@ -403,7 +403,7 @@ List strategies with optional filters.
 def list_strategies(
     self,
     status: str | None = None,
-    domain: str | None = None,
+    strategy_version: str | None = None,
     strategy_type: str | None = None,
 ) -> list[dict[str, Any]]:
 ```
@@ -412,27 +412,50 @@ def list_strategies(
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `status` | `str \| None` | ❌ No | Filter by status ('draft', 'testing', 'active', 'deprecated') |
-| `domain` | `str \| None` | ❌ No | Filter by domain ('nfl', 'nba', etc.) |
-| `strategy_type` | `str \| None` | ❌ No | Filter by type ('value', 'arbitrage', etc.) |
+| `status` | `str \| None` | ❌ No | Filter by status ('draft', 'testing', 'active', 'inactive', 'deprecated') |
+| `strategy_version` | `str \| None` | ❌ No | Filter by version ('v1.0', 'v1.1', 'v2.0', etc.) |
+| `strategy_type` | `str \| None` | ❌ No | Filter by type ('value', 'arbitrage', 'momentum', 'mean_reversion') |
 
-**Returns:** List of strategies matching ALL filters (AND logic), ordered by created_at DESC
+**Returns:** List of strategies matching ALL filters (AND logic), ordered by strategy_name, strategy_version
+
+**Educational Note:**
+This method mirrors the `list_models()` API in `model_manager.py` for API consistency.
+Useful for flexible strategy queries without requiring rigid status filters.
 
 **Examples:**
 ```python
-# Get all active NFL value strategies
+# Get all active value strategies
 strategies = manager.list_strategies(
     status="active",
-    domain="nfl",
+    strategy_type="value"
+)
+
+# Get all v1.0 strategies (any status/type)
+v10_strategies = manager.list_strategies(strategy_version="v1.0")
+
+# Get all active v2.0 value strategies (multiple filters with AND logic)
+filtered = manager.list_strategies(
+    status="active",
+    strategy_version="v2.0",
     strategy_type="value"
 )
 
 # Get all strategies (no filters)
 all_strategies = manager.list_strategies()
 
-# Get all testing strategies (any domain/type)
+# Get all testing strategies (any version/type)
 testing = manager.list_strategies(status="testing")
 ```
+
+**Related Methods:**
+- `get_active_strategies()` - Convenience method for status='active' only
+- `get_strategies_by_name()` - Filter by name only
+- `get_strategy()` - Fetch single strategy by ID
+
+**References:**
+- GitHub Issue #132: Add list_strategies() method
+- REQ-VER-004: Version Lifecycle Management
+- REQ-VER-005: A/B Testing Support
 
 ---
 

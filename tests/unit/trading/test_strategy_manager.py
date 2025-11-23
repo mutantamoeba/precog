@@ -408,6 +408,201 @@ class TestStrategyManagerRetrieval:
         assert draft["strategy_id"] not in active_ids
         assert all(s["status"] == "active" for s in result)
 
+    def test_list_strategies_no_filters(self, clean_test_data, db_cursor, strategy_factory):
+        """Test listing all strategies without filters.
+
+        Validates:
+        - No filters returns ALL strategies
+        - Returns list of dictionaries
+        - REQ-VER-004: Strategy listing
+        - GitHub Issue #132: list_strategies() method
+
+        Reference: PHASE_1.5_TEST_PLAN_V1.0.md
+        """
+        # Setup - Create multiple strategies with different attributes
+        manager = StrategyManager()
+
+        strategy_factory["status"] = "active"
+        strategy_factory["strategy_version"] = "1.0"
+        s1 = manager.create_strategy(**strategy_factory)
+
+        strategy_factory["status"] = "draft"
+        strategy_factory["strategy_version"] = "1.1"
+        s2 = manager.create_strategy(**strategy_factory)
+
+        strategy_factory["status"] = "testing"
+        strategy_factory["strategy_version"] = "2.0"
+        s3 = manager.create_strategy(**strategy_factory)
+
+        # Execute - List all strategies
+        result = manager.list_strategies()
+
+        # Verify
+        assert len(result) >= 3, "Should have at least 3 strategies"
+        strategy_ids = [s["strategy_id"] for s in result]
+        assert s1["strategy_id"] in strategy_ids
+        assert s2["strategy_id"] in strategy_ids
+        assert s3["strategy_id"] in strategy_ids
+
+    def test_list_strategies_filter_by_status(self, clean_test_data, db_cursor, strategy_factory):
+        """Test listing strategies filtered by status.
+
+        Validates:
+        - Status filter works correctly
+        - Returns only matching strategies
+        - REQ-VER-005: Status filtering
+        - GitHub Issue #132: list_strategies() method
+
+        Reference: PHASE_1.5_TEST_PLAN_V1.0.md
+        """
+        # Setup
+        manager = StrategyManager()
+
+        strategy_factory["status"] = "active"
+        active = manager.create_strategy(**strategy_factory)
+
+        strategy_factory["strategy_version"] = "1.1"
+        strategy_factory["status"] = "draft"
+        draft = manager.create_strategy(**strategy_factory)
+
+        # Execute - Filter by status='active'
+        result = manager.list_strategies(status="active")
+
+        # Verify
+        strategy_ids = [s["strategy_id"] for s in result]
+        assert active["strategy_id"] in strategy_ids
+        assert draft["strategy_id"] not in strategy_ids
+        assert all(s["status"] == "active" for s in result)
+
+    def test_list_strategies_filter_by_version(self, clean_test_data, db_cursor, strategy_factory):
+        """Test listing strategies filtered by version.
+
+        Validates:
+        - Version filter works correctly
+        - Returns only matching version
+        - REQ-VER-004: Version management
+        - GitHub Issue #132: list_strategies() method
+
+        Reference: PHASE_1.5_TEST_PLAN_V1.0.md
+        """
+        # Setup
+        manager = StrategyManager()
+
+        strategy_factory["strategy_version"] = "1.0"
+        v10 = manager.create_strategy(**strategy_factory)
+
+        strategy_factory["strategy_version"] = "1.1"
+        v11 = manager.create_strategy(**strategy_factory)
+
+        strategy_factory["strategy_version"] = "2.0"
+        v20 = manager.create_strategy(**strategy_factory)
+
+        # Execute - Filter by version='1.0'
+        result = manager.list_strategies(strategy_version="1.0")
+
+        # Verify
+        strategy_ids = [s["strategy_id"] for s in result]
+        assert v10["strategy_id"] in strategy_ids
+        assert v11["strategy_id"] not in strategy_ids
+        assert v20["strategy_id"] not in strategy_ids
+        assert all(s["strategy_version"] == "1.0" for s in result)
+
+    def test_list_strategies_filter_by_type(self, clean_test_data, db_cursor, strategy_factory):
+        """Test listing strategies filtered by type.
+
+        Validates:
+        - Type filter works correctly
+        - Returns only matching type
+        - REQ-VER-004: Strategy type filtering
+        - GitHub Issue #132: list_strategies() method
+
+        Reference: PHASE_1.5_TEST_PLAN_V1.0.md
+        """
+        # Setup
+        manager = StrategyManager()
+
+        strategy_factory["strategy_type"] = "value"
+        value_strat = manager.create_strategy(**strategy_factory)
+
+        strategy_factory["strategy_name"] = "arbitrage_strat"
+        strategy_factory["strategy_type"] = "arbitrage"
+        arb_strat = manager.create_strategy(**strategy_factory)
+
+        # Execute - Filter by type='value'
+        result = manager.list_strategies(strategy_type="value")
+
+        # Verify
+        strategy_ids = [s["strategy_id"] for s in result]
+        assert value_strat["strategy_id"] in strategy_ids
+        assert arb_strat["strategy_id"] not in strategy_ids
+        assert all(s["strategy_type"] == "value" for s in result)
+
+    def test_list_strategies_multiple_filters(self, clean_test_data, db_cursor, strategy_factory):
+        """Test listing strategies with multiple filters (AND logic).
+
+        Validates:
+        - Multiple filters use AND logic
+        - Returns only strategies matching ALL filters
+        - REQ-VER-005: Complex filtering
+        - GitHub Issue #132: list_strategies() method
+
+        Reference: PHASE_1.5_TEST_PLAN_V1.0.md
+        """
+        # Setup - Create strategies with different combinations
+        manager = StrategyManager()
+
+        # active + v1.0 + value (MATCH)
+        strategy_factory["status"] = "active"
+        strategy_factory["strategy_version"] = "1.0"
+        strategy_factory["strategy_type"] = "value"
+        match = manager.create_strategy(**strategy_factory)
+
+        # active + v1.1 + value (NO MATCH - wrong version)
+        strategy_factory["strategy_version"] = "1.1"
+        no_match1 = manager.create_strategy(**strategy_factory)
+
+        # draft + v2.0 + value (NO MATCH - wrong status)
+        strategy_factory["status"] = "draft"
+        strategy_factory["strategy_version"] = "2.0"
+        no_match2 = manager.create_strategy(**strategy_factory)
+
+        # Execute - Filter by status='active' AND version='1.0' AND type='value'
+        result = manager.list_strategies(
+            status="active", strategy_version="1.0", strategy_type="value"
+        )
+
+        # Verify - Should only return the exact match
+        strategy_ids = [s["strategy_id"] for s in result]
+        assert match["strategy_id"] in strategy_ids
+        assert no_match1["strategy_id"] not in strategy_ids
+        assert no_match2["strategy_id"] not in strategy_ids
+        assert all(
+            s["status"] == "active"
+            and s["strategy_version"] == "1.0"
+            and s["strategy_type"] == "value"
+            for s in result
+        )
+
+    def test_list_strategies_empty_result(self, clean_test_data, db_cursor):
+        """Test listing strategies with no matches.
+
+        Validates:
+        - Returns empty list when no strategies match
+        - No errors on empty result
+        - GitHub Issue #132: list_strategies() method
+
+        Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Edge Cases
+        """
+        # Setup
+        manager = StrategyManager()
+
+        # Execute - Filter for non-existent status
+        result = manager.list_strategies(status="nonexistent_status")
+
+        # Verify
+        assert result == []
+        assert isinstance(result, list)
+
 
 class TestStrategyManagerUpdates:
     """Test suite for strategy update operations (mutable fields only)."""
