@@ -56,7 +56,7 @@ def market_price(draw, min_value=0, max_value=1, places=4):
 
 
 @st.composite
-def fee_percent(draw, min_value=0, max_value=0.15, places=4):
+def fee_percent(draw, min_value=Decimal("0"), max_value=Decimal("0.1500"), places=4):
     """
     Generate fee percentages.
 
@@ -220,8 +220,8 @@ def test_edge_formula_correctness(true_prob, price, fee):
 
 
 @given(
-    true_prob=probability(min_value=0.1, max_value=0.9),
-    price=market_price(min_value=0.1, max_value=0.9),
+    true_prob=probability(min_value=Decimal("0.1000"), max_value=Decimal("0.9000")),
+    price=market_price(min_value=Decimal("0.1000"), max_value=Decimal("0.9000")),
 )
 def test_fees_always_reduce_edge(true_prob, price):
     """
@@ -308,7 +308,7 @@ def test_edge_bounded_by_reasonable_range(true_prob, price, fee):
 
 
 @given(
-    price=market_price(min_value=0.1, max_value=0.9),
+    price=market_price(min_value=Decimal("0.1000"), max_value=Decimal("0.9000")),
     fee=fee_percent(),
 )
 def test_edge_increases_monotonically_with_true_probability(price, fee):
@@ -333,7 +333,7 @@ def test_edge_increases_monotonically_with_true_probability(price, fee):
 
 
 @given(
-    true_prob=probability(min_value=0.1, max_value=0.9),
+    true_prob=probability(min_value=Decimal("0.1000"), max_value=Decimal("0.9000")),
     fee=fee_percent(),
 )
 def test_edge_decreases_monotonically_with_market_price(true_prob, fee):
@@ -362,9 +362,9 @@ def test_edge_decreases_monotonically_with_market_price(true_prob, fee):
 
 
 @given(
-    true_prob=probability(min_value=0.3, max_value=0.7),
-    mid_price=market_price(min_value=0.3, max_value=0.7),
-    spread_width=spread(min_value=0.0010, max_value=0.0500),
+    true_prob=probability(min_value=Decimal("0.3000"), max_value=Decimal("0.7000")),
+    mid_price=market_price(min_value=Decimal("0.3000"), max_value=Decimal("0.7000")),
+    spread_width=spread(min_value=Decimal("0.0010"), max_value=Decimal("0.0500")),
     fee=fee_percent(),
 )
 def test_spread_reduces_realizable_edge(true_prob, mid_price, spread_width, fee):
@@ -404,9 +404,9 @@ def test_spread_reduces_realizable_edge(true_prob, mid_price, spread_width, fee)
 
 
 @given(
-    true_prob=probability(min_value=0.4, max_value=0.6),
-    bid=market_price(min_value=0.35, max_value=0.55),
-    ask=market_price(min_value=0.45, max_value=0.65),
+    true_prob=probability(min_value=Decimal("0.4000"), max_value=Decimal("0.6000")),
+    bid=market_price(min_value=Decimal("0.3500"), max_value=Decimal("0.5500")),
+    ask=market_price(min_value=Decimal("0.4500"), max_value=Decimal("0.6500")),
     fee=fee_percent(),
 )
 def test_realizable_edge_uses_ask_price(true_prob, bid, ask, fee):
@@ -454,8 +454,8 @@ def test_edge_above_threshold_recommends_trade(edge, threshold):
 
 
 @given(
-    true_prob=probability(min_value=0.1, max_value=0.9),
-    price=market_price(min_value=0.1, max_value=0.9),
+    true_prob=probability(min_value=Decimal("0.1000"), max_value=Decimal("0.9000")),
+    price=market_price(min_value=Decimal("0.1000"), max_value=Decimal("0.9000")),
     fee=fee_percent(),
 )
 def test_threshold_zero_means_any_positive_edge_trades(true_prob, price, fee):
