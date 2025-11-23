@@ -210,10 +210,13 @@ scd_type2_validation:
   # Auto-discovered from database schema (zero maintenance)
   discovery_method: "Query information_schema for tables with row_current_ind column"
 
-  required_pattern: |
-    .filter(table.c.row_current_ind == True)
-    # OR
-    .where(table.row_current_ind.is_(True))
+  # Pattern for raw SQL (our actual implementation with psycopg2)
+  # Matches: WHERE row_current_ind = TRUE, AND row_current_ind = TRUE, etc.
+  required_pattern: "row_current_ind\\s*=\\s*(TRUE|True|true)"
+
+  # Future patterns (if we migrate to SQLAlchemy ORM):
+  # - ".filter(table.c.row_current_ind == True)"
+  # - ".where(table.row_current_ind.is_(True))"
 
   forbidden_patterns:
     - ".all()"                           # Missing filter (gets ALL versions)

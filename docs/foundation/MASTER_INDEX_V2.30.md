@@ -1,9 +1,26 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.28
+**Version:** 2.30
 **Last Updated:** 2025-11-22
 **Status:** ✅ Current
+**Changes in v2.30:**
+- **USER GUIDES FOR CORE MODULES (PHASE 1.5)**: Added 6 comprehensive user guides documenting manager layer, configuration APIs, and Kalshi terminology
+- Added STRATEGY_MANAGER_USER_GUIDE_V1.0.md (~850 lines): Strategy CRUD, A/B testing, version management, performance tracking
+- Added MODEL_MANAGER_USER_GUIDE_V1.0.md (~800 lines): Model CRUD, version lifecycle, backtesting integration, evaluation framework
+- Added POSITION_MANAGER_USER_GUIDE_V1.0.md (~900 lines): Position lifecycle, P&L calculation, exit condition evaluation, risk management
+- Added CONFIG_LOADER_USER_GUIDE_V1.0.md (~700 lines): ConfigLoader API, environment prefixing, Decimal conversion, caching, database vs YAML hierarchy
+- Added KALSHI_CLIENT_USER_GUIDE_V1.0.md (~850 lines): Authentication, rate limiting, error handling, all API methods, pagination
+- Added KALSHI_MARKET_TERMINOLOGY_GUIDE_V1.0.md (~430 lines): Binary market structure, YES/NO vs BUY/SELL, position vs trade tables, P&L logic
+- Total: ~4,530 lines of comprehensive API documentation complementing existing implementation guides
+- Updated CLAUDE.md Section 6: Reorganized Implementation Guides into 4 categories (Configuration & Setup, Core Architecture, Manager Layer, API Clients)
+**Changes in v2.29:**
+- **PHASE 1.5 COMPLETION DOCUMENTATION**: Added Phase 1.5 completion report and deferred tasks documentation
+- Added PHASE_1.5_COMPLETION_REPORT.md to utility documents (24.4 KB, 10-step assessment protocol)
+- Added PHASE_1.5_DEFERRED_TASKS_V1.0.md to utility documents (DEF-P1.5-001: Configuration System Enhancement)
+- Updated Phase Completion Assessment section with Phase 1.5 status (⚠️ PASS WITH CONDITIONS - 3/4 deliverables complete, 93.83% coverage)
+- Phase 1.5 assessment: 550 tests passing, all coverage targets exceeded (Model Manager 92.66%, Strategy Manager 86.59%, Position Manager 91.04%)
+- 1 deliverable deferred to Phase 2 Week 1 (Configuration System Enhancement - version resolution + override handling)
 **Changes in v2.28:**
 - **ADDED PATTERN 16 & 17 TO DEVELOPMENT_PATTERNS (PHASE 1)**: Type safety and code quality patterns
 - Updated DEVELOPMENT_PATTERNS V1.5 → V1.6 (added Pattern 16: Type Safety with Dynamic Data - YAML/JSON Parsing + Pattern 17: Avoid Nested If Statements)
@@ -302,7 +319,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.18.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.28.md** | ✅ | v2.28 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.28** (Added Pattern 16 & 17 to DEVELOPMENT_PATTERNS: Type Safety with YAML/JSON Parsing + Avoid Nested If Statements; updated DEVELOPMENT_PATTERNS V1.5 → V1.6; total 17 patterns now) |
+| **MASTER_INDEX_V2.30.md** | ✅ | v2.30 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.30** (Added Phase 1.5 completion documentation: PHASE_1.5_COMPLETION_REPORT.md + PHASE_1.5_DEFERRED_TASKS_V1.0.md; updated Phase Completion Assessment section with Phase 1.5 status) |
 | **ARCHITECTURE_DECISIONS_V2.21.md** | ✅ | v2.21 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (97 total) - **UPDATED V2.21** (ADR-094 through 097: Workflow Enforcement Infrastructure - YAML-driven validation architecture, auto-discovery pattern for validators, parallel execution in git hooks (66% time savings: 145s → 40-50s), tier-specific coverage targets; 4-layer defense-in-depth: pre-commit (~2-5s) → pre-push (~40-50s) → CI/CD (~2-5min) → branch protection; 93 → 97 total ADRs) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
 | **ADR_INDEX_V1.15.md** | ✅ | v1.15 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 76 architecture decisions - **UPDATED V1.15** (ADR-094 through 097: Workflow Enforcement Infrastructure - YAML-driven validation, auto-discovery pattern, parallel execution in git hooks, tier-specific coverage targets; 72 → 76 total ADRs) |
@@ -380,6 +397,7 @@ Test specifications, validation protocols, and quality assurance.
 | **PHASE_1_TEST_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1 | Phase 1 | 🟡 High | **NEW** - Comprehensive test plan for Phase 1 (database, API, CLI) with test cases, fixtures, and success criteria |
 | **PHASE_1.5_TEST_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🟡 High | **NEW** - Test plan for Phase 1.5 (Strategy Manager, Model Manager, Position Manager enhancements) with comprehensive test scenarios and success criteria |
 | **HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🟡 High | **NEW** - Property-based testing strategy with Hypothesis framework (3 test suites: Kelly Criterion, Edge Detection, Configuration Validation; 35+ tests implemented) |
+| **COMPREHENSIVE_TEST_AUDIT_PHASE_1.5_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🔴 Critical | **NEW** - Quality-focused analysis of 29 test files (520+ tests) per TESTING_STRATEGY_V3.1.md: tier-specific coverage analysis (Critical Path ≥90%, Business Logic ≥85%, Infrastructure ≥80%), 8-type test framework gaps, Pattern 13 compliance (real fixtures vs mocks), identifies exemplary test_attribution_comprehensive.py (only module with all 8 test types), critical gaps (2 integration files using mocks, missing stress/E2E tests), 30 improvement recommendations |
 | **MODEL_VALIDATION_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4 ✅ | 🟡 High | Elo vs. research, backtesting benchmarks |
 | **BACKTESTING_PROTOCOL_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4-5 ✅ | 🟡 High | Walk-forward validation, train/test splits |
 
@@ -417,6 +435,12 @@ Phase-specific implementation guides created in Phase 0.5.
 | **MANAGER_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Comprehensive architecture guide for 4 core managers (Model, Strategy, Position, Config); database schemas with field-by-field explanations; status lifecycle diagrams; immutable vs SCD Type 2 versioning patterns; design principles (pure psycopg2, decimal precision, two-level configs); ~900 lines; addresses user request to document manager architecture summary |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
 | **DEVELOPER_SETUP_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1 | Phase 1.5 | 🟡 High | **NEW** - Comprehensive developer onboarding guide (Python 3.12+, PostgreSQL 15+, Git, GitHub CLI, pre-commit hooks); platform-specific instructions (Windows/macOS/Linux); addresses gh CLI dependency risk from Phase Completion assessment |
+| **STRATEGY_MANAGER_USER_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Strategy Manager API usage guide (~850 lines): create/update/archive strategies, A/B testing workflow, version management, performance tracking, common patterns (safe initialization, active strategy queries, multi-version testing), troubleshooting |
+| **MODEL_MANAGER_USER_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Model Manager API usage guide (~800 lines): create/update/archive models, version lifecycle, backtesting integration, evaluation framework, common patterns (safe initialization, active model queries, calibration tracking), troubleshooting |
+| **POSITION_MANAGER_USER_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Position Manager API usage guide (~900 lines): position lifecycle (open/update/close), P&L calculation (YES vs NO), exit condition evaluation, risk management, common patterns (safe initialization, position monitoring, profit target checks), troubleshooting |
+| **CONFIG_LOADER_USER_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - ConfigLoader API usage guide (~700 lines): load YAML configs, environment prefixing (DEV_/STAGING_/PROD_), automatic Decimal conversion, caching mechanism, database vs YAML hierarchy, common patterns (safe initialization, nested config access, reloading), troubleshooting; complements CONFIGURATION_GUIDE (YAML structure) |
+| **KALSHI_CLIENT_USER_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Kalshi Client API usage guide (~850 lines): RSA-PSS authentication (automatic), rate limiting (100 req/min), error handling (exponential backoff), all API methods (get_markets/balance/positions/fills/settlements), pagination, common patterns (safe client initialization, environment-specific client, error-resilient calls), troubleshooting; complements API_INTEGRATION_GUIDE (API reference) |
+| **KALSHI_MARKET_TERMINOLOGY_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🟡 High | **NEW** - Kalshi market terminology guide (~430 lines): Binary prediction market structure (YES/NO outcomes vs BUY/SELL actions), side vs action fields, position vs trade tables, P&L calculation logic (YES profits on price increase, NO profits on price decrease), complete examples with position lifecycle, case sensitivity notes (Python UPPERCASE vs database lowercase); addresses common confusion about Kalshi API terminology |
 
 ---
 
@@ -444,7 +468,9 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **GITHUB_BRANCH_PROTECTION_CONFIG.md** | ✅ | v1.0 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **NEW** - Complete GitHub branch protection configuration (completes DEF-003) |
 | **PHASE_1_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1 | 🟡 High | **NEW** - Tracks deferred enhancements from Phase 1 (extended docstrings, pre-commit hooks, branch protection) |
 | **PHASE_1_PR_REVIEW_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1.5 | 🔴 Critical | **NEW** - Dual-tracking system for 45 actionable items from PRs #2-#21 AI reviews: 3 critical (float usage/Pattern 1, zero test coverage, path sanitization), 8 high, 18 medium, 16 low priority; GitHub issues #29-#73 with bi-directional links; prevents "4 out of 7 tasks lost" problem |
+| **PHASE_1.5_COMPLETION_REPORT.md** | ✅ | n/a | `/docs/phase-completion/` | 1.5 | Phase 1.5 | 🔴 Critical | **NEW** - Phase 1.5 completion assessment (10-step protocol): ⚠️ PASS WITH CONDITIONS - 3/4 deliverables complete, 550 tests passing, 93.83% overall coverage, all targets exceeded (Model Manager 92.66%, Strategy Manager 86.59%, Position Manager 91.04%); 1 deliverable deferred (DEF-P1.5-001) |
 | **PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 1.5-4 | 🟡 High | **NEW** - Comprehensive property-based testing roadmap (74-91 tests deferred to Phases 1.5-4: database CRUD, strategy versioning, position lifecycle, async handling, ensemble predictions) |
+| **PHASE_1.5_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 2 Week 1 | 🟡 High | **NEW** - Configuration System Enhancement deferred to Phase 2 (DEF-P1.5-001: version resolution + override handling, 6-8 hours implementation estimate, requires live database integration) |
 | **PHASE_4_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 4.5 | Phase 4.5 | 🔴 Critical | **NEW** - Comprehensive research task documentation (11 tasks: DEF-009 to DEF-019, strategies HIGHEST PRIORITY, models, edge detection) - ~2800 lines, 74-92 hour total effort |
 | **STRATEGIC_WORK_ROADMAP_V1.1.md** | ✅ | v1.1 | `/docs/utility/` | 1-10 | All phases | 🔴 Critical | **UPDATED V1.1** - Master roadmap of 25 strategic tasks + Phases 6-9 analytics tasks (performance tracking, dashboards, A/B testing) organized by category |
 | **ENVIRONMENT_CHECKLIST_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0 | Phase 0 ✅ | 🔴 Critical | Windows 11 setup, Parts 1-7, dependencies verification (**FIXED** filename from V1.1 → V1.0) |
@@ -705,6 +731,7 @@ Additional guides, references, and supporting documentation.
 
 **Phase 0 Assessment:** ✅ Complete (see SESSION_7_HANDOFF.md for results)
 **Phase 0.5 Assessment:** ✅ Complete (all Days 1-10 finished + standardization, ready for Phase 1)
+**Phase 1.5 Assessment:** ⚠️ PASS WITH CONDITIONS (see docs/phase-completion/PHASE_1.5_COMPLETION_REPORT.md - 3/4 deliverables complete, 93.83% coverage, 1 deferred task: DEF-P1.5-001)
 
 ---
 
