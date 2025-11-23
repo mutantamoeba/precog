@@ -225,7 +225,9 @@ def test_zero_edge_means_zero_position(kelly_frac, bankroll):
 
 
 @given(
-    edge=edge_value(min_value=-0.5, max_value=-0.01),  # Only negative edges
+    edge=edge_value(
+        min_value=Decimal("-0.5000"), max_value=Decimal("-0.0100")
+    ),  # Only negative edges
     kelly_frac=kelly_fraction(),
     bankroll=bankroll_amount(),
 )
@@ -246,7 +248,9 @@ def test_negative_edge_means_zero_position(edge, kelly_frac, bankroll):
 
 
 @given(
-    edge=edge_value(min_value=0.01, max_value=0.5),  # Only positive edges
+    edge=edge_value(
+        min_value=Decimal("0.0100"), max_value=Decimal("0.5000")
+    ),  # Only positive edges
     bankroll=bankroll_amount(),
 )
 def test_kelly_fraction_reduces_position_proportionally(edge, bankroll):
@@ -275,8 +279,10 @@ def test_kelly_fraction_reduces_position_proportionally(edge, bankroll):
 
 
 @given(
-    edge=edge_value(min_value=0.01, max_value=0.5),  # Only positive edges
-    kelly_frac=kelly_fraction(min_value=0.1, max_value=0.5),  # Exclude zero
+    edge=edge_value(
+        min_value=Decimal("0.0100"), max_value=Decimal("0.5000")
+    ),  # Only positive edges
+    kelly_frac=kelly_fraction(min_value=Decimal("0.10"), max_value=Decimal("0.50")),  # Exclude zero
 )
 def test_position_size_scales_linearly_with_bankroll(edge, kelly_frac):
     """
@@ -304,7 +310,7 @@ def test_position_size_scales_linearly_with_bankroll(edge, kelly_frac):
 
 
 @given(
-    kelly_frac=kelly_fraction(min_value=0.1, max_value=0.5),
+    kelly_frac=kelly_fraction(min_value=Decimal("0.10"), max_value=Decimal("0.50")),
     bankroll=bankroll_amount(),
 )
 def test_position_increases_monotonically_with_edge(kelly_frac, bankroll):
@@ -329,10 +335,10 @@ def test_position_increases_monotonically_with_edge(kelly_frac, bankroll):
 
 
 @given(
-    edge=edge_value(min_value=0.01, max_value=0.5),
+    edge=edge_value(min_value=Decimal("0.0100"), max_value=Decimal("0.5000")),
     kelly_frac=kelly_fraction(),
     bankroll=bankroll_amount(),
-    max_pos=bankroll_amount(min_value=10, max_value=500),
+    max_pos=bankroll_amount(min_value=Decimal("10.00"), max_value=Decimal("500.00")),
 )
 def test_max_position_constraint_respected(edge, kelly_frac, bankroll, max_pos):
     """
@@ -395,9 +401,9 @@ def test_negative_bankroll_raises_error(edge, kelly_frac):
 
 
 @given(
-    edge=edge_value(min_value=0.01, max_value=0.3),
-    kelly_frac=kelly_fraction(min_value=0.2, max_value=0.5),
-    bankroll=bankroll_amount(min_value=1000, max_value=10000),
+    edge=edge_value(min_value=Decimal("0.0100"), max_value=Decimal("0.3000")),
+    kelly_frac=kelly_fraction(min_value=Decimal("0.20"), max_value=Decimal("0.50")),
+    bankroll=bankroll_amount(min_value=Decimal("1000.00"), max_value=Decimal("10000.00")),
 )
 def test_position_size_reasonable_bounds(edge, kelly_frac, bankroll):
     """

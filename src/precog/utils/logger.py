@@ -191,8 +191,15 @@ def setup_logging(
         log_file = None
 
     # Configure standard library logging (required for structlog)
-    # force=True: Clear existing handlers to prevent ResourceWarnings when
-    # setup_logging() is called multiple times (e.g., in tests)
+    # Explicitly close existing FileHandler objects to prevent ResourceWarnings
+    # when setup_logging() is called multiple times (e.g., in tests)
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:  # [:] creates a copy to safely modify during iteration
+        if isinstance(handler, logging.FileHandler):
+            handler.close()
+            root_logger.removeHandler(handler)
+
+    # force=True: Clear remaining handlers before adding new ones
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
         format="%(message)s",

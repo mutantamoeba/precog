@@ -538,8 +538,8 @@ def test_trading_config_has_required_fields():
 
 
 @given(
-    kelly_frac=kelly_fraction_value(min_value=0.1, max_value=0.5),
-    edge_threshold=edge_threshold_value(min_value=0.01, max_value=0.15),
+    kelly_frac=kelly_fraction_value(min_value=Decimal("0.10"), max_value=Decimal("0.50")),
+    edge_threshold=edge_threshold_value(min_value=Decimal("0.0100"), max_value=Decimal("0.1500")),
 )
 def test_config_values_practical_ranges(kelly_frac, edge_threshold):
     """
