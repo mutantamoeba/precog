@@ -991,11 +991,24 @@ Run this **validation checklist**:
 
 **Location:** `docs/guides/`
 
+**Configuration & Setup:**
 1. **CONFIGURATION_GUIDE_V3.1.md** - YAML configuration reference (START HERE)
-2. **VERSIONING_GUIDE_V1.0.md** - Strategy/model versioning
-3. **TRAILING_STOP_GUIDE_V1.0.md** - Trailing stop implementation
-4. **POSITION_MANAGEMENT_GUIDE_V1.0.md** - Position lifecycle
-5. **POSTGRESQL_SETUP_GUIDE.md** - Database setup (Windows/Linux/Mac)
+2. **CONFIG_LOADER_USER_GUIDE_V1.0.md** - ConfigLoader API usage (~700 lines)
+3. **POSTGRESQL_SETUP_GUIDE.md** - Database setup (Windows/Linux/Mac)
+
+**Core Architecture:**
+4. **VERSIONING_GUIDE_V1.0.md** - Strategy/model versioning
+5. **TRAILING_STOP_GUIDE_V1.0.md** - Trailing stop implementation
+6. **POSITION_MANAGEMENT_GUIDE_V1.0.md** - Position lifecycle
+
+**Manager Layer (Phase 1.5):**
+7. **STRATEGY_MANAGER_USER_GUIDE_V1.0.md** - Strategy CRUD & A/B testing (~850 lines)
+8. **MODEL_MANAGER_USER_GUIDE_V1.0.md** - Model CRUD & evaluation (~800 lines)
+9. **POSITION_MANAGER_USER_GUIDE_V1.0.md** - Position lifecycle & P&L (~900 lines)
+
+**API Clients:**
+10. **KALSHI_CLIENT_USER_GUIDE_V1.0.md** - Kalshi API usage (~850 lines)
+11. **KALSHI_MARKET_TERMINOLOGY_GUIDE_V1.0.md** - YES/NO vs BUY/SELL (~430 lines)
 
 ### API & Integration
 
