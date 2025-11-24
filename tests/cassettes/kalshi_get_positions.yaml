@@ -1,0 +1,46 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://demo-api.kalshi.co/trade-api/v2/portfolio/positions
+  response:
+    body:
+      string: '{"cursor":"","event_positions":[{"event_exposure":9888,"event_exposure_dollars":"98.8800","event_ticker":"KXALIENS-26","fees_paid":28,"fees_paid_dollars":"0.2800","realized_pnl":0,"realized_pnl_dollars":"0.0000","total_cost":9888,"total_cost_dollars":"98.8800","total_cost_shares":103}],"market_positions":[{"fees_paid":28,"fees_paid_dollars":"0.2800","last_updated_ts":"2025-10-25T02:18:39.771507Z","market_exposure":9888,"market_exposure_dollars":"98.8800","position":-103,"realized_pnl":0,"realized_pnl_dollars":"0.0000","resting_orders_count":0,"ticker":"KXALIENS-26","total_traded":9888,"total_traded_dollars":"98.8800"}]}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '627'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Sun, 23 Nov 2025 21:27:01 GMT
+      Via:
+      - 1.1 ea0f558b3f7fa7ada5748649f809b0b0.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - Q34wUAAH35zPIP9RASt5OoCUhn5cTEJs7b9ws8p8BqJNTo9x10wjkQ==
+      X-Amz-Cf-Pop:
+      - ORD58-P10
+      X-Cache:
+      - Miss from cloudfront
+      content-security-policy:
+      - default-src 'none';
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1

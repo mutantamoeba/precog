@@ -36,6 +36,7 @@ import os
 import time
 from decimal import Decimal
 from typing import Any, ClassVar, cast
+from urllib.parse import urlparse
 
 import requests
 from dotenv import load_dotenv
@@ -199,11 +200,17 @@ class KalshiClient:
         """
         url = f"{self.base_url}{path}"
 
+        # Extract full path for signature (must include /trade-api/v2 prefix)
+        # The signature is computed over the full path, not just the endpoint path
+        # Example: /trade-api/v2/portfolio/balance (not just /portfolio/balance)
+        full_path = urlparse(url).path
+
         # Retry loop with exponential backoff
         for attempt in range(max_retries + 1):  # +1 for initial attempt
             try:
                 # Get fresh authentication headers for each attempt
-                headers = self.auth.get_headers(method=method, path=path)
+                # CRITICAL: Must pass full path including /trade-api/v2 for correct signature
+                headers = self.auth.get_headers(method=method, path=full_path)
 
                 # Log request (without sensitive headers)
                 if attempt == 0:
@@ -323,35 +330,55 @@ class KalshiClient:
         """
         Convert all price fields in dictionary from string to Decimal.
 
-        Modifies data in-place. Looks for fields containing price-related keywords
-        and converts them to Decimal type.
+        Modifies data in-place. Parses Kalshi's sub-penny price fields with 4 decimal
+        precision. Kalshi provides dual format for backward compatibility:
+        - Legacy: yes_bid (integer cents: 0, 100)
+        - Sub-penny: yes_bid_dollars (string: "0.0000", "1.0000")
+
+        We parse the *_dollars/*_fixed fields for sub-penny precision.
 
         Args:
             data: Dictionary potentially containing price fields
 
         Educational Note:
-            Kalshi API returns prices as strings (e.g., "0.6250").
-            We MUST convert to Decimal for precision.
-            Float would cause rounding errors with sub-penny prices.
+            Kalshi API Sub-Penny Pricing (Nov 2025):
+            - Market endpoints: Use *_dollars suffix (yes_bid_dollars: "0.4275")
+            - Fill endpoints: Use *_fixed suffix (yes_price_fixed: "0.9600")
+            - Portfolio endpoints: Use integer cents (balance: 235084)
 
-        Reference: docs/api-integration/KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md
+            We MUST use *_dollars/*_fixed fields for 4 decimal precision.
+            Float would cause rounding errors (0.04 + 0.96 = 1.0000000000000002).
+
+        Reference:
+            - docs/api-integration/KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md
+            - https://docs.kalshi.com/getting_started/subpenny_pricing
         Related: REQ-SYS-003 (Decimal Precision for Prices)
         """
         price_fields = [
-            "yes_bid",
-            "yes_ask",
-            "no_bid",
-            "no_ask",
-            "last_price",
+            # Market price fields (sub-penny format: *_dollars suffix)
+            "yes_bid_dollars",
+            "yes_ask_dollars",
+            "no_bid_dollars",
+            "no_ask_dollars",
+            "last_price_dollars",
+            "previous_price_dollars",
+            "previous_yes_bid_dollars",
+            "previous_yes_ask_dollars",
+            # Fill price fields (sub-penny format: *_fixed suffix)
+            "yes_price_fixed",
+            "no_price_fixed",
+            # Other market fields with *_dollars suffix
+            "liquidity_dollars",
+            "notional_value_dollars",
+            # Position/portfolio fields (various formats)
             "user_average_price",
             "realized_pnl",
             "total_cost",
             "fees_paid",
-            "price",
             "settlement_value",
             "revenue",
             "total_fees",
-            "balance",
+            "balance",  # Integer cents (no _dollars variant)
         ]
 
         for field in price_fields:

@@ -1,9 +1,19 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.31
+**Version:** 2.32
 **Last Updated:** 2025-11-23
 **Status:** ✅ Current
+**Changes in v2.32:**
+- **SUB-PENNY PRICING IMPLEMENTATION (SESSION 7)**: Added comprehensive documentation of Kalshi sub-penny pricing dual format discovery
+- Added KALSHI_SUBPENNY_PRICING_IMPLEMENTATION_V1.0.md (~600 lines) to API & Integration Documents
+- Documents critical discovery: We were parsing wrong API fields (integer cents instead of string dollars)
+- Fixed kalshi_client.py to parse *_dollars fields (markets) and *_fixed fields (fills) for 4 decimal precision
+- Updated 8 VCR integration tests - all passing with sub-penny fields (yes_bid_dollars, yes_price_fixed)
+- Explains Kalshi dual format: Legacy (yes_bid: 0 integer cents) vs Sub-penny (yes_bid_dollars: "0.0000" string)
+- Educational content: Why Decimal matters (float 0.96+0.04=1.0000000000000002 vs Decimal exact), real trading impact
+- Future-proof: Already supports sub-penny when Kalshi enables (currently format only, pricing still whole cents)
+
 **Changes in v2.31:**
 - **PATTERN 21 + TEST GAP MAPPING (SESSION 5)**: Added Pattern 21 to DEVELOPMENT_PATTERNS and comprehensive test gap tracking
 - Updated DEVELOPMENT_PATTERNS V1.8 → V1.9 (added Pattern 21: Validation-First Architecture - ~450 lines documenting 4-layer defense in depth)
@@ -329,7 +339,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.18.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.31.md** | ✅ | v2.31 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.31** (Pattern 21 addition to DEVELOPMENT_PATTERNS V1.9 + TEST_GAP_GITHUB_ISSUE_MAPPING_V1.0.md created mapping 15 test gaps to GitHub issues #101-#132) |
+| **MASTER_INDEX_V2.32.md** | ✅ | v2.32 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.32** (Sub-penny pricing implementation: Added KALSHI_SUBPENNY_PRICING_IMPLEMENTATION_V1.0.md documenting Kalshi dual format, fixed critical API field parsing bug, 8 VCR integration tests + 47 total Kalshi tests passing) |
 | **ARCHITECTURE_DECISIONS_V2.21.md** | ✅ | v2.21 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (97 total) - **UPDATED V2.21** (ADR-094 through 097: Workflow Enforcement Infrastructure - YAML-driven validation architecture, auto-discovery pattern for validators, parallel execution in git hooks (66% time savings: 145s → 40-50s), tier-specific coverage targets; 4-layer defense-in-depth: pre-commit (~2-5s) → pre-push (~40-50s) → CI/CD (~2-5min) → branch protection; 93 → 97 total ADRs) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
 | **ADR_INDEX_V1.15.md** | ✅ | v1.15 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 76 architecture decisions - **UPDATED V1.15** (ADR-094 through 097: Workflow Enforcement Infrastructure - YAML-driven validation, auto-discovery pattern, parallel execution in git hooks, tier-specific coverage targets; 72 → 76 total ADRs) |
@@ -350,6 +360,7 @@ External API documentation, integration guides, and authentication specs.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **API_INTEGRATION_GUIDE_V2.0.md** | ✅ | v2.0 | `/docs/api-integration/` | 1 | Phases 1-2, 6, 10 | 🔴 Critical | **UPDATED V2.0** - Merged Kalshi/ESPN/Balldontlie, RSA-PSS auth examples, API best practices |
 | **KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md** | ✅ | v1.0 | `/docs/api-integration/` | 1 | Phases 1-5 | 🔴 Critical | **PRINT & KEEP AT DESK** - Critical reference |
+| **KALSHI_SUBPENNY_PRICING_IMPLEMENTATION_V1.0.md** | ✅ | v1.0 | `/docs/api-integration/` | 1 | Phases 1-5 | 🔴 Critical | **NEW SESSION 7** - Sub-penny pricing dual format (600 lines): Discovery of wrong field parsing (integer cents vs string dollars), Fix to use *_dollars/*_fixed fields, 8 VCR tests passing, Kalshi dual format explained (legacy vs sub-penny), Decimal precision educational content, Future-proof for sub-penny launch |
 | **KALSHI_API_STRUCTURE_COMPREHENSIVE_V2.0.md** | ⚠️ | v2.0 | `/docs/api-integration/` | 1 | Phases 1-5 | 🟡 High | ⚠️ Merged into API_INTEGRATION_GUIDE, mark archived |
 | **KALSHI_DATABASE_SCHEMA_CORRECTED_V1.0.md** | ✅ | v1.0 | `/docs/api-integration/` | 1 | Phase 1 | 🟢 Medium | Kalshi-specific schema corrections |
 
