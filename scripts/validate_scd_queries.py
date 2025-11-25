@@ -250,6 +250,8 @@ def check_scd_queries(verbose: bool = False) -> tuple[bool, list[str]]:
 
             # Track markdown code blocks in docstrings
             in_code_block = False
+            # Track docstring sections (Args, Returns, Raises, etc.)
+            in_docstring_section = False
 
             # Check each line for queries on SCD Type 2 tables
             for line_num, line in enumerate(lines, start=1):
@@ -263,6 +265,35 @@ def check_scd_queries(verbose: bool = False) -> tuple[bool, list[str]]:
                 # Skip lines inside code blocks
                 if in_code_block:
                     continue
+
+                # Detect docstring sections (Args:, Returns:, Raises:, etc.)
+                if stripped in (
+                    "Args:",
+                    "Returns:",
+                    "Raises:",
+                    "Yields:",
+                    "Attributes:",
+                    "Examples:",
+                    "Note:",
+                    "Notes:",
+                    "Warning:",
+                    "See Also:",
+                ):
+                    in_docstring_section = True
+                    continue
+
+                # Exit docstring section when we hit empty line or dedented code
+                if in_docstring_section:
+                    # Empty line or dedented line (not indented parameter doc)
+                    if not stripped or (not line.startswith((" ", "\t")) and stripped):
+                        in_docstring_section = False
+                    else:
+                        # Skip parameter documentation lines (e.g., "position_id: Position surrogate key (int from positions.id)")
+                        # These are indented under Args: and contain colons
+                        if ":" in stripped and not stripped.startswith(
+                            ("http:", "https:", "postgres:")
+                        ):
+                            continue
 
                 # Skip docstring examples (lines starting with >>> or ...)
                 if stripped.startswith((">>>", "...")):
