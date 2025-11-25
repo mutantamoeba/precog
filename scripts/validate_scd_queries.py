@@ -128,13 +128,14 @@ def discover_scd_tables(verbose: bool = False) -> set[str]:
         if verbose:
             print("[DEBUG] psycopg2 not available - using hardcoded SCD table list")
         # Fallback to known SCD Type 2 tables
+        # NOTE: strategies and models use IMMUTABLE versioning (not SCD Type 2)
         return {
-            "markets",
-            "positions",
-            "strategies",
-            "models",
-            "odds_snapshots",
-            "market_events",
+            "markets",  # Market prices change frequently → SCD Type 2
+            "positions",  # Position prices/PnL change frequently → SCD Type 2
+            # "strategies",  # ❌ Uses IMMUTABLE versioning (v1.0 → v1.1)
+            # "models",  # ❌ Uses IMMUTABLE versioning (v1.0 → v1.1)
+            # "odds_snapshots",  # TODO: Verify if this uses SCD Type 2
+            # "market_events",  # TODO: Verify if this uses SCD Type 2
         }
 
     # Get database connection from environment
@@ -142,13 +143,14 @@ def discover_scd_tables(verbose: bool = False) -> set[str]:
     if not database_url:
         if verbose:
             print("[DEBUG] DATABASE_URL not set - using hardcoded SCD table list")
+        # NOTE: strategies and models use IMMUTABLE versioning (not SCD Type 2)
         return {
-            "markets",
-            "positions",
-            "strategies",
-            "models",
-            "odds_snapshots",
-            "market_events",
+            "markets",  # Market prices change frequently → SCD Type 2
+            "positions",  # Position prices/PnL change frequently → SCD Type 2
+            # "strategies",  # ❌ Uses IMMUTABLE versioning (v1.0 → v1.1)
+            # "models",  # ❌ Uses IMMUTABLE versioning (v1.0 → v1.1)
+            # "odds_snapshots",  # TODO: Verify if this uses SCD Type 2
+            # "market_events",  # TODO: Verify if this uses SCD Type 2
         }
 
     try:
@@ -183,13 +185,14 @@ def discover_scd_tables(verbose: bool = False) -> set[str]:
             print(f"[DEBUG] Database query failed: {e}")
             print("[DEBUG] Using hardcoded SCD table list")
         # Fallback to known SCD Type 2 tables
+        # NOTE: strategies and models use IMMUTABLE versioning (not SCD Type 2)
         return {
-            "markets",
-            "positions",
-            "strategies",
-            "models",
-            "odds_snapshots",
-            "market_events",
+            "markets",  # Market prices change frequently → SCD Type 2
+            "positions",  # Position prices/PnL change frequently → SCD Type 2
+            # "strategies",  # ❌ Uses IMMUTABLE versioning (v1.0 → v1.1)
+            # "models",  # ❌ Uses IMMUTABLE versioning (v1.0 → v1.1)
+            # "odds_snapshots",  # TODO: Verify if this uses SCD Type 2
+            # "market_events",  # TODO: Verify if this uses SCD Type 2
         }
 
 
