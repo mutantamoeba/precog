@@ -20,6 +20,12 @@ Cassettes recorded: tests/cassettes/kalshi_*.yaml
 - kalshi_get_fills.yaml (1 historical fill)
 - kalshi_get_settlements.yaml (0 settlements)
 
+Pattern 13 Exception: External API mock
+These tests use VCR to replay REAL API responses. They test API client behavior
+without touching the database, so database fixtures (db_pool, db_cursor, clean_test_data)
+are not applicable. Pattern 13 lesson learned was about DATABASE connection pool mocking,
+not HTTP interaction recording.
+
 Related Requirements:
     - REQ-API-001: Kalshi API Integration
     - REQ-API-002: RSA-PSS Authentication

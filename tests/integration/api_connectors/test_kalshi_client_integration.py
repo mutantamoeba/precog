@@ -14,6 +14,12 @@ Note: These are integration tests, not unit tests.
 - They use mocked HTTP responses (not real API calls)
 - They verify the full request/response flow
 
+Pattern 13 Exception: External API mock
+These tests mock HTTP responses to test API client behavior. They don't
+touch the database, so database fixtures (db_pool, db_cursor, clean_test_data)
+are not applicable. Pattern 13 lesson learned was about DATABASE connection
+pool mocking, not HTTP mocking.
+
 Related Requirements:
     - REQ-API-001: Kalshi API Integration
     - REQ-API-002: RSA-PSS Authentication
