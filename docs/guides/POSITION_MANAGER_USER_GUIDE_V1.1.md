@@ -1,11 +1,14 @@
 # Position Manager User Guide
 
 ---
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-11-22
+**Last Updated:** 2025-11-24
 **Target Audience:** Developers implementing position tracking and management for Precog
 **Purpose:** Comprehensive guide to using Position Manager for opening, updating, and closing positions
-**Related Guides:** STRATEGY_MANAGER_USER_GUIDE_V1.0.md, MODEL_MANAGER_USER_GUIDE_V1.0.md, KALSHI_MARKET_TERMINOLOGY_GUIDE_V1.0.md, TRAILING_STOP_GUIDE_V1.0.md
+**Related Guides:**
+- **User Guides:** STRATEGY_MANAGER_USER_GUIDE_V1.1.md, MODEL_MANAGER_USER_GUIDE_V1.1.md, KALSHI_MARKET_TERMINOLOGY_GUIDE_V1.0.md, TRAILING_STOP_GUIDE_V1.0.md, PERFORMANCE_TRACKING_GUIDE_V1.0.md
+- **Supplementary Specs (Phase 5a):** POSITION_MONITORING_SPEC_V1.0.md, EXIT_EVALUATION_SPEC_V1.0.md, EVENT_LOOP_ARCHITECTURE_V1.0.md, ORDER_EXECUTION_ARCHITECTURE_V1.0.md
 
 ---
 
@@ -23,7 +26,8 @@
 10. [Common Patterns](#common-patterns)
 11. [Troubleshooting](#troubleshooting)
 12. [Advanced Topics](#advanced-topics)
-13. [References](#references)
+13. [Future Enhancements (Phase 5a+)](#future-enhancements-phase-5a)
+14. [References](#references)
 
 ---
 
@@ -92,6 +96,10 @@ position = manager.open_position(
 7. **YES/NO Position Support** - Handles Kalshi binary market structure
 8. **Decimal Precision** - All prices/P&L use `Decimal` type (Pattern 1)
 9. **Type Safety** - TypedDict return types with compile-time checking
+
+**Current Phase:** Phase 1.5 (CRUD Operations)
+
+**Future Enhancements:** Phase 5a adds trading execution capabilities including position monitoring with PositionMonitor, exit evaluation with ExitEvaluator, partial exit handling, and event loop integration. See [Future Enhancements (Phase 5a+)](#future-enhancements-phase-5a) for details.
 
 ---
 
@@ -1523,6 +1531,332 @@ for snapshot in history:
 
 ---
 
+## Future Enhancements (Phase 5a+)
+
+**Current Implementation:** Phase 1.5 provides CRUD operations for positions (create, read, update, close).
+
+**Phase 5a Trading MVP** adds automated position monitoring, exit evaluation, and execution capabilities.
+
+### 1. Position Monitoring (PositionMonitor)
+
+**Purpose:** Automated position tracking with adaptive polling frequency
+
+**Implementation:** `src/precog/trading/position_monitor.py` (~300 lines)
+
+**Key Features:**
+- **Adaptive Polling:** 30-second intervals for normal positions, 5-second intervals for urgent exit conditions
+- **Real-Time Price Updates:** Fetch current prices from Kalshi API, update positions via PositionManager
+- **Exit Signal Detection:** Check 10-condition hierarchy, flag positions for exit evaluation
+- **Performance Tracking:** Log monitoring latency, API errors, update success rates
+
+**Example Usage (Phase 5a+):**
+```python
+from precog.trading.position_monitor import PositionMonitor
+
+monitor = PositionMonitor()
+
+# Start monitoring all open positions
+monitor.start()
+
+# Monitoring runs in background thread:
+# - Fetch prices every 30s for normal positions
+# - Fetch prices every 5s for positions meeting urgent exit conditions
+# - Update position prices via PositionManager.update_price()
+# - Evaluate exit conditions via ExitEvaluator
+# - Flag positions for execution via ExitExecutor
+```
+
+**Exit Condition Priority:**
+| Priority | Condition | Polling Frequency |
+|----------|-----------|-------------------|
+| **CRITICAL** | Hard stop loss hit | 5 seconds |
+| **CRITICAL** | Target price reached | 5 seconds |
+| **HIGH** | 5% trailing stop hit | 10 seconds |
+| **MEDIUM** | Market close approaching (< 1 hour) | 30 seconds |
+| **LOW** | Normal monitoring | 30 seconds |
+
+**Supplementary Spec:** `docs/supplementary/POSITION_MONITORING_SPEC_V1.0.md`
+
+---
+
+### 2. Exit Evaluation (ExitEvaluator)
+
+**Purpose:** 10-condition priority hierarchy for exit decisions
+
+**Implementation:** `src/precog/trading/exit_evaluator.py` (~400 lines)
+
+**Exit Conditions (Priority Order):**
+
+**CRITICAL (Exit Immediately - Market Order):**
+1. **Hard Stop Loss Hit** - `current_price <= stop_loss_price`
+2. **Target Price Reached** - `current_price >= target_price`
+3. **Margin Call** - `account_balance < maintenance_margin`
+
+**HIGH (Exit Within 30 Seconds - Limit Order with Timeout):**
+4. **Trailing Stop Hit** - `current_price <= trailing_stop_price`
+5. **Market Expiration Imminent** - `time_to_close < 1 hour`
+
+**MEDIUM (Exit Within 5 Minutes - Limit Order):**
+6. **Diminishing Edge** - `current_edge < min_edge_threshold`
+7. **Model Confidence Drop** - `model_confidence < confidence_threshold`
+8. **Adverse Event** - External event affecting position (injury, weather, etc.)
+
+**LOW (Exit When Convenient - Passive Limit Order):**
+9. **Portfolio Rebalancing** - Position exceeds allocation limits
+10. **Tax-Loss Harvesting** - Realize losses for tax purposes
+
+**Example Usage (Phase 5a+):**
+```python
+from precog.trading.exit_evaluator import ExitEvaluator
+from decimal import Decimal
+
+evaluator = ExitEvaluator()
+
+# Evaluate exit conditions for position
+result = evaluator.evaluate_exit(
+    position_id="POS-123",
+    current_price=Decimal("0.72"),
+    current_time=datetime.now(),
+    market_close_time=datetime(2025, 11, 24, 20, 0, 0)
+)
+
+print(f"Exit Decision: {result['should_exit']}")
+print(f"Priority: {result['priority']}")  # CRITICAL, HIGH, MEDIUM, LOW
+print(f"Reason: {result['reason']}")      # "Trailing stop hit"
+print(f"Urgency: {result['urgency']}")    # "immediate", "30s", "5min", "passive"
+```
+
+**Supplementary Spec:** `docs/supplementary/EXIT_EVALUATION_SPEC_V1.0.md`
+
+---
+
+### 3. Exit Execution (ExitExecutor)
+
+**Purpose:** Urgency-based order execution with fallback logic
+
+**Implementation:** `src/precog/trading/exit_executor.py` (~250 lines)
+
+**Execution Strategies:**
+
+| Urgency | Order Type | Timeout | Price | Use Case |
+|---------|------------|---------|-------|----------|
+| **Immediate** | Market | None | Accept any price | Hard stop loss, margin call |
+| **30 Seconds** | Limit + Fallback | 30s → Market | Best bid/ask | Trailing stop, market close |
+| **5 Minutes** | Limit + Fallback | 5min → Market | Current price | Diminishing edge |
+| **Passive** | Limit | None (GTC) | Target price | Portfolio rebalancing |
+
+**Example Usage (Phase 5a+):**
+```python
+from precog.trading.exit_executor import ExitExecutor
+from decimal import Decimal
+
+executor = ExitExecutor()
+
+# Execute exit based on priority
+trade = executor.execute_exit(
+    position_id="POS-123",
+    priority="CRITICAL",
+    reason="Hard stop loss hit",
+    current_price=Decimal("0.65")
+)
+
+print(f"Order ID: {trade['order_id']}")
+print(f"Order Type: {trade['order_type']}")   # "market"
+print(f"Fill Price: {trade['fill_price']}")   # 0.65
+print(f"Slippage: {trade['slippage']}")       # 0.00 (market order)
+```
+
+**Fallback Logic (Limit Orders):**
+```python
+# Example: HIGH priority exit (30-second timeout)
+# 1. Submit limit order at current best bid: $0.72
+# 2. Wait 30 seconds for fill
+# 3. If not filled:
+#    - Cancel limit order
+#    - Submit market order (accept any price)
+#    - Log slippage for performance tracking
+```
+
+**Supplementary Spec:** `docs/supplementary/ORDER_EXECUTION_ARCHITECTURE_V1.0.md`
+
+---
+
+### 4. Partial Exit Handling (PartialExitHandler)
+
+**Purpose:** Scale-out logic for taking partial profits
+
+**Implementation:** Integrated into `ExitEvaluator` and `ExitExecutor`
+
+**Use Cases:**
+- **Target Price Reached:** Close 50%, let remaining 50% run with trailing stop
+- **High Confidence Positions:** Scale out in 25% increments (4 exits total)
+- **Risk Management:** Close 25% at first sign of trouble, monitor remaining 75%
+
+**Example (Phase 5a+):**
+```python
+# Position reaches target price
+# Original: 100 contracts @ $0.50 entry, $0.80 target
+# Current: Price hits $0.80
+
+evaluator.evaluate_exit(
+    position_id="POS-123",
+    current_price=Decimal("0.80"),
+    allow_partial=True,
+    partial_pct=Decimal("0.50")  # Close 50%
+)
+
+# Result:
+# - Close 50 contracts @ $0.80 (realized P&L: +$15.00)
+# - Keep 50 contracts open
+# - Update trailing stop to $0.75 (protect profits)
+# - Continue monitoring remaining position
+```
+
+---
+
+### 5. Event Loop Integration
+
+**Purpose:** Real-time position monitoring within main event loop
+
+**Implementation:** `src/precog/core/event_loop.py` (Phase 5a enhancement)
+
+**Architecture:**
+```python
+# Main event loop (pseudo-code)
+async def main_event_loop():
+    """Main trading event loop (Phase 5a+)"""
+
+    while True:
+        # 1. Monitor positions (every 5-30 seconds)
+        urgent_positions = await position_monitor.check_positions()
+
+        # 2. Evaluate exits for flagged positions
+        for pos in urgent_positions:
+            exit_decision = await exit_evaluator.evaluate(pos)
+
+            # 3. Execute exits if conditions met
+            if exit_decision['should_exit']:
+                await exit_executor.execute(pos, exit_decision)
+
+        # 4. Scan for new opportunities (every 60 seconds)
+        if time.time() % 60 == 0:
+            await opportunity_scanner.scan()
+
+        # 5. Update model predictions (every 5 minutes)
+        if time.time() % 300 == 0:
+            await model_updater.refresh_predictions()
+
+        await asyncio.sleep(1)  # 1-second loop
+```
+
+**Supplementary Spec:** `docs/supplementary/EVENT_LOOP_ARCHITECTURE_V1.0.md`
+
+---
+
+### 6. Implementation Checklist (Phase 5a)
+
+**Module 1: PositionMonitor** (~300 lines, 90%+ coverage target)
+- [ ] Adaptive polling logic (30s normal, 5s urgent)
+- [ ] Real-time price fetching from Kalshi API
+- [ ] Position price updates via PositionManager
+- [ ] Exit signal detection (10-condition check)
+- [ ] Performance logging (latency, errors, success rate)
+- [ ] Unit tests (15 tests): polling logic, price updates, error handling
+- [ ] Integration tests (5 tests): end-to-end monitoring flow
+
+**Module 2: ExitEvaluator** (~400 lines, 95%+ coverage target)
+- [ ] 10-condition priority hierarchy implementation
+- [ ] Priority classification (CRITICAL/HIGH/MEDIUM/LOW)
+- [ ] Urgency calculation (immediate/30s/5min/passive)
+- [ ] Partial exit logic (percentage-based scaling)
+- [ ] Event-driven evaluation (injury, weather, etc.)
+- [ ] Unit tests (20 tests): all 10 conditions, edge cases
+- [ ] Property tests (Hypothesis): condition priority consistency
+
+**Module 3: ExitExecutor** (~250 lines, 90%+ coverage target)
+- [ ] Market order execution (immediate urgency)
+- [ ] Limit order with timeout (30s, 5min)
+- [ ] Fallback logic (limit → market if timeout)
+- [ ] Slippage tracking and logging
+- [ ] Order status monitoring (pending → filled → confirmed)
+- [ ] Unit tests (12 tests): all order types, fallback logic
+- [ ] Integration tests (8 tests): end-to-end execution with Kalshi API
+
+**Module 4: PartialExitHandler** (~150 lines, 90%+ coverage target)
+- [ ] Partial position closure logic
+- [ ] Remaining position update (quantity, trailing stop)
+- [ ] Multi-stage exit tracking (4x 25% exits)
+- [ ] P&L calculation for partial closures
+- [ ] Unit tests (10 tests): partial closure scenarios
+- [ ] Integration tests (3 tests): multi-stage exits
+
+**Module 5: Event Loop Integration** (~100 lines enhancement)
+- [ ] Async position monitoring task
+- [ ] Exit evaluation task scheduler
+- [ ] Execution task queue
+- [ ] Error handling and retry logic
+- [ ] Integration tests (5 tests): full event loop scenarios
+
+**Total Estimated Effort:**
+- **Code:** ~1200 lines across 5 modules
+- **Tests:** ~70 unit tests + ~20 integration tests (~1500 lines test code)
+- **Documentation:** 4 supplementary specs (~2000 lines)
+- **Coverage Target:** ≥90% (critical trading logic)
+- **Timeline:** 3-4 weeks (Phase 5a)
+
+---
+
+### 7. Design Philosophy: Why Phase 5a?
+
+**Question:** Why defer automated position monitoring and exit execution to Phase 5a instead of Phase 1.5?
+
+**Answer:**
+
+**Phase 1.5 Focus:** Build robust CRUD foundation
+- Manual position management workflows
+- Data integrity (SCD Type 2, Decimal precision)
+- P&L calculation correctness (YES vs NO logic)
+- Margin validation accuracy
+- Type safety (TypedDict)
+
+**Phase 5a Focus:** Add real-time automation
+- Automated monitoring (background threads)
+- Exit evaluation (10-condition hierarchy)
+- Execution logic (urgency-based orders)
+- Event loop integration (async coordination)
+- Performance optimization (low-latency monitoring)
+
+**Why This Order?**
+1. **Correctness First:** Phase 1.5 ensures CRUD operations work correctly before automating them
+2. **Test Coverage:** 90%+ coverage on CRUD layer provides confidence for automation layer
+3. **Learning Period:** Manual workflows in Phase 1.5-4 inform Phase 5a automation design
+4. **Incremental Risk:** Automate only after manual processes proven reliable
+5. **Clear Separation:** CRUD (Phase 1.5) vs Automation (Phase 5a) = easier debugging
+
+**Real-World Example:**
+```python
+# Phase 1.5: Manual position management (current)
+position = manager.open_position(...)
+# ... wait for price movement ...
+position = manager.update_price(position_id, new_price)
+# ... manually check exit conditions ...
+if should_exit:
+    manager.close_position(position_id)
+
+# Phase 5a: Automated position management (future)
+position = manager.open_position(...)
+# PositionMonitor automatically:
+# - Fetches prices every 30s
+# - Updates position prices
+# - Evaluates exit conditions
+# - Executes exits when conditions met
+# Developer just monitors logs and performance metrics
+```
+
+**Key Insight:** Phase 1.5 builds the "manual controls" (steering wheel, brake pedal). Phase 5a adds "autopilot" (automated monitoring and execution). You need reliable manual controls before building autopilot.
+
+---
+
 ## References
 
 ### Source Code
@@ -1531,14 +1865,24 @@ for snapshot in history:
 - **Model Manager:** `src/precog/analytics/model_manager.py`
 - **Database Connection:** `src/precog/database/connection.py`
 
-### Documentation
+### User Guides
+- **Strategy Manager User Guide:** `docs/guides/STRATEGY_MANAGER_USER_GUIDE_V1.1.md`
+- **Model Manager User Guide:** `docs/guides/MODEL_MANAGER_USER_GUIDE_V1.1.md`
 - **Kalshi Market Terminology:** `docs/guides/KALSHI_MARKET_TERMINOLOGY_GUIDE_V1.0.md`
 - **Trailing Stop Guide:** `docs/guides/TRAILING_STOP_GUIDE_V1.0.md`
-- **Strategy Manager Guide:** `docs/guides/STRATEGY_MANAGER_USER_GUIDE_V1.0.md`
-- **Model Manager Guide:** `docs/guides/MODEL_MANAGER_USER_GUIDE_V1.0.md`
 - **Position Management Guide:** `docs/guides/POSITION_MANAGEMENT_GUIDE_V1.0.md`
+- **Performance Tracking Guide:** `docs/guides/PERFORMANCE_TRACKING_GUIDE_V1.0.md`
+
+### Supplementary Specifications (Phase 5a)
+- **Position Monitoring Spec:** `docs/supplementary/POSITION_MONITORING_SPEC_V1.0.md`
+- **Exit Evaluation Spec:** `docs/supplementary/EXIT_EVALUATION_SPEC_V1.0.md`
+- **Event Loop Architecture:** `docs/supplementary/EVENT_LOOP_ARCHITECTURE_V1.0.md`
+- **Order Execution Architecture:** `docs/supplementary/ORDER_EXECUTION_ARCHITECTURE_V1.0.md`
+
+### Foundation Documents
 - **Database Schema:** `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md`
 - **Development Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.6.md`
+- **Development Phases:** `docs/foundation/DEVELOPMENT_PHASES_V1.5.md`
 
 ### Requirements & ADRs
 - **REQ-POS-001:** Position Management
@@ -1582,4 +1926,4 @@ for snapshot in history:
 
 ---
 
-**END OF POSITION_MANAGER_USER_GUIDE_V1.0.md**
+**END OF POSITION_MANAGER_USER_GUIDE_V1.1.md**

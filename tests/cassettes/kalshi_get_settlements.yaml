@@ -1,0 +1,46 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://demo-api.kalshi.co/trade-api/v2/portfolio/settlements?limit=5
+  response:
+    body:
+      string: '{"cursor":"","settlements":[]}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '30'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Sun, 23 Nov 2025 21:27:02 GMT
+      Via:
+      - 1.1 b40940a08d8ae316e8c3593183c3786c.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - nka8DCc7uI4m_hxTkZm01fWrp9FS9wWz90QAeDQpafQOtR58VOg3zQ==
+      X-Amz-Cf-Pop:
+      - ORD58-P10
+      X-Cache:
+      - Miss from cloudfront
+      content-security-policy:
+      - default-src 'none';
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1

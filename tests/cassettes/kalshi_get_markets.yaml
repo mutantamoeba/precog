@@ -1,0 +1,114 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://demo-api.kalshi.co/trade-api/v2/markets?limit=5&series_ticker=KXNFLGAME
+  response:
+    body:
+      string: '{"cursor":"CgwIwcLvyAYQoLb83AESG0tYTkZMR0FNRS0yNU5PVjI3Q0lOQkFMLUNJTg","markets":[{"can_close_early":true,"category":"","close_time":"2025-12-11T18:00:00Z","created_time":"2025-11-18T03:00:18.150913Z","custom_strike":{"football_team":"08c52d1f-7ce1-445f-be72-97de0554ecc8"},"early_close_condition":"This
+        market will close and expire after a winner is declared.","event_ticker":"KXNFLGAME-25NOV27GBDET","expected_expiration_time":"2025-11-27T21:00:00Z","expiration_time":"2025-12-11T18:00:00Z","expiration_value":"","last_price":0,"last_price_dollars":"0.0000","latest_expiration_time":"2025-12-11T18:00:00Z","liquidity":0,"liquidity_dollars":"0.0000","market_type":"binary","no_ask":100,"no_ask_dollars":"1.0000","no_bid":0,"no_bid_dollars":"0.0000","no_sub_title":"Green
+        Bay","notional_value":100,"notional_value_dollars":"1.0000","open_interest":0,"open_time":"2025-11-18T03:29:26Z","previous_price":0,"previous_price_dollars":"0.0000","previous_yes_ask":100,"previous_yes_ask_dollars":"1.0000","previous_yes_bid":0,"previous_yes_bid_dollars":"0.0000","price_level_structure":"linear_cent","price_ranges":[{"end":"1.0000","start":"0.0000","step":"0.0100"}],"response_price_units":"usd_cent","result":"","risk_limit_cents":0,"rules_primary":"If
+        Green Bay wins the Green Bay at Detroit professional football game originally
+        scheduled for Nov 27, 2025, then the market resolves to Yes.","rules_secondary":"The
+        following market refers to the team who is the winner (or participant awarded
+        a tie) in the Green Bay at Detroit professional football game originally scheduled
+        for Nov 27, 2025. If this game is postponed or delayed, the market will remain
+        open and close after the rescheduled game has finished (within two weeks).
+        If the cancelled game is not played or is rescheduled further than two weeks
+        out, the market will resolve to a fair price for each team in accordance with
+        the rules. If the game is declared a tie, the market will resolve to 50/50
+        for both teams.","settlement_timer_seconds":300,"status":"active","strike_type":"structured","subtitle":"","tick_size":1,"ticker":"KXNFLGAME-25NOV27GBDET-GB","title":"Green
+        Bay at Detroit Winner?","volume":0,"volume_24h":0,"yes_ask":100,"yes_ask_dollars":"1.0000","yes_bid":0,"yes_bid_dollars":"0.0000","yes_sub_title":"Green
+        Bay"},{"can_close_early":true,"category":"","close_time":"2025-12-11T18:00:00Z","created_time":"2025-11-18T03:00:18.150913Z","custom_strike":{"football_team":"f95a55a7-8472-4ffa-be20-14547e3c32ff"},"early_close_condition":"This
+        market will close and expire after a winner is declared.","event_ticker":"KXNFLGAME-25NOV27GBDET","expected_expiration_time":"2025-11-27T21:00:00Z","expiration_time":"2025-12-11T18:00:00Z","expiration_value":"","last_price":0,"last_price_dollars":"0.0000","latest_expiration_time":"2025-12-11T18:00:00Z","liquidity":0,"liquidity_dollars":"0.0000","market_type":"binary","no_ask":100,"no_ask_dollars":"1.0000","no_bid":0,"no_bid_dollars":"0.0000","no_sub_title":"Detroit","notional_value":100,"notional_value_dollars":"1.0000","open_interest":0,"open_time":"2025-11-18T03:29:26Z","previous_price":0,"previous_price_dollars":"0.0000","previous_yes_ask":100,"previous_yes_ask_dollars":"1.0000","previous_yes_bid":0,"previous_yes_bid_dollars":"0.0000","price_level_structure":"linear_cent","price_ranges":[{"end":"1.0000","start":"0.0000","step":"0.0100"}],"response_price_units":"usd_cent","result":"","risk_limit_cents":0,"rules_primary":"If
+        Detroit wins the Green Bay at Detroit professional football game originally
+        scheduled for Nov 27, 2025, then the market resolves to Yes.","rules_secondary":"The
+        following market refers to the team who is the winner (or participant awarded
+        a tie) in the Green Bay at Detroit professional football game originally scheduled
+        for Nov 27, 2025. If this game is postponed or delayed, the market will remain
+        open and close after the rescheduled game has finished (within two weeks).
+        If the cancelled game is not played or is rescheduled further than two weeks
+        out, the market will resolve to a fair price for each team in accordance with
+        the rules. If the game is declared a tie, the market will resolve to 50/50
+        for both teams.","settlement_timer_seconds":300,"status":"active","strike_type":"structured","subtitle":"","tick_size":1,"ticker":"KXNFLGAME-25NOV27GBDET-DET","title":"Green
+        Bay at Detroit Winner?","volume":0,"volume_24h":0,"yes_ask":100,"yes_ask_dollars":"1.0000","yes_bid":0,"yes_bid_dollars":"0.0000","yes_sub_title":"Detroit"},{"can_close_early":true,"category":"","close_time":"2025-12-11T21:30:00Z","created_time":"2025-11-18T03:00:17.939661Z","custom_strike":{"football_team":"64f72720-2e4a-4cc8-a39b-ca148aecb389"},"early_close_condition":"This
+        market will close and expire after a winner is declared.","event_ticker":"KXNFLGAME-25NOV27KCDAL","expected_expiration_time":"2025-11-28T00:30:00Z","expiration_time":"2025-12-11T21:30:00Z","expiration_value":"","last_price":0,"last_price_dollars":"0.0000","latest_expiration_time":"2025-12-11T21:30:00Z","liquidity":0,"liquidity_dollars":"0.0000","market_type":"binary","no_ask":100,"no_ask_dollars":"1.0000","no_bid":0,"no_bid_dollars":"0.0000","no_sub_title":"Kansas
+        City","notional_value":100,"notional_value_dollars":"1.0000","open_interest":0,"open_time":"2025-11-18T03:29:26Z","previous_price":0,"previous_price_dollars":"0.0000","previous_yes_ask":100,"previous_yes_ask_dollars":"1.0000","previous_yes_bid":0,"previous_yes_bid_dollars":"0.0000","price_level_structure":"linear_cent","price_ranges":[{"end":"1.0000","start":"0.0000","step":"0.0100"}],"response_price_units":"usd_cent","result":"","risk_limit_cents":0,"rules_primary":"If
+        Kansas City wins the Kansas City at Dallas professional football game originally
+        scheduled for Nov 27, 2025, then the market resolves to Yes.","rules_secondary":"The
+        following market refers to the team who is the winner (or participant awarded
+        a tie) in the Kansas City at Dallas professional football game originally
+        scheduled for Nov 27, 2025. If this game is postponed or delayed, the market
+        will remain open and close after the rescheduled game has finished (within
+        two weeks). If the cancelled game is not played or is rescheduled further
+        than two weeks out, the market will resolve to a fair price for each team
+        in accordance with the rules. If the game is declared a tie, the market will
+        resolve to 50/50 for both teams.","settlement_timer_seconds":300,"status":"active","strike_type":"structured","subtitle":"","tick_size":1,"ticker":"KXNFLGAME-25NOV27KCDAL-KC","title":"Kansas
+        City at Dallas Winner?","volume":0,"volume_24h":0,"yes_ask":100,"yes_ask_dollars":"1.0000","yes_bid":0,"yes_bid_dollars":"0.0000","yes_sub_title":"Kansas
+        City"},{"can_close_early":true,"category":"","close_time":"2025-12-11T21:30:00Z","created_time":"2025-11-18T03:00:17.939661Z","custom_strike":{"football_team":"62b97b7c-5503-461c-b328-fd8543219b22"},"early_close_condition":"This
+        market will close and expire after a winner is declared.","event_ticker":"KXNFLGAME-25NOV27KCDAL","expected_expiration_time":"2025-11-28T00:30:00Z","expiration_time":"2025-12-11T21:30:00Z","expiration_value":"","last_price":0,"last_price_dollars":"0.0000","latest_expiration_time":"2025-12-11T21:30:00Z","liquidity":0,"liquidity_dollars":"0.0000","market_type":"binary","no_ask":100,"no_ask_dollars":"1.0000","no_bid":0,"no_bid_dollars":"0.0000","no_sub_title":"Dallas","notional_value":100,"notional_value_dollars":"1.0000","open_interest":0,"open_time":"2025-11-18T03:29:26Z","previous_price":0,"previous_price_dollars":"0.0000","previous_yes_ask":100,"previous_yes_ask_dollars":"1.0000","previous_yes_bid":0,"previous_yes_bid_dollars":"0.0000","price_level_structure":"linear_cent","price_ranges":[{"end":"1.0000","start":"0.0000","step":"0.0100"}],"response_price_units":"usd_cent","result":"","risk_limit_cents":0,"rules_primary":"If
+        Dallas wins the Kansas City at Dallas professional football game originally
+        scheduled for Nov 27, 2025, then the market resolves to Yes.","rules_secondary":"The
+        following market refers to the team who is the winner (or participant awarded
+        a tie) in the Kansas City at Dallas professional football game originally
+        scheduled for Nov 27, 2025. If this game is postponed or delayed, the market
+        will remain open and close after the rescheduled game has finished (within
+        two weeks). If the cancelled game is not played or is rescheduled further
+        than two weeks out, the market will resolve to a fair price for each team
+        in accordance with the rules. If the game is declared a tie, the market will
+        resolve to 50/50 for both teams.","settlement_timer_seconds":300,"status":"active","strike_type":"structured","subtitle":"","tick_size":1,"ticker":"KXNFLGAME-25NOV27KCDAL-DAL","title":"Kansas
+        City at Dallas Winner?","volume":0,"volume_24h":0,"yes_ask":100,"yes_ask_dollars":"1.0000","yes_bid":0,"yes_bid_dollars":"0.0000","yes_sub_title":"Dallas"},{"can_close_early":true,"category":"","close_time":"2025-12-12T01:20:00Z","created_time":"2025-11-18T03:00:17.463412Z","custom_strike":{"football_team":"b007a1ab-bca6-42c7-8706-62607a605866"},"early_close_condition":"This
+        market will close and expire after a winner is declared.","event_ticker":"KXNFLGAME-25NOV27CINBAL","expected_expiration_time":"2025-11-28T04:20:00Z","expiration_time":"2025-12-12T01:20:00Z","expiration_value":"","last_price":0,"last_price_dollars":"0.0000","latest_expiration_time":"2025-12-12T01:20:00Z","liquidity":0,"liquidity_dollars":"0.0000","market_type":"binary","no_ask":100,"no_ask_dollars":"1.0000","no_bid":0,"no_bid_dollars":"0.0000","no_sub_title":"Cincinnati","notional_value":100,"notional_value_dollars":"1.0000","open_interest":0,"open_time":"2025-11-18T03:29:26Z","previous_price":0,"previous_price_dollars":"0.0000","previous_yes_ask":100,"previous_yes_ask_dollars":"1.0000","previous_yes_bid":0,"previous_yes_bid_dollars":"0.0000","price_level_structure":"linear_cent","price_ranges":[{"end":"1.0000","start":"0.0000","step":"0.0100"}],"response_price_units":"usd_cent","result":"","risk_limit_cents":0,"rules_primary":"If
+        Cincinnati wins the Cincinnati at Baltimore professional football game originally
+        scheduled for Nov 27, 2025, then the market resolves to Yes.","rules_secondary":"The
+        following market refers to the team who is the winner (or participant awarded
+        a tie) in the Cincinnati at Baltimore professional football game originally
+        scheduled for Nov 27, 2025. If this game is postponed or delayed, the market
+        will remain open and close after the rescheduled game has finished (within
+        two weeks). If the cancelled game is not played or is rescheduled further
+        than two weeks out, the market will resolve to a fair price for each team
+        in accordance with the rules. If the game is declared a tie, the market will
+        resolve to 50/50 for both teams.","settlement_timer_seconds":300,"status":"active","strike_type":"structured","subtitle":"","tick_size":1,"ticker":"KXNFLGAME-25NOV27CINBAL-CIN","title":"Cincinnati
+        at Baltimore Winner?","volume":0,"volume_24h":0,"yes_ask":100,"yes_ask_dollars":"1.0000","yes_bid":0,"yes_bid_dollars":"0.0000","yes_sub_title":"Cincinnati"}]}
+
+        '
+    headers:
+      Cache-Control:
+      - public, max-age=5
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 23 Nov 2025 16:56:51 GMT
+      Transfer-Encoding:
+      - chunked
+      Via:
+      - 1.1 fea3bb73170852a6088ac898afbb2522.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - VajMphVU7j9lqQ24jFw1HgH84VmhyYI1zaf_GA28hB9iBUrZ8axMog==
+      X-Amz-Cf-Pop:
+      - ORD58-P10
+      X-Cache:
+      - Miss from cloudfront
+      content-security-policy:
+      - default-src 'none';
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1

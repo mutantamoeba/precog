@@ -6212,7 +6212,7 @@ CREATE TABLE brier_score_metrics (...);
 
 **References:**
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -6969,7 +6969,7 @@ Cons:
 ### References
 
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -7736,7 +7736,7 @@ WebSocket for Position Monitoring (real-time):
 
 ### References
 
-- `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 7 Task #2: Frontend Development)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 7 Task #2: Frontend Development)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.9: Materialized Views)
 - Next.js Documentation: https://nextjs.org/docs
 - Recharts Documentation: https://recharts.org/
@@ -8658,7 +8658,7 @@ def run_holdout_validation(
 - `docs/guides/MODEL_EVALUATION_GUIDE_V1.0.md` (implementation guide - to be created)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 2 Task #3, Phase 6 Task #1)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 2 Task #3, Phase 6 Task #1)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.7: Evaluation Runs Table)
 
 ---
@@ -9381,7 +9381,7 @@ ON position_risk_by_strategy(league, strategy_name);
 - `docs/guides/DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md` (React dashboard + API integration - to be created)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 6 Task #3, Phase 7 Task #2)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 6 Task #3, Phase 7 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.8: Materialized Views Reference)
 
 ---
@@ -10212,7 +10212,7 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (includes A/B testing architecture)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 7 Task #3, Phase 8 Task #2)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 7 Task #3, Phase 8 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.9: A/B Tests Table)
 
 ---
@@ -11128,7 +11128,7 @@ CREATE TABLE strategies (
 ### References
 
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (edges table schema)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.5.md` (Phase 1.5 manager components)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 1.5 manager components)
 - `src/precog/trading/model_manager.py` (edge calculation logic - Phase 1.5 implementation)
 - `src/precog/trading/strategy_manager.py` (edge query logic - Phase 1.5 implementation)
 
@@ -11567,7 +11567,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 
 **Supporting Documentation:**
 - DEVELOPMENT_PHILOSOPHY_V1.3.md (updated TDD section with Phase 1.5 lesson learned)
-- DEVELOPMENT_PATTERNS_V1.9.md (added Pattern 13: Test Coverage Quality)
+- DEVELOPMENT_PATTERNS_V1.10.md (added Pattern 13: Test Coverage Quality)
 - PHASE_1.5_TEST_PLAN_V1.0.md (test planning for manager components)
 
 **Development Guides:**
@@ -11638,7 +11638,7 @@ tests/
 - `docs/foundation/TESTING_STRATEGY_V3.1.md` (comprehensive 8 test type framework)
 - `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md` (REQ-TEST-012 through REQ-TEST-019)
 - `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md` (TDD section with Phase 1.5 lessons)
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.9.md` (Pattern 13: Test Coverage Quality)
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.10.md` (Pattern 13: Test Coverage Quality)
 
 **Code:**
 - `tests/conftest.py` (db_pool, clean_test_data fixtures)

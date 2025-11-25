@@ -91,15 +91,15 @@ class TestKalshiClientIntegration:
         assert markets[0]["ticker"] == "KXNFLGAME-25DEC15-KC-YES"
         assert markets[1]["ticker"] == "KXNFLGAME-25DEC15-BUF-YES"
 
-        # Verify Decimal conversion
-        assert isinstance(markets[0]["yes_bid"], Decimal)
-        assert markets[0]["yes_bid"] == Decimal("0.6200")
-        assert isinstance(markets[0]["yes_ask"], Decimal)
-        assert markets[0]["yes_ask"] == Decimal("0.6250")
+        # Verify Decimal conversion (using *_dollars fields for sub-penny precision)
+        assert isinstance(markets[0]["yes_bid_dollars"], Decimal)
+        assert markets[0]["yes_bid_dollars"] == Decimal("0.6200")
+        assert isinstance(markets[0]["yes_ask_dollars"], Decimal)
+        assert markets[0]["yes_ask_dollars"] == Decimal("0.6250")
 
         # Verify sub-penny pricing preserved
-        assert isinstance(markets[1]["yes_bid"], Decimal)
-        assert markets[1]["yes_bid"] == Decimal("0.4275")  # Sub-penny!
+        assert isinstance(markets[1]["yes_bid_dollars"], Decimal)
+        assert markets[1]["yes_bid_dollars"] == Decimal("0.4275")  # Sub-penny!
 
     def test_get_balance_integration(self, monkeypatch):
         """Test get_balance() returns Decimal balance."""
@@ -188,9 +188,11 @@ class TestKalshiClientIntegration:
         assert len(fills) == 2
         assert fills[0]["ticker"] == "KXNFLGAME-25DEC15-KC-YES"
 
-        # Verify Decimal types
-        assert isinstance(fills[0]["price"], Decimal)
-        assert fills[0]["price"] == Decimal("0.6150")
+        # Verify Decimal types (using *_fixed fields for sub-penny precision)
+        assert isinstance(fills[0]["yes_price_fixed"], Decimal)
+        assert fills[0]["yes_price_fixed"] == Decimal("0.6200")
+        assert isinstance(fills[0]["no_price_fixed"], Decimal)
+        assert fills[0]["no_price_fixed"] == Decimal("0.3800")
 
     def test_get_settlements_integration(self, monkeypatch):
         """Test get_settlements() returns settlement data with Decimal values."""
@@ -473,14 +475,14 @@ class TestKalshiClientDecimalPrecision:
         Verifies that prices like "0.4275" are correctly parsed as Decimal("0.4275")
         without any precision loss.
         """
-        # Create mock response with sub-penny price
+        # Create mock response with sub-penny price (using *_dollars suffix)
         mock_market = {
             "ticker": "TEST-MARKET",
-            "yes_bid": test_case["api_value"],
-            "yes_ask": test_case["api_value"],
-            "no_bid": "0.5000",
-            "no_ask": "0.5000",
-            "last_price": test_case["api_value"],
+            "yes_bid_dollars": test_case["api_value"],
+            "yes_ask_dollars": test_case["api_value"],
+            "no_bid_dollars": "0.5000",
+            "no_ask_dollars": "0.5000",
+            "last_price_dollars": test_case["api_value"],
             "volume": 1000,
         }
 
@@ -507,12 +509,12 @@ class TestKalshiClientDecimalPrecision:
 
         market = markets[0]
 
-        # Verify exact Decimal value
-        assert market["yes_bid"] == test_case["expected_decimal"]
-        assert isinstance(market["yes_bid"], Decimal)
+        # Verify exact Decimal value (using *_dollars field)
+        assert market["yes_bid_dollars"] == test_case["expected_decimal"]
+        assert isinstance(market["yes_bid_dollars"], Decimal)
 
         # Verify string representation matches (no precision loss)
-        assert str(market["yes_bid"]) == test_case["api_value"]
+        assert str(market["yes_bid_dollars"]) == test_case["api_value"]
 
     @pytest.mark.parametrize("test_case", DECIMAL_ARITHMETIC_TESTS)
     def test_decimal_arithmetic_operations(self, test_case):
@@ -562,8 +564,14 @@ class TestKalshiClientDecimalPrecision:
             client = KalshiClient(environment="demo")
             markets = client.get_markets()
 
-        # Check all price fields are Decimal for all markets
-        price_fields = ["yes_bid", "yes_ask", "no_bid", "no_ask", "last_price"]
+        # Check all price fields are Decimal for all markets (sub-penny format with *_dollars suffix)
+        price_fields = [
+            "yes_bid_dollars",
+            "yes_ask_dollars",
+            "no_bid_dollars",
+            "no_ask_dollars",
+            "last_price_dollars",
+        ]
 
         for market in markets:
             for field in price_fields:
@@ -1030,20 +1038,20 @@ class TestKalshiClientPagination:
             "markets": [
                 {
                     "ticker": "MARKET-1-YES",
-                    "yes_bid": "0.6000",
-                    "yes_ask": "0.6100",
-                    "no_bid": "0.3900",
-                    "no_ask": "0.4000",
-                    "last_price": "0.6050",
+                    "yes_bid_dollars": "0.6000",
+                    "yes_ask_dollars": "0.6100",
+                    "no_bid_dollars": "0.3900",
+                    "no_ask_dollars": "0.4000",
+                    "last_price_dollars": "0.6050",
                     "volume": 1000,
                 },
                 {
                     "ticker": "MARKET-2-YES",
-                    "yes_bid": "0.7000",
-                    "yes_ask": "0.7100",
-                    "no_bid": "0.2900",
-                    "no_ask": "0.3000",
-                    "last_price": "0.7050",
+                    "yes_bid_dollars": "0.7000",
+                    "yes_ask_dollars": "0.7100",
+                    "no_bid_dollars": "0.2900",
+                    "no_ask_dollars": "0.3000",
+                    "last_price_dollars": "0.7050",
                     "volume": 2000,
                 },
             ]
@@ -1067,9 +1075,9 @@ class TestKalshiClientPagination:
         assert markets[0]["ticker"] == "MARKET-1-YES"
         assert markets[1]["ticker"] == "MARKET-2-YES"
 
-        # Verify prices converted to Decimal
-        assert isinstance(markets[0]["yes_bid"], Decimal)
-        assert markets[0]["yes_bid"] == Decimal("0.6000")
+        # Verify prices converted to Decimal (sub-penny format with *_dollars suffix)
+        assert isinstance(markets[0]["yes_bid_dollars"], Decimal)
+        assert markets[0]["yes_bid_dollars"] == Decimal("0.6000")
 
     def test_multi_page_cursor_handling(self, monkeypatch):
         """Test get_markets with multi-page results (cursor pagination)."""
@@ -1079,20 +1087,20 @@ class TestKalshiClientPagination:
             "markets": [
                 {
                     "ticker": "MARKET-1-YES",
-                    "yes_bid": "0.6000",
-                    "yes_ask": "0.6100",
-                    "no_bid": "0.3900",
-                    "no_ask": "0.4000",
-                    "last_price": "0.6050",
+                    "yes_bid_dollars": "0.6000",
+                    "yes_ask_dollars": "0.6100",
+                    "no_bid_dollars": "0.3900",
+                    "no_ask_dollars": "0.4000",
+                    "last_price_dollars": "0.6050",
                     "volume": 1000,
                 },
                 {
                     "ticker": "MARKET-2-YES",
-                    "yes_bid": "0.7000",
-                    "yes_ask": "0.7100",
-                    "no_bid": "0.2900",
-                    "no_ask": "0.3000",
-                    "last_price": "0.7050",
+                    "yes_bid_dollars": "0.7000",
+                    "yes_ask_dollars": "0.7100",
+                    "no_bid_dollars": "0.2900",
+                    "no_ask_dollars": "0.3000",
+                    "last_price_dollars": "0.7050",
                     "volume": 2000,
                 },
             ],
@@ -1106,11 +1114,11 @@ class TestKalshiClientPagination:
             "markets": [
                 {
                     "ticker": "MARKET-3-YES",
-                    "yes_bid": "0.8000",
-                    "yes_ask": "0.8100",
-                    "no_bid": "0.1900",
-                    "no_ask": "0.2000",
-                    "last_price": "0.8050",
+                    "yes_bid_dollars": "0.8000",
+                    "yes_ask_dollars": "0.8100",
+                    "no_bid_dollars": "0.1900",
+                    "no_ask_dollars": "0.2000",
+                    "last_price_dollars": "0.8050",
                     "volume": 3000,
                 },
             ]

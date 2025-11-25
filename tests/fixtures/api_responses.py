@@ -37,15 +37,21 @@ KALSHI_MARKET_RESPONSE = {
             "status": "open",
             "can_close_early": False,
             "result": None,
-            # Prices as strings (Kalshi API format)
-            "yes_bid": "0.6200",
-            "yes_ask": "0.6250",
-            "no_bid": "0.3750",
-            "no_ask": "0.3800",
-            "last_price": "0.6225",
+            # Kalshi dual format: legacy integer cents + sub-penny string dollars
+            "yes_bid": 62,  # Legacy: integer cents
+            "yes_bid_dollars": "0.6200",  # Sub-penny: string dollars
+            "yes_ask": 63,
+            "yes_ask_dollars": "0.6250",
+            "no_bid": 38,
+            "no_bid_dollars": "0.3750",
+            "no_ask": 38,
+            "no_ask_dollars": "0.3800",
+            "last_price": 62,
+            "last_price_dollars": "0.6225",
             "volume": 15420,
             "open_interest": 8750,
             "liquidity": 125000,
+            "liquidity_dollars": "1250.0000",
         },
         {
             "ticker": "KXNFLGAME-25DEC15-BUF-YES",
@@ -60,14 +66,20 @@ KALSHI_MARKET_RESPONSE = {
             "can_close_early": False,
             "result": None,
             # Sub-penny pricing example (critical test case)
-            "yes_bid": "0.4275",
-            "yes_ask": "0.4325",
-            "no_bid": "0.5675",
-            "no_ask": "0.5725",
-            "last_price": "0.4300",
+            "yes_bid": 43,  # Legacy: integer cents (rounded)
+            "yes_bid_dollars": "0.4275",  # Sub-penny: exact value
+            "yes_ask": 43,
+            "yes_ask_dollars": "0.4325",
+            "no_bid": 57,
+            "no_bid_dollars": "0.5675",
+            "no_ask": 57,
+            "no_ask_dollars": "0.5725",
+            "last_price": 43,
+            "last_price_dollars": "0.4300",
             "volume": 8920,
             "open_interest": 4560,
             "liquidity": 87500,
+            "liquidity_dollars": "875.0000",
         },
     ],
     "cursor": "next_page_token_abc123",  # Pagination cursor
@@ -137,7 +149,11 @@ KALSHI_FILLS_RESPONSE = {
             "side": "yes",
             "action": "buy",
             "count": 50,
-            "price": "0.6150",  # Execution price
+            "price": 0.6150,  # Legacy: float (AVOID!)
+            "yes_price": 62,  # Legacy: integer cents
+            "no_price": 38,
+            "yes_price_fixed": "0.6200",  # Sub-penny: string dollars
+            "no_price_fixed": "0.3800",
             "created_time": "2025-12-10T14:23:45Z",
             "is_taker": True,
         },
@@ -148,7 +164,11 @@ KALSHI_FILLS_RESPONSE = {
             "side": "yes",
             "action": "buy",
             "count": 50,
-            "price": "0.4200",
+            "price": 0.4200,  # Legacy: float (AVOID!)
+            "yes_price": 42,  # Legacy: integer cents
+            "no_price": 58,
+            "yes_price_fixed": "0.4200",  # Sub-penny: string dollars
+            "no_price_fixed": "0.5800",
             "created_time": "2025-12-10T15:10:22Z",
             "is_taker": False,
         },
