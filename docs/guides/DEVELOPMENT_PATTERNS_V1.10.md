@@ -1,13 +1,27 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.9
+**Version:** 1.10
 **Created:** 2025-11-13
-**Last Updated:** 2025-11-23
+**Last Updated:** 2025-11-24
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.10:**
+- **Added Pattern 22: VCR Pattern for Real API Responses (ALWAYS for External APIs) - CRITICAL**
+- Documents VCR (Video Cassette Recorder) testing pattern for API integration tests
+- Real-world context from GitHub #124 Parts 1-6 (Kalshi sub-penny pricing discovery)
+- VCR records REAL API responses once, replays them in tests (combines speed + accuracy)
+- Caught critical bug: Kalshi dual-format pricing (integer cents vs. sub-penny string)
+- Benefits: 100% real API structures, fast (1ms), deterministic, CI-friendly, credentials filtered
+- Implementation: 5-step workflow (install → configure → write test → record → commit cassette)
+- Decision tree: When to use VCR vs. Mocks vs. Real Fixtures (4 scenarios)
+- Common mistakes: Sensitive headers not filtered, wrong record_mode, one cassette for all tests
+- VCR + Pattern 13 integration: Real API responses + Real database fixtures
+- Real-world example: 8 VCR tests for Kalshi API, 5 cassettes, 359-line test file
+- Cross-references: Pattern 13, Pattern 1, ADR-075, REQ-TEST-013/014, GitHub #124
+- Total addition: ~360 lines documenting VCR testing pattern best practices
 **Changes in V1.9:**
 - **Added Pattern 21: Validation-First Architecture - 4-Layer Defense in Depth (CRITICAL)**
 - Documents comprehensive validation architecture: pre-commit → pre-push → CI/CD → branch protection
@@ -5105,6 +5119,592 @@ Closes #104"
 
 ---
 
+## Pattern 22: VCR Pattern for Real API Responses (ALWAYS for External APIs) - CRITICAL
+
+**TL;DR:** ALWAYS use VCR (Video Cassette Recorder) pattern to record REAL API responses and replay them in integration tests. Mocked API responses can pass tests yet miss critical bugs in response parsing, field mapping, and data transformations.
+
+**WHY:** API integration tests with mocked responses can pass yet miss critical bugs in response parsing, field mapping, and data transformations. The VCR (Video Cassette Recorder) pattern records REAL API responses once, then replays them in tests—combining the speed/determinism of mocks with the accuracy of real data.
+
+**The Critical Lesson:** "Mocked API response" ≠ "Real API response structure"
+
+### Real-World Example: Kalshi Dual-Format Pricing (GitHub #124)
+
+**The Bug:**
+Kalshi API provides dual format for backward compatibility:
+- **Legacy integer cents:** `yes_bid: 62` (2 decimals, cents)
+- **Sub-penny string:** `yes_bid_dollars: "0.6200"` (4 decimals, string)
+
+**The Discovery:**
+1. **Mocked tests used integer format:** Tests created mock responses with `yes_bid: 62` and passed ✅
+2. **Real API returned string format:** Actual Kalshi API returned `yes_bid_dollars: "0.6200"` (sub-penny precision)
+3. **Bug discovered only with VCR:** When VCR cassettes recorded actual API responses, tests revealed client was parsing wrong field
+4. **Impact:** Without VCR, production code would have used 2-decimal pricing instead of 4-decimal sub-penny pricing → precision loss in trading decisions
+
+**Files Affected:**
+- `tests/integration/api_connectors/test_kalshi_client_vcr.py` - VCR tests catching dual-format bug
+- `src/precog/api_connectors/kalshi_client.py` - Updated to parse `*_dollars` fields instead of integer cents
+- `tests/cassettes/kalshi_*.yaml` - 5 cassettes with REAL API responses
+
+**Result:** VCR pattern caught bug that mocks missed. Tests with real API data revealed actual response structure.
+
+---
+
+### What is VCR?
+
+**VCR (Video Cassette Recorder)** is a testing pattern that:
+1. **Records** real HTTP interactions from live API once
+2. **Saves** them to "cassette" files (YAML format)
+3. **Replays** cassettes in tests (no network calls)
+4. **Filters** sensitive headers (API keys, signatures, timestamps)
+
+**Benefits:**
+- ✅ **100% real API data** - Uses actual response structures from production API
+- ✅ **Fast** - No network calls (cassettes replay in ~1ms)
+- ✅ **Deterministic** - Same responses every time, no flaky tests
+- ✅ **CI-friendly** - No API credentials needed in CI/CD
+- ✅ **Version control** - Cassettes committed to git, reviewable in PRs
+
+**Python Library:** `vcrpy` (install: `pip install vcrpy`)
+
+---
+
+### VCR Configuration
+
+**File:** `tests/integration/api_connectors/test_kalshi_client_vcr.py`
+
+```python
+import vcr
+
+# Configure VCR for test cassettes
+my_vcr = vcr.VCR(
+    cassette_library_dir="tests/cassettes",           # Where to save cassettes
+    record_mode="none",                                # Never record in tests (only replay)
+    match_on=["method", "scheme", "host", "port", "path", "query"],  # Match requests by URL components
+    filter_headers=[                                   # Remove sensitive headers before saving
+        "KALSHI-ACCESS-KEY",
+        "KALSHI-ACCESS-SIGNATURE",
+        "KALSHI-ACCESS-TIMESTAMP"
+    ],
+    decode_compressed_response=True,                   # Auto-decode gzip/deflate responses
+)
+```
+
+**Configuration Options:**
+
+| Option | Value | Why |
+|--------|-------|-----|
+| `cassette_library_dir` | `"tests/cassettes"` | Centralized cassette storage |
+| `record_mode` | `"none"` | **Tests only replay** (never record, prevents accidental overwrites) |
+| `match_on` | `["method", "scheme", "host", "port", "path", "query"]` | Match requests by full URL (prevents mismatches) |
+| `filter_headers` | `["KALSHI-ACCESS-KEY", ...]` | **CRITICAL:** Remove credentials before committing cassettes |
+| `decode_compressed_response` | `True` | Auto-decode gzip responses (Kalshi uses gzip) |
+
+**⚠️ CRITICAL:** `filter_headers` prevents API credentials from being committed to git. Always filter authentication headers (API keys, signatures, tokens).
+
+---
+
+### VCR Test Example
+
+**File:** `tests/integration/api_connectors/test_kalshi_client_vcr.py`
+
+```python
+@pytest.mark.integration
+@pytest.mark.api
+def test_get_markets_with_real_api_data(monkeypatch):
+    """
+    Test get_markets() with REAL recorded Kalshi market data.
+
+    Uses cassette: kalshi_get_markets.yaml
+    - 5 real NFL markets from KXNFLGAME series
+    - Real prices with sub-penny precision (0.0000 format)
+    - Real market titles, tickers, volumes
+    """
+    # Set environment variables for client initialization
+    monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "test-key-id")  # Dummy value (not used with cassette)
+    monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "_keys/kalshi_demo_private.pem")
+
+    # Use VCR cassette (replays recorded HTTP interaction)
+    with my_vcr.use_cassette("kalshi_get_markets.yaml"):
+        client = KalshiClient(environment="demo")
+        markets = client.get_markets(series_ticker="KXNFLGAME", limit=5)
+
+    # Verify real data structure
+    assert len(markets) == 5, "Should return 5 markets from cassette"
+
+    # Verify first market structure (real data from actual API)
+    market = markets[0]
+    assert "ticker" in market
+    assert "title" in market
+    assert market["ticker"].startswith("KXNFLGAME-"), "Real Kalshi market ticker format"
+
+    # Verify ALL price fields are Decimal (CRITICAL! Pattern 1)
+    price_fields = ["yes_bid_dollars", "yes_ask_dollars", "no_bid_dollars", "no_ask_dollars"]
+    for field in price_fields:
+        if field in market:
+            assert isinstance(market[field], Decimal), (
+                f"Field '{field}' must be Decimal, got {type(market[field])}"
+            )
+
+    # Verify specific market from recording (proves real data)
+    assert any(m["ticker"] == "KXNFLGAME-25NOV27GBDET-GB" for m in markets), (
+        "Should include GB @ DET market from cassette"
+    )
+```
+
+**Key Points:**
+1. **Dummy credentials OK:** `test-key-id` works because cassette replays HTTP response (no real API call)
+2. **Real data verification:** Assert on actual market tickers from cassette (proves real data)
+3. **Pattern 1 integration:** Verify Decimal precision with real API response (catches parsing bugs)
+4. **Fast execution:** ~1ms (no network call)
+
+---
+
+### Cassette Structure (YAML)
+
+**File:** `tests/cassettes/kalshi_get_markets.yaml`
+
+```yaml
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Content-Type:
+      - application/json
+      # NOTE: Sensitive headers filtered (KALSHI-ACCESS-KEY, KALSHI-ACCESS-SIGNATURE, KALSHI-ACCESS-TIMESTAMP)
+    method: GET
+    uri: https://demo-api.kalshi.co/trade-api/v2/markets?limit=5&series_ticker=KXNFLGAME
+  response:
+    body:
+      string: '{"cursor":"...","markets":[{"ticker":"KXNFLGAME-25NOV27GBDET-GB","title":"Green Bay at Detroit Winner?","yes_bid_dollars":"0.0000","yes_ask_dollars":"1.0000",...}]}'
+    headers:
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 23 Nov 2025 16:56:51 GMT
+    status:
+      code: 200
+      message: OK
+version: 1
+```
+
+**Cassette Contents:**
+- **Request:** HTTP method, URL, headers (credentials filtered), body
+- **Response:** Status code, headers, body (full JSON response from real API)
+- **Version:** VCR format version (for compatibility)
+
+**Commit to Git:** ✅ YES - Cassettes are committed to version control (no credentials due to `filter_headers`)
+
+---
+
+### VCR vs. Mocks vs. Real Fixtures: Decision Tree
+
+**When to use VCR:**
+
+1. ✅ **Testing external API client?** → Use VCR
+   - **Examples:** Kalshi API, ESPN API, Balldontlie API
+   - **Why:** Ensures response parsing works with REAL data structures
+   - **Benefit:** Catches bugs like Kalshi dual-format pricing
+
+2. ✅ **Testing integration with third-party service?** → Use VCR
+   - **Examples:** Payment APIs (Stripe), Weather APIs, Sports data APIs
+   - **Why:** Third-party APIs change response formats without notice
+   - **Benefit:** Cassettes document expected API contract
+
+3. ✅ **Testing API error handling with REAL error responses?** → Use VCR
+   - **Examples:** 429 rate limit, 500 server error, 401 unauthorized
+   - **Why:** Real error responses may have different structure than docs
+   - **Benefit:** Record actual error response, test parsing
+
+**When to use Real Fixtures (Pattern 13):**
+
+4. ✅ **Testing internal logic/business rules?** → Use real fixtures
+   - **Examples:** Database CRUD operations, trading logic, position management
+   - **Why:** Full control over test data, no network dependency
+   - **Benefit:** Faster setup, easier debugging
+
+**When to use Mocks:**
+
+5. ✅ **Testing error handling for scenarios that can't be recorded?** → Use mocks
+   - **Examples:** Network failures (`requests.ConnectionError`), timeouts
+   - **Why:** Can't record network failures (no HTTP response exists)
+   - **Benefit:** Can simulate any error condition
+
+**Decision Matrix:**
+
+| Scenario | Solution | Rationale |
+|----------|----------|-----------|
+| Kalshi `get_markets()` | VCR cassette ✅ | External API, need real response structure |
+| Database `insert_market()` | Real fixtures (Pattern 13) ✅ | Internal logic, need control over test data |
+| API network timeout | Mock `requests.Timeout` ✅ | Can't record network failure (no HTTP response) |
+| API 429 rate limit | VCR cassette ✅ | Can record real 429 response from API |
+| Trading strategy backtest | Real fixtures (Pattern 13) ✅ | Need historical data with known outcomes |
+| ESPN API `get_scores()` | VCR cassette ✅ | External API, response format may change |
+
+**Key Principle:** For external APIs you don't control → Use VCR. For internal logic you control → Use real fixtures (Pattern 13).
+
+---
+
+### Common Mistakes
+
+#### ❌ Mistake 1: Not Filtering Sensitive Headers
+
+**Problem:** API credentials committed to git in cassettes
+
+**Wrong:**
+```python
+my_vcr = vcr.VCR(
+    cassette_library_dir="tests/cassettes",
+    record_mode="none",
+    # Missing filter_headers! ❌
+)
+```
+
+**Cassette contains:**
+```yaml
+headers:
+  KALSHI-ACCESS-KEY: 75b4b76e-d191-4855-b219-5c31cdcba1c8  # ❌ LEAKED!
+  KALSHI-ACCESS-SIGNATURE: <RSA-PSS signature>             # ❌ LEAKED!
+```
+
+**Correct:**
+```python
+my_vcr = vcr.VCR(
+    cassette_library_dir="tests/cassettes",
+    record_mode="none",
+    filter_headers=["KALSHI-ACCESS-KEY", "KALSHI-ACCESS-SIGNATURE", "KALSHI-ACCESS-TIMESTAMP"],  # ✅
+)
+```
+
+**Cassette contains:**
+```yaml
+headers:
+  # Sensitive headers filtered by VCR ✅
+  Content-Type: application/json
+```
+
+**Why Critical:** Committing API credentials to git = security breach. Always use `filter_headers`.
+
+---
+
+#### ❌ Mistake 2: Using `record_mode="all"` in Tests
+
+**Problem:** Tests accidentally overwrite cassettes on every run
+
+**Wrong:**
+```python
+my_vcr = vcr.VCR(
+    cassette_library_dir="tests/cassettes",
+    record_mode="all",  # ❌ DANGER: Overwrites cassettes every test run!
+)
+```
+
+**Impact:**
+- Every test run makes real API calls (slow, requires credentials)
+- Cassettes change randomly based on current API state
+- Git diffs show cassette changes unrelated to code changes
+- CI/CD fails if API is down or rate-limited
+
+**Correct:**
+```python
+my_vcr = vcr.VCR(
+    cassette_library_dir="tests/cassettes",
+    record_mode="none",  # ✅ Tests ONLY replay (never record)
+)
+```
+
+**When to use `record_mode="all"`:**
+- **Only when initially recording cassettes** (separate script, not in tests)
+- **Only when re-recording after API changes** (documented process below)
+
+---
+
+#### ❌ Mistake 3: One Cassette for All Tests
+
+**Problem:** Overwriting cassettes, hard to debug test failures
+
+**Wrong:**
+```python
+def test_get_markets(monkeypatch):
+    with my_vcr.use_cassette("kalshi_api.yaml"):  # ❌ Generic name
+        markets = client.get_markets()
+
+def test_get_balance(monkeypatch):
+    with my_vcr.use_cassette("kalshi_api.yaml"):  # ❌ Same cassette reused
+        balance = client.get_balance()
+```
+
+**Impact:**
+- Second test overwrites first cassette when recording
+- Can't tell which test failed by cassette name
+- Git diffs show mixed changes from multiple tests
+
+**Correct:**
+```python
+def test_get_markets(monkeypatch):
+    with my_vcr.use_cassette("kalshi_get_markets.yaml"):  # ✅ Specific name
+        markets = client.get_markets()
+
+def test_get_balance(monkeypatch):
+    with my_vcr.use_cassette("kalshi_get_balance.yaml"):  # ✅ Different cassette
+        balance = client.get_balance()
+```
+
+**Naming Convention:** `<api>_<method>_<scenario>.yaml`
+- `kalshi_get_markets.yaml` - Normal case
+- `kalshi_get_markets_rate_limited.yaml` - 429 error case
+- `kalshi_get_markets_empty.yaml` - Edge case (no results)
+
+---
+
+### Re-Recording Cassettes Workflow
+
+**When to re-record:**
+1. API response format changes (new fields, field renames)
+2. Need to test new API endpoint
+3. Need to update test data (newer markets, different prices)
+4. API version upgrade (v1 → v2)
+
+**5-Step Re-Recording Process:**
+
+**Step 1: Create recording script** (separate from tests)
+
+```python
+# scripts/record_kalshi_cassettes.py
+"""
+Record VCR cassettes for Kalshi API integration tests.
+
+ONLY run this script when:
+1. Adding new API endpoints to test
+2. API response format changes
+3. Updating test data
+
+DO NOT run this in tests (use record_mode="none" in tests).
+"""
+import vcr
+from precog.api_connectors.kalshi_client import KalshiClient
+
+# Configure VCR for RECORDING (not replaying)
+recording_vcr = vcr.VCR(
+    cassette_library_dir="tests/cassettes",
+    record_mode="all",  # ✅ OK for recording script
+    filter_headers=["KALSHI-ACCESS-KEY", "KALSHI-ACCESS-SIGNATURE", "KALSHI-ACCESS-TIMESTAMP"],
+    decode_compressed_response=True,
+)
+
+def record_get_markets():
+    """Record kalshi_get_markets.yaml cassette."""
+    with recording_vcr.use_cassette("kalshi_get_markets.yaml"):
+        client = KalshiClient(environment="demo")  # Uses REAL API credentials from .env
+        markets = client.get_markets(series_ticker="KXNFLGAME", limit=5)
+        print(f"✅ Recorded {len(markets)} markets to kalshi_get_markets.yaml")
+
+def record_get_balance():
+    """Record kalshi_get_balance.yaml cassette."""
+    with recording_vcr.use_cassette("kalshi_get_balance.yaml"):
+        client = KalshiClient(environment="demo")
+        balance = client.get_balance()
+        print(f"✅ Recorded balance ${balance} to kalshi_get_balance.yaml")
+
+if __name__ == "__main__":
+    record_get_markets()
+    record_get_balance()
+    # ... record other endpoints
+```
+
+**Step 2: Run recording script** (requires real API credentials)
+
+```bash
+# Ensure .env has KALSHI_DEMO_KEY_ID and KALSHI_DEMO_KEYFILE
+python scripts/record_kalshi_cassettes.py
+
+# Output:
+# ✅ Recorded 5 markets to kalshi_get_markets.yaml
+# ✅ Recorded balance $235084 to kalshi_get_balance.yaml
+```
+
+**Step 3: Verify cassettes updated**
+
+```bash
+git diff tests/cassettes/
+
+# Example diff:
+# - "balance": 220000
+# + "balance": 235084  # Updated balance from current API state
+```
+
+**Step 4: Run tests with new cassettes**
+
+```bash
+python -m pytest tests/integration/api_connectors/test_kalshi_client_vcr.py -v
+
+# All tests should pass ✅
+```
+
+**Step 5: Commit updated cassettes**
+
+```bash
+git add tests/cassettes/*.yaml
+git commit -m "test: Re-record Kalshi VCR cassettes for updated API responses
+
+- Updated kalshi_get_markets.yaml (5 markets)
+- Updated kalshi_get_balance.yaml (balance: $235084)
+
+Reason: API response format changed (added 'liquidity_dollars' field)"
+```
+
+**⚠️ Important:** NEVER commit cassettes with unfiltered credentials. Always verify `filter_headers` worked:
+
+```bash
+# Verify no credentials in cassettes
+git grep -i "KALSHI-ACCESS-KEY" tests/cassettes/
+# Should return: (no matches) ✅
+```
+
+---
+
+### VCR + Pattern 13 Integration: Real API Responses + Real Database
+
+**Best of Both Worlds:** Combine VCR (real API responses) with Pattern 13 (real database fixtures) for comprehensive integration tests.
+
+**Example:** Test CLI command that fetches from API and saves to database
+
+**File:** `tests/integration/cli/test_cli_database_integration.py`
+
+```python
+@pytest.mark.integration
+@pytest.mark.cli
+def test_cli_fetch_markets_saves_to_database(
+    cli_runner,                # CLI test runner (from conftest.py)
+    db_pool,                   # Real database connection pool (Pattern 13)
+    db_cursor,                 # Real database cursor (Pattern 13)
+    clean_test_data,           # Fixture to clean test data (Pattern 13)
+    setup_kalshi_platform,     # Fixture to insert Kalshi platform (Pattern 13)
+    monkeypatch,
+):
+    """
+    Test that CLI 'fetch-markets' command:
+    1. Fetches markets from Kalshi API (VCR cassette - REAL API response)
+    2. Saves them to database (Pattern 13 - REAL database)
+
+    Combines:
+    - VCR Pattern: Real API responses from cassette ✅
+    - Pattern 13: Real database fixtures ✅
+    """
+    # Mock environment variables for API client
+    monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "test-key-id")
+    monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "_keys/kalshi_demo_private.pem")
+
+    # VCR: Replay REAL API response from cassette
+    with my_vcr.use_cassette("kalshi_get_markets.yaml"):
+        result = cli_runner.invoke(cli, ["fetch-markets", "--limit", "5"])
+
+    # Verify CLI success
+    assert result.exit_code == 0, f"CLI failed: {result.output}"
+
+    # Pattern 13: Verify data saved to REAL database
+    db_cursor.execute(
+        """
+        SELECT COUNT(*)
+        FROM markets
+        WHERE series_ticker = 'KXNFLGAME'
+        AND row_current_ind = TRUE
+        """
+    )
+    count = db_cursor.fetchone()[0]
+    assert count == 5, "Should have saved 5 markets from VCR cassette to real database"
+
+    # Verify Decimal precision in database (Pattern 1 + VCR + Pattern 13)
+    db_cursor.execute(
+        """
+        SELECT ticker, yes_bid_dollars
+        FROM markets
+        WHERE series_ticker = 'KXNFLGAME'
+        AND row_current_ind = TRUE
+        LIMIT 1
+        """
+    )
+    row = db_cursor.fetchone()
+    assert isinstance(row[1], Decimal), "Database should store Decimal (not float)"
+```
+
+**Why This Integration Matters:**
+
+1. **VCR provides real API data:** Cassette contains actual Kalshi market data (5 NFL markets with sub-penny pricing)
+2. **Pattern 13 provides real database:** Test uses actual PostgreSQL database (not mocked connection)
+3. **End-to-end validation:** Proves entire flow works (API → parsing → database) with real data
+4. **Catches both API and DB bugs:**
+   - API parsing bugs: VCR cassette has real response structure
+   - Database bugs: Pattern 13 uses real SQL constraints, Decimal types, indexes
+
+**Result:** Highest confidence integration test - uses real API responses AND real database.
+
+---
+
+### Real-World Impact: GitHub #124
+
+**Context:** Phase 1.5 integration test audit revealed 77% false positive rate from mocks
+
+**Problem:**
+- Tests used mocked API responses: `{"balance": "1234.5678"}`
+- Real Kalshi API returns: `{"balance": 123456}` (cents, not dollars!)
+- Tests passed ✅ but production code would fail ❌
+
+**Solution:** VCR Pattern (GitHub #124 Parts 1-6)
+
+**Implementation:**
+1. **Installed vcrpy:** `pip install vcrpy`
+2. **Configured VCR:** `filter_headers` for credentials, `record_mode="none"` for tests
+3. **Recorded 5 cassettes:** markets, balance, positions, fills, settlements
+4. **Created 8 VCR tests:** `test_kalshi_client_vcr.py` (359 lines)
+5. **Updated client:** Parse `yes_bid_dollars` (string) instead of `yes_bid` (int cents)
+
+**Files Changed:**
+- `tests/integration/api_connectors/test_kalshi_client_vcr.py` (NEW, 359 lines, 8 tests)
+- `tests/cassettes/*.yaml` (5 new cassettes with REAL API data)
+- `src/precog/api_connectors/kalshi_client.py` (updated to parse `*_dollars` fields)
+- `docs/api-integration/KALSHI_SUBPENNY_PRICING_IMPLEMENTATION_V1.0.md` (NEW, 514 lines)
+
+**Result:**
+- ✅ All 8 VCR tests passing with REAL API data
+- ✅ Caught dual-format pricing bug (mocks missed it)
+- ✅ 100% confidence in API response parsing (uses actual Kalshi responses)
+- ✅ Fast CI/CD (cassettes replay in ~1ms, no API calls)
+
+---
+
+### Summary
+
+**VCR Pattern Checklist:**
+
+- [ ] **Install vcrpy:** `pip install vcrpy`
+- [ ] **Configure VCR:** Set `filter_headers` to remove credentials
+- [ ] **Use `record_mode="none"` in tests:** Tests only replay (never record)
+- [ ] **One cassette per test:** Specific naming (`<api>_<method>.yaml`)
+- [ ] **Commit cassettes to git:** Reviewable in PRs, no credentials
+- [ ] **Combine with Pattern 13:** VCR (real API) + Real database = comprehensive integration
+- [ ] **Re-record with script:** Separate recording script (not in tests)
+- [ ] **Verify credential filtering:** `git grep` cassettes before committing
+
+**When to Use VCR:**
+- ✅ Testing external API clients (Kalshi, ESPN, Balldontlie)
+- ✅ Need real API response structures (prevents mocking errors)
+- ✅ Want fast, deterministic tests (no network calls)
+- ✅ CI/CD without API credentials
+
+**Cross-References:**
+- **Pattern 1:** Decimal Precision - VCR tests verify Decimal parsing with real API data
+- **Pattern 13:** Real Fixtures, Not Mocks - VCR for API, real fixtures for database
+- **ADR-075:** VCR Pattern for Integration Tests
+- **REQ-TEST-013:** Integration tests use real API fixtures (VCR cassettes)
+- **REQ-TEST-014:** Test coverage includes API integration with VCR
+- **GitHub #124:** Fix integration test mocks (Parts 1-6: VCR implementation)
+- **File:** `tests/integration/api_connectors/test_kalshi_client_vcr.py` (8 tests, 5 cassettes)
+- **File:** `docs/api-integration/KALSHI_SUBPENNY_PRICING_IMPLEMENTATION_V1.0.md` (dual-format documentation)
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -5130,6 +5730,7 @@ Closes #104"
 | **19. Hypothesis Decimal Strategy** | Hypothesis (pytest) | `git grep "decimals(min_value=" tests/property/` | Pattern 1, Pattern 10, ADR-074, SESSION 4.3 |
 | **20. Resource Management** | Manual (code review) | `git grep "handler.close()" -- '*.py'` | Pattern 9, Pattern 12, SESSION 4.2 |
 | **21. Validation-First Architecture** | Pre-commit + Pre-push hooks | `pre-commit run --all-files` | DEF-001, DEF-002, DEF-003, Pattern 1/4/9/18 |
+| **22. VCR Pattern** | Pytest (integration tests) | `pytest tests/integration/api_connectors/test_kalshi_client_vcr.py` | ADR-075, REQ-TEST-013/014, GitHub #124, Pattern 1/13 |
 
 ---
 
