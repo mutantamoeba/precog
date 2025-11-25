@@ -288,6 +288,7 @@ class PositionManager:
                         """
                         SELECT * FROM positions
                         WHERE id = %s
+                          AND row_current_ind = TRUE
                         """,
                         (position_id,),
                     )
@@ -389,6 +390,7 @@ class PositionManager:
                         """
                         SELECT * FROM positions
                         WHERE id = %s
+                          AND row_current_ind = TRUE
                         """,
                         (new_position_id,),
                     )
@@ -520,6 +522,7 @@ class PositionManager:
                         """
                         SELECT * FROM positions
                         WHERE id = %s
+                          AND row_current_ind = TRUE
                         """,
                         (final_position_id,),
                     )
@@ -800,6 +803,7 @@ class PositionManager:
                         %s::jsonb, position_metadata, TRUE
                     FROM positions
                     WHERE id = %s
+                      AND row_current_ind = TRUE
                     RETURNING id
                     """,
                     (psycopg2.extras.Json(trailing_stop_state), position_id),
@@ -813,6 +817,7 @@ class PositionManager:
                     """
                     SELECT * FROM positions
                     WHERE id = %s
+                      AND row_current_ind = TRUE
                     """,
                     (new_position_id,),
                 )
@@ -1030,6 +1035,7 @@ class PositionManager:
                         %s::jsonb, position_metadata, TRUE
                     FROM positions
                     WHERE id = %s
+                      AND row_current_ind = TRUE
                     RETURNING id
                     """,
                     (
@@ -1048,6 +1054,7 @@ class PositionManager:
                     """
                     SELECT * FROM positions
                     WHERE id = %s
+                      AND row_current_ind = TRUE
                     """,
                     (new_position_id,),
                 )
