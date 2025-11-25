@@ -1,9 +1,16 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.32
-**Last Updated:** 2025-11-23
+**Version:** 2.33
+**Last Updated:** 2025-11-24
 **Status:** ✅ Current
+**Changes in v2.33:**
+- **MANAGER USER GUIDES V1.1 UPDATE**: Updated all three manager user guides from V1.0 to V1.1 with comprehensive Future Enhancements sections
+- Updated STRATEGY_MANAGER_USER_GUIDE V1.0 → V1.1: Added 373-line Future Enhancements section documenting Phase 5a automation (StrategyEvaluator, performance-based activation criteria, systematic A/B testing framework)
+- Updated MODEL_MANAGER_USER_GUIDE V1.0 → V1.1: Added 460-line Future Enhancements section documenting Phase 3+ automation (ModelTrainer, EdgeCalculator, DataCollector, FeatureEngineer, ModelEvaluator)
+- Updated POSITION_MANAGER_USER_GUIDE V1.0 → V1.1: Added 327-line Future Enhancements section documenting Phase 5a automation (PositionMonitor, ExitEvaluator, ExitExecutor, PartialExitHandler)
+- All three guides now split Related Guides into User Guides vs Supplementary Specs categories
+- Updated DEVELOPMENT_PHASES V1.5 → V1.6: Added Supplementary Specifications section to Phase 5a listing 4 implementation guides (POSITION_MONITORING_SPEC, EXIT_EVALUATION_SPEC, EVENT_LOOP_ARCHITECTURE, ORDER_EXECUTION_ARCHITECTURE)
 **Changes in v2.32:**
 - **SUB-PENNY PRICING IMPLEMENTATION (SESSION 7)**: Added comprehensive documentation of Kalshi sub-penny pricing dual format discovery
 - Added KALSHI_SUBPENNY_PRICING_IMPLEMENTATION_V1.0.md (~600 lines) to API & Integration Documents
@@ -26,9 +33,9 @@
 - Total effort estimate: 49-66 hours for CRITICAL + HIGH + MEDIUM priorities (excluding deferred LOW priority)
 **Changes in v2.30:**
 - **USER GUIDES FOR CORE MODULES (PHASE 1.5)**: Added 6 comprehensive user guides documenting manager layer, configuration APIs, and Kalshi terminology
-- Added STRATEGY_MANAGER_USER_GUIDE_V1.0.md (~850 lines): Strategy CRUD, A/B testing, version management, performance tracking
-- Added MODEL_MANAGER_USER_GUIDE_V1.0.md (~800 lines): Model CRUD, version lifecycle, backtesting integration, evaluation framework
-- Added POSITION_MANAGER_USER_GUIDE_V1.0.md (~900 lines): Position lifecycle, P&L calculation, exit condition evaluation, risk management
+- Added STRATEGY_MANAGER_USER_GUIDE_V1.1.md (~850 lines): Strategy CRUD, A/B testing, version management, performance tracking
+- Added MODEL_MANAGER_USER_GUIDE_V1.1.md (~800 lines): Model CRUD, version lifecycle, backtesting integration, evaluation framework
+- Added POSITION_MANAGER_USER_GUIDE_V1.1.md (~900 lines): Position lifecycle, P&L calculation, exit condition evaluation, risk management
 - Added CONFIG_LOADER_USER_GUIDE_V1.0.md (~700 lines): ConfigLoader API, environment prefixing, Decimal conversion, caching, database vs YAML hierarchy
 - Added KALSHI_CLIENT_USER_GUIDE_V1.0.md (~850 lines): Authentication, rate limiting, error handling, all API methods, pagination
 - Added KALSHI_MARKET_TERMINOLOGY_GUIDE_V1.0.md (~430 lines): Binary market structure, YES/NO vs BUY/SELL, position vs trade tables, P&L logic
@@ -191,7 +198,7 @@
 - Updated PHASE_0.7_DEFERRED_TASKS V1.1 → V1.2 (marked all 8 tasks complete: DEF-001 through DEF-008)
 - Added validation script maintenance reminders to CLAUDE.md (Pattern 1, Pattern 2, SESSION_HANDOFF template)
 - Updated PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md (8-step → 9-step: added validation scripts step)
-- Updated DEVELOPMENT_PHASES_V1.5.md (added validation reminders to all 6 phase test planning checklists)
+- Updated DEVELOPMENT_PHASES_V1.6.md (added validation reminders to all 6 phase test planning checklists)
 - Comprehensive Defense in Depth documentation (4-layer validation architecture)
 - Phase 0.7 status: 100% complete (pre-commit hooks, pre-push hooks, branch protection, schema validation, all deferred tasks done)
 **Changes in v2.11:**
@@ -339,12 +346,12 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.18.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.32.md** | ✅ | v2.32 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.32** (Sub-penny pricing implementation: Added KALSHI_SUBPENNY_PRICING_IMPLEMENTATION_V1.0.md documenting Kalshi dual format, fixed critical API field parsing bug, 8 VCR integration tests + 47 total Kalshi tests passing) |
+| **MASTER_INDEX_V2.33.md** | ✅ | v2.33 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.33** (Sub-penny pricing implementation: Added KALSHI_SUBPENNY_PRICING_IMPLEMENTATION_V1.0.md documenting Kalshi dual format, fixed critical API field parsing bug, 8 VCR integration tests + 47 total Kalshi tests passing) |
 | **ARCHITECTURE_DECISIONS_V2.21.md** | ✅ | v2.21 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (97 total) - **UPDATED V2.21** (ADR-094 through 097: Workflow Enforcement Infrastructure - YAML-driven validation architecture, auto-discovery pattern for validators, parallel execution in git hooks (66% time savings: 145s → 40-50s), tier-specific coverage targets; 4-layer defense-in-depth: pre-commit (~2-5s) → pre-push (~40-50s) → CI/CD (~2-5min) → branch protection; 93 → 97 total ADRs) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
 | **ADR_INDEX_V1.15.md** | ✅ | v1.15 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 76 architecture decisions - **UPDATED V1.15** (ADR-094 through 097: Workflow Enforcement Infrastructure - YAML-driven validation, auto-discovery pattern, parallel execution in git hooks, tier-specific coverage targets; 72 → 76 total ADRs) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
-| **DEVELOPMENT_PHASES_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.5** |
+| **DEVELOPMENT_PHASES_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.6** |
 | **TESTING_STRATEGY_V3.1.md** | ✅ | v3.1 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V3.1** - Enhanced coverage tier classification based on TDD/security/accuracy emphasis; Position Manager 85%→90% (handles money+real-time); Kalshi Client 75%→90% (handles money+security); risk-based framework (financial impact, security impact, blast radius); classification examples table showing WHY each module is in its tier; V3.0: Comprehensive 8 test type framework addressing Phase 1.5 TDD failure (expanded from 4 types to: unit, property, integration, E2E, stress, race, performance, chaos); mock usage restrictions (REQ-TEST-013: APPROPRIATE for external APIs/time, FORBIDDEN for database/internal logic/config); integration testing philosophy "test with REAL infrastructure not mocks"; test type requirements matrix (module tier × test type); phase-based roadmap (when each type required Phases 1-5); property-based testing with Hypothesis (REQ-TEST-018) |
 | **TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Comprehensive test requirements (REQ-TEST-012 through REQ-TEST-019): 8 test types (unit, property, integration, E2E, stress, race, performance, chaos), mock usage restrictions, fixture requirements, coverage standards (Critical ≥90%, Manager ≥85%, Infrastructure ≥80%), stress/integration/E2E test requirements |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
@@ -431,7 +438,7 @@ Roadmap, timelines, and project management.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DEVELOPMENT_PHASES_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 0.5 complete, Phase 5 split into 5a/5b - UPDATED Phase 0.7 |
+| **DEVELOPMENT_PHASES_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 0.5 complete, Phase 5 split into 5a/5b - UPDATED V1.6 |
 | **DEPLOYMENT_GUIDE_V1.0.md** | 🔵 | - | `/docs/deployment/` | 1 | Phase 1 ✅ | 🟡 High | Local/AWS deployment stubs |
 | **USER_GUIDE_V1.0.md** | 🔵 | - | `/docs/guides/` | 5 | Phase 5 ✅ | 🟢 Medium | CLI examples (edges-list, trade-execute) |
 | **DEVELOPER_ONBOARDING_V1.0.md** | 🔵 | - | `/docs/utility/` | 0 | Phase 0 ✅ | 🟡 High | Merged with ENVIRONMENT_CHECKLIST, onboarding steps |
@@ -452,14 +459,14 @@ Phase-specific implementation guides created in Phase 0.5.
 | **ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 6-9 | Phases 6-9 | 🔴 Critical | **NEW** - End-to-end analytics architecture: 4-layer design (Collection→Storage→Aggregation→Presentation), dual processing (real-time <200ms + batch), 6 materialized views |
 | **AB_TESTING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 8 | Phase 8 | 🟡 High | **NEW** - Statistical methodology for strategy/model evaluation: Welch's t-test, Chi-square, sample size calculation (64 trades/variant), Bayesian analysis, experiment lifecycle |
 | **DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 9 | Phase 9 | 🟡 High | **NEW** - React 18 + Next.js 14 trading dashboard: component library (MetricCard, PositionCard), Socket.IO real-time (<200ms), SWR data fetching, Plotly.js charts, deployment |
-| **DEVELOPMENT_PATTERNS_V1.9.md** | ✅ | v1.9 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.9** - Added Pattern 19 (Hypothesis Decimal Strategy), Pattern 20 (Resource Management), Pattern 21 (Validation-First Architecture) - 21 total patterns now; Pattern 19 documents using Decimal strings for min/max values in Hypothesis decimals() strategy (~310 lines); Pattern 20 documents explicit resource cleanup (handler.close() before removeHandler()) (~340 lines); Pattern 21 documents 4-layer validation architecture: pre-commit (2-5s) → pre-push (30-60s) → CI/CD (2-5min) → branch protection (~450 lines); real-world impact metrics: pre-commit reduces CI failures 60-70%, pre-push reduces CI failures 80-90%; cross-references ADR-094 through 097, Pattern 13 (Real Fixtures), YAML-driven validation |
+| **DEVELOPMENT_PATTERNS_V1.10.md** | ✅ | v1.9 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.9** - Added Pattern 19 (Hypothesis Decimal Strategy), Pattern 20 (Resource Management), Pattern 21 (Validation-First Architecture) - 21 total patterns now; Pattern 19 documents using Decimal strings for min/max values in Hypothesis decimals() strategy (~310 lines); Pattern 20 documents explicit resource cleanup (handler.close() before removeHandler()) (~340 lines); Pattern 21 documents 4-layer validation architecture: pre-commit (2-5s) → pre-push (30-60s) → CI/CD (2-5min) → branch protection (~450 lines); real-world impact metrics: pre-commit reduces CI failures 60-70%, pre-push reduces CI failures 80-90%; cross-references ADR-094 through 097, Pattern 13 (Real Fixtures), YAML-driven validation |
 | **SENTRY_INTEGRATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | Phase 2 | 🟡 High | **NEW** - 3-layer hybrid observability architecture: logger.py (audit trail) + Sentry (real-time) + alerts table (permanent record); implementation guide with code examples, testing procedures, troubleshooting |
 | **MANAGER_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Comprehensive architecture guide for 4 core managers (Model, Strategy, Position, Config); database schemas with field-by-field explanations; status lifecycle diagrams; immutable vs SCD Type 2 versioning patterns; design principles (pure psycopg2, decimal precision, two-level configs); ~900 lines; addresses user request to document manager architecture summary |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
 | **DEVELOPER_SETUP_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1 | Phase 1.5 | 🟡 High | **NEW** - Comprehensive developer onboarding guide (Python 3.12+, PostgreSQL 15+, Git, GitHub CLI, pre-commit hooks); platform-specific instructions (Windows/macOS/Linux); addresses gh CLI dependency risk from Phase Completion assessment |
-| **STRATEGY_MANAGER_USER_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Strategy Manager API usage guide (~850 lines): create/update/archive strategies, A/B testing workflow, version management, performance tracking, common patterns (safe initialization, active strategy queries, multi-version testing), troubleshooting |
-| **MODEL_MANAGER_USER_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Model Manager API usage guide (~800 lines): create/update/archive models, version lifecycle, backtesting integration, evaluation framework, common patterns (safe initialization, active model queries, calibration tracking), troubleshooting |
-| **POSITION_MANAGER_USER_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Position Manager API usage guide (~900 lines): position lifecycle (open/update/close), P&L calculation (YES vs NO), exit condition evaluation, risk management, common patterns (safe initialization, position monitoring, profit target checks), troubleshooting |
+| **STRATEGY_MANAGER_USER_GUIDE_V1.1.md** | ✅ | v1.1 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **UPDATED V1.1** - Strategy Manager API usage guide (~850 lines): create/update/archive strategies, A/B testing workflow, version management, performance tracking, common patterns (safe initialization, active strategy queries, multi-version testing), troubleshooting |
+| **MODEL_MANAGER_USER_GUIDE_V1.1.md** | ✅ | v1.1 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **UPDATED V1.1** - Model Manager API usage guide (~800 lines): create/update/archive models, version lifecycle, backtesting integration, evaluation framework, common patterns (safe initialization, active model queries, calibration tracking), troubleshooting |
+| **POSITION_MANAGER_USER_GUIDE_V1.1.md** | ✅ | v1.1 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **UPDATED V1.1** - Position Manager API usage guide (~900 lines): position lifecycle (open/update/close), P&L calculation (YES vs NO), exit condition evaluation, risk management, common patterns (safe initialization, position monitoring, profit target checks), troubleshooting |
 | **CONFIG_LOADER_USER_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - ConfigLoader API usage guide (~700 lines): load YAML configs, environment prefixing (DEV_/STAGING_/PROD_), automatic Decimal conversion, caching mechanism, database vs YAML hierarchy, common patterns (safe initialization, nested config access, reloading), troubleshooting; complements CONFIGURATION_GUIDE (YAML structure) |
 | **KALSHI_CLIENT_USER_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Kalshi Client API usage guide (~850 lines): RSA-PSS authentication (automatic), rate limiting (100 req/min), error handling (exponential backoff), all API methods (get_markets/balance/positions/fills/settlements), pagination, common patterns (safe client initialization, environment-specific client, error-resilient calls), troubleshooting; complements API_INTEGRATION_GUIDE (API reference) |
 | **KALSHI_MARKET_TERMINOLOGY_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🟡 High | **NEW** - Kalshi market terminology guide (~430 lines): Binary prediction market structure (YES/NO outcomes vs BUY/SELL actions), side vs action fields, position vs trade tables, P&L calculation logic (YES profits on price increase, NO profits on price decrease), complete examples with position lifecycle, case sensitivity notes (Python UPPERCASE vs database lowercase); addresses common confusion about Kalshi API terminology |
@@ -611,7 +618,7 @@ Additional guides, references, and supporting documentation.
 - ✅ ARCHITECTURE_DECISIONS_V2.5.md (ADR numbers added for all decisions)
 - ✅ ADR_INDEX.md (systematic ADR catalog)
 - ✅ PROJECT_OVERVIEW_V1.4.md
-- ✅ DEVELOPMENT_PHASES_V1.5.md (Phase 5 split into 5a/5b)
+- ✅ DEVELOPMENT_PHASES_V1.6.md (Phase 5 split into 5a/5b)
 - ✅ system.yaml (added comprehensive notifications configuration)
 - ✅ position_management.yaml V2.0 (10 exit conditions)
 - ✅ probability_models.yaml V2.0 (versioning)
@@ -658,7 +665,7 @@ Additional guides, references, and supporting documentation.
 - DATABASE_SCHEMA_SUMMARY_V1.6.md (schema - 25 tables including alerts + ML placeholders)
 - API_INTEGRATION_GUIDE_V1.0.md (API docs)
 - KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md (critical reference)
-- DEVELOPMENT_PHASES_V1.5.md (roadmap)
+- DEVELOPMENT_PHASES_V1.6.md (roadmap)
 - GLOSSARY.md (terminology)
 - Handoff_Protocol_V1.0.md (process reference)
 - VERSIONING_GUIDE_V1.0.md (versioning patterns)

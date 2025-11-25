@@ -1,9 +1,14 @@
 # Development Phases & Roadmap
 
 ---
-**Version:** 1.5
-**Last Updated:** 2025-11-09
+**Version:** 1.6
+**Last Updated:** 2025-11-24
 **Status:** ✅ Current
+**Changes in v1.6:**
+- **MANAGER USER GUIDES V1.1**: Updated all three manager user guides (Position, Strategy, Model) from V1.0 to V1.1
+- Added comprehensive Future Enhancements sections documenting Phase 3+ and Phase 5a automation plans
+- Added Supplementary Specifications section to Phase 5a listing 4 implementation guides
+- Split Related Guides into User Guides vs Supplementary Specs categories
 **Changes in v1.5:**
 - **PHASE 0.7B COMPLETION**: Added Phase 0.7b (Code Review & Quality Assurance Templates) - Standardized review infrastructure complete
 - Created 3 comprehensive review templates with DEVELOPMENT_PHILOSOPHY_V1.1.md integration
@@ -84,7 +89,7 @@ Each phase has codenames from sci-fi references for fun tracking. Phases are seq
 - [✅] .env.template (all Phase 1-10 API keys placeholders)
 
 #### Process & Utility
-- [✅] DEVELOPMENT_PHASES_V1.1.md (this file - roadmap)
+- [✅] DEVELOPMENT_PHASES_V1.6.md (this file - roadmap)
 - [✅] ENVIRONMENT_CHECKLIST_V1.1.md (Windows 11 setup, Parts 1-7)
 - [✅] REQUIREMENTS_AND_DEPENDENCIES_V1.0.md (comprehensive vs. sample reqs.txt)
 - [✅] VERSION_HEADERS_GUIDE_V2.1.md (version control standards)
@@ -1647,6 +1652,29 @@ python scripts/validate_phase_start.py --phase 5a
 - Database updates (`position_exits` table usage)
 - Test suite (>80% coverage)
 - MONITORING_IMPLEMENTATION_GUIDE_V1.0.md
+
+### Supplementary Specifications (Phase 5a)
+
+**Purpose:** Detailed implementation guides for Phase 5a trading execution automation
+
+**Location:** `docs/supplementary/`
+
+**Specifications:**
+1. **POSITION_MONITORING_SPEC_V1.0.md** - Position monitoring architecture, adaptive polling logic (30s normal / 5s urgent), real-time price updates, exit signal detection, performance tracking
+2. **EXIT_EVALUATION_SPEC_V1.0.md** - Exit condition hierarchy (10 conditions across CRITICAL/HIGH/MEDIUM/LOW priorities), urgency-based execution strategies (immediate/30s/5min/passive), partial exit logic
+3. **EVENT_LOOP_ARCHITECTURE_V1.0.md** - Main trading event loop architecture, position monitoring integration, exit evaluation scheduling, error handling and retry logic
+4. **ORDER_EXECUTION_ARCHITECTURE_V1.0.md** - Urgency-based order execution (market orders for CRITICAL, limit orders with timeouts for HIGH/MEDIUM/LOW), fallback logic (limit → market on timeout), slippage tracking
+
+**Referenced In:**
+- `docs/guides/POSITION_MANAGER_USER_GUIDE_V1.1.md` - Section "Future Enhancements (Phase 5a+)"
+- `docs/guides/STRATEGY_MANAGER_USER_GUIDE_V1.1.md` - Section "Future Enhancements (Phase 5a+)"
+
+**Cross-References:**
+- REQ-MON-001 through REQ-MON-003 (monitoring requirements)
+- REQ-EXIT-001 through REQ-EXIT-003 (exit evaluation requirements)
+- ADR-TBD (Phase 5a architectural decisions - to be created during implementation)
+
+---
 
 ### Success Criteria (Phase 5a)
 - [  ] Normal monitoring working (30s checks)

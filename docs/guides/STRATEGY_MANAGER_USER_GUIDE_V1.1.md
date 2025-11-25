@@ -1,10 +1,14 @@
 # Strategy Manager User Guide
 
 ---
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-11-22
+**Last Updated:** 2025-11-24
 **Target Audience:** Developers implementing trading strategies
 **Purpose:** Comprehensive guide to using Strategy Manager for versioned strategy configuration management
+**Related Guides:**
+- **User Guides:** POSITION_MANAGER_USER_GUIDE_V1.1.md, MODEL_MANAGER_USER_GUIDE_V1.1.md, VERSIONING_GUIDE_V1.0.md, CONFIGURATION_GUIDE_V3.1.md
+- **Supplementary Specs (Phase 5a):** STRATEGY_EVALUATION_SPEC_V1.0.md, AB_TESTING_FRAMEWORK_SPEC_V1.0.md, EVENT_LOOP_ARCHITECTURE_V1.0.md
 
 ---
 
@@ -20,6 +24,8 @@
 8. [Common Patterns](#common-patterns)
 9. [Troubleshooting](#troubleshooting)
 10. [Advanced Topics](#advanced-topics)
+11. [Future Enhancements (Phase 5a+)](#future-enhancements-phase-5a)
+12. [References](#references)
 
 ---
 
@@ -49,6 +55,10 @@ Strategy Manager provides CRUD operations for trading strategies with **immutabl
 ✅ **Trade Attribution** - Every trade links to exact strategy config
 ✅ **Lifecycle Management** - draft → testing → active → deprecated
 ✅ **Metrics Tracking** - Track ROI, trade count separately from config
+
+**Current Phase:** Phase 1.5 (CRUD Operations)
+
+**Future Enhancements:** Phase 5a adds automated strategy evaluation with performance-based activation/deprecation, systematic A/B testing framework with statistical significance testing, and event loop integration for daily automated evaluation. See [Future Enhancements (Phase 5a+)](#future-enhancements-phase-5a) for details.
 
 ---
 
@@ -1175,15 +1185,387 @@ for row in cursor.fetchall():
 
 ---
 
+## Future Enhancements (Phase 5a+)
+
+**Current Implementation:** Phase 1.5 provides CRUD operations for strategies (create, read, update status/metrics, list/filter).
+
+**Phase 5a Trading MVP** adds automated strategy evaluation, performance-based activation/deprecation, and systematic A/B testing.
+
+### 1. Automated Strategy Evaluation (StrategyEvaluator)
+
+**Purpose:** Automated performance-based activation and deprecation
+
+**Implementation:** `src/precog/trading/strategy_evaluator.py` (~350 lines)
+
+**Key Features:**
+- **Performance Monitoring:** Track ROI, win rate, Sharpe ratio, max drawdown per strategy
+- **Automated Activation:** Promote draft/testing → active when performance criteria met
+- **Automated Deprecation:** Demote active → deprecated when performance degrades
+- **Notification System:** Alert developers when strategies activated/deprecated
+
+**Example Usage (Phase 5a+):**
+```python
+from precog.trading.strategy_evaluator import StrategyEvaluator
+
+evaluator = StrategyEvaluator()
+
+# Evaluate all testing strategies for activation
+results = evaluator.evaluate_for_activation(status='testing')
+
+for strategy_id, decision in results.items():
+    print(f"Strategy {strategy_id}: {decision['action']}")
+    # Output: "activate" or "continue_testing"
+    print(f"Reason: {decision['reason']}")
+    # Example: "Met activation criteria: ROI 12.3%, win rate 58%, 150 trades"
+```
+
+**Supplementary Spec:** `docs/supplementary/STRATEGY_EVALUATION_SPEC_V1.0.md`
+
+---
+
+### 2. Performance-Based Activation Criteria
+
+**Purpose:** Objective thresholds for promoting strategies from testing → active
+
+**Activation Criteria Table:**
+
+| Criterion | Threshold | Rationale |
+|-----------|-----------|-----------|
+| **Minimum trades** | ≥100 trades | Statistical significance (sample size) |
+| **ROI** | ≥10% (30-day) | Profitability requirement |
+| **Win rate** | ≥55% | Consistency requirement (above break-even + fees) |
+| **Sharpe ratio** | ≥1.5 | Risk-adjusted returns (reward/risk ratio) |
+| **Max drawdown** | ≤15% | Risk management (acceptable loss tolerance) |
+| **Consecutive losses** | ≤5 | Strategy not "broken" or overfitted |
+
+**Example Evaluation (Phase 5a+):**
+```python
+# Strategy: halftime_entry v1.2 (testing)
+# Metrics after 30 days paper trading:
+# - Trades: 127
+# - ROI: 14.2%
+# - Win rate: 58.3%
+# - Sharpe ratio: 1.82
+# - Max drawdown: 11.2%
+# - Max consecutive losses: 3
+
+# Evaluation result:
+evaluator.evaluate_for_activation(strategy_id=42)
+# Returns:
+# {
+#     'action': 'activate',
+#     'reason': 'All activation criteria met',
+#     'criteria_summary': {
+#         'trades': '✅ 127 ≥ 100',
+#         'roi': '✅ 14.2% ≥ 10%',
+#         'win_rate': '✅ 58.3% ≥ 55%',
+#         'sharpe': '✅ 1.82 ≥ 1.5',
+#         'drawdown': '✅ 11.2% ≤ 15%',
+#         'consecutive_losses': '✅ 3 ≤ 5'
+#     }
+# }
+```
+
+**Deprecation Criteria (Phase 5a+):**
+
+| Criterion | Threshold | Rationale |
+|-----------|-----------|-----------|
+| **ROI degradation** | 30-day ROI < 5% | No longer profitable enough |
+| **Win rate drop** | Win rate < 52% | Below consistency threshold |
+| **Sharpe deterioration** | Sharpe ratio < 1.0 | Risk-adjusted returns too low |
+| **Drawdown spike** | Max drawdown > 20% | Risk tolerance exceeded |
+| **Consecutive losses** | ≥8 losses in a row | Strategy likely broken |
+
+**Example Deprecation (Phase 5a+):**
+```python
+# Strategy: market_momentum v2.1 (active)
+# Recent 30-day metrics (was performing well):
+# - ROI: 3.2% (was 12%)
+# - Win rate: 51.5% (was 57%)
+# - Sharpe ratio: 0.85 (was 1.65)
+
+# Evaluation result:
+evaluator.evaluate_for_deprecation(strategy_id=55)
+# Returns:
+# {
+#     'action': 'deprecate',
+#     'reason': 'Failed 2 deprecation criteria',
+#     'criteria_summary': {
+#         'roi': '❌ 3.2% < 5%',
+#         'win_rate': '❌ 51.5% < 52%',
+#         'sharpe': '❌ 0.85 < 1.0',
+#         'drawdown': '✅ 14.2% ≤ 20%',
+#         'consecutive_losses': '✅ 4 ≤ 8'
+#     }
+# }
+```
+
+---
+
+### 3. Systematic A/B Testing Framework
+
+**Purpose:** Statistical comparison of strategy versions to determine winners
+
+**Implementation:** `src/precog/trading/ab_testing_manager.py` (~400 lines)
+
+**Key Features:**
+- **50/50 Traffic Allocation:** Randomly assign equal opportunities to both versions
+- **Statistical Significance Testing:** Chi-square test for win rate, t-test for ROI
+- **Sample Size Calculation:** Determine minimum trades needed for valid comparison
+- **Winner Declaration:** Automatically identify superior version when statistically significant
+
+**A/B Test Workflow (Phase 5a+):**
+```python
+from precog.trading.ab_testing_manager import ABTestManager
+
+ab_test = ABTestManager()
+
+# Start A/B test: halftime_entry v1.1 vs v1.2
+test_id = ab_test.create_test(
+    strategy_a_id=42,  # halftime_entry v1.1 (control)
+    strategy_b_id=43,  # halftime_entry v1.2 (variant)
+    allocation_pct=0.50,  # 50/50 split
+    min_sample_size=200,  # Need 200 trades (100 each) for significance
+    significance_level=0.05  # p < 0.05
+)
+
+# Monitor test progress
+status = ab_test.get_test_status(test_id)
+print(f"Trades Collected: {status['trades_count']}/200")
+print(f"Statistical Power: {status['power']:.2f}")  # Goal: ≥0.80
+
+# When enough trades collected:
+result = ab_test.evaluate_test(test_id)
+print(f"Winner: {result['winner']}")  # "strategy_a", "strategy_b", or "inconclusive"
+print(f"Confidence: {result['confidence']:.1f}%")  # Example: 95.2%
+print(f"Effect Size: {result['effect_size']}")  # Example: "v1.2 ROI +3.2% vs v1.1"
+```
+
+**Example A/B Test Result (Phase 5a+):**
+```
+A/B Test Results: halftime_entry v1.1 vs v1.2
+
+Strategy A (v1.1 - Control):
+- Trades: 105
+- Win Rate: 56.2%
+- Average ROI per trade: 8.3%
+- Total ROI: $872.15
+
+Strategy B (v1.2 - Variant):
+- Trades: 103
+- Win Rate: 61.2%
+- Average ROI per trade: 10.7%
+- Total ROI: $1,102.10
+
+Statistical Analysis:
+- Win Rate Difference: +5.0 percentage points (p=0.042) ✅ SIGNIFICANT
+- ROI Difference: +2.4 percentage points (p=0.038) ✅ SIGNIFICANT
+- Effect Size (Cohen's d): 0.42 (medium effect)
+
+Decision: PROMOTE v1.2 (variant wins)
+Action: Deprecate v1.1, activate v1.2 as primary strategy
+```
+
+**Supplementary Spec:** `docs/supplementary/AB_TESTING_FRAMEWORK_SPEC_V1.0.md`
+
+---
+
+### 4. Event Loop Integration
+
+**Purpose:** Daily automated strategy evaluation within main event loop
+
+**Implementation:** `src/precog/core/event_loop.py` (Phase 5a enhancement)
+
+**Architecture:**
+```python
+# Main event loop (pseudo-code)
+async def main_event_loop():
+    """Main trading event loop (Phase 5a+)"""
+
+    while True:
+        # ... position monitoring, trading execution ...
+
+        # Daily strategy evaluation (runs at 2 AM)
+        if time.hour == 2 and time.minute == 0:
+            # 1. Evaluate testing strategies for activation
+            testing_results = await strategy_evaluator.evaluate_for_activation(
+                status='testing'
+            )
+            for strategy_id, decision in testing_results.items():
+                if decision['action'] == 'activate':
+                    await strategy_manager.update_status(strategy_id, 'active')
+                    await notify_slack(f"✅ Strategy {strategy_id} activated!")
+
+            # 2. Evaluate active strategies for deprecation
+            active_results = await strategy_evaluator.evaluate_for_deprecation(
+                status='active'
+            )
+            for strategy_id, decision in active_results.items():
+                if decision['action'] == 'deprecate':
+                    await strategy_manager.update_status(strategy_id, 'deprecated')
+                    await notify_slack(f"⚠️ Strategy {strategy_id} deprecated!")
+
+            # 3. Check A/B test results
+            ab_tests = await ab_testing_manager.get_active_tests()
+            for test_id in ab_tests:
+                result = await ab_testing_manager.evaluate_test(test_id)
+                if result['winner'] != 'inconclusive':
+                    await notify_slack(f"🎯 A/B Test {test_id}: {result['winner']} wins!")
+
+        await asyncio.sleep(60)  # Check every minute
+```
+
+**Supplementary Spec:** `docs/supplementary/EVENT_LOOP_ARCHITECTURE_V1.0.md`
+
+---
+
+### 5. Implementation Checklist (Phase 5a)
+
+**Module 1: StrategyEvaluator** (~350 lines, 95%+ coverage target)
+- [ ] Performance metric calculation (ROI, win rate, Sharpe, drawdown)
+- [ ] Activation criteria evaluation (6 thresholds)
+- [ ] Deprecation criteria evaluation (5 thresholds)
+- [ ] Notification system integration (Slack, email)
+- [ ] Unit tests (18 tests): all criteria, edge cases
+- [ ] Integration tests (6 tests): end-to-end evaluation workflow
+
+**Module 2: ABTestingManager** (~400 lines, 95%+ coverage target)
+- [ ] A/B test creation and configuration
+- [ ] 50/50 traffic allocation logic
+- [ ] Sample size calculation (power analysis)
+- [ ] Statistical significance testing (chi-square, t-test)
+- [ ] Winner declaration logic
+- [ ] Unit tests (20 tests): statistical tests, allocation, sample size
+- [ ] Integration tests (8 tests): full A/B test lifecycle
+
+**Module 3: Event Loop Integration** (~150 lines enhancement)
+- [ ] Daily evaluation scheduler (2 AM)
+- [ ] Async task coordination
+- [ ] Error handling and retry logic
+- [ ] Notification dispatch
+- [ ] Integration tests (4 tests): scheduled evaluation scenarios
+
+**Module 4: Notification System** (~200 lines)
+- [ ] Slack webhook integration
+- [ ] Email notification (SMTP)
+- [ ] Notification templates (activation, deprecation, A/B test winner)
+- [ ] Rate limiting (prevent spam)
+- [ ] Unit tests (8 tests): template rendering, delivery
+- [ ] Integration tests (3 tests): end-to-end notification delivery
+
+**Total Estimated Effort:**
+- **Code:** ~1100 lines across 4 modules
+- **Tests:** ~60 unit tests + ~20 integration tests (~1200 lines test code)
+- **Documentation:** 3 supplementary specs (~1800 lines)
+- **Coverage Target:** ≥95% (automated decision-making is critical)
+- **Timeline:** 3-4 weeks (Phase 5a)
+
+---
+
+### 6. Design Philosophy: Why Phase 5a?
+
+**Question:** Why defer automated strategy evaluation to Phase 5a instead of implementing alongside CRUD in Phase 1.5?
+
+**Answer:**
+
+**Phase 1.5 Focus:** Build robust manual tools
+- Manual strategy creation and configuration
+- Manual status transitions (draft → testing → active)
+- Manual metrics tracking (paper trading results)
+- Manual A/B test setup and evaluation
+- Learn what works through hands-on experimentation
+
+**Phase 5a Focus:** Add intelligent automation
+- Automated performance-based activation/deprecation
+- Automated A/B testing with statistical rigor
+- Automated daily evaluation workflow
+- Automated notifications and alerting
+
+**Why This Order?**
+1. **Learning Period:** Phase 1.5-4 manual workflows inform Phase 5a automation criteria
+2. **Threshold Calibration:** Need real trading data to set activation/deprecation thresholds
+3. **A/B Test Design:** Manual A/B tests teach what metrics matter for automated framework
+4. **Risk Management:** Don't automate strategy activation until manual process proven reliable
+5. **Clear Separation:** CRUD (Phase 1.5) vs Automation (Phase 5a) = easier debugging
+
+**Real-World Workflow Comparison:**
+
+**Phase 1.5 (Manual - Current):**
+```python
+# Developer creates strategy manually
+strategy = manager.create_strategy(
+    strategy_name="halftime_entry",
+    version="v1.2",
+    config={"min_edge": "0.08"},
+    status="testing"
+)
+
+# After 30 days paper trading:
+# Developer manually checks metrics dashboard
+# Sees: ROI 14.2%, win rate 58.3%, 127 trades
+# Developer manually decides: "This looks good, let's activate"
+manager.update_status(strategy_id=42, new_status="active")
+
+# After 60 days live trading:
+# Developer manually checks performance
+# Sees: ROI dropped to 3.2%, win rate 51.5%
+# Developer manually decides: "Performance degraded, deprecate"
+manager.update_status(strategy_id=42, new_status="deprecated")
+```
+
+**Phase 5a (Automated - Future):**
+```python
+# Developer creates strategy manually (same as Phase 1.5)
+strategy = manager.create_strategy(
+    strategy_name="halftime_entry",
+    version="v1.2",
+    config={"min_edge": "0.08"},
+    status="testing"
+)
+
+# 30 days later: StrategyEvaluator runs automatically at 2 AM
+# Checks metrics: ROI 14.2%, win rate 58.3%, 127 trades
+# Evaluation: All activation criteria met ✅
+# Action: Auto-activate strategy
+# Notification: Developer receives Slack message "✅ Strategy 42 activated!"
+
+# 60 days later: StrategyEvaluator runs automatically at 2 AM
+# Checks metrics: ROI 3.2%, win rate 51.5%
+# Evaluation: Failed ROI and win rate thresholds ❌
+# Action: Auto-deprecate strategy
+# Notification: Developer receives Slack message "⚠️ Strategy 42 deprecated (performance degraded)"
+```
+
+**Key Insight:** Phase 1.5 builds the "manual steering wheel" (strategy creation, status updates, metrics tracking). Phase 5a adds "cruise control" (automated evaluation and transitions). You need to learn how to drive manually before enabling autopilot.
+
+**Why Manual Tools Matter:**
+- Phase 1.5-4 manual experimentation reveals that ROI threshold should be 10% (not 8% or 12%)
+- Manual A/B tests teach that 100 trades minimum needed for statistical significance (not 50 or 200)
+- Manual deprecation workflows show that 5% ROI threshold prevents premature deprecation
+- Phase 5a automation codifies these learned thresholds into reliable automated system
+
+---
+
 ## References
 
-### Related Documentation
+### User Guides
 
+- **Position Manager User Guide:** `docs/guides/POSITION_MANAGER_USER_GUIDE_V1.1.md`
+- **Model Manager User Guide:** `docs/guides/MODEL_MANAGER_USER_GUIDE_V1.1.md`
 - **Versioning Guide:** `docs/guides/VERSIONING_GUIDE_V1.0.md`
 - **Configuration Guide:** `docs/guides/CONFIGURATION_GUIDE_V3.1.md`
+
+### Supplementary Specifications (Phase 5a)
+
+- **Strategy Evaluation Spec:** `docs/supplementary/STRATEGY_EVALUATION_SPEC_V1.0.md`
+- **A/B Testing Framework Spec:** `docs/supplementary/AB_TESTING_FRAMEWORK_SPEC_V1.0.md`
+- **Event Loop Architecture:** `docs/supplementary/EVENT_LOOP_ARCHITECTURE_V1.0.md`
+
+### Foundation Documents
+
 - **Database Schema:** `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md`
-- **Position Manager Guide:** `docs/guides/POSITION_MANAGEMENT_GUIDE_V1.0.md` (coming soon)
-- **Model Manager Guide:** `docs/guides/MODEL_MANAGER_USER_GUIDE_V1.0.md` (coming soon)
+- **Development Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.6.md`
+- **Development Phases:** `docs/foundation/DEVELOPMENT_PHASES_V1.5.md`
 
 ### Requirements & ADRs
 
@@ -1204,4 +1586,4 @@ for row in cursor.fetchall():
 
 ---
 
-**END OF STRATEGY_MANAGER_USER_GUIDE_V1.0.md**
+**END OF STRATEGY_MANAGER_USER_GUIDE_V1.1.md**
