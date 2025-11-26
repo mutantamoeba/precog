@@ -870,6 +870,15 @@ def update_position_price(
         trailing_stop_state if trailing_stop_state is not None else current["trailing_stop_state"]
     )
 
+    # ⭐ Early return optimization (Issue #113):
+    # Skip SCD Type 2 versioning if no state actually changed.
+    # This prevents 3600+ unnecessary writes/hour in monitoring loops.
+    price_unchanged = current["current_price"] == current_price
+    trailing_stop_unchanged = current["trailing_stop_state"] == new_trailing_stop
+    if price_unchanged and trailing_stop_unchanged:
+        # No state change - return existing id without creating new version
+        return cast("int", current["id"])
+
     with get_cursor(commit=True) as cur:
         # Mark current as historical using surrogate id
         cur.execute(

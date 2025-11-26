@@ -395,6 +395,7 @@ Related Guide: docs/guides/CONFIGURATION_GUIDE_V3.1.md (Environment variables)
 import os
 from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import NoReturn
 
 import typer
 from dotenv import load_dotenv
@@ -429,6 +430,32 @@ console = Console()
 
 # Initialize logger
 logger = get_logger(__name__)
+
+
+def cli_error(message: str, hint: str | None = None) -> NoReturn:
+    """
+    Display error message and exit with code 1.
+
+    Uses NoReturn type hint to indicate this function never returns normally.
+    This helps type checkers understand control flow in error handling.
+
+    Args:
+        message: Error message to display
+        hint: Optional hint for fixing the error
+
+    Raises:
+        typer.Exit: Always raises with code=1
+
+    Example:
+        >>> if not api_key:
+        ...     cli_error("API key not found", "Set KALSHI_API_KEY in .env")
+
+    Reference: Issue #68 (NoReturn Type Hint for Exit Paths)
+    """
+    console.print(f"[red]Error:[/red] {message}")
+    if hint:
+        console.print(f"[dim]Hint:[/dim] {hint}")
+    raise typer.Exit(code=1)
 
 
 def get_kalshi_client(environment: str = "demo") -> KalshiClient:

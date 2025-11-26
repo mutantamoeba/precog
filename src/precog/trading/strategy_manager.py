@@ -473,7 +473,10 @@ class StrategyManager:
         # Get current status
         strategy = self.get_strategy(strategy_id)
         if not strategy:
-            raise ValueError(f"Strategy {strategy_id} not found")
+            raise ValueError(
+                f"Strategy {strategy_id} not found "
+                f"(operation=update_status, target_status={new_status})"
+            )
 
         current_status = strategy["status"]
 
@@ -585,7 +588,12 @@ class StrategyManager:
             row = cursor.fetchone()
 
             if not row:
-                raise ValueError(f"Strategy {strategy_id} not found")
+                # Build context of which metrics were being updated
+                metrics_attempted = ", ".join(updates)
+                raise ValueError(
+                    f"Strategy {strategy_id} not found "
+                    f"(operation=update_metrics, attempted_updates=[{metrics_attempted}])"
+                )
 
             conn.commit()
 
