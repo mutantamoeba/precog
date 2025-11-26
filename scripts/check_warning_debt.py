@@ -78,14 +78,14 @@ def run_pytest_with_warnings() -> tuple[str, int]:
             ["python", "-m", "pytest", "tests/", "-v", "-W", "default", "--tb=no"],
             capture_output=True,
             text=True,
-            timeout=300,  # 5 minute timeout
+            timeout=600,  # 10 minute timeout (property tests take ~2.5 min)
         )
 
         output = result.stdout + result.stderr
         return output, result.returncode
 
     except subprocess.TimeoutExpired:
-        print("[ERROR] Pytest timed out after 5 minutes")
+        print("[ERROR] Pytest timed out after 10 minutes")
         sys.exit(2)
     except FileNotFoundError:
         print("[ERROR] pytest not found - is it installed?")

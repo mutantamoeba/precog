@@ -114,13 +114,14 @@ property_test_requirements:
       - "Rounding behavior consistent"
 
   api_parsing:
-    description: "API response parsing (TypedDict validation)"
+    description: "API response parsing (Decimal conversion)"
     modules:
       - "api_connectors/kalshi_client.py"
     required_properties:
       - "All *_dollars fields parsed as Decimal"
-      - "TypedDict contracts enforced"
-      - "Invalid responses rejected"
+      # Note: TypedDict validation and error handling covered by integration tests (Pattern 13)
+      # See: tests/integration/api_connectors/test_kalshi_client_integration.py
+      # See: tests/integration/api_connectors/test_kalshi_client_vcr.py
 
 # ============================================================================
 # Pattern 13 (Part 2): Test Fixture Requirements
