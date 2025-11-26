@@ -501,7 +501,7 @@ class StrategyManager:
             row = cursor.fetchone()
             conn.commit()
 
-            logger.info(f"Updated strategy {strategy_id} status: {current_status} → {new_status}")
+            logger.info(f"Updated strategy {strategy_id} status: {current_status} -> {new_status}")
 
             return self._row_to_dict(cursor, row)
 
