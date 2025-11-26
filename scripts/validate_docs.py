@@ -280,8 +280,14 @@ def validate_master_index() -> ValidationResult:
     # Extract document listings (format: | **FILENAME** | [STATUS] | vX.Y | /path/ | ...)
     # Regex accounts for bold markdown markers (**) around filenames
     # Capture both filename and status emoji to skip planned documents (🔵)
-    # Supports both V1.0 and V1.0.1 version formats (semantic versioning)
-    doc_pattern = r"\|\s+\*\*([A-Z_0-9]+_V\d+\.\d+(?:\.\d+)?\.md)\*\*\s+\|\s+(✅|🔵|📦|🚧)"
+    # Supports:
+    #  - Mixed-case filenames (e.g., Handoff_Protocol_V1_1.md)
+    #  - Dots in base filename (e.g., PHASE_1.5_TEST_PLAN_V1.0.md)
+    #  - Both dot and underscore version separators (V1.0 and V1_1)
+    #  - Semantic versioning (V1.0.1)
+    doc_pattern = (
+        r"\|\s+\*\*([A-Za-z_0-9.]+_V\d+[._]\d+(?:[._]\d+)?\.md)\*\*\s+\|\s+(✅|🔵|📦|🚧|⚠️)"
+    )
     all_matches = re.findall(doc_pattern, content)
 
     # Only check documents with ✅ status (existing), skip 🔵 (planned), 📦 (archived), 🚧 (draft)
