@@ -564,7 +564,12 @@ def fetch_balance(
 
     except Exception as e:
         logger.error(f"Failed to fetch balance: {e}", exc_info=verbose)
-        console.print(f"\n[red]Error:[/red] Failed to fetch balance: {e}")
+        # Security: Don't expose internal error details to user (Issue #42)
+        console.print("\n[red]Error:[/red] Failed to fetch balance from API")
+        if verbose:
+            console.print(f"[dim]Details: {e}[/dim]")
+        else:
+            console.print("[dim]Use --verbose for error details[/dim]")
         raise typer.Exit(code=1) from e
 
 
@@ -769,7 +774,12 @@ def fetch_markets(
 
     except Exception as e:
         logger.error(f"Failed to fetch markets: {e}", exc_info=verbose)
-        console.print(f"\n[red]Error:[/red] Failed to fetch markets: {e}")
+        # Security: Don't expose internal error details to user (Issue #42)
+        console.print("\n[red]Error:[/red] Failed to fetch markets from API")
+        if verbose:
+            console.print(f"[dim]Details: {e}[/dim]")
+        else:
+            console.print("[dim]Use --verbose for error details[/dim]")
         raise typer.Exit(code=1) from e
 
 
@@ -869,7 +879,12 @@ def fetch_positions(
 
     except Exception as e:
         logger.error(f"Failed to fetch positions: {e}", exc_info=verbose)
-        console.print(f"\n[red]Error:[/red] Failed to fetch positions: {e}")
+        # Security: Don't expose internal error details to user (Issue #42)
+        console.print("\n[red]Error:[/red] Failed to fetch positions from API")
+        if verbose:
+            console.print(f"[dim]Details: {e}[/dim]")
+        else:
+            console.print("[dim]Use --verbose for error details[/dim]")
         raise typer.Exit(code=1) from e
 
 
@@ -993,7 +1008,12 @@ def fetch_fills(
 
     except Exception as e:
         logger.error(f"Failed to fetch fills: {e}", exc_info=verbose)
-        console.print(f"\n[red]Error:[/red] Failed to fetch fills: {e}")
+        # Security: Don't expose internal error details to user (Issue #42)
+        console.print("\n[red]Error:[/red] Failed to fetch trade fills from API")
+        if verbose:
+            console.print(f"[dim]Details: {e}[/dim]")
+        else:
+            console.print("[dim]Use --verbose for error details[/dim]")
         raise typer.Exit(code=1) from e
 
 
@@ -1155,7 +1175,12 @@ def fetch_settlements(
 
     except Exception as e:
         logger.error(f"Failed to fetch settlements: {e}", exc_info=verbose)
-        console.print(f"\n[red]Error:[/red] Failed to fetch settlements: {e}")
+        # Security: Don't expose internal error details to user (Issue #42)
+        console.print("\n[red]Error:[/red] Failed to fetch settlements from API")
+        if verbose:
+            console.print(f"[dim]Details: {e}[/dim]")
+        else:
+            console.print("[dim]Use --verbose for error details[/dim]")
         raise typer.Exit(code=1) from e
 
 
@@ -1302,7 +1327,12 @@ def db_init(
 
     except Exception as e:
         logger.error(f"Database initialization failed: {e}", exc_info=verbose)
-        console.print(f"\n[red]Error:[/red] Database initialization failed: {e}")
+        # Security: Don't expose internal error details to user (Issue #42)
+        console.print("\n[red]Error:[/red] Database initialization failed")
+        if verbose:
+            console.print(f"[dim]Details: {e}[/dim]")
+        else:
+            console.print("[dim]Use --verbose for error details[/dim]")
         raise typer.Exit(code=1) from e
 
 
@@ -1604,7 +1634,12 @@ def config_show(
         raise typer.Exit(code=1) from None
     except Exception as e:
         logger.error(f"Failed to display configuration: {e}", exc_info=verbose)
-        console.print(f"\n[red]Error:[/red] Failed to display configuration: {e}")
+        # Security: Don't expose internal error details to user (Issue #42)
+        console.print("\n[red]Error:[/red] Failed to display configuration")
+        if verbose:
+            console.print(f"[dim]Details: {e}[/dim]")
+        else:
+            console.print("[dim]Use --verbose for error details[/dim]")
         raise typer.Exit(code=1) from e
 
 
@@ -1801,7 +1836,12 @@ def config_validate(
 
     except Exception as e:
         logger.error(f"Configuration validation failed: {e}", exc_info=verbose)
-        console.print(f"\n[red]Error:[/red] Configuration validation failed: {e}")
+        # Security: Don't expose internal error details to user (Issue #42)
+        console.print("\n[red]Error:[/red] Configuration validation failed")
+        if verbose:
+            console.print(f"[dim]Details: {e}[/dim]")
+        else:
+            console.print("[dim]Use --verbose for error details[/dim]")
         raise typer.Exit(code=1) from e
 
 
