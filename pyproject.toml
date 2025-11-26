@@ -252,6 +252,8 @@ markers = [
     "critical: Critical tests that must always pass",
     "database: Tests requiring database connection",
     "api: Tests requiring API access",
+    "e2e: End-to-end tests requiring external services (API credentials)",
+    "stress: Stress and load tests for infrastructure resilience",
 ]
 
 # Logging during tests
@@ -267,6 +269,7 @@ asyncio_mode = "auto"
 filterwarnings = [
     "error",  # Treat warnings as errors (strict)
     "ignore::DeprecationWarning",  # Ignore deprecation warnings from dependencies
+    "ignore::pytest.PytestUnknownMarkWarning",  # Markers from pytest.ini may not be visible to pyproject.toml
 ]
 
 # ==============================================================================
