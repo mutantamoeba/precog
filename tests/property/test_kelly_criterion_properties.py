@@ -104,63 +104,12 @@ def bankroll_amount(draw, min_value=100, max_value=100000, places=2):
 
 
 # ==============================================================================
-# Kelly Criterion Implementation (Simplified for POC)
+# Import Production Implementation
 # ==============================================================================
 
-
-def calculate_kelly_size(
-    edge: Decimal, kelly_fraction: Decimal, bankroll: Decimal, max_position: Decimal | None = None
-) -> Decimal:
-    """
-    Calculate position size using Kelly criterion.
-
-    Formula: position = (edge * kelly_fraction * bankroll)
-
-    Constraints:
-    - If edge <= 0: position = 0 (never bet against yourself)
-    - If position > bankroll: position = bankroll (can't bet more than you have)
-    - If position > max_position: position = max_position (position sizing limit)
-
-    Args:
-        edge: Expected value advantage (true_prob - market_price - fees)
-        kelly_fraction: Multiplier to reduce Kelly bet (0.25 = quarter Kelly)
-        bankroll: Total capital available
-        max_position: Optional maximum position size (risk management)
-
-    Returns:
-        Decimal position size in dollars
-
-    Raises:
-        ValueError: If kelly_fraction not in [0, 1]
-        ValueError: If bankroll < 0
-    """
-    # Validation
-    if not (Decimal("0") <= kelly_fraction <= Decimal("1")):
-        raise ValueError(f"kelly_fraction must be in [0, 1], got {kelly_fraction}")
-
-    if bankroll < Decimal("0"):
-        raise ValueError(f"bankroll cannot be negative, got {bankroll}")
-
-    # Never bet on negative edge
-    if edge <= Decimal("0"):
-        return Decimal("0")
-
-    # Calculate Kelly position
-    position = edge * kelly_fraction * bankroll
-
-    # Apply constraints
-    if position > bankroll:
-        position = bankroll
-
-    if max_position is not None and position > max_position:
-        position = max_position
-
-    # Position cannot be negative
-    if position < Decimal("0"):
-        position = Decimal("0")
-
-    return position
-
+# Production implementation moved to src/precog/trading/kelly_criterion.py
+# This import ensures property tests validate the ACTUAL production code
+from precog.trading.kelly_criterion import calculate_kelly_size  # noqa: E402
 
 # ==============================================================================
 # Property-Based Tests

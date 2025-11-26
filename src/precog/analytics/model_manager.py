@@ -475,7 +475,10 @@ class ModelManager:
             cursor.execute("SELECT status FROM probability_models WHERE model_id = %s", (model_id,))
             row = cursor.fetchone()
             if not row:
-                raise ValueError(f"Model {model_id} not found")
+                raise ValueError(
+                    f"Model {model_id} not found "
+                    f"(operation=update_status, target_status={new_status})"
+                )
 
             current_status = row[0]
 
@@ -587,7 +590,12 @@ class ModelManager:
             row = cursor.fetchone()
 
             if not row:
-                raise ValueError(f"Model {model_id} not found")
+                # Build context of which metrics were being updated
+                metrics_attempted = ", ".join(updates)
+                raise ValueError(
+                    f"Model {model_id} not found "
+                    f"(operation=update_metrics, attempted_updates=[{metrics_attempted}])"
+                )
 
             conn.commit()
 

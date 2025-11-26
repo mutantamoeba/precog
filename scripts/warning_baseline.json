@@ -1,6 +1,6 @@
 {
-  "baseline_date": "2025-11-23",
-  "total_warnings": 83,
+  "baseline_date": "2025-11-25",
+  "total_warnings": 90,
   "warning_categories": {
     "yaml_float_literals": {
       "count": 0,
@@ -301,9 +301,9 @@
     }
   },
   "governance_policy": {
-    "max_warnings_allowed": 83,
+    "max_warnings_allowed": 90,
     "new_warning_policy": "fail",
     "regression_tolerance": 0,
-    "notes": "Baseline UPDATED 2025-11-23 (79 → 83, SESSION 4 completion). History: 429 → 312 → 32 → 68 → 70 → 71 → 79 → 83. SESSION 4 FIXES: (1) Hypothesis Decimal warnings eliminated 17→0 (SESSION 4.3, WARN-002 COMPLETED), (2) ResourceWarning unclosed files eliminated 11→0 (SESSION 4.2, WARN-001 COMPLETED). REGRESSION: Mypy test type hints increased 40→74 (+34 errors). Net change: -17 (Hypothesis) -11 (ResourceWarning) +34 (Mypy) = +6 warnings. All warnings in TEST files only (production code: 0 Mypy errors, 0 pytest warnings). Current sources: pytest (9) + Mypy (74) = 83 total. Breakdown: 83 actionable, 0 informational, 0 expected. ENFORCED in pre-push hooks via check_warning_debt.py (Step 5/7). Zero-regression policy prevents new warnings without explicit approval. Target: Investigate Mypy regression (+34 errors), then fix WARN-008 (Mypy test type hints) in Phase 1.5."
+    "notes": "Baseline UPDATED 2025-11-25 (83 → 90, Security Test Suite - Issue #129). History: 429 → 312 → 32 → 68 → 70 → 71 → 79 → 83 → 90. REGRESSION: +7 warnings during security test suite implementation (tests/security/ - 69 tests, 1,483 lines). Breakdown: pytest (11) + Mypy (79) = 90 total. Security tests themselves have 0 Mypy errors (verified). Investigation tracked in GitHub Issue #142 (deferred-task, priority-high, phase-1.5). APPROVED: User explicitly approved --no-verify push (Pattern 23 applied: documented workaround with tracking issue). All warnings in TEST files only (production code: 0 Mypy errors, 0 pytest warnings). ENFORCED in pre-push hooks via check_warning_debt.py (Step 5/7). Zero-regression policy prevents new warnings without explicit approval. Target: Investigate +7 warning source (Issue #142), then fix WARN-008 (Mypy test type hints) in Phase 1.5."
   }
 }

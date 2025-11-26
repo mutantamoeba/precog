@@ -118,11 +118,15 @@ class ConfigLoader:
             self.config_dir = Path(config_dir)
         self.configs: dict[str, dict[str, Any]] = {}
 
+        logger.debug(f"ConfigLoader initialized with config_dir: {self.config_dir}")
+
         # Load environment variables from .env file
         load_dotenv()
+        logger.debug("Loaded environment variables from .env file")
 
         # Get current environment (development, staging, production, test)
         self.environment = os.getenv("ENVIRONMENT", "development")
+        logger.debug(f"Environment set to: {self.environment}")
 
         # List of all configuration files
         self.config_files = [
@@ -168,13 +172,17 @@ class ConfigLoader:
         env_prefix = self.environment.upper()
         prefixed_key = f"{env_prefix}_{key}"
         value = os.getenv(prefixed_key)
+        logger.debug(f"Looking for env var '{prefixed_key}': {'found' if value else 'not found'}")
 
         # Fall back to unprefixed variable (for backward compatibility)
         if value is None:
             value = os.getenv(key)
+            if value is not None:
+                logger.debug(f"Fallback to unprefixed '{key}': found")
 
         # Return default if not found
         if value is None:
+            logger.debug(f"Env var '{key}' not found, using default: {default}")
             return default
 
         # Convert to requested type
@@ -359,23 +367,31 @@ class ConfigLoader:
         # Check cache first
         cache_key = config_name.replace(".yaml", "")
         if cache_key in self.configs:
+            logger.debug(f"Config '{cache_key}' loaded from cache")
             return self.configs[cache_key]
 
         # Load from file
         file_path = self.config_dir / config_name
+        logger.debug(f"Loading config file: {file_path}")
         if not file_path.exists():
             msg = f"Config file not found: {file_path}"
+            logger.debug(f"Config file not found: {file_path}")
             raise FileNotFoundError(msg)
 
         with open(file_path, encoding="utf-8") as f:
             config = yaml.safe_load(f)
+        logger.debug(
+            f"Parsed YAML config '{config_name}' with {len(config) if config else 0} top-level keys"
+        )
 
         # Convert money/price values to Decimal
         if convert_decimals:
             config = self._convert_to_decimal(config)
+            logger.debug(f"Converted monetary values to Decimal for '{config_name}'")
 
         # Cache the result
         self.configs[cache_key] = config
+        logger.debug(f"Cached config '{cache_key}'")
         return cast("dict[str, Any]", config)
 
     def load_all(self, convert_decimals: bool = True) -> dict[str, dict[str, Any]]:
@@ -434,12 +450,14 @@ class ConfigLoader:
             try:
                 self.load(config_name)
             except FileNotFoundError:
+                logger.debug(f"Config '{config_name}' not found, returning default: {default}")
                 return default
 
         config = self.configs[config_name]
 
         # If no key path, return entire config
         if key_path is None:
+            logger.debug(f"Returning entire config for '{config_name}'")
             return config
 
         # Navigate nested keys
@@ -449,8 +467,12 @@ class ConfigLoader:
             if isinstance(value, dict) and key in value:
                 value = value[key]
             else:
+                logger.debug(
+                    f"Key path '{key_path}' not found in '{config_name}', returning default: {default}"
+                )
                 return default
 
+        logger.debug(f"Retrieved '{config_name}.{key_path}' = {value}")
         return value
 
     def reload(self, config_name: str | None = None):
@@ -469,9 +491,11 @@ class ConfigLoader:
             # Remove specific config from cache
             config_name = config_name.replace(".yaml", "")
             self.configs.pop(config_name, None)
+            logger.debug(f"Cleared cache for config '{config_name}'")
         else:
             # Clear entire cache
             self.configs.clear()
+            logger.debug("Cleared entire config cache")
 
     def validate_required_configs(self) -> bool:
         """
