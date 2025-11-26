@@ -108,18 +108,23 @@ def check_duplicate_display_order(table_name: str) -> list[dict]:
     Check for existing duplicate display_order values per category.
 
     Args:
-        table_name: Table to check
+        table_name: Table to check (must be a known table name)
 
     Returns:
         List of duplicates found (empty if none)
+
+    Note:
+        Table names are validated against a known allowlist to prevent SQL injection.
+        Table identifiers cannot use parameterized queries in PostgreSQL.
     """
-    query = f"""
-        SELECT category, display_order, COUNT(*) as cnt
-        FROM {table_name}
-        WHERE display_order IS NOT NULL
-        GROUP BY category, display_order
-        HAVING COUNT(*) > 1
-    """
+    # Validate table name against known tables (SQL injection prevention)
+    valid_tables = {"strategy_types", "model_types", "edge_types"}
+    if table_name not in valid_tables:
+        raise ValueError(f"Invalid table name: {table_name}. Must be one of {valid_tables}")
+
+    # Safe to use f-string since table_name is validated against allowlist above
+    # S608 is a false positive - table_name is validated before use
+    query = f"SELECT category, display_order, COUNT(*) as cnt FROM {table_name} WHERE display_order IS NOT NULL GROUP BY category, display_order HAVING COUNT(*) > 1"
     result = fetch_all(query)
     return result if result else []
 

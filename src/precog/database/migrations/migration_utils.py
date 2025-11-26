@@ -640,8 +640,13 @@ def safe_data_migration(
         if rollback_func:
             try:
                 rollback_func()
-            except Exception:
-                pass
+            except Exception as rollback_error:
+                # Log rollback failure but continue to raise original error
+                import logging
+
+                logging.getLogger(__name__).warning(
+                    "Rollback failed during migration error handling: %s", rollback_error
+                )
         raise MigrationError(
             f"Data migration failed: {description}",
             operation="DATA MIGRATION",
