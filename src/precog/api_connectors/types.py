@@ -181,11 +181,12 @@ class ProcessedMarketData(TypedDict):
     can_close_early: bool
     result: Literal["yes", "no"] | None
     # Price fields as Decimal
-    yes_bid: Decimal
-    yes_ask: Decimal
-    no_bid: Decimal
-    no_ask: Decimal
-    last_price: Decimal
+    # Price fields as Decimal (using *_dollars suffix for sub-penny precision)
+    yes_bid_dollars: Decimal
+    yes_ask_dollars: Decimal
+    no_bid_dollars: Decimal
+    no_ask_dollars: Decimal
+    last_price_dollars: Decimal
     volume: int
     open_interest: int
     liquidity: int
@@ -214,7 +215,9 @@ class ProcessedFillData(TypedDict):
     side: Literal["yes", "no"]
     action: Literal["buy", "sell"]
     count: int
-    price: Decimal  # Execution price as Decimal
+    # Price fields using *_fixed suffix for sub-penny precision
+    yes_price_fixed: Decimal
+    no_price_fixed: Decimal
     created_time: str
     is_taker: bool
 

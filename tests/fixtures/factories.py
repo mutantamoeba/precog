@@ -21,6 +21,7 @@ Usage:
 
 from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import Any, cast
 
 import factory
 from faker import Faker
@@ -247,17 +248,20 @@ class GameStateDataFactory(BaseFactory):
 # ==============================================================================
 
 
-def create_test_market_with_position():
+def create_test_market_with_position() -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Create a test market with an associated position.
 
     Returns:
         Tuple of (market_data, position_data)
     """
-    market = MarketDataFactory()
-    position = PositionDataFactory(
-        ticker=market["ticker"],
-        current_price=market["yes_bid"],
+    market = cast("dict[str, Any]", MarketDataFactory())
+    position = cast(
+        "dict[str, Any]",
+        PositionDataFactory(
+            ticker=market["ticker"],
+            current_price=market["yes_bid"],
+        ),
     )
     return market, position
 
@@ -309,7 +313,7 @@ if __name__ == "__main__":
     """Example usage of factories."""
 
     # Create a single market
-    market = MarketDataFactory()
+    market = cast("dict[str, Any]", MarketDataFactory())
     print(f"Market: {market['ticker']}")
     print(f"Yes bid: {market['yes_bid']}")
 
@@ -318,9 +322,12 @@ if __name__ == "__main__":
     print(f"\nCreated {len(markets)} markets")
 
     # Create market with custom values
-    custom_market = MarketDataFactory(
-        ticker="TEST-NFL-KC-BUF-YES",
-        yes_bid=Decimal("0.7500"),
+    custom_market = cast(
+        "dict[str, Any]",
+        MarketDataFactory(
+            ticker="TEST-NFL-KC-BUF-YES",
+            yes_bid=Decimal("0.7500"),
+        ),
     )
     print(f"\nCustom market: {custom_market['ticker']}")
     print(f"Yes bid: {custom_market['yes_bid']}")

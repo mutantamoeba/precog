@@ -172,7 +172,9 @@ jobs:
       - name: Run tests with coverage
         run: |
           python -m pytest tests/ -v --cov=. --cov-report=xml --cov-report=html --cov-report=term-missing -n auto
-        continue-on-error: true
+        # CRITICAL: Do NOT use continue-on-error: true here!
+        # Test failures MUST block the CI pipeline to prevent broken code from being merged.
+        # Issue discovered 2025-11-26: 80 failing tests were merged due to this misconfiguration.
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'

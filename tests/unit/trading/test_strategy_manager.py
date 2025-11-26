@@ -900,9 +900,19 @@ class TestStrategyManagerIntegration:
         # v2.0 stays in draft with no metrics
 
         # Retrieve all versions (REAL database)
-        v1_0 = manager.get_strategy(strategy_id=v1_0["strategy_id"])
-        v1_1 = manager.get_strategy(strategy_id=v1_1["strategy_id"])
-        v2_0 = manager.get_strategy(strategy_id=v2_0["strategy_id"])
+        v1_0_retrieved = manager.get_strategy(strategy_id=v1_0["strategy_id"])
+        v1_1_retrieved = manager.get_strategy(strategy_id=v1_1["strategy_id"])
+        v2_0_retrieved = manager.get_strategy(strategy_id=v2_0["strategy_id"])
+
+        # Assert not None before using
+        assert v1_0_retrieved is not None
+        assert v1_1_retrieved is not None
+        assert v2_0_retrieved is not None
+
+        # Now reassign for rest of test
+        v1_0 = v1_0_retrieved
+        v1_1 = v1_1_retrieved
+        v2_0 = v2_0_retrieved
 
         # Verify all 3 versions exist independently
         assert v1_0["strategy_version"] == "1.0"

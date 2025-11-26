@@ -1674,14 +1674,18 @@ class TestErrorHandling:
             - Network errors handled gracefully
             - Generic exceptions handled gracefully
             - Exit code 1 on errors
+
+        Note: Error details are only shown with --verbose flag for security
+        (prevents leaking internal error details to end users).
         """
         import requests
 
         # Test HTTP 401 error (authentication failure)
+        # Use --verbose to see error details (security: details hidden by default)
         mock_kalshi_client.get_balance.side_effect = requests.exceptions.HTTPError(
             "401 Unauthorized"
         )
-        result = runner.invoke(app, ["fetch-balance"])
+        result = runner.invoke(app, ["fetch-balance", "--verbose"])
         assert result.exit_code == 1
         assert "Failed to fetch balance" in result.stdout
         assert "401" in result.stdout or "Unauthorized" in result.stdout
@@ -1706,7 +1710,9 @@ class TestErrorHandling:
         mock_kalshi_client.get_fills.side_effect = Exception("Unexpected error")
         result = runner.invoke(app, ["fetch-fills"])
         assert result.exit_code == 1
-        assert "Failed to fetch fills" in result.stdout
+        # CLI outputs "Failed to fetch trade fills from API" (not just "fills")
+        assert "Failed to fetch" in result.stdout
+        assert "fills" in result.stdout
 
     def test_verbose_mode_shows_details(self, runner, mock_kalshi_client):
         """Test verbose mode shows detailed error info.

@@ -63,6 +63,7 @@ def test_decimal_precision_not_float(db_pool, clean_test_data, sample_market_dat
     market = get_current_market(sample_market_data["ticker"])
 
     # This is THE critical test for trading
+    assert market is not None
     assert type(market["yes_price"]) == Decimal, (
         f"Expected Decimal, got {type(market['yes_price'])}"
     )
@@ -80,6 +81,7 @@ def test_create_market_sub_penny_precision(db_pool, clean_test_data, sample_mark
     market = get_current_market("TEST-SUBPENNY")
 
     # Verify exact sub-penny precision
+    assert market is not None
     assert str(market["yes_price"]) == "0.4275"
     assert str(market["no_price"]) == "0.5725"
 
@@ -100,6 +102,7 @@ def test_get_current_market_filters_by_row_current_ind(
     market = get_current_market(sample_market_data["ticker"])
 
     # Should return ONLY the updated version
+    assert market is not None
     assert market["yes_price"] == Decimal("0.5500")
 
 
@@ -146,6 +149,7 @@ def test_update_market_partial_fields(db_pool, clean_test_data, sample_market_da
     market = get_current_market(sample_market_data["ticker"])
 
     # yes_price updated
+    assert market is not None
     assert market["yes_price"] == Decimal("0.5500")
     # no_price preserved
     assert market["no_price"] == Decimal("0.4800")
@@ -352,6 +356,7 @@ def test_extreme_prices(db_pool, clean_test_data, sample_market_data, decimal_pr
     create_market(**sample_market_data)
     market = get_current_market("TEST-EXTREME")
 
+    assert market is not None
     assert market["yes_price"] == Decimal("0.0001")
     assert market["no_price"] == Decimal("0.9999")
 
@@ -367,6 +372,7 @@ def test_tight_spread(db_pool, clean_test_data, sample_market_data, decimal_pric
     market = get_current_market("TEST-TIGHT")
 
     # Spread should be exactly 0.0001
+    assert market is not None
     spread = market["no_price"] - market["yes_price"]
     assert spread == Decimal("0.0001")
 
@@ -456,8 +462,8 @@ def test_create_account_balance_rejects_float(db_pool, clean_test_data):
     with pytest.raises(ValueError, match="Balance must be Decimal"):
         create_account_balance(
             platform_id="test-platform2",
-            balance=1234.5678,
-            currency="USD",  # type: ignore[arg-type]  # Float not Decimal
+            balance=1234.5678,  # type: ignore[arg-type]
+            currency="USD",
         )
 
 
@@ -560,7 +566,9 @@ def test_get_current_positions_with_market_id_filter(
     _position2 = create_position(**sample_position_data)  # Intentionally unused - testing filter
 
     # Test: Get positions filtered by market_id1
-    positions = get_current_positions(market_id=market_id1)
+    # Note: market_id1 is str (returned by create_market), but get_current_positions
+    # type hint says int. The underlying DB column is VARCHAR so str is correct.
+    positions = get_current_positions(market_id=market_id1)  # type: ignore[arg-type]
 
     # Should only return position1 (compare using surrogate id)
     assert len(positions) == 1

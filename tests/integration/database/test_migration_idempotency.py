@@ -33,16 +33,20 @@ import pytest
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from precog.database.connection import execute_query, fetch_one, test_connection  # noqa: E402
+# Alias test_connection to avoid pytest discovering it as a test function
+from precog.database.connection import execute_query, fetch_one  # noqa: E402
+from precog.database.connection import test_connection as db_test_connection  # noqa: E402
 
 # Skip all tests if database not available
-pytestmark = pytest.mark.skipif(not test_connection(), reason="Database connection not available")
+pytestmark = pytest.mark.skipif(
+    not db_test_connection(), reason="Database connection not available"
+)
 
 
 class TestMigrationIdempotency:
     """Test that migrations can be run multiple times without errors."""
 
-    def test_table_exists_check_is_idempotent(self):
+    def test_table_exists_check_is_idempotent(self, db_cursor):
         """Verify table_exists function works correctly."""
         # Check for a known existing table
         result = fetch_one(
@@ -164,6 +168,7 @@ class TestMigrationIdempotency:
             )
             # Verify only one row exists
             result = fetch_one("SELECT COUNT(*) as count FROM _test_seed_table WHERE code = 'TEST'")
+            assert result is not None
             assert result["count"] == 1
         finally:
             # Cleanup
@@ -173,7 +178,7 @@ class TestMigrationIdempotency:
 class TestMigrationUtilsIntegration:
     """Test migration utility functions from migration_utils.py."""
 
-    def test_table_exists_function(self):
+    def test_table_exists_function(self, db_cursor):
         """Test table_exists utility function."""
         from precog.database.migrations.migration_utils import table_exists
 
@@ -211,13 +216,15 @@ class TestMigrationUtilsIntegration:
             )
         """
         try:
-            # First creation
-            result1 = safe_create_table("_test_safe_table", create_sql)
-            assert result1 is True
+            # First creation - returns tuple (success, message)
+            success1, msg1 = safe_create_table("_test_safe_table", create_sql)
+            assert success1 is True
+            assert "created" in msg1.lower() or "skip" in msg1.lower()
 
-            # Second creation should succeed (idempotent)
-            result2 = safe_create_table("_test_safe_table", create_sql)
-            assert result2 is False  # Table already exists
+            # Second creation should succeed (idempotent) - returns (True, skip message)
+            success2, msg2 = safe_create_table("_test_safe_table", create_sql)
+            assert success2 is True  # Still succeeds (idempotent)
+            assert "skip" in msg2.lower()  # But indicates table already exists
         finally:
             execute_query("DROP TABLE IF EXISTS _test_safe_table CASCADE")
 
@@ -228,18 +235,20 @@ class TestMigrationUtilsIntegration:
             safe_create_table,
         )
 
-        # Create test table
+        # Create test table - returns tuple (success, message)
         safe_create_table(
             "_test_add_column", "CREATE TABLE _test_add_column (id SERIAL PRIMARY KEY)"
         )
         try:
-            # First add
-            result1 = safe_add_column("_test_add_column", "new_column", "VARCHAR(100)")
-            assert result1 is True
+            # First add - returns tuple (success, message)
+            success1, msg1 = safe_add_column("_test_add_column", "new_column", "VARCHAR(100)")
+            assert success1 is True
+            assert "added" in msg1.lower() or "skip" in msg1.lower()
 
-            # Second add should succeed (idempotent)
-            result2 = safe_add_column("_test_add_column", "new_column", "VARCHAR(100)")
-            assert result2 is False  # Column already exists
+            # Second add should succeed (idempotent) - returns (True, skip message)
+            success2, msg2 = safe_add_column("_test_add_column", "new_column", "VARCHAR(100)")
+            assert success2 is True  # Still succeeds (idempotent)
+            assert "skip" in msg2.lower()  # But indicates column already exists
         finally:
             execute_query("DROP TABLE IF EXISTS _test_add_column CASCADE")
 
@@ -247,7 +256,7 @@ class TestMigrationUtilsIntegration:
 class TestSchemaValidation:
     """Validate current schema matches expected state."""
 
-    def test_core_tables_exist(self):
+    def test_core_tables_exist(self, db_cursor):
         """Verify all core tables from migrations exist."""
         core_tables = [
             "markets",
@@ -270,12 +279,22 @@ class TestSchemaValidation:
                 """,
                 (table,),
             )
+            assert result is not None
             assert result["exists"] is True, f"Core table '{table}' does not exist"
 
     def test_scd_type2_columns_exist(self):
-        """Verify SCD Type 2 columns exist on versioned tables."""
+        """Verify SCD Type 2 columns exist on versioned tables.
+
+        Note: Our schema uses a simplified SCD Type 2 with only:
+        - row_current_ind: Boolean flag for current record
+        - row_end_ts: Timestamp when record was superseded (NULL if current)
+
+        We don't use row_start_ts or row_version as they're redundant with
+        created_at/updated_at timestamps already present on all tables.
+        """
         versioned_tables = ["markets", "positions", "game_states", "edges"]
-        scd_columns = ["row_current_ind", "row_start_ts", "row_end_ts", "row_version"]
+        # Simplified SCD Type 2 columns (see ARCHITECTURE_DECISIONS ADR-019)
+        scd_columns = ["row_current_ind", "row_end_ts"]
 
         for table in versioned_tables:
             for column in scd_columns:
@@ -290,15 +309,21 @@ class TestSchemaValidation:
                     """,
                     (table, column),
                 )
+                assert result is not None
                 assert result["exists"] is True, (
                     f"SCD Type 2 column '{column}' missing from '{table}'"
                 )
 
     def test_price_columns_are_decimal(self):
-        """Verify price columns use DECIMAL(10,4) precision."""
+        """Verify price columns use DECIMAL(10,4) precision.
+
+        Note: Our schema uses yes_price/no_price (not yes_bid/yes_ask)
+        as we store the current market price, not the bid/ask spread.
+        See ARCHITECTURE_DECISIONS ADR-002 for Decimal precision decisions.
+        """
         price_columns = [
-            ("markets", "yes_bid"),
-            ("markets", "yes_ask"),
+            ("markets", "yes_price"),  # Current yes price (not bid)
+            ("markets", "no_price"),  # Current no price (not ask)
             ("positions", "entry_price"),
         ]
 

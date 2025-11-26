@@ -462,6 +462,7 @@ def test_fetch_markets_handles_partial_failures(
         mock_client = MagicMock()
 
         # Mock 3 markets, but one will fail due to missing event
+        # NOTE: main.py expects yes_bid/yes_ask (legacy format) not yes_bid_dollars
         mock_client.get_markets.return_value = [
             {
                 "ticker": "KXNFLGAME-25DEC15-KC-YES",
@@ -469,11 +470,11 @@ def test_fetch_markets_handles_partial_failures(
                 "series_ticker": "KXNFLGAME",
                 "title": "Market 1",
                 "status": "open",
-                "yes_bid_dollars": Decimal("0.6200"),  # Use *_dollars fields (Pattern 1)
-                "yes_ask_dollars": Decimal("0.6250"),
-                "no_bid_dollars": Decimal("0.3750"),
-                "no_ask_dollars": Decimal("0.3800"),
-                "last_price_dollars": Decimal("0.6200"),
+                "yes_bid": Decimal("0.6200"),  # main.py uses yes_bid/yes_ask keys
+                "yes_ask": Decimal("0.6250"),
+                "no_bid": Decimal("0.3750"),
+                "no_ask": Decimal("0.3800"),
+                "last_price": Decimal("0.6200"),
                 "volume": 1000,
             },
             {
@@ -482,11 +483,11 @@ def test_fetch_markets_handles_partial_failures(
                 "series_ticker": "KXNFLGAME",
                 "title": "Market 2",
                 "status": "open",
-                "yes_bid_dollars": Decimal("0.4300"),  # Use *_dollars fields (Pattern 1)
-                "yes_ask_dollars": Decimal("0.4350"),
-                "no_bid_dollars": Decimal("0.5650"),
-                "no_ask_dollars": Decimal("0.5700"),
-                "last_price_dollars": Decimal("0.4300"),
+                "yes_bid": Decimal("0.4300"),  # main.py uses yes_bid/yes_ask keys
+                "yes_ask": Decimal("0.4350"),
+                "no_bid": Decimal("0.5650"),
+                "no_ask": Decimal("0.5700"),
+                "last_price": Decimal("0.4300"),
                 "volume": 2000,
             },
             {
@@ -495,11 +496,11 @@ def test_fetch_markets_handles_partial_failures(
                 "series_ticker": "KXNFLGAME",
                 "title": "Market 3",
                 "status": "open",
-                "yes_bid_dollars": Decimal("0.5000"),  # Use *_dollars fields (Pattern 1)
-                "yes_ask_dollars": Decimal("0.5050"),
-                "no_bid_dollars": Decimal("0.4950"),
-                "no_ask_dollars": Decimal("0.5000"),
-                "last_price_dollars": Decimal("0.5000"),
+                "yes_bid": Decimal("0.5000"),  # main.py uses yes_bid/yes_ask keys
+                "yes_ask": Decimal("0.5050"),
+                "no_bid": Decimal("0.4950"),
+                "no_ask": Decimal("0.5000"),
+                "last_price": Decimal("0.5000"),
                 "volume": 3000,
             },
         ]

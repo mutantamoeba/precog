@@ -110,12 +110,15 @@ class TestKalshiClientWithVCR:
 
         # Verify ALL price fields are Decimal (CRITICAL!)
         # Note: We parse *_dollars fields for sub-penny precision
-        price_fields = ["yes_bid_dollars", "yes_ask_dollars", "no_bid_dollars", "no_ask_dollars"]
-        for field in price_fields:
-            if field in market:
-                assert isinstance(market[field], Decimal), (
-                    f"Field '{field}' must be Decimal, got {type(market[field])}"
-                )
+        # Check each field individually to satisfy TypedDict literal key requirements
+        if "yes_bid_dollars" in market and market["yes_bid_dollars"] is not None:
+            assert isinstance(market["yes_bid_dollars"], Decimal), "yes_bid_dollars must be Decimal"
+        if "yes_ask_dollars" in market and market["yes_ask_dollars"] is not None:
+            assert isinstance(market["yes_ask_dollars"], Decimal), "yes_ask_dollars must be Decimal"
+        if "no_bid_dollars" in market and market["no_bid_dollars"] is not None:
+            assert isinstance(market["no_bid_dollars"], Decimal), "no_bid_dollars must be Decimal"
+        if "no_ask_dollars" in market and market["no_ask_dollars"] is not None:
+            assert isinstance(market["no_ask_dollars"], Decimal), "no_ask_dollars must be Decimal"
 
         # Verify specific market from recording
         # Note: Cassette recorded on 2025-11-23, data may have changed since then
@@ -280,27 +283,46 @@ class TestKalshiClientDecimalPrecisionWithVCR:
         # Check ALL markets for Decimal precision
         # Note: We parse *_dollars fields for sub-penny precision
         for market in markets:
-            price_fields = [
-                "yes_bid_dollars",
-                "yes_ask_dollars",
-                "no_bid_dollars",
-                "no_ask_dollars",
-            ]
-            for field in price_fields:
-                if field in market and market[field] is not None:
-                    price = market[field]
+            # Check each field individually to satisfy TypedDict literal key requirements
+            if "yes_bid_dollars" in market and market["yes_bid_dollars"] is not None:
+                price = market["yes_bid_dollars"]
+                assert isinstance(price, Decimal), (
+                    f"Market {market['ticker']} yes_bid_dollars is {type(price)}, expected Decimal"
+                )
+                price_str = str(price)
+                assert "." in price_str or price == Decimal("0"), (
+                    f"Price {price} should have decimal point (unless zero)"
+                )
 
-                    # Verify Decimal type
-                    assert isinstance(price, Decimal), (
-                        f"Market {market['ticker']} field '{field}' is {type(price)}, expected Decimal"
-                    )
+            if "yes_ask_dollars" in market and market["yes_ask_dollars"] is not None:
+                price = market["yes_ask_dollars"]
+                assert isinstance(price, Decimal), (
+                    f"Market {market['ticker']} yes_ask_dollars is {type(price)}, expected Decimal"
+                )
+                price_str = str(price)
+                assert "." in price_str or price == Decimal("0"), (
+                    f"Price {price} should have decimal point (unless zero)"
+                )
 
-                    # Verify string representation has NO precision loss
-                    # Decimal("0.4275") should stringify back to "0.4275"
-                    price_str = str(price)
-                    assert "." in price_str or price == Decimal("0"), (
-                        f"Price {price} should have decimal point (unless zero)"
-                    )
+            if "no_bid_dollars" in market and market["no_bid_dollars"] is not None:
+                price = market["no_bid_dollars"]
+                assert isinstance(price, Decimal), (
+                    f"Market {market['ticker']} no_bid_dollars is {type(price)}, expected Decimal"
+                )
+                price_str = str(price)
+                assert "." in price_str or price == Decimal("0"), (
+                    f"Price {price} should have decimal point (unless zero)"
+                )
+
+            if "no_ask_dollars" in market and market["no_ask_dollars"] is not None:
+                price = market["no_ask_dollars"]
+                assert isinstance(price, Decimal), (
+                    f"Market {market['ticker']} no_ask_dollars is {type(price)}, expected Decimal"
+                )
+                price_str = str(price)
+                assert "." in price_str or price == Decimal("0"), (
+                    f"Price {price} should have decimal point (unless zero)"
+                )
 
     def test_cent_to_dollar_conversion_accuracy(self, monkeypatch):
         """

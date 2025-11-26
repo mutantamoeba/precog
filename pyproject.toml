@@ -131,6 +131,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "src/precog/trading/strategy_manager.py" = ["S608"]
 "src/precog/analytics/model_manager.py" = ["S608"]
 "src/precog/database/lookup_helpers.py" = ["S608"]
+"src/precog/database/migrations/migration_025_unique_display_order_constraints.py" = ["S608"]
 
 # Test-specific ignores (patterns acceptable in tests but not production code)
 "tests/**/*.py" = [
@@ -215,6 +216,8 @@ module = [
     "psycopg2.*",
     "factory.*",
     "faker.*",
+    "github.*",
+    "vcr.*",
 ]
 ignore_missing_imports = true  # External libraries without type stubs
 

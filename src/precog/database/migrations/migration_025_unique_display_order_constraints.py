@@ -123,7 +123,7 @@ def check_duplicate_display_order(table_name: str) -> list[dict]:
         raise ValueError(f"Invalid table name: {table_name}. Must be one of {valid_tables}")
 
     # Safe to use f-string since table_name is validated against allowlist above
-    # S608 is a false positive - table_name is validated before use
+    # S608 is a false positive - table_name is validated before use (see pyproject.toml per-file-ignores)
     query = f"SELECT category, display_order, COUNT(*) as cnt FROM {table_name} WHERE display_order IS NOT NULL GROUP BY category, display_order HAVING COUNT(*) > 1"
     result = fetch_all(query)
     return result if result else []

@@ -580,10 +580,12 @@ class TestKalshiClientDecimalPrecision:
         ]
 
         for market in markets:
+            # Cast to dict to allow dynamic field access (mypy requires string literals for TypedDict)
+            market_dict = dict(market)
             for field in price_fields:
-                assert isinstance(market[field], Decimal), (
-                    f"Field '{field}' in market '{market['ticker']}' is {type(market[field])}, "
-                    f"expected Decimal. Value: {market[field]}"
+                assert isinstance(market_dict[field], Decimal), (
+                    f"Field '{field}' in market '{market['ticker']}' is {type(market_dict[field])}, "
+                    f"expected Decimal. Value: {market_dict[field]}"
                 )
 
 

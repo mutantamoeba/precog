@@ -440,6 +440,7 @@ def test_create_position_immutable_attribution(
     position = get_position_by_id(position_id)
 
     # ⭐ These values are IMMUTABLE entry-time snapshots
+    assert position is not None
     assert position["calculated_probability"] == Decimal("0.5500")
     assert position["market_price_at_entry"] == Decimal("0.4500")
     assert position["edge_at_entry"] == Decimal("0.1000")
@@ -553,6 +554,7 @@ def test_strategy_config_nested_versioning(db_pool, clean_test_data, sample_stra
         notes="Entry v1.5 + Exit v2.3",
     )
 
+    assert strategy_id is not None
     assert strategy_id > 0
 
     # Verify config structure
@@ -628,6 +630,8 @@ def test_strategy_config_independent_versioning(db_pool, clean_test_data):
         notes="Entry v1.6 + Exit v2.3",
     )
 
+    assert strategy_id_v1 is not None
+    assert strategy_id_v2 is not None
     assert strategy_id_v1 > 0
     assert strategy_id_v2 > 0
     assert strategy_id_v2 > strategy_id_v1
@@ -681,6 +685,8 @@ def test_analytics_query_roi_by_model(
     trade_1 = get_trade_by_id(trade_id_1)
     trade_2 = get_trade_by_id(trade_id_2)
 
+    assert trade_1 is not None
+    assert trade_2 is not None
     assert trade_1["model_id"] == 1
     assert trade_2["model_id"] == 2
 
@@ -728,6 +734,8 @@ def test_analytics_query_edge_vs_outcome(db_pool, clean_test_data, sample_market
     trade_high = get_trade_by_id(trade_id_high_edge)
     trade_low = get_trade_by_id(trade_id_low_edge)
 
+    assert trade_high is not None
+    assert trade_low is not None
     assert trade_high["edge_value"] == Decimal("0.2500")
     assert trade_low["edge_value"] == Decimal("0.0500")
 

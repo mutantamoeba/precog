@@ -141,8 +141,9 @@ def test_decimal_never_becomes_float(price):
     assert isinstance(subtracted, Decimal), "Subtraction created non-Decimal"
 
     # Extra paranoid: check they're not float
-    assert not isinstance(doubled, float), "Multiplication created float!"
-    assert not isinstance(halved, float), "Division created float!"
+    # Note: Decimal and float are incompatible types, so mypy flags this as unreachable
+    assert not isinstance(doubled, float), "Multiplication created float!"  # type: ignore[unreachable]
+    assert not isinstance(halved, float), "Division created float!"  # type: ignore[unreachable]
 
 
 @given(price=kalshi_prices)

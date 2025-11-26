@@ -719,13 +719,32 @@ def fetch_markets(
                             "liquidity": market.get("liquidity"),
                         }
 
+                        # Convert API prices to Decimal (Pattern 1: NEVER use float)
+                        # Kalshi API returns *_dollars fields as strings (e.g., "0.6200")
+                        yes_price = Decimal(market.get("yes_bid_dollars", "0"))
+                        no_price = Decimal(market.get("no_bid_dollars", "0"))
+                        yes_ask = Decimal(market.get("yes_ask_dollars", "0"))
+                        spread = yes_ask - yes_price  # Calculate spread from Decimals
+
+                        # Map Kalshi API status to our database status
+                        # API returns: active, closed, settled
+                        # Database allows: open, closed, settled, halted
+                        kalshi_status = market.get("status", "open")
+                        status_map = {
+                            "active": "open",  # Kalshi "active" = our "open"
+                            "closed": "closed",
+                            "settled": "settled",
+                            "halted": "halted",  # Keep as-is if Kalshi uses this
+                        }
+                        db_status = status_map.get(kalshi_status, "open")  # Default to "open"
+
                         # Try to update first (market may already exist)
                         try:
                             update_market_with_versioning(
                                 ticker=market["ticker"],
-                                yes_price=market["yes_bid"],  # Use bid as current price
-                                no_price=market["no_bid"],
-                                status=market["status"],
+                                yes_price=yes_price,  # Use bid as current price (Decimal)
+                                no_price=no_price,
+                                status=db_status,  # Mapped status for database constraint
                                 volume=market.get("volume"),
                                 open_interest=market.get("open_interest"),
                                 market_metadata=metadata,
@@ -739,13 +758,13 @@ def fetch_markets(
                                 external_id=market["ticker"],  # Use ticker as external_id
                                 ticker=market["ticker"],
                                 title=market["title"],
-                                yes_price=market["yes_bid"],
-                                no_price=market["no_bid"],
+                                yes_price=yes_price,  # Decimal
+                                no_price=no_price,  # Decimal
                                 market_type="binary",
-                                status=market["status"],
+                                status=db_status,  # Mapped status for database constraint
                                 volume=market.get("volume"),
                                 open_interest=market.get("open_interest"),
-                                spread=market["yes_ask"] - market["yes_bid"],  # Calculate spread
+                                spread=spread,  # Decimal spread
                                 metadata=metadata,
                             )
                             created_count += 1

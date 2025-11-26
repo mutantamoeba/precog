@@ -1,13 +1,25 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.11
+**Version:** 1.12
 **Created:** 2025-11-13
-**Last Updated:** 2025-11-25
+**Last Updated:** 2025-11-26
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.12:**
+- **Added Pattern 24: Type Safety and Mypy Warning Prevention (ALWAYS)**
+- Documents 3-pattern approach to eliminating Mypy type errors: None-checking, TypedDict alignment, dynamic key access
+- Real-world context from 2025-11-26 session: Reduced Mypy errors 117→0 (100% elimination)
+- Pattern 1: Always check for None before indexing Optional[Dict] return values
+- Pattern 2: Align TypedDict definitions with actual API field names (e.g., yes_bid_dollars not yes_bid)
+- Pattern 3: Use cast() for factory classes and dynamic dictionary access
+- Covers common error types: [index] (53), [typeddict-item] (38), [arg-type] (14), [unreachable] (3)
+- Common mistakes: Forgetting None checks, using float instead of Decimal, dynamic TypedDict key access
+- Integration with Pattern 6 (TypedDict), Pattern 16 (Type Safety YAML/JSON), Pattern 21 (Validation-First)
+- Cross-references: Mypy configuration in pyproject.toml, pre-push hook enforcement
+- Total addition: ~280 lines documenting type safety and warning prevention patterns
 **Changes in V1.11:**
 - **Added Pattern 23: Validation Failure Handling - Fix Failures, Don't Bypass (MANDATORY)**
 - Documents systematic approach to handling validation failures (distinguish false positives from real failures)
@@ -6252,6 +6264,174 @@ def test_scd_validation_ignores_docstring_parameters():
 
 ---
 
+## Pattern 24: Type Safety and Mypy Warning Prevention (ALWAYS)
+
+**Priority:** 🔴 Critical - Type errors indicate potential runtime failures
+**Enforcement:** Pre-push hook (Mypy), CI/CD pipeline
+**Real-World Context:** 2025-11-26 session reduced Mypy errors from 117 to 0 (100% elimination)
+
+### Why This Pattern Matters
+
+Mypy type errors aren't just linting warnings - they represent potential runtime failures:
+- `[index]` errors: Code may crash with `TypeError: 'NoneType' object is not subscriptable`
+- `[typeddict-item]` errors: API response parsing may fail silently or return wrong values
+- `[arg-type]` errors: Functions may receive wrong types causing subtle bugs
+
+**Real-world impact:** The 117 type errors fixed in this session could have caused:
+- Test failures that mask real bugs (false negatives)
+- Production crashes when database returns None
+- Silent data corruption from type coercion
+
+### The Three Prevention Patterns
+
+#### Pattern 24.1: None-Check Before Indexing (ALWAYS)
+
+**Problem:** Functions returning `Optional[Dict]` may return `None`, but code tries to index immediately.
+
+```python
+# ❌ WRONG - Mypy [index] error
+def test_market_creation(db_cursor):
+    market = get_market_by_ticker("TEST-TICKER")  # Returns Optional[Dict]
+    assert market["yes_price"] == Decimal("0.5000")  # Error: may be None!
+
+# ✅ CORRECT - Add explicit None check
+def test_market_creation(db_cursor):
+    market = get_market_by_ticker("TEST-TICKER")  # Returns Optional[Dict]
+    assert market is not None  # Guard against None
+    assert market["yes_price"] == Decimal("0.5000")  # Safe: market guaranteed not None
+```
+
+**When to apply:** Every time you access a value from a function that returns `Optional[T]`
+
+#### Pattern 24.2: TypedDict Field Alignment (ALWAYS)
+
+**Problem:** TypedDict definitions don't match actual API response fields.
+
+```python
+# ❌ WRONG - TypedDict doesn't match API response
+class ProcessedMarketData(TypedDict):
+    yes_bid: Decimal    # Field name doesn't match API!
+    yes_ask: Decimal
+
+# API returns: {"yes_bid_dollars": "0.6200", "yes_ask_dollars": "0.6300"}
+
+# ✅ CORRECT - Match actual API field names
+class ProcessedMarketData(TypedDict):
+    yes_bid_dollars: Decimal    # Matches API response
+    yes_ask_dollars: Decimal
+```
+
+**When to apply:** When creating TypedDicts for API responses, verify field names match actual responses (use VCR cassettes as reference)
+
+#### Pattern 24.3: Cast for Dynamic Access (WHEN NEEDED)
+
+**Problem:** Factory classes and dynamic dictionary access trigger Mypy errors.
+
+```python
+# ❌ WRONG - Factory returns class, not dict
+from tests.fixtures.factories import MarketDataFactory
+market = MarketDataFactory()
+ticker = market["ticker"]  # Error: MarketDataFactory not indexable
+
+# ✅ CORRECT - Use cast() to inform Mypy
+from typing import Any, Dict, cast
+from tests.fixtures.factories import MarketDataFactory
+market = cast(Dict[str, Any], MarketDataFactory())
+ticker = market["ticker"]  # OK: Mypy knows it's a dict
+```
+
+**When to apply:**
+- Factory classes that return dictionaries
+- Dynamic key access on TypedDicts (use `dict(typed_dict)` first)
+- YAML/JSON parsing (see Pattern 16)
+
+### Common Mypy Error Types and Fixes
+
+| Error Type | Count (This Session) | Fix Strategy |
+|------------|---------------------|--------------|
+| `[index]` | 53 | Add `assert value is not None` |
+| `[typeddict-item]` | 38 | Fix TypedDict field names/types |
+| `[arg-type]` | 14 | Fix argument types (float→Decimal, str→int) |
+| `[literal-required]` | 7 | Use literal keys, not variables |
+| `[unreachable]` | 3 | Add `# type: ignore[unreachable]` for defensive checks |
+| `[union-attr]` | 2 | Add None checks before attribute access |
+
+### Common Mistakes
+
+1. **Forgetting the Decimal import:**
+```python
+# ❌ WRONG
+balance=1234.5678  # Float, not Decimal!
+
+# ✅ CORRECT
+from decimal import Decimal
+balance=Decimal("1234.5678")
+```
+
+2. **Dynamic TypedDict key access:**
+```python
+# ❌ WRONG - Mypy requires literal keys for TypedDict
+for field in ["yes_bid", "yes_ask"]:
+    value = market[field]  # Error: literal required
+
+# ✅ CORRECT - Convert to dict or use explicit access
+market_dict = dict(market)
+for field in ["yes_bid", "yes_ask"]:
+    value = market_dict[field]  # OK: dict allows dynamic keys
+```
+
+3. **Ignoring instead of fixing:**
+```python
+# ❌ WRONG - Blanket ignore hides real bugs
+result = get_market(ticker)
+assert result["price"]  # type: ignore
+
+# ✅ CORRECT - Fix the actual issue
+result = get_market(ticker)
+assert result is not None
+assert result["price"]
+```
+
+### Pre-Push Hook Integration
+
+Mypy runs automatically on `git push` via the pre-push hook:
+
+```bash
+# From .git/hooks/pre-push
+echo "[Step 4/8] Running Mypy type checking..."
+python -m mypy src/ tests/
+```
+
+**If Mypy fails:**
+1. Run `python -m mypy src/ tests/` to see errors
+2. Apply the patterns above to fix each error type
+3. Re-run Mypy until all errors are resolved
+4. Push again
+
+### Cross-References
+
+**Related Patterns:**
+- **Pattern 6 (TypedDict for API Responses):** Original TypedDict guidance
+- **Pattern 16 (Type Safety YAML/JSON):** Cast usage for parsed data
+- **Pattern 21 (Validation-First Architecture):** Pre-push hook enforcement
+
+**Related Files:**
+- `pyproject.toml` - Mypy configuration
+- `src/precog/api_connectors/types.py` - TypedDict definitions
+- `tests/fixtures/factories.py` - Factory classes (cast example)
+
+**Related Configuration:**
+```toml
+# pyproject.toml
+[tool.mypy]
+python_version = "3.12"
+warn_return_any = true
+warn_unused_ignores = true
+disallow_untyped_defs = false  # Gradual typing
+```
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -6279,6 +6459,7 @@ def test_scd_validation_ignores_docstring_parameters():
 | **21. Validation-First Architecture** | Pre-commit + Pre-push hooks | `pre-commit run --all-files` | DEF-001, DEF-002, DEF-003, Pattern 1/4/9/18 |
 | **22. VCR Pattern** | Pytest (integration tests) | `pytest tests/integration/api_connectors/test_kalshi_client_vcr.py` | ADR-075, REQ-TEST-013/014, GitHub #124, Pattern 1/13 |
 | **23. Validation Failure Handling** | Manual (4-step protocol) | `git push` (pre-push hooks), `./scripts/validate_all.sh` | Pattern 21, Pattern 18, Pattern 9, Issue #127 |
+| **24. Type Safety (Mypy)** | Pre-push hook (Mypy) | `python -m mypy src/ tests/` | Pattern 6, Pattern 16, Pattern 21 |
 
 ---
 

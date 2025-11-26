@@ -103,6 +103,7 @@ def test_property_edge_calculation_invariant(
         )
 
         trade = get_trade_by_id(trade_id)
+        assert trade is not None
         expected_edge = calculated_prob - market_price
 
         # Allow small floating-point tolerance (1 basis point = 0.0001)
@@ -153,6 +154,8 @@ def test_property_attribution_immutability(
         pos_2 = get_position_by_id(position_id)
 
         # Attribution fields must be identical
+        assert pos_1 is not None
+        assert pos_2 is not None
         assert pos_1["calculated_probability"] == pos_2["calculated_probability"]
         assert pos_1["edge_at_entry"] == pos_2["edge_at_entry"]
         assert pos_1["market_price_at_entry"] == pos_2["market_price_at_entry"]
@@ -205,7 +208,7 @@ def test_e2e_full_attribution_workflow(
         yes_price=Decimal("0.5500"),
         no_price=Decimal("0.4500"),
         status="open",
-        metadata='{"test": true}',
+        metadata={"test": True},
     )
 
     # Step 2: Create trade with attribution
@@ -237,6 +240,8 @@ def test_e2e_full_attribution_workflow(
     trade = get_trade_by_id(trade_id)
     position = get_position_by_id(position_id)
 
+    assert trade is not None
+    assert position is not None
     assert trade["calculated_probability"] == position["calculated_probability"]
     assert trade["edge_value"] == position["edge_at_entry"]
     assert trade["market_price"] == position["market_price_at_entry"]
@@ -298,6 +303,7 @@ def test_stress_bulk_trade_creation(
 
     # Verify all trades have correct attribution
     sample_trade = get_trade_by_id(trade_ids[0])
+    assert sample_trade is not None
     assert sample_trade["edge_value"] is not None
     assert sample_trade["calculated_probability"] is not None
 
@@ -371,7 +377,7 @@ def test_race_concurrent_trade_creation(
     Reference:
         - REQ-TEST-017: Race condition tests for concurrent operations
     """
-    result_queue = Queue()
+    result_queue: Queue = Queue()
 
     def create_trades_concurrently(thread_id, count):
         """Worker thread: Create trades concurrently"""
@@ -413,6 +419,7 @@ def test_race_concurrent_trade_creation(
 
     # Verify: All trades have correct attribution
     sample_trade = get_trade_by_id(all_trade_ids[0])
+    assert sample_trade is not None
     assert sample_trade["edge_value"] == Decimal("0.1500")
 
 
@@ -611,6 +618,7 @@ def test_chaos_trade_with_probability_boundary_values(
     )
 
     trade_obj_1 = get_trade_by_id(trade_1)
+    assert trade_obj_1 is not None
     assert trade_obj_1["calculated_probability"] == Decimal("0.0000")
     assert trade_obj_1["edge_value"] == Decimal("-0.0100")  # Negative edge
 
@@ -627,6 +635,7 @@ def test_chaos_trade_with_probability_boundary_values(
     )
 
     trade_obj_2 = get_trade_by_id(trade_2)
+    assert trade_obj_2 is not None
     assert trade_obj_2["calculated_probability"] == Decimal("1.0000")
     assert trade_obj_2["edge_value"] == Decimal("0.0100")  # Small positive edge
 
@@ -643,6 +652,7 @@ def test_chaos_trade_with_probability_boundary_values(
     )
 
     trade_obj_3 = get_trade_by_id(trade_3)
+    assert trade_obj_3 is not None
     assert trade_obj_3["calculated_probability"] == Decimal("0.9999")
     assert trade_obj_3["edge_value"] == Decimal("0.0199")
 
