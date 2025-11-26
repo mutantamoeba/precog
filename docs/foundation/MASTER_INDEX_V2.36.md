@@ -1,9 +1,15 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.35
-**Last Updated:** 2025-11-25
+**Version:** 2.36
+**Last Updated:** 2025-11-26
 **Status:** ✅ Current
+**Changes in v2.36:**
+- **STALE ENTRY FIXES**: Fixed 4 stale MASTER_INDEX entries that referenced non-existent files (Issue #130)
+  - Handoff_Protocol_V1_1.md -> Handoff_Protocol_V1.0.md (📦 archived)
+  - VERSION_HEADERS_GUIDE_V2_1.md -> VERSION_HEADERS_GUIDE_V2.1.md (📦 archived)
+  - PHASE_0.7_DEFERRED_TASKS_V1.4.md (📦 archived - phase complete)
+  - PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md (🔵 planned - merged into TEST_REQUIREMENTS)
 **Changes in v2.35:**
 - **COLUMN RENAME DEPRECATION PATTERN**: Added COLUMN_RENAME_DEPRECATION_PATTERN_V1.0.md to Implementation Guides - 3-phase expand-contract migration pattern for safe database column renames (addresses PR #93 M-10 recommendation)
 **Changes in v2.34:**
@@ -355,7 +361,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.18.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.35.md** | ✅ | v2.35 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.35** (Added COLUMN_RENAME_DEPRECATION_PATTERN_V1.0.md) |
+| **MASTER_INDEX_V2.36.md** | ✅ | v2.36 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.36** (Issue #130: Fixed 4 stale entries, fixed regex in validate_docs.py) |
 | **ARCHITECTURE_DECISIONS_V2.21.md** | ✅ | v2.21 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (97 total) - **UPDATED V2.21** (ADR-094 through 097: Workflow Enforcement Infrastructure - YAML-driven validation architecture, auto-discovery pattern for validators, parallel execution in git hooks (66% time savings: 145s → 40-50s), tier-specific coverage targets; 4-layer defense-in-depth: pre-commit (~2-5s) → pre-push (~40-50s) → CI/CD (~2-5min) → branch protection; 93 → 97 total ADRs) |
 | **REQUIREMENT_INDEX.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
 | **ADR_INDEX_V1.15.md** | ✅ | v1.15 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 76 architecture decisions - **UPDATED V1.15** (ADR-094 through 097: Workflow Enforcement Infrastructure - YAML-driven validation, auto-discovery pattern, parallel execution in git hooks, tier-specific coverage targets; 72 → 76 total ADRs) |
@@ -504,14 +510,14 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **SCHEMA_MIGRATION_WORKFLOW_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | All phases | 🔴 Critical | **NEW** - Comprehensive database schema migration workflow: 13 main sections covering complete migration workflow (Plan → Create Migration → Update CRUD → Update Tests → Run Tests → Update Docs → Commit/Deploy); pre-migration checklist, dual-key pattern code examples, test templates (Pattern 13 compliant - NO mocks), rollback procedures, common scenarios, troubleshooting guide; companion to Pattern 14 (Schema Migration → CRUD Workflow); cross-references ADR-089 (Dual-Key Schema Pattern) |
 | **SESSION_7_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 7 | 🟡 High | Latest session handoff (session # is version) |
 | **SESSION_6_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 6 | 🟢 Medium | Previous session handoff |
-| **Handoff_Protocol_V1_1.md** | ✅ | v1.1 | `/docs/utility/` | 0 | All phases | 🔴 Critical | **UPDATED V1.1** - Merged 4 docs: HANDOFF_PROCESS + TOKEN_MONITORING + PHASE_COMPLETION + KNOWLEDGE_STRATEGY (V1.0 archived) |
-| **VERSION_HEADERS_GUIDE_V2_1.md** | ✅ | v2.1 | `/docs/utility/` | 0 | All phases | 🟡 High | Version control standards, references Handoff_Protocol (**FIXED** filename from V2.1 → V2_1) |
-| **PHASE_0.7_DEFERRED_TASKS_V1.4.md** | ✅ | v1.5 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **PHASE 0.7 COMPLETE** - All 8/8 tasks complete (DEF-001 through DEF-008: pre-commit, pre-push, branch protection, schema validation, all hooks) - **UPDATED V1.4** (linked REQ-CICD-004/005 to DEF-001/002 for requirements traceability, marked acceptance criteria complete) |
+| **Handoff_Protocol_V1.0.md** | 📦 | v1.0 | `/docs/_archive/` | 0 | All phases | 🔴 Critical | **ARCHIVED** - Original handoff protocol; superseded by SESSION_WORKFLOW_GUIDE_V1.0.md |
+| **VERSION_HEADERS_GUIDE_V2.1.md** | 📦 | v2.1 | `/docs/_archive/` | 0 | All phases | 🟡 High | **ARCHIVED** - Version control standards (superseded by inline documentation in DEVELOPMENT_PATTERNS) |
+| **PHASE_0.7_DEFERRED_TASKS_V1.4.md** | 📦 | v1.4 | `/docs/_archive/` | 0.7 | Phase 0.7 | 🟡 High | **ARCHIVED** - Phase 0.7 deferred tasks complete; all 8/8 tasks done (DEF-001 through DEF-008: pre-commit, pre-push, branch protection, schema validation) |
 | **GITHUB_BRANCH_PROTECTION_CONFIG.md** | ✅ | v1.0 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **NEW** - Complete GitHub branch protection configuration (completes DEF-003) |
 | **PHASE_1_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1 | 🟡 High | **NEW** - Tracks deferred enhancements from Phase 1 (extended docstrings, pre-commit hooks, branch protection) |
 | **PHASE_1_PR_REVIEW_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1 | Phase 1.5 | 🔴 Critical | **NEW** - Dual-tracking system for 45 actionable items from PRs #2-#21 AI reviews: 3 critical (float usage/Pattern 1, zero test coverage, path sanitization), 8 high, 18 medium, 16 low priority; GitHub issues #29-#73 with bi-directional links; prevents "4 out of 7 tasks lost" problem |
 | **PHASE_1.5_COMPLETION_REPORT.md** | ✅ | n/a | `/docs/phase-completion/` | 1.5 | Phase 1.5 | 🔴 Critical | **NEW** - Phase 1.5 completion assessment (10-step protocol): ⚠️ PASS WITH CONDITIONS - 3/4 deliverables complete, 550 tests passing, 93.83% overall coverage, all targets exceeded (Model Manager 92.66%, Strategy Manager 86.59%, Position Manager 91.04%); 1 deliverable deferred (DEF-P1.5-001) |
-| **PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 1.5-4 | 🟡 High | **NEW** - Comprehensive property-based testing roadmap (74-91 tests deferred to Phases 1.5-4: database CRUD, strategy versioning, position lifecycle, async handling, ensemble predictions) |
+| **PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md** | 🔵 | - | `/docs/utility/` | 1.5 | Phase 1.5-4 | 🟡 High | **PLANNED** - Property-based testing roadmap for 74-91 additional tests across Phases 1.5-4 (merged into TEST_REQUIREMENTS_COMPREHENSIVE) |
 | **PHASE_1.5_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 2 Week 1 | 🟡 High | **NEW** - Configuration System Enhancement deferred to Phase 2 (DEF-P1.5-001: version resolution + override handling, 6-8 hours implementation estimate, requires live database integration) |
 | **PHASE_4_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 4.5 | Phase 4.5 | 🔴 Critical | **NEW** - Comprehensive research task documentation (11 tasks: DEF-009 to DEF-019, strategies HIGHEST PRIORITY, models, edge detection) - ~2800 lines, 74-92 hour total effort |
 | **STRATEGIC_WORK_ROADMAP_V1.1.md** | ✅ | v1.1 | `/docs/utility/` | 1-10 | All phases | 🔴 Critical | **UPDATED V1.1** - Master roadmap of 25 strategic tasks + Phases 6-9 analytics tasks (performance tracking, dashboards, A/B testing) organized by category |
