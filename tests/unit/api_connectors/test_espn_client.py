@@ -4,6 +4,7 @@ Unit tests for ESPN API Client - Phase 2.
 Tests cover:
 - Client initialization
 - NFL/NCAAF scoreboard fetching
+- Multi-sport support (NFL, NCAAF, NBA, NCAAB, NHL, WNBA) - REQ-DATA-003
 - Response parsing (game state extraction)
 - Rate limiting (500 req/hour)
 - Error handling (retries, timeouts, HTTP errors)
@@ -11,6 +12,9 @@ Tests cover:
 
 Following TDD: Tests written BEFORE implementation.
 Reference: docs/testing/PHASE_2_TEST_PLAN_V1.0.md Section 2.1
+
+Requirements Tested:
+    - REQ-DATA-003: Multi-Sport Support (6 Leagues: NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
 
 Educational Note:
     These tests use the pytest-mock library for mocking HTTP requests.
