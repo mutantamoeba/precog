@@ -79,6 +79,7 @@ select = [
     "PTH",    # flake8-use-pathlib (prefer pathlib over os.path)
     "PD",     # pandas-vet (pandas best practices)
     "RUF",    # Ruff-specific rules
+    "S608",   # flake8-bandit: SQL injection via string-based query (pre-push also checks this)
 ]
 
 # Disable specific rules

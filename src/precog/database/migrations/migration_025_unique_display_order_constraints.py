@@ -118,13 +118,14 @@ def check_duplicate_display_order(table_name: str) -> list[dict]:
         Table identifiers cannot use parameterized queries in PostgreSQL.
     """
     # Validate table name against known tables (SQL injection prevention)
-    valid_tables = {"strategy_types", "model_types", "edge_types"}
+    # These are the only tables with display_order columns per Migration 023
+    valid_tables = {"strategy_types", "model_classes"}
     if table_name not in valid_tables:
         raise ValueError(f"Invalid table name: {table_name}. Must be one of {valid_tables}")
 
-    # Safe to use f-string since table_name is validated against allowlist above
-    # S608 is a false positive - table_name is validated before use
-    query = f"SELECT category, display_order, COUNT(*) as cnt FROM {table_name} WHERE display_order IS NOT NULL GROUP BY category, display_order HAVING COUNT(*) > 1"
+    # Safe to use f-string since table_name is validated against allowlist above (lines 122-124)
+    # S608 is a false positive here - allowlist validation makes SQL injection impossible
+    query = f"SELECT category, display_order, COUNT(*) as cnt FROM {table_name} WHERE display_order IS NOT NULL GROUP BY category, display_order HAVING COUNT(*) > 1"  # noqa: S608
     result = fetch_all(query)
     return result if result else []
 
