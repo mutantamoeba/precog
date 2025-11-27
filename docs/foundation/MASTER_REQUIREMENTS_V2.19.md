@@ -1,9 +1,18 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.18
-**Last Updated:** 2025-11-22
+**Version:** 2.19
+**Last Updated:** 2025-11-27
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.19:**
+- **LIVE DATA MANAGEMENT REQUIREMENTS**: Added Section 4.12 with REQ-DATA-001 through REQ-DATA-005 (5 comprehensive live data requirements)
+- **REQ-DATA-001**: Game State Data Collection with SCD Type 2 Versioning (~1.8M records/year)
+- **REQ-DATA-002**: Venue Data Management (Normalized Table) with ESPN venue ID linkage
+- **REQ-DATA-003**: Multi-Sport Support (6 Leagues: NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
+- **REQ-DATA-004**: Team Rankings Storage with Temporal Validity (AP, Coaches, CFP, ESPN rankings)
+- **REQ-DATA-005**: JSONB Situation Data for Sport-Specific Fields (avoids 30+ nullable columns)
+- **CROSS-REFERENCES**: ADR-029, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md, Migrations 026-029
+- **STORAGE ESTIMATES**: ~1.1 GB/year for all 6 sports, ~9,485 games/year
 **Changes in v2.18:**
 - **WORKFLOW ENFORCEMENT REQUIREMENTS**: Added REQ-VALIDATION-007 through REQ-VALIDATION-012 (6 comprehensive workflow enforcement requirements)
 - **PATTERN ENFORCEMENT**: Requirements enforce Pattern 2 (SCD Type 2 queries), Pattern 8 (Config Sync), Pattern 10 (Property-Based Testing), Pattern 13 (Test Coverage Quality)
@@ -275,7 +284,7 @@ precog/
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.18.md` - This document (requirements through Phase 10)
+  2. `MASTER_REQUIREMENTS_V2.19.md` - This document (requirements through Phase 10)
   3. `MASTER_INDEX_V2.37.md` - Complete document inventory
   4. `ARCHITECTURE_DECISIONS_V2.22.md` - All 97 ADRs with design rationale (Phase 0-4.5)
   5. `REQUIREMENT_INDEX.md` - Systematic requirement catalog
@@ -1150,6 +1159,133 @@ Comprehensive performance tracking, model validation, and analytics infrastructu
 - **Phase 1.5-2**: Core tracking implementation (performance_metrics, evaluation_runs, model_predictions tables)
 - **Phase 6-7**: Dashboard integration (materialized views, enhanced collection, reporting UI)
 - **Phase 9**: Advanced analytics (A/B testing, ensemble tracking, feature importance)
+
+### 4.12 Live Data Management (Phase 2)
+
+Real-time game data collection, storage, and versioning for multi-sport prediction market analysis. Implements SCD Type 2 versioning for complete game state history and JSONB situation fields for sport-specific data.
+
+**REQ-DATA-001: Game State Data Collection with SCD Type 2 Versioning**
+- Phase: 2
+- Priority: Critical
+- Status: 🔵 Planned
+- Reference: ADR-029 (ESPN Data Model with Normalized Schema), ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md
+- Description: Collect and store game state snapshots using SCD Type 2 versioning for complete game history
+- Game State Fields:
+  - **Core Fields**: espn_event_id, home_team_id, away_team_id, venue_id, home_score, away_score
+  - **Temporal Fields**: period, clock_seconds, clock_display, game_status
+  - **Context Fields**: game_date, broadcast, neutral_site, season_type, week_number
+  - **Versioning Fields**: row_start_timestamp, row_end_timestamp, row_current_ind (SCD Type 2)
+- SCD Type 2 Pattern:
+  - New row created on ANY score/period/status change (INSERT with row_current_ind = TRUE)
+  - Previous row updated with row_end_timestamp and row_current_ind = FALSE
+  - Enables complete game timeline reconstruction for backtesting
+- Performance Requirements:
+  - Collection frequency: Every 30-60 seconds during live games
+  - Insert latency: <100ms per state update
+  - Query latency: <50ms for current state (row_current_ind = TRUE index)
+- Storage Estimate: ~1.8M records/year across all 6 sports (~900 MB)
+
+**REQ-DATA-002: Venue Data Management (Normalized Table)**
+- Phase: 2
+- Priority: High
+- Status: 🔵 Planned
+- Reference: ADR-029 (ESPN Data Model), Migration 026
+- Description: Store venue information in normalized table with ESPN venue ID linkage
+- Venue Fields:
+  - **Identity**: venue_id (PK), espn_venue_id (UNIQUE), venue_name
+  - **Location**: city, state (nullable for international venues)
+  - **Attributes**: capacity, indoor (boolean for weather considerations)
+  - **Timestamps**: created_at, updated_at
+- Normalization Benefits:
+  - Eliminates venue data duplication across game_states records
+  - Enables venue-based analytics (home field advantage, capacity impact)
+  - Supports weather integration (indoor vs outdoor venues)
+- Storage Estimate: ~150 unique venues across all sports (<1 MB)
+
+**REQ-DATA-003: Multi-Sport Support (6 Leagues)**
+- Phase: 2
+- Priority: Critical
+- Status: 🟡 In Progress (ESPN client endpoints complete, database pending)
+- Reference: ADR-029, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md
+- Description: Support 6 sports leagues with unified schema and sport-specific JSONB
+- Supported Leagues:
+  - **NFL**: National Football League (~285 games/season)
+  - **NCAAF**: College Football (~800 games/season)
+  - **NBA**: National Basketball Association (~1,350 games/season)
+  - **NCAAB**: College Basketball (~5,500 games/season)
+  - **NHL**: National Hockey League (~1,350 games/season)
+  - **WNBA**: Women's National Basketball Association (~200 games/season)
+- Schema Design:
+  - Unified `game_states` table for all sports (no separate tables per sport)
+  - Sport-specific data stored in JSONB `situation` field (see REQ-DATA-005)
+  - Teams table extended with `sport` and `league` columns
+- API Endpoints (✅ Complete):
+  - NFL: `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard`
+  - NCAAF: `https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard`
+  - NBA: `https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard`
+  - NCAAB: `https://site.api.espn.com/apis/site/v2/sports/basketball/mens-college-basketball/scoreboard`
+  - NHL: `https://site.api.espn.com/apis/site/v2/sports/hockey/nhl/scoreboard`
+  - WNBA: `https://site.api.espn.com/apis/site/v2/sports/basketball/wnba/scoreboard`
+- Total Games: ~9,485 games/year, ~1.8M game state records/year
+- Storage Estimate: ~1.1 GB/year for all sports
+
+**REQ-DATA-004: Team Rankings Storage (Temporal Validity)**
+- Phase: 2
+- Priority: Medium
+- Status: 🔵 Planned
+- Reference: ADR-029, Migration 027
+- Description: Store team rankings with temporal validity for historical analysis
+- Ranking Types Supported:
+  - **AP Poll**: Associated Press college football/basketball rankings
+  - **Coaches Poll**: College coaches rankings
+  - **CFP Rankings**: College Football Playoff committee rankings
+  - **ESPN Power Index**: ESPN's power rankings (FPI for football)
+  - **ESPN BPI**: ESPN Basketball Power Index
+- Ranking Fields:
+  - **Identity**: ranking_id (PK), team_id (FK), ranking_type
+  - **Ranking Data**: rank, points, first_place_votes
+  - **Temporal**: season, week (NULL for preseason/final), ranking_date
+  - **Uniqueness**: (team_id, ranking_type, season, week) for point-in-time queries
+- Use Cases:
+  - Ranked matchup detection (Top 25 vs Top 25)
+  - Ranking momentum analysis (rising/falling teams)
+  - Model feature engineering (ranking differential)
+- Storage Estimate: ~50,000 records/year (~5 MB)
+
+**REQ-DATA-005: JSONB Situation Data (Sport-Specific Fields)**
+- Phase: 2
+- Priority: High
+- Status: 🔵 Planned
+- Reference: ADR-029 (ESPN Data Model), ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md
+- Description: Store sport-specific game situation data in JSONB field without schema explosion
+- JSONB Design Rationale:
+  - Avoids 30+ nullable columns for sport-specific fields
+  - Enables flexible schema evolution (add fields without migration)
+  - Supports GIN indexing for efficient JSONB queries
+- Sport-Specific Fields:
+  - **Football (NFL/NCAAF)**:
+    - possession, down, distance, yard_line, is_red_zone
+    - home_turnovers, away_turnovers, home_timeouts, away_timeouts
+    - last_play, drive_plays, drive_yards
+  - **Basketball (NBA/NCAAB/WNBA)**:
+    - possession, home_fouls, away_fouls
+    - home_timeouts, away_timeouts, bonus, possession_arrow
+  - **Hockey (NHL)**:
+    - home_powerplay, away_powerplay, powerplay_time
+    - home_shots, away_shots, home_saves, away_saves
+- Query Examples:
+  - Football red zone: `WHERE situation->>'is_red_zone' = 'true'`
+  - Basketball bonus: `WHERE situation->>'bonus' = 'double'`
+  - Hockey power play: `WHERE (situation->>'home_powerplay')::boolean = true`
+- Index Strategy: GIN index on `situation` field for flexible queries
+- TypedDict Support: ESPNSituationData TypedDict in espn_client.py for compile-time type safety
+
+**Cross-References:**
+- ADR-029: ESPN Data Model with Normalized Schema
+- ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md: Complete implementation plan
+- DATABASE_SCHEMA_SUMMARY_V1.12.md (planned): Schema documentation with new tables
+- Migrations 026-029: Database migrations for new tables
+- src/precog/api_connectors/espn_client.py: TypedDict implementations
 
 ---
 
