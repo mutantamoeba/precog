@@ -35,11 +35,20 @@ import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+from typing import Any, TypedDict
 
 import pytest
 import yaml
 
 pytestmark = [pytest.mark.stress, pytest.mark.slow]
+
+
+class StressResults(TypedDict):
+    """Type-safe results dict for stress tests."""
+
+    reads: int
+    reloads: int
+    errors: list[str]
 
 
 @pytest.fixture
@@ -160,7 +169,7 @@ class TestConfigLoaderReload:
             This tests the most challenging scenario: reload during reads.
             Proper synchronization should ensure consistency.
         """
-        results = {"reads": 0, "reloads": 0, "errors": []}
+        results: StressResults = {"reads": 0, "reloads": 0, "errors": []}
         lock = threading.Lock()
         stop_event = threading.Event()
 
@@ -249,7 +258,7 @@ class TestConfigLoaderLargeConfigs:
             YAML safe_load should handle reasonable depth.
         """
         # Create deeply nested config (50 levels)
-        nested = {"value": "deepest"}
+        nested: dict[str, Any] = {"value": "deepest"}
         for i in range(50):
             nested = {f"level_{50 - i}": nested}
 

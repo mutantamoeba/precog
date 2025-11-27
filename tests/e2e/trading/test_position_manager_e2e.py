@@ -1316,8 +1316,9 @@ class TestPositionPrecisionRequirements:
             assert isinstance(position["unrealized_pnl"], Decimal)
 
             # Verify NOT float (defensive check)
-            assert not isinstance(position["entry_price"], float)
-            assert not isinstance(position["current_price"], float)
+            # Note: Mypy knows Decimal can't be float at runtime, so ignore unreachable
+            assert not isinstance(position["entry_price"], float)  # type: ignore[unreachable]
+            assert not isinstance(position["current_price"], float)  # type: ignore[unreachable]
 
     def test_pnl_calculated_with_decimal_precision(self):
         """Test P&L calculations preserve Decimal precision.
@@ -1362,7 +1363,8 @@ class TestPositionPrecisionRequirements:
         assert pnl == Decimal("2.5250")
 
         # Verify NOT float (would have precision errors)
-        assert not isinstance(pnl, float)
+        # Note: Mypy knows Decimal can't be float at runtime, so ignore unreachable
+        assert not isinstance(pnl, float)  # type: ignore[unreachable]
 
     def test_no_float_contamination_in_workflow(self):
         """Test complete workflow never introduces float contamination.

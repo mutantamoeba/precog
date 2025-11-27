@@ -232,9 +232,7 @@ def test_decimal_columns_reject_float(
 @pytest.mark.property
 @pytest.mark.critical
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(
-    ticker=st.text(alphabet=st.characters(whitelist_categories=("Lu",)), min_size=5, max_size=20)
-)
+@given(ticker=st.text(alphabet=st.characters(whitelist_categories=["Lu"]), min_size=5, max_size=20))
 def test_scd_type2_at_most_one_current_row(db_pool, clean_test_data, setup_kalshi_platform, ticker):
     """
     PROPERTY: At most ONE row can have row_current_ind=TRUE per market ticker.
@@ -455,9 +453,7 @@ def test_scd_type2_update_creates_new_row(
 @pytest.mark.property
 @pytest.mark.critical
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(
-    ticker=st.text(alphabet=st.characters(whitelist_categories=("Lu",)), min_size=5, max_size=20)
-)
+@given(ticker=st.text(alphabet=st.characters(whitelist_categories=["Lu"]), min_size=5, max_size=20))
 def test_unique_constraint_prevents_duplicate_current_rows(
     db_pool, clean_test_data, setup_kalshi_platform, ticker
 ):
@@ -524,9 +520,7 @@ def test_unique_constraint_prevents_duplicate_current_rows(
 @pytest.mark.property
 @pytest.mark.critical
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(
-    ticker=st.text(alphabet=st.characters(whitelist_categories=("Lu",)), min_size=5, max_size=20)
-)
+@given(ticker=st.text(alphabet=st.characters(whitelist_categories=["Lu"]), min_size=5, max_size=20))
 def test_foreign_key_prevents_orphan_markets(
     db_pool, clean_test_data, setup_kalshi_platform, ticker
 ):
@@ -574,9 +568,7 @@ def test_foreign_key_prevents_orphan_markets(
 @pytest.mark.property
 @pytest.mark.critical
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(
-    ticker=st.text(alphabet=st.characters(whitelist_categories=("Lu",)), min_size=5, max_size=20)
-)
+@given(ticker=st.text(alphabet=st.characters(whitelist_categories=["Lu"]), min_size=5, max_size=20))
 def test_foreign_key_prevents_invalid_event_reference(
     db_pool, clean_test_data, setup_kalshi_platform, ticker
 ):
@@ -617,9 +609,7 @@ def test_foreign_key_prevents_invalid_event_reference(
 @pytest.mark.property
 @pytest.mark.critical
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(
-    ticker=st.text(alphabet=st.characters(whitelist_categories=("Lu",)), min_size=5, max_size=20)
-)
+@given(ticker=st.text(alphabet=st.characters(whitelist_categories=["Lu"]), min_size=5, max_size=20))
 def test_not_null_constraint_on_required_fields(
     db_pool, clean_test_data, setup_kalshi_platform, ticker
 ):
@@ -659,7 +649,7 @@ def test_not_null_constraint_on_required_fields(
             platform_id="kalshi",
             event_id="KXNFLGAME-25DEC15",
             external_id=f"EXTERNAL-{ticker}",
-            ticker=None,  # ❌ NOT NULL violation
+            ticker=None,  # type: ignore[arg-type]  # ❌ NOT NULL violation
             title="Test Market",
             yes_price=Decimal("0.6200"),
             no_price=Decimal("0.3800"),
@@ -727,6 +717,7 @@ def test_timestamp_monotonicity_on_updates(
 
     # Get initial timestamp
     market_v1 = get_current_market(ticker)
+    assert market_v1 is not None, "Market v1 should exist"
     timestamp_v1 = market_v1["updated_at"]
 
     # Update market
@@ -741,6 +732,7 @@ def test_timestamp_monotonicity_on_updates(
 
     # Get updated timestamp
     market_v2 = get_current_market(ticker)
+    assert market_v2 is not None, "Market v2 should exist"
     timestamp_v2 = market_v2["updated_at"]
 
     # Verify timestamp increased
@@ -757,9 +749,7 @@ def test_timestamp_monotonicity_on_updates(
 @pytest.mark.property
 @pytest.mark.critical
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(
-    ticker=st.text(alphabet=st.characters(whitelist_categories=("Lu",)), min_size=5, max_size=20)
-)
+@given(ticker=st.text(alphabet=st.characters(whitelist_categories=["Lu"]), min_size=5, max_size=20))
 def test_transaction_rollback_on_constraint_violation(
     db_pool, clean_test_data, setup_kalshi_platform, ticker
 ):
@@ -937,9 +927,7 @@ def test_check_constraints_enforced(db_pool, clean_test_data, setup_kalshi_platf
 @pytest.mark.property
 @pytest.mark.critical
 @settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
-@given(
-    ticker=st.text(alphabet=st.characters(whitelist_categories=("Lu",)), min_size=5, max_size=20)
-)
+@given(ticker=st.text(alphabet=st.characters(whitelist_categories=["Lu"]), min_size=5, max_size=20))
 def test_cascade_delete_integrity(db_pool, clean_test_data, setup_kalshi_platform, ticker):
     """
     PROPERTY: Deleting platform cascades to delete all related markets.

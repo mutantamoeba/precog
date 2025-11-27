@@ -33,6 +33,7 @@ Reference: docs/testing/PHASE_1_TEST_PLAN_V1.0.md (Section 4.2.1)
 import logging
 import time
 from decimal import Decimal
+from typing import Any, cast
 from unittest.mock import Mock, patch
 
 import pytest
@@ -98,14 +99,17 @@ class TestKalshiClientIntegration:
         assert markets[1]["ticker"] == "KXNFLGAME-25DEC15-BUF-YES"
 
         # Verify Decimal conversion (using *_dollars fields for sub-penny precision)
-        assert isinstance(markets[0]["yes_bid_dollars"], Decimal)
-        assert markets[0]["yes_bid_dollars"] == Decimal("0.6200")
-        assert isinstance(markets[0]["yes_ask_dollars"], Decimal)
-        assert markets[0]["yes_ask_dollars"] == Decimal("0.6250")
+        # Cast to dict for accessing raw API fields not in ProcessedMarketData
+        m0 = cast("dict[str, Any]", markets[0])
+        m1 = cast("dict[str, Any]", markets[1])
+        assert isinstance(m0["yes_bid_dollars"], Decimal)
+        assert m0["yes_bid_dollars"] == Decimal("0.6200")
+        assert isinstance(m0["yes_ask_dollars"], Decimal)
+        assert m0["yes_ask_dollars"] == Decimal("0.6250")
 
         # Verify sub-penny pricing preserved
-        assert isinstance(markets[1]["yes_bid_dollars"], Decimal)
-        assert markets[1]["yes_bid_dollars"] == Decimal("0.4275")  # Sub-penny!
+        assert isinstance(m1["yes_bid_dollars"], Decimal)
+        assert m1["yes_bid_dollars"] == Decimal("0.4275")  # Sub-penny!
 
     def test_get_balance_integration(self, monkeypatch):
         """Test get_balance() returns Decimal balance."""
@@ -195,10 +199,12 @@ class TestKalshiClientIntegration:
         assert fills[0]["ticker"] == "KXNFLGAME-25DEC15-KC-YES"
 
         # Verify Decimal types (using *_fixed fields for sub-penny precision)
-        assert isinstance(fills[0]["yes_price_fixed"], Decimal)
-        assert fills[0]["yes_price_fixed"] == Decimal("0.6200")
-        assert isinstance(fills[0]["no_price_fixed"], Decimal)
-        assert fills[0]["no_price_fixed"] == Decimal("0.3800")
+        # Cast to dict for accessing raw API fields not in ProcessedFillData
+        f0 = cast("dict[str, Any]", fills[0])
+        assert isinstance(f0["yes_price_fixed"], Decimal)
+        assert f0["yes_price_fixed"] == Decimal("0.6200")
+        assert isinstance(f0["no_price_fixed"], Decimal)
+        assert f0["no_price_fixed"] == Decimal("0.3800")
 
     def test_get_settlements_integration(self, monkeypatch):
         """Test get_settlements() returns settlement data with Decimal values."""
@@ -516,11 +522,13 @@ class TestKalshiClientDecimalPrecision:
         market = markets[0]
 
         # Verify exact Decimal value (using *_dollars field)
-        assert market["yes_bid_dollars"] == test_case["expected_decimal"]
-        assert isinstance(market["yes_bid_dollars"], Decimal)
+        # Cast to dict for accessing raw API fields not in ProcessedMarketData
+        market_dict = cast("dict[str, Any]", market)
+        assert market_dict["yes_bid_dollars"] == test_case["expected_decimal"]
+        assert isinstance(market_dict["yes_bid_dollars"], Decimal)
 
         # Verify string representation matches (no precision loss)
-        assert str(market["yes_bid_dollars"]) == test_case["api_value"]
+        assert str(market_dict["yes_bid_dollars"]) == test_case["api_value"]
 
     @pytest.mark.parametrize("test_case", DECIMAL_ARITHMETIC_TESTS)
     def test_decimal_arithmetic_operations(self, test_case):
@@ -580,10 +588,12 @@ class TestKalshiClientDecimalPrecision:
         ]
 
         for market in markets:
+            # Cast to dict for dynamic key access (TypedDict doesn't support variable keys)
+            market_dict = cast("dict[str, Any]", market)
             for field in price_fields:
-                assert isinstance(market[field], Decimal), (
-                    f"Field '{field}' in market '{market['ticker']}' is {type(market[field])}, "
-                    f"expected Decimal. Value: {market[field]}"
+                assert isinstance(market_dict[field], Decimal), (
+                    f"Field '{field}' in market '{market['ticker']}' is {type(market_dict[field])}, "
+                    f"expected Decimal. Value: {market_dict[field]}"
                 )
 
 
@@ -1082,8 +1092,10 @@ class TestKalshiClientPagination:
         assert markets[1]["ticker"] == "MARKET-2-YES"
 
         # Verify prices converted to Decimal (sub-penny format with *_dollars suffix)
-        assert isinstance(markets[0]["yes_bid_dollars"], Decimal)
-        assert markets[0]["yes_bid_dollars"] == Decimal("0.6000")
+        # Cast to dict for accessing raw API fields not in ProcessedMarketData
+        m0 = cast("dict[str, Any]", markets[0])
+        assert isinstance(m0["yes_bid_dollars"], Decimal)
+        assert m0["yes_bid_dollars"] == Decimal("0.6000")
 
     def test_multi_page_cursor_handling(self, monkeypatch):
         """Test get_markets with multi-page results (cursor pagination)."""

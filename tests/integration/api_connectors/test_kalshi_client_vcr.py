@@ -39,6 +39,7 @@ Reference:
 """
 
 from decimal import Decimal
+from typing import Any, cast
 
 import pytest
 import vcr
@@ -111,10 +112,12 @@ class TestKalshiClientWithVCR:
         # Verify ALL price fields are Decimal (CRITICAL!)
         # Note: We parse *_dollars fields for sub-penny precision
         price_fields = ["yes_bid_dollars", "yes_ask_dollars", "no_bid_dollars", "no_ask_dollars"]
+        # Cast to dict for dynamic key access (TypedDict doesn't support variable keys)
+        market_dict = cast("dict[str, Any]", market)
         for field in price_fields:
-            if field in market:
-                assert isinstance(market[field], Decimal), (
-                    f"Field '{field}' must be Decimal, got {type(market[field])}"
+            if field in market_dict:
+                assert isinstance(market_dict[field], Decimal), (
+                    f"Field '{field}' must be Decimal, got {type(market_dict[field])}"
                 )
 
         # Verify specific market from recording
@@ -207,12 +210,14 @@ class TestKalshiClientWithVCR:
 
         # Verify price fields are Decimal (CRITICAL!)
         # Note: We parse *_fixed fields for sub-penny precision in fills
-        assert isinstance(fill["yes_price_fixed"], Decimal), "yes_price_fixed must be Decimal"
-        assert isinstance(fill["no_price_fixed"], Decimal), "no_price_fixed must be Decimal"
+        # Cast to dict for accessing raw API fields not in ProcessedFillData
+        fill_dict = cast("dict[str, Any]", fill)
+        assert isinstance(fill_dict["yes_price_fixed"], Decimal), "yes_price_fixed must be Decimal"
+        assert isinstance(fill_dict["no_price_fixed"], Decimal), "no_price_fixed must be Decimal"
 
         # Verify real prices from cassette
-        assert fill["no_price_fixed"] == Decimal("0.9600"), "NO side price"
-        assert fill["yes_price_fixed"] == Decimal("0.0400"), "YES side price"
+        assert fill_dict["no_price_fixed"] == Decimal("0.9600"), "NO side price"
+        assert fill_dict["yes_price_fixed"] == Decimal("0.0400"), "YES side price"
 
         # Educational Note: YES + NO prices should sum to $1.00
         # Real data: 0.96 + 0.04 = 1.00 ✅
@@ -280,6 +285,8 @@ class TestKalshiClientDecimalPrecisionWithVCR:
         # Check ALL markets for Decimal precision
         # Note: We parse *_dollars fields for sub-penny precision
         for market in markets:
+            # Cast to dict for dynamic key access (TypedDict doesn't support variable keys)
+            market_dict = cast("dict[str, Any]", market)
             price_fields = [
                 "yes_bid_dollars",
                 "yes_ask_dollars",
@@ -287,8 +294,8 @@ class TestKalshiClientDecimalPrecisionWithVCR:
                 "no_ask_dollars",
             ]
             for field in price_fields:
-                if field in market and market[field] is not None:
-                    price = market[field]
+                if field in market_dict and market_dict[field] is not None:
+                    price = market_dict[field]
 
                     # Verify Decimal type
                     assert isinstance(price, Decimal), (
@@ -347,8 +354,10 @@ class TestKalshiClientDecimalPrecisionWithVCR:
 
         # Use real fill to test complementarity
         fill = fills[0]
-        yes_price = fill["yes_price_fixed"]
-        no_price = fill["no_price_fixed"]
+        # Cast to dict for accessing raw API fields not in ProcessedFillData
+        fill_dict = cast("dict[str, Any]", fill)
+        yes_price = fill_dict["yes_price_fixed"]
+        no_price = fill_dict["no_price_fixed"]
 
         # Verify sum equals exactly $1.00 (no rounding errors!)
         total = yes_price + no_price

@@ -37,6 +37,7 @@ Usage:
 
 import uuid
 from decimal import Decimal
+from typing import Any
 
 import pytest
 from hypothesis import HealthCheck, assume, given, settings
@@ -60,7 +61,7 @@ from precog.database.crud_operations import (
 
 
 @st.composite
-def strategy_config_dict(draw) -> dict[str, any]:
+def strategy_config_dict(draw) -> dict[str, Any]:
     """
     Generate strategy configuration dict (IMMUTABLE after creation).
 
@@ -260,6 +261,7 @@ def test_strategy_status_mutable(db_pool, clean_test_data, status_sequence):
 
         # Verify status changed
         strategy = get_strategy(strategy_id)
+        assert strategy is not None, "Strategy should exist"
         assert strategy["status"] == new_status, (
             f"Status not updated: expected {new_status}, got {strategy['status']}"
         )
@@ -441,10 +443,12 @@ def test_config_change_creates_new_version(db_pool, clean_test_data, original_co
 
     # Verify v1.0 config UNCHANGED
     v1_0 = get_strategy(v1_0_id)
+    assert v1_0 is not None, "Strategy v1.0 should exist"
     assert v1_0["config"] == original_config, "v1.0 config changed! Config should be IMMUTABLE."
 
     # Verify v1.1 has new config
     v1_1 = get_strategy(v1_1_id)
+    assert v1_1 is not None, "Strategy v1.1 should exist"
     assert v1_1["config"] == new_config, (
         f"v1.1 config mismatch: expected {new_config}, got {v1_1['config']}"
     )
@@ -515,6 +519,10 @@ def test_at_most_one_active_version(db_pool, clean_test_data, strat_name):
         config={"min_lead": 10},
         status="draft",
     )
+
+    # Type narrowing: assert both strategies were created
+    assert v1_0_id is not None, "Strategy v1.0 should be created"
+    assert v1_1_id is not None, "Strategy v1.1 should be created"
 
     # Activate v1.0
     update_strategy_status(v1_0_id, "active")

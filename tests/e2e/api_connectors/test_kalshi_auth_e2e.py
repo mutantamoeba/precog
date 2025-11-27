@@ -57,6 +57,10 @@ def kalshi_auth():
     api_key = os.getenv("KALSHI_DEMO_KEY_ID")
     keyfile = os.getenv("KALSHI_DEMO_KEYFILE")
 
+    # Type narrowing for environment variables
+    assert api_key is not None, "KALSHI_DEMO_KEY_ID must be set"
+    assert keyfile is not None, "KALSHI_DEMO_KEYFILE must be set"
+
     return KalshiAuth(api_key, keyfile)
 
 
