@@ -1093,20 +1093,45 @@ python scripts/validate_phase_start.py --phase 2
 - **This historical data will be leveraged in Phase 4 for odds calculation**
 
 ### Deliverables
-- ESPN API client (`api_connectors/espn_client.py`)
-- APScheduler task scheduler (`schedulers/market_updater.py`)
-- Data quality validation module
-- Historical data backfill script (nflfastR)
-- Updated test suite
-- LIVE_DATA_INTEGRATION_GUIDE_V1.0.md
+
+**ESPN Data Model (ADR-029):**
+- [✅] ESPN API client with TypedDict refactoring (`api_connectors/espn_client.py`)
+  - [✅] ESPNTeamInfo, ESPNVenueInfo, ESPNGameMetadata, ESPNSituationData, ESPNGameState, ESPNGameFull TypedDicts
+  - [✅] Multi-sport endpoints (NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
+  - [✅] Generic `get_scoreboard(league)` method
+- [  ] Database migrations 026-029:
+  - [  ] Migration 026: `venues` table (normalized venue data)
+  - [  ] Migration 027: `team_rankings` table (AP, CFP, Coaches, ESPN Power rankings)
+  - [  ] Migration 028: `teams` enhancement (espn_team_id, sport, league columns)
+  - [  ] Migration 029: `game_states` table (SCD Type 2 versioning)
+- [  ] CRUD operations for venues, team_rankings, game_states
+- [  ] Multi-sport team seeding (NBA, NHL, NCAAB, WNBA teams)
+
+**Task Scheduling & Data Quality:**
+- [  ] APScheduler task scheduler (`schedulers/market_updater.py`)
+- [  ] Data quality validation module
+- [  ] Historical data backfill script (nflfastR)
+
+**Documentation:**
+- [✅] ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md
+- [  ] ESPN_DATA_MODEL_V1.0.md guide
+- [  ] LIVE_DATA_INTEGRATION_GUIDE_V1.0.md
+
+**Reference:** `docs/utility/ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md` for detailed implementation phases
 
 ### Success Criteria
-- [  ] Can fetch live NFL game data every 15 seconds
-- [  ] Game states stored correctly in database
+- [✅] ESPN client with multi-sport support (6 leagues: NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
+- [✅] TypedDict structure separating static metadata from dynamic game state
+- [  ] Can fetch live game data every 15 seconds for any supported league
+- [  ] Game states stored with SCD Type 2 versioning (complete history)
+- [  ] JSONB situation field storing sport-specific data (downs, fouls, power plays)
+- [  ] Venues normalized (no duplication across games)
+- [  ] Team rankings tracked with temporal validity
 - [  ] Data quality checks catch anomalies
 - [  ] Historical data (2019-2024) loaded into `odds_matrices`
 - [  ] No data loss during extended polling sessions
 - [  ] APScheduler jobs run reliably
+- [  ] Storage efficient (~1.1 GB/year for all sports)
 
 ---
 
