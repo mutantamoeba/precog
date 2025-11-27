@@ -33,10 +33,14 @@ import pytest
 PROJECT_ROOT = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from precog.database.connection import execute_query, fetch_one, test_connection  # noqa: E402
+from precog.database.connection import execute_query, fetch_one  # noqa: E402
+from precog.database.connection import test_connection as check_db_connection  # noqa: E402
 
 # Skip all tests if database not available
-pytestmark = pytest.mark.skipif(not test_connection(), reason="Database connection not available")
+# Note: Renamed import to check_db_connection to avoid pytest collecting it as a test
+pytestmark = pytest.mark.skipif(
+    not check_db_connection(), reason="Database connection not available"
+)
 
 
 class TestMigrationIdempotency:

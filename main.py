@@ -705,8 +705,28 @@ def fetch_markets(
                 updated_count = 0
                 error_count = 0
 
+                # Map Kalshi API status to Precog database status
+                # Kalshi API: "active", "finalized", "closed", etc.
+                # Precog DB: "open", "closed", "settled", "halted" (markets_status_check constraint)
+                # Reference: ADR-002, DATABASE_SCHEMA_SUMMARY_V1.11.md
+                kalshi_status_mapping: dict[str, str] = {
+                    "active": "open",  # Live/tradable market
+                    "finalized": "settled",  # Market has settled with result
+                    "closed": "closed",  # Market closed for trading
+                    "halted": "halted",  # Trading temporarily halted
+                }
+
                 for market in markets:
                     try:
+                        # Map Kalshi status to Precog database status
+                        kalshi_status = market["status"]
+                        mapped_status = kalshi_status_mapping.get(kalshi_status, kalshi_status)
+                        if kalshi_status != mapped_status:
+                            logger.debug(
+                                f"Mapped Kalshi status '{kalshi_status}' -> '{mapped_status}' "
+                                f"for market {market['ticker']}"
+                            )
+
                         # Prepare metadata (extra fields not in main table)
                         metadata = {
                             "subtitle": market.get("subtitle"),
@@ -726,7 +746,7 @@ def fetch_markets(
                                 ticker=market["ticker"],
                                 yes_price=market["yes_bid_dollars"],  # Use Decimal bid
                                 no_price=market["no_bid_dollars"],
-                                status=market["status"],
+                                status=mapped_status,
                                 volume=market.get("volume"),
                                 open_interest=market.get("open_interest"),
                                 market_metadata=metadata,
@@ -743,7 +763,7 @@ def fetch_markets(
                                 yes_price=market["yes_bid_dollars"],  # Use Decimal bid
                                 no_price=market["no_bid_dollars"],
                                 market_type="binary",
-                                status=market["status"],
+                                status=mapped_status,
                                 volume=market.get("volume"),
                                 open_interest=market.get("open_interest"),
                                 spread=market["yes_ask_dollars"]
