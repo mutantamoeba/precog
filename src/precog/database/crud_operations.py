@@ -1812,3 +1812,660 @@ def get_trade_by_id(trade_id: int) -> dict[str, Any] | None:
           AND m.row_current_ind = TRUE
     """
     return fetch_one(query, (trade_id,))
+
+
+# =============================================================================
+# VENUE OPERATIONS (Phase 2 - Live Data Integration)
+# =============================================================================
+
+
+def create_venue(
+    espn_venue_id: str,
+    venue_name: str,
+    city: str | None = None,
+    state: str | None = None,
+    capacity: int | None = None,
+    indoor: bool = False,
+) -> int:
+    """
+    Create new venue record (or update if ESPN venue ID exists).
+
+    Venues are mutable entities - no SCD Type 2 versioning. Updates use
+    simple UPDATE statements since venue data rarely changes and history
+    is not needed for trading decisions.
+
+    Args:
+        espn_venue_id: ESPN unique venue identifier (e.g., "3622")
+        venue_name: Full venue name (e.g., "GEHA Field at Arrowhead Stadium")
+        city: City where venue is located
+        state: State/province abbreviation or full name
+        capacity: Maximum seating capacity
+        indoor: TRUE for domed stadiums/indoor arenas
+
+    Returns:
+        venue_id of created/updated record
+
+    Educational Note:
+        Venues use UPSERT (INSERT ... ON CONFLICT UPDATE) because:
+        - ESPN venue IDs are stable external identifiers
+        - Venue data changes rarely (naming rights updates)
+        - No need for historical versioning (not trading-relevant)
+        - Simplifies data pipeline (always upsert, never check exists)
+
+    Example:
+        >>> venue_id = create_venue(
+        ...     espn_venue_id="3622",
+        ...     venue_name="GEHA Field at Arrowhead Stadium",
+        ...     city="Kansas City",
+        ...     state="Missouri",
+        ...     capacity=76416,
+        ...     indoor=False
+        ... )
+
+    References:
+        - REQ-DATA-002: Venue Data Management
+        - ADR-029: ESPN Data Model with Normalized Schema
+    """
+    query = """
+        INSERT INTO venues (
+            espn_venue_id, venue_name, city, state, capacity, indoor
+        )
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT (espn_venue_id)
+        DO UPDATE SET
+            venue_name = EXCLUDED.venue_name,
+            city = EXCLUDED.city,
+            state = EXCLUDED.state,
+            capacity = EXCLUDED.capacity,
+            indoor = EXCLUDED.indoor,
+            updated_at = NOW()
+        RETURNING venue_id
+    """
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, (espn_venue_id, venue_name, city, state, capacity, indoor))
+        result = cur.fetchone()
+        return cast("int", result["venue_id"])
+
+
+def get_venue_by_espn_id(espn_venue_id: str) -> dict[str, Any] | None:
+    """
+    Get venue by ESPN venue ID.
+
+    Args:
+        espn_venue_id: ESPN unique venue identifier
+
+    Returns:
+        Dictionary with venue data, or None if not found
+
+    Example:
+        >>> venue = get_venue_by_espn_id("3622")
+        >>> if venue:
+        ...     print(f"{venue['venue_name']} - {venue['city']}, {venue['state']}")
+    """
+    query = """
+        SELECT *
+        FROM venues
+        WHERE espn_venue_id = %s
+    """
+    return fetch_one(query, (espn_venue_id,))
+
+
+def get_venue_by_id(venue_id: int) -> dict[str, Any] | None:
+    """
+    Get venue by internal venue_id.
+
+    Args:
+        venue_id: Internal venue ID
+
+    Returns:
+        Dictionary with venue data, or None if not found
+    """
+    query = """
+        SELECT *
+        FROM venues
+        WHERE venue_id = %s
+    """
+    return fetch_one(query, (venue_id,))
+
+
+# =============================================================================
+# TEAM RANKING OPERATIONS (Phase 2 - Live Data Integration)
+# =============================================================================
+
+
+def create_team_ranking(
+    team_id: int,
+    ranking_type: str,
+    rank: int,
+    season: int,
+    ranking_date: datetime,
+    week: int | None = None,
+    points: int | None = None,
+    first_place_votes: int | None = None,
+    previous_rank: int | None = None,
+) -> int:
+    """
+    Create new team ranking record.
+
+    Rankings are append-only history - no SCD Type 2, no updates. Each
+    week's ranking is a separate record. Use UPSERT to handle re-imports
+    of the same week's rankings.
+
+    Args:
+        team_id: Foreign key to teams.team_id
+        ranking_type: Type of ranking ('ap_poll', 'cfp', 'coaches_poll', etc.)
+        rank: Numeric rank position (1 = best)
+        season: Season year (e.g., 2024)
+        ranking_date: Date ranking was released
+        week: Week number (1-18), None for preseason/final
+        points: Poll points (AP/Coaches)
+        first_place_votes: Number of #1 votes
+        previous_rank: Previous week's rank (None if was unranked)
+
+    Returns:
+        ranking_id of created/updated record
+
+    Educational Note:
+        Rankings use temporal validity (season + week) instead of SCD Type 2:
+        - Each week's poll is a distinct point-in-time snapshot
+        - No need to track intra-week changes (polls released weekly)
+        - Simpler queries: "Get AP Poll week 12" vs "Get AP Poll at timestamp X"
+        - History preserved naturally via (team, type, season, week) uniqueness
+
+    Example:
+        >>> ranking_id = create_team_ranking(
+        ...     team_id=1,
+        ...     ranking_type="ap_poll",
+        ...     rank=3,
+        ...     season=2024,
+        ...     week=12,
+        ...     ranking_date=datetime(2024, 11, 17),
+        ...     points=1432,
+        ...     first_place_votes=12
+        ... )
+
+    References:
+        - REQ-DATA-004: Team Rankings Storage (Temporal Validity)
+        - ADR-029: ESPN Data Model with Normalized Schema
+    """
+    query = """
+        INSERT INTO team_rankings (
+            team_id, ranking_type, rank, season, week, ranking_date,
+            points, first_place_votes, previous_rank
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (team_id, ranking_type, season, week)
+        DO UPDATE SET
+            rank = EXCLUDED.rank,
+            ranking_date = EXCLUDED.ranking_date,
+            points = EXCLUDED.points,
+            first_place_votes = EXCLUDED.first_place_votes,
+            previous_rank = EXCLUDED.previous_rank
+        RETURNING ranking_id
+    """
+    with get_cursor(commit=True) as cur:
+        cur.execute(
+            query,
+            (
+                team_id,
+                ranking_type,
+                rank,
+                season,
+                week,
+                ranking_date,
+                points,
+                first_place_votes,
+                previous_rank,
+            ),
+        )
+        result = cur.fetchone()
+        return cast("int", result["ranking_id"])
+
+
+def get_team_rankings(
+    team_id: int,
+    ranking_type: str | None = None,
+    season: int | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Get ranking history for a team.
+
+    Args:
+        team_id: Team ID to lookup
+        ranking_type: Filter by ranking type (optional)
+        season: Filter by season (optional)
+
+    Returns:
+        List of ranking records ordered by season, week
+
+    Example:
+        >>> rankings = get_team_rankings(team_id=1, ranking_type="ap_poll", season=2024)
+        >>> for r in rankings:
+        ...     print(f"Week {r['week']}: #{r['rank']} ({r['points']} pts)")
+    """
+    conditions = ["team_id = %s"]
+    params: list[Any] = [team_id]
+
+    if ranking_type:
+        conditions.append("ranking_type = %s")
+        params.append(ranking_type)
+
+    if season:
+        conditions.append("season = %s")
+        params.append(season)
+
+    # S608 false positive: conditions are hardcoded strings, not user input
+    query = f"""
+        SELECT *
+        FROM team_rankings
+        WHERE {" AND ".join(conditions)}
+        ORDER BY season DESC, week DESC NULLS LAST
+    """  # noqa: S608
+    return fetch_all(query, tuple(params))
+
+
+def get_current_rankings(
+    ranking_type: str, season: int, week: int | None = None
+) -> list[dict[str, Any]]:
+    """
+    Get current rankings for a ranking type.
+
+    If week is not specified, returns the most recent week's rankings.
+
+    Args:
+        ranking_type: Type of ranking ('ap_poll', 'cfp', etc.)
+        season: Season year
+        week: Specific week (optional, defaults to latest)
+
+    Returns:
+        List of ranking records ordered by rank
+
+    Example:
+        >>> rankings = get_current_rankings("ap_poll", 2024)
+        >>> for r in rankings[:5]:
+        ...     print(f"#{r['rank']}: Team {r['team_id']} ({r['points']} pts)")
+    """
+    if week is None:
+        # Get most recent week
+        week_query = """
+            SELECT MAX(week) as max_week
+            FROM team_rankings
+            WHERE ranking_type = %s AND season = %s
+        """
+        result = fetch_one(week_query, (ranking_type, season))
+        if not result or result["max_week"] is None:
+            return []
+        week = result["max_week"]
+
+    query = """
+        SELECT tr.*, t.team_code, t.team_name, t.display_name
+        FROM team_rankings tr
+        JOIN teams t ON tr.team_id = t.team_id
+        WHERE tr.ranking_type = %s
+          AND tr.season = %s
+          AND tr.week = %s
+        ORDER BY tr.rank
+    """
+    return fetch_all(query, (ranking_type, season, week))
+
+
+# =============================================================================
+# GAME STATE OPERATIONS (Phase 2 - Live Data Integration, SCD Type 2)
+# =============================================================================
+
+
+def create_game_state(
+    espn_event_id: str,
+    home_team_id: int | None = None,
+    away_team_id: int | None = None,
+    venue_id: int | None = None,
+    home_score: int = 0,
+    away_score: int = 0,
+    period: int = 0,
+    clock_seconds: Decimal | None = None,
+    clock_display: str | None = None,
+    game_status: str = "pre",
+    game_date: datetime | None = None,
+    broadcast: str | None = None,
+    neutral_site: bool = False,
+    season_type: str | None = None,
+    week_number: int | None = None,
+    league: str | None = None,
+    situation: dict | None = None,
+    linescores: list | None = None,
+) -> int:
+    """
+    Create initial game state record (row_current_ind = TRUE).
+
+    Use this for NEW games only. For updates, use upsert_game_state()
+    which handles SCD Type 2 versioning (closes old row, creates new).
+
+    Args:
+        espn_event_id: ESPN event identifier (natural key)
+        home_team_id: Foreign key to teams.team_id for home team
+        away_team_id: Foreign key to teams.team_id for away team
+        venue_id: Foreign key to venues.venue_id
+        home_score: Home team score
+        away_score: Away team score
+        period: Current period (0=pregame, 1-4=regulation, 5+=OT)
+        clock_seconds: Seconds remaining in period
+        clock_display: Human-readable clock (e.g., "5:32")
+        game_status: Status ('pre', 'in_progress', 'halftime', 'final', etc.)
+        game_date: Scheduled game start time
+        broadcast: TV broadcast info
+        neutral_site: TRUE for neutral venue games
+        season_type: Season phase ('regular', 'playoff', 'bowl', etc.)
+        week_number: Week number within season
+        league: League code ('nfl', 'nba', etc.)
+        situation: Sport-specific situation data (JSONB)
+        linescores: Period-by-period scores (JSONB)
+
+    Returns:
+        game_state_id of newly created record
+
+    Educational Note:
+        Game states use SCD Type 2 for complete historical tracking:
+        - Each score/clock change creates NEW row (old preserved)
+        - row_current_ind = TRUE marks latest version
+        - Enables replay: "What was the score at halftime?"
+        - Critical for backtesting live trading strategies
+        - ~190 updates per game = ~190 historical rows per game
+
+    Example:
+        >>> state_id = create_game_state(
+        ...     espn_event_id="401547417",
+        ...     home_team_id=1,
+        ...     away_team_id=2,
+        ...     venue_id=1,
+        ...     game_status="pre",
+        ...     game_date=datetime(2024, 11, 28, 16, 30),
+        ...     league="nfl",
+        ...     season_type="regular",
+        ...     week_number=12
+        ... )
+
+    References:
+        - REQ-DATA-001: Game State Data Collection (SCD Type 2)
+        - ADR-029: ESPN Data Model with Normalized Schema
+        - Pattern 2: Dual Versioning System (SCD Type 2)
+    """
+    query = """
+        INSERT INTO game_states (
+            espn_event_id, home_team_id, away_team_id, venue_id,
+            home_score, away_score, period, clock_seconds, clock_display,
+            game_status, game_date, broadcast, neutral_site,
+            season_type, week_number, league, situation, linescores,
+            row_current_ind, row_start_timestamp
+        )
+        VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            TRUE, NOW()
+        )
+        RETURNING game_state_id
+    """
+    with get_cursor(commit=True) as cur:
+        cur.execute(
+            query,
+            (
+                espn_event_id,
+                home_team_id,
+                away_team_id,
+                venue_id,
+                home_score,
+                away_score,
+                period,
+                clock_seconds,
+                clock_display,
+                game_status,
+                game_date,
+                broadcast,
+                neutral_site,
+                season_type,
+                week_number,
+                league,
+                json.dumps(situation) if situation else None,
+                json.dumps(linescores) if linescores else None,
+            ),
+        )
+        result = cur.fetchone()
+        return cast("int", result["game_state_id"])
+
+
+def get_current_game_state(espn_event_id: str) -> dict[str, Any] | None:
+    """
+    Get current (latest) game state for an event.
+
+    Args:
+        espn_event_id: ESPN event identifier
+
+    Returns:
+        Dictionary with current game state, or None if not found
+
+    Educational Note:
+        Always query with row_current_ind = TRUE to get latest version.
+        Without this filter, you may get historical rows with stale data.
+
+    Example:
+        >>> state = get_current_game_state("401547417")
+        >>> if state:
+        ...     print(f"{state['home_score']}-{state['away_score']} ({state['clock_display']})")
+    """
+    query = """
+        SELECT gs.*,
+               th.team_code AS home_team_code, th.team_name AS home_team_name,
+               ta.team_code AS away_team_code, ta.team_name AS away_team_name,
+               v.venue_name, v.city, v.state
+        FROM game_states gs
+        LEFT JOIN teams th ON gs.home_team_id = th.team_id
+        LEFT JOIN teams ta ON gs.away_team_id = ta.team_id
+        LEFT JOIN venues v ON gs.venue_id = v.venue_id
+        WHERE gs.espn_event_id = %s
+          AND gs.row_current_ind = TRUE
+    """
+    return fetch_one(query, (espn_event_id,))
+
+
+def upsert_game_state(
+    espn_event_id: str,
+    home_team_id: int | None = None,
+    away_team_id: int | None = None,
+    venue_id: int | None = None,
+    home_score: int = 0,
+    away_score: int = 0,
+    period: int = 0,
+    clock_seconds: Decimal | None = None,
+    clock_display: str | None = None,
+    game_status: str = "pre",
+    game_date: datetime | None = None,
+    broadcast: str | None = None,
+    neutral_site: bool = False,
+    season_type: str | None = None,
+    week_number: int | None = None,
+    league: str | None = None,
+    situation: dict | None = None,
+    linescores: list | None = None,
+) -> int:
+    """
+    Insert or update game state with SCD Type 2 versioning.
+
+    If game exists: closes current row (row_current_ind=FALSE) and inserts new.
+    If game doesn't exist: creates new row with row_current_ind=TRUE.
+
+    This is the primary function for updating live game data from ESPN API.
+
+    Args:
+        (same as create_game_state)
+
+    Returns:
+        game_state_id of newly created record
+
+    Educational Note:
+        SCD Type 2 UPSERT pattern:
+        1. Check if current row exists for espn_event_id
+        2. If exists: UPDATE to close it (row_current_ind=FALSE, row_end_timestamp=NOW)
+        3. INSERT new row with row_current_ind=TRUE
+
+        This preserves complete history - every score change, clock update,
+        situation change is recorded as a separate row.
+
+    Example:
+        >>> # Update score during game
+        >>> state_id = upsert_game_state(
+        ...     espn_event_id="401547417",
+        ...     home_score=7,
+        ...     away_score=3,
+        ...     period=1,
+        ...     clock_display="5:32",
+        ...     game_status="in_progress",
+        ...     situation={"possession": "KC", "down": 2, "distance": 7}
+        ... )
+
+    References:
+        - REQ-DATA-001: Game State Data Collection (SCD Type 2)
+        - Pattern 2: Dual Versioning System
+    """
+    # Step 1: Close current row (if exists)
+    close_query = """
+        UPDATE game_states
+        SET row_current_ind = FALSE,
+            row_end_timestamp = NOW()
+        WHERE espn_event_id = %s
+          AND row_current_ind = TRUE
+    """
+    with get_cursor(commit=False) as cur:
+        cur.execute(close_query, (espn_event_id,))
+
+    # Step 2: Insert new row (inherit values from closed row if not provided)
+    # For simplicity, we require all values to be provided
+    return create_game_state(
+        espn_event_id=espn_event_id,
+        home_team_id=home_team_id,
+        away_team_id=away_team_id,
+        venue_id=venue_id,
+        home_score=home_score,
+        away_score=away_score,
+        period=period,
+        clock_seconds=clock_seconds,
+        clock_display=clock_display,
+        game_status=game_status,
+        game_date=game_date,
+        broadcast=broadcast,
+        neutral_site=neutral_site,
+        season_type=season_type,
+        week_number=week_number,
+        league=league,
+        situation=situation,
+        linescores=linescores,
+    )
+
+
+def get_game_state_history(espn_event_id: str, limit: int = 100) -> list[dict[str, Any]]:
+    """
+    Get historical game state versions for an event.
+
+    Returns all versions ordered by timestamp (newest first), useful for:
+    - Reviewing game progression
+    - Backtesting trading decisions
+    - Debugging data pipeline issues
+
+    Args:
+        espn_event_id: ESPN event identifier
+        limit: Maximum rows to return (default 100)
+
+    Returns:
+        List of game state records ordered by row_start_timestamp DESC
+
+    Example:
+        >>> history = get_game_state_history("401547417")
+        >>> for state in history[:5]:
+        ...     print(f"{state['row_start_timestamp']}: {state['home_score']}-{state['away_score']}")
+    """
+    query = """
+        SELECT *
+        FROM game_states
+        WHERE espn_event_id = %s
+        ORDER BY row_start_timestamp DESC
+        LIMIT %s
+    """
+    return fetch_all(query, (espn_event_id, limit))
+
+
+def get_live_games(league: str | None = None) -> list[dict[str, Any]]:
+    """
+    Get all currently in-progress games.
+
+    Args:
+        league: Filter by league (optional)
+
+    Returns:
+        List of current game states for in-progress games
+
+    Example:
+        >>> games = get_live_games(league="nfl")
+        >>> for g in games:
+        ...     print(f"{g['home_team_code']} {g['home_score']}-{g['away_score']} {g['away_team_code']}")
+    """
+    conditions = ["gs.row_current_ind = TRUE", "gs.game_status = 'in_progress'"]
+    params: list[Any] = []
+
+    if league:
+        conditions.append("gs.league = %s")
+        params.append(league)
+
+    # S608 false positive: conditions are hardcoded strings, not user input
+    query = f"""
+        SELECT gs.*,
+               th.team_code AS home_team_code, th.display_name AS home_team_name,
+               ta.team_code AS away_team_code, ta.display_name AS away_team_name,
+               v.venue_name
+        FROM game_states gs
+        LEFT JOIN teams th ON gs.home_team_id = th.team_id
+        LEFT JOIN teams ta ON gs.away_team_id = ta.team_id
+        LEFT JOIN venues v ON gs.venue_id = v.venue_id
+        WHERE {" AND ".join(conditions)}
+        ORDER BY gs.game_date
+    """  # noqa: S608
+    return fetch_all(query, tuple(params))
+
+
+def get_games_by_date(game_date: datetime, league: str | None = None) -> list[dict[str, Any]]:
+    """
+    Get all games scheduled for a specific date.
+
+    Args:
+        game_date: Date to query (time component ignored)
+        league: Filter by league (optional)
+
+    Returns:
+        List of current game states for games on that date
+
+    Example:
+        >>> from datetime import datetime
+        >>> games = get_games_by_date(datetime(2024, 11, 28), league="nfl")
+        >>> for g in games:
+        ...     print(f"{g['game_date']}: {g['home_team_code']} vs {g['away_team_code']}")
+    """
+    conditions = [
+        "gs.row_current_ind = TRUE",
+        "DATE(gs.game_date) = DATE(%s)",
+    ]
+    params: list[Any] = [game_date]
+
+    if league:
+        conditions.append("gs.league = %s")
+        params.append(league)
+
+    # S608 false positive: conditions are hardcoded strings, not user input
+    query = f"""
+        SELECT gs.*,
+               th.team_code AS home_team_code, th.display_name AS home_team_name,
+               ta.team_code AS away_team_code, ta.display_name AS away_team_name,
+               v.venue_name
+        FROM game_states gs
+        LEFT JOIN teams th ON gs.home_team_id = th.team_id
+        LEFT JOIN teams ta ON gs.away_team_id = ta.team_id
+        LEFT JOIN venues v ON gs.venue_id = v.venue_id
+        WHERE {" AND ".join(conditions)}
+        ORDER BY gs.game_date, gs.league
+    """  # noqa: S608
+    return fetch_all(query, tuple(params))
