@@ -198,7 +198,7 @@ def validate_table_existence() -> tuple[bool, list[str]]:
 
     # Get documented tables
     schema_file = (
-        Path(__file__).parent.parent / "docs" / "database" / "DATABASE_SCHEMA_SUMMARY_V1.11.md"
+        Path(__file__).parent.parent / "docs" / "database" / "DATABASE_SCHEMA_SUMMARY_V1.12.md"
     )
     if not schema_file.exists():
         errors.append(f"Schema documentation not found: {schema_file}")

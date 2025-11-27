@@ -163,7 +163,7 @@ This document captures the implementation plan for Phase 2 ESPN data model enhan
 
 **Deliverables:**
 - [ ] `docs/guides/ESPN_DATA_MODEL_V1.0.md` - Comprehensive guide
-- [ ] Update `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` to V1.12
+- [ ] Update `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` to V1.12
 - [ ] Update `docs/database/DATABASE_TABLES_REFERENCE.md`
 - [ ] Update `docs/foundation/MASTER_INDEX_*.md`
 - [ ] Update `docs/foundation/DEVELOPMENT_PHASES_*.md` with Phase 2 tasks
@@ -420,7 +420,7 @@ GameState = ESPNGameState
 
 - **ADR-029:** ESPN Data Model with Normalized Schema
 - **DEVELOPMENT_PHASES_V1.6.md:** Phase 2 section (lines 954-1099)
-- **DATABASE_SCHEMA_SUMMARY_V1.11.md:** Current schema reference
+- **DATABASE_SCHEMA_SUMMARY_V1.12.md:** Current schema reference
 - **src/precog/api_connectors/espn_client.py:** TypedDict implementations
 - **TESTING_STRATEGY_V3.1.md:** Test type requirements
 

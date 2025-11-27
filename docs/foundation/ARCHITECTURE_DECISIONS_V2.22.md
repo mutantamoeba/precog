@@ -5761,7 +5761,7 @@ CREATE TABLE model_config_params (
 - ADR-079: Performance Tracking Architecture (query patterns inform this decision)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (current JSONB schema)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (current JSONB schema)
 - `config/probability_models.yaml` (config examples)
 - `config/trade_strategies.yaml` (strategy config examples)
 
@@ -6218,7 +6218,7 @@ CREATE TABLE brier_score_metrics (...);
 - STRAT-026: Performance Metrics Infrastructure Implementation (Phase 1.5-2, 18-22h)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8: Performance Tracking & Analytics)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8: Performance Tracking & Analytics)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
@@ -6975,7 +6975,7 @@ Cons:
 
 ### References
 
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8: Performance Tracking & Analytics)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8: Performance Tracking & Analytics)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
@@ -7744,7 +7744,7 @@ WebSocket for Position Monitoring (real-time):
 ### References
 
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 7 Task #2: Frontend Development)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.9: Materialized Views)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.9: Materialized Views)
 - Next.js Documentation: https://nextjs.org/docs
 - Recharts Documentation: https://recharts.org/
 - React Query Documentation: https://tanstack.com/query/latest
@@ -8666,7 +8666,7 @@ def run_holdout_validation(
 - `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 2 Task #3, Phase 6 Task #1)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.7: Evaluation Runs Table)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.7: Evaluation Runs Table)
 
 ---
 
@@ -9389,7 +9389,7 @@ ON position_risk_by_strategy(league, strategy_name);
 - `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 6 Task #3, Phase 7 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.8: Materialized Views Reference)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.8: Materialized Views Reference)
 
 ---
 
@@ -10220,7 +10220,7 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 - `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 7 Task #3, Phase 8 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.9: A/B Tests Table)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.9: A/B Tests Table)
 
 ---
 
@@ -10654,7 +10654,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 - ADR-018: Immutable Versions Pattern (JSONB supports atomic config versioning)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (materialized views already defined)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (materialized views already defined)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` (analytics requirements)
 
 ---
@@ -10823,7 +10823,7 @@ python scripts/validate_schema.py --ci
 ```
 
 **Future Expansion (Phase 2+):**
-- Parse DATABASE_SCHEMA_SUMMARY_V1.11.md directly (vs. hardcoded schemas)
+- Parse DATABASE_SCHEMA_SUMMARY_V1.12.md directly (vs. hardcoded schemas)
 - Add more tables: markets, positions, trades, etc.
 - Integrate into CI/CD pipeline (blocks PRs if schema drift detected)
 
@@ -10957,7 +10957,7 @@ CREATE TABLE strategies (
 **References:**
 - `src/precog/database/migrations/migration_011_standardize_classification_fields.py` (implementation)
 - `scripts/validate_schema.py` (automated validation)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (updated schemas)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (updated schemas)
 - `docs/utility/PHASE_1_DEFERRED_TASKS_V1.0.md` (DEF-P1-008 completed)
 
 ---
@@ -11134,7 +11134,7 @@ CREATE TABLE strategies (
 
 ### References
 
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (edges table schema)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (edges table schema)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 1.5 manager components)
 - `src/precog/trading/model_manager.py` (edge calculation logic - Phase 1.5 implementation)
 - `src/precog/trading/strategy_manager.py` (edge query logic - Phase 1.5 implementation)
@@ -11699,7 +11699,7 @@ Decision to use pytest as the primary testing framework with coverage, async sup
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
 
 Decision to enforce referential integrity using PostgreSQL foreign key constraints on all relationship columns.
 
@@ -11707,7 +11707,7 @@ Decision to enforce referential integrity using PostgreSQL foreign key constrain
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
 
 Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key relationships.
 
@@ -11715,7 +11715,7 @@ Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
 
 Decision to create database views that filter for current rows (row_current_ind = TRUE) to simplify application queries.
 
@@ -11739,7 +11739,7 @@ Decision to implement 2-stage partial exits (50% at +15%, 25% at +25%, 25% with 
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
 
 Decision to use append-only table for position_exits to maintain complete exit event history.
 
@@ -11747,7 +11747,7 @@ Decision to use append-only table for position_exits to maintain complete exit e
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
 
 Decision to log all exit order attempts (filled and unfilled) to exit_attempts table for debugging "why didn't my exit fill?" issues.
 
@@ -13037,7 +13037,7 @@ def validate_position_trade_attribution(position_id: str) -> bool:
 ### Related Documentation
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Attribution architecture analysis with tradeoffs
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` - Current schema (pre-attribution)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` - Current schema (pre-attribution)
 - `MASTER_REQUIREMENTS_V2.19.md` - REQ-DB-006 (Decimal precision for all financial fields)
 
 **Status:** ✅ Decision approved, implementation in progress (Migrations 019-020 planned)
@@ -13789,7 +13789,7 @@ def test_invalid_strategy_type_raises_foreign_key_error():
 ### Related Documentation
 
 - `docs/database/LOOKUP_TABLES_DESIGN.md` - Complete design specification with UI examples
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` - Updated schema documentation
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` - Updated schema documentation
 - `src/precog/database/lookup_helpers.py` - Helper functions implementation
 - `tests/test_lookup_tables.py` - Comprehensive test suite (23 tests, 100% coverage)
 - `src/precog/database/migrations/migration_023_create_lookup_tables.py` - Migration script

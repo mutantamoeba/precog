@@ -17,7 +17,7 @@ Educational Note:
 References:
     - Issue #104: Automate migration testing
     - src/precog/database/migrations/migration_utils.py
-    - docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md
+    - docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md
 
 Created: 2025-11-25
 Phase: 1.5 (Foundation Validation)

@@ -85,7 +85,7 @@
 - **METADATA-RICH ENUMS**: Lookup tables store display_name, description, category, display_order, complexity_level, icon_name, help_text for UI-friendly queries
 - **HELPER MODULE**: Created lookup_helpers.py with validation/query functions (get_strategy_types(), validate_strategy_type(), add_strategy_type())
 - **COMPREHENSIVE TESTING**: 23 tests with 100% coverage for lookup table infrastructure
-- Cross-references: ADR-093 ↔ REQ-DB-015/016 ↔ Migration 023 ↔ DATABASE_SCHEMA_SUMMARY_V1.11 ↔ lookup_helpers.py
+- Cross-references: ADR-093 ↔ REQ-DB-015/016 ↔ Migration 023 ↔ DATABASE_SCHEMA_SUMMARY_V1.12 ↔ lookup_helpers.py
 **Changes in v2.26:**
 - **TRADE & POSITION ATTRIBUTION ARCHITECTURE (PHASE 1.5)**: Complete attribution system for performance analytics and strategy A/B testing
 - Created SCHEMA_ANALYSIS_2025-11-21.md (800+ lines) - Comprehensive architectural analysis identifying 5 schema gaps, design options & tradeoffs, user Q&A, final decisions for attribution architecture
@@ -399,7 +399,7 @@ Schema design, data models, and database architecture.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DATABASE_SCHEMA_SUMMARY_V1.11.md** | ✅ | v1.11 | `/docs/database/` | 0.5-1 | Phases 1-10 | 🔴 Critical | **UPDATED V1.11** - Lookup tables for business enums (Migration 023: replaced CHECK constraints with FK constraints to strategy_types and model_classes lookup tables; enables no-migration extensibility; added v1.11 FK constraint notes to strategies and probability_models tables) |
+| **DATABASE_SCHEMA_SUMMARY_V1.12.md** | ✅ | v1.12 | `/docs/database/` | 0.5-2 | Phases 1-10 | 🔴 Critical | **UPDATED V1.12** - Live sports data infrastructure (Phase 2): Added venues, team_rankings, game_states (SCD Type 2) tables; Enhanced teams table with display_name and league; 32 tables total (was 29); Added Section 10 with comprehensive table definitions |
 | **DATABASE_TABLES_REFERENCE.md** | ✅ | v1.0 | `/docs/database/` | 1 | Phases 1-10 | 🟡 High | Quick lookup for all tables, common queries (Phase 1) |
 | **ODDS_RESEARCH_COMPREHENSIVE.md** | ✅ | v1.0 | `/docs/database/` | 4 | Phase 4, 9 | 🟡 High | Historical odds methodology, merged into models |
 | **DATA_DICTIONARY.md** | 🔵 | - | `/docs/database/` | 6-7 | Phases 6-10 | 🟡 High | Comprehensive data dictionary - all columns documented (planned Phase 6-7) |

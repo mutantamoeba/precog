@@ -302,7 +302,7 @@ class TestValidateTableExistence:
         # Create mock schema file
         schema_path = tmp_path / "docs" / "database"
         schema_path.mkdir(parents=True)
-        schema_file = schema_path / "DATABASE_SCHEMA_SUMMARY_V1.11.md"
+        schema_file = schema_path / "DATABASE_SCHEMA_SUMMARY_V1.12.md"
         schema_file.write_text("#### markets\n#### positions\n")
 
         mock_parse.return_value = {"markets": {}, "positions": {}}

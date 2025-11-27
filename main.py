@@ -708,7 +708,7 @@ def fetch_markets(
                 # Map Kalshi API status to Precog database status
                 # Kalshi API: "active", "finalized", "closed", etc.
                 # Precog DB: "open", "closed", "settled", "halted" (markets_status_check constraint)
-                # Reference: ADR-002, DATABASE_SCHEMA_SUMMARY_V1.11.md
+                # Reference: ADR-002, DATABASE_SCHEMA_SUMMARY_V1.12.md
                 kalshi_status_mapping: dict[str, str] = {
                     "active": "open",  # Live/tradable market
                     "finalized": "settled",  # Market has settled with result
