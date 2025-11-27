@@ -78,56 +78,265 @@ RateLimitExceeded = RateLimitExceededError
 
 
 # =============================================================================
-# TypedDict Response Types
+# TypedDict Response Types - Normalized ESPN Data Model
 # =============================================================================
+# Reference: docs/guides/ESPN_DATA_MODEL_V1.0.md
+# Related ADR: ADR-XXX (ESPN Data Model: Normalized Schema)
+#
+# Design Philosophy:
+#   - Separate static metadata (teams, venue) from dynamic state (scores, clock)
+#   - JSONB-ready situation data for sport-specific fields
+#   - Clear ownership: ESPNTeamInfo describes a team, ESPNVenueInfo a venue
+#   - Backward compatibility via GameState alias
 
 
-class GameState(TypedDict, total=False):
-    """Parsed game state from ESPN API.
+class ESPNTeamInfo(TypedDict, total=False):
+    """Static team information from ESPN API.
 
     Educational Note:
-        TypedDict provides compile-time type checking without runtime overhead.
-        Using total=False makes all fields optional (some may be missing for
-        pre-game or final states).
+        This TypedDict captures team identity and performance context.
+        Separate from game state because team info doesn't change during a game.
 
-    Core Fields (always present):
+    Fields:
+        espn_team_id: ESPN's internal team identifier
+        team_code: Short abbreviation (e.g., "KC", "BUF")
+        team_name: Full team name (e.g., "Kansas City Chiefs")
+        display_name: Short display name (e.g., "Chiefs")
+        record: Overall season record (e.g., "10-1")
+        home_record: Record at home games (e.g., "5-0")
+        away_record: Record in away games (e.g., "5-1")
+        rank: AP/CFP ranking (college only, None for NFL)
+
+    Reference: Phase 2 ESPN Data Model Plan
+    """
+
+    espn_team_id: str
+    team_code: str
+    team_name: str
+    display_name: str
+    record: str
+    home_record: str
+    away_record: str
+    rank: int | None
+
+
+class ESPNVenueInfo(TypedDict, total=False):
+    """Venue/stadium information from ESPN API.
+
+    Educational Note:
+        Venue data is extracted separately for normalization.
+        This allows us to build a venues table with unique stadium records.
+
+    Fields:
+        espn_venue_id: ESPN's internal venue identifier (may not always be present)
+        venue_name: Full stadium name (e.g., "Highmark Stadium")
+        city: City where venue is located
+        state: State/province
+        capacity: Seating capacity
+        indoor: True if dome/indoor stadium
+
+    Reference: Phase 2 ESPN Data Model Plan
+    """
+
+    espn_venue_id: str
+    venue_name: str
+    city: str
+    state: str
+    capacity: int
+    indoor: bool
+
+
+class ESPNGameMetadata(TypedDict, total=False):
+    """Static game information that doesn't change during the game.
+
+    Educational Note:
+        Metadata is set when game is scheduled and rarely changes.
+        Separating it from state allows efficient storage:
+        - Metadata stored once per game
+        - State stored every update (SCD Type 2)
+
+    Fields:
         espn_event_id: Unique ESPN identifier for the game
-        home_team: Home team abbreviation (e.g., "BUF")
-        away_team: Away team abbreviation (e.g., "KC")
-        home_score: Home team score (integer)
-        away_score: Away team score (integer)
-        period: Current period (1-4 for quarters, 5+ for OT)
-        clock_seconds: Time remaining in period (seconds)
-        clock_display: Formatted clock display (e.g., "8:05")
-        game_status: Status string ("scheduled", "in_progress", "halftime", "final")
+        game_date: ISO 8601 formatted game date/time
+        home_team: Home team information (ESPNTeamInfo)
+        away_team: Away team information (ESPNTeamInfo)
+        venue: Venue information (ESPNVenueInfo)
+        broadcast: TV network (e.g., "CBS", "ESPN", "FOX")
+        neutral_site: True if game is at neutral location
+        season_type: Game type (preseason, regular, playoff, bowl, allstar)
+        week_number: Week of the season (if applicable)
 
-    Situation Fields (in-game only):
-        possession: Which team has the ball ("home", "away", or None)
-        down: Current down (1-4) or None
-        distance: Yards to go for first down
-        yard_line: Current yard line
-        is_red_zone: True if offense is inside the 20
+    Reference: Phase 2 ESPN Data Model Plan
+    """
+
+    espn_event_id: str
+    game_date: str
+    home_team: ESPNTeamInfo
+    away_team: ESPNTeamInfo
+    venue: ESPNVenueInfo
+    broadcast: str
+    neutral_site: bool
+    season_type: str
+    week_number: int | None
+
+
+class ESPNSituationData(TypedDict, total=False):
+    """Sport-specific situation data (stored as JSONB in database).
+
+    Educational Note:
+        Different sports have different in-game situations:
+        - NFL/NCAAF: downs, distance, yard line, possession
+        - NBA/NCAAB: fouls, bonus status, possession arrow
+        - NHL: power plays, shots on goal
+
+        Using JSONB allows sport-specific fields without schema changes.
+
+    Common Fields:
+        possession: Which team has the ball ("home" or "away")
         home_timeouts: Home team timeouts remaining
         away_timeouts: Away team timeouts remaining
 
-    Model Training Features (for edge detection):
-        home_record: Home team record (e.g., "11-3")
-        away_record: Away team record (e.g., "10-4")
-        home_home_record: Home team record at home (e.g., "6-1")
-        away_away_record: Away team record on road (e.g., "5-2")
+    Football-specific (NFL/NCAAF):
+        down: Current down (1-4)
+        distance: Yards to first down
+        yard_line: Current yard line (0-100)
+        is_red_zone: Inside opponent's 20-yard line
+        home_turnovers: Home team turnover count
+        away_turnovers: Away team turnover count
+        last_play: Description of last play
+        drive_plays: Plays in current drive
+        drive_yards: Yards in current drive
+
+    Basketball-specific (NBA/NCAAB):
+        home_fouls: Home team foul count
+        away_fouls: Away team foul count
+        bonus: Team in bonus ("home", "away", or None)
+        possession_arrow: Next possession on jump ball
+
+    Hockey-specific (NHL):
+        home_powerplay: Home team on power play
+        away_powerplay: Away team on power play
+        powerplay_time: Time remaining in power play
+        home_shots: Home team shots on goal
+        away_shots: Away team shots on goal
+
+    Reference: Phase 2 ESPN Data Model Plan
+    """
+
+    # Common
+    possession: str | None
+    home_timeouts: int
+    away_timeouts: int
+
+    # Football (NFL/NCAAF)
+    down: int | None
+    distance: int | None
+    yard_line: int | None
+    is_red_zone: bool
+    home_turnovers: int
+    away_turnovers: int
+    last_play: str
+    drive_plays: int
+    drive_yards: int
+
+    # Basketball (NBA/NCAAB)
+    home_fouls: int
+    away_fouls: int
+    bonus: str | None
+    possession_arrow: str | None
+
+    # Hockey (NHL)
+    home_powerplay: bool
+    away_powerplay: bool
+    powerplay_time: str
+    home_shots: int
+    away_shots: int
+
+
+class ESPNGameState(TypedDict, total=False):
+    """Dynamic game state that changes during live games.
+
+    Educational Note:
+        This captures the current state of a game at a point in time.
+        With SCD Type 2 versioning, we store every state change for:
+        - Live game tracking
+        - Historical analysis
+        - ML model training
+
+    Fields:
+        espn_event_id: Reference to the game (FK to metadata)
+        home_score: Home team current score
+        away_score: Away team current score
+        period: Current period (1-4 for quarters, 5+ for OT)
+        clock_seconds: Time remaining in period (seconds)
+        clock_display: Formatted clock (e.g., "8:05")
+        game_status: Current status (scheduled, in_progress, halftime, final)
+        situation: Sport-specific situation data
         linescores: Quarter-by-quarter scores [[H1,A1], [H2,A2], ...]
-        venue_name: Stadium name
-        venue_city: Stadium city
-        venue_indoor: True if dome/indoor stadium
-        venue_capacity: Stadium capacity
-        game_date: ISO format game date
-        broadcast: TV network broadcasting
-        home_rank: Home team ranking (college only, None for NFL)
-        away_rank: Away team ranking (college only, None for NFL)
-        home_team_id: ESPN team ID (for lookups)
-        away_team_id: ESPN team ID (for lookups)
-        home_display_name: Full team name (e.g., "Buffalo Bills")
-        away_display_name: Full team name (e.g., "Kansas City Chiefs")
+
+    Reference: Phase 2 ESPN Data Model Plan
+    """
+
+    espn_event_id: str
+    home_score: int
+    away_score: int
+    period: int
+    clock_seconds: float
+    clock_display: str
+    game_status: str
+    situation: ESPNSituationData
+    linescores: list[list[int]]
+
+
+class ESPNGameFull(TypedDict, total=False):
+    """Complete game data combining metadata and current state.
+
+    Educational Note:
+        This is the "full picture" TypedDict returned by scoreboard endpoints.
+        It combines static metadata with dynamic state for convenience.
+
+        For database storage:
+        - metadata -> game metadata + venues + teams tables
+        - state -> game_states table (SCD Type 2)
+
+    Fields:
+        metadata: Static game information
+        state: Current dynamic state
+
+    Reference: Phase 2 ESPN Data Model Plan
+    """
+
+    metadata: ESPNGameMetadata
+    state: ESPNGameState
+
+
+# =============================================================================
+# Backward Compatibility - GameState Alias
+# =============================================================================
+# The original GameState TypedDict is maintained for backward compatibility.
+# New code should use ESPNGameFull, ESPNGameMetadata, or ESPNGameState.
+
+
+class GameState(TypedDict, total=False):
+    """Legacy game state format - DEPRECATED, use ESPNGameFull instead.
+
+    Educational Note:
+        This flattened format is maintained for backward compatibility with
+        existing code and tests. New code should use the normalized TypeDicts:
+        - ESPNGameFull: Complete game data
+        - ESPNGameMetadata: Static game info
+        - ESPNGameState: Dynamic game state
+        - ESPNTeamInfo: Team details
+        - ESPNVenueInfo: Venue details
+
+    Migration Path:
+        Old: game["home_team"]
+        New: game["metadata"]["home_team"]["team_code"]
+
+        Old: game["home_score"]
+        New: game["state"]["home_score"]
+
+    Reference: Phase 2 ESPN Data Model Plan - TypedDict Refactoring
     """
 
     # Core game identification
@@ -215,11 +424,26 @@ class ESPNClient:
     Reference: docs/testing/PHASE_2_TEST_PLAN_V1.0.md Section 2.1
     """
 
-    # API endpoints
+    # API endpoints - Multi-sport support
+    # All ESPN scoreboards use the same base pattern
+    BASE_URL: ClassVar[str] = "https://site.api.espn.com/apis/site/v2/sports"
+
     ENDPOINTS: ClassVar[dict[str, str]] = {
-        "nfl": "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
-        "ncaaf": "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard",
+        # Football
+        "nfl": f"{BASE_URL}/football/nfl/scoreboard",
+        "ncaaf": f"{BASE_URL}/football/college-football/scoreboard",
+        # Basketball
+        "nba": f"{BASE_URL}/basketball/nba/scoreboard",
+        "ncaab": f"{BASE_URL}/basketball/mens-college-basketball/scoreboard",
+        "wnba": f"{BASE_URL}/basketball/wnba/scoreboard",
+        # Hockey
+        "nhl": f"{BASE_URL}/hockey/nhl/scoreboard",
     }
+
+    # Sport categories for situation parsing
+    FOOTBALL_SPORTS: ClassVar[set[str]] = {"nfl", "ncaaf"}
+    BASKETBALL_SPORTS: ClassVar[set[str]] = {"nba", "ncaab", "wnba"}
+    HOCKEY_SPORTS: ClassVar[set[str]] = {"nhl"}
 
     # Game status mapping from ESPN to our internal format
     STATUS_MAP: ClassVar[dict[str, str]] = {
@@ -311,23 +535,144 @@ class ESPNClient:
         """
         return self._get_scoreboard("ncaaf", date)
 
+    def get_nba_scoreboard(self, date: datetime | None = None) -> list[GameState]:
+        """
+        Fetch NBA scoreboard for the specified date.
+
+        Args:
+            date: Target date for scoreboard (default: today)
+
+        Returns:
+            List of GameState dicts for each game
+
+        Raises:
+            RateLimitExceeded: If rate limit would be exceeded
+            ESPNAPIError: If API request fails after retries
+
+        Educational Note:
+            NBA games use 4 quarters like NFL, but have different situation
+            data (fouls, bonus status) stored in the situation JSONB field.
+
+        Reference: Phase 2 ESPN Data Model - Multi-Sport Support
+        """
+        return self._get_scoreboard("nba", date)
+
+    def get_ncaab_scoreboard(self, date: datetime | None = None) -> list[GameState]:
+        """
+        Fetch NCAAB (men's college basketball) scoreboard for the specified date.
+
+        Args:
+            date: Target date for scoreboard (default: today)
+
+        Returns:
+            List of GameState dicts for each game
+
+        Raises:
+            RateLimitExceeded: If rate limit would be exceeded
+            ESPNAPIError: If API request fails after retries
+
+        Educational Note:
+            College basketball has 2 halves instead of 4 quarters.
+            Period values: 1 = first half, 2 = second half, 3+ = overtime.
+
+        Reference: Phase 2 ESPN Data Model - Multi-Sport Support
+        """
+        return self._get_scoreboard("ncaab", date)
+
+    def get_nhl_scoreboard(self, date: datetime | None = None) -> list[GameState]:
+        """
+        Fetch NHL scoreboard for the specified date.
+
+        Args:
+            date: Target date for scoreboard (default: today)
+
+        Returns:
+            List of GameState dicts for each game
+
+        Raises:
+            RateLimitExceeded: If rate limit would be exceeded
+            ESPNAPIError: If API request fails after retries
+
+        Educational Note:
+            NHL games have 3 periods (not 4 quarters).
+            Situation data includes power play status and shots on goal.
+
+        Reference: Phase 2 ESPN Data Model - Multi-Sport Support
+        """
+        return self._get_scoreboard("nhl", date)
+
+    def get_wnba_scoreboard(self, date: datetime | None = None) -> list[GameState]:
+        """
+        Fetch WNBA scoreboard for the specified date.
+
+        Args:
+            date: Target date for scoreboard (default: today)
+
+        Returns:
+            List of GameState dicts for each game
+
+        Raises:
+            RateLimitExceeded: If rate limit would be exceeded
+            ESPNAPIError: If API request fails after retries
+
+        Reference: Phase 2 ESPN Data Model - Multi-Sport Support
+        """
+        return self._get_scoreboard("wnba", date)
+
+    def get_scoreboard(self, league: str, date: datetime | None = None) -> list[GameState]:
+        """
+        Generic scoreboard fetch for any supported league.
+
+        Args:
+            league: One of "nfl", "ncaaf", "nba", "ncaab", "nhl", "wnba"
+            date: Target date for scoreboard (default: today)
+
+        Returns:
+            List of GameState dicts for each game
+
+        Raises:
+            ValueError: If league is not supported
+            RateLimitExceeded: If rate limit would be exceeded
+            ESPNAPIError: If API request fails after retries
+
+        Educational Note:
+            This generic method allows fetching any supported sport without
+            needing specific method calls. Useful for building sport-agnostic
+            data collection pipelines.
+
+        Usage:
+            >>> # Fetch all sports
+            >>> for league in ["nfl", "nba", "nhl"]:
+            ...     games = client.get_scoreboard(league)
+            ...     print(f"{league.upper()}: {len(games)} games")
+
+        Reference: Phase 2 ESPN Data Model - Multi-Sport Support
+        """
+        if league not in self.ENDPOINTS:
+            raise ValueError(
+                f"Unsupported league: {league}. Supported: {list(self.ENDPOINTS.keys())}"
+            )
+        return self._get_scoreboard(league, date)
+
     def get_live_games(self, league: str = "nfl") -> list[GameState]:
         """
         Get only games currently in progress (excludes scheduled and final).
 
         Args:
-            league: "nfl" or "ncaaf"
+            league: "nfl", "ncaaf", "nba", "ncaab", "nhl", or "wnba"
 
         Returns:
             List of GameState dicts for live games only
 
         Educational Note:
-            "Live" includes games at halftime since they're not over yet.
+            "Live" includes games at halftime/intermission since they're not over yet.
             Only games with status "final" or "scheduled" are excluded.
-        """
-        all_games = self.get_nfl_scoreboard() if league == "nfl" else self.get_ncaaf_scoreboard()
 
-        # Filter to only in-progress games (includes halftime)
+        Reference: Phase 2 ESPN Data Model - Multi-Sport Support
+        """
+        all_games = self.get_scoreboard(league)
+
+        # Filter to only in-progress games (includes halftime/intermission)
         live_statuses = {"in_progress", "halftime"}
         return [g for g in all_games if g.get("game_status") in live_statuses]
 

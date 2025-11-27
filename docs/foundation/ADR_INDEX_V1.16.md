@@ -1,9 +1,15 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.15
-**Last Updated:** 2025-11-22
+**Version:** 1.16
+**Last Updated:** 2025-11-27
 **Status:** ✅ Current
+**Changes in v1.16:**
+- **ESPN DATA MODEL ARCHITECTURE (PHASE 2):** Added ADR-029 (ESPN Data Model with Normalized Schema)
+- Added new "Phase 2: ESPN Data Model (Live Data Integration)" section
+- Documents normalized database schema for multi-sport ESPN data (NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
+- Updated ARCHITECTURE_DECISIONS reference from V2.21 to V2.22
+- Total ADRs: 76 → 77 (1 new ADR added for Phase 2 data architecture)
 **Changes in v1.15:**
 - **WORKFLOW ENFORCEMENT INFRASTRUCTURE (PHASE 1.5):** Added ADR-094, ADR-095, ADR-096, ADR-097 (Comprehensive Workflow Enforcement)
 - Added ADR-094: YAML-Driven Validation Architecture (externalized validation rules to validation_config.yaml)
@@ -242,6 +248,12 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
 | ADR-055 | Sentry for Production Error Tracking (Hybrid Architecture) | 2025-11-14 | 🔵 | 2 | ARCHITECTURE_DECISIONS_V2.14 |
+
+### Phase 2: ESPN Data Model (Live Data Integration)
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-029 | ESPN Data Model with Normalized Schema | 2025-11-27 | ✅ | 2 | ARCHITECTURE_DECISIONS_V2.22 |
 
 ### Phase 4.5: Strategic Research Priorities (Open Questions)
 

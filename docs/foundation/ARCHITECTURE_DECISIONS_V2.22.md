@@ -1,9 +1,16 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.21
-**Last Updated:** November 22, 2025
+**Version:** 2.22
+**Last Updated:** November 27, 2025
 **Status:** ✅ Current
+**Changes in v2.22:**
+- **ESPN DATA MODEL ARCHITECTURE (PHASE 2):** Added ADR-029 (ESPN Data Model with Normalized Schema)
+- Documents normalized 4-table schema for ESPN data: venues, game_states (SCD Type 2), teams (enhanced), team_rankings
+- TypedDict separation: ESPNTeamInfo, ESPNVenueInfo, ESPNGameMetadata, ESPNSituationData, ESPNGameState, ESPNGameFull
+- JSONB situation field for sport-specific data (turnovers/downs for football, fouls for basketball, power plays for hockey)
+- Multi-sport support: NFL, NCAAF, NBA, NCAAB, NHL, WNBA (~1.1 GB/year storage estimate)
+- Storage-efficient design with normalized venues and SCD Type 2 game state history
 **Changes in v2.21:**
 - **WORKFLOW ENFORCEMENT ARCHITECTURE:** Added Decisions #94-97/ADR-094-307 (YAML-Driven Validation, Auto-Discovery, Parallel Execution, Tier-Specific Coverage)
 - **ADR-094: YAML-Driven Validation Architecture** - Documents decision to externalize all validation rules to validation_config.yaml
@@ -11743,6 +11750,106 @@ Decision to use append-only table for position_exits to maintain complete exit e
 **Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
 
 Decision to log all exit order attempts (filled and unfilled) to exit_attempts table for debugging "why didn't my exit fill?" issues.
+
+### ADR-029: ESPN Data Model with Normalized Schema
+
+**Status:** ✅ Accepted
+**Phase:** 2
+**Documented in:** ESPN_DATA_MODEL_V1.0.md (planned)
+**Related Requirements:** REQ-DATA-001 through REQ-DATA-005 (planned)
+
+#### Context
+
+Phase 2 (Live Data Integration) requires a robust data model for storing ESPN API data across multiple sports (NFL, NCAAF, NBA, NCAAB, NHL, WNBA). The ESPN API returns deeply nested JSON with mixed static metadata (venue, team info) and dynamic game state (scores, period, clock). We need to:
+
+1. Store live game states with SCD Type 2 versioning for complete history
+2. Track team rankings (AP, CFP, Coaches, ESPN Power) with temporal validity
+3. Normalize venue information to avoid duplication
+4. Support sport-specific situation data (downs, fouls, power plays) without schema explosion
+
+#### Decision
+
+**Implement a normalized 4-table schema with TypedDict separation:**
+
+**1. venues table (NEW)**
+- Stores unique venue information with ESPN venue ID as primary key
+- Columns: espn_venue_id, venue_name, city, state, capacity, indoor, created_at, updated_at
+- Eliminates venue data duplication across game records
+
+**2. game_states table (SCD Type 2)**
+- Stores timestamped game state snapshots with row_current_ind for current state
+- Columns: game_state_id, espn_event_id, home_score, away_score, period, clock_seconds, game_status
+- **JSONB situation field** for sport-specific data (turnovers, downs, fouls, power plays)
+- SCD Type 2 versioning captures every score change for historical analysis
+
+**3. teams table (ENHANCED)**
+- Add ESPN metadata: espn_team_id, display_name, conference, division
+- Support multiple sports (not just NFL)
+- Enable team-level queries across all leagues
+
+**4. team_rankings table (NEW)**
+- Tracks rankings over time: team_id, ranking_type, rank, season, week
+- ranking_type: 'ap_poll', 'cfp', 'coaches_poll', 'espn_power', 'espn_fpi'
+- Temporal validity with season + week (NULL week for final rankings)
+
+**5. TypedDict Structure in espn_client.py**
+```python
+ESPNTeamInfo      # Static team data (ID, name, record)
+ESPNVenueInfo     # Static venue data (ID, name, capacity)
+ESPNGameMetadata  # Static game data (date, teams, venue, broadcast)
+ESPNSituationData # Sport-specific JSONB (downs, fouls, power plays)
+ESPNGameState     # Dynamic state (score, period, clock, situation)
+ESPNGameFull      # Combined metadata + state
+GameState         # Backward-compatible alias
+```
+
+**6. JSONB Situation Data Schema**
+```python
+# Football (NFL/NCAAF)
+{"possession": "KC", "down": 2, "distance": 7, "yard_line": 35,
+ "home_turnovers": 1, "away_turnovers": 0, "last_play": "Rush for 4 yards"}
+
+# Basketball (NBA/NCAAB/WNBA)
+{"possession": "LAL", "home_fouls": 4, "away_fouls": 3,
+ "bonus": "single", "possession_arrow": "BOS"}
+
+# Hockey (NHL)
+{"possession": null, "home_powerplay": true, "away_powerplay": false,
+ "powerplay_time": "1:45", "home_shots": 28, "away_shots": 31}
+```
+
+#### Consequences
+
+**Positive:**
+- **No schema changes** when adding new sports (JSONB absorbs sport-specific fields)
+- **Complete game history** via SCD Type 2 (every score change tracked)
+- **Storage efficient** (~1.1 GB/year for all 6 sports)
+- **Query flexibility** for rankings, venues, team stats across sports
+- **Type safety** via TypedDicts without runtime overhead
+
+**Negative:**
+- JSONB queries slightly slower than native columns (mitigated by GIN indexes)
+- Need to maintain TypedDict definitions as API changes
+- Additional complexity in CRUD operations
+
+**Neutral:**
+- Requires migrations 026-029 (one-time effort)
+- Need to seed teams for NBA, NHL, NCAAB (existing seeding pattern)
+
+#### Alternatives Considered
+
+1. **Single denormalized table**: Rejected - massive duplication, no history
+2. **Separate tables per sport**: Rejected - maintenance nightmare, no cross-sport queries
+3. **Native columns for all fields**: Rejected - would require ~50 columns, sparse for each sport
+4. **Pydantic models**: Deferred to Phase 5+ (TypedDict sufficient for current needs)
+
+#### Implementation
+
+- **Phase A (COMPLETE)**: TypedDict refactoring in espn_client.py
+- **Phase B**: Database migrations 026-029
+- **Phase C**: CRUD operations for new tables
+- **Phase D**: Documentation (ESPN_DATA_MODEL_V1.0.md)
+- **Phase E**: Multi-sport team seeding
 
 ---
 

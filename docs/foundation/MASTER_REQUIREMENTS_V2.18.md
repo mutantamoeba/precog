@@ -276,10 +276,10 @@ precog/
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
   2. `MASTER_REQUIREMENTS_V2.18.md` - This document (requirements through Phase 10)
-  3. `MASTER_INDEX_V2.36.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.21.md` - All 97 ADRs with design rationale (Phase 0-4.5)
+  3. `MASTER_INDEX_V2.37.md` - Complete document inventory
+  4. `ARCHITECTURE_DECISIONS_V2.22.md` - All 97 ADRs with design rationale (Phase 0-4.5)
   5. `REQUIREMENT_INDEX.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.15.md` - Architecture decision index
+  6. `ADR_INDEX_V1.16.md` - Architecture decision index
   7. `TESTING_STRATEGY_V3.1.md` - Test cases, coverage requirements, future enhancements
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
