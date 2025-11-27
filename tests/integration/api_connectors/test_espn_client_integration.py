@@ -1,0 +1,427 @@
+"""
+Integration tests for ESPN API Client using VCR cassettes.
+
+These tests use VCR (Video Cassette Recorder) to record and replay real ESPN
+API responses. This provides:
+1. Deterministic tests (always same response data)
+2. Fast execution (no network latency after first run)
+3. Testing against real API structure
+
+VCR cassettes are stored in tests/integration/api_connectors/vcr_cassettes/
+
+Educational Note:
+    VCR records HTTP interactions on first run, then replays them on subsequent
+    runs. This is ideal for:
+    - Public APIs without authentication
+    - Ensuring tests work against real response structures
+    - CI/CD environments without network access
+
+    To re-record cassettes: delete the YAML file and run tests again.
+
+Reference: docs/testing/PHASE_2_TEST_PLAN_V1.0.md Section 2.1.4
+"""
+
+from datetime import datetime
+from pathlib import Path
+from unittest.mock import patch
+
+import pytest
+import vcr
+
+from tests.fixtures import (
+    ESPN_NCAAF_SCOREBOARD_LIVE,
+    ESPN_NFL_SCOREBOARD_LIVE,
+)
+
+# VCR configuration
+VCR_CASSETTES_DIR = Path(__file__).parent / "vcr_cassettes"
+
+# Custom VCR instance for ESPN API
+espn_vcr = vcr.VCR(
+    cassette_library_dir=str(VCR_CASSETTES_DIR),
+    record_mode="none",  # Don't record - use mock responses for now
+    match_on=["uri", "method"],
+    filter_headers=["User-Agent"],
+)
+
+
+# =============================================================================
+# Mock VCR Cassette Tests (Using Fixtures Instead of Real API)
+# =============================================================================
+# Note: These tests use mock responses instead of real VCR cassettes
+# because ESPN API may return different data each time (live games change).
+# For production, you would record cassettes during known game states.
+
+
+class TestESPNIntegrationWithMocks:
+    """Integration tests using mock responses that simulate VCR cassettes."""
+
+    @patch("requests.Session.get")
+    def test_fetch_nfl_scoreboard_integration(self, mock_get):
+        """Integration test: Fetch and parse NFL scoreboard."""
+        from unittest.mock import Mock
+
+        from precog.api_connectors.espn_client import ESPNClient
+
+        # Simulate VCR cassette response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = ESPN_NFL_SCOREBOARD_LIVE
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nfl_scoreboard()
+
+        # Verify we got games back
+        assert len(games) == 2
+
+        # Verify first game structure (KC @ BUF)
+        game = games[0]
+        assert game["espn_event_id"] == "401547417"
+        assert game["home_team"] == "BUF"
+        assert game["away_team"] == "KC"
+        assert game["home_score"] == 24
+        assert game["away_score"] == 21
+        assert game["period"] == 4
+        assert game["game_status"] == "in_progress"
+
+    @patch("requests.Session.get")
+    def test_fetch_ncaaf_scoreboard_integration(self, mock_get):
+        """Integration test: Fetch and parse NCAAF scoreboard."""
+        from unittest.mock import Mock
+
+        from precog.api_connectors.espn_client import ESPNClient
+
+        # Simulate VCR cassette response
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = ESPN_NCAAF_SCOREBOARD_LIVE
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_ncaaf_scoreboard()
+
+        # Verify we got the OSU vs Michigan game
+        assert len(games) == 1
+        game = games[0]
+        assert game["espn_event_id"] == "401628501"
+        assert "OSU" in game["home_team"] or "MICH" in game["away_team"]
+
+    @patch("requests.Session.get")
+    def test_get_live_games_filters_correctly(self, mock_get):
+        """Integration test: get_live_games only returns in-progress games."""
+        from unittest.mock import Mock
+
+        from precog.api_connectors.espn_client import ESPNClient
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = ESPN_NFL_SCOREBOARD_LIVE
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        live_games = client.get_live_games(league="nfl")
+
+        # All games in ESPN_NFL_SCOREBOARD_LIVE are in progress
+        assert len(live_games) == 2
+        for game in live_games:
+            assert game["game_status"] in {"in_progress", "halftime"}
+
+    @patch("requests.Session.get")
+    def test_multiple_requests_share_session(self, mock_get):
+        """Integration test: Multiple requests reuse HTTP session."""
+        from unittest.mock import Mock
+
+        from precog.api_connectors.espn_client import ESPNClient
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = ESPN_NFL_SCOREBOARD_LIVE
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+
+        # Make multiple requests
+        client.get_nfl_scoreboard()
+        client.get_nfl_scoreboard()
+        client.get_nfl_scoreboard()
+
+        # Should have used the same session (tracked via request_timestamps)
+        assert len(client.request_timestamps) == 3
+
+
+# =============================================================================
+# Real VCR Cassette Tests (Requires Network on First Run)
+# =============================================================================
+# These tests are marked with @pytest.mark.vcr and will:
+# 1. On first run: Make real API calls and record responses
+# 2. On subsequent runs: Replay recorded responses
+
+
+@pytest.mark.vcr
+@pytest.mark.skip(reason="VCR cassettes not yet recorded - requires network access")
+class TestESPNRealVCRCassettes:
+    """
+    Integration tests using real VCR cassettes.
+
+    To enable these tests:
+    1. Remove @pytest.mark.skip decorator
+    2. Set VCR record_mode to "new_episodes" or "once"
+    3. Run tests with network access
+    4. Cassettes will be saved to vcr_cassettes/
+
+    Note: ESPN data changes constantly, so cassettes capture a
+    point-in-time snapshot. Re-record when testing specific scenarios.
+    """
+
+    def test_real_nfl_scoreboard_fetch(self):
+        """Fetch real NFL scoreboard (recorded via VCR)."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        client = ESPNClient()
+        games = client.get_nfl_scoreboard()
+
+        # Verify we got a response
+        assert isinstance(games, list)
+        # Games may or may not exist depending on when cassette was recorded
+        if games:
+            game = games[0]
+            assert "espn_event_id" in game
+            assert "home_team" in game
+            assert "away_team" in game
+
+    def test_real_ncaaf_scoreboard_fetch(self):
+        """Fetch real NCAAF scoreboard (recorded via VCR)."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        client = ESPNClient()
+        games = client.get_ncaaf_scoreboard()
+
+        assert isinstance(games, list)
+
+
+# =============================================================================
+# Integration Tests: Error Handling with Mocks
+# =============================================================================
+
+
+class TestESPNErrorHandlingIntegration:
+    """Integration tests for error handling behavior."""
+
+    @patch("requests.Session.get")
+    def test_retry_behavior_on_server_error(self, mock_get):
+        """Integration test: Verify retry behavior on 500 errors."""
+        from unittest.mock import Mock
+
+        import requests
+
+        from precog.api_connectors.espn_client import ESPNClient
+
+        # First two calls fail, third succeeds
+        fail_response = Mock()
+        fail_response.status_code = 500
+        http_error = requests.HTTPError("500 Server Error")
+        http_error.response = fail_response
+        fail_response.raise_for_status.side_effect = http_error
+
+        success_response = Mock()
+        success_response.status_code = 200
+        success_response.json.return_value = ESPN_NFL_SCOREBOARD_LIVE
+
+        mock_get.side_effect = [fail_response, fail_response, success_response]
+
+        client = ESPNClient(max_retries=3)
+        games = client.get_nfl_scoreboard()
+
+        # Should succeed after retries
+        assert len(games) == 2
+        assert mock_get.call_count == 3
+
+    @patch("requests.Session.get")
+    def test_timeout_handling(self, mock_get):
+        """Integration test: Verify timeout handling."""
+
+        import requests
+
+        from precog.api_connectors.espn_client import ESPNAPIError, ESPNClient
+
+        # All calls timeout
+        mock_get.side_effect = requests.Timeout("Connection timed out")
+
+        client = ESPNClient(timeout_seconds=5, max_retries=2)
+
+        with pytest.raises(ESPNAPIError) as exc_info:
+            client.get_nfl_scoreboard()
+
+        assert "timeout" in str(exc_info.value).lower()
+
+
+# =============================================================================
+# Integration Tests: Rate Limiting
+# =============================================================================
+
+
+class TestESPNRateLimitingIntegration:
+    """Integration tests for rate limiting behavior."""
+
+    @patch("requests.Session.get")
+    def test_rate_limit_tracking_across_requests(self, mock_get):
+        """Integration test: Rate limit is tracked across multiple requests."""
+        from unittest.mock import Mock
+
+        from precog.api_connectors.espn_client import ESPNClient
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = ESPN_NFL_SCOREBOARD_LIVE
+        mock_get.return_value = mock_response
+
+        client = ESPNClient(rate_limit_per_hour=100)
+
+        # Initial state
+        assert client.get_remaining_requests() == 100
+
+        # Make 5 requests
+        for _ in range(5):
+            client.get_nfl_scoreboard()
+
+        # Should have 95 remaining
+        assert client.get_remaining_requests() == 95
+
+    @patch("requests.Session.get")
+    def test_rate_limit_blocks_when_exceeded(self, mock_get):
+        """Integration test: Rate limit blocks requests when exceeded."""
+        from datetime import timedelta
+        from unittest.mock import Mock
+
+        from precog.api_connectors.espn_client import ESPNClient, RateLimitExceeded
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = ESPN_NFL_SCOREBOARD_LIVE
+        mock_get.return_value = mock_response
+
+        client = ESPNClient(rate_limit_per_hour=5)
+
+        # Simulate 5 requests already made
+        now = datetime.now()
+        client.request_timestamps = [now - timedelta(minutes=i) for i in range(5)]
+
+        # 6th request should be blocked
+        with pytest.raises(RateLimitExceeded):
+            client.get_nfl_scoreboard()
+
+
+# =============================================================================
+# Integration Tests: Data Consistency
+# =============================================================================
+
+
+class TestESPNDataConsistencyIntegration:
+    """Integration tests for data consistency between calls."""
+
+    @patch("requests.Session.get")
+    def test_game_data_structure_consistent(self, mock_get):
+        """Integration test: All games have consistent data structure."""
+        from unittest.mock import Mock
+
+        from precog.api_connectors.espn_client import ESPNClient
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = ESPN_NFL_SCOREBOARD_LIVE
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nfl_scoreboard()
+
+        required_fields = [
+            "espn_event_id",
+            "home_team",
+            "away_team",
+            "home_score",
+            "away_score",
+            "period",
+            "clock_seconds",
+            "clock_display",
+            "game_status",
+        ]
+
+        for game in games:
+            for field in required_fields:
+                assert field in game, f"Missing field: {field} in game {game.get('espn_event_id')}"
+
+    @patch("requests.Session.get")
+    def test_score_types_are_integers(self, mock_get):
+        """Integration test: Scores are always integers, not strings."""
+        from unittest.mock import Mock
+
+        from precog.api_connectors.espn_client import ESPNClient
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = ESPN_NFL_SCOREBOARD_LIVE
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nfl_scoreboard()
+
+        for game in games:
+            assert isinstance(game["home_score"], int), (
+                f"home_score is {type(game['home_score'])}, expected int"
+            )
+            assert isinstance(game["away_score"], int), (
+                f"away_score is {type(game['away_score'])}, expected int"
+            )
+
+
+# =============================================================================
+# Integration Tests: API Response Variations
+# =============================================================================
+
+
+class TestESPNResponseVariationsIntegration:
+    """Integration tests for handling various API response formats."""
+
+    @patch("requests.Session.get")
+    def test_handles_empty_events_list(self, mock_get):
+        """Integration test: Handle empty events list (no games today)."""
+        from unittest.mock import Mock
+
+        from precog.api_connectors.espn_client import ESPNClient
+        from tests.fixtures import ESPN_NFL_SCOREBOARD_EMPTY
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = ESPN_NFL_SCOREBOARD_EMPTY
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nfl_scoreboard()
+
+        assert games == []
+
+    @patch("requests.Session.get")
+    def test_handles_malformed_event_gracefully(self, mock_get):
+        """Integration test: Handle malformed event without crashing."""
+        from unittest.mock import Mock
+
+        from precog.api_connectors.espn_client import ESPNClient
+
+        malformed_response = {
+            "events": [
+                {"id": "123"},  # Missing competitions
+                ESPN_NFL_SCOREBOARD_LIVE["events"][0],  # Valid event
+            ]
+        }
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = malformed_response
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nfl_scoreboard()
+
+        # Should parse the valid event and skip the malformed one
+        assert len(games) >= 1

@@ -17,7 +17,13 @@ Usage:
 
     # Create multiple
     markets = MarketFactory.create_batch(5)
+
+Note:
+    ESPN factories use camelCase attribute names (displayName, homeAway, etc.)
+    to match ESPN API response structure exactly. This is intentional - the
+    factories generate mock data that must have the same keys as real API responses.
 """
+# ruff: noqa: N815, RUF012
 
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -212,6 +218,312 @@ class DecimalEdgeCaseFactory(BaseFactory):
             cls.sub_penny(),
             cls.rounded_penny(),
         ]
+
+
+# ==============================================================================
+# ESPN API Response Factories (Phase 2)
+# ==============================================================================
+
+
+class ESPNTeamFactory(BaseFactory):
+    """Factory for ESPN team data within competitor objects."""
+
+    class Meta:
+        model = dict
+
+    id = factory.Sequence(lambda n: str(n + 1))
+    uid = factory.LazyAttribute(lambda obj: f"s:20~l:28~t:{obj.id}")
+    location = factory.Faker("city")
+    name = factory.Faker("last_name")
+    abbreviation = factory.LazyAttribute(lambda obj: obj.name[:3].upper())
+    displayName = factory.LazyAttribute(lambda obj: f"{obj.location} {obj.name}")
+    shortDisplayName = factory.LazyAttribute(lambda obj: obj.name)
+    color = factory.Faker("hex_color")
+    alternateColor = factory.Faker("hex_color")
+    logo = factory.LazyAttribute(
+        lambda obj: f"https://a.espncdn.com/i/teamlogos/nfl/500/{obj.abbreviation.lower()}.png"
+    )
+
+
+class ESPNCompetitorFactory(BaseFactory):
+    """Factory for ESPN competitor (team in a game) data."""
+
+    class Meta:
+        model = dict
+
+    id = factory.Sequence(lambda n: str(n + 1))
+    uid = factory.LazyAttribute(lambda obj: f"s:20~l:28~t:{obj.id}")
+    type = "team"
+    order = 0  # 0 for home, 1 for away
+    homeAway = "home"
+    winner = False
+
+    team = factory.SubFactory(ESPNTeamFactory)
+
+    score = factory.LazyFunction(lambda: str(fake.random_int(min=0, max=42)))
+    linescores = factory.LazyFunction(
+        lambda: [{"value": fake.random_int(min=0, max=14)} for _ in range(4)]
+    )
+    statistics = []
+    records = factory.LazyFunction(
+        lambda: [
+            {"name": "overall", "summary": f"{fake.random_int(0, 14)}-{fake.random_int(0, 14)}"},
+            {"name": "home", "summary": f"{fake.random_int(0, 7)}-{fake.random_int(0, 7)}"},
+        ]
+    )
+
+
+class ESPNGameStatusFactory(BaseFactory):
+    """Factory for ESPN game status data."""
+
+    class Meta:
+        model = dict
+
+    clock = factory.LazyFunction(lambda: float(fake.random_int(min=0, max=900)))
+    displayClock = factory.LazyAttribute(
+        lambda obj: f"{int(obj.clock // 60)}:{int(obj.clock % 60):02d}"
+    )
+    period = factory.Faker("random_int", min=1, max=4)
+
+    type = factory.LazyFunction(
+        lambda: {
+            "id": "2",
+            "name": "STATUS_IN_PROGRESS",
+            "state": "in",
+            "completed": False,
+            "description": "In Progress",
+            "detail": "In Progress",
+            "shortDetail": "In Progress",
+        }
+    )
+
+    @classmethod
+    def pregame(cls):
+        """Create a pre-game status."""
+        return cls(
+            clock=0.0,
+            displayClock="0:00",
+            period=0,
+            type={
+                "id": "1",
+                "name": "STATUS_SCHEDULED",
+                "state": "pre",
+                "completed": False,
+                "description": "Scheduled",
+                "detail": "Scheduled",
+                "shortDetail": "Scheduled",
+            },
+        )
+
+    @classmethod
+    def in_progress(cls, period: int = 2, clock: float = 720.0):
+        """Create an in-progress status."""
+        display_clock = f"{int(clock // 60)}:{int(clock % 60):02d}"
+        return cls(
+            clock=clock,
+            displayClock=display_clock,
+            period=period,
+            type={
+                "id": "2",
+                "name": "STATUS_IN_PROGRESS",
+                "state": "in",
+                "completed": False,
+                "description": "In Progress",
+                "detail": f"Q{period} - {display_clock}",
+                "shortDetail": f"Q{period} - {display_clock}",
+            },
+        )
+
+    @classmethod
+    def halftime(cls):
+        """Create a halftime status."""
+        return cls(
+            clock=0.0,
+            displayClock="0:00",
+            period=2,
+            type={
+                "id": "23",
+                "name": "STATUS_HALFTIME",
+                "state": "in",
+                "completed": False,
+                "description": "Halftime",
+                "detail": "Halftime",
+                "shortDetail": "Halftime",
+            },
+        )
+
+    @classmethod
+    def final(cls):
+        """Create a final (completed game) status."""
+        return cls(
+            clock=0.0,
+            displayClock="0:00",
+            period=4,
+            type={
+                "id": "3",
+                "name": "STATUS_FINAL",
+                "state": "post",
+                "completed": True,
+                "description": "Final",
+                "detail": "Final",
+                "shortDetail": "Final",
+            },
+        )
+
+
+class ESPNSituationFactory(BaseFactory):
+    """Factory for ESPN game situation (possession, down, etc.) data."""
+
+    class Meta:
+        model = dict
+
+    down = factory.Faker("random_int", min=1, max=4)
+    yardLine = factory.Faker("random_int", min=1, max=99)
+    distance = factory.Faker("random_int", min=1, max=15)
+    downDistanceText = factory.LazyAttribute(
+        lambda obj: f"{obj.down}{'st' if obj.down == 1 else 'nd' if obj.down == 2 else 'rd' if obj.down == 3 else 'th'} & {obj.distance}"
+    )
+    shortDownDistanceText = factory.LazyAttribute(
+        lambda obj: f"{obj.down}{'st' if obj.down == 1 else 'nd' if obj.down == 2 else 'rd' if obj.down == 3 else 'th'} & {obj.distance}"
+    )
+    possessionText = "Home Ball"
+    isRedZone = factory.LazyAttribute(lambda obj: obj.yardLine <= 20)
+    homeTimeouts = factory.Faker("random_int", min=0, max=3)
+    awayTimeouts = factory.Faker("random_int", min=0, max=3)
+    possession = "1"  # Team ID with possession
+
+
+class ESPNCompetitionFactory(BaseFactory):
+    """Factory for ESPN competition (a single game/matchup) data."""
+
+    class Meta:
+        model = dict
+
+    id = factory.Sequence(lambda n: str(401547400 + n))
+    uid = factory.LazyAttribute(lambda obj: f"s:20~l:28~e:{obj.id}~c:{obj.id}")
+    date = factory.LazyFunction(lambda: datetime.utcnow().isoformat() + "Z")
+    attendance = factory.Faker("random_int", min=60000, max=82500)
+
+    type = {"id": "1", "abbreviation": "STD"}
+    timeValid = True
+    neutralSite = False
+    conferenceCompetition = False
+    playByPlayAvailable = True
+    recent = True
+
+    venue = factory.LazyFunction(
+        lambda: {
+            "id": str(fake.random_int(min=1000, max=9999)),
+            "fullName": f"{fake.city()} Stadium",
+            "address": {"city": fake.city(), "state": fake.state_abbr()},
+            "capacity": fake.random_int(min=60000, max=82500),
+            "indoor": False,
+        }
+    )
+
+    # Default: create home and away competitors
+    competitors = factory.LazyFunction(
+        lambda: [
+            ESPNCompetitorFactory(order=0, homeAway="home"),
+            ESPNCompetitorFactory(order=1, homeAway="away"),
+        ]
+    )
+
+    status = factory.SubFactory(ESPNGameStatusFactory)
+
+    broadcasts = factory.LazyFunction(
+        lambda: [
+            {"market": "national", "names": [fake.random_element(["CBS", "FOX", "NBC", "ESPN"])]}
+        ]
+    )
+
+    situation = factory.SubFactory(ESPNSituationFactory)
+
+
+class ESPNEventFactory(BaseFactory):
+    """Factory for ESPN event (game) data - the top-level object."""
+
+    class Meta:
+        model = dict
+
+    id = factory.Sequence(lambda n: str(401547400 + n))
+    uid = factory.LazyAttribute(lambda obj: f"s:20~l:28~e:{obj.id}")
+    date = factory.LazyFunction(lambda: datetime.utcnow().isoformat() + "Z")
+
+    name = factory.LazyFunction(
+        lambda: f"{fake.city()} {fake.last_name()} at {fake.city()} {fake.last_name()}"
+    )
+    shortName = factory.LazyAttribute(lambda obj: " @ ".join(obj.name.split(" at ")[::-1][:2]))
+
+    season = {"year": 2025, "type": 2, "slug": "regular-season"}
+    week = {"number": factory.Faker("random_int", min=1, max=18)}
+
+    competitions = factory.LazyAttribute(lambda obj: [ESPNCompetitionFactory(id=obj.id)])
+
+    status = factory.SubFactory(ESPNGameStatusFactory)
+
+
+class ESPNScoreboardFactory(BaseFactory):
+    """
+    Factory for ESPN scoreboard API response.
+
+    This creates complete scoreboard responses for testing.
+
+    Usage:
+        # Create scoreboard with 3 games
+        scoreboard = ESPNScoreboardFactory(num_events=3)
+
+        # Create empty scoreboard (no games)
+        empty = ESPNScoreboardFactory(num_events=0)
+    """
+
+    class Meta:
+        model = dict
+
+    leagues = factory.LazyFunction(
+        lambda: [
+            {
+                "id": "28",
+                "uid": "s:20~l:28",
+                "name": "National Football League",
+                "abbreviation": "NFL",
+                "slug": "nfl",
+                "season": {"year": 2025, "type": 2},
+            }
+        ]
+    )
+
+    season = {"type": 2, "year": 2025}
+    week = {"number": factory.Faker("random_int", min=1, max=18)}
+
+    events = factory.LazyFunction(lambda: [ESPNEventFactory() for _ in range(2)])
+
+    @classmethod
+    def with_events(cls, num_events: int = 2):
+        """Create a scoreboard with a specific number of events."""
+        return cls(events=[ESPNEventFactory() for _ in range(num_events)])
+
+    @classmethod
+    def empty(cls):
+        """Create an empty scoreboard (no games today)."""
+        return cls(events=[])
+
+    @classmethod
+    def ncaaf(cls, num_events: int = 2):
+        """Create an NCAAF scoreboard."""
+        return cls(
+            leagues=[
+                {
+                    "id": "23",
+                    "uid": "s:20~l:23",
+                    "name": "NCAA - Football",
+                    "abbreviation": "NCAAF",
+                    "slug": "college-football",
+                    "season": {"year": 2025, "type": 2},
+                }
+            ],
+            events=[ESPNEventFactory() for _ in range(num_events)],
+        )
 
 
 # ==============================================================================
