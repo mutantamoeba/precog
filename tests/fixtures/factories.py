@@ -247,15 +247,15 @@ class GameStateDataFactory(BaseFactory):
 # ==============================================================================
 
 
-def create_test_market_with_position():
+def create_test_market_with_position() -> tuple[dict, dict]:
     """
     Create a test market with an associated position.
 
     Returns:
         Tuple of (market_data, position_data)
     """
-    market = MarketDataFactory()
-    position = PositionDataFactory(
+    market: dict = MarketDataFactory()  # type: ignore[assignment]
+    position: dict = PositionDataFactory(  # type: ignore[assignment]
         ticker=market["ticker"],
         current_price=market["yes_bid"],
     )
@@ -307,9 +307,10 @@ def create_versioned_strategies(base_name: str, num_versions: int = 3):
 
 if __name__ == "__main__":
     """Example usage of factories."""
+    from typing import Any
 
     # Create a single market
-    market = MarketDataFactory()
+    market: dict[str, Any] = MarketDataFactory()  # type: ignore[assignment]
     print(f"Market: {market['ticker']}")
     print(f"Yes bid: {market['yes_bid']}")
 
@@ -318,7 +319,7 @@ if __name__ == "__main__":
     print(f"\nCreated {len(markets)} markets")
 
     # Create market with custom values
-    custom_market = MarketDataFactory(
+    custom_market: dict[str, Any] = MarketDataFactory(  # type: ignore[assignment]
         ticker="TEST-NFL-KC-BUF-YES",
         yes_bid=Decimal("0.7500"),
     )
@@ -331,8 +332,8 @@ if __name__ == "__main__":
         print(f"Edge case price: {case['price']}")
 
     # Create market with position
-    market, position = create_test_market_with_position()
-    print(f"\nMarket: {market['ticker']}")
+    market_with_pos, position = create_test_market_with_position()
+    print(f"\nMarket: {market_with_pos['ticker']}")
     print(f"Position PnL: {position['unrealized_pnl']}")
 
     # Create versioned strategies

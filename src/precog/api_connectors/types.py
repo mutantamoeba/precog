@@ -166,9 +166,21 @@ class RateLimitErrorResponse(ErrorResponse):
 # =============================================================================
 
 
-class ProcessedMarketData(TypedDict):
-    """Market data after Decimal conversion (for internal use)."""
+class ProcessedMarketData(TypedDict, total=False):
+    """Market data after Decimal conversion (for internal use).
 
+    The Kalshi API returns dual-format pricing:
+    - Legacy integer cent fields (yes_bid, yes_ask, etc.)
+    - Sub-penny dollar string fields (*_dollars suffix)
+
+    After processing, the *_dollars fields are converted to Decimal
+    for sub-penny precision while legacy cent fields remain as int.
+
+    Using total=False because different API endpoints return different
+    subsets of fields (e.g., some don't include liquidity_dollars).
+    """
+
+    # Required string fields (always present)
     ticker: str
     event_ticker: str
     series_ticker: str
@@ -180,15 +192,24 @@ class ProcessedMarketData(TypedDict):
     status: Literal["open", "closed", "settled"]
     can_close_early: bool
     result: Literal["yes", "no"] | None
-    # Price fields as Decimal
-    yes_bid: Decimal
-    yes_ask: Decimal
-    no_bid: Decimal
-    no_ask: Decimal
-    last_price: Decimal
+
+    # Legacy integer cent fields (kept as-is from API)
+    yes_bid: int
+    yes_ask: int
+    no_bid: int
+    no_ask: int
+    last_price: int
     volume: int
     open_interest: int
     liquidity: int
+
+    # Sub-penny Decimal fields (*_dollars suffix - converted to Decimal)
+    yes_bid_dollars: Decimal
+    yes_ask_dollars: Decimal
+    no_bid_dollars: Decimal
+    no_ask_dollars: Decimal
+    last_price_dollars: Decimal
+    liquidity_dollars: Decimal
 
 
 class ProcessedPositionData(TypedDict):
@@ -205,8 +226,19 @@ class ProcessedPositionData(TypedDict):
     resting_order_count: int
 
 
-class ProcessedFillData(TypedDict):
-    """Fill data after Decimal conversion (for internal use)."""
+class ProcessedFillData(TypedDict, total=False):
+    """Fill data after Decimal conversion (for internal use).
+
+    The Kalshi API returns dual-format pricing for fills:
+    - Legacy integer cent fields (yes_price, no_price)
+    - Sub-penny dollar string fields (*_fixed suffix)
+
+    After processing, the *_fixed fields are converted to Decimal
+    for sub-penny precision.
+
+    Using total=False because different API endpoints return different
+    subsets of fields.
+    """
 
     order_id: str
     trade_id: str
@@ -214,9 +246,17 @@ class ProcessedFillData(TypedDict):
     side: Literal["yes", "no"]
     action: Literal["buy", "sell"]
     count: int
-    price: Decimal  # Execution price as Decimal
     created_time: str
     is_taker: bool
+
+    # Legacy integer cent fields
+    price: float  # Legacy float - AVOID using
+    yes_price: int
+    no_price: int
+
+    # Sub-penny Decimal fields (*_fixed suffix - converted to Decimal)
+    yes_price_fixed: Decimal
+    no_price_fixed: Decimal
 
 
 class ProcessedSettlementData(TypedDict):
