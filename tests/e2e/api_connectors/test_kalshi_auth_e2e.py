@@ -56,6 +56,8 @@ def kalshi_auth():
 
     api_key = os.getenv("KALSHI_DEMO_KEY_ID")
     keyfile = os.getenv("KALSHI_DEMO_KEYFILE")
+    assert api_key is not None, "KALSHI_DEMO_KEY_ID not set"
+    assert keyfile is not None, "KALSHI_DEMO_KEYFILE not set"
 
     return KalshiAuth(api_key, keyfile)
 

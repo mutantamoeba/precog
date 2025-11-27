@@ -38,8 +38,10 @@ sys.path.insert(0, str(PROJECT_ROOT))
 # Import module under test using importlib (scripts is not a package)
 script_path = PROJECT_ROOT / "scripts" / "validate_schema_consistency.py"
 spec = importlib.util.spec_from_file_location("validate_schema_consistency", script_path)
+assert spec is not None  # Guard for type checker (file should exist)
 validate_schema_module = importlib.util.module_from_spec(spec)
 sys.modules["validate_schema_consistency"] = validate_schema_module
+assert spec.loader is not None  # Guard for type checker (spec should have loader)
 spec.loader.exec_module(validate_schema_module)
 
 # Import functions from the loaded module

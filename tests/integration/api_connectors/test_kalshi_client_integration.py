@@ -581,9 +581,10 @@ class TestKalshiClientDecimalPrecision:
 
         for market in markets:
             for field in price_fields:
-                assert isinstance(market[field], Decimal), (
-                    f"Field '{field}' in market '{market['ticker']}' is {type(market[field])}, "
-                    f"expected Decimal. Value: {market[field]}"
+                # TypedDict dynamic key access requires type: ignore
+                assert isinstance(market[field], Decimal), (  # type: ignore[literal-required]
+                    f"Field '{field}' in market '{market['ticker']}' is {type(market[field])}, "  # type: ignore[literal-required]
+                    f"expected Decimal. Value: {market[field]}"  # type: ignore[literal-required]
                 )
 
 

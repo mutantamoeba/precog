@@ -506,7 +506,7 @@ def sample_model(db_pool, clean_test_data) -> int:
 
 
 @pytest.fixture
-def sample_strategy(db_pool, clean_test_data, sample_strategy_config_nested) -> int:  # type: ignore[return]
+def sample_strategy(db_pool, clean_test_data, sample_strategy_config_nested) -> int:
     """Create sample strategy with nested versioning for testing."""
     return create_strategy(  # type: ignore[return-value]
         strategy_name="NFL Model Ensemble",
