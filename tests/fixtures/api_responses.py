@@ -98,14 +98,21 @@ KALSHI_SINGLE_MARKET_RESPONSE = {
         "status": "open",
         "can_close_early": False,
         "result": None,
-        "yes_bid": "0.6200",
-        "yes_ask": "0.6250",
-        "no_bid": "0.3750",
-        "no_ask": "0.3800",
-        "last_price": "0.6225",
+        # Kalshi dual format: legacy integer cents + sub-penny string dollars
+        "yes_bid": 62,  # Legacy: integer cents
+        "yes_bid_dollars": "0.6200",  # Sub-penny: string dollars
+        "yes_ask": 63,
+        "yes_ask_dollars": "0.6250",
+        "no_bid": 37,
+        "no_bid_dollars": "0.3750",
+        "no_ask": 38,
+        "no_ask_dollars": "0.3800",
+        "last_price": 62,
+        "last_price_dollars": "0.6225",
         "volume": 15420,
         "open_interest": 8750,
         "liquidity": 125000,
+        "liquidity_dollars": "1250.0000",
     }
 }
 

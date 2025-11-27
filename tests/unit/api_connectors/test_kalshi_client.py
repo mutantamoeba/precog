@@ -352,13 +352,22 @@ class TestKalshiMarketData:
         # Verify markets returned
         assert len(markets) == 2
 
-        # CRITICAL: Verify all prices are Decimal type
+        # CRITICAL: Verify all *_dollars prices are Decimal type
+        # Note: The Kalshi API returns dual format:
+        # - Legacy integer cent fields (yes_bid, yes_ask, etc.) - kept as integers
+        # - Sub-penny dollar fields (*_dollars) - converted to Decimal
+        # We validate the *_dollars fields which have sub-penny precision
         for market in markets:
-            assert isinstance(market["yes_bid"], Decimal), "yes_bid must be Decimal"
-            assert isinstance(market["yes_ask"], Decimal), "yes_ask must be Decimal"
-            assert isinstance(market["no_bid"], Decimal), "no_bid must be Decimal"
-            assert isinstance(market["no_ask"], Decimal), "no_ask must be Decimal"
-            assert isinstance(market["last_price"], Decimal), "last_price must be Decimal"
+            assert isinstance(market["yes_bid_dollars"], Decimal), "yes_bid_dollars must be Decimal"
+            assert isinstance(market["yes_ask_dollars"], Decimal), "yes_ask_dollars must be Decimal"
+            assert isinstance(market["no_bid_dollars"], Decimal), "no_bid_dollars must be Decimal"
+            assert isinstance(market["no_ask_dollars"], Decimal), "no_ask_dollars must be Decimal"
+            assert isinstance(market["last_price_dollars"], Decimal), (
+                "last_price_dollars must be Decimal"
+            )
+            # Also verify legacy cent fields are integers (not accidentally converted)
+            assert isinstance(market["yes_bid"], int), "yes_bid (cents) should be int"
+            assert isinstance(market["yes_ask"], int), "yes_ask (cents) should be int"
 
     @pytest.mark.unit
     @pytest.mark.critical
@@ -377,10 +386,15 @@ class TestKalshiMarketData:
         # Check second market with sub-penny prices
         buffalo_market = markets[1]
 
-        # Verify exact Decimal precision (no rounding)
-        assert buffalo_market["yes_bid"] == Decimal("0.4275")
-        assert buffalo_market["yes_ask"] == Decimal("0.4325")
-        assert buffalo_market["last_price"] == Decimal("0.4300")
+        # Verify exact Decimal precision (no rounding) using *_dollars fields
+        # The legacy cent fields (yes_bid, etc.) are rounded integers
+        # The sub-penny precision is in the *_dollars fields
+        assert buffalo_market["yes_bid_dollars"] == Decimal("0.4275")
+        assert buffalo_market["yes_ask_dollars"] == Decimal("0.4325")
+        assert buffalo_market["last_price_dollars"] == Decimal("0.4300")
+        # Legacy cent fields should be integers (rounded from sub-penny)
+        assert buffalo_market["yes_bid"] == 43  # Rounded from 0.4275
+        assert buffalo_market["yes_ask"] == 43  # Rounded from 0.4325
 
     @pytest.mark.unit
     def test_get_markets_with_filters(self, mock_env_credentials, mock_load_private_key):
@@ -415,11 +429,20 @@ class TestKalshiMarketData:
 
             market = client.get_market("KXNFLGAME-25DEC15-KC-YES")
 
-        # Verify Decimal types
-        assert isinstance(market["yes_bid"], Decimal)
-        assert isinstance(market["yes_ask"], Decimal)
-        assert market["yes_bid"] == Decimal("0.6200")
-        assert market["yes_ask"] == Decimal("0.6250")
+        # Verify Decimal conversion for *_dollars fields (sub-penny precision)
+        # The client's _convert_prices_to_decimal() converts *_dollars fields to Decimal
+        assert isinstance(market["yes_bid_dollars"], Decimal), "yes_bid_dollars must be Decimal"
+        assert market["yes_bid_dollars"] == Decimal("0.6200")
+        assert isinstance(market["yes_ask_dollars"], Decimal), "yes_ask_dollars must be Decimal"
+        assert market["yes_ask_dollars"] == Decimal("0.6250")
+        assert isinstance(market["last_price_dollars"], Decimal), (
+            "last_price_dollars must be Decimal"
+        )
+        assert market["last_price_dollars"] == Decimal("0.6225")
+        # Legacy integer cent fields should remain as integers
+        assert market["yes_bid"] == 62
+        assert market["yes_ask"] == 63
+        assert market["ticker"] == "KXNFLGAME-25DEC15-KC-YES"
 
     @pytest.mark.unit
     def test_get_markets_with_event_ticker(self, mock_env_credentials, mock_load_private_key):
@@ -639,15 +662,22 @@ class TestKalshiErrorHandling:
         client = KalshiClient(environment="demo")
 
         # Create response with invalid Decimal value (non-numeric string)
+        # Note: The client parses *_dollars fields for Decimal conversion
+        # We put the invalid value in yes_bid_dollars to trigger InvalidOperation
         malformed_response = {
             "markets": [
                 {
                     "ticker": "INVALID-MARKET",
-                    "yes_bid": "not-a-number",  # Invalid Decimal value
-                    "yes_ask": "0.6250",
-                    "no_bid": "0.3700",
-                    "no_ask": "0.3750",
-                    "last_price": "0.6200",
+                    "yes_bid": 62,  # Legacy: integer cents (valid)
+                    "yes_bid_dollars": "not-a-number",  # Invalid Decimal value in *_dollars field
+                    "yes_ask": 63,
+                    "yes_ask_dollars": "0.6250",
+                    "no_bid": 37,
+                    "no_bid_dollars": "0.3700",
+                    "no_ask": 38,
+                    "no_ask_dollars": "0.3750",
+                    "last_price": 62,
+                    "last_price_dollars": "0.6200",
                     "volume": 1000,
                 }
             ]
@@ -752,7 +782,12 @@ class TestKalshiIntegration:
         # Verify results
         assert len(markets) == 2
         assert isinstance(balance, Decimal)
-        assert all(isinstance(m["yes_bid"], Decimal) for m in markets)
+        # Note: The Kalshi API returns dual format:
+        # - Legacy integer cent fields (yes_bid, yes_ask) - kept as integers
+        # - Sub-penny dollar fields (*_dollars) - converted to Decimal
+        # We validate the *_dollars fields which have sub-penny precision
+        assert all(isinstance(m["yes_bid_dollars"], Decimal) for m in markets)
+        assert all(isinstance(m["yes_bid"], int) for m in markets)  # Legacy cents are integers
 
     def test_get_fills_returns_decimal_prices(self, mock_env_credentials, mock_load_private_key):
         """Test get_fills() returns fills with Decimal prices."""
@@ -768,11 +803,19 @@ class TestKalshiIntegration:
             fills = client.get_fills(ticker="KXNFLGAME-25OCT05-NEBUF-B250")
 
         # Verify Decimal conversion
+        # Note: The Kalshi API returns dual format for fills:
+        # - Legacy float field (price) - AVOID, kept as float
+        # - Sub-penny fixed fields (yes_price_fixed, no_price_fixed) - converted to Decimal
+        # We validate the *_fixed fields which have sub-penny precision
         assert len(fills) == 2
-        assert isinstance(fills[0]["price"], Decimal)
-        assert fills[0]["price"] == Decimal("0.6150")
-        assert isinstance(fills[1]["price"], Decimal)
-        assert fills[1]["price"] == Decimal("0.4200")
+        assert isinstance(fills[0]["yes_price_fixed"], Decimal)
+        assert fills[0]["yes_price_fixed"] == Decimal("0.6200")
+        assert isinstance(fills[0]["no_price_fixed"], Decimal)
+        assert fills[0]["no_price_fixed"] == Decimal("0.3800")
+        assert isinstance(fills[1]["yes_price_fixed"], Decimal)
+        assert fills[1]["yes_price_fixed"] == Decimal("0.4200")
+        assert isinstance(fills[1]["no_price_fixed"], Decimal)
+        assert fills[1]["no_price_fixed"] == Decimal("0.5800")
 
     def test_get_settlements_returns_decimal_values(
         self, mock_env_credentials, mock_load_private_key
