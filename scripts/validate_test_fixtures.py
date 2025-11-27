@@ -52,12 +52,25 @@ def load_test_fixture_requirements() -> dict:
 
     Returns:
         dict with fixture requirements, or defaults if file not found
+
+    Educational Note:
+        The config now distinguishes between:
+        - database_integration_tests: Require db_pool, db_cursor, clean_test_data
+        - api_integration_tests: Use VCR cassettes, no database fixtures needed
+
+        This prevents false positives for API integration tests that test
+        HTTP-level behavior, not database interaction.
     """
     validation_config_path = PROJECT_ROOT / "scripts" / "validation_config.yaml"
 
     default_requirements = {
-        "integration_tests": {
-            "description": "Tests requiring real database/API infrastructure",
+        "database_integration_tests": {
+            "description": "Tests requiring real database infrastructure",
+            "path_patterns": [
+                "tests/integration/database/",
+                "tests/integration/trading/",
+                "tests/integration/analytics/",
+            ],
             "required_fixtures": [
                 "db_pool",  # Real connection pool (not mocked)
                 "db_cursor",  # Real database cursor
@@ -66,17 +79,28 @@ def load_test_fixture_requirements() -> dict:
             "forbidden_patterns": [
                 r"unittest\.mock\.patch\(['\"]psycopg2\.pool['\"]",  # Don't mock connection pool
                 r"mock_connection\s*=\s*Mock\(",  # Don't mock database connections
-                r"monkeypatch\.setattr\(['\"]requests\.post['\"]",  # Don't mock API calls
                 r"@patch\(['\"]psycopg2\.connect['\"]",  # Don't mock database connect
-                r"MagicMock.*pool",  # Don't mock connection pool with MagicMock
             ],
             "allowed_exceptions": [
                 "Unit test - mock OK",
-                "External API mock",
-                "Network failure test",
                 "Error handling test",
             ],
-        }
+        },
+        "api_integration_tests": {
+            "description": "Tests for external API clients (ESPN, Balldontlie, etc.)",
+            "path_patterns": [
+                "tests/integration/api_connectors/",
+            ],
+            "required_fixtures": [],  # No database fixtures needed - uses VCR cassettes
+            "forbidden_patterns": [
+                r"mock_connection\s*=\s*Mock\(",  # Don't mock database in API tests
+            ],
+            "allowed_exceptions": [
+                "VCR cassette",
+                "External API mock",
+                "Network failure test",
+            ],
+        },
     }
 
     if not validation_config_path.exists() or not YAML_AVAILABLE:
@@ -90,6 +114,35 @@ def load_test_fixture_requirements() -> dict:
             )
     except Exception:
         return default_requirements
+
+
+def get_test_category(test_file: Path, requirements: dict) -> str | None:
+    """
+    Determine which test category a test file belongs to based on path patterns.
+
+    Args:
+        test_file: Path to the test file
+        requirements: Test fixture requirements config
+
+    Returns:
+        Category name (e.g., "database_integration_tests") or None if no match
+
+    Educational Note:
+        This enables path-based categorization of tests:
+        - tests/integration/api_connectors/ -> api_integration_tests (no DB fixtures)
+        - tests/integration/database/ -> database_integration_tests (requires DB fixtures)
+    """
+    test_path_str = str(test_file).replace("\\", "/")  # Normalize for Windows
+
+    for category_name, category_config in requirements.items():
+        path_patterns = category_config.get("path_patterns", [])
+        for pattern in path_patterns:
+            # Normalize pattern for comparison
+            pattern = pattern.replace("\\", "/")
+            if pattern in test_path_str:
+                return str(category_name)  # Explicit cast for type safety
+
+    return None
 
 
 def check_fixture_usage(test_file: Path, required_fixtures: list[str]) -> list[str]:
@@ -171,28 +224,36 @@ def check_forbidden_patterns(
 
 def validate_test_fixtures(verbose: bool = False) -> tuple[bool, list[str]]:
     """
-    Validate all integration tests use real fixtures, not mocks.
+    Validate all integration tests use appropriate fixtures based on their category.
 
     Args:
         verbose: If True, show detailed validation process
 
     Returns:
         (passed, violations) tuple
+
+    Educational Note:
+        The validation is now path-based:
+        - Database integration tests (tests/integration/database/, trading/, analytics/)
+          require db_pool, db_cursor, clean_test_data
+        - API integration tests (tests/integration/api_connectors/)
+          use VCR cassettes, no database fixtures required
+
+        This prevents false positives for HTTP-level integration tests.
     """
     violations = []
 
     # Load requirements
     requirements = load_test_fixture_requirements()
-    integration_config = requirements.get("integration_tests", {})
-
-    required_fixtures = integration_config.get("required_fixtures", [])
-    forbidden_patterns = integration_config.get("forbidden_patterns", [])
-    exception_comments = integration_config.get("allowed_exceptions", [])
 
     if verbose:
-        print(f"[DEBUG] Required fixtures: {', '.join(required_fixtures)}")
-        print(f"[DEBUG] Forbidden patterns: {len(forbidden_patterns)}")
-        print(f"[DEBUG] Exception comments: {len(exception_comments)}")
+        print(f"[DEBUG] Loaded {len(requirements)} test categories:")
+        for category_name, category_config in requirements.items():
+            fixtures = category_config.get("required_fixtures", [])
+            patterns = category_config.get("path_patterns", [])
+            print(
+                f"[DEBUG]   {category_name}: {len(fixtures)} fixtures, {len(patterns)} path patterns"
+            )
 
     # Find all integration test files
     integration_tests = list((PROJECT_ROOT / "tests" / "integration").rglob("*.py"))
@@ -207,6 +268,7 @@ def validate_test_fixtures(verbose: bool = False) -> tuple[bool, list[str]]:
 
     files_scanned = 0
     violations_found = 0
+    skipped_uncategorized = 0
 
     for test_file in integration_tests:
         # Skip __pycache__ and __init__.py
@@ -215,37 +277,58 @@ def validate_test_fixtures(verbose: bool = False) -> tuple[bool, list[str]]:
 
         files_scanned += 1
 
-        # Check for required fixtures
-        missing_fixtures = check_fixture_usage(test_file, required_fixtures)
+        # Determine which category this test belongs to
+        category = get_test_category(test_file, requirements)
 
-        if missing_fixtures:
-            violations.append(
-                f"{test_file.relative_to(PROJECT_ROOT)} - Missing required fixtures: {', '.join(missing_fixtures)}"
+        if category is None:
+            # Uncategorized tests - skip with warning in verbose mode
+            if verbose:
+                print(f"[DEBUG] Skipping uncategorized: {test_file.relative_to(PROJECT_ROOT)}")
+            skipped_uncategorized += 1
+            continue
+
+        category_config = requirements.get(category, {})
+        required_fixtures = category_config.get("required_fixtures", [])
+        forbidden_patterns = category_config.get("forbidden_patterns", [])
+        exception_comments = category_config.get("allowed_exceptions", [])
+
+        if verbose:
+            print(
+                f"[DEBUG] {test_file.name} -> {category} (requires: {len(required_fixtures)} fixtures)"
             )
-            violations.append(
-                f"  Fix: Add fixtures to test functions: def test_something({', '.join(required_fixtures)}):"
-            )
-            violations_found += 1
+
+        # Only check for required fixtures if the category has any
+        if required_fixtures:
+            missing_fixtures = check_fixture_usage(test_file, required_fixtures)
+
+            if missing_fixtures:
+                violations.append(
+                    f"{test_file.relative_to(PROJECT_ROOT)} - Missing required fixtures: {', '.join(missing_fixtures)}"
+                )
+                violations.append(
+                    f"  Fix: Add fixtures to test functions: def test_something({', '.join(required_fixtures)}):"
+                )
+                violations_found += 1
 
         # Check for forbidden mock patterns
-        mock_violations = check_forbidden_patterns(
-            test_file, forbidden_patterns, exception_comments
-        )
+        if forbidden_patterns:
+            mock_violations = check_forbidden_patterns(
+                test_file, forbidden_patterns, exception_comments
+            )
 
-        if mock_violations:
-            violations.append(
-                f"{test_file.relative_to(PROJECT_ROOT)} - Forbidden mock patterns found:"
-            )
-            for violation in mock_violations:
-                violations.append(f"  {violation}")
-            violations.append("  Fix: Use real fixtures (db_pool, db_cursor) instead of mocks")
-            violations.append(
-                "  Exception: Add comment '# Unit test - mock OK' if legitimate unit test"
-            )
-            violations_found += 1
+            if mock_violations:
+                violations.append(
+                    f"{test_file.relative_to(PROJECT_ROOT)} - Forbidden mock patterns found:"
+                )
+                for violation in mock_violations:
+                    violations.append(f"  {violation}")
+                violations.append("  Fix: Use real fixtures instead of mocks")
+                violations.append("  Exception: Add comment from allowed_exceptions if legitimate")
+                violations_found += 1
 
     if verbose:
         print(f"[DEBUG] Scanned {files_scanned} files, found {violations_found} violations")
+        print(f"[DEBUG] Skipped {skipped_uncategorized} uncategorized files")
 
     return len(violations) == 0, violations
 

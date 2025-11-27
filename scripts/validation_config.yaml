@@ -134,8 +134,14 @@ property_test_requirements:
 # Reference: TESTING_GAPS_ANALYSIS.md lines 36-42 (Strategy Manager lesson learned)
 
 test_fixture_requirements:
-  integration_tests:
-    description: "Tests requiring real database/API infrastructure"
+  # Database integration tests require real DB fixtures (Pattern 13 - Coverage Quality)
+  # Lesson Learned: Mocking connection pools caused Strategy Manager tests to pass with bugs
+  database_integration_tests:
+    description: "Tests requiring real database infrastructure"
+    path_patterns:
+      - "tests/integration/database/"
+      - "tests/integration/trading/"
+      - "tests/integration/analytics/"
     required_fixtures:
       - "db_pool"          # Real connection pool (not mocked)
       - "db_cursor"        # Real database cursor
@@ -144,11 +150,25 @@ test_fixture_requirements:
     forbidden_patterns:
       - "unittest.mock.patch('psycopg2.pool')"  # Don't mock connection pool
       - "mock_connection = Mock()"              # Don't mock database connections
-      - "monkeypatch.setattr('requests.post')"  # Don't mock API calls (use test fixtures)
+      - "@patch('psycopg2.connect')"            # Don't mock database connect
 
     allowed_exceptions:
-      - "External APIs in unit tests (ESPN, Balldontlie)"
-      - "Network failures for error handling tests"
+      - "Unit test - mock OK"
+      - "Error handling test"
+
+  # API integration tests use VCR cassettes/HTTP mocks - no database fixtures needed
+  # These test HTTP-level integration, not database integration
+  api_integration_tests:
+    description: "Tests for external API clients (ESPN, Balldontlie, etc.)"
+    path_patterns:
+      - "tests/integration/api_connectors/"
+    required_fixtures: []  # No database fixtures needed - uses VCR cassettes
+    forbidden_patterns:
+      - "mock_connection = Mock()"              # Don't mock database in API tests
+    allowed_exceptions:
+      - "VCR cassette"                          # HTTP mocking via VCR is expected
+      - "External API mock"                     # HTTP mocking is expected
+      - "Network failure test"                  # Testing error handling
 
 # ============================================================================
 # Phase-Specific Deliverables
