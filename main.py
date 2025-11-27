@@ -720,11 +720,12 @@ def fetch_markets(
                         }
 
                         # Try to update first (market may already exist)
+                        # Use *_dollars fields for Decimal precision (ADR-002)
                         try:
                             update_market_with_versioning(
                                 ticker=market["ticker"],
-                                yes_price=market["yes_bid"],  # Use bid as current price
-                                no_price=market["no_bid"],
+                                yes_price=market["yes_bid_dollars"],  # Use Decimal bid
+                                no_price=market["no_bid_dollars"],
                                 status=market["status"],
                                 volume=market.get("volume"),
                                 open_interest=market.get("open_interest"),
@@ -739,13 +740,14 @@ def fetch_markets(
                                 external_id=market["ticker"],  # Use ticker as external_id
                                 ticker=market["ticker"],
                                 title=market["title"],
-                                yes_price=market["yes_bid"],
-                                no_price=market["no_bid"],
+                                yes_price=market["yes_bid_dollars"],  # Use Decimal bid
+                                no_price=market["no_bid_dollars"],
                                 market_type="binary",
                                 status=market["status"],
                                 volume=market.get("volume"),
                                 open_interest=market.get("open_interest"),
-                                spread=market["yes_ask"] - market["yes_bid"],  # Calculate spread
+                                spread=market["yes_ask_dollars"]
+                                - market["yes_bid_dollars"],  # Calculate spread
                                 metadata=metadata,
                             )
                             created_count += 1

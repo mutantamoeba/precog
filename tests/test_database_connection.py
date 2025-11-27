@@ -184,6 +184,7 @@ def test_parameterized_query_prevents_injection(db_pool):
     result = fetch_one("SELECT %s as value", (malicious_input,))
 
     # Should return the string as-is (safely escaped)
+    assert result is not None  # Guard for type checker
     assert result["value"] == malicious_input
 
     # Verify markets table still exists

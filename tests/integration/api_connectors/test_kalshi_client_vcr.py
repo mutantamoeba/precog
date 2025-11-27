@@ -113,8 +113,9 @@ class TestKalshiClientWithVCR:
         price_fields = ["yes_bid_dollars", "yes_ask_dollars", "no_bid_dollars", "no_ask_dollars"]
         for field in price_fields:
             if field in market:
-                assert isinstance(market[field], Decimal), (
-                    f"Field '{field}' must be Decimal, got {type(market[field])}"
+                # TypedDict dynamic key access requires type: ignore
+                assert isinstance(market[field], Decimal), (  # type: ignore[literal-required]
+                    f"Field '{field}' must be Decimal, got {type(market[field])}"  # type: ignore[literal-required]
                 )
 
         # Verify specific market from recording
@@ -287,8 +288,9 @@ class TestKalshiClientDecimalPrecisionWithVCR:
                 "no_ask_dollars",
             ]
             for field in price_fields:
-                if field in market and market[field] is not None:
-                    price = market[field]
+                # TypedDict dynamic key access requires type: ignore
+                if field in market and market[field] is not None:  # type: ignore[literal-required]
+                    price = market[field]  # type: ignore[literal-required]
 
                     # Verify Decimal type
                     assert isinstance(price, Decimal), (

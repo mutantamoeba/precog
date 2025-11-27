@@ -160,7 +160,7 @@ class TestConfigLoaderReload:
             This tests the most challenging scenario: reload during reads.
             Proper synchronization should ensure consistency.
         """
-        results = {"reads": 0, "reloads": 0, "errors": []}
+        results: dict[str, int | list[str]] = {"reads": 0, "reloads": 0, "errors": []}
         lock = threading.Lock()
         stop_event = threading.Event()
 
@@ -169,10 +169,10 @@ class TestConfigLoaderReload:
                 try:
                     config_loader.get_config("trading")
                     with lock:
-                        results["reads"] += 1
+                        results["reads"] += 1  # type: ignore[operator]
                 except Exception as e:
                     with lock:
-                        results["errors"].append(f"Read error: {e}")
+                        results["errors"].append(f"Read error: {e}")  # type: ignore[union-attr]
                 time.sleep(0.001)
 
         def periodic_reloader():
@@ -180,10 +180,10 @@ class TestConfigLoaderReload:
                 try:
                     config_loader._cache.clear()
                     with lock:
-                        results["reloads"] += 1
+                        results["reloads"] += 1  # type: ignore[operator]
                 except Exception as e:
                     with lock:
-                        results["errors"].append(f"Reload error: {e}")
+                        results["errors"].append(f"Reload error: {e}")  # type: ignore[union-attr]
                 time.sleep(0.01)
 
         # Start reader and reloader threads
@@ -203,9 +203,9 @@ class TestConfigLoaderReload:
         reloader.join(timeout=1)
 
         # Should complete without errors
-        assert len(results["errors"]) == 0, f"Errors: {results['errors']}"
-        assert results["reads"] > 100, f"Too few reads: {results['reads']}"
-        assert results["reloads"] > 10, f"Too few reloads: {results['reloads']}"
+        assert len(results["errors"]) == 0, f"Errors: {results['errors']}"  # type: ignore[arg-type]
+        assert results["reads"] > 100, f"Too few reads: {results['reads']}"  # type: ignore[operator]
+        assert results["reloads"] > 10, f"Too few reloads: {results['reloads']}"  # type: ignore[operator]
 
 
 class TestConfigLoaderLargeConfigs:
@@ -249,7 +249,7 @@ class TestConfigLoaderLargeConfigs:
             YAML safe_load should handle reasonable depth.
         """
         # Create deeply nested config (50 levels)
-        nested = {"value": "deepest"}
+        nested: dict = {"value": "deepest"}
         for i in range(50):
             nested = {f"level_{50 - i}": nested}
 
