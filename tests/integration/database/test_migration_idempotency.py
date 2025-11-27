@@ -42,7 +42,7 @@ pytestmark = pytest.mark.skipif(not test_connection(), reason="Database connecti
 class TestMigrationIdempotency:
     """Test that migrations can be run multiple times without errors."""
 
-    def test_table_exists_check_is_idempotent(self):
+    def test_table_exists_check_is_idempotent(self, db_pool, db_cursor, clean_test_data):
         """Verify table_exists function works correctly."""
         # Check for a known existing table
         result = fetch_one(
@@ -58,7 +58,7 @@ class TestMigrationIdempotency:
         # markets table should exist
         assert result["exists"] is True
 
-    def test_column_exists_check_is_idempotent(self):
+    def test_column_exists_check_is_idempotent(self, db_pool, db_cursor, clean_test_data):
         """Verify we can check if column exists before adding."""
         result = fetch_one(
             """
@@ -74,7 +74,7 @@ class TestMigrationIdempotency:
         # ticker column should exist in markets table
         assert result["exists"] is True
 
-    def test_create_table_if_not_exists_pattern(self):
+    def test_create_table_if_not_exists_pattern(self, db_pool, db_cursor, clean_test_data):
         """Verify CREATE TABLE IF NOT EXISTS is idempotent."""
         # Try to create a table that already exists
         # This should not raise an error
@@ -103,7 +103,7 @@ class TestMigrationIdempotency:
             execute_query("DROP TABLE IF EXISTS _test_idempotent_table")
             pytest.fail(f"CREATE TABLE IF NOT EXISTS should be idempotent: {e}")
 
-    def test_create_index_if_not_exists_pattern(self):
+    def test_create_index_if_not_exists_pattern(self, db_pool, db_cursor, clean_test_data):
         """Verify CREATE INDEX IF NOT EXISTS is idempotent."""
         # Create test table
         execute_query(
@@ -133,7 +133,7 @@ class TestMigrationIdempotency:
             # Cleanup
             execute_query("DROP TABLE IF EXISTS _test_index_table CASCADE")
 
-    def test_insert_on_conflict_do_nothing_pattern(self):
+    def test_insert_on_conflict_do_nothing_pattern(self, db_pool, db_cursor, clean_test_data):
         """Verify INSERT ON CONFLICT DO NOTHING is idempotent for seeds."""
         # Create test table with unique constraint
         execute_query(
@@ -173,7 +173,7 @@ class TestMigrationIdempotency:
 class TestMigrationUtilsIntegration:
     """Test migration utility functions from migration_utils.py."""
 
-    def test_table_exists_function(self):
+    def test_table_exists_function(self, db_pool, db_cursor, clean_test_data):
         """Test table_exists utility function."""
         from precog.database.migrations.migration_utils import table_exists
 
@@ -182,7 +182,7 @@ class TestMigrationUtilsIntegration:
         # Non-existent table
         assert table_exists("nonexistent_table_xyz") is False
 
-    def test_column_exists_function(self):
+    def test_column_exists_function(self, db_pool, db_cursor, clean_test_data):
         """Test column_exists utility function."""
         from precog.database.migrations.migration_utils import column_exists
 
@@ -191,7 +191,7 @@ class TestMigrationUtilsIntegration:
         # Non-existent column
         assert column_exists("markets", "nonexistent_column_xyz") is False
 
-    def test_index_exists_function(self):
+    def test_index_exists_function(self, db_pool, db_cursor, clean_test_data):
         """Test index_exists utility function."""
         from precog.database.migrations.migration_utils import index_exists
 
@@ -200,7 +200,7 @@ class TestMigrationUtilsIntegration:
         # Non-existent index
         assert index_exists("nonexistent_index_xyz") is False
 
-    def test_safe_create_table(self):
+    def test_safe_create_table(self, db_pool, db_cursor, clean_test_data):
         """Test safe_create_table function is idempotent."""
         from precog.database.migrations.migration_utils import safe_create_table
 
@@ -221,7 +221,7 @@ class TestMigrationUtilsIntegration:
         finally:
             execute_query("DROP TABLE IF EXISTS _test_safe_table CASCADE")
 
-    def test_safe_add_column(self):
+    def test_safe_add_column(self, db_pool, db_cursor, clean_test_data):
         """Test safe_add_column function is idempotent."""
         from precog.database.migrations.migration_utils import (
             safe_add_column,
@@ -247,7 +247,7 @@ class TestMigrationUtilsIntegration:
 class TestSchemaValidation:
     """Validate current schema matches expected state."""
 
-    def test_core_tables_exist(self):
+    def test_core_tables_exist(self, db_pool, db_cursor, clean_test_data):
         """Verify all core tables from migrations exist."""
         core_tables = [
             "markets",
@@ -272,7 +272,7 @@ class TestSchemaValidation:
             )
             assert result["exists"] is True, f"Core table '{table}' does not exist"
 
-    def test_scd_type2_columns_exist(self):
+    def test_scd_type2_columns_exist(self, db_pool, db_cursor, clean_test_data):
         """Verify SCD Type 2 columns exist on versioned tables."""
         versioned_tables = ["markets", "positions", "game_states", "edges"]
         scd_columns = ["row_current_ind", "row_start_ts", "row_end_ts", "row_version"]
@@ -294,7 +294,7 @@ class TestSchemaValidation:
                     f"SCD Type 2 column '{column}' missing from '{table}'"
                 )
 
-    def test_price_columns_are_decimal(self):
+    def test_price_columns_are_decimal(self, db_pool, db_cursor, clean_test_data):
         """Verify price columns use DECIMAL(10,4) precision."""
         price_columns = [
             ("markets", "yes_bid"),
