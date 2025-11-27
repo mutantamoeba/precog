@@ -784,7 +784,7 @@ def create_position(
 
 
 def get_current_positions(
-    status: str | None = None, market_id: int | None = None
+    status: str | None = None, market_id: str | None = None
 ) -> list[dict[str, Any]]:
     """
     Get current positions (row_current_ind = TRUE).
