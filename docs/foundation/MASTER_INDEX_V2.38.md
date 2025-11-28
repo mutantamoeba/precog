@@ -1,9 +1,17 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.37
-**Last Updated:** 2025-11-27
+**Version:** 2.38
+**Last Updated:** 2025-11-28
 **Status:** ✅ Current
+**Changes in v2.38:**
+- **DATA COLLECTION GUIDE V1.1**: Updated DATA_COLLECTION_GUIDE_V1.0.md → DATA_COLLECTION_GUIDE_V1.1.md
+- Added Section 11: Data Source Tiering Strategy (3-tier architecture: Historical FREE, Dev/Testing FREE, Production PAID)
+- Added ESPN rate limiting guidance (10 req/sec historical, 1 req/10 sec live) to prevent throttling/IP blocking
+- Added sportsdataverse-py and nflreadpy integration examples for historical data
+- Added verified API pricing reference (MySportsFeeds $109-$1,599/mo, Sportradar $1,000-5,000+/mo, Balldontlie FREE)
+- Added GameStateProvider abstraction pattern for tier-agnostic data access
+- Cross-references ADR-076 (Sports Data Source Tiering Strategy)
 **Changes in v2.37:**
 - **ESPN DATA MODEL (PHASE 2)**: Updated ARCHITECTURE_DECISIONS V2.21 → V2.22, ADR_INDEX V1.15 → V1.16
 - Added ADR-029: ESPN Data Model with Normalized Schema (venues, game_states, team_rankings, teams)
@@ -23,7 +31,7 @@
 - Added AB_TESTING_FRAMEWORK_SPEC_V1.0.md (~680 lines) to Supplementary Specifications: Documents systematic A/B testing framework with 50/50 traffic allocation, statistical significance testing (chi-square for win rate, Welch's t-test for ROI), minimum 200 trades (100/variant), winner declaration requires BOTH tests significant (p<0.05)
 - Added MODEL_TRAINING_GUIDE_V1.0.md (~520 lines) to Implementation Guides: Documents automated model training pipelines with hyperparameter tuning (grid search vs Bayesian optimization), cross-validation (time-series split prevents data leakage), model serialization (joblib), training metrics (accuracy, log loss, calibration ECE, Brier score), weekly training schedule (Sunday 3 AM)
 - Added EDGE_CALCULATION_GUIDE_V1.0.md (~410 lines) to Implementation Guides: Documents real-time edge calculation (model_predicted_prob - market_price), multi-model ensemble predictions (weighted average), confidence intervals (95% CI = ensemble_pred ± 1.96 * std_error), edge thresholding (filter edge > min_edge), historical edge tracking, hourly calculation schedule
-- Added DATA_COLLECTION_GUIDE_V1.0.md (~470 lines) to Implementation Guides: Documents automated data collection from ESPN (NFL/NBA game results), Kalshi (market prices), Balldontlie (NBA stats); incremental updates (fetch only new data since last collection), schema validation (outlier detection, missing values), daily/hourly collection schedules via event loop
+- Added DATA_COLLECTION_GUIDE_V1.0.md (~470 lines) to Implementation Guides: Documents automated data collection from ESPN (NFL/NBA game results), Kalshi (market prices), Balldontlie (NBA stats); incremental updates (fetch only new data since last collection), schema validation (outlier detection, missing values), daily/hourly collection schedules via event loop. **Updated to V1.1 in v2.38.**
 **Changes in v2.33:**
 - **MANAGER USER GUIDES V1.1 UPDATE**: Updated all three manager user guides from V1.0 to V1.1 with comprehensive Future Enhancements sections
 - Updated STRATEGY_MANAGER_USER_GUIDE V1.0 → V1.1: Added 373-line Future Enhancements section documenting Phase 5a automation (StrategyEvaluator, performance-based activation criteria, systematic A/B testing framework)
@@ -495,7 +503,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **ESPN_DATA_MODEL_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | Phase 2 | 🔴 Critical | **NEW** - ESPN data model guide (~650 lines): Database schema (venues, team_rankings, game_states SCD Type 2), TypedDict definitions (ESPNTeamInfo, ESPNVenueInfo, ESPNGameState, etc.), CRUD operations (create_venue, upsert_game_state, get_game_state_history), JSONB situation schemas (football/basketball/hockey), multi-sport support (NFL, NCAAF, NBA, NCAAB, NHL, WNBA), query patterns, storage estimates (~1.1GB/year); Phase 2 Live Data Integration |
 | **MODEL_TRAINING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 3+ | Phases 3+ | 🔴 Critical | **NEW (SESSION 9)** - Automated model training pipeline guide (~520 lines): hyperparameter tuning (grid search vs Bayesian optimization), cross-validation (time-series split prevents data leakage), model serialization (joblib for sklearn models), training metrics (accuracy, log loss, calibration ECE, Brier score), weekly training schedule (Sunday 3 AM); complements MODEL_MANAGER_USER_GUIDE Future Enhancements |
 | **EDGE_CALCULATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 3+ | Phases 3+ | 🔴 Critical | **NEW (SESSION 9)** - Real-time edge calculation guide (~410 lines): edge formula (model_predicted_prob - market_price), multi-model ensemble predictions (weighted average), confidence intervals (95% CI = ensemble_pred ± 1.96 * std_error), edge thresholding (filter opportunities where edge > min_edge), historical edge tracking, hourly calculation schedule, integration with trading system; complements MODEL_MANAGER_USER_GUIDE Future Enhancements |
-| **DATA_COLLECTION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 3+ | Phases 3+ | 🔴 Critical | **NEW (SESSION 9)** - Automated data collection pipeline guide (~470 lines): multi-source collection (ESPN NFL/NBA game results, Kalshi market prices, Balldontlie NBA stats), incremental updates (fetch only new data since last collection), schema validation (outlier detection, missing value handling), data storage (PostgreSQL games/market_prices tables), daily/hourly collection schedules via event loop, exponential backoff retry logic; complements MODEL_MANAGER_USER_GUIDE Future Enhancements |
+| **DATA_COLLECTION_GUIDE_V1.1.md** | ✅ | v1.1 | `/docs/guides/` | 3+ | Phases 3+ | 🔴 Critical | **UPDATED** - Automated data collection pipeline guide (~650 lines): V1.1 adds Section 11 Data Source Tiering Strategy (3-tier architecture: Tier 1 Historical FREE sportsdataverse-py/nflreadpy, Tier 2 Dev/Testing FREE ESPN hidden API, Tier 3 Production PAID $109-$1,599/mo); ESPN rate limiting (10 req/sec historical, 1 req/10 sec live); GameStateProvider abstraction; verified API pricing reference; strategy latency tolerance matrix. Original: multi-source collection, incremental updates, schema validation, exponential backoff. Cross-refs ADR-076. |
 
 ---
 

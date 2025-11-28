@@ -2,8 +2,11 @@
 
 ---
 **Version:** 1.7
-**Last Updated:** 2025-11-24
+**Last Updated:** 2025-11-28
 **Status:** ✅ Current
+**Changes in v1.7:**
+- **PHASE 4 DELIVERABLES**: Added STRATEGY_DEVELOPMENT_GUIDE_V1.0.md to Phase 4 deliverables (strategy design patterns, latency tolerance, data source selection, lag-aware strategy design)
+- **DISTINCTION CLARIFIED**: STRATEGY_DEVELOPMENT_GUIDE is for design patterns; STRATEGY_MANAGER_USER_GUIDE is for CRUD operations
 **Changes in v1.6:**
 - **MANAGER USER GUIDES V1.1**: Updated all three manager user guides (Position, Strategy, Model) from V1.0 to V1.1
 - Added comprehensive Future Enhancements sections documenting Phase 3+ and Phase 5a automation plans
@@ -1467,6 +1470,7 @@ python scripts/validate_phase_start.py --phase 4
 - Backtesting framework
 - MODEL_VALIDATION_V1.0.md (Elo vs. research, benchmark comparisons)
 - BACKTESTING_PROTOCOL_V1.0.md (walk-forward steps, train/test splits)
+- STRATEGY_DEVELOPMENT_GUIDE_V1.0.md (strategy design patterns, latency tolerance, data source selection, lag-aware strategy design) - **Note:** Distinct from STRATEGY_MANAGER_USER_GUIDE (CRUD operations)
 - Updated test suite
 
 ### Success Criteria
