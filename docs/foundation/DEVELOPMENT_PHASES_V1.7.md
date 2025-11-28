@@ -1,7 +1,7 @@
 # Development Phases & Roadmap
 
 ---
-**Version:** 1.6
+**Version:** 1.7
 **Last Updated:** 2025-11-24
 **Status:** ✅ Current
 **Changes in v1.6:**
