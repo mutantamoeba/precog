@@ -1,9 +1,51 @@
 # Database Schema Summary
 
 ---
-**Version:** 1.11
-**Last Updated:** 2025-11-22
-**Status:** ✅ Current - Lookup Tables for Business Enums (Phase 1.5)
+**Version:** 1.12
+**Last Updated:** 2025-11-27
+**Status:** ✅ Current - Live Sports Data Infrastructure (Phase 2)
+**Changes in v1.12:**
+- **LIVE SPORTS DATA INFRASTRUCTURE**: Added 4 migrations (011-014) for ESPN data model
+- **Migration 011: Create Venues Table**
+  - Added `venues` table for normalized stadium/arena data from ESPN API
+  - Fields: venue_id (PK), espn_venue_id (UNIQUE), venue_name, city, state, capacity, indoor, created_at, updated_at
+  - Indexes: idx_venues_espn_id, idx_venues_name, idx_venues_state (partial), idx_venues_indoor
+  - CHECK constraints: capacity > 0, espn_venue_id format validation
+  - **Use Case:** Normalize venue data across ~9,500 games/year referencing ~150 venues
+- **Migration 012: Create Team Rankings Table**
+  - Added `team_rankings` table for AP Poll, CFP, Coaches Poll rankings with temporal validity
+  - Fields: ranking_id (PK), team_id (FK), ranking_type, rank, season, week, ranking_date, points, first_place_votes, previous_rank
+  - Unique constraint: (team_id, ranking_type, season, week)
+  - Indexes: idx_rankings_type_season_week, idx_rankings_team, idx_rankings_date, idx_rankings_type_rank
+  - CHECK constraints: Valid ranking_type, rank > 0, season 2020-2050, week 0-20
+  - **Use Case:** Historical rankings needed for backtesting and model validation
+- **Migration 013: Enhance Teams Table**
+  - Added `display_name` VARCHAR(100) - Short team name for UI (e.g., "Chiefs" vs "Kansas City Chiefs")
+  - Added `league` VARCHAR(20) - League code to differentiate NFL vs NCAAF, NBA vs NCAAB
+  - Updated sport CHECK constraint for 6 leagues: nfl, ncaaf, nba, ncaab, nhl, wnba (+ mlb, soccer)
+  - Added league CHECK constraint, index idx_teams_league
+  - Backfilled league from sport for existing teams
+  - **Use Case:** Multi-sport support across 6 leagues
+- **Migration 014: Create Game States Table (SCD Type 2)**
+  - Added `game_states` table for live game state tracking with complete history preservation
+  - Core fields: game_state_id (PK), espn_event_id, home/away_team_id (FK), venue_id (FK)
+  - Score fields: home_score, away_score, period, clock_seconds, clock_display, game_status
+  - Metadata: game_date, broadcast, neutral_site, season_type, week_number, league
+  - JSONB fields: situation (sport-specific data), linescores (period-by-period scores)
+  - SCD Type 2: row_start_timestamp, row_end_timestamp, row_current_ind
+  - Partial unique index: `idx_game_states_current_unique` ensures one current row per event
+  - 11 indexes for various query patterns including GIN index on situation JSONB
+  - CHECK constraints: Valid game_status, season_type, league, score/period non-negative
+  - **Storage Estimate:** ~1.8M rows/year across 6 sports (~9,500 games × ~190 updates/game)
+  - **Use Case:** Historical playback ("what was the score at 2:30 PM?"), backtesting, model validation
+- **New CRUD Operations:** `src/precog/database/crud_operations.py` (~660 lines added)
+  - Venue operations: create_venue, get_venue_by_espn_id, get_venue_by_id
+  - Team ranking operations: create_team_ranking, get_team_rankings, get_current_rankings
+  - Game state operations: create_game_state, get_current_game_state, upsert_game_state (SCD Type 2), get_game_state_history, get_live_games, get_games_by_date
+- **Architecture Decision:** ADR-029: ESPN Data Model with Normalized Schema
+- **Requirements:** REQ-DATA-001 (Game State Collection), REQ-DATA-002 (Venue Data), REQ-DATA-003 (Multi-Sport), REQ-DATA-004 (Team Rankings)
+- **Table Count:** 32 tables (was 29) - Added venues, team_rankings, game_states
+- **Next Steps:** ESPN data ingestion service, team seeding for NBA/NHL/NCAAB
 **Changes in v1.11:**
 - **LOOKUP TABLES INFRASTRUCTURE**: Added 2 lookup tables (Migration 023) replacing CHECK constraints with FK constraints
 - **Migration 023: Create Lookup Tables**
@@ -2249,6 +2291,235 @@ REFRESH MATERIALIZED VIEW model_calibration_summary;
 - **Phase 1.5-2**: Implement performance_metrics, evaluation_runs, model_predictions (core tracking)
 - **Phase 6-7**: Implement materialized views, enhance metrics collection, dashboard integration
 - **Phase 9**: Implement ensemble_predictions, ab_test_groups, ab_test_results (advanced features)
+
+### 10. Live Sports Data (Phase 2 - NEW in v1.12)
+
+**Note:** These tables support live game data collection and ESPN API integration for Phase 2 sports prediction model features.
+
+#### venues
+```sql
+CREATE TABLE venues (
+    venue_id SERIAL PRIMARY KEY,
+    espn_venue_id VARCHAR(50) UNIQUE NOT NULL,  -- ESPN's venue identifier
+    venue_name VARCHAR(255) NOT NULL,           -- 'GEHA Field at Arrowhead Stadium'
+    city VARCHAR(100),                          -- 'Kansas City'
+    state VARCHAR(50),                          -- 'Missouri' or 'MO'
+    capacity INTEGER,                           -- 76416
+    indoor BOOLEAN DEFAULT FALSE,               -- TRUE for domes/arenas
+
+    -- Timestamps
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+
+    -- Note: NO row_current_ind - venues are mutable entities (capacity can change)
+);
+
+-- Indexes
+CREATE INDEX idx_venues_espn_id ON venues(espn_venue_id);
+CREATE INDEX idx_venues_name ON venues(venue_name);
+CREATE INDEX idx_venues_state ON venues(state) WHERE state IS NOT NULL;
+CREATE INDEX idx_venues_indoor ON venues(indoor);
+
+-- CHECK Constraints
+ALTER TABLE venues ADD CONSTRAINT venues_capacity_check CHECK (capacity IS NULL OR capacity > 0);
+ALTER TABLE venues ADD CONSTRAINT venues_espn_id_format_check CHECK (espn_venue_id ~ '^[0-9A-Za-z_-]+$');
+```
+
+**Purpose:** Normalized venue/stadium data from ESPN API. Prevents data duplication (~9,500 games/year reference ~150 venues).
+
+**Key Features:**
+- **ESPN ID Linkage:** Reliable external reference for data reconciliation
+- **Indoor Flag:** Weather-dependent analysis (indoor venues unaffected by weather)
+- **Capacity:** Home advantage analysis
+
+#### team_rankings
+```sql
+CREATE TABLE team_rankings (
+    ranking_id SERIAL PRIMARY KEY,
+    team_id INTEGER NOT NULL REFERENCES teams(team_id) ON DELETE CASCADE,
+
+    -- Ranking Identification
+    ranking_type VARCHAR(50) NOT NULL,    -- 'ap_poll', 'cfp', 'coaches_poll', 'espn_power', 'espn_fpi'
+    rank INTEGER NOT NULL,                -- 1-25 for polls, 1-130 for FPI
+    season INTEGER NOT NULL,              -- 2024, 2025, etc.
+    week INTEGER,                         -- 1-18 for regular season, NULL for preseason/final
+
+    -- Temporal Validity
+    ranking_date DATE NOT NULL,           -- Date ranking was released
+
+    -- Ranking Details (optional based on ranking type)
+    points INTEGER,                       -- AP/Coaches poll points
+    first_place_votes INTEGER,            -- Number of #1 votes
+    previous_rank INTEGER,                -- Rank from previous week (NULL if unranked)
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    -- Ensure one ranking per team/type/season/week combination
+    CONSTRAINT team_rankings_unique UNIQUE (team_id, ranking_type, season, week)
+);
+
+-- Indexes
+CREATE INDEX idx_rankings_type_season_week ON team_rankings(ranking_type, season, week);
+CREATE INDEX idx_rankings_team ON team_rankings(team_id);
+CREATE INDEX idx_rankings_date ON team_rankings(ranking_date);
+CREATE INDEX idx_rankings_type_rank ON team_rankings(ranking_type, season, rank);
+
+-- CHECK Constraints
+ALTER TABLE team_rankings ADD CONSTRAINT team_rankings_type_check CHECK (ranking_type IN ('ap_poll', 'cfp', 'coaches_poll', 'espn_power', 'espn_fpi'));
+ALTER TABLE team_rankings ADD CONSTRAINT team_rankings_rank_positive CHECK (rank > 0);
+ALTER TABLE team_rankings ADD CONSTRAINT team_rankings_season_check CHECK (season BETWEEN 2020 AND 2050);
+ALTER TABLE team_rankings ADD CONSTRAINT team_rankings_week_check CHECK (week IS NULL OR week BETWEEN 0 AND 20);
+ALTER TABLE team_rankings ADD CONSTRAINT team_rankings_points_check CHECK (points IS NULL OR points >= 0);
+ALTER TABLE team_rankings ADD CONSTRAINT team_rankings_votes_check CHECK (first_place_votes IS NULL OR first_place_votes >= 0);
+```
+
+**Purpose:** Historical team rankings (AP Poll, CFP, etc.) with temporal validity. Weekly rankings affect market pricing.
+
+**Key Features:**
+- **Temporal Storage:** Rankings by (season, week) not just current
+- **Multiple Ranking Types:** AP Poll, CFP, Coaches Poll, ESPN Power, ESPN FPI
+- **Historical Access:** "What were rankings on Nov 15?" for backtesting
+
+#### teams (Enhancement - Migration 013)
+```sql
+-- Added columns to existing teams table (Migration 010)
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS display_name VARCHAR(100);
+ALTER TABLE teams ADD COLUMN IF NOT EXISTS league VARCHAR(20);
+
+-- Updated CHECK constraints
+ALTER TABLE teams DROP CONSTRAINT IF EXISTS teams_sport_check;
+ALTER TABLE teams ADD CONSTRAINT teams_sport_check CHECK (sport IN ('nfl', 'ncaaf', 'nba', 'ncaab', 'nhl', 'wnba', 'mlb', 'soccer'));
+ALTER TABLE teams ADD CONSTRAINT teams_league_check CHECK (league IS NULL OR league IN ('nfl', 'ncaaf', 'nba', 'ncaab', 'nhl', 'wnba', 'mlb', 'soccer'));
+
+-- Backfill league from sport
+UPDATE teams SET league = sport WHERE league IS NULL;
+
+-- Index
+CREATE INDEX IF NOT EXISTS idx_teams_league ON teams(league) WHERE league IS NOT NULL;
+```
+
+**Purpose:** Enhanced teams table with display_name and league for multi-sport support.
+
+**Key Features:**
+- **display_name:** Short team name for UI ("Chiefs" vs "Kansas City Chiefs")
+- **league:** Differentiates NFL vs NCAAF, NBA vs NCAAB (both have "football" or "basketball" as sport)
+- **Multi-Sport:** Supports 6 leagues (NFL, NCAAF, NBA, NCAAB, NHL, WNBA) + future expansion
+
+#### game_states (SCD Type 2)
+```sql
+CREATE TABLE game_states (
+    -- Primary Key (surrogate)
+    game_state_id SERIAL PRIMARY KEY,
+
+    -- Game Identification
+    espn_event_id VARCHAR(50) NOT NULL,        -- ESPN event identifier (natural key component)
+
+    -- Team References (foreign keys to teams table)
+    home_team_id INTEGER REFERENCES teams(team_id),
+    away_team_id INTEGER REFERENCES teams(team_id),
+
+    -- Venue Reference (foreign key to venues table)
+    venue_id INTEGER REFERENCES venues(venue_id),
+
+    -- Score Data
+    home_score INTEGER NOT NULL DEFAULT 0,
+    away_score INTEGER NOT NULL DEFAULT 0,
+
+    -- Game Progress
+    period INTEGER NOT NULL DEFAULT 0,         -- 0=pregame, 1-4=quarters, 5+=OT
+    clock_seconds DECIMAL(10,2),               -- Seconds remaining in period (NULL if stopped)
+    clock_display VARCHAR(20),                 -- Display format (e.g., "5:32", "Final", "Halftime")
+
+    -- Game Status
+    game_status VARCHAR(50) NOT NULL,          -- 'pre', 'in_progress', 'halftime', 'final', 'delayed', 'postponed', 'canceled'
+
+    -- Game Metadata (static for the game, duplicated for query convenience)
+    game_date TIMESTAMP WITH TIME ZONE,        -- Scheduled game start time
+    broadcast VARCHAR(100),                    -- TV broadcast info (e.g., "ESPN", "CBS")
+    neutral_site BOOLEAN DEFAULT FALSE,        -- TRUE for bowl games, tournaments
+    season_type VARCHAR(20),                   -- 'preseason', 'regular', 'playoff', 'bowl', 'tournament'
+    week_number INTEGER,                       -- Week number (NFL weeks 1-18, college weeks 0-15)
+    league VARCHAR(20),                        -- 'nfl', 'ncaaf', 'nba', etc.
+
+    -- Sport-Specific Situation Data (JSONB for flexibility)
+    -- Football: {"possession": "KC", "down": 2, "distance": 7, "yard_line": 35, ...}
+    -- Basketball: {"possession": "LAL", "home_fouls": 4, "away_fouls": 3, ...}
+    -- Hockey: {"home_powerplay": true, "powerplay_time": "1:45", "home_shots": 28, ...}
+    situation JSONB,
+
+    -- Period-by-Period Scores
+    -- Format: [[home_q1, away_q1], [home_q2, away_q2], ...]
+    linescores JSONB,
+
+    -- Data Source Tracking
+    data_source VARCHAR(50) DEFAULT 'espn',    -- Source API ('espn', 'balldontlie', etc.)
+
+    -- SCD Type 2 Fields (Pattern 2 from DEVELOPMENT_PATTERNS)
+    row_start_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    row_end_timestamp TIMESTAMP WITH TIME ZONE,         -- NULL for current row
+    row_current_ind BOOLEAN DEFAULT TRUE               -- TRUE for current row only
+);
+
+-- Partial Unique Index for Current Row (SCD Type 2 constraint)
+CREATE UNIQUE INDEX idx_game_states_current_unique ON game_states(espn_event_id) WHERE row_current_ind = TRUE;
+
+-- Performance Indexes
+CREATE INDEX idx_game_states_event ON game_states(espn_event_id);
+CREATE INDEX idx_game_states_current ON game_states(espn_event_id) WHERE row_current_ind = TRUE;
+CREATE INDEX idx_game_states_date ON game_states(game_date);
+CREATE INDEX idx_game_states_status ON game_states(game_status);
+CREATE INDEX idx_game_states_league ON game_states(league);
+CREATE INDEX idx_game_states_situation ON game_states USING GIN (situation);
+CREATE INDEX idx_game_states_timestamp ON game_states(row_start_timestamp);
+CREATE INDEX idx_game_states_home_team ON game_states(home_team_id);
+CREATE INDEX idx_game_states_away_team ON game_states(away_team_id);
+CREATE INDEX idx_game_states_venue ON game_states(venue_id);
+
+-- CHECK Constraints
+ALTER TABLE game_states ADD CONSTRAINT game_states_home_score_check CHECK (home_score >= 0);
+ALTER TABLE game_states ADD CONSTRAINT game_states_away_score_check CHECK (away_score >= 0);
+ALTER TABLE game_states ADD CONSTRAINT game_states_period_check CHECK (period >= 0);
+ALTER TABLE game_states ADD CONSTRAINT game_states_clock_seconds_check CHECK (clock_seconds IS NULL OR clock_seconds >= 0);
+ALTER TABLE game_states ADD CONSTRAINT game_states_status_check CHECK (game_status IN ('pre', 'in_progress', 'halftime', 'final', 'delayed', 'postponed', 'canceled'));
+ALTER TABLE game_states ADD CONSTRAINT game_states_season_type_check CHECK (season_type IS NULL OR season_type IN ('preseason', 'regular', 'playoff', 'bowl', 'tournament', 'allstar'));
+ALTER TABLE game_states ADD CONSTRAINT game_states_league_check CHECK (league IS NULL OR league IN ('nfl', 'ncaaf', 'nba', 'ncaab', 'nhl', 'wnba', 'mlb', 'soccer'));
+ALTER TABLE game_states ADD CONSTRAINT game_states_week_check CHECK (week_number IS NULL OR week_number BETWEEN 0 AND 25);
+```
+
+**Purpose:** Live game state tracking with SCD Type 2 versioning for complete history preservation.
+
+**Key Features:**
+- **SCD Type 2:** Each state change creates NEW row, preserving complete history
+- **Partial Unique Index:** `row_current_ind = TRUE` ensures one current row per event
+- **Historical Playback:** "What was the score at 2:30 PM?" for backtesting
+- **JSONB Situation:** Sport-specific data (downs, fouls, shots) without schema explosion
+- **GIN Index:** Efficient JSON queries on situation field
+
+**Storage Estimate:** ~1.8M rows/year across 6 sports (~9,500 games × ~190 updates/game)
+
+**Example Queries:**
+```sql
+-- Get current game state
+SELECT * FROM game_states WHERE espn_event_id = '401547417' AND row_current_ind = TRUE;
+
+-- Get game state history
+SELECT game_state_id, home_score, away_score, period, clock_display, row_start_timestamp
+FROM game_states WHERE espn_event_id = '401547417' ORDER BY row_start_timestamp;
+
+-- Get all in-progress games
+SELECT gs.*, t_home.display_name AS home_team_name, t_away.display_name AS away_team_name
+FROM game_states gs
+JOIN teams t_home ON gs.home_team_id = t_home.team_id
+JOIN teams t_away ON gs.away_team_id = t_away.team_id
+WHERE gs.row_current_ind = TRUE AND gs.game_status = 'in_progress';
+
+-- Query situation data (JSONB) - get NFL games with possession
+SELECT espn_event_id, situation->>'possession' AS possession,
+       (situation->>'down')::INT AS down, (situation->>'distance')::INT AS distance
+FROM game_states
+WHERE row_current_ind = TRUE AND league = 'nfl' AND game_status = 'in_progress';
+```
 
 ## Helper Views (NEW in v1.4)
 

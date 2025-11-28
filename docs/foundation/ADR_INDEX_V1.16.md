@@ -1,9 +1,15 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.15
-**Last Updated:** 2025-11-22
+**Version:** 1.16
+**Last Updated:** 2025-11-27
 **Status:** ✅ Current
+**Changes in v1.16:**
+- **ESPN DATA MODEL ARCHITECTURE (PHASE 2):** Added ADR-029 (ESPN Data Model with Normalized Schema)
+- Added new "Phase 2: ESPN Data Model (Live Data Integration)" section
+- Documents normalized database schema for multi-sport ESPN data (NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
+- Updated ARCHITECTURE_DECISIONS reference from V2.21 to V2.22
+- Total ADRs: 76 → 77 (1 new ADR added for Phase 2 data architecture)
 **Changes in v1.15:**
 - **WORKFLOW ENFORCEMENT INFRASTRUCTURE (PHASE 1.5):** Added ADR-094, ADR-095, ADR-096, ADR-097 (Comprehensive Workflow Enforcement)
 - Added ADR-094: YAML-Driven Validation Architecture (externalized validation rules to validation_config.yaml)
@@ -242,6 +248,12 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
 | ADR-055 | Sentry for Production Error Tracking (Hybrid Architecture) | 2025-11-14 | 🔵 | 2 | ARCHITECTURE_DECISIONS_V2.14 |
+
+### Phase 2: ESPN Data Model (Live Data Integration)
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-029 | ESPN Data Model with Normalized Schema | 2025-11-27 | ✅ | 2 | ARCHITECTURE_DECISIONS_V2.22 |
 
 ### Phase 4.5: Strategic Research Priorities (Open Questions)
 
@@ -521,7 +533,7 @@ Standardize on `approach`/`domain` for both probability_models and strategies ta
 
 **References:**
 - Migration 011 implementation
-- DATABASE_SCHEMA_SUMMARY_V1.11.md
+- DATABASE_SCHEMA_SUMMARY_V1.12.md
 - scripts/validate_schema.py (DEF-P1-008)
 - REQ-DB-006
 
@@ -559,7 +571,7 @@ Phase 1.5 architecture: **3 managers** (Strategy, Model, Position) - NOT 4
 
 **References:**
 - DEVELOPMENT_PHASES_V1.4.md (Phase 1.5 deliverables)
-- DATABASE_SCHEMA_SUMMARY_V1.11.md (edges table)
+- DATABASE_SCHEMA_SUMMARY_V1.12.md (edges table)
 - REQ-TRADING-001, REQ-ML-001
 
 ---
@@ -677,7 +689,7 @@ CREATE TABLE trades (
 - ARCHITECTURE_DECISIONS_V2.20.md (full ADR-089 with 433 lines of details)
 - DEVELOPMENT_PATTERNS_V1.5.md (Pattern 14: Schema Migration → CRUD Workflow)
 - SCHEMA_MIGRATION_WORKFLOW_V1.0.md (comprehensive migration guide)
-- DATABASE_SCHEMA_SUMMARY_V1.11.md (Migration 011 implementation)
+- DATABASE_SCHEMA_SUMMARY_V1.12.md (Migration 011 implementation)
 
 ---
 
@@ -806,7 +818,7 @@ Use EXPLICIT COLUMNS (not JSONB) for trade and position attribution fields.
 **References:**
 - ARCHITECTURE_DECISIONS_V2.20.md (full ADR-091 with performance benchmarks)
 - docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md (JSONB vs explicit columns tradeoff analysis)
-- DATABASE_SCHEMA_SUMMARY_V1.11.md (current schema pre-attribution)
+- DATABASE_SCHEMA_SUMMARY_V1.12.md (current schema pre-attribution)
 - ADR-002 (Decimal Precision - all fields DECIMAL(10,4) not FLOAT)
 
 ---
@@ -963,7 +975,7 @@ ALTER TABLE probability_models
 **References:**
 - ARCHITECTURE_DECISIONS_V2.20.md (full ADR-093 with 378 lines of implementation details)
 - MASTER_REQUIREMENTS_V2.17.md (REQ-DB-015: Strategy Type Lookup Table, REQ-DB-016: Model Class Lookup Table)
-- DATABASE_SCHEMA_SUMMARY_V1.11.md (FK constraint implementation details)
+- DATABASE_SCHEMA_SUMMARY_V1.12.md (FK constraint implementation details)
 - docs/database/LOOKUP_TABLES_DESIGN.md (complete design specification)
 - Migration 023: migration_023_create_lookup_tables.py
 - src/precog/database/lookup_helpers.py (helper functions)

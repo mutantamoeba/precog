@@ -79,6 +79,10 @@ coverage_tiers:
       - "src/precog/analytics/model_manager.py"
       - "src/precog/trading/strategy_manager.py"
       - "src/precog/trading/position_manager.py"
+      # Phase 2: Live Data Integration
+      - "src/precog/api_connectors/espn_client.py"
+      - "src/precog/schedulers/market_updater.py"
+      - "src/precog/data/quality_validator.py"
 
     critical_path:
       - "src/precog/api_connectors/kalshi_client.py"
@@ -130,8 +134,14 @@ property_test_requirements:
 # Reference: TESTING_GAPS_ANALYSIS.md lines 36-42 (Strategy Manager lesson learned)
 
 test_fixture_requirements:
-  integration_tests:
-    description: "Tests requiring real database/API infrastructure"
+  # Database integration tests require real DB fixtures (Pattern 13 - Coverage Quality)
+  # Lesson Learned: Mocking connection pools caused Strategy Manager tests to pass with bugs
+  database_integration_tests:
+    description: "Tests requiring real database infrastructure"
+    path_patterns:
+      - "tests/integration/database/"
+      - "tests/integration/trading/"
+      - "tests/integration/analytics/"
     required_fixtures:
       - "db_pool"          # Real connection pool (not mocked)
       - "db_cursor"        # Real database cursor
@@ -140,11 +150,25 @@ test_fixture_requirements:
     forbidden_patterns:
       - "unittest.mock.patch('psycopg2.pool')"  # Don't mock connection pool
       - "mock_connection = Mock()"              # Don't mock database connections
-      - "monkeypatch.setattr('requests.post')"  # Don't mock API calls (use test fixtures)
+      - "@patch('psycopg2.connect')"            # Don't mock database connect
 
     allowed_exceptions:
-      - "External APIs in unit tests (ESPN, Balldontlie)"
-      - "Network failures for error handling tests"
+      - "Unit test - mock OK"
+      - "Error handling test"
+
+  # API integration tests use VCR cassettes/HTTP mocks - no database fixtures needed
+  # These test HTTP-level integration, not database integration
+  api_integration_tests:
+    description: "Tests for external API clients (ESPN, Balldontlie, etc.)"
+    path_patterns:
+      - "tests/integration/api_connectors/"
+    required_fixtures: []  # No database fixtures needed - uses VCR cassettes
+    forbidden_patterns:
+      - "mock_connection = Mock()"              # Don't mock database in API tests
+    allowed_exceptions:
+      - "VCR cassette"                          # HTTP mocking via VCR is expected
+      - "External API mock"                     # HTTP mocking is expected
+      - "Network failure test"                  # Testing error handling
 
 # ============================================================================
 # Phase-Specific Deliverables
@@ -187,17 +211,68 @@ phase_deliverables:
         test_file_patterns:
           - "tests/unit/database/test_crud_operations.py"
 
+  # Phase 2: Live Data Integration (Codename: "Observer")
+  # Reference: docs/foundation/DEVELOPMENT_PHASES_V1.6.md lines 954-1110
+  # Test Types Reference: TESTING_STRATEGY_V3.1.md Section "Test Categories" (8 test types)
+  "2":
+    name: "Live Data Integration"
+    deliverables:
+      - name: "ESPN API Client"
+        file: "src/precog/api_connectors/espn_client.py"
+        coverage_target: 85
+        # Test types per TESTING_STRATEGY: unit (isolation), property (invariants),
+        # integration (real infra), stress (rate limits), e2e (full workflow)
+        test_types: ["unit", "property", "integration", "stress", "e2e"]
+        test_file_patterns:
+          - "tests/unit/api_connectors/test_espn_client.py"
+          - "tests/property/api_connectors/test_espn_client_properties.py"
+          - "tests/integration/api_connectors/test_espn_client_integration.py"
+          - "tests/stress/api_connectors/test_espn_rate_limits.py"
+          - "tests/e2e/test_live_data_pipeline.py"
+
+      - name: "Task Scheduler (APScheduler)"
+        file: "src/precog/schedulers/market_updater.py"
+        coverage_target: 85
+        # Scheduler requires: unit (job logic), integration (APScheduler behavior),
+        # stress (concurrent jobs), race_condition (job overlap handling)
+        test_types: ["unit", "integration", "stress", "race_condition"]
+        test_file_patterns:
+          - "tests/unit/schedulers/test_market_updater.py"
+          - "tests/integration/schedulers/test_scheduler_integration.py"
+          - "tests/stress/schedulers/test_concurrent_jobs.py"
+
+      - name: "Data Quality Validation"
+        file: "src/precog/data/quality_validator.py"
+        coverage_target: 80
+        # Validation requires: unit (rules), property (invariants like timestamp ordering),
+        # integration (DB interaction), stress (bulk validation)
+        test_types: ["unit", "property", "integration", "stress"]
+        test_file_patterns:
+          - "tests/unit/data/test_quality_validator.py"
+          - "tests/property/data/test_quality_validator_properties.py"
+          - "tests/integration/data/test_quality_validator_integration.py"
+
+      - name: "Historical Backfill Script"
+        file: "scripts/backfill_nflfastr.py"
+        coverage_target: 75
+        # Backfill requires: unit (parsing), integration (DB writes),
+        # stress (large dataset handling)
+        test_types: ["unit", "integration", "stress"]
+        test_file_patterns:
+          - "tests/unit/scripts/test_backfill_nflfastr.py"
+          - "tests/integration/scripts/test_backfill_integration.py"
+
+      - name: "Game States Database Layer"
+        file: "src/precog/database/crud_operations.py"
+        coverage_target: 85
+        # SCD Type 2 operations require comprehensive testing
+        test_types: ["unit", "property", "integration", "race_condition"]
+        test_file_patterns:
+          - "tests/unit/database/test_game_states_crud.py"
+          - "tests/property/database/test_scd_type2_properties.py"
+          - "tests/integration/database/test_game_states_integration.py"
+
   # Future phases: Add sections as implementation progresses
-  # "2.0":
-  #   name: "ESPN Integration & Live Data"
-  #   deliverables:
-  #     - name: "ESPN API Client"
-  #       file: "src/precog/api_connectors/espn_client.py"
-  #       coverage_target: 80
-  #       test_types: ["unit", "integration", "property"]
-  #       test_file_patterns:
-  #         - "tests/unit/api_connectors/test_espn_client.py"
-  #         - "tests/property/test_espn_client_properties.py"
 
 # ============================================================================
 # Pattern 2: SCD Type 2 Query Validation

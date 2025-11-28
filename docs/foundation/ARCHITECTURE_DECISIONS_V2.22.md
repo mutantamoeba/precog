@@ -1,9 +1,16 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.21
-**Last Updated:** November 22, 2025
+**Version:** 2.22
+**Last Updated:** November 27, 2025
 **Status:** ✅ Current
+**Changes in v2.22:**
+- **ESPN DATA MODEL ARCHITECTURE (PHASE 2):** Added ADR-029 (ESPN Data Model with Normalized Schema)
+- Documents normalized 4-table schema for ESPN data: venues, game_states (SCD Type 2), teams (enhanced), team_rankings
+- TypedDict separation: ESPNTeamInfo, ESPNVenueInfo, ESPNGameMetadata, ESPNSituationData, ESPNGameState, ESPNGameFull
+- JSONB situation field for sport-specific data (turnovers/downs for football, fouls for basketball, power plays for hockey)
+- Multi-sport support: NFL, NCAAF, NBA, NCAAB, NHL, WNBA (~1.1 GB/year storage estimate)
+- Storage-efficient design with normalized venues and SCD Type 2 game state history
 **Changes in v2.21:**
 - **WORKFLOW ENFORCEMENT ARCHITECTURE:** Added Decisions #94-97/ADR-094-307 (YAML-Driven Validation, Auto-Discovery, Parallel Execution, Tier-Specific Coverage)
 - **ADR-094: YAML-Driven Validation Architecture** - Documents decision to externalize all validation rules to validation_config.yaml
@@ -5754,7 +5761,7 @@ CREATE TABLE model_config_params (
 - ADR-079: Performance Tracking Architecture (query patterns inform this decision)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (current JSONB schema)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (current JSONB schema)
 - `config/probability_models.yaml` (config examples)
 - `config/trade_strategies.yaml` (strategy config examples)
 
@@ -6211,7 +6218,7 @@ CREATE TABLE brier_score_metrics (...);
 - STRAT-026: Performance Metrics Infrastructure Implementation (Phase 1.5-2, 18-22h)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8: Performance Tracking & Analytics)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8: Performance Tracking & Analytics)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
@@ -6968,7 +6975,7 @@ Cons:
 
 ### References
 
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8: Performance Tracking & Analytics)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8: Performance Tracking & Analytics)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
@@ -7737,7 +7744,7 @@ WebSocket for Position Monitoring (real-time):
 ### References
 
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 7 Task #2: Frontend Development)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.9: Materialized Views)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.9: Materialized Views)
 - Next.js Documentation: https://nextjs.org/docs
 - Recharts Documentation: https://recharts.org/
 - React Query Documentation: https://tanstack.com/query/latest
@@ -8656,10 +8663,10 @@ def run_holdout_validation(
 ### Related Documentation
 
 - `docs/guides/MODEL_EVALUATION_GUIDE_V1.0.md` (implementation guide - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 2 Task #3, Phase 6 Task #1)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.7: Evaluation Runs Table)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.7: Evaluation Runs Table)
 
 ---
 
@@ -9379,10 +9386,10 @@ ON position_risk_by_strategy(league, strategy_name);
 
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (comprehensive analytics implementation guide - to be created)
 - `docs/guides/DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md` (React dashboard + API integration - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 6 Task #3, Phase 7 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.8: Materialized Views Reference)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.8: Materialized Views Reference)
 
 ---
 
@@ -10210,10 +10217,10 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 
 - `docs/guides/AB_TESTING_GUIDE_V1.0.md` (comprehensive A/B testing guide - to be created)
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (includes A/B testing architecture)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 7 Task #3, Phase 8 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (Section 8.9: A/B Tests Table)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.9: A/B Tests Table)
 
 ---
 
@@ -10647,8 +10654,8 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 - ADR-018: Immutable Versions Pattern (JSONB supports atomic config versioning)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (materialized views already defined)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (analytics requirements)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (materialized views already defined)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` (analytics requirements)
 
 ---
 
@@ -10816,7 +10823,7 @@ python scripts/validate_schema.py --ci
 ```
 
 **Future Expansion (Phase 2+):**
-- Parse DATABASE_SCHEMA_SUMMARY_V1.11.md directly (vs. hardcoded schemas)
+- Parse DATABASE_SCHEMA_SUMMARY_V1.12.md directly (vs. hardcoded schemas)
 - Add more tables: markets, positions, trades, etc.
 - Integrate into CI/CD pipeline (blocks PRs if schema drift detected)
 
@@ -10950,7 +10957,7 @@ CREATE TABLE strategies (
 **References:**
 - `src/precog/database/migrations/migration_011_standardize_classification_fields.py` (implementation)
 - `scripts/validate_schema.py` (automated validation)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (updated schemas)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (updated schemas)
 - `docs/utility/PHASE_1_DEFERRED_TASKS_V1.0.md` (DEF-P1-008 completed)
 
 ---
@@ -11127,7 +11134,7 @@ CREATE TABLE strategies (
 
 ### References
 
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` (edges table schema)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (edges table schema)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 1.5 manager components)
 - `src/precog/trading/model_manager.py` (edge calculation logic - Phase 1.5 implementation)
 - `src/precog/trading/strategy_manager.py` (edge query logic - Phase 1.5 implementation)
@@ -11562,7 +11569,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 **Primary Documentation:**
 - TESTING_STRATEGY_V3.1.md (comprehensive 8 test type framework, 1,462 lines)
 - TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md (REQ-TEST-012 through REQ-TEST-019)
-- MASTER_REQUIREMENTS_V2.18.md (added 8 new test requirements)
+- MASTER_REQUIREMENTS_V2.19.md (added 8 new test requirements)
 - REQUIREMENT_INDEX.md (added REQ-TEST-012 through REQ-TEST-019)
 
 **Supporting Documentation:**
@@ -11692,7 +11699,7 @@ Decision to use pytest as the primary testing framework with coverage, async sup
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
 
 Decision to enforce referential integrity using PostgreSQL foreign key constraints on all relationship columns.
 
@@ -11700,7 +11707,7 @@ Decision to enforce referential integrity using PostgreSQL foreign key constrain
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
 
 Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key relationships.
 
@@ -11708,7 +11715,7 @@ Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
 
 Decision to create database views that filter for current rows (row_current_ind = TRUE) to simplify application queries.
 
@@ -11732,7 +11739,7 @@ Decision to implement 2-stage partial exits (50% at +15%, 25% at +25%, 25% with 
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
 
 Decision to use append-only table for position_exits to maintain complete exit event history.
 
@@ -11740,9 +11747,109 @@ Decision to use append-only table for position_exits to maintain complete exit e
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.11.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
 
 Decision to log all exit order attempts (filled and unfilled) to exit_attempts table for debugging "why didn't my exit fill?" issues.
+
+### ADR-029: ESPN Data Model with Normalized Schema
+
+**Status:** ✅ Accepted
+**Phase:** 2
+**Documented in:** ESPN_DATA_MODEL_V1.0.md (planned)
+**Related Requirements:** REQ-DATA-001 through REQ-DATA-005 (planned)
+
+#### Context
+
+Phase 2 (Live Data Integration) requires a robust data model for storing ESPN API data across multiple sports (NFL, NCAAF, NBA, NCAAB, NHL, WNBA). The ESPN API returns deeply nested JSON with mixed static metadata (venue, team info) and dynamic game state (scores, period, clock). We need to:
+
+1. Store live game states with SCD Type 2 versioning for complete history
+2. Track team rankings (AP, CFP, Coaches, ESPN Power) with temporal validity
+3. Normalize venue information to avoid duplication
+4. Support sport-specific situation data (downs, fouls, power plays) without schema explosion
+
+#### Decision
+
+**Implement a normalized 4-table schema with TypedDict separation:**
+
+**1. venues table (NEW)**
+- Stores unique venue information with ESPN venue ID as primary key
+- Columns: espn_venue_id, venue_name, city, state, capacity, indoor, created_at, updated_at
+- Eliminates venue data duplication across game records
+
+**2. game_states table (SCD Type 2)**
+- Stores timestamped game state snapshots with row_current_ind for current state
+- Columns: game_state_id, espn_event_id, home_score, away_score, period, clock_seconds, game_status
+- **JSONB situation field** for sport-specific data (turnovers, downs, fouls, power plays)
+- SCD Type 2 versioning captures every score change for historical analysis
+
+**3. teams table (ENHANCED)**
+- Add ESPN metadata: espn_team_id, display_name, conference, division
+- Support multiple sports (not just NFL)
+- Enable team-level queries across all leagues
+
+**4. team_rankings table (NEW)**
+- Tracks rankings over time: team_id, ranking_type, rank, season, week
+- ranking_type: 'ap_poll', 'cfp', 'coaches_poll', 'espn_power', 'espn_fpi'
+- Temporal validity with season + week (NULL week for final rankings)
+
+**5. TypedDict Structure in espn_client.py**
+```python
+ESPNTeamInfo      # Static team data (ID, name, record)
+ESPNVenueInfo     # Static venue data (ID, name, capacity)
+ESPNGameMetadata  # Static game data (date, teams, venue, broadcast)
+ESPNSituationData # Sport-specific JSONB (downs, fouls, power plays)
+ESPNGameState     # Dynamic state (score, period, clock, situation)
+ESPNGameFull      # Combined metadata + state
+GameState         # Backward-compatible alias
+```
+
+**6. JSONB Situation Data Schema**
+```python
+# Football (NFL/NCAAF)
+{"possession": "KC", "down": 2, "distance": 7, "yard_line": 35,
+ "home_turnovers": 1, "away_turnovers": 0, "last_play": "Rush for 4 yards"}
+
+# Basketball (NBA/NCAAB/WNBA)
+{"possession": "LAL", "home_fouls": 4, "away_fouls": 3,
+ "bonus": "single", "possession_arrow": "BOS"}
+
+# Hockey (NHL)
+{"possession": null, "home_powerplay": true, "away_powerplay": false,
+ "powerplay_time": "1:45", "home_shots": 28, "away_shots": 31}
+```
+
+#### Consequences
+
+**Positive:**
+- **No schema changes** when adding new sports (JSONB absorbs sport-specific fields)
+- **Complete game history** via SCD Type 2 (every score change tracked)
+- **Storage efficient** (~1.1 GB/year for all 6 sports)
+- **Query flexibility** for rankings, venues, team stats across sports
+- **Type safety** via TypedDicts without runtime overhead
+
+**Negative:**
+- JSONB queries slightly slower than native columns (mitigated by GIN indexes)
+- Need to maintain TypedDict definitions as API changes
+- Additional complexity in CRUD operations
+
+**Neutral:**
+- Requires migrations 026-029 (one-time effort)
+- Need to seed teams for NBA, NHL, NCAAB (existing seeding pattern)
+
+#### Alternatives Considered
+
+1. **Single denormalized table**: Rejected - massive duplication, no history
+2. **Separate tables per sport**: Rejected - maintenance nightmare, no cross-sport queries
+3. **Native columns for all fields**: Rejected - would require ~50 columns, sparse for each sport
+4. **Pydantic models**: Deferred to Phase 5+ (TypedDict sufficient for current needs)
+
+#### Implementation
+
+- **Phase A (COMPLETE)**: TypedDict refactoring in espn_client.py
+- **Phase B**: Database migrations 026-029
+- **Phase C**: CRUD operations for new tables
+- **Phase D**: Documentation (ESPN_DATA_MODEL_V1.0.md)
+- **Phase E**: Multi-sport team seeding
 
 ---
 
@@ -12511,7 +12618,7 @@ Result: Only enter when model confident AND market mispriced
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Comprehensive architectural analysis
 - `docs/guides/VERSIONING_GUIDE_V1.0.md` - Strategy/model versioning patterns
-- `MASTER_REQUIREMENTS_V2.18.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
+- `MASTER_REQUIREMENTS_V2.19.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -12930,8 +13037,8 @@ def validate_position_trade_attribution(position_id: str) -> bool:
 ### Related Documentation
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Attribution architecture analysis with tradeoffs
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` - Current schema (pre-attribution)
-- `MASTER_REQUIREMENTS_V2.18.md` - REQ-DB-006 (Decimal precision for all financial fields)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` - Current schema (pre-attribution)
+- `MASTER_REQUIREMENTS_V2.19.md` - REQ-DB-006 (Decimal precision for all financial fields)
 
 **Status:** ✅ Decision approved, implementation in progress (Migrations 019-020 planned)
 
@@ -13306,7 +13413,7 @@ def sync_trades_full():
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Trade source tracking architectural analysis
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` - Kalshi API trade download patterns
-- `MASTER_REQUIREMENTS_V2.18.md` - REQ-API-001 (Kalshi API Integration)
+- `MASTER_REQUIREMENTS_V2.19.md` - REQ-API-001 (Kalshi API Integration)
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -13682,11 +13789,11 @@ def test_invalid_strategy_type_raises_foreign_key_error():
 ### Related Documentation
 
 - `docs/database/LOOKUP_TABLES_DESIGN.md` - Complete design specification with UI examples
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.11.md` - Updated schema documentation
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` - Updated schema documentation
 - `src/precog/database/lookup_helpers.py` - Helper functions implementation
 - `tests/test_lookup_tables.py` - Comprehensive test suite (23 tests, 100% coverage)
 - `src/precog/database/migrations/migration_023_create_lookup_tables.py` - Migration script
-- `MASTER_REQUIREMENTS_V2.18.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
+- `MASTER_REQUIREMENTS_V2.19.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
 
 **Status:** ✅ Decision approved, implementation complete (Migration 023 applied, helper module created, 23 tests passing)
 

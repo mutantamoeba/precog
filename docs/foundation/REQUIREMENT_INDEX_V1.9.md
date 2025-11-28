@@ -1,10 +1,18 @@
 # Requirement Index
 
 ---
-**Version:** 1.8
-**Last Updated:** 2025-11-22
+**Version:** 1.9
+**Last Updated:** 2025-11-27
 **Status:** ✅ Current
 **Purpose:** Master index of all system requirements with systematic IDs
+**Changes in v1.9:**
+- **LIVE DATA MANAGEMENT REQUIREMENTS (PHASE 2)**: Added REQ-DATA-001 through REQ-DATA-005 (5 comprehensive live data requirements)
+- **NEW CATEGORY**: DATA (Live Data Management) - Game states, venues, multi-sport support, rankings, JSONB situation data
+- **SCD TYPE 2 VERSIONING**: REQ-DATA-001 implements SCD Type 2 for game state history (~1.8M records/year)
+- **MULTI-SPORT SUPPORT**: REQ-DATA-003 covers 6 leagues (NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
+- **CROSS-REFERENCES**: ADR-029, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md, Migrations 026-029
+- Updated document references to V2.19
+- Updated requirement statistics (119 → 124 total requirements)
 **Changes in v1.8:**
 - **WORKFLOW ENFORCEMENT INFRASTRUCTURE (PHASE 1.5)**: Added REQ-VALIDATION-007 through REQ-VALIDATION-012 (6 comprehensive workflow enforcement requirements)
 - **PATTERN ENFORCEMENT**: Requirements enforce Pattern 2 (SCD Type 2 queries), Pattern 8 (Config Sync), Pattern 10 (Property-Based Testing), Pattern 13 (Test Coverage Quality)
@@ -97,6 +105,7 @@ This document provides a systematic index of all Precog requirements using categ
 | Security | SEC | Security and compliance requirements | 1-10 |
 | Analytics | ANALYTICS | Analytics infrastructure (materialized views, performance tracking) | 6-9 |
 | Reporting | REPORTING | Dashboards, reports, and data visualization | 7-9 |
+| Data | DATA | Live data management (game states, venues, rankings) | 2 |
 
 ---
 
@@ -153,6 +162,63 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-DB-008 | Database Connection Pooling | 1 | High | 🔵 | MASTER_REQUIREMENTS_V2.9 |
 | REQ-DB-015 | Strategy Type Lookup Table | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.17 |
 | REQ-DB-016 | Model Class Lookup Table | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.17 |
+
+---
+
+## Data Requirements (DATA)
+
+**Overview:** Live game data collection, storage, and versioning for multi-sport prediction markets. Implements SCD Type 2 for complete game history and JSONB for sport-specific situation data.
+
+| ID | Title | Phase | Priority | Status | Document |
+|----|-------|-------|----------|--------|----------|
+| REQ-DATA-001 | Game State Data Collection (SCD Type 2 Versioning) | 2 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.19 |
+| REQ-DATA-002 | Venue Data Management (Normalized Table) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.19 |
+| REQ-DATA-003 | Multi-Sport Support (6 Leagues) | 2 | Critical | 🟡 | MASTER_REQUIREMENTS_V2.19 |
+| REQ-DATA-004 | Team Rankings Storage (Temporal Validity) | 2 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.19 |
+| REQ-DATA-005 | JSONB Situation Data (Sport-Specific Fields) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.19 |
+
+**Details:**
+
+**REQ-DATA-001: Game State Data Collection**
+- SCD Type 2 versioning: row_current_ind, row_start_timestamp, row_end_timestamp
+- New row created on ANY score/period/status change
+- Enables complete game timeline reconstruction for backtesting
+- Performance: 30-60s collection frequency, <100ms insert, <50ms query
+- Storage: ~1.8M records/year across 6 sports (~900 MB)
+- Related: ADR-029 (ESPN Data Model), Migration 029 (game_states table)
+
+**REQ-DATA-002: Venue Data Management**
+- Normalized venues table with ESPN venue ID linkage
+- Fields: venue_id, espn_venue_id, venue_name, city, state, capacity, indoor
+- Benefits: Eliminates duplication, enables venue analytics, weather integration
+- Storage: ~150 unique venues (<1 MB)
+- Related: ADR-029, Migration 026 (venues table)
+
+**REQ-DATA-003: Multi-Sport Support**
+- 6 leagues: NFL (~285 games), NCAAF (~800), NBA (~1,350), NCAAB (~5,500), NHL (~1,350), WNBA (~200)
+- Unified game_states table (no separate tables per sport)
+- Sport-specific data in JSONB situation field
+- Teams table extended with sport/league columns
+- Status: ESPN client endpoints ✅ Complete, database schema 🔵 Pending
+- Total: ~9,485 games/year, ~1.8M game state records/year (~1.1 GB/year)
+- Related: ADR-029, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md
+
+**REQ-DATA-004: Team Rankings Storage**
+- Ranking types: AP Poll, Coaches Poll, CFP, ESPN Power Index, ESPN BPI
+- Temporal validity: season, week (NULL for preseason/final), ranking_date
+- Uniqueness: (team_id, ranking_type, season, week)
+- Use cases: Ranked matchup detection, ranking momentum, model features
+- Storage: ~50,000 records/year (~5 MB)
+- Related: ADR-029, Migration 027 (team_rankings table)
+
+**REQ-DATA-005: JSONB Situation Data**
+- Avoids 30+ nullable columns for sport-specific fields
+- Football: possession, down, distance, yard_line, is_red_zone, turnovers, timeouts
+- Basketball: possession, fouls, timeouts, bonus, possession_arrow
+- Hockey: powerplay status, shots, saves
+- GIN index on situation field for flexible queries
+- TypedDict: ESPNSituationData in espn_client.py for compile-time safety
+- Related: ADR-029, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md
 
 ---
 
@@ -365,12 +431,12 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-VALIDATION-004 | YAML Configuration Validation | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.12 |
 | REQ-VALIDATION-005 | CODE_REVIEW_TEMPLATE Automated Enforcement | 0.7c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
 | REQ-VALIDATION-006 | SECURITY_REVIEW_CHECKLIST Automated Enforcement | 0.7c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
-| REQ-VALIDATION-007 | SCD Type 2 Query Validation (Pattern 2) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.18 |
-| REQ-VALIDATION-008 | Property-Based Test Coverage (Pattern 10) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.18 |
-| REQ-VALIDATION-009 | Real Test Fixtures Enforcement (Pattern 13) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.18 |
-| REQ-VALIDATION-010 | Phase Start Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.18 |
-| REQ-VALIDATION-011 | Phase Completion Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.18 |
-| REQ-VALIDATION-012 | Configuration Synchronization (Pattern 8) | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.18 |
+| REQ-VALIDATION-007 | SCD Type 2 Query Validation (Pattern 2) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.19 |
+| REQ-VALIDATION-008 | Property-Based Test Coverage (Pattern 10) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.19 |
+| REQ-VALIDATION-009 | Real Test Fixtures Enforcement (Pattern 13) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.19 |
+| REQ-VALIDATION-010 | Phase Start Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.19 |
+| REQ-VALIDATION-011 | Phase Completion Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.19 |
+| REQ-VALIDATION-012 | Configuration Synchronization (Pattern 8) | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.19 |
 
 **Summary:** Phase 0.6c implemented automated code quality and documentation validation. Phase 0.7c added CODE_REVIEW_TEMPLATE and SECURITY_REVIEW_CHECKLIST enforcement via pre-commit/pre-push hooks. Phase 1 adds YAML configuration validation with 4-level checks (syntax, Decimal type safety, required keys, cross-file consistency). Phase 1.5 adds comprehensive workflow enforcement infrastructure: SCD Type 2 query validation (Pattern 2), property-based test coverage enforcement (Pattern 10), real test fixtures validation (Pattern 13), phase start/completion protocol automation (3-step and 10-step assessments), and configuration synchronization checks (Pattern 8).
 
@@ -575,14 +641,16 @@ This document provides a systematic index of all Precog requirements using categ
 
 ## Requirement Statistics
 
-**Total Requirements:** 110
+**Total Requirements:** 124
 **Completed (✅):** 26 (Phase 0-0.6c)
-**Planned (🔵):** 84 (Phase 0.7, 1-10 including REQ-ML-001, REQ-ANALYTICS-001-004, REQ-REPORTING-001)
+**In Progress (🟡):** 1 (REQ-DATA-003 - ESPN client complete, database pending)
+**Planned (🔵):** 97 (Phase 0.7, 1-10 including REQ-ML-001, REQ-ANALYTICS-001-004, REQ-REPORTING-001, REQ-DATA-001-005)
 
 **By Category:**
 - System (SYS): 6 requirements
 - **API (API): 7 requirements** (added REQ-API-007 in V1.3)
-- Database (DB): 7 requirements
+- Database (DB): 10 requirements
+- **Data (DATA): 5 requirements** (NEW in V1.9 - live game data, SCD Type 2 versioning)
 - Monitoring (MON): 5 requirements
 - Exit (EXIT): 5 requirements
 - Execution (EXEC): 5 requirements
@@ -593,11 +661,11 @@ This document provides a systematic index of all Precog requirements using categ
 - Methods (METH): 15 requirements
 - Alerts (ALERT): 15 requirements
 - Machine Learning (ML): 4 requirements
-- **Testing (TEST): 8 requirements** (added 4 in V1.2)
+- **Testing (TEST): 19 requirements** (added 8 in V1.2, added 6 in V1.8)
 - Performance (PERF): 4 requirements
-- **Validation (VALIDATION): 4 requirements** (added REQ-VALIDATION-004 in V1.3)
-- **CI/CD (CICD): 3 requirements** (added in V1.2)
-- **Observability (OBSERV): 1 requirement** (NEW in V1.3)
+- **Validation (VALIDATION): 12 requirements** (added REQ-VALIDATION-004 in V1.3, 6 in V1.8)
+- **CI/CD (CICD): 5 requirements** (added 2 in V1.7)
+- **Observability (OBSERV): 2 requirements** (added REQ-OBSERV-002 in V1.6)
 - **Security (SEC): 1 requirement** (NEW in V1.3)
 - **Analytics (ANALYTICS): 4 requirements** (NEW in V1.5 - materialized views, performance tracking)
 - **Reporting (REPORTING): 1 requirement** (NEW in V1.5 - dashboard architecture)
@@ -609,7 +677,7 @@ This document provides a systematic index of all Precog requirements using categ
 - **Phase 0.7: 7 requirements (0% complete)** - CI/CD and advanced testing
 - **Phase 1: 29 requirements (0% complete)** - API best practices, alerts, CLI
 - **Phase 1.5-2: 1 requirement (0% complete)** - performance tracking architecture (REQ-ANALYTICS-003)
-- Phase 2: 3 requirements (0% complete)
+- **Phase 2: 8 requirements (0% complete)** - ESPN data, venues, rankings (REQ-DATA-001-005)
 - Phase 4: 5 requirements (0% complete)
 - Phase 4-5: 15 requirements (0% complete) - methods system
 - Phase 5: 14 requirements (100% complete - documented)
