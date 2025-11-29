@@ -70,12 +70,18 @@ def load_baseline() -> dict:
 
 
 def run_pytest_with_warnings() -> tuple[str, int]:
-    """Run pytest with warning capture enabled."""
+    """Run pytest with warning capture enabled.
+
+    NOTE: We do NOT use `-W default` here. This respects pyproject.toml's
+    filterwarnings configuration, so upstream library deprecation warnings
+    (like pytest-asyncio's Python 3.16 deprecation) are properly filtered
+    rather than counted against our baseline.
+    """
     print("[INFO] Running pytest with warning detection...")
 
     try:
         result = subprocess.run(
-            ["python", "-m", "pytest", "tests/", "-v", "-W", "default", "--tb=no"],
+            ["python", "-m", "pytest", "tests/", "-v", "--tb=no"],
             capture_output=True,
             text=True,
             timeout=600,  # 10 minute timeout (property tests take ~2.5 min)
@@ -402,7 +408,7 @@ def check_baseline(
     print("  1. Fix new warnings before merging")
     print("  2. Update baseline with approval (document in WARNING_DEBT_TRACKER.md)")
     print("\n[COMMAND] To see warnings:")
-    print("  python -m pytest tests/ -v -W default --tb=no")
+    print("  python -m pytest tests/ -v --tb=no")
     print("  python scripts/validate_docs.py")
     print("  python -m ruff check .")
     print("  python -m mypy .")
