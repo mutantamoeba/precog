@@ -58,6 +58,11 @@ from precog.schedulers.kalshi_websocket import (
     KalshiWebSocketHandler,
     create_websocket_handler,
 )
+from precog.schedulers.market_data_manager import (
+    DataSourceStatus,
+    MarketDataManager,
+    create_market_data_manager,
+)
 from precog.schedulers.market_updater import (
     MarketUpdater,
     create_market_updater,
@@ -66,10 +71,13 @@ from precog.schedulers.market_updater import (
 
 __all__ = [
     "ConnectionState",
+    "DataSourceStatus",
     "KalshiMarketPoller",
     "KalshiWebSocketHandler",
+    "MarketDataManager",
     "MarketUpdater",
     "create_kalshi_poller",
+    "create_market_data_manager",
     "create_market_updater",
     "create_websocket_handler",
     "run_single_kalshi_poll",
