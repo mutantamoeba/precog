@@ -228,10 +228,40 @@ jobs:
       - name: Run quick validation script
         run: bash scripts/validate_quick.sh
 
+  test-type-coverage:
+    name: Test Type Coverage Audit (TESTING_STRATEGY V3.2)
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    # Run if code or tests changed
+    if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          allow-prereleases: true
+
+      - name: Run test type coverage audit
+        run: python scripts/audit_test_type_coverage.py --summary
+        # Currently informational only - will add --strict when gaps are closed
+        continue-on-error: true
+
+      - name: Generate JSON report for artifacts
+        run: python scripts/audit_test_type_coverage.py --json > test_type_coverage.json
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-type-coverage-report
+          path: test_type_coverage.json
+
   ci-summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [pre-commit-checks, security-scan, documentation-validation, test, validate-quick]
+    needs: [pre-commit-checks, security-scan, documentation-validation, test, validate-quick, test-type-coverage]
     if: always()
     steps:
       - name: Check all jobs status
@@ -244,9 +274,11 @@ jobs:
           echo "Documentation Validation: ${{ needs.documentation-validation.result }}"
           echo "Tests:                    ${{ needs.test.result }}"
           echo "Quick Validation:         ${{ needs.validate-quick.result }}"
+          echo "Test Type Coverage:       ${{ needs.test-type-coverage.result }}"
           echo "=========================================="
 
           # Check if any job that actually ran failed (skipped jobs are OK)
+          # Note: test-type-coverage uses continue-on-error, so it won't fail the pipeline
           if [[ "${{ needs.pre-commit-checks.result }}" == "failure" ]] || \
              [[ "${{ needs.security-scan.result }}" == "failure" ]] || \
              [[ "${{ needs.documentation-validation.result }}" == "failure" ]] || \
@@ -264,6 +296,7 @@ jobs:
           [[ "${{ needs.security-scan.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.test.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.validate-quick.result }}" == "skipped" ]] && ((SKIPPED+=1))
+          [[ "${{ needs.test-type-coverage.result }}" == "skipped" ]] && ((SKIPPED+=1))
 
           echo ""
           if [[ $SKIPPED -gt 0 ]]; then

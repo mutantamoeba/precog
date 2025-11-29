@@ -97,7 +97,7 @@
 - **Implementation:** Test organization structure (8 test directories), phase-based roadmap (Phase 1-5), fixture requirements (db_pool, clean_test_data)
 - **Benefits:** Prevents false confidence, comprehensive coverage (8 types catch different bug categories), clear guidance (mock usage decision tree)
 - **Costs:** Increased test execution time (integration/stress tests slower), steeper learning curve (Hypothesis, threading), more test infrastructure
-- References TESTING_STRATEGY_V3.1.md, REQ-TEST-012 through REQ-TEST-019, ADR-074 (Property-Based Testing), ADR-075 (Multi-Source Warning Governance)
+- References TESTING_STRATEGY_V3.2.md, REQ-TEST-012 through REQ-TEST-019, ADR-074 (Property-Based Testing), ADR-075 (Multi-Source Warning Governance)
 **Changes in v2.16:**
 - **SCHEMA STANDARDIZATION - CLASSIFICATION FIELD NAMING:** Added Decision #86/ADR-086 (Schema Classification Field Naming - Phase 1.5)
 - Documents the approach/domain naming decision that resolved three-way schema mismatch blocking Model Manager implementation
@@ -3670,7 +3670,7 @@ test_results/
 - pytest-html generates HTML reports
 - .gitignore excludes timestamped runs (keeps README.md)
 
-**Reference:** `foundation/TESTING_STRATEGY_V3.1.md`
+**Reference:** `foundation/TESTING_STRATEGY_V3.2.md`
 
 ---
 
@@ -3848,7 +3848,7 @@ safety check --full-report
 - CI workflow fails on high/critical findings
 - Weekly dependency scans via scheduled workflow
 
-**Reference:** `foundation/TESTING_STRATEGY_V3.1.md`, REQ-TEST-008
+**Reference:** `foundation/TESTING_STRATEGY_V3.2.md`, REQ-TEST-008
 
 ---
 
@@ -3890,7 +3890,7 @@ Target: >80% mutation score on critical modules
 - Run weekly on critical modules
 - Track mutation score trends
 
-**Reference:** `foundation/TESTING_STRATEGY_V3.1.md`, REQ-TEST-009
+**Reference:** `foundation/TESTING_STRATEGY_V3.2.md`, REQ-TEST-009
 
 ---
 
@@ -3935,7 +3935,7 @@ def test_spread_always_positive(price):
 - Focus on financial calculations (decimal precision critical)
 - Integrate into test suite (pytest-hypothesis plugin)
 
-**Reference:** `foundation/TESTING_STRATEGY_V3.1.md`, REQ-TEST-010
+**Reference:** `foundation/TESTING_STRATEGY_V3.2.md`, REQ-TEST-010
 
 ---
 
@@ -11861,7 +11861,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 **Mitigation:**
 - Run unit tests fast (~5s) during development via `./scripts/test_fast.sh`
 - Run full suite (~30s) before commits via pre-push hooks
-- Provide comprehensive examples in TESTING_STRATEGY_V3.1.md
+- Provide comprehensive examples in TESTING_STRATEGY_V3.2.md
 
 ### When to Use Each Test Type
 
@@ -11927,7 +11927,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 ### Documentation Updates
 
 **Primary Documentation:**
-- TESTING_STRATEGY_V3.1.md (comprehensive 8 test type framework, 1,462 lines)
+- TESTING_STRATEGY_V3.2.md (comprehensive 8 test type framework, 1,462 lines)
 - TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md (REQ-TEST-012 through REQ-TEST-019)
 - MASTER_REQUIREMENTS_V2.19.md (added 8 new test requirements)
 - REQUIREMENT_INDEX.md (added REQ-TEST-012 through REQ-TEST-019)
@@ -12002,7 +12002,7 @@ tests/
 ### References
 
 **Documentation:**
-- `docs/foundation/TESTING_STRATEGY_V3.1.md` (comprehensive 8 test type framework)
+- `docs/foundation/TESTING_STRATEGY_V3.2.md` (comprehensive 8 test type framework)
 - `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md` (REQ-TEST-012 through REQ-TEST-019)
 - `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md` (TDD section with Phase 1.5 lessons)
 - `docs/guides/DEVELOPMENT_PATTERNS_V1.12.md` (Pattern 13: Test Coverage Quality)
@@ -12051,7 +12051,7 @@ Decision to use Python's standard logging library with structlog for structured 
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** pyproject.toml, TESTING_STRATEGY_V3.1.md
+**Documented in:** pyproject.toml, TESTING_STRATEGY_V3.2.md
 
 Decision to use pytest as the primary testing framework with coverage, async support, and HTML reporting.
 

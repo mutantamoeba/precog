@@ -1,10 +1,17 @@
-# Testing Strategy V3.1
+# Testing Strategy V3.2
 
 **Document Type:** Foundation
 **Status:** ✅ Active
-**Version:** 3.1
+**Version:** 3.2
 **Created:** 2025-10-23
-**Last Updated:** 2025-11-17
+**Last Updated:** 2025-11-28
+**Changes in V3.2:**
+- **All 8 Test Types Now MANDATORY** - All modules must have all 8 test types regardless of phase
+- **Removed Phase-Based Test Type Deferral** - All test types required from Phase 1 onwards
+- **Updated Tier Requirements Matrix** - Critical Path, Business Logic, and Infrastructure ALL require 8 test types
+- **Added test type coverage audit script** - `scripts/audit_test_type_coverage.py` enforces requirements
+- **Pre-push hook integration** - Test type coverage check added to pre-push validation (step 8)
+- **Why This Change:** Phase 2 MarketDataManager revealed testing gaps. Performance/chaos tests deferred to Phase 5+ left critical infrastructure under-tested.
 **Changes in V3.1:**
 - **Enhanced Coverage Tier Classification** - Updated tier framework based on TDD/security/accuracy emphasis
 - **Position Manager**: Business Logic (85%) → Critical Path (90%)
@@ -1247,14 +1254,32 @@ This matrix defines which test types are required for each module tier:
 | Module Tier | Unit | Property | Integration | E2E | Stress | Race | Performance | Chaos |
 |-------------|------|----------|-------------|-----|--------|------|-------------|-------|
 | **Critical Path** (≥90% coverage) | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
-| **Business Logic** (≥85% coverage) | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ⚠️ Optional | ⚠️ Optional | ❌ N/A | ❌ N/A |
-| **Infrastructure** (≥80% coverage) | ✅ Required | ❌ N/A | ✅ Required | ❌ N/A | ✅ Required | ⚠️ Optional | ❌ N/A | ❌ N/A |
-| **Integration Points** (≥75% coverage) | ✅ Required | ❌ N/A | ✅ Required | ✅ Required | ⚠️ Optional | ❌ N/A | ❌ N/A | ❌ N/A |
+| **Business Logic** (≥85% coverage) | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
+| **Infrastructure** (≥80% coverage) | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
+
+**⚠️ V3.2 UPDATE: All 8 Test Types Now Required for ALL Tiers**
+
+**Why This Change (Lessons Learned from Phase 2):**
+- **Performance tests deferred to Phase 5+** → Critical path latency issues discovered in production, not testing
+- **Chaos tests deferred to Phase 5+** → Failure recovery bugs in MarketDataManager found during integration, not testing
+- **Race tests optional for Infrastructure** → Connection pool race conditions discovered in stress testing, not earlier
+- **Prevention:** All 8 test types from Phase 1 catches issues before they become expensive to fix
+
+**Enforcement:**
+```bash
+# Run test type coverage audit
+python scripts/audit_test_type_coverage.py --strict
+
+# Pre-push hook automatically runs this check (step 8)
+```
+
+**Legacy Reference (V3.1 - Now Deprecated):**
+- Business Logic previously: 6 types (stress/race optional, performance/chaos N/A)
+- Infrastructure previously: 4 types (property/e2e/performance/chaos N/A)
+- Integration Points previously: 3 types
 
 **Legend:**
-- ✅ **Required:** Must have tests of this type
-- ⚠️ **Optional:** Recommended but not required
-- ❌ **N/A:** Not applicable to this tier
+- ✅ **Required:** Must have tests of this type - enforced by audit script
 
 ---
 
@@ -1323,6 +1348,8 @@ This matrix defines which test types are required for each module tier:
 
 ## Phase-Based Test Type Roadmap
 
+**⚠️ V3.2 UPDATE: ALL 8 Test Types Required from Phase 1 Onwards**
+
 This section defines when each test type becomes required across development phases.
 
 **Reference:** REQ-TEST-012 (Test Type Coverage Requirements)
@@ -1330,13 +1357,24 @@ This section defines when each test type becomes required across development pha
 | Test Type | Phase 1 | Phase 1.5 | Phase 2 | Phase 3 | Phase 4 | Phase 5 |
 |-----------|---------|-----------|---------|---------|---------|---------|
 | **Unit** | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
-| **Property** | ⚠️ Optional | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
+| **Property** | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
 | **Integration** | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
-| **End-to-End** | ❌ N/A | ❌ N/A | ⚠️ Optional | ✅ Required | ✅ Required | ✅ Required |
-| **Stress** | ⚠️ Optional | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
-| **Race** | ❌ N/A | ⚠️ Optional | ⚠️ Optional | ✅ Required | ✅ Required | ✅ Required |
-| **Performance** | ❌ N/A | ❌ N/A | ❌ N/A | ❌ N/A | ⚠️ Optional | ✅ Required |
-| **Chaos** | ❌ N/A | ❌ N/A | ❌ N/A | ❌ N/A | ❌ N/A | ✅ Required |
+| **End-to-End** | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
+| **Stress** | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
+| **Race** | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
+| **Performance** | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
+| **Chaos** | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required | ✅ Required |
+
+**Why All 8 Types from Phase 1?**
+- **Cost of fixing bugs increases exponentially** with each phase (10x Phase 2, 100x Phase 5)
+- **Performance/chaos issues are architectural** - harder to fix later
+- **Race conditions in infrastructure** propagate to all dependent code
+- **Phase 2 lesson:** MarketDataManager performance and chaos issues were found late because tests were "optional"
+
+**Enforcement:**
+- Pre-push hook runs `audit_test_type_coverage.py --strict`
+- CI/CD blocks PRs missing required test types
+- Phase completion protocol Step 5 validates test type coverage
 
 ---
 
