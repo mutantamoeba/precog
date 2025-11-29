@@ -93,15 +93,16 @@ def setup_property_test_data(db_pool, clean_test_data):
     """
     with get_cursor(commit=True) as cur:
         # Create test teams with high IDs to avoid conflicts
+        # Note: Using columns from migration 010 schema (not migration 028 enhancements)
         cur.execute(
             """
             INSERT INTO teams (
-                team_id, team_code, team_name, display_name,
-                espn_team_id, conference, division, sport, league, current_elo
+                team_id, team_code, team_name,
+                espn_team_id, conference, division, sport, current_elo_rating
             )
             VALUES
-                (99001, 'PT1', 'Property Team 1', 'Test Team 1', '99001', 'Test', 'East', 'football', 'nfl', 1500),
-                (99002, 'PT2', 'Property Team 2', 'Test Team 2', '99002', 'Test', 'West', 'football', 'nfl', 1500)
+                (99001, 'PT1', 'Property Team 1', '99001', 'Test', 'East', 'nfl', 1500),
+                (99002, 'PT2', 'Property Team 2', '99002', 'Test', 'West', 'nfl', 1500)
             ON CONFLICT (team_id) DO NOTHING
         """
         )
@@ -440,14 +441,18 @@ def test_team_ranking_upsert_preserves_uniqueness(
     teams = setup_property_test_data
     team_id = teams["home_team_id"]
 
-    # Create ranking for week 10
+    # Use a valid week (0-20 per team_rankings_week_check constraint)
+    # and use a valid ranking_type from team_rankings_type_check constraint
+    test_week = 20  # Max valid week (0-20 range)
+
+    # Create ranking for test week
     create_team_ranking(
         team_id=team_id,
-        ranking_type="prop_test_poll",
+        ranking_type="ap_poll",  # Valid type per team_rankings_type_check constraint
         rank=rank,
-        season=2024,
+        season=2099,  # Far-future season for test isolation
         ranking_date=datetime(2024, 11, 10),
-        week=10,
+        week=test_week,
         points=points,
         first_place_votes=first_place_votes,
     )
@@ -455,11 +460,11 @@ def test_team_ranking_upsert_preserves_uniqueness(
     # Upsert SAME week (should update, not create duplicate)
     create_team_ranking(
         team_id=team_id,
-        ranking_type="prop_test_poll",
+        ranking_type="ap_poll",
         rank=rank + 1,  # Different rank
-        season=2024,
+        season=2099,
         ranking_date=datetime(2024, 11, 10),
-        week=10,  # Same week!
+        week=test_week,  # Same week!
         points=points + 10,
     )
 
@@ -469,17 +474,17 @@ def test_team_ranking_upsert_preserves_uniqueness(
             """
             SELECT COUNT(*) FROM team_rankings
             WHERE team_id = %s
-              AND ranking_type = 'prop_test_poll'
-              AND season = 2024
-              AND week = 10
+              AND ranking_type = 'ap_poll'
+              AND season = 2099
+              AND week = %s
         """,
-            (team_id,),
+            (team_id, test_week),
         )
         result = cur.fetchone()
         count = result["count"]
 
     assert count == 1, f"Expected 1 ranking record for same week, found {count}"
 
-    # Clean up
+    # Clean up - use specific season/week to avoid deleting other test data
     with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM team_rankings WHERE ranking_type = 'prop_test_poll'")
+        cur.execute("DELETE FROM team_rankings WHERE season = 2099 AND week = %s", (test_week,))

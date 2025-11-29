@@ -45,17 +45,18 @@ from precog.database.crud_operations import (
 def setup_e2e_teams(db_pool, clean_test_data):
     """Create realistic team data for E2E tests."""
     with get_cursor(commit=True) as cur:
+        # Note: Using columns from migration 010 schema (not migration 028 enhancements)
         cur.execute(
             """
             INSERT INTO teams (
-                team_id, team_code, team_name, display_name,
-                espn_team_id, conference, division, sport, league, current_elo
+                team_id, team_code, team_name,
+                espn_team_id, conference, division, sport, current_elo_rating
             )
             VALUES
-                (88001, 'KC', 'Chiefs', 'Kansas City Chiefs', '12', 'AFC', 'West', 'football', 'nfl', 1650),
-                (88002, 'LV', 'Raiders', 'Las Vegas Raiders', '13', 'AFC', 'West', 'football', 'nfl', 1480),
-                (88003, 'DET', 'Lions', 'Detroit Lions', '8', 'NFC', 'North', 'football', 'nfl', 1580),
-                (88004, 'CHI', 'Bears', 'Chicago Bears', '3', 'NFC', 'North', 'football', 'nfl', 1420)
+                (88001, 'KC', 'Chiefs', '12', 'AFC', 'West', 'nfl', 1650),
+                (88002, 'LV', 'Raiders', '13', 'AFC', 'West', 'nfl', 1480),
+                (88003, 'DET', 'Lions', '8', 'NFC', 'North', 'nfl', 1580),
+                (88004, 'CHI', 'Bears', '3', 'NFC', 'North', 'nfl', 1420)
             ON CONFLICT (team_id) DO NOTHING
         """
         )
@@ -264,7 +265,7 @@ class TestESPNDataIngestionWorkflow:
             if rank is not None:
                 create_team_ranking(
                     team_id=team_id,
-                    ranking_type="e2e_ap_poll",
+                    ranking_type="ap_poll",
                     rank=rank,
                     season=2024,
                     ranking_date=datetime(2024, 11, 17),
@@ -282,7 +283,7 @@ class TestESPNDataIngestionWorkflow:
         for team_id, rank, points, votes in week_13_rankings:
             create_team_ranking(
                 team_id=team_id,
-                ranking_type="e2e_ap_poll",
+                ranking_type="ap_poll",
                 rank=rank,
                 season=2024,
                 ranking_date=datetime(2024, 11, 24),
@@ -295,7 +296,7 @@ class TestESPNDataIngestionWorkflow:
         # Step 3: Query historical rankings for Detroit
         det_rankings = get_team_rankings(
             team_id=teams["det"]["team_id"],
-            ranking_type="e2e_ap_poll",
+            ranking_type="ap_poll",
             season=2024,
         )
         assert len(det_rankings) == 2
@@ -308,7 +309,7 @@ class TestESPNDataIngestionWorkflow:
         assert week_13_rank["rank"] < week_12_rank["rank"]  # Improved
 
         # Step 4: Query current rankings (latest week)
-        current = get_current_rankings("e2e_ap_poll", 2024)
+        current = get_current_rankings("ap_poll", 2024)
         assert len(current) >= 2
 
         # Should return week 13 rankings

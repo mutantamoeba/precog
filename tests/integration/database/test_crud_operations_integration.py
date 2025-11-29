@@ -49,16 +49,17 @@ def setup_test_teams(db_pool, clean_test_data):
     """
     with get_cursor(commit=True) as cur:
         # Create test teams
+        # Note: Using columns from migration 010 schema (not migration 028 enhancements)
         cur.execute(
             """
             INSERT INTO teams (
-                team_id, team_code, team_name, display_name,
-                espn_team_id, conference, division, sport, league, current_elo
+                team_id, team_code, team_name,
+                espn_team_id, conference, division, sport, current_elo_rating
             )
             VALUES
-                (9001, 'KC', 'Chiefs', 'Kansas City Chiefs', '12', 'AFC', 'West', 'football', 'nfl', 1650),
-                (9002, 'SF', '49ers', 'San Francisco 49ers', '25', 'NFC', 'West', 'football', 'nfl', 1620),
-                (9003, 'OSU', 'Buckeyes', 'Ohio State Buckeyes', '194', 'Big Ten', 'East', 'football', 'ncaaf', 1600)
+                (9001, 'KC', 'Chiefs', '12', 'AFC', 'West', 'nfl', 1650),
+                (9002, 'SF', '49ers', '25', 'NFC', 'West', 'nfl', 1620),
+                (9003, 'OSU', 'Buckeyes', '194', 'Big Ten', 'East', 'nfl', 1600)
             ON CONFLICT (team_id) DO NOTHING
         """
         )
@@ -101,7 +102,7 @@ def setup_test_venue(db_pool, clean_test_data):
 class TestVenueIntegration:
     """Integration tests for venue CRUD operations."""
 
-    def test_create_venue_inserts_record(self, db_pool, clean_test_data):
+    def test_create_venue_inserts_record(self, db_pool, db_cursor, clean_test_data):
         """Test create_venue inserts record into database."""
         venue_id = create_venue(
             espn_venue_id="INT-TEST-3622",
@@ -126,7 +127,7 @@ class TestVenueIntegration:
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM venues WHERE espn_venue_id = 'INT-TEST-3622'")
 
-    def test_create_venue_upsert_updates_existing(self, db_pool, clean_test_data):
+    def test_create_venue_upsert_updates_existing(self, db_pool, db_cursor, clean_test_data):
         """Test create_venue updates existing record on conflict."""
         # Create initial
         venue_id1 = create_venue(
@@ -154,7 +155,7 @@ class TestVenueIntegration:
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM venues WHERE espn_venue_id = 'INT-UPSERT-001'")
 
-    def test_get_venue_by_id_returns_correct_venue(self, db_pool, clean_test_data):
+    def test_get_venue_by_id_returns_correct_venue(self, db_pool, db_cursor, clean_test_data):
         """Test get_venue_by_id retrieves correct record."""
         venue_id = create_venue(espn_venue_id="INT-BYID-001", venue_name="ById Test Stadium")
 
@@ -168,7 +169,7 @@ class TestVenueIntegration:
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM venues WHERE espn_venue_id = 'INT-BYID-001'")
 
-    def test_venue_with_nullable_fields(self, db_pool, clean_test_data):
+    def test_venue_with_nullable_fields(self, db_pool, db_cursor, clean_test_data):
         """Test venue creation with nullable fields as None."""
         venue_id = create_venue(
             espn_venue_id="INT-NULL-001",
@@ -196,7 +197,9 @@ class TestVenueIntegration:
 class TestTeamRankingIntegration:
     """Integration tests for team ranking CRUD operations."""
 
-    def test_create_team_ranking_inserts_record(self, db_pool, clean_test_data, setup_test_teams):
+    def test_create_team_ranking_inserts_record(
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams
+    ):
         """Test create_team_ranking inserts record into database."""
         team_id = setup_test_teams["home_team_id"]
 
@@ -220,7 +223,9 @@ class TestTeamRankingIntegration:
         assert ranking["rank"] == 3
         assert ranking["points"] == 1432
 
-    def test_create_team_ranking_upsert_updates(self, db_pool, clean_test_data, setup_test_teams):
+    def test_create_team_ranking_upsert_updates(
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams
+    ):
         """Test create_team_ranking updates on conflict."""
         team_id = setup_test_teams["home_team_id"]
 
@@ -251,7 +256,7 @@ class TestTeamRankingIntegration:
         assert cfp_week_13[0]["rank"] == 3
 
     def test_get_current_rankings_returns_latest_week(
-        self, db_pool, clean_test_data, setup_test_teams
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams
     ):
         """Test get_current_rankings returns most recent week."""
         team_id = setup_test_teams["home_team_id"]
@@ -259,7 +264,7 @@ class TestTeamRankingIntegration:
         # Create rankings for multiple weeks
         create_team_ranking(
             team_id=team_id,
-            ranking_type="test_poll",
+            ranking_type="coaches_poll",
             rank=5,
             season=2024,
             ranking_date=datetime(2024, 11, 10),
@@ -267,7 +272,7 @@ class TestTeamRankingIntegration:
         )
         create_team_ranking(
             team_id=team_id,
-            ranking_type="test_poll",
+            ranking_type="coaches_poll",
             rank=3,
             season=2024,
             ranking_date=datetime(2024, 11, 17),
@@ -275,7 +280,7 @@ class TestTeamRankingIntegration:
         )
 
         # Get current (should be week 11)
-        rankings = get_current_rankings("test_poll", 2024)
+        rankings = get_current_rankings("coaches_poll", 2024)
 
         assert len(rankings) >= 1
         # All returned should be week 11 (latest)
@@ -295,7 +300,7 @@ class TestGameStateIntegration:
     """Integration tests for game state CRUD with SCD Type 2."""
 
     def test_create_game_state_inserts_current_record(
-        self, db_pool, clean_test_data, setup_test_teams, setup_test_venue
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
     ):
         """Test create_game_state inserts with row_current_ind=TRUE."""
         teams = setup_test_teams
@@ -325,7 +330,7 @@ class TestGameStateIntegration:
             cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-GAME-001'")
 
     def test_upsert_game_state_creates_history(
-        self, db_pool, clean_test_data, setup_test_teams, setup_test_venue
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
     ):
         """Test upsert_game_state creates SCD Type 2 history."""
         teams = setup_test_teams
@@ -375,7 +380,7 @@ class TestGameStateIntegration:
             cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-GAME-002'")
 
     def test_get_game_state_history_orders_by_timestamp(
-        self, db_pool, clean_test_data, setup_test_teams, setup_test_venue
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
     ):
         """Test get_game_state_history returns newest first."""
         teams = setup_test_teams
@@ -417,7 +422,7 @@ class TestGameStateIntegration:
             cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-GAME-003'")
 
     def test_get_live_games_filters_in_progress(
-        self, db_pool, clean_test_data, setup_test_teams, setup_test_venue
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
     ):
         """Test get_live_games returns only in_progress games."""
         teams = setup_test_teams
@@ -461,7 +466,7 @@ class TestGameStateIntegration:
             )
 
     def test_get_games_by_date_filters_correctly(
-        self, db_pool, clean_test_data, setup_test_teams, setup_test_venue
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
     ):
         """Test get_games_by_date filters by date."""
         teams = setup_test_teams
@@ -508,7 +513,7 @@ class TestGameStateSituationJsonb:
     """Integration tests for JSONB situation field."""
 
     def test_situation_jsonb_round_trip(
-        self, db_pool, clean_test_data, setup_test_teams, setup_test_venue
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
     ):
         """Test JSONB situation field preserves data structure."""
         teams = setup_test_teams
@@ -549,7 +554,7 @@ class TestGameStateSituationJsonb:
             cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-GAME-JSONB'")
 
     def test_linescores_jsonb_round_trip(
-        self, db_pool, clean_test_data, setup_test_teams, setup_test_venue
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
     ):
         """Test JSONB linescores field preserves array structure."""
         teams = setup_test_teams

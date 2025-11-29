@@ -169,10 +169,9 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov pytest-xdist
 
-      - name: Run tests with coverage
+      - name: Run unit tests with coverage (skip integration/e2e/stress/performance)
         run: |
-          python -m pytest tests/ -v --cov=. --cov-report=xml --cov-report=html --cov-report=term-missing -n auto
-        continue-on-error: true
+          python -m pytest tests/unit/ -v --cov=. --cov-report=xml --cov-report=html --cov-report=term-missing -n auto
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
@@ -194,6 +193,104 @@ jobs:
             test_results/
             htmlcov/
             coverage.xml
+
+  integration-tests:
+    name: Integration Tests (PostgreSQL)
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    # Only run if code changed (requires database)
+    if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: precog_test
+          POSTGRES_PASSWORD: precog_test_password
+          POSTGRES_DB: precog_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      # Database connection for tests
+      DB_HOST: localhost
+      DB_PORT: 5432
+      DB_NAME: precog_test
+      DB_USER: precog_test
+      DB_PASSWORD: precog_test_password
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          allow-prereleases: true
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov hypothesis
+
+      - name: Run database migrations
+        run: |
+          # Apply all migrations to test database
+          python -c "
+          import os
+          import psycopg2
+          from psycopg2.extras import RealDictCursor
+
+          conn = psycopg2.connect(
+              host=os.getenv('DB_HOST'),
+              port=os.getenv('DB_PORT'),
+              dbname=os.getenv('DB_NAME'),
+              user=os.getenv('DB_USER'),
+              password=os.getenv('DB_PASSWORD')
+          )
+          conn.autocommit = True
+          cur = conn.cursor()
+
+          # Run migration scripts in order
+          import importlib.util
+          import glob
+
+          migration_files = sorted(glob.glob('src/precog/database/migrations/migration_*.py'))
+          for mf in migration_files:
+              print(f'Running: {mf}')
+              spec = importlib.util.spec_from_file_location('migration', mf)
+              module = importlib.util.module_from_spec(spec)
+              spec.loader.exec_module(module)
+              if hasattr(module, 'run_migration'):
+                  module.run_migration(cur, conn)
+
+          conn.close()
+          print('All migrations applied successfully')
+          "
+
+      - name: Run integration tests
+        run: |
+          python -m pytest tests/integration/ tests/property/ -v --tb=short
+
+      - name: Run E2E tests
+        run: |
+          python -m pytest tests/e2e/ -v --tb=short
+        continue-on-error: true  # E2E may have external dependencies
 
   validate-quick:
     name: Quick Validation Suite
@@ -261,7 +358,7 @@ jobs:
   ci-summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [pre-commit-checks, security-scan, documentation-validation, test, validate-quick, test-type-coverage]
+    needs: [pre-commit-checks, security-scan, documentation-validation, test, integration-tests, validate-quick, test-type-coverage]
     if: always()
     steps:
       - name: Check all jobs status
@@ -272,7 +369,8 @@ jobs:
           echo "Pre-commit Checks:        ${{ needs.pre-commit-checks.result }}"
           echo "Security Scan:            ${{ needs.security-scan.result }}"
           echo "Documentation Validation: ${{ needs.documentation-validation.result }}"
-          echo "Tests:                    ${{ needs.test.result }}"
+          echo "Unit Tests:               ${{ needs.test.result }}"
+          echo "Integration Tests:        ${{ needs.integration-tests.result }}"
           echo "Quick Validation:         ${{ needs.validate-quick.result }}"
           echo "Test Type Coverage:       ${{ needs.test-type-coverage.result }}"
           echo "=========================================="
@@ -283,6 +381,7 @@ jobs:
              [[ "${{ needs.security-scan.result }}" == "failure" ]] || \
              [[ "${{ needs.documentation-validation.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
+             [[ "${{ needs.integration-tests.result }}" == "failure" ]] || \
              [[ "${{ needs.validate-quick.result }}" == "failure" ]]; then
             echo ""
             echo "❌ CI FAILED: One or more checks failed"
@@ -295,6 +394,7 @@ jobs:
           [[ "${{ needs.pre-commit-checks.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.security-scan.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.test.result }}" == "skipped" ]] && ((SKIPPED+=1))
+          [[ "${{ needs.integration-tests.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.validate-quick.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.test-type-coverage.result }}" == "skipped" ]] && ((SKIPPED+=1))
 

@@ -43,21 +43,21 @@ from precog.database.crud_operations import (
 def setup_perf_teams(db_pool, clean_test_data):
     """Create teams for performance tests."""
     with get_cursor(commit=True) as cur:
+        # Note: Using columns from migration 010 schema (not migration 028 enhancements)
         for i in range(1, 11):
             cur.execute(
                 """
                 INSERT INTO teams (
-                    team_id, team_code, team_name, display_name,
-                    espn_team_id, conference, division, sport, league, current_elo
+                    team_id, team_code, team_name,
+                    espn_team_id, conference, division, sport, current_elo_rating
                 )
-                VALUES (%s, %s, %s, %s, %s, 'Perf', 'Div', 'football', 'nfl', 1500)
+                VALUES (%s, %s, %s, %s, 'Perf', 'Div', 'nfl', 1500)
                 ON CONFLICT (team_id) DO NOTHING
             """,
                 (
                     66000 + i,
                     f"PF{i}",
                     f"Perf Team {i}",
-                    f"Performance Test Team {i}",
                     str(66000 + i),
                 ),
             )
@@ -344,7 +344,7 @@ class TestTeamRankingQueryPerformance:
         for i, team_id in enumerate(teams):
             create_team_ranking(
                 team_id=team_id,
-                ranking_type="perf_poll",
+                ranking_type="espn_power",
                 rank=i + 1,
                 season=2024,
                 ranking_date=datetime(2024, 11, 17),
@@ -373,7 +373,7 @@ class TestTeamRankingQueryPerformance:
             for i, team_id in enumerate(teams):
                 create_team_ranking(
                     team_id=team_id,
-                    ranking_type="perf_query_poll",
+                    ranking_type="espn_fpi",
                     rank=i + 1,
                     season=2024,
                     ranking_date=datetime(2024, 11, week),
@@ -386,7 +386,7 @@ class TestTeamRankingQueryPerformance:
         # Measure query (should get latest week = 14)
         for _ in range(50):
             start = time.perf_counter()
-            rankings = get_current_rankings("perf_query_poll", 2024)
+            rankings = get_current_rankings("espn_fpi", 2024)
             elapsed = (time.perf_counter() - start) * 1000  # ms
             latencies.append(elapsed)
             assert len(rankings) == 10  # All teams ranked

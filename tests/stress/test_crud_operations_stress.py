@@ -43,21 +43,21 @@ def setup_stress_teams(db_pool, clean_test_data):
     """Create teams for stress tests."""
     with get_cursor(commit=True) as cur:
         # Create 10 teams for high-volume tests
+        # Note: Using columns from migration 010 schema (not migration 028 enhancements)
         for i in range(1, 11):
             cur.execute(
                 """
                 INSERT INTO teams (
-                    team_id, team_code, team_name, display_name,
-                    espn_team_id, conference, division, sport, league, current_elo
+                    team_id, team_code, team_name,
+                    espn_team_id, conference, division, sport, current_elo_rating
                 )
-                VALUES (%s, %s, %s, %s, %s, 'Test', 'Division', 'football', 'nfl', 1500)
+                VALUES (%s, %s, %s, %s, 'Test', 'Division', 'nfl', 1500)
                 ON CONFLICT (team_id) DO NOTHING
             """,
                 (
                     77000 + i,
                     f"ST{i}",
                     f"Stress Team {i}",
-                    f"Stress Test Team {i}",
                     str(77000 + i),
                 ),
             )
