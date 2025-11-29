@@ -173,7 +173,7 @@ jobs:
 
       - name: Run unit tests with coverage (skip integration/e2e/stress/performance)
         run: |
-          python -m pytest tests/unit/ -v --cov=. --cov-report=xml --cov-report=html --cov-report=term-missing -n auto
+          python -m pytest tests/unit/ -v --cov=src/precog --cov-report=xml --cov-report=html --cov-report=term-missing -n auto
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
@@ -249,7 +249,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -e .  # Install precog package (src/ layout)
-          pip install pytest pytest-cov hypothesis
+          pip install pytest pytest-cov hypothesis vcrpy
 
       - name: Run database migrations
         run: |
