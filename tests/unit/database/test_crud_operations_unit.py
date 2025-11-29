@@ -266,7 +266,8 @@ class TestCreateGameStateUnit:
     def test_create_game_state_returns_id(self, mock_get_cursor):
         """Test create_game_state returns game_state_id."""
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"game_state_id": 500}
+        # Note: RETURNING id returns "id" key, then code maps to game_state_id
+        mock_cursor.fetchone.return_value = {"id": 500}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -287,7 +288,8 @@ class TestCreateGameStateUnit:
     def test_create_game_state_with_situation_jsonb(self, mock_get_cursor):
         """Test create_game_state serializes situation to JSONB."""
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"game_state_id": 1}
+        # Note: RETURNING id returns "id" key
+        mock_cursor.fetchone.return_value = {"id": 1}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -296,8 +298,10 @@ class TestCreateGameStateUnit:
         create_game_state(espn_event_id="401547417", situation=situation, game_status="in_progress")
 
         # Verify JSON serialization in params
-        call_args = mock_cursor.execute.call_args
-        params = call_args[0][1]
+        # Note: create_game_state makes 2 execute calls: INSERT then UPDATE
+        # Check the first call (INSERT) for the params
+        insert_call = mock_cursor.execute.call_args_list[0]
+        params = insert_call[0][1]
         # situation is near the end of params
         assert '{"possession": "KC"' in str(params)
 
@@ -305,7 +309,8 @@ class TestCreateGameStateUnit:
     def test_create_game_state_with_decimal_clock(self, mock_get_cursor):
         """Test create_game_state handles Decimal clock_seconds."""
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"game_state_id": 1}
+        # Note: RETURNING id returns "id" key
+        mock_cursor.fetchone.return_value = {"id": 1}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -315,8 +320,10 @@ class TestCreateGameStateUnit:
             clock_display="5:32",
         )
 
-        call_args = mock_cursor.execute.call_args
-        params = call_args[0][1]
+        # Note: create_game_state makes 2 execute calls: INSERT then UPDATE
+        # Check the first call (INSERT) for the params
+        insert_call = mock_cursor.execute.call_args_list[0]
+        params = insert_call[0][1]
         # Verify Decimal is passed (not float)
         assert any(isinstance(p, Decimal) for p in params)
 
@@ -381,14 +388,21 @@ class TestGetGameStateUnit:
 class TestUpsertGameStateUnit:
     """Unit tests for upsert_game_state SCD Type 2 function."""
 
-    @patch("precog.database.crud_operations.create_game_state")
     @patch("precog.database.crud_operations.get_cursor")
-    def test_upsert_game_state_closes_current_row(self, mock_get_cursor, mock_create_game_state):
-        """Test upsert_game_state closes current row before inserting."""
+    def test_upsert_game_state_closes_current_row(self, mock_get_cursor):
+        """Test upsert_game_state closes current row before inserting.
+
+        Educational Note:
+            upsert_game_state makes 3 execute calls:
+            1. close_query - SET row_current_ind = FALSE
+            2. insert_query - INSERT new row RETURNING id
+            3. update_id_query - UPDATE game_state_id
+        """
         mock_cursor = MagicMock()
+        # Mock fetchone to return id for RETURNING clause
+        mock_cursor.fetchone.return_value = {"id": 100}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
-        mock_create_game_state.return_value = 100
 
         result = upsert_game_state(
             espn_event_id="401547417",
@@ -397,8 +411,8 @@ class TestUpsertGameStateUnit:
             game_status="in_progress",
         )
 
-        # Verify close query was executed
-        close_sql = mock_cursor.execute.call_args[0][0]
+        # Verify close query was first execute call
+        close_sql = mock_cursor.execute.call_args_list[0][0][0]  # First call, first positional arg
         assert "row_current_ind = FALSE" in close_sql
         assert "row_end_timestamp = NOW()" in close_sql
         assert result == 100
