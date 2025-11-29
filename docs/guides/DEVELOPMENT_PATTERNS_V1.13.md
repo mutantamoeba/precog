@@ -1,13 +1,23 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.12
+**Version:** 1.13
 **Created:** 2025-11-13
-**Last Updated:** 2025-11-28
+**Last Updated:** 2025-11-29
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.13:**
+- **Added Pattern 25: ANSI Escape Code Handling for Cross-Platform CLI Testing (ALWAYS)**
+- Documents critical pattern from PR #159 CI fixes: Rich library outputs ANSI codes that break string matching on Windows
+- The Problem: Rich outputs `\x1b[1;36m47.50\x1b[0m` but tests check for `"$47.50"`
+- The Solution: Create `strip_ansi()` helper function using regex `\x1b\[[0-9;]*m`
+- When to use: ANY CLI test using Rich library output (tables, progress bars, colored text)
+- 20+ test assertions fixed across test_fetch_fills, test_fetch_settlements, test_health_check
+- Includes helper function implementation, code examples (WRONG vs CORRECT), decision tree
+- Cross-references: Pattern 5 (Cross-Platform Compatibility), PR #159, tests/unit/test_main.py
+- Total addition: ~200 lines documenting ANSI escape code handling pattern
 **Changes in V1.12:**
 - **Added Pattern 24: No New Usage of Deprecated Code (MANDATORY)**
 - Documents the principle of never using deprecated APIs/TypeDicts/patterns in new code
@@ -6430,6 +6440,158 @@ class MarketUpdater:
 
 ---
 
+## Pattern 25: ANSI Escape Code Handling for Cross-Platform CLI Testing (ALWAYS)
+
+### The Rule
+
+**ALWAYS use `strip_ansi()` helper when testing CLI output from Rich library on Windows.**
+
+Rich library outputs ANSI escape codes for colors/formatting that are embedded within text. On Windows, these codes break string matching in tests.
+
+### The Problem
+
+Rich outputs colored text with ANSI codes embedded **within** the expected text:
+
+```python
+# What Rich outputs (invisible in terminal, visible in tests):
+"$\x1b[1;36m47.50\x1b[0m"  # The $47.50 is split by ANSI codes!
+
+# What tests check for:
+"$47.50"  # This string is NOT in the Rich output!
+```
+
+**Why this fails:**
+- `"$47.50" in result.stdout` → `False` (the dollar sign is before the ANSI code)
+- `"47.50" in result.stdout` → `False` (ANSI code comes immediately after "47")
+- Works on Ubuntu (different ANSI handling), fails on Windows
+
+### The Solution
+
+Create a `strip_ansi()` helper function to remove ANSI codes before assertions:
+
+```python
+import re
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text.
+
+    Rich library outputs ANSI codes for colors/formatting, which can break
+    string matching in tests when codes are embedded within expected text.
+
+    Example:
+        Input:  "\\x1b[1;36m100\\x1b[0m contracts"
+        Output: "100 contracts"
+
+    Args:
+        text: String potentially containing ANSI escape codes
+
+    Returns:
+        String with all ANSI escape codes removed
+    """
+    ansi_pattern = re.compile(r"\x1b\[[0-9;]*m")
+    return ansi_pattern.sub("", text)
+```
+
+### Code Examples
+
+**❌ WRONG - Fails on Windows:**
+```python
+def test_fetch_settlements_single(self, runner, mock_kalshi_client):
+    result = runner.invoke(app, ["fetch-settlements"])
+    assert result.exit_code == 0
+    # FAILS: Rich outputs "$\x1b[1;36m47.50\x1b[0m"
+    assert "$47.50" in result.stdout
+```
+
+**✅ CORRECT - Cross-platform compatible:**
+```python
+def test_fetch_settlements_single(self, runner, mock_kalshi_client):
+    result = runner.invoke(app, ["fetch-settlements"])
+    assert result.exit_code == 0
+    # Strip ANSI codes for cross-platform compatibility
+    output = strip_ansi(result.stdout)
+    assert "$47.50" in output
+```
+
+### When to Use This Pattern
+
+| Scenario | Use strip_ansi()? |
+|----------|-------------------|
+| CLI test with Rich tables | ✅ YES |
+| CLI test with Rich progress bars | ✅ YES |
+| CLI test with colored text | ✅ YES |
+| CLI test with plain print() | ❌ No (no ANSI codes) |
+| Non-CLI tests | ❌ No (not applicable) |
+| Testing on Ubuntu only | ⚠️ Still recommended (future-proof) |
+
+### Common Patterns Fixed by This
+
+**Monetary values:**
+```python
+# Rich outputs: "$\x1b[1;36m47.50\x1b[0m"
+output = strip_ansi(result.stdout)
+assert "$47.50" in output
+```
+
+**Counts and metrics:**
+```python
+# Rich outputs: "Fetched \x1b[1;36m1\x1b[0m fills"
+output = strip_ansi(result.stdout)
+assert "Fetched 1 fills" in output
+```
+
+**Progress indicators:**
+```python
+# Rich outputs: "\x1b[1;36m[1/4]\x1b[0m Checking API"
+output = strip_ansi(result.stdout)
+assert "[1/4]" in output
+```
+
+**Pagination messages:**
+```python
+# Rich outputs: "and \x1b[1;36m5\x1b[0m more fills"
+output = strip_ansi(result.stdout)
+assert "and 5 more fills" in output
+```
+
+### Implementation Location
+
+Add the `strip_ansi()` helper at the top of your test file:
+
+```python
+# tests/unit/test_main.py (line ~30, after imports)
+
+import re
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text."""
+    ansi_pattern = re.compile(r"\x1b\[[0-9;]*m")
+    return ansi_pattern.sub("", text)
+```
+
+**Future improvement:** Move to `tests/conftest.py` or `tests/helpers.py` for reuse across test files.
+
+### Cross-References
+
+**Related Patterns:**
+- **Pattern 5 (Cross-Platform Compatibility):** This pattern is a specific case of cross-platform issues
+- **Pattern 21 (Validation-First Architecture):** CI catches these issues on Windows matrix
+
+**Related Files:**
+- `tests/unit/test_main.py` - Contains `strip_ansi()` helper and 20+ fixed assertions
+- `main.py` - CLI implementation using Rich library
+
+**Related PRs:**
+- **PR #159:** Phase 2C CRUD Operations - 20+ assertions fixed with this pattern
+
+**Real-World Trigger:**
+- Session 2025-11-29: CI passed on Ubuntu but failed on Windows
+- Root cause: Rich library ANSI codes embedded within monetary values
+- Tests checking `"$47.50" in result.stdout` failed because actual output was `"$\x1b[1;36m47.50\x1b[0m"`
+- Fixed 20+ assertions across test_fetch_fills, test_fetch_settlements, test_health_check
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -6458,6 +6620,7 @@ class MarketUpdater:
 | **22. VCR Pattern** | Pytest (integration tests) | `pytest tests/integration/api_connectors/test_kalshi_client_vcr.py` | ADR-075, REQ-TEST-013/014, GitHub #124, Pattern 1/13 |
 | **23. Validation Failure Handling** | Manual (4-step protocol) | `git push` (pre-push hooks), `./scripts/validate_all.sh` | Pattern 21, Pattern 18, Pattern 9, Issue #127 |
 | **24. No New Deprecated Code** | Code review | `git grep "DEPRECATED" -- '*.py'` | Pattern 6, Pattern 18 |
+| **25. ANSI Escape Code Handling** | Code review + CI Windows matrix | `strip_ansi(result.stdout)` | Pattern 5, PR #159 |
 
 ---
 
