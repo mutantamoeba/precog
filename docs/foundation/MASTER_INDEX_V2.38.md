@@ -1,9 +1,17 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.37
-**Last Updated:** 2025-11-27
+**Version:** 2.38
+**Last Updated:** 2025-11-28
 **Status:** ✅ Current
+**Changes in v2.38:**
+- **DATA COLLECTION GUIDE V1.1**: Updated DATA_COLLECTION_GUIDE_V1.0.md → DATA_COLLECTION_GUIDE_V1.1.md
+- Added Section 11: Data Source Tiering Strategy (3-tier architecture: Historical FREE, Dev/Testing FREE, Production PAID)
+- Added ESPN rate limiting guidance (10 req/sec historical, 1 req/10 sec live) to prevent throttling/IP blocking
+- Added sportsdataverse-py and nflreadpy integration examples for historical data
+- Added verified API pricing reference (MySportsFeeds $109-$1,599/mo, Sportradar $1,000-5,000+/mo, Balldontlie FREE)
+- Added GameStateProvider abstraction pattern for tier-agnostic data access
+- Cross-references ADR-076 (Sports Data Source Tiering Strategy)
 **Changes in v2.37:**
 - **ESPN DATA MODEL (PHASE 2)**: Updated ARCHITECTURE_DECISIONS V2.21 → V2.22, ADR_INDEX V1.15 → V1.16
 - Added ADR-029: ESPN Data Model with Normalized Schema (venues, game_states, team_rankings, teams)
@@ -23,7 +31,7 @@
 - Added AB_TESTING_FRAMEWORK_SPEC_V1.0.md (~680 lines) to Supplementary Specifications: Documents systematic A/B testing framework with 50/50 traffic allocation, statistical significance testing (chi-square for win rate, Welch's t-test for ROI), minimum 200 trades (100/variant), winner declaration requires BOTH tests significant (p<0.05)
 - Added MODEL_TRAINING_GUIDE_V1.0.md (~520 lines) to Implementation Guides: Documents automated model training pipelines with hyperparameter tuning (grid search vs Bayesian optimization), cross-validation (time-series split prevents data leakage), model serialization (joblib), training metrics (accuracy, log loss, calibration ECE, Brier score), weekly training schedule (Sunday 3 AM)
 - Added EDGE_CALCULATION_GUIDE_V1.0.md (~410 lines) to Implementation Guides: Documents real-time edge calculation (model_predicted_prob - market_price), multi-model ensemble predictions (weighted average), confidence intervals (95% CI = ensemble_pred ± 1.96 * std_error), edge thresholding (filter edge > min_edge), historical edge tracking, hourly calculation schedule
-- Added DATA_COLLECTION_GUIDE_V1.0.md (~470 lines) to Implementation Guides: Documents automated data collection from ESPN (NFL/NBA game results), Kalshi (market prices), Balldontlie (NBA stats); incremental updates (fetch only new data since last collection), schema validation (outlier detection, missing values), daily/hourly collection schedules via event loop
+- Added DATA_COLLECTION_GUIDE_V1.0.md (~470 lines) to Implementation Guides: Documents automated data collection from ESPN (NFL/NBA game results), Kalshi (market prices), Balldontlie (NBA stats); incremental updates (fetch only new data since last collection), schema validation (outlier detection, missing values), daily/hourly collection schedules via event loop. **Updated to V1.1 in v2.38.**
 **Changes in v2.33:**
 - **MANAGER USER GUIDES V1.1 UPDATE**: Updated all three manager user guides from V1.0 to V1.1 with comprehensive Future Enhancements sections
 - Updated STRATEGY_MANAGER_USER_GUIDE V1.0 → V1.1: Added 373-line Future Enhancements section documenting Phase 5a automation (StrategyEvaluator, performance-based activation criteria, systematic A/B testing framework)
@@ -218,7 +226,7 @@
 - Updated PHASE_0.7_DEFERRED_TASKS V1.1 → V1.2 (marked all 8 tasks complete: DEF-001 through DEF-008)
 - Added validation script maintenance reminders to CLAUDE.md (Pattern 1, Pattern 2, SESSION_HANDOFF template)
 - Updated PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md (8-step → 9-step: added validation scripts step)
-- Updated DEVELOPMENT_PHASES_V1.6.md (added validation reminders to all 6 phase test planning checklists)
+- Updated DEVELOPMENT_PHASES_V1.7.md (added validation reminders to all 6 phase test planning checklists)
 - Comprehensive Defense in Depth documentation (4-layer validation architecture)
 - Phase 0.7 status: 100% complete (pre-commit hooks, pre-push hooks, branch protection, schema validation, all deferred tasks done)
 **Changes in v2.11:**
@@ -366,12 +374,12 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.19.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.37.md** | ✅ | v2.37 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.37** (ESPN Data Model: ARCHITECTURE_DECISIONS V2.22, ADR_INDEX V1.16, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0) |
-| **ARCHITECTURE_DECISIONS_V2.22.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.22** (ADR-029: ESPN Data Model with Normalized Schema - 4-table design for multi-sport ESPN data; venues, game_states (SCD Type 2), team_rankings, teams; JSONB situation field for sport-specific data; ~1.1 GB/year storage; 97 → 98 total ADRs) |
-| **REQUIREMENT_INDEX_V1.9.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
+| **MASTER_INDEX_V2.38.md** | ✅ | v2.37 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.37** (ESPN Data Model: ARCHITECTURE_DECISIONS V2.22, ADR_INDEX V1.16, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0) |
+| **ARCHITECTURE_DECISIONS_V2.23.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.22** (ADR-029: ESPN Data Model with Normalized Schema - 4-table design for multi-sport ESPN data; venues, game_states (SCD Type 2), team_rankings, teams; JSONB situation field for sport-specific data; ~1.1 GB/year storage; 97 → 98 total ADRs) |
+| **REQUIREMENT_INDEX_V1.10.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
 | **ADR_INDEX_V1.16.md** | ✅ | v1.16 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 77 architecture decisions - **UPDATED V1.16** (ADR-029: ESPN Data Model with Normalized Schema - Phase 2 Live Data Integration; 76 → 77 total ADRs) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
-| **DEVELOPMENT_PHASES_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.6** |
+| **DEVELOPMENT_PHASES_V1.7.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.6** |
 | **TESTING_STRATEGY_V3.1.md** | ✅ | v3.1 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V3.1** - Enhanced coverage tier classification based on TDD/security/accuracy emphasis; Position Manager 85%→90% (handles money+real-time); Kalshi Client 75%→90% (handles money+security); risk-based framework (financial impact, security impact, blast radius); classification examples table showing WHY each module is in its tier; V3.0: Comprehensive 8 test type framework addressing Phase 1.5 TDD failure (expanded from 4 types to: unit, property, integration, E2E, stress, race, performance, chaos); mock usage restrictions (REQ-TEST-013: APPROPRIATE for external APIs/time, FORBIDDEN for database/internal logic/config); integration testing philosophy "test with REAL infrastructure not mocks"; test type requirements matrix (module tier × test type); phase-based roadmap (when each type required Phases 1-5); property-based testing with Hypothesis (REQ-TEST-018) |
 | **TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Comprehensive test requirements (REQ-TEST-012 through REQ-TEST-019): 8 test types (unit, property, integration, E2E, stress, race, performance, chaos), mock usage restrictions, fixture requirements, coverage standards (Critical ≥90%, Manager ≥85%, Infrastructure ≥80%), stress/integration/E2E test requirements |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
@@ -459,7 +467,7 @@ Roadmap, timelines, and project management.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DEVELOPMENT_PHASES_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 0.5 complete, Phase 5 split into 5a/5b - UPDATED V1.6 |
+| **DEVELOPMENT_PHASES_V1.7.md** | ✅ | v1.6 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 0.5 complete, Phase 5 split into 5a/5b - UPDATED V1.6 |
 | **DEPLOYMENT_GUIDE_V1.0.md** | 🔵 | - | `/docs/deployment/` | 1 | Phase 1 ✅ | 🟡 High | Local/AWS deployment stubs |
 | **USER_GUIDE_V1.0.md** | 🔵 | - | `/docs/guides/` | 5 | Phase 5 ✅ | 🟢 Medium | CLI examples (edges-list, trade-execute) |
 | **DEVELOPER_ONBOARDING_V1.0.md** | 🔵 | - | `/docs/utility/` | 0 | Phase 0 ✅ | 🟡 High | Merged with ENVIRONMENT_CHECKLIST, onboarding steps |
@@ -480,7 +488,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 6-9 | Phases 6-9 | 🔴 Critical | **NEW** - End-to-end analytics architecture: 4-layer design (Collection→Storage→Aggregation→Presentation), dual processing (real-time <200ms + batch), 6 materialized views |
 | **AB_TESTING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 8 | Phase 8 | 🟡 High | **NEW** - Statistical methodology for strategy/model evaluation: Welch's t-test, Chi-square, sample size calculation (64 trades/variant), Bayesian analysis, experiment lifecycle |
 | **DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 9 | Phase 9 | 🟡 High | **NEW** - React 18 + Next.js 14 trading dashboard: component library (MetricCard, PositionCard), Socket.IO real-time (<200ms), SWR data fetching, Plotly.js charts, deployment |
-| **DEVELOPMENT_PATTERNS_V1.11.md** | ✅ | v1.11 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.11** - Added Pattern 23 (Validation Failure Handling - Fix Failures, Don't Bypass) - 23 total patterns now; Pattern 23 documents systematic validation failure response protocol: 4-step process (Investigate → Fix False Positives → Fix Real Failures → Re-run Validation), decision tree for classification, when bypass is acceptable (rare), validation script best practices, testing validation scripts (~530 lines); real-world context from session: 5 false positives eliminated (SCD Type 2 docstring detection), 11 property tests added (Issue #127), validation config alignment, pre-push success 0% → 100%; cross-references Pattern 21 (Validation-First Architecture), Pattern 18 (Avoid Technical Debt), Pattern 9 (Warning Governance), Issue #127, ADR-002/018-020/074 |
+| **DEVELOPMENT_PATTERNS_V1.12.md** | ✅ | v1.11 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.11** - Added Pattern 23 (Validation Failure Handling - Fix Failures, Don't Bypass) - 23 total patterns now; Pattern 23 documents systematic validation failure response protocol: 4-step process (Investigate → Fix False Positives → Fix Real Failures → Re-run Validation), decision tree for classification, when bypass is acceptable (rare), validation script best practices, testing validation scripts (~530 lines); real-world context from session: 5 false positives eliminated (SCD Type 2 docstring detection), 11 property tests added (Issue #127), validation config alignment, pre-push success 0% → 100%; cross-references Pattern 21 (Validation-First Architecture), Pattern 18 (Avoid Technical Debt), Pattern 9 (Warning Governance), Issue #127, ADR-002/018-020/074 |
 | **SENTRY_INTEGRATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | Phase 2 | 🟡 High | **NEW** - 3-layer hybrid observability architecture: logger.py (audit trail) + Sentry (real-time) + alerts table (permanent record); implementation guide with code examples, testing procedures, troubleshooting |
 | **MANAGER_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Comprehensive architecture guide for 4 core managers (Model, Strategy, Position, Config); database schemas with field-by-field explanations; status lifecycle diagrams; immutable vs SCD Type 2 versioning patterns; design principles (pure psycopg2, decimal precision, two-level configs); ~900 lines; addresses user request to document manager architecture summary |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
@@ -495,7 +503,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **ESPN_DATA_MODEL_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | Phase 2 | 🔴 Critical | **NEW** - ESPN data model guide (~650 lines): Database schema (venues, team_rankings, game_states SCD Type 2), TypedDict definitions (ESPNTeamInfo, ESPNVenueInfo, ESPNGameState, etc.), CRUD operations (create_venue, upsert_game_state, get_game_state_history), JSONB situation schemas (football/basketball/hockey), multi-sport support (NFL, NCAAF, NBA, NCAAB, NHL, WNBA), query patterns, storage estimates (~1.1GB/year); Phase 2 Live Data Integration |
 | **MODEL_TRAINING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 3+ | Phases 3+ | 🔴 Critical | **NEW (SESSION 9)** - Automated model training pipeline guide (~520 lines): hyperparameter tuning (grid search vs Bayesian optimization), cross-validation (time-series split prevents data leakage), model serialization (joblib for sklearn models), training metrics (accuracy, log loss, calibration ECE, Brier score), weekly training schedule (Sunday 3 AM); complements MODEL_MANAGER_USER_GUIDE Future Enhancements |
 | **EDGE_CALCULATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 3+ | Phases 3+ | 🔴 Critical | **NEW (SESSION 9)** - Real-time edge calculation guide (~410 lines): edge formula (model_predicted_prob - market_price), multi-model ensemble predictions (weighted average), confidence intervals (95% CI = ensemble_pred ± 1.96 * std_error), edge thresholding (filter opportunities where edge > min_edge), historical edge tracking, hourly calculation schedule, integration with trading system; complements MODEL_MANAGER_USER_GUIDE Future Enhancements |
-| **DATA_COLLECTION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 3+ | Phases 3+ | 🔴 Critical | **NEW (SESSION 9)** - Automated data collection pipeline guide (~470 lines): multi-source collection (ESPN NFL/NBA game results, Kalshi market prices, Balldontlie NBA stats), incremental updates (fetch only new data since last collection), schema validation (outlier detection, missing value handling), data storage (PostgreSQL games/market_prices tables), daily/hourly collection schedules via event loop, exponential backoff retry logic; complements MODEL_MANAGER_USER_GUIDE Future Enhancements |
+| **DATA_COLLECTION_GUIDE_V1.1.md** | ✅ | v1.1 | `/docs/guides/` | 3+ | Phases 3+ | 🔴 Critical | **UPDATED** - Automated data collection pipeline guide (~650 lines): V1.1 adds Section 11 Data Source Tiering Strategy (3-tier architecture: Tier 1 Historical FREE sportsdataverse-py/nflreadpy, Tier 2 Dev/Testing FREE ESPN hidden API, Tier 3 Production PAID $109-$1,599/mo); ESPN rate limiting (10 req/sec historical, 1 req/10 sec live); GameStateProvider abstraction; verified API pricing reference; strategy latency tolerance matrix. Original: multi-source collection, incremental updates, schema validation, exponential backoff. Cross-refs ADR-076. |
 
 ---
 
@@ -643,11 +651,11 @@ Additional guides, references, and supporting documentation.
 **All Phase 0.5 deliverables complete (Days 1-10 + Standardization + Phase 1 Foundation):**
 - ✅ DATABASE_SCHEMA_SUMMARY_V1.6.md (added alerts table + 4 ML infrastructure placeholders)
 - ✅ MASTER_REQUIREMENTS_V2.7.md (added 34 requirements: REQ-METH, REQ-ALERT, REQ-ML)
-- ✅ REQUIREMENT_INDEX_V1.9.md V1.1 (updated with 89 total requirements)
+- ✅ REQUIREMENT_INDEX_V1.10.md V1.1 (updated with 89 total requirements)
 - ✅ ARCHITECTURE_DECISIONS_V2.5.md (ADR numbers added for all decisions)
 - ✅ ADR_INDEX.md (systematic ADR catalog)
 - ✅ PROJECT_OVERVIEW_V1.4.md
-- ✅ DEVELOPMENT_PHASES_V1.6.md (Phase 5 split into 5a/5b)
+- ✅ DEVELOPMENT_PHASES_V1.7.md (Phase 5 split into 5a/5b)
 - ✅ system.yaml (added comprehensive notifications configuration)
 - ✅ position_management.yaml V2.0 (10 exit conditions)
 - ✅ probability_models.yaml V2.0 (versioning)
@@ -688,13 +696,13 @@ Additional guides, references, and supporting documentation.
 - PROJECT_OVERVIEW_V1.3.md (architecture)
 - MASTER_REQUIREMENTS_V2.7.md (requirements with REQ IDs - includes methods, alerts, ML)
 - ARCHITECTURE_DECISIONS_V2.5.md (design rationale with ADR numbers)
-- REQUIREMENT_INDEX_V1.9.md V1.1 (requirement catalog - 89 requirements)
+- REQUIREMENT_INDEX_V1.10.md V1.1 (requirement catalog - 89 requirements)
 - ADR_INDEX.md (ADR catalog)
 - CONFIGURATION_GUIDE_V3.1.md (config patterns)
 - DATABASE_SCHEMA_SUMMARY_V1.6.md (schema - 25 tables including alerts + ML placeholders)
 - API_INTEGRATION_GUIDE_V1.0.md (API docs)
 - KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md (critical reference)
-- DEVELOPMENT_PHASES_V1.6.md (roadmap)
+- DEVELOPMENT_PHASES_V1.7.md (roadmap)
 - GLOSSARY.md (terminology)
 - Handoff_Protocol_V1.0.md (process reference)
 - VERSIONING_GUIDE_V1.0.md (versioning patterns)
@@ -801,7 +809,7 @@ Additional guides, references, and supporting documentation.
 | 2.30 | 2025-11-22 | **USER GUIDES FOR CORE MODULES (PHASE 1.5)**: Added 6 comprehensive user guides (~4,530 lines total: STRATEGY_MANAGER, MODEL_MANAGER, POSITION_MANAGER, CONFIG_LOADER, KALSHI_CLIENT, KALSHI_MARKET_TERMINOLOGY) |
 | 2.29 | 2025-11-22 | **PHASE 1.5 COMPLETION DOCUMENTATION**: Added PHASE_1.5_COMPLETION_REPORT.md + PHASE_1.5_DEFERRED_TASKS_V1.0.md; Phase 1.5 status: ⚠️ PASS WITH CONDITIONS (3/4 deliverables complete, 93.83% coverage) |
 | 2.5 | 2025-10-24 | **ALERTS & ML PLANNING**: Updated MASTER_REQUIREMENTS V2.6→V2.7 (34 new requirements), REQUIREMENT_INDEX V1.0→V1.1 (89 total reqs), DATABASE_SCHEMA_SUMMARY V1.5→V1.6 (alerts + 4 ML placeholders), system.yaml (notifications config); added 4 ML docs to planned (PROBABILITY_PRIMER, ELO_IMPLEMENTATION_GUIDE, MODEL_EVALUATION_GUIDE, MACHINE_LEARNING_ROADMAP); 25 total tables; ready for Phase 1 |
-| 2.4 | 2025-10-22 | Added REQUIREMENT_INDEX_V1.9.md and ADR_INDEX.md; updated MASTER_REQUIREMENTS V2.6, ARCHITECTURE_DECISIONS V2.5; updated document count 33 → 35; standardization complete |
+| 2.4 | 2025-10-22 | Added REQUIREMENT_INDEX_V1.10.md and ADR_INDEX.md; updated MASTER_REQUIREMENTS V2.6, ARCHITECTURE_DECISIONS V2.5; updated document count 33 → 35; standardization complete |
 | 2.3 | 2025-10-21 | Phase 0.5 complete: added 3 implementation guides (VERSIONING, TRAILING_STOP, POSITION_MANAGEMENT), updated 6 core docs (MASTER_REQUIREMENTS V2.5, DATABASE_SCHEMA V1.5, CONFIGURATION_GUIDE V3.1, DEVELOPMENT_PHASES V1.3, 3 YAML V2.0), added schema migration V1.5, Phase 5 split into 5a/5b |
 | 2.2 | 2025-10-17 | Updated all document versions (Master Requirements v2.3, Architecture Decisions v2.3, Project Overview v1.3, Configuration Guide v3.0, Database Schema v1.2); renamed all files to match internal versions; added Phase 0 completion documents |
 | 2.1 | 2025-10-12 | Added "Location" and "Phase Ties" columns; Session 7 handoff streamline (7 docs archived, 4 consolidated); added Handoff_Protocol_V1.0.md; marked Phase 0 at 100% |

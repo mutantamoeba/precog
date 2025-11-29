@@ -2,8 +2,9 @@
 
 ---
 
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-11-24
+**Last Updated:** 2025-11-28
 **Status:** 🔵 Planned (Phase 3+)
 **Target Audience:** Developers implementing automated data collection pipelines for model training
 **Prerequisites:** API_INTEGRATION_GUIDE_V2.0.md, MODEL_TRAINING_GUIDE_V1.0.md
@@ -11,7 +12,21 @@
 - `docs/guides/MODEL_MANAGER_USER_GUIDE_V1.1.md` (Future Enhancements - Data Collection Pipelines)
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` (ESPN, Kalshi, Balldontlie APIs)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (REQ-DATA-001 through REQ-DATA-006)
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.32.md` (ADR-002: Decimal Precision, ADR-053: Data Validation)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.23.md` (ADR-002: Decimal Precision, ADR-053: Data Validation, ADR-076: Sports Data Source Tiering)
+
+**Changes in V1.1:**
+- **SPORTS DATA SOURCE TIERING STRATEGY:** Added Section 11 documenting 3-tier data source architecture
+- **ESPN LATENCY CORRECTION:** Changed ESPN latency from "5-15 min" to "UNKNOWN - requires empirical measurement"
+- **ESPN RATE LIMITING:** Added self-imposed rate limits for ESPN Hidden API (live game monitoring only, NOT for historical data)
+- Added sportsdataverse-py and nflreadpy integration examples for historical data (Tier 1, bulk download, no rate limits)
+- Added verified API pricing reference table (MySportsFeeds, Sportradar, Balldontlie)
+- **STRATEGY LATENCY TOLERANCE MATRIX:** Added guidance for acceptable delay (10-30s survivable, minutes NOT)
+- **LAG-AWARE STRATEGY DESIGN:** Added StrategyConfig pattern with max_tolerated_lag_seconds
+- **BOOTSTRAP-FIRST APPROACH:** Added two-stage FREE → PAID upgrade path
+- **MULTI-SOURCE RECONCILIATION:** Added GameStateWithConfidence dataclass and confidence scoring
+- **GAMESTATEROVIDER ABSTRACTION:** Added source_confidence property and use_free_only parameter
+- ✅ **Added:** ADR-076 (Sports Data Source Tiering Strategy) in ARCHITECTURE_DECISIONS_V2.23.md
+- ✅ **Documented:** STRATEGY_DEVELOPMENT_GUIDE_V1.0.md as Phase 4 deliverable in DEVELOPMENT_PHASES_V1.7.md
 
 ---
 
@@ -27,6 +42,7 @@
 8. [Scheduling & Automation](#scheduling--automation)
 9. [Error Handling & Retry Logic](#error-handling--retry-logic)
 10. [Testing & Validation](#testing--validation)
+11. [Data Source Tiering Strategy](#data-source-tiering-strategy) **NEW**
 
 ---
 
@@ -84,7 +100,52 @@
 }
 ```
 
-**Rate Limit:** Unlimited (public API)
+**Rate Limiting (CRITICAL):**
+
+The ESPN API is a **hidden/undocumented API** with no published rate limits. However, aggressive usage can result in:
+- **Temporary throttling** (429 responses)
+- **IP blocking** (403 Forbidden, potentially permanent)
+- **Increased latency** (server-side queuing)
+
+**Our Self-Imposed Rate Limits:**
+
+| Use Case | Rate Limit | Rationale |
+|----------|------------|-----------|
+| **Historical data collection** | 10 req/sec | Bulk collection should be polite |
+| **Live game monitoring** | 1 req/10 sec per game | Balance freshness vs. load |
+| **Development/testing** | 5 req/sec | Fast iteration without abuse |
+
+**Implementation:**
+```python
+from precog.api_connectors.rate_limiter import RateLimiter
+
+# ESPN rate limiter (10 requests/second for historical collection)
+espn_limiter = RateLimiter(
+    max_requests=10,
+    time_window=1.0,  # 1 second
+    name="espn_api"
+)
+
+# Use with ESPN API calls
+async def fetch_espn_scoreboard(date: str) -> dict:
+    """Fetch ESPN scoreboard with rate limiting."""
+    await espn_limiter.acquire()  # Block until rate limit allows
+
+    response = requests.get(
+        f"https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard",
+        params={'dates': date},
+        timeout=10
+    )
+    response.raise_for_status()
+    return response.json()
+```
+
+**Best Practices:**
+1. **Always use rate limiter** - Even "unlimited" APIs can throttle aggressive clients
+2. **Add jitter** - Randomize request timing to avoid thundering herd
+3. **Respect 429 responses** - Implement exponential backoff (see Section 9)
+4. **Cache aggressively** - Don't re-fetch data that hasn't changed
+5. **Monitor for errors** - Track 429/403 responses to detect throttling early
 
 **Documentation:** https://gist.github.com/nntrn/ee26cb2a0716de0947a0a4e9a157bc1c
 
@@ -406,7 +467,7 @@ def collect_nfl_games(
 ### Why Incremental Updates?
 
 **Problem:** Re-fetching ALL historical data every day is wasteful:
-- 1000+ games per season × 4 sports = 4000+ API calls
+- 1000+ games per season x 4 sports = 4000+ API calls
 - 60+ seconds collection time
 - Unnecessary database writes (99% of games unchanged)
 
@@ -936,6 +997,383 @@ class TestDataCollector:
 
 ---
 
+## 11. Data Source Tiering Strategy
+
+**NEW IN V1.1** - Documents 3-tier data source architecture for strategy-appropriate cost optimization.
+
+### Overview
+
+Sports data sources vary dramatically in cost, latency, and reliability. This section documents the 3-tier architecture for selecting appropriate data sources based on strategy requirements.
+
+### Three-Tier Architecture
+
+```
+                    ┌─────────────────────────────────────────────────────────────┐
+                    │               DATA SOURCE TIERING PYRAMID                    │
+                    └─────────────────────────────────────────────────────────────┘
+
+    Latency                                                                     Cost
+    ───────►                                                                    ◄───────
+
+      ▲                          ┌───────────────────┐
+      │                          │   TIER 3: PAID    │                            ▲
+   <1 min                        │  MySportsFeeds    │                         $909+/mo
+      │                          │   Sportradar      │                            │
+      │                          │   (Sub-second)    │                            │
+      │                          └───────────────────┘
+      │                      ┌───────────────────────────┐
+      │                      │    TIER 2: DEV/TESTING    │
+   UNKNOWN                   │   ESPN Hidden API (FREE)  │                       FREE
+      │                      │    Balldontlie (FREE)     │                    (unreliable)
+      │                      │   (Latency: TBD Phase 2)  │
+      │                      └───────────────────────────┘
+      │              ┌─────────────────────────────────────────┐
+      │              │        TIER 1: HISTORICAL DATA          │
+   Hours             │    sportsdataverse-py / nflreadpy       │                FREE
+      │              │          (No latency req)               │             (reliable)
+      ▼              └─────────────────────────────────────────┘
+
+```
+
+### Tier 1: Historical Data (FREE, Reliable)
+
+**Data Sources:**
+- **sportsdataverse-py**: Python wrapper for nflverse data (50+ years NFL stats)
+- **nflreadpy**: Alternative Python package for nflverse
+- **GitHub Releases**: Direct download from nflverse/nfldata
+
+**Use Cases:**
+- Model training (historical game outcomes, team stats)
+- Backtesting strategies (historical win probabilities)
+- Elo ratings bootstrap (pre-2024 games)
+
+**Example (sportsdataverse-py):**
+```python
+import sportsdataverse.nfl as nfl
+
+# Fetch NFL play-by-play data (FREE, ~10 sec/season)
+pbp = nfl.load_nfl_pbp(seasons=[2023, 2024])
+
+# Fetch team schedules with outcomes
+schedules = nfl.load_nfl_schedule(seasons=[2024])
+
+# Fetch weekly rosters for injury tracking
+rosters = nfl.load_nfl_weekly_rosters(seasons=[2024])
+
+# All data is FREE, reliable, comprehensive
+# Latency: Hours (batch download, not real-time)
+```
+
+### Tier 2: Development/Testing (FREE, Unreliable)
+
+**Data Sources:**
+- **ESPN Hidden API**: Score updates (latency UNKNOWN - requires empirical measurement)
+- **Balldontlie**: NBA/NFL/MLB/NHL (latency varies)
+
+**CRITICAL: ESPN Latency is UNKNOWN**
+
+Reports vary wildly on ESPN hidden API latency:
+- Some users report ~194ms (near real-time)
+- Others report "updates only occurring once daily" for some leagues
+- Community consensus: "still slower than TV" but exact delay unclear
+
+**Action Required (Phase 2):** Empirically measure ESPN delay by comparing API timestamps
+to TV/official feed for a sample of games. This determines which strategies are viable.
+
+**Use Cases:**
+- Development environment testing
+- Pre-game model features (hours before kickoff)
+- **Lag-aware strategies** that tolerate 30-60+ second delays (quarter/half markets)
+- **NOT for sub-second scalping** (use Tier 3 paid feeds)
+
+**Example (ESPN Hidden API):**
+```python
+import requests
+import time
+
+# Fetch live NFL scoreboard
+response = requests.get(
+    "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
+)
+games = response.json()['events']
+
+# CRITICAL: Latency is UNKNOWN until empirically measured
+# Reliability: Moderate (no SLA, may break without notice)
+# Rate limit: Self-imposed 1 req/10-15 sec to avoid IP blocking
+```
+
+### Tier 3: Production (PAID, Reliable)
+
+**Data Sources (Verified Pricing, November 2024):**
+
+| Provider | Latency | Price/Month/League | Notes |
+|----------|---------|-------------------|-------|
+| **MySportsFeeds** | 10 min | $109 | Best budget option |
+| **MySportsFeeds** | 5 min | $309 | Mid-tier latency |
+| **MySportsFeeds** | 1 min | $909 | Low-latency production |
+| **MySportsFeeds** | Near-RT | $1,599 | Enterprise grade |
+| **Sportradar** | Sub-second | $1,000-5,000+ | Official NFL partner |
+| **SportsDataIO** | Real-time | $600-2,000 | Enterprise pricing |
+| **Balldontlie** | ~10 min | FREE | Free alternative |
+
+**Use Cases:**
+- Production live trading (Phase 5+)
+- Live in-game strategies requiring <1 min latency
+- Sub-second scalping strategies
+
+### Strategy Latency Tolerance Matrix
+
+**Key Insight:** For Kalshi-style prediction markets, a delay of **10-30 seconds is usually survivable**
+for many edges. A delay of **several minutes is NOT acceptable** for live trading.
+
+| Strategy Type | Latency Tolerance | Recommended Tier | Monthly Cost | Notes |
+|--------------|-------------------|------------------|--------------|-------|
+| **Pre-game (model features)** | Hours | Tier 1 | FREE | Elo, priors, team strength |
+| **Pre-game (final line check)** | 30 min | Tier 2 | FREE | Check for line movement |
+| **Live quarter/half props** | 30-60 sec | Tier 2 | FREE | Slow-moving markets |
+| **Live structural edges** | 10-30 sec | Tier 2/3 | FREE-$109 | Stale lines after obvious events |
+| **Live in-game (score-based)** | 5-10 sec | Tier 3 | $909+ | Fast-moving markets |
+| **Live scalping (sub-second)** | <1 sec | Tier 3 ONLY | $1,599+ | NOT recommended for bootstrap |
+
+### Lag-Aware Strategy Design (CRITICAL)
+
+**Design Principle:** Instead of building for tick-by-tick, sub-second reactions, focus on
+**edges that persist for MINUTES, not seconds:**
+
+1. **Markets that update slowly after scoring drives** - Book may be slow to adjust
+2. **Quarter/half markets** - Structural edges where the book is slow to move
+3. **Mispriced futures/season-long markets** - Not time-sensitive
+4. **Pre-game edges** - Hours of tolerance, no live data needed
+
+**Strategy Metadata Pattern:**
+```python
+@dataclass
+class StrategyConfig:
+    """Each strategy explicitly declares its data requirements."""
+    name: str
+    max_tolerated_lag_seconds: int  # e.g., 60 for quarter props
+    required_fields: list[str]      # e.g., ["score", "time_remaining"]
+    min_confidence_threshold: float  # e.g., 0.8 for multi-source agreement
+
+# Only enable strategies whose data requirements can be met
+def can_enable_strategy(strategy: StrategyConfig, provider: GameStateProvider) -> bool:
+    return provider.latency_seconds <= strategy.max_tolerated_lag_seconds
+```
+
+### Bootstrap-First Two-Stage Approach
+
+**The Problem:** Premium feeds cost $100-$1,600+/month per league. Without proven ROI,
+this expense cannot be justified.
+
+**Stage 1: Bootstrap (FREE/Low-Cost)**
+- Build and validate end-to-end system on historical data
+- Use free or delayed "live" data (ESPN, Balldontlie)
+- Paper trading and micro-sized positions
+- Focus on lag-tolerant strategies (quarter props, slow markets)
+- **Goal:** Prove the system works before paying for premium data
+
+**Stage 2: Scale (After Proving Value)**
+- Upgrade to pro feed ONLY after demonstrating profitability
+- Premium feed bill comes AFTER de-risking the concept
+- By then, you'll know exact latency requirements
+- Can negotiate trial/discounted start with providers
+
+**Cost Timeline:**
+```
+Phase 2-3: $0/month (Tier 1 + Tier 2 only, paper trading)
+Phase 4:   $0/month (Live trading with micro positions, lag-tolerant strategies)
+Phase 5+:  $109-909/month (Add Tier 3 ONLY when metrics justify ROI)
+```
+
+### Multi-Source Reconciliation (Confidence Scoring)
+
+**Problem:** Single data source may be delayed, stale, or wrong.
+
+**Solution:** Combine multiple free/hobby-tier feeds and reconcile discrepancies:
+
+```python
+@dataclass
+class GameStateWithConfidence:
+    """Game state with confidence score based on source agreement."""
+    score_home: int
+    score_away: int
+    time_remaining: str
+    quarter: int
+    timestamp: datetime
+    confidence: float  # 0.0 - 1.0
+    sources_agreeing: int
+    sources_total: int
+
+class MultiSourceReconciler:
+    """Reconcile game state from multiple data sources."""
+
+    def __init__(self, providers: list[GameStateProvider]):
+        self.providers = providers
+
+    def get_reconciled_state(self, game_id: str) -> GameStateWithConfidence:
+        states = [p.get_game_state(game_id) for p in self.providers]
+
+        # Count agreement
+        scores = [(s['home_score'], s['away_score']) for s in states]
+        most_common_score = max(set(scores), key=scores.count)
+        agreeing = scores.count(most_common_score)
+
+        # Calculate confidence
+        confidence = agreeing / len(states)
+
+        return GameStateWithConfidence(
+            score_home=most_common_score[0],
+            score_away=most_common_score[1],
+            confidence=confidence,
+            sources_agreeing=agreeing,
+            sources_total=len(states),
+            # ... other fields
+        )
+
+# Risk layer uses confidence to gate trading
+def should_trade(state: GameStateWithConfidence, strategy: StrategyConfig) -> bool:
+    if state.confidence < strategy.min_confidence_threshold:
+        return False  # Sources disagree - don't trade or be very conservative
+    return True
+```
+
+**Confidence-Based Trading Rules:**
+- **High confidence (>0.9):** Multiple sources agree, recent timestamps -> Trade normally
+- **Medium confidence (0.7-0.9):** Some disagreement -> Trade conservative edges only
+- **Low confidence (<0.7):** Sources disagree significantly -> DO NOT TRADE
+
+### GameStateProvider Abstraction
+
+**Pattern for Tier-Agnostic Code:**
+
+```python
+from typing import Protocol
+from decimal import Decimal
+
+class GameStateProvider(Protocol):
+    """Abstract interface for game state data sources."""
+
+    def get_current_score(self, game_id: str) -> dict:
+        """Get current game score."""
+        ...
+
+    def get_game_clock(self, game_id: str) -> dict:
+        """Get game clock (quarter, time remaining)."""
+        ...
+
+    @property
+    def latency_seconds(self) -> int:
+        """Expected latency in seconds (-1 if unknown)."""
+        ...
+
+    @property
+    def source_confidence(self) -> float:
+        """Source reliability confidence (0.0-1.0). Use for reconciliation weighting."""
+        ...
+
+
+class ESPNGameStateProvider:
+    """Tier 2: ESPN Hidden API (FREE, latency UNKNOWN - requires empirical measurement)."""
+
+    @property
+    def latency_seconds(self) -> int:
+        # UNKNOWN - requires Phase 2 empirical measurement
+        # Reports range from ~194ms to "daily updates" depending on league
+        return -1  # Unknown until measured
+
+    @property
+    def source_confidence(self) -> float:
+        return 0.7  # Free tier, no SLA, may break without notice
+
+
+class MySportsFeedsProvider:
+    """Tier 3: MySportsFeeds (PAID, configurable latency, high reliability)."""
+
+    def __init__(self, plan: str = "live_10min"):
+        self._latency_map = {
+            "live_10min": 600,    # $109/mo
+            "live_5min": 300,     # $309/mo
+            "live_1min": 60,      # $909/mo
+            "near_realtime": 5,   # $1,599/mo
+        }
+        self.plan = plan
+
+    @property
+    def latency_seconds(self) -> int:
+        return self._latency_map[self.plan]
+
+    @property
+    def source_confidence(self) -> float:
+        return 0.95  # Paid tier with SLA, highly reliable
+
+
+# Strategy selects provider based on latency tolerance
+def create_game_provider(strategy_latency_tolerance: int, use_free_only: bool = True) -> GameStateProvider:
+    """Factory method: Select provider based on strategy needs.
+
+    Args:
+        strategy_latency_tolerance: Max acceptable latency in seconds
+        use_free_only: If True (bootstrap mode), always return ESPN regardless of tolerance
+
+    Note:
+        During bootstrap phase, always use free providers. The latency tolerance
+        determines which STRATEGIES to enable, not which provider to use.
+    """
+    if use_free_only:
+        # Bootstrap mode: Free provider only. Strategy layer decides if this
+        # latency is acceptable for the strategy's requirements.
+        return ESPNGameStateProvider()
+
+    # Production mode: Select based on tolerance
+    if strategy_latency_tolerance >= 60:
+        return MySportsFeedsProvider("live_1min")  # $909/mo
+    else:
+        return MySportsFeedsProvider("near_realtime")  # $1,599/mo
+```
+
+### nflverse/sportsdataverse Integration
+
+**Installation:**
+```bash
+pip install sportsdataverse nfl-data-py nflreadr
+```
+
+**Available Data (All FREE):**
+
+| Dataset | Description | Update Frequency |
+|---------|-------------|------------------|
+| `load_nfl_pbp()` | Play-by-play (1999-present) | Daily during season |
+| `load_nfl_schedule()` | Season schedules with outcomes | Weekly |
+| `load_nfl_weekly_rosters()` | Weekly active rosters | Weekly |
+| `load_nfl_player_stats()` | Individual player stats | Post-game |
+| `load_nfl_team_stats()` | Team-level statistics | Post-game |
+| `load_nfl_combine()` | NFL Combine results | Annual |
+| `load_nfl_draft()` | Draft picks (1936-present) | Annual |
+
+**Example: Model Training Pipeline:**
+```python
+import sportsdataverse.nfl as nfl
+import pandas as pd
+
+# Collect 5 years of data for model training (FREE)
+pbp_data = nfl.load_nfl_pbp(seasons=list(range(2019, 2024)))
+
+# Filter to regular season games
+regular_season = pbp_data[pbp_data['season_type'] == 'REG']
+
+# Calculate features for Elo model
+team_stats = regular_season.groupby(['game_id', 'home_team']).agg({
+    'yards_gained': 'sum',
+    'score_differential': 'last',
+    'epa': 'sum'  # Expected Points Added
+}).reset_index()
+
+# This is ~50,000 games of data, completely FREE
+print(f"Collected {len(team_stats)} game records for model training")
+```
+
+---
+
 `★ Insight ─────────────────────────────────────`
 **Data Collection: Foundation of Accurate Predictions**
 
@@ -943,18 +1381,31 @@ class TestDataCollector:
 
 2. **Schema Validation Prevents Garbage In, Garbage Out:** Missing fields or wrong types corrupt model training. Strict validation ensures only clean, complete data enters the database.
 
-3. **Automated Scheduling Ensures Freshness:** Models trained on stale data make poor predictions. Daily/hourly collection via event loop keeps data fresh without manual intervention.
+3. **Tiered Data Sources Optimize Cost/Latency:** Start with FREE sources (Tier 1-2) for development and pre-game strategies. Only pay for Tier 3 when live trading ROI justifies $109-1,599/month per league.
+
+4. **Bootstrap-First Approach:** Measure empirical latency requirements before committing to expensive APIs. Many strategies work fine with 5-10 minute delay (FREE).
 `─────────────────────────────────────────────────`
 
-Perfect! All 5 guides/specs are now created. Let me update the todo list and then update MASTER_INDEX V2.33 → V2.34.
+---
 
-<function_calls>
-<invoke name="TodoWrite">
-<parameter name="todos">[
-  {"content": "Create STRATEGY_EVALUATION_SPEC_V1.0.md (~400 lines)", "status": "completed", "activeForm": "Creating STRATEGY_EVALUATION_SPEC_V1.0.md"},
-  {"content": "Create AB_TESTING_FRAMEWORK_SPEC_V1.0.md (~350 lines)", "status": "completed", "activeForm": "Creating AB_TESTING_FRAMEWORK_SPEC_V1.0.md"},
-  {"content": "Create MODEL_TRAINING_GUIDE_V1.0.md (~500 lines)", "status": "completed", "activeForm": "Creating MODEL_TRAINING_GUIDE_V1.0.md"},
-  {"content": "Create EDGE_CALCULATION_GUIDE_V1.0.md (~400 lines)", "status": "completed", "activeForm": "Creating EDGE_CALCULATION_GUIDE_V1.0.md"},
-  {"content": "Create DATA_COLLECTION_GUIDE_V1.0.md (~450 lines)", "status": "completed", "activeForm": "Creating DATA_COLLECTION_GUIDE_V1.0.md"},
-  {"content": "Update MASTER_INDEX V2.33 → V2.34 with 5 new specs", "status": "in_progress", "activeForm": "Updating MASTER_INDEX"}
-]
+## Appendix A: API Pricing Reference (November 2024)
+
+| Provider | Tier | Latency | Price/Month | Leagues |
+|----------|------|---------|-------------|---------|
+| **sportsdataverse** | 1 | Hours | FREE | NFL, NBA, NCAAF, NCAAB |
+| **nflreadpy** | 1 | Hours | FREE | NFL only |
+| **ESPN Hidden API** | 2 | 5-15 min | FREE | All major sports |
+| **Balldontlie** | 2/3 | ~10 min | FREE | NBA, NFL, MLB, NHL |
+| **MySportsFeeds (10min)** | 3 | 10 min | $109 | Per league |
+| **MySportsFeeds (5min)** | 3 | 5 min | $309 | Per league |
+| **MySportsFeeds (1min)** | 3 | 1 min | $909 | Per league |
+| **MySportsFeeds (RT)** | 3 | Near-RT | $1,599 | Per league |
+| **Sportradar** | 3 | Sub-sec | $1,000-5,000+ | Enterprise |
+| **SportsDataIO** | 3 | Real-time | $600-2,000 | Enterprise |
+| **The Odds API** | 2 | Real-time | $25+ | Odds only |
+
+**Note:** Prices verified November 2024. Check provider websites for current pricing.
+
+---
+
+**END OF DATA_COLLECTION_GUIDE V1.1**
