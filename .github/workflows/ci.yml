@@ -289,11 +289,11 @@ jobs:
 
       - name: Run integration tests
         run: |
-          python -m pytest tests/integration/ tests/property/ -v --tb=short
+          python -m pytest tests/integration/ tests/property/ -v --tb=short --no-cov
 
       - name: Run E2E tests
         run: |
-          python -m pytest tests/e2e/ -v --tb=short
+          python -m pytest tests/e2e/ -v --tb=short --no-cov
         continue-on-error: true  # E2E may have external dependencies
 
   validate-quick:
