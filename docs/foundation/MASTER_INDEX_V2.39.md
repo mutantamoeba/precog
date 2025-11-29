@@ -1,9 +1,14 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.38
-**Last Updated:** 2025-11-28
+**Version:** 2.39
+**Last Updated:** 2025-11-29
 **Status:** ✅ Current
+**Changes in v2.39:**
+- **SESSION_WORKFLOW_GUIDE V1.0 → V1.1**: Added Pre-Planning Test Coverage Checklist (Section 3)
+- New section enforces TESTING_STRATEGY V3.2 8-test-type requirement before todo list creation
+- Root cause: Phase 2C planning only included 2/8 test types (unit + integration)
+- CLAUDE.md V1.21 → V1.22 (added Step 4 reference to checklist)
 **Changes in v2.38:**
 - **DATA COLLECTION GUIDE V1.1**: Updated DATA_COLLECTION_GUIDE_V1.0.md → DATA_COLLECTION_GUIDE_V1.1.md
 - Added Section 11: Data Source Tiering Strategy (3-tier architecture: Historical FREE, Dev/Testing FREE, Production PAID)
@@ -374,7 +379,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.19.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.38.md** | ✅ | v2.37 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.37** (ESPN Data Model: ARCHITECTURE_DECISIONS V2.22, ADR_INDEX V1.16, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0) |
+| **MASTER_INDEX_V2.39.md** | ✅ | v2.39 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.39** (SESSION_WORKFLOW_GUIDE V1.0→V1.1: Pre-Planning Test Coverage Checklist; CLAUDE.md V1.21→V1.22) |
 | **ARCHITECTURE_DECISIONS_V2.23.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.22** (ADR-029: ESPN Data Model with Normalized Schema - 4-table design for multi-sport ESPN data; venues, game_states (SCD Type 2), team_rankings, teams; JSONB situation field for sport-specific data; ~1.1 GB/year storage; 97 → 98 total ADRs) |
 | **REQUIREMENT_INDEX_V1.11.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
 | **ADR_INDEX_V1.16.md** | ✅ | v1.16 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 77 architecture decisions - **UPDATED V1.16** (ADR-029: ESPN Data Model with Normalized Schema - Phase 2 Live Data Integration; 76 → 77 total ADRs) |
@@ -521,12 +526,12 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 1.5 | 🔴 Critical | **NEW** - TDD failure post-mortem: why Strategy Manager tests passed despite bugs (over-reliance on mocks, small test suite false confidence, bypassed clean_test_data fixture, wrote tests after implementation); documents 6 lessons learned, action plan for refactoring all manager tests, prevention strategies (test review checklist, coverage monitoring, test type requirements) |
 | **TESTING_GAPS_ANALYSIS.md** | ✅ | n/a | `/` (root) | 1.5 | Phase 1.5 | 🔴 Critical | **NEW** - Current test coverage analysis and gap identification: overall 86.25% coverage but manager layer severely inadequate (Model 25.75%, Strategy 19.96% vs. ≥85% target); documents why tests were insufficient (connection pool not stressed, missing test types), 8 required test categories, impact on trading application, immediate/near-term/long-term recommendations |
 | **DOCUMENTATION_WORKFLOW_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | All | All phases | 🔴 Critical | **NEW** - Document cohesion & consistency workflows extracted from CLAUDE.md: Update Cascade Rules (6 scenarios), status field standards, consistency validation checklists, document dependency map; prevents documentation drift |
-| **SESSION_WORKFLOW_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | All | All phases | 🔴 Critical | **NEW** - Comprehensive session workflows extracted from CLAUDE.md V1.17 Section 3 (9 sections): starting sessions, phase start protocol, git safety, recovery patterns, multi-session coordination, pre-commit/pre-push hooks, ending sessions, phase transitions, deferred task tracking; follows V1.16 extraction pattern |
+| **SESSION_WORKFLOW_GUIDE_V1.1.md** | ✅ | v1.1 | `/docs/utility/` | All | All phases | 🔴 Critical | Comprehensive session workflows (10 sections): starting sessions, phase start protocol, **pre-planning test coverage checklist (V1.1 NEW - enforces 8 test types)**, during development, git safety, recovery patterns, multi-session coordination, ending sessions, phase transitions, deferred task tracking; V1.1 adds Section 3 requiring audit_test_type_coverage.py run before todo list creation |
 | **ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 2 | Phase 2 | 🟡 High | **NEW** - Phase 2 ESPN data model implementation plan: 5 phases (A-E), TypedDict refactoring, database migrations 026-029, CRUD operations, multi-sport support (NFL, NCAAF, NBA, NCAAB, NHL, WNBA), ~1.1 GB/year storage estimate |
 | **SCHEMA_MIGRATION_WORKFLOW_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | All phases | 🔴 Critical | **NEW** - Comprehensive database schema migration workflow: 13 main sections covering complete migration workflow (Plan → Create Migration → Update CRUD → Update Tests → Run Tests → Update Docs → Commit/Deploy); pre-migration checklist, dual-key pattern code examples, test templates (Pattern 13 compliant - NO mocks), rollback procedures, common scenarios, troubleshooting guide; companion to Pattern 14 (Schema Migration → CRUD Workflow); cross-references ADR-089 (Dual-Key Schema Pattern) |
 | **SESSION_7_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 7 | 🟡 High | Latest session handoff (session # is version) |
 | **SESSION_6_HANDOFF.md** | ✅ | - | `/docs/sessions/` | 0 | Session 6 | 🟢 Medium | Previous session handoff |
-| **Handoff_Protocol_V1.0.md** | 📦 | v1.0 | `/docs/_archive/` | 0 | All phases | 🔴 Critical | **ARCHIVED** - Original handoff protocol; superseded by SESSION_WORKFLOW_GUIDE_V1.0.md |
+| **Handoff_Protocol_V1.0.md** | 📦 | v1.0 | `/docs/_archive/` | 0 | All phases | 🔴 Critical | **ARCHIVED** - Original handoff protocol; superseded by SESSION_WORKFLOW_GUIDE_V1.1.md |
 | **VERSION_HEADERS_GUIDE_V2.1.md** | 📦 | v2.1 | `/docs/_archive/` | 0 | All phases | 🟡 High | **ARCHIVED** - Version control standards (superseded by inline documentation in DEVELOPMENT_PATTERNS) |
 | **PHASE_0.7_DEFERRED_TASKS_V1.4.md** | 📦 | v1.4 | `/docs/_archive/` | 0.7 | Phase 0.7 | 🟡 High | **ARCHIVED** - Phase 0.7 deferred tasks complete; all 8/8 tasks done (DEF-001 through DEF-008: pre-commit, pre-push, branch protection, schema validation) |
 | **GITHUB_BRANCH_PROTECTION_CONFIG.md** | ✅ | v1.0 | `/docs/utility/` | 0.7 | Phase 0.7 | 🟡 High | **NEW** - Complete GitHub branch protection configuration (completes DEF-003) |
