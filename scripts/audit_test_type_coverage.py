@@ -200,8 +200,9 @@ def check_test_file_for_types(test_file: Path) -> list[str]:
                 if f"@pytest.mark.{marker}" in content or f"pytest.mark.{marker}" in content:
                     types_found.append(test_type)
                     break
-    except Exception:
-        pass
+    except (OSError, UnicodeDecodeError):
+        # Skip files that can't be read - return empty list
+        return []
     return types_found
 
 
