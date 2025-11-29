@@ -2877,7 +2877,10 @@ class TestShowEnvironment:
         assert "warning" in output  # Warning message
 
     @patch("precog.database.connection.get_environment")
-    @patch.dict("os.environ", {"PRECOG_ENV": "test", "DB_NAME": "precog_test"})
+    @patch.dict(
+        "os.environ",
+        {"PRECOG_ENV": "test", "DB_NAME": "precog_test", "DB_PASSWORD": "secret123"},
+    )
     def test_env_verbose_shows_env_vars(self, mock_get_env, runner):
         """Test env command with --verbose shows environment variables.
 
@@ -2885,7 +2888,7 @@ class TestShowEnvironment:
             - Exit code 0
             - Displays PRECOG_ENV variable
             - Displays DB_NAME variable
-            - Hides password
+            - Hides password (shows hidden/masked when DB_PASSWORD is set)
         """
         mock_get_env.return_value = "test"
 
@@ -2895,8 +2898,10 @@ class TestShowEnvironment:
         output = strip_ansi(result.stdout)
         assert "PRECOG_ENV" in output
         assert "DB_NAME" in output
-        # Password should be hidden
-        assert "hidden" in output.lower() or "******" in output
+        # Password should be hidden when set (not show actual value)
+        assert "hidden" in output.lower() or "******" in output or "set" in output.lower()
+        # Actual password value should never appear
+        assert "secret123" not in output
 
 
 # ============================================================================
