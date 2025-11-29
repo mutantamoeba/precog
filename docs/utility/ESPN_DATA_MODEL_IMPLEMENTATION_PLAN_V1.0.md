@@ -53,13 +53,13 @@ This document captures the implementation plan for Phase 2 ESPN data model enhan
 - [x] Added generic `get_scoreboard(league)` method for sport-agnostic pipelines
 - [x] All 44 tests passing
 
-### Phase B: Database Migrations (PENDING)
-**Status:** Pending
-**Duration:** 1-2 days
+### Phase B: Database Migrations (COMPLETE)
+**Status:** ✅ Complete (2025-11-29)
+**Duration:** 1 day
 **Dependencies:** Phase A complete
 
 **Deliverables:**
-- [ ] Migration 026: Create `venues` table
+- [x] Migration 026: Create `venues` table
   ```sql
   CREATE TABLE venues (
       venue_id SERIAL PRIMARY KEY,
@@ -74,7 +74,7 @@ This document captures the implementation plan for Phase 2 ESPN data model enhan
   );
   ```
 
-- [ ] Migration 027: Create `team_rankings` table
+- [x] Migration 027: Create `team_rankings` table
   ```sql
   CREATE TABLE team_rankings (
       ranking_id SERIAL PRIMARY KEY,
@@ -91,7 +91,7 @@ This document captures the implementation plan for Phase 2 ESPN data model enhan
   );
   ```
 
-- [ ] Migration 028: Enhance `teams` table
+- [x] Migration 028: Enhance `teams` table
   ```sql
   ALTER TABLE teams ADD COLUMN IF NOT EXISTS espn_team_id VARCHAR(50);
   ALTER TABLE teams ADD COLUMN IF NOT EXISTS display_name VARCHAR(100);
@@ -102,7 +102,7 @@ This document captures the implementation plan for Phase 2 ESPN data model enhan
   CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_espn_id ON teams(espn_team_id);
   ```
 
-- [ ] Migration 029: Create `game_states` table (SCD Type 2)
+- [x] Migration 029: Create `game_states` table (SCD Type 2)
   ```sql
   CREATE TABLE game_states (
       game_state_id SERIAL PRIMARY KEY,
