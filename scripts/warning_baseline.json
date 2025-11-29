@@ -274,7 +274,7 @@
   "tracking": {
     "last_measured": "2025-11-16T10:00:00Z",
     "measurement_commands": {
-      "pytest_warnings": "python -m pytest tests/ -v -W default --tb=no",
+      "pytest_warnings": "python -m pytest tests/ -v --tb=no",
       "validate_docs_warnings": "python scripts/validate_docs.py",
       "code_quality_ruff": "python -m ruff check .",
       "code_quality_mypy": "python -m mypy ."
