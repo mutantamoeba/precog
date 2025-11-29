@@ -2244,6 +2244,7 @@ def create_game_state(
     league: str | None = None,
     situation: dict | None = None,
     linescores: list | None = None,
+    data_source: str = "espn",
 ) -> int:
     """
     Create initial game state record (row_current_ind = TRUE).
@@ -2270,9 +2271,10 @@ def create_game_state(
         league: League code ('nfl', 'nba', etc.)
         situation: Sport-specific situation data (JSONB)
         linescores: Period-by-period scores (JSONB)
+        data_source: Source of game data (default: 'espn')
 
     Returns:
-        game_state_id of newly created record
+        id (surrogate key) of newly created record
 
     Educational Note:
         Game states use SCD Type 2 for complete historical tracking:
@@ -2281,6 +2283,11 @@ def create_game_state(
         - Enables replay: "What was the score at halftime?"
         - Critical for backtesting live trading strategies
         - ~190 updates per game = ~190 historical rows per game
+
+        Dual-Key Structure (Migration 029):
+        - id SERIAL (surrogate key) - returned by this function
+        - game_state_id VARCHAR (business key) - auto-generated as GS-{id}
+        - Enables SCD Type 2 versioning (multiple versions of same event)
 
     Example:
         >>> state_id = create_game_state(
@@ -2300,23 +2307,24 @@ def create_game_state(
         - ADR-029: ESPN Data Model with Normalized Schema
         - Pattern 2: Dual Versioning System (SCD Type 2)
     """
-    query = """
+    # Step 1: INSERT with placeholder game_state_id (will be updated immediately)
+    insert_query = """
         INSERT INTO game_states (
-            espn_event_id, home_team_id, away_team_id, venue_id,
+            game_state_id, espn_event_id, home_team_id, away_team_id, venue_id,
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
-            row_current_ind, row_start_timestamp
+            data_source, row_current_ind, row_start_timestamp
         )
         VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            TRUE, NOW()
+            'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, TRUE, NOW()
         )
-        RETURNING game_state_id
+        RETURNING id
     """
     with get_cursor(commit=True) as cur:
         cur.execute(
-            query,
+            insert_query,
             (
                 espn_event_id,
                 home_team_id,
@@ -2336,10 +2344,21 @@ def create_game_state(
                 league,
                 json.dumps(situation) if situation else None,
                 json.dumps(linescores) if linescores else None,
+                data_source,
             ),
         )
         result = cur.fetchone()
-        return cast("int", result["game_state_id"])
+        surrogate_id = cast("int", result["id"])
+
+        # Step 2: UPDATE to set correct game_state_id (GS-{id} format)
+        update_query = """
+            UPDATE game_states
+            SET game_state_id = %s
+            WHERE id = %s
+        """
+        cur.execute(update_query, (f"GS-{surrogate_id}", surrogate_id))
+
+        return surrogate_id
 
 
 def get_current_game_state(espn_event_id: str) -> dict[str, Any] | None:
@@ -2395,6 +2414,7 @@ def upsert_game_state(
     league: str | None = None,
     situation: dict | None = None,
     linescores: list | None = None,
+    data_source: str = "espn",
 ) -> int:
     """
     Insert or update game state with SCD Type 2 versioning.
@@ -2406,9 +2426,10 @@ def upsert_game_state(
 
     Args:
         (same as create_game_state)
+        data_source: Source of game data (default: 'espn')
 
     Returns:
-        game_state_id of newly created record
+        id (surrogate key) of newly created record
 
     Educational Note:
         SCD Type 2 UPSERT pattern:
@@ -2435,7 +2456,16 @@ def upsert_game_state(
         - REQ-DATA-001: Game State Data Collection (SCD Type 2)
         - Pattern 2: Dual Versioning System
     """
-    # Step 1: Close current row (if exists)
+    # Use a SINGLE transaction for all operations to maintain atomicity
+    # This ensures that if INSERT fails, the UPDATE is also rolled back
+    #
+    # Educational Note:
+    #   SCD Type 2 upsert is a 3-step atomic operation:
+    #   1. Close current row (row_current_ind = FALSE)
+    #   2. Insert new row with placeholder game_state_id
+    #   3. Update new row with proper game_state_id (GS-{id})
+    #   All three must succeed or all must fail (ACID transaction)
+
     close_query = """
         UPDATE game_states
         SET row_current_ind = FALSE,
@@ -2443,31 +2473,64 @@ def upsert_game_state(
         WHERE espn_event_id = %s
           AND row_current_ind = TRUE
     """
-    with get_cursor(commit=False) as cur:
+
+    insert_query = """
+        INSERT INTO game_states (
+            game_state_id, espn_event_id, home_team_id, away_team_id, venue_id,
+            home_score, away_score, period, clock_seconds, clock_display,
+            game_status, game_date, broadcast, neutral_site,
+            season_type, week_number, league, situation, linescores,
+            data_source, row_current_ind, row_start_timestamp
+        )
+        VALUES (
+            'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, TRUE, NOW()
+        )
+        RETURNING id
+    """
+
+    update_id_query = """
+        UPDATE game_states
+        SET game_state_id = %s
+        WHERE id = %s
+    """
+
+    with get_cursor(commit=True) as cur:
+        # Step 1: Close current row (if exists)
         cur.execute(close_query, (espn_event_id,))
 
-    # Step 2: Insert new row (inherit values from closed row if not provided)
-    # For simplicity, we require all values to be provided
-    return create_game_state(
-        espn_event_id=espn_event_id,
-        home_team_id=home_team_id,
-        away_team_id=away_team_id,
-        venue_id=venue_id,
-        home_score=home_score,
-        away_score=away_score,
-        period=period,
-        clock_seconds=clock_seconds,
-        clock_display=clock_display,
-        game_status=game_status,
-        game_date=game_date,
-        broadcast=broadcast,
-        neutral_site=neutral_site,
-        season_type=season_type,
-        week_number=week_number,
-        league=league,
-        situation=situation,
-        linescores=linescores,
-    )
+        # Step 2: Insert new row with placeholder
+        cur.execute(
+            insert_query,
+            (
+                espn_event_id,
+                home_team_id,
+                away_team_id,
+                venue_id,
+                home_score,
+                away_score,
+                period,
+                clock_seconds,
+                clock_display,
+                game_status,
+                game_date,
+                broadcast,
+                neutral_site,
+                season_type,
+                week_number,
+                league,
+                json.dumps(situation) if situation else None,
+                json.dumps(linescores) if linescores else None,
+                data_source,
+            ),
+        )
+        result = cur.fetchone()
+        surrogate_id = cast("int", result["id"])
+
+        # Step 3: Update game_state_id to proper value
+        cur.execute(update_id_query, (f"GS-{surrogate_id}", surrogate_id))
+
+        return surrogate_id
 
 
 def get_game_state_history(espn_event_id: str, limit: int = 100) -> list[dict[str, Any]]:

@@ -1,9 +1,14 @@
 # Comprehensive Test Requirements
 
-**Version:** 1.0
-**Date:** 2025-11-17
+**Version:** 2.0
+**Date:** 2025-11-29
 **Purpose:** Establish testing standards for all Precog modules
 **Triggered By:** TDD Failure Root Cause Analysis (Strategy Manager tests insufficient)
+**Changes in V2.0:**
+- **All 8 Test Types Now MANDATORY** - Removed N/A, OPT, P5+ designations
+- **Synced with TESTING_STRATEGY_V3.2** - Both documents now have identical requirements
+- **Validation via Phase 2C** - CRUD tests uncovered 3 critical bugs proving all test types needed
+- **Lesson Learned:** Phase 2C race condition bug would have been caught by Race tests if they weren't OPT
 
 ---
 
@@ -23,44 +28,57 @@ This document establishes comprehensive testing requirements for the Precog trad
 
 **Requirement:**
 
-All modules MUST have appropriate test coverage across multiple test types. Not all modules need all test types, but all modules MUST have at minimum:
+All modules MUST have comprehensive test coverage across ALL 8 test types. No exceptions, no deferrals.
 
-1. **Unit tests** (isolated function logic)
-2. **Integration tests** (with real dependencies - database, config, logging)
+**V2.0 Mandate:** Every module, regardless of phase or category, requires all 8 test types.
 
-**Test Type Matrix:**
+**Test Type Matrix (V2.0 - All Required):**
 
 | Module Type | Unit | Property | Integration | E2E | Stress | Race | Performance | Chaos |
 |-------------|------|----------|-------------|-----|--------|------|-------------|-------|
-| **Manager Layer** (Strategy, Model, Position) | ✅ REQ | ✅ REQ | ✅ REQ | ⚠️ OPT | ⚠️ OPT | ⚠️ OPT | ⏸️ P5+ | ⏸️ P5+ |
-| **Database Layer** (connection, CRUD, init) | ✅ REQ | ✅ REQ | ✅ REQ | ❌ N/A | ✅ REQ | ⚠️ OPT | ⏸️ P5+ | ⏸️ P5+ |
-| **API Layer** (Kalshi, ESPN, auth) | ✅ REQ | ⚠️ OPT | ⚠️ OPT | ❌ N/A | ⚠️ OPT | ❌ N/A | ⏸️ P5+ | ⏸️ P5+ |
-| **Config/Logger** (utils) | ✅ REQ | ❌ N/A | ✅ REQ | ❌ N/A | ❌ N/A | ❌ N/A | ❌ N/A | ❌ N/A |
-| **Trading Execution** (Phase 5) | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ⚠️ OPT |
+| **Manager Layer** (Strategy, Model, Position) | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ |
+| **Database Layer** (connection, CRUD, init) | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ |
+| **API Layer** (Kalshi, ESPN, auth) | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ |
+| **Config/Logger** (utils) | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ |
+| **Trading Execution** (Phase 5) | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ | ✅ REQ |
 
 Legend:
-- ✅ REQ = Required
-- ⚠️ OPT = Optional (recommended)
-- ❌ N/A = Not applicable
-- ⏸️ P5+ = Deferred to Phase 5+
+- ✅ REQ = Required (ALL test types mandatory for ALL modules)
 
 **Acceptance Criteria:**
 
-- [ ] All manager modules have unit + integration + property tests
-- [ ] All database modules have unit + integration + property + stress tests
+- [ ] All modules have ALL 8 test types (Unit, Property, Integration, E2E, Stress, Race, Performance, Chaos)
 - [ ] Test coverage dashboard shows test type breakdown per module
-- [ ] CI/CD pipeline enforces minimum test types per module category
+- [ ] CI/CD pipeline enforces ALL 8 test types for EVERY module
+- [ ] Pre-push hooks execute ALL 8 test types (not just unit tests)
+- [ ] `scripts/audit_test_type_coverage.py --strict` passes
 
 **Rationale:**
 
-Different modules have different risk profiles:
-- **Managers:** High complexity, business logic → need thorough testing
-- **Database:** Critical infrastructure, connection pooling → need stress tests
-- **API:** External dependency, rate limits → need integration tests
-- **Config/Logger:** Simple utilities → unit + integration sufficient
-- **Trading:** Financial risk → need ALL test types
+**V2.0 Rationale: All 8 test types required for ALL modules.**
 
-**Reference:** ADR-076 (Test Type Categories)
+Previous approach (V1.0) had tiered requirements based on "risk profiles." This failed in Phase 2C when:
+- Race condition bug in `upsert_game_state()` would have been caught by Race tests
+- Race tests were marked "OPT" for Database Layer
+- Bug made it to integration testing, causing transaction failures
+
+**Lessons Learned:**
+- "Low-risk" modules can have high-impact bugs
+- Race conditions exist everywhere concurrent operations happen
+- Performance issues in "utility" modules cascade to critical paths
+- Chaos testing reveals recovery bugs in ALL infrastructure
+
+**Universal Test Type Benefits:**
+- **Unit:** Validates isolated logic
+- **Property:** Catches edge cases via generated inputs
+- **Integration:** Validates component interactions
+- **E2E:** Validates complete workflows
+- **Stress:** Reveals resource exhaustion issues
+- **Race:** Catches concurrent access bugs
+- **Performance:** Establishes latency baselines
+- **Chaos:** Validates failure recovery
+
+**Reference:** ADR-076 (Test Type Categories), TESTING_STRATEGY_V3.2
 
 ---
 
@@ -658,4 +676,4 @@ E2E tests provide **user-level confidence**.
 
 ---
 
-**END OF TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md**
+**END OF TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md**

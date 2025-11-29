@@ -452,7 +452,7 @@ Creating requirements or ADRs without explicit todo items for EACH update locati
 **Real-World Example:**
 
 In Phase 1.5, when creating REQ-TEST-012 through REQ-TEST-019:
-1. ✅ Created TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md with 8 detailed requirements
+1. ✅ Created TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md with 8 detailed requirements
 2. ✅ Marked todo as "Create REQ-TEST-012 through REQ-TEST-019" COMPLETE
 3. ❌ **Nearly forgot** to add them to MASTER_REQUIREMENTS_V2.16
 4. ❌ **Nearly forgot** to add them to REQUIREMENT_INDEX

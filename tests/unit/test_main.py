@@ -34,6 +34,7 @@ Related:
 Coverage Target: 85%+ for main.py (currently 93.53%)
 """
 
+import re
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -43,6 +44,21 @@ from typer.testing import CliRunner
 
 # Import the Typer app from main.py
 from main import app
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text.
+
+    Rich library outputs ANSI codes for colors/formatting, which can break
+    string matching in tests when codes are embedded within expected text.
+
+    Example:
+        Input:  "\\x1b[1;36m100\\x1b[0m contracts"
+        Output: "100 contracts"
+    """
+    ansi_pattern = re.compile(r"\x1b\[[0-9;]*m")
+    return ansi_pattern.sub("", text)
+
 
 # ============================================================================
 # Fixtures
@@ -557,10 +573,11 @@ class TestFetchMarkets:
         # Verify command failed
         assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
 
-        # Verify error message shown
-        assert "Error:" in result.stdout, "Error label not shown"
-        assert "Limit must be at least 1" in result.stdout, "Error message not clear"
-        assert "Tip:" in result.stdout, "Tip not provided"
+        # Verify error message shown (strip ANSI for cross-platform compatibility)
+        output = strip_ansi(result.stdout)
+        assert "Error:" in output, "Error label not shown"
+        assert "Limit must be at least 1" in output, "Error message not clear"
+        assert "Tip:" in output, "Tip not provided"
 
         # Verify API not called (fast-fail before network call)
         mock_kalshi_client.get_markets.assert_not_called()
@@ -579,12 +596,13 @@ class TestFetchMarkets:
         # Verify command failed
         assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
 
-        # Verify error message shown
-        assert "Error:" in result.stdout, "Error label not shown"
-        assert "cannot exceed 200" in result.stdout, "Maximum limit not mentioned"
-        assert "Kalshi API maximum" in result.stdout, "Kalshi API context not provided"
-        assert "Tip:" in result.stdout, "Tip not provided"
-        assert "--limit 200" in result.stdout, "Suggested limit not shown"
+        # Verify error message shown (strip ANSI for cross-platform compatibility)
+        output = strip_ansi(result.stdout)
+        assert "Error:" in output, "Error label not shown"
+        assert "cannot exceed 200" in output, "Maximum limit not mentioned"
+        assert "Kalshi API maximum" in output, "Kalshi API context not provided"
+        assert "Tip:" in output, "Tip not provided"
+        assert "--limit 200" in output, "Suggested limit not shown"
 
         # Verify API not called
         mock_kalshi_client.get_markets.assert_not_called()
@@ -930,8 +948,10 @@ class TestFetchPositions:
         assert "NO" in result.stdout, "NO side not displayed"
 
         # Verify Total Exposure sum (62.50 + 22.50 + 140.00 = 225.00)
-        assert "Total Exposure" in result.stdout, "Total Exposure not shown"
-        assert "$225.00" in result.stdout, "Total Exposure sum not correct"
+        # Strip ANSI codes for cross-platform compatibility
+        output = strip_ansi(result.stdout)
+        assert "Total Exposure" in output, "Total Exposure not shown"
+        assert "$225.00" in output, "Total Exposure sum not correct"
 
     def test_fetch_positions_dry_run(self, runner, mock_kalshi_client):
         """Test fetch-positions with --dry-run.
@@ -1134,9 +1154,10 @@ class TestFetchFills:
         # Verify date displayed (may be truncated: "2025-11-…")
         assert "2025-11" in result.stdout, "Created date not displayed"
 
-        # Verify Total Volume shown
-        assert "Total Volume" in result.stdout, "Total Volume not shown"
-        assert "100 contracts" in result.stdout, "Total Volume count not shown"
+        # Verify Total Volume shown (strip ANSI for cross-platform compatibility)
+        output = strip_ansi(result.stdout)
+        assert "Total Volume" in output, "Total Volume not shown"
+        assert "100 contracts" in output, "Total Volume count not shown"
 
     def test_fetch_fills_multiple(self, runner, mock_kalshi_client):
         """Test fetch-fills with multiple fills.
@@ -1200,8 +1221,10 @@ class TestFetchFills:
         assert "SELL" in result.stdout, "SELL action not displayed"
 
         # Verify Total Volume sum (100 + 50 + 200 = 350)
-        assert "Total Volume" in result.stdout, "Total Volume not shown"
-        assert "350 contracts" in result.stdout, "Total Volume sum not correct"
+        # Strip ANSI codes for cross-platform compatibility
+        output = strip_ansi(result.stdout)
+        assert "Total Volume" in output, "Total Volume not shown"
+        assert "350 contracts" in output, "Total Volume sum not correct"
 
     def test_fetch_fills_pagination(self, runner, mock_kalshi_client):
         """Test fetch-fills with > 10 fills shows pagination message.
@@ -1231,16 +1254,19 @@ class TestFetchFills:
         # Verify exit code
         assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
 
+        # Strip ANSI codes for cross-platform compatibility
+        output = strip_ansi(result.stdout)
+
         # Verify table title shows full count
-        assert "15 total" in result.stdout, "Total fill count not shown in table title"
+        assert "15 total" in output, "Total fill count not shown in table title"
 
         # Verify pagination message shown
-        assert "and 5 more fills" in result.stdout, "Pagination message not shown"
+        assert "and 5 more fills" in output, "Pagination message not shown"
 
         # Verify total volume calculated from DISPLAYED fills (10 * 10 = 100)
         # NOTE: This is a limitation in main.py line 826 - only sums fills[:10]
         # Ideally should sum ALL fills, but testing actual behavior
-        assert "100 contracts" in result.stdout, "Total volume shown"
+        assert "100 contracts" in output, "Total volume shown"
 
     def test_fetch_fills_dry_run(self, runner, mock_kalshi_client):
         """Test fetch-fills with --dry-run.
@@ -1349,7 +1375,8 @@ class TestFetchFills:
 
         # Verify success
         assert result.exit_code == 0
-        assert "Fetched 1 fills" in result.stdout
+        output = strip_ansi(result.stdout)
+        assert "Fetched 1 fills" in output
 
 
 class TestFetchSettlements:
@@ -1424,12 +1451,13 @@ class TestFetchSettlements:
         assert "2025-11" in result.stdout, "Settled date not displayed"
 
         # Verify totals and P&L
-        assert "Total Revenue" in result.stdout, "Total Revenue not shown"
-        assert "Total Fees" in result.stdout, "Total Fees not shown"
-        assert "Net P&L" in result.stdout, "Net P&L not shown"
+        output = strip_ansi(result.stdout)
+        assert "Total Revenue" in output, "Total Revenue not shown"
+        assert "Total Fees" in output, "Total Fees not shown"
+        assert "Net P&L" in output, "Net P&L not shown"
 
         # Verify P&L calculation (50.00 - 2.50 = 47.50)
-        assert "$47.50" in result.stdout, "Net P&L not calculated correctly"
+        assert "$47.50" in output, "Net P&L not calculated correctly"
 
     def test_fetch_settlements_multiple(self, runner, mock_kalshi_client):
         """Test fetch-settlements with multiple settlements.
@@ -1482,20 +1510,21 @@ class TestFetchSettlements:
         assert "NFL-SF" in result.stdout, "Third ticker not displayed"
 
         # Verify results (uppercase)
-        assert "YES" in result.stdout, "YES result not displayed"
-        assert "NO" in result.stdout, "NO result not displayed"
+        output = strip_ansi(result.stdout)
+        assert "YES" in output, "YES result not displayed"
+        assert "NO" in output, "NO result not displayed"
 
         # Verify Total Revenue sum (50.00 + (-25.00) + 75.00 = 100.00)
-        assert "Total Revenue" in result.stdout, "Total Revenue not shown"
-        assert "$100.00" in result.stdout, "Total Revenue sum not correct"
+        assert "Total Revenue" in output, "Total Revenue not shown"
+        assert "$100.00" in output, "Total Revenue sum not correct"
 
         # Verify Total Fees sum (2.50 + 1.25 + 3.75 = 7.50)
-        assert "Total Fees" in result.stdout, "Total Fees not shown"
-        assert "$7.50" in result.stdout, "Total Fees sum not correct"
+        assert "Total Fees" in output, "Total Fees not shown"
+        assert "$7.50" in output, "Total Fees sum not correct"
 
         # Verify Net P&L (100.00 - 7.50 = 92.50)
-        assert "Net P&L" in result.stdout, "Net P&L not shown"
-        assert "$92.50" in result.stdout, "Net P&L calculation not correct"
+        assert "Net P&L" in output, "Net P&L not shown"
+        assert "$92.50" in output, "Net P&L calculation not correct"
 
     def test_fetch_settlements_dry_run(self, runner, mock_kalshi_client):
         """Test fetch-settlements with --dry-run.
@@ -1810,19 +1839,20 @@ class TestDbInit:
         )
 
         # Verify all 4 steps shown
-        assert "[1/4]" in result.stdout, "[1/4] not shown"
-        assert "[2/4]" in result.stdout, "[2/4] not shown"
-        assert "[3/4]" in result.stdout, "[3/4] not shown"
-        assert "[4/4]" in result.stdout, "[4/4] not shown"
+        output = strip_ansi(result.stdout)
+        assert "[1/4]" in output, "[1/4] not shown"
+        assert "[2/4]" in output, "[2/4] not shown"
+        assert "[3/4]" in output, "[3/4] not shown"
+        assert "[4/4]" in output, "[4/4] not shown"
 
         # Verify step descriptions
-        assert "Testing database connection" in result.stdout
-        assert "Creating database tables" in result.stdout
-        assert "Applying database migrations" in result.stdout
-        assert "Validating schema" in result.stdout
+        assert "Testing database connection" in output
+        assert "Creating database tables" in output
+        assert "Applying database migrations" in output
+        assert "Validating schema" in output
 
         # Verify success message
-        assert "Database initialization complete" in result.stdout
+        assert "Database initialization complete" in output
 
         # Verify all business logic functions were called
         mock_test_connection.assert_called_once()
@@ -1851,11 +1881,12 @@ class TestDbInit:
         assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
 
         # Verify error message
-        assert "Database connection failed" in result.stdout
-        assert "[1/4]" in result.stdout, "Should show step 1"
+        output = strip_ansi(result.stdout)
+        assert "Database connection failed" in output
+        assert "[1/4]" in output, "Should show step 1"
 
         # Verify NOT all steps executed (should stop at step 1)
-        assert "[2/4]" not in result.stdout, "Should not reach step 2"
+        assert "[2/4]" not in output, "Should not reach step 2"
 
     @patch("precog.database.connection.test_connection")
     @patch("precog.database.initialization.validate_schema_file")
@@ -1895,11 +1926,12 @@ class TestDbInit:
         assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
 
         # Verify error message
-        assert "Schema creation failed" in result.stdout or "ERROR" in result.stdout
+        output = strip_ansi(result.stdout)
+        assert "Schema creation failed" in output or "ERROR" in output
 
         # Verify step 1 passed
-        assert "[1/4]" in result.stdout
-        assert "Testing database connection" in result.stdout
+        assert "[1/4]" in output
+        assert "Testing database connection" in output
 
     @patch("precog.database.connection.test_connection")
     @patch("precog.database.initialization.validate_schema_file")
@@ -1949,11 +1981,12 @@ class TestDbInit:
         assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
 
         # Verify validation error message
-        assert "Missing critical tables" in result.stdout or "Missing tables" in result.stdout
+        output = strip_ansi(result.stdout)
+        assert "Missing critical tables" in output or "Missing tables" in output
 
         # Verify step 4 executed
-        assert "[4/4]" in result.stdout
-        assert "Validating schema" in result.stdout
+        assert "[4/4]" in output
+        assert "Validating schema" in output
 
     @patch("precog.database.connection.test_connection")
     def test_db_init_dry_run(self, mock_test_connection, runner):
@@ -2021,10 +2054,11 @@ class TestDbInit:
         assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
 
         # Verify all steps shown with detail
-        assert "[1/4]" in result.stdout
-        assert "[2/4]" in result.stdout
-        assert "[3/4]" in result.stdout
-        assert "[4/4]" in result.stdout
+        output = strip_ansi(result.stdout)
+        assert "[1/4]" in output
+        assert "[2/4]" in output
+        assert "[3/4]" in output
+        assert "[4/4]" in output
 
         # Verbose mode should work without errors
         assert result.exit_code == 0
@@ -2084,10 +2118,11 @@ class TestHealthCheck:
         assert "director" in result.stdout.lower() or "Directory" in result.stdout
 
         # Verify success indicators (PASS or ✓ or similar)
-        assert "PASS" in result.stdout or "passed" in result.stdout.lower()
+        output = strip_ansi(result.stdout)
+        assert "PASS" in output or "passed" in output.lower()
 
         # Verify summary shows all passed
-        assert "4/4" in result.stdout or "All checks passed" in result.stdout
+        assert "4/4" in output or "All checks passed" in output
 
     @patch("precog.database.connection.test_connection")
     def test_health_check_database_fail(self, mock_test_connection, runner):
@@ -2108,11 +2143,12 @@ class TestHealthCheck:
         assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
 
         # Verify database check failed
-        assert "database" in result.stdout.lower()
-        assert "FAIL" in result.stdout or "failed" in result.stdout.lower()
+        output = strip_ansi(result.stdout)
+        assert "database" in output.lower()
+        assert "FAIL" in output or "failed" in output.lower()
 
         # Verify summary shows failures
-        assert "3/4" in result.stdout or "1 failed" in result.stdout.lower()
+        assert "3/4" in output or "1 failed" in output.lower()
 
     @patch("precog.database.connection.test_connection")
     @patch("precog.config.config_loader.ConfigLoader")
