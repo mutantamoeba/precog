@@ -280,7 +280,8 @@ jobs:
               module = importlib.util.module_from_spec(spec)
               spec.loader.exec_module(module)
               if hasattr(module, 'run_migration'):
-                  module.run_migration(cur, conn)
+                  # Migrations are self-managing (create their own connection)
+                  module.run_migration()
 
           conn.close()
           print('All migrations applied successfully')
