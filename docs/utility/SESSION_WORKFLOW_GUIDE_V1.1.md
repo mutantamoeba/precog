@@ -1,13 +1,18 @@
 # Session Workflow Guide
 
 ---
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-11-15
-**Last Updated:** 2025-11-15
+**Last Updated:** 2025-11-29
 **Purpose:** Comprehensive guide to session workflows, phase transitions, and task tracking
 **Target Audience:** Claude Code AI assistant in all sessions
 **Extracted From:** CLAUDE.md V1.17 Section 3 (following V1.16 extraction pattern)
 **Status:** ✅ Current
+**Changes in V1.1:**
+- **Added Section 3: Pre-Planning Test Coverage Checklist (MANDATORY)** - Enforces TESTING_STRATEGY V3.2 8-test-type requirement before todo list creation
+- **Root Cause:** Phase 2C planning failure - only 2/8 test types included in todo list
+- **Solution:** Mandatory checklist requiring `audit_test_type_coverage.py` run + explicit 8-test-type verification
+- **Renumbered sections 3-9 → 4-10** to accommodate new section
 
 ---
 
@@ -15,13 +20,14 @@
 
 1. [Starting a New Session](#1-starting-a-new-session)
 2. [Phase Start Protocol](#2-phase-start-protocol)
-3. [During Development](#3-during-development)
-4. [Git Safety Protocols](#4-git-safety-protocols)
-5. [Recovering from Interrupted Sessions](#5-recovering-from-interrupted-sessions)
-6. [Multi-Session Coordination](#6-multi-session-coordination)
-7. [Ending a Session](#7-ending-a-session)
-8. [Phase Transitions](#8-phase-transitions)
-9. [Deferred Task Tracking (Dual-System)](#9-deferred-task-tracking-dual-system)
+3. [Pre-Planning Test Coverage Checklist (MANDATORY)](#3-pre-planning-test-coverage-checklist-mandatory) ⭐ **NEW**
+4. [During Development](#4-during-development)
+5. [Git Safety Protocols](#5-git-safety-protocols)
+6. [Recovering from Interrupted Sessions](#6-recovering-from-interrupted-sessions)
+7. [Multi-Session Coordination](#7-multi-session-coordination)
+8. [Ending a Session](#8-ending-a-session)
+9. [Phase Transitions](#9-phase-transitions)
+10. [Deferred Task Tracking (Dual-System)](#10-deferred-task-tracking-dual-system)
 
 ---
 
@@ -263,7 +269,133 @@ This makes task status **visible at every session start**.
 
 ---
 
-## 3. During Development
+## 3. Pre-Planning Test Coverage Checklist (MANDATORY)
+
+**⏱️ Time Required:** 5 minutes
+
+**When to use:** BEFORE creating any todo list for phase work, feature implementation, or CRUD operations.
+
+### The Problem: Incomplete Test Planning
+
+**Root Cause (Phase 2C, 2025-11-29):**
+- Todo list created with only 2/8 test types (unit + integration)
+- Missing: property, e2e, stress, race, performance, chaos tests
+- TESTING_STRATEGY V3.2 requires ALL 8 test types for ALL modules
+- **Result:** Would have created test coverage gaps requiring rework
+
+**Why This Happens:**
+- Planning focuses on implementation, testing becomes afterthought
+- Easy to forget test types when not explicitly checked
+- No automated enforcement at planning stage (only at pre-push/CI)
+
+### The Solution: Mandatory Pre-Planning Checklist
+
+**⚠️ BEFORE creating any todo list, complete this checklist:**
+
+#### Step 1: Run Test Type Audit (1 minute)
+
+```bash
+# Check current test type coverage gaps
+python scripts/audit_test_type_coverage.py --summary
+```
+
+**Expected Output:**
+```
+======================================================================
+TEST TYPE COVERAGE AUDIT SUMMARY
+======================================================================
+
+Modules analyzed: 11
+Passing: 0
+Failing: 11
+```
+
+**What to look for:**
+- Which modules are missing which test types
+- Current baseline to compare against after implementation
+
+#### Step 2: Review TESTING_STRATEGY Requirements (2 minutes)
+
+**TESTING_STRATEGY V3.2 requires ALL 8 test types for ALL tiers:**
+
+| Test Type | Marker | Purpose |
+|-----------|--------|---------|
+| **Unit** | `@pytest.mark.unit` | Isolated function logic |
+| **Property** | `@pytest.mark.property` | Hypothesis invariants (100+ cases) |
+| **Integration** | `@pytest.mark.integration` | REAL database, no mocks |
+| **E2E** | `@pytest.mark.e2e` | Complete workflows |
+| **Stress** | `@pytest.mark.stress` | Connection pool, rate limits |
+| **Race** | `@pytest.mark.race` | Concurrent operations |
+| **Performance** | `@pytest.mark.performance` | Latency benchmarks |
+| **Chaos** | `@pytest.mark.chaos` | Failure recovery |
+
+**Reference:** `docs/foundation/TESTING_STRATEGY_V3.2.md`
+
+#### Step 3: Verify Todo Includes All 8 Test Types (2 minutes)
+
+**Before finalizing your todo list, verify it includes:**
+
+- [ ] Unit tests (`@pytest.mark.unit`) - isolated logic
+- [ ] Property tests (`@pytest.mark.property`) - Hypothesis invariants
+- [ ] Integration tests (`@pytest.mark.integration`) - real DB, no mocks
+- [ ] E2E tests (`@pytest.mark.e2e`) - complete workflows
+- [ ] Stress tests (`@pytest.mark.stress`) - load testing
+- [ ] Race tests (`@pytest.mark.race`) - concurrency
+- [ ] Performance tests (`@pytest.mark.performance`) - benchmarks
+- [ ] Chaos tests (`@pytest.mark.chaos`) - failure recovery
+
+**Example: Correct Todo List for CRUD Implementation**
+
+```python
+TodoWrite([
+    # Implementation
+    {"content": "Implement venues CRUD", "status": "pending", ...},
+    {"content": "Implement game_states CRUD (SCD Type 2)", "status": "pending", ...},
+
+    # ALL 8 Test Types (MANDATORY)
+    {"content": "Write UNIT tests (pytest.mark.unit)", "status": "pending", ...},
+    {"content": "Write PROPERTY tests (Hypothesis)", "status": "pending", ...},
+    {"content": "Write INTEGRATION tests (real DB)", "status": "pending", ...},
+    {"content": "Write E2E tests (complete workflows)", "status": "pending", ...},
+    {"content": "Write STRESS tests (load testing)", "status": "pending", ...},
+    {"content": "Write RACE tests (concurrency)", "status": "pending", ...},
+    {"content": "Write PERFORMANCE tests (benchmarks)", "status": "pending", ...},
+    {"content": "Write CHAOS tests (failure recovery)", "status": "pending", ...},
+
+    # Validation
+    {"content": "Run audit_test_type_coverage.py --strict", "status": "pending", ...},
+])
+```
+
+### Defense in Depth
+
+This checklist is the **first layer** of test coverage enforcement:
+
+| Layer | When | Tool | Action |
+|-------|------|------|--------|
+| **1. Pre-Planning** | Before todo list | This checklist | Ensures 8 test types planned |
+| **2. Pre-Push** | On `git push` | `audit_test_type_coverage.py` | Warns about missing types |
+| **3. CI/CD** | On PR | `test-type-coverage` job | Blocks merge if types missing |
+
+**Key Insight:** Catching gaps at planning stage saves hours of rework vs. catching at CI stage.
+
+### Quick Reference Card
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ PRE-PLANNING CHECKLIST (before any todo list creation)     │
+├─────────────────────────────────────────────────────────────┤
+│ □ Run: python scripts/audit_test_type_coverage.py --summary│
+│ □ Review: TESTING_STRATEGY_V3.2.md 8-test-type requirement │
+│ □ Verify todo includes ALL 8 test types:                   │
+│   □ unit    □ property    □ integration   □ e2e            │
+│   □ stress  □ race        □ performance   □ chaos          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 4. During Development
 
 ### Track Progress Continuously
 
@@ -284,7 +416,7 @@ See **Section 4: Git Safety Protocols** for complete pre-commit checklist.
 
 ---
 
-## 4. Git Safety Protocols
+## 5. Git Safety Protocols
 
 ### Pre-Commit Hooks (Automatic)
 
@@ -498,7 +630,7 @@ git push
 
 ---
 
-## 5. Recovering from Interrupted Sessions
+## 6. Recovering from Interrupted Sessions
 
 **⏱️ Time Required:** 5 minutes
 
@@ -607,7 +739,7 @@ $ gh pr merge 12 --squash --delete-branch
 
 ---
 
-## 6. Multi-Session Coordination
+## 7. Multi-Session Coordination
 
 **⏱️ Time Required:** 10 minutes (initial setup), ongoing awareness
 
@@ -753,7 +885,7 @@ git stash pop
 
 ---
 
-## 7. Ending a Session
+## 8. Ending a Session
 
 **⏱️ Time Required:** 10 minutes
 
@@ -857,7 +989,7 @@ git push origin $BRANCH
 
 ---
 
-## 8. Phase Transitions
+## 9. Phase Transitions
 
 **⏱️ Time Required:** 50 minutes (10-step assessment)
 
@@ -881,11 +1013,11 @@ See `docs/utility/PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md` for complete 10-
 
 ---
 
-## 9. Deferred Task Tracking (Dual-System)
+## 10. Deferred Task Tracking (Dual-System)
 
 **⏱️ Time Required:** Ongoing (2-5 minutes per task)
 
-### 9.1 The Problem: Lost Tasks
+### 10.1 The Problem: Lost Tasks
 
 **Observation:** Tasks get forgotten when tracked in documentation only.
 
@@ -899,7 +1031,7 @@ See `docs/utility/PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md` for complete 10-
 2. Parse through task descriptions to find relevant ones
 3. Manually track completion status
 
-### 9.2 Dual-Tracking Solution
+### 10.2 Dual-Tracking Solution
 
 **Layer 1: Documentation** - `PHASE_X_DEFERRED_TASKS_V1.0.md`
 - **Purpose:** Provides context, rationale, implementation details
@@ -917,7 +1049,7 @@ See `docs/utility/PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md` for complete 10-
 - Documentation → Issue numbers (`**GitHub Issue:** #45`)
 - Issue → Documentation lines (`See docs/utility/PHASE_0.7_DEFERRED_TASKS_V1.4.md lines 139-223`)
 
-### 9.3 Why Dual-Tracking Works
+### 10.3 Why Dual-Tracking Works
 
 | Feature | Documentation Only | GitHub Issues Only | Dual-Tracking |
 |---------|-------------------|-------------------|---------------|
@@ -932,7 +1064,7 @@ See `docs/utility/PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md` for complete 10-
 
 **Key Insight:** Documentation provides depth, GitHub provides breadth. Together they ensure tasks aren't forgotten.
 
-### 9.4 Creating Deferred Tasks (Step-by-Step)
+### 10.4 Creating Deferred Tasks (Step-by-Step)
 
 **When a task is deferred during phase work:**
 
@@ -1025,7 +1157,7 @@ Replace st.floats() with st.decimals() in property tests to comply with Pattern 
 **Source:** PR #13 AI review"
 ```
 
-### 9.5 Phase Start Protocol Integration
+### 10.5 Phase Start Protocol Integration
 
 **At the START of every phase, check BOTH sources:**
 
@@ -1044,7 +1176,7 @@ TodoWrite([
 ])
 ```
 
-### 9.6 Phase Completion Protocol Integration
+### 10.6 Phase Completion Protocol Integration
 
 **Step 6 of Phase Completion Protocol now includes:**
 
@@ -1055,7 +1187,7 @@ TodoWrite([
 
 **Prevents future task loss** by ensuring dual-tracking is set up before phase ends.
 
-### 9.7 Closing Deferred Tasks
+### 10.7 Closing Deferred Tasks
 
 **When task is completed:**
 
@@ -1072,7 +1204,7 @@ gh issue close 89 --comment "Completed in Phase 1.5. All st.floats() replaced wi
 - ✅ DEF-P1-015: Fixed float usage in property tests (Issue #89 closed)
 ```
 
-### 9.8 Example: Phase 1 Deferred Tasks
+### 10.8 Example: Phase 1 Deferred Tasks
 
 **Created during PR analysis (2025-11-15):**
 
@@ -1099,13 +1231,14 @@ gh issue close 89 --comment "Completed in Phase 1.5. All st.floats() replaced wi
 This guide provides comprehensive workflows for:
 1. ✅ **Starting sessions** - 5-minute checklist with git safety, phase check, todo list
 2. ✅ **Phase starts** - 15-minute protocol ensuring no tasks missed (deferred + test planning)
-3. ✅ **Development** - Continuous progress tracking with TodoWrite
-4. ✅ **Git safety** - Pre-commit, pre-push (parallelized!), branch protection
-5. ✅ **Recovery** - 5-minute protocol for interrupted sessions
-6. ✅ **Multi-session** - 7-step coordination preventing conflicts
-7. ✅ **Ending sessions** - 10-minute handoff with SESSION_HANDOFF.md update
-8. ✅ **Phase transitions** - 50-minute 10-step assessment protocol
-9. ✅ **Deferred tasks** - Dual-tracking system (documentation + GitHub) ensuring no task loss
+3. ✅ **Pre-planning checklist** - 5-minute test coverage verification (ALL 8 test types) ⭐ **NEW**
+4. ✅ **Development** - Continuous progress tracking with TodoWrite
+5. ✅ **Git safety** - Pre-commit, pre-push (parallelized!), branch protection
+6. ✅ **Recovery** - 5-minute protocol for interrupted sessions
+7. ✅ **Multi-session** - 7-step coordination preventing conflicts
+8. ✅ **Ending sessions** - 10-minute handoff with SESSION_HANDOFF.md update
+9. ✅ **Phase transitions** - 50-minute 10-step assessment protocol
+10. ✅ **Deferred tasks** - Dual-tracking system (documentation + GitHub) ensuring no task loss
 
 **Key References:**
 - CLAUDE.md - Project overview and critical patterns
@@ -1115,4 +1248,4 @@ This guide provides comprehensive workflows for:
 
 ---
 
-**END OF SESSION_WORKFLOW_GUIDE_V1.0**
+**END OF SESSION_WORKFLOW_GUIDE_V1.1**
