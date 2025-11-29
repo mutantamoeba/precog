@@ -143,7 +143,11 @@ def espn_event(draw: st.DrawFn) -> dict[str, Any]:
 
 
 class TestGameStateParsingInvariants:
-    """Property tests for game state parsing invariants."""
+    """Property tests for game state parsing invariants.
+
+    Educational Note:
+        Tests now use ESPNGameFull structure with metadata/state separation.
+    """
 
     @given(event=espn_event())
     @settings(max_examples=100, deadline=None)
@@ -152,13 +156,14 @@ class TestGameStateParsingInvariants:
         from precog.api_connectors.espn_client import ESPNClient
 
         client = ESPNClient()
-        game_state = client._parse_event(event)
+        game_full = client._parse_event(event)
 
-        if game_state:
-            assert game_state["home_score"] >= 0, "Home score should be non-negative"
-            assert game_state["away_score"] >= 0, "Away score should be non-negative"
-            assert isinstance(game_state["home_score"], int), "Home score should be int"
-            assert isinstance(game_state["away_score"], int), "Away score should be int"
+        if game_full:
+            state = game_full["state"]
+            assert state["home_score"] >= 0, "Home score should be non-negative"
+            assert state["away_score"] >= 0, "Away score should be non-negative"
+            assert isinstance(state["home_score"], int), "Home score should be int"
+            assert isinstance(state["away_score"], int), "Away score should be int"
 
     @given(event=espn_event())
     @settings(max_examples=100, deadline=None)
@@ -167,10 +172,10 @@ class TestGameStateParsingInvariants:
         from precog.api_connectors.espn_client import ESPNClient
 
         client = ESPNClient()
-        game_state = client._parse_event(event)
+        game_full = client._parse_event(event)
 
-        if game_state:
-            assert 0 <= game_state["period"] <= 10, "Period should be 0-10"
+        if game_full:
+            assert 0 <= game_full["state"]["period"] <= 10, "Period should be 0-10"
 
     @given(event=espn_event())
     @settings(max_examples=100, deadline=None)
@@ -179,10 +184,10 @@ class TestGameStateParsingInvariants:
         from precog.api_connectors.espn_client import ESPNClient
 
         client = ESPNClient()
-        game_state = client._parse_event(event)
+        game_full = client._parse_event(event)
 
-        if game_state:
-            assert game_state["clock_seconds"] >= 0, "Clock seconds should be non-negative"
+        if game_full:
+            assert game_full["state"]["clock_seconds"] >= 0, "Clock seconds should be non-negative"
 
 
 # =============================================================================
@@ -191,7 +196,11 @@ class TestGameStateParsingInvariants:
 
 
 class TestTeamAbbreviationInvariants:
-    """Property tests for team abbreviation handling."""
+    """Property tests for team abbreviation handling.
+
+    Educational Note:
+        Team codes are now in game["metadata"]["home_team"]["team_code"]
+    """
 
     @given(event=espn_event())
     @settings(max_examples=100, deadline=None)
@@ -200,11 +209,13 @@ class TestTeamAbbreviationInvariants:
         from precog.api_connectors.espn_client import ESPNClient
 
         client = ESPNClient()
-        game_state = client._parse_event(event)
+        game_full = client._parse_event(event)
 
-        if game_state:
-            assert isinstance(game_state["home_team"], str), "Home team should be string"
-            assert isinstance(game_state["away_team"], str), "Away team should be string"
+        if game_full:
+            home_code = game_full["metadata"]["home_team"]["team_code"]
+            away_code = game_full["metadata"]["away_team"]["team_code"]
+            assert isinstance(home_code, str), "Home team code should be string"
+            assert isinstance(away_code, str), "Away team code should be string"
 
     @given(event=espn_event())
     @settings(max_examples=100, deadline=None)
@@ -213,12 +224,14 @@ class TestTeamAbbreviationInvariants:
         from precog.api_connectors.espn_client import ESPNClient
 
         client = ESPNClient()
-        game_state = client._parse_event(event)
+        game_full = client._parse_event(event)
 
-        if game_state:
+        if game_full:
+            home_code = game_full["metadata"]["home_team"]["team_code"]
+            away_code = game_full["metadata"]["away_team"]["team_code"]
             # Note: abbreviations come from our test data, so they should be non-empty
-            assert len(game_state["home_team"]) > 0 or game_state["home_team"] == ""
-            assert len(game_state["away_team"]) > 0 or game_state["away_team"] == ""
+            assert len(home_code) > 0 or home_code == ""
+            assert len(away_code) > 0 or away_code == ""
 
 
 # =============================================================================
@@ -236,13 +249,13 @@ class TestStatusMappingInvariants:
         from precog.api_connectors.espn_client import ESPNClient
 
         client = ESPNClient()
-        game_state = client._parse_event(event)
+        game_full = client._parse_event(event)
 
         known_statuses = {"scheduled", "in_progress", "halftime", "final", "unknown"}
 
-        if game_state:
-            assert game_state["game_status"] in known_statuses, (
-                f"Unknown status: {game_state['game_status']}"
+        if game_full:
+            assert game_full["state"]["game_status"] in known_statuses, (
+                f"Unknown status: {game_full['state']['game_status']}"
             )
 
     @given(state=st.sampled_from(["pre", "in", "post"]))
@@ -323,10 +336,12 @@ class TestEventIdInvariants:
         from precog.api_connectors.espn_client import ESPNClient
 
         client = ESPNClient()
-        game_state = client._parse_event(event)
+        game_full = client._parse_event(event)
 
-        if game_state:
-            assert isinstance(game_state["espn_event_id"], str), "Event ID should be string"
+        if game_full:
+            assert isinstance(game_full["metadata"]["espn_event_id"], str), (
+                "Event ID should be string"
+            )
 
     @given(event=espn_event())
     @settings(max_examples=100, deadline=None)
@@ -335,10 +350,10 @@ class TestEventIdInvariants:
         from precog.api_connectors.espn_client import ESPNClient
 
         client = ESPNClient()
-        game_state = client._parse_event(event)
+        game_full = client._parse_event(event)
 
-        if game_state:
-            assert len(game_state["espn_event_id"]) > 0, "Event ID should be non-empty"
+        if game_full:
+            assert len(game_full["metadata"]["espn_event_id"]) > 0, "Event ID should be non-empty"
 
 
 # =============================================================================
@@ -351,17 +366,25 @@ class TestPossessionInvariants:
 
     @given(event=espn_event())
     @settings(max_examples=100, deadline=None)
-    def test_possession_is_home_away_or_none(self, event: dict[str, Any]):
-        """Property: Possession is 'home', 'away', or None."""
+    def test_possession_is_team_code_or_none(self, event: dict[str, Any]):
+        """Property: Possession is a team code string or None.
+
+        Educational Note:
+            The ESPN parser converts possession team ID to the team's code
+            (e.g., "BUF", "KC") for easier identification. This is more useful
+            than just "home"/"away" when working with multiple games.
+        """
         from precog.api_connectors.espn_client import ESPNClient
 
         client = ESPNClient()
-        game_state = client._parse_event(event)
+        game_full = client._parse_event(event)
 
-        if game_state:
-            valid_possessions = {"home", "away", None}
-            assert game_state["possession"] in valid_possessions, (
-                f"Invalid possession: {game_state['possession']}"
+        if game_full:
+            situation = game_full["state"].get("situation", {})
+            possession = situation.get("possession")
+            # Possession is either None or a team code string (2-4 uppercase letters)
+            assert possession is None or (isinstance(possession, str) and len(possession) >= 2), (
+                f"Invalid possession: {possession}"
             )
 
     @given(event=espn_event())
@@ -371,10 +394,13 @@ class TestPossessionInvariants:
         from precog.api_connectors.espn_client import ESPNClient
 
         client = ESPNClient()
-        game_state = client._parse_event(event)
+        game_full = client._parse_event(event)
 
-        if game_state and game_state.get("down") is not None:
-            assert 1 <= game_state["down"] <= 4, f"Invalid down: {game_state['down']}"
+        if game_full:
+            situation = game_full["state"].get("situation", {})
+            down = situation.get("down")
+            if down is not None:
+                assert 1 <= down <= 4, f"Invalid down: {down}"
 
     @given(event=espn_event())
     @settings(max_examples=100, deadline=None)
@@ -383,11 +409,14 @@ class TestPossessionInvariants:
         from precog.api_connectors.espn_client import ESPNClient
 
         client = ESPNClient()
-        game_state = client._parse_event(event)
+        game_full = client._parse_event(event)
 
-        if game_state:
-            assert 0 <= game_state["home_timeouts"] <= 3, "Home timeouts should be 0-3"
-            assert 0 <= game_state["away_timeouts"] <= 3, "Away timeouts should be 0-3"
+        if game_full:
+            situation = game_full["state"].get("situation", {})
+            home_timeouts = situation.get("home_timeouts", 0)
+            away_timeouts = situation.get("away_timeouts", 0)
+            assert 0 <= home_timeouts <= 3, "Home timeouts should be 0-3"
+            assert 0 <= away_timeouts <= 3, "Away timeouts should be 0-3"
 
 
 # =============================================================================

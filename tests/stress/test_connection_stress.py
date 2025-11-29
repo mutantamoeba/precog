@@ -37,7 +37,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 
-from precog.database.connection import test_connection
+from precog.database.connection import test_connection as verify_db_connection
 
 # Skip if database not available
 # Note: database marker is registered in pyproject.toml
@@ -47,7 +47,7 @@ pytestmark = [pytest.mark.stress, pytest.mark.slow, pytest.mark.database]
 @pytest.fixture(scope="module", autouse=True)
 def skip_if_no_database():
     """Skip all tests in this module if database is not available."""
-    if not test_connection():
+    if not verify_db_connection():
         pytest.skip("Database not available")
 
 

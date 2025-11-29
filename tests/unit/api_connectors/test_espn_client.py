@@ -234,7 +234,12 @@ class TestGameStateParsing:
 
     @patch("requests.Session.get")
     def test_parse_live_game_extracts_scores(self, mock_get: MagicMock):
-        """Verify parsing extracts home and away scores from live game."""
+        """Verify parsing extracts home and away scores from live game.
+
+        Educational Note:
+            ESPNGameFull structure separates static metadata from dynamic state.
+            Scores are in game["state"] since they change during the game.
+        """
         from precog.api_connectors.espn_client import ESPNClient
 
         mock_response = Mock()
@@ -245,14 +250,19 @@ class TestGameStateParsing:
         client = ESPNClient()
         games = client.get_nfl_scoreboard()
 
-        # First game: KC @ BUF
+        # First game: KC @ BUF - access via state dict
         game = games[0]
-        assert game["home_score"] == 24
-        assert game["away_score"] == 21
+        assert game["state"]["home_score"] == 24
+        assert game["state"]["away_score"] == 21
 
     @patch("requests.Session.get")
     def test_parse_live_game_extracts_teams(self, mock_get: MagicMock):
-        """Verify parsing extracts team abbreviations from live game."""
+        """Verify parsing extracts team abbreviations from live game.
+
+        Educational Note:
+            Team info is in game["metadata"]["home_team"] and game["metadata"]["away_team"]
+            because team identity is static (doesn't change during game).
+        """
         from precog.api_connectors.espn_client import ESPNClient
 
         mock_response = Mock()
@@ -263,10 +273,10 @@ class TestGameStateParsing:
         client = ESPNClient()
         games = client.get_nfl_scoreboard()
 
-        # First game: KC @ BUF
+        # First game: KC @ BUF - access via metadata dict
         game = games[0]
-        assert game["home_team"] == "BUF"
-        assert game["away_team"] == "KC"
+        assert game["metadata"]["home_team"]["team_code"] == "BUF"
+        assert game["metadata"]["away_team"]["team_code"] == "KC"
 
     @patch("requests.Session.get")
     def test_parse_live_game_extracts_period_and_clock(self, mock_get: MagicMock):
@@ -281,11 +291,11 @@ class TestGameStateParsing:
         client = ESPNClient()
         games = client.get_nfl_scoreboard()
 
-        # First game: KC @ BUF in 4th quarter
+        # First game: KC @ BUF in 4th quarter - access via state dict
         game = games[0]
-        assert game["period"] == 4
-        assert game["clock_seconds"] == 485
-        assert game["clock_display"] == "8:05"
+        assert game["state"]["period"] == 4
+        assert game["state"]["clock_seconds"] == 485
+        assert game["state"]["clock_display"] == "8:05"
 
     @patch("requests.Session.get")
     def test_parse_live_game_extracts_status(self, mock_get: MagicMock):
@@ -301,7 +311,7 @@ class TestGameStateParsing:
         games = client.get_nfl_scoreboard()
 
         game = games[0]
-        assert game["game_status"] == "in_progress"
+        assert game["state"]["game_status"] == "in_progress"
 
     @patch("requests.Session.get")
     def test_parse_pregame_status(self, mock_get: MagicMock):
@@ -317,9 +327,9 @@ class TestGameStateParsing:
         games = client.get_nfl_scoreboard()
 
         game = games[0]
-        assert game["game_status"] == "scheduled"
-        assert game["home_score"] == 0
-        assert game["away_score"] == 0
+        assert game["state"]["game_status"] == "scheduled"
+        assert game["state"]["home_score"] == 0
+        assert game["state"]["away_score"] == 0
 
     @patch("requests.Session.get")
     def test_parse_final_game_status(self, mock_get: MagicMock):
@@ -335,9 +345,9 @@ class TestGameStateParsing:
         games = client.get_nfl_scoreboard()
 
         game = games[0]
-        assert game["game_status"] == "final"
-        assert game["home_score"] == 20
-        assert game["away_score"] == 27
+        assert game["state"]["game_status"] == "final"
+        assert game["state"]["home_score"] == 20
+        assert game["state"]["away_score"] == 27
 
     @patch("requests.Session.get")
     def test_parse_halftime_status(self, mock_get: MagicMock):
@@ -353,7 +363,7 @@ class TestGameStateParsing:
         games = client.get_nfl_scoreboard()
 
         game = games[0]
-        assert game["game_status"] == "halftime"
+        assert game["state"]["game_status"] == "halftime"
 
     @patch("requests.Session.get")
     def test_parse_overtime_period(self, mock_get: MagicMock):
@@ -369,11 +379,15 @@ class TestGameStateParsing:
         games = client.get_nfl_scoreboard()
 
         game = games[0]
-        assert game["period"] == 5  # OT = period 5
+        assert game["state"]["period"] == 5  # OT = period 5
 
     @patch("requests.Session.get")
     def test_parse_extracts_espn_event_id(self, mock_get: MagicMock):
-        """Verify parsing extracts ESPN event ID for tracking."""
+        """Verify parsing extracts ESPN event ID for tracking.
+
+        Educational Note:
+            espn_event_id is in metadata (static identifier for the game).
+        """
         from precog.api_connectors.espn_client import ESPNClient
 
         mock_response = Mock()
@@ -385,12 +399,17 @@ class TestGameStateParsing:
         games = client.get_nfl_scoreboard()
 
         game = games[0]
-        assert "espn_event_id" in game
-        assert game["espn_event_id"] == "401547417"
+        assert "espn_event_id" in game["metadata"]
+        assert game["metadata"]["espn_event_id"] == "401547417"
 
     @patch("requests.Session.get")
     def test_parse_extracts_possession_info(self, mock_get: MagicMock):
-        """Verify parsing extracts possession and down/distance info."""
+        """Verify parsing extracts possession and down/distance info.
+
+        Educational Note:
+            Situation data (possession, down, distance) is in game["state"]["situation"]
+            because this data changes during the game.
+        """
         from precog.api_connectors.espn_client import ESPNClient
 
         mock_response = Mock()
@@ -402,10 +421,11 @@ class TestGameStateParsing:
         games = client.get_nfl_scoreboard()
 
         game = games[0]
-        assert "possession" in game
-        assert "down" in game
-        assert "distance" in game
-        assert "yard_line" in game
+        situation = game["state"]["situation"]
+        assert "possession" in situation
+        assert "down" in situation
+        assert "distance" in situation
+        assert "yard_line" in situation
 
     @patch("requests.Session.get")
     def test_parse_extracts_red_zone_flag(self, mock_get: MagicMock):
@@ -421,7 +441,7 @@ class TestGameStateParsing:
         games = client.get_nfl_scoreboard()
 
         game = games[0]
-        assert game["is_red_zone"] is True
+        assert game["state"]["situation"]["is_red_zone"] is True
 
 
 # =============================================================================
@@ -836,11 +856,17 @@ class TestGetLiveGames:
 
 
 class TestTypedDictReturnTypes:
-    """Tests for TypedDict return types (type safety)."""
+    """Tests for TypedDict return types (type safety).
+
+    Educational Note:
+        ESPNGameFull now returns a normalized structure with:
+        - metadata: Static game info (teams, venue, broadcast)
+        - state: Dynamic game state (scores, clock, situation)
+    """
 
     @patch("requests.Session.get")
     def test_game_state_has_required_keys(self, mock_get: MagicMock):
-        """Verify parsed game state has all required keys."""
+        """Verify parsed game state has all required top-level and nested keys."""
         from precog.api_connectors.espn_client import ESPNClient
 
         mock_response = Mock()
@@ -851,10 +877,23 @@ class TestTypedDictReturnTypes:
         client = ESPNClient()
         games = client.get_nfl_scoreboard()
 
-        required_keys = [
+        game = games[0]
+
+        # Top-level keys (ESPNGameFull structure)
+        assert "metadata" in game, "Missing required key: metadata"
+        assert "state" in game, "Missing required key: state"
+
+        # Metadata keys
+        metadata_keys = [
             "espn_event_id",
             "home_team",
             "away_team",
+        ]
+        for key in metadata_keys:
+            assert key in game["metadata"], f"Missing metadata key: {key}"
+
+        # State keys
+        state_keys = [
             "home_score",
             "away_score",
             "period",
@@ -862,10 +901,8 @@ class TestTypedDictReturnTypes:
             "clock_display",
             "game_status",
         ]
-
-        game = games[0]
-        for key in required_keys:
-            assert key in game, f"Missing required key: {key}"
+        for key in state_keys:
+            assert key in game["state"], f"Missing state key: {key}"
 
     @patch("requests.Session.get")
     def test_score_values_are_integers(self, mock_get: MagicMock):
@@ -881,8 +918,8 @@ class TestTypedDictReturnTypes:
         games = client.get_nfl_scoreboard()
 
         game = games[0]
-        assert isinstance(game["home_score"], int)
-        assert isinstance(game["away_score"], int)
+        assert isinstance(game["state"]["home_score"], int)
+        assert isinstance(game["state"]["away_score"], int)
 
     @patch("requests.Session.get")
     def test_team_abbreviations_are_strings(self, mock_get: MagicMock):
@@ -898,7 +935,10 @@ class TestTypedDictReturnTypes:
         games = client.get_nfl_scoreboard()
 
         game = games[0]
-        assert isinstance(game["home_team"], str)
-        assert isinstance(game["away_team"], str)
-        assert len(game["home_team"]) <= 4  # NFL abbreviations are 2-4 chars
-        assert len(game["away_team"]) <= 4
+        home_team_code = game["metadata"]["home_team"]["team_code"]
+        away_team_code = game["metadata"]["away_team"]["team_code"]
+
+        assert isinstance(home_team_code, str)
+        assert isinstance(away_team_code, str)
+        assert len(home_team_code) <= 4  # NFL abbreviations are 2-4 chars
+        assert len(away_team_code) <= 4

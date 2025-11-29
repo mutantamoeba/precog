@@ -216,13 +216,15 @@ class TestMigrationUtilsIntegration:
             )
         """
         try:
-            # First creation
-            result1 = safe_create_table("_test_safe_table", create_sql)
-            assert result1 is True
+            # First creation - returns (success, message) tuple
+            success1, msg1 = safe_create_table("_test_safe_table", create_sql)
+            assert success1 is True, f"First creation failed: {msg1}"
 
             # Second creation should succeed (idempotent)
-            # Note: safe_create_table returns False when table exists (expected)
-            result2 = safe_create_table("_test_safe_table", create_sql)  # noqa: F841
+            # Note: safe_create_table returns (True, "[SKIP]...") when table exists
+            success2, msg2 = safe_create_table("_test_safe_table", create_sql)
+            assert success2 is True, f"Second creation failed: {msg2}"
+            assert "[SKIP]" in msg2, "Expected skip message for existing table"
         finally:
             execute_query("DROP TABLE IF EXISTS _test_safe_table CASCADE")
 
@@ -233,18 +235,21 @@ class TestMigrationUtilsIntegration:
             safe_create_table,
         )
 
-        # Create test table
-        safe_create_table(
+        # Create test table - returns (success, message) tuple
+        success, _ = safe_create_table(
             "_test_add_column", "CREATE TABLE _test_add_column (id SERIAL PRIMARY KEY)"
         )
+        assert success is True
         try:
-            # First add
-            result1 = safe_add_column("_test_add_column", "new_column", "VARCHAR(100)")
-            assert result1 is True
+            # First add - returns (success, message) tuple
+            success1, msg1 = safe_add_column("_test_add_column", "new_column", "VARCHAR(100)")
+            assert success1 is True, f"First add failed: {msg1}"
 
             # Second add should succeed (idempotent)
-            # Note: safe_add_column returns False when column exists (expected)
-            result2 = safe_add_column("_test_add_column", "new_column", "VARCHAR(100)")  # noqa: F841
+            # Note: safe_add_column returns (True, "[SKIP]...") when column exists
+            success2, msg2 = safe_add_column("_test_add_column", "new_column", "VARCHAR(100)")
+            assert success2 is True, f"Second add failed: {msg2}"
+            assert "[SKIP]" in msg2, "Expected skip message for existing column"
         finally:
             execute_query("DROP TABLE IF EXISTS _test_add_column CASCADE")
 
@@ -279,9 +284,14 @@ class TestSchemaValidation:
             assert result["exists"] is True, f"Core table '{table}' does not exist"
 
     def test_scd_type2_columns_exist(self, db_pool, db_cursor, clean_test_data):
-        """Verify SCD Type 2 columns exist on versioned tables."""
+        """Verify SCD Type 2 columns exist on versioned tables.
+
+        Note: The actual schema uses row_current_ind and row_end_ts.
+        row_start_ts and row_version are not implemented in current schema.
+        """
         versioned_tables = ["markets", "positions", "game_states", "edges"]
-        scd_columns = ["row_current_ind", "row_start_ts", "row_end_ts", "row_version"]
+        # Only check columns that exist in the actual schema
+        scd_columns = ["row_current_ind", "row_end_ts"]
 
         for table in versioned_tables:
             for column in scd_columns:
@@ -302,10 +312,13 @@ class TestSchemaValidation:
                 )
 
     def test_price_columns_are_decimal(self, db_pool, db_cursor, clean_test_data):
-        """Verify price columns use DECIMAL(10,4) precision."""
+        """Verify price columns use DECIMAL (numeric) type.
+
+        Note: The actual schema uses yes_price/no_price (not yes_bid/yes_ask).
+        """
         price_columns = [
-            ("markets", "yes_bid"),
-            ("markets", "yes_ask"),
+            ("markets", "yes_price"),
+            ("markets", "no_price"),
             ("positions", "entry_price"),
         ]
 

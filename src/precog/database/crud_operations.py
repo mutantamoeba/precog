@@ -1740,6 +1740,67 @@ def update_strategy_status(
         return result is not None
 
 
+def list_strategies(
+    status: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """
+    List all strategies with optional status filtering.
+
+    Args:
+        status: Optional filter by status ("draft", "testing", "active", "deprecated")
+        limit: Maximum number of strategies to return (default: 100)
+
+    Returns:
+        List of strategy dictionaries ordered by created_at (newest first)
+
+    Educational Note:
+        This function provides a simple listing of ALL strategies, regardless
+        of version relationships. Use this for:
+        - Admin dashboards showing all strategies
+        - Database integrity verification (e.g., after SQL injection tests)
+        - Auditing strategy counts
+
+        For version-aware queries (e.g., "get latest active version of X"),
+        use get_active_strategy_version() instead.
+
+    Example:
+        >>> # List all strategies
+        >>> all_strategies = list_strategies()
+        >>> len(all_strategies)
+        15
+
+        >>> # List only active strategies
+        >>> active = list_strategies(status="active")
+        >>> for s in active:
+        ...     print(f"{s['strategy_name']} v{s['strategy_version']}")
+    """
+    if status:
+        query = """
+            SELECT *
+            FROM strategies
+            WHERE status = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+        """
+        results = fetch_all(query, (status, limit))
+    else:
+        query = """
+            SELECT *
+            FROM strategies
+            ORDER BY created_at DESC
+            LIMIT %s
+        """
+        results = fetch_all(query, (limit,))
+
+    # Convert config Decimal strings back to Decimal for consistency
+    for result in results:
+        if result.get("config"):
+            result["config"] = _convert_config_strings_to_decimal(result["config"])
+
+    return results
+
+
 def get_position_by_id(position_id: int) -> dict[str, Any] | None:
     """
     Get position by internal id (current version only).
@@ -1926,6 +1987,56 @@ def get_venue_by_id(venue_id: int) -> dict[str, Any] | None:
         WHERE venue_id = %s
     """
     return fetch_one(query, (venue_id,))
+
+
+# =============================================================================
+# TEAM LOOKUP OPERATIONS
+# =============================================================================
+# These functions provide team lookup by various identifiers.
+# Essential for the live polling service to map ESPN IDs to database IDs.
+
+
+def get_team_by_espn_id(espn_team_id: str, league: str | None = None) -> dict[str, Any] | None:
+    """
+    Get team by ESPN team ID and optional league filter.
+
+    Educational Note:
+        ESPN team IDs are unique per-league but NOT globally unique.
+        For example, team ID "1" might exist in both NFL and NBA.
+        Always provide the league parameter when you know it to ensure
+        correct team matching.
+
+    Args:
+        espn_team_id: ESPN's unique team identifier (e.g., "12" for Chiefs)
+        league: Optional league filter (nfl, ncaaf, nba, ncaab, nhl, wnba)
+                Recommended to prevent cross-league mismatches.
+
+    Returns:
+        Dictionary with team data, or None if not found.
+        Includes: team_id, team_code, team_name, display_name, espn_team_id,
+                  conference, division, sport, league, current_elo
+
+    Example:
+        >>> team = get_team_by_espn_id("12", league="nfl")
+        >>> if team:
+        ...     print(f"{team['team_name']} ({team['team_code']})")
+        ...     # Kansas City Chiefs (KC)
+
+    Reference: REQ-DATA-003 (Multi-Sport Support)
+    """
+    if league:
+        query = """
+            SELECT *
+            FROM teams
+            WHERE espn_team_id = %s AND league = %s
+        """
+        return fetch_one(query, (espn_team_id, league))
+    query = """
+            SELECT *
+            FROM teams
+            WHERE espn_team_id = %s
+        """
+    return fetch_one(query, (espn_team_id,))
 
 
 # =============================================================================

@@ -54,7 +54,13 @@ espn_vcr = vcr.VCR(
 
 
 class TestESPNIntegrationWithMocks:
-    """Integration tests using mock responses that simulate VCR cassettes."""
+    """Integration tests using mock responses that simulate VCR cassettes.
+
+    Educational Note:
+        Tests now use ESPNGameFull format with metadata/state structure.
+        - game["metadata"]["espn_event_id"] for static game identifier
+        - game["state"]["home_score"] for dynamic score data
+    """
 
     @patch("requests.Session.get")
     def test_fetch_nfl_scoreboard_integration(self, mock_get):
@@ -75,15 +81,15 @@ class TestESPNIntegrationWithMocks:
         # Verify we got games back
         assert len(games) == 2
 
-        # Verify first game structure (KC @ BUF)
+        # Verify first game structure (KC @ BUF) - using normalized format
         game = games[0]
-        assert game["espn_event_id"] == "401547417"
-        assert game["home_team"] == "BUF"
-        assert game["away_team"] == "KC"
-        assert game["home_score"] == 24
-        assert game["away_score"] == 21
-        assert game["period"] == 4
-        assert game["game_status"] == "in_progress"
+        assert game["metadata"]["espn_event_id"] == "401547417"
+        assert game["metadata"]["home_team"]["team_code"] == "BUF"
+        assert game["metadata"]["away_team"]["team_code"] == "KC"
+        assert game["state"]["home_score"] == 24
+        assert game["state"]["away_score"] == 21
+        assert game["state"]["period"] == 4
+        assert game["state"]["game_status"] == "in_progress"
 
     @patch("requests.Session.get")
     def test_fetch_ncaaf_scoreboard_integration(self, mock_get):
@@ -104,8 +110,10 @@ class TestESPNIntegrationWithMocks:
         # Verify we got the OSU vs Michigan game
         assert len(games) == 1
         game = games[0]
-        assert game["espn_event_id"] == "401628501"
-        assert "OSU" in game["home_team"] or "MICH" in game["away_team"]
+        assert game["metadata"]["espn_event_id"] == "401628501"
+        home_code = game["metadata"]["home_team"]["team_code"]
+        away_code = game["metadata"]["away_team"]["team_code"]
+        assert "OSU" in home_code or "MICH" in away_code
 
     @patch("requests.Session.get")
     def test_get_live_games_filters_correctly(self, mock_get):
@@ -125,7 +133,7 @@ class TestESPNIntegrationWithMocks:
         # All games in ESPN_NFL_SCOREBOARD_LIVE are in progress
         assert len(live_games) == 2
         for game in live_games:
-            assert game["game_status"] in {"in_progress", "halftime"}
+            assert game["state"]["game_status"] in {"in_progress", "halftime"}
 
     @patch("requests.Session.get")
     def test_multiple_requests_share_session(self, mock_get):
@@ -318,11 +326,15 @@ class TestESPNRateLimitingIntegration:
 
 
 class TestESPNDataConsistencyIntegration:
-    """Integration tests for data consistency between calls."""
+    """Integration tests for data consistency between calls.
+
+    Educational Note:
+        Tests now validate ESPNGameFull structure with metadata/state separation.
+    """
 
     @patch("requests.Session.get")
     def test_game_data_structure_consistent(self, mock_get):
-        """Integration test: All games have consistent data structure."""
+        """Integration test: All games have consistent ESPNGameFull structure."""
         from unittest.mock import Mock
 
         from precog.api_connectors.espn_client import ESPNClient
@@ -335,10 +347,14 @@ class TestESPNDataConsistencyIntegration:
         client = ESPNClient()
         games = client.get_nfl_scoreboard()
 
-        required_fields = [
-            "espn_event_id",
-            "home_team",
-            "away_team",
+        # Top-level required fields
+        top_level_fields = ["metadata", "state"]
+
+        # Metadata required fields
+        metadata_fields = ["espn_event_id", "home_team", "away_team"]
+
+        # State required fields
+        state_fields = [
             "home_score",
             "away_score",
             "period",
@@ -348,8 +364,18 @@ class TestESPNDataConsistencyIntegration:
         ]
 
         for game in games:
-            for field in required_fields:
-                assert field in game, f"Missing field: {field} in game {game.get('espn_event_id')}"
+            event_id = game.get("metadata", {}).get("espn_event_id", "unknown")
+
+            for field in top_level_fields:
+                assert field in game, f"Missing top-level field: {field} in game {event_id}"
+
+            for field in metadata_fields:
+                assert field in game["metadata"], (
+                    f"Missing metadata field: {field} in game {event_id}"
+                )
+
+            for field in state_fields:
+                assert field in game["state"], f"Missing state field: {field} in game {event_id}"
 
     @patch("requests.Session.get")
     def test_score_types_are_integers(self, mock_get):
@@ -367,11 +393,11 @@ class TestESPNDataConsistencyIntegration:
         games = client.get_nfl_scoreboard()
 
         for game in games:
-            assert isinstance(game["home_score"], int), (
-                f"home_score is {type(game['home_score'])}, expected int"
+            assert isinstance(game["state"]["home_score"], int), (
+                f"home_score is {type(game['state']['home_score'])}, expected int"
             )
-            assert isinstance(game["away_score"], int), (
-                f"away_score is {type(game['away_score'])}, expected int"
+            assert isinstance(game["state"]["away_score"], int), (
+                f"away_score is {type(game['state']['away_score'])}, expected int"
             )
 
 

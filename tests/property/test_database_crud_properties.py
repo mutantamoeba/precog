@@ -326,7 +326,10 @@ def test_scd_type2_at_most_one_current_row(db_pool, clean_test_data, setup_kalsh
 
 @pytest.mark.property
 @pytest.mark.critical
-@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+@settings(
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+    database=None,  # Disable Hypothesis example database to prevent stale state issues
+)
 @given(
     original_price=decimal_price(Decimal("0.30"), Decimal("0.70")),
     updated_price=decimal_price(Decimal("0.30"), Decimal("0.70")),
@@ -374,12 +377,16 @@ def test_scd_type2_update_creates_new_row(
         >>> assert current_row.id != old_id  # Different row!
         >>> assert current_row.yes_price == 0.6500  # New price
     """
+    import uuid
+
     # Use assume() to tell Hypothesis to skip identical values (not a test failure)
     assume(original_price != updated_price)
 
     # Create initial market
-    # Use both prices in ticker to ensure uniqueness
-    ticker = f"TEST-SCD-{original_price}-{updated_price}"
+    # Use UUID to ensure uniqueness across Hypothesis examples (prevents collisions from
+    # Hypothesis database replaying examples with leftover test data)
+    unique_id = uuid.uuid4().hex[:8]
+    ticker = f"SCD-{unique_id}"
     market_id = create_market(
         platform_id="kalshi",
         event_id="KXNFLGAME-25DEC15",
@@ -602,13 +609,12 @@ def test_foreign_key_prevents_invalid_event_reference(
 # =============================================================================
 
 
-@pytest.mark.skip(
-    reason="Hypothesis replay + database fixtures = flaky. Direct test confirms constraint works. "
-    "TODO: Refactor to use session-scoped fixtures or remove property test framework for DB constraints."
-)
 @pytest.mark.property
 @pytest.mark.critical
-@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+@settings(
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+    database=None,  # Disable Hypothesis example database to prevent stale state issues
+)
 @given(ticker=st.text(alphabet=st.characters(whitelist_categories=["Lu"]), min_size=5, max_size=20))
 def test_not_null_constraint_on_required_fields(
     db_pool, clean_test_data, setup_kalshi_platform, ticker
@@ -665,7 +671,10 @@ def test_not_null_constraint_on_required_fields(
 
 @pytest.mark.property
 @pytest.mark.critical
-@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+@settings(
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+    database=None,  # Disable Hypothesis example database to prevent stale state issues
+)
 @given(
     price1=decimal_price(Decimal("0.30"), Decimal("0.70")),
     price2=decimal_price(Decimal("0.30"), Decimal("0.70")),
@@ -698,11 +707,15 @@ def test_timestamp_monotonicity_on_updates(
         >>> v2 = update_market(price=0.65)
         >>> assert v2.row_start_ts > v1.row_start_ts  # Time moved forward
     """
+    import uuid
+
     # Use assume() to tell Hypothesis to skip identical values (not a test failure)
     assume(price1 != price2)
 
     # Create initial market
-    ticker = f"TEST-TIME-{price1}-{price2}"
+    # Use UUID to ensure uniqueness across Hypothesis examples
+    unique_id = uuid.uuid4().hex[:8]
+    ticker = f"TIME-{unique_id}"
     create_market(
         platform_id="kalshi",
         event_id="KXNFLGAME-25DEC15",
@@ -926,9 +939,12 @@ def test_check_constraints_enforced(db_pool, clean_test_data, setup_kalshi_platf
 
 @pytest.mark.property
 @pytest.mark.critical
-@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+@settings(
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+    database=None,  # Disable Hypothesis example database to prevent stale state issues
+)
 @given(ticker=st.text(alphabet=st.characters(whitelist_categories=["Lu"]), min_size=5, max_size=20))
-def test_cascade_delete_integrity(db_pool, clean_test_data, setup_kalshi_platform, ticker):
+def test_cascade_delete_integrity(db_pool, clean_test_data, ticker):
     """
     PROPERTY: Deleting platform cascades to delete all related markets.
 
@@ -969,10 +985,17 @@ def test_cascade_delete_integrity(db_pool, clean_test_data, setup_kalshi_platfor
         >>> markets = query(Market).filter(platform_id="test-platform").all()
         >>> assert len(markets) == 0  # Both markets deleted automatically
     """
+    import uuid
+
     from precog.database.connection import get_cursor
 
-    # Create a temporary test platform (separate from kalshi fixture)
-    test_platform_id = f"TEST-PLATFORM-{ticker[:5]}"
+    # Use UUID to ensure uniqueness across Hypothesis examples
+    unique_id = uuid.uuid4().hex[:8]
+    test_platform_id = f"PLAT-{unique_id}"
+
+    test_series_id = f"SER-{unique_id}"
+    test_event_id = f"EVT-{unique_id}"
+    test_ticker = f"TKR-{unique_id}"
 
     with get_cursor(commit=True) as cur:
         # Create test platform
@@ -988,30 +1011,31 @@ def test_cascade_delete_integrity(db_pool, clean_test_data, setup_kalshi_platfor
         cur.execute(
             """
             INSERT INTO series (series_id, platform_id, external_id, title, category)
-            VALUES (%s, %s, 'TEST-SERIES-EXT', 'Test Series', 'sports')
+            VALUES (%s, %s, %s, 'Test Series', 'sports')
         """,
-            (f"TEST-SERIES-{ticker[:5]}", test_platform_id),
+            (test_series_id, test_platform_id, f"EXT-{unique_id}"),
         )
 
         # Create test event
         cur.execute(
             """
             INSERT INTO events (event_id, platform_id, series_id, external_id, category, title, status)
-            VALUES (%s, %s, %s, 'TEST-EVENT-EXT', 'sports', 'Test Event', 'scheduled')
+            VALUES (%s, %s, %s, %s, 'sports', 'Test Event', 'scheduled')
         """,
             (
-                f"TEST-EVENT-{ticker[:5]}",
+                test_event_id,
                 test_platform_id,
-                f"TEST-SERIES-{ticker[:5]}",
+                test_series_id,
+                f"EXTEVT-{unique_id}",
             ),
         )
 
     # Create market for this test platform
     market_id = create_market(
         platform_id=test_platform_id,
-        event_id=f"TEST-EVENT-{ticker[:5]}",
-        external_id=f"EXTERNAL-{ticker}",
-        ticker=ticker,
+        event_id=test_event_id,
+        external_id=f"EXTERNAL-{unique_id}",
+        ticker=test_ticker,
         title="Test Market",
         yes_price=Decimal("0.6200"),
         no_price=Decimal("0.3800"),

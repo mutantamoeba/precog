@@ -149,6 +149,10 @@ class TestESPNResponseParsing:
         Educational Note:
             Real API responses may differ from our test fixtures.
             This test validates our parsing handles real-world data.
+
+            The ESPN client returns ESPNGameFull TypedDict with:
+            - metadata: Static game info (teams, venue, broadcast)
+            - state: Dynamic info (scores, clock, status)
         """
         games = espn_client.get_nfl_scoreboard()
 
@@ -157,10 +161,14 @@ class TestESPNResponseParsing:
 
         game = games[0]
 
-        # Core fields should always be present
-        assert "espn_event_id" in game
-        assert "home_team" in game
-        assert "away_team" in game
+        # Core structure should have metadata and state
+        assert "metadata" in game
+        assert "state" in game
+
+        # Core fields in metadata
+        assert "espn_event_id" in game["metadata"]
+        assert "home_team" in game["metadata"]
+        assert "away_team" in game["metadata"]
 
     def test_scores_are_integers(self, espn_client):
         """Verify scores are parsed as integers.
@@ -168,7 +176,7 @@ class TestESPNResponseParsing:
         Educational Note:
             ESPN returns scores as strings in JSON. We must convert
             them to integers for calculations. This validates that
-            conversion.
+            conversion. Scores are in the 'state' section of ESPNGameFull.
         """
         games = espn_client.get_nfl_scoreboard()
 
@@ -176,11 +184,12 @@ class TestESPNResponseParsing:
             pytest.skip("No NFL games available today")
 
         for game in games:
-            assert isinstance(game["home_score"], int)
-            assert isinstance(game["away_score"], int)
+            # Scores are in the state section
+            assert isinstance(game["state"]["home_score"], int)
+            assert isinstance(game["state"]["away_score"], int)
             # Scores should be non-negative
-            assert game["home_score"] >= 0
-            assert game["away_score"] >= 0
+            assert game["state"]["home_score"] >= 0
+            assert game["state"]["away_score"] >= 0
 
     def test_game_status_maps_correctly(self, espn_client):
         """Verify game status maps to known values.
@@ -188,13 +197,16 @@ class TestESPNResponseParsing:
         Educational Note:
             ESPN uses various status codes (pre, in, post, etc.).
             We must map these to our internal status values consistently.
+            Status is in the 'state' section of ESPNGameFull.
         """
         games = espn_client.get_nfl_scoreboard()
 
         known_statuses = {"scheduled", "in_progress", "halftime", "final", "unknown"}
 
         for game in games:
-            assert game["game_status"] in known_statuses, f"Unknown status: {game['game_status']}"
+            # Status is in the state section
+            status = game["state"]["game_status"]
+            assert status in known_statuses, f"Unknown status: {status}"
 
     def test_team_abbreviations_are_strings(self, espn_client):
         """Verify team abbreviations are parsed as strings.
@@ -202,15 +214,19 @@ class TestESPNResponseParsing:
         Educational Note:
             Team abbreviations are used as keys for lookups and joins.
             They must be consistent string types.
+            In ESPNGameFull, home_team/away_team are dicts with team_code.
         """
         games = espn_client.get_nfl_scoreboard()
 
         for game in games:
-            assert isinstance(game["home_team"], str)
-            assert isinstance(game["away_team"], str)
+            # Teams are now dicts in metadata section
+            home_team = game["metadata"]["home_team"]
+            away_team = game["metadata"]["away_team"]
+            assert isinstance(home_team["team_code"], str)
+            assert isinstance(away_team["team_code"], str)
             # Abbreviations should be short (2-4 chars typically)
-            assert 1 <= len(game["home_team"]) <= 10
-            assert 1 <= len(game["away_team"]) <= 10
+            assert 1 <= len(home_team["team_code"]) <= 10
+            assert 1 <= len(away_team["team_code"]) <= 10
 
 
 # =============================================================================
@@ -222,21 +238,27 @@ class TestESPNDataStructure:
     """E2E tests validating the complete GameState structure."""
 
     def test_game_state_has_required_fields(self, espn_client):
-        """Verify GameState contains all required fields.
+        """Verify ESPNGameFull contains all required fields.
 
         Educational Note:
-            Our GameState TypedDict defines required fields for downstream
-            processing. This validates real API data populates them.
+            Our ESPNGameFull TypedDict has metadata (static) and state (dynamic).
+            This validates real API data populates both sections.
         """
         games = espn_client.get_nfl_scoreboard()
 
         if len(games) == 0:
             pytest.skip("No NFL games available today")
 
-        required_fields = [
+        # Required fields in metadata
+        metadata_fields = [
             "espn_event_id",
             "home_team",
             "away_team",
+        ]
+
+        # Required fields in state
+        state_fields = [
+            "espn_event_id",
             "home_score",
             "away_score",
             "period",
@@ -245,8 +267,14 @@ class TestESPNDataStructure:
         ]
 
         game = games[0]
-        for field in required_fields:
-            assert field in game, f"Missing required field: {field}"
+        assert "metadata" in game, "Missing metadata section"
+        assert "state" in game, "Missing state section"
+
+        for field in metadata_fields:
+            assert field in game["metadata"], f"Missing metadata field: {field}"
+
+        for field in state_fields:
+            assert field in game["state"], f"Missing state field: {field}"
 
     def test_model_training_fields_present(self, espn_client):
         """Verify model training fields are populated when available.
@@ -255,30 +283,48 @@ class TestESPNDataStructure:
             Some fields (records, venue, broadcast) are for ML model features.
             They may not always be present, but when they are, they should
             have correct types.
+
+            In ESPNGameFull, team info is nested in metadata.home_team/away_team.
         """
         games = espn_client.get_nfl_scoreboard()
 
         if len(games) == 0:
             pytest.skip("No NFL games available today")
 
-        # Model training fields (optional but typed when present)
-        model_fields = {
-            "home_team_id": str,
-            "away_team_id": str,
-            "home_display_name": str,
-            "away_display_name": str,
-            "home_record": str,
-            "away_record": str,
-            "venue_name": str,
-            "game_date": str,
+        game = games[0]
+        metadata = game["metadata"]
+
+        # Check team objects have expected fields
+        home_team = metadata["home_team"]
+        away_team = metadata["away_team"]
+
+        team_fields = {
+            "espn_team_id": str,
+            "team_code": str,
+            "team_name": str,
+            "display_name": str,
+            "record": str,
         }
 
-        game = games[0]
-        for field, expected_type in model_fields.items():
-            if field in game and game[field] is not None:
-                assert isinstance(game[field], expected_type), (
-                    f"Field {field} is {type(game[field])}, expected {expected_type}"
+        for field, expected_type in team_fields.items():
+            if field in home_team and home_team[field] is not None:
+                assert isinstance(home_team[field], expected_type), (
+                    f"home_team.{field} is {type(home_team[field])}, expected {expected_type}"
                 )
+            if field in away_team and away_team[field] is not None:
+                assert isinstance(away_team[field], expected_type), (
+                    f"away_team.{field} is {type(away_team[field])}, expected {expected_type}"
+                )
+
+        # Check venue info if present
+        if "venue" in metadata and metadata["venue"] is not None:
+            venue = metadata["venue"]
+            if "venue_name" in venue:
+                assert isinstance(venue["venue_name"], str)
+
+        # Check game_date in metadata
+        if "game_date" in metadata and metadata["game_date"] is not None:
+            assert isinstance(metadata["game_date"], str)
 
     def test_situation_data_valid_when_present(self, espn_client):
         """Verify situation data (down, distance, possession) is valid.
@@ -286,6 +332,7 @@ class TestESPNDataStructure:
         Educational Note:
             Situation data is only present for in-progress games.
             When present, values must be in valid ranges.
+            In ESPNGameFull, situation is nested in state.situation.
         """
         games = espn_client.get_live_games(league="nfl")
 
@@ -293,17 +340,20 @@ class TestESPNDataStructure:
             pytest.skip("No live NFL games right now")
 
         for game in games:
+            state = game["state"]
+            situation = state.get("situation", {})
+
             # If down is present, should be 1-4
-            if game.get("down") is not None:
-                assert 1 <= game["down"] <= 4
+            if situation.get("down") is not None:
+                assert 1 <= situation["down"] <= 4
 
             # If distance is present, should be positive
-            if game.get("distance") is not None:
-                assert game["distance"] > 0
+            if situation.get("distance") is not None:
+                assert situation["distance"] > 0
 
             # Timeouts should be 0-3
-            assert 0 <= game["home_timeouts"] <= 3
-            assert 0 <= game["away_timeouts"] <= 3
+            assert 0 <= situation.get("home_timeouts", 3) <= 3
+            assert 0 <= situation.get("away_timeouts", 3) <= 3
 
 
 # =============================================================================
@@ -402,13 +452,15 @@ class TestESPNDataQuality:
         Educational Note:
             Duplicate event IDs would cause data integrity issues.
             This validates ESPN returns distinct games.
+            Event IDs are in both metadata and state sections.
         """
         games = espn_client.get_nfl_scoreboard()
 
         if len(games) < 2:
             pytest.skip("Need multiple games to test uniqueness")
 
-        event_ids = [g["espn_event_id"] for g in games]
+        # Event IDs are in the metadata section
+        event_ids = [g["metadata"]["espn_event_id"] for g in games]
         assert len(event_ids) == len(set(event_ids)), "Duplicate event IDs found"
 
     def test_clock_display_format_valid(self, espn_client):
@@ -455,7 +507,7 @@ class TestESPNDataPipeline:
 
         Educational Note:
             This is a comprehensive test that exercises the entire
-            data collection flow from API to parsed GameState.
+            data collection flow from API to parsed ESPNGameFull.
         """
         # Step 1: Fetch scoreboard
         games = espn_client.get_nfl_scoreboard()
@@ -464,18 +516,20 @@ class TestESPNDataPipeline:
         # Step 2: If games exist, validate structure
         if games:
             game = games[0]
+            metadata = game["metadata"]
+            state = game["state"]
 
-            # Core identification
-            assert game["espn_event_id"]
-            assert game["home_team"]
-            assert game["away_team"]
+            # Core identification (in metadata)
+            assert metadata["espn_event_id"]
+            assert metadata["home_team"]
+            assert metadata["away_team"]
 
-            # Scores
-            assert isinstance(game["home_score"], int)
-            assert isinstance(game["away_score"], int)
+            # Scores (in state)
+            assert isinstance(state["home_score"], int)
+            assert isinstance(state["away_score"], int)
 
-            # Status
-            assert game["game_status"] in {
+            # Status (in state)
+            assert state["game_status"] in {
                 "scheduled",
                 "in_progress",
                 "halftime",
@@ -491,7 +545,7 @@ class TestESPNDataPipeline:
 
         Educational Note:
             NCAAF has more teams than NFL and different scheduling,
-            but the data structure should be identical.
+            but the data structure should be identical (ESPNGameFull).
         """
         # Step 1: Fetch scoreboard
         games = espn_client.get_ncaaf_scoreboard()
@@ -500,13 +554,15 @@ class TestESPNDataPipeline:
         # Step 2: If games exist, validate structure
         if games:
             game = games[0]
+            metadata = game["metadata"]
+            state = game["state"]
 
-            # Same structure as NFL
-            assert game["espn_event_id"]
-            assert game["home_team"]
-            assert game["away_team"]
-            assert isinstance(game["home_score"], int)
-            assert isinstance(game["away_score"], int)
+            # Same structure as NFL (in metadata and state)
+            assert metadata["espn_event_id"]
+            assert metadata["home_team"]
+            assert metadata["away_team"]
+            assert isinstance(state["home_score"], int)
+            assert isinstance(state["away_score"], int)
 
     def test_get_live_games_filters_correctly(self, espn_client):
         """Test that get_live_games only returns in-progress games.
@@ -519,6 +575,7 @@ class TestESPNDataPipeline:
 
         # All returned games should be in progress or halftime
         for game in live_games:
-            assert game["game_status"] in {"in_progress", "halftime"}, (
-                f"get_live_games returned non-live game: {game['game_status']}"
+            status = game["state"]["game_status"]
+            assert status in {"in_progress", "halftime"}, (
+                f"get_live_games returned non-live game: {status}"
             )
