@@ -59,6 +59,83 @@ load_dotenv()
 # Connection pool (global singleton)
 _connection_pool: pool.SimpleConnectionPool | None = None
 
+# Valid environments
+VALID_ENVIRONMENTS = ("dev", "test", "staging", "prod")
+
+
+def get_environment() -> str:
+    """
+    Determine current database environment.
+
+    Priority:
+    1. PRECOG_ENV environment variable (explicit)
+    2. DB_NAME environment variable (inferred from name)
+    3. Default to 'dev' (safe default)
+
+    Returns:
+        Environment name: 'dev', 'test', 'staging', or 'prod'
+
+    Example:
+        >>> os.environ["PRECOG_ENV"] = "test"
+        >>> get_environment()
+        'test'
+
+    Educational Note:
+        Environment detection ensures you don't accidentally run
+        destructive operations against production. Always verify
+        the environment before running migrations or bulk deletes.
+    """
+    # Explicit environment selection (highest priority)
+    env = os.getenv("PRECOG_ENV")
+    if env:
+        if env not in VALID_ENVIRONMENTS:
+            msg = f"Invalid PRECOG_ENV: {env}. Must be one of {VALID_ENVIRONMENTS}"
+            raise ValueError(msg)
+        return env
+
+    # Infer from database name
+    db_name = os.getenv("DB_NAME", "precog_dev")
+    if "test" in db_name:
+        return "test"
+    if "staging" in db_name:
+        return "staging"
+    if "prod" in db_name:
+        return "prod"
+    return "dev"
+
+
+def require_environment(required: str) -> None:
+    """
+    Ensure we're running in the expected environment.
+
+    Use at the start of scripts that should only run in specific environments.
+
+    Args:
+        required: Expected environment ('dev', 'test', 'staging', 'prod')
+
+    Raises:
+        RuntimeError: If current environment doesn't match required
+
+    Example:
+        >>> require_environment("dev")  # Passes in dev
+        >>> require_environment("prod")  # Raises if not prod
+
+    Educational Note:
+        This is a "safety guard" pattern. By failing fast when in the
+        wrong environment, we prevent accidental data corruption or
+        production outages from running dev scripts against prod.
+    """
+    if required not in VALID_ENVIRONMENTS:
+        msg = f"Invalid required environment: {required}. Must be one of {VALID_ENVIRONMENTS}"
+        raise ValueError(msg)
+
+    current = get_environment()
+    if current != required:
+        msg = (
+            f"This operation requires {required} environment, but current environment is {current}"
+        )
+        raise RuntimeError(msg)
+
 
 def initialize_pool(
     minconn: int | None = None,
