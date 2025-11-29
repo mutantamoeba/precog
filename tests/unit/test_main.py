@@ -2810,6 +2810,96 @@ class TestConfigValidate:
 
 
 # ============================================================================
+# Test Environment Command (Issue #161)
+# ============================================================================
+
+
+class TestShowEnvironment:
+    """Test env command for displaying environment configuration.
+
+    Tests the new 'env' command added in Issue #161 for database
+    environment safety guards.
+
+    Related:
+        - Issue #161: Database Environment Safety Guards
+        - docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
+        - main.py: show_environment() function
+    """
+
+    @patch("precog.database.connection.get_environment")
+    def test_env_shows_test_environment(self, mock_get_env, runner):
+        """Test env command shows test environment correctly.
+
+        Verifies:
+            - Exit code 0
+            - Displays 'test' environment
+            - Shows low risk level
+        """
+        mock_get_env.return_value = "test"
+
+        result = runner.invoke(app, ["env"])
+
+        assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
+        output = strip_ansi(result.stdout).lower()
+        assert "test" in output
+        assert "low" in output  # Risk level
+
+    @patch("precog.database.connection.get_environment")
+    def test_env_shows_dev_environment(self, mock_get_env, runner):
+        """Test env command shows dev environment correctly."""
+        mock_get_env.return_value = "dev"
+
+        result = runner.invoke(app, ["env"])
+
+        assert result.exit_code == 0
+        output = strip_ansi(result.stdout).lower()
+        assert "dev" in output
+        assert "low" in output  # Risk level
+
+    @patch("precog.database.connection.get_environment")
+    def test_env_shows_prod_warning(self, mock_get_env, runner):
+        """Test env command shows warning for prod environment.
+
+        Verifies:
+            - Exit code 0
+            - Displays 'prod' environment
+            - Shows CRITICAL risk level
+            - Shows warning message
+        """
+        mock_get_env.return_value = "prod"
+
+        result = runner.invoke(app, ["env"])
+
+        assert result.exit_code == 0
+        output = strip_ansi(result.stdout).lower()
+        assert "prod" in output
+        assert "critical" in output  # Risk level
+        assert "warning" in output  # Warning message
+
+    @patch("precog.database.connection.get_environment")
+    @patch.dict("os.environ", {"PRECOG_ENV": "test", "DB_NAME": "precog_test"})
+    def test_env_verbose_shows_env_vars(self, mock_get_env, runner):
+        """Test env command with --verbose shows environment variables.
+
+        Verifies:
+            - Exit code 0
+            - Displays PRECOG_ENV variable
+            - Displays DB_NAME variable
+            - Hides password
+        """
+        mock_get_env.return_value = "test"
+
+        result = runner.invoke(app, ["env", "--verbose"])
+
+        assert result.exit_code == 0
+        output = strip_ansi(result.stdout)
+        assert "PRECOG_ENV" in output
+        assert "DB_NAME" in output
+        # Password should be hidden
+        assert "hidden" in output.lower() or "******" in output
+
+
+# ============================================================================
 # Notes for Implementation
 # ============================================================================
 

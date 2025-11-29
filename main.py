@@ -1867,6 +1867,102 @@ def config_validate(
         raise typer.Exit(code=1) from e
 
 
+# =============================================================================
+# ENVIRONMENT COMMANDS (Issue #161)
+# =============================================================================
+
+
+@app.command(name="env")
+def show_environment(
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Show detailed environment configuration",
+    ),
+) -> None:
+    """
+    Display current database environment configuration.
+
+    Shows the detected environment (dev, test, staging, prod) based on
+    PRECOG_ENV environment variable or DB_NAME inference. Use this to
+    verify which database you're connected to before running commands.
+
+    Environment Detection Priority:
+        1. PRECOG_ENV environment variable (explicit)
+        2. DB_NAME environment variable (inferred from name)
+        3. Default to 'dev' (safe default)
+
+    Example:
+        python main.py env
+        python main.py env --verbose
+
+    See: docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
+    """
+    import os
+
+    from precog.database.connection import get_environment
+
+    if verbose:
+        logger.info("Verbose mode enabled")
+
+    # Get current environment
+    current_env = get_environment()
+
+    # Environment colors and risk levels
+    env_info = {
+        "dev": {"color": "green", "risk": "Low", "desc": "Local development"},
+        "test": {"color": "blue", "risk": "Low", "desc": "Automated testing"},
+        "staging": {"color": "yellow", "risk": "Medium", "desc": "Pre-production validation"},
+        "prod": {"color": "red", "risk": "CRITICAL", "desc": "Live trading"},
+    }
+
+    info = env_info.get(current_env, {"color": "white", "risk": "Unknown", "desc": "Unknown"})
+
+    # Display environment info
+    console.print()
+    console.print(
+        f"[bold {info['color']}]Current Environment: {current_env.upper()}[/bold {info['color']}]"
+    )
+    console.print()
+
+    # Create environment table
+    table = Table(title="Environment Configuration")
+    table.add_column("Setting", style="cyan", no_wrap=True)
+    table.add_column("Value", style="white")
+
+    table.add_row("Environment", f"[{info['color']}]{current_env}[/{info['color']}]")
+    table.add_row("Risk Level", f"[{info['color']}]{info['risk']}[/{info['color']}]")
+    table.add_row("Description", info["desc"])
+
+    if verbose:
+        # Show environment variables
+        table.add_row("", "")  # Spacer
+        table.add_row("[bold]Environment Variables[/bold]", "")
+        table.add_row("PRECOG_ENV", os.getenv("PRECOG_ENV", "[dim]not set[/dim]"))
+        table.add_row("DB_NAME", os.getenv("DB_NAME", "[dim]not set[/dim]"))
+        table.add_row("DB_HOST", os.getenv("DB_HOST", "[dim]not set[/dim]"))
+        table.add_row("DB_PORT", os.getenv("DB_PORT", "[dim]not set[/dim]"))
+        table.add_row("DB_USER", os.getenv("DB_USER", "[dim]not set[/dim]"))
+        table.add_row(
+            "DB_PASSWORD",
+            "[dim]****** (hidden)[/dim]" if os.getenv("DB_PASSWORD") else "[dim]not set[/dim]",
+        )
+
+    console.print(table)
+
+    # Show safety reminder for prod/staging
+    if current_env in ("prod", "staging"):
+        console.print()
+        console.print(
+            f"[bold {info['color']}]WARNING:[/bold {info['color']}] You are in {current_env.upper()} environment!"
+        )
+        console.print("[dim]All database operations will affect real data.[/dim]")
+        console.print("[dim]Double-check commands before executing.[/dim]")
+
+    console.print()
+
+
 def main():
     """Main entry point for CLI."""
     app()
