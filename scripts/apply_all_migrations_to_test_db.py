@@ -2,9 +2,14 @@
 """
 Apply all database migrations to TEST database (precog_test).
 Uses TEST_DB_* environment variables.
+
+Environment Safety (Issue #161):
+    This script ONLY works with test databases. It will refuse to run
+    against dev/staging/prod databases. See DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
 """
 
 import os
+import sys
 from pathlib import Path
 
 import psycopg2
@@ -25,14 +30,41 @@ db_config = {
 # Validate password
 if not db_config["password"]:
     print("[ERROR] TEST_DB_PASSWORD not set in .env")
-    exit(1)
+    sys.exit(1)
+
+# =============================================================================
+# ENVIRONMENT SAFETY CHECK (Issue #161)
+# =============================================================================
+# This script is ONLY for test database - enforce this strictly
+db_name = db_config["dbname"] or ""
+if "test" not in db_name.lower():
+    print("=" * 70)
+    print("[ERROR] ENVIRONMENT SAFETY VIOLATION")
+    print("=" * 70)
+    print()
+    print("  This script is for TEST databases only!")
+    print(f"  Database name '{db_name}' does not contain 'test'")
+    print()
+    print("  If you want to migrate dev/staging/prod, use:")
+    print("    - scripts/apply_migration_v1.4.py")
+    print("    - scripts/apply_migration_v1.5.py")
+    print()
+    print("  Or set TEST_DB_NAME=precog_test in your .env file")
+    print("=" * 70)
+    sys.exit(1)
 
 print("=" * 70)
-print("Applying All Migrations to TEST Database (precog_test)")
+print("Applying All Migrations to TEST Database")
 print("=" * 70)
+print()
+print("  Environment:  TEST (enforced)")
+print(f"  Database:     {db_config['dbname']}")
+print(f"  Host:         {db_config['host']}:{db_config['port']}")
+print(f"  User:         {db_config['user']}")
+print()
 
 # Connect to database
-print("\n[1/3] Connecting to test database...")
+print("[1/3] Connecting to test database...")
 try:
     conn = psycopg2.connect(**db_config)
     conn.autocommit = True
@@ -40,7 +72,7 @@ try:
     print(f"[OK] Connected to {db_config['dbname']}")
 except Exception as e:
     print(f"[ERROR] Connection failed: {e}")
-    exit(1)
+    sys.exit(1)
 
 # Find all migration files
 print("\n[2/3] Finding migration files...")
@@ -49,7 +81,7 @@ migration_files = sorted(migrations_dir.glob("*.sql"))
 
 if not migration_files:
     print(f"[ERROR] No migration files found in {migrations_dir}")
-    exit(1)
+    sys.exit(1)
 
 print(f"[OK] Found {len(migration_files)} migration files")
 
@@ -69,7 +101,7 @@ for i, migration_file in enumerate(migration_files, 1):
         print(f"  [ERROR] Failed to apply {migration_file.name}")
         print(f"  Error: {e}")
         conn.rollback()
-        exit(1)
+        sys.exit(1)
 
 # Verify schema
 print("\n[VERIFY] Checking schema...")
@@ -89,6 +121,6 @@ cursor.close()
 conn.close()
 
 print("\n" + "=" * 70)
-print("[SUCCESS] All migrations applied to precog_test database!")
+print(f"[SUCCESS] All migrations applied to {db_config['dbname']}!")
 print("=" * 70)
 print("\nYou can now run: pytest tests/test_crud_operations.py -v")

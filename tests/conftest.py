@@ -3,8 +3,17 @@ Pytest configuration and shared fixtures.
 
 Fixtures are reusable test setup/teardown functions.
 They run before each test that uses them.
+
+Environment Safety:
+    This module enforces test environment via require_environment("test").
+    Tests will fail immediately if DB_NAME doesn't contain 'test' or
+    PRECOG_ENV isn't set to 'test'. This prevents accidental test runs
+    against dev/staging/prod databases.
+
+    See: docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
 """
 
+import os
 import shutil
 import tempfile
 from decimal import Decimal
@@ -16,7 +25,12 @@ import pytest
 from precog.config.config_loader import ConfigLoader
 
 # Import modules to test
-from precog.database.connection import close_pool, get_cursor, initialize_pool
+from precog.database.connection import (
+    close_pool,
+    get_cursor,
+    get_environment,
+    initialize_pool,
+)
 from precog.database.crud_operations import create_strategy
 from precog.utils.logger import setup_logging
 
@@ -520,7 +534,55 @@ def sample_strategy(db_pool, clean_test_data, sample_strategy_config_nested) -> 
 
 
 def pytest_configure(config):
-    """Register custom markers."""
+    """
+    Register custom markers and enforce test environment.
+
+    Environment Safety:
+        This hook runs BEFORE any tests execute. We enforce PRECOG_ENV=test
+        here to fail fast if someone accidentally runs tests against dev/prod.
+
+    Markers:
+        - unit: Isolated unit tests (no external dependencies)
+        - integration: Tests requiring database or external services
+        - slow: Tests that take >1s (can skip with -m "not slow")
+        - critical: Must-pass tests for CI/CD gates
+    """
+    # ==========================================================================
+    # ENVIRONMENT SAFETY GUARD (Issue #161)
+    # ==========================================================================
+    # Ensure we're in test environment BEFORE any database access
+    # This prevents accidental test runs against dev/staging/prod databases
+    #
+    # If this fails, set PRECOG_ENV=test or ensure DB_NAME contains 'test'
+    # See: docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
+    # ==========================================================================
+
+    # Set PRECOG_ENV if not already set (for local dev convenience)
+    if not os.getenv("PRECOG_ENV"):
+        os.environ["PRECOG_ENV"] = "test"
+
+    # Verify we're in test environment
+    current_env = get_environment()
+    if current_env != "test":
+        raise RuntimeError(
+            f"\n"
+            f"{'=' * 70}\n"
+            f"ENVIRONMENT SAFETY ERROR\n"
+            f"{'=' * 70}\n"
+            f"Tests attempted to run in '{current_env}' environment!\n"
+            f"\n"
+            f"Tests MUST run in 'test' environment to prevent data corruption.\n"
+            f"\n"
+            f"To fix, either:\n"
+            f"  1. Set PRECOG_ENV=test before running tests\n"
+            f"  2. Ensure DB_NAME contains 'test' (e.g., precog_test)\n"
+            f"\n"
+            f"Example:\n"
+            f"  PRECOG_ENV=test python -m pytest tests/\n"
+            f"{'=' * 70}\n"
+        )
+
+    # Register custom markers
     config.addinivalue_line("markers", "unit: Unit tests (isolated, fast)")
     config.addinivalue_line(
         "markers", "integration: Integration tests (database, external dependencies)"

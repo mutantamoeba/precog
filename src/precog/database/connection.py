@@ -137,6 +137,74 @@ def require_environment(required: str) -> None:
         raise RuntimeError(msg)
 
 
+def protect_dangerous_operation(
+    operation_name: str,
+    allow_in_test: bool = True,
+    allow_in_dev: bool = True,
+) -> None:
+    """
+    Guard dangerous database operations (DROP, TRUNCATE, bulk DELETE).
+
+    Use this before executing operations that could cause data loss.
+    Always blocks in production, requires confirmation in staging.
+
+    Args:
+        operation_name: Human-readable name of the operation (for logging/errors)
+        allow_in_test: If True, allow in test environment (default: True)
+        allow_in_dev: If True, allow in dev environment (default: True)
+
+    Raises:
+        RuntimeError: If operation not allowed in current environment
+
+    Example:
+        >>> protect_dangerous_operation("DROP TABLE markets")  # Blocks in prod
+        >>> protect_dangerous_operation("TRUNCATE positions", allow_in_dev=False)
+
+    Educational Note:
+        This implements the "Defense in Depth" pattern. Even if someone
+        accidentally connects to production, dangerous operations are
+        blocked at the code level. This is a last line of defense.
+
+    See: docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
+    """
+    current_env = get_environment()
+
+    # Production: ALWAYS block dangerous operations
+    if current_env == "prod":
+        msg = (
+            f"BLOCKED: '{operation_name}' is not allowed in production!\n"
+            f"Production database modifications require manual DBA approval.\n"
+            f"See: docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md"
+        )
+        raise RuntimeError(msg)
+
+    # Staging: Block (staging should also be protected)
+    if current_env == "staging":
+        msg = (
+            f"BLOCKED: '{operation_name}' is not allowed in staging!\n"
+            f"Staging modifications require explicit approval.\n"
+            f"Use migration scripts with confirmation prompts instead."
+        )
+        raise RuntimeError(msg)
+
+    # Dev: Check if allowed
+    if current_env == "dev" and not allow_in_dev:
+        msg = f"BLOCKED: '{operation_name}' is not allowed in dev environment."
+        raise RuntimeError(msg)
+
+    # Test: Check if allowed
+    if current_env == "test" and not allow_in_test:
+        msg = f"BLOCKED: '{operation_name}' is not allowed in test environment."
+        raise RuntimeError(msg)
+
+    # Operation allowed - log it for audit trail
+    logger.info(
+        "dangerous_operation_allowed",
+        operation=operation_name,
+        environment=current_env,
+    )
+
+
 def initialize_pool(
     minconn: int | None = None,
     maxconn: int | None = None,

@@ -143,6 +143,10 @@ jobs:
         python-version: ['3.12', '3.13', '3.14']
       fail-fast: false
 
+    # Environment safety (Issue #161): Explicitly set test environment
+    env:
+      PRECOG_ENV: test
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -219,6 +223,8 @@ jobs:
           --health-retries 5
 
     env:
+      # Environment safety (Issue #161): Explicitly set test environment
+      PRECOG_ENV: test
       # Database connection for tests
       DB_HOST: localhost
       DB_PORT: 5432
