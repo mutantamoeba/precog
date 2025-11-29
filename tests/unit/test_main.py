@@ -1254,17 +1254,18 @@ class TestFetchFills:
         # Verify exit code
         assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}"
 
+        # Strip ANSI codes for cross-platform compatibility
+        output = strip_ansi(result.stdout)
+
         # Verify table title shows full count
-        assert "15 total" in result.stdout, "Total fill count not shown in table title"
+        assert "15 total" in output, "Total fill count not shown in table title"
 
         # Verify pagination message shown
-        assert "and 5 more fills" in result.stdout, "Pagination message not shown"
+        assert "and 5 more fills" in output, "Pagination message not shown"
 
         # Verify total volume calculated from DISPLAYED fills (10 * 10 = 100)
         # NOTE: This is a limitation in main.py line 826 - only sums fills[:10]
         # Ideally should sum ALL fills, but testing actual behavior
-        # Strip ANSI codes for cross-platform compatibility
-        output = strip_ansi(result.stdout)
         assert "100 contracts" in output, "Total volume shown"
 
     def test_fetch_fills_dry_run(self, runner, mock_kalshi_client):
@@ -1374,7 +1375,8 @@ class TestFetchFills:
 
         # Verify success
         assert result.exit_code == 0
-        assert "Fetched 1 fills" in result.stdout
+        output = strip_ansi(result.stdout)
+        assert "Fetched 1 fills" in output
 
 
 class TestFetchSettlements:
@@ -1449,12 +1451,13 @@ class TestFetchSettlements:
         assert "2025-11" in result.stdout, "Settled date not displayed"
 
         # Verify totals and P&L
-        assert "Total Revenue" in result.stdout, "Total Revenue not shown"
-        assert "Total Fees" in result.stdout, "Total Fees not shown"
-        assert "Net P&L" in result.stdout, "Net P&L not shown"
+        output = strip_ansi(result.stdout)
+        assert "Total Revenue" in output, "Total Revenue not shown"
+        assert "Total Fees" in output, "Total Fees not shown"
+        assert "Net P&L" in output, "Net P&L not shown"
 
         # Verify P&L calculation (50.00 - 2.50 = 47.50)
-        assert "$47.50" in result.stdout, "Net P&L not calculated correctly"
+        assert "$47.50" in output, "Net P&L not calculated correctly"
 
     def test_fetch_settlements_multiple(self, runner, mock_kalshi_client):
         """Test fetch-settlements with multiple settlements.
@@ -1507,20 +1510,21 @@ class TestFetchSettlements:
         assert "NFL-SF" in result.stdout, "Third ticker not displayed"
 
         # Verify results (uppercase)
-        assert "YES" in result.stdout, "YES result not displayed"
-        assert "NO" in result.stdout, "NO result not displayed"
+        output = strip_ansi(result.stdout)
+        assert "YES" in output, "YES result not displayed"
+        assert "NO" in output, "NO result not displayed"
 
         # Verify Total Revenue sum (50.00 + (-25.00) + 75.00 = 100.00)
-        assert "Total Revenue" in result.stdout, "Total Revenue not shown"
-        assert "$100.00" in result.stdout, "Total Revenue sum not correct"
+        assert "Total Revenue" in output, "Total Revenue not shown"
+        assert "$100.00" in output, "Total Revenue sum not correct"
 
         # Verify Total Fees sum (2.50 + 1.25 + 3.75 = 7.50)
-        assert "Total Fees" in result.stdout, "Total Fees not shown"
-        assert "$7.50" in result.stdout, "Total Fees sum not correct"
+        assert "Total Fees" in output, "Total Fees not shown"
+        assert "$7.50" in output, "Total Fees sum not correct"
 
         # Verify Net P&L (100.00 - 7.50 = 92.50)
-        assert "Net P&L" in result.stdout, "Net P&L not shown"
-        assert "$92.50" in result.stdout, "Net P&L calculation not correct"
+        assert "Net P&L" in output, "Net P&L not shown"
+        assert "$92.50" in output, "Net P&L calculation not correct"
 
     def test_fetch_settlements_dry_run(self, runner, mock_kalshi_client):
         """Test fetch-settlements with --dry-run.
@@ -2139,11 +2143,12 @@ class TestHealthCheck:
         assert result.exit_code == 1, f"Expected exit code 1, got {result.exit_code}"
 
         # Verify database check failed
-        assert "database" in result.stdout.lower()
-        assert "FAIL" in result.stdout or "failed" in result.stdout.lower()
+        output = strip_ansi(result.stdout)
+        assert "database" in output.lower()
+        assert "FAIL" in output or "failed" in output.lower()
 
         # Verify summary shows failures
-        assert "3/4" in result.stdout or "1 failed" in result.stdout.lower()
+        assert "3/4" in output or "1 failed" in output.lower()
 
     @patch("precog.database.connection.test_connection")
     @patch("precog.config.config_loader.ConfigLoader")
