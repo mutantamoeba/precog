@@ -1823,7 +1823,7 @@ All critical paths tested:
 python -m pytest tests/ --cov=src/precog --cov-report=term-missing
 
 # Compare to DEVELOPMENT_PHASES targets
-grep "≥" docs/foundation/DEVELOPMENT_PHASES_V1.6.md
+grep "≥" docs/foundation/DEVELOPMENT_PHASES_V1.7.md
 
 # Verify gaps documented in PR descriptions
 gh pr list --state merged --search "merged:>=2025-11-01"
@@ -1871,7 +1871,7 @@ connection.py         81.82%  (target: 80%, gap: +1.82pp ✅)
 - Write tests before/during implementation (TDD/test-driven)
 
 ### Cross-References
-- **DEVELOPMENT_PHASES_V1.6.md:** Phase-specific module targets
+- **DEVELOPMENT_PHASES_V1.7.md:** Phase-specific module targets
 - **Phase Completion Protocol (CLAUDE.md Step 5):** Coverage validation checklist
 - **Pattern 10:** Property-Based Testing (achieving high coverage with generated inputs)
 - **DEVELOPMENT_PHILOSOPHY_V1.3.md:** Test-Driven Development principle
@@ -2627,8 +2627,8 @@ pytest --cov=module tests/unit/test_new_feature.py
 - **Factories:** `tests/fixtures/factories.py` - Test data factories
 - **Scripts:** `scripts/test_*.sh`, `scripts/validate_*.sh` - Execution scripts
 - **Requirements:** `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` - REQ-TEST-012 through REQ-TEST-019
-- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.22.md` - ADR-074, ADR-076 (Test Type Categories)
-- **Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.11.md` - Pattern 13 (Test Coverage Quality)
+- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.23.md` - ADR-074, ADR-076 (Test Type Categories)
+- **Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.12.md` - Pattern 13 (Test Coverage Quality)
 - **Root Cause Analysis:** `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Phase 1.5 TDD failure lessons learned
 - **Validation:** `docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Overall quality infrastructure
 

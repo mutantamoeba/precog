@@ -226,7 +226,7 @@
 - Updated PHASE_0.7_DEFERRED_TASKS V1.1 → V1.2 (marked all 8 tasks complete: DEF-001 through DEF-008)
 - Added validation script maintenance reminders to CLAUDE.md (Pattern 1, Pattern 2, SESSION_HANDOFF template)
 - Updated PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md (8-step → 9-step: added validation scripts step)
-- Updated DEVELOPMENT_PHASES_V1.6.md (added validation reminders to all 6 phase test planning checklists)
+- Updated DEVELOPMENT_PHASES_V1.7.md (added validation reminders to all 6 phase test planning checklists)
 - Comprehensive Defense in Depth documentation (4-layer validation architecture)
 - Phase 0.7 status: 100% complete (pre-commit hooks, pre-push hooks, branch protection, schema validation, all deferred tasks done)
 **Changes in v2.11:**
@@ -374,12 +374,12 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.19.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.37.md** | ✅ | v2.37 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.37** (ESPN Data Model: ARCHITECTURE_DECISIONS V2.22, ADR_INDEX V1.16, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0) |
-| **ARCHITECTURE_DECISIONS_V2.22.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.22** (ADR-029: ESPN Data Model with Normalized Schema - 4-table design for multi-sport ESPN data; venues, game_states (SCD Type 2), team_rankings, teams; JSONB situation field for sport-specific data; ~1.1 GB/year storage; 97 → 98 total ADRs) |
-| **REQUIREMENT_INDEX_V1.9.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
+| **MASTER_INDEX_V2.38.md** | ✅ | v2.37 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.37** (ESPN Data Model: ARCHITECTURE_DECISIONS V2.22, ADR_INDEX V1.16, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0) |
+| **ARCHITECTURE_DECISIONS_V2.23.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.22** (ADR-029: ESPN Data Model with Normalized Schema - 4-table design for multi-sport ESPN data; venues, game_states (SCD Type 2), team_rankings, teams; JSONB situation field for sport-specific data; ~1.1 GB/year storage; 97 → 98 total ADRs) |
+| **REQUIREMENT_INDEX_V1.10.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
 | **ADR_INDEX_V1.16.md** | ✅ | v1.16 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 77 architecture decisions - **UPDATED V1.16** (ADR-029: ESPN Data Model with Normalized Schema - Phase 2 Live Data Integration; 76 → 77 total ADRs) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
-| **DEVELOPMENT_PHASES_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.6** |
+| **DEVELOPMENT_PHASES_V1.7.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.6** |
 | **TESTING_STRATEGY_V3.1.md** | ✅ | v3.1 | `/docs/foundation/` | 0.6c | Phases 1-10 | 🟡 High | **UPDATED V3.1** - Enhanced coverage tier classification based on TDD/security/accuracy emphasis; Position Manager 85%→90% (handles money+real-time); Kalshi Client 75%→90% (handles money+security); risk-based framework (financial impact, security impact, blast radius); classification examples table showing WHY each module is in its tier; V3.0: Comprehensive 8 test type framework addressing Phase 1.5 TDD failure (expanded from 4 types to: unit, property, integration, E2E, stress, race, performance, chaos); mock usage restrictions (REQ-TEST-013: APPROPRIATE for external APIs/time, FORBIDDEN for database/internal logic/config); integration testing philosophy "test with REAL infrastructure not mocks"; test type requirements matrix (module tier × test type); phase-based roadmap (when each type required Phases 1-5); property-based testing with Hypothesis (REQ-TEST-018) |
 | **TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Comprehensive test requirements (REQ-TEST-012 through REQ-TEST-019): 8 test types (unit, property, integration, E2E, stress, race, performance, chaos), mock usage restrictions, fixture requirements, coverage standards (Critical ≥90%, Manager ≥85%, Infrastructure ≥80%), stress/integration/E2E test requirements |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
@@ -467,7 +467,7 @@ Roadmap, timelines, and project management.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DEVELOPMENT_PHASES_V1.6.md** | ✅ | v1.6 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 0.5 complete, Phase 5 split into 5a/5b - UPDATED V1.6 |
+| **DEVELOPMENT_PHASES_V1.7.md** | ✅ | v1.6 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 0.5 complete, Phase 5 split into 5a/5b - UPDATED V1.6 |
 | **DEPLOYMENT_GUIDE_V1.0.md** | 🔵 | - | `/docs/deployment/` | 1 | Phase 1 ✅ | 🟡 High | Local/AWS deployment stubs |
 | **USER_GUIDE_V1.0.md** | 🔵 | - | `/docs/guides/` | 5 | Phase 5 ✅ | 🟢 Medium | CLI examples (edges-list, trade-execute) |
 | **DEVELOPER_ONBOARDING_V1.0.md** | 🔵 | - | `/docs/utility/` | 0 | Phase 0 ✅ | 🟡 High | Merged with ENVIRONMENT_CHECKLIST, onboarding steps |
@@ -488,7 +488,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 6-9 | Phases 6-9 | 🔴 Critical | **NEW** - End-to-end analytics architecture: 4-layer design (Collection→Storage→Aggregation→Presentation), dual processing (real-time <200ms + batch), 6 materialized views |
 | **AB_TESTING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 8 | Phase 8 | 🟡 High | **NEW** - Statistical methodology for strategy/model evaluation: Welch's t-test, Chi-square, sample size calculation (64 trades/variant), Bayesian analysis, experiment lifecycle |
 | **DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 9 | Phase 9 | 🟡 High | **NEW** - React 18 + Next.js 14 trading dashboard: component library (MetricCard, PositionCard), Socket.IO real-time (<200ms), SWR data fetching, Plotly.js charts, deployment |
-| **DEVELOPMENT_PATTERNS_V1.11.md** | ✅ | v1.11 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.11** - Added Pattern 23 (Validation Failure Handling - Fix Failures, Don't Bypass) - 23 total patterns now; Pattern 23 documents systematic validation failure response protocol: 4-step process (Investigate → Fix False Positives → Fix Real Failures → Re-run Validation), decision tree for classification, when bypass is acceptable (rare), validation script best practices, testing validation scripts (~530 lines); real-world context from session: 5 false positives eliminated (SCD Type 2 docstring detection), 11 property tests added (Issue #127), validation config alignment, pre-push success 0% → 100%; cross-references Pattern 21 (Validation-First Architecture), Pattern 18 (Avoid Technical Debt), Pattern 9 (Warning Governance), Issue #127, ADR-002/018-020/074 |
+| **DEVELOPMENT_PATTERNS_V1.12.md** | ✅ | v1.11 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.11** - Added Pattern 23 (Validation Failure Handling - Fix Failures, Don't Bypass) - 23 total patterns now; Pattern 23 documents systematic validation failure response protocol: 4-step process (Investigate → Fix False Positives → Fix Real Failures → Re-run Validation), decision tree for classification, when bypass is acceptable (rare), validation script best practices, testing validation scripts (~530 lines); real-world context from session: 5 false positives eliminated (SCD Type 2 docstring detection), 11 property tests added (Issue #127), validation config alignment, pre-push success 0% → 100%; cross-references Pattern 21 (Validation-First Architecture), Pattern 18 (Avoid Technical Debt), Pattern 9 (Warning Governance), Issue #127, ADR-002/018-020/074 |
 | **SENTRY_INTEGRATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | Phase 2 | 🟡 High | **NEW** - 3-layer hybrid observability architecture: logger.py (audit trail) + Sentry (real-time) + alerts table (permanent record); implementation guide with code examples, testing procedures, troubleshooting |
 | **MANAGER_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Comprehensive architecture guide for 4 core managers (Model, Strategy, Position, Config); database schemas with field-by-field explanations; status lifecycle diagrams; immutable vs SCD Type 2 versioning patterns; design principles (pure psycopg2, decimal precision, two-level configs); ~900 lines; addresses user request to document manager architecture summary |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
@@ -651,11 +651,11 @@ Additional guides, references, and supporting documentation.
 **All Phase 0.5 deliverables complete (Days 1-10 + Standardization + Phase 1 Foundation):**
 - ✅ DATABASE_SCHEMA_SUMMARY_V1.6.md (added alerts table + 4 ML infrastructure placeholders)
 - ✅ MASTER_REQUIREMENTS_V2.7.md (added 34 requirements: REQ-METH, REQ-ALERT, REQ-ML)
-- ✅ REQUIREMENT_INDEX_V1.9.md V1.1 (updated with 89 total requirements)
+- ✅ REQUIREMENT_INDEX_V1.10.md V1.1 (updated with 89 total requirements)
 - ✅ ARCHITECTURE_DECISIONS_V2.5.md (ADR numbers added for all decisions)
 - ✅ ADR_INDEX.md (systematic ADR catalog)
 - ✅ PROJECT_OVERVIEW_V1.4.md
-- ✅ DEVELOPMENT_PHASES_V1.6.md (Phase 5 split into 5a/5b)
+- ✅ DEVELOPMENT_PHASES_V1.7.md (Phase 5 split into 5a/5b)
 - ✅ system.yaml (added comprehensive notifications configuration)
 - ✅ position_management.yaml V2.0 (10 exit conditions)
 - ✅ probability_models.yaml V2.0 (versioning)
@@ -696,13 +696,13 @@ Additional guides, references, and supporting documentation.
 - PROJECT_OVERVIEW_V1.3.md (architecture)
 - MASTER_REQUIREMENTS_V2.7.md (requirements with REQ IDs - includes methods, alerts, ML)
 - ARCHITECTURE_DECISIONS_V2.5.md (design rationale with ADR numbers)
-- REQUIREMENT_INDEX_V1.9.md V1.1 (requirement catalog - 89 requirements)
+- REQUIREMENT_INDEX_V1.10.md V1.1 (requirement catalog - 89 requirements)
 - ADR_INDEX.md (ADR catalog)
 - CONFIGURATION_GUIDE_V3.1.md (config patterns)
 - DATABASE_SCHEMA_SUMMARY_V1.6.md (schema - 25 tables including alerts + ML placeholders)
 - API_INTEGRATION_GUIDE_V1.0.md (API docs)
 - KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md (critical reference)
-- DEVELOPMENT_PHASES_V1.6.md (roadmap)
+- DEVELOPMENT_PHASES_V1.7.md (roadmap)
 - GLOSSARY.md (terminology)
 - Handoff_Protocol_V1.0.md (process reference)
 - VERSIONING_GUIDE_V1.0.md (versioning patterns)
@@ -809,7 +809,7 @@ Additional guides, references, and supporting documentation.
 | 2.30 | 2025-11-22 | **USER GUIDES FOR CORE MODULES (PHASE 1.5)**: Added 6 comprehensive user guides (~4,530 lines total: STRATEGY_MANAGER, MODEL_MANAGER, POSITION_MANAGER, CONFIG_LOADER, KALSHI_CLIENT, KALSHI_MARKET_TERMINOLOGY) |
 | 2.29 | 2025-11-22 | **PHASE 1.5 COMPLETION DOCUMENTATION**: Added PHASE_1.5_COMPLETION_REPORT.md + PHASE_1.5_DEFERRED_TASKS_V1.0.md; Phase 1.5 status: ⚠️ PASS WITH CONDITIONS (3/4 deliverables complete, 93.83% coverage) |
 | 2.5 | 2025-10-24 | **ALERTS & ML PLANNING**: Updated MASTER_REQUIREMENTS V2.6→V2.7 (34 new requirements), REQUIREMENT_INDEX V1.0→V1.1 (89 total reqs), DATABASE_SCHEMA_SUMMARY V1.5→V1.6 (alerts + 4 ML placeholders), system.yaml (notifications config); added 4 ML docs to planned (PROBABILITY_PRIMER, ELO_IMPLEMENTATION_GUIDE, MODEL_EVALUATION_GUIDE, MACHINE_LEARNING_ROADMAP); 25 total tables; ready for Phase 1 |
-| 2.4 | 2025-10-22 | Added REQUIREMENT_INDEX_V1.9.md and ADR_INDEX.md; updated MASTER_REQUIREMENTS V2.6, ARCHITECTURE_DECISIONS V2.5; updated document count 33 → 35; standardization complete |
+| 2.4 | 2025-10-22 | Added REQUIREMENT_INDEX_V1.10.md and ADR_INDEX.md; updated MASTER_REQUIREMENTS V2.6, ARCHITECTURE_DECISIONS V2.5; updated document count 33 → 35; standardization complete |
 | 2.3 | 2025-10-21 | Phase 0.5 complete: added 3 implementation guides (VERSIONING, TRAILING_STOP, POSITION_MANAGEMENT), updated 6 core docs (MASTER_REQUIREMENTS V2.5, DATABASE_SCHEMA V1.5, CONFIGURATION_GUIDE V3.1, DEVELOPMENT_PHASES V1.3, 3 YAML V2.0), added schema migration V1.5, Phase 5 split into 5a/5b |
 | 2.2 | 2025-10-17 | Updated all document versions (Master Requirements v2.3, Architecture Decisions v2.3, Project Overview v1.3, Configuration Guide v3.0, Database Schema v1.2); renamed all files to match internal versions; added Phase 0 completion documents |
 | 2.1 | 2025-10-12 | Added "Location" and "Phase Ties" columns; Session 7 handoff streamline (7 docs archived, 4 consolidated); added Handoff_Protocol_V1.0.md; marked Phase 0 at 100% |
