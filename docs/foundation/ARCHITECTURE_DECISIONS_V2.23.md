@@ -11934,7 +11934,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 
 **Supporting Documentation:**
 - DEVELOPMENT_PHILOSOPHY_V1.3.md (updated TDD section with Phase 1.5 lesson learned)
-- DEVELOPMENT_PATTERNS_V1.12.md (added Pattern 13: Test Coverage Quality)
+- DEVELOPMENT_PATTERNS_V1.13.md (added Pattern 13: Test Coverage Quality)
 - PHASE_1.5_TEST_PLAN_V1.0.md (test planning for manager components)
 
 **Development Guides:**
@@ -12005,7 +12005,7 @@ tests/
 - `docs/foundation/TESTING_STRATEGY_V3.2.md` (comprehensive 8 test type framework)
 - `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md` (REQ-TEST-012 through REQ-TEST-019)
 - `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md` (TDD section with Phase 1.5 lessons)
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.12.md` (Pattern 13: Test Coverage Quality)
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.13.md` (Pattern 13: Test Coverage Quality)
 
 **Code:**
 - `tests/conftest.py` (db_pool, clean_test_data fixtures)
