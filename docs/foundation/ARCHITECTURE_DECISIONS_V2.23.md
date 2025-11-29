@@ -11928,7 +11928,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 
 **Primary Documentation:**
 - TESTING_STRATEGY_V3.2.md (comprehensive 8 test type framework, 1,462 lines)
-- TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md (REQ-TEST-012 through REQ-TEST-019)
+- TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md (REQ-TEST-012 through REQ-TEST-019)
 - MASTER_REQUIREMENTS_V2.19.md (added 8 new test requirements)
 - REQUIREMENT_INDEX.md (added REQ-TEST-012 through REQ-TEST-019)
 
@@ -12003,7 +12003,7 @@ tests/
 
 **Documentation:**
 - `docs/foundation/TESTING_STRATEGY_V3.2.md` (comprehensive 8 test type framework)
-- `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V1.0.md` (REQ-TEST-012 through REQ-TEST-019)
+- `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md` (REQ-TEST-012 through REQ-TEST-019)
 - `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md` (TDD section with Phase 1.5 lessons)
 - `docs/guides/DEVELOPMENT_PATTERNS_V1.12.md` (Pattern 13: Test Coverage Quality)
 

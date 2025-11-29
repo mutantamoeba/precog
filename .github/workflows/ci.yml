@@ -341,10 +341,9 @@ jobs:
           python-version: '3.14'
           allow-prereleases: true
 
-      - name: Run test type coverage audit
-        run: python scripts/audit_test_type_coverage.py --summary
-        # Currently informational only - will add --strict when gaps are closed
-        continue-on-error: true
+      - name: Run test type coverage audit (STRICT - all 8 test types required)
+        run: python scripts/audit_test_type_coverage.py --strict
+        # V2.0 ENFORCEMENT: All 8 test types MANDATORY per TEST_REQUIREMENTS_COMPREHENSIVE V2.0
 
       - name: Generate JSON report for artifacts
         run: python scripts/audit_test_type_coverage.py --json > test_type_coverage.json
