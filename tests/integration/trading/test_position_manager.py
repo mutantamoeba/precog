@@ -148,8 +148,12 @@ def position_params(db_cursor, clean_test_data):
 # ============================================================================
 
 
-def test_open_position_success(db_cursor, clean_test_data, position_params):
+def test_open_position_success(db_pool, db_cursor, clean_test_data, position_params):
     """Test opening position with valid parameters and sufficient margin.
+
+    Note:
+        db_pool fixture ensures real database infrastructure is used
+        (Pattern 13 - no mocking connections in integration tests).
 
     Educational Note:
         - Required margin for YES @ 0.4975, qty 10:

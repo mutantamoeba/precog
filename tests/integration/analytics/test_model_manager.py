@@ -76,8 +76,13 @@ def model_factory() -> dict:
 # ============================================================================
 
 
-def test_create_model_success(clean_test_data, manager, model_factory):
-    """Test creating new model version with valid config."""
+def test_create_model_success(db_pool, db_cursor, clean_test_data, manager, model_factory):
+    """Test creating new model version with valid config.
+
+    Note:
+        db_pool and db_cursor fixtures ensure real database infrastructure
+        is used (Pattern 13 - no mocking connections in integration tests).
+    """
     model = manager.create_model(**model_factory)
 
     # Verify model created with correct attributes
