@@ -174,7 +174,7 @@ This file demonstrates the **gold standard** for comprehensive testing. Every ot
 
 ## 1. Module Tier Classification
 
-Per validation_config.yaml (lines 65-88) and TESTING_STRATEGY_V3.1.md (lines 1263-1288):
+Per validation_config.yaml (lines 65-88) and TESTING_STRATEGY_V3.2.md (lines 1263-1288):
 
 ### Critical Path Modules (≥90% coverage, ALL 8 test types required)
 
@@ -248,7 +248,7 @@ Per validation_config.yaml (lines 65-88) and TESTING_STRATEGY_V3.1.md (lines 126
 
 ## 2. Test Type Requirements Matrix Compliance
 
-Per TESTING_STRATEGY_V3.1.md lines 1241-1253 (REQ-TEST-012):
+Per TESTING_STRATEGY_V3.2.md lines 1241-1253 (REQ-TEST-012):
 
 ### Critical Path Modules: kalshi_client.py, kalshi_auth.py
 
@@ -776,7 +776,7 @@ from tests.fixtures.api_responses import (
 
 ## 8. Audit Methodology
 
-This audit followed a **quality-first approach** per TESTING_STRATEGY_V3.1.md:
+This audit followed a **quality-first approach** per TESTING_STRATEGY_V3.2.md:
 
 1. **Tier Classification** - Mapped each module to correct tier (validation_config.yaml)
 2. **Test Type Requirements** - Verified required test types per REQ-TEST-012
@@ -788,7 +788,7 @@ This audit followed a **quality-first approach** per TESTING_STRATEGY_V3.1.md:
 **Tools Used:**
 - Manual file reading (test_*.py files)
 - Grep searches for patterns (db_pool, @patch, Mock)
-- TESTING_STRATEGY_V3.1.md (requirements reference)
+- TESTING_STRATEGY_V3.2.md (requirements reference)
 - validation_config.yaml (tier definitions)
 - Pattern 10, Pattern 13 (testing patterns)
 
