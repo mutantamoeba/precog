@@ -118,12 +118,24 @@ This structured logging enables future integrations:
 - **Grafana Loki:** Log aggregation, correlation with metrics
 - **CloudWatch Logs:** AWS-native log management
 
+Credential Masking (REQ-SEC-009):
+---------------------------------
+This module automatically masks sensitive data in logs:
+- API keys, passwords, tokens → masked as "abc***xyz"
+- Connection strings → postgres://user:****@host:5432/db
+- Error messages → credentials in exception text sanitized
+
+Sensitive field names detected: api_key, api_secret, password, token,
+jwt_token, access_token, refresh_token, secret, private_key, auth_token,
+authorization, bearer_token, connection_string.
+
 Reference: docs/guides/CONFIGURATION_GUIDE_V3.1.md (Logging section)
-Related Requirements: REQ-OBSERV-001 (Structured Logging)
+Related Requirements: REQ-OBSERV-001 (Structured Logging), REQ-SEC-009 (Credential Masking)
 Related ADR: ADR-048 (Logging Strategy)
 """
 
 import logging
+import re
 import sys
 from datetime import datetime
 from decimal import Decimal
@@ -131,6 +143,165 @@ from pathlib import Path
 from typing import Any
 
 import structlog
+
+# =============================================================================
+# CREDENTIAL MASKING (REQ-SEC-009)
+# =============================================================================
+
+# Sensitive field names that MUST be masked
+SENSITIVE_FIELD_NAMES = frozenset(
+    {
+        "api_key",
+        "api_secret",
+        "password",
+        "token",
+        "jwt_token",
+        "access_token",
+        "refresh_token",
+        "secret",
+        "private_key",
+        "auth_token",
+        "authorization",
+        "bearer_token",
+        "connection_string",
+    }
+)
+
+# Patterns that indicate sensitive content (case-insensitive)
+SENSITIVE_PATTERNS = [
+    # Connection strings with embedded passwords
+    re.compile(r"(postgres://[^:]+:)([^@]+)(@.+)", re.IGNORECASE),
+    re.compile(r"(mysql://[^:]+:)([^@]+)(@.+)", re.IGNORECASE),
+    re.compile(r"(mongodb://[^:]+:)([^@]+)(@.+)", re.IGNORECASE),
+    # Credentials in error messages - detects various assignment formats
+    re.compile(r"(password\s*[=:]\s*['\"]?)([^'\"]+)(['\"]?)", re.IGNORECASE),
+    re.compile(r"(password\s+['\"])([^'\"]+)(['\"])", re.IGNORECASE),
+]
+
+
+def mask_credential(value: str | None, show_chars: int = 3) -> str:
+    """
+    Mask a credential showing only first and last N characters.
+
+    Args:
+        value: The credential value to mask
+        show_chars: Number of characters to show at start and end (default: 3)
+
+    Returns:
+        Masked string in format "abc***xyz"
+
+    Example:
+        >>> mask_credential("abc123-secret-456def")
+        "abc***def"
+        >>> mask_credential("short")
+        "***"
+    """
+    if value is None:
+        return "None"
+    value_str = str(value)
+    if len(value_str) <= show_chars * 2:
+        return "***"
+    return f"{value_str[:show_chars]}***{value_str[-show_chars:]}"
+
+
+def sanitize_connection_string(conn_str: str) -> str:
+    """
+    Sanitize database connection strings by masking the password.
+
+    Args:
+        conn_str: Connection string like postgres://user:password@host:port/db
+
+    Returns:
+        Sanitized string with password replaced by ****
+
+    Example:
+        >>> sanitize_connection_string("postgres://user:MySecret@localhost:5432/db")
+        "postgres://user:****@localhost:5432/db"
+    """
+    for pattern in SENSITIVE_PATTERNS[:3]:  # Connection string patterns
+        match = pattern.match(conn_str)
+        if match:
+            return f"{match.group(1)}****{match.group(3)}"
+    return conn_str
+
+
+def sanitize_error_message(message: str) -> str:
+    """
+    Sanitize error messages by masking any embedded credentials.
+
+    Args:
+        message: Error message that may contain credentials
+
+    Returns:
+        Sanitized message with credentials replaced by ****
+
+    Example:
+        >>> sanitize_error_message("Auth failed: password 'MySecret123' is invalid")
+        "Auth failed: password '****' is invalid"
+    """
+    result = message
+
+    # Apply all sensitive patterns to sanitize credentials
+    for pattern in SENSITIVE_PATTERNS:
+        result = pattern.sub(r"\g<1>****\g<3>", result)
+
+    return result
+
+
+def mask_sensitive_data(
+    logger: logging.Logger, method_name: str, event_dict: dict[str, Any]
+) -> dict[str, Any]:
+    """
+    Structlog processor that masks sensitive data in log events.
+
+    This processor runs BEFORE log output and automatically:
+    - Masks values for sensitive field names (api_key, password, etc.)
+    - Sanitizes connection strings
+    - Cleans error messages of embedded credentials
+
+    Args:
+        logger: The logger instance (unused, required by structlog)
+        method_name: The log method name (info, error, etc.)
+        event_dict: The log event dictionary
+
+    Returns:
+        Modified event dictionary with sensitive data masked
+
+    Reference:
+        REQ-SEC-009: Sensitive Data Masking in Logs
+        Pattern 4: Security - NO CREDENTIALS IN CODE
+    """
+    for key, value in list(event_dict.items()):
+        if value is None:
+            continue
+
+        # Check if field name is sensitive
+        key_lower = key.lower()
+
+        # Special handling for connection strings - sanitize password portion
+        if key_lower == "connection_string" or (
+            isinstance(value, str) and "://" in value and "@" in value
+        ):
+            event_dict[key] = sanitize_connection_string(str(value))
+            continue
+
+        # Mask other sensitive field names completely
+        if key_lower in SENSITIVE_FIELD_NAMES or any(
+            sensitive in key_lower for sensitive in ["key", "secret", "password", "token"]
+        ):
+            event_dict[key] = mask_credential(str(value))
+            continue
+
+        # Check for exception messages that may contain credentials
+        if key_lower in (
+            "exception_message",
+            "error_message",
+            "message",
+            "exception",
+        ) and isinstance(value, str):
+            event_dict[key] = sanitize_error_message(value)
+
+    return event_dict
 
 
 def decimal_serializer(obj: Any, **kwargs) -> Any:
@@ -220,6 +391,8 @@ def setup_logging(
         structlog.stdlib.add_logger_name,
         # Add timestamp in ISO format
         structlog.processors.TimeStamper(fmt="iso"),
+        # CRITICAL: Mask sensitive data BEFORE logging (REQ-SEC-009)
+        mask_sensitive_data,
         # Add stack info for exceptions
         structlog.processors.StackInfoRenderer(),
         # Format exception info

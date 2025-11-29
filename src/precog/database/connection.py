@@ -21,7 +21,8 @@ Thread Safety:
 
 Performance Metrics:
 - Min connections (minconn=2): Always 2 connections ready (warm pool)
-- Max connections (maxconn=10): Pool grows up to 10 under heavy load
+- Max connections (maxconn=25): Pool grows up to 25 under heavy load
+- Configurable via DB_POOL_MIN_CONN / DB_POOL_MAX_CONN env vars
 - Idle behavior: Connections returned to pool immediately after use
 - Connection lifetime: Reused indefinitely (until close_pool() called)
 
@@ -60,8 +61,8 @@ _connection_pool: pool.SimpleConnectionPool | None = None
 
 
 def initialize_pool(
-    minconn: int = 2,
-    maxconn: int = 10,
+    minconn: int | None = None,
+    maxconn: int | None = None,
     host: str | None = None,
     port: int | None = None,
     database: str | None = None,
@@ -72,8 +73,8 @@ def initialize_pool(
     Initialize PostgreSQL connection pool.
 
     Args:
-        minconn: Minimum number of connections in pool
-        maxconn: Maximum number of connections in pool
+        minconn: Minimum connections (defaults to DB_POOL_MIN_CONN env or 2)
+        maxconn: Maximum connections (defaults to DB_POOL_MAX_CONN env or 25)
         host: Database host (defaults to .env DB_HOST)
         port: Database port (defaults to .env DB_PORT)
         database: Database name (defaults to .env DB_NAME)
@@ -83,8 +84,16 @@ def initialize_pool(
     Returns:
         Connection pool instance
 
+    Educational Note:
+        Pool sizing guidelines:
+        - minconn=2: Keeps 2 connections warm (avoids cold start latency)
+        - maxconn=25: Handles concurrent operations (trading + monitoring + data fetch)
+        - PostgreSQL overhead: ~5-10MB RAM per connection
+        - Increase maxconn for heavy parallelism (50+ concurrent operations)
+
     Example:
-        >>> initialize_pool()
+        >>> initialize_pool()  # Uses env defaults
+        >>> initialize_pool(maxconn=50)  # High-concurrency production
         >>> conn = get_connection()
     """
     global _connection_pool
@@ -94,6 +103,9 @@ def initialize_pool(
         return _connection_pool
 
     # Use environment variables if parameters not provided
+    # Pool size configurable via env for different environments
+    minconn = minconn if minconn is not None else int(os.getenv("DB_POOL_MIN_CONN", "2"))
+    maxconn = maxconn if maxconn is not None else int(os.getenv("DB_POOL_MAX_CONN", "25"))
     host = host or os.getenv("DB_HOST", "localhost")
     port = port or int(os.getenv("DB_PORT", "5432"))
     database = database or os.getenv("DB_NAME", "precog_dev")

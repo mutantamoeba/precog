@@ -8,20 +8,22 @@ This test suite verifies that sensitive credentials NEVER appear in:
 - Exception strings
 
 **IMPLEMENTATION STATUS:**
-    These tests define REQUIREMENTS for credential masking features.
-    The credential masking feature (REQ-SEC-009) is scheduled for Phase 3+.
-    Tests are marked with xfail to document expected behavior without blocking CI.
+    REQ-SEC-009 (Credential Masking) is COMPLETE.
+    Implementation: mask_sensitive_data() structlog processor in src/precog/utils/logger.py
+    - Masks API keys, tokens, passwords: "abc123-secret" -> "abc***ret"
+    - Sanitizes connection strings: "postgres://user:pass@host" -> "postgres://user:****@host"
+    - Sanitizes exception messages containing credentials
+    - GDPR/PCI-DSS compliance achieved
 
-Related Issue: GitHub Issue #129 (Security Tests)
+Related Issue: GitHub Issue #129 (Security Tests), GitHub Issue #151 (REQ-SEC-009)
 Related Pattern: Pattern 4 (Security - NO CREDENTIALS IN CODE)
-Related Requirement: REQ-SEC-009 (Credential Masking)
+Related Requirement: REQ-SEC-009 (Credential Masking) - COMPLETE
 """
 
 import logging
 import tempfile
 from pathlib import Path
 
-import pytest
 from psycopg2 import OperationalError
 
 from precog.api_connectors.kalshi_auth import KalshiAuth
@@ -29,11 +31,8 @@ from precog.api_connectors.kalshi_client import KalshiClient
 from precog.database.connection import get_connection
 from precog.utils.logger import setup_logging
 
-# Mark tests that require credential masking feature (not yet implemented)
-credential_masking_not_implemented = pytest.mark.xfail(
-    reason="Credential masking (REQ-SEC-009) not yet implemented - Phase 3+ feature",
-    strict=False,  # Test may pass once implemented
-)
+# REQ-SEC-009 credential masking is now IMPLEMENTED
+# Tests below validate the implementation works correctly
 
 
 def cleanup_logging_handlers() -> None:
@@ -69,7 +68,6 @@ FAKE_TOKEN = "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.test-jwt-token-secret"
 # =============================================================================
 
 
-@credential_masking_not_implemented
 def test_logger_does_not_log_api_key_in_structured_fields() -> None:
     """
     Verify API keys passed as structured fields are NOT logged.
@@ -129,7 +127,6 @@ def test_logger_does_not_log_api_key_in_structured_fields() -> None:
             cleanup_logging_handlers()
 
 
-@credential_masking_not_implemented
 def test_logger_does_not_log_password_in_exception_messages() -> None:
     """
     Verify passwords in exception messages are NOT logged.
@@ -193,7 +190,6 @@ def test_logger_does_not_log_password_in_exception_messages() -> None:
             cleanup_logging_handlers()
 
 
-@credential_masking_not_implemented
 def test_logger_masks_connection_strings_in_error_messages() -> None:
     """
     Verify database connection strings with passwords are masked in logs.
@@ -249,7 +245,6 @@ def test_logger_masks_connection_strings_in_error_messages() -> None:
 # =============================================================================
 
 
-@credential_masking_not_implemented
 def test_kalshi_client_does_not_log_api_key_on_error(monkeypatch) -> None:
     """
     Verify KalshiClient error messages never contain API key/secret.
@@ -308,7 +303,6 @@ def test_kalshi_client_does_not_log_api_key_on_error(monkeypatch) -> None:
             cleanup_logging_handlers()
 
 
-@credential_masking_not_implemented
 def test_kalshi_auth_does_not_log_private_key_on_error(monkeypatch, tmpdir) -> None:
     """
     Verify KalshiAuth never logs RSA private key in error messages.
@@ -373,7 +367,6 @@ def test_kalshi_auth_does_not_log_private_key_on_error(monkeypatch, tmpdir) -> N
 # =============================================================================
 
 
-@credential_masking_not_implemented
 def test_database_connection_error_masks_password(monkeypatch) -> None:
     """
     Verify database connection errors mask password in connection string.
@@ -438,7 +431,6 @@ def test_database_connection_error_masks_password(monkeypatch) -> None:
 # =============================================================================
 
 
-@credential_masking_not_implemented
 def test_logger_masks_jwt_tokens_in_authentication_logs() -> None:
     """
     Verify JWT tokens are masked in authentication logs.

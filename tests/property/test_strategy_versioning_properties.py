@@ -279,7 +279,10 @@ def test_strategy_status_mutable(db_pool, clean_test_data, status_sequence):
 
 @pytest.mark.property
 @pytest.mark.critical
-@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+@settings(
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+    database=None,  # Disable Hypothesis example database to prevent stale state issues
+)
 @given(version=semver_string())
 def test_strategy_version_unique(db_pool, clean_test_data, version):
     """
@@ -560,7 +563,10 @@ def test_at_most_one_active_version(db_pool, clean_test_data, strat_name):
 
 @pytest.mark.property
 @pytest.mark.critical
-@settings(suppress_health_check=[HealthCheck.function_scoped_fixture])
+@settings(
+    suppress_health_check=[HealthCheck.function_scoped_fixture],
+    database=None,  # Disable Hypothesis example database to prevent stale state issues
+)
 @given(num_versions=st.integers(min_value=2, max_value=10))
 def test_all_versions_preserved(db_pool, clean_test_data, num_versions):
     """

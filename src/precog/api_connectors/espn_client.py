@@ -497,7 +497,7 @@ class ESPNClient:
     # Public API Methods
     # =========================================================================
 
-    def get_nfl_scoreboard(self, date: datetime | None = None) -> list[GameState]:
+    def get_nfl_scoreboard(self, date: datetime | None = None) -> list[ESPNGameFull]:
         """
         Fetch NFL scoreboard with all games for the specified date.
 
@@ -505,7 +505,7 @@ class ESPNClient:
             date: Target date for scoreboard (default: today)
 
         Returns:
-            List of GameState dicts for each game
+            List of ESPNGameFull dicts for each game
 
         Raises:
             RateLimitExceeded: If rate limit would be exceeded
@@ -514,12 +514,13 @@ class ESPNClient:
         Usage:
             >>> games = client.get_nfl_scoreboard()
             >>> for game in games:
-            ...     print(f"{game['away_team']} @ {game['home_team']}: "
-            ...           f"{game['away_score']}-{game['home_score']}")
+            ...     home = game["metadata"]["home_team"]["team_code"]
+            ...     away = game["metadata"]["away_team"]["team_code"]
+            ...     print(f"{away} @ {home}: {game['state']['away_score']}-{game['state']['home_score']}")
         """
         return self._get_scoreboard("nfl", date)
 
-    def get_ncaaf_scoreboard(self, date: datetime | None = None) -> list[GameState]:
+    def get_ncaaf_scoreboard(self, date: datetime | None = None) -> list[ESPNGameFull]:
         """
         Fetch NCAAF (college football) scoreboard for the specified date.
 
@@ -527,7 +528,7 @@ class ESPNClient:
             date: Target date for scoreboard (default: today)
 
         Returns:
-            List of GameState dicts for each game
+            List of ESPNGameFull dicts for each game
 
         Raises:
             RateLimitExceeded: If rate limit would be exceeded
@@ -535,7 +536,7 @@ class ESPNClient:
         """
         return self._get_scoreboard("ncaaf", date)
 
-    def get_nba_scoreboard(self, date: datetime | None = None) -> list[GameState]:
+    def get_nba_scoreboard(self, date: datetime | None = None) -> list[ESPNGameFull]:
         """
         Fetch NBA scoreboard for the specified date.
 
@@ -543,7 +544,7 @@ class ESPNClient:
             date: Target date for scoreboard (default: today)
 
         Returns:
-            List of GameState dicts for each game
+            List of ESPNGameFull dicts for each game
 
         Raises:
             RateLimitExceeded: If rate limit would be exceeded
@@ -553,11 +554,11 @@ class ESPNClient:
             NBA games use 4 quarters like NFL, but have different situation
             data (fouls, bonus status) stored in the situation JSONB field.
 
-        Reference: Phase 2 ESPN Data Model - Multi-Sport Support
+        Reference: docs/guides/ESPN_DATA_MODEL_V1.0.md
         """
         return self._get_scoreboard("nba", date)
 
-    def get_ncaab_scoreboard(self, date: datetime | None = None) -> list[GameState]:
+    def get_ncaab_scoreboard(self, date: datetime | None = None) -> list[ESPNGameFull]:
         """
         Fetch NCAAB (men's college basketball) scoreboard for the specified date.
 
@@ -565,7 +566,7 @@ class ESPNClient:
             date: Target date for scoreboard (default: today)
 
         Returns:
-            List of GameState dicts for each game
+            List of ESPNGameFull dicts for each game
 
         Raises:
             RateLimitExceeded: If rate limit would be exceeded
@@ -575,11 +576,11 @@ class ESPNClient:
             College basketball has 2 halves instead of 4 quarters.
             Period values: 1 = first half, 2 = second half, 3+ = overtime.
 
-        Reference: Phase 2 ESPN Data Model - Multi-Sport Support
+        Reference: docs/guides/ESPN_DATA_MODEL_V1.0.md
         """
         return self._get_scoreboard("ncaab", date)
 
-    def get_nhl_scoreboard(self, date: datetime | None = None) -> list[GameState]:
+    def get_nhl_scoreboard(self, date: datetime | None = None) -> list[ESPNGameFull]:
         """
         Fetch NHL scoreboard for the specified date.
 
@@ -587,7 +588,7 @@ class ESPNClient:
             date: Target date for scoreboard (default: today)
 
         Returns:
-            List of GameState dicts for each game
+            List of ESPNGameFull dicts for each game
 
         Raises:
             RateLimitExceeded: If rate limit would be exceeded
@@ -597,11 +598,11 @@ class ESPNClient:
             NHL games have 3 periods (not 4 quarters).
             Situation data includes power play status and shots on goal.
 
-        Reference: Phase 2 ESPN Data Model - Multi-Sport Support
+        Reference: docs/guides/ESPN_DATA_MODEL_V1.0.md
         """
         return self._get_scoreboard("nhl", date)
 
-    def get_wnba_scoreboard(self, date: datetime | None = None) -> list[GameState]:
+    def get_wnba_scoreboard(self, date: datetime | None = None) -> list[ESPNGameFull]:
         """
         Fetch WNBA scoreboard for the specified date.
 
@@ -609,44 +610,45 @@ class ESPNClient:
             date: Target date for scoreboard (default: today)
 
         Returns:
-            List of GameState dicts for each game
+            List of ESPNGameFull dicts for each game
 
         Raises:
             RateLimitExceeded: If rate limit would be exceeded
             ESPNAPIError: If API request fails after retries
 
-        Reference: Phase 2 ESPN Data Model - Multi-Sport Support
+        Reference: docs/guides/ESPN_DATA_MODEL_V1.0.md
         """
         return self._get_scoreboard("wnba", date)
 
-    def get_scoreboard(self, league: str, date: datetime | None = None) -> list[GameState]:
+    def get_scoreboard(self, league: str, date: datetime | None = None) -> list[ESPNGameFull]:
         """
-        Generic scoreboard fetch for any supported league.
+        Fetch scoreboard for any supported league.
+
+        Returns ESPNGameFull with structured metadata/state sections,
+        matching the database schema design.
 
         Args:
             league: One of "nfl", "ncaaf", "nba", "ncaab", "nhl", "wnba"
             date: Target date for scoreboard (default: today)
 
         Returns:
-            List of GameState dicts for each game
+            List of ESPNGameFull dicts for each game
 
         Raises:
             ValueError: If league is not supported
             RateLimitExceeded: If rate limit would be exceeded
             ESPNAPIError: If API request fails after retries
 
-        Educational Note:
-            This generic method allows fetching any supported sport without
-            needing specific method calls. Useful for building sport-agnostic
-            data collection pipelines.
+        Example:
+            >>> games = client.get_scoreboard("nfl")
+            >>> for game in games:
+            ...     home = game["metadata"]["home_team"]["team_code"]
+            ...     away = game["metadata"]["away_team"]["team_code"]
+            ...     score = f"{game['state']['home_score']}-{game['state']['away_score']}"
+            ...     print(f"{away} @ {home}: {score}")
 
-        Usage:
-            >>> # Fetch all sports
-            >>> for league in ["nfl", "nba", "nhl"]:
-            ...     games = client.get_scoreboard(league)
-            ...     print(f"{league.upper()}: {len(games)} games")
-
-        Reference: Phase 2 ESPN Data Model - Multi-Sport Support
+        Reference: docs/guides/ESPN_DATA_MODEL_V1.0.md
+        Related: REQ-DATA-001 (Game State Data Collection)
         """
         if league not in self.ENDPOINTS:
             raise ValueError(
@@ -654,7 +656,7 @@ class ESPNClient:
             )
         return self._get_scoreboard(league, date)
 
-    def get_live_games(self, league: str = "nfl") -> list[GameState]:
+    def get_live_games(self, league: str = "nfl") -> list[ESPNGameFull]:
         """
         Get only games currently in progress (excludes scheduled and final).
 
@@ -662,19 +664,19 @@ class ESPNClient:
             league: "nfl", "ncaaf", "nba", "ncaab", "nhl", or "wnba"
 
         Returns:
-            List of GameState dicts for live games only
+            List of ESPNGameFull dicts for live games only
 
         Educational Note:
             "Live" includes games at halftime/intermission since they're not over yet.
             Only games with status "final" or "scheduled" are excluded.
 
-        Reference: Phase 2 ESPN Data Model - Multi-Sport Support
+        Reference: docs/guides/ESPN_DATA_MODEL_V1.0.md
         """
         all_games = self.get_scoreboard(league)
 
         # Filter to only in-progress games (includes halftime/intermission)
         live_statuses = {"in_progress", "halftime"}
-        return [g for g in all_games if g.get("game_status") in live_statuses]
+        return [g for g in all_games if g.get("state", {}).get("game_status") in live_statuses]
 
     def get_remaining_requests(self) -> int:
         """
@@ -695,16 +697,16 @@ class ESPNClient:
     # Private Helper Methods
     # =========================================================================
 
-    def _get_scoreboard(self, league: str, date: datetime | None = None) -> list[GameState]:
+    def _get_scoreboard(self, league: str, date: datetime | None = None) -> list[ESPNGameFull]:
         """
         Internal method to fetch and parse scoreboard data.
 
         Args:
-            league: "nfl" or "ncaaf"
+            league: League code (nfl, ncaaf, nba, etc.)
             date: Target date (default: today)
 
         Returns:
-            List of parsed GameState dicts
+            List of parsed ESPNGameFull dicts with metadata/state structure
         """
         # Check rate limit before making request
         self._check_rate_limit()
@@ -723,13 +725,13 @@ class ESPNClient:
         if not events:
             return []
 
-        # Parse each event into GameState
-        games = []
+        # Parse each event into ESPNGameFull
+        games: list[ESPNGameFull] = []
         for event in events:
             try:
-                game_state = self._parse_event(event)
-                if game_state:
-                    games.append(game_state)
+                game_full = self._parse_event(event)
+                if game_full:
+                    games.append(game_full)
             except Exception as e:
                 logger.warning(f"Failed to parse event {event.get('id', 'unknown')}: {e}")
                 continue
@@ -815,35 +817,44 @@ class ESPNClient:
             f"Request failed after {self.max_retries + 1} attempts"
         ) from last_exception
 
-    def _parse_event(self, event: dict[str, Any]) -> GameState | None:
+    def _parse_event(self, event: dict[str, Any]) -> ESPNGameFull | None:
         """
-        Parse ESPN event into GameState.
+        Parse ESPN event into normalized ESPNGameFull structure.
+
+        Returns a structured TypedDict with separate metadata and state sections,
+        matching the database schema design.
 
         Args:
             event: Raw ESPN event dict
 
         Returns:
-            Parsed GameState or None if parsing fails
+            Parsed ESPNGameFull or None if parsing fails
 
         Educational Note:
             ESPN's response structure is deeply nested:
             event -> competitions[0] -> competitors[0/1]
 
-            We flatten this into a clean GameState dict for easier use,
-            extracting both core game info and model training features.
+            This method normalizes the structure into:
+            - metadata -> teams, venues, game metadata tables
+            - state -> game_states table (SCD Type 2)
+
+            This separation makes it easier to update each table independently
+            and provides better type safety.
+
+        Reference: docs/guides/ESPN_DATA_MODEL_V1.0.md
         """
         try:
             event_id = event.get("id", "")
             event_date = event.get("date", "")
 
-            # Get first competition (there's usually only one)
+            # Get first competition
             competitions = event.get("competitions", [])
             if not competitions:
                 return None
 
             competition = competitions[0]
 
-            # Get competitors (home and away teams)
+            # Get competitors
             competitors = competition.get("competitors", [])
             if len(competitors) < 2:
                 return None
@@ -860,19 +871,86 @@ class ESPNClient:
             if not home_team or not away_team:
                 return None
 
+            # Parse team info
+            home_team_info = home_team.get("team", {})
+            away_team_info = away_team.get("team", {})
+
+            # Parse records
+            home_records = {
+                r.get("name"): r.get("summary", "") for r in home_team.get("records", [])
+            }
+            away_records = {
+                r.get("name"): r.get("summary", "") for r in away_team.get("records", [])
+            }
+
+            # Build home team TypedDict
+            home_team_typed: ESPNTeamInfo = {
+                "espn_team_id": home_team.get("id", ""),
+                "team_code": home_team_info.get("abbreviation", ""),
+                "team_name": home_team_info.get("name", ""),
+                "display_name": home_team_info.get("displayName", ""),
+                "record": home_records.get("overall", ""),
+                "home_record": home_records.get("home", ""),
+                "away_record": home_records.get("away", ""),
+                "rank": home_team.get("curatedRank", {}).get("current"),
+            }
+
+            # Build away team TypedDict
+            away_team_typed: ESPNTeamInfo = {
+                "espn_team_id": away_team.get("id", ""),
+                "team_code": away_team_info.get("abbreviation", ""),
+                "team_name": away_team_info.get("name", ""),
+                "display_name": away_team_info.get("displayName", ""),
+                "record": away_records.get("overall", ""),
+                "home_record": away_records.get("home", ""),
+                "away_record": away_records.get("away", ""),
+                "rank": away_team.get("curatedRank", {}).get("current"),
+            }
+
+            # Parse venue info
+            venue = competition.get("venue", {})
+            venue_address = venue.get("address", {})
+            venue_typed: ESPNVenueInfo = {
+                "espn_venue_id": str(venue.get("id", "")),
+                "venue_name": venue.get("fullName", ""),
+                "city": venue_address.get("city", ""),
+                "state": venue_address.get("state", ""),
+                "capacity": venue.get("capacity", 0),
+                "indoor": venue.get("indoor", False),
+            }
+
+            # Parse broadcast
+            broadcasts = competition.get("broadcasts", [])
+            broadcast = ""
+            if broadcasts:
+                names = broadcasts[0].get("names", [])
+                broadcast = names[0] if names else ""
+
+            # Build metadata
+            metadata: ESPNGameMetadata = {
+                "espn_event_id": event_id,
+                "game_date": event_date,
+                "home_team": home_team_typed,
+                "away_team": away_team_typed,
+                "venue": venue_typed,
+                "broadcast": broadcast,
+                "neutral_site": competition.get("neutralSite", False),
+                "season_type": event.get("season", {}).get("type", 2),  # 2 = regular
+                "week_number": event.get("week", {}).get("number"),
+            }
+
             # Parse status
             status = competition.get("status", {})
             status_type = status.get("type", {})
             state = status_type.get("state", "pre")
             status_name = status_type.get("name", "")
 
-            # Map ESPN status to our internal format
             if status_name == "STATUS_HALFTIME":
                 game_status = "halftime"
             else:
                 game_status = self.STATUS_MAP.get(state, "unknown")
 
-            # Parse scores (convert from string, handle None)
+            # Parse scores
             home_score_str = home_team.get("score", "0")
             away_score_str = away_team.get("score", "0")
             home_score = int(home_score_str) if home_score_str else 0
@@ -883,101 +961,58 @@ class ESPNClient:
             clock_display = status.get("displayClock", "0:00")
             period = status.get("period", 0)
 
-            # Parse team info
-            home_team_info = home_team.get("team", {})
-            away_team_info = away_team.get("team", {})
-            home_abbr = home_team_info.get("abbreviation", "")
-            away_abbr = away_team_info.get("abbreviation", "")
+            # Parse linescores
+            home_linescores = [ls.get("value", 0) for ls in home_team.get("linescores", [])]
+            away_linescores = [ls.get("value", 0) for ls in away_team.get("linescores", [])]
+            linescores = (
+                [list(qs) for qs in zip(home_linescores, away_linescores, strict=False)]
+                if home_linescores
+                else []
+            )
 
-            # Parse situation (possession, down, etc.)
-            situation = competition.get("situation", {})
-            possession_id = situation.get("possession")
+            # Parse situation
+            situation_raw = competition.get("situation", {})
+            possession_id = situation_raw.get("possession")
 
-            # Determine possession (home or away)
+            # Determine possession team code
             possession = None
             if possession_id:
                 if possession_id == home_team.get("id"):
-                    possession = "home"
+                    possession = home_team_typed["team_code"]
                 elif possession_id == away_team.get("id"):
-                    possession = "away"
+                    possession = away_team_typed["team_code"]
 
-            # Parse records for model training
-            home_records = {
-                r.get("name"): r.get("summary", "") for r in home_team.get("records", [])
+            # Build situation TypedDict
+            situation: ESPNSituationData = {
+                "possession": possession,
+                "home_timeouts": situation_raw.get("homeTimeouts", 3),
+                "away_timeouts": situation_raw.get("awayTimeouts", 3),
+                "down": situation_raw.get("down"),
+                "distance": situation_raw.get("distance"),
+                "yard_line": situation_raw.get("yardLine"),
+                "is_red_zone": situation_raw.get("isRedZone", False),
             }
-            away_records = {
-                r.get("name"): r.get("summary", "") for r in away_team.get("records", [])
-            }
 
-            # Parse linescores (quarter-by-quarter scores)
-            home_linescores = [ls.get("value", 0) for ls in home_team.get("linescores", [])]
-            away_linescores = [ls.get("value", 0) for ls in away_team.get("linescores", [])]
-            # Combine into [[home_q1, away_q1], [home_q2, away_q2], ...]
-            # Note: strict=False since linescores may have different lengths during game
-            linescores = (
-                list(zip(home_linescores, away_linescores, strict=False)) if home_linescores else []
-            )
-
-            # Parse venue info
-            venue = competition.get("venue", {})
-            venue_address = venue.get("address", {})
-
-            # Parse broadcast info
-            broadcasts = competition.get("broadcasts", [])
-            broadcast = ""
-            if broadcasts:
-                names = broadcasts[0].get("names", [])
-                broadcast = names[0] if names else ""
-
-            # Parse rankings (college football)
-            home_rank = home_team.get("curatedRank", {}).get("current")
-            away_rank = away_team.get("curatedRank", {}).get("current")
-
-            # Build GameState with all features
-            game_state: GameState = {
-                # Core identification
+            # Build state
+            game_state: ESPNGameState = {
                 "espn_event_id": event_id,
-                "game_date": event_date,
-                "home_team": home_abbr,
-                "away_team": away_abbr,
-                "home_team_id": home_team.get("id", ""),
-                "away_team_id": away_team.get("id", ""),
-                "home_display_name": home_team_info.get("displayName", ""),
-                "away_display_name": away_team_info.get("displayName", ""),
-                # Current state
                 "home_score": home_score,
                 "away_score": away_score,
                 "period": period,
                 "clock_seconds": float(clock_seconds) if clock_seconds else 0.0,
                 "clock_display": clock_display,
                 "game_status": game_status,
-                # Situation
-                "possession": possession,
-                "down": situation.get("down"),
-                "distance": situation.get("distance"),
-                "yard_line": situation.get("yardLine"),
-                "is_red_zone": situation.get("isRedZone", False),
-                "home_timeouts": situation.get("homeTimeouts", 3),
-                "away_timeouts": situation.get("awayTimeouts", 3),
-                # Model training features - Records
-                "home_record": home_records.get("overall", ""),
-                "away_record": away_records.get("overall", ""),
-                "home_home_record": home_records.get("home", ""),
-                "away_away_record": away_records.get("away", ""),
-                # Model training features - Scoring progression
-                "linescores": [list(qs) for qs in linescores],  # Convert tuples to lists
-                # Model training features - Venue
-                "venue_name": venue.get("fullName", ""),
-                "venue_city": venue_address.get("city", ""),
-                "venue_indoor": venue.get("indoor", False),
-                "venue_capacity": venue.get("capacity", 0),
-                # Model training features - Context
-                "broadcast": broadcast,
-                "home_rank": home_rank,
-                "away_rank": away_rank,
+                "situation": situation,
+                "linescores": linescores,
             }
 
-            return game_state
+            # Combine into ESPNGameFull
+            full_game: ESPNGameFull = {
+                "metadata": metadata,
+                "state": game_state,
+            }
+
+            return full_game
 
         except Exception as e:
             logger.warning(f"Error parsing event: {e}")

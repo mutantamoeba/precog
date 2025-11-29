@@ -1,13 +1,26 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.11
+**Version:** 1.12
 **Created:** 2025-11-13
-**Last Updated:** 2025-11-25
+**Last Updated:** 2025-11-28
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.12:**
+- **Added Pattern 24: No New Usage of Deprecated Code (MANDATORY)**
+- Documents the principle of never using deprecated APIs/TypeDicts/patterns in new code
+- Real-world context from this session: MarketUpdater initially used deprecated GameState
+- User question "if its deprecated, why are you still using it?" triggered this pattern
+- The Rule: New implementations MUST use modern replacement; existing code SHOULD migrate when touched
+- Migration checklist (5 steps): Identify replacement → Use modern API → Add modern API if needed → Update tests → Update docs
+- Decision tree for when building new features vs. bug fixes
+- Common deprecated patterns table: GameState → ESPNGameFull, get_scoreboard() → get_scoreboard_normalized()
+- Wrong vs. Correct examples showing deprecated API usage in new code
+- Cross-references: Pattern 6 (TypedDict), Pattern 18 (Avoid Technical Debt), Pattern 23 (Validation Failure Handling)
+- Related files: espn_client.py, market_updater.py
+- Total addition: ~165 lines documenting no-new-deprecated-code principle
 **Changes in V1.11:**
 - **Added Pattern 23: Validation Failure Handling - Fix Failures, Don't Bypass (MANDATORY)**
 - Documents systematic approach to handling validation failures (distinguish false positives from real failures)
@@ -6252,6 +6265,171 @@ def test_scd_validation_ignores_docstring_parameters():
 
 ---
 
+## Pattern 24: No New Usage of Deprecated Code (MANDATORY)
+
+**TL;DR:** When building new features or refactoring, ALWAYS use modern/current APIs, TypeDicts, and patterns. NEVER use deprecated code in new implementations. Migrate progressively as you touch code.
+
+**WHY:** Using deprecated code in new implementations:
+1. **Accumulates technical debt** - More code that needs eventual migration
+2. **Creates inconsistency** - Some code uses old patterns, some uses new
+3. **Delays full migration** - The deprecated code never gets removed
+4. **Confuses developers** - Which pattern should new code follow?
+
+### The Rule
+
+```
+When code is marked as DEPRECATED:
+  - New implementations: MUST use the modern replacement
+  - Existing code: SHOULD migrate when touched (refactoring, bug fixes)
+  - Tests: MUST add tests for modern API, MAY keep deprecated tests temporarily
+```
+
+### Real-World Example: ESPN TypedDicts (This Session)
+
+**The Scenario:**
+- `GameState` TypedDict: Flat structure, marked DEPRECATED
+- `ESPNGameFull` TypedDict: Normalized structure with `metadata` and `state` sections
+- `get_scoreboard()`: Returns deprecated `GameState`
+- `get_scoreboard_normalized()`: Returns modern `ESPNGameFull`
+
+**The Problem:**
+When building `MarketUpdater` for Phase 2 live polling, the code initially used:
+```python
+# ❌ WRONG: Using deprecated API in new code
+games = self.espn_client.get_scoreboard(league)  # Returns GameState (deprecated)
+for game in games:
+    self._sync_game_to_db(game, league)  # Expects flat dict
+```
+
+**The Fix:**
+```python
+# ✅ CORRECT: Using modern normalized API
+games = self.espn_client.get_scoreboard_normalized(league)  # Returns ESPNGameFull
+for game in games:
+    # Use normalized structure with clear metadata/state separation
+    metadata = game["metadata"]
+    state = game["state"]
+    home_team = metadata["home_team"]["team_code"]  # Type-safe access
+```
+
+### Migration Checklist
+
+When encountering deprecated code:
+
+1. **Identify the modern replacement**
+   - Check docstrings for "DEPRECATED, use X instead"
+   - Check related ADRs or design documents
+   - If no replacement exists, create one before using deprecated code
+
+2. **New code uses modern API (MANDATORY)**
+   ```python
+   # Building new MarketUpdater
+   def _poll_league(self, league: str):
+       # ✅ MUST use get_scoreboard_normalized (modern)
+       games = self.espn_client.get_scoreboard_normalized(league)
+   ```
+
+3. **Add modern API if needed**
+   ```python
+   # ESPN client only had deprecated method
+   # ✅ Add get_scoreboard_normalized() before using in new code
+   def get_scoreboard_normalized(self, league: str) -> list[ESPNGameFull]:
+       """Fetch scoreboard with normalized TypedDict structure."""
+       ...
+   ```
+
+4. **Update tests for new implementations**
+   - New tests MUST use modern API
+   - Existing deprecated tests can remain temporarily
+   - Mark deprecated tests for eventual removal
+
+5. **Update documentation**
+   - Clearly mark deprecated APIs in docstrings
+   - Document migration path
+   - Update examples to use modern API
+
+### Common Deprecated Patterns in This Codebase
+
+| Deprecated | Modern Replacement | Migration Guide |
+|------------|-------------------|-----------------|
+| `GameState` (flat TypedDict) | `ESPNGameFull` (normalized) | Use `get_scoreboard_normalized()` |
+| `get_scoreboard()` | `get_scoreboard_normalized()` | Returns ESPNGameFull with metadata/state |
+| `row_current_ind = 1` | `row_current_ind = TRUE` | Boolean column, not integer |
+
+### Decision Tree
+
+```
+Building new feature or refactoring existing code?
+├── YES: Does the code touch deprecated APIs?
+│   ├── YES: Use modern replacement (MANDATORY)
+│   │   ├── Modern replacement exists? → Use it
+│   │   └── No modern replacement? → Create it first, then use it
+│   └── NO: Proceed normally
+└── NO (just bug fix): Is fix trivial?
+    ├── YES: Can use deprecated API (document migration needed)
+    └── NO: Should use modern replacement
+```
+
+### ❌ WRONG vs ✅ CORRECT Examples
+
+**❌ WRONG: New feature using deprecated API**
+```python
+# Building new MarketUpdater service (new code)
+class MarketUpdater:
+    def poll(self):
+        # Using deprecated GameState format
+        games = self.client.get_scoreboard("nfl")  # ❌ Deprecated
+        for game in games:
+            score = game["home_score"]  # Flat structure
+```
+
+**✅ CORRECT: New feature using modern API**
+```python
+# Building new MarketUpdater service (new code)
+class MarketUpdater:
+    def poll(self):
+        # Using modern ESPNGameFull format
+        games = self.client.get_scoreboard_normalized("nfl")  # ✅ Modern
+        for game in games:
+            score = game["state"]["home_score"]  # Clear structure
+            team = game["metadata"]["home_team"]["team_code"]  # Type-safe
+```
+
+---
+
+**❌ WRONG: Creating modern replacement but not using it**
+```python
+# Added get_scoreboard_normalized() to ESPN client
+# But MarketUpdater still uses deprecated get_scoreboard()
+# ❌ Both modern and deprecated APIs exist, but new code uses deprecated
+```
+
+**✅ CORRECT: Create and use modern replacement**
+```python
+# 1. Add get_scoreboard_normalized() to ESPN client
+# 2. Update MarketUpdater to use get_scoreboard_normalized()
+# 3. Update tests to test new API
+# 4. Mark get_scoreboard() as deprecated in docstring
+```
+
+### Cross-References
+
+**Related Patterns:**
+- **Pattern 6 (TypedDict):** Prefer TypedDicts over raw dicts (this extends to preferring modern TypedDicts)
+- **Pattern 18 (Avoid Technical Debt):** Deprecated code is technical debt
+- **Pattern 23 (Validation Failure Handling):** Don't bypass by using deprecated code to avoid migration
+
+**Related Files:**
+- `src/precog/api_connectors/espn_client.py` - GameState (deprecated) vs ESPNGameFull (modern)
+- `src/precog/schedulers/market_updater.py` - Uses modern ESPNGameFull
+
+**Real-World Trigger:**
+- Session 2025-11-28: Building MarketUpdater initially used deprecated GameState
+- User asked: "if its deprecated, why are you still using it?"
+- Led to adding `get_scoreboard_normalized()` and this pattern
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -6279,6 +6457,7 @@ def test_scd_validation_ignores_docstring_parameters():
 | **21. Validation-First Architecture** | Pre-commit + Pre-push hooks | `pre-commit run --all-files` | DEF-001, DEF-002, DEF-003, Pattern 1/4/9/18 |
 | **22. VCR Pattern** | Pytest (integration tests) | `pytest tests/integration/api_connectors/test_kalshi_client_vcr.py` | ADR-075, REQ-TEST-013/014, GitHub #124, Pattern 1/13 |
 | **23. Validation Failure Handling** | Manual (4-step protocol) | `git push` (pre-push hooks), `./scripts/validate_all.sh` | Pattern 21, Pattern 18, Pattern 9, Issue #127 |
+| **24. No New Deprecated Code** | Code review | `git grep "DEPRECATED" -- '*.py'` | Pattern 6, Pattern 18 |
 
 ---
 
