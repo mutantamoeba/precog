@@ -15,9 +15,9 @@ Educational Note:
     - Rate limiting behavior
     - Network/timeout handling
 
-Prerequisites:
-    - KALSHI_DEMO_KEY_ID set in .env
-    - KALSHI_DEMO_KEYFILE set in .env (path to RSA private key)
+Prerequisites (using DATABASE_ENVIRONMENT_STRATEGY naming convention):
+    - DEV_KALSHI_API_KEY set in .env (or TEST_KALSHI_API_KEY if PRECOG_ENV=test)
+    - DEV_KALSHI_PRIVATE_KEY_PATH set in .env (path to RSA private key)
 
 Run with:
     pytest tests/e2e/api_connectors/test_kalshi_e2e.py -v -m e2e
@@ -26,6 +26,7 @@ References:
     - Issue #125: E2E tests for kalshi_client.py
     - REQ-TEST-012: Test types taxonomy (E2E tests)
     - docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
+    - docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
 
 Phase: 2 (E2E Testing Infrastructure)
 GitHub Issue: #125
@@ -37,13 +38,31 @@ from decimal import Decimal
 import pytest
 import requests
 
+
+def _kalshi_credentials_available() -> bool:
+    """Check if Kalshi credentials are available for current environment.
+
+    Uses DATABASE_ENVIRONMENT_STRATEGY naming convention:
+    - PRECOG_ENV=test → TEST_KALSHI_API_KEY / TEST_KALSHI_PRIVATE_KEY_PATH
+    - PRECOG_ENV=dev (default) → DEV_KALSHI_API_KEY / DEV_KALSHI_PRIVATE_KEY_PATH
+    """
+    precog_env = os.getenv("PRECOG_ENV", "dev").upper()
+    valid_prefixes = {"DEV", "TEST", "STAGING"}
+    prefix = precog_env if precog_env in valid_prefixes else "DEV"
+
+    api_key = os.getenv(f"{prefix}_KALSHI_API_KEY")
+    key_path = os.getenv(f"{prefix}_KALSHI_PRIVATE_KEY_PATH")
+
+    return bool(api_key and key_path)
+
+
 # Skip entire module if credentials not available
 pytestmark = [
     pytest.mark.e2e,
     pytest.mark.api,
     pytest.mark.skipif(
-        not os.getenv("KALSHI_DEMO_KEY_ID") or not os.getenv("KALSHI_DEMO_KEYFILE"),
-        reason="Kalshi demo credentials not configured in .env",
+        not _kalshi_credentials_available(),
+        reason="Kalshi credentials not configured in .env (DEV_KALSHI_API_KEY/DEV_KALSHI_PRIVATE_KEY_PATH or TEST_KALSHI_* if PRECOG_ENV=test)",
     ),
 ]
 
@@ -98,10 +117,10 @@ class TestKalshiClientAuthentication:
             the headers are properly formed before making a real API call.
         """
         # Generate signed headers for a test request
-        headers = kalshi_client.auth.get_signed_headers(
+        # Note: KalshiAuth.get_headers() takes (method, path) - no body parameter
+        headers = kalshi_client.auth.get_headers(
             method="GET",
             path="/trade-api/v2/exchange/status",
-            body=None,
         )
 
         # Verify required headers exist
@@ -167,13 +186,27 @@ class TestKalshiClientMarkets:
         Educational Note:
             This is one of the most important E2E tests because it validates
             that our Decimal conversion is happening correctly for real API data.
+
+            The ProcessedMarketData TypedDict has two sets of price fields:
+            - Legacy integer cent fields: yes_bid, yes_ask (int, for API compatibility)
+            - Sub-penny dollar fields: yes_bid_dollars, yes_ask_dollars (Decimal, for calculations)
+
+            We MUST use the *_dollars fields for any financial calculations to maintain
+            sub-penny precision (e.g., 0.5475 instead of 54 or 55 cents).
         """
         markets = kalshi_client.get_markets(limit=5)
 
         if len(markets) == 0:
             pytest.skip("No markets available in demo environment")
 
-        price_fields = ["yes_bid", "yes_ask", "no_bid", "no_ask", "last_price"]
+        # Check the *_dollars fields which are Decimal (not the legacy int fields)
+        price_fields = [
+            "yes_bid_dollars",
+            "yes_ask_dollars",
+            "no_bid_dollars",
+            "no_ask_dollars",
+            "last_price_dollars",
+        ]
 
         for market in markets:
             for field in price_fields:
@@ -349,18 +382,23 @@ class TestKalshiClientDecimalPrecision:
         Educational Note:
             Kalshi returns prices with up to 4 decimal places (e.g., 0.5475).
             We must maintain this precision for accurate edge calculations.
+
+            The *_dollars fields (yes_ask_dollars, yes_bid_dollars, etc.) contain
+            the Decimal values. The legacy fields (yes_ask, yes_bid) are integers.
         """
         markets = kalshi_client.get_markets(limit=10)
 
         if len(markets) == 0:
             pytest.skip("No markets available in demo environment")
 
-        # Check that we can handle sub-penny precision
+        # Check that we can handle sub-penny precision using *_dollars fields
         for market in markets:
-            yes_ask = market.get("yes_ask")
+            yes_ask = market.get("yes_ask_dollars")
             if yes_ask is not None:
                 # Verify it's Decimal
-                assert isinstance(yes_ask, Decimal)
+                assert isinstance(yes_ask, Decimal), (
+                    f"yes_ask_dollars is {type(yes_ask).__name__}, expected Decimal"
+                )
 
                 # Verify precision is preserved (at least 4 decimal places possible)
                 # Create a value with 4 decimal places to ensure type supports it
@@ -373,6 +411,8 @@ class TestKalshiClientDecimalPrecision:
         Educational Note:
             This tests that Decimal operations (add, subtract, multiply)
             maintain precision - critical for edge calculations.
+
+            We use *_dollars fields which are Decimal (not legacy int fields).
         """
         markets = kalshi_client.get_markets(limit=1)
 
@@ -380,10 +420,14 @@ class TestKalshiClientDecimalPrecision:
             pytest.skip("No markets available in demo environment")
 
         market = markets[0]
-        yes_ask = market.get("yes_ask")
-        yes_bid = market.get("yes_bid")
+        yes_ask = market.get("yes_ask_dollars")
+        yes_bid = market.get("yes_bid_dollars")
 
         if yes_ask is not None and yes_bid is not None:
+            # Both should be Decimal
+            assert isinstance(yes_ask, Decimal), f"yes_ask_dollars is {type(yes_ask).__name__}"
+            assert isinstance(yes_bid, Decimal), f"yes_bid_dollars is {type(yes_bid).__name__}"
+
             # Calculate spread
             spread = yes_ask - yes_bid
 

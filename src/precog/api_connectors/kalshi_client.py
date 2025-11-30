@@ -116,9 +116,26 @@ class KalshiClient:
         self.environment = environment
         self.base_url = self.BASE_URLS[environment]
 
-        # Load credentials from environment
-        key_env_var = f"KALSHI_{environment.upper()}_KEY_ID"
-        keyfile_env_var = f"KALSHI_{environment.upper()}_KEYFILE"
+        # Load credentials from environment using DATABASE_ENVIRONMENT_STRATEGY naming
+        # See: docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
+        #
+        # Credential prefix mapping:
+        # - "prod" environment → PROD_KALSHI_* (production Kalshi API)
+        # - "demo" environment → {PRECOG_ENV}_KALSHI_* (demo Kalshi API)
+        #   - PRECOG_ENV=dev → DEV_KALSHI_*
+        #   - PRECOG_ENV=test → TEST_KALSHI_*
+        #   - PRECOG_ENV=staging → STAGING_KALSHI_*
+        if environment == "prod":
+            cred_prefix = "PROD"
+        else:
+            # Demo environment: use PRECOG_ENV, default to DEV
+            precog_env = os.getenv("PRECOG_ENV", "dev").upper()
+            # Map to valid credential prefixes
+            valid_prefixes = {"DEV", "TEST", "STAGING"}
+            cred_prefix = precog_env if precog_env in valid_prefixes else "DEV"
+
+        key_env_var = f"{cred_prefix}_KALSHI_API_KEY"
+        keyfile_env_var = f"{cred_prefix}_KALSHI_PRIVATE_KEY_PATH"
 
         api_key = os.getenv(key_env_var)
         keyfile_path = os.getenv(keyfile_env_var)
@@ -127,6 +144,7 @@ class KalshiClient:
             raise OSError(
                 f"Missing Kalshi credentials. Please set {key_env_var} and "
                 f"{keyfile_env_var} in .env file.\n"
+                f"Current PRECOG_ENV={os.getenv('PRECOG_ENV', 'dev')}, credential prefix={cred_prefix}\n"
                 f"See docs/guides/CONFIGURATION_GUIDE_V3.1.md for setup instructions."
             )
 
