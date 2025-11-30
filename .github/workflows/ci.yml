@@ -175,9 +175,13 @@ jobs:
           pip install -e .  # Install precog package (src/ layout)
           pip install pytest pytest-cov pytest-xdist
 
-      - name: Run unit tests with coverage (skip integration/e2e/stress/performance)
+      - name: Run tests (unit + property) - Cross-platform, no PostgreSQL
         run: |
-          python -m pytest tests/unit/ -v --cov=src/precog --cov-report=xml --cov-report=html --cov-report=term-missing -n auto
+          # Run tests that don't require PostgreSQL (aligned across Windows/Linux)
+          # Unit tests: All mocked, no external dependencies
+          # Property tests: Use Hypothesis for data generation, mocked DB
+          # Integration/E2E/stress/chaos tests need PostgreSQL - run in Linux-only job
+          python -m pytest tests/unit/ tests/property/ -v --cov=src/precog --cov-report=xml --cov-report=html --cov-report=term-missing -n auto
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
@@ -304,17 +308,17 @@ jobs:
           print('All Python migrations applied successfully')
           "
 
-      - name: Run integration tests
+      - name: Run database-dependent tests (integration + security + stress + chaos)
         run: |
-          # Integration tests now have proper schema setup
-          # Tests may skip if API credentials not available (expected in CI)
-          python -m pytest tests/integration/ tests/property/ -v --tb=short
+          # Phase 1.9: Run all test types that need PostgreSQL
+          # Tests will skip if specific dependencies (API credentials) not available
+          python -m pytest tests/integration/ tests/security/ tests/stress/ tests/chaos/ -v --tb=short
 
-      - name: Run E2E tests
+      - name: Run E2E + performance tests
         run: |
           # E2E tests will skip if API credentials not configured
-          # This is expected in CI - skips are not failures
-          python -m pytest tests/e2e/ -v --tb=short
+          # Performance tests validate speed requirements
+          python -m pytest tests/e2e/ tests/performance/ -v --tb=short
 
   validate-quick:
     name: Quick Validation Suite
