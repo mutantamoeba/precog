@@ -1,10 +1,16 @@
-# Testing Strategy V3.2
+# Testing Strategy V3.3
 
 **Document Type:** Foundation
 **Status:** ✅ Active
-**Version:** 3.2
+**Version:** 3.3
 **Created:** 2025-10-23
-**Last Updated:** 2025-11-28
+**Last Updated:** 2025-11-30
+**Changes in V3.3:**
+- **Test Isolation Patterns Section (NEW)** - Added comprehensive test isolation requirements based on Phase 1.9 findings
+- **5 Isolation Patterns Documented** - Transaction-based isolation, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2 isolation
+- **Root Cause Analysis** - Documents why 12+ tests failed in Phase 1.9 (DB state contamination, FK violations, cleanup order issues)
+- **Cross-Reference** - Links to detailed TEST_ISOLATION_PATTERNS_V1.0.md in `/docs/testing/`
+- **Updated TOC** - Added Section 9.5: Test Isolation Patterns
 **Changes in V3.2:**
 - **All 8 Test Types Now MANDATORY** - All modules must have all 8 test types regardless of phase
 - **Removed Phase-Based Test Type Deferral** - All test types required from Phase 1 onwards
@@ -86,15 +92,16 @@ This document defines the **comprehensive testing strategy** for the Precog trad
 7. [Phase-Based Test Type Roadmap](#phase-based-test-type-roadmap) ⭐ **NEW**
 8. [Test Factories](#test-factories)
 9. [Test Fixtures](#test-fixtures)
-10. [Coverage Requirements](#coverage-requirements)
-11. [Running Tests](#running-tests)
-12. [Test Execution Scripts](#test-execution-scripts)
-13. [Parallel Execution](#parallel-execution)
-14. [Critical Test Scenarios](#critical-test-scenarios)
-15. [Debugging Tests](#debugging-tests)
-16. [Best Practices](#best-practices)
-17. [CI/CD Integration](#cicd-integration)
-18. [Future Enhancements](#future-enhancements)
+10. [Test Isolation Patterns](#test-isolation-patterns) ⭐ **NEW V3.3**
+11. [Coverage Requirements](#coverage-requirements)
+12. [Running Tests](#running-tests)
+13. [Test Execution Scripts](#test-execution-scripts)
+14. [Parallel Execution](#parallel-execution)
+15. [Critical Test Scenarios](#critical-test-scenarios)
+16. [Debugging Tests](#debugging-tests)
+17. [Best Practices](#best-practices)
+18. [CI/CD Integration](#cicd-integration)
+19. [Future Enhancements](#future-enhancements)
 
 ---
 
@@ -1616,6 +1623,85 @@ def test_strategy_manager(db_pool, db_cursor, clean_test_data):
 **`test_logger`:**
 - Logger instance writing to temp directory
 - No pollution of production logs
+
+---
+
+## Test Isolation Patterns
+
+**Added in V3.3** - Based on Phase 1.9 findings where 12+ tests failed due to database state contamination.
+
+**Full Documentation:** See `docs/testing/TEST_ISOLATION_PATTERNS_V1.0.md` for comprehensive patterns and code examples.
+
+### Why Test Isolation Matters (Phase 1.9 Lessons)
+
+Phase 1.9 discovered that test failures were caused by **database state contamination**, not actual bugs:
+
+| Root Cause | Example | Impact |
+|------------|---------|--------|
+| Incomplete transaction rollback | Commit without rollback | Data persists between tests |
+| Foreign key dependency gaps | Delete market before trades | ForeignKeyViolation errors |
+| Cleanup order violations | Delete platform before events | Cascade failures |
+| Parallel worker interference | Worker 1 inserts while Worker 2 deletes | Race conditions, deadlocks |
+| SCD Type 2 state leakage | `row_current_ind=TRUE` not reset | Query returns wrong "current" record |
+
+### Required Isolation Patterns (5 Patterns)
+
+**Pattern 1: Transaction-Based Isolation (MANDATORY)**
+```python
+@pytest.fixture
+def isolated_transaction(db_pool):
+    """Use savepoints for clean rollback."""
+    conn = db_pool.getconn()
+    cursor = conn.cursor()
+    cursor.execute("SAVEPOINT test_isolation_point")
+    try:
+        yield cursor
+    finally:
+        cursor.execute("ROLLBACK TO SAVEPOINT test_isolation_point")
+        cursor.execute("RELEASE SAVEPOINT test_isolation_point")
+        cursor.close()
+        db_pool.putconn(conn)
+```
+
+**Pattern 2: Foreign Key Dependency Chain (MANDATORY)**
+
+Clean up in REVERSE dependency order:
+```
+trades → settlements → positions → edges → markets →
+game_states → events → series → platforms
+```
+
+**Pattern 3: Cleanup Fixture Ordering (MANDATORY)**
+- Use `yield` in fixtures
+- Cleanup runs in reverse fixture order
+- Ensure FK-safe deletion sequence
+
+**Pattern 4: Parallel Execution Safety (MANDATORY for pytest-xdist)**
+- Use worker-specific prefixes: `TEST-{worker_id}-{uuid}`
+- Never use global test identifiers across workers
+- Isolate database connections per worker
+
+**Pattern 5: SCD Type 2 Isolation (MANDATORY for versioned tables)**
+- Reset `row_current_ind=TRUE` after each test
+- Use unique identifiers per test for versioned records
+- Clean both historical and current records
+
+### Quick Reference Table
+
+| Scenario | Pattern Required | Implementation |
+|----------|------------------|----------------|
+| Database test | Pattern 1 (Transactions) | Use `isolated_transaction` fixture |
+| Test with FK dependencies | Pattern 2 (FK Chain) | Cleanup in reverse order |
+| Fixture with cleanup | Pattern 3 (Ordering) | Use `yield` with cleanup after |
+| Parallel test execution | Pattern 4 (Worker Safety) | Worker-specific prefixes |
+| SCD Type 2 tables | Pattern 5 (SCD Isolation) | Reset `row_current_ind` |
+
+### Cross-References
+
+- **Full Documentation:** `docs/testing/TEST_ISOLATION_PATTERNS_V1.0.md`
+- **Related Requirements:** REQ-TEST-014 (Integration tests use real infrastructure)
+- **Related ADRs:** ADR-018/019/020 (Dual Versioning), ADR-076 (Testing Strategy)
+- **Implementation:** `tests/conftest.py` (fixtures to be updated in Phase 1.9 Part B)
 
 ---
 

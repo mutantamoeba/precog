@@ -616,7 +616,7 @@ db_cursor.execute("DELETE FROM events WHERE ...")
 ## References
 
 **Related Documents:**
-- `docs/foundation/TESTING_STRATEGY_V3.2.md` - Test type requirements
+- `docs/foundation/TESTING_STRATEGY_V3.3.md` - Test type requirements
 - `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md` - REQ-TEST-012 through REQ-TEST-019
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md` - FK constraint definitions
 - `tests/conftest.py` - Current fixture implementations

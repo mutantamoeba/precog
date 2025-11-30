@@ -14,7 +14,7 @@ This document provides a complete test plan for Phase 2 deliverables, created BE
 
 **Reference Documents:**
 - `docs/foundation/DEVELOPMENT_PHASES_V1.6.md` (Phase 2 specification, lines 954-1110)
-- `docs/foundation/TESTING_STRATEGY_V3.2.md` (8 test types, coverage tiers)
+- `docs/foundation/TESTING_STRATEGY_V3.3.md` (8 test types, coverage tiers)
 - `scripts/validation_config.yaml` (Phase 2 deliverables, coverage targets)
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` (ESPN API integration patterns)
 

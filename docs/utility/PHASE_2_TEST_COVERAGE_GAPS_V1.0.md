@@ -4,13 +4,13 @@
 **Version:** 1.0
 **Created:** 2025-11-28
 **Last Updated:** 2025-11-28
-**Purpose:** Document missing test types per TESTING_STRATEGY_V3.2 mandatory requirements
-**Reference:** TESTING_STRATEGY_V3.2.md - All 8 test types required for ALL modules
+**Purpose:** Document missing test types per TESTING_STRATEGY_V3.3 mandatory requirements
+**Reference:** TESTING_STRATEGY_V3.3.md - All 8 test types required for ALL modules
 ---
 
 ## Overview
 
-Following the TESTING_STRATEGY_V3.2 update requiring all 8 test types for all modules regardless of tier, this document tracks the test coverage gaps identified during Phase 2 completion.
+Following the TESTING_STRATEGY_V3.3 update requiring all 8 test types for all modules regardless of tier, this document tracks the test coverage gaps identified during Phase 2 completion.
 
 **Audit Command:** `python scripts/audit_test_type_coverage.py --summary`
 
@@ -250,7 +250,7 @@ Following the TESTING_STRATEGY_V3.2 update requiring all 8 test types for all mo
 
 ## Related Documents
 
-- `docs/foundation/TESTING_STRATEGY_V3.2.md` - All 8 test types mandatory
+- `docs/foundation/TESTING_STRATEGY_V3.3.md` - All 8 test types mandatory
 - `scripts/audit_test_type_coverage.py` - Automated gap detection
 - `.git/hooks/pre-push` - Step 11 runs audit automatically
 

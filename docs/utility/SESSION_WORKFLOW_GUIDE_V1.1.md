@@ -329,7 +329,7 @@ Failing: 11
 | **Performance** | `@pytest.mark.performance` | Latency benchmarks |
 | **Chaos** | `@pytest.mark.chaos` | Failure recovery |
 
-**Reference:** `docs/foundation/TESTING_STRATEGY_V3.2.md`
+**Reference:** `docs/foundation/TESTING_STRATEGY_V3.3.md`
 
 #### Step 3: Verify Todo Includes All 8 Test Types (2 minutes)
 
@@ -386,7 +386,7 @@ This checklist is the **first layer** of test coverage enforcement:
 │ PRE-PLANNING CHECKLIST (before any todo list creation)     │
 ├─────────────────────────────────────────────────────────────┤
 │ □ Run: python scripts/audit_test_type_coverage.py --summary│
-│ □ Review: TESTING_STRATEGY_V3.2.md 8-test-type requirement │
+│ □ Review: TESTING_STRATEGY_V3.3.md 8-test-type requirement │
 │ □ Verify todo includes ALL 8 test types:                   │
 │   □ unit    □ property    □ integration   □ e2e            │
 │   □ stress  □ race        □ performance   □ chaos          │

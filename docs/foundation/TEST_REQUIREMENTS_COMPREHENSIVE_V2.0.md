@@ -6,7 +6,7 @@
 **Triggered By:** TDD Failure Root Cause Analysis (Strategy Manager tests insufficient)
 **Changes in V2.0:**
 - **All 8 Test Types Now MANDATORY** - Removed N/A, OPT, P5+ designations
-- **Synced with TESTING_STRATEGY_V3.2** - Both documents now have identical requirements
+- **Synced with TESTING_STRATEGY_V3.3** - Both documents now have identical requirements
 - **Validation via Phase 2C** - CRUD tests uncovered 3 critical bugs proving all test types needed
 - **Lesson Learned:** Phase 2C race condition bug would have been caught by Race tests if they weren't OPT
 
@@ -78,7 +78,7 @@ Previous approach (V1.0) had tiered requirements based on "risk profiles." This 
 - **Performance:** Establishes latency baselines
 - **Chaos:** Validates failure recovery
 
-**Reference:** ADR-076 (Test Type Categories), TESTING_STRATEGY_V3.2
+**Reference:** ADR-076 (Test Type Categories), TESTING_STRATEGY_V3.3
 
 ---
 
@@ -657,7 +657,7 @@ E2E tests provide **user-level confidence**.
 **Related Documents:**
 - `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Why we need these requirements
 - `TESTING_GAPS_ANALYSIS.md` - Current test coverage analysis
-- `docs/foundation/TESTING_STRATEGY_V3.2.md` - Current version (will be updated to V3.0 with 8 test types)
+- `docs/foundation/TESTING_STRATEGY_V3.3.md` - Current version (will be updated to V3.0 with 8 test types)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` - Current version (will add these REQs in V2.16)
 
 **Related ADRs:**
