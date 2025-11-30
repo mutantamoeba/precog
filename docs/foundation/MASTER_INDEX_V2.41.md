@@ -1,9 +1,14 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.40
+**Version:** 2.41
 **Last Updated:** 2025-11-30
 **Status:** ✅ Current
+**Changes in v2.41:**
+- **PHASE 1.9 TEST ISOLATION PATTERNS**: Added TEST_ISOLATION_PATTERNS_V1.0.md to Testing & Quality Documents
+- Documents 5 patterns for proper test isolation discovered during Phase 1.9
+- Addresses root causes of test failures: DB state contamination, FK dependency gaps, cleanup order issues
+- Part of Phase 1.9 Part A documentation work (~93 hours total effort)
 **Changes in v2.40:**
 - **PHASE 1.9 PLANNING (BLOCKING)**: Added PHASE_1.9_TEST_INFRASTRUCTURE_PLAN_V1.0.md to utility documents
 - Documents blocking phase for test infrastructure overhaul (~93 hours effort)
@@ -385,7 +390,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.19.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.40.md** | ✅ | v2.40 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.39** (SESSION_WORKFLOW_GUIDE V1.0→V1.1: Pre-Planning Test Coverage Checklist; CLAUDE.md V1.21→V1.22) |
+| **MASTER_INDEX_V2.41.md** | ✅ | v2.41 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.41** (Phase 1.9: TEST_ISOLATION_PATTERNS_V1.0.md added to Testing & Quality Documents) |
 | **ARCHITECTURE_DECISIONS_V2.23.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.22** (ADR-029: ESPN Data Model with Normalized Schema - 4-table design for multi-sport ESPN data; venues, game_states (SCD Type 2), team_rankings, teams; JSONB situation field for sport-specific data; ~1.1 GB/year storage; 97 → 98 total ADRs) |
 | **REQUIREMENT_INDEX_V1.11.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
 | **ADR_INDEX_V1.16.md** | ✅ | v1.16 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 77 architecture decisions - **UPDATED V1.16** (ADR-029: ESPN Data Model with Normalized Schema - Phase 2 Live Data Integration; 76 → 77 total ADRs) |
@@ -467,6 +472,7 @@ Test specifications, validation protocols, and quality assurance.
 | **HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🟡 High | **NEW** - Property-based testing strategy with Hypothesis framework (3 test suites: Kelly Criterion, Edge Detection, Configuration Validation; 35+ tests implemented) |
 | **COMPREHENSIVE_TEST_AUDIT_PHASE_1.5_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🔴 Critical | **NEW** - Quality-focused analysis of 29 test files (520+ tests) per TESTING_STRATEGY_V3.2.md: tier-specific coverage analysis (Critical Path ≥90%, Business Logic ≥85%, Infrastructure ≥80%), 8-type test framework gaps, Pattern 13 compliance (real fixtures vs mocks), identifies exemplary test_attribution_comprehensive.py (only module with all 8 test types), critical gaps (2 integration files using mocks, missing stress/E2E tests), 30 improvement recommendations |
 | **TEST_GAP_GITHUB_ISSUE_MAPPING_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 2 | 🔴 Critical | **NEW** - Comprehensive mapping of 15 high-priority test gaps to GitHub issues #101-#132: 2 CRITICAL (7-10h: fix integration test mocks, add E2E tests for Critical Path), 5 HIGH (21-29h: stress tests, property tests, Mypy regression, SCD violations, validation violations), 6 MEDIUM (21-27h: E2E for business logic, security tests, MASTER_INDEX gaps, manager query methods, TypedDict returns, schema validation), 2 LOW (14-18h deferred to Phase 5: performance tests, chaos tests); all test gaps from COMPREHENSIVE_TEST_AUDIT_PHASE_1.5_V1.0.md now have trackable GitHub issues for Phase 2 implementation; total effort: 49-66 hours (excluding deferred LOW priority) |
+| **TEST_ISOLATION_PATTERNS_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.9 | Phase 1.9 | 🔴 Critical | **NEW** - Phase 1.9 test isolation patterns documentation (~500 lines): 5 root causes of test failures (DB contamination, FK gaps, cleanup order, parallel interference, SCD leakage), 5 isolation patterns (transaction-based isolation, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2), implementation checklist for conftest.py fixes, anti-patterns to avoid; cross-references TESTING_STRATEGY V3.3, TEST_REQUIREMENTS_COMPREHENSIVE V2.1 |
 | **MODEL_VALIDATION_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4 ✅ | 🟡 High | Elo vs. research, backtesting benchmarks |
 | **BACKTESTING_PROTOCOL_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4-5 ✅ | 🟡 High | Walk-forward validation, train/test splits |
 
