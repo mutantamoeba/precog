@@ -257,9 +257,20 @@ jobs:
           pip install -e .  # Install precog package (src/ layout)
           pip install pytest pytest-cov hypothesis vcrpy
 
-      - name: Run database migrations
+      - name: Apply base schema and SQL migrations
         run: |
-          # Apply all migrations to test database
+          # Apply SQL migrations first (000-015), then Python migrations
+          # SQL migrations create/modify tables; Python migrations do complex logic
+          echo "Applying SQL migrations..."
+          for sql_file in $(ls -v src/precog/database/migrations/*.sql 2>/dev/null); do
+            echo "Running: $sql_file"
+            PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f "$sql_file" || true
+          done
+          echo "SQL migrations complete"
+
+      - name: Apply Python migrations
+        run: |
+          # Run Python migrations (complex logic, surrogate keys, etc.)
           python -c "
           import os
           import psycopg2
@@ -275,7 +286,7 @@ jobs:
           conn.autocommit = True
           cur = conn.cursor()
 
-          # Run migration scripts in order
+          # Run Python migration scripts in order
           import importlib.util
           import glob
 
@@ -290,18 +301,20 @@ jobs:
                   module.run_migration()
 
           conn.close()
-          print('All migrations applied successfully')
+          print('All Python migrations applied successfully')
           "
 
       - name: Run integration tests
         run: |
+          # Integration tests now have proper schema setup
+          # Tests may skip if API credentials not available (expected in CI)
           python -m pytest tests/integration/ tests/property/ -v --tb=short
-        continue-on-error: true  # Tech debt: CI database setup incomplete (missing base schema, API keys)
 
       - name: Run E2E tests
         run: |
+          # E2E tests will skip if API credentials not configured
+          # This is expected in CI - skips are not failures
           python -m pytest tests/e2e/ -v --tb=short
-        continue-on-error: true  # E2E may have external dependencies
 
   validate-quick:
     name: Quick Validation Suite
