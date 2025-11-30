@@ -2434,7 +2434,7 @@ def upsert_game_state(
     Educational Note:
         SCD Type 2 UPSERT pattern:
         1. Check if current row exists for espn_event_id
-        2. If exists: UPDATE to close it (row_current_ind=FALSE, row_end_timestamp=NOW)
+        2. If exists: UPDATE to close it (row_current_ind=FALSE, row_end_ts=NOW)
         3. INSERT new row with row_current_ind=TRUE
 
         This preserves complete history - every score change, clock update,
@@ -2469,7 +2469,7 @@ def upsert_game_state(
     close_query = """
         UPDATE game_states
         SET row_current_ind = FALSE,
-            row_end_timestamp = NOW()
+            row_end_ts = NOW()
         WHERE espn_event_id = %s
           AND row_current_ind = TRUE
     """

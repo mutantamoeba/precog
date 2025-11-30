@@ -45,11 +45,22 @@ from tests.fixtures.api_responses import (
 
 @pytest.fixture
 def mock_env_credentials(monkeypatch):
-    """Mock environment variables for Kalshi credentials."""
-    monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "test-key-id-12345")
-    monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "/fake/path/to/key.pem")
-    monkeypatch.setenv("KALSHI_PROD_KEY_ID", "prod-key-id-67890")
-    monkeypatch.setenv("KALSHI_PROD_KEYFILE", "/fake/path/to/prod_key.pem")
+    """Mock environment variables for Kalshi credentials.
+
+    Uses DATABASE_ENVIRONMENT_STRATEGY naming convention:
+    - {PRECOG_ENV}_KALSHI_API_KEY
+    - {PRECOG_ENV}_KALSHI_PRIVATE_KEY_PATH
+
+    Default PRECOG_ENV is 'dev', so DEV_KALSHI_* is used for demo environment.
+    """
+    # Set PRECOG_ENV to ensure consistent behavior
+    monkeypatch.setenv("PRECOG_ENV", "dev")
+    # Dev/demo credentials
+    monkeypatch.setenv("DEV_KALSHI_API_KEY", "test-key-id-12345")
+    monkeypatch.setenv("DEV_KALSHI_PRIVATE_KEY_PATH", "/fake/path/to/key.pem")
+    # Prod credentials
+    monkeypatch.setenv("PROD_KALSHI_API_KEY", "prod-key-id-67890")
+    monkeypatch.setenv("PROD_KALSHI_PRIVATE_KEY_PATH", "/fake/path/to/prod_key.pem")
 
 
 @pytest.fixture
@@ -313,12 +324,23 @@ class TestKalshiClient:
 
     @pytest.mark.unit
     def test_client_initialization_missing_credentials(self, monkeypatch):
-        """Test KalshiClient raises error when credentials missing."""
+        """Test KalshiClient raises error when credentials missing.
+
+        Uses DATABASE_ENVIRONMENT_STRATEGY naming convention - clears
+        all environment-prefixed credential variables.
+        """
         from precog.api_connectors.kalshi_client import KalshiClient
 
-        # Clear environment variables
-        monkeypatch.delenv("KALSHI_DEMO_KEY_ID", raising=False)
-        monkeypatch.delenv("KALSHI_DEMO_KEYFILE", raising=False)
+        # Set PRECOG_ENV to ensure consistent behavior
+        monkeypatch.setenv("PRECOG_ENV", "dev")
+
+        # Clear all credential environment variables (new naming convention)
+        monkeypatch.delenv("DEV_KALSHI_API_KEY", raising=False)
+        monkeypatch.delenv("DEV_KALSHI_PRIVATE_KEY_PATH", raising=False)
+        monkeypatch.delenv("TEST_KALSHI_API_KEY", raising=False)
+        monkeypatch.delenv("TEST_KALSHI_PRIVATE_KEY_PATH", raising=False)
+        monkeypatch.delenv("STAGING_KALSHI_API_KEY", raising=False)
+        monkeypatch.delenv("STAGING_KALSHI_PRIVATE_KEY_PATH", raising=False)
 
         with pytest.raises(EnvironmentError) as exc_info:
             KalshiClient(environment="demo")
