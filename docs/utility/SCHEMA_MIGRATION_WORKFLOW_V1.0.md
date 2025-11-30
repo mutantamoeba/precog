@@ -1220,7 +1220,7 @@ def test_open_position(clean_test_data, manager, position_params):
 **Testing:**
 - **tests/conftest.py:** Fixture infrastructure (clean_test_data, db_pool)
 - **TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md:** Why mocks hide bugs
-- **TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md:** REQ-TEST-012 through REQ-TEST-019
+- **TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md:** REQ-TEST-012 through REQ-TEST-019
 
 **Examples:**
 - **Migration 011:** `src/precog/database/migrations/011_add_positions_dual_key.sql`

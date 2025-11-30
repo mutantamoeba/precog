@@ -2090,7 +2090,7 @@ def test_create_strategy(clean_test_data, db_cursor):
 
 ### Cross-References
 - **TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md:** Post-mortem documenting Strategy Manager test failure
-- **TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md:** REQ-TEST-012 through REQ-TEST-019 (8 test types, coverage standards, mock restrictions)
+- **TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md:** REQ-TEST-012 through REQ-TEST-019 (8 test types, coverage standards, mock restrictions)
 - **TESTING_GAPS_ANALYSIS.md:** Current coverage gaps and remediation plan
 - **DEVELOPMENT_PHILOSOPHY_V1.3.md:** Section 1 - Test Quality: When Tests Pass But Aren't Sufficient
 - **Pattern 11:** Test Mocking Patterns (HOW to mock public APIs vs implementation)
@@ -2786,7 +2786,7 @@ Q: Did you update documentation?
 **Testing Infrastructure:**
 - **tests/conftest.py:** Fixture infrastructure (clean_test_data, db_pool, db_cursor)
 - **TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md:** Why mocks hide bugs (Strategy Manager lesson)
-- **TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md:** REQ-TEST-012 through REQ-TEST-019
+- **TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md:** REQ-TEST-012 through REQ-TEST-019
 
 **Documentation:**
 - **DATABASE_SCHEMA_SUMMARY_V1.7.md:** Complete schema reference

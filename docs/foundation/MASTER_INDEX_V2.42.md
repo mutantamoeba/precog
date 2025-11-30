@@ -1,9 +1,17 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.41
+**Version:** 2.42
 **Last Updated:** 2025-11-30
 **Status:** ✅ Current
+**Changes in v2.42:**
+- **TEST_REQUIREMENTS_COMPREHENSIVE V2.0 → V2.1**: Added REQ-TEST-020 through REQ-TEST-024 (Test Isolation Requirements)
+- REQ-TEST-020: Transaction-Based Test Isolation (savepoint pattern)
+- REQ-TEST-021: Foreign Key Dependency Chain Management
+- REQ-TEST-022: Cleanup Fixture Ordering (reverse FK order)
+- REQ-TEST-023: Parallel Execution Safety (worker prefixes)
+- REQ-TEST-024: SCD Type 2 Test Isolation
+- All 5 new requirements cross-reference TEST_ISOLATION_PATTERNS_V1.0.md
 **Changes in v2.41:**
 - **PHASE 1.9 TEST ISOLATION PATTERNS**: Added TEST_ISOLATION_PATTERNS_V1.0.md to Testing & Quality Documents
 - Documents 5 patterns for proper test isolation discovered during Phase 1.9
@@ -390,16 +398,16 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.19.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.41.md** | ✅ | v2.41 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.41** (Phase 1.9: TEST_ISOLATION_PATTERNS_V1.0.md added to Testing & Quality Documents) |
+| **MASTER_INDEX_V2.42.md** | ✅ | v2.41 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.41** (Phase 1.9: TEST_ISOLATION_PATTERNS_V1.0.md added to Testing & Quality Documents) |
 | **ARCHITECTURE_DECISIONS_V2.23.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.22** (ADR-029: ESPN Data Model with Normalized Schema - 4-table design for multi-sport ESPN data; venues, game_states (SCD Type 2), team_rankings, teams; JSONB situation field for sport-specific data; ~1.1 GB/year storage; 97 → 98 total ADRs) |
 | **REQUIREMENT_INDEX_V1.11.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
 | **ADR_INDEX_V1.16.md** | ✅ | v1.16 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 77 architecture decisions - **UPDATED V1.16** (ADR-029: ESPN Data Model with Normalized Schema - Phase 2 Live Data Integration; 76 → 77 total ADRs) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.7.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.6** |
 | **TESTING_STRATEGY_V3.3.md** | ✅ | v3.3 | `/docs/foundation/` | 2 | Phases 1-10 | 🔴 Critical | **UPDATED V3.3** - Added Test Isolation Patterns section (5 patterns: transaction-based, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2); based on Phase 1.9 findings (12+ test failures from DB state contamination); cross-references TEST_ISOLATION_PATTERNS_V1.0.md; V3.2: All 8 test types MANDATORY; V3.0: 8 test type framework |
-| **TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md** | ✅ | v2.0 | `/docs/foundation/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Comprehensive test requirements (REQ-TEST-012 through REQ-TEST-019): 8 test types (unit, property, integration, E2E, stress, race, performance, chaos), mock usage restrictions, fixture requirements, coverage standards (Critical ≥90%, Manager ≥85%, Infrastructure ≥80%), stress/integration/E2E test requirements |
+| **TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md** | ✅ | v2.1 | `/docs/foundation/` | 1.9 | Phases 1.5+ | 🔴 Critical | **UPDATED V2.1** - Added REQ-TEST-020 through REQ-TEST-024 (Test Isolation Requirements from Phase 1.9): transaction-based isolation, FK dependency chain management, cleanup fixture ordering, parallel execution safety, SCD Type 2 isolation; cross-references TEST_ISOLATION_PATTERNS_V1.0.md; V2.0: REQ-TEST-012-019 (8 test types, mock restrictions, fixture requirements, coverage standards) |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
-| **DEVELOPMENT_PHILOSOPHY_V1.3.md** | ✅ | v1.3 | `/docs/foundation/` | 0.7 | All phases | 🔴 Critical | **UPDATED V1.3** - Added Section 1 subsection: Test Quality - When Tests Pass But Aren't Sufficient (lessons from Phase 1.5 TDD failure: 17/17 tests passing but 13/17 failed with real database; 6 lessons learned: mock sparingly, use test infrastructure, write tests before implementation, need 8 test types, stress test resources, coverage % ≠ quality; cross-references TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md, TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md) |
+| **DEVELOPMENT_PHILOSOPHY_V1.3.md** | ✅ | v1.3 | `/docs/foundation/` | 0.7 | All phases | 🔴 Critical | **UPDATED V1.3** - Added Section 1 subsection: Test Quality - When Tests Pass But Aren't Sufficient (lessons from Phase 1.5 TDD failure: 17/17 tests passing but 13/17 failed with real database; 6 lessons learned: mock sparingly, use test infrastructure, write tests before implementation, need 8 test types, stress test resources, coverage % ≠ quality; cross-references TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md, TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md) |
 
 ---
 
