@@ -1,10 +1,16 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.39
-**Last Updated:** 2025-11-29
+**Version:** 2.40
+**Last Updated:** 2025-11-30
 **Status:** ✅ Current
-**Changes in v2.39:**
+**Changes in v2.40:**
+- **PHASE 1.9 PLANNING (BLOCKING)**: Added PHASE_1.9_TEST_INFRASTRUCTURE_PLAN_V1.0.md to utility documents
+- Documents blocking phase for test infrastructure overhaul (~93 hours effort)
+- Addresses: 2 failed tests, 33 skipped tests, 5 xfail tests, 10/11 modules missing test types
+- Created GitHub Issue #165 (subsumes and closes Issue #155)
+- Key discovery: Kalshi E2E tests skip due to wrong credential variable names (KALSHI_DEMO_* vs DEV_KALSHI_*)
+**Changes in v2.40:**
 - **SESSION_WORKFLOW_GUIDE V1.0 → V1.1**: Added Pre-Planning Test Coverage Checklist (Section 3)
 - New section enforces TESTING_STRATEGY V3.2 8-test-type requirement before todo list creation
 - Root cause: Phase 2C planning only included 2/8 test types (unit + integration)
@@ -379,7 +385,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.19.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.39.md** | ✅ | v2.39 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.39** (SESSION_WORKFLOW_GUIDE V1.0→V1.1: Pre-Planning Test Coverage Checklist; CLAUDE.md V1.21→V1.22) |
+| **MASTER_INDEX_V2.40.md** | ✅ | v2.40 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.39** (SESSION_WORKFLOW_GUIDE V1.0→V1.1: Pre-Planning Test Coverage Checklist; CLAUDE.md V1.21→V1.22) |
 | **ARCHITECTURE_DECISIONS_V2.23.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.22** (ADR-029: ESPN Data Model with Normalized Schema - 4-table design for multi-sport ESPN data; venues, game_states (SCD Type 2), team_rankings, teams; JSONB situation field for sport-specific data; ~1.1 GB/year storage; 97 → 98 total ADRs) |
 | **REQUIREMENT_INDEX_V1.11.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
 | **ADR_INDEX_V1.16.md** | ✅ | v1.16 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 77 architecture decisions - **UPDATED V1.16** (ADR-029: ESPN Data Model with Normalized Schema - Phase 2 Live Data Integration; 76 → 77 total ADRs) |
@@ -542,7 +548,8 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md** | 🔵 | - | `/docs/utility/` | 1.5 | Phase 1.5-4 | 🟡 High | **PLANNED** - Property-based testing roadmap for 74-91 additional tests across Phases 1.5-4 (merged into TEST_REQUIREMENTS_COMPREHENSIVE) |
 | **PHASE_1.5_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 2 Week 1 | 🟡 High | **NEW** - Configuration System Enhancement deferred to Phase 2 (DEF-P1.5-001: version resolution + override handling, 6-8 hours implementation estimate, requires live database integration) |
 | **PHASE_4_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 4.5 | Phase 4.5 | 🔴 Critical | **NEW** - Comprehensive research task documentation (11 tasks: DEF-009 to DEF-019, strategies HIGHEST PRIORITY, models, edge detection) - ~2800 lines, 74-92 hour total effort |
-| **PHASE_2_TEST_COVERAGE_GAPS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 2 | Phase 2 | 🔴 Critical | **NEW** - Test type coverage gaps per TESTING_STRATEGY_V3.2 (0/11 modules passing); 39 missing tests across 8 types; ~57 hours effort; tracked in GitHub issue #155 |
+| **PHASE_2_TEST_COVERAGE_GAPS_V1.0.md** | 📦 | v1.0 | `/docs/utility/` | 2 | Phase 2 | 🔴 Critical | **ARCHIVED** - Subsumed by PHASE_1.9_TEST_INFRASTRUCTURE_PLAN_V1.0.md; Issue #155 closed, replaced by Issue #165 |
+| **PHASE_1.9_TEST_INFRASTRUCTURE_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.9 | Phase 1.9 | 🔴 Critical | **NEW** - BLOCKING phase for test infrastructure overhaul (~93 hours); addresses 2 failed, 33 skipped, 5 xfail tests, 10/11 modules missing test types; GitHub Issue #165 |
 | **STRATEGIC_WORK_ROADMAP_V1.1.md** | ✅ | v1.1 | `/docs/utility/` | 1-10 | All phases | 🔴 Critical | **UPDATED V1.1** - Master roadmap of 25 strategic tasks + Phases 6-9 analytics tasks (performance tracking, dashboards, A/B testing) organized by category |
 | **ENVIRONMENT_CHECKLIST_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 0 | Phase 0 ✅ | 🔴 Critical | Windows 11 setup, Parts 1-7, dependencies verification (**FIXED** filename from V1.1 → V1.0) |
 | **CONSISTENCY_REVIEW.md** | ✅ | n/a | `/docs/phase-0-completion/` | 0 | Phase 0 ✅ | 🟡 High | Phase 0 consistency validation, all discrepancies fixed |
