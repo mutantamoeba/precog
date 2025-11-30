@@ -173,8 +173,12 @@ def assert_version_format(version: str):
 class TestStrategyManagerCreate:
     """Test suite for strategy creation operations."""
 
-    def test_create_strategy(self, clean_test_data, db_cursor, strategy_factory):
+    def test_create_strategy(self, db_pool, clean_test_data, db_cursor, strategy_factory):
         """Test creating a new strategy version.
+
+        Note:
+            db_pool fixture ensures real database infrastructure is used
+            (Pattern 13 - no mocking connections in integration tests).
 
         Validates:
         - Strategy created successfully
