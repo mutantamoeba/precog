@@ -2,7 +2,7 @@
 
 ---
 **Version:** 2.42
-**Last Updated:** 2025-11-30
+**Last Updated:** 2025-12-03
 **Status:** ✅ Current
 **Changes in v2.42:**
 - **TEST_REQUIREMENTS_COMPREHENSIVE V2.0 → V2.1**: Added REQ-TEST-020 through REQ-TEST-024 (Test Isolation Requirements)
@@ -23,7 +23,6 @@
 - Addresses: 2 failed tests, 33 skipped tests, 5 xfail tests, 10/11 modules missing test types
 - Created GitHub Issue #165 (subsumes and closes Issue #155)
 - Key discovery: Kalshi E2E tests skip due to wrong credential variable names (KALSHI_DEMO_* vs DEV_KALSHI_*)
-**Changes in v2.40:**
 - **SESSION_WORKFLOW_GUIDE V1.0 → V1.1**: Added Pre-Planning Test Coverage Checklist (Section 3)
 - New section enforces TESTING_STRATEGY V3.2 8-test-type requirement before todo list creation
 - Root cause: Phase 2C planning only included 2/8 test types (unit + integration)
@@ -398,7 +397,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.19.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.42.md** | ✅ | v2.41 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.41** (Phase 1.9: TEST_ISOLATION_PATTERNS_V1.0.md added to Testing & Quality Documents) |
+| **MASTER_INDEX_V2.42.md** | ✅ | v2.42 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.42** (Phase 1.9: TEST_ISOLATION_PATTERNS_V1.0.md, TEST_REQUIREMENTS_COMPREHENSIVE V2.1 with REQ-TEST-020-024) |
 | **ARCHITECTURE_DECISIONS_V2.23.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.22** (ADR-029: ESPN Data Model with Normalized Schema - 4-table design for multi-sport ESPN data; venues, game_states (SCD Type 2), team_rankings, teams; JSONB situation field for sport-specific data; ~1.1 GB/year storage; 97 → 98 total ADRs) |
 | **REQUIREMENT_INDEX_V1.11.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
 | **ADR_INDEX_V1.16.md** | ✅ | v1.16 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 77 architecture decisions - **UPDATED V1.16** (ADR-029: ESPN Data Model with Normalized Schema - Phase 2 Live Data Integration; 76 → 77 total ADRs) |
