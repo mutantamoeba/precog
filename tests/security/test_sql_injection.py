@@ -12,6 +12,8 @@ NOTE: These tests require Phase 1.5 Manager APIs and lookup table setup.
       Currently skipped until Phase 1.5 implementation.
 """
 
+import hashlib
+import time
 from decimal import Decimal
 
 import pytest
@@ -99,9 +101,11 @@ def test_create_strategy_rejects_sql_injection_in_name(
         - No SQL syntax errors
     """
     # Create strategy with malicious input
+    # Use unique version per payload to avoid duplicate key violations
+    unique_version = f"v1.0-{hashlib.md5(malicious_input.encode()).hexdigest()[:8]}"
     strategy_id = crud_operations.create_strategy(
         strategy_name=malicious_input,  # Malicious SQL in name field
-        strategy_version="v1.0",
+        strategy_version=unique_version,
         strategy_type="value",  # Use valid strategy type from lookup table
         config={"min_edge": str(Decimal("0.05"))},  # String for JSONB
     )
@@ -212,10 +216,11 @@ def test_update_strategy_status_rejects_sql_injection(
     """
     import psycopg2.errors
 
-    # First, create a test strategy
+    # First, create a test strategy with unique version
+    unique_version = f"v1.0-{hashlib.md5(malicious_input.encode()).hexdigest()[:8]}"
     strategy_id = crud_operations.create_strategy(
         strategy_name="SQL injection update test",
-        strategy_version="v1.0",
+        strategy_version=unique_version,
         strategy_type="value",  # Use valid strategy type from lookup table
         config={"min_edge": str(Decimal("0.05"))},  # String for JSONB
     )
@@ -377,10 +382,11 @@ def test_create_strategy_rejects_sql_injection_in_json_config(
         "nested": malicious_config["nested"],
     }
 
-    # Create strategy with malicious JSON
+    # Create strategy with malicious JSON - use unique version with timestamp
+    unique_version = f"v1.0-json-{int(time.time() * 1000) % 100000}"
     strategy_id = crud_operations.create_strategy(
         strategy_name="JSON injection test",
-        strategy_version="v1.0",
+        strategy_version=unique_version,
         strategy_type="value",  # Use valid strategy type from lookup table
         config=serializable_config,
     )
@@ -437,10 +443,11 @@ def test_strategies_table_survives_all_injection_attempts(
     assert result is not None
     assert result["table_exists"] is True, "strategies table was dropped by injection!"
 
-    # Verify CRUD still works
+    # Verify CRUD still works - use unique version with timestamp
+    unique_version = f"v1.0-integrity-{int(time.time() * 1000) % 100000}"
     strategy_id = crud_operations.create_strategy(
         strategy_name="Post-injection integrity test",
-        strategy_version="v1.0",
+        strategy_version=unique_version,
         strategy_type="value",  # Use valid strategy type from lookup table
         config={"min_edge": str(Decimal("0.05"))},
     )
