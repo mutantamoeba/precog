@@ -285,7 +285,8 @@ class TestKalshiAuthEdgeCases:
         )
 
     @pytest.mark.xfail(
-        reason="Timing-dependent test - modern CPUs execute too fast for reliable ms uniqueness"
+        reason="Timing-dependent test - modern CPUs execute too fast for reliable ms uniqueness",
+        strict=False,  # Allow XPASS - test may pass on slower systems or under load
     )
     def test_rapid_requests_have_unique_timestamps(self, kalshi_auth):
         """Verify rapid sequential requests get different timestamps.

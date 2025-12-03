@@ -27,7 +27,7 @@ Related: ADR-074 (Property-Based Testing with Hypothesis)
 from datetime import datetime, timedelta
 from typing import Any
 
-from hypothesis import given, settings
+from hypothesis import HealthCheck, given, settings
 from hypothesis import strategies as st
 
 # =============================================================================
@@ -150,7 +150,7 @@ class TestGameStateParsingInvariants:
     """
 
     @given(event=espn_event())
-    @settings(max_examples=100, deadline=None)
+    @settings(max_examples=100, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     def test_parsed_scores_are_non_negative(self, event: dict[str, Any]):
         """Property: Parsed scores are always non-negative integers."""
         from precog.api_connectors.espn_client import ESPNClient
@@ -166,7 +166,7 @@ class TestGameStateParsingInvariants:
             assert isinstance(state["away_score"], int), "Away score should be int"
 
     @given(event=espn_event())
-    @settings(max_examples=100, deadline=None)
+    @settings(max_examples=100, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     def test_parsed_period_is_valid_range(self, event: dict[str, Any]):
         """Property: Parsed period is always in valid range (0-10)."""
         from precog.api_connectors.espn_client import ESPNClient
@@ -178,7 +178,7 @@ class TestGameStateParsingInvariants:
             assert 0 <= game_full["state"]["period"] <= 10, "Period should be 0-10"
 
     @given(event=espn_event())
-    @settings(max_examples=100, deadline=None)
+    @settings(max_examples=100, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     def test_clock_seconds_is_non_negative(self, event: dict[str, Any]):
         """Property: Clock seconds is always non-negative."""
         from precog.api_connectors.espn_client import ESPNClient
@@ -203,7 +203,7 @@ class TestTeamAbbreviationInvariants:
     """
 
     @given(event=espn_event())
-    @settings(max_examples=100, deadline=None)
+    @settings(max_examples=100, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     def test_team_abbreviations_are_strings(self, event: dict[str, Any]):
         """Property: Team abbreviations are always strings."""
         from precog.api_connectors.espn_client import ESPNClient
@@ -218,7 +218,7 @@ class TestTeamAbbreviationInvariants:
             assert isinstance(away_code, str), "Away team code should be string"
 
     @given(event=espn_event())
-    @settings(max_examples=100, deadline=None)
+    @settings(max_examples=100, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     def test_team_abbreviations_are_non_empty(self, event: dict[str, Any]):
         """Property: Team abbreviations are never empty strings."""
         from precog.api_connectors.espn_client import ESPNClient
@@ -243,7 +243,7 @@ class TestStatusMappingInvariants:
     """Property tests for status mapping completeness."""
 
     @given(event=espn_event())
-    @settings(max_examples=100, deadline=None)
+    @settings(max_examples=100, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     def test_game_status_maps_to_known_value(self, event: dict[str, Any]):
         """Property: Game status always maps to a known status value."""
         from precog.api_connectors.espn_client import ESPNClient
@@ -330,7 +330,7 @@ class TestEventIdInvariants:
     """Property tests for event ID handling."""
 
     @given(event=espn_event())
-    @settings(max_examples=100, deadline=None)
+    @settings(max_examples=100, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     def test_espn_event_id_is_string(self, event: dict[str, Any]):
         """Property: ESPN event ID is always a string."""
         from precog.api_connectors.espn_client import ESPNClient
@@ -344,7 +344,7 @@ class TestEventIdInvariants:
             )
 
     @given(event=espn_event())
-    @settings(max_examples=100, deadline=None)
+    @settings(max_examples=100, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     def test_espn_event_id_is_non_empty(self, event: dict[str, Any]):
         """Property: ESPN event ID is never empty."""
         from precog.api_connectors.espn_client import ESPNClient
@@ -365,7 +365,7 @@ class TestPossessionInvariants:
     """Property tests for possession and situation data."""
 
     @given(event=espn_event())
-    @settings(max_examples=100, deadline=None)
+    @settings(max_examples=100, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     def test_possession_is_team_code_or_none(self, event: dict[str, Any]):
         """Property: Possession is a team code string or None.
 
@@ -388,7 +388,7 @@ class TestPossessionInvariants:
             )
 
     @given(event=espn_event())
-    @settings(max_examples=100, deadline=None)
+    @settings(max_examples=100, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     def test_down_is_valid_or_none(self, event: dict[str, Any]):
         """Property: Down is 1-4 or None."""
         from precog.api_connectors.espn_client import ESPNClient
@@ -403,7 +403,7 @@ class TestPossessionInvariants:
                 assert 1 <= down <= 4, f"Invalid down: {down}"
 
     @given(event=espn_event())
-    @settings(max_examples=100, deadline=None)
+    @settings(max_examples=100, deadline=None, suppress_health_check=[HealthCheck.too_slow])
     def test_timeouts_are_valid_range(self, event: dict[str, Any]):
         """Property: Timeouts are in valid range (0-3)."""
         from precog.api_connectors.espn_client import ESPNClient
