@@ -51,12 +51,24 @@ Related:
 import base64
 import time
 from decimal import Decimal
+from pathlib import Path
 
+import pytest
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from precog.api_connectors.kalshi_auth import generate_signature, load_private_key
 from precog.api_connectors.rate_limiter import RateLimiter
+
+# Path to the demo private key (excluded from git for security)
+DEMO_KEY_PATH = Path("_keys/kalshi_demo_private.pem")
+HAS_PRIVATE_KEY = DEMO_KEY_PATH.exists()
+
+# Skip marker for tests requiring private key
+requires_private_key = pytest.mark.skipif(
+    not HAS_PRIVATE_KEY,
+    reason=f"Private key not found at {DEMO_KEY_PATH} (excluded from git for security)",
+)
 
 # ==============================================================================
 # Custom Hypothesis Strategies for API Testing
@@ -172,6 +184,7 @@ def cents_amount(draw, min_value=0, max_value=100000000):
 # ==============================================================================
 
 
+@requires_private_key
 @given(
     timestamp=api_timestamp(),
     method=http_method(),
@@ -200,6 +213,7 @@ def test_signature_always_base64_encoded(timestamp, method, path):
         raise AssertionError(f"Signature is not valid base64: {signature}, error: {e}") from e
 
 
+@requires_private_key
 @given(
     timestamp=api_timestamp(),
     method=http_method(),
@@ -231,6 +245,7 @@ def test_signature_always_valid_length(timestamp, method, path):
     )
 
 
+@requires_private_key
 @given(
     timestamp=api_timestamp(),
     method=http_method(),
@@ -259,6 +274,7 @@ def test_signature_changes_with_timestamp(timestamp, method, path):
     )
 
 
+@requires_private_key
 @given(
     timestamp=api_timestamp(),
     method=http_method(),
@@ -290,6 +306,7 @@ def test_signature_changes_with_method(timestamp, method, path):
     )
 
 
+@requires_private_key
 @given(
     timestamp=api_timestamp(),
     method=http_method(),
