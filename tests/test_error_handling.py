@@ -15,6 +15,7 @@ Target: 90%+ coverage before Phase 2
 
 import psycopg2
 import pytest
+import yaml
 
 from precog.config.config_loader import ConfigLoader
 from precog.database.connection import get_connection
@@ -94,16 +95,33 @@ def test_transaction_rollback_on_connection_loss():
 # ============================================================================
 
 
-def test_config_loader_invalid_yaml_syntax():
+def test_config_loader_invalid_yaml_syntax(tmp_path):
     """
     Test behavior when YAML file has syntax errors.
 
-    Expected: Clear error message, fail fast, don't proceed
-    Coverage: config/config_loader.py lines 288-293 (YAML parsing errors)
+    Expected: yaml.YAMLError raised with clear error message
+    Coverage: config/config_loader.py line 382 (yaml.safe_load)
     """
-    pytest.skip(
-        "ConfigLoader.load() only loads from config/ directory; temp file testing not supported"
+    # Create temp config directory with invalid YAML
+    config_dir = tmp_path / "config"
+    config_dir.mkdir()
+
+    invalid_yaml_file = config_dir / "invalid.yaml"
+    invalid_yaml_file.write_text(
+        "key1: value1\n"
+        "key2: [unclosed list\n"  # Invalid YAML - unclosed bracket
+        "key3: value3\n",
+        encoding="utf-8",
     )
+
+    loader = ConfigLoader(config_dir=config_dir)
+
+    with pytest.raises(yaml.YAMLError) as exc_info:
+        loader.load("invalid")
+
+    # Verify error message is informative
+    error_msg = str(exc_info.value)
+    assert "while parsing" in error_msg.lower() or "expected" in error_msg.lower()
 
 
 def test_config_loader_missing_required_file():
@@ -127,10 +145,11 @@ def test_config_loader_missing_environment_variable():
     Test behavior when referenced environment variable doesn't exist.
 
     Expected: Clear error message indicating which env var is missing
-    Coverage: config/config_loader.py lines 332-333 (env var expansion)
+    Future Feature: Environment variable expansion within YAML files (e.g., ${DATABASE_HOST})
     """
     pytest.skip(
-        "ConfigLoader.load() only loads from config/ directory; temp file testing not supported"
+        "Environment variable expansion not implemented in ConfigLoader.load(); "
+        "no support for ${VAR} substitution in YAML files"
     )
 
 
@@ -139,10 +158,11 @@ def test_config_loader_invalid_data_type():
     Test behavior when config value has wrong data type.
 
     Expected: Type validation error with clear message
-    Coverage: config/config_loader.py lines 346-347 (type validation)
+    Future Feature: Schema validation against expected types for config values
     """
     pytest.skip(
-        "ConfigLoader.load() only loads from config/ directory; temp file testing not supported"
+        "Type validation not implemented in ConfigLoader.load(); "
+        "only Decimal conversion performed, no schema validation"
     )
 
 

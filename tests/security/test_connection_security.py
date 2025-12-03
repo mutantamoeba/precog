@@ -131,7 +131,6 @@ def test_connection_timeout_masks_password_in_error(monkeypatch) -> None:
 
 
 @connection_pool_test_limitation
-@credential_masking_not_implemented
 def test_invalid_database_name_masks_password_in_error(monkeypatch) -> None:
     """
     Verify invalid database name errors mask password.
@@ -196,7 +195,6 @@ def test_invalid_database_name_masks_password_in_error(monkeypatch) -> None:
 
 
 @connection_pool_test_limitation
-@credential_masking_not_implemented
 def test_authentication_failed_masks_password_in_error(monkeypatch) -> None:
     """
     Verify authentication failed errors mask password.
@@ -493,7 +491,6 @@ def test_environment_variables_not_leaked_in_stack_traces() -> None:
 # =============================================================================
 
 
-@credential_masking_not_implemented
 def test_http_basic_auth_masked_in_request_logs() -> None:
     """
     Verify HTTP Basic Auth credentials masked in request logs.

@@ -39,7 +39,7 @@ VCR_CASSETTES_DIR = Path(__file__).parent / "vcr_cassettes"
 # Custom VCR instance for ESPN API
 espn_vcr = vcr.VCR(
     cassette_library_dir=str(VCR_CASSETTES_DIR),
-    record_mode="none",  # Don't record - use mock responses for now
+    record_mode="new_episodes",  # Record new API calls, replay existing ones
     match_on=["uri", "method"],
     filter_headers=["User-Agent"],
 )
@@ -161,27 +161,25 @@ class TestESPNIntegrationWithMocks:
 # =============================================================================
 # Real VCR Cassette Tests (Requires Network on First Run)
 # =============================================================================
-# These tests are marked with @pytest.mark.vcr and will:
-# 1. On first run: Make real API calls and record responses
-# 2. On subsequent runs: Replay recorded responses
+# These tests use @espn_vcr.use_cassette() decorator and will:
+# 1. On first run: Make real API calls and record responses to YAML cassettes
+# 2. On subsequent runs: Replay recorded responses from YAML cassettes
+# Note: Tests pass in isolation and with pytest-xdist parallel execution
 
 
-@pytest.mark.vcr
-@pytest.mark.skip(reason="VCR cassettes not yet recorded - requires network access")
 class TestESPNRealVCRCassettes:
     """
     Integration tests using real VCR cassettes.
 
-    To enable these tests:
-    1. Remove @pytest.mark.skip decorator
-    2. Set VCR record_mode to "new_episodes" or "once"
-    3. Run tests with network access
-    4. Cassettes will be saved to vcr_cassettes/
+    VCR Configuration:
+    - record_mode="new_episodes": Records new API calls, replays existing
+    - Cassettes saved to: tests/integration/api_connectors/vcr_cassettes/
 
     Note: ESPN data changes constantly, so cassettes capture a
     point-in-time snapshot. Re-record when testing specific scenarios.
     """
 
+    @espn_vcr.use_cassette("espn_nfl_scoreboard.yaml")
     def test_real_nfl_scoreboard_fetch(self):
         """Fetch real NFL scoreboard (recorded via VCR)."""
         from precog.api_connectors.espn_client import ESPNClient
@@ -194,10 +192,14 @@ class TestESPNRealVCRCassettes:
         # Games may or may not exist depending on when cassette was recorded
         if games:
             game = games[0]
-            assert "espn_event_id" in game
-            assert "home_team" in game
-            assert "away_team" in game
+            # ESPNGameFull format: metadata/state structure
+            assert "metadata" in game, "Expected ESPNGameFull format with 'metadata' key"
+            assert "state" in game, "Expected ESPNGameFull format with 'state' key"
+            assert "espn_event_id" in game["metadata"]
+            assert "home_team" in game["metadata"]
+            assert "away_team" in game["metadata"]
 
+    @espn_vcr.use_cassette("espn_ncaaf_scoreboard.yaml")
     def test_real_ncaaf_scoreboard_fetch(self):
         """Fetch real NCAAF scoreboard (recorded via VCR)."""
         from precog.api_connectors.espn_client import ESPNClient
@@ -206,6 +208,11 @@ class TestESPNRealVCRCassettes:
         games = client.get_ncaaf_scoreboard()
 
         assert isinstance(games, list)
+        # NCAAF may have no games depending on season
+        if games:
+            game = games[0]
+            assert "metadata" in game
+            assert "state" in game
 
 
 # =============================================================================
