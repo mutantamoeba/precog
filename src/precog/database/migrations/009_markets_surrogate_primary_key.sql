@@ -156,7 +156,7 @@ COMMENT ON INDEX idx_markets_unique_current IS 'Ensures only one current version
 -- STEP 6: Add new FK constraints using surrogate key
 -- ============================================================================
 
--- edges → markets
+-- edges -> markets
 ALTER TABLE edges
 ADD CONSTRAINT fk_edges_market_uuid
 FOREIGN KEY (market_uuid) REFERENCES markets(id);
@@ -164,7 +164,7 @@ FOREIGN KEY (market_uuid) REFERENCES markets(id);
 CREATE INDEX IF NOT EXISTS idx_edges_market_uuid
 ON edges(market_uuid);
 
--- positions → markets
+-- positions -> markets
 ALTER TABLE positions
 ADD CONSTRAINT fk_positions_market_uuid
 FOREIGN KEY (market_uuid) REFERENCES markets(id);
@@ -172,7 +172,7 @@ FOREIGN KEY (market_uuid) REFERENCES markets(id);
 CREATE INDEX IF NOT EXISTS idx_positions_market_uuid
 ON positions(market_uuid);
 
--- trades → markets
+-- trades -> markets
 ALTER TABLE trades
 ADD CONSTRAINT fk_trades_market_uuid
 FOREIGN KEY (market_uuid) REFERENCES markets(id);
@@ -180,7 +180,7 @@ FOREIGN KEY (market_uuid) REFERENCES markets(id);
 CREATE INDEX IF NOT EXISTS idx_trades_market_uuid
 ON trades(market_uuid);
 
--- settlements → markets
+-- settlements -> markets
 ALTER TABLE settlements
 ADD CONSTRAINT fk_settlements_market_uuid
 FOREIGN KEY (market_uuid) REFERENCES markets(id);

@@ -11,7 +11,7 @@ Educational Note:
     Example distinction:
     - Unit test: test_calculate_position_pnl() - tests P&L formula in isolation
     - Integration test: test_crud_create_position() - tests database CRUD operation
-    - E2E test: test_complete_position_lifecycle_workflow() - tests open → update → close
+    - E2E test: test_complete_position_lifecycle_workflow() - tests open -> update -> close
 
     E2E tests are:
     - Slower (test multiple operations)
@@ -48,7 +48,7 @@ pytestmark = [pytest.mark.e2e, pytest.mark.slow]
 
 
 # ============================================================================
-# Test Class 1: Position Lifecycle (Open → Update → Close)
+# Test Class 1: Position Lifecycle (Open -> Update -> Close)
 # ============================================================================
 
 
@@ -75,7 +75,7 @@ class TestPositionLifecycle:
     """
 
     def test_complete_position_lifecycle_workflow(self):
-        """Test complete workflow: open → update price → close position.
+        """Test complete workflow: open -> update price -> close position.
 
         Educational Note:
             This is a "happy path" E2E test covering the most common workflow:
@@ -543,7 +543,7 @@ class TestPositionVersioning:
         of position changes by creating NEW rows instead of updating existing rows.
 
         Key concepts:
-        - Surrogate key (id): Changes with each version (1 → 2 → 3)
+        - Surrogate key (id): Changes with each version (1 -> 2 -> 3)
         - Business key (position_id): Stays constant across versions (POS-1)
         - row_current_ind: TRUE for current version, FALSE for historical
 
@@ -564,7 +564,7 @@ class TestPositionVersioning:
 
         Educational Note:
             When update_position() is called:
-            1. Old version: row_current_ind TRUE → FALSE (archived)
+            1. Old version: row_current_ind TRUE -> FALSE (archived)
             2. New version: INSERT with row_current_ind = TRUE (current)
             3. Both versions remain in database (complete history)
 
@@ -626,7 +626,7 @@ class TestPositionVersioning:
             ```
 
             Without this filter:
-            - Query returns ALL versions (10 updates → 10 rows)
+            - Query returns ALL versions (10 updates -> 10 rows)
             - Wrong P&L values (mix of historical and current)
             - Slow queries (scanning unnecessary rows)
 
@@ -753,11 +753,11 @@ class TestPositionPnLCalculation:
 
         YES position (profit when price goes UP):
         - P&L = quantity * (current_price - entry_price)
-        - Example: Entry $0.50, Current $0.75, Qty 10 → P&L = $2.50
+        - Example: Entry $0.50, Current $0.75, Qty 10 -> P&L = $2.50
 
         NO position (profit when price goes DOWN):
         - P&L = quantity * (entry_price - current_price)
-        - Example: Entry $0.50, Current $0.25, Qty 10 → P&L = $2.50
+        - Example: Entry $0.50, Current $0.25, Qty 10 -> P&L = $2.50
 
         Why different?
         - YES wins when market settles at $1.00 (YES outcome)
@@ -779,7 +779,7 @@ class TestPositionPnLCalculation:
             Scenario:
             - Entry: $0.50 (50% probability YES wins)
             - Current: $0.75 (75% probability YES wins)
-            - Probability increased 25 percentage points → PROFIT!
+            - Probability increased 25 percentage points -> PROFIT!
             - P&L = quantity * price_increase = 10 * $0.25 = $2.50
 
         References:
@@ -808,7 +808,7 @@ class TestPositionPnLCalculation:
             Scenario:
             - Entry: $0.50 (50% probability YES wins)
             - Current: $0.30 (30% probability YES wins)
-            - Probability decreased 20 percentage points → LOSS!
+            - Probability decreased 20 percentage points -> LOSS!
             - P&L = quantity * price_decrease = 10 * (-$0.20) = -$2.00
 
         References:
@@ -835,15 +835,15 @@ class TestPositionPnLCalculation:
             NO position profits when price goes DOWN.
 
             Scenario:
-            - Entry: $0.50 (50% probability YES wins → 50% NO wins)
-            - Current: $0.25 (25% probability YES wins → 75% NO wins)
-            - NO probability increased 25 percentage points → PROFIT!
+            - Entry: $0.50 (50% probability YES wins -> 50% NO wins)
+            - Current: $0.25 (25% probability YES wins -> 75% NO wins)
+            - NO probability increased 25 percentage points -> PROFIT!
             - P&L = quantity * (entry - current) = 10 * $0.25 = $2.50
 
             Why inverse calculation?
             - NO position is OPPOSITE of YES
-            - Lower YES price → Higher NO win probability → NO profit
-            - Higher YES price → Lower NO win probability → NO loss
+            - Lower YES price -> Higher NO win probability -> NO profit
+            - Higher YES price -> Lower NO win probability -> NO loss
 
         References:
             - REQ-RISK-003: Profit Target Management
@@ -871,7 +871,7 @@ class TestPositionPnLCalculation:
             Scenario:
             - Entry: $0.50 (50% NO win probability)
             - Current: $0.75 (25% NO win probability)
-            - NO probability decreased 25 percentage points → LOSS!
+            - NO probability decreased 25 percentage points -> LOSS!
             - P&L = quantity * (entry - current) = 10 * (-$0.25) = -$2.50
 
         References:
@@ -941,12 +941,12 @@ class TestTrailingStopIntegration:
         1. INACTIVE: Waiting for activation threshold
            - Stop = static stop_loss_price
            - Example: Entry $0.50, Stop $0.35, Current $0.60
-             Profit $0.10 < threshold $0.15 → inactive
+             Profit $0.10 < threshold $0.15 -> inactive
 
         2. ACTIVATION: Profit threshold reached
            - activated = TRUE
            - Stop = current_price - initial_distance
-           - Example: Price $0.65 → profit $0.15 → ACTIVATE!
+           - Example: Price $0.65 -> profit $0.15 -> ACTIVATE!
              Stop = $0.65 - $0.05 = $0.60
 
         3. TRAILING: Following price up
@@ -1064,7 +1064,7 @@ class TestTrailingStopIntegration:
 
             Scenario:
             - Highest: $0.75, Stop: $0.70 (distance $0.05)
-            - Price moves to $0.80 → NEW HIGH!
+            - Price moves to $0.80 -> NEW HIGH!
             - Update stop: $0.80 - $0.05 = $0.75 (stop raised)
 
         References:
@@ -1158,7 +1158,7 @@ class TestTrailingStopIntegration:
 
             Scenario:
             - Highest: $0.80, Stop: $0.75 (activated)
-            - Price drops to $0.74 → STOP TRIGGERED!
+            - Price drops to $0.74 -> STOP TRIGGERED!
             - Signal: Close position at $0.74 (trailing_stop exit)
 
             Why separate trigger check?
@@ -1372,13 +1372,13 @@ class TestPositionPrecisionRequirements:
             somewhere in workflow, introducing precision errors.
 
             Common sources:
-            - JSON serialization: json.dumps(Decimal("0.5")) → 0.5 (float!)
-            - Division: Decimal("1") / 2 → Decimal("0.5") (OK!)
-              But: Decimal("1") / 2.0 → float! (CONTAMINATION!)
-            - String formatting: f"{Decimal('0.5')}" → "0.5" (OK)
-              But: float(Decimal("0.5")) → 0.5 (CONTAMINATION!)
+            - JSON serialization: json.dumps(Decimal("0.5")) -> 0.5 (float!)
+            - Division: Decimal("1") / 2 -> Decimal("0.5") (OK!)
+              But: Decimal("1") / 2.0 -> float! (CONTAMINATION!)
+            - String formatting: f"{Decimal('0.5')}" -> "0.5" (OK)
+              But: float(Decimal("0.5")) -> 0.5 (CONTAMINATION!)
 
-            This test verifies entire workflow (open → update → close) maintains
+            This test verifies entire workflow (open -> update -> close) maintains
             Decimal precision WITHOUT float contamination.
 
         References:
@@ -1487,7 +1487,7 @@ class TestPositionPrecisionRequirements:
             assert isinstance(pos["realized_pnl"], Decimal)
 
             # Verify NO float contamination anywhere in workflow
-            # (all assertions passed → all values are Decimal)
+            # (all assertions passed -> all values are Decimal)
 
 
 # ============================================================================
@@ -1521,7 +1521,7 @@ class TestMarginValidationAndErrors:
             YES position @ $0.75, quantity 10:
             Required margin = 10 * (1.00 - 0.75) = 10 * 0.25 = $2.50
 
-            If available margin < $2.50 → InsufficientMarginError
+            If available margin < $2.50 -> InsufficientMarginError
 
         References:
             - REQ-RISK-001: Position Entry Validation
@@ -1536,7 +1536,7 @@ class TestMarginValidationAndErrors:
                 side="YES",
                 quantity=10,
                 entry_price=Decimal("0.7500"),
-                available_margin=Decimal("2.00"),  # Need $2.50, have $2.00 → FAIL
+                available_margin=Decimal("2.00"),  # Need $2.50, have $2.00 -> FAIL
             )
 
     def test_insufficient_margin_no_position(self):
@@ -1546,7 +1546,7 @@ class TestMarginValidationAndErrors:
             NO position @ $0.75, quantity 10:
             Required margin = 10 * 0.75 = $7.50
 
-            If available margin < $7.50 → InsufficientMarginError
+            If available margin < $7.50 -> InsufficientMarginError
 
         References:
             - REQ-RISK-001: Position Entry Validation
@@ -1561,7 +1561,7 @@ class TestMarginValidationAndErrors:
                 side="NO",
                 quantity=10,
                 entry_price=Decimal("0.7500"),
-                available_margin=Decimal("7.00"),  # Need $7.50, have $7.00 → FAIL
+                available_margin=Decimal("7.00"),  # Need $7.50, have $7.00 -> FAIL
             )
 
     def test_invalid_price_range_validation(self):

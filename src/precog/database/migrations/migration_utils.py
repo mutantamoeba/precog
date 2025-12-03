@@ -359,9 +359,9 @@ def safe_rename_column(
     Safely rename a column with migration-safe pattern.
 
     Handles:
-    - Column doesn't exist (old name) → error
-    - Column already renamed → skip
-    - Both exist → error (manual intervention needed)
+    - Column doesn't exist (old name) -> error
+    - Column already renamed -> skip
+    - Both exist -> error (manual intervention needed)
 
     Args:
         table_name: Name of the table

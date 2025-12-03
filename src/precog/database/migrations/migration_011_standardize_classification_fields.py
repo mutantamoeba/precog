@@ -14,8 +14,8 @@ Standardize on approach/domain (semantically superior to all options):
 - domain: WHICH markets it applies to (nfl, elections, economics, NULL=multi-domain)
 
 **Changes:**
-1. Rename category → approach in probability_models and strategies
-2. Rename subcategory → domain in probability_models and strategies
+1. Rename category -> approach in probability_models and strategies
+2. Rename subcategory -> domain in probability_models and strategies
 3. Add description TEXT to both tables (audit/documentation field)
 4. Add created_by VARCHAR to both tables (audit trail)
 
@@ -74,7 +74,7 @@ def get_connection():
 
 def apply_migration(conn):
     """
-    Apply migration: Rename category/subcategory → approach/domain, add description/created_by.
+    Apply migration: Rename category/subcategory -> approach/domain, add description/created_by.
 
     Args:
         conn: Database connection
@@ -167,7 +167,7 @@ def apply_migration(conn):
 
 def rollback_migration(conn):
     """
-    Rollback migration: Rename approach/domain → category/subcategory, drop description/created_by.
+    Rollback migration: Rename approach/domain -> category/subcategory, drop description/created_by.
 
     Args:
         conn: Database connection

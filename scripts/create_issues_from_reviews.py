@@ -34,7 +34,7 @@ Exit Codes:
 
 Educational Note:
     This automates GitHub issue creation from review comments,
-    streamlining the workflow from PR review → Issue → Implementation.
+    streamlining the workflow from PR review -> Issue -> Implementation.
     Uses PyGithub library for GitHub API interaction.
 
 Reference:

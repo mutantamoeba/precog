@@ -248,10 +248,10 @@ Current: 87.16% (335 statements, 43 missed)
 Target: 90%+ (335 statements, <34 missed)
 
 These 10 tests target:
-- connection.py: 8 missed lines → 4 missed (50% improvement)
-- config_loader.py: 20 missed lines → 15 missed (25% improvement)
-- crud_operations.py: 5 missed lines → 2 missed (60% improvement)
-- logger.py: 6 missed lines → 4 missed (33% improvement)
+- connection.py: 8 missed lines -> 4 missed (50% improvement)
+- config_loader.py: 20 missed lines -> 15 missed (25% improvement)
+- crud_operations.py: 5 missed lines -> 2 missed (60% improvement)
+- logger.py: 6 missed lines -> 4 missed (33% improvement)
 
 Estimated New Coverage: 89-91%
 Estimated Run Time: ~5 seconds

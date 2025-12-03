@@ -1,12 +1,12 @@
 -- Migration 011: Fix Market FK Consistency (Business Key over Surrogate Key)
 -- Date: 2025-12-02
 -- Phase: 1.9 (Test Infrastructure)
--- Purpose: Replace surrogate key FKs (market_uuid → markets.id) with business key FKs (market_id → markets.market_id)
+-- Purpose: Replace surrogate key FKs (market_uuid -> markets.id) with business key FKs (market_id -> markets.market_id)
 
 -- ============================================================================
 -- BACKGROUND: The Problem
 -- ============================================================================
--- Migration 009 added surrogate key FKs (market_uuid → markets.id) to enable
+-- Migration 009 added surrogate key FKs (market_uuid -> markets.id) to enable
 -- SCD Type 2 versioning. However, this approach was over-engineered:
 --
 -- 1. No code actually populates market_uuid columns (always NULL)
@@ -15,12 +15,12 @@
 -- 4. Industry standard for SCD Type 2 uses business key FKs, not surrogate keys
 --
 -- Current state (broken):
---   - settlements.market_uuid → markets.id (FK exists, column always NULL ❌)
---   - settlements.market_id → markets.market_id (NO FK, actually used ✅)
+--   - settlements.market_uuid -> markets.id (FK exists, column always NULL ❌)
+--   - settlements.market_id -> markets.market_id (NO FK, actually used ✅)
 --   - Same issue in: edges, positions, trades
 --
 -- Solution:
---   - Add FK constraints: market_id → markets.market_id
+--   - Add FK constraints: market_id -> markets.market_id
 --   - Drop unused market_uuid columns
 --   - Simplify queries: JOIN markets m ON table.market_id = m.market_id WHERE m.row_current_ind = TRUE
 
@@ -75,7 +75,7 @@ BEGIN
 END $$;
 
 -- ============================================================================
--- STEP 2: Drop surrogate key FK constraints (market_uuid → markets.id)
+-- STEP 2: Drop surrogate key FK constraints (market_uuid -> markets.id)
 -- ============================================================================
 
 -- Drop FK constraints on market_uuid columns
@@ -100,7 +100,7 @@ ALTER TABLE positions DROP COLUMN IF EXISTS market_uuid;
 ALTER TABLE trades DROP COLUMN IF EXISTS market_uuid;
 
 -- ============================================================================
--- STEP 4: Add business key FK constraints (market_id → markets.market_id)
+-- STEP 4: Add business key FK constraints (market_id -> markets.market_id)
 -- ============================================================================
 
 -- Note: We can't create a standard FK to markets.market_id because market_id

@@ -42,7 +42,7 @@ WHERE row_current_ind = TRUE;
 
 **Changes:**
 1. Add new surrogate id column (SERIAL PRIMARY KEY)
-2. Rename current position_id → position_id_old (temp)
+2. Rename current position_id -> position_id_old (temp)
 3. Add new position_id VARCHAR (business key)
 4. Populate business keys from old IDs (POS-{id} format)
 5. Update foreign keys in trades, position_exits tables

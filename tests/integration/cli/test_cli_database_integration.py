@@ -7,7 +7,7 @@ Tests verify that CLI commands correctly write data to database:
 - fetch-settlements: Settlement records + market status updates
 
 Critical aspects tested:
-1. Decimal precision preserved through API → CLI → database
+1. Decimal precision preserved through API -> CLI -> database
 2. SCD Type 2 versioning works correctly
 3. Upsert pattern (try update, fallback to create)
 4. Foreign key relationships maintained
@@ -140,7 +140,7 @@ def test_fetch_balance_saves_to_database(
     2. Balance saved as DECIMAL in database
     3. row_current_ind = TRUE for new record
     4. Currency defaults to USD
-    5. Decimal precision preserved through API → CLI → database
+    5. Decimal precision preserved through API -> CLI -> database
     """
     # Set environment variables for KalshiClient initialization
     monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "75b4b76e-d191-4855-b219-5c31cdcba1c8")
@@ -187,8 +187,8 @@ def test_fetch_balance_updates_with_scd_type2(
     Test SCD Type 2 versioning when balance updates.
 
     Scenario:
-    1. First fetch: balance = $1000.00 → row_current_ind=TRUE
-    2. Second fetch: balance = $1500.00 → old record marked FALSE, new record TRUE
+    1. First fetch: balance = $1000.00 -> row_current_ind=TRUE
+    2. Second fetch: balance = $1500.00 -> old record marked FALSE, new record TRUE
 
     Verifies:
     - Old balance marked row_current_ind=FALSE
@@ -351,8 +351,8 @@ def test_fetch_markets_upsert_pattern(
     Test upsert pattern: try update first, fallback to create.
 
     Scenario:
-    1. First fetch: Markets don't exist → create_market()
-    2. Second fetch: Markets exist → update_market_with_versioning()
+    1. First fetch: Markets don't exist -> create_market()
+    2. Second fetch: Markets exist -> update_market_with_versioning()
 
     Verifies:
     - First run: markets created
@@ -383,7 +383,7 @@ def test_fetch_markets_upsert_pattern(
     monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "75b4b76e-d191-4855-b219-5c31cdcba1c8")
     monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "_keys/kalshi_demo_private.pem")
 
-    # FIRST FETCH: Markets don't exist → create_market()
+    # FIRST FETCH: Markets don't exist -> create_market()
     with my_vcr.use_cassette("cli/markets_initial.yaml"):
         result = cli_runner.invoke(app, ["fetch-markets", "--series", "KXNFLGAME", "--limit", "5"])
         assert result.exit_code == 0, f"First fetch failed: {result.stdout}"
@@ -407,7 +407,7 @@ def test_fetch_markets_upsert_pattern(
             f"Expected at least 2 markets after first fetch, got {count_after_first}"
         )
 
-    # SECOND FETCH: Markets exist → update_market_with_versioning()
+    # SECOND FETCH: Markets exist -> update_market_with_versioning()
     # Use SAME cassette to avoid VCR URL matching issues
     with my_vcr.use_cassette("cli/markets_initial.yaml"):
         result = cli_runner.invoke(app, ["fetch-markets", "--series", "KXNFLGAME", "--limit", "5"])
@@ -747,7 +747,7 @@ def test_fetch_markets_handles_partial_failures(
             },
             {
                 "ticker": "NONEXISTENT-EVENT-YES",
-                "event_ticker": "NONEXISTENT-EVENT",  # Event DOESN'T exist → will fail
+                "event_ticker": "NONEXISTENT-EVENT",  # Event DOESN'T exist -> will fail
                 "series_ticker": "KXNFLGAME",
                 "title": "Market 3",
                 "status": "open",

@@ -29,9 +29,9 @@
 # - Old versions stay in database for historical analysis
 #
 # SEMANTIC VERSIONING:
-# - v1.0 → v1.1: Minor update (bug fix, small parameter change)
+# - v1.0 -> v1.1: Minor update (bug fix, small parameter change)
 #   Example: Change k_factor from 32 to 35
-# - v1.0 → v2.0: Major update (significant algorithm change)
+# - v1.0 -> v2.0: Major update (significant algorithm change)
 #   Example: Switch from simple Elo to margin-adjusted Elo
 #
 # LIFECYCLE STATES:
@@ -41,9 +41,9 @@
 # 4. DEPRECATED: Replaced by newer version, kept for records
 #
 # EXAMPLE LIFECYCLE:
-# elo_nfl_v1.0 (ACTIVE)   → Deployed, making predictions
+# elo_nfl_v1.0 (ACTIVE)   -> Deployed, making predictions
 #     ↓ (found k_factor too low)
-# elo_nfl_v1.1 (TESTING)  → Testing in parallel with v1.0
+# elo_nfl_v1.1 (TESTING)  -> Testing in parallel with v1.0
 #     ↓ (v1.1 performs 2% better over 30 days)
 # elo_nfl_v1.0 (DEPRECATED) + elo_nfl_v1.1 (ACTIVE)
 #
@@ -103,7 +103,7 @@ versioning:
       new_version: "0.20"       # 20% traffic
 
     # Evaluation criteria for promotion
-    # WHY: Need objective criteria to promote v1.1 → ACTIVE
+    # WHY: Need objective criteria to promote v1.1 -> ACTIVE
     promotion_criteria:
       min_improvement_pct: "0.02"  # 2% better edge accuracy
       min_evaluation_period_days: 30

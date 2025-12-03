@@ -22,7 +22,7 @@ Transform edges table to dual-key structure:
 - Add partial UNIQUE index on (edge_id) WHERE row_current_ind = TRUE
 
 **Foreign Key Dependencies:**
-- trades.edge_id → edges.edge_id (must update to reference surrogate id)
+- trades.edge_id -> edges.edge_id (must update to reference surrogate id)
 
 **Migration Steps:**
 1. Add surrogate id column (SERIAL)

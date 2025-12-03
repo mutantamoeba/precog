@@ -193,7 +193,7 @@ def test_open_position_insufficient_margin_yes(db_cursor, clean_test_data, posit
     Educational Note:
         - YES position margin = quantity * (1.00 - entry_price)
         - Entry $0.75, qty 10: margin = 10 * 0.25 = $2.50
-        - Available $1.00 < required $2.50 → should FAIL
+        - Available $1.00 < required $2.50 -> should FAIL
     """
     manager = PositionManager()
 
@@ -211,7 +211,7 @@ def test_open_position_insufficient_margin_no(db_cursor, clean_test_data, positi
     Educational Note:
         - NO position margin = quantity * entry_price
         - Entry $0.25, qty 10: margin = 10 * 0.25 = $2.50
-        - Available $1.00 < required $2.50 → should FAIL
+        - Available $1.00 < required $2.50 -> should FAIL
     """
     manager = PositionManager()
 
@@ -276,7 +276,7 @@ def test_update_position_creates_new_version(db_cursor, clean_test_data, positio
         - SCD Type 2 pattern: UPDATE creates NEW row, marks old row non-current
         - Old version: row_current_ind = FALSE (archived)
         - New version: row_current_ind = TRUE (current)
-        - Surrogate id CHANGES (old id → new id)
+        - Surrogate id CHANGES (old id -> new id)
         - Business key STAYS SAME (position_id copied to new version)
     """
     manager = PositionManager()
@@ -623,7 +623,7 @@ def test_calculate_pnl_breakeven(db_cursor, clean_test_data):
 
 
 def test_complete_position_lifecycle(db_cursor, clean_test_data, position_params):
-    """Test complete position lifecycle: open → update → update → close.
+    """Test complete position lifecycle: open -> update -> update -> close.
 
     Educational Note:
         - Demonstrates SCD Type 2 versioning in action
@@ -680,7 +680,7 @@ def test_margin_calculation_yes_vs_no(db_cursor, clean_test_data, position_param
         **position_params,
         "side": "YES",
         "entry_price": Decimal("0.7500"),
-        "available_margin": Decimal("3.00"),  # Need $2.50 → should PASS
+        "available_margin": Decimal("3.00"),  # Need $2.50 -> should PASS
     }
     yes_position = manager.open_position(**yes_params)
     assert yes_position["side"] == "YES"
@@ -691,7 +691,7 @@ def test_margin_calculation_yes_vs_no(db_cursor, clean_test_data, position_param
         "market_id": "KALSHI-NFL-002",  # Different market
         "side": "NO",
         "entry_price": Decimal("0.7500"),
-        "available_margin": Decimal("3.00"),  # Need $7.50 → should FAIL
+        "available_margin": Decimal("3.00"),  # Need $7.50 -> should FAIL
     }
     with pytest.raises(InsufficientMarginError):
         manager.open_position(**no_params)

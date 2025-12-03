@@ -69,7 +69,7 @@ def strategy_factory() -> dict[str, Any]:
 # Educational Note (ADR-088):
 #   - ❌ FORBIDDEN: Mocking get_connection(), database, config, logging
 #   - ✅ REQUIRED: Use REAL infrastructure fixtures
-#   - Phase 1.5 lesson: 17/17 tests passed with mocks → 13/17 failed with real DB
+#   - Phase 1.5 lesson: 17/17 tests passed with mocks -> 13/17 failed with real DB
 
 
 # ============================================================================
@@ -144,9 +144,9 @@ def assert_version_format(version: str):
 
     Educational Note:
         - Semantic versioning: MAJOR.MINOR or MAJOR.MINOR.PATCH
-        - MAJOR: Breaking changes (v1.0 → v2.0)
-        - MINOR: New features, backwards compatible (v1.0 → v1.1)
-        - PATCH: Bug fixes (v1.0.0 → v1.0.1)
+        - MAJOR: Breaking changes (v1.0 -> v2.0)
+        - MINOR: New features, backwards compatible (v1.0 -> v1.1)
+        - PATCH: Bug fixes (v1.0.0 -> v1.0.1)
         - Reference: https://semver.org
 
     Example:
@@ -615,8 +615,8 @@ class TestStrategyManagerUpdates:
         """Test updating strategy status with transition validation.
 
         Validates:
-        - Status updates successfully (draft → testing → active)
-        - Invalid transitions rejected (deprecated → active)
+        - Status updates successfully (draft -> testing -> active)
+        - Invalid transitions rejected (deprecated -> active)
         - Returns updated strategy
         - REQ-VER-006: Status lifecycle
 
@@ -627,7 +627,7 @@ class TestStrategyManagerUpdates:
         strategy = manager.create_strategy(**strategy_factory)
         assert strategy["status"] == "draft"
 
-        # Execute first transition: draft → testing (REAL database)
+        # Execute first transition: draft -> testing (REAL database)
         result = manager.update_status(strategy_id=strategy["strategy_id"], new_status="testing")
         assert result["status"] == "testing"
 
@@ -637,7 +637,7 @@ class TestStrategyManagerUpdates:
         )
         assert db_cursor.fetchone()["status"] == "testing"
 
-        # Execute second transition: testing → active (REAL database)
+        # Execute second transition: testing -> active (REAL database)
         result = manager.update_status(strategy_id=strategy["strategy_id"], new_status="active")
         assert result["status"] == "active"
 
@@ -651,8 +651,8 @@ class TestStrategyManagerUpdates:
         """Test that invalid status transitions raise error.
 
         Validates:
-        - deprecated → active rejected (terminal state)
-        - active → draft rejected (backwards movement)
+        - deprecated -> active rejected (terminal state)
+        - active -> draft rejected (backwards movement)
         - Appropriate error message
 
         Reference: PHASE_1.5_TEST_PLAN_V1.0.md - Edge Case 10
@@ -668,7 +668,7 @@ class TestStrategyManagerUpdates:
         )
         db_cursor.connection.commit()
 
-        # Invalid transition: deprecated → active (REAL database)
+        # Invalid transition: deprecated -> active (REAL database)
         with pytest.raises(InvalidStatusTransitionError, match=r"deprecated.*active"):
             manager.update_status(strategy_id=strategy["strategy_id"], new_status="active")
 
@@ -791,7 +791,7 @@ class TestStrategyManagerIntegration:
     """Integration tests for end-to-end strategy lifecycle."""
 
     def test_strategy_lifecycle_end_to_end(self, clean_test_data, db_cursor, strategy_factory):
-        """Test complete strategy lifecycle: create → testing → active → inactive → deprecated.
+        """Test complete strategy lifecycle: create -> testing -> active -> inactive -> deprecated.
 
         Validates:
         - Full status transition chain

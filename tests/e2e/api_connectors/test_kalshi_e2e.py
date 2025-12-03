@@ -43,8 +43,8 @@ def _kalshi_credentials_available() -> bool:
     """Check if Kalshi credentials are available for current environment.
 
     Uses DATABASE_ENVIRONMENT_STRATEGY naming convention:
-    - PRECOG_ENV=test → TEST_KALSHI_API_KEY / TEST_KALSHI_PRIVATE_KEY_PATH
-    - PRECOG_ENV=dev (default) → DEV_KALSHI_API_KEY / DEV_KALSHI_PRIVATE_KEY_PATH
+    - PRECOG_ENV=test -> TEST_KALSHI_API_KEY / TEST_KALSHI_PRIVATE_KEY_PATH
+    - PRECOG_ENV=dev (default) -> DEV_KALSHI_API_KEY / DEV_KALSHI_PRIVATE_KEY_PATH
     """
     precog_env = os.getenv("PRECOG_ENV", "dev").upper()
     valid_prefixes = {"DEV", "TEST", "STAGING"}

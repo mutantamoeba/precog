@@ -9,8 +9,8 @@ Property-based testing generates thousands of test cases automatically.
 Mathematical Properties Tested:
 1. Position size never exceeds bankroll
 2. Position size is always non-negative
-3. Zero edge → zero position
-4. Negative edge → zero position (should not bet)
+3. Zero edge -> zero position
+4. Negative edge -> zero position (should not bet)
 5. Kelly fraction reduces position size proportionally
 6. Position size scales linearly with bankroll
 7. Position size increases monotonically with edge
@@ -161,7 +161,7 @@ def test_position_size_always_non_negative(edge, kelly_frac, bankroll):
 )
 def test_zero_edge_means_zero_position(kelly_frac, bankroll):
     """
-    PROPERTY: Zero edge → zero position size.
+    PROPERTY: Zero edge -> zero position size.
 
     If there's no edge (fair bet), Kelly criterion says don't bet.
 
@@ -182,7 +182,7 @@ def test_zero_edge_means_zero_position(kelly_frac, bankroll):
 )
 def test_negative_edge_means_zero_position(edge, kelly_frac, bankroll):
     """
-    PROPERTY: Negative edge → zero position size.
+    PROPERTY: Negative edge -> zero position size.
 
     If edge is negative (market price > true probability), we should NEVER bet.
     Doing so guarantees losses over time.
@@ -384,7 +384,7 @@ def test_position_size_reasonable_bounds(edge, kelly_frac, bankroll):
 # ==============================================================================
 """
 Hypothesis Configuration (from pyproject.toml):
-- max_examples = 100 (default) → Will test 100 random inputs per property
+- max_examples = 100 (default) -> Will test 100 random inputs per property
 - deadline = 400ms per example
 - verbosity = "normal"
 

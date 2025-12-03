@@ -176,7 +176,7 @@ market_filters:
   min_volume_contracts: 100
 
   # Maximum spread (difference between bid and ask)
-  # Example: Bid $0.48, Ask $0.52 → Spread = $0.04 = 4%
+  # Example: Bid $0.48, Ask $0.52 -> Spread = $0.04 = 4%
   #
   # WHY: Wide spreads = high transaction costs. You're paying
   # the spread every time you trade.
@@ -254,7 +254,7 @@ position_management:
     enabled: true
 
     # Exit if position is down this much (as % of position size)
-    # Example: $100 position, -50% stop-loss → Exit at $50 loss
+    # Example: $100 position, -50% stop-loss -> Exit at $50 loss
     #
     # WHY: Prevents holding onto losers. Sometimes wrong = wrong,
     # and continuing to hold just increases losses.
@@ -265,7 +265,7 @@ position_management:
     enabled: true
 
     # Exit if position is up this much (as % of position size)
-    # Example: $100 position, +100% target → Exit at $100 profit
+    # Example: $100 position, +100% target -> Exit at $100 profit
     #
     # WHY: Lock in gains. A bird in hand is worth two in the bush.
     # Don't get greedy - take profits when available.

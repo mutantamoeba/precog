@@ -16,7 +16,7 @@ Why Property Tests for API Clients?
 Property Categories:
 1. Authentication Signatures (kalshi_auth.py):
    - Signature always valid for valid inputs
-   - Signature deterministic (same inputs → same signature)
+   - Signature deterministic (same inputs -> same signature)
    - Signature format always base64-encoded string
    - Message construction correct (timestamp + METHOD + path)
 
@@ -26,10 +26,10 @@ Property Categories:
    - Exponential backoff properties (retries increase: 1s, 2s, 4s)
 
 3. Decimal Conversion (kalshi_client.py):
-   - All *_dollars/*_fixed fields → Decimal
+   - All *_dollars/*_fixed fields -> Decimal
    - No float contamination in response parsing
    - Decimal precision preserved (4 decimal places)
-   - String conversion reversible (Decimal → str → Decimal)
+   - String conversion reversible (Decimal -> str -> Decimal)
 
 Traditional Example-Based Tests:
 - test_kalshi_client.py: 27 tests with specific known inputs
@@ -182,7 +182,7 @@ def test_signature_always_base64_encoded(timestamp, method, path):
     PROPERTY: Signature is always a valid base64-encoded string.
 
     RSA-PSS signatures are binary data. They MUST be base64-encoded for HTTP transport.
-    Invalid base64 → API request fails with authentication error.
+    Invalid base64 -> API request fails with authentication error.
     """
     # Load demo private key (test key, safe to use in tests)
     private_key = load_private_key("_keys/kalshi_demo_private.pem")
@@ -213,7 +213,7 @@ def test_signature_always_valid_length(timestamp, method, path):
     they should always produce signatures of consistent byte length for a given
     key size.
 
-    Note: RSA-PSS is intentionally non-deterministic! Same inputs → different
+    Note: RSA-PSS is intentionally non-deterministic! Same inputs -> different
     signatures each time. This prevents signature analysis attacks.
     """
     private_key = load_private_key("_keys/kalshi_demo_private.pem")
@@ -238,7 +238,7 @@ def test_signature_always_valid_length(timestamp, method, path):
 )
 def test_signature_changes_with_timestamp(timestamp, method, path):
     """
-    PROPERTY: Different timestamp → different signature.
+    PROPERTY: Different timestamp -> different signature.
 
     Each request must have unique signature (prevents replay attacks).
     Changing timestamp should change signature.
@@ -254,8 +254,8 @@ def test_signature_changes_with_timestamp(timestamp, method, path):
 
     assert signature1 != signature2, (
         f"Different timestamps produced same signature! This allows replay attacks.\n"
-        f"Timestamp 1: {timestamp} → Signature: {signature1}\n"
-        f"Timestamp 2: {timestamp2} → Signature: {signature2}"
+        f"Timestamp 1: {timestamp} -> Signature: {signature1}\n"
+        f"Timestamp 2: {timestamp2} -> Signature: {signature2}"
     )
 
 
@@ -266,7 +266,7 @@ def test_signature_changes_with_timestamp(timestamp, method, path):
 )
 def test_signature_changes_with_method(timestamp, method, path):
     """
-    PROPERTY: Different HTTP method → different signature.
+    PROPERTY: Different HTTP method -> different signature.
 
     GET and POST to same endpoint must have different signatures.
     Otherwise, attacker could replay GET signature for POST request.
@@ -285,8 +285,8 @@ def test_signature_changes_with_method(timestamp, method, path):
 
     assert signature1 != signature2, (
         f"Different methods produced same signature! This allows request forgery.\n"
-        f"Method 1: {method} → Signature: {signature1}\n"
-        f"Method 2: {method2} → Signature: {signature2}"
+        f"Method 1: {method} -> Signature: {signature1}\n"
+        f"Method 2: {method2} -> Signature: {signature2}"
     )
 
 
@@ -296,7 +296,7 @@ def test_signature_changes_with_method(timestamp, method, path):
 )
 def test_signature_changes_with_path(timestamp, method):
     """
-    PROPERTY: Different API path → different signature.
+    PROPERTY: Different API path -> different signature.
 
     /markets and /balance must have different signatures.
     Otherwise, attacker could replay signature for wrong endpoint.
@@ -311,13 +311,13 @@ def test_signature_changes_with_path(timestamp, method):
 
     assert signature1 != signature2, (
         f"Different paths produced same signature! This allows endpoint forgery.\n"
-        f"Path 1: {path1} → Signature: {signature1}\n"
-        f"Path 2: {path2} → Signature: {signature2}"
+        f"Path 1: {path1} -> Signature: {signature1}\n"
+        f"Path 2: {path2} -> Signature: {signature2}"
     )
 
 
 # Removed test_signature_method_case_insensitive_uppercase
-# The implementation uses method.upper() internally, which means "get" → "GET"
+# The implementation uses method.upper() internally, which means "get" -> "GET"
 # However, RSA-PSS signatures are non-deterministic, so we can't compare signatures directly.
 # The important property is that signatures are always valid, not that they're identical.
 
@@ -341,7 +341,7 @@ def test_rate_limiter_never_exceeds_limit(requests_per_minute, num_requests):
     """
     PROPERTY: Rate limiter never allows more than configured rate.
 
-    This is CRITICAL. Exceeding rate limits → 429 errors → API bans.
+    This is CRITICAL. Exceeding rate limits -> 429 errors -> API bans.
 
     Token bucket algorithm: Tokens replenish at fixed rate (requests_per_minute / 60).
     If we make requests faster than replenishment, should block.
@@ -370,7 +370,7 @@ def test_rate_limiter_never_exceeds_limit(requests_per_minute, num_requests):
     burst_capacity = requests_per_minute
 
     # With num_requests (max 20) < burst_capacity (min 100),
-    # all requests fit in burst → no delays expected
+    # all requests fit in burst -> no delays expected
     assert num_requests <= burst_capacity, (
         f"Test constraint violated: num_requests ({num_requests}) should be <= "
         f"burst_capacity ({burst_capacity}). Adjust test parameters."
@@ -402,16 +402,16 @@ def test_rate_limiter_never_exceeds_limit(requests_per_minute, num_requests):
 @given(price_str=decimal_price_string())
 def test_decimal_conversion_no_precision_loss(price_str):
     """
-    PROPERTY: Converting string → Decimal → string preserves value.
+    PROPERTY: Converting string -> Decimal -> string preserves value.
 
     Kalshi API returns prices as strings ("0.4275"). We convert to Decimal.
     This conversion MUST NOT lose precision.
 
     Example failure with float:
-        "0.4275" → float(0.4275) → str → "0.42750000000000005" ❌
+        "0.4275" -> float(0.4275) -> str -> "0.42750000000000005" ❌
 
     Correct with Decimal:
-        "0.4275" → Decimal("0.4275") → str → "0.4275" ✅
+        "0.4275" -> Decimal("0.4275") -> str -> "0.4275" ✅
     """
     # Convert string to Decimal (simulates our API client)
     price_decimal = Decimal(price_str)
@@ -456,13 +456,13 @@ def test_decimal_never_becomes_float(price_str):
 )
 def test_cents_to_dollars_conversion_exact(cents):
     """
-    PROPERTY: Converting cents → dollars is exact (no rounding errors).
+    PROPERTY: Converting cents -> dollars is exact (no rounding errors).
 
     Kalshi returns balance in cents (integer). We must convert to dollars
     without losing precision.
 
     Example:
-        235084 cents → $2350.84 (exact)
+        235084 cents -> $2350.84 (exact)
         NOT $2350.8399999999 (float rounding error)
     """
     # Convert cents to dollars (simulates our API client)
@@ -473,7 +473,7 @@ def test_cents_to_dollars_conversion_exact(cents):
 
     # Should match original exactly
     assert round_trip_cents == Decimal(cents), (
-        f"Cents → dollars → cents round trip lost precision!\n"
+        f"Cents -> dollars -> cents round trip lost precision!\n"
         f"Original cents: {cents}\n"
         f"Dollars: {dollars}\n"
         f"Round trip cents: {round_trip_cents}"
@@ -566,7 +566,7 @@ Property Test Coverage:
 
 1. Authentication Signatures (6 properties):
    ✅ Signature always base64-encoded
-   ✅ Signature deterministic (same inputs → same output)
+   ✅ Signature deterministic (same inputs -> same output)
    ✅ Signature changes with timestamp (prevents replay)
    ✅ Signature changes with HTTP method (prevents forgery)
    ✅ Signature changes with path (prevents endpoint forgery)
@@ -576,9 +576,9 @@ Property Test Coverage:
    ✅ Never exceeds configured rate limit
 
 3. Decimal Conversion (5 properties):
-   ✅ String → Decimal → string preserves precision
+   ✅ String -> Decimal -> string preserves precision
    ✅ Decimal never contaminated by float
-   ✅ Cents → dollars conversion exact
+   ✅ Cents -> dollars conversion exact
    ✅ Complementary prices sum correctly (Decimal arithmetic)
    ✅ All *_dollars fields converted to Decimal
 

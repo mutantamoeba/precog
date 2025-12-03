@@ -4,8 +4,8 @@ Apply complete database schema to TEST database (precog_test).
 
 Schema application order:
 1. Base schema (schema_enhanced.sql v1.1)
-2. v1.3 → v1.4 migration (adds strategies, probability_models)
-3. v1.4 → v1.5 migration (if exists)
+2. v1.3 -> v1.4 migration (adds strategies, probability_models)
+3. v1.4 -> v1.5 migration (if exists)
 4. Numbered migrations (001, 002, 003, etc. from database/migrations/)
 
 Uses TEST_DB_* environment variables.
@@ -54,9 +54,9 @@ repo_root = Path(__file__).parent.parent
 schema_files = [
     # 1. Base schema (v1.1)
     repo_root / "src" / "database" / "schema_enhanced.sql",
-    # 2. v1.3 → v1.4 migration (adds strategies, probability_models)
+    # 2. v1.3 -> v1.4 migration (adds strategies, probability_models)
     repo_root / "src" / "database" / "migrations" / "schema_v1.3_to_v1.4_migration.sql",
-    # 3. v1.4 → v1.5 migration
+    # 3. v1.4 -> v1.5 migration
     repo_root / "src" / "database" / "migrations" / "schema_v1.4_to_v1.5_migration.sql",
 ]
 

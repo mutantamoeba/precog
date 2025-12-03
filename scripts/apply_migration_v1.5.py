@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Apply schema v1.5 migration (V1.4 → V1.5)
+Apply schema v1.5 migration (V1.4 -> V1.5)
 Phase 0.5: Position monitoring and exit management
 
 Environment Safety (Issue #161):

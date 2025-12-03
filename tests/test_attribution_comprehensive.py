@@ -529,8 +529,8 @@ def test_chaos_trade_with_null_attribution_fields(
         side="buy",
         quantity=10,
         price=Decimal("0.5000"),
-        # calculated_probability=None,  # Omitted → defaults to NULL
-        # market_price=None,            # Omitted → defaults to NULL
+        # calculated_probability=None,  # Omitted -> defaults to NULL
+        # market_price=None,            # Omitted -> defaults to NULL
     )
 
     trade = get_trade_by_id(trade_id)

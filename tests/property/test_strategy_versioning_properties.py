@@ -3,11 +3,11 @@ Property-based tests for strategy versioning (immutable config pattern).
 
 Tests strategy versioning invariants that must hold for ALL inputs:
 - Config immutability (NEVER changes after creation)
-- Status mutability (CAN change: draft → testing → active → deprecated)
+- Status mutability (CAN change: draft -> testing -> active -> deprecated)
 - Version uniqueness (strategy_name + strategy_version unique)
 - Semantic versioning ordering (v1.0 < v1.1 < v2.0)
 - Trade attribution integrity (every trade links to specific version)
-- Config changes require new versions (v1.0 → v1.1)
+- Config changes require new versions (v1.0 -> v1.1)
 - Active version uniqueness (at most ONE active version per strategy)
 - Version history preservation (historical versions never deleted)
 
@@ -154,7 +154,7 @@ def test_strategy_config_immutable_via_database(db_pool, clean_test_data, config
         - Best practice: Never provide UPDATE function for immutable fields
 
         To change config:
-        1. Create NEW version (v1.0 → v1.1)
+        1. Create NEW version (v1.0 -> v1.1)
         2. Link new trades to v1.1
         3. Keep v1.0 for historical attribution
 
@@ -215,7 +215,7 @@ def test_strategy_config_immutable_via_database(db_pool, clean_test_data, config
 )
 def test_strategy_status_mutable(db_pool, clean_test_data, status_sequence):
     """
-    PROPERTY: Strategy status is MUTABLE - can change (draft → testing → active → deprecated).
+    PROPERTY: Strategy status is MUTABLE - can change (draft -> testing -> active -> deprecated).
 
     Validates:
     - Status can transition through lifecycle states

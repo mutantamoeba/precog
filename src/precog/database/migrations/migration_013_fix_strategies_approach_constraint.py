@@ -25,7 +25,7 @@ semantic values. Migration 011 renamed the column but didn't update the constrai
 - Future-proof: Add values as needed (ALTER CONSTRAINT not supported, so new migration required)
 
 **References:**
-- Migration 011: Standardized category → approach renaming
+- Migration 011: Standardized category -> approach renaming
 - Migration 012: Fixed probability_models approach constraint (same pattern)
 - DATABASE_SCHEMA_SUMMARY_V1.9.md: approach field documentation
 - ADR-076: Standardize Classification Field Naming

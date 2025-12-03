@@ -28,7 +28,7 @@ if sys.platform == "win32":
     sys.stdout = codecs.getwriter("utf-8")(sys.stdout.buffer, "strict")
 
 
-# Old → New filename mappings
+# Old -> New filename mappings
 RENAMED_FILES = {
     "VERSIONING_GUIDE.md": "VERSIONING_GUIDE_V1.0.md",
     "TRAILING_STOP_GUIDE.md": "TRAILING_STOP_GUIDE_V1.0.md",
@@ -141,7 +141,7 @@ def main():
     print("\nAction required: Update these references to use new filenames")
     print("\nRenamed files:")
     for old_name, new_name in RENAMED_FILES.items():
-        print(f"  {old_name} → {new_name}")
+        print(f"  {old_name} -> {new_name}")
 
     return 1
 

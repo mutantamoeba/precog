@@ -3,7 +3,7 @@
 Tests the complete Model Manager workflow for versioned probability models:
 1. Model creation with immutable configurations
 2. Model version management and retrieval
-3. Status lifecycle transitions (draft → testing → active → deprecated)
+3. Status lifecycle transitions (draft -> testing -> active -> deprecated)
 4. Metrics updates (calibration, accuracy) while preserving config immutability
 5. Model version comparison for A/B testing
 6. Decimal precision requirements (Pattern 1)
@@ -12,7 +12,7 @@ Educational Note:
     E2E (end-to-end) tests validate complete workflows, not just units.
     These tests simulate real model management scenarios:
     - Create Elo model v1.0 with k_factor=20
-    - Test it (update status: draft → testing)
+    - Test it (update status: draft -> testing)
     - Update calibration metrics (track performance)
     - Create v1.1 with improved k_factor=24
     - Compare v1.0 vs v1.1 (A/B testing)
@@ -92,11 +92,11 @@ def test_run_id():
 
     Educational Note:
         Problem: Tests create models with static names ("elo_nfl v1.0")
-        → UniqueViolation when tests re-run if cleanup failed
-        → False test failures, debugging confusion
+        -> UniqueViolation when tests re-run if cleanup failed
+        -> False test failures, debugging confusion
 
         Solution: Append unique ID to all model names
-        - "elo_nfl" → "elo_nfl_a3f7b2c1"
+        - "elo_nfl" -> "elo_nfl_a3f7b2c1"
         - Each test run has different suffix
         - No name collisions between test runs
         - Tests can run in parallel safely
@@ -242,8 +242,8 @@ class TestModelCreationWorkflow:
     Educational Note:
         Model configs are IMMUTABLE after creation (REQ-VER-001).
         To change model parameters, create NEW version:
-        - v1.0 (k_factor=20) → v1.1 (k_factor=24): calibration improvement
-        - v1.0 → v2.0: algorithm change (Elo → ML)
+        - v1.0 (k_factor=20) -> v1.1 (k_factor=24): calibration improvement
+        - v1.0 -> v2.0: algorithm change (Elo -> ML)
 
         This ensures:
         - Every prediction links to exact config used
@@ -307,8 +307,8 @@ class TestModelCreationWorkflow:
 
         Educational Note:
             Semantic versioning (REQ-VER-002):
-            - v1.0 → v1.1: Minor (calibration, same algorithm)
-            - v1.0 → v2.0: Major (algorithm change)
+            - v1.0 -> v1.1: Minor (calibration, same algorithm)
+            - v1.0 -> v2.0: Major (algorithm change)
             - Both versions can run simultaneously for A/B testing
         """
         # Create v1.0
@@ -332,7 +332,7 @@ class TestModelCreationWorkflow:
         # Create v2.0 (major version - algorithm change)
         elo_v2_0 = elo_model_config.copy()
         elo_v2_0["model_version"] = "v2.0"
-        elo_v2_0["model_class"] = "ml"  # Algorithm change: Elo → ML
+        elo_v2_0["model_class"] = "ml"  # Algorithm change: Elo -> ML
         elo_v2_0["config"] = {
             "model_type": "xgboost",
             "max_depth": Decimal("6"),
@@ -724,19 +724,19 @@ class TestModelStatusManagement:
         - deprecated: Retired (no longer used)
 
         Valid transitions:
-        - draft → testing (start validation)
-        - testing → active (promote to production)
-        - testing → draft (revert to development)
-        - active → deprecated (retire model)
+        - draft -> testing (start validation)
+        - testing -> active (promote to production)
+        - testing -> draft (revert to development)
+        - active -> deprecated (retire model)
 
         Invalid transitions:
-        - deprecated → active (can't resurrect)
-        - active → testing (can't go backwards)
+        - deprecated -> active (can't resurrect)
+        - active -> testing (can't go backwards)
     """
 
     def test_update_status_active_to_inactive(self, clean_test_data, manager, elo_model_config):
         """
-        Test complete status lifecycle: draft → testing → active → deprecated.
+        Test complete status lifecycle: draft -> testing -> active -> deprecated.
 
         Scenario:
         - Create model (draft)
@@ -763,17 +763,17 @@ class TestModelStatusManagement:
         # Verify initial status
         assert model["status"] == "draft"
 
-        # Transition: draft → testing
+        # Transition: draft -> testing
         updated = manager.update_status(model_id, "testing")
         assert updated["status"] == "testing"
         assert updated["config"] == original_config, "Config must remain unchanged"
 
-        # Transition: testing → active
+        # Transition: testing -> active
         updated = manager.update_status(model_id, "active")
         assert updated["status"] == "active"
         assert updated["config"] == original_config, "Config must remain unchanged"
 
-        # Transition: active → deprecated
+        # Transition: active -> deprecated
         updated = manager.update_status(model_id, "deprecated")
         assert updated["status"] == "deprecated"
         assert updated["config"] == original_config, "Config must remain unchanged"
@@ -806,13 +806,13 @@ class TestModelStatusManagement:
         assert model["config"]["k_factor"] == Decimal("20.00")
         assert model["config"]["home_advantage"] == Decimal("65.00")
 
-        # Update status: draft → testing
+        # Update status: draft -> testing
         manager.update_status(model_id, "testing")
         retrieved = manager.get_model(model_id=model_id)
         assert retrieved["config"] == original_config
         assert retrieved["config"]["k_factor"] == Decimal("20.00")
 
-        # Update status: testing → active
+        # Update status: testing -> active
         manager.update_status(model_id, "active")
         retrieved = manager.get_model(model_id=model_id)
         assert retrieved["config"] == original_config
@@ -832,27 +832,27 @@ class TestModelStatusManagement:
         - Verify InvalidStatusTransitionError raised
 
         Expected:
-        - deprecated → active: REJECTED (can't resurrect)
-        - active → testing: REJECTED (can't go backwards)
-        - draft → active: REJECTED (must test first)
+        - deprecated -> active: REJECTED (can't resurrect)
+        - active -> testing: REJECTED (can't go backwards)
+        - draft -> active: REJECTED (must test first)
 
         Educational Note:
             Status validation prevents:
             - Accidental resurrection of deprecated models
-            - Skipping validation (draft → active directly)
-            - Going backwards in lifecycle (active → testing)
+            - Skipping validation (draft -> active directly)
+            - Going backwards in lifecycle (active -> testing)
 
             Valid state machine enforces quality control.
         """
         model = manager.create_model(**elo_model_config)
         model_id = model["model_id"]
 
-        # Transition to deprecated (draft → testing → active → deprecated)
+        # Transition to deprecated (draft -> testing -> active -> deprecated)
         manager.update_status(model_id, "testing")
         manager.update_status(model_id, "active")
         manager.update_status(model_id, "deprecated")
 
-        # Attempt invalid transition: deprecated → active (can't resurrect)
+        # Attempt invalid transition: deprecated -> active (can't resurrect)
         with pytest.raises(InvalidStatusTransitionError) as exc_info:
             manager.update_status(model_id, "active")
         assert "deprecated" in str(exc_info.value).lower()
@@ -868,7 +868,7 @@ class TestModelStatusManagement:
         manager.update_status(model2_id, "testing")
         manager.update_status(model2_id, "active")
 
-        # Attempt invalid transition: active → testing (can't go backwards)
+        # Attempt invalid transition: active -> testing (can't go backwards)
         with pytest.raises(InvalidStatusTransitionError) as exc_info:
             manager.update_status(model2_id, "testing")
         assert "active" in str(exc_info.value).lower()
@@ -912,7 +912,7 @@ class TestModelMetricsUpdate:
 
         Educational Note:
             Accuracy = Percentage of correct predictions
-            Example: 1000 predictions, 678 correct → 67.8% accuracy
+            Example: 1000 predictions, 678 correct -> 67.8% accuracy
         """
         model = manager.create_model(**elo_model_config)
         model_id = model["model_id"]
@@ -961,8 +961,8 @@ class TestModelMetricsUpdate:
             - >0.15 = poor calibration
 
             Example:
-            - Predict 60% probability, outcome happens → error = (0.6-1.0)^2 = 0.16
-            - Predict 60% probability, outcome doesn't happen → error = (0.6-0.0)^2 = 0.36
+            - Predict 60% probability, outcome happens -> error = (0.6-1.0)^2 = 0.16
+            - Predict 60% probability, outcome doesn't happen -> error = (0.6-0.0)^2 = 0.36
             - Average error across all predictions = calibration score
         """
         model = manager.create_model(**elo_model_config)
@@ -1006,7 +1006,7 @@ class TestModelMetricsUpdate:
             - created_at, created_by (audit trail)
 
             Mutable fields (can change):
-            - status (lifecycle: draft → testing → active → deprecated)
+            - status (lifecycle: draft -> testing -> active -> deprecated)
             - validation_calibration, validation_accuracy, validation_sample_size (performance)
         """
         model = manager.create_model(**elo_model_config)
@@ -1171,7 +1171,7 @@ class TestModelVersionComparison:
 
             For trading, calibration matters more:
             - Need accurate probabilities, not just yes/no
-            - Better calibration → better edge calculation → better Kelly sizing
+            - Better calibration -> better edge calculation -> better Kelly sizing
         """
         # Create v1.0 (baseline calibration)
         v1_0 = manager.create_model(**elo_model_config)
@@ -1308,5 +1308,5 @@ class TestModelVersionComparison:
         assert v1_1_retrieved["validation_calibration"] == Decimal("0.0523")
 
         # Verify trade attribution possible
-        # In production: trades.model_id = v1_1_id → can trace to exact config
+        # In production: trades.model_id = v1_1_id -> can trace to exact config
         assert v1_1_id != v1_0_id, "Each version has unique ID for trade attribution"

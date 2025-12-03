@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Apply schema v1.4 migration (V1.3 → V1.4)
+Apply schema v1.4 migration (V1.3 -> V1.4)
 
 Environment Safety (Issue #161):
     This script includes environment detection and confirmation prompts

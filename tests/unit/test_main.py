@@ -1089,7 +1089,7 @@ class TestFetchFills:
         - Custom days parameter (1, 30, 90)
         - Decimal price/amount display
         - Rich table with columns (timestamp, ticker, side, quantity, price)
-        - Timestamp conversion (Unix → readable)
+        - Timestamp conversion (Unix -> readable)
         - Dry-run and verbose modes
         - Error handling
     """
