@@ -28,11 +28,16 @@ Related ADR: ADR-047 (RSA-PSS Authentication Pattern)
 """
 
 import base64
+import threading
 import time
+from collections.abc import Callable
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from cryptography.hazmat.backends import default_backend
+
+if TYPE_CHECKING:
+    from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.hazmat.primitives.asymmetric.rsa import RSAPrivateKey
@@ -164,6 +169,7 @@ class KalshiAuth:
     - Generating signatures for requests
     - Building authentication headers
     - Token management (Kalshi tokens expire after 30 minutes)
+    - Thread-safe token refresh operations
 
     Usage:
         >>> auth = KalshiAuth(
@@ -174,23 +180,44 @@ class KalshiAuth:
         >>> headers = auth.get_headers(method="GET", path="/trade-api/v2/markets")
         >>> response = requests.get(url, headers=headers)
 
+    Testing Usage (Dependency Injection):
+        >>> mock_key = MagicMock()
+        >>> mock_key.sign.return_value = b"mock_signature"
+        >>> auth = KalshiAuth(
+        ...     api_key="TEST_API_KEY",
+        ...     private_key_path="/fake/path",
+        ...     key_loader=lambda path: mock_key  # Inject mock loader
+        ... )
+
     Educational Note:
         The API key is like a username - it identifies you.
         The private key is like a password - it proves you're you.
         But unlike a password, the private key never gets sent!
         You just send signatures created WITH the private key.
 
+        This class uses dependency injection for the key_loader, making it
+        testable without needing actual private key files. This follows
+        Pattern 12 (Dependency Injection) from DEVELOPMENT_PATTERNS.
+
     Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
     Related Requirements: REQ-API-002 (RSA-PSS Authentication)
     """
 
-    def __init__(self, api_key: str, private_key_path: str):
+    def __init__(
+        self,
+        api_key: str,
+        private_key_path: str,
+        key_loader: Callable[[str], RSAPrivateKey] | None = None,
+    ):
         """
         Initialize authentication manager.
 
         Args:
             api_key: Your Kalshi API key (UUID format)
             private_key_path: Path to your .pem private key file
+            key_loader: Optional callable that loads private keys from path.
+                       Defaults to load_private_key(). Useful for testing
+                       to inject mock key loaders.
 
         Raises:
             FileNotFoundError: If private key file doesn't exist
@@ -201,14 +228,38 @@ class KalshiAuth:
             ...     api_key="YOUR_KALSHI_API_KEY",
             ...     private_key_path="./kalshi_demo_key.pem"
             ... )
+
+        Testing Example:
+            >>> mock_key = MagicMock()
+            >>> auth = KalshiAuth(
+            ...     api_key="TEST_API_KEY",
+            ...     private_key_path="/any/path",
+            ...     key_loader=lambda p: mock_key
+            ... )
+
+        Educational Note:
+            The key_loader parameter implements Dependency Injection (DI):
+            - Production: Uses load_private_key() to read real .pem files
+            - Testing: Inject a mock that returns a fake key object
+            This makes the class testable without file system access.
         """
         self.api_key = api_key
-        self.private_key = load_private_key(private_key_path)
+        self.private_key_path = private_key_path
+
+        # Use injected key loader or default to load_private_key
+        _loader = key_loader if key_loader is not None else load_private_key
+        self.private_key = _loader(private_key_path)
 
         # Token management (Phase 1.5 - not implemented yet)
         # Kalshi tokens expire after 30 minutes
         self.token: str | None = None
         self.token_expiry: int | None = None
+
+        # Thread safety for token management
+        # Prevents race conditions when multiple threads refresh tokens
+        # Using RLock (Reentrant Lock) to allow nested calls like
+        # refresh_token() -> is_token_expired() without deadlock
+        self._token_lock = threading.RLock()
 
     def get_headers(self, method: str, path: str) -> dict:
         """
@@ -262,29 +313,41 @@ class KalshiAuth:
 
     def is_token_expired(self) -> bool:
         """
-        Check if cached token is expired.
+        Check if cached token is expired (thread-safe).
 
         Returns:
             True if token is expired or not set, False otherwise
+
+        Educational Note:
+            This method uses a lock to ensure thread-safe reads of token state.
+            Without the lock, one thread could read token while another is
+            updating it, leading to inconsistent state.
 
         Note:
             Token management is planned for Phase 1.5.
             Currently, we generate new signatures for every request.
         """
-        if self.token is None or self.token_expiry is None:
-            return True
+        with self._token_lock:
+            if self.token is None or self.token_expiry is None:
+                return True
 
-        current_time = int(time.time() * 1000)
-        return current_time >= self.token_expiry
+            current_time = int(time.time() * 1000)
+            return current_time >= self.token_expiry
 
     def refresh_token(self) -> None:
         """
-        Refresh authentication token.
+        Refresh authentication token (thread-safe).
 
         Kalshi tokens expire after 30 minutes. This method will:
         1. Generate a new signature
         2. Request a new token from Kalshi
         3. Cache the token for future requests
+
+        Educational Note:
+            This method uses a lock to ensure only one thread refreshes
+            the token at a time. This prevents the "thundering herd" problem
+            where multiple threads detect an expired token and all try to
+            refresh simultaneously.
 
         Note:
             Token management is planned for Phase 1.5.
@@ -293,5 +356,10 @@ class KalshiAuth:
 
         Related: REQ-API-002 (Token refresh every 30 minutes)
         """
-        # Token refresh implementation deferred to Phase 1.5
-        # For Phase 1, we generate fresh signatures for each request
+        with self._token_lock:
+            # Double-check pattern: token might have been refreshed by another thread
+            if not self.is_token_expired():
+                return
+
+            # Token refresh implementation deferred to Phase 1.5
+            # For Phase 1, we generate fresh signatures for each request

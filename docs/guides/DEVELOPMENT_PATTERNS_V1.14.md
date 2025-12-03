@@ -1,13 +1,28 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.13
+**Version:** 1.14
 **Created:** 2025-11-13
-**Last Updated:** 2025-11-29
+**Last Updated:** 2025-12-02
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.14:**
+- **Added Pattern 26: Resource Cleanup for Testability (close() Methods) (ALWAYS)**
+- Mandates explicit close() methods on all classes managing external resources (HTTP sessions, database connections)
+- Enables proper resource cleanup in tests and production, prevents leaks, allows mocking session lifecycle
+- Documents classes requiring close(): KalshiClient, ESPNClient, KalshiWebSocketHandler, KalshiMarketPoller, Database Pool
+- Includes context manager pattern for automatic cleanup (__enter__/__exit__)
+- **Added Pattern 27: Dependency Injection for Testability (ALWAYS for External Resources)**
+- Mandates optional constructor parameters for external dependencies to enable clean testing without patches
+- Shows migration from complex patching (3 @patch decorators) to clean DI (inject mocks directly)
+- DI patterns for: key loaders (cryptographic), HTTP sessions, auth handlers, rate limiters
+- Test helper pattern: _create_mock_client() for consistent mock creation
+- "When to Use DI" decision table for 8 dependency types
+- Real-world trigger: Phase 1.9 Test Infrastructure discovered test using patch without importing it
+- Cross-references: Pattern 20, Pattern 13, Phase 1.9 Part B
+- Total addition: ~350 lines documenting resource cleanup and DI patterns
 **Changes in V1.13:**
 - **Added Pattern 25: ANSI Escape Code Handling for Cross-Platform CLI Testing (ALWAYS)**
 - Documents critical pattern from PR #159 CI fixes: Rich library outputs ANSI codes that break string matching on Windows
@@ -6592,6 +6607,333 @@ def strip_ansi(text: str) -> str:
 
 ---
 
+## Pattern 26: Resource Cleanup for Testability (close() Methods) (ALWAYS)
+
+### The Rule
+
+**ALWAYS add explicit `close()` methods to classes that manage external resources (HTTP sessions, database connections, file handles).**
+
+This enables proper resource cleanup in tests and production code, prevents resource leaks, and allows mocking session lifecycle.
+
+### The Problem
+
+Without explicit cleanup methods:
+1. Resources leak in long-running processes
+2. Tests cannot verify cleanup behavior
+3. Mock sessions cannot be properly closed
+4. Connection pool exhaustion in high-throughput scenarios
+
+```python
+# ❌ WRONG: No cleanup method
+class KalshiClient:
+    def __init__(self):
+        self.session = requests.Session()
+        # No way to close the session!
+
+# Tests have no way to verify cleanup
+def test_client():
+    client = KalshiClient()
+    client.get_markets()
+    # Session left open forever
+```
+
+### The Solution
+
+Add explicit `close()` methods to all resource-managing classes:
+
+```python
+# ✅ CORRECT: Explicit cleanup
+class KalshiClient:
+    def __init__(self, session: requests.Session | None = None):
+        self.session = session if session is not None else requests.Session()
+        self._owns_session = session is None  # Track if we created it
+
+    def close(self) -> None:
+        """Close HTTP session and release resources.
+
+        Educational Note:
+            Explicit cleanup is crucial for:
+            1. Testing: Verify cleanup behavior with mocks
+            2. Resource management: Prevent connection leaks
+            3. Graceful shutdown: Clean exit in long-running processes
+        """
+        if hasattr(self, "session") and self.session is not None:
+            self.session.close()
+```
+
+### Classes Requiring close() Methods
+
+| Class | Resource Type | close() Method |
+|-------|--------------|----------------|
+| `KalshiClient` | HTTP Session (requests.Session) | `self.session.close()` |
+| `ESPNClient` | HTTP Session | `self.session.close()` |
+| `KalshiWebSocketHandler` | WebSocket Connection | `self.stop()` (alias for close) |
+| `KalshiMarketPoller` | Background Thread + Session | `self.stop()` |
+| Database Connection Pool | PostgreSQL Connections | `self.engine.dispose()` |
+
+### Code Examples
+
+**ESPNClient with close():**
+```python
+class ESPNClient:
+    def __init__(self, rate_limit: int = 500, timeout: int = 10, max_retries: int = 3):
+        self.session = requests.Session()
+        self._rate_limiter = RateLimiter(rate_limit)
+        # ... other init
+
+    def close(self) -> None:
+        """Close HTTP session and release resources."""
+        if hasattr(self, "session") and self.session is not None:
+            self.session.close()
+```
+
+**Test using close():**
+```python
+def test_client_cleanup():
+    client = ESPNClient()
+    try:
+        # Use client...
+        client.get_scoreboard("nfl")
+    finally:
+        client.close()  # Explicit cleanup
+```
+
+**Or use context manager pattern:**
+```python
+# ✅ BEST: Context manager for automatic cleanup
+class ESPNClient:
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+# Usage:
+with ESPNClient() as client:
+    client.get_scoreboard("nfl")
+# Automatically closed
+```
+
+### Cross-References
+
+**Related Patterns:**
+- **Pattern 27 (Dependency Injection):** close() works with injected sessions
+- **Pattern 20 (Resource Management):** General resource management principles
+
+**Related Files:**
+- `src/precog/api_connectors/kalshi_client.py:366-376` - KalshiClient.close()
+- `src/precog/api_connectors/espn_client.py:119-126` - ESPNClient.close()
+
+**Related PRs:**
+- **Phase 1.9 Part B:** Added close() methods to all API clients
+
+**Real-World Trigger:**
+- Session 2025-12-02: Phase 1.9 Test Infrastructure discovered stress tests couldn't verify cleanup
+- Tests mocking sessions had no way to verify session.close() was called
+
+---
+
+## Pattern 27: Dependency Injection for Testability (ALWAYS for External Resources)
+
+### The Rule
+
+**ALWAYS use optional constructor parameters for external dependencies (HTTP sessions, auth handlers, rate limiters) to enable clean testing without patches.**
+
+Dependency Injection (DI) makes classes testable by allowing mock dependencies to be injected directly, rather than using complex `@patch` decorators.
+
+### The Problem
+
+Without DI, tests require complex patching:
+
+```python
+# ❌ WRONG: Hard to test - requires patching internal modules
+class KalshiClient:
+    def __init__(self):
+        self.auth = KalshiAuth(
+            api_key=os.getenv("KALSHI_API_KEY"),
+            private_key_path=os.getenv("KALSHI_KEY_PATH"),
+        )
+        self.session = requests.Session()
+        self.rate_limiter = RateLimiter()
+
+# Tests become fragile:
+@patch.dict("os.environ", {"KALSHI_API_KEY": "test"})
+@patch("precog.api_connectors.kalshi_auth.load_private_key")
+@patch("precog.api_connectors.kalshi_client.RateLimiter")
+def test_client(mock_limiter, mock_load, mock_env):
+    mock_load.return_value = MagicMock()
+    client = KalshiClient()
+    # 3 levels of patching required!
+```
+
+### The Solution
+
+Accept optional dependencies in constructor:
+
+```python
+# ✅ CORRECT: Dependency Injection pattern
+class KalshiClient:
+    def __init__(
+        self,
+        environment: str = "demo",
+        auth: KalshiAuth | None = None,
+        session: requests.Session | None = None,
+        rate_limiter: RateLimiter | None = None,
+    ):
+        """Initialize client with optional dependency injection.
+
+        Args:
+            environment: API environment ("demo" or "prod")
+            auth: Optional KalshiAuth instance. If None, created from env vars.
+            session: Optional HTTP session. If None, new Session created.
+            rate_limiter: Optional rate limiter. If None, default created.
+
+        Educational Note:
+            Dependency Injection makes this class testable without patches:
+            - Production: Pass None for all, defaults created from environment
+            - Testing: Inject mocks directly via constructor
+        """
+        # Use injected dependencies or create defaults
+        self.auth = auth if auth is not None else self._create_auth(environment)
+        self.session = session if session is not None else requests.Session()
+        self.rate_limiter = rate_limiter if rate_limiter is not None else RateLimiter()
+
+# Clean tests - no patching!
+def test_client():
+    mock_auth = MagicMock()
+    mock_session = MagicMock()
+    mock_limiter = MagicMock()
+
+    client = KalshiClient(
+        environment="demo",
+        auth=mock_auth,
+        session=mock_session,
+        rate_limiter=mock_limiter,
+    )
+    # Test with full control over dependencies!
+```
+
+### DI Patterns for Common Dependencies
+
+**1. Key Loader (for cryptographic operations):**
+```python
+class KalshiAuth:
+    def __init__(
+        self,
+        api_key: str,
+        private_key_path: str,
+        key_loader: Callable[[str], RSAPrivateKey] | None = None,
+    ):
+        """Accept optional key loader for testing.
+
+        Production: key_loader=None -> uses load_private_key()
+        Testing: key_loader=lambda p: mock_key -> no file access needed
+        """
+        _loader = key_loader if key_loader is not None else load_private_key
+        self.private_key = _loader(private_key_path)
+```
+
+**2. HTTP Session (for API clients):**
+```python
+class ESPNClient:
+    def __init__(
+        self,
+        session: requests.Session | None = None,
+        rate_limiter: RateLimiter | None = None,
+    ):
+        self.session = session if session is not None else requests.Session()
+        self._rate_limiter = rate_limiter if rate_limiter is not None else RateLimiter()
+```
+
+### Test Helper Pattern
+
+Create helper methods in test classes for consistent mock creation:
+
+```python
+class TestKalshiClientStress:
+    def _create_mock_client(self):
+        """Create KalshiClient with mocked dependencies using DI.
+
+        Educational Note:
+            This helper demonstrates the clean DI approach.
+            No patches needed - just inject mocks directly!
+        """
+        mock_auth = MagicMock()
+        mock_auth.get_headers.return_value = {
+            "Authorization": "Bearer mock-token",
+            "Content-Type": "application/json",
+        }
+
+        mock_session = MagicMock()
+        mock_limiter = MagicMock()
+
+        return KalshiClient(
+            environment="demo",
+            auth=mock_auth,
+            session=mock_session,
+            rate_limiter=mock_limiter,
+        )
+
+    def test_concurrent_requests(self):
+        client = self._create_mock_client()
+        # Test with full control!
+```
+
+### Migration: Patching to DI
+
+**Before (complex patching):**
+```python
+with patch.dict("os.environ", env_vars):
+    with patch("module.load_private_key") as mock_load:
+        mock_load.return_value = mock_key
+        client = KalshiClient(environment="demo")
+```
+
+**After (clean DI):**
+```python
+client = KalshiClient(
+    environment="demo",
+    auth=mock_auth,
+    session=mock_session,
+    rate_limiter=mock_limiter,
+)
+```
+
+### When to Use DI
+
+| Dependency Type | Use DI? | Example |
+|-----------------|---------|---------|
+| HTTP sessions | ✅ YES | `requests.Session` |
+| Database connections | ✅ YES | `sqlalchemy.Engine` |
+| Auth handlers | ✅ YES | `KalshiAuth` |
+| Rate limiters | ✅ YES | `RateLimiter` |
+| File loaders | ✅ YES | `load_private_key` callable |
+| Configuration | ✅ YES | `ConfigLoader` |
+| Pure functions | ❌ No | Math calculations |
+| Constants | ❌ No | `BASE_URL` strings |
+
+### Cross-References
+
+**Related Patterns:**
+- **Pattern 26 (Resource Cleanup):** DI-injected resources still need cleanup
+- **Pattern 13 (Test Coverage Quality):** DI enables proper integration testing
+
+**Related Files:**
+- `src/precog/api_connectors/kalshi_client.py:75-115` - KalshiClient DI constructor
+- `src/precog/api_connectors/kalshi_auth.py:205-260` - KalshiAuth with key_loader DI
+- `tests/stress/api_connectors/test_kalshi_client_stress.py` - DI test helper example
+
+**Related PRs:**
+- **Phase 1.9 Part B:** Added DI to KalshiClient, KalshiAuth, ESPNClient
+
+**Real-World Trigger:**
+- Session 2025-12-02: Phase 1.9 discovered tests using complex patching
+- Test `test_concurrent_session_initialization` failed with "name 'patch' is not defined"
+- Root cause: Test still used old patching approach, hadn't imported `patch`
+- Solution: Convert to DI pattern - no patches needed, cleaner tests
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -6621,6 +6963,8 @@ def strip_ansi(text: str) -> str:
 | **23. Validation Failure Handling** | Manual (4-step protocol) | `git push` (pre-push hooks), `./scripts/validate_all.sh` | Pattern 21, Pattern 18, Pattern 9, Issue #127 |
 | **24. No New Deprecated Code** | Code review | `git grep "DEPRECATED" -- '*.py'` | Pattern 6, Pattern 18 |
 | **25. ANSI Escape Code Handling** | Code review + CI Windows matrix | `strip_ansi(result.stdout)` | Pattern 5, PR #159 |
+| **26. Resource Cleanup** | Code review | `git grep "def close" -- '*.py'` | Pattern 20, Phase 1.9 |
+| **27. Dependency Injection** | Code review | `git grep "= None" -- '*.py'` (constructor params) | Pattern 13, Phase 1.9 |
 
 ---
 
