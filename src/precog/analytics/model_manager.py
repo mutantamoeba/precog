@@ -7,7 +7,7 @@ Educational Note:
     Models use IMMUTABLE versions for A/B testing and precise trade attribution.
     When you need to change a model's parameters:
     - Don't modify existing config (IMMUTABLE!)
-    - Create new version: v1.0 → v1.1 (calibration) or v1.0 → v2.0 (algorithm change)
+    - Create new version: v1.0 -> v1.1 (calibration) or v1.0 -> v2.0 (algorithm change)
     - This ensures every trade knows EXACTLY which model was used
 
 References:
@@ -51,7 +51,7 @@ class InvalidStatusTransitionError(Exception):
     """Raised when attempting invalid status transition.
 
     Educational Note:
-        Models follow a lifecycle: draft → testing → active → deprecated
+        Models follow a lifecycle: draft -> testing -> active -> deprecated
         Not all transitions are valid (e.g., can't go from deprecated back to active)
     """
 
@@ -131,9 +131,9 @@ class ModelManager:
 
         Educational Note:
             Config is IMMUTABLE after creation. To change model parameters:
-            1. Create NEW version (v1.0 → v1.1 or v2.0)
-            2. Update status on old version (active → deprecated)
-            3. Update status on new version (draft → testing → active)
+            1. Create NEW version (v1.0 -> v1.1 or v2.0)
+            2. Update status on old version (active -> deprecated)
+            3. Update status on new version (draft -> testing -> active)
 
             This ensures:
             - Every prediction links to exact model config used
@@ -167,7 +167,7 @@ class ModelManager:
         if not config:
             raise ValueError("Model config cannot be empty")
 
-        # Prepare config for JSONB storage (Decimal → string)
+        # Prepare config for JSONB storage (Decimal -> string)
         config_jsonb = self._prepare_config_for_db(config)
 
         conn = get_connection()
@@ -454,18 +454,18 @@ class ModelManager:
 
         Educational Note:
             Status is MUTABLE (unlike config). Valid transitions:
-            - draft → testing (start backtesting)
-            - testing → active (promote to production)
-            - testing → draft (revert to development)
-            - active → deprecated (retire old version)
-            - deprecated → [none] (terminal state)
+            - draft -> testing (start backtesting)
+            - testing -> active (promote to production)
+            - testing -> draft (revert to development)
+            - active -> deprecated (retire old version)
+            - deprecated -> [none] (terminal state)
 
             Config remains IMMUTABLE. To change model parameters,
             create new version instead.
 
         Example:
-            >>> model = manager.update_status(1, 'testing')  # draft → testing
-            >>> model = manager.update_status(1, 'active')   # testing → active
+            >>> model = manager.update_status(1, 'testing')  # draft -> testing
+            >>> model = manager.update_status(1, 'active')   # testing -> active
         """
         conn = get_connection()
         cursor = conn.cursor()
@@ -499,7 +499,7 @@ class ModelManager:
             row = cursor.fetchone()
             conn.commit()
 
-            logger.info(f"Updated model {model_id} status: {current_status} → {new_status}")
+            logger.info(f"Updated model {model_id} status: {current_status} -> {new_status}")
 
             return self._row_to_dict(cursor, row)
 
@@ -619,7 +619,7 @@ class ModelManager:
             release_connection(conn)
 
     def _prepare_config_for_db(self, config: dict[str, Any]) -> str:
-        """Convert config dict to JSONB-safe format (Decimal → string).
+        """Convert config dict to JSONB-safe format (Decimal -> string).
 
         Args:
             config: Model configuration with Decimal values
@@ -629,8 +629,8 @@ class ModelManager:
 
         Educational Note:
             PostgreSQL JSONB doesn't natively support Python Decimal.
-            We store as string: Decimal("32.0") → "32.0" in database
-            Then reverse on retrieval: "32.0" → Decimal("32.0")
+            We store as string: Decimal("32.0") -> "32.0" in database
+            Then reverse on retrieval: "32.0" -> Decimal("32.0")
 
             Pattern 1 compliance: Application ALWAYS uses Decimal, never float
 
@@ -666,7 +666,7 @@ class ModelManager:
             Dict mapping column names to values
 
         Educational Note:
-            Automatically converts config from JSONB string → Decimal
+            Automatically converts config from JSONB string -> Decimal
             using _parse_config_from_db(). Application always sees Decimal,
             never float (Pattern 1 compliance).
         """
@@ -680,7 +680,7 @@ class ModelManager:
         return result
 
     def _parse_config_from_db(self, config: dict[str, Any]) -> dict[str, Any]:
-        """Convert config from database format (string → Decimal).
+        """Convert config from database format (string -> Decimal).
 
         Args:
             config: Config dict from database (strings for numeric values)
@@ -689,8 +689,8 @@ class ModelManager:
             Config dict with Decimal values
 
         Educational Note:
-            We store Decimals as strings in JSONB: Decimal("32.0") → "32.0"
-            This method reverses that: "32.0" → Decimal("32.0")
+            We store Decimals as strings in JSONB: Decimal("32.0") -> "32.0"
+            This method reverses that: "32.0" -> Decimal("32.0")
             Pattern 1 compliance: Application always uses Decimal, never float.
         """
 
@@ -721,14 +721,14 @@ class ModelManager:
 
         Educational Note:
             Models follow a lifecycle:
-            - draft → testing (start backtesting)
-            - testing → active (promote to production) OR testing → draft (revert)
-            - active → deprecated (retire)
-            - deprecated → [none] (terminal state, no way back)
+            - draft -> testing (start backtesting)
+            - testing -> active (promote to production) OR testing -> draft (revert)
+            - active -> deprecated (retire)
+            - deprecated -> [none] (terminal state, no way back)
 
             Invalid transitions:
-            - deprecated → active (can't resurrect deprecated models)
-            - active → testing (can't go backwards)
+            - deprecated -> active (can't resurrect deprecated models)
+            - active -> testing (can't go backwards)
         """
         # Define valid transitions
         valid_transitions = {
@@ -740,6 +740,6 @@ class ModelManager:
 
         if new not in valid_transitions.get(current, []):
             raise InvalidStatusTransitionError(
-                f"Invalid transition: {current} → {new}. "
+                f"Invalid transition: {current} -> {new}. "
                 f"Valid transitions from {current}: {valid_transitions.get(current, [])}"
             )

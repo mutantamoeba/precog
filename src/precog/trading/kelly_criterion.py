@@ -7,8 +7,8 @@ based on the Kelly Criterion.
 Educational Note:
     The Kelly Criterion calculates the optimal bet size to maximize
     long-term geometric growth rate. It balances risk and reward:
-    - Too small bets → suboptimal growth
-    - Too large bets → increased ruin probability
+    - Too small bets -> suboptimal growth
+    - Too large bets -> increased ruin probability
 
     In practice, we use "fractional Kelly" (e.g., 0.25 = quarter Kelly)
     to reduce variance while maintaining positive expected growth.
@@ -121,8 +121,8 @@ def calculate_kelly_size(
         This function has 11 property-based tests validating:
         1. Position never exceeds bankroll (safety invariant)
         2. Position always non-negative
-        3. Zero edge → zero position
-        4. Negative edge → zero position (CRITICAL)
+        3. Zero edge -> zero position
+        4. Negative edge -> zero position (CRITICAL)
         5. Kelly fraction reduces position proportionally
         6. Position scales linearly with bankroll
         7. Position increases monotonically with edge
@@ -213,8 +213,8 @@ def calculate_edge(
         **Understanding Edge:**
 
         Edge represents the expected profit per dollar bet:
-        - edge = 0.05 → Expect to make $0.05 per $1 bet
-        - edge = -0.10 → Expect to lose $0.10 per $1 bet
+        - edge = 0.05 -> Expect to make $0.05 per $1 bet
+        - edge = -0.10 -> Expect to lose $0.10 per $1 bet
 
         **Example:**
         - True probability: 60%

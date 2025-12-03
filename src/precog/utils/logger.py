@@ -79,7 +79,7 @@ Example - Avoid logging in hot loops:
 Decimal Precision in Logs:
 --------------------------
 Custom decimal_serializer preserves financial precision in JSON:
-- Decimal("0.5200") → "0.5200" (NOT 0.52 or 0.5199999)
+- Decimal("0.5200") -> "0.5200" (NOT 0.52 or 0.5199999)
 - Critical for price reconstruction from logs
 - Enables exact trade replication for backtesting
 
@@ -121,9 +121,9 @@ This structured logging enables future integrations:
 Credential Masking (REQ-SEC-009):
 ---------------------------------
 This module automatically masks sensitive data in logs:
-- API keys, passwords, tokens → masked as "abc***xyz"
-- Connection strings → postgres://user:****@host:5432/db
-- Error messages → credentials in exception text sanitized
+- API keys, passwords, tokens -> masked as "abc***xyz"
+- Connection strings -> postgres://user:****@host:5432/db
+- Error messages -> credentials in exception text sanitized
 
 Sensitive field names detected: api_key, api_secret, password, token,
 jwt_token, access_token, refresh_token, secret, private_key, auth_token,
@@ -276,8 +276,8 @@ def _mask_value_recursive(key: str, value: Any) -> Any:
 
     Educational Note:
         Handles nested structures like:
-        - headers={"Authorization": "Basic abc123"}  → {"Authorization": "Basic ***"}
-        - errors=[{"password": "secret"}]  → [{"password": "***"}]
+        - headers={"Authorization": "Basic abc123"}  -> {"Authorization": "Basic ***"}
+        - errors=[{"password": "secret"}]  -> [{"password": "***"}]
     """
     if value is None:
         return value
@@ -349,9 +349,9 @@ def mask_sensitive_data(
     Educational Note:
         Handles complex nested structures:
         - logger.debug("api_request", headers={"Authorization": "Bearer token"})
-          → Headers dict is recursively scanned, Authorization value masked
+          -> Headers dict is recursively scanned, Authorization value masked
         - logger.error("db_error", error="postgres://user:pass@host/db")
-          → Connection string detected and password masked
+          -> Connection string detected and password masked
     """
     for key, value in list(event_dict.items()):
         event_dict[key] = _mask_value_recursive(key, value)

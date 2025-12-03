@@ -7,7 +7,7 @@ Educational Note:
     Strategies use IMMUTABLE versions for A/B testing and precise trade attribution.
     When you need to change a strategy's parameters:
     - Don't modify existing config (IMMUTABLE!)
-    - Create new version: v1.0 → v1.1 (bug fix) or v1.0 → v2.0 (major change)
+    - Create new version: v1.0 -> v1.1 (bug fix) or v1.0 -> v2.0 (major change)
     - This ensures every trade knows EXACTLY which config was used
 
 References:
@@ -52,13 +52,13 @@ class InvalidStatusTransitionError(Exception):
     """Raised when attempting invalid status transition.
 
     Valid transitions:
-        - draft → testing → active
-        - active → inactive → deprecated
-        - testing → draft (revert to draft)
+        - draft -> testing -> active
+        - active -> inactive -> deprecated
+        - testing -> draft (revert to draft)
 
     Invalid transitions:
-        - deprecated → active (can't reactivate deprecated)
-        - active → testing (can't go backwards)
+        - deprecated -> active (can't reactivate deprecated)
+        - active -> testing (can't go backwards)
     """
 
 
@@ -123,7 +123,7 @@ class StrategyManager:
         - Pros: Type safety, IDE autocomplete, relationship management
         - Cons: Additional abstraction layer, overhead for simple CRUD
         - Decision: Use raw SQL for Phase 1.5, evaluate ORM for Phase 2+
-          when we have complex relationships (strategies → trades → positions)
+          when we have complex relationships (strategies -> trades -> positions)
 
     References:
         - docs/guides/VERSIONING_GUIDE_V1.0.md - Complete versioning patterns
@@ -191,7 +191,7 @@ class StrategyManager:
         if not config:
             raise ValueError("Strategy config cannot be empty")
 
-        # Convert config to JSONB (with Decimal → string conversion)
+        # Convert config to JSONB (with Decimal -> string conversion)
         config_jsonb = self._prepare_config_for_db(config)
 
         # Insert strategy
@@ -459,13 +459,13 @@ class StrategyManager:
 
         Educational Note:
             Status is MUTABLE (config is not!). Common workflows:
-            - Development: draft → testing → active
-            - Retirement: active → inactive → deprecated
-            - Revert: testing → draft
+            - Development: draft -> testing -> active
+            - Retirement: active -> inactive -> deprecated
+            - Revert: testing -> draft
 
             Invalid transitions that raise errors:
-            - deprecated → active (can't reactivate)
-            - active → testing (can't go backwards)
+            - deprecated -> active (can't reactivate)
+            - active -> testing (can't go backwards)
 
         References:
             - REQ-VER-004: Version Lifecycle Management
@@ -501,7 +501,7 @@ class StrategyManager:
             row = cursor.fetchone()
             conn.commit()
 
-            logger.info(f"Updated strategy {strategy_id} status: {current_status} → {new_status}")
+            logger.info(f"Updated strategy {strategy_id} status: {current_status} -> {new_status}")
 
             return self._row_to_dict(cursor, row)
 
@@ -619,7 +619,7 @@ class StrategyManager:
     # Private helper methods
 
     def _prepare_config_for_db(self, config: dict[str, Any]) -> str:
-        """Convert config dict to JSONB string (Decimal → string conversion).
+        """Convert config dict to JSONB string (Decimal -> string conversion).
 
         Args:
             config: Strategy config dict
@@ -629,7 +629,7 @@ class StrategyManager:
 
         Educational Note:
             PostgreSQL JSONB doesn't support Python Decimal type natively.
-            We convert Decimal → string for storage, string → Decimal on retrieval.
+            We convert Decimal -> string for storage, string -> Decimal on retrieval.
 
             Example:
                 Input:  {"min_edge": Decimal("0.05")}
@@ -690,8 +690,8 @@ class StrategyManager:
             Config dict with Decimal values
 
         Educational Note:
-            We store Decimals as strings in JSONB: Decimal("0.05") → "0.05"
-            This method reverses that: "0.05" → Decimal("0.05")
+            We store Decimals as strings in JSONB: Decimal("0.05") -> "0.05"
+            This method reverses that: "0.05" -> Decimal("0.05")
             Pattern 1 compliance: Application always uses Decimal, never float.
         """
 
@@ -722,13 +722,13 @@ class StrategyManager:
 
         Educational Note:
             Valid transitions form a state machine:
-            - draft → testing → active (forward progression)
-            - active → inactive → deprecated (retirement)
-            - testing → draft (revert to development)
+            - draft -> testing -> active (forward progression)
+            - active -> inactive -> deprecated (retirement)
+            - testing -> draft (revert to development)
 
             Invalid transitions:
-            - deprecated → * (deprecated is terminal)
-            - active → testing (can't go backwards)
+            - deprecated -> * (deprecated is terminal)
+            - active -> testing (can't go backwards)
         """
         # Define valid transitions
         valid_transitions = {
@@ -741,6 +741,6 @@ class StrategyManager:
 
         if new not in valid_transitions.get(current, []):
             raise InvalidStatusTransitionError(
-                f"Invalid transition: {current} → {new}. "
+                f"Invalid transition: {current} -> {new}. "
                 f"Valid transitions from {current}: {valid_transitions.get(current, [])}"
             )

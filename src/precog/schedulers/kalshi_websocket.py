@@ -157,8 +157,8 @@ class KalshiWebSocketHandler:
 
     Educational Notes:
         WebSocket vs REST:
-        - REST (polling): Request → Response → Wait → Repeat
-        - WebSocket: Connect once → Server pushes updates continuously
+        - REST (polling): Request -> Response -> Wait -> Repeat
+        - WebSocket: Connect once -> Server pushes updates continuously
 
         This is like the difference between:
         - Checking your mailbox every hour (polling)
@@ -401,8 +401,8 @@ class KalshiWebSocketHandler:
         Initialize authentication from environment variables.
 
         Uses DATABASE_ENVIRONMENT_STRATEGY naming convention:
-        - prod → PROD_KALSHI_API_KEY / PROD_KALSHI_PRIVATE_KEY_PATH
-        - demo → {PRECOG_ENV}_KALSHI_* (DEV, TEST, or STAGING based on PRECOG_ENV)
+        - prod -> PROD_KALSHI_API_KEY / PROD_KALSHI_PRIVATE_KEY_PATH
+        - demo -> {PRECOG_ENV}_KALSHI_* (DEV, TEST, or STAGING based on PRECOG_ENV)
 
         Raises:
             ValueError: If required environment variables not set.

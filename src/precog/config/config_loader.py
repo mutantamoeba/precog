@@ -61,14 +61,14 @@ See: docs/utility/SECURITY_REVIEW_CHECKLIST.md for pre-commit security scan
 
 Decimal Precision (CRITICAL for Money):
 ---------------------------------------
-All monetary values automatically converted from float → Decimal:
+All monetary values automatically converted from float -> Decimal:
 - Prevents floating-point errors (0.1 + 0.2 ≠ 0.3 in float!)
 - Kalshi uses sub-penny pricing ($0.4975) - MUST be exact
 - Financial calculations require precision to the penny
 
 Auto-converted keys (see _convert_to_decimal):
-- *_dollars, *_price, *_spread → Decimal
-- probability, threshold, *_percent → Decimal
+- *_dollars, *_price, *_spread -> Decimal
+- probability, threshold, *_percent -> Decimal
 - See full list in _convert_to_decimal() method (200+ lines)
 
 Caching Strategy:
@@ -716,13 +716,13 @@ class ConfigLoader:
             - distance: "0.05" (trail 5¢ below highest price)
 
             Price movement:
-            1. $0.52 → $0.67 (+15¢) → Trailing stop activates at $0.62
-            2. $0.67 → $0.75 (+23¢) → Trailing stop moves to $0.70
-            3. $0.75 → $0.72 (-3¢) → Triggered! Sell at $0.72 (20¢ profit locked in)
+            1. $0.52 -> $0.67 (+15¢) -> Trailing stop activates at $0.62
+            2. $0.67 -> $0.75 (+23¢) -> Trailing stop moves to $0.70
+            3. $0.75 -> $0.72 (-3¢) -> Triggered! Sell at $0.72 (20¢ profit locked in)
 
             Configuration layers:
-            1. Default: position_management.yaml → trailing_stops
-            2. Strategy-specific: position_management.yaml → trailing_stops → strategies → {strategy_name}
+            1. Default: position_management.yaml -> trailing_stops
+            2. Strategy-specific: position_management.yaml -> trailing_stops -> strategies -> {strategy_name}
 
         References:
             - REQ-RISK-003: Trailing Stop Loss

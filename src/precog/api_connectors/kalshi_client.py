@@ -120,11 +120,11 @@ class KalshiClient:
         # See: docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
         #
         # Credential prefix mapping:
-        # - "prod" environment → PROD_KALSHI_* (production Kalshi API)
-        # - "demo" environment → {PRECOG_ENV}_KALSHI_* (demo Kalshi API)
-        #   - PRECOG_ENV=dev → DEV_KALSHI_*
-        #   - PRECOG_ENV=test → TEST_KALSHI_*
-        #   - PRECOG_ENV=staging → STAGING_KALSHI_*
+        # - "prod" environment -> PROD_KALSHI_* (production Kalshi API)
+        # - "demo" environment -> {PRECOG_ENV}_KALSHI_* (demo Kalshi API)
+        #   - PRECOG_ENV=dev -> DEV_KALSHI_*
+        #   - PRECOG_ENV=test -> TEST_KALSHI_*
+        #   - PRECOG_ENV=staging -> STAGING_KALSHI_*
         if environment == "prod":
             cred_prefix = "PROD"
         else:
