@@ -19,6 +19,7 @@ Reference:
 
 import os
 import subprocess
+import sys
 import uuid
 from collections.abc import Generator
 from pathlib import Path
@@ -545,6 +546,10 @@ class TestApplyMigrations:
             except OSError:
                 pass
 
+    @pytest.mark.skipif(
+        sys.platform == "win32",
+        reason="Symlink-based path traversal test not applicable on Windows",
+    )
     def test_apply_migrations_path_traversal(self) -> None:
         """Test migration application rejects path traversal attacks.
 
@@ -559,8 +564,7 @@ class TestApplyMigrations:
         Coverage:
             This test covers lines 210-211 (path traversal security check).
         """
-        # Create migration directory with malicious symlink (if platform supports it)
-        import sys
+        # Create migration directory with malicious symlink
 
         project_root = Path.cwd()
         temp_dir = project_root / "tests" / ".tmp"
@@ -574,33 +578,26 @@ class TestApplyMigrations:
             # Create a normal migration file
             (migration_dir / "001_normal.sql").write_text("CREATE TABLE test (id INT);")
 
-            # Try to create a symlink to a file outside migration directory
-            # This simulates a path traversal attack
-            if sys.platform != "win32":  # Symlinks work differently on Windows
-                try:
-                    # Create a symlink pointing outside migration directory
-                    outside_file = temp_dir / "outside.sql"
-                    outside_file.write_text("MALICIOUS SQL")
-                    symlink_path = migration_dir / "002_malicious.sql"
-                    symlink_path.symlink_to(outside_file)
+            # Create a symlink pointing outside migration directory
+            # This simulates a path traversal attack (CWE-22)
+            try:
+                outside_file = temp_dir / "outside.sql"
+                outside_file.write_text("MALICIOUS SQL")
+                symlink_path = migration_dir / "002_malicious.sql"
+                symlink_path.symlink_to(outside_file)
 
-                    applied, failed = apply_migrations(
-                        "postgresql://localhost/test_db", str(migration_dir)
-                    )
+                applied, failed = apply_migrations(
+                    "postgresql://localhost/test_db", str(migration_dir)
+                )
 
-                    # The symlink should be detected and failed
-                    # (or the security check passes and we get file not found)
-                    # Either way, we shouldn't apply malicious migration
-                    assert "002_malicious.sql" in failed or applied < 2
+                # The symlink should be detected and failed
+                # (or the security check passes and we get file not found)
+                # Either way, we shouldn't apply malicious migration
+                assert "002_malicious.sql" in failed or applied < 2
 
-                except OSError:
-                    # Symlink creation failed (permissions issue)
-                    # Skip this test on this platform
-                    pytest.skip("Cannot create symlinks on this platform")
-            else:
-                # On Windows, just verify normal behavior
-                # (path traversal is harder to test without symlinks)
-                pytest.skip("Symlink-based path traversal test not applicable on Windows")
+            except OSError:
+                # Symlink creation failed (permissions issue)
+                pytest.skip("Cannot create symlinks on this platform - permission denied")
 
         finally:
             # Cleanup

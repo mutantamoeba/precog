@@ -30,6 +30,24 @@ from precog.api_connectors.kalshi_client import KalshiClient
 from precog.database.connection import get_connection
 from precog.utils.logger import setup_logging
 
+
+def _kalshi_credentials_available() -> bool:
+    """Check if Kalshi credentials are available for current environment.
+
+    Uses DATABASE_ENVIRONMENT_STRATEGY naming convention:
+    - PRECOG_ENV=test -> TEST_KALSHI_API_KEY / TEST_KALSHI_PRIVATE_KEY_PATH
+    - PRECOG_ENV=dev (default) -> DEV_KALSHI_API_KEY / DEV_KALSHI_PRIVATE_KEY_PATH
+    """
+    precog_env = os.getenv("PRECOG_ENV", "dev").upper()
+    valid_prefixes = {"DEV", "TEST", "STAGING"}
+    prefix = precog_env if precog_env in valid_prefixes else "DEV"
+
+    api_key = os.getenv(f"{prefix}_KALSHI_API_KEY")
+    key_path = os.getenv(f"{prefix}_KALSHI_PRIVATE_KEY_PATH")
+
+    return bool(api_key and key_path)
+
+
 # Mark tests that require credential masking feature (not yet implemented)
 credential_masking_not_implemented = pytest.mark.xfail(
     reason="Credential masking (REQ-SEC-009) not yet implemented - Phase 3+ feature",
@@ -263,7 +281,10 @@ def test_authentication_failed_masks_password_in_error(monkeypatch) -> None:
 # =============================================================================
 
 
-@pytest.mark.skip(reason="Requires Kalshi credentials setup - manual testing only")
+@pytest.mark.skipif(
+    not _kalshi_credentials_available(),
+    reason="Kalshi credentials not configured in .env (DEV_KALSHI_API_KEY/DEV_KALSHI_PRIVATE_KEY_PATH)",
+)
 def test_old_api_key_rejected_after_rotation(monkeypatch) -> None:
     """
     Verify old API keys are rejected after rotation.
@@ -335,9 +356,9 @@ def test_old_api_key_rejected_after_rotation(monkeypatch) -> None:
         with pytest.raises(requests.HTTPError) as exc_info:
             # This would use old key
             client = KalshiClient()
-            # Mock the authentication to bypass RSA signature generation
-            with patch.object(client, "_make_authenticated_request") as mock_auth_request:
-                mock_auth_request.side_effect = requests.HTTPError("401 Client Error: Unauthorized")
+            # Mock the request to simulate 401 response from old API key
+            with patch.object(client, "_make_request") as mock_make_request:
+                mock_make_request.side_effect = requests.HTTPError("401 Client Error: Unauthorized")
                 client.get_balance()
 
         # Verify error indicates unauthorized
