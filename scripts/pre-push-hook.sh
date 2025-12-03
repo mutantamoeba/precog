@@ -128,14 +128,14 @@ run_parallel_check() {
 # STEP 2: ALL 8 Test Types - Phase 1.9 MANDATORY (Issue #165)
 # ==============================================================================
 # Runs ALL 8 test types as required by Phase 1.9 and TESTING_STRATEGY V3.2:
-#   - unit: 409 tests
-#   - property: 101 tests
-#   - integration: 175 tests (needs DB)
-#   - e2e: 134 tests (may skip if no API credentials)
-#   - stress: 59 tests
-#   - chaos: 25 tests
-#   - security: 69 tests
-#   - performance: 8 tests
+#   - unit: 409 tests (parallel - no DB)
+#   - property: 101 tests (parallel - no DB)
+#   - integration: 175 tests (sequential - uses DB)
+#   - e2e: 134 tests (sequential - uses DB)
+#   - stress: 59 tests (sequential - uses DB)
+#   - chaos: 25 tests (sequential - uses DB)
+#   - security: 69 tests (sequential - uses DB)
+#   - performance: 8 tests (sequential - uses DB)
 #
 # REQUIREMENTS (per Issue #165):
 #   1. ALL tests must pass (no failures)
@@ -143,17 +143,35 @@ run_parallel_check() {
 #   3. NO quick fixes or tech debt
 #   4. Test isolation must be proper (transactions, cleanup fixtures)
 #
+# STRATEGY (matches CI configuration):
+#   - Unit/property tests run in PARALLEL (-n auto): Fast, all mocked, no DB conflicts
+#   - Database tests run SEQUENTIALLY (-p no:xdist): Reliable, avoids deadlocks
+#   - Total time: ~2 min (vs 5 min all-sequential, vs 47s all-parallel-with-errors)
+#
 # If tests fail due to database contamination, FIX THE ROOT CAUSE:
 #   - Add proper transaction-based isolation
 #   - Add cleanup fixtures
 #   - Fix missing foreign key dependencies
 #   - DO NOT reduce test scope
 {
-    run_parallel_check 2 "All 8 Test Types" \
-        python -m pytest tests/ -v --no-cov --tb=short
+    run_parallel_check 2 "All 8 Test Types" bash -c '
+        # Stage 1: Unit tests (parallel, no DB)
+        echo "=== Stage 1/3: Unit Tests (parallel) ==="
+        python -m pytest tests/unit/ -v --no-cov --tb=short -n auto || exit 1
+
+        # Stage 2: Non-DB property tests (parallel)
+        echo ""
+        echo "=== Stage 2/3: Property Tests - Non-DB (parallel) ==="
+        python -m pytest tests/property/api_connectors/ tests/property/test_config_validation_properties.py tests/property/test_edge_detection_properties.py tests/property/test_kelly_criterion_properties.py tests/property/test_strategy_versioning_properties.py tests/property/utils/ tests/property/schedulers/ -v --no-cov --tb=short -n auto --ignore=tests/property/database/ --ignore=tests/property/test_crud_operations_properties.py --ignore=tests/property/test_database_crud_properties.py || exit 1
+
+        # Stage 3: Database tests + DB property tests (sequential)
+        echo ""
+        echo "=== Stage 3/3: Database Tests + DB Property Tests (sequential) ==="
+        python -m pytest tests/property/database/ tests/property/test_crud_operations_properties.py tests/property/test_database_crud_properties.py tests/integration/ tests/e2e/ tests/security/ tests/stress/ tests/chaos/ tests/performance/ -v --no-cov --tb=short -p no:xdist || exit 1
+    '
 } &
 PIDS[2]=$!
-NAMES[2]="🧪 All 8 Test Types (1196 tests)"
+NAMES[2]="🧪 All 8 Test Types (1196 tests - hybrid parallel/sequential)"
 OUTPUTS[2]="$TEMP_DIR/step_2.txt"
 
 # ==============================================================================

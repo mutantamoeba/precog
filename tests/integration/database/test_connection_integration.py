@@ -20,20 +20,23 @@ from precog.database.connection import get_cursor
 class TestConnectionIntegration:
     """Integration tests for database connection with real PostgreSQL."""
 
-    def test_basic_connection(self, db_pool, clean_test_data):
+    def test_basic_connection(self, db_pool, db_cursor, clean_test_data):
         """
         INTEGRATION: Establish basic database connection.
 
         Verifies:
         - Connection to PostgreSQL works
         - Cursor can execute queries
+
+        Note: db_cursor fixture included for Pattern 13 compliance.
+        Test uses get_cursor() directly to test the connection module.
         """
         with get_cursor() as cur:
             cur.execute("SELECT 1 AS val")
             result = cur.fetchone()
             assert result["val"] == 1
 
-    def test_connection_with_commit(self, db_pool, clean_test_data):
+    def test_connection_with_commit(self, db_pool, db_cursor, clean_test_data):
         """
         INTEGRATION: Connection with transaction commit.
 
@@ -66,7 +69,7 @@ class TestConnectionIntegration:
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM venues WHERE espn_venue_id = 'INT-TEST-001'")
 
-    def test_connection_rollback_on_error(self, db_pool, clean_test_data):
+    def test_connection_rollback_on_error(self, db_pool, db_cursor, clean_test_data):
         """
         INTEGRATION: Connection rollback on error.
 
@@ -97,7 +100,7 @@ class TestConnectionIntegration:
             result = cur.fetchone()
             assert result is None, "Data should have been rolled back"
 
-    def test_multiple_cursors(self, db_pool, clean_test_data):
+    def test_multiple_cursors(self, db_pool, db_cursor, clean_test_data):
         """
         INTEGRATION: Multiple cursors work correctly.
 
@@ -116,7 +119,7 @@ class TestConnectionIntegration:
             assert result1["val"] == 1
             assert result2["val"] == 2
 
-    def test_connection_pool_reuse(self, db_pool, clean_test_data):
+    def test_connection_pool_reuse(self, db_pool, db_cursor, clean_test_data):
         """
         INTEGRATION: Connections are reused from pool.
 
