@@ -155,22 +155,18 @@ run_parallel_check() {
 #   - DO NOT reduce test scope
 {
     run_parallel_check 2 "All 8 Test Types" bash -c '
-        # Stage 1: Unit tests (parallel, no DB)
-        echo "=== Stage 1/3: Unit Tests (parallel) ==="
+        # Stage 1: Unit tests (parallel - no DB, no Hypothesis)
+        echo "=== Stage 1/2: Unit Tests (parallel) ==="
         python -m pytest tests/unit/ -v --no-cov --tb=short -n auto || exit 1
 
-        # Stage 2: Non-DB property tests (parallel)
-        # NOTE: test_strategy_versioning_properties.py uses db_pool fixture, so it goes in Stage 3
-        # NOTE: test_edge_detection_properties.py has slow Hypothesis input generation when parallel
+        # Stage 2: Property + Database tests (sequential)
+        # ALL property tests run sequentially because:
+        # 1. Hypothesis health checks are timing-sensitive
+        # 2. Parallel execution causes resource contention that triggers false "too_slow" failures
+        # 3. DB property tests also need sequential execution to avoid deadlocks
         echo ""
-        echo "=== Stage 2/3: Property Tests - Non-DB (parallel) ==="
-        python -m pytest tests/property/api_connectors/ tests/property/test_config_validation_properties.py tests/property/test_kelly_criterion_properties.py tests/property/utils/ tests/property/schedulers/ -v --no-cov --tb=short -n auto --ignore=tests/property/database/ --ignore=tests/property/test_crud_operations_properties.py --ignore=tests/property/test_database_crud_properties.py --ignore=tests/property/test_strategy_versioning_properties.py --ignore=tests/property/test_edge_detection_properties.py || exit 1
-
-        # Stage 3: Database tests + DB property tests + slow Hypothesis tests (sequential)
-        # Includes tests that use db_pool fixture or have timing-sensitive Hypothesis strategies
-        echo ""
-        echo "=== Stage 3/3: Database Tests + DB Property Tests (sequential) ==="
-        python -m pytest tests/property/database/ tests/property/test_crud_operations_properties.py tests/property/test_database_crud_properties.py tests/property/test_strategy_versioning_properties.py tests/property/test_edge_detection_properties.py tests/integration/ tests/e2e/ tests/security/ tests/stress/ tests/chaos/ tests/performance/ -v --no-cov --tb=short -p no:xdist || exit 1
+        echo "=== Stage 2/2: Property Tests + DB Tests (sequential) ==="
+        python -m pytest tests/property/ tests/integration/ tests/e2e/ tests/security/ tests/stress/ tests/chaos/ tests/performance/ -v --no-cov --tb=short -p no:xdist || exit 1
     '
 } &
 PIDS[2]=$!
