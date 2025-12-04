@@ -1,9 +1,18 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.24
+**Version:** 2.25
 **Last Updated:** December 3, 2025
 **Status:** ✅ Current
+**Changes in v2.25:**
+- **ALEMBIC MIGRATION FRAMEWORK (PHASE 1.9):** Added ADR-056 (Alembic Migration Framework for Database Schema Management)
+- Documents decision to adopt Alembic for database migrations, replacing 10 manual SQL/Python scripts
+- Provides version tracking, rollback support, CI integration with `alembic upgrade head`
+- Consolidated initial migration with 25 tables, SCD Type 2 support, proper FK constraints
+- **TESTCONTAINERS PLANNING (PHASE 1.9+):** Added ADR-057 (Testcontainers for Database Test Isolation)
+- Documents planned solution for stress test FK constraint failures using testcontainers-python
+- 4 stress tests currently marked xfail pending testcontainers implementation
+- Enables true database isolation with ephemeral PostgreSQL containers per test class
 **Changes in v2.24:**
 - **TIMESCALEDB DECISION (PHASE 6+):** Added ADR-098 (TimescaleDB Deferred to Phase 6+)
 - Documents decision to defer TimescaleDB extension adoption until Phase 6+
@@ -5343,6 +5352,187 @@ def execute_trade(ticker: str, side: str, quantity: int):
 4. Release tracking (tag errors by `precog@X.Y.Z` version)
 
 **Reference:** `api-integration/SENTRY_INTEGRATION_GUIDE_V1.0.md` (future), REQ-OBSERV-002, ADR-049 (Correlation IDs), ADR-051 (Log Masking), ADR-010 (Structured Logging)
+
+---
+
+## Decision #50/ADR-056: Alembic Migration Framework for Database Schema Management (Phase 1.9)
+
+**Date:** December 3, 2025
+**Phase:** 1.9 (Test Infrastructure)
+**Status:** 🟢 Accepted
+
+### Problem
+
+The project had accumulated **10 manual SQL/Python migration scripts** (001-010) that:
+
+1. **Lacked version tracking** - No way to know which migrations had been applied to a database
+2. **Had no rollback support** - Manual migrations are one-way; reverting required manual SQL
+3. **Used error-suppression patterns** - CI used `|| true` to ignore migration failures, masking real issues
+4. **Created schema drift** - Different environments could have different schema versions
+5. **Blocked CI** - PR #167 failed due to `game_states` FK constraint issues that were hidden by `|| true`
+
+**Root Cause:** The `game_states` table had Foreign Key constraints on `home_team_id` and `away_team_id` referencing `teams(team_id)`, but stress tests were inserting game_states without first creating the referenced teams.
+
+### Decision
+
+**Adopt Alembic as the database migration framework**, replacing the manual SQL/Python migration approach:
+
+1. **Single source of truth:** All schema changes managed through Alembic migrations
+2. **Version tracking:** Alembic tracks applied migrations in `alembic_version` table
+3. **Rollback support:** Each migration has `upgrade()` and `downgrade()` functions
+4. **CI integration:** `alembic upgrade head` replaces complex multi-script migration logic
+
+### Implementation
+
+**File Structure:**
+```
+src/precog/database/
+├── alembic.ini           # Alembic configuration
+└── alembic/
+    ├── env.py            # Environment config (reads DB credentials from env vars)
+    ├── script.py.mako    # Migration template
+    └── versions/
+        └── 0001_initial_baseline_schema.py  # Consolidated schema migration
+```
+
+**env.py Security Pattern:**
+```python
+def get_database_url() -> str:
+    """Build PostgreSQL connection URL from environment variables."""
+    password = os.getenv("DB_PASSWORD")
+    if not password:
+        raise ValueError("DB_PASSWORD environment variable is required.")
+    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
+```
+
+**CI Workflow (Updated):**
+```yaml
+- name: Apply database migrations with Alembic
+  run: |
+    cd src/precog/database
+    alembic upgrade head
+    alembic current
+```
+
+### Initial Migration Content
+
+The `0001_initial_baseline_schema.py` migration consolidates all previous schema into one authoritative migration:
+
+- **25 tables** with proper column types (DECIMAL(10,4) for prices)
+- **SCD Type 2 support** with `row_current_ind`, `row_start_timestamp`, `row_end_timestamp`
+- **All Foreign Key constraints** properly defined
+- **Indexes** for performance-critical queries
+
+### Alternatives Considered
+
+1. **Django Migrations:** Rejected - Precog doesn't use Django ORM
+2. **Flyway:** Rejected - Java-based, adds non-Python dependency
+3. **Manual SQL:** Current approach - Replaced due to issues above
+4. **SQLAlchemy ORM autogenerate:** Deferred - Requires full ORM model layer first
+
+### Consequences
+
+**Positive:**
+- ✅ CI failures now visible (no `|| true` suppression)
+- ✅ Schema version is trackable (`alembic current`)
+- ✅ Rollback support for schema changes (`alembic downgrade -1`)
+- ✅ Industry-standard tooling with extensive documentation
+- ✅ Compatible with future SQLAlchemy ORM models
+
+**Negative:**
+- ⚠️ Existing test data in dev DBs may need recreation after migration
+- ⚠️ Learning curve for team members unfamiliar with Alembic
+
+**Reference:** `src/precog/database/alembic/`, REQ-DB-025, SCHEMA_MIGRATION_WORKFLOW_V1.1.md
+
+---
+
+## Decision #51/ADR-057: Testcontainers for Database Test Isolation (Phase 1.9+)
+
+**Date:** December 3, 2025
+**Phase:** 1.9+ (Test Infrastructure Enhancement)
+**Status:** 🔵 Planned
+
+### Problem
+
+Stress tests with Foreign Key constraints fail due to **shared database state** between tests:
+
+1. **FK Constraint Violations:** `test_rapid_game_state_updates` inserts `game_states` without first creating referenced `teams`
+2. **Test Isolation Failure:** One test's cleanup can remove data another test depends on
+3. **Fixture Conflicts:** `setup_stress_teams` fixture creates teams, but cleanup order isn't guaranteed
+4. **Workaround Required:** 4 stress tests marked as `xfail` pending proper isolation
+
+**Affected Tests:**
+- `test_rapid_game_state_updates`
+- `test_parallel_updates_different_games`
+- `test_concurrent_upsert_same_game_state`
+- `test_data_integrity_under_system_stress`
+
+### Decision
+
+**Implement testcontainers-python for proper database test isolation:**
+
+1. **Ephemeral containers:** Each test class gets a fresh PostgreSQL container
+2. **Complete isolation:** No shared state between test runs
+3. **Real database:** Tests run against actual PostgreSQL (not SQLite mocks)
+4. **CI compatible:** Works in GitHub Actions with Docker support
+
+### Implementation Plan
+
+**1. Add Dependency:**
+```bash
+pip install testcontainers[postgres]
+```
+
+**2. Create Test Fixture:**
+```python
+# tests/conftest.py
+import pytest
+from testcontainers.postgres import PostgresContainer
+
+@pytest.fixture(scope="class")
+def postgres_container():
+    """Provide isolated PostgreSQL container per test class."""
+    with PostgresContainer("postgres:15") as postgres:
+        yield postgres
+
+@pytest.fixture(scope="class")
+def isolated_db_connection(postgres_container):
+    """Create connection to isolated container."""
+    url = postgres_container.get_connection_url()
+    # Run Alembic migrations on fresh container
+    # Return connection for tests
+```
+
+**3. Update Stress Tests:**
+```python
+@pytest.mark.usefixtures("isolated_db_connection")
+class TestGameStateConcurrency:
+    def test_rapid_game_state_updates(self):
+        # Now uses isolated container - no FK conflicts
+```
+
+### Alternatives Considered
+
+1. **SQLite in-memory:** Rejected - Doesn't support all PostgreSQL features (DECIMAL precision, FK constraints)
+2. **Shared test database with transaction rollback:** Current approach - Fails with concurrent tests
+3. **Mocking CRUD operations:** Rejected - Defeats purpose of integration testing
+4. **Pytest-postgresql:** Considered - Less mature than testcontainers
+
+### Consequences
+
+**Positive:**
+- ✅ Complete test isolation - no more FK constraint conflicts
+- ✅ Tests run against real PostgreSQL with identical behavior
+- ✅ Enables true concurrent stress testing
+- ✅ Removes xfail markers from 4 stress tests
+
+**Negative:**
+- ⚠️ Slower test execution (container startup ~2-3 seconds per class)
+- ⚠️ Requires Docker in CI environment (already available in GitHub Actions)
+- ⚠️ Additional dependency (testcontainers-python)
+
+**Reference:** tests/stress/test_crud_operations_stress.py, ADR-056 (Alembic)
 
 ---
 

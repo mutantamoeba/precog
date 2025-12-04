@@ -139,10 +139,11 @@ def upgrade() -> None:
     # 2. TEAMS & SPORTS DATA
     # =========================================================================
 
-    # teams table
+    # teams table (combines migration 010 + 013 enhancements)
     op.execute("""
         CREATE TABLE IF NOT EXISTS teams (
             team_id SERIAL PRIMARY KEY,
+            team_code VARCHAR(10) NOT NULL UNIQUE,
             team_name VARCHAR(100) NOT NULL,
             display_name VARCHAR(100),
             abbreviation VARCHAR(10),
@@ -151,15 +152,18 @@ def upgrade() -> None:
             conference VARCHAR(50),
             division VARCHAR(50),
             espn_team_id VARCHAR(50),
+            current_elo_rating DECIMAL(10,2) CHECK (current_elo_rating IS NULL OR current_elo_rating BETWEEN 0 AND 3000),
             external_ids JSONB,
             metadata JSONB,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
         )
     """)
+    op.execute("CREATE INDEX IF NOT EXISTS idx_teams_code ON teams(team_code)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_teams_sport ON teams(sport)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_teams_league ON teams(league)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_teams_espn_id ON teams(espn_team_id)")
+    op.execute("CREATE INDEX IF NOT EXISTS idx_teams_elo_rating ON teams(current_elo_rating)")
 
     # elo_rating_history table
     op.execute("""
