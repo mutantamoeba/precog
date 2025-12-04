@@ -1,9 +1,15 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.42
+**Version:** 2.43
 **Last Updated:** 2025-12-03
 **Status:** ✅ Current
+**Changes in v2.43:**
+- **TIMESCALEDB DECISION (PHASE 1.9)**: Updated ARCHITECTURE_DECISIONS V2.23 → V2.24, ADR_INDEX V1.16 → V1.17
+- Added ADR-098: TimescaleDB Deferred to Phase 6+ (current PostgreSQL + SCD Type 2 sufficient for Phase 1-5)
+- Added Phase 1.9 section to ADR_INDEX for test infrastructure decisions
+- Evaluation triggers documented for future TimescaleDB re-assessment (>1M rows/month, query bottlenecks, retention needs)
+- Total ADRs: 97 → 98
 **Changes in v2.42:**
 - **TEST_REQUIREMENTS_COMPREHENSIVE V2.0 → V2.1**: Added REQ-TEST-020 through REQ-TEST-024 (Test Isolation Requirements)
 - REQ-TEST-020: Transaction-Based Test Isolation (savepoint pattern)
@@ -397,10 +403,10 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.19.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.42.md** | ✅ | v2.42 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.42** (Phase 1.9: TEST_ISOLATION_PATTERNS_V1.0.md, TEST_REQUIREMENTS_COMPREHENSIVE V2.1 with REQ-TEST-020-024) |
-| **ARCHITECTURE_DECISIONS_V2.23.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.22** (ADR-029: ESPN Data Model with Normalized Schema - 4-table design for multi-sport ESPN data; venues, game_states (SCD Type 2), team_rankings, teams; JSONB situation field for sport-specific data; ~1.1 GB/year storage; 97 → 98 total ADRs) |
+| **MASTER_INDEX_V2.43.md** | ✅ | v2.43 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.43** (ADR-098: TimescaleDB Deferred to Phase 6+; ARCHITECTURE_DECISIONS V2.24; ADR_INDEX V1.17) |
+| **ARCHITECTURE_DECISIONS_V2.24.md** | ✅ | v2.24 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.24** (ADR-098: TimescaleDB Deferred to Phase 6+ - current PostgreSQL + SCD Type 2 sufficient for Phase 1-5; evaluation triggers: >1M rows/month, query bottlenecks, retention needs; migration path documented for future adoption) |
 | **REQUIREMENT_INDEX_V1.11.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
-| **ADR_INDEX_V1.16.md** | ✅ | v1.16 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 77 architecture decisions - **UPDATED V1.16** (ADR-029: ESPN Data Model with Normalized Schema - Phase 2 Live Data Integration; 76 → 77 total ADRs) |
+| **ADR_INDEX_V1.17.md** | ✅ | v1.17 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 98 architecture decisions - **UPDATED V1.17** (ADR-098: TimescaleDB Deferred to Phase 6+ - Phase 1.9 Test Infrastructure; 97 → 98 total ADRs) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.7.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.6** |
 | **TESTING_STRATEGY_V3.3.md** | ✅ | v3.3 | `/docs/foundation/` | 2 | Phases 1-10 | 🔴 Critical | **UPDATED V3.3** - Added Test Isolation Patterns section (5 patterns: transaction-based, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2); based on Phase 1.9 findings (12+ test failures from DB state contamination); cross-references TEST_ISOLATION_PATTERNS_V1.0.md; V3.2: All 8 test types MANDATORY; V3.0: 8 test type framework |

@@ -12,7 +12,7 @@
 - `docs/guides/MODEL_MANAGER_USER_GUIDE_V1.1.md` (Future Enhancements - Data Collection Pipelines)
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` (ESPN, Kalshi, Balldontlie APIs)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (REQ-DATA-001 through REQ-DATA-006)
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.23.md` (ADR-002: Decimal Precision, ADR-053: Data Validation, ADR-076: Sports Data Source Tiering)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.24.md` (ADR-002: Decimal Precision, ADR-053: Data Validation, ADR-076: Sports Data Source Tiering)
 
 **Changes in V1.1:**
 - **SPORTS DATA SOURCE TIERING STRATEGY:** Added Section 11 documenting 3-tier data source architecture
@@ -25,7 +25,7 @@
 - **BOOTSTRAP-FIRST APPROACH:** Added two-stage FREE → PAID upgrade path
 - **MULTI-SOURCE RECONCILIATION:** Added GameStateWithConfidence dataclass and confidence scoring
 - **GAMESTATEROVIDER ABSTRACTION:** Added source_confidence property and use_free_only parameter
-- ✅ **Added:** ADR-076 (Sports Data Source Tiering Strategy) in ARCHITECTURE_DECISIONS_V2.23.md
+- ✅ **Added:** ADR-076 (Sports Data Source Tiering Strategy) in ARCHITECTURE_DECISIONS_V2.24.md
 - ✅ **Documented:** STRATEGY_DEVELOPMENT_GUIDE_V1.0.md as Phase 4 deliverable in DEVELOPMENT_PHASES_V1.7.md
 
 ---
