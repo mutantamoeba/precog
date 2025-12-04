@@ -94,19 +94,25 @@ def clean_test_data(db_cursor):
     )
     # Try to delete positions/trades referencing test strategies/models (may fail in CI)
     # In CI, strategy_id/model_id columns may not exist if migrations 001/003 failed
+    # Delete fixture data (99901+) AND any SERIAL-generated data (1-99900)
     try:
-        db_cursor.execute("DELETE FROM trades WHERE strategy_id > 1 OR model_id > 1")
-        db_cursor.execute("DELETE FROM positions WHERE strategy_id > 1 OR model_id > 1")
+        db_cursor.execute(
+            "DELETE FROM trades WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
+        )
+        db_cursor.execute(
+            "DELETE FROM positions WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
+        )
     except Exception:
         db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
     # Then delete parent records
     db_cursor.execute("DELETE FROM markets WHERE market_id LIKE 'MKT-TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
-    # Clean up test models and strategies (may fail if tables don't exist in CI)
+    # Clean up ALL test models and strategies (fixture data + SERIAL-generated)
+    # This ensures clean state for property tests that create many strategies
     try:
-        db_cursor.execute("DELETE FROM probability_models WHERE model_id > 1")
-        db_cursor.execute("DELETE FROM strategies WHERE strategy_id > 1")
+        db_cursor.execute("DELETE FROM probability_models")
+        db_cursor.execute("DELETE FROM strategies")
     except Exception:
         db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
     # Delete both uppercase TEST-PLATFORM- and lowercase test_ platforms
@@ -143,16 +149,19 @@ def clean_test_data(db_cursor):
     """)
 
     # Create test strategy and probability model (required parent records for positions/trades)
-    # These tables may not exist in CI if migrations 001/003 failed (missing parent tables)
+    # Use HIGH IDs (99901) to avoid SERIAL sequence collision with property tests
+    # Property tests use create_strategy() which auto-generates IDs via SERIAL starting at 1
+    # Using high IDs ensures no collision: SERIAL generates 1,2,3... while fixtures use 99901,99902...
+    # This mirrors the teams pattern (99001, 99002) in test_crud_operations_properties.py
     try:
         db_cursor.execute("""
             INSERT INTO strategies (strategy_id, strategy_name, strategy_version, strategy_type, config, status)
-            VALUES (1, 'test_strategy', 'v1.0', 'value', '{"test": true}', 'active')
+            VALUES (99901, 'test_strategy', 'v1.0', 'value', '{"test": true}', 'active')
             ON CONFLICT (strategy_id) DO NOTHING
         """)
         db_cursor.execute("""
             INSERT INTO probability_models (model_id, model_name, model_version, model_class, config, status)
-            VALUES (1, 'test_model', 'v1.0', 'elo', '{"test": true}', 'active')
+            VALUES (99901, 'test_model', 'v1.0', 'elo', '{"test": true}', 'active')
             ON CONFLICT (model_id) DO NOTHING
         """)
     except Exception:
@@ -169,19 +178,25 @@ def clean_test_data(db_cursor):
         "DELETE FROM positions WHERE market_id LIKE 'MKT-TEST-%' OR market_id LIKE 'KALSHI-%'"
     )
     # Try to delete positions/trades referencing test strategies/models (may fail in CI)
+    # Delete ALL positions/trades with strategy_id/model_id (fixture data + SERIAL-generated)
     try:
-        db_cursor.execute("DELETE FROM trades WHERE strategy_id > 1 OR model_id > 1")
-        db_cursor.execute("DELETE FROM positions WHERE strategy_id > 1 OR model_id > 1")
+        db_cursor.execute(
+            "DELETE FROM trades WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
+        )
+        db_cursor.execute(
+            "DELETE FROM positions WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
+        )
     except Exception:
         db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
     # Then delete parent records
     db_cursor.execute("DELETE FROM markets WHERE market_id LIKE 'MKT-TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
-    # Clean up test models and strategies (may fail if tables don't exist in CI)
+    # Clean up ALL test models and strategies (fixture data + SERIAL-generated)
+    # This ensures clean state for next test
     try:
-        db_cursor.execute("DELETE FROM probability_models WHERE model_id > 1")
-        db_cursor.execute("DELETE FROM strategies WHERE strategy_id > 1")
+        db_cursor.execute("DELETE FROM probability_models")
+        db_cursor.execute("DELETE FROM strategies")
     except Exception:
         db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
     # Don't delete test platform - keep it for other tests
@@ -213,10 +228,13 @@ def sample_market_data():
 
 @pytest.fixture
 def sample_position_data():
-    """Sample position data for testing."""
+    """Sample position data for testing.
+
+    Uses high IDs (99901) to match fixture data and avoid SERIAL collision.
+    """
     return {
-        "strategy_id": 1,
-        "model_id": 1,
+        "strategy_id": 99901,
+        "model_id": 99901,
         "side": "YES",
         "quantity": 100,
         "entry_price": Decimal("0.5200"),
@@ -227,10 +245,13 @@ def sample_position_data():
 
 @pytest.fixture
 def sample_trade_data():
-    """Sample trade data for testing."""
+    """Sample trade data for testing.
+
+    Uses high IDs (99901) to match fixture data and avoid SERIAL collision.
+    """
     return {
-        "strategy_id": 1,
-        "model_id": 1,
+        "strategy_id": 99901,
+        "model_id": 99901,
         "side": "buy",  # trades use 'buy'/'sell', not 'yes'/'no'
         "quantity": 100,
         "price": Decimal("0.5200"),
@@ -510,19 +531,23 @@ def sample_model(db_pool, clean_test_data) -> int:
         Models are immutable records with unique model_id values.
         Used to test ROI comparison between different models.
 
+        Uses HIGH IDs (99901, 99902) to avoid SERIAL sequence collision with
+        property tests that use create_model() which auto-generates IDs via SERIAL.
+        This mirrors the teams pattern (99001, 99002) in test_crud_operations_properties.py
+
     Returns:
-        model_id of first model (Model A)
+        model_id of first model (Model A) - 99901
     """
     from precog.database.connection import execute_query
 
-    # Create Model A (model_id=1)
+    # Create Model A (model_id=99901) - high ID to avoid SERIAL collision
     query_a = """
         INSERT INTO probability_models (
             model_id, model_name, model_version, model_class, domain,
             config, status, description
         )
         VALUES (
-            1, 'Test Model A', 'v1.0', 'elo', 'nfl',
+            99901, 'Test Model A', 'v1.0', 'elo', 'nfl',
             '{"k_factor": 32, "initial_rating": 1500}', 'active',
             'Elo-based model for testing'
         )
@@ -530,14 +555,14 @@ def sample_model(db_pool, clean_test_data) -> int:
     """
     execute_query(query_a)
 
-    # Create Model B (model_id=2)
+    # Create Model B (model_id=99902) - high ID to avoid SERIAL collision
     query_b = """
         INSERT INTO probability_models (
             model_id, model_name, model_version, model_class, domain,
             config, status, description
         )
         VALUES (
-            2, 'Test Model B', 'v1.0', 'ensemble', 'nfl',
+            99902, 'Test Model B', 'v1.0', 'ensemble', 'nfl',
             '{"models": ["elo", "power_rankings"], "weights": [0.6, 0.4]}', 'active',
             'Ensemble model for testing'
         )
@@ -545,7 +570,7 @@ def sample_model(db_pool, clean_test_data) -> int:
     """
     execute_query(query_b)
 
-    return 1
+    return 99901
 
 
 @pytest.fixture

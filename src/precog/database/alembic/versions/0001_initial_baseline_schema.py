@@ -134,6 +134,14 @@ def upgrade() -> None:
     )
     op.execute("CREATE INDEX IF NOT EXISTS idx_markets_status ON markets(status)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_markets_market_id ON markets(market_id)")
+    # Unique constraint: only ONE current row per market_id (SCD Type-2 enforcement)
+    op.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_markets_unique_current ON markets(market_id) WHERE row_current_ind = TRUE"
+    )
+    # Unique constraint: only ONE current row per ticker (business key uniqueness)
+    op.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_markets_unique_ticker_current ON markets(ticker) WHERE row_current_ind = TRUE"
+    )
 
     # =========================================================================
     # 2. TEAMS & SPORTS DATA

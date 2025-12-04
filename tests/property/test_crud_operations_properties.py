@@ -446,11 +446,12 @@ def test_team_ranking_upsert_preserves_uniqueness(
     test_week = 20  # Max valid week (0-20 range)
 
     # Create ranking for test week
+    # NOTE: Season must be in range 2020-2050 per team_rankings_season_check constraint
     create_team_ranking(
         team_id=team_id,
         ranking_type="ap_poll",  # Valid type per team_rankings_type_check constraint
         rank=rank,
-        season=2099,  # Far-future season for test isolation
+        season=2049,  # Far-future but valid season (2020-2050 constraint)
         ranking_date=datetime(2024, 11, 10),
         week=test_week,
         points=points,
@@ -462,7 +463,7 @@ def test_team_ranking_upsert_preserves_uniqueness(
         team_id=team_id,
         ranking_type="ap_poll",
         rank=rank + 1,  # Different rank
-        season=2099,
+        season=2049,
         ranking_date=datetime(2024, 11, 10),
         week=test_week,  # Same week!
         points=points + 10,
@@ -475,7 +476,7 @@ def test_team_ranking_upsert_preserves_uniqueness(
             SELECT COUNT(*) FROM team_rankings
             WHERE team_id = %s
               AND ranking_type = 'ap_poll'
-              AND season = 2099
+              AND season = 2049
               AND week = %s
         """,
             (team_id, test_week),
@@ -487,4 +488,4 @@ def test_team_ranking_upsert_preserves_uniqueness(
 
     # Clean up - use specific season/week to avoid deleting other test data
     with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM team_rankings WHERE season = 2099 AND week = %s", (test_week,))
+        cur.execute("DELETE FROM team_rankings WHERE season = 2049 AND week = %s", (test_week,))
