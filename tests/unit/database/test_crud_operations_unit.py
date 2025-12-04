@@ -414,7 +414,7 @@ class TestUpsertGameStateUnit:
         # Verify close query was first execute call
         close_sql = mock_cursor.execute.call_args_list[0][0][0]  # First call, first positional arg
         assert "row_current_ind = FALSE" in close_sql
-        assert "row_end_ts = NOW()" in close_sql
+        assert "row_end_timestamp = NOW()" in close_sql
         assert result == 100
 
 
