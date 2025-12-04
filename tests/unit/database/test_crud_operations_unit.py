@@ -266,8 +266,8 @@ class TestCreateGameStateUnit:
     def test_create_game_state_returns_id(self, mock_get_cursor):
         """Test create_game_state returns game_state_id."""
         mock_cursor = MagicMock()
-        # Migration 014: game_state_id is SERIAL PRIMARY KEY, RETURNING game_state_id
-        mock_cursor.fetchone.return_value = {"game_state_id": 500}
+        # Note: RETURNING id returns "id" key, then code maps to game_state_id
+        mock_cursor.fetchone.return_value = {"id": 500}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -288,8 +288,8 @@ class TestCreateGameStateUnit:
     def test_create_game_state_with_situation_jsonb(self, mock_get_cursor):
         """Test create_game_state serializes situation to JSONB."""
         mock_cursor = MagicMock()
-        # Migration 014: game_state_id is SERIAL PRIMARY KEY, RETURNING game_state_id
-        mock_cursor.fetchone.return_value = {"game_state_id": 1}
+        # Note: RETURNING id returns "id" key
+        mock_cursor.fetchone.return_value = {"id": 1}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -298,7 +298,8 @@ class TestCreateGameStateUnit:
         create_game_state(espn_event_id="401547417", situation=situation, game_status="in_progress")
 
         # Verify JSON serialization in params
-        # Migration 014 schema: Single INSERT with RETURNING game_state_id
+        # Note: create_game_state makes 2 execute calls: INSERT then UPDATE
+        # Check the first call (INSERT) for the params
         insert_call = mock_cursor.execute.call_args_list[0]
         params = insert_call[0][1]
         # situation is near the end of params
@@ -308,8 +309,8 @@ class TestCreateGameStateUnit:
     def test_create_game_state_with_decimal_clock(self, mock_get_cursor):
         """Test create_game_state handles Decimal clock_seconds."""
         mock_cursor = MagicMock()
-        # Migration 014: game_state_id is SERIAL PRIMARY KEY, RETURNING game_state_id
-        mock_cursor.fetchone.return_value = {"game_state_id": 1}
+        # Note: RETURNING id returns "id" key
+        mock_cursor.fetchone.return_value = {"id": 1}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -319,7 +320,8 @@ class TestCreateGameStateUnit:
             clock_display="5:32",
         )
 
-        # Migration 014 schema: Single INSERT with RETURNING game_state_id
+        # Note: create_game_state makes 2 execute calls: INSERT then UPDATE
+        # Check the first call (INSERT) for the params
         insert_call = mock_cursor.execute.call_args_list[0]
         params = insert_call[0][1]
         # Verify Decimal is passed (not float)

@@ -2274,7 +2274,7 @@ def create_game_state(
         data_source: Source of game data (default: 'espn')
 
     Returns:
-        game_state_id (SERIAL primary key) of newly created record
+        id (surrogate key) of newly created record
 
     Educational Note:
         Game states use SCD Type 2 for complete historical tracking:
@@ -2284,10 +2284,10 @@ def create_game_state(
         - Critical for backtesting live trading strategies
         - ~190 updates per game = ~190 historical rows per game
 
-        Schema (Migration 014):
-        - game_state_id SERIAL PRIMARY KEY (auto-increment integer)
-        - espn_event_id VARCHAR(50) is the natural key
-        - Partial unique index ensures one current row per espn_event_id
+        Dual-Key Structure (Migration 029):
+        - id SERIAL (surrogate key) - returned by this function
+        - game_state_id VARCHAR (business key) - auto-generated as GS-{id}
+        - Enables SCD Type 2 versioning (multiple versions of same event)
 
     Example:
         >>> state_id = create_game_state(
@@ -2304,23 +2304,23 @@ def create_game_state(
 
     References:
         - REQ-DATA-001: Game State Data Collection (SCD Type 2)
-        - Migration 014: Create game_states table with SCD Type 2
+        - ADR-029: ESPN Data Model with Normalized Schema
         - Pattern 2: Dual Versioning System (SCD Type 2)
     """
-    # INSERT without game_state_id (SERIAL auto-generates it)
+    # Step 1: INSERT with placeholder game_state_id (will be updated immediately)
     insert_query = """
         INSERT INTO game_states (
-            espn_event_id, home_team_id, away_team_id, venue_id,
+            game_state_id, espn_event_id, home_team_id, away_team_id, venue_id,
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
             data_source, row_current_ind, row_start_timestamp
         )
         VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, TRUE, NOW()
         )
-        RETURNING game_state_id
+        RETURNING id
     """
     with get_cursor(commit=True) as cur:
         cur.execute(
@@ -2348,7 +2348,17 @@ def create_game_state(
             ),
         )
         result = cur.fetchone()
-        return cast("int", result["game_state_id"])
+        surrogate_id = cast("int", result["id"])
+
+        # Step 2: UPDATE to set correct game_state_id (GS-{id} format)
+        update_query = """
+            UPDATE game_states
+            SET game_state_id = %s
+            WHERE id = %s
+        """
+        cur.execute(update_query, (f"GS-{surrogate_id}", surrogate_id))
+
+        return surrogate_id
 
 
 def get_current_game_state(espn_event_id: str) -> dict[str, Any] | None:
