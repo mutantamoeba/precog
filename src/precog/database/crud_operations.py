@@ -2469,7 +2469,7 @@ def upsert_game_state(
     close_query = """
         UPDATE game_states
         SET row_current_ind = FALSE,
-            row_end_ts = NOW()
+            row_end_timestamp = NOW()
         WHERE espn_event_id = %s
           AND row_current_ind = TRUE
     """

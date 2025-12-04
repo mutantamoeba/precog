@@ -388,63 +388,89 @@ def upgrade() -> None:
     # 6. STRATEGIES & PROBABILITY MODELS (Immutable Versions)
     # =========================================================================
 
-    # strategies table (Immutable versions)
+    # strategies table (Immutable versions) - matches migration 016
     op.execute("""
         CREATE TABLE IF NOT EXISTS strategies (
             strategy_id SERIAL PRIMARY KEY,
-            name VARCHAR(100) NOT NULL,
-            version VARCHAR(20) NOT NULL,
-            approach VARCHAR(50) REFERENCES strategy_types(strategy_type_code),
+            platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
+            strategy_name VARCHAR(100) NOT NULL,
+            strategy_version VARCHAR(20) NOT NULL DEFAULT '1.0',
+            strategy_type VARCHAR(50) NOT NULL,
             domain VARCHAR(50),
-            platform_id VARCHAR(50) REFERENCES platforms(platform_id),
             config JSONB NOT NULL,
-            entry_criteria JSONB,
-            exit_criteria JSONB,
-            risk_params JSONB,
-            status VARCHAR(20) DEFAULT 'development' CHECK (status IN ('development', 'testing', 'active', 'paused', 'retired')),
-            description TEXT,
-            created_by VARCHAR(100),
+            status VARCHAR(20) NOT NULL DEFAULT 'draft'
+                CHECK (status IN ('draft', 'testing', 'active', 'inactive', 'deprecated')),
             activated_at TIMESTAMP WITH TIME ZONE,
             deactivated_at TIMESTAMP WITH TIME ZONE,
+            notes TEXT,
+            paper_trades_count INTEGER DEFAULT 0 CHECK (paper_trades_count >= 0),
+            paper_roi DECIMAL(10,4),
+            live_trades_count INTEGER DEFAULT 0 CHECK (live_trades_count >= 0),
+            live_roi DECIMAL(10,4),
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            CONSTRAINT unique_strategy_version UNIQUE (name, version)
+            description TEXT,
+            created_by VARCHAR(100),
+            CONSTRAINT unique_strategy_name_version UNIQUE (strategy_name, strategy_version),
+            CONSTRAINT strategy_activation_order
+                CHECK (deactivated_at IS NULL OR activated_at IS NULL OR deactivated_at >= activated_at)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_strategies_name ON strategies(name)")
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_strategies_approach_domain ON strategies(approach, domain)"
-    )
+    # Add FK to strategy_types
+    op.execute("""
+        ALTER TABLE strategies
+        ADD CONSTRAINT fk_strategies_strategy_type
+        FOREIGN KEY (strategy_type) REFERENCES strategy_types(strategy_type_code)
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS idx_strategies_platform ON strategies(platform_id)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_strategies_status ON strategies(status)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_strategies_strategy_type ON strategies(strategy_type)"
+    )
 
-    # probability_models table (Immutable versions)
+    # probability_models table (Immutable versions) - matches migration 016
     op.execute("""
         CREATE TABLE IF NOT EXISTS probability_models (
             model_id SERIAL PRIMARY KEY,
-            name VARCHAR(100) NOT NULL,
-            version VARCHAR(20) NOT NULL,
-            approach VARCHAR(50) REFERENCES model_classes(model_class_code),
+            model_name VARCHAR(100) NOT NULL,
+            model_version VARCHAR(20) NOT NULL DEFAULT '1.0',
+            model_class VARCHAR(50) NOT NULL,
             domain VARCHAR(50),
             config JSONB NOT NULL,
-            weights JSONB,
-            feature_columns JSONB,
             training_start_date DATE,
             training_end_date DATE,
-            training_sample_size INTEGER,
-            status VARCHAR(20) DEFAULT 'development' CHECK (status IN ('development', 'testing', 'active', 'paused', 'retired')),
-            description TEXT,
-            created_by VARCHAR(100),
+            training_sample_size INTEGER CHECK (training_sample_size IS NULL OR training_sample_size >= 0),
+            status VARCHAR(20) NOT NULL DEFAULT 'draft'
+                CHECK (status IN ('draft', 'testing', 'active', 'deprecated')),
             activated_at TIMESTAMP WITH TIME ZONE,
             deactivated_at TIMESTAMP WITH TIME ZONE,
+            notes TEXT,
+            validation_accuracy DECIMAL(6,4) CHECK (validation_accuracy IS NULL OR (validation_accuracy >= 0.0000 AND validation_accuracy <= 1.0000)),
+            validation_calibration DECIMAL(6,4) CHECK (validation_calibration IS NULL OR validation_calibration >= 0.0000),
+            validation_sample_size INTEGER CHECK (validation_sample_size IS NULL OR validation_sample_size >= 0),
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-            CONSTRAINT unique_model_version UNIQUE (name, version)
+            description TEXT,
+            created_by VARCHAR(100),
+            CONSTRAINT unique_model_name_version UNIQUE (model_name, model_version),
+            CONSTRAINT model_activation_order
+                CHECK (deactivated_at IS NULL OR activated_at IS NULL OR deactivated_at >= activated_at)
         )
     """)
-    op.execute("CREATE INDEX IF NOT EXISTS idx_models_name ON probability_models(name)")
+    # Add FK to model_classes
+    op.execute("""
+        ALTER TABLE probability_models
+        ADD CONSTRAINT fk_probability_models_model_class
+        FOREIGN KEY (model_class) REFERENCES model_classes(model_class_code)
+    """)
     op.execute(
-        "CREATE INDEX IF NOT EXISTS idx_models_approach_domain ON probability_models(approach, domain)"
+        "CREATE INDEX IF NOT EXISTS idx_probability_models_model_class ON probability_models(model_class)"
     )
-    op.execute("CREATE INDEX IF NOT EXISTS idx_models_status ON probability_models(status)")
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_probability_models_status ON probability_models(status)"
+    )
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS idx_probability_models_category ON probability_models(model_class, domain)"
+    )
 
     # edges table (SCD Type 2)
     op.execute("""
