@@ -24,6 +24,15 @@
 -- See: docs/utility/ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md
 
 -- ============================================================================
+-- STEP 0: Drop legacy game_states table from migration 000
+-- ============================================================================
+-- Migration 000 created a simpler game_states table with home_team/away_team VARCHAR columns.
+-- This migration replaces it with the Phase 2 design using proper foreign keys to teams table.
+-- The || true in CI migration runner suppresses errors, so we need explicit DROP.
+
+DROP TABLE IF EXISTS game_states CASCADE;
+
+-- ============================================================================
 -- STEP 1: Create game_states Table
 -- ============================================================================
 
