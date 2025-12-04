@@ -111,7 +111,7 @@ def setup_property_test_data(db_pool, clean_test_data):
 
     # Cleanup
     with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM game_states WHERE home_team_id IN (99001, 99002)")
+        cur.execute("DELETE FROM game_states WHERE home_team IN (99001, 99002)")
         cur.execute("DELETE FROM team_rankings WHERE team_id IN (99001, 99002)")
         cur.execute("DELETE FROM teams WHERE team_id IN (99001, 99002)")
         # Clean up venues created by property tests
