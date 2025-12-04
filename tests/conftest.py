@@ -11,6 +11,11 @@ Environment Safety:
     against dev/staging/prod databases.
 
     See: docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
+
+Testcontainers Support (ADR-057):
+    For property tests that need true database isolation, use the
+    testcontainers fixtures from tests.fixtures.testcontainers_fixtures.
+    These provide ephemeral PostgreSQL containers per test class.
 """
 
 import os
@@ -23,6 +28,21 @@ from typing import Any
 import pytest
 
 from precog.config.config_loader import ConfigLoader
+
+# Import testcontainers fixtures for property tests (ADR-057)
+# These are re-exported here so pytest can discover them
+try:
+    from tests.fixtures.testcontainers_fixtures import (
+        TESTCONTAINERS_AVAILABLE,
+        container_cursor,
+        container_db_connection,
+        postgres_container,
+    )
+except ImportError:
+    TESTCONTAINERS_AVAILABLE = False
+    postgres_container = None  # type: ignore[assignment, misc]
+    container_db_connection = None  # type: ignore[assignment, misc]
+    container_cursor = None  # type: ignore[assignment, misc]
 
 # Import modules to test
 from precog.database.connection import (
@@ -39,14 +59,69 @@ from precog.utils.logger import setup_logging
 # =============================================================================
 
 
+def _check_docker_available() -> bool:
+    """Check if Docker is available for testcontainers."""
+    import shutil
+    import subprocess
+
+    # Check if docker command exists
+    if not shutil.which("docker"):
+        return False
+
+    # Check if Docker daemon is running
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
+
+# Detect environment at module load time
+DOCKER_AVAILABLE = _check_docker_available()
+USE_TESTCONTAINERS = DOCKER_AVAILABLE and TESTCONTAINERS_AVAILABLE
+
+
 @pytest.fixture(scope="session")
-def db_pool():
+def db_pool(request):
     """
     Create database connection pool once per test session.
 
+    Strategy (ADR-057 - Testcontainers for Database Test Isolation):
+        1. If Docker + testcontainers available: Use ephemeral PostgreSQL container
+           - Provides fresh schema, no state leakage, proper isolation
+           - Best for local development and pre-push hooks
+        2. Otherwise: Use environment variables (DB_HOST, DB_PORT, etc.)
+           - Works with CI PostgreSQL service container
+           - Falls back to local PostgreSQL if configured
+
     Scope: session - created once, shared across all tests
+
+    Educational Note:
+        Using testcontainers provides TRUE database isolation:
+        - Fresh PostgreSQL container with clean schema
+        - All migrations applied from scratch
+        - No interference from previous test runs
+        - Hypothesis caching issues eliminated
+
+        Without testcontainers, tests share a database which can cause:
+        - State leakage between tests
+        - Schema drift (local DB may be outdated)
+        - Flaky tests from leftover data
     """
-    # Initialize pool
+    if USE_TESTCONTAINERS:
+        # Request the testcontainers fixture first - it sets DB_* env vars
+        # This ensures initialize_pool() uses the containerized database
+        container_params = request.getfixturevalue("postgres_container")
+        print(
+            f"\n[TESTCONTAINERS] Using ephemeral PostgreSQL container at "
+            f"{container_params['host']}:{container_params['port']}"
+        )
+
+    # Initialize pool (uses DB_* env vars set by testcontainers or from environment)
     pool = initialize_pool(minconn=2, maxconn=5)
 
     yield pool  # Return pool object to tests

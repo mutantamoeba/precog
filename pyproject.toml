@@ -16,6 +16,16 @@ authors = [
     {name = "Precog Development Team"},
 ]
 
+# Optional dependencies for testing
+[project.optional-dependencies]
+test = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-html>=4.0.0",
+    "hypothesis>=6.100.0",
+    "testcontainers[postgres]>=4.13.0",
+]
+
 # Package configuration (src layout)
 [tool.setuptools]
 package-dir = {"" = "src"}

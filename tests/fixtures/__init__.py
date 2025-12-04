@@ -135,4 +135,58 @@ __all__ = [  # noqa: RUF022
     "create_test_market_with_position",
     "create_test_trade_sequence",
     "create_versioned_strategies",
+    # Testcontainers (ADR-057)
+    "postgres_container",
+    "container_db_connection",
+    "container_cursor",
+    "TESTCONTAINERS_AVAILABLE",
+    # Detection flags for test configuration
+    "DOCKER_AVAILABLE",
+    "USE_TESTCONTAINERS",
 ]
+
+
+# Testcontainers fixtures (ADR-057: Testcontainers for Database Test Isolation)
+# These provide ephemeral PostgreSQL containers for ALL database tests
+# Strategy:
+#   - Local (Docker available): Uses testcontainers for isolation
+#   - CI (testcontainers not installed): Uses PostgreSQL service container
+try:
+    from tests.fixtures.testcontainers_fixtures import (
+        TESTCONTAINERS_AVAILABLE,
+        container_cursor,
+        container_db_connection,
+        postgres_container,
+    )
+except ImportError:
+    # testcontainers not installed - fixtures will skip tests
+    TESTCONTAINERS_AVAILABLE = False
+    postgres_container = None  # type: ignore[assignment, misc]
+    container_db_connection = None  # type: ignore[assignment, misc]
+    container_cursor = None  # type: ignore[assignment, misc]
+
+
+def _check_docker_available() -> bool:
+    """Check if Docker is available for testcontainers."""
+    import shutil
+    import subprocess
+
+    # Check if docker command exists
+    if not shutil.which("docker"):
+        return False
+
+    # Check if Docker daemon is running
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
+
+# Detection flags for test configuration
+DOCKER_AVAILABLE = _check_docker_available()
+USE_TESTCONTAINERS = DOCKER_AVAILABLE and TESTCONTAINERS_AVAILABLE

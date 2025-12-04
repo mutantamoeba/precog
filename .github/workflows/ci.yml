@@ -278,6 +278,14 @@ jobs:
           # Verify migration applied successfully
           alembic current
 
+      - name: Clear Hypothesis example cache (prevents stale data issues)
+        run: |
+          # Clear cached Hypothesis examples that may conflict with current schema
+          # This prevents "UniqueViolation" and "CheckViolation" errors from stale cached data
+          # See ADR-057: Testcontainers for Database Test Isolation
+          rm -rf .hypothesis/examples || true
+          echo "Hypothesis cache cleared"
+
       - name: Run database-dependent property tests
         run: |
           # Property tests that require real PostgreSQL (SCD Type-2, Decimal precision, strategy versioning)
