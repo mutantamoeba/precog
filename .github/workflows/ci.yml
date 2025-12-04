@@ -179,9 +179,11 @@ jobs:
         run: |
           # Run tests that don't require PostgreSQL (aligned across Windows/Linux)
           # Unit tests: All mocked, no external dependencies
-          # Property tests: Use Hypothesis for data generation, mocked DB
+          # Property tests: Most use Hypothesis for data generation, mocked DB
+          # NOTE: Database-dependent property tests (test_crud_operations_properties.py,
+          #       test_database_crud_properties.py) run in integration-tests job with PostgreSQL
           # Integration/E2E/stress/chaos tests need PostgreSQL - run in Linux-only job
-          python -m pytest tests/unit/ tests/property/ -v --cov=src/precog --cov-report=xml --cov-report=html --cov-report=term-missing -n auto
+          python -m pytest tests/unit/ tests/property/ -v --cov=src/precog --cov-report=xml --cov-report=html --cov-report=term-missing -n auto --ignore=tests/property/test_crud_operations_properties.py --ignore=tests/property/test_database_crud_properties.py
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
@@ -307,6 +309,11 @@ jobs:
           conn.close()
           print('All Python migrations applied successfully')
           "
+
+      - name: Run database-dependent property tests
+        run: |
+          # Property tests that require real PostgreSQL (SCD Type-2, Decimal precision, etc.)
+          python -m pytest tests/property/test_crud_operations_properties.py tests/property/test_database_crud_properties.py -v --tb=short
 
       - name: Run database-dependent tests (integration + security + stress + chaos)
         run: |
