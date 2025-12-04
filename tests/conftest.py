@@ -78,6 +78,13 @@ def clean_test_data(db_cursor):
     Creates required parent records (platforms, events) for testing.
     Deletes any test records (IDs starting with 'TEST-')
     """
+    # CRITICAL: If a prior transaction failed, we need to rollback first
+    # This prevents 'InFailedSqlTransaction' errors cascading to cleanup
+    try:
+        db_cursor.connection.rollback()
+    except Exception:
+        pass  # Already rolled back or no active transaction
+
     # Cleanup before test (in reverse FK order)
     # Delete child records first - trades/positions reference strategies/models/markets
     db_cursor.execute("DELETE FROM trades WHERE market_id LIKE 'MKT-TEST-%'")
