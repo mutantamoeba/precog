@@ -135,6 +135,7 @@ test_results/*/
 # Logs
 *.log
 logs/
+.pre-push-logs/
 
 # Temporary files
 *.tmp
