@@ -265,52 +265,18 @@ jobs:
           pip install -e .  # Install precog package (src/ layout)
           pip install pytest pytest-cov hypothesis vcrpy
 
-      - name: Apply base schema and SQL migrations
+      - name: Apply database migrations with Alembic
         run: |
-          # Apply SQL migrations first (000-015), then Python migrations
-          # SQL migrations create/modify tables; Python migrations do complex logic
-          echo "Applying SQL migrations..."
-          for sql_file in $(ls -v src/precog/database/migrations/*.sql 2>/dev/null); do
-            echo "Running: $sql_file"
-            PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f "$sql_file" || true
-          done
-          echo "SQL migrations complete"
+          # Alembic manages all schema migrations with proper version tracking
+          # This replaces the previous manual SQL + Python migration approach
+          # See ADR-030 for migration framework decision
+          cd src/precog/database
+          echo "Running Alembic migrations..."
+          alembic upgrade head
+          echo "Alembic migrations complete"
 
-      - name: Apply Python migrations
-        run: |
-          # Run Python migrations (complex logic, surrogate keys, etc.)
-          python -c "
-          import os
-          import psycopg2
-          from psycopg2.extras import RealDictCursor
-
-          conn = psycopg2.connect(
-              host=os.getenv('DB_HOST'),
-              port=os.getenv('DB_PORT'),
-              dbname=os.getenv('DB_NAME'),
-              user=os.getenv('DB_USER'),
-              password=os.getenv('DB_PASSWORD')
-          )
-          conn.autocommit = True
-          cur = conn.cursor()
-
-          # Run Python migration scripts in order
-          import importlib.util
-          import glob
-
-          migration_files = sorted(glob.glob('src/precog/database/migrations/migration_*.py'))
-          for mf in migration_files:
-              print(f'Running: {mf}')
-              spec = importlib.util.spec_from_file_location('migration', mf)
-              module = importlib.util.module_from_spec(spec)
-              spec.loader.exec_module(module)
-              if hasattr(module, 'run_migration'):
-                  # Migrations are self-managing (create their own connection)
-                  module.run_migration()
-
-          conn.close()
-          print('All Python migrations applied successfully')
-          "
+          # Verify migration applied successfully
+          alembic current
 
       - name: Run database-dependent property tests
         run: |
