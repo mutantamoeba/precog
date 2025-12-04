@@ -98,7 +98,7 @@ def clean_test_data(db_cursor):
         db_cursor.execute("DELETE FROM trades WHERE strategy_id > 1 OR model_id > 1")
         db_cursor.execute("DELETE FROM positions WHERE strategy_id > 1 OR model_id > 1")
     except Exception:
-        pass  # Columns don't exist in this environment - skip
+        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
     # Then delete parent records
     db_cursor.execute("DELETE FROM markets WHERE market_id LIKE 'MKT-TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
@@ -108,7 +108,7 @@ def clean_test_data(db_cursor):
         db_cursor.execute("DELETE FROM probability_models WHERE model_id > 1")
         db_cursor.execute("DELETE FROM strategies WHERE strategy_id > 1")
     except Exception:
-        pass  # Tables don't exist in this environment - skip
+        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
     # Delete both uppercase TEST-PLATFORM- and lowercase test_ platforms
     db_cursor.execute(
         "DELETE FROM platforms WHERE platform_id LIKE 'test_%' OR platform_id LIKE 'TEST-PLATFORM-%'"
@@ -156,7 +156,7 @@ def clean_test_data(db_cursor):
             ON CONFLICT (model_id) DO NOTHING
         """)
     except Exception:
-        pass  # Tables don't exist in this environment - skip
+        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
 
     db_cursor.connection.commit()
 
@@ -173,7 +173,7 @@ def clean_test_data(db_cursor):
         db_cursor.execute("DELETE FROM trades WHERE strategy_id > 1 OR model_id > 1")
         db_cursor.execute("DELETE FROM positions WHERE strategy_id > 1 OR model_id > 1")
     except Exception:
-        pass  # Columns don't exist in this environment - skip
+        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
     # Then delete parent records
     db_cursor.execute("DELETE FROM markets WHERE market_id LIKE 'MKT-TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
@@ -183,7 +183,7 @@ def clean_test_data(db_cursor):
         db_cursor.execute("DELETE FROM probability_models WHERE model_id > 1")
         db_cursor.execute("DELETE FROM strategies WHERE strategy_id > 1")
     except Exception:
-        pass  # Tables don't exist in this environment - skip
+        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
     # Don't delete test platform - keep it for other tests
     db_cursor.connection.commit()
 
