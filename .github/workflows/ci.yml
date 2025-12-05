@@ -290,18 +290,30 @@ jobs:
 
       - name: Run database-dependent property tests
         timeout-minutes: 10
+        env:
+          PYTHONUNBUFFERED: "1"
         run: |
           # Property tests that require real PostgreSQL (SCD Type-2, Decimal precision, strategy versioning)
           # --timeout=120: Kill individual tests that hang for >2 minutes
+          echo "=== Starting property tests at $(date) ==="
           python -m pytest tests/property/test_crud_operations_properties.py tests/property/test_database_crud_properties.py tests/property/test_strategy_versioning_properties.py -v --tb=short --timeout=120
+          echo "=== Property tests complete at $(date) ==="
 
       - name: Run database-dependent tests (integration + security + stress + chaos)
         timeout-minutes: 15
+        env:
+          PYTHONUNBUFFERED: "1"
         run: |
           # Phase 1.9: Run all test types that need PostgreSQL
           # Tests will skip if specific dependencies (API credentials) not available
           # --timeout=120: Kill individual tests that hang for >2 minutes
-          python -m pytest tests/integration/ tests/security/ tests/stress/ tests/chaos/ -v --tb=short --timeout=120
+          # PYTHONUNBUFFERED=1: Force unbuffered output to see progress in real-time
+          echo "=== Starting integration tests at $(date) ==="
+          echo "=== Collecting tests first ==="
+          python -m pytest tests/integration/ tests/security/ tests/stress/ tests/chaos/ --collect-only -q 2>&1 | head -50 || true
+          echo "=== Collection complete, running tests ==="
+          python -m pytest tests/integration/ tests/security/ tests/stress/ tests/chaos/ -v --tb=short --timeout=120 -p no:cacheprovider
+          echo "=== Integration tests complete at $(date) ==="
 
       - name: Run E2E + performance tests
         timeout-minutes: 5
