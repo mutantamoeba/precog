@@ -248,7 +248,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE TABLE IF NOT EXISTS team_rankings (
         ranking_id SERIAL PRIMARY KEY,
         team_id INTEGER REFERENCES teams(team_id) ON DELETE CASCADE,
-        ranking_type VARCHAR(50) NOT NULL CHECK (ranking_type IN ('ap_poll', 'coaches_poll', 'cfp', 'committee', 'power_ranking')),
+        ranking_type VARCHAR(50) NOT NULL CHECK (ranking_type IN ('ap_poll', 'coaches_poll', 'cfp', 'committee', 'power_ranking', 'AP', 'espn_power', 'espn_fpi')),
         rank INTEGER NOT NULL CHECK (rank > 0),
         season INTEGER NOT NULL CHECK (season >= 2020 AND season <= 2050),
         week INTEGER CHECK (week IS NULL OR (week >= 0 AND week <= 20)),
@@ -290,8 +290,8 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         situation JSONB,
         linescores JSONB,
         data_source VARCHAR(50) DEFAULT 'espn' NOT NULL,
-        row_start_timestamp TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
-        row_end_timestamp TIMESTAMP WITH TIME ZONE,
+        row_start_ts TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
+        row_end_ts TIMESTAMP WITH TIME ZONE,
         row_current_ind BOOLEAN DEFAULT TRUE NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_game_states_event ON game_states(espn_event_id);
@@ -457,6 +457,8 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         confidence_metrics JSONB,
         recommended_action VARCHAR(50) CHECK (recommended_action IN ('auto_execute', 'alert', 'ignore')),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        row_start_ts TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        row_end_ts TIMESTAMP WITH TIME ZONE,
         row_current_ind BOOLEAN DEFAULT TRUE
     );
     CREATE INDEX IF NOT EXISTS idx_edges_market ON edges(market_id);
@@ -476,7 +478,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         strategy_id INTEGER REFERENCES strategies(strategy_id),
         model_id INTEGER REFERENCES probability_models(model_id),
-        side VARCHAR(10) NOT NULL CHECK (side IN ('yes', 'no', 'long', 'short')),
+        side VARCHAR(10) NOT NULL CHECK (UPPER(side) IN ('YES', 'NO', 'LONG', 'SHORT')),
         entry_price DECIMAL(10,4) NOT NULL CHECK (entry_price >= 0.0000 AND entry_price <= 1.0000),
         quantity INTEGER NOT NULL CHECK (quantity > 0),
         current_price DECIMAL(10,4),
@@ -537,6 +539,8 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         quantity INTEGER NOT NULL CHECK (quantity > 0),
         fees DECIMAL(10,4) CHECK (fees IS NULL OR fees >= 0.0000),
         trade_source trade_source_type DEFAULT 'automated',
+        order_type VARCHAR(20) DEFAULT 'market' CHECK (order_type IN ('market', 'limit', 'stop', 'stop_limit')),
+        execution_time TIMESTAMP WITH TIME ZONE,
         calculated_probability DECIMAL(10,4) CHECK (calculated_probability IS NULL OR (calculated_probability >= 0.0000 AND calculated_probability <= 1.0000)),
         market_price DECIMAL(10,4) CHECK (market_price IS NULL OR (market_price >= 0.0000 AND market_price <= 1.0000)),
         edge_value DECIMAL(10,4),

@@ -195,7 +195,7 @@ def sample_market(db_pool, clean_test_data, sample_platform, sample_event) -> st
 
 
 def test_create_trade_with_automated_source_default(
-    db_pool, clean_test_data, sample_market, sample_strategy
+    db_pool, clean_test_data, sample_market, sample_strategy, sample_model
 ):
     """
     Test trade creation defaults to 'automated' source.
@@ -207,7 +207,7 @@ def test_create_trade_with_automated_source_default(
     trade_id = create_trade(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=1,
+        model_id=sample_model,
         side="buy",
         quantity=50,
         price=Decimal("0.5500"),
@@ -221,7 +221,9 @@ def test_create_trade_with_automated_source_default(
     assert trade["price"] == Decimal("0.5500")
 
 
-def test_create_trade_with_manual_source(db_pool, clean_test_data, sample_market, sample_strategy):
+def test_create_trade_with_manual_source(
+    db_pool, clean_test_data, sample_market, sample_strategy, sample_model
+):
     """
     Test trade creation with manual source (Kalshi UI trade).
 
@@ -232,7 +234,7 @@ def test_create_trade_with_manual_source(db_pool, clean_test_data, sample_market
     trade_id = create_trade(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=1,
+        model_id=sample_model,
         side="buy",
         quantity=100,
         price=Decimal("0.6000"),
@@ -247,7 +249,7 @@ def test_create_trade_with_manual_source(db_pool, clean_test_data, sample_market
 
 
 def test_create_trade_with_attribution_fields(
-    db_pool, clean_test_data, sample_market, sample_strategy
+    db_pool, clean_test_data, sample_market, sample_strategy, sample_model
 ):
     """
     Test trade creation with full attribution enrichment (Migration 019).
@@ -260,7 +262,7 @@ def test_create_trade_with_attribution_fields(
     trade_id = create_trade(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=1,
+        model_id=sample_model,
         side="buy",
         quantity=75,
         price=Decimal("0.5200"),
@@ -278,7 +280,9 @@ def test_create_trade_with_attribution_fields(
     assert trade["edge_value"] == Decimal("0.1050")  # 0.6250 - 0.5200
 
 
-def test_create_trade_with_negative_edge(db_pool, clean_test_data, sample_market, sample_strategy):
+def test_create_trade_with_negative_edge(
+    db_pool, clean_test_data, sample_market, sample_strategy, sample_model
+):
     """
     Test trade with negative edge (overpriced market).
 
@@ -290,7 +294,7 @@ def test_create_trade_with_negative_edge(db_pool, clean_test_data, sample_market
     trade_id = create_trade(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=1,
+        model_id=sample_model,
         side="buy",
         quantity=50,
         price=Decimal("0.7500"),
@@ -308,7 +312,7 @@ def test_create_trade_with_negative_edge(db_pool, clean_test_data, sample_market
 
 
 def test_create_trade_without_attribution_fields(
-    db_pool, clean_test_data, sample_market, sample_strategy
+    db_pool, clean_test_data, sample_market, sample_strategy, sample_model
 ):
     """
     Test backward compatibility: trades without attribution fields.
@@ -321,7 +325,7 @@ def test_create_trade_without_attribution_fields(
     trade_id = create_trade(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=1,
+        model_id=sample_model,
         side="buy",
         quantity=50,
         price=Decimal("0.5000"),
@@ -338,7 +342,7 @@ def test_create_trade_without_attribution_fields(
 
 
 def test_create_trade_probability_out_of_range(
-    db_pool, clean_test_data, sample_market, sample_strategy
+    db_pool, clean_test_data, sample_market, sample_strategy, sample_model
 ):
     """
     Test CHECK constraint: calculated_probability must be in [0.0, 1.0].
@@ -353,7 +357,7 @@ def test_create_trade_probability_out_of_range(
         create_trade(
             market_id=sample_market,
             strategy_id=sample_strategy,
-            model_id=1,
+            model_id=sample_model,
             side="buy",
             quantity=50,
             price=Decimal("0.5000"),
@@ -366,7 +370,7 @@ def test_create_trade_probability_out_of_range(
         create_trade(
             market_id=sample_market,
             strategy_id=sample_strategy,
-            model_id=1,
+            model_id=sample_model,
             side="buy",
             quantity=50,
             price=Decimal("0.5000"),
@@ -381,7 +385,7 @@ def test_create_trade_probability_out_of_range(
 
 
 def test_create_position_with_attribution_fields(
-    db_pool, clean_test_data, sample_market, sample_strategy
+    db_pool, clean_test_data, sample_market, sample_strategy, sample_model
 ):
     """
     Test position creation with full attribution (Migration 020).
@@ -395,7 +399,7 @@ def test_create_position_with_attribution_fields(
     position_id = create_position(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=1,
+        model_id=sample_model,
         side="yes",
         quantity=100,
         entry_price=Decimal("0.5200"),
@@ -408,7 +412,7 @@ def test_create_position_with_attribution_fields(
     position = get_position_by_id(position_id)
 
     assert position is not None
-    assert position["model_id"] == 1
+    assert position["model_id"] == sample_model
     assert position["calculated_probability"] == Decimal("0.6800")
     assert position["market_price_at_entry"] == Decimal("0.5200")
     # ⭐ Automatic edge_at_entry calculation
@@ -416,7 +420,7 @@ def test_create_position_with_attribution_fields(
 
 
 def test_create_position_immutable_attribution(
-    db_pool, clean_test_data, sample_market, sample_strategy
+    db_pool, clean_test_data, sample_market, sample_strategy, sample_model
 ):
     """
     Test immutability of position attribution fields (ADR-018).
@@ -429,7 +433,7 @@ def test_create_position_immutable_attribution(
     position_id = create_position(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=1,
+        model_id=sample_model,
         side="yes",
         quantity=50,
         entry_price=Decimal("0.4500"),
@@ -451,7 +455,7 @@ def test_create_position_immutable_attribution(
 
 
 def test_create_position_without_attribution_fields(
-    db_pool, clean_test_data, sample_market, sample_strategy
+    db_pool, clean_test_data, sample_market, sample_strategy, sample_model
 ):
     """
     Test backward compatibility: positions without attribution fields.
@@ -464,7 +468,7 @@ def test_create_position_without_attribution_fields(
     position_id = create_position(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=1,
+        model_id=sample_model,
         side="yes",
         quantity=75,
         entry_price=Decimal("0.5000"),
@@ -480,7 +484,7 @@ def test_create_position_without_attribution_fields(
 
 
 def test_create_position_with_negative_edge(
-    db_pool, clean_test_data, sample_market, sample_strategy
+    db_pool, clean_test_data, sample_market, sample_strategy, sample_model
 ):
     """
     Test position with negative edge at entry.
@@ -492,7 +496,7 @@ def test_create_position_with_negative_edge(
     position_id = create_position(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=1,
+        model_id=sample_model,
         side="yes",
         quantity=50,
         entry_price=Decimal("0.8000"),
@@ -507,7 +511,7 @@ def test_create_position_with_negative_edge(
 
 
 def test_create_position_probability_out_of_range(
-    db_pool, clean_test_data, sample_market, sample_strategy
+    db_pool, clean_test_data, sample_market, sample_strategy, sample_model
 ):
     """
     Test CHECK constraint: calculated_probability must be in [0.0, 1.0].
@@ -521,7 +525,7 @@ def test_create_position_probability_out_of_range(
         create_position(
             market_id=sample_market,
             strategy_id=sample_strategy,
-            model_id=1,
+            model_id=sample_model,
             side="yes",
             quantity=50,
             entry_price=Decimal("0.5000"),
@@ -662,7 +666,7 @@ def test_analytics_query_roi_by_model(
     trade_id_1 = create_trade(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=1,  # Model A (from sample_model fixture)
+        model_id=sample_model,  # Model A (from sample_model fixture)
         side="buy",
         quantity=50,
         price=Decimal("0.5000"),
@@ -673,7 +677,7 @@ def test_analytics_query_roi_by_model(
     trade_id_2 = create_trade(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=2,  # Model B
+        model_id=sample_model + 1,  # Model B (99902 from sample_model fixture)
         side="buy",
         quantity=50,
         price=Decimal("0.5000"),
@@ -687,8 +691,8 @@ def test_analytics_query_roi_by_model(
     assert trade_1 is not None  # Guard for type checker
     assert trade_2 is not None  # Guard for type checker
 
-    assert trade_1["model_id"] == 1
-    assert trade_2["model_id"] == 2
+    assert trade_1["model_id"] == sample_model
+    assert trade_2["model_id"] == sample_model + 1
 
     # ⭐ Analytics query (SQL):
     # SELECT model_id, COUNT(*), AVG(edge_value), AVG(realized_pnl)
@@ -698,7 +702,9 @@ def test_analytics_query_roi_by_model(
     # ORDER BY AVG(realized_pnl) DESC
 
 
-def test_analytics_query_edge_vs_outcome(db_pool, clean_test_data, sample_market, sample_strategy):
+def test_analytics_query_edge_vs_outcome(
+    db_pool, clean_test_data, sample_market, sample_strategy, sample_model
+):
     """
     Test analytics query: Edge value vs trade outcome.
 
@@ -711,7 +717,7 @@ def test_analytics_query_edge_vs_outcome(db_pool, clean_test_data, sample_market
     trade_id_high_edge = create_trade(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=1,
+        model_id=sample_model,
         side="buy",
         quantity=50,
         price=Decimal("0.5000"),
@@ -723,7 +729,7 @@ def test_analytics_query_edge_vs_outcome(db_pool, clean_test_data, sample_market
     trade_id_low_edge = create_trade(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=1,
+        model_id=sample_model,
         side="buy",
         quantity=50,
         price=Decimal("0.5000"),

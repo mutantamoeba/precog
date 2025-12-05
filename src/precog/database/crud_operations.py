@@ -2314,7 +2314,7 @@ def create_game_state(
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
-            data_source, row_current_ind, row_start_timestamp
+            data_source, row_current_ind, row_start_ts
         )
         VALUES (
             'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
@@ -2469,7 +2469,7 @@ def upsert_game_state(
     close_query = """
         UPDATE game_states
         SET row_current_ind = FALSE,
-            row_end_timestamp = NOW()
+            row_end_ts = NOW()
         WHERE espn_event_id = %s
           AND row_current_ind = TRUE
     """
@@ -2480,7 +2480,7 @@ def upsert_game_state(
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
-            data_source, row_current_ind, row_start_timestamp
+            data_source, row_current_ind, row_start_ts
         )
         VALUES (
             'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
@@ -2547,18 +2547,18 @@ def get_game_state_history(espn_event_id: str, limit: int = 100) -> list[dict[st
         limit: Maximum rows to return (default 100)
 
     Returns:
-        List of game state records ordered by row_start_timestamp DESC
+        List of game state records ordered by row_start_ts DESC
 
     Example:
         >>> history = get_game_state_history("401547417")
         >>> for state in history[:5]:
-        ...     print(f"{state['row_start_timestamp']}: {state['home_score']}-{state['away_score']}")
+        ...     print(f"{state['row_start_ts']}: {state['home_score']}-{state['away_score']}")
     """
     query = """
         SELECT *
         FROM game_states
         WHERE espn_event_id = %s
-        ORDER BY row_start_timestamp DESC
+        ORDER BY row_start_ts DESC
         LIMIT %s
     """
     return fetch_all(query, (espn_event_id, limit))
