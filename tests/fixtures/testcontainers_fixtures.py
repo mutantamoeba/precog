@@ -186,6 +186,8 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_markets_market_id ON markets(market_id);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_markets_unique_current ON markets(market_id) WHERE row_current_ind = TRUE;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_markets_unique_ticker_current ON markets(ticker) WHERE row_current_ind = TRUE;
+    -- Historical query index (migration 024)
+    CREATE INDEX IF NOT EXISTS idx_markets_history ON markets(row_current_ind, created_at DESC);
 
     -- 2. TEAMS & SPORTS DATA
     CREATE TABLE IF NOT EXISTS teams (
@@ -338,6 +340,8 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     );
     CREATE INDEX IF NOT EXISTS idx_strategy_types_active ON strategy_types(is_active) WHERE is_active = TRUE;
     CREATE INDEX IF NOT EXISTS idx_strategy_types_category ON strategy_types(category);
+    -- Unique display_order constraint (migration 025)
+    CREATE UNIQUE INDEX IF NOT EXISTS unique_strategy_types_display_order ON strategy_types(category, display_order) WHERE display_order IS NOT NULL;
 
     INSERT INTO strategy_types (strategy_type_code, display_name, description, category, display_order)
     VALUES
@@ -361,13 +365,15 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     );
     CREATE INDEX IF NOT EXISTS idx_model_classes_active ON model_classes(is_active) WHERE is_active = TRUE;
     CREATE INDEX IF NOT EXISTS idx_model_classes_category ON model_classes(category);
+    -- Unique display_order constraint (migration 025)
+    CREATE UNIQUE INDEX IF NOT EXISTS unique_model_classes_display_order ON model_classes(category, display_order) WHERE display_order IS NOT NULL;
 
     INSERT INTO model_classes (model_class_code, display_name, description, category, complexity_level, display_order)
     VALUES
         ('elo', 'Elo Rating', 'Classic Elo rating system for head-to-head predictions', 'statistical', 'simple', 1),
-        ('ensemble', 'Ensemble', 'Combine multiple models for robust predictions', 'hybrid', 'advanced', 2),
+        ('ensemble', 'Ensemble', 'Combine multiple models for robust predictions', 'hybrid', 'moderate', 2),
         ('ml', 'Machine Learning', 'General ML models (XGBoost, Random Forest, etc.)', 'machine_learning', 'moderate', 3),
-        ('hybrid', 'Hybrid', 'Combine statistical and ML approaches', 'hybrid', 'advanced', 4),
+        ('hybrid', 'Hybrid', 'Combine statistical and ML approaches', 'hybrid', 'moderate', 4),
         ('regression', 'Regression', 'Linear and logistic regression models', 'statistical', 'simple', 5),
         ('neural_net', 'Neural Network', 'Deep learning models', 'machine_learning', 'advanced', 6),
         ('baseline', 'Baseline', 'Simple baseline models for comparison', 'baseline', 'simple', 7)
@@ -402,6 +408,8 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_strategies_platform ON strategies(platform_id);
     CREATE INDEX IF NOT EXISTS idx_strategies_status ON strategies(status);
     CREATE INDEX IF NOT EXISTS idx_strategies_strategy_type ON strategies(strategy_type);
+    -- Historical query index (migration 024)
+    CREATE INDEX IF NOT EXISTS idx_strategies_version_history ON strategies(strategy_name, strategy_version, created_at DESC);
 
     CREATE TABLE IF NOT EXISTS probability_models (
         model_id SERIAL PRIMARY KEY,
@@ -432,8 +440,12 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_probability_models_status ON probability_models(status);
     CREATE INDEX IF NOT EXISTS idx_probability_models_category ON probability_models(model_class, domain);
 
+    -- edges table (SCD Type 2 with dual-key structure per migration 017)
+    -- id: Surrogate primary key (unique across all versions)
+    -- edge_id: Business key (can repeat for SCD Type 2 versions)
     CREATE TABLE IF NOT EXISTS edges (
-        edge_id SERIAL PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
+        edge_id VARCHAR NOT NULL,
         market_id VARCHAR(100),
         probability_matrix_id INTEGER REFERENCES probability_matrices(probability_id) ON DELETE SET NULL,
         model_id INTEGER REFERENCES probability_models(model_id) ON DELETE SET NULL,
@@ -450,10 +462,16 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_edges_market ON edges(market_id);
     CREATE INDEX IF NOT EXISTS idx_edges_ev ON edges(expected_value) WHERE row_current_ind = TRUE;
     CREATE INDEX IF NOT EXISTS idx_edges_current ON edges(row_current_ind) WHERE row_current_ind = TRUE;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_unique_current ON edges(edge_id) WHERE row_current_ind = TRUE;
+    CREATE INDEX IF NOT EXISTS idx_edges_business_key ON edges(edge_id);
 
     -- 7. TRADING & POSITIONS
+    -- positions table (SCD Type 2 with dual-key structure per migration 015)
+    -- id: Surrogate primary key (unique across all versions)
+    -- position_id: Business key (can repeat for SCD Type 2 versions)
     CREATE TABLE IF NOT EXISTS positions (
-        position_id SERIAL PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
+        position_id VARCHAR NOT NULL,
         market_id VARCHAR(100),
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         strategy_id INTEGER REFERENCES strategies(strategy_id),
@@ -468,6 +486,13 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         unrealized_pnl_pct DECIMAL(10,4),
         realized_pnl DECIMAL(10,4),
         trailing_stop_state JSONB,
+        target_price DECIMAL(10,4) CHECK (target_price IS NULL OR (target_price >= 0.0000 AND target_price <= 1.0000)),
+        stop_loss_price DECIMAL(10,4) CHECK (stop_loss_price IS NULL OR (stop_loss_price >= 0.0000 AND stop_loss_price <= 1.0000)),
+        entry_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        exit_time TIMESTAMP WITH TIME ZONE,
+        last_check_time TIMESTAMP WITH TIME ZONE,
+        exit_price DECIMAL(10,4) CHECK (exit_price IS NULL OR (exit_price >= 0.0000 AND exit_price <= 1.0000)),
+        position_metadata JSONB,
         exit_reason VARCHAR(100),
         exit_priority VARCHAR(20) CHECK (exit_priority IS NULL OR exit_priority IN ('critical', 'high', 'medium', 'low')),
         calculated_probability DECIMAL(10,4) CHECK (calculated_probability IS NULL OR (calculated_probability >= 0.0000 AND calculated_probability <= 1.0000)),
@@ -484,6 +509,10 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_positions_platform ON positions(platform_id);
     CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
     CREATE INDEX IF NOT EXISTS idx_positions_current ON positions(row_current_ind) WHERE row_current_ind = TRUE;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_positions_unique_current ON positions(position_id) WHERE row_current_ind = TRUE;
+    CREATE INDEX IF NOT EXISTS idx_positions_business_key ON positions(position_id);
+    -- Historical query index (migration 024)
+    CREATE INDEX IF NOT EXISTS idx_positions_history ON positions(row_current_ind, created_at DESC);
 
     -- Create ENUM type for trade source
     DO $$ BEGIN
@@ -492,12 +521,13 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         WHEN duplicate_object THEN null;
     END $$;
 
+    -- trades table (per migration 015/017: References surrogate IDs, not business keys)
     CREATE TABLE IF NOT EXISTS trades (
         trade_id SERIAL PRIMARY KEY,
         market_id VARCHAR(100),
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
-        position_id INTEGER REFERENCES positions(position_id) ON DELETE SET NULL,
-        edge_id INTEGER REFERENCES edges(edge_id) ON DELETE SET NULL,
+        position_internal_id INTEGER REFERENCES positions(id) ON DELETE SET NULL,
+        edge_internal_id INTEGER REFERENCES edges(id) ON DELETE SET NULL,
         strategy_id INTEGER REFERENCES strategies(strategy_id),
         model_id INTEGER REFERENCES probability_models(model_id),
         order_id VARCHAR(100),
@@ -519,7 +549,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     );
     CREATE INDEX IF NOT EXISTS idx_trades_market ON trades(market_id);
     CREATE INDEX IF NOT EXISTS idx_trades_platform ON trades(platform_id);
-    CREATE INDEX IF NOT EXISTS idx_trades_position ON trades(position_id);
+    CREATE INDEX IF NOT EXISTS idx_trades_position ON trades(position_internal_id);
     CREATE INDEX IF NOT EXISTS idx_trades_created ON trades(created_at);
     CREATE INDEX IF NOT EXISTS idx_trades_source ON trades(trade_source);
 
@@ -533,9 +563,10 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     );
     CREATE INDEX IF NOT EXISTS idx_settlements_market ON settlements(market_id);
 
+    -- position_exits table (per migration 015: References surrogate ID, not business key)
     CREATE TABLE IF NOT EXISTS position_exits (
         exit_id SERIAL PRIMARY KEY,
-        position_id INTEGER REFERENCES positions(position_id) ON DELETE CASCADE,
+        position_internal_id INTEGER REFERENCES positions(id) ON DELETE CASCADE,
         exit_reason VARCHAR(100) NOT NULL,
         exit_priority VARCHAR(20) CHECK (exit_priority IN ('critical', 'high', 'medium', 'low')),
         exit_price DECIMAL(10,4) CHECK (exit_price >= 0.0000 AND exit_price <= 1.0000),
@@ -543,11 +574,12 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         realized_pnl DECIMAL(10,4),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_position_exits_position ON position_exits(position_id);
+    CREATE INDEX IF NOT EXISTS idx_position_exits_position ON position_exits(position_internal_id);
 
+    -- exit_attempts table (per migration 015: References surrogate ID, not business key)
     CREATE TABLE IF NOT EXISTS exit_attempts (
         attempt_id SERIAL PRIMARY KEY,
-        position_id INTEGER REFERENCES positions(position_id) ON DELETE CASCADE,
+        position_internal_id INTEGER REFERENCES positions(id) ON DELETE CASCADE,
         exit_reason VARCHAR(100) NOT NULL,
         attempted_price DECIMAL(10,4),
         actual_price DECIMAL(10,4),
@@ -556,7 +588,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         failure_reason TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_exit_attempts_position ON exit_attempts(position_id);
+    CREATE INDEX IF NOT EXISTS idx_exit_attempts_position ON exit_attempts(position_internal_id);
 
     CREATE TABLE IF NOT EXISTS account_balance (
         balance_id SERIAL PRIMARY KEY,
