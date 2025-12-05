@@ -395,7 +395,6 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         description TEXT,
         created_by VARCHAR(100),
-        subcategory VARCHAR(50),
         CONSTRAINT unique_strategy_name_version UNIQUE (strategy_name, strategy_version),
         CONSTRAINT strategy_activation_order
             CHECK (deactivated_at IS NULL OR activated_at IS NULL OR deactivated_at >= activated_at)
