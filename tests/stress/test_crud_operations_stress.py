@@ -15,8 +15,17 @@ Usage:
     pytest tests/stress/test_phase2c_crud_stress.py -v -m stress
     pytest tests/stress/test_phase2c_crud_stress.py -v -m race
     pytest tests/stress/test_phase2c_crud_stress.py -v -m chaos
+
+CI Skip Reason (Phase 1.9 Investigation):
+    These tests hang in CI because they create 50+ concurrent connections competing
+    for the shared PostgreSQL service container's limited connection pool. The tests
+    require testcontainers for proper database isolation where each test gets its own
+    PostgreSQL instance. See GitHub issue #168 for testcontainers implementation.
+
+    The tests run successfully locally where developers have dedicated database resources.
 """
 
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -31,6 +40,16 @@ from precog.database.crud_operations import (
     get_game_state_history,
     get_venue_by_espn_id,
     upsert_game_state,
+)
+
+# CI environment detection - same pattern as test_connection_stress.py
+# Tests run locally but xfail in CI where shared database causes hangs
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+
+_CI_XFAIL_REASON = (
+    "Stress tests require testcontainers for proper database isolation. "
+    "These tests hang in CI with shared PostgreSQL due to connection pool exhaustion. "
+    "Run locally with 'pytest tests/stress/ -v -m stress'. See GitHub issue #168."
 )
 
 # =============================================================================
@@ -78,6 +97,7 @@ def setup_stress_teams(db_pool, clean_test_data):
 
 
 @pytest.mark.stress
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestHighVolumeVenueOperations:
     """Stress tests for venue CRUD under high load."""
 
@@ -158,6 +178,7 @@ class TestHighVolumeVenueOperations:
 
 
 @pytest.mark.stress
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestHighVolumeGameStateOperations:
     """Stress tests for game state CRUD under high load."""
 
@@ -290,6 +311,7 @@ class TestHighVolumeGameStateOperations:
 
 
 @pytest.mark.race
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestSCDType2RaceConditions:
     """Race condition tests for SCD Type 2 concurrent updates."""
 
@@ -465,6 +487,7 @@ class TestSCDType2RaceConditions:
 
 
 @pytest.mark.chaos
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestDatabaseFailureRecovery:
     """Chaos tests for database failure scenarios."""
 
