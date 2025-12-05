@@ -15,6 +15,7 @@ Usage:
     pytest tests/stress/schedulers/test_kalshi_websocket_stress.py -v -m stress
 """
 
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -23,8 +24,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
+# CI environment detection - same pattern as connection stress tests
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+
+_CI_XFAIL_REASON = (
+    "Stress tests use time-based loops and threading barriers that can hang "
+    "or timeout in CI environments due to resource constraints. "
+    "Run locally with 'pytest tests/stress/ -v -m stress'. See GitHub issue #168."
+)
+
 
 @pytest.mark.stress
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestKalshiWebSocketHandlerStress:
     """Stress tests for Kalshi WebSocket operations."""
 

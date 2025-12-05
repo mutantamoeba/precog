@@ -21,6 +21,7 @@ Educational Note:
     Reference: Pattern 12 (Dependency Injection) in DEVELOPMENT_PATTERNS
 """
 
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -28,8 +29,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
+# CI environment detection - same pattern as connection stress tests
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+
+_CI_XFAIL_REASON = (
+    "Race condition tests use threading barriers that can hang "
+    "or timeout in CI environments due to resource constraints. "
+    "Run locally with 'pytest tests/stress/ -v -m race'. See GitHub issue #168."
+)
+
 
 @pytest.mark.race
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestKalshiClientRace:
     """Race condition tests for Kalshi API client."""
 

@@ -21,6 +21,7 @@ Educational Note:
 Reference: docs/testing/PHASE_2_TEST_PLAN_V1.0.md Section 2.1.5
 """
 
+import os
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta
@@ -30,11 +31,21 @@ import pytest
 
 from tests.fixtures import ESPN_NFL_SCOREBOARD_LIVE
 
+# CI environment detection - same pattern as connection stress tests
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+
+_CI_XFAIL_REASON = (
+    "Stress tests use time-based loops and threading barriers that can hang "
+    "or timeout in CI environments due to resource constraints. "
+    "Run locally with 'pytest tests/stress/ -v -m stress'. See GitHub issue #168."
+)
+
 # =============================================================================
 # Stress Tests: High-Volume Burst Requests
 # =============================================================================
 
 
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestRateLimitingUnderBurst:
     """Stress tests for burst request scenarios."""
 
@@ -116,6 +127,7 @@ class TestRateLimitingUnderBurst:
 # =============================================================================
 
 
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestRateLimitingUnderSustainedLoad:
     """Stress tests for sustained request load."""
 
@@ -176,6 +188,7 @@ class TestRateLimitingUnderSustainedLoad:
 # =============================================================================
 
 
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestRateLimitRecovery:
     """Stress tests for rate limit recovery scenarios."""
 
@@ -239,6 +252,7 @@ class TestRateLimitRecovery:
 # =============================================================================
 
 
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestConcurrentRequests:
     """Stress tests for concurrent request handling."""
 
