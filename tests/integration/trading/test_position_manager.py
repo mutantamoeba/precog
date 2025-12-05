@@ -84,10 +84,10 @@ def position_params(db_cursor, clean_test_data):
             # Create test markets (required for get_current_positions() JOIN)
             # Multiple markets needed for filtering tests
             markets_to_create = [
-                ("KALSHI-NFL-TEST-001", "KALSHI-TEST-001", "Test Market: KC to beat BUF"),
-                ("KALSHI-NFL-001", "KALSHI-001", "Test Market 1"),
-                ("KALSHI-NFL-002", "KALSHI-002", "Test Market 2"),
-                ("KALSHI-NFL-003", "KALSHI-003", "Test Market 3"),
+                ("MKT-NFL-TEST-001", "MKT-TEST-001", "Test Market: KC to beat BUF"),
+                ("MKT-NFL-001", "MKT-001", "Test Market 1"),
+                ("MKT-NFL-002", "MKT-002", "Test Market 2"),
+                ("MKT-NFL-003", "MKT-003", "Test Market 3"),
             ]
 
             for market_id, external_id, title in markets_to_create:
@@ -120,7 +120,7 @@ def position_params(db_cursor, clean_test_data):
         release_connection(conn)
 
     return {
-        "market_id": "KALSHI-NFL-TEST-001",
+        "market_id": "MKT-NFL-TEST-001",
         "strategy_id": strategy_id,
         "model_id": model_id,
         "side": "YES",
@@ -193,7 +193,7 @@ def test_open_position_insufficient_margin_yes(db_cursor, clean_test_data, posit
     Educational Note:
         - YES position margin = quantity * (1.00 - entry_price)
         - Entry $0.75, qty 10: margin = 10 * 0.25 = $2.50
-        - Available $1.00 < required $2.50 → should FAIL
+        - Available $1.00 < required $2.50 -> should FAIL
     """
     manager = PositionManager()
 
@@ -211,7 +211,7 @@ def test_open_position_insufficient_margin_no(db_cursor, clean_test_data, positi
     Educational Note:
         - NO position margin = quantity * entry_price
         - Entry $0.25, qty 10: margin = 10 * 0.25 = $2.50
-        - Available $1.00 < required $2.50 → should FAIL
+        - Available $1.00 < required $2.50 -> should FAIL
     """
     manager = PositionManager()
 
@@ -276,7 +276,7 @@ def test_update_position_creates_new_version(db_cursor, clean_test_data, positio
         - SCD Type 2 pattern: UPDATE creates NEW row, marks old row non-current
         - Old version: row_current_ind = FALSE (archived)
         - New version: row_current_ind = TRUE (current)
-        - Surrogate id CHANGES (old id → new id)
+        - Surrogate id CHANGES (old id -> new id)
         - Business key STAYS SAME (position_id copied to new version)
     """
     manager = PositionManager()
@@ -445,8 +445,8 @@ def test_get_open_positions_all(db_cursor, clean_test_data, position_params):
 
     # Open 3 positions
     manager.open_position(**position_params)
-    manager.open_position(**{**position_params, "market_id": "KALSHI-NFL-002"})
-    manager.open_position(**{**position_params, "market_id": "KALSHI-NFL-003"})
+    manager.open_position(**{**position_params, "market_id": "MKT-NFL-002"})
+    manager.open_position(**{**position_params, "market_id": "MKT-NFL-003"})
 
     # Get all open positions
     positions = manager.get_open_positions()
@@ -461,15 +461,15 @@ def test_get_open_positions_filter_by_market(db_cursor, clean_test_data, positio
     manager = PositionManager()
 
     # Open positions in different markets
-    manager.open_position(**{**position_params, "market_id": "KALSHI-NFL-001"})
-    manager.open_position(**{**position_params, "market_id": "KALSHI-NFL-002"})
-    manager.open_position(**{**position_params, "market_id": "KALSHI-NFL-001"})
+    manager.open_position(**{**position_params, "market_id": "MKT-NFL-001"})
+    manager.open_position(**{**position_params, "market_id": "MKT-NFL-002"})
+    manager.open_position(**{**position_params, "market_id": "MKT-NFL-001"})
 
     # Filter by market
-    positions = manager.get_open_positions(market_id="KALSHI-NFL-001")
+    positions = manager.get_open_positions(market_id="MKT-NFL-001")
 
     assert len(positions) == 2
-    assert all(p["market_id"] == "KALSHI-NFL-001" for p in positions)
+    assert all(p["market_id"] == "MKT-NFL-001" for p in positions)
 
 
 def test_get_open_positions_filter_by_strategy(db_cursor, clean_test_data, position_params):
@@ -508,8 +508,8 @@ def test_get_open_positions_excludes_closed(db_cursor, clean_test_data, position
 
     # Open 3 positions
     p1 = manager.open_position(**position_params)
-    p2 = manager.open_position(**{**position_params, "market_id": "KALSHI-NFL-002"})
-    p3 = manager.open_position(**{**position_params, "market_id": "KALSHI-NFL-003"})
+    p2 = manager.open_position(**{**position_params, "market_id": "MKT-NFL-002"})
+    p3 = manager.open_position(**{**position_params, "market_id": "MKT-NFL-003"})
 
     # Close one position
     manager.close_position(
@@ -623,7 +623,7 @@ def test_calculate_pnl_breakeven(db_cursor, clean_test_data):
 
 
 def test_complete_position_lifecycle(db_cursor, clean_test_data, position_params):
-    """Test complete position lifecycle: open → update → update → close.
+    """Test complete position lifecycle: open -> update -> update -> close.
 
     Educational Note:
         - Demonstrates SCD Type 2 versioning in action
@@ -680,7 +680,7 @@ def test_margin_calculation_yes_vs_no(db_cursor, clean_test_data, position_param
         **position_params,
         "side": "YES",
         "entry_price": Decimal("0.7500"),
-        "available_margin": Decimal("3.00"),  # Need $2.50 → should PASS
+        "available_margin": Decimal("3.00"),  # Need $2.50 -> should PASS
     }
     yes_position = manager.open_position(**yes_params)
     assert yes_position["side"] == "YES"
@@ -688,10 +688,10 @@ def test_margin_calculation_yes_vs_no(db_cursor, clean_test_data, position_param
     # Test NO position at 0.75 with same margin should FAIL
     no_params = {
         **position_params,
-        "market_id": "KALSHI-NFL-002",  # Different market
+        "market_id": "MKT-NFL-002",  # Different market
         "side": "NO",
         "entry_price": Decimal("0.7500"),
-        "available_margin": Decimal("3.00"),  # Need $7.50 → should FAIL
+        "available_margin": Decimal("3.00"),  # Need $7.50 -> should FAIL
     }
     with pytest.raises(InsufficientMarginError):
         manager.open_position(**no_params)

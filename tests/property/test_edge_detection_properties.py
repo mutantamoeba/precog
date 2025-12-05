@@ -18,10 +18,10 @@ Mathematical Properties Tested:
 8. Market efficiency adjustment correctness
 
 Why This Matters:
-- False positive edge → losing trades
-- False negative edge → missed opportunities
-- Fee miscalculation → systematic losses
-- Spread ignorance → slippage eats profits
+- False positive edge -> losing trades
+- False negative edge -> missed opportunities
+- Fee miscalculation -> systematic losses
+- Spread ignorance -> slippage eats profits
 
 Traditional example-based tests miss edge cases. Hypothesis generates extreme
 scenarios (probability = 0.9999, fees = 9.99%, spread = 0.4950) automatically.
@@ -93,9 +93,9 @@ def calculate_edge(
         edge = true_probability - (market_price + fees)
         edge = true_probability - (market_price * (1 + fee_percent))
 
-    Positive edge → expected value is positive → should trade
-    Zero edge → break-even → indifferent
-    Negative edge → expected value is negative → should NOT trade
+    Positive edge -> expected value is positive -> should trade
+    Zero edge -> break-even -> indifferent
+    Negative edge -> expected value is negative -> should NOT trade
 
     Args:
         true_probability: Our model's estimate of win probability
@@ -292,8 +292,8 @@ def test_edge_bounded_by_reasonable_range(true_prob, price, fee):
     PROPERTY: Edge should be in range [-1.15, 1.0].
 
     Mathematical bounds:
-    - Maximum edge: true_prob = 1, price = 0, fee = 0 → edge = 1
-    - Minimum edge: true_prob = 0, price = 1, fee = 15% → edge = -1.15
+    - Maximum edge: true_prob = 1, price = 0, fee = 0 -> edge = 1
+    - Minimum edge: true_prob = 0, price = 1, fee = 15% -> edge = -1.15
 
     If edge is outside this range, formula is broken.
     """
@@ -313,7 +313,7 @@ def test_edge_bounded_by_reasonable_range(true_prob, price, fee):
 )
 def test_edge_increases_monotonically_with_true_probability(price, fee):
     """
-    PROPERTY: Higher true_probability → higher edge (monotonic increase).
+    PROPERTY: Higher true_probability -> higher edge (monotonic increase).
 
     If true_prob1 < true_prob2, then edge(true_prob1) < edge(true_prob2).
 
@@ -338,7 +338,7 @@ def test_edge_increases_monotonically_with_true_probability(price, fee):
 )
 def test_edge_decreases_monotonically_with_market_price(true_prob, fee):
     """
-    PROPERTY: Higher market_price → lower edge (monotonic decrease).
+    PROPERTY: Higher market_price -> lower edge (monotonic decrease).
 
     If price1 < price2, then edge(price1) > edge(price2).
 
@@ -369,7 +369,7 @@ def test_edge_decreases_monotonically_with_market_price(true_prob, fee):
 )
 def test_spread_reduces_realizable_edge(true_prob, mid_price, spread_width, fee):
     """
-    PROPERTY: Wider spread → lower realizable edge.
+    PROPERTY: Wider spread -> lower realizable edge.
 
     When bid-ask spread widens, the realizable edge (what we can actually capture)
     decreases because we buy at ask (higher) and sell at bid (lower).
@@ -398,8 +398,8 @@ def test_spread_reduces_realizable_edge(true_prob, mid_price, spread_width, fee)
 
     assert edge_wide <= edge_narrow, (
         f"Wider spread produced higher edge! "
-        f"Narrow spread {narrow_spread} → edge {edge_narrow}, "
-        f"Wide spread {spread_width} → edge {edge_wide}"
+        f"Narrow spread {narrow_spread} -> edge {edge_narrow}, "
+        f"Wide spread {spread_width} -> edge {edge_wide}"
     )
 
 
@@ -565,7 +565,7 @@ def test_bid_exceeds_ask_raises_error(true_prob, bid, ask, fee):
 # ==============================================================================
 """
 Hypothesis Configuration (from pyproject.toml):
-- max_examples = 100 (default) → Will test 100 random inputs per property
+- max_examples = 100 (default) -> Will test 100 random inputs per property
 - deadline = 400ms per example
 
 To run with statistics:

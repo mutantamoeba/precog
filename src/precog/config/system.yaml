@@ -651,9 +651,9 @@ development:
 # 4. Disabling circuit breakers (NEVER do this in prod!)
 
 # TROUBLESHOOTING:
-# - "Can't connect to database" → Check password_env is set
-# - "Too many log files" → Adjust max_files
-# - "API rate limited" → Check rate_limits settings
-# - "System slow" → Check telemetry metrics
+# - "Can't connect to database" -> Check password_env is set
+# - "Too many log files" -> Adjust max_files
+# - "API rate limited" -> Check rate_limits settings
+# - "System slow" -> Check telemetry metrics
 
 # END OF SYSTEM.YAML

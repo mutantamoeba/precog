@@ -1,0 +1,50 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://demo-api.kalshi.co/trade-api/v2/markets?limit=5&series_ticker=KXNFLGAME
+  response:
+    body:
+      string: '{"cursor":"","markets":[{"ticker":"KXNFLGAME-25DEC15-KC-YES","event_ticker":"KXNFLGAME-25DEC15","series_ticker":"KXNFLGAME","title":"Mock
+        Market 1 - Initial","status":"open","yes_bid":62,"yes_bid_dollars":"0.6200","yes_ask":62,"yes_ask_dollars":"0.6250","no_bid":37,"no_bid_dollars":"0.3750","no_ask":38,"no_ask_dollars":"0.3800","last_price":62,"last_price_dollars":"0.6200","volume":1000,"open_interest":500,"close_time":"2025-12-15T21:00:00Z","expiration_time":"2025-12-15T21:00:00Z","market_type":"binary","notional_value":100,"notional_value_dollars":"1.0000"},{"ticker":"KXNFLGAME-25DEC15-BUF-YES","event_ticker":"KXNFLGAME-25DEC15","series_ticker":"KXNFLGAME","title":"Mock
+        Market 2 - Initial","status":"open","yes_bid":43,"yes_bid_dollars":"0.4300","yes_ask":43,"yes_ask_dollars":"0.4350","no_bid":56,"no_bid_dollars":"0.5650","no_ask":57,"no_ask_dollars":"0.5700","last_price":43,"last_price_dollars":"0.4300","volume":2000,"open_interest":800,"close_time":"2025-12-15T21:00:00Z","expiration_time":"2025-12-15T21:00:00Z","market_type":"binary","notional_value":100,"notional_value_dollars":"1.0000"}]}'
+    headers:
+      Cache-Control:
+      - public, max-age=5
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      Date:
+      - Sun, 23 Nov 2025 16:56:51 GMT
+      Transfer-Encoding:
+      - chunked
+      Via:
+      - 1.1 fea3bb73170852a6088ac898afbb2522.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - VajMphVU7j9lqQ24jFw1HgH84VmhyYI1zaf_GA28hB9iBUrZ8axMog==
+      X-Amz-Cf-Pop:
+      - ORD58-P10
+      X-Cache:
+      - Miss from cloudfront
+      content-security-policy:
+      - default-src 'none';
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1

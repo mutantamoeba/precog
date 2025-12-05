@@ -1,9 +1,25 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.23
-**Last Updated:** November 28, 2025
+**Version:** 2.25
+**Last Updated:** December 3, 2025
 **Status:** ✅ Current
+**Changes in v2.25:**
+- **ALEMBIC MIGRATION FRAMEWORK (PHASE 1.9):** Added ADR-056 (Alembic Migration Framework for Database Schema Management)
+- Documents decision to adopt Alembic for database migrations, replacing 10 manual SQL/Python scripts
+- Provides version tracking, rollback support, CI integration with `alembic upgrade head`
+- Consolidated initial migration with 25 tables, SCD Type 2 support, proper FK constraints
+- **TESTCONTAINERS PLANNING (PHASE 1.9+):** Added ADR-057 (Testcontainers for Database Test Isolation)
+- Documents planned solution for stress test FK constraint failures using testcontainers-python
+- 4 stress tests currently marked xfail pending testcontainers implementation
+- Enables true database isolation with ephemeral PostgreSQL containers per test class
+**Changes in v2.24:**
+- **TIMESCALEDB DECISION (PHASE 6+):** Added ADR-098 (TimescaleDB Deferred to Phase 6+)
+- Documents decision to defer TimescaleDB extension adoption until Phase 6+
+- Current PostgreSQL + SCD Type 2 approach sufficient for Phase 1-5 data volumes (~1.1 GB/year)
+- TimescaleDB evaluation triggers: >1M rows/month, time-series query bottlenecks, retention policy needs
+- Migration path documented for future adoption with hypertables, compression, continuous aggregates
+- Preserves option to adopt later without current complexity overhead
 **Changes in v2.23:**
 - **SPORTS DATA SOURCE TIERING STRATEGY (PHASE 2):** Added ADR-076 (Sports Data Source Tiering Strategy)
 - Documents 3-tier architecture: Historical (sportsdataverse FREE), Dev/Testing (ESPN hidden API FREE), Production (paid APIs $109-1,599/mo per league)
@@ -97,7 +113,7 @@
 - **Implementation:** Test organization structure (8 test directories), phase-based roadmap (Phase 1-5), fixture requirements (db_pool, clean_test_data)
 - **Benefits:** Prevents false confidence, comprehensive coverage (8 types catch different bug categories), clear guidance (mock usage decision tree)
 - **Costs:** Increased test execution time (integration/stress tests slower), steeper learning curve (Hypothesis, threading), more test infrastructure
-- References TESTING_STRATEGY_V3.2.md, REQ-TEST-012 through REQ-TEST-019, ADR-074 (Property-Based Testing), ADR-075 (Multi-Source Warning Governance)
+- References TESTING_STRATEGY_V3.3.md, REQ-TEST-012 through REQ-TEST-019, ADR-074 (Property-Based Testing), ADR-075 (Multi-Source Warning Governance)
 **Changes in v2.16:**
 - **SCHEMA STANDARDIZATION - CLASSIFICATION FIELD NAMING:** Added Decision #86/ADR-086 (Schema Classification Field Naming - Phase 1.5)
 - Documents the approach/domain naming decision that resolved three-way schema mismatch blocking Model Manager implementation
@@ -3670,7 +3686,7 @@ test_results/
 - pytest-html generates HTML reports
 - .gitignore excludes timestamped runs (keeps README.md)
 
-**Reference:** `foundation/TESTING_STRATEGY_V3.2.md`
+**Reference:** `foundation/TESTING_STRATEGY_V3.3.md`
 
 ---
 
@@ -3848,7 +3864,7 @@ safety check --full-report
 - CI workflow fails on high/critical findings
 - Weekly dependency scans via scheduled workflow
 
-**Reference:** `foundation/TESTING_STRATEGY_V3.2.md`, REQ-TEST-008
+**Reference:** `foundation/TESTING_STRATEGY_V3.3.md`, REQ-TEST-008
 
 ---
 
@@ -3890,7 +3906,7 @@ Target: >80% mutation score on critical modules
 - Run weekly on critical modules
 - Track mutation score trends
 
-**Reference:** `foundation/TESTING_STRATEGY_V3.2.md`, REQ-TEST-009
+**Reference:** `foundation/TESTING_STRATEGY_V3.3.md`, REQ-TEST-009
 
 ---
 
@@ -3935,7 +3951,7 @@ def test_spread_always_positive(price):
 - Focus on financial calculations (decimal precision critical)
 - Integrate into test suite (pytest-hypothesis plugin)
 
-**Reference:** `foundation/TESTING_STRATEGY_V3.2.md`, REQ-TEST-010
+**Reference:** `foundation/TESTING_STRATEGY_V3.3.md`, REQ-TEST-010
 
 ---
 
@@ -5336,6 +5352,187 @@ def execute_trade(ticker: str, side: str, quantity: int):
 4. Release tracking (tag errors by `precog@X.Y.Z` version)
 
 **Reference:** `api-integration/SENTRY_INTEGRATION_GUIDE_V1.0.md` (future), REQ-OBSERV-002, ADR-049 (Correlation IDs), ADR-051 (Log Masking), ADR-010 (Structured Logging)
+
+---
+
+## Decision #50/ADR-056: Alembic Migration Framework for Database Schema Management (Phase 1.9)
+
+**Date:** December 3, 2025
+**Phase:** 1.9 (Test Infrastructure)
+**Status:** 🟢 Accepted
+
+### Problem
+
+The project had accumulated **10 manual SQL/Python migration scripts** (001-010) that:
+
+1. **Lacked version tracking** - No way to know which migrations had been applied to a database
+2. **Had no rollback support** - Manual migrations are one-way; reverting required manual SQL
+3. **Used error-suppression patterns** - CI used `|| true` to ignore migration failures, masking real issues
+4. **Created schema drift** - Different environments could have different schema versions
+5. **Blocked CI** - PR #167 failed due to `game_states` FK constraint issues that were hidden by `|| true`
+
+**Root Cause:** The `game_states` table had Foreign Key constraints on `home_team_id` and `away_team_id` referencing `teams(team_id)`, but stress tests were inserting game_states without first creating the referenced teams.
+
+### Decision
+
+**Adopt Alembic as the database migration framework**, replacing the manual SQL/Python migration approach:
+
+1. **Single source of truth:** All schema changes managed through Alembic migrations
+2. **Version tracking:** Alembic tracks applied migrations in `alembic_version` table
+3. **Rollback support:** Each migration has `upgrade()` and `downgrade()` functions
+4. **CI integration:** `alembic upgrade head` replaces complex multi-script migration logic
+
+### Implementation
+
+**File Structure:**
+```
+src/precog/database/
+├── alembic.ini           # Alembic configuration
+└── alembic/
+    ├── env.py            # Environment config (reads DB credentials from env vars)
+    ├── script.py.mako    # Migration template
+    └── versions/
+        └── 0001_initial_baseline_schema.py  # Consolidated schema migration
+```
+
+**env.py Security Pattern:**
+```python
+def get_database_url() -> str:
+    """Build PostgreSQL connection URL from environment variables."""
+    password = os.getenv("DB_PASSWORD")
+    if not password:
+        raise ValueError("DB_PASSWORD environment variable is required.")
+    return f"postgresql://{user}:{password}@{host}:{port}/{database}"
+```
+
+**CI Workflow (Updated):**
+```yaml
+- name: Apply database migrations with Alembic
+  run: |
+    cd src/precog/database
+    alembic upgrade head
+    alembic current
+```
+
+### Initial Migration Content
+
+The `0001_initial_baseline_schema.py` migration consolidates all previous schema into one authoritative migration:
+
+- **25 tables** with proper column types (DECIMAL(10,4) for prices)
+- **SCD Type 2 support** with `row_current_ind`, `row_start_timestamp`, `row_end_timestamp`
+- **All Foreign Key constraints** properly defined
+- **Indexes** for performance-critical queries
+
+### Alternatives Considered
+
+1. **Django Migrations:** Rejected - Precog doesn't use Django ORM
+2. **Flyway:** Rejected - Java-based, adds non-Python dependency
+3. **Manual SQL:** Current approach - Replaced due to issues above
+4. **SQLAlchemy ORM autogenerate:** Deferred - Requires full ORM model layer first
+
+### Consequences
+
+**Positive:**
+- ✅ CI failures now visible (no `|| true` suppression)
+- ✅ Schema version is trackable (`alembic current`)
+- ✅ Rollback support for schema changes (`alembic downgrade -1`)
+- ✅ Industry-standard tooling with extensive documentation
+- ✅ Compatible with future SQLAlchemy ORM models
+
+**Negative:**
+- ⚠️ Existing test data in dev DBs may need recreation after migration
+- ⚠️ Learning curve for team members unfamiliar with Alembic
+
+**Reference:** `src/precog/database/alembic/`, REQ-DB-025, SCHEMA_MIGRATION_WORKFLOW_V1.1.md
+
+---
+
+## Decision #51/ADR-057: Testcontainers for Database Test Isolation (Phase 1.9+)
+
+**Date:** December 3, 2025
+**Phase:** 1.9+ (Test Infrastructure Enhancement)
+**Status:** 🔵 Planned
+
+### Problem
+
+Stress tests with Foreign Key constraints fail due to **shared database state** between tests:
+
+1. **FK Constraint Violations:** `test_rapid_game_state_updates` inserts `game_states` without first creating referenced `teams`
+2. **Test Isolation Failure:** One test's cleanup can remove data another test depends on
+3. **Fixture Conflicts:** `setup_stress_teams` fixture creates teams, but cleanup order isn't guaranteed
+4. **Workaround Required:** 4 stress tests marked as `xfail` pending proper isolation
+
+**Affected Tests:**
+- `test_rapid_game_state_updates`
+- `test_parallel_updates_different_games`
+- `test_concurrent_upsert_same_game_state`
+- `test_data_integrity_under_system_stress`
+
+### Decision
+
+**Implement testcontainers-python for proper database test isolation:**
+
+1. **Ephemeral containers:** Each test class gets a fresh PostgreSQL container
+2. **Complete isolation:** No shared state between test runs
+3. **Real database:** Tests run against actual PostgreSQL (not SQLite mocks)
+4. **CI compatible:** Works in GitHub Actions with Docker support
+
+### Implementation Plan
+
+**1. Add Dependency:**
+```bash
+pip install testcontainers[postgres]
+```
+
+**2. Create Test Fixture:**
+```python
+# tests/conftest.py
+import pytest
+from testcontainers.postgres import PostgresContainer
+
+@pytest.fixture(scope="class")
+def postgres_container():
+    """Provide isolated PostgreSQL container per test class."""
+    with PostgresContainer("postgres:15") as postgres:
+        yield postgres
+
+@pytest.fixture(scope="class")
+def isolated_db_connection(postgres_container):
+    """Create connection to isolated container."""
+    url = postgres_container.get_connection_url()
+    # Run Alembic migrations on fresh container
+    # Return connection for tests
+```
+
+**3. Update Stress Tests:**
+```python
+@pytest.mark.usefixtures("isolated_db_connection")
+class TestGameStateConcurrency:
+    def test_rapid_game_state_updates(self):
+        # Now uses isolated container - no FK conflicts
+```
+
+### Alternatives Considered
+
+1. **SQLite in-memory:** Rejected - Doesn't support all PostgreSQL features (DECIMAL precision, FK constraints)
+2. **Shared test database with transaction rollback:** Current approach - Fails with concurrent tests
+3. **Mocking CRUD operations:** Rejected - Defeats purpose of integration testing
+4. **Pytest-postgresql:** Considered - Less mature than testcontainers
+
+### Consequences
+
+**Positive:**
+- ✅ Complete test isolation - no more FK constraint conflicts
+- ✅ Tests run against real PostgreSQL with identical behavior
+- ✅ Enables true concurrent stress testing
+- ✅ Removes xfail markers from 4 stress tests
+
+**Negative:**
+- ⚠️ Slower test execution (container startup ~2-3 seconds per class)
+- ⚠️ Requires Docker in CI environment (already available in GitHub Actions)
+- ⚠️ Additional dependency (testcontainers-python)
+
+**Reference:** tests/stress/test_crud_operations_stress.py, ADR-056 (Alembic)
 
 ---
 
@@ -11861,7 +12058,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 **Mitigation:**
 - Run unit tests fast (~5s) during development via `./scripts/test_fast.sh`
 - Run full suite (~30s) before commits via pre-push hooks
-- Provide comprehensive examples in TESTING_STRATEGY_V3.2.md
+- Provide comprehensive examples in TESTING_STRATEGY_V3.3.md
 
 ### When to Use Each Test Type
 
@@ -11927,14 +12124,14 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 ### Documentation Updates
 
 **Primary Documentation:**
-- TESTING_STRATEGY_V3.2.md (comprehensive 8 test type framework, 1,462 lines)
-- TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md (REQ-TEST-012 through REQ-TEST-019)
+- TESTING_STRATEGY_V3.3.md (comprehensive 8 test type framework, 1,462 lines)
+- TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md (REQ-TEST-012 through REQ-TEST-019)
 - MASTER_REQUIREMENTS_V2.19.md (added 8 new test requirements)
 - REQUIREMENT_INDEX.md (added REQ-TEST-012 through REQ-TEST-019)
 
 **Supporting Documentation:**
 - DEVELOPMENT_PHILOSOPHY_V1.3.md (updated TDD section with Phase 1.5 lesson learned)
-- DEVELOPMENT_PATTERNS_V1.13.md (added Pattern 13: Test Coverage Quality)
+- DEVELOPMENT_PATTERNS_V1.14.md (added Pattern 13: Test Coverage Quality, Pattern 26: Resource Cleanup, Pattern 27: Dependency Injection)
 - PHASE_1.5_TEST_PLAN_V1.0.md (test planning for manager components)
 
 **Development Guides:**
@@ -12002,10 +12199,10 @@ tests/
 ### References
 
 **Documentation:**
-- `docs/foundation/TESTING_STRATEGY_V3.2.md` (comprehensive 8 test type framework)
-- `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md` (REQ-TEST-012 through REQ-TEST-019)
+- `docs/foundation/TESTING_STRATEGY_V3.3.md` (comprehensive 8 test type framework)
+- `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md` (REQ-TEST-012 through REQ-TEST-019)
 - `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md` (TDD section with Phase 1.5 lessons)
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.13.md` (Pattern 13: Test Coverage Quality)
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.14.md` (Pattern 13: Test Coverage Quality, Patterns 26-27)
 
 **Code:**
 - `tests/conftest.py` (db_pool, clean_test_data fixtures)
@@ -12051,7 +12248,7 @@ Decision to use Python's standard logging library with structlog for structured 
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** pyproject.toml, TESTING_STRATEGY_V3.2.md
+**Documented in:** pyproject.toml, TESTING_STRATEGY_V3.3.md
 
 Decision to use pytest as the primary testing framework with coverage, async support, and HTML reporting.
 
@@ -14702,6 +14899,184 @@ def validate_coverage_targets(verbose: bool = False) -> tuple[bool, list[str]]:
 
 ---
 
+## Decision #98/ADR-098: TimescaleDB Deferred to Phase 6+ (Phase 1.9)
+
+**Date:** December 3, 2025
+**Phase:** 1.9 (Test Infrastructure & Process Hardening)
+**Status:** ✅ Complete (Decision Made)
+
+### Problem
+
+Should we adopt the TimescaleDB PostgreSQL extension now to handle time-series data (game states, market prices, trade history)? TimescaleDB offers:
+- Hypertables (automatic time-partitioning)
+- Compression (10-40x storage reduction)
+- Continuous aggregates (materialized views with auto-refresh)
+- Retention policies (automatic old data cleanup)
+
+### Decision
+
+**Defer TimescaleDB adoption until Phase 6+ (Post-MVP, when empirical bottlenecks emerge).**
+
+Current PostgreSQL with SCD Type 2 versioning is sufficient for Phase 1-5 data volumes. Add TimescaleDB only when data volume or query performance requires it.
+
+**Current Approach (Phases 1-5):**
+
+```sql
+-- Standard PostgreSQL with SCD Type 2 versioning
+-- game_states table with temporal tracking
+CREATE TABLE game_states (
+    id SERIAL PRIMARY KEY,
+    espn_event_id VARCHAR(255) NOT NULL,
+    home_score INTEGER,
+    away_score INTEGER,
+    period INTEGER,
+    clock_seconds NUMERIC(10,4),
+    game_status VARCHAR(50),
+    situation JSONB,
+    source VARCHAR(50),
+    captured_at TIMESTAMPTZ NOT NULL,
+    -- SCD Type 2 columns
+    row_created_ts TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    row_updated_ts TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    row_effective_ts TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    row_end_ts TIMESTAMPTZ DEFAULT '9999-12-31 23:59:59',
+    row_current_ind BOOLEAN DEFAULT TRUE
+);
+
+-- Standard B-tree indexes (sufficient for Phase 1-5 volumes)
+CREATE INDEX idx_game_states_event_time ON game_states (espn_event_id, captured_at DESC);
+CREATE INDEX idx_game_states_current ON game_states (row_current_ind) WHERE row_current_ind = TRUE;
+```
+
+**Future TimescaleDB Approach (Phase 6+, if needed):**
+
+```sql
+-- Convert to hypertable (time-partitioned)
+SELECT create_hypertable('game_states', 'captured_at',
+    chunk_time_interval => INTERVAL '1 day',
+    if_not_exists => TRUE);
+
+-- Enable compression (10-40x storage reduction)
+ALTER TABLE game_states SET (
+    timescaledb.compress,
+    timescaledb.compress_segmentby = 'espn_event_id',
+    timescaledb.compress_orderby = 'captured_at DESC'
+);
+
+-- Continuous aggregates for analytics
+CREATE MATERIALIZED VIEW game_state_hourly
+WITH (timescaledb.continuous) AS
+SELECT
+    espn_event_id,
+    time_bucket('1 hour', captured_at) AS hour,
+    AVG(home_score) AS avg_home_score,
+    MAX(home_score) AS max_home_score
+FROM game_states
+GROUP BY espn_event_id, time_bucket('1 hour', captured_at);
+
+-- Retention policy (auto-delete after 2 years)
+SELECT add_retention_policy('game_states', INTERVAL '2 years');
+```
+
+### Rationale
+
+1. **YAGNI Principle**: Current data volume (~1.1 GB/year for multi-sport) doesn't require specialized time-series infrastructure
+2. **Complexity Cost**: TimescaleDB adds operational complexity (extension management, hypertable migration, backup changes)
+3. **PostgreSQL Sufficiency**: Standard PostgreSQL with proper indexing handles expected Phase 1-5 query patterns efficiently
+4. **Defer Decision**: Keep the option open - migrating existing tables to hypertables is non-destructive
+5. **Bootstrap First**: Prove value with simple infrastructure before adding specialized tooling
+
+**Data Volume Analysis:**
+
+| Phase | Data Type | Estimated Volume | TimescaleDB Benefit |
+|-------|-----------|------------------|---------------------|
+| 1-2 | Market prices | ~100K rows/year | Minimal (standard indexes sufficient) |
+| 3-4 | Game states | ~500K rows/year | Low (SCD Type 2 handles versioning) |
+| 5 | Trade history | ~50K rows/year | Low (audit trail, not time-series queries) |
+| 6+ | High-frequency polling | >1M rows/month | **HIGH** (compression, partitioning critical) |
+
+**Evaluation Triggers (When to Reconsider):**
+
+1. **Volume Threshold**: Game state inserts exceed 1M rows/month
+2. **Query Performance**: Time-range queries on game_states exceed 100ms
+3. **Storage Pressure**: Database size exceeds 50GB (uncompressed)
+4. **Analytics Needs**: Require real-time aggregations (continuous aggregates)
+5. **Retention Requirements**: Need automated data lifecycle management
+
+### Alternatives Considered
+
+1. **Adopt TimescaleDB Now**
+   - Pros: Future-proof, learn tooling early
+   - Cons: Premature optimization, operational overhead, adds complexity during Phase 1.9 test hardening
+   - **Rejected**: Violates YAGNI, no current bottleneck
+
+2. **Use InfluxDB or Other Time-Series DB**
+   - Pros: Purpose-built for time-series
+   - Cons: Separate database to manage, data duplication, breaks single-database architecture
+   - **Rejected**: PostgreSQL + TimescaleDB keeps everything in one database
+
+3. **Implement Manual Partitioning**
+   - Pros: No extension dependency
+   - Cons: Complex to maintain, TimescaleDB handles this automatically
+   - **Rejected**: When we need partitioning, TimescaleDB is the right tool
+
+4. **Never Use TimescaleDB**
+   - Pros: Simplicity
+   - Cons: May hit scalability issues in Phase 6+
+   - **Rejected**: Keep option open for future
+
+### Implementation
+
+**Phase 1-5 (Current):**
+- Continue with standard PostgreSQL tables
+- Use SCD Type 2 for versioned data (markets, positions, game_states)
+- Monitor query performance with `pg_stat_statements`
+- Track table sizes in operational metrics
+
+**Phase 6+ (If Triggers Met):**
+1. Install TimescaleDB extension (`CREATE EXTENSION IF NOT EXISTS timescaledb;`)
+2. Convert high-volume tables to hypertables (`SELECT create_hypertable(...)`)
+3. Enable compression on historical data
+4. Create continuous aggregates for analytics dashboards
+5. Set up retention policies
+
+**Migration Path (Non-Breaking):**
+
+```python
+# Future migration script (Phase 6+)
+# Converting existing table to hypertable is additive
+
+def migrate_to_timescaledb(conn):
+    """
+    Migrate game_states to TimescaleDB hypertable.
+
+    Educational Note:
+        create_hypertable() is non-destructive - it restructures the table
+        into time-partitioned chunks but preserves all existing data.
+        Existing indexes are migrated automatically.
+    """
+    with conn.cursor() as cur:
+        # Check if TimescaleDB is available
+        cur.execute("SELECT extname FROM pg_extension WHERE extname = 'timescaledb'")
+        if not cur.fetchone():
+            cur.execute("CREATE EXTENSION IF NOT EXISTS timescaledb")
+
+        # Convert to hypertable (idempotent with if_not_exists)
+        cur.execute("""
+            SELECT create_hypertable('game_states', 'captured_at',
+                chunk_time_interval => INTERVAL '1 day',
+                if_not_exists => TRUE,
+                migrate_data => TRUE  -- Migrate existing data into chunks
+            )
+        """)
+
+        conn.commit()
+```
+
+**Reference:** ADR-076 (Sports Data Source Tiering), ADR-003 (Database Versioning Strategy), ADR-029 (ESPN Data Model), DATABASE_SCHEMA_SUMMARY_V1.7.md
+
+---
+
 ## Approval & Sign-off
 
 This document represents the architectural decisions as of October 22, 2025 (Phase 0.5 completion with standardization).
@@ -14712,9 +15087,10 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.21
-**Last Updated:** November 22, 2025
+**Document Version:** 2.24
+**Last Updated:** December 3, 2025
 **Critical Changes:**
+- v2.24: **TIMESCALEDB DECISION (PHASE 6+)** - Added Decision #98/ADR-098 (TimescaleDB Deferred to Phase 6+): Current PostgreSQL + SCD Type 2 sufficient for Phase 1-5, triggers defined for re-evaluation
 - v2.21: **WORKFLOW ENFORCEMENT ARCHITECTURE** - Added Decisions #94-97/ADR-094-307 (YAML-Driven Validation, Auto-Discovery Pattern, Parallel Execution in Git Hooks, Tier-Specific Coverage Targets - Phase 1.5)
 - v2.20: **LOOKUP TABLES FOR BUSINESS ENUMS** - Added Decision #93/ADR-093 (Lookup Tables for Business Enums - Phase 1.5)
 - v2.19: **TRADE & POSITION ATTRIBUTION ARCHITECTURE** - Added Decisions #90-92/ADR-090-092 (Trade/Position Attribution & Strategy Scope - Phase 1.5)
@@ -14736,4 +15112,4 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 **For complete ADR catalog, see:** ADR_INDEX_V1.4.md
 
-**END OF ARCHITECTURE DECISIONS V2.20**
+**END OF ARCHITECTURE DECISIONS V2.24**

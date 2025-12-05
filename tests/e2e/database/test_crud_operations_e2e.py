@@ -327,7 +327,7 @@ class TestVenueDataEnrichment:
         """
         E2E: Simulate venue name update due to naming rights change.
 
-        Real example: Arrowhead Stadium → GEHA Field at Arrowhead Stadium
+        Real example: Arrowhead Stadium -> GEHA Field at Arrowhead Stadium
         """
         # Original name (before naming rights deal)
         venue_id_1 = create_venue(

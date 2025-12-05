@@ -933,7 +933,7 @@ def validate_config_synchronization() -> ValidationResult:
     3. Documentation (CONFIGURATION_GUIDE, DEVELOPMENT_PATTERNS)
     4. Infrastructure (Terraform - Phase 5+)
 
-    This prevents config drift like the Bandit → Ruff migration issue (orphaned [tool.bandit] section).
+    This prevents config drift like the Bandit -> Ruff migration issue (orphaned [tool.bandit] section).
 
     Reference: docs/guides/DEVELOPMENT_PATTERNS_V1.4.md Pattern 8
     Reference: scripts/validation_config.yaml (config layer definitions)

@@ -13,7 +13,7 @@ The code uses 'testing' as a unified pre-production status, while the schema has
 **Solution:**
 1. Drop the old `probability_models_status_check` constraint
 2. Create new constraint with values matching Model Manager implementation
-3. Align with strategies table pattern: 'draft' → 'testing' → 'active' → 'deprecated'
+3. Align with strategies table pattern: 'draft' -> 'testing' -> 'active' -> 'deprecated'
 
 **Why These Values?**
 - `draft` - Model under development, config not finalized

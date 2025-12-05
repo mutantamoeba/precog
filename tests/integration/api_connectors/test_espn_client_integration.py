@@ -21,6 +21,7 @@ Educational Note:
 Reference: docs/testing/PHASE_2_TEST_PLAN_V1.0.md Section 2.1.4
 """
 
+import os
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -36,10 +37,17 @@ from tests.fixtures import (
 # VCR configuration
 VCR_CASSETTES_DIR = Path(__file__).parent / "vcr_cassettes"
 
+# Determine VCR record mode based on environment
+# - CI environments: "none" (playback only, no network requests)
+# - Local development: "new_episodes" (record new API calls)
+# This prevents CI hangs when cassettes don't match exactly
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+_vcr_record_mode = "none" if _is_ci else "new_episodes"
+
 # Custom VCR instance for ESPN API
 espn_vcr = vcr.VCR(
     cassette_library_dir=str(VCR_CASSETTES_DIR),
-    record_mode="none",  # Don't record - use mock responses for now
+    record_mode=_vcr_record_mode,
     match_on=["uri", "method"],
     filter_headers=["User-Agent"],
 )
@@ -161,27 +169,44 @@ class TestESPNIntegrationWithMocks:
 # =============================================================================
 # Real VCR Cassette Tests (Requires Network on First Run)
 # =============================================================================
-# These tests are marked with @pytest.mark.vcr and will:
-# 1. On first run: Make real API calls and record responses
-# 2. On subsequent runs: Replay recorded responses
+# These tests use @espn_vcr.use_cassette() decorator and will:
+# 1. On first run: Make real API calls and record responses to YAML cassettes
+# 2. On subsequent runs: Replay recorded responses from YAML cassettes
+# Note: Tests pass in isolation and with pytest-xdist parallel execution
 
 
-@pytest.mark.vcr
-@pytest.mark.skip(reason="VCR cassettes not yet recorded - requires network access")
+@pytest.mark.skipif(
+    _is_ci,
+    reason=(
+        "VCR cassette tests hang in CI due to large YAML parsing issues. "
+        "Mock-based tests (TestESPNIntegrationWithMocks) provide equivalent coverage. "
+        "Run locally with 'pytest -k TestESPNRealVCRCassettes' to validate API structure."
+    ),
+)
 class TestESPNRealVCRCassettes:
     """
     Integration tests using real VCR cassettes.
 
-    To enable these tests:
-    1. Remove @pytest.mark.skip decorator
-    2. Set VCR record_mode to "new_episodes" or "once"
-    3. Run tests with network access
-    4. Cassettes will be saved to vcr_cassettes/
+    VCR Configuration:
+    - record_mode="new_episodes": Records new API calls, replays existing
+    - Cassettes saved to: tests/integration/api_connectors/vcr_cassettes/
 
     Note: ESPN data changes constantly, so cassettes capture a
     point-in-time snapshot. Re-record when testing specific scenarios.
+
+    CI Skip Reason (Phase 1.9 Investigation):
+        These tests hang in CI after VCR cassette decorator activates but before
+        the test body executes. Root cause: 347KB YAML cassette with embedded JSON
+        causes issues during VCR initialization in CI environment. The pytest-timeout
+        signal handler never triggers because the hang occurs during VCR setup.
+
+        The mock-based tests (TestESPNIntegrationWithMocks) provide equivalent
+        functional coverage using verified fixture data. These VCR tests remain
+        available for local validation of real API structure changes.
     """
 
+    @pytest.mark.timeout(10)  # Prevent indefinite hangs
+    @espn_vcr.use_cassette("espn_nfl_scoreboard.yaml")
     def test_real_nfl_scoreboard_fetch(self):
         """Fetch real NFL scoreboard (recorded via VCR)."""
         from precog.api_connectors.espn_client import ESPNClient
@@ -194,10 +219,15 @@ class TestESPNRealVCRCassettes:
         # Games may or may not exist depending on when cassette was recorded
         if games:
             game = games[0]
-            assert "espn_event_id" in game
-            assert "home_team" in game
-            assert "away_team" in game
+            # ESPNGameFull format: metadata/state structure
+            assert "metadata" in game, "Expected ESPNGameFull format with 'metadata' key"
+            assert "state" in game, "Expected ESPNGameFull format with 'state' key"
+            assert "espn_event_id" in game["metadata"]
+            assert "home_team" in game["metadata"]
+            assert "away_team" in game["metadata"]
 
+    @pytest.mark.timeout(10)  # Prevent indefinite hangs
+    @espn_vcr.use_cassette("espn_ncaaf_scoreboard.yaml")
     def test_real_ncaaf_scoreboard_fetch(self):
         """Fetch real NCAAF scoreboard (recorded via VCR)."""
         from precog.api_connectors.espn_client import ESPNClient
@@ -206,6 +236,11 @@ class TestESPNRealVCRCassettes:
         games = client.get_ncaaf_scoreboard()
 
         assert isinstance(games, list)
+        # NCAAF may have no games depending on season
+        if games:
+            game = games[0]
+            assert "metadata" in game
+            assert "state" in game
 
 
 # =============================================================================

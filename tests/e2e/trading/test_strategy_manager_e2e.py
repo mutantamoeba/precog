@@ -5,8 +5,8 @@ validating the complete lifecycle of versioned trading strategies with immutable
 configurations.
 
 Educational Note:
-    E2E tests validate the full workflow from creation → retrieval → status updates
-    → metrics tracking. Unlike unit tests that mock dependencies, these tests
+    E2E tests validate the full workflow from creation -> retrieval -> status updates
+    -> metrics tracking. Unlike unit tests that mock dependencies, these tests
     validate:
     - Database operations (mocked connections)
     - JSONB config serialization/deserialization
@@ -19,7 +19,7 @@ Educational Note:
     - Creating strategy v1.0, testing it, activating it
     - Creating v1.1 with different config for A/B testing
     - Comparing performance metrics between versions
-    - Managing strategy lifecycle (draft → testing → active → deprecated)
+    - Managing strategy lifecycle (draft -> testing -> active -> deprecated)
 
 References:
     - Issue #128: Complete Phase 1.5 foundation validation
@@ -69,7 +69,7 @@ class TestStrategyCreationWorkflow:
 
         Real-world scenario:
         1. Create halftime_entry v1.0 with min_edge=0.05
-        2. Backtest shows 0.05 too risky → create v1.1 with min_edge=0.10
+        2. Backtest shows 0.05 too risky -> create v1.1 with min_edge=0.10
         3. Both versions preserved for trade attribution
     """
 
@@ -86,7 +86,7 @@ class TestStrategyCreationWorkflow:
             - position_size: Position size in dollars
 
             Database round-trip must preserve exact precision:
-            Decimal("0.05") → JSONB storage → Decimal("0.05") (not 0.04999999)
+            Decimal("0.05") -> JSONB storage -> Decimal("0.05") (not 0.04999999)
 
         References:
             - REQ-SYS-003: Decimal Precision Enforcement
@@ -205,7 +205,7 @@ class TestStrategyCreationWorkflow:
 
             Example workflow:
             - Create halftime_entry v1.0 (min_edge=0.05)
-            - Test shows too aggressive → create v1.1 (min_edge=0.10)
+            - Test shows too aggressive -> create v1.1 (min_edge=0.10)
             - Both versions exist simultaneously
             - Trades link to exact version used
 
@@ -373,7 +373,7 @@ class TestStrategyCreationWorkflow:
             This enables comparing performance:
             - v1.0 ROI: 12%
             - v1.1 ROI: 15%
-            - Winner: v1.1 → promote to production
+            - Winner: v1.1 -> promote to production
 
         References:
             - REQ-VER-005: A/B Testing Support
@@ -472,9 +472,9 @@ class TestStrategyRetrieval:
         - Pagination and filtering
 
         Real-world scenario:
-        - Production needs all active strategies → get_active_strategies()
-        - Analyst wants v1.0 vs v1.1 comparison → get_strategies_by_name()
-        - CLI shows strategy details → get_strategy(id)
+        - Production needs all active strategies -> get_active_strategies()
+        - Analyst wants v1.0 vs v1.1 comparison -> get_strategies_by_name()
+        - CLI shows strategy details -> get_strategy(id)
     """
 
     def test_get_strategy_by_id(self):
@@ -880,35 +880,35 @@ class TestStrategyStatusManagement:
 
     Educational Note:
         Status management validates the strategy lifecycle state machine:
-        - draft → testing → active (forward progression)
-        - active → inactive → deprecated (retirement)
-        - testing → draft (revert to development)
+        - draft -> testing -> active (forward progression)
+        - active -> inactive -> deprecated (retirement)
+        - testing -> draft (revert to development)
 
         Invalid transitions raise InvalidStatusTransitionError:
-        - deprecated → active (can't reactivate deprecated)
-        - active → testing (can't go backwards)
+        - deprecated -> active (can't reactivate deprecated)
+        - active -> testing (can't go backwards)
 
         Real-world scenario:
         1. Create v1.0 (status=draft)
-        2. Complete development → update_status('testing')
-        3. Paper trading looks good → update_status('active')
-        4. Strategy underperforms → update_status('inactive')
-        5. Strategy obsolete → update_status('deprecated')
+        2. Complete development -> update_status('testing')
+        3. Paper trading looks good -> update_status('active')
+        4. Strategy underperforms -> update_status('inactive')
+        5. Strategy obsolete -> update_status('deprecated')
 
     References:
         - REQ-VER-004: Version Lifecycle Management
     """
 
     def test_update_status_active_to_inactive(self):
-        """Verify valid status transition: active → inactive.
+        """Verify valid status transition: active -> inactive.
 
         Educational Note:
-            Transitioning active → inactive is common when:
+            Transitioning active -> inactive is common when:
             - Strategy underperforms (ROI below threshold)
             - Market conditions change (strategy no longer effective)
             - Risk management (reduce exposure)
 
-            Strategy can be reactivated later: inactive → active
+            Strategy can be reactivated later: inactive -> active
         """
         manager = StrategyManager()
 
@@ -1109,13 +1109,13 @@ class TestStrategyStatusManagement:
 
         Educational Note:
             Invalid transitions prevent logical errors:
-            - deprecated → active: Deprecated strategies are retired permanently
-            - active → testing: Can't demote active to testing (create new version)
+            - deprecated -> active: Deprecated strategies are retired permanently
+            - active -> testing: Can't demote active to testing (create new version)
 
             Valid transitions follow state machine:
-            - draft → testing → active (forward)
-            - active → inactive → deprecated (retirement)
-            - testing → draft (revert)
+            - draft -> testing -> active (forward)
+            - active -> inactive -> deprecated (retirement)
+            - testing -> draft (revert)
 
         References:
             - REQ-VER-004: Version Lifecycle Management
@@ -1170,12 +1170,12 @@ class TestStrategyStatusManagement:
             ),
             patch("precog.trading.strategy_manager.release_connection"),
         ):
-            # Attempt invalid transition: deprecated → active
+            # Attempt invalid transition: deprecated -> active
             with pytest.raises(InvalidStatusTransitionError) as exc_info:
                 manager.update_status(1, "active")
 
         # Verify error message
-        assert "Invalid transition: deprecated → active" in str(exc_info.value)
+        assert "Invalid transition: deprecated -> active" in str(exc_info.value)
         assert "Valid transitions from deprecated: []" in str(exc_info.value)
 
 

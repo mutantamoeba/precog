@@ -3,6 +3,9 @@
 # Phase 0.6c - Validation Infrastructure
 # Usage: ./scripts/validate_quick.sh
 # Time: ~3 seconds (fast feedback during development)
+#
+# NOTE: Only checks tracked files (excludes untracked WIP files)
+# This allows skeleton tests to exist without blocking commits/pushes
 
 set -e  # Exit on first error
 
@@ -14,28 +17,39 @@ echo ""
 # Track overall success
 FAILED=0
 
-# 1. Ruff - Code Linting
+# Get list of tracked Python files (excludes untracked WIP)
+TRACKED_PY_FILES=$(git ls-files '*.py' | tr '\n' ' ')
+
+# 1. Ruff - Code Linting (tracked files only)
 echo "1. Ruff Linting"
 echo "---------------"
-if python -m ruff check . ; then
-    echo "  [OK] Ruff lint: No issues"
+if [ -n "$TRACKED_PY_FILES" ]; then
+    if python -m ruff check $TRACKED_PY_FILES ; then
+        echo "  [OK] Ruff lint: No issues"
+    else
+        echo "  [FAIL] Ruff lint: Issues found"
+        echo "     Run: python -m ruff check --fix . (to auto-fix)"
+        FAILED=1
+    fi
 else
-    echo "  [FAIL] Ruff lint: Issues found"
-    echo "     Run: python -m ruff check --fix . (to auto-fix)"
-    FAILED=1
+    echo "  [OK] Ruff lint: No tracked Python files"
 fi
 
 echo ""
 
-# 2. Ruff - Code Formatting
+# 2. Ruff - Code Formatting (tracked files only)
 echo "2. Ruff Formatting"
 echo "------------------"
-if python -m ruff format --check . ; then
-    echo "  [OK] Ruff format: All code properly formatted"
+if [ -n "$TRACKED_PY_FILES" ]; then
+    if python -m ruff format --check $TRACKED_PY_FILES ; then
+        echo "  [OK] Ruff format: All code properly formatted"
+    else
+        echo "  [FAIL] Ruff format: Formatting issues found"
+        echo "     Run: python -m ruff format . (to auto-fix)"
+        FAILED=1
+    fi
 else
-    echo "  [FAIL] Ruff format: Formatting issues found"
-    echo "     Run: python -m ruff format . (to auto-fix)"
-    FAILED=1
+    echo "  [OK] Ruff format: No tracked Python files"
 fi
 
 echo ""

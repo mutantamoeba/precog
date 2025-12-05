@@ -1,20 +1,26 @@
 # Schema Migration Workflow Guide
 
 ---
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-11-19
-**Last Updated:** 2025-11-19
+**Last Updated:** 2025-12-03
 **Purpose:** Comprehensive step-by-step workflow for database schema migrations and CRUD operation synchronization
 **Target Audience:** Developers implementing database schema changes
 **Companion Document:** Pattern 14 in DEVELOPMENT_PATTERNS_V1.5.md
 **Status:** ✅ Current
+**Changes in V1.1:**
+- Added "SQL vs Python Migrations" section explaining the dual-migration strategy
+- Added CI execution order documentation
+- Added conflict prevention checklist
+- Documented superseded migration pattern (migration 014 vs 029)
 
 ---
 
 ## 📋 Table of Contents
 
 1. [Introduction](#introduction)
-2. [When to Use This Workflow](#when-to-use-this-workflow)
+2. [SQL vs Python Migrations](#sql-vs-python-migrations) ⚠️ **NEW**
+3. [When to Use This Workflow](#when-to-use-this-workflow)
 3. [Pre-Migration Checklist](#pre-migration-checklist)
 4. [Step 1: Plan the Migration](#step-1-plan-the-migration)
 5. [Step 2: Create Database Migration](#step-2-create-database-migration)
@@ -61,6 +67,100 @@ This guide provides a comprehensive workflow for synchronizing database schema c
 - Changing column types
 - Adding/modifying constraints
 - Any schema change affecting CRUD operations
+
+---
+
+## SQL vs Python Migrations
+
+### ⚠️ CRITICAL: Understanding Our Dual-Migration System
+
+Precog uses **two types of migrations** that are executed in a specific order in CI:
+
+| Type | Location | Format | Execution Order |
+|------|----------|--------|-----------------|
+| **SQL Migrations** | `migrations/*.sql` | 000-016 | **FIRST** |
+| **Python Migrations** | `migrations/migration_*.py` | 011-029+ | **SECOND** |
+
+### CI Execution Order
+
+```bash
+# Step 1: SQL migrations run FIRST (with || true to suppress errors)
+for sql_file in $(ls -v src/precog/database/migrations/*.sql); do
+    psql -f "$sql_file" || true
+done
+
+# Step 2: Python migrations run SECOND
+for py_file in sorted(glob('migrations/migration_*.py')); do
+    module.run_migration()
+done
+```
+
+### The Problem: Schema Conflicts
+
+When both SQL and Python migrations create the **same table**, the SQL migration runs first and "wins". Python migrations typically use `CREATE TABLE IF NOT EXISTS`, which becomes a **no-op** if the table already exists.
+
+**Real Example (game_states):**
+- **SQL 014**: Created `game_state_id SERIAL PRIMARY KEY` (wrong schema)
+- **Python 029**: Expected `id SERIAL PRIMARY KEY` + `game_state_id VARCHAR` (correct schema)
+- **Result**: CI runs SQL 014 first, Python 029's `CREATE TABLE IF NOT EXISTS` does nothing
+- **Consequence**: CRUD code expects Python 029's schema but gets SQL 014's schema → CI fails
+
+### Solution: Supersede Conflicting SQL Migrations
+
+When a Python migration is the authoritative source for a table, **comment out the SQL migration** and add a clear note:
+
+```sql
+-- ============================================================================
+-- ⚠️ SUPERSEDED BY MIGRATION 029 (Python) ⚠️
+-- ============================================================================
+-- This SQL migration is COMMENTED OUT because migration_029_*.py
+-- is the AUTHORITATIVE source for the game_states table schema.
+--
+-- WHY THE CONFLICT:
+-- - This SQL migration (014) uses: game_state_id SERIAL PRIMARY KEY
+-- - Python migration (029) uses: id SERIAL PRIMARY KEY + game_state_id VARCHAR(50)
+-- ============================================================================
+
+-- COMMENTED OUT: Superseded by migration 029 (Python)
+-- CREATE TABLE game_states ( ... );
+```
+
+### When to Use SQL vs Python Migrations
+
+| Use SQL Migrations For | Use Python Migrations For |
+|------------------------|---------------------------|
+| Simple CREATE TABLE | Complex logic (surrogate key generation) |
+| Adding columns | Data transformations |
+| Adding indexes | Conditional logic |
+| Adding constraints | Tables requiring transaction control |
+| Tables with no Python logic | Phase 2+ tables (game_states, etc.) |
+
+### Conflict Prevention Checklist
+
+Before creating a new migration, run this check:
+
+```bash
+# Find all tables created by SQL migrations
+grep -h "CREATE TABLE" src/precog/database/migrations/*.sql | grep -v "^--" | sort
+
+# Find all tables created by Python migrations
+grep -rh "CREATE TABLE" src/precog/database/migrations/migration_*.py | grep -v "^#" | sort
+
+# Check for conflicts (tables in BOTH lists)
+```
+
+**If conflict found:**
+1. Determine which migration is **authoritative** (usually the newer/more complete one)
+2. Comment out the conflicting migration with clear documentation
+3. Add a note pointing to the authoritative migration
+4. Test locally before pushing to CI
+
+### Current Known Conflicts (Resolved)
+
+| Table | SQL Migration | Python Migration | Authoritative | Resolution |
+|-------|--------------|------------------|---------------|------------|
+| game_states | 014 | 029 | **Python 029** | SQL 014 commented out |
+| team_rankings | 012 | 027 | Either (same schema) | No action needed |
 
 ---
 
@@ -1220,7 +1320,7 @@ def test_open_position(clean_test_data, manager, position_params):
 **Testing:**
 - **tests/conftest.py:** Fixture infrastructure (clean_test_data, db_pool)
 - **TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md:** Why mocks hide bugs
-- **TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md:** REQ-TEST-012 through REQ-TEST-019
+- **TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md:** REQ-TEST-012 through REQ-TEST-019
 
 **Examples:**
 - **Migration 011:** `src/precog/database/migrations/011_add_positions_dual_key.sql`

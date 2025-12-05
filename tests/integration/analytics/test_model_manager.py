@@ -123,12 +123,12 @@ def test_create_model_minimal_fields(clean_test_data, manager):
 
 
 def test_create_model_decimal_conversion(clean_test_data, manager, model_factory):
-    """Test Decimal → string → Decimal conversion for JSONB storage.
+    """Test Decimal -> string -> Decimal conversion for JSONB storage.
 
     Educational Note:
         PostgreSQL JSONB doesn't support Python Decimal natively.
-        We convert: Decimal("20.00") → "20.00" (string in database)
-        Then reverse on retrieval: "20.00" → Decimal("20.00")
+        We convert: Decimal("20.00") -> "20.00" (string in database)
+        Then reverse on retrieval: "20.00" -> Decimal("20.00")
 
         This ensures Pattern 1 compliance: application always uses Decimal.
     """
@@ -435,10 +435,10 @@ def test_update_metrics_model_not_found(clean_test_data, manager):
 
 
 def test_update_status_draft_to_testing(clean_test_data, manager, model_factory):
-    """Test valid transition: draft → testing."""
+    """Test valid transition: draft -> testing."""
     model = manager.create_model(**model_factory)
 
-    # Transition draft → testing
+    # Transition draft -> testing
     updated = manager.update_status(model_id=model["model_id"], new_status="testing")
 
     assert updated["status"] == "testing"
@@ -446,56 +446,56 @@ def test_update_status_draft_to_testing(clean_test_data, manager, model_factory)
 
 
 def test_update_status_testing_to_active(clean_test_data, manager, model_factory):
-    """Test valid transition: testing → active."""
+    """Test valid transition: testing -> active."""
     model = manager.create_model(**{**model_factory, "status": "testing"})
 
-    # Transition testing → active
+    # Transition testing -> active
     updated = manager.update_status(model_id=model["model_id"], new_status="active")
 
     assert updated["status"] == "active"
 
 
 def test_update_status_active_to_deprecated(clean_test_data, manager, model_factory):
-    """Test valid transition: active → deprecated."""
+    """Test valid transition: active -> deprecated."""
     model = manager.create_model(**{**model_factory, "status": "active"})
 
-    # Transition active → deprecated
+    # Transition active -> deprecated
     updated = manager.update_status(model_id=model["model_id"], new_status="deprecated")
 
     assert updated["status"] == "deprecated"
 
 
 def test_update_status_testing_to_draft_revert(clean_test_data, manager, model_factory):
-    """Test valid revert: testing → draft (found issues during testing)."""
+    """Test valid revert: testing -> draft (found issues during testing)."""
     model = manager.create_model(**{**model_factory, "status": "testing"})
 
-    # Revert testing → draft
+    # Revert testing -> draft
     updated = manager.update_status(model_id=model["model_id"], new_status="draft")
 
     assert updated["status"] == "draft"
 
 
 def test_update_status_invalid_transition_draft_to_active(clean_test_data, manager, model_factory):
-    """Test invalid transition: draft → active (must go through testing).
+    """Test invalid transition: draft -> active (must go through testing).
 
     Educational Note:
         Status lifecycle enforces quality gates:
-        - draft → testing: Model under evaluation
-        - testing → active: Passed validation, ready for production
-        - active → deprecated: New version available
+        - draft -> testing: Model under evaluation
+        - testing -> active: Passed validation, ready for production
+        - active -> deprecated: New version available
 
-        Skipping testing (draft → active) bypassed validation!
+        Skipping testing (draft -> active) bypassed validation!
     """
     model = manager.create_model(**model_factory)
 
-    with pytest.raises(InvalidStatusTransitionError, match="Invalid transition: draft → active"):
+    with pytest.raises(InvalidStatusTransitionError, match="Invalid transition: draft -> active"):
         manager.update_status(model_id=model["model_id"], new_status="active")
 
 
 def test_update_status_invalid_transition_deprecated_to_active(
     clean_test_data, manager, model_factory
 ):
-    """Test invalid transition: deprecated → active (terminal state).
+    """Test invalid transition: deprecated -> active (terminal state).
 
     Educational Note:
         Once deprecated, models cannot be reactivated.
@@ -505,7 +505,7 @@ def test_update_status_invalid_transition_deprecated_to_active(
     model = manager.create_model(**{**model_factory, "status": "deprecated"})
 
     with pytest.raises(
-        InvalidStatusTransitionError, match="Invalid transition: deprecated → active"
+        InvalidStatusTransitionError, match="Invalid transition: deprecated -> active"
     ):
         manager.update_status(model_id=model["model_id"], new_status="active")
 
@@ -527,7 +527,7 @@ def test_config_immutability_no_update_method(clean_test_data, manager):
     Educational Note:
         Config immutability is enforced by NOT providing an update method.
         To change model parameters:
-        1. Create new version (v1.0 → v1.1 or v2.0)
+        1. Create new version (v1.0 -> v1.1 or v2.0)
         2. Deprecate old version
         3. Activate new version
 
@@ -543,16 +543,16 @@ def test_config_immutability_requires_new_version(clean_test_data, manager, mode
 
     Educational Note:
         Versioning workflow:
-        1. v1.0 has k_factor=20 → Deploy to production
-        2. Want to test k_factor=25 → Create v1.1 with new config
+        1. v1.0 has k_factor=20 -> Deploy to production
+        2. Want to test k_factor=25 -> Create v1.1 with new config
         3. A/B test: Compare v1.0 vs v1.1 calibration
-        4. If v1.1 better → Deprecate v1.0, promote v1.1
+        4. If v1.1 better -> Deprecate v1.0, promote v1.1
         5. All predictions know which version was used (trade attribution)
     """
     # Create v1.0
     v1_0 = manager.create_model(**model_factory)
 
-    # Want to change k_factor: 20 → 25
+    # Want to change k_factor: 20 -> 25
     # CANNOT update v1.0 config (no method exists)
     # MUST create v1.1 with new config
 
@@ -669,11 +669,11 @@ def test_status_lifecycle_valid_paths(clean_test_data, manager, model_factory):
     """Test all valid status transition paths.
 
     Valid Paths:
-    1. draft → testing → active → deprecated (normal lifecycle)
-    2. draft → testing → draft (revert after finding issues)
-    3. draft → draft (stay in draft)
+    1. draft -> testing -> active -> deprecated (normal lifecycle)
+    2. draft -> testing -> draft (revert after finding issues)
+    3. draft -> draft (stay in draft)
     """
-    # Path 1: Normal lifecycle (draft → testing → active → deprecated)
+    # Path 1: Normal lifecycle (draft -> testing -> active -> deprecated)
     model1 = manager.create_model(**model_factory)
     model1 = manager.update_status(model_id=model1["model_id"], new_status="testing")
     assert model1["status"] == "testing"
@@ -682,7 +682,7 @@ def test_status_lifecycle_valid_paths(clean_test_data, manager, model_factory):
     model1 = manager.update_status(model_id=model1["model_id"], new_status="deprecated")
     assert model1["status"] == "deprecated"
 
-    # Path 2: Revert (testing → draft)
+    # Path 2: Revert (testing -> draft)
     model2_config = model_factory.copy()
     model2_config["model_name"] = "revert_test"
     model2_config["status"] = "testing"

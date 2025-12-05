@@ -431,7 +431,7 @@ def test_check_trailing_stop_trigger_yes_position_triggered(
     position_manager, mock_position_with_trailing_stop, mocker
 ):
     """Test YES position: trigger when current_price <= stop_price."""
-    # Mock: current_price = 0.58, stop_price = 0.60 → TRIGGERED
+    # Mock: current_price = 0.58, stop_price = 0.60 -> TRIGGERED
     mock_position_with_trailing_stop["side"] = "YES"
     mock_position_with_trailing_stop["current_price"] = Decimal("0.58")
     mock_position_with_trailing_stop["trailing_stop_state"]["current_stop_price"] = Decimal("0.60")
@@ -455,7 +455,7 @@ def test_check_trailing_stop_trigger_yes_position_not_triggered(
     position_manager, mock_position_with_trailing_stop, mocker
 ):
     """Test YES position: no trigger when current_price > stop_price."""
-    # Mock: current_price = 0.70, stop_price = 0.60 → NOT TRIGGERED
+    # Mock: current_price = 0.70, stop_price = 0.60 -> NOT TRIGGERED
     mock_position_with_trailing_stop["side"] = "YES"
     mock_position_with_trailing_stop["current_price"] = Decimal("0.70")
     mock_position_with_trailing_stop["trailing_stop_state"]["current_stop_price"] = Decimal("0.60")
@@ -479,7 +479,7 @@ def test_check_trailing_stop_trigger_no_position_triggered(
     position_manager, mock_position_with_trailing_stop, mocker
 ):
     """Test NO position: trigger when current_price >= (1.00 - stop_price)."""
-    # Mock: NO position, current_price = 0.72, stop = 0.30 → effective stop = 0.70 → TRIGGERED
+    # Mock: NO position, current_price = 0.72, stop = 0.30 -> effective stop = 0.70 -> TRIGGERED
     mock_position_with_trailing_stop["side"] = "NO"
     mock_position_with_trailing_stop["current_price"] = Decimal("0.72")
     mock_position_with_trailing_stop["trailing_stop_state"]["current_stop_price"] = Decimal("0.30")
@@ -503,7 +503,7 @@ def test_check_trailing_stop_trigger_no_position_not_triggered(
     position_manager, mock_position_with_trailing_stop, mocker
 ):
     """Test NO position: no trigger when current_price < (1.00 - stop_price)."""
-    # Mock: NO position, current_price = 0.65, stop = 0.30 → effective stop = 0.70 → NOT TRIGGERED
+    # Mock: NO position, current_price = 0.65, stop = 0.30 -> effective stop = 0.70 -> NOT TRIGGERED
     mock_position_with_trailing_stop["side"] = "NO"
     mock_position_with_trailing_stop["current_price"] = Decimal("0.65")
     mock_position_with_trailing_stop["trailing_stop_state"]["current_stop_price"] = Decimal("0.30")

@@ -66,6 +66,7 @@ class KalshiClient:
     - API requests with retry logic
     - Response parsing and Decimal conversion
     - Error handling
+    - Resource cleanup (session close)
 
     Usage:
         >>> # Initialize
@@ -77,6 +78,20 @@ class KalshiClient:
         >>> # All prices are Decimal objects
         >>> for market in markets:
         ...     print(f"Yes ask: ${market['yes_ask']}")  # Decimal('0.6500')
+        >>>
+        >>> # Cleanup when done
+        >>> client.close()
+
+    Testing Usage (Dependency Injection):
+        >>> mock_auth = MagicMock()
+        >>> mock_session = MagicMock()
+        >>> mock_limiter = MagicMock()
+        >>> client = KalshiClient(
+        ...     environment="demo",
+        ...     auth=mock_auth,
+        ...     session=mock_session,
+        ...     rate_limiter=mock_limiter
+        ... )
 
     Educational Note:
         Always develop against "demo" first!
@@ -87,6 +102,10 @@ class KalshiClient:
 
         Only switch to "prod" when you're confident your code works.
 
+        This class uses dependency injection for auth, session, and rate_limiter,
+        making it fully testable without actual API credentials or network access.
+        See Pattern 12 (Dependency Injection) in DEVELOPMENT_PATTERNS.
+
     Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
     """
 
@@ -96,19 +115,47 @@ class KalshiClient:
         "prod": "https://api.elections.kalshi.com/trade-api/v2",
     }
 
-    def __init__(self, environment: str = "demo"):
+    def __init__(
+        self,
+        environment: str = "demo",
+        auth: KalshiAuth | None = None,
+        session: requests.Session | None = None,
+        rate_limiter: RateLimiter | None = None,
+    ):
         """
         Initialize Kalshi client.
 
         Args:
             environment: "demo" or "prod"
+            auth: Optional KalshiAuth instance. If not provided, creates one
+                  from environment variables. Useful for testing to inject mocks.
+            session: Optional requests.Session. If not provided, creates new one.
+                     Useful for testing to inject mock sessions.
+            rate_limiter: Optional RateLimiter. If not provided, creates one with
+                          100 req/min limit. Useful for testing to inject mocks.
 
         Raises:
             ValueError: If environment invalid
-            EnvironmentError: If required env vars missing
+            EnvironmentError: If required env vars missing (when auth not provided)
 
         Example:
             >>> client = KalshiClient(environment="demo")
+
+        Testing Example:
+            >>> mock_auth = MagicMock()
+            >>> client = KalshiClient(
+            ...     environment="demo",
+            ...     auth=mock_auth,
+            ...     session=MagicMock(),
+            ...     rate_limiter=MagicMock()
+            ... )
+
+        Educational Note:
+            The optional auth/session/rate_limiter parameters implement
+            Dependency Injection (DI):
+            - Production: Parameters are None, so we create real instances
+            - Testing: Inject mocks, avoiding real credentials/network
+            This makes the class testable without environment setup.
         """
         if environment not in ["demo", "prod"]:
             raise ValueError(f"Invalid environment: {environment}. Must be 'demo' or 'prod'")
@@ -116,33 +163,82 @@ class KalshiClient:
         self.environment = environment
         self.base_url = self.BASE_URLS[environment]
 
-        # Load credentials from environment
-        key_env_var = f"KALSHI_{environment.upper()}_KEY_ID"
-        keyfile_env_var = f"KALSHI_{environment.upper()}_KEYFILE"
+        # Use injected dependencies or create defaults
+        if auth is not None:
+            self.auth = auth
+        else:
+            # Load credentials from environment using DATABASE_ENVIRONMENT_STRATEGY naming
+            # See: docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
+            #
+            # Credential prefix mapping:
+            # - "prod" environment -> PROD_KALSHI_* (production Kalshi API)
+            # - "demo" environment -> {PRECOG_ENV}_KALSHI_* (demo Kalshi API)
+            #   - PRECOG_ENV=dev -> DEV_KALSHI_*
+            #   - PRECOG_ENV=test -> TEST_KALSHI_*
+            #   - PRECOG_ENV=staging -> STAGING_KALSHI_*
+            if environment == "prod":
+                cred_prefix = "PROD"
+            else:
+                # Demo environment: use PRECOG_ENV, default to DEV
+                precog_env = os.getenv("PRECOG_ENV", "dev").upper()
+                # Map to valid credential prefixes
+                valid_prefixes = {"DEV", "TEST", "STAGING"}
+                cred_prefix = precog_env if precog_env in valid_prefixes else "DEV"
 
-        api_key = os.getenv(key_env_var)
-        keyfile_path = os.getenv(keyfile_env_var)
+            key_env_var = f"{cred_prefix}_KALSHI_API_KEY"
+            keyfile_env_var = f"{cred_prefix}_KALSHI_PRIVATE_KEY_PATH"
 
-        if not api_key or not keyfile_path:
-            raise OSError(
-                f"Missing Kalshi credentials. Please set {key_env_var} and "
-                f"{keyfile_env_var} in .env file.\n"
-                f"See docs/guides/CONFIGURATION_GUIDE_V3.1.md for setup instructions."
-            )
+            api_key = os.getenv(key_env_var)
+            keyfile_path = os.getenv(keyfile_env_var)
 
-        # Initialize authentication
-        self.auth = KalshiAuth(api_key, keyfile_path)
+            if not api_key or not keyfile_path:
+                raise OSError(
+                    f"Missing Kalshi credentials. Please set {key_env_var} and "
+                    f"{keyfile_env_var} in .env file.\n"
+                    f"Current PRECOG_ENV={os.getenv('PRECOG_ENV', 'dev')}, credential prefix={cred_prefix}\n"
+                    f"See docs/guides/CONFIGURATION_GUIDE_V3.1.md for setup instructions."
+                )
+
+            # Initialize authentication
+            self.auth = KalshiAuth(api_key, keyfile_path)
 
         # Session for connection pooling (more efficient)
-        self.session = requests.Session()
+        self.session = session if session is not None else requests.Session()
 
         # Rate limiting (100 requests per minute for Kalshi)
-        self.rate_limiter = RateLimiter(requests_per_minute=100)
+        self.rate_limiter = (
+            rate_limiter if rate_limiter is not None else RateLimiter(requests_per_minute=100)
+        )
 
         logger.info(
             f"KalshiClient initialized for {environment} environment",
             extra={"environment": environment, "base_url": self.base_url},
         )
+
+    def close(self) -> None:
+        """
+        Close the HTTP session and release resources.
+
+        Should be called when the client is no longer needed to properly
+        clean up connection pools and prevent resource leaks.
+
+        Usage:
+            >>> client = KalshiClient(environment="demo")
+            >>> try:
+            ...     markets = client.get_markets()
+            ... finally:
+            ...     client.close()
+
+        Educational Note:
+            Resource cleanup is important for long-running applications.
+            The requests.Session maintains a connection pool that should
+            be explicitly closed when no longer needed.
+
+        Reference: Pattern 11 (Resource Cleanup) - DEVELOPMENT_PATTERNS
+        """
+        if hasattr(self, "session") and self.session:
+            self.session.close()
+            logger.debug("KalshiClient session closed")
 
     def _make_request(
         self,
@@ -652,17 +748,3 @@ class KalshiClient:
         logger.info(f"Fetched {len(settlements)} settlements", extra={"count": len(settlements)})
 
         return cast("list[ProcessedSettlementData]", settlements)
-
-    def close(self) -> None:
-        """
-        Close the client and clean up resources.
-
-        Example:
-            >>> client = KalshiClient("demo")
-            >>> try:
-            ...     markets = client.get_markets()
-            ... finally:
-            ...     client.close()
-        """
-        self.session.close()
-        logger.info("KalshiClient closed")

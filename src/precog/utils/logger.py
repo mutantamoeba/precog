@@ -79,7 +79,7 @@ Example - Avoid logging in hot loops:
 Decimal Precision in Logs:
 --------------------------
 Custom decimal_serializer preserves financial precision in JSON:
-- Decimal("0.5200") → "0.5200" (NOT 0.52 or 0.5199999)
+- Decimal("0.5200") -> "0.5200" (NOT 0.52 or 0.5199999)
 - Critical for price reconstruction from logs
 - Enables exact trade replication for backtesting
 
@@ -121,9 +121,9 @@ This structured logging enables future integrations:
 Credential Masking (REQ-SEC-009):
 ---------------------------------
 This module automatically masks sensitive data in logs:
-- API keys, passwords, tokens → masked as "abc***xyz"
-- Connection strings → postgres://user:****@host:5432/db
-- Error messages → credentials in exception text sanitized
+- API keys, passwords, tokens -> masked as "abc***xyz"
+- Connection strings -> postgres://user:****@host:5432/db
+- Error messages -> credentials in exception text sanitized
 
 Sensitive field names detected: api_key, api_secret, password, token,
 jwt_token, access_token, refresh_token, secret, private_key, auth_token,
@@ -173,6 +173,9 @@ SENSITIVE_PATTERNS = [
     re.compile(r"(postgres://[^:]+:)([^@]+)(@.+)", re.IGNORECASE),
     re.compile(r"(mysql://[^:]+:)([^@]+)(@.+)", re.IGNORECASE),
     re.compile(r"(mongodb://[^:]+:)([^@]+)(@.+)", re.IGNORECASE),
+    # HTTP Authorization headers (Basic, Bearer, etc.)
+    re.compile(r"(Basic\s+)([A-Za-z0-9+/=]+)", re.IGNORECASE),
+    re.compile(r"(Bearer\s+)([A-Za-z0-9\-._~+/=]+)", re.IGNORECASE),
     # Credentials in error messages - detects various assignment formats
     re.compile(r"(password\s*[=:]\s*['\"]?)([^'\"]+)(['\"]?)", re.IGNORECASE),
     re.compile(r"(password\s+['\"])([^'\"]+)(['\"])", re.IGNORECASE),
@@ -235,17 +238,87 @@ def sanitize_error_message(message: str) -> str:
     Returns:
         Sanitized message with credentials replaced by ****
 
+    Educational Note:
+        Handles patterns with different numbers of capture groups:
+        - 2 groups (Authorization headers): (prefix)(credential) -> "prefix***"
+        - 3 groups (connection strings): (prefix)(credential)(suffix) -> "prefix****suffix"
+
     Example:
         >>> sanitize_error_message("Auth failed: password 'MySecret123' is invalid")
         "Auth failed: password '****' is invalid"
+        >>> sanitize_error_message("Request sent with Basic dGVzdDoxMjM=")
+        "Request sent with Basic ***"
     """
     result = message
 
-    # Apply all sensitive patterns to sanitize credentials
+    # Apply patterns with appropriate replacement based on group count
     for pattern in SENSITIVE_PATTERNS:
-        result = pattern.sub(r"\g<1>****\g<3>", result)
+        if pattern.groups == 2:
+            # Authorization headers: (prefix)(token) -> "prefix***"
+            result = pattern.sub(r"\g<1>***", result)
+        elif pattern.groups == 3:
+            # Connection strings and password assignments: (prefix)(credential)(suffix)
+            result = pattern.sub(r"\g<1>****\g<3>", result)
 
     return result
+
+
+def _mask_value_recursive(key: str, value: Any) -> Any:
+    """
+    Recursively mask sensitive data in a value (handles nested dicts/lists).
+
+    Args:
+        key: The key name (used to determine if value is sensitive)
+        value: The value to potentially mask
+
+    Returns:
+        Masked value (or original if not sensitive)
+
+    Educational Note:
+        Handles nested structures like:
+        - headers={"Authorization": "Basic abc123"}  -> {"Authorization": "Basic ***"}
+        - errors=[{"password": "secret"}]  -> [{"password": "***"}]
+    """
+    if value is None:
+        return value
+
+    key_lower = key.lower()
+
+    # Handle dictionaries recursively
+    if isinstance(value, dict):
+        return {k: _mask_value_recursive(k, v) for k, v in value.items()}
+
+    # Handle lists recursively
+    if isinstance(value, list):
+        return [_mask_value_recursive(key, item) for item in value]
+
+    # Convert to string for pattern matching
+    if not isinstance(value, str):
+        value = str(value)
+
+    # Special handling for connection strings - sanitize password portion
+    if key_lower == "connection_string" or ("://" in value and "@" in value):
+        return sanitize_connection_string(value)
+
+    # Mask sensitive field names completely
+    if key_lower in SENSITIVE_FIELD_NAMES or any(
+        sensitive in key_lower for sensitive in ["key", "secret", "password", "token", "auth"]
+    ):
+        return mask_credential(value)
+
+    # Check for exception/error messages that may contain credentials
+    if key_lower in ("exception_message", "error_message", "message", "exception", "error"):
+        return sanitize_error_message(value)
+
+    # Check string values for embedded sensitive patterns (HTTP headers, etc.)
+    if isinstance(value, str):
+        # Apply all sanitization patterns to catch Authorization headers, tokens, etc.
+        sanitized = value
+        for pattern in SENSITIVE_PATTERNS:
+            sanitized = pattern.sub(r"\g<1>***", sanitized)
+        return sanitized
+
+    return value
 
 
 def mask_sensitive_data(
@@ -258,6 +331,8 @@ def mask_sensitive_data(
     - Masks values for sensitive field names (api_key, password, etc.)
     - Sanitizes connection strings
     - Cleans error messages of embedded credentials
+    - Recursively processes nested dicts/lists (e.g., headers dict)
+    - Masks HTTP Authorization headers (Basic, Bearer)
 
     Args:
         logger: The logger instance (unused, required by structlog)
@@ -270,36 +345,16 @@ def mask_sensitive_data(
     Reference:
         REQ-SEC-009: Sensitive Data Masking in Logs
         Pattern 4: Security - NO CREDENTIALS IN CODE
+
+    Educational Note:
+        Handles complex nested structures:
+        - logger.debug("api_request", headers={"Authorization": "Bearer token"})
+          -> Headers dict is recursively scanned, Authorization value masked
+        - logger.error("db_error", error="postgres://user:pass@host/db")
+          -> Connection string detected and password masked
     """
     for key, value in list(event_dict.items()):
-        if value is None:
-            continue
-
-        # Check if field name is sensitive
-        key_lower = key.lower()
-
-        # Special handling for connection strings - sanitize password portion
-        if key_lower == "connection_string" or (
-            isinstance(value, str) and "://" in value and "@" in value
-        ):
-            event_dict[key] = sanitize_connection_string(str(value))
-            continue
-
-        # Mask other sensitive field names completely
-        if key_lower in SENSITIVE_FIELD_NAMES or any(
-            sensitive in key_lower for sensitive in ["key", "secret", "password", "token"]
-        ):
-            event_dict[key] = mask_credential(str(value))
-            continue
-
-        # Check for exception messages that may contain credentials
-        if key_lower in (
-            "exception_message",
-            "error_message",
-            "message",
-            "exception",
-        ) and isinstance(value, str):
-            event_dict[key] = sanitize_error_message(value)
+        event_dict[key] = _mask_value_recursive(key, value)
 
     return event_dict
 

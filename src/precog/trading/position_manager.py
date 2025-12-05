@@ -353,7 +353,7 @@ class PositionManager:
         Educational Note:
             **SCD Type 2 Versioning:**
             When you call this method:
-            1. Old version: row_current_ind TRUE → FALSE (archived)
+            1. Old version: row_current_ind TRUE -> FALSE (archived)
             2. New version: INSERT with row_current_ind = TRUE (current)
             3. Surrogate id changes, business key stays the same
 
@@ -577,7 +577,7 @@ class PositionManager:
             otherwise you'll get ALL historical versions (slow query, wrong results).
 
             Example:
-                - Position POS-100 has 10 price updates → 10 rows in database
+                - Position POS-100 has 10 price updates -> 10 rows in database
                 - Query WITHOUT row_current_ind filter: Returns 10 rows (WRONG!)
                 - Query WITH row_current_ind = TRUE: Returns 1 row (CORRECT!)
 
@@ -870,21 +870,21 @@ class PositionManager:
             - Profit < activation_threshold
             - Stop = static stop_loss_price
             - Example: Entry $0.50, Static stop $0.35, Current $0.60 (+$0.10 profit)
-              Activation threshold $0.15 not reached yet → stop stays $0.35
+              Activation threshold $0.15 not reached yet -> stop stays $0.35
 
             Phase 2: ACTIVATION (threshold reached)
             - Profit >= activation_threshold
             - activated = TRUE, activation_price = current_price
             - Calculate initial stop: highest_price - initial_distance
-            - Example: Price reaches $0.65 (+$0.15 profit) → ACTIVATE!
+            - Example: Price reaches $0.65 (+$0.15 profit) -> ACTIVATE!
               Stop = $0.65 - $0.05 = $0.60 (trailing begins)
 
             Phase 3: TRAILING (following price up)
             - Track highest_price
             - Recalculate stop: highest_price - distance (with tightening)
             - Stop only moves UP, never down
-            - Example: Price $0.75 → Stop $0.70 ($0.75 - $0.05)
-                      Price $0.72 → Stop stays $0.70 (doesn't move down)
+            - Example: Price $0.75 -> Stop $0.70 ($0.75 - $0.05)
+                      Price $0.72 -> Stop stays $0.70 (doesn't move down)
 
             **Distance Calculation with Tightening:**
             ```
@@ -1086,12 +1086,12 @@ class PositionManager:
             YES position (profit when price goes UP):
             - Stop triggered when price FALLS to/below stop level
             - Trigger condition: current_price <= current_stop_price
-            - Example: Stop $0.70, Price drops to $0.68 → TRIGGERED!
+            - Example: Stop $0.70, Price drops to $0.68 -> TRIGGERED!
 
             NO position (profit when price goes DOWN):
             - Stop triggered when price RISES to/above stop level
             - Trigger condition: current_price >= (1.00 - current_stop_price)
-            - Example: Stop $0.30, Price rises to $0.72 → TRIGGERED!
+            - Example: Stop $0.30, Price rises to $0.72 -> TRIGGERED!
               (Because NO position's stop is inverse: $1.00 - $0.30 = $0.70)
 
             **Why check in separate method?**

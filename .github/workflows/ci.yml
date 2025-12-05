@@ -175,9 +175,17 @@ jobs:
           pip install -e .  # Install precog package (src/ layout)
           pip install pytest pytest-cov pytest-xdist
 
-      - name: Run unit tests with coverage (skip integration/e2e/stress/performance)
+      - name: Run tests (unit + property) - Cross-platform, no PostgreSQL
         run: |
-          python -m pytest tests/unit/ -v --cov=src/precog --cov-report=xml --cov-report=html --cov-report=term-missing -n auto
+          # Run tests that don't require PostgreSQL (aligned across Windows/Linux)
+          # Unit tests: All mocked, no external dependencies
+          # Property tests: Most use Hypothesis for data generation, mocked DB
+          # NOTE: Database-dependent property tests run in integration-tests job with PostgreSQL:
+          #       - test_crud_operations_properties.py
+          #       - test_database_crud_properties.py
+          #       - test_strategy_versioning_properties.py
+          # Integration/E2E/stress/chaos tests need PostgreSQL - run in Linux-only job
+          python -m pytest tests/unit/ tests/property/ -v --cov=src/precog --cov-report=xml --cov-report=html --cov-report=term-missing -n auto --ignore=tests/property/test_crud_operations_properties.py --ignore=tests/property/test_database_crud_properties.py --ignore=tests/property/test_strategy_versioning_properties.py
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
@@ -206,6 +214,8 @@ jobs:
     needs: detect-changes
     # Only run if code changed (requires database)
     if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
+    # Job timeout to prevent hanging CI runs (Issue: 5hr+ hangs observed)
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -255,53 +265,84 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -e .  # Install precog package (src/ layout)
-          pip install pytest pytest-cov hypothesis vcrpy
+          pip install pytest pytest-cov hypothesis vcrpy pytest-timeout
 
-      - name: Run database migrations
+      - name: Apply database migrations with Alembic
         run: |
-          # Apply all migrations to test database
-          python -c "
-          import os
-          import psycopg2
-          from psycopg2.extras import RealDictCursor
+          # Alembic manages all schema migrations with proper version tracking
+          # This replaces the previous manual SQL + Python migration approach
+          # See ADR-030 for migration framework decision
+          cd src/precog/database
+          echo "Running Alembic migrations..."
+          alembic upgrade head
+          echo "Alembic migrations complete"
 
-          conn = psycopg2.connect(
-              host=os.getenv('DB_HOST'),
-              port=os.getenv('DB_PORT'),
-              dbname=os.getenv('DB_NAME'),
-              user=os.getenv('DB_USER'),
-              password=os.getenv('DB_PASSWORD')
-          )
-          conn.autocommit = True
-          cur = conn.cursor()
+          # Verify migration applied successfully
+          alembic current
 
-          # Run migration scripts in order
-          import importlib.util
-          import glob
-
-          migration_files = sorted(glob.glob('src/precog/database/migrations/migration_*.py'))
-          for mf in migration_files:
-              print(f'Running: {mf}')
-              spec = importlib.util.spec_from_file_location('migration', mf)
-              module = importlib.util.module_from_spec(spec)
-              spec.loader.exec_module(module)
-              if hasattr(module, 'run_migration'):
-                  # Migrations are self-managing (create their own connection)
-                  module.run_migration()
-
-          conn.close()
-          print('All migrations applied successfully')
-          "
-
-      - name: Run integration tests
+      - name: Clear Hypothesis example cache (prevents stale data issues)
         run: |
-          python -m pytest tests/integration/ tests/property/ -v --tb=short
-        continue-on-error: true  # Tech debt: CI database setup incomplete (missing base schema, API keys)
+          # Clear cached Hypothesis examples that may conflict with current schema
+          # This prevents "UniqueViolation" and "CheckViolation" errors from stale cached data
+          # See ADR-057: Testcontainers for Database Test Isolation
+          rm -rf .hypothesis/examples || true
+          echo "Hypothesis cache cleared"
 
-      - name: Run E2E tests
+      - name: Run database-dependent property tests
+        timeout-minutes: 10
+        env:
+          PYTHONUNBUFFERED: "1"
         run: |
-          python -m pytest tests/e2e/ -v --tb=short
-        continue-on-error: true  # E2E may have external dependencies
+          # Property tests that require real PostgreSQL (SCD Type-2, Decimal precision, strategy versioning)
+          # --timeout=120: Kill individual tests that hang for >2 minutes
+          echo "=== Starting property tests at $(date) ==="
+          python -m pytest tests/property/test_crud_operations_properties.py tests/property/test_database_crud_properties.py tests/property/test_strategy_versioning_properties.py -v --tb=short --timeout=120
+          echo "=== Property tests complete at $(date) ==="
+
+      # Phase 1.9 DIAGNOSTIC: Split into separate steps to identify hang source
+      - name: Run integration tests (database CRUD)
+        timeout-minutes: 5
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          echo "=== Starting integration tests at $(date) ==="
+          python -m pytest tests/integration/ -v --tb=short --timeout=60 -p no:cacheprovider
+          echo "=== Integration tests complete at $(date) ==="
+
+      - name: Run security tests
+        timeout-minutes: 3
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          echo "=== Starting security tests at $(date) ==="
+          python -m pytest tests/security/ -v --tb=short --timeout=60 -p no:cacheprovider
+          echo "=== Security tests complete at $(date) ==="
+
+      - name: Run stress tests
+        timeout-minutes: 5
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          echo "=== Starting stress tests at $(date) ==="
+          python -m pytest tests/stress/ -v --tb=short --timeout=60 -p no:cacheprovider
+          echo "=== Stress tests complete at $(date) ==="
+
+      - name: Run chaos tests
+        timeout-minutes: 3
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          echo "=== Starting chaos tests at $(date) ==="
+          python -m pytest tests/chaos/ -v --tb=short --timeout=60 -p no:cacheprovider
+          echo "=== Chaos tests complete at $(date) ==="
+
+      - name: Run E2E + performance tests
+        timeout-minutes: 5
+        run: |
+          # E2E tests will skip if API credentials not configured
+          # Performance tests validate speed requirements
+          # --timeout=60: Kill individual tests that hang for >1 minute
+          python -m pytest tests/e2e/ tests/performance/ -v --tb=short --timeout=60
 
   validate-quick:
     name: Quick Validation Suite

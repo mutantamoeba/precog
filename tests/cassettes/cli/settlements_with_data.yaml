@@ -1,0 +1,46 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://demo-api.kalshi.co/trade-api/v2/portfolio/settlements?limit=100
+  response:
+    body:
+      string: '{"cursor":"","settlements":[{"ticker":"KXNFLGAME-25DEC15-KC-YES","market_result":"yes","settlement_value":"1.0000","settled_time":"2025-12-16T02:30:00Z","revenue":"100.0000","total_fees":"0.7000"}]}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '162'
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Mon, 16 Dec 2025 02:30:45 GMT
+      Via:
+      - 1.1 be2c4206e13042a954840d2c2aee86ac.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - AbC8dEf9gH5iJ6kL2mN3oP4qR5sT6uV7wX8yZ9aB0cD1eF2gH3iJ4k==
+      X-Amz-Cf-Pop:
+      - ORD58-P10
+      X-Cache:
+      - Miss from cloudfront
+      content-security-policy:
+      - default-src 'none';
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1

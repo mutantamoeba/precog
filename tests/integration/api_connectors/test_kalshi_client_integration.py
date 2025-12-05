@@ -279,7 +279,12 @@ class TestKalshiClientErrorHandling:
                 client.get_balance()
 
     def test_429_rate_limit_raises_error(self, monkeypatch):
-        """Test 429 Rate Limit response raises HTTPError (no automatic retry)."""
+        """Test 429 Rate Limit response raises HTTPError (no automatic retry).
+
+        Note: We mock time.sleep to prevent the rate limiter from actually
+        waiting 30 seconds (the Retry-After header value). This was causing
+        CI timeouts (see PR #167 investigation).
+        """
         # Mock 429 response with Retry-After header
         mock_429 = Mock()
         mock_429.status_code = 429
@@ -300,11 +305,13 @@ class TestKalshiClientErrorHandling:
                 "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ):
-                client = KalshiClient(environment="demo")
+                # Mock time.sleep to prevent actual 30-second wait from rate limiter
+                with patch("precog.api_connectors.rate_limiter.time.sleep"):
+                    client = KalshiClient(environment="demo")
 
-                # Should raise HTTPError for 429 (no automatic retry)
-                with pytest.raises(requests.HTTPError, match="429"):
-                    client.get_balance()
+                    # Should raise HTTPError for 429 (no automatic retry)
+                    with pytest.raises(requests.HTTPError, match="429"):
+                        client.get_balance()
 
     def test_500_server_error_triggers_retry(self, monkeypatch):
         """Test 500 Internal Server Error triggers retry with exponential backoff."""
@@ -749,8 +756,12 @@ class TestKalshiClientRateLimiting:
 
         When API returns 429 with Retry-After header, client should:
         1. Extract Retry-After value
-        2. Wait for specified duration
+        2. Wait for specified duration (mocked to prevent actual sleep)
         3. Raise HTTPError (caller decides whether to retry)
+
+        Note: We mock time.sleep to prevent the rate limiter from actually
+        waiting 30 seconds (the Retry-After header value). This was causing
+        CI timeouts (see PR #167 investigation).
         """
         monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "test-key-id")
         monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "tests/fixtures/test_private_key.pem")
@@ -771,11 +782,13 @@ class TestKalshiClientRateLimiting:
                 "precog.api_connectors.kalshi_client.KalshiAuth.get_headers",
                 return_value={"Authorization": "Bearer mock"},
             ):
-                client = KalshiClient(environment="demo")
+                # Mock time.sleep to prevent actual 30-second wait from rate limiter
+                with patch("precog.api_connectors.rate_limiter.time.sleep"):
+                    client = KalshiClient(environment="demo")
 
-                # Should raise HTTPError with 429 status
-                with pytest.raises(requests.HTTPError, match="429"):
-                    client.get_balance()
+                    # Should raise HTTPError with 429 status
+                    with pytest.raises(requests.HTTPError, match="429"):
+                        client.get_balance()
 
     def test_rate_limiter_utilization_calculation(self, monkeypatch):
         """

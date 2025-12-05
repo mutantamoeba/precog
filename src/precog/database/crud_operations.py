@@ -45,11 +45,11 @@ Visual Example - Market Price History:
 
 Query for CURRENT price:
     SELECT * FROM markets WHERE market_id = 42 AND row_current_ind = TRUE
-    → Returns 0.5500 (latest version only)
+    -> Returns 0.5500 (latest version only)
 
 Query for HISTORICAL prices:
     SELECT * FROM markets WHERE market_id = 42 ORDER BY row_start_ts
-    → Returns all 3 versions (complete price history)
+    -> Returns all 3 versions (complete price history)
 ```
 
 Why This Matters for Trading:
@@ -75,9 +75,9 @@ Why This Matters for Trading:
    - Reconstruct "why did we exit at 0.5800 instead of 0.6000?"
 
 **5. Debugging**
-   - "Why didn't we enter this market?" → Check historical prices
-   - "Did our price feed freeze?" → Check row timestamps
-   - "When did this market close?" → Check status history
+   - "Why didn't we enter this market?" -> Check historical prices
+   - "Did our price feed freeze?" -> Check row timestamps
+   - "When did this market close?" -> Check status history
 
 The row_current_ind Pattern (CRITICAL):
 ----------------------------------------
@@ -121,7 +121,7 @@ Performance Implications:
 - Each price update creates NEW row (not UPDATE)
 - 1000 price updates per day = 1000 rows (vs 1 row with UPDATE)
 - PostgreSQL handles this efficiently with indexes
-- Typical size: ~500 bytes/row → 500 KB/day per active market
+- Typical size: ~500 bytes/row -> 500 KB/day per active market
 - For 100 active markets: ~50 MB/day (negligible)
 
 **Query Performance:**
@@ -181,7 +181,7 @@ result = db.execute(
 
 # ❌ WRONG - SQL injection vulnerability
 query = f"SELECT * FROM markets WHERE ticker = '{ticker}'"
-# ^ If ticker = "'; DROP TABLE markets; --" → DELETES ALL DATA!
+# ^ If ticker = "'; DROP TABLE markets; --" -> DELETES ALL DATA!
 ```
 
 **Key principle:** NEVER concatenate user input into SQL strings.
@@ -273,8 +273,8 @@ class DecimalEncoder(json.JSONEncoder):
     Educational Note:
         Why not convert to float? Because float introduces rounding errors!
         Example:
-            Decimal("0.4975") → float → 0.49750000000000005 ❌ WRONG
-            Decimal("0.4975") → str → "0.4975" ✅ CORRECT
+            Decimal("0.4975") -> float -> 0.49750000000000005 ❌ WRONG
+            Decimal("0.4975") -> str -> "0.4975" ✅ CORRECT
 
     Example:
         >>> config = {"max_edge": Decimal("0.05"), "kelly_fraction": Decimal("0.10")}
@@ -1298,9 +1298,9 @@ def update_account_balance_with_versioning(
         - Can't correlate balance with trades/positions
 
         With SCD Type 2:
-        - Query: "What was my balance on 2024-01-15?" → Filter by created_at
-        - Query: "How has balance changed this month?" → Aggregate by day
-        - Query: "Current balance?" → WHERE row_current_ind=TRUE
+        - Query: "What was my balance on 2024-01-15?" -> Filter by created_at
+        - Query: "How has balance changed this month?" -> Aggregate by day
+        - Query: "Current balance?" -> WHERE row_current_ind=TRUE
 
     Example:
         >>> # First balance fetch
@@ -1475,8 +1475,8 @@ def create_strategy(
     Educational Note:
         Strategy configs are IMMUTABLE for A/B testing integrity:
         - v1.0 config NEVER changes (preserves test results)
-        - To modify config, create NEW version (v1.0 → v1.1)
-        - Status is MUTABLE (draft → testing → active → deprecated)
+        - To modify config, create NEW version (v1.0 -> v1.1)
+        - Status is MUTABLE (draft -> testing -> active -> deprecated)
 
         Why immutability matters:
         - A/B testing: Need to know EXACTLY which config generated each trade
@@ -1700,11 +1700,11 @@ def update_strategy_status(
 
     Educational Note:
         Status is MUTABLE (can change in-place):
-        - draft → testing → active → deprecated (normal lifecycle)
-        - active → deprecated (when superseded by new version)
+        - draft -> testing -> active -> deprecated (normal lifecycle)
+        - active -> deprecated (when superseded by new version)
 
         Config is IMMUTABLE (cannot change in-place):
-        - To change config, create NEW version (v1.0 → v1.1)
+        - To change config, create NEW version (v1.0 -> v1.1)
 
     Example:
         >>> # Move from draft to testing
@@ -2314,7 +2314,7 @@ def create_game_state(
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
-            data_source, row_current_ind, row_start_timestamp
+            data_source, row_current_ind, row_start_ts
         )
         VALUES (
             'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
@@ -2434,7 +2434,7 @@ def upsert_game_state(
     Educational Note:
         SCD Type 2 UPSERT pattern:
         1. Check if current row exists for espn_event_id
-        2. If exists: UPDATE to close it (row_current_ind=FALSE, row_end_timestamp=NOW)
+        2. If exists: UPDATE to close it (row_current_ind=FALSE, row_end_ts=NOW)
         3. INSERT new row with row_current_ind=TRUE
 
         This preserves complete history - every score change, clock update,
@@ -2469,7 +2469,7 @@ def upsert_game_state(
     close_query = """
         UPDATE game_states
         SET row_current_ind = FALSE,
-            row_end_timestamp = NOW()
+            row_end_ts = NOW()
         WHERE espn_event_id = %s
           AND row_current_ind = TRUE
     """
@@ -2480,7 +2480,7 @@ def upsert_game_state(
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
-            data_source, row_current_ind, row_start_timestamp
+            data_source, row_current_ind, row_start_ts
         )
         VALUES (
             'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
@@ -2547,18 +2547,18 @@ def get_game_state_history(espn_event_id: str, limit: int = 100) -> list[dict[st
         limit: Maximum rows to return (default 100)
 
     Returns:
-        List of game state records ordered by row_start_timestamp DESC
+        List of game state records ordered by row_start_ts DESC
 
     Example:
         >>> history = get_game_state_history("401547417")
         >>> for state in history[:5]:
-        ...     print(f"{state['row_start_timestamp']}: {state['home_score']}-{state['away_score']}")
+        ...     print(f"{state['row_start_ts']}: {state['home_score']}-{state['away_score']}")
     """
     query = """
         SELECT *
         FROM game_states
         WHERE espn_event_id = %s
-        ORDER BY row_start_timestamp DESC
+        ORDER BY row_start_ts DESC
         LIMIT %s
     """
     return fetch_all(query, (espn_event_id, limit))

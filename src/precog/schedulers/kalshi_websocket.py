@@ -157,8 +157,8 @@ class KalshiWebSocketHandler:
 
     Educational Notes:
         WebSocket vs REST:
-        - REST (polling): Request → Response → Wait → Repeat
-        - WebSocket: Connect once → Server pushes updates continuously
+        - REST (polling): Request -> Response -> Wait -> Repeat
+        - WebSocket: Connect once -> Server pushes updates continuously
 
         This is like the difference between:
         - Checking your mailbox every hour (polling)
@@ -400,24 +400,33 @@ class KalshiWebSocketHandler:
         """
         Initialize authentication from environment variables.
 
+        Uses DATABASE_ENVIRONMENT_STRATEGY naming convention:
+        - prod -> PROD_KALSHI_API_KEY / PROD_KALSHI_PRIVATE_KEY_PATH
+        - demo -> {PRECOG_ENV}_KALSHI_* (DEV, TEST, or STAGING based on PRECOG_ENV)
+
         Raises:
             ValueError: If required environment variables not set.
         """
         import os
 
-        # Get environment-specific credentials
-        if self.environment == "demo":
-            api_key = os.getenv("KALSHI_DEMO_API_KEY")
-            key_file = os.getenv("KALSHI_DEMO_KEYFILE")
+        # Get environment-specific credentials using DATABASE_ENVIRONMENT_STRATEGY naming
+        # See: docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
+        if self.environment == "prod":
+            cred_prefix = "PROD"
         else:
-            api_key = os.getenv("KALSHI_PROD_API_KEY")
-            key_file = os.getenv("KALSHI_PROD_KEYFILE")
+            # Demo environment: use PRECOG_ENV, default to DEV
+            precog_env = os.getenv("PRECOG_ENV", "dev").upper()
+            valid_prefixes = {"DEV", "TEST", "STAGING"}
+            cred_prefix = precog_env if precog_env in valid_prefixes else "DEV"
+
+        api_key = os.getenv(f"{cred_prefix}_KALSHI_API_KEY")
+        key_file = os.getenv(f"{cred_prefix}_KALSHI_PRIVATE_KEY_PATH")
 
         if not api_key or not key_file:
-            env_prefix = "KALSHI_DEMO" if self.environment == "demo" else "KALSHI_PROD"
             raise ValueError(
-                f"Missing Kalshi credentials. Set {env_prefix}_API_KEY and {env_prefix}_KEYFILE "
-                "environment variables."
+                f"Missing Kalshi credentials. Set {cred_prefix}_KALSHI_API_KEY and "
+                f"{cred_prefix}_KALSHI_PRIVATE_KEY_PATH environment variables.\n"
+                f"Current PRECOG_ENV={os.getenv('PRECOG_ENV', 'dev')}"
             )
 
         self._auth = KalshiAuth(api_key=api_key, private_key_path=key_file)

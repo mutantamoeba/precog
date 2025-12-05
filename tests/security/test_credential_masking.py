@@ -503,9 +503,9 @@ def test_credential_masking_utility_function() -> None:
         ```
 
         Usage:
-        - API keys: "abc123-secret-456def" → "abc***def"
-        - Passwords: "MySecretPassword" → "MyS***ord"
-        - Tokens: "eyJhbGc...xyz" → "eyJ***xyz"
+        - API keys: "abc123-secret-456def" -> "abc***def"
+        - Passwords: "MySecretPassword" -> "MyS***ord"
+        - Tokens: "eyJhbGc...xyz" -> "eyJ***xyz"
 
     Args:
         None

@@ -18,9 +18,9 @@ Mathematical Properties Tested:
 
 Why This Matters:
 - Invalid config values cause silent failures or catastrophic losses
-- Kelly fraction = 2.5 instead of 0.25 → massive over-betting
-- Negative edge threshold → trading with no edge
-- Float contamination → rounding errors in money calculations
+- Kelly fraction = 2.5 instead of 0.25 -> massive over-betting
+- Negative edge threshold -> trading with no edge
+- Float contamination -> rounding errors in money calculations
 - Property tests catch typos and validation bugs BEFORE production
 
 Hypothesis generates edge cases humans wouldn't think to test.
@@ -451,7 +451,7 @@ def test_yaml_values_convert_to_decimal(yaml_float):
     # Float has ~15 decimal digits precision
     tolerance = Decimal("1e-10")
     difference = abs(decimal_value - Decimal(str(yaml_float)))
-    assert difference < tolerance, f"Conversion error: {yaml_float} → {decimal_value}"
+    assert difference < tolerance, f"Conversion error: {yaml_float} -> {decimal_value}"
 
 
 def test_config_loader_converts_money_to_decimal():
@@ -571,7 +571,7 @@ def test_config_values_practical_ranges(kelly_frac, edge_threshold):
 # ==============================================================================
 """
 Hypothesis Configuration (from pyproject.toml):
-- max_examples = 100 (default) → Will test 100 random inputs per property
+- max_examples = 100 (default) -> Will test 100 random inputs per property
 - deadline = 400ms per example
 - verbosity = "normal"
 

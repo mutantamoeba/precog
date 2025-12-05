@@ -10,7 +10,7 @@
 - Root cause: over-reliance on mocks, small test suite false confidence, tests written after implementation
 - 6 lessons learned: (1) Mock sparingly integrate thoroughly, (2) Use test infrastructure (conftest.py), (3) Write tests BEFORE implementation, (4) Need 8 test types not just unit tests, (5) Stress test critical resources, (6) Coverage % ≠ test quality
 - Includes anti-pattern examples (mocking internal infrastructure), correct patterns (real database fixtures), test review checklist, red flags
-- Cross-references: TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md (REQ-TEST-012 through REQ-TEST-019), TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md, TESTING_GAPS_ANALYSIS.md
+- Cross-references: TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md (REQ-TEST-012 through REQ-TEST-019), TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md, TESTING_GAPS_ANALYSIS.md
 **Changes in V1.2:**
 - **Added Section 10: Security-First Testing** - Comprehensive principle for testing WITH security validations (not around them)
 - Documents "tests validate security works correctly, not that code works when security disabled"
@@ -435,13 +435,13 @@ def test_connection_pool_concurrent_stress(db_pool):
 ---
 
 **Related Documents:**
-- `docs/foundation/TESTING_STRATEGY_V3.2.md` (will be updated to V3.0)
-- `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md` - REQ-TEST-012 through REQ-TEST-019
+- `docs/foundation/TESTING_STRATEGY_V3.3.md` (will be updated to V3.0)
+- `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md` - REQ-TEST-012 through REQ-TEST-019
 - `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Detailed post-mortem
 - `TESTING_GAPS_ANALYSIS.md` - Current test coverage gaps
 - `CLAUDE.md` Section 7 (Common Tasks - Task 1)
 **Related Documents:**
-- `docs/foundation/TESTING_STRATEGY_V3.2.md`
+- `docs/foundation/TESTING_STRATEGY_V3.3.md`
 - `CLAUDE.md` Section 7 (Common Tasks - Task 1)
 
 ---
@@ -2147,7 +2147,7 @@ Before marking any feature complete, validate ALL principles followed:
 ## Related Documentation
 
 **Testing & Validation:**
-- `docs/foundation/TESTING_STRATEGY_V3.2.md` - Testing infrastructure
+- `docs/foundation/TESTING_STRATEGY_V3.3.md` - Testing infrastructure
 - `docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality
 
 **Process & Workflow:**

@@ -197,12 +197,13 @@ def test_e2e_full_attribution_workflow(
     Reference:
         - REQ-TEST-015: End-to-end attribution workflow tests
     """
-    # Step 1: Create market
+    # Step 1: Create market with unique ID to avoid duplicate key errors
+    unique_suffix = int(time.time() * 1000)  # Millisecond timestamp for uniqueness
     market_id = create_market(
         platform_id=sample_platform,
         event_id=sample_event,
-        external_id="E2E-TEST-001",
-        ticker="E2E-TEST-001",
+        external_id=f"E2E-TEST-{unique_suffix}",
+        ticker=f"E2E-TEST-{unique_suffix}",
         title="E2E Test Market",
         market_type="binary",
         yes_price=Decimal("0.5500"),
@@ -215,7 +216,7 @@ def test_e2e_full_attribution_workflow(
     trade_id = create_trade(
         market_id=market_id,
         strategy_id=sample_strategy,
-        model_id=1,  # From sample_model
+        model_id=sample_model,
         side="buy",
         quantity=100,
         price=Decimal("0.5500"),
@@ -228,7 +229,7 @@ def test_e2e_full_attribution_workflow(
     position_id = create_position(
         market_id=market_id,
         strategy_id=sample_strategy,
-        model_id=1,
+        model_id=sample_model,
         side="yes",
         quantity=100,
         entry_price=Decimal("0.5500"),
@@ -286,7 +287,7 @@ def test_stress_bulk_trade_creation(
         trade_id = create_trade(
             market_id=sample_market,
             strategy_id=sample_strategy,
-            model_id=1,
+            model_id=sample_model,
             side="buy",
             quantity=10,
             price=mkt_price,
@@ -337,7 +338,7 @@ def test_stress_bulk_position_creation(
         position_id = create_position(
             market_id=sample_market,
             strategy_id=sample_strategy,
-            model_id=1,
+            model_id=sample_model,
             side="yes",
             quantity=20,
             entry_price=entry_price,
@@ -386,7 +387,7 @@ def test_race_concurrent_trade_creation(
             trade_id = create_trade(
                 market_id=sample_market,
                 strategy_id=sample_strategy,
-                model_id=1,
+                model_id=sample_model,
                 side="buy",
                 quantity=5,
                 price=Decimal("0.5000"),
@@ -450,8 +451,11 @@ def test_performance_analytics_query_with_large_dataset(
         - REQ-TEST-018: Performance tests for analytics queries
     """
     # Create 5000 trades for realistic dataset
+    # sample_model fixture creates Model A (99901) and Model B (99902)
     for i in range(5000):
-        model_id = 1 if i % 2 == 0 else 2  # Alternate between Model A and B
+        model_id = (
+            sample_model if i % 2 == 0 else sample_model + 1
+        )  # Alternate between Model A and B
         calc_prob = Decimal("0.5500") + (Decimal(i % 45) / Decimal("100"))
         mkt_price = Decimal("0.5000")
 
@@ -491,10 +495,12 @@ def test_performance_analytics_query_with_large_dataset(
     # Verify at least 2 models present (may include NULL from other tests)
     assert len(results) >= 2, f"Expected at least 2 model groups, got {len(results)}"
 
-    # Verify our test data is present (model_id 1 and 2)
+    # Verify our test data is present (model_id 99901 and 99902 from sample_model fixture)
     model_ids = {row["model_id"] for row in results if row["model_id"] is not None}
-    assert 1 in model_ids, f"Model 1 missing from results: {model_ids}"
-    assert 2 in model_ids, f"Model 2 missing from results: {model_ids}"
+    assert sample_model in model_ids, f"Model A ({sample_model}) missing from results: {model_ids}"
+    assert sample_model + 1 in model_ids, (
+        f"Model B ({sample_model + 1}) missing from results: {model_ids}"
+    )
 
 
 # =============================================================================
@@ -525,12 +531,12 @@ def test_chaos_trade_with_null_attribution_fields(
     trade_id = create_trade(
         market_id=sample_market,
         strategy_id=sample_strategy,
-        model_id=1,  # Required parameter (even if attribution fields NULL)
+        model_id=sample_model,  # Required parameter (even if attribution fields NULL)
         side="buy",
         quantity=10,
         price=Decimal("0.5000"),
-        # calculated_probability=None,  # Omitted → defaults to NULL
-        # market_price=None,            # Omitted → defaults to NULL
+        # calculated_probability=None,  # Omitted -> defaults to NULL
+        # market_price=None,            # Omitted -> defaults to NULL
     )
 
     trade = get_trade_by_id(trade_id)
@@ -543,7 +549,7 @@ def test_chaos_trade_with_null_attribution_fields(
     assert trade["calculated_probability"] is None
     assert trade["market_price"] is None
     assert trade["edge_value"] is None
-    assert trade["model_id"] == 1  # model_id is required parameter
+    assert trade["model_id"] == sample_model  # model_id is required parameter
 
 
 @pytest.mark.chaos

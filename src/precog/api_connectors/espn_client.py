@@ -693,6 +693,35 @@ class ESPNClient:
         self._clean_old_timestamps()
         return self.rate_limit_per_hour - len(self.request_timestamps)
 
+    def close(self) -> None:
+        """
+        Close the HTTP session and release resources.
+
+        Should be called when the client is no longer needed to properly
+        clean up connection pools and prevent resource leaks.
+
+        Usage:
+            >>> client = ESPNClient()
+            >>> try:
+            ...     games = client.get_nfl_scoreboard()
+            ... finally:
+            ...     client.close()
+
+        Educational Note:
+            Resource cleanup is important for long-running applications.
+            The requests.Session maintains a connection pool that should
+            be explicitly closed when no longer needed.
+
+            For context managers, consider using:
+            >>> with contextlib.closing(ESPNClient()) as client:
+            ...     games = client.get_nfl_scoreboard()
+
+        Reference: Pattern 11 (Resource Cleanup) - DEVELOPMENT_PATTERNS
+        """
+        if hasattr(self, "session") and self.session:
+            self.session.close()
+            logger.debug("ESPN client session closed")
+
     # =========================================================================
     # Private Helper Methods
     # =========================================================================

@@ -1,12 +1,20 @@
 # Comprehensive Test Requirements
 
-**Version:** 2.0
-**Date:** 2025-11-29
+**Version:** 2.1
+**Date:** 2025-11-30
 **Purpose:** Establish testing standards for all Precog modules
 **Triggered By:** TDD Failure Root Cause Analysis (Strategy Manager tests insufficient)
+**Changes in V2.1:**
+- **Added REQ-TEST-020 through REQ-TEST-024** - Test Isolation Requirements from Phase 1.9 lessons learned
+- **REQ-TEST-020:** Transaction-Based Test Isolation (savepoint pattern)
+- **REQ-TEST-021:** Foreign Key Dependency Chain Management
+- **REQ-TEST-022:** Cleanup Fixture Ordering (reverse FK order)
+- **REQ-TEST-023:** Parallel Execution Safety (worker prefixes)
+- **REQ-TEST-024:** SCD Type 2 Test Isolation
+- **Cross-references TEST_ISOLATION_PATTERNS_V1.0.md** for detailed implementation patterns
 **Changes in V2.0:**
 - **All 8 Test Types Now MANDATORY** - Removed N/A, OPT, P5+ designations
-- **Synced with TESTING_STRATEGY_V3.2** - Both documents now have identical requirements
+- **Synced with TESTING_STRATEGY_V3.3** - Both documents now have identical requirements
 - **Validation via Phase 2C** - CRUD tests uncovered 3 critical bugs proving all test types needed
 - **Lesson Learned:** Phase 2C race condition bug would have been caught by Race tests if they weren't OPT
 
@@ -78,7 +86,7 @@ Previous approach (V1.0) had tiered requirements based on "risk profiles." This 
 - **Performance:** Establishes latency baselines
 - **Chaos:** Validates failure recovery
 
-**Reference:** ADR-076 (Test Type Categories), TESTING_STRATEGY_V3.2
+**Reference:** ADR-076 (Test Type Categories), TESTING_STRATEGY_V3.3
 
 ---
 
@@ -620,6 +628,397 @@ E2E tests provide **user-level confidence**.
 
 ---
 
+## REQ-TEST-020: Transaction-Based Test Isolation
+
+**Priority:** 🔴 CRITICAL
+**Phase:** 1.9+
+**Status:** 🔵 Planned
+**Added:** V2.1 (Phase 1.9 lessons learned)
+
+**Requirement:**
+
+All database tests MUST use transaction-based isolation with PostgreSQL savepoints to guarantee complete data isolation:
+
+**Pattern: Savepoint-Based Isolation**
+
+```python
+@pytest.fixture
+def isolated_transaction(db_pool):
+    """
+    Provide fully isolated transaction with guaranteed rollback.
+
+    Uses savepoint to ensure complete isolation even if test commits.
+
+    Educational Note:
+        PostgreSQL savepoints create nested transaction boundaries.
+        ROLLBACK TO SAVEPOINT undoes ALL changes since savepoint,
+        regardless of intermediate commits within the savepoint.
+    """
+    conn = db_pool.getconn()
+    cursor = conn.cursor()
+
+    # Create savepoint for complete isolation
+    cursor.execute("SAVEPOINT test_isolation_point")
+
+    try:
+        yield cursor
+    finally:
+        # ALWAYS rollback to savepoint - undoes ALL test changes
+        cursor.execute("ROLLBACK TO SAVEPOINT test_isolation_point")
+        cursor.execute("RELEASE SAVEPOINT test_isolation_point")
+        cursor.close()
+        db_pool.putconn(conn)
+```
+
+**Anti-Pattern (FORBIDDEN):**
+
+```python
+# ❌ WRONG - Commits without isolation
+def test_create_market(db_cursor):
+    db_cursor.execute("INSERT INTO markets ...")
+    db_cursor.connection.commit()  # Data persists to next test!
+```
+
+**Acceptance Criteria:**
+
+- [ ] `isolated_transaction` fixture added to conftest.py
+- [ ] All database tests use savepoint-based isolation
+- [ ] No test data persists after test completion
+- [ ] Tests pass regardless of execution order
+
+**Rationale:**
+
+Without transaction isolation, test data persists and causes:
+- UniqueViolation errors on subsequent runs
+- False positives (test passes due to leftover data)
+- False negatives (test fails due to conflicting data)
+
+**Reference:** TEST_ISOLATION_PATTERNS_V1.0.md - Pattern 1
+
+---
+
+## REQ-TEST-021: Foreign Key Dependency Chain Management
+
+**Priority:** 🔴 CRITICAL
+**Phase:** 1.9+
+**Status:** 🔵 Planned
+**Added:** V2.1 (Phase 1.9 lessons learned)
+
+**Requirement:**
+
+Test fixtures creating records with FK dependencies MUST create the complete dependency chain in correct order:
+
+**FK Dependency Chain (Create Order):**
+
+```
+platforms (ROOT)
+    |
+    +-- series
+    |       |
+    |       +-- events
+    |               |
+    |               +-- markets
+    |               |       |
+    |               |       +-- positions → trades
+    |               |       +-- edges
+    |               |       +-- settlements
+    |               |
+    |               +-- game_states
+```
+
+**Pattern: Complete Hierarchy Fixture**
+
+```python
+@pytest.fixture
+def complete_test_hierarchy(db_cursor, worker_prefix):
+    """
+    Create complete FK dependency chain for testing.
+
+    FK Chain (must create in this order):
+        platforms -> series -> events -> markets -> game_states
+                                      -> positions -> trades
+    """
+    # 1. Platform (root of FK chain)
+    db_cursor.execute("""
+        INSERT INTO platforms (platform_id, platform_type, display_name, status)
+        VALUES (%s, 'trading', 'Test Platform', 'active')
+        ON CONFLICT (platform_id) DO NOTHING
+    """, (f"{worker_prefix}-PLATFORM",))
+
+    # 2. Series (references platform)
+    db_cursor.execute("""
+        INSERT INTO series (series_id, platform_id, external_id, category, title)
+        VALUES (%s, %s, %s, 'sports', 'Test Series')
+        ON CONFLICT (series_id) DO NOTHING
+    """, (f"{worker_prefix}-SERIES", f"{worker_prefix}-PLATFORM", f"{worker_prefix}-EXT-SERIES"))
+
+    # 3. Event (references platform and series)
+    # ... continue for full chain
+```
+
+**Anti-Pattern (FORBIDDEN):**
+
+```python
+# ❌ WRONG - Assumes event exists (FK violation!)
+def test_create_game_state():
+    create_game_state(event_id="TEST-EVENT")  # Parent may not exist!
+```
+
+**Acceptance Criteria:**
+
+- [ ] `complete_test_hierarchy` fixture added to conftest.py
+- [ ] All tests requiring FK parents use hierarchy fixture
+- [ ] ON CONFLICT handling for idempotent setup
+- [ ] No ForeignKeyViolation errors in test runs
+
+**Rationale:**
+
+Missing parent records cause ForeignKeyViolation errors that are:
+- Intermittent (depend on test execution order)
+- Hard to debug (error message doesn't indicate missing parent)
+- Cascade failures (one missing parent breaks many tests)
+
+**Reference:** TEST_ISOLATION_PATTERNS_V1.0.md - Pattern 2
+
+---
+
+## REQ-TEST-022: Cleanup Fixture Ordering
+
+**Priority:** 🔴 CRITICAL
+**Phase:** 1.9+
+**Status:** 🔵 Planned
+**Added:** V2.1 (Phase 1.9 lessons learned)
+
+**Requirement:**
+
+Test cleanup MUST delete records in reverse FK dependency order (children before parents):
+
+**Delete Order (Children First, Parents Last):**
+
+```
+1. trades          (leaf - references positions, markets)
+2. positions       (references markets, strategies, models)
+3. settlements     (references markets)
+4. edges           (references markets, probability_matrices)
+5. game_states     (references events)
+6. markets         (references events)
+7. events          (references series)
+8. series          (references platforms)
+9. strategies      (no FK children in tests)
+10. probability_models (no FK children in tests)
+11. platforms      (ROOT - delete last)
+```
+
+**Pattern: Ordered Cleanup**
+
+```python
+def cleanup_test_data(db_cursor, prefix: str):
+    """
+    Clean up test data in correct FK order.
+
+    Educational Note:
+        PostgreSQL enforces FK constraints on DELETE.
+        Deleting a parent with existing children causes:
+        - FK violation error if ON DELETE RESTRICT (default)
+        - Cascade delete if ON DELETE CASCADE (dangerous!)
+    """
+    # Child tables first (leaf nodes in FK tree)
+    db_cursor.execute("DELETE FROM trades WHERE market_id LIKE %s", (f"{prefix}%",))
+    db_cursor.execute("DELETE FROM positions WHERE market_id LIKE %s", (f"{prefix}%",))
+    db_cursor.execute("DELETE FROM settlements WHERE market_id LIKE %s", (f"{prefix}%",))
+    db_cursor.execute("DELETE FROM edges WHERE market_id LIKE %s", (f"{prefix}%",))
+    db_cursor.execute("DELETE FROM game_states WHERE event_id LIKE %s", (f"{prefix}%",))
+
+    # Intermediate tables
+    db_cursor.execute("DELETE FROM markets WHERE market_id LIKE %s", (f"{prefix}%",))
+    db_cursor.execute("DELETE FROM events WHERE event_id LIKE %s", (f"{prefix}%",))
+    db_cursor.execute("DELETE FROM series WHERE series_id LIKE %s", (f"{prefix}%",))
+
+    # Root tables last
+    db_cursor.execute("DELETE FROM platforms WHERE platform_id LIKE %s", (f"{prefix}%",))
+
+    db_cursor.connection.commit()
+```
+
+**Anti-Pattern (FORBIDDEN):**
+
+```python
+# ❌ WRONG - Delete parents before children (FK violation!)
+db_cursor.execute("DELETE FROM events WHERE ...")  # FK violation!
+db_cursor.execute("DELETE FROM game_states WHERE ...")
+```
+
+**Acceptance Criteria:**
+
+- [ ] Cleanup function follows reverse FK order
+- [ ] All fixture teardowns use ordered cleanup
+- [ ] No ForeignKeyViolation during teardown
+- [ ] Tests pass when run repeatedly
+
+**Rationale:**
+
+Wrong delete order causes:
+- ForeignKeyViolation during teardown
+- Orphaned data (cleanup aborts mid-way)
+- Test pollution from incomplete cleanup
+
+**Reference:** TEST_ISOLATION_PATTERNS_V1.0.md - Pattern 3
+
+---
+
+## REQ-TEST-023: Parallel Execution Safety
+
+**Priority:** 🟡 HIGH
+**Phase:** 1.9+
+**Status:** 🔵 Planned
+**Added:** V2.1 (Phase 1.9 lessons learned)
+
+**Requirement:**
+
+Tests running in parallel (pytest-xdist) MUST use worker-specific data identifiers to prevent collisions:
+
+**Pattern: Worker-Prefixed Test Data**
+
+```python
+import os
+
+def get_test_prefix() -> str:
+    """
+    Get worker-specific prefix for test data isolation.
+
+    In parallel execution (pytest-xdist), each worker gets unique prefix:
+    - Worker 0: TEST-GW0-
+    - Worker 1: TEST-GW1-
+    - Single worker: TEST-MASTER-
+
+    Educational Note:
+        pytest-xdist sets PYTEST_XDIST_WORKER environment variable.
+        Values are 'gw0', 'gw1', etc. for each worker process.
+    """
+    worker = os.environ.get('PYTEST_XDIST_WORKER', 'master')
+    return f"TEST-{worker.upper()}"
+
+
+@pytest.fixture
+def worker_prefix():
+    """Provide worker-specific test data prefix."""
+    return get_test_prefix()
+
+
+def test_create_market(worker_prefix, db_cursor):
+    """Test using worker-specific ID."""
+    market_id = f"{worker_prefix}-NFL-KC-BUF"  # e.g., TEST-GW0-NFL-KC-BUF
+    # No collision with other workers
+```
+
+**Anti-Pattern (FORBIDDEN):**
+
+```python
+# ❌ WRONG - Hardcoded ID causes collision in parallel
+market_id = "TEST-NFL-KC-BUF"  # Worker 0 and Worker 1 both use this!
+```
+
+**Acceptance Criteria:**
+
+- [ ] `worker_prefix` fixture added to conftest.py
+- [ ] All test data IDs use worker prefix
+- [ ] No UniqueViolation in parallel runs
+- [ ] No deadlocks between workers
+- [ ] Tests pass with `pytest -n auto`
+
+**Rationale:**
+
+Parallel workers sharing IDs cause:
+- UniqueViolation on concurrent inserts
+- Deadlocks when workers lock same rows
+- Race conditions with unpredictable results
+
+**Reference:** TEST_ISOLATION_PATTERNS_V1.0.md - Pattern 4
+
+---
+
+## REQ-TEST-024: SCD Type 2 Test Isolation
+
+**Priority:** 🟡 HIGH
+**Phase:** 1.9+
+**Status:** 🔵 Planned
+**Added:** V2.1 (Phase 1.9 lessons learned)
+
+**Requirement:**
+
+Tests modifying SCD Type 2 records (row_current_ind flag) MUST use isolated test data to prevent state leakage:
+
+**SCD Type 2 Invariant:**
+> For any (entity_id), exactly ONE row has `row_current_ind = TRUE`
+
+**Pattern: Isolated SCD Test Data**
+
+```python
+@pytest.fixture
+def isolated_scd_test(db_cursor, worker_prefix):
+    """
+    Create isolated SCD Type 2 test data.
+
+    Tests modifying row_current_ind MUST:
+        1. Use unique entity IDs (worker-prefixed + UUID)
+        2. Clean up ALL versions (current AND historical)
+        3. Not assume any pre-existing state
+    """
+    market_id = f"{worker_prefix}-SCD-TEST-{uuid.uuid4().hex[:8]}"
+
+    # Create initial version (current)
+    db_cursor.execute("""
+        INSERT INTO markets (
+            market_id, platform_id, event_id, external_id, ticker, title,
+            yes_price, no_price, market_type, status, row_current_ind
+        ) VALUES (
+            %s, 'test_platform', 'TEST-EVENT', %s, %s, 'SCD Test Market',
+            0.5000, 0.5000, 'binary', 'open', TRUE
+        )
+    """, (market_id, f"{market_id}-ext", market_id))
+
+    db_cursor.connection.commit()
+
+    yield {'market_id': market_id}
+
+    # Cleanup: Delete ALL versions (current AND historical)
+    db_cursor.execute("DELETE FROM markets WHERE market_id = %s", (market_id,))
+    db_cursor.connection.commit()
+```
+
+**Anti-Pattern (FORBIDDEN):**
+
+```python
+# ❌ WRONG - Shared market_id leaks state between tests
+market_id = "TEST-MARKET-001"
+
+def test_a():
+    # Sets row_current_ind = FALSE for old version
+    update_market_price(market_id, new_price)
+
+def test_b():
+    # Expects only ONE current row - fails if test_a ran first!
+    result = get_current_market(market_id)
+```
+
+**Acceptance Criteria:**
+
+- [ ] SCD Type 2 tests use UUID-based entity IDs
+- [ ] Cleanup removes ALL versions (not just current)
+- [ ] Tests pass regardless of execution order
+- [ ] SCD Type 2 invariant validated after each test
+
+**Rationale:**
+
+SCD Type 2 state leakage causes:
+- "More than one current row" assertion failures
+- Historical versions from other tests polluting results
+- Unpredictable test failures based on execution order
+
+**Reference:** TEST_ISOLATION_PATTERNS_V1.0.md - Pattern 5
+
+---
+
 ## Implementation Priorities
 
 **Phase 1.5 (Immediate):**
@@ -630,9 +1029,16 @@ E2E tests provide **user-level confidence**.
 5. 🔵 REQ-TEST-016: Stress Tests (implementation pending)
 6. 🔵 REQ-TEST-017: Integration Tests (implementation pending)
 
+**Phase 1.9 (Test Infrastructure - BLOCKING):**
+7. 🔵 REQ-TEST-020: Transaction-Based Test Isolation (implementation pending)
+8. 🔵 REQ-TEST-021: FK Dependency Chain Management (implementation pending)
+9. 🔵 REQ-TEST-022: Cleanup Fixture Ordering (implementation pending)
+10. 🔵 REQ-TEST-023: Parallel Execution Safety (implementation pending)
+11. 🔵 REQ-TEST-024: SCD Type 2 Test Isolation (implementation pending)
+
 **Phase 2+:**
-7. ✅ REQ-TEST-018: Property Tests (Hypothesis implemented in Phase 0.7)
-8. 🔵 REQ-TEST-019: E2E Tests (Phase 2+)
+12. ✅ REQ-TEST-018: Property Tests (Hypothesis implemented in Phase 0.7)
+13. 🔵 REQ-TEST-019: E2E Tests (Phase 2+)
 
 ---
 
@@ -657,23 +1063,25 @@ E2E tests provide **user-level confidence**.
 **Related Documents:**
 - `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Why we need these requirements
 - `TESTING_GAPS_ANALYSIS.md` - Current test coverage analysis
-- `docs/foundation/TESTING_STRATEGY_V3.2.md` - Current version (will be updated to V3.0 with 8 test types)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` - Current version (will add these REQs in V2.16)
+- `docs/foundation/TESTING_STRATEGY_V3.3.md` - Comprehensive testing strategy with 8 test types
+- `docs/testing/TEST_ISOLATION_PATTERNS_V1.0.md` - Detailed patterns for test isolation (Phase 1.9)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` - Master requirements document
 
 **Related ADRs:**
 - ADR-074: Property-Based Testing with Hypothesis
-- ADR-076: Test Type Categories (to be created)
+- ADR-076: Test Type Categories
 
 **Related Patterns:**
 - Pattern 10: Property-Based Testing with Hypothesis
-- Pattern 11: Comprehensive Test Coverage (to be created)
+- TEST_ISOLATION_PATTERNS Patterns 1-5: Test isolation patterns for database tests
 
 ---
 
-**Sign-off:** Claude Code - 2025-11-17
+**Sign-off:** Claude Code - 2025-11-30
 
-**Note:** These requirements will be integrated into MASTER_REQUIREMENTS_V2.19.md (updating to V2.16) in next session.
+**Note:** REQ-TEST-020 through REQ-TEST-024 added in V2.1 based on Phase 1.9 lessons learned.
+Implementation is tracked in Issue #165 (Phase 1.9 Test Infrastructure Plan - BLOCKING).
 
 ---
 
-**END OF TEST_REQUIREMENTS_COMPREHENSIVE_V2.0.md**
+**END OF TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md**

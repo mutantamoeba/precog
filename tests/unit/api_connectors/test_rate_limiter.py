@@ -156,8 +156,21 @@ class TestTokenBucket:
         assert available == pytest.approx(75.0, abs=0.01)
 
     def test_thread_safety(self):
-        """Test token bucket is thread-safe with concurrent access."""
-        bucket = TokenBucket(capacity=100, refill_rate=10.0)
+        """Test token bucket is thread-safe with concurrent access.
+
+        Educational Note:
+            This test verifies thread-safety by spawning 100 threads that
+            all try to acquire tokens simultaneously. We use a very low
+            refill rate (0.1 tokens/sec) to minimize refill during thread
+            execution, making the test more deterministic across platforms.
+
+            Windows CI with Python 3.13 showed timing sensitivity where
+            higher refill rates (10 tokens/sec) caused 1.5+ tokens to refill
+            during the ~0.15 seconds of thread execution, exceeding tolerance.
+        """
+        # Use low refill rate to prevent significant refill during thread execution
+        # 0.1 tokens/sec means max ~0.05 tokens refill in 0.5 seconds of thread work
+        bucket = TokenBucket(capacity=100, refill_rate=0.1)
         results = []
 
         def acquire_tokens():
@@ -178,8 +191,8 @@ class TestTokenBucket:
 
         # Should have 100 successful acquisitions (bucket had 100 tokens)
         assert sum(results) == 100
-        # Allow some tokens to have refilled during thread execution
-        assert bucket.tokens == pytest.approx(0.0, abs=1.0)
+        # With refill_rate=0.1, even if threads take 0.5s, only ~0.05 tokens refill
+        assert bucket.tokens == pytest.approx(0.0, abs=0.5)
 
 
 class TestRateLimiter:

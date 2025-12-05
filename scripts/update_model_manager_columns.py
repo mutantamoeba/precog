@@ -1,12 +1,12 @@
 """Update model_manager.py to use model_class instead of approach.
 
 This script updates:
-1. Function parameter: approach → model_class
-2. SQL queries: approach column → model_class
+1. Function parameter: approach -> model_class
+2. SQL queries: approach column -> model_class
 3. Docstrings and comments
 4. Variable names
 
-Part of Migration 022 (probability_models.approach → model_class)
+Part of Migration 022 (probability_models.approach -> model_class)
 """
 
 import re
@@ -49,7 +49,7 @@ with open(file_path, "w", encoding="utf-8") as f:
 
 print(f"[OK] Updated {file_path}")
 print("Changes:")
-print("  - Function parameter: approach → model_class")
-print("  - SQL columns: approach → model_class")
+print("  - Function parameter: approach -> model_class")
+print("  - SQL columns: approach -> model_class")
 print("  - Docstrings and examples updated")
-print("  - Schema reference: V1.9 → V1.10")
+print("  - Schema reference: V1.9 -> V1.10")

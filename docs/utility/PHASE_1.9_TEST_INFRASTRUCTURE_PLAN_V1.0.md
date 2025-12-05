@@ -438,7 +438,7 @@ Before Phase 1.9 is considered complete:
 ## References
 
 - **GitHub Issue:** #165 (Phase 1.9: Test Infrastructure & Process Hardening)
-- **Testing Strategy:** docs/foundation/TESTING_STRATEGY_V3.2.md
+- **Testing Strategy:** docs/foundation/TESTING_STRATEGY_V3.3.md
 - **Database Environment:** docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
 - **Audit Script:** scripts/audit_test_type_coverage.py
 - **Pre-push Hook:** .git/hooks/pre-push

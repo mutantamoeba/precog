@@ -22,23 +22,23 @@ repos:
         files: \.(md|yaml|yml)$
         description: "Validates docs consistency, cross-refs, versioning, phase status, YAML configs, and config sync (Pattern 8)"
 
-      # Code quality: Ruff linter
+      # Code quality: Ruff linter (staged files only)
       - id: ruff-check
         name: Ruff Linter
-        entry: python -m ruff check .
+        entry: python -m ruff check
         language: system
-        pass_filenames: false
+        pass_filenames: true
         types: [python]
-        description: "Runs Ruff linter for code quality"
+        description: "Runs Ruff linter on staged Python files"
 
-      # Code quality: Ruff formatter (checks only - run `ruff format .` manually to fix)
+      # Code quality: Ruff formatter (staged files only)
       - id: ruff-format
         name: Ruff Formatter
-        entry: python -m ruff format --check .
+        entry: python -m ruff format --check
         language: system
-        pass_filenames: false
+        pass_filenames: true
         types: [python]
-        description: "Checks code formatting with Ruff (no auto-fix)"
+        description: "Checks code formatting on staged Python files"
 
       # Type checking: Mypy
       - id: mypy

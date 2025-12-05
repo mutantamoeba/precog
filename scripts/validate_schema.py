@@ -77,7 +77,7 @@ def get_actual_schema(table_name: str, conn: psycopg2.extensions.connection) -> 
         conn: Database connection
 
     Returns:
-        Dictionary mapping column_name → data_type
+        Dictionary mapping column_name -> data_type
         Example: {"model_id": "integer", "model_name": "character varying"}
 
     Educational Note:
@@ -129,7 +129,7 @@ def get_documented_schema(table_name: str) -> dict[str, str]:
         table_name: Name of table
 
     Returns:
-        Dictionary mapping column_name → data_type
+        Dictionary mapping column_name -> data_type
 
     Raises:
         ValueError: If table not found in documented schemas
@@ -144,7 +144,7 @@ def get_documented_schema(table_name: str) -> dict[str, str]:
 
     documented_schemas = {
         "probability_models": {
-            "model_id": "integer",  # SERIAL → integer in information_schema
+            "model_id": "integer",  # SERIAL -> integer in information_schema
             "model_name": "character varying(100)",
             "model_version": "character varying(20)",
             "approach": "character varying(50)",  # HOW the model works (elo, regression, value)

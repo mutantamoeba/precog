@@ -11,6 +11,17 @@ Environment Safety:
     against dev/staging/prod databases.
 
     See: docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
+
+Testcontainers Support (ADR-057):
+    For property tests that need true database isolation, use the
+    testcontainers fixtures from tests.fixtures.testcontainers_fixtures.
+    These provide ephemeral PostgreSQL containers per test class.
+
+Test Key Generation:
+    The test_private_key fixture generates an RSA private key for testing
+    Kalshi API authentication. The key is generated on-the-fly and NOT
+    committed to git (security best practice). This ensures CI and local
+    environments both have valid test keys without exposing real credentials.
 """
 
 import os
@@ -23,6 +34,21 @@ from typing import Any
 import pytest
 
 from precog.config.config_loader import ConfigLoader
+
+# Import testcontainers fixtures for property tests (ADR-057)
+# These are re-exported here so pytest can discover them
+try:
+    from tests.fixtures.testcontainers_fixtures import (
+        TESTCONTAINERS_AVAILABLE,
+        container_cursor,
+        container_db_connection,
+        postgres_container,
+    )
+except ImportError:
+    TESTCONTAINERS_AVAILABLE = False
+    postgres_container = None  # type: ignore[assignment, misc]
+    container_db_connection = None  # type: ignore[assignment, misc]
+    container_cursor = None  # type: ignore[assignment, misc]
 
 # Import modules to test
 from precog.database.connection import (
@@ -39,14 +65,69 @@ from precog.utils.logger import setup_logging
 # =============================================================================
 
 
+def _check_docker_available() -> bool:
+    """Check if Docker is available for testcontainers."""
+    import shutil
+    import subprocess
+
+    # Check if docker command exists
+    if not shutil.which("docker"):
+        return False
+
+    # Check if Docker daemon is running
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return False
+
+
+# Detect environment at module load time
+DOCKER_AVAILABLE = _check_docker_available()
+USE_TESTCONTAINERS = DOCKER_AVAILABLE and TESTCONTAINERS_AVAILABLE
+
+
 @pytest.fixture(scope="session")
-def db_pool():
+def db_pool(request):
     """
     Create database connection pool once per test session.
 
+    Strategy (ADR-057 - Testcontainers for Database Test Isolation):
+        1. If Docker + testcontainers available: Use ephemeral PostgreSQL container
+           - Provides fresh schema, no state leakage, proper isolation
+           - Best for local development and pre-push hooks
+        2. Otherwise: Use environment variables (DB_HOST, DB_PORT, etc.)
+           - Works with CI PostgreSQL service container
+           - Falls back to local PostgreSQL if configured
+
     Scope: session - created once, shared across all tests
+
+    Educational Note:
+        Using testcontainers provides TRUE database isolation:
+        - Fresh PostgreSQL container with clean schema
+        - All migrations applied from scratch
+        - No interference from previous test runs
+        - Hypothesis caching issues eliminated
+
+        Without testcontainers, tests share a database which can cause:
+        - State leakage between tests
+        - Schema drift (local DB may be outdated)
+        - Flaky tests from leftover data
     """
-    # Initialize pool
+    if USE_TESTCONTAINERS:
+        # Request the testcontainers fixture first - it sets DB_* env vars
+        # This ensures initialize_pool() uses the containerized database
+        container_params = request.getfixturevalue("postgres_container")
+        print(
+            f"\n[TESTCONTAINERS] Using ephemeral PostgreSQL container at "
+            f"{container_params['host']}:{container_params['port']}"
+        )
+
+    # Initialize pool (uses DB_* env vars set by testcontainers or from environment)
     pool = initialize_pool(minconn=2, maxconn=5)
 
     yield pool  # Return pool object to tests
@@ -78,19 +159,43 @@ def clean_test_data(db_cursor):
     Creates required parent records (platforms, events) for testing.
     Deletes any test records (IDs starting with 'TEST-')
     """
+    # CRITICAL: If a prior transaction failed, we need to rollback first
+    # This prevents 'InFailedSqlTransaction' errors cascading to cleanup
+    try:
+        db_cursor.connection.rollback()
+    except Exception:
+        pass  # Already rolled back or no active transaction
+
     # Cleanup before test (in reverse FK order)
-    # Delete child records first (trades and positions reference strategies/models/markets)
+    # Delete child records first - trades/positions reference strategies/models/markets
     db_cursor.execute("DELETE FROM trades WHERE market_id LIKE 'MKT-TEST-%'")
+    # Delete positions by test market pattern
     db_cursor.execute(
-        "DELETE FROM positions WHERE market_id LIKE 'MKT-TEST-%' OR market_id LIKE 'KALSHI-%' OR strategy_id > 1 OR model_id > 1"
+        "DELETE FROM positions WHERE market_id LIKE 'MKT-TEST-%' OR market_id LIKE 'KALSHI-%'"
     )
+    # Try to delete positions/trades referencing test strategies/models (may fail in CI)
+    # In CI, strategy_id/model_id columns may not exist if migrations 001/003 failed
+    # Delete fixture data (99901+) AND any SERIAL-generated data (1-99900)
+    try:
+        db_cursor.execute(
+            "DELETE FROM trades WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
+        )
+        db_cursor.execute(
+            "DELETE FROM positions WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
+        )
+    except Exception:
+        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
     # Then delete parent records
     db_cursor.execute("DELETE FROM markets WHERE market_id LIKE 'MKT-TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
-    # Clean up test models and strategies (models/strategies created during tests)
-    db_cursor.execute("DELETE FROM probability_models WHERE model_id > 1")  # Keep model_id=1 for FK
-    db_cursor.execute("DELETE FROM strategies WHERE strategy_id > 1")  # Keep strategy_id=1 for FK
+    # Clean up ALL test models and strategies (fixture data + SERIAL-generated)
+    # This ensures clean state for property tests that create many strategies
+    try:
+        db_cursor.execute("DELETE FROM probability_models")
+        db_cursor.execute("DELETE FROM strategies")
+    except Exception:
+        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
     # Delete both uppercase TEST-PLATFORM- and lowercase test_ platforms
     db_cursor.execute(
         "DELETE FROM platforms WHERE platform_id LIKE 'test_%' OR platform_id LIKE 'TEST-PLATFORM-%'"
@@ -124,37 +229,57 @@ def clean_test_data(db_cursor):
         ON CONFLICT (event_id) DO NOTHING
     """)
 
-    # Create test strategy (required parent record for positions and trades)
-    db_cursor.execute("""
-        INSERT INTO strategies (strategy_id, strategy_name, strategy_version, strategy_type, config, status)
-        VALUES (1, 'test_strategy', 'v1.0', 'value', '{"test": true}', 'active')
-        ON CONFLICT (strategy_id) DO NOTHING
-    """)
-
-    # Create test probability model (required parent record for positions and trades)
-    db_cursor.execute("""
-        INSERT INTO probability_models (model_id, model_name, model_version, model_class, config, status)
-        VALUES (1, 'test_model', 'v1.0', 'elo', '{"test": true}', 'active')
-        ON CONFLICT (model_id) DO NOTHING
-    """)
+    # Create test strategy and probability model (required parent records for positions/trades)
+    # Use HIGH IDs (99901) to avoid SERIAL sequence collision with property tests
+    # Property tests use create_strategy() which auto-generates IDs via SERIAL starting at 1
+    # Using high IDs ensures no collision: SERIAL generates 1,2,3... while fixtures use 99901,99902...
+    # This mirrors the teams pattern (99001, 99002) in test_crud_operations_properties.py
+    try:
+        db_cursor.execute("""
+            INSERT INTO strategies (strategy_id, strategy_name, strategy_version, strategy_type, config, status)
+            VALUES (99901, 'test_strategy', 'v1.0', 'value', '{"test": true}', 'active')
+            ON CONFLICT (strategy_id) DO NOTHING
+        """)
+        db_cursor.execute("""
+            INSERT INTO probability_models (model_id, model_name, model_version, model_class, config, status)
+            VALUES (99901, 'test_model', 'v1.0', 'elo', '{"test": true}', 'active')
+            ON CONFLICT (model_id) DO NOTHING
+        """)
+    except Exception:
+        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
 
     db_cursor.connection.commit()
 
     yield  # Test runs here
 
     # Cleanup after test (in reverse FK order)
-    # Delete child records first (trades and positions reference strategies/models/markets)
+    # Delete child records first - trades/positions reference strategies/models/markets
     db_cursor.execute("DELETE FROM trades WHERE market_id LIKE 'MKT-TEST-%'")
     db_cursor.execute(
-        "DELETE FROM positions WHERE market_id LIKE 'MKT-TEST-%' OR market_id LIKE 'KALSHI-%' OR strategy_id > 1 OR model_id > 1"
+        "DELETE FROM positions WHERE market_id LIKE 'MKT-TEST-%' OR market_id LIKE 'KALSHI-%'"
     )
+    # Try to delete positions/trades referencing test strategies/models (may fail in CI)
+    # Delete ALL positions/trades with strategy_id/model_id (fixture data + SERIAL-generated)
+    try:
+        db_cursor.execute(
+            "DELETE FROM trades WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
+        )
+        db_cursor.execute(
+            "DELETE FROM positions WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
+        )
+    except Exception:
+        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
     # Then delete parent records
     db_cursor.execute("DELETE FROM markets WHERE market_id LIKE 'MKT-TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
-    # Clean up test models and strategies (models/strategies created during tests)
-    db_cursor.execute("DELETE FROM probability_models WHERE model_id > 1")  # Keep model_id=1 for FK
-    db_cursor.execute("DELETE FROM strategies WHERE strategy_id > 1")  # Keep strategy_id=1 for FK
+    # Clean up ALL test models and strategies (fixture data + SERIAL-generated)
+    # This ensures clean state for next test
+    try:
+        db_cursor.execute("DELETE FROM probability_models")
+        db_cursor.execute("DELETE FROM strategies")
+    except Exception:
+        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
     # Don't delete test platform - keep it for other tests
     db_cursor.connection.commit()
 
@@ -184,10 +309,13 @@ def sample_market_data():
 
 @pytest.fixture
 def sample_position_data():
-    """Sample position data for testing."""
+    """Sample position data for testing.
+
+    Uses high IDs (99901) to match fixture data and avoid SERIAL collision.
+    """
     return {
-        "strategy_id": 1,
-        "model_id": 1,
+        "strategy_id": 99901,
+        "model_id": 99901,
         "side": "YES",
         "quantity": 100,
         "entry_price": Decimal("0.5200"),
@@ -198,10 +326,13 @@ def sample_position_data():
 
 @pytest.fixture
 def sample_trade_data():
-    """Sample trade data for testing."""
+    """Sample trade data for testing.
+
+    Uses high IDs (99901) to match fixture data and avoid SERIAL collision.
+    """
     return {
-        "strategy_id": 1,
-        "model_id": 1,
+        "strategy_id": 99901,
+        "model_id": 99901,
         "side": "buy",  # trades use 'buy'/'sell', not 'yes'/'no'
         "quantity": 100,
         "price": Decimal("0.5200"),
@@ -339,6 +470,91 @@ def assert_decimal_precision():
 # =============================================================================
 # MARKER HELPERS
 # =============================================================================
+
+
+# =============================================================================
+# TEST PRIVATE KEY FIXTURE (Kalshi API Authentication Testing)
+# =============================================================================
+
+
+def _generate_test_private_key() -> str:
+    """
+    Generate a test RSA private key for Kalshi API authentication testing.
+
+    Educational Note:
+        This generates a valid RSA private key programmatically instead of
+        committing a key file to git. This is a security best practice:
+        - Real private keys should NEVER be committed to version control
+        - Test keys can be generated on-the-fly
+        - CI environments get valid test keys without secrets management
+
+        The key is used for testing RSA-PSS signature generation in
+        KalshiAuth. Since the tests mock the actual API calls, the key
+        doesn't need to be registered with Kalshi - it just needs to be
+        a valid RSA key format.
+
+    Returns:
+        PEM-encoded RSA private key as a string
+    """
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    # Generate a 2048-bit RSA key (matches Kalshi's requirements)
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    )
+
+    # Serialize to PEM format
+    pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+
+    return pem.decode("utf-8")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def ensure_test_private_key():
+    """
+    Ensure test_private_key.pem exists for Kalshi API integration tests.
+
+    This fixture runs automatically (autouse=True) at session start and:
+    1. Checks if tests/fixtures/test_private_key.pem exists
+    2. If not, generates a valid RSA private key
+    3. Saves it to the expected location
+    4. Sets TEST_KALSHI_* environment variables for CI compatibility
+
+    The key is NOT committed to git (*.pem is in .gitignore).
+    This ensures CI and local development both have valid test keys.
+
+    Educational Note:
+        KalshiClient uses PRECOG_ENV to determine credential prefix:
+        - PRECOG_ENV=test -> looks for TEST_KALSHI_API_KEY, TEST_KALSHI_PRIVATE_KEY_PATH
+        - PRECOG_ENV=dev -> looks for DEV_KALSHI_API_KEY, DEV_KALSHI_PRIVATE_KEY_PATH
+        CI sets PRECOG_ENV=test, so we must set TEST_KALSHI_* env vars here.
+
+    Scope: session - only generates key once per test run
+    """
+    test_key_path = Path(__file__).parent / "fixtures" / "test_private_key.pem"
+
+    # Ensure fixtures directory exists
+    test_key_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Generate key if it doesn't exist
+    if not test_key_path.exists():
+        print(f"\n[TEST SETUP] Generating test private key at {test_key_path}")
+        key_pem = _generate_test_private_key()
+        test_key_path.write_text(key_pem)
+        print("[TEST SETUP] Test private key generated successfully")
+
+    # Set environment variables for KalshiClient credential lookup in CI
+    # When PRECOG_ENV=test (CI default), KalshiClient looks for TEST_KALSHI_* vars
+    os.environ["TEST_KALSHI_API_KEY"] = "test-key-id-for-ci-vcr-tests"
+    os.environ["TEST_KALSHI_PRIVATE_KEY_PATH"] = str(test_key_path)
+
+    return test_key_path
 
 
 # =============================================================================
@@ -481,19 +697,23 @@ def sample_model(db_pool, clean_test_data) -> int:
         Models are immutable records with unique model_id values.
         Used to test ROI comparison between different models.
 
+        Uses HIGH IDs (99901, 99902) to avoid SERIAL sequence collision with
+        property tests that use create_model() which auto-generates IDs via SERIAL.
+        This mirrors the teams pattern (99001, 99002) in test_crud_operations_properties.py
+
     Returns:
-        model_id of first model (Model A)
+        model_id of first model (Model A) - 99901
     """
     from precog.database.connection import execute_query
 
-    # Create Model A (model_id=1)
+    # Create Model A (model_id=99901) - high ID to avoid SERIAL collision
     query_a = """
         INSERT INTO probability_models (
             model_id, model_name, model_version, model_class, domain,
             config, status, description
         )
         VALUES (
-            1, 'Test Model A', 'v1.0', 'elo', 'nfl',
+            99901, 'Test Model A', 'v1.0', 'elo', 'nfl',
             '{"k_factor": 32, "initial_rating": 1500}', 'active',
             'Elo-based model for testing'
         )
@@ -501,14 +721,14 @@ def sample_model(db_pool, clean_test_data) -> int:
     """
     execute_query(query_a)
 
-    # Create Model B (model_id=2)
+    # Create Model B (model_id=99902) - high ID to avoid SERIAL collision
     query_b = """
         INSERT INTO probability_models (
             model_id, model_name, model_version, model_class, domain,
             config, status, description
         )
         VALUES (
-            2, 'Test Model B', 'v1.0', 'ensemble', 'nfl',
+            99902, 'Test Model B', 'v1.0', 'ensemble', 'nfl',
             '{"models": ["elo", "power_rankings"], "weights": [0.6, 0.4]}', 'active',
             'Ensemble model for testing'
         )
@@ -516,7 +736,7 @@ def sample_model(db_pool, clean_test_data) -> int:
     """
     execute_query(query_b)
 
-    return 1
+    return 99901
 
 
 @pytest.fixture

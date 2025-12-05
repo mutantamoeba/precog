@@ -56,8 +56,8 @@ portfolio:
 # - Normal mode (30s): Standard tracking for stable positions
 # - Urgent mode (5s): Fast checks when near critical thresholds
 #
-# EXAMPLE: Position at +10% profit → check every 30s (normal)
-#          Position within 2% of stop loss → check every 5s (urgent)
+# EXAMPLE: Position at +10% profit -> check every 30s (normal)
+#          Position within 2% of stop loss -> check every 5s (urgent)
 #          This prevents hitting API rate limits while catching critical events
 
 monitoring:
@@ -71,7 +71,7 @@ monitoring:
   urgent_frequency: 5       # user-customizable: Seconds between checks (urgent conditions)
 
   # URGENT MODE TRIGGERS
-  # When to switch from 30s → 5s checking?
+  # When to switch from 30s -> 5s checking?
   # WHY: Don't want to miss stop loss or profit target by checking too slowly
   urgent_conditions:
     near_stop_loss_pct: "0.02"      # user-customizable: Within 2% of stop loss = urgent
@@ -79,7 +79,7 @@ monitoring:
     near_trailing_stop_pct: "0.02"  # user-customizable: Within 2% of trailing stop = urgent
 
   # EXAMPLE: Position down 13%, stop loss at -15%
-  #          → Within 2% of stop → Switch to 5s checks
+  #          -> Within 2% of stop -> Switch to 5s checks
   #          This gives us 6 chances to catch the exact stop loss
   #          vs. 1 chance with 30s checking
 
@@ -133,8 +133,8 @@ monitoring:
 # - LOW (4): Optimization - execute with conservative limits
 #
 # EXAMPLE: Position triggers both "stop_loss" (CRITICAL) and "early_exit" (LOW)
-#          → System executes stop_loss first (highest priority)
-#          → Uses market order (immediate fill)
+#          -> System executes stop_loss first (highest priority)
+#          -> Uses market order (immediate fill)
 
 exit_priorities:
   # CRITICAL PRIORITY (Level 1)
@@ -148,7 +148,7 @@ exit_priorities:
   # HIGH PRIORITY (Level 2)
   # =======================
   # WHY: These protect profits or manage significant risk
-  # EXECUTION: Aggressive limit orders → walk 2x → market order
+  # EXECUTION: Aggressive limit orders -> walk 2x -> market order
   HIGH:
     - trailing_stop          # Trailing stop activated and hit
     - time_based_urgent      # Market closing in <5 minutes
@@ -157,7 +157,7 @@ exit_priorities:
   # MEDIUM PRIORITY (Level 3)
   # =========================
   # WHY: Profit-taking - want good price but not urgent
-  # EXECUTION: Fair limit orders → walk up to 5x
+  # EXECUTION: Fair limit orders -> walk up to 5x
   MEDIUM:
     - profit_target          # Target profit reached (+25% default)
     - partial_exit_target    # Partial exit threshold reached
@@ -165,7 +165,7 @@ exit_priorities:
   # LOW PRIORITY (Level 4)
   # ======================
   # WHY: Optimization - only exit if can get good price
-  # EXECUTION: Conservative limit orders → walk up to 10x
+  # EXECUTION: Conservative limit orders -> walk up to 10x
   LOW:
     - early_exit             # Edge dropped below threshold (<2%)
     - edge_disappeared       # Edge turned negative
@@ -190,12 +190,12 @@ exit_priorities:
 # 2. Check priority level
 # 3. Choose execution strategy based on priority
 # 4. Place order
-# 5. If doesn't fill → escalate based on retry strategy
+# 5. If doesn't fill -> escalate based on retry strategy
 #
 # EXAMPLE: stop_loss triggers (CRITICAL)
-#          → Use market order
-#          → Timeout 5s
-#          → Retry: immediate_market (use market again if first fails)
+#          -> Use market order
+#          -> Timeout 5s
+#          -> Retry: immediate_market (use market again if first fails)
 
 exit_execution:
   # CRITICAL: Capital Protection
@@ -205,8 +205,8 @@ exit_execution:
     order_type: market                    # Market order (fills immediately)
     timeout_seconds: 5                    # Expect fill within 5s
     retry_strategy: immediate_market      # If fails, retry market order
-    # EXAMPLE: Stop loss hit → Market sell → Fills at $0.48 (wanted $0.50)
-    #          → Accept $0.02 slippage to protect capital
+    # EXAMPLE: Stop loss hit -> Market sell -> Fills at $0.48 (wanted $0.50)
+    #          -> Accept $0.02 slippage to protect capital
 
   # HIGH: Risk Management
   # =====================
@@ -217,9 +217,9 @@ exit_execution:
     timeout_seconds: 10                   # Wait 10s for fill
     retry_strategy: walk_then_market      # Walk price 2x, then use market
     max_walks: 2                          # Maximum 2 price adjustments
-    # EXAMPLE: Trailing stop hit → Limit at $0.75 → Doesn't fill in 10s
-    #          → Walk to $0.74 → Wait 10s → Walk to $0.73 → Wait 10s
-    #          → Still doesn't fill → Market order → Exit at $0.72
+    # EXAMPLE: Trailing stop hit -> Limit at $0.75 -> Doesn't fill in 10s
+    #          -> Walk to $0.74 -> Wait 10s -> Walk to $0.73 -> Wait 10s
+    #          -> Still doesn't fill -> Market order -> Exit at $0.72
 
   # MEDIUM: Profit Taking
   # =====================
@@ -230,8 +230,8 @@ exit_execution:
     timeout_seconds: 30                   # Wait 30s for fill
     retry_strategy: walk_price            # Walk price up to max_walks
     max_walks: 5                          # Maximum 5 price adjustments
-    # EXAMPLE: Profit target hit → Limit at $0.80 → Walk to $0.79, $0.78, etc.
-    #          → Eventually fills or gives up after 5 walks
+    # EXAMPLE: Profit target hit -> Limit at $0.80 -> Walk to $0.79, $0.78, etc.
+    #          -> Eventually fills or gives up after 5 walks
 
   # LOW: Optimization
   # =================
@@ -242,9 +242,9 @@ exit_execution:
     timeout_seconds: 60                   # Wait 60s for fill
     retry_strategy: walk_slowly           # Patient walking
     max_walks: 10                         # Maximum 10 price adjustments
-    # EXAMPLE: Rebalancing opportunity → Limit at $0.85 → Very patient
-    #          → Walk slowly over several minutes
-    #          → If doesn't fill after 10 walks, position stays open
+    # EXAMPLE: Rebalancing opportunity -> Limit at $0.85 -> Very patient
+    #          -> Walk slowly over several minutes
+    #          -> If doesn't fill after 10 walks, position stays open
 
 # ============================================
 # LIQUIDITY CONSTRAINTS (Phase 5 Enhancement)
@@ -254,9 +254,9 @@ exit_execution:
 #      This triggers high-priority exit to get out before liquidity disappears
 #
 # EXAMPLE: Enter position in liquid market (100 contracts, 1¢ spread)
-#          → Later, volume drops to 30 contracts, spread widens to 4¢
-#          → liquidity_dried_up triggers (HIGH priority)
-#          → System exits aggressively before market completely freezes
+#          -> Later, volume drops to 30 contracts, spread widens to 4¢
+#          -> liquidity_dried_up triggers (HIGH priority)
+#          -> System exits aggressively before market completely freezes
 
 liquidity:
   max_spread: "0.03"          # user-customizable: 3¢ maximum spread (triggers liquidity_dried_up)
@@ -335,16 +335,16 @@ exit_rules:
     # CONCEPT: Stop loss that "trails" behind price as it rises
     #
     # EXAMPLE: Enter at $0.60, current price $0.75 (up 25%)
-    #          → Trailing stop activates at 10% profit
-    #          → Initial trail distance: 5%
-    #          → Peak price: $0.75, stop price: $0.7125 (5% below peak)
-    #          → Price rises to $0.80 → stop moves to $0.76
-    #          → Price falls to $0.76 → STOP HIT → Exit with 27% gain
-    #          → vs. no trailing stop → might ride back down to $0.60
+    #          -> Trailing stop activates at 10% profit
+    #          -> Initial trail distance: 5%
+    #          -> Peak price: $0.75, stop price: $0.7125 (5% below peak)
+    #          -> Price rises to $0.80 -> stop moves to $0.76
+    #          -> Price falls to $0.76 -> STOP HIT -> Exit with 27% gain
+    #          -> vs. no trailing stop -> might ride back down to $0.60
     #
     # ADVANCED: Tightening trailing stop
     # WHY: As profit increases, protect more of it
-    #      Initial 5% trail → tightens to 2% at higher profits
+    #      Initial 5% trail -> tightens to 2% at higher profits
     trailing_stop:
       enabled: true
       activation_threshold: "0.10"  # user-customizable: Activate after 10% profit
@@ -353,11 +353,11 @@ exit_rules:
       floor_distance: "0.02"        # user-customizable: Minimum 2% trail (never tighter)
 
       # TIGHTENING EXAMPLE:
-      # Profit = 10% → Trail distance = 5% (initial)
-      # Profit = 15% → Trail distance = 4% (5% - 1% = 4%)
-      # Profit = 20% → Trail distance = 3% (5% - 2% = 3%)
-      # Profit = 25% → Trail distance = 2% (5% - 3% = 2%, hits floor)
-      # Profit = 50% → Trail distance = 2% (stays at floor)
+      # Profit = 10% -> Trail distance = 5% (initial)
+      # Profit = 15% -> Trail distance = 4% (5% - 1% = 4%)
+      # Profit = 20% -> Trail distance = 3% (5% - 2% = 3%)
+      # Profit = 25% -> Trail distance = 2% (5% - 3% = 2%, hits floor)
+      # Profit = 50% -> Trail distance = 2% (stays at floor)
 
       # NOTE: Trailing stop stored in database as JSONB
       # Schema: {
@@ -382,20 +382,20 @@ exit_rules:
     # EXAMPLE: Position of 100 contracts, entry $0.60
     #
     # Price $0.69 (+15%):
-    #   → partial_exit_stage_1 triggers
-    #   → Sell 50 contracts at $0.69
-    #   → Realized P&L: 50 * ($0.69 - $0.60) = $4.50
-    #   → 50 contracts remain
+    #   -> partial_exit_stage_1 triggers
+    #   -> Sell 50 contracts at $0.69
+    #   -> Realized P&L: 50 * ($0.69 - $0.60) = $4.50
+    #   -> 50 contracts remain
     #
     # Price $0.75 (+25%):
-    #   → partial_exit_stage_2 triggers
-    #   → Sell 25 contracts at $0.75
-    #   → Realized P&L: 25 * ($0.75 - $0.60) = $3.75
-    #   → 25 contracts remain
+    #   -> partial_exit_stage_2 triggers
+    #   -> Sell 25 contracts at $0.75
+    #   -> Realized P&L: 25 * ($0.75 - $0.60) = $3.75
+    #   -> 25 contracts remain
     #
     # Price rides to $0.90, then trailing stop hits at $0.88:
-    #   → Sell remaining 25 at $0.88
-    #   → Realized P&L: 25 * ($0.88 - $0.60) = $7.00
+    #   -> Sell remaining 25 at $0.88
+    #   -> Realized P&L: 25 * ($0.88 - $0.60) = $7.00
     #
     # TOTAL REALIZED: $4.50 + $3.75 + $7.00 = $15.25
     # vs. all-or-nothing: 100 * ($0.88 - $0.60) = $28.00 (IF trailing stop catches peak)

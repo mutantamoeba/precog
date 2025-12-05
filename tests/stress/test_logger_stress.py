@@ -28,6 +28,7 @@ GitHub Issue: #126
 
 import gc
 import logging
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -35,7 +36,20 @@ from io import StringIO
 
 import pytest
 
-pytestmark = [pytest.mark.stress, pytest.mark.slow]
+# CI environment detection - same pattern as connection stress tests
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+
+_CI_XFAIL_REASON = (
+    "Stress tests use time-based loops and threading that can hang "
+    "or timeout in CI environments due to resource constraints. "
+    "Run locally with 'pytest tests/stress/ -v -m stress'. See GitHub issue #168."
+)
+
+pytestmark = [
+    pytest.mark.stress,
+    pytest.mark.slow,
+    pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False),
+]
 
 
 @pytest.fixture

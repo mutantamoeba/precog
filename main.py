@@ -888,7 +888,7 @@ def fetch_positions(
         # Setup needed:
         #   1. Create "manual" strategy record (for API-fetched positions not created by our system)
         #   2. Create "manual" model record (placeholder for positions without ensemble predictions)
-        #   3. Add lookup logic: ticker → market_id
+        #   3. Add lookup logic: ticker -> market_id
         #   4. Use create_position() with strategy_id=1 (manual), model_id=1 (manual)
         # Target: Phase 1.5+ (after strategy/model infrastructure exists)
         if not dry_run:
@@ -1015,7 +1015,7 @@ def fetch_fills(
         # Why deferred: Fills (trades) require position_id for linking to open positions
         # Setup needed:
         #   1. Positions must exist in database first (see fetch-positions deferral above)
-        #   2. Add lookup logic: ticker + side → position_id
+        #   2. Add lookup logic: ticker + side -> position_id
         #   3. Use create_trade() with proper position_id linking
         #   4. Handle deduplication (don't insert same trade_id twice)
         # Note: Trades table is append-only (no versioning), but requires position linkage

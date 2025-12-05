@@ -1,9 +1,24 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.16
-**Last Updated:** 2025-11-27
+**Version:** 1.18
+**Last Updated:** 2025-12-03
 **Status:** ✅ Current
+**Changes in v1.18:**
+- **ALEMBIC MIGRATION FRAMEWORK (PHASE 1.9):** Added ADR-056 (Alembic Migration Framework)
+- **TESTCONTAINERS FOR TEST ISOLATION (PHASE 1.9):** Added ADR-057 (Testcontainers - Planned)
+- Documents migration from manual SQL scripts to industry-standard Alembic framework
+- Documents planned testcontainers-python integration for database test isolation
+- Updated ARCHITECTURE_DECISIONS reference from V2.24 to V2.25
+- Total ADRs: 98 → 100 (2 new ADRs added for test infrastructure)
+**Changes in v1.17:**
+- **TIMESCALEDB DECISION (PHASE 1.9):** Added ADR-098 (TimescaleDB Deferred to Phase 6+)
+- Added new "Phase 1.9: Test Infrastructure & Process Hardening" section
+- Documents decision to defer TimescaleDB extension until empirical bottlenecks emerge
+- Current PostgreSQL + SCD Type 2 sufficient for Phase 1-5 data volumes
+- Evaluation triggers defined for future re-assessment
+- Updated ARCHITECTURE_DECISIONS reference from V2.23 to V2.24
+- Total ADRs: 97 → 98 (1 new ADR added for database architecture)
 **Changes in v1.16:**
 - **ESPN DATA MODEL ARCHITECTURE (PHASE 2):** Added ADR-029 (ESPN Data Model with Normalized Schema)
 - Added new "Phase 2: ESPN Data Model (Live Data Integration)" section
@@ -242,6 +257,14 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR-095 | Auto-Discovery Pattern for Validators | 2025-11-22 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.21 |
 | ADR-096 | Parallel Execution in Git Hooks | 2025-11-22 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.21 |
 | ADR-097 | Tier-Specific Coverage Targets | 2025-11-22 | ✅ | 1.5 | ARCHITECTURE_DECISIONS_V2.21 |
+
+### Phase 1.9: Test Infrastructure & Process Hardening
+
+| ADR | Title | Date | Status | Phase | Document |
+|-----|-------|------|--------|-------|----------|
+| ADR-056 | Alembic Migration Framework for Database Schema Management | 2025-12-03 | ✅ | 1.9 | ARCHITECTURE_DECISIONS_V2.25 |
+| ADR-057 | Testcontainers for Database Test Isolation | 2025-12-03 | 🔵 | 1.9+ | ARCHITECTURE_DECISIONS_V2.25 |
+| ADR-098 | TimescaleDB Deferred to Phase 6+ | 2025-12-03 | ✅ | 1.9 | ARCHITECTURE_DECISIONS_V2.25 |
 
 ### Phase 2: Production Monitoring Infrastructure (Planned)
 
@@ -617,7 +640,7 @@ Establish 8 Test Type Framework for comprehensive coverage:
   - 8 test directories in tests/ structure
 
 **References:**
-- TESTING_STRATEGY_V3.2.md (1,462 lines)
+- TESTING_STRATEGY_V3.3.md (1,462 lines)
 - REQ-TEST-012 through REQ-TEST-019
 - ADR-074 (Property-Based Testing)
 - ADR-075 (Multi-Source Warning Governance)
@@ -1251,9 +1274,9 @@ coverage_tiers:
 ---
 ## ADR Statistics
 
-**Total ADRs:** 97
-**Accepted (✅):** 48 (Phase 0-1.5 complete)
-**Proposed (🔵):** 49 (Phase 1, 2-10)
+**Total ADRs:** 100
+**Accepted (✅):** 51 (Phase 0-1.9 complete)
+**Proposed (🔵):** 49 (Phase 2-10)
 **Rejected (❌):** 0
 **Superseded (⚠️):** 1 (ADR-089 Dual-Key Pattern superseded by schema implementation)
 
@@ -1262,6 +1285,7 @@ coverage_tiers:
 - Phase 0.5: 12 ADRs (100% accepted)
 - Phase 1: 12 ADRs (6 accepted for DB completion + 6 planned for API best practices)
 - Phase 1.5: 12 ADRs (100% accepted - property-based testing POC + schema standardization + no edge manager + 8 test type framework + dual-key pattern + trade/position attribution architecture [3 ADRs] + workflow enforcement infrastructure [4 ADRs])
+- Phase 1.9: 3 ADRs (2 accepted: Alembic + TimescaleDB deferral, 1 planned: Testcontainers)
 - Phase 0.6c: 5 ADRs (100% accepted - includes cross-platform standards)
 - Phase 0.7: 6 ADRs (2 accepted: Python 3.14 compatibility + Branch Protection + 4 planned)
 - Phase 2: 3 ADRs (0% - planned)
@@ -1280,11 +1304,13 @@ coverage_tiers:
 
 ---
 
-**Document Version:** 1.15
+**Document Version:** 1.18
 **Created:** 2025-10-21
-**Last Updated:** 2025-11-22
+**Last Updated:** 2025-12-03
 **Purpose:** Systematic architecture decision tracking and reference
 **Critical Changes:**
+- v1.18: Added ADR-056 (Alembic Migration Framework) and ADR-057 (Testcontainers - Planned) for Phase 1.9 test infrastructure
+- v1.17: Added ADR-098 for TimescaleDB deferral (Phase 1.9 - defer until Phase 6+ when empirical bottlenecks emerge)
 - v1.15: Added ADR-094, ADR-095, ADR-096, ADR-097 for workflow enforcement infrastructure (Phase 1.5 - YAML-driven validation, auto-discovery pattern, parallel execution in git hooks, tier-specific coverage targets)
 - v1.14: Added ADR-090, ADR-091, ADR-092 for trade/position attribution architecture (Phase 1.5 - strategy scope, explicit columns, trade source tracking)
 - v1.10: Added ADR-046 for branch protection strategy (Phase 0.7 retroactive, GitHub branch protection with 6 required CI checks)
@@ -1294,6 +1320,6 @@ coverage_tiers:
 - v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.21.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.25.md
 
-**END OF ADR INDEX V1.15**
+**END OF ADR INDEX V1.18**

@@ -57,6 +57,7 @@ my_vcr = vcr.VCR(
 
 @pytest.mark.integration
 @pytest.mark.api
+@pytest.mark.timeout(30)  # Prevent indefinite VCR hangs in CI
 class TestKalshiClientWithVCR:
     """
     Test Kalshi API client using VCR cassettes with REAL API data.
@@ -248,6 +249,7 @@ class TestKalshiClientWithVCR:
 
 @pytest.mark.integration
 @pytest.mark.api
+@pytest.mark.timeout(30)  # Prevent indefinite VCR hangs in CI
 class TestKalshiClientDecimalPrecisionWithVCR:
     """
     Test Decimal precision using REAL Kalshi API data (VCR cassettes).
