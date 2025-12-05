@@ -16,6 +16,12 @@ Testcontainers Support (ADR-057):
     For property tests that need true database isolation, use the
     testcontainers fixtures from tests.fixtures.testcontainers_fixtures.
     These provide ephemeral PostgreSQL containers per test class.
+
+Test Key Generation:
+    The test_private_key fixture generates an RSA private key for testing
+    Kalshi API authentication. The key is generated on-the-fly and NOT
+    committed to git (security best practice). This ensures CI and local
+    environments both have valid test keys without exposing real credentials.
 """
 
 import os
@@ -464,6 +470,79 @@ def assert_decimal_precision():
 # =============================================================================
 # MARKER HELPERS
 # =============================================================================
+
+
+# =============================================================================
+# TEST PRIVATE KEY FIXTURE (Kalshi API Authentication Testing)
+# =============================================================================
+
+
+def _generate_test_private_key() -> str:
+    """
+    Generate a test RSA private key for Kalshi API authentication testing.
+
+    Educational Note:
+        This generates a valid RSA private key programmatically instead of
+        committing a key file to git. This is a security best practice:
+        - Real private keys should NEVER be committed to version control
+        - Test keys can be generated on-the-fly
+        - CI environments get valid test keys without secrets management
+
+        The key is used for testing RSA-PSS signature generation in
+        KalshiAuth. Since the tests mock the actual API calls, the key
+        doesn't need to be registered with Kalshi - it just needs to be
+        a valid RSA key format.
+
+    Returns:
+        PEM-encoded RSA private key as a string
+    """
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    # Generate a 2048-bit RSA key (matches Kalshi's requirements)
+    private_key = rsa.generate_private_key(
+        public_exponent=65537,
+        key_size=2048,
+    )
+
+    # Serialize to PEM format
+    pem = private_key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+
+    return pem.decode("utf-8")
+
+
+@pytest.fixture(scope="session", autouse=True)
+def ensure_test_private_key():
+    """
+    Ensure test_private_key.pem exists for Kalshi API integration tests.
+
+    This fixture runs automatically (autouse=True) at session start and:
+    1. Checks if tests/fixtures/test_private_key.pem exists
+    2. If not, generates a valid RSA private key
+    3. Saves it to the expected location
+
+    The key is NOT committed to git (*.pem is in .gitignore).
+    This ensures CI and local development both have valid test keys.
+
+    Scope: session - only generates key once per test run
+    """
+    test_key_path = Path(__file__).parent / "fixtures" / "test_private_key.pem"
+
+    # Ensure fixtures directory exists
+    test_key_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Generate key if it doesn't exist
+    if not test_key_path.exists():
+        print(f"\n[TEST SETUP] Generating test private key at {test_key_path}")
+        key_pem = _generate_test_private_key()
+        test_key_path.write_text(key_pem)
+        print("[TEST SETUP] Test private key generated successfully")
+
+    return test_key_path
 
 
 # =============================================================================
