@@ -299,21 +299,42 @@ jobs:
           python -m pytest tests/property/test_crud_operations_properties.py tests/property/test_database_crud_properties.py tests/property/test_strategy_versioning_properties.py -v --tb=short --timeout=120
           echo "=== Property tests complete at $(date) ==="
 
-      - name: Run database-dependent tests (integration + security + stress + chaos)
-        timeout-minutes: 15
+      # Phase 1.9 DIAGNOSTIC: Split into separate steps to identify hang source
+      - name: Run integration tests (database CRUD)
+        timeout-minutes: 5
         env:
           PYTHONUNBUFFERED: "1"
         run: |
-          # Phase 1.9: Run all test types that need PostgreSQL
-          # Tests will skip if specific dependencies (API credentials) not available
-          # --timeout=120: Kill individual tests that hang for >2 minutes
-          # PYTHONUNBUFFERED=1: Force unbuffered output to see progress in real-time
           echo "=== Starting integration tests at $(date) ==="
-          echo "=== Collecting tests first ==="
-          python -m pytest tests/integration/ tests/security/ tests/stress/ tests/chaos/ --collect-only -q 2>&1 | head -50 || true
-          echo "=== Collection complete, running tests ==="
-          python -m pytest tests/integration/ tests/security/ tests/stress/ tests/chaos/ -v --tb=short --timeout=120 -p no:cacheprovider
+          python -m pytest tests/integration/ -v --tb=short --timeout=60 -p no:cacheprovider
           echo "=== Integration tests complete at $(date) ==="
+
+      - name: Run security tests
+        timeout-minutes: 3
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          echo "=== Starting security tests at $(date) ==="
+          python -m pytest tests/security/ -v --tb=short --timeout=60 -p no:cacheprovider
+          echo "=== Security tests complete at $(date) ==="
+
+      - name: Run stress tests
+        timeout-minutes: 5
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          echo "=== Starting stress tests at $(date) ==="
+          python -m pytest tests/stress/ -v --tb=short --timeout=60 -p no:cacheprovider
+          echo "=== Stress tests complete at $(date) ==="
+
+      - name: Run chaos tests
+        timeout-minutes: 3
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          echo "=== Starting chaos tests at $(date) ==="
+          python -m pytest tests/chaos/ -v --tb=short --timeout=60 -p no:cacheprovider
+          echo "=== Chaos tests complete at $(date) ==="
 
       - name: Run E2E + performance tests
         timeout-minutes: 5
