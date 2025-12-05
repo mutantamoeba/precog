@@ -524,9 +524,16 @@ def ensure_test_private_key():
     1. Checks if tests/fixtures/test_private_key.pem exists
     2. If not, generates a valid RSA private key
     3. Saves it to the expected location
+    4. Sets TEST_KALSHI_* environment variables for CI compatibility
 
     The key is NOT committed to git (*.pem is in .gitignore).
     This ensures CI and local development both have valid test keys.
+
+    Educational Note:
+        KalshiClient uses PRECOG_ENV to determine credential prefix:
+        - PRECOG_ENV=test -> looks for TEST_KALSHI_API_KEY, TEST_KALSHI_PRIVATE_KEY_PATH
+        - PRECOG_ENV=dev -> looks for DEV_KALSHI_API_KEY, DEV_KALSHI_PRIVATE_KEY_PATH
+        CI sets PRECOG_ENV=test, so we must set TEST_KALSHI_* env vars here.
 
     Scope: session - only generates key once per test run
     """
@@ -541,6 +548,11 @@ def ensure_test_private_key():
         key_pem = _generate_test_private_key()
         test_key_path.write_text(key_pem)
         print("[TEST SETUP] Test private key generated successfully")
+
+    # Set environment variables for KalshiClient credential lookup in CI
+    # When PRECOG_ENV=test (CI default), KalshiClient looks for TEST_KALSHI_* vars
+    os.environ["TEST_KALSHI_API_KEY"] = "test-key-id-for-ci-vcr-tests"
+    os.environ["TEST_KALSHI_PRIVATE_KEY_PATH"] = str(test_key_path)
 
     return test_key_path
 
