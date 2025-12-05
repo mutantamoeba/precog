@@ -187,6 +187,7 @@ class TestESPNRealVCRCassettes:
     point-in-time snapshot. Re-record when testing specific scenarios.
     """
 
+    @pytest.mark.timeout(10)  # Prevent indefinite hangs
     @espn_vcr.use_cassette("espn_nfl_scoreboard.yaml")
     def test_real_nfl_scoreboard_fetch(self):
         """Fetch real NFL scoreboard (recorded via VCR)."""
@@ -207,6 +208,7 @@ class TestESPNRealVCRCassettes:
             assert "home_team" in game["metadata"]
             assert "away_team" in game["metadata"]
 
+    @pytest.mark.timeout(10)  # Prevent indefinite hangs
     @espn_vcr.use_cassette("espn_ncaaf_scoreboard.yaml")
     def test_real_ncaaf_scoreboard_fetch(self):
         """Fetch real NCAAF scoreboard (recorded via VCR)."""
