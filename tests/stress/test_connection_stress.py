@@ -28,9 +28,18 @@ References:
 
 Phase: 4 (Stress Testing Infrastructure)
 GitHub Issue: #126
+
+CI Skip Reason (Phase 1.9 Investigation):
+    These tests hang in CI because they create 50+ concurrent connections competing
+    for the shared PostgreSQL service container's limited connection pool. The tests
+    require testcontainers for proper database isolation where each test gets its own
+    PostgreSQL instance. See GitHub issue #168 for testcontainers implementation.
+
+    The tests run successfully locally where developers have dedicated database resources.
 """
 
 import gc
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -43,6 +52,16 @@ from precog.database.connection import test_connection as verify_db_connection
 # Note: database marker is registered in pyproject.toml
 pytestmark = [pytest.mark.stress, pytest.mark.slow, pytest.mark.database]
 
+# CI environment detection - same pattern as ESPN VCR tests
+# Tests run locally but xfail in CI where shared database causes hangs
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+
+_CI_XFAIL_REASON = (
+    "Stress tests require testcontainers for proper database isolation. "
+    "These tests hang in CI with shared PostgreSQL due to connection pool exhaustion. "
+    "Run locally with 'pytest tests/stress/ -v -m stress'. See GitHub issue #168."
+)
+
 
 @pytest.fixture(scope="module", autouse=True)
 def skip_if_no_database():
@@ -51,13 +70,10 @@ def skip_if_no_database():
         pytest.skip("Database not available")
 
 
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestConnectionPoolExhaustion:
     """Stress tests for connection pool behavior under exhaustion."""
 
-    @pytest.mark.xfail(
-        reason="Stress tests require testcontainers for proper database isolation - "
-        "connection pool exhaustion tests can hang in CI with shared database"
-    )
     def test_pool_handles_many_concurrent_connections(self):
         """Test pool handles 50 concurrent connection requests.
 
@@ -95,10 +111,6 @@ class TestConnectionPoolExhaustion:
             f"Too many failures: {results['failure']}/{num_connections}"
         )
 
-    @pytest.mark.xfail(
-        reason="Stress tests require testcontainers for proper database isolation - "
-        "connection pool exhaustion tests can hang in CI with shared database"
-    )
     def test_pool_queues_when_exhausted(self):
         """Test connections queue when pool is exhausted.
 
@@ -139,13 +151,10 @@ class TestConnectionPoolExhaustion:
         assert results["queued_success"] == 1 or wait_time > 0.1
 
 
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestConnectionRapidCycles:
     """Stress tests for rapid connection/disconnection cycles."""
 
-    @pytest.mark.xfail(
-        reason="Stress tests require testcontainers for proper database isolation - "
-        "rapid cycling tests can hang in CI with shared database"
-    )
     def test_rapid_connect_disconnect_cycles(self):
         """Test 1000 rapid connection cycles.
 
@@ -171,10 +180,6 @@ class TestConnectionRapidCycles:
         # All cycles should succeed
         assert success_count == num_cycles, f"Only {success_count}/{num_cycles} cycles succeeded"
 
-    @pytest.mark.xfail(
-        reason="Stress tests require testcontainers for proper database isolation - "
-        "interleaved connection tests can hang in CI with shared database"
-    )
     def test_interleaved_connect_disconnect(self):
         """Test interleaved connect/disconnect patterns.
 
@@ -209,13 +214,10 @@ class TestConnectionRapidCycles:
             assert result is not None
 
 
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestConcurrentQueryExecution:
     """Stress tests for concurrent query execution."""
 
-    @pytest.mark.xfail(
-        reason="Stress tests require testcontainers for proper database isolation - "
-        "concurrent query tests can hang in CI with shared database"
-    )
     def test_concurrent_read_queries(self):
         """Test 50 concurrent read queries.
 
@@ -243,10 +245,6 @@ class TestConcurrentQueryExecution:
         for query_id, result in results:
             assert result == query_id, f"Query {query_id} returned {result}"
 
-    @pytest.mark.xfail(
-        reason="Stress tests require testcontainers for proper database isolation - "
-        "concurrent mixed operations can hang in CI with shared database"
-    )
     def test_concurrent_mixed_operations(self):
         """Test concurrent reads and writes.
 
@@ -308,13 +306,10 @@ class TestConcurrentQueryExecution:
             execute_query("DROP TABLE IF EXISTS _stress_test_table")
 
 
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestConnectionLeakDetection:
     """Stress tests for connection leak detection."""
 
-    @pytest.mark.xfail(
-        reason="Stress tests require testcontainers for proper database isolation - "
-        "connection leak tests can hang in CI with shared database"
-    )
     def test_no_connection_leak_on_exception(self):
         """Test connections are returned to pool even on exception.
 
@@ -340,10 +335,6 @@ class TestConnectionLeakDetection:
             result = cursor.fetchone()
             assert result is not None
 
-    @pytest.mark.xfail(
-        reason="Stress tests require testcontainers for proper database isolation - "
-        "connection stability tests can hang in CI with shared database"
-    )
     def test_connection_count_stable_over_time(self):
         """Test connection count doesn't grow over time.
 
@@ -369,13 +360,10 @@ class TestConnectionLeakDetection:
             assert result is not None
 
 
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestConnectionTimeout:
     """Stress tests for connection timeout scenarios."""
 
-    @pytest.mark.xfail(
-        reason="Stress tests require testcontainers for proper database isolation - "
-        "slow query tests can hang in CI with shared database"
-    )
     def test_handles_slow_queries_gracefully(self):
         """Test system handles slow queries without deadlock.
 
