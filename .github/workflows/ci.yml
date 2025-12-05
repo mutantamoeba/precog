@@ -214,6 +214,8 @@ jobs:
     needs: detect-changes
     # Only run if code changed (requires database)
     if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
+    # Job timeout to prevent hanging CI runs (Issue: 5hr+ hangs observed)
+    timeout-minutes: 30
 
     services:
       postgres:
@@ -263,7 +265,7 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install -e .  # Install precog package (src/ layout)
-          pip install pytest pytest-cov hypothesis vcrpy
+          pip install pytest pytest-cov hypothesis vcrpy pytest-timeout
 
       - name: Apply database migrations with Alembic
         run: |
@@ -287,21 +289,27 @@ jobs:
           echo "Hypothesis cache cleared"
 
       - name: Run database-dependent property tests
+        timeout-minutes: 10
         run: |
           # Property tests that require real PostgreSQL (SCD Type-2, Decimal precision, strategy versioning)
-          python -m pytest tests/property/test_crud_operations_properties.py tests/property/test_database_crud_properties.py tests/property/test_strategy_versioning_properties.py -v --tb=short
+          # --timeout=120: Kill individual tests that hang for >2 minutes
+          python -m pytest tests/property/test_crud_operations_properties.py tests/property/test_database_crud_properties.py tests/property/test_strategy_versioning_properties.py -v --tb=short --timeout=120
 
       - name: Run database-dependent tests (integration + security + stress + chaos)
+        timeout-minutes: 15
         run: |
           # Phase 1.9: Run all test types that need PostgreSQL
           # Tests will skip if specific dependencies (API credentials) not available
-          python -m pytest tests/integration/ tests/security/ tests/stress/ tests/chaos/ -v --tb=short
+          # --timeout=120: Kill individual tests that hang for >2 minutes
+          python -m pytest tests/integration/ tests/security/ tests/stress/ tests/chaos/ -v --tb=short --timeout=120
 
       - name: Run E2E + performance tests
+        timeout-minutes: 5
         run: |
           # E2E tests will skip if API credentials not configured
           # Performance tests validate speed requirements
-          python -m pytest tests/e2e/ tests/performance/ -v --tb=short
+          # --timeout=60: Kill individual tests that hang for >1 minute
+          python -m pytest tests/e2e/ tests/performance/ -v --tb=short --timeout=60
 
   validate-quick:
     name: Quick Validation Suite
