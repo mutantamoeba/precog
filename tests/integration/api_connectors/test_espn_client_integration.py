@@ -21,6 +21,7 @@ Educational Note:
 Reference: docs/testing/PHASE_2_TEST_PLAN_V1.0.md Section 2.1.4
 """
 
+import os
 from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
@@ -36,10 +37,17 @@ from tests.fixtures import (
 # VCR configuration
 VCR_CASSETTES_DIR = Path(__file__).parent / "vcr_cassettes"
 
+# Determine VCR record mode based on environment
+# - CI environments: "none" (playback only, no network requests)
+# - Local development: "new_episodes" (record new API calls)
+# This prevents CI hangs when cassettes don't match exactly
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+_vcr_record_mode = "none" if _is_ci else "new_episodes"
+
 # Custom VCR instance for ESPN API
 espn_vcr = vcr.VCR(
     cassette_library_dir=str(VCR_CASSETTES_DIR),
-    record_mode="new_episodes",  # Record new API calls, replay existing ones
+    record_mode=_vcr_record_mode,
     match_on=["uri", "method"],
     filter_headers=["User-Agent"],
 )
