@@ -32,6 +32,7 @@ References:
 import os
 import shutil
 import subprocess
+import threading
 from collections.abc import Callable, Generator
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
@@ -310,6 +311,94 @@ def stress_db_connection(
     conn.close()
 
 
+class CISafeBarrier:
+    """
+    Thread barrier with timeout support for CI-safe synchronization.
+
+    Standard threading.Barrier can hang indefinitely if threads fail or are slow.
+    This wrapper adds timeout support and graceful degradation for CI environments.
+
+    Why This Matters:
+        CI runners have limited resources and unpredictable thread scheduling.
+        A barrier.wait() without timeout can hang for hours (observed: 5hr+ hangs).
+        This class ensures tests fail fast rather than hang.
+
+    Usage:
+        # Instead of:
+        barrier = threading.Barrier(20)
+        barrier.wait()  # Hangs forever if thread fails
+
+        # Use:
+        barrier = CISafeBarrier(20, timeout=10.0)
+        barrier.wait()  # Raises TimeoutError after 10s
+
+    Args:
+        parties: Number of threads that must call wait()
+        timeout: Maximum seconds to wait (default: 10.0)
+        action: Optional callable to run when all parties arrive
+
+    Reference:
+        - Issue #168: Testcontainers for database stress tests
+        - Pattern 28: CI-Safe Stress Testing (DEVELOPMENT_PATTERNS_V1.15.md)
+    """
+
+    def __init__(
+        self,
+        parties: int,
+        timeout: float = 10.0,
+        action: Callable[[], None] | None = None,
+    ):
+        self._barrier = threading.Barrier(parties, action=action)
+        self._timeout = timeout
+        self._parties = parties
+
+    def wait(self, timeout: float | None = None) -> int:
+        """
+        Wait for all parties with timeout.
+
+        Args:
+            timeout: Override default timeout (optional)
+
+        Returns:
+            The arrival index (0 to parties-1)
+
+        Raises:
+            TimeoutError: If timeout exceeded (CI-friendly failure)
+            threading.BrokenBarrierError: If barrier is broken
+        """
+        effective_timeout = timeout if timeout is not None else self._timeout
+        try:
+            return self._barrier.wait(timeout=effective_timeout)
+        except threading.BrokenBarrierError:
+            raise TimeoutError(
+                f"CISafeBarrier timed out after {effective_timeout}s waiting for "
+                f"{self._parties} parties. This may indicate CI resource constraints."
+            ) from None
+
+    def reset(self) -> None:
+        """Reset the barrier to initial state."""
+        self._barrier.reset()
+
+    def abort(self) -> None:
+        """Abort the barrier, causing all waiting threads to receive BrokenBarrierError."""
+        self._barrier.abort()
+
+    @property
+    def parties(self) -> int:
+        """Number of parties required to pass the barrier."""
+        return self._parties
+
+    @property
+    def n_waiting(self) -> int:
+        """Number of parties currently waiting."""
+        return self._barrier.n_waiting
+
+    @property
+    def broken(self) -> bool:
+        """True if barrier is in broken state."""
+        return self._barrier.broken
+
+
 def with_timeout(timeout_seconds: float = 30.0) -> Callable[[F], F]:
     """
     Decorator for stress tests that need thread-safe timeouts.
@@ -359,6 +448,7 @@ def with_timeout(timeout_seconds: float = 30.0) -> Callable[[F], F]:
 __all__ = [
     "DOCKER_AVAILABLE",
     "TESTCONTAINERS_AVAILABLE",
+    "CISafeBarrier",
     "stress_db_connection",
     "stress_postgres_container",
     "with_timeout",

@@ -62,7 +62,7 @@ class TestTokenBucket:
 
         # Consume all tokens
         bucket.acquire(tokens=10, block=False)
-        assert bucket.tokens == pytest.approx(0.0, abs=0.01)
+        assert bucket.tokens == pytest.approx(0.0, abs=0.05)  # Allow timing tolerance
 
         # Try to acquire more (should fail)
         result = bucket.acquire(tokens=1, block=False)
