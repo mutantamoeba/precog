@@ -1,27 +1,30 @@
 """
 Stress Test Specific Testcontainers Fixtures.
 
-Provides function-scoped PostgreSQL containers for stress tests that need
-complete database isolation. Unlike the session-scoped fixtures in
-testcontainers_fixtures.py, these create a fresh container per test.
+Provides PostgreSQL containers for stress tests that need database isolation.
 
-Why Function Scope for Stress Tests?
-    Stress tests intentionally exhaust database resources (connections, locks).
-    Session-scoped containers would cause cascading failures as one test's
-    exhausted connections affect subsequent tests.
+CI vs Local Strategy:
+    - CI: Uses the existing PostgreSQL service container (already running with
+          migrations applied). No container startup overhead (~0s).
+    - Local: Uses testcontainers to create fresh containers when Docker available.
+          Skips gracefully if Docker not running.
 
-    Function scope ensures:
-    - Each test gets a fresh PostgreSQL instance
-    - Connection pools start clean (no exhaustion from previous tests)
-    - No state leakage between stress scenarios
-    - Proper isolation for concurrent connection tests
+Why This Dual Strategy?
+    CI environments already have a PostgreSQL service container running (see
+    ci.yml integration-tests job). Creating additional testcontainers would:
+    - Add 15s+ startup per test (container + migrations)
+    - Compete for Docker resources with the service container
+    - Potentially exhaust CI memory
 
-Performance Trade-off:
-    - Session scope: ~10s startup once, shared across all tests
-    - Function scope: ~10s startup per test (slower but isolated)
+    By reusing the CI service container:
+    - Zero container startup overhead
+    - Migrations already applied by CI workflow
+    - Tests run in seconds, not minutes
 
-    For stress tests, isolation trumps speed because these tests specifically
-    test edge cases that break shared resources.
+Isolation Approach:
+    - Session-scoped fixture shares one container/connection across tests
+    - Per-test cleanup (pool reset) provides isolation without restart overhead
+    - Tests that truly exhaust resources should handle their own cleanup
 
 References:
     - Issue #168: Implement testcontainers for database stress tests
@@ -171,32 +174,50 @@ def _apply_full_schema(host: str, port: int, database: str, user: str, password:
         raise RuntimeError(f"Alembic migration failed: {result.stderr.decode()}")
 
 
-@pytest.fixture
-def stress_postgres_container() -> Generator[dict[str, str], None, None]:
+@pytest.fixture(scope="session")
+def _stress_postgres_container_session() -> Generator[dict[str, str], None, None]:
     """
-    Create a fresh PostgreSQL container for each stress test.
+    Internal session-scoped fixture for PostgreSQL container.
 
-    Scope: function - New container per test for complete isolation.
+    CI vs Local Strategy:
+        - CI: Uses existing PostgreSQL service container (env vars already set)
+        - Local: Creates testcontainer when Docker available
+
+    This is session-scoped so container startup (~10s) and migrations (~5s)
+    happen only ONCE per test session, not per test.
 
     Yields:
-        Dictionary with connection parameters:
-        - host: Container hostname
-        - port: Exposed PostgreSQL port
-        - database: Database name
-        - user: Database user
-        - password: Database password
-
-    Educational Note:
-        Unlike session-scoped fixtures, this creates a new container per test.
-        This is slower (~10s per test) but ensures:
-        - Fresh connection pool for each test
-        - No exhausted resources from previous tests
-        - Complete isolation for concurrent connection scenarios
-
-    Configuration:
-        - max_connections=200: Higher than default (100) for stress testing
-        - shared_buffers=128MB: Adequate for stress test workloads
+        Dictionary with connection parameters
     """
+    # In CI, use the existing PostgreSQL service container
+    if _is_ci:
+        # CI workflow already has PostgreSQL running with migrations applied
+        # Environment variables are already set by the workflow
+        connection_params = {
+            "host": os.environ.get("DB_HOST", "localhost"),
+            "port": os.environ.get("DB_PORT", "5432"),
+            "database": os.environ.get("DB_NAME", "precog_test"),
+            "user": os.environ.get("DB_USER", "precog_test"),
+            "password": os.environ.get("DB_PASSWORD", "precog_test_password"),
+        }
+
+        # Initialize connection pool
+        try:
+            close_pool()
+        except Exception:
+            pass
+        initialize_pool()
+
+        yield connection_params
+
+        # Cleanup
+        try:
+            close_pool()
+        except Exception:
+            pass
+        return
+
+    # Local: Use testcontainers
     if not TESTCONTAINERS_AVAILABLE:
         pytest.skip("testcontainers not installed - run: pip install testcontainers[postgres]")
 
@@ -227,9 +248,7 @@ def stress_postgres_container() -> Generator[dict[str, str], None, None]:
             "password": "stress_password",
         }
 
-        # Apply full Precog schema using Alembic migrations
-        # This ensures CRUD stress tests have all required tables (venues, teams, game_states)
-        # Connection stress tests don't require specific schema (just SELECT 1, etc.)
+        # Apply full Precog schema using Alembic migrations (ONCE for whole session)
         _apply_full_schema(
             host=host,
             port=port,
@@ -253,19 +272,16 @@ def stress_postgres_container() -> Generator[dict[str, str], None, None]:
         os.environ["DB_USER"] = "stress_user"
         os.environ["DB_PASSWORD"] = "stress_password"
 
-        # Close existing connection pool and reinitialize with new env vars
-        # This ensures get_cursor() uses the testcontainer database
+        # Initialize pool
         try:
             close_pool()
         except Exception:
-            pass  # Pool may not exist yet
-
-        # Initialize new pool pointing to testcontainer
+            pass
         initialize_pool()
 
         yield connection_params
 
-        # Close testcontainer pool before restoring environment
+        # Cleanup
         try:
             close_pool()
         except Exception:
@@ -278,11 +294,60 @@ def stress_postgres_container() -> Generator[dict[str, str], None, None]:
             elif key in os.environ:
                 del os.environ[key]
 
-        # Reinitialize pool with original environment (if tests continue)
-        try:
-            initialize_pool()
-        except Exception:
-            pass  # May fail if original env vars not set
+
+@pytest.fixture
+def stress_postgres_container(
+    _stress_postgres_container_session: dict[str, str],
+) -> Generator[dict[str, str], None, None]:
+    """
+    Provide PostgreSQL container with per-test isolation.
+
+    Scope: function - Wraps session container with per-test pool reset.
+
+    CI vs Local Behavior:
+        - CI (~0s): Uses existing service container, just resets pool
+        - Local (~15s first test, ~0s subsequent): Session container reused
+
+    Yields:
+        Dictionary with connection parameters:
+        - host: Database hostname
+        - port: Database port
+        - database: Database name
+        - user: Database user
+        - password: Database password
+
+    Educational Note:
+        This fixture provides test isolation WITHOUT container restart:
+        1. Session fixture starts container once (CI: use existing)
+        2. Each test gets a fresh connection pool
+        3. Pool reset ensures no connection exhaustion carryover
+
+        This trades complete isolation for speed:
+        - Function-scoped container: ~15s x N tests = ~285s for 19 tests
+        - Session-scoped + pool reset: ~15s + ~0.1s x N = ~17s for 19 tests
+
+    Configuration:
+        Inherits from session fixture:
+        - max_connections=200 (local testcontainer)
+        - CI uses whatever the service container has
+    """
+    # Get connection params from session fixture
+    params = _stress_postgres_container_session
+
+    # Reset connection pool for isolation
+    try:
+        close_pool()
+    except Exception:
+        pass
+    initialize_pool()
+
+    yield params
+
+    # Cleanup: Close connections after test
+    try:
+        close_pool()
+    except Exception:
+        pass
 
 
 @pytest.fixture
@@ -449,6 +514,7 @@ __all__ = [
     "DOCKER_AVAILABLE",
     "TESTCONTAINERS_AVAILABLE",
     "CISafeBarrier",
+    "_stress_postgres_container_session",
     "stress_db_connection",
     "stress_postgres_container",
     "with_timeout",
