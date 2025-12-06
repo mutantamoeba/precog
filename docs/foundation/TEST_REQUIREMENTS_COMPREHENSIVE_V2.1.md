@@ -11,10 +11,10 @@
 - **REQ-TEST-022:** Cleanup Fixture Ordering (reverse FK order)
 - **REQ-TEST-023:** Parallel Execution Safety (worker prefixes)
 - **REQ-TEST-024:** SCD Type 2 Test Isolation
-- **Cross-references TEST_ISOLATION_PATTERNS_V1.0.md** for detailed implementation patterns
+- **Cross-references TEST_ISOLATION_PATTERNS_V1.1.md** for detailed implementation patterns
 **Changes in V2.0:**
 - **All 8 Test Types Now MANDATORY** - Removed N/A, OPT, P5+ designations
-- **Synced with TESTING_STRATEGY_V3.3** - Both documents now have identical requirements
+- **Synced with TESTING_STRATEGY_V3.4** - Both documents now have identical requirements
 - **Validation via Phase 2C** - CRUD tests uncovered 3 critical bugs proving all test types needed
 - **Lesson Learned:** Phase 2C race condition bug would have been caught by Race tests if they weren't OPT
 
@@ -86,7 +86,7 @@ Previous approach (V1.0) had tiered requirements based on "risk profiles." This 
 - **Performance:** Establishes latency baselines
 - **Chaos:** Validates failure recovery
 
-**Reference:** ADR-076 (Test Type Categories), TESTING_STRATEGY_V3.3
+**Reference:** ADR-076 (Test Type Categories), TESTING_STRATEGY_V3.4
 
 ---
 
@@ -693,7 +693,7 @@ Without transaction isolation, test data persists and causes:
 - False positives (test passes due to leftover data)
 - False negatives (test fails due to conflicting data)
 
-**Reference:** TEST_ISOLATION_PATTERNS_V1.0.md - Pattern 1
+**Reference:** TEST_ISOLATION_PATTERNS_V1.1.md - Pattern 1
 
 ---
 
@@ -778,7 +778,7 @@ Missing parent records cause ForeignKeyViolation errors that are:
 - Hard to debug (error message doesn't indicate missing parent)
 - Cascade failures (one missing parent breaks many tests)
 
-**Reference:** TEST_ISOLATION_PATTERNS_V1.0.md - Pattern 2
+**Reference:** TEST_ISOLATION_PATTERNS_V1.1.md - Pattern 2
 
 ---
 
@@ -862,7 +862,7 @@ Wrong delete order causes:
 - Orphaned data (cleanup aborts mid-way)
 - Test pollution from incomplete cleanup
 
-**Reference:** TEST_ISOLATION_PATTERNS_V1.0.md - Pattern 3
+**Reference:** TEST_ISOLATION_PATTERNS_V1.1.md - Pattern 3
 
 ---
 
@@ -933,7 +933,7 @@ Parallel workers sharing IDs cause:
 - Deadlocks when workers lock same rows
 - Race conditions with unpredictable results
 
-**Reference:** TEST_ISOLATION_PATTERNS_V1.0.md - Pattern 4
+**Reference:** TEST_ISOLATION_PATTERNS_V1.1.md - Pattern 4
 
 ---
 
@@ -1015,7 +1015,7 @@ SCD Type 2 state leakage causes:
 - Historical versions from other tests polluting results
 - Unpredictable test failures based on execution order
 
-**Reference:** TEST_ISOLATION_PATTERNS_V1.0.md - Pattern 5
+**Reference:** TEST_ISOLATION_PATTERNS_V1.1.md - Pattern 5
 
 ---
 
@@ -1063,9 +1063,9 @@ SCD Type 2 state leakage causes:
 **Related Documents:**
 - `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Why we need these requirements
 - `TESTING_GAPS_ANALYSIS.md` - Current test coverage analysis
-- `docs/foundation/TESTING_STRATEGY_V3.3.md` - Comprehensive testing strategy with 8 test types
-- `docs/testing/TEST_ISOLATION_PATTERNS_V1.0.md` - Detailed patterns for test isolation (Phase 1.9)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` - Master requirements document
+- `docs/foundation/TESTING_STRATEGY_V3.4.md` - Comprehensive testing strategy with 8 test types
+- `docs/testing/TEST_ISOLATION_PATTERNS_V1.1.md` - Detailed patterns for test isolation (Phase 1.9)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.20.md` - Master requirements document
 
 **Related ADRs:**
 - ADR-074: Property-Based Testing with Hypothesis

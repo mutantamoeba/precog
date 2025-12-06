@@ -1,10 +1,16 @@
 # Test Isolation Patterns
 
-**Version:** 1.0
-**Date:** 2025-11-30
+**Version:** 1.1
+**Date:** 2025-12-06
 **Status:** Active
 **Created:** Phase 1.9 Test Infrastructure (Issue #165)
 **Purpose:** Document patterns for proper test isolation to prevent database state contamination
+**Changes in V1.1:**
+- **Added Pattern 6: CI-Safe ThreadPoolExecutor Isolation** (Issue #168)
+- Documents threading tests that hang in CI due to resource constraints
+- Solution: `pytest.mark.skipif(_is_ci)` for ThreadPoolExecutor/threading.Barrier tests
+- Helper classes: CISafeBarrier, with_timeout decorator
+- Reference: Pattern 28 (DEVELOPMENT_PATTERNS_V1.16.md)
 
 ---
 
@@ -29,9 +35,10 @@ This document captures **critical patterns** for test isolation discovered durin
 5. [Pattern 3: Cleanup Fixture Ordering](#pattern-3-cleanup-fixture-ordering)
 6. [Pattern 4: Parallel Execution Safety](#pattern-4-parallel-execution-safety)
 7. [Pattern 5: SCD Type 2 Test Isolation](#pattern-5-scd-type-2-test-isolation)
-8. [Implementation Checklist](#implementation-checklist)
-9. [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
-10. [References](#references)
+8. [Pattern 6: CI-Safe ThreadPoolExecutor Isolation](#pattern-6-ci-safe-threadpoolexecutor-isolation)
+9. [Implementation Checklist](#implementation-checklist)
+10. [Anti-Patterns to Avoid](#anti-patterns-to-avoid)
+11. [References](#references)
 
 ---
 
@@ -613,16 +620,132 @@ db_cursor.execute("DELETE FROM events WHERE ...")
 
 ---
 
+## Pattern 6: CI-Safe ThreadPoolExecutor Isolation
+
+### Problem
+
+Tests using `ThreadPoolExecutor`, `threading.Barrier()`, or sustained `time.perf_counter()` loops **hang indefinitely** in CI environments due to resource constraints:
+
+```
+# CI Log showing timeout:
+FAILED tests/stress/test_connection_stress.py::test_concurrent - TIMEOUT after 600s
+# Or just hangs for 15+ minutes with no output
+```
+
+**Root Causes:**
+1. **ThreadPoolExecutor + as_completed():** Concurrent futures waiting on each other deadlock with unpredictable thread scheduling in CI
+2. **Threading Barriers:** `threading.Barrier(20).wait()` requires all 20 threads to arrive - CI scheduling delays cause timeouts
+3. **pytest-timeout Limitations:** `--timeout-method=thread` cannot interrupt blocking Python code in threads (SIGALRM only works on main thread)
+4. **Resource Constraints:** CI runners have 2 vCPUs vs 8+ cores locally - threading behavior is fundamentally different
+
+### Solution
+
+Use `pytest.mark.skipif(_is_ci)` to skip threading-heavy tests in CI:
+
+```python
+import os
+import pytest
+
+# CI environment detection - standardized pattern
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+
+_CI_SKIP_REASON = (
+    "Stress tests skip in CI - they can hang in resource-constrained environments. "
+    "Run locally: pytest tests/stress/ -v -m stress"
+)
+
+# Module-level pytestmark for ALL tests in file
+pytestmark = [
+    pytest.mark.stress,
+    pytest.mark.slow,
+    pytest.mark.skipif(_is_ci, reason=_CI_SKIP_REASON),
+]
+
+
+class TestConnectionPoolStress:
+    def test_concurrent_connections(self, stress_postgres_container):
+        """Skipped in CI, runs locally with adequate resources."""
+        with ThreadPoolExecutor(max_workers=50) as executor:
+            futures = [executor.submit(use_connection) for _ in range(50)]
+            for future in as_completed(futures):
+                pass  # Would hang in CI
+```
+
+### Helper Classes
+
+**CISafeBarrier (tests/fixtures/stress_testcontainers.py):**
+
+```python
+class CISafeBarrier:
+    """Thread barrier with timeout support for CI-safe synchronization."""
+
+    def __init__(self, parties: int, timeout: float = 10.0):
+        self._barrier = threading.Barrier(parties)
+        self._timeout = timeout
+
+    def wait(self, timeout: float | None = None) -> int:
+        """Wait with timeout - raises TimeoutError instead of hanging."""
+        effective_timeout = timeout if timeout is not None else self._timeout
+        try:
+            return self._barrier.wait(timeout=effective_timeout)
+        except threading.BrokenBarrierError:
+            raise TimeoutError(
+                f"CISafeBarrier timed out after {effective_timeout}s"
+            ) from None
+```
+
+**with_timeout Decorator:**
+
+```python
+def with_timeout(timeout_seconds: float = 30.0):
+    """Decorator for stress tests that need thread-safe timeouts."""
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(func, *args, **kwargs)
+                try:
+                    return future.result(timeout=timeout_seconds)
+                except FuturesTimeoutError:
+                    raise TimeoutError(
+                        f"Test exceeded {timeout_seconds}s timeout"
+                    ) from None
+        return wrapper
+    return decorator
+```
+
+### When to Apply
+
+| Test Type | CI Behavior | Pattern |
+|-----------|-------------|---------|
+| **ThreadPoolExecutor tests** | Skip in CI | `skipif(_is_ci)` |
+| **threading.Barrier tests** | Skip in CI | `skipif(_is_ci)` |
+| **time.perf_counter loops** | Skip in CI | `skipif(_is_ci)` |
+| **Connection pool stress** | Skip in CI | `skipif(_is_ci)` + testcontainers |
+| **Unit tests** | Run normally | No skip |
+| **Integration tests** | Run normally | No skip |
+| **Chaos tests (mock injection)** | Run normally | No skip |
+
+### Reference
+
+- **Pattern 28:** DEVELOPMENT_PATTERNS_V1.16.md (comprehensive threading CI patterns)
+- **Issue #168:** Testcontainers for database stress tests
+- **ADR-057:** Testcontainers for Database Test Isolation
+- **tests/fixtures/stress_testcontainers.py:** CISafeBarrier, with_timeout implementation
+
+---
+
 ## References
 
 **Related Documents:**
-- `docs/foundation/TESTING_STRATEGY_V3.3.md` - Test type requirements
+- `docs/foundation/TESTING_STRATEGY_V3.4.md` - Test type requirements
 - `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md` - REQ-TEST-012 through REQ-TEST-019
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md` - FK constraint definitions
 - `tests/conftest.py` - Current fixture implementations
 
 **Related Issues:**
 - Issue #165: Phase 1.9 Test Infrastructure Plan (BLOCKING)
+- Issue #168: Testcontainers for Database Stress Tests (Pattern 6)
 - Issue #155: Test Type Coverage Gaps (57h effort)
 
 **Related ADRs:**

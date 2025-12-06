@@ -1,9 +1,15 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.25
-**Last Updated:** December 3, 2025
+**Version:** 2.26
+**Last Updated:** December 6, 2025
 **Status:** ✅ Current
+**Changes in v2.26:**
+- **CI-SAFE STRESS TEST MARKERS (ISSUE #168):** Added ADR-099 (skipif vs xfail(run=False) for CI Stress Tests)
+- Documents decision to prefer `skipif(_is_ci)` over `xfail(run=False)` for stress tests that hang in CI
+- `skipif` shows "SKIPPED" (clear intent: test intentionally not run) vs `xfail` shows "XFAIL" (misleading: implies expected failure)
+- Applies to ThreadPoolExecutor-based stress tests (config loader, logger, database connections)
+- Pattern 28 in DEVELOPMENT_PATTERNS updated to reflect this evolution
 **Changes in v2.25:**
 - **ALEMBIC MIGRATION FRAMEWORK (PHASE 1.9):** Added ADR-056 (Alembic Migration Framework for Database Schema Management)
 - Documents decision to adopt Alembic for database migrations, replacing 10 manual SQL/Python scripts
@@ -113,7 +119,7 @@
 - **Implementation:** Test organization structure (8 test directories), phase-based roadmap (Phase 1-5), fixture requirements (db_pool, clean_test_data)
 - **Benefits:** Prevents false confidence, comprehensive coverage (8 types catch different bug categories), clear guidance (mock usage decision tree)
 - **Costs:** Increased test execution time (integration/stress tests slower), steeper learning curve (Hypothesis, threading), more test infrastructure
-- References TESTING_STRATEGY_V3.3.md, REQ-TEST-012 through REQ-TEST-019, ADR-074 (Property-Based Testing), ADR-075 (Multi-Source Warning Governance)
+- References TESTING_STRATEGY_V3.4.md, REQ-TEST-012 through REQ-TEST-019, ADR-074 (Property-Based Testing), ADR-075 (Multi-Source Warning Governance)
 **Changes in v2.16:**
 - **SCHEMA STANDARDIZATION - CLASSIFICATION FIELD NAMING:** Added Decision #86/ADR-086 (Schema Classification Field Naming - Phase 1.5)
 - Documents the approach/domain naming decision that resolved three-way schema mismatch blocking Model Manager implementation
@@ -3686,7 +3692,7 @@ test_results/
 - pytest-html generates HTML reports
 - .gitignore excludes timestamped runs (keeps README.md)
 
-**Reference:** `foundation/TESTING_STRATEGY_V3.3.md`
+**Reference:** `foundation/TESTING_STRATEGY_V3.4.md`
 
 ---
 
@@ -3864,7 +3870,7 @@ safety check --full-report
 - CI workflow fails on high/critical findings
 - Weekly dependency scans via scheduled workflow
 
-**Reference:** `foundation/TESTING_STRATEGY_V3.3.md`, REQ-TEST-008
+**Reference:** `foundation/TESTING_STRATEGY_V3.4.md`, REQ-TEST-008
 
 ---
 
@@ -3906,7 +3912,7 @@ Target: >80% mutation score on critical modules
 - Run weekly on critical modules
 - Track mutation score trends
 
-**Reference:** `foundation/TESTING_STRATEGY_V3.3.md`, REQ-TEST-009
+**Reference:** `foundation/TESTING_STRATEGY_V3.4.md`, REQ-TEST-009
 
 ---
 
@@ -3951,7 +3957,7 @@ def test_spread_always_positive(price):
 - Focus on financial calculations (decimal precision critical)
 - Integrate into test suite (pytest-hypothesis plugin)
 
-**Reference:** `foundation/TESTING_STRATEGY_V3.3.md`, REQ-TEST-010
+**Reference:** `foundation/TESTING_STRATEGY_V3.4.md`, REQ-TEST-010
 
 ---
 
@@ -9220,7 +9226,7 @@ def run_holdout_validation(
 ### Related Documentation
 
 - `docs/guides/MODEL_EVALUATION_GUIDE_V1.0.md` (implementation guide - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.20.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.7.md` (Phase 2 Task #3, Phase 6 Task #1)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.7: Evaluation Runs Table)
@@ -9943,7 +9949,7 @@ ON position_risk_by_strategy(league, strategy_name);
 
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (comprehensive analytics implementation guide - to be created)
 - `docs/guides/DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md` (React dashboard + API integration - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.20.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.7.md` (Phase 6 Task #3, Phase 7 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.8: Materialized Views Reference)
@@ -10774,7 +10780,7 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 
 - `docs/guides/AB_TESTING_GUIDE_V1.0.md` (comprehensive A/B testing guide - to be created)
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (includes A/B testing architecture)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.20.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.7.md` (Phase 7 Task #3, Phase 8 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.9: A/B Tests Table)
@@ -11212,7 +11218,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 
 **References:**
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (materialized views already defined)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` (analytics requirements)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.20.md` (analytics requirements)
 
 ---
 
@@ -12058,7 +12064,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 **Mitigation:**
 - Run unit tests fast (~5s) during development via `./scripts/test_fast.sh`
 - Run full suite (~30s) before commits via pre-push hooks
-- Provide comprehensive examples in TESTING_STRATEGY_V3.3.md
+- Provide comprehensive examples in TESTING_STRATEGY_V3.4.md
 
 ### When to Use Each Test Type
 
@@ -12124,14 +12130,14 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 ### Documentation Updates
 
 **Primary Documentation:**
-- TESTING_STRATEGY_V3.3.md (comprehensive 8 test type framework, 1,462 lines)
+- TESTING_STRATEGY_V3.4.md (comprehensive 8 test type framework, 1,462 lines)
 - TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md (REQ-TEST-012 through REQ-TEST-019)
-- MASTER_REQUIREMENTS_V2.19.md (added 8 new test requirements)
+- MASTER_REQUIREMENTS_V2.20.md (added 8 new test requirements)
 - REQUIREMENT_INDEX.md (added REQ-TEST-012 through REQ-TEST-019)
 
 **Supporting Documentation:**
 - DEVELOPMENT_PHILOSOPHY_V1.3.md (updated TDD section with Phase 1.5 lesson learned)
-- DEVELOPMENT_PATTERNS_V1.15.md (added Pattern 13: Test Coverage Quality, Patterns 26-28: Resource Cleanup, Dependency Injection, CI-Safe Stress Testing)
+- DEVELOPMENT_PATTERNS_V1.16.md (added Pattern 13: Test Coverage Quality, Patterns 26-28: Resource Cleanup, Dependency Injection, CI-Safe Stress Testing)
 - PHASE_1.5_TEST_PLAN_V1.0.md (test planning for manager components)
 
 **Development Guides:**
@@ -12199,10 +12205,10 @@ tests/
 ### References
 
 **Documentation:**
-- `docs/foundation/TESTING_STRATEGY_V3.3.md` (comprehensive 8 test type framework)
+- `docs/foundation/TESTING_STRATEGY_V3.4.md` (comprehensive 8 test type framework)
 - `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md` (REQ-TEST-012 through REQ-TEST-019)
 - `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md` (TDD section with Phase 1.5 lessons)
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.15.md` (Pattern 13: Test Coverage Quality, Patterns 26-28)
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.16.md` (Pattern 13: Test Coverage Quality, Patterns 26-28)
 
 **Code:**
 - `tests/conftest.py` (db_pool, clean_test_data fixtures)
@@ -12248,7 +12254,7 @@ Decision to use Python's standard logging library with structlog for structured 
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** pyproject.toml, TESTING_STRATEGY_V3.3.md
+**Documented in:** pyproject.toml, TESTING_STRATEGY_V3.4.md
 
 Decision to use pytest as the primary testing framework with coverage, async support, and HTML reporting.
 
@@ -13175,7 +13181,7 @@ Result: Only enter when model confident AND market mispriced
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Comprehensive architectural analysis
 - `docs/guides/VERSIONING_GUIDE_V1.0.md` - Strategy/model versioning patterns
-- `MASTER_REQUIREMENTS_V2.19.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
+- `MASTER_REQUIREMENTS_V2.20.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -13595,7 +13601,7 @@ def validate_position_trade_attribution(position_id: str) -> bool:
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Attribution architecture analysis with tradeoffs
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` - Current schema (pre-attribution)
-- `MASTER_REQUIREMENTS_V2.19.md` - REQ-DB-006 (Decimal precision for all financial fields)
+- `MASTER_REQUIREMENTS_V2.20.md` - REQ-DB-006 (Decimal precision for all financial fields)
 
 **Status:** ✅ Decision approved, implementation in progress (Migrations 019-020 planned)
 
@@ -13970,7 +13976,7 @@ def sync_trades_full():
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Trade source tracking architectural analysis
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` - Kalshi API trade download patterns
-- `MASTER_REQUIREMENTS_V2.19.md` - REQ-API-001 (Kalshi API Integration)
+- `MASTER_REQUIREMENTS_V2.20.md` - REQ-API-001 (Kalshi API Integration)
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -14350,7 +14356,7 @@ def test_invalid_strategy_type_raises_foreign_key_error():
 - `src/precog/database/lookup_helpers.py` - Helper functions implementation
 - `tests/test_lookup_tables.py` - Comprehensive test suite (23 tests, 100% coverage)
 - `src/precog/database/migrations/migration_023_create_lookup_tables.py` - Migration script
-- `MASTER_REQUIREMENTS_V2.19.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
+- `MASTER_REQUIREMENTS_V2.20.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
 
 **Status:** ✅ Decision approved, implementation complete (Migration 023 applied, helper module created, 23 tests passing)
 
@@ -15077,6 +15083,120 @@ def migrate_to_timescaledb(conn):
 
 ---
 
+## Decision #99/ADR-099: skipif vs xfail(run=False) for CI Stress Tests (Issue #168)
+
+**Date:** December 6, 2025
+**Phase:** 1.9 (Test Infrastructure & Process Hardening)
+**Status:** ✅ Complete (Implemented)
+
+### Problem
+
+Stress tests using `ThreadPoolExecutor`, `threading.Barrier()`, or sustained concurrency loops hang indefinitely in CI environments due to:
+
+1. **Resource constraints**: CI runners have limited CPU/memory causing thread scheduling delays
+2. **pytest-timeout limitations**: `--timeout-method=thread` cannot interrupt blocking Python threads (SIGALRM only works on main thread)
+3. **ThreadPoolExecutor deadlocks**: `as_completed()` blocks on Future objects that never complete when worker threads are starved
+
+**Observed behavior**: Tests pass locally in ~2-5 seconds but hang for 5+ hours in GitHub Actions, eventually killed by workflow timeout.
+
+### Decision
+
+**Use `pytest.mark.skipif(_is_ci, reason=...)` instead of `pytest.mark.xfail(run=False, reason=...)`.**
+
+```python
+# CI environment detection
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+_CI_SKIP_REASON = (
+    "Stress tests skip in CI - they can hang in resource-constrained environments. "
+    "Run locally: pytest tests/stress/ -v"
+)
+
+# Preferred approach: skipif (SKIPPED output)
+pytestmark = [
+    pytest.mark.stress,
+    pytest.mark.slow,
+    pytest.mark.skipif(_is_ci, reason=_CI_SKIP_REASON),
+]
+```
+
+### Rationale
+
+**Semantic accuracy:**
+
+| Approach | pytest Output | Implied Meaning | Reality |
+|----------|--------------|-----------------|---------|
+| `xfail(run=False)` | XFAIL | "Test expected to fail" | Misleading - tests DON'T fail, they hang |
+| `skipif(_is_ci)` | SKIPPED | "Intentionally not run in this environment" | Accurate - clear intent |
+
+**Key insights:**
+
+1. **`xfail` implies defect**: "Expected failure" suggests something is broken. But these tests work perfectly - they just can't run in constrained CI environments.
+
+2. **`skipif` communicates intent**: "Skipped" clearly indicates a deliberate choice not to run in certain environments, not a known bug.
+
+3. **CI output clarity**: Seeing "27 SKIPPED" is clearer than "27 XFAIL" when reviewing CI logs.
+
+4. **Future flexibility**: If CI resources improve, we can remove the `skipif` without semantic confusion.
+
+### Alternatives Considered
+
+1. **pytest-timeout with thread method**
+   - Rejected: Cannot interrupt blocking threads, only works for main thread via SIGALRM
+
+2. **xfail(run=False)**
+   - Rejected: Misleading semantics - suggests expected failure rather than intentional skip
+
+3. **Reduce concurrency in CI**
+   - Rejected: Would change test behavior, defeating purpose of stress testing
+
+4. **Conditional resource allocation**
+   - Rejected: Complex to implement, may not prevent all hangs
+
+### Implementation
+
+**Applied to:**
+- `tests/stress/test_config_loader_stress.py` (6 tests)
+- `tests/stress/test_logger_stress.py` (8 tests)
+- `tests/stress/test_connection_stress.py` (9 tests)
+
+**Pattern:**
+```python
+# At module level
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+
+pytestmark = [
+    pytest.mark.stress,
+    pytest.mark.slow,
+    pytest.mark.skipif(_is_ci, reason=_CI_SKIP_REASON),
+]
+```
+
+**CI behavior:**
+```
+tests/stress/test_config_loader_stress.py::TestConfigLoaderConcurrency::test_concurrent_config_reads SKIPPED
+tests/stress/test_config_loader_stress.py::TestConfigLoaderConcurrency::test_concurrent_different_config_reads SKIPPED
+# ... 23 tests total skipped in CI
+```
+
+**Local behavior:**
+```bash
+# Run all stress tests locally (Docker required for DB tests)
+pytest tests/stress/ -v
+
+# Run only non-DB stress tests locally (no Docker needed)
+pytest tests/stress/test_config_loader_stress.py tests/stress/test_logger_stress.py -v
+```
+
+### Related Artifacts
+
+- **Issue:** #168 (Testcontainers for Database Stress Tests)
+- **Pattern:** Pattern 28 in DEVELOPMENT_PATTERNS_V1.16.md
+- **Testing Strategy:** TESTING_STRATEGY_V3.4.md Section 5.3.4 (Stress Tests CI Behavior)
+- **Isolation Patterns:** TEST_ISOLATION_PATTERNS_V1.1.md Pattern 6 (CI-Safe ThreadPoolExecutor)
+- **Requirement:** REQ-TEST-020 (CI-Safe Stress Testing)
+
+---
+
 ## Approval & Sign-off
 
 This document represents the architectural decisions as of October 22, 2025 (Phase 0.5 completion with standardization).
@@ -15087,9 +15207,10 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.24
-**Last Updated:** December 3, 2025
+**Document Version:** 2.26
+**Last Updated:** December 6, 2025
 **Critical Changes:**
+- v2.26: **CI-SAFE STRESS TEST MARKERS (ISSUE #168)** - Added Decision #99/ADR-099 (skipif vs xfail(run=False) for CI Stress Tests): `skipif(_is_ci)` preferred over `xfail(run=False)` for clearer semantic meaning (SKIPPED vs XFAIL)
 - v2.24: **TIMESCALEDB DECISION (PHASE 6+)** - Added Decision #98/ADR-098 (TimescaleDB Deferred to Phase 6+): Current PostgreSQL + SCD Type 2 sufficient for Phase 1-5, triggers defined for re-evaluation
 - v2.21: **WORKFLOW ENFORCEMENT ARCHITECTURE** - Added Decisions #94-97/ADR-094-307 (YAML-Driven Validation, Auto-Discovery Pattern, Parallel Execution in Git Hooks, Tier-Specific Coverage Targets - Phase 1.5)
 - v2.20: **LOOKUP TABLES FOR BUSINESS ENUMS** - Added Decision #93/ADR-093 (Lookup Tables for Business Enums - Phase 1.5)
@@ -15112,4 +15233,4 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 **For complete ADR catalog, see:** ADR_INDEX_V1.4.md
 
-**END OF ARCHITECTURE DECISIONS V2.24**
+**END OF ARCHITECTURE DECISIONS V2.26**

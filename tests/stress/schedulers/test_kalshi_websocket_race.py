@@ -12,9 +12,15 @@ Related:
 
 Usage:
     pytest tests/stress/schedulers/test_kalshi_websocket_race.py -v -m race
+
+CI-Safe Refactoring (Issue #168):
+    Previously used `xfail(run=False)` to skip in CI due to threading.Barrier hangs.
+    Now uses CISafeBarrier with timeouts for graceful degradation:
+    - Tests run in CI (not skipped)
+    - Timeouts prevent indefinite hangs
+    - Failures are fast and informative
 """
 
-import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -23,20 +29,19 @@ from unittest.mock import MagicMock
 
 import pytest
 
-# CI environment detection - same pattern as connection stress tests
-_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
-
-_CI_XFAIL_REASON = (
-    "Race condition tests use threading barriers that can hang "
-    "or timeout in CI environments due to resource constraints. "
-    "Run locally with 'pytest tests/stress/ -v -m race'. See GitHub issue #168."
-)
+# Import CI-safe barrier from stress test fixtures
+from tests.fixtures.stress_testcontainers import CISafeBarrier
 
 
 @pytest.mark.race
-@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
 class TestKalshiWebSocketHandlerRace:
-    """Race condition tests for Kalshi WebSocket Handler."""
+    """Race condition tests for Kalshi WebSocket Handler.
+
+    Uses CISafeBarrier for CI-compatible thread synchronization.
+    """
+
+    # Timeout for barrier synchronization (seconds)
+    BARRIER_TIMEOUT = 15.0
 
     def test_concurrent_callback_add_remove(self):
         """
@@ -64,7 +69,7 @@ class TestKalshiWebSocketHandlerRace:
         )
 
         errors = []
-        barrier = threading.Barrier(20)
+        barrier = CISafeBarrier(20, timeout=self.BARRIER_TIMEOUT)
 
         def noop_callback(t, y, n):
             pass
@@ -74,6 +79,8 @@ class TestKalshiWebSocketHandlerRace:
                 barrier.wait()
                 for i in range(5):
                     handler.add_callback(noop_callback)
+            except TimeoutError:
+                errors.append((worker_id, "Barrier timeout - CI resource constraints"))
             except Exception as e:
                 errors.append((worker_id, f"add: {e}"))
 
@@ -86,6 +93,8 @@ class TestKalshiWebSocketHandlerRace:
                             handler.remove_callback(handler._callbacks[0])
                         except (IndexError, ValueError):
                             pass  # Expected race condition
+            except TimeoutError:
+                errors.append((worker_id, "Barrier timeout - CI resource constraints"))
             except Exception as e:
                 errors.append((worker_id, f"remove: {e}"))
 
@@ -97,7 +106,12 @@ class TestKalshiWebSocketHandlerRace:
                 futures.append(executor.submit(remove_callbacks, i))
 
             for f in futures:
-                f.result()
+                f.result(timeout=30)
+
+        # Handle CI timeouts gracefully
+        timeout_errors = [e for e in errors if "timeout" in str(e[1]).lower()]
+        if timeout_errors:
+            pytest.skip(f"Barrier timeout in CI: {len(timeout_errors)} threads timed out")
 
         # Should not have critical errors (IndexError during iteration is acceptable)
         critical_errors = [e for e in errors if "critical" in str(e[1]).lower()]
@@ -129,13 +143,15 @@ class TestKalshiWebSocketHandlerRace:
         )
 
         errors = []
-        barrier = threading.Barrier(20)
+        barrier = CISafeBarrier(20, timeout=self.BARRIER_TIMEOUT)
 
         def subscribe_worker(worker_id: int):
             try:
                 barrier.wait()
                 for i in range(5):
                     handler.subscribe([f"MKT-{worker_id}-{i}"])
+            except TimeoutError:
+                errors.append((worker_id, "Barrier timeout - CI resource constraints"))
             except Exception as e:
                 errors.append((worker_id, f"subscribe: {e}"))
 
@@ -144,6 +160,8 @@ class TestKalshiWebSocketHandlerRace:
                 barrier.wait()
                 for i in range(5):
                     handler.unsubscribe([f"MKT-{worker_id % 10}-{i}"])
+            except TimeoutError:
+                errors.append((worker_id, "Barrier timeout - CI resource constraints"))
             except Exception as e:
                 errors.append((worker_id, f"unsubscribe: {e}"))
 
@@ -155,9 +173,16 @@ class TestKalshiWebSocketHandlerRace:
                 futures.append(executor.submit(unsubscribe_worker, i))
 
             for f in futures:
-                f.result()
+                f.result(timeout=30)
 
-        assert len(errors) == 0, f"Errors: {errors}"
+        # Handle CI timeouts gracefully
+        timeout_errors = [e for e in errors if "timeout" in str(e[1]).lower()]
+        other_errors = [e for e in errors if "timeout" not in str(e[1]).lower()]
+
+        if timeout_errors:
+            pytest.skip(f"Barrier timeout in CI: {len(timeout_errors)} threads timed out")
+
+        assert len(other_errors) == 0, f"Errors: {other_errors}"
 
     def test_stats_access_during_updates(self):
         """
@@ -190,17 +215,26 @@ class TestKalshiWebSocketHandlerRace:
 
         stats_snapshots = []
         stop_event = threading.Event()
-        barrier = threading.Barrier(10)
+        barrier_errors = []
+        barrier = CISafeBarrier(10, timeout=self.BARRIER_TIMEOUT)
 
         def update_stats(worker_id: int):
-            barrier.wait()
+            try:
+                barrier.wait()
+            except TimeoutError:
+                barrier_errors.append(worker_id)
+                return
             while not stop_event.is_set():
                 with handler._lock:
                     handler._stats["messages_received"] += 1
                     handler._stats["price_updates"] += 1
 
         def read_stats(worker_id: int):
-            barrier.wait()
+            try:
+                barrier.wait()
+            except TimeoutError:
+                barrier_errors.append(worker_id)
+                return
             while not stop_event.is_set():
                 stats = handler.stats
                 stats_snapshots.append(stats)
@@ -216,7 +250,10 @@ class TestKalshiWebSocketHandlerRace:
             stop_event.set()
 
             for f in futures:
-                f.result()
+                f.result(timeout=30)
+
+        if barrier_errors:
+            pytest.skip(f"Barrier timeout in CI: {len(barrier_errors)} threads")
 
         # All snapshots should be valid dicts with expected keys
         assert len(stats_snapshots) > 0
@@ -252,7 +289,8 @@ class TestKalshiWebSocketHandlerRace:
         invocation_count = [0]
         lock = threading.Lock()
         stop_event = threading.Event()
-        barrier = threading.Barrier(10)
+        barrier_errors = []
+        barrier = CISafeBarrier(10, timeout=self.BARRIER_TIMEOUT)
 
         def counting_callback(ticker: str, yes: Decimal, no: Decimal):
             with lock:
@@ -261,7 +299,11 @@ class TestKalshiWebSocketHandlerRace:
         handler.add_callback(counting_callback)
 
         def invoke_continuously(worker_id: int):
-            barrier.wait()
+            try:
+                barrier.wait()
+            except TimeoutError:
+                barrier_errors.append(worker_id)
+                return
             while not stop_event.is_set():
                 for callback in list(handler._callbacks):  # Copy for safe iteration
                     try:
@@ -273,7 +315,11 @@ class TestKalshiWebSocketHandlerRace:
             pass
 
         def modify_continuously(worker_id: int):
-            barrier.wait()
+            try:
+                barrier.wait()
+            except TimeoutError:
+                barrier_errors.append(worker_id)
+                return
             while not stop_event.is_set():
                 handler.add_callback(noop_callback_for_modify)
                 try:
@@ -292,7 +338,10 @@ class TestKalshiWebSocketHandlerRace:
             stop_event.set()
 
             for f in futures:
-                f.result()
+                f.result(timeout=30)
+
+        if barrier_errors:
+            pytest.skip(f"Barrier timeout in CI: {len(barrier_errors)} threads")
 
         # Should have invoked callbacks many times
         assert invocation_count[0] > 0

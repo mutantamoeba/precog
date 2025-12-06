@@ -22,14 +22,22 @@ Run with:
 
 References:
     - Issue #126: Stress tests for infrastructure
+    - Issue #168: CI-safe stress testing
     - REQ-TEST-012: Test types taxonomy (Stress tests)
+    - Pattern 28: CI-Safe Stress Testing (DEVELOPMENT_PATTERNS_V1.15.md)
     - src/precog/config/config_loader.py
 
 Phase: 4 (Stress Testing Infrastructure)
-GitHub Issue: #126
+GitHub Issue: #126, #168
+
+CI Strategy (Issue #168):
+    Stress tests skip in CI to prevent timeouts and resource exhaustion.
+    These tests use ThreadPoolExecutor which can hang in resource-constrained
+    CI environments. Run locally for best results.
 """
 
 import gc
+import os
 import tempfile
 import threading
 import time
@@ -39,10 +47,18 @@ from pathlib import Path
 import pytest
 import yaml
 
+# CI environment detection - skip stress tests in CI
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+_CI_SKIP_REASON = (
+    "Stress tests skip in CI - they can hang in resource-constrained environments. "
+    "Run locally: pytest tests/stress/test_config_loader_stress.py -v"
+)
+
 # Mark all tests as stress tests (slow) - they test actual implementation
 pytestmark = [
     pytest.mark.stress,
     pytest.mark.slow,
+    pytest.mark.skipif(_is_ci, reason=_CI_SKIP_REASON),
 ]
 
 

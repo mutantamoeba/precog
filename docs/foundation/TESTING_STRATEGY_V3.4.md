@@ -1,15 +1,21 @@
-# Testing Strategy V3.3
+# Testing Strategy V3.4
 
 **Document Type:** Foundation
 **Status:** ✅ Active
-**Version:** 3.3
+**Version:** 3.4
 **Created:** 2025-10-23
-**Last Updated:** 2025-11-30
+**Last Updated:** 2025-12-06
+**Changes in V3.4:**
+- **CI-Safe Stress Testing (Issue #168)** - Added CI behavior documentation to Stress Tests and Race Condition Tests sections
+- **skipif pattern:** Stress tests use `pytest.mark.skipif(_is_ci)` to skip in CI (prevents ThreadPoolExecutor/threading.Barrier hangs)
+- **Root causes documented:** ThreadPoolExecutor deadlocks, threading barrier timeouts, pytest-timeout SIGALRM limitations
+- **Local-only testing:** Stress tests run locally with adequate resources; CI runs functional tests only
+- **Reference:** Pattern 28 (DEVELOPMENT_PATTERNS_V1.16.md), Issue #168, ADR-057 (testcontainers)
 **Changes in V3.3:**
 - **Test Isolation Patterns Section (NEW)** - Added comprehensive test isolation requirements based on Phase 1.9 findings
 - **5 Isolation Patterns Documented** - Transaction-based isolation, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2 isolation
 - **Root Cause Analysis** - Documents why 12+ tests failed in Phase 1.9 (DB state contamination, FK violations, cleanup order issues)
-- **Cross-Reference** - Links to detailed TEST_ISOLATION_PATTERNS_V1.0.md in `/docs/testing/`
+- **Cross-Reference** - Links to detailed TEST_ISOLATION_PATTERNS_V1.1.md in `/docs/testing/`
 - **Updated TOC** - Added Section 9.5: Test Isolation Patterns
 **Changes in V3.2:**
 - **All 8 Test Types Now MANDATORY** - All modules must have all 8 test types regardless of phase
@@ -786,7 +792,42 @@ pytest -m stress
 
 **Coverage Target:** ≥80% (infrastructure tier)
 
-**Reference:** REQ-TEST-016 (Stress Test Requirements)
+**⚠️ CI Behavior (Pattern 28, Issue #168):**
+
+Stress tests using `ThreadPoolExecutor`, `threading.Barrier()`, or sustained loops **skip in CI** to prevent hangs:
+
+```python
+# All stress tests include this module-level marker:
+import os
+import pytest
+
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+_CI_SKIP_REASON = (
+    "Stress tests skip in CI - they can hang in resource-constrained environments. "
+    "Run locally: pytest tests/stress/ -v -m stress"
+)
+
+# Module-level pytestmark applies to ALL tests in file
+pytestmark = [
+    pytest.mark.stress,
+    pytest.mark.slow,
+    pytest.mark.skipif(_is_ci, reason=_CI_SKIP_REASON),
+]
+```
+
+**Why Skip in CI?**
+- **ThreadPoolExecutor + as_completed():** Concurrent futures can deadlock with unpredictable thread scheduling
+- **Threading barriers:** `Barrier(20).wait()` requires all threads to arrive - CI delays cause timeouts
+- **pytest-timeout limitations:** `--timeout-method=thread` cannot interrupt blocking Python threads
+- **Resource constraints:** CI runners have 2 vCPUs vs 8+ cores locally - fundamentally different behavior
+
+**Run Locally:**
+```bash
+# Stress tests run normally on local machines with adequate resources
+pytest tests/stress/ -v -m stress
+```
+
+**Reference:** REQ-TEST-016 (Stress Test Requirements), Pattern 28 (DEVELOPMENT_PATTERNS_V1.16.md), Issue #168
 
 ---
 
@@ -873,6 +914,23 @@ pytest -m race -v
 - Testing lock implementations
 
 **Coverage Target:** ≥85% (business logic tier)
+
+**⚠️ CI Behavior (Pattern 28, Issue #168):**
+
+Race condition tests use similar threading patterns to stress tests and **skip in CI**:
+
+```python
+# Race condition tests include skipif marker
+pytestmark = [
+    pytest.mark.race,
+    pytest.mark.skipif(_is_ci, reason=_CI_SKIP_REASON),
+]
+```
+
+**Run Locally:**
+```bash
+pytest -m race -v
+```
 
 ---
 
@@ -1630,7 +1688,7 @@ def test_strategy_manager(db_pool, db_cursor, clean_test_data):
 
 **Added in V3.3** - Based on Phase 1.9 findings where 12+ tests failed due to database state contamination.
 
-**Full Documentation:** See `docs/testing/TEST_ISOLATION_PATTERNS_V1.0.md` for comprehensive patterns and code examples.
+**Full Documentation:** See `docs/testing/TEST_ISOLATION_PATTERNS_V1.1.md` for comprehensive patterns and code examples.
 
 ### Why Test Isolation Matters (Phase 1.9 Lessons)
 
@@ -1698,7 +1756,7 @@ game_states → events → series → platforms
 
 ### Cross-References
 
-- **Full Documentation:** `docs/testing/TEST_ISOLATION_PATTERNS_V1.0.md`
+- **Full Documentation:** `docs/testing/TEST_ISOLATION_PATTERNS_V1.1.md`
 - **Related Requirements:** REQ-TEST-014 (Integration tests use real infrastructure)
 - **Related ADRs:** ADR-018/019/020 (Dual Versioning), ADR-076 (Testing Strategy)
 - **Implementation:** `tests/conftest.py` (fixtures to be updated in Phase 1.9 Part B)
@@ -2750,9 +2808,9 @@ pytest --cov=module tests/unit/test_new_feature.py
 - **Fixtures:** `tests/conftest.py` - Shared fixtures (db_pool, db_cursor, clean_test_data REQUIRED)
 - **Factories:** `tests/fixtures/factories.py` - Test data factories
 - **Scripts:** `scripts/test_*.sh`, `scripts/validate_*.sh` - Execution scripts
-- **Requirements:** `docs/foundation/MASTER_REQUIREMENTS_V2.19.md` - REQ-TEST-012 through REQ-TEST-019
-- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.25.md` - ADR-074, ADR-076 (Test Type Categories)
-- **Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.15.md` - Pattern 13 (Test Coverage Quality), Pattern 26 (Resource Cleanup), Pattern 27 (Dependency Injection), Pattern 28 (CI-Safe Stress Testing)
+- **Requirements:** `docs/foundation/MASTER_REQUIREMENTS_V2.20.md` - REQ-TEST-012 through REQ-TEST-019
+- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.26.md` - ADR-074, ADR-076 (Test Type Categories)
+- **Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.16.md` - Pattern 13 (Test Coverage Quality), Pattern 26 (Resource Cleanup), Pattern 27 (Dependency Injection), Pattern 28 (CI-Safe Stress Testing)
 - **Root Cause Analysis:** `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Phase 1.5 TDD failure lessons learned
 - **Validation:** `docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Overall quality infrastructure
 

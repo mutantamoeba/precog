@@ -1,16 +1,16 @@
 # Requirement Index
 
 ---
-<<<<<<<< Updated upstream:docs/foundation/REQUIREMENT_INDEX_V1.11.md
-**Version:** 1.11
-**Last Updated:** 2025-11-28
+**Version:** 1.12
+**Last Updated:** 2025-12-06
 **Status:** ✅ Current
 **Purpose:** Master index of all system requirements with systematic IDs
-========
-**Version:** 1.11
-**Last Updated:** 2025-11-28
-**Status:** ✅ Current
-**Purpose:** Master index of all system requirements with systematic IDs
+**Changes in v1.12:**
+- **REQ-TEST-020 ADDED**: CI-Safe Stress Test Requirements (Issue #168)
+- **PROBLEM**: Stress tests using ThreadPoolExecutor hang indefinitely in CI
+- **SOLUTION**: Use `skipif(_is_ci)` to skip stress tests in resource-constrained CI environments
+- **CROSS-REFS**: ADR-099 (skipif vs xfail decision), Pattern 28 (DEVELOPMENT_PATTERNS_V1.16)
+- Updated MASTER_REQUIREMENTS reference to V2.20
 **Changes in v1.11:**
 - **REQ-SEC-009 COMPLETION**: Marked Sensitive Data Masking in Logs as ✅ Complete
 - **IMPLEMENTATION DETAILS**: Added structlog processor `mask_sensitive_data()` in logger.py
@@ -20,7 +20,6 @@
   - GDPR/PCI-DSS compliance achieved
 - **TEST VALIDATION**: 9 tests in tests/security/test_credential_masking.py (all passing)
 - Updated requirement statistics (27 → 28 requirements complete)
->>>>>>>> Stashed changes:docs/foundation/REQUIREMENT_INDEX_V1.11.md
 **Changes in v1.10:**
 - **PHASE 1 COMPLETION UPDATE**: Marked 12 implemented requirements as ✅ Complete
 - **API REQUIREMENTS**: REQ-API-001, REQ-API-002, REQ-API-005, REQ-API-006 → ✅ (Kalshi client, auth, rate limiting, error handling implemented)
@@ -195,11 +194,11 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-DATA-001 | Game State Data Collection (SCD Type 2 Versioning) | 2 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.19 |
-| REQ-DATA-002 | Venue Data Management (Normalized Table) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.19 |
-| REQ-DATA-003 | Multi-Sport Support (6 Leagues) | 2 | Critical | 🟡 | MASTER_REQUIREMENTS_V2.19 |
-| REQ-DATA-004 | Team Rankings Storage (Temporal Validity) | 2 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.19 |
-| REQ-DATA-005 | JSONB Situation Data (Sport-Specific Fields) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.19 |
+| REQ-DATA-001 | Game State Data Collection (SCD Type 2 Versioning) | 2 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.20 |
+| REQ-DATA-002 | Venue Data Management (Normalized Table) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.20 |
+| REQ-DATA-003 | Multi-Sport Support (6 Leagues) | 2 | Critical | 🟡 | MASTER_REQUIREMENTS_V2.20 |
+| REQ-DATA-004 | Team Rankings Storage (Temporal Validity) | 2 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.20 |
+| REQ-DATA-005 | JSONB Situation Data (Sport-Specific Fields) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.20 |
 
 **Details:**
 
@@ -442,6 +441,7 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-TEST-017 | Integration Test Requirements | 1.5+ | Critical | 🔵 | MASTER_REQUIREMENTS_V2.16 |
 | REQ-TEST-018 | Property-Based Test Requirements | 1+ | Critical | ✅ | MASTER_REQUIREMENTS_V2.16 |
 | REQ-TEST-019 | End-to-End Test Requirements | 2+ | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
+| REQ-TEST-020 | CI-Safe Stress Test Requirements | 1.9 | High | ✅ | MASTER_REQUIREMENTS_V2.20 |
 
 ---
 
@@ -455,12 +455,12 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-VALIDATION-004 | YAML Configuration Validation | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.12 |
 | REQ-VALIDATION-005 | CODE_REVIEW_TEMPLATE Automated Enforcement | 0.7c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
 | REQ-VALIDATION-006 | SECURITY_REVIEW_CHECKLIST Automated Enforcement | 0.7c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
-| REQ-VALIDATION-007 | SCD Type 2 Query Validation (Pattern 2) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.19 |
-| REQ-VALIDATION-008 | Property-Based Test Coverage (Pattern 10) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.19 |
-| REQ-VALIDATION-009 | Real Test Fixtures Enforcement (Pattern 13) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.19 |
-| REQ-VALIDATION-010 | Phase Start Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.19 |
-| REQ-VALIDATION-011 | Phase Completion Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.19 |
-| REQ-VALIDATION-012 | Configuration Synchronization (Pattern 8) | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.19 |
+| REQ-VALIDATION-007 | SCD Type 2 Query Validation (Pattern 2) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.20 |
+| REQ-VALIDATION-008 | Property-Based Test Coverage (Pattern 10) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.20 |
+| REQ-VALIDATION-009 | Real Test Fixtures Enforcement (Pattern 13) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.20 |
+| REQ-VALIDATION-010 | Phase Start Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.20 |
+| REQ-VALIDATION-011 | Phase Completion Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.20 |
+| REQ-VALIDATION-012 | Configuration Synchronization (Pattern 8) | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.20 |
 
 **Summary:** Phase 0.6c implemented automated code quality and documentation validation. Phase 0.7c added CODE_REVIEW_TEMPLATE and SECURITY_REVIEW_CHECKLIST enforcement via pre-commit/pre-push hooks. Phase 1 adds YAML configuration validation with 4-level checks (syntax, Decimal type safety, required keys, cross-file consistency). Phase 1.5 adds comprehensive workflow enforcement infrastructure: SCD Type 2 query validation (Pattern 2), property-based test coverage enforcement (Pattern 10), real test fixtures validation (Pattern 13), phase start/completion protocol automation (3-step and 10-step assessments), and configuration synchronization checks (Pattern 8).
 
@@ -725,9 +725,9 @@ This document provides a systematic index of all Precog requirements using categ
 
 ---
 
-**Document Version:** 1.11
-**Last Updated:** 2025-11-28
+**Document Version:** 1.12
+**Last Updated:** 2025-12-06
 **Created:** 2025-10-21
 **Purpose:** Systematic requirement tracking and traceability
 
-**END OF REQUIREMENT INDEX**
+**END OF REQUIREMENT INDEX V1.12**

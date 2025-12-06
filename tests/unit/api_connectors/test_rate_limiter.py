@@ -49,18 +49,26 @@ class TestTokenBucket:
         assert bucket.tokens == 90.0
 
     def test_acquire_fails_when_insufficient_tokens_nonblocking(self):
-        """Test non-blocking acquire fails when insufficient tokens."""
-        bucket = TokenBucket(capacity=10, refill_rate=1.0)
+        """Test non-blocking acquire fails when insufficient tokens.
+
+        Educational Note:
+            Uses low refill rate (0.01 tokens/sec) to prevent timing sensitivity.
+            With 1.0 tokens/sec, even 30ms delay between operations would add
+            0.03 tokens, failing the 0.01 tolerance. 0.01 tokens/sec means
+            even 1 second delay only adds 0.01 tokens.
+        """
+        # Low refill rate prevents timing sensitivity in tests
+        bucket = TokenBucket(capacity=10, refill_rate=0.01)
 
         # Consume all tokens
         bucket.acquire(tokens=10, block=False)
-        assert bucket.tokens == pytest.approx(0.0, abs=0.01)
+        assert bucket.tokens == pytest.approx(0.0, abs=0.05)  # Allow timing tolerance
 
         # Try to acquire more (should fail)
         result = bucket.acquire(tokens=1, block=False)
 
         assert result is False
-        assert bucket.tokens == pytest.approx(0.0, abs=0.01)  # No change
+        assert bucket.tokens == pytest.approx(0.0, abs=0.05)  # Allow small refill
 
     def test_acquire_exceeding_capacity_raises_error(self):
         """Test requesting more tokens than capacity raises ValueError."""

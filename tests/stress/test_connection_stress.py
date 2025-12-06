@@ -15,71 +15,89 @@ Educational Note:
     - Production load patterns differ from unit tests
 
 Prerequisites:
-    - PostgreSQL database available
-    - DATABASE_URL or individual DB env vars configured
+    - Docker available (for testcontainers)
+    - OR local PostgreSQL database
 
 Run with:
     pytest tests/stress/test_connection_stress.py -v -m stress
 
 References:
     - Issue #126: Stress tests for infrastructure
+    - Issue #168: Testcontainers for database stress tests
     - REQ-TEST-012: Test types taxonomy (Stress tests)
+    - Pattern 28: CI-Safe Stress Testing (DEVELOPMENT_PATTERNS_V1.15.md)
     - src/precog/database/connection.py
 
 Phase: 4 (Stress Testing Infrastructure)
-GitHub Issue: #126
+GitHub Issue: #126, #168
 
-CI Skip Reason (Phase 1.9 Investigation):
-    These tests hang in CI because they create 50+ concurrent connections competing
-    for the shared PostgreSQL service container's limited connection pool. The tests
-    require testcontainers for proper database isolation where each test gets its own
-    PostgreSQL instance. See GitHub issue #168 for testcontainers implementation.
+Testcontainers Integration (Issue #168):
+    These tests now use testcontainers to provide isolated PostgreSQL instances.
+    Each test class gets a fresh database container, preventing connection pool
+    exhaustion issues that occurred with shared CI database services.
 
-    The tests run successfully locally where developers have dedicated database resources.
+    Benefits:
+    - Complete isolation between tests
+    - No shared connection pool contention
+    - Works consistently in CI and locally
+    - Each test starts with fresh connection pool
 """
 
 import gc
-import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import pytest
 
-from precog.database.connection import test_connection as verify_db_connection
+# Import stress testcontainers fixtures
+from tests.fixtures.stress_testcontainers import (
+    DOCKER_AVAILABLE,
+    SKIP_DB_STRESS_IN_CI,
+    stress_db_connection,
+    stress_postgres_container,
+)
+
+# Re-export fixtures for pytest discovery
+__all__ = ["stress_db_connection", "stress_postgres_container"]
 
 # Skip if database not available
 # Note: database marker is registered in pyproject.toml
 pytestmark = [pytest.mark.stress, pytest.mark.slow, pytest.mark.database]
 
-# CI environment detection - same pattern as ESPN VCR tests
-# Tests run locally but xfail in CI where shared database causes hangs
-_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
 
-_CI_XFAIL_REASON = (
-    "Stress tests require testcontainers for proper database isolation. "
-    "These tests hang in CI with shared PostgreSQL due to connection pool exhaustion. "
-    "Run locally with 'pytest tests/stress/ -v -m stress'. See GitHub issue #168."
+# Skip reasons for database stress tests
+_DOCKER_SKIP_REASON = (
+    "Docker not available - stress tests require testcontainers. "
+    "Start Docker Desktop to run stress tests locally."
+)
+_CI_SKIP_REASON = (
+    "Database stress tests skip in CI - they require isolated testcontainers with "
+    "configurable max_connections. The shared CI PostgreSQL service has limited "
+    "connection pools that these tests would overwhelm. Run locally with Docker."
 )
 
-
-@pytest.fixture(scope="module", autouse=True)
-def skip_if_no_database():
-    """Skip all tests in this module if database is not available."""
-    if not verify_db_connection():
-        pytest.skip("Database not available")
+# Combined skip condition: Skip if Docker not available OR if running in CI
+_SKIP_DB_STRESS = not DOCKER_AVAILABLE or SKIP_DB_STRESS_IN_CI
+_SKIP_REASON = _CI_SKIP_REASON if SKIP_DB_STRESS_IN_CI else _DOCKER_SKIP_REASON
 
 
-@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestConnectionPoolExhaustion:
-    """Stress tests for connection pool behavior under exhaustion."""
+    """Stress tests for connection pool behavior under exhaustion.
 
-    def test_pool_handles_many_concurrent_connections(self):
+    Uses testcontainers for isolated PostgreSQL instance per test class.
+    """
+
+    def test_pool_handles_many_concurrent_connections(self, stress_postgres_container):
         """Test pool handles 50 concurrent connection requests.
 
         Educational Note:
             Connection pools have limited capacity. This test verifies
             the pool can handle high concurrency without failure.
+
+        Args:
+            stress_postgres_container: Function-scoped PostgreSQL container
         """
         from precog.database.connection import get_cursor
 
@@ -111,12 +129,15 @@ class TestConnectionPoolExhaustion:
             f"Too many failures: {results['failure']}/{num_connections}"
         )
 
-    def test_pool_queues_when_exhausted(self):
+    def test_pool_queues_when_exhausted(self, stress_postgres_container):
         """Test connections queue when pool is exhausted.
 
         Educational Note:
             When all pool connections are in use, new requests should
             queue and wait rather than failing immediately.
+
+        Args:
+            stress_postgres_container: Function-scoped PostgreSQL container
         """
         from precog.database.connection import get_cursor
 
@@ -151,11 +172,14 @@ class TestConnectionPoolExhaustion:
         assert results["queued_success"] == 1 or wait_time > 0.1
 
 
-@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestConnectionRapidCycles:
-    """Stress tests for rapid connection/disconnection cycles."""
+    """Stress tests for rapid connection/disconnection cycles.
 
-    def test_rapid_connect_disconnect_cycles(self):
+    Uses testcontainers for isolated PostgreSQL instance per test class.
+    """
+
+    def test_rapid_connect_disconnect_cycles(self, stress_postgres_container):
         """Test 1000 rapid connection cycles.
 
         Educational Note:
@@ -163,6 +187,9 @@ class TestConnectionRapidCycles:
             - Connection cleanup correctness
             - Resource leak on disconnect
             - Pool reclamation speed
+
+        Args:
+            stress_postgres_container: Function-scoped PostgreSQL container
         """
         from precog.database.connection import get_cursor
 
@@ -180,12 +207,15 @@ class TestConnectionRapidCycles:
         # All cycles should succeed
         assert success_count == num_cycles, f"Only {success_count}/{num_cycles} cycles succeeded"
 
-    def test_interleaved_connect_disconnect(self):
+    def test_interleaved_connect_disconnect(self, stress_postgres_container):
         """Test interleaved connect/disconnect patterns.
 
         Educational Note:
             Real applications often have overlapping connections.
             This pattern tests pool management under overlap.
+
+        Args:
+            stress_postgres_container: Function-scoped PostgreSQL container
         """
         from precog.database.connection import get_cursor
 
@@ -214,16 +244,22 @@ class TestConnectionRapidCycles:
             assert result is not None
 
 
-@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestConcurrentQueryExecution:
-    """Stress tests for concurrent query execution."""
+    """Stress tests for concurrent query execution.
 
-    def test_concurrent_read_queries(self):
+    Uses testcontainers for isolated PostgreSQL instance per test class.
+    """
+
+    def test_concurrent_read_queries(self, stress_postgres_container):
         """Test 50 concurrent read queries.
 
         Educational Note:
             Read queries should never interfere with each other.
             This tests for query isolation and result correctness.
+
+        Args:
+            stress_postgres_container: Function-scoped PostgreSQL container
         """
         from precog.database.connection import fetch_one
 
@@ -245,12 +281,15 @@ class TestConcurrentQueryExecution:
         for query_id, result in results:
             assert result == query_id, f"Query {query_id} returned {result}"
 
-    def test_concurrent_mixed_operations(self):
+    def test_concurrent_mixed_operations(self, stress_postgres_container):
         """Test concurrent reads and writes.
 
         Educational Note:
             Mixed read/write workloads are common in production.
             This tests transaction isolation.
+
+        Args:
+            stress_postgres_container: Function-scoped PostgreSQL container
         """
         from precog.database.connection import execute_query, fetch_all, get_cursor
 
@@ -306,17 +345,23 @@ class TestConcurrentQueryExecution:
             execute_query("DROP TABLE IF EXISTS _stress_test_table")
 
 
-@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestConnectionLeakDetection:
-    """Stress tests for connection leak detection."""
+    """Stress tests for connection leak detection.
 
-    def test_no_connection_leak_on_exception(self):
+    Uses testcontainers for isolated PostgreSQL instance per test class.
+    """
+
+    def test_no_connection_leak_on_exception(self, stress_postgres_container):
         """Test connections are returned to pool even on exception.
 
         Educational Note:
             Connection leaks often occur when exceptions happen
             inside a connection context. The context manager must
             ensure cleanup in all cases.
+
+        Args:
+            stress_postgres_container: Function-scoped PostgreSQL container
         """
         from precog.database.connection import get_cursor
 
@@ -335,12 +380,15 @@ class TestConnectionLeakDetection:
             result = cursor.fetchone()
             assert result is not None
 
-    def test_connection_count_stable_over_time(self):
+    def test_connection_count_stable_over_time(self, stress_postgres_container):
         """Test connection count doesn't grow over time.
 
         Educational Note:
             A stable connection count indicates no leaks.
             Growth over time indicates connections aren't being returned.
+
+        Args:
+            stress_postgres_container: Function-scoped PostgreSQL container
         """
         from precog.database.connection import get_cursor
 
@@ -360,16 +408,22 @@ class TestConnectionLeakDetection:
             assert result is not None
 
 
-@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestConnectionTimeout:
-    """Stress tests for connection timeout scenarios."""
+    """Stress tests for connection timeout scenarios.
 
-    def test_handles_slow_queries_gracefully(self):
+    Uses testcontainers for isolated PostgreSQL instance per test class.
+    """
+
+    def test_handles_slow_queries_gracefully(self, stress_postgres_container):
         """Test system handles slow queries without deadlock.
 
         Educational Note:
             Slow queries shouldn't block other operations.
             This tests for proper timeout handling.
+
+        Args:
+            stress_postgres_container: Function-scoped PostgreSQL container
         """
         from precog.database.connection import fetch_one, get_cursor
 
