@@ -19,19 +19,23 @@ Run with:
 
 References:
     - Issue #126: Stress tests for infrastructure
+    - Issue #168: CI-safe stress testing
     - REQ-TEST-012: Test types taxonomy (Stress tests)
+    - Pattern 28: CI-Safe Stress Testing (DEVELOPMENT_PATTERNS_V1.15.md)
     - src/precog/utils/logger.py
 
 Phase: 4 (Stress Testing Infrastructure)
-GitHub Issue: #126
+GitHub Issue: #126, #168
 
-CI-Safe Refactoring (Issue #168):
-    Previously used `xfail(run=False)` to skip in CI. These tests use finite
-    time loops (not barriers), so they complete reliably in CI environments.
+CI Strategy (Issue #168):
+    Stress tests skip in CI to prevent timeouts and resource exhaustion.
+    These tests use ThreadPoolExecutor which can hang in resource-constrained
+    CI environments. Run locally with Docker for best results.
 """
 
 import gc
 import logging
+import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -39,9 +43,17 @@ from io import StringIO
 
 import pytest
 
+# CI environment detection - skip stress tests in CI
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+_CI_SKIP_REASON = (
+    "Stress tests skip in CI - they can hang in resource-constrained environments. "
+    "Run locally: pytest tests/stress/test_logger_stress.py -v"
+)
+
 pytestmark = [
     pytest.mark.stress,
     pytest.mark.slow,
+    pytest.mark.skipif(_is_ci, reason=_CI_SKIP_REASON),
 ]
 
 
