@@ -14,12 +14,14 @@
 - The Problem: CI resource constraints cause threading barriers to timeout and time-based loops to exceed limits
 - The Solution: Use `@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)` to skip execution in CI
 - Critical insight: `run=False` prevents test body execution entirely (not just marking expected failures)
+- **⚠️ Clarified as TEMPORARY workaround**: xfail is temporary while testcontainers is implemented; ultimate goal is 100% test pass rate with NO xfails
+- Transition Plan: Phase 1.9 (xfail) -> Phase 2.0+ (testcontainers) -> Remove xfails (all tests pass)
 - Test Type Classification: Stress/race tests need xfail, chaos tests run normally, e2e tests use conditional skips
 - CI environment detection pattern: `os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"`
 - Local execution encouraged: Run stress tests locally with `pytest tests/stress/ -v -m stress`
 - Real-world trigger: PR #167 had CI jobs timing out at 10+ minutes due to stress test hangs
 - Cross-references: Pattern 21 (Validation-First), Pattern 13 (Test Coverage), PR #167, GitHub issue #168
-- Total addition: ~300 lines documenting CI-safe stress testing pattern
+- Total addition: ~330 lines documenting CI-safe stress testing pattern with temporary workaround clarification
 **Changes in V1.14:**
 - **Added Pattern 26: Resource Cleanup for Testability (close() Methods) (ALWAYS)**
 - Mandates explicit close() methods on all classes managing external resources (HTTP sessions, database connections)
@@ -6999,6 +7001,32 @@ class TestRateLimitingStress:
 | `run=True` (default) | Runs test, marks as xfail if it fails | Flaky tests, known issues being fixed |
 
 **Always use `run=False` for stress tests** - they would hang CI, not just fail.
+
+### ⚠️ Important: This is a TEMPORARY Workaround
+
+**Current Status:** `xfail(run=False)` is a temporary solution while testcontainers is being implemented.
+
+**Long-Term Goal:** ALL tests should pass in CI with NO xfails or skips.
+
+| Timeline | Solution | Status |
+|----------|----------|--------|
+| **Now** | `xfail(run=False)` | ✅ In use - prevents CI hangs |
+| **Phase 2.0+** | Testcontainers | 🔵 Planned - proper resource isolation |
+| **Ultimate Goal** | All tests pass | 🎯 100% pass rate, no xfails |
+
+**Why Testcontainers Will Enable Full CI Execution:**
+1. **Resource Isolation:** Each test gets dedicated containers with guaranteed resources
+2. **No Threading Issues:** Containers provide predictable CPU/memory allocation
+3. **Parallel Execution:** Tests can run concurrently without resource contention
+4. **Identical Environments:** CI and local environments match exactly
+
+**Tracking:** See GitHub issue #168 for testcontainers implementation progress.
+
+**Transition Plan:**
+1. ✅ **Phase 1.9:** Add `xfail(run=False)` to prevent CI hangs (COMPLETE)
+2. 🔵 **Phase 2.0+:** Implement testcontainers for stress tests
+3. 🔵 **After testcontainers:** Remove `xfail` markers, run all tests in CI
+4. 🎯 **Goal:** 100% test pass rate with full stress test coverage
 
 ### Test Type CI Behavior Classification
 
