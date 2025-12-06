@@ -33,14 +33,43 @@ import time
 import pytest
 import requests
 
+
+def _real_kalshi_credentials_available() -> bool:
+    """Check if REAL Kalshi credentials are available for E2E tests.
+
+    Returns False if:
+    - DEV_KALSHI_* credentials are not set AND
+    - TEST_KALSHI_* credentials are fake (from conftest.py)
+
+    Educational Note:
+        conftest.py sets PRECOG_ENV=test and provides fake TEST_KALSHI_* credentials
+        for unit/integration tests. E2E tests must detect these fake credentials
+        and skip, because E2E tests need REAL credentials to talk to the real API.
+    """
+    # Check DEV credentials first (preferred for local E2E testing)
+    dev_api_key = os.getenv("DEV_KALSHI_API_KEY")
+    dev_key_path = os.getenv("DEV_KALSHI_PRIVATE_KEY_PATH")
+    if dev_api_key and dev_key_path:
+        return True
+
+    # Check TEST credentials (but reject fake ones from conftest.py)
+    test_api_key = os.getenv("TEST_KALSHI_API_KEY")
+    test_key_path = os.getenv("TEST_KALSHI_PRIVATE_KEY_PATH")
+    if test_api_key and test_key_path:
+        # Reject fake credentials from conftest.py
+        return test_api_key != "test-key-id-for-ci-vcr-tests"
+
+    return False
+
+
 # Skip entire module if credentials not available
 # Uses DEV_KALSHI_* environment variables (demo/sandbox API)
 pytestmark = [
     pytest.mark.e2e,
     pytest.mark.api,
     pytest.mark.skipif(
-        not os.getenv("DEV_KALSHI_API_KEY") or not os.getenv("DEV_KALSHI_PRIVATE_KEY_PATH"),
-        reason="Kalshi dev credentials not configured in .env (DEV_KALSHI_API_KEY, DEV_KALSHI_PRIVATE_KEY_PATH)",
+        not _real_kalshi_credentials_available(),
+        reason="Real Kalshi credentials not configured in .env (DEV_KALSHI_API_KEY/DEV_KALSHI_PRIVATE_KEY_PATH). Fake test credentials from conftest.py won't work for E2E tests.",
     ),
 ]
 

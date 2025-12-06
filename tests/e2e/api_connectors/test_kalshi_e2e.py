@@ -40,11 +40,21 @@ import requests
 
 
 def _kalshi_credentials_available() -> bool:
-    """Check if Kalshi credentials are available for current environment.
+    """Check if REAL Kalshi credentials are available for current environment.
 
     Uses DATABASE_ENVIRONMENT_STRATEGY naming convention:
     - PRECOG_ENV=test -> TEST_KALSHI_API_KEY / TEST_KALSHI_PRIVATE_KEY_PATH
     - PRECOG_ENV=dev (default) -> DEV_KALSHI_API_KEY / DEV_KALSHI_PRIVATE_KEY_PATH
+
+    Returns False if:
+    - Credentials are not set
+    - Credentials are the fake test credentials from conftest.py
+      (test-key-id-for-ci-vcr-tests is set by conftest for unit/integration tests)
+
+    Educational Note:
+        conftest.py sets PRECOG_ENV=test and provides fake TEST_KALSHI_* credentials
+        for unit/integration tests. E2E tests must detect these fake credentials
+        and skip, because E2E tests need REAL credentials to talk to the real API.
     """
     precog_env = os.getenv("PRECOG_ENV", "dev").upper()
     valid_prefixes = {"DEV", "TEST", "STAGING"}
@@ -53,7 +63,13 @@ def _kalshi_credentials_available() -> bool:
     api_key = os.getenv(f"{prefix}_KALSHI_API_KEY")
     key_path = os.getenv(f"{prefix}_KALSHI_PRIVATE_KEY_PATH")
 
-    return bool(api_key and key_path)
+    # Check if credentials exist
+    if not (api_key and key_path):
+        return False
+
+    # Check if credentials are the fake ones from conftest.py
+    # conftest.py sets TEST_KALSHI_API_KEY="test-key-id-for-ci-vcr-tests"
+    return api_key != "test-key-id-for-ci-vcr-tests"
 
 
 # Skip entire module if credentials not available

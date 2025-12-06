@@ -324,7 +324,9 @@ jobs:
           PYTHONUNBUFFERED: "1"
         run: |
           echo "=== Starting stress tests at $(date) ==="
-          python -m pytest tests/stress/ -v --tb=short --timeout=60 -p no:cacheprovider
+          # Use --timeout-method=thread because stress tests use threading/ThreadPoolExecutor
+          # SIGALRM (default on Linux) can't interrupt threads, thread method can
+          python -m pytest tests/stress/ -v --tb=short --timeout=60 --timeout-method=thread -p no:cacheprovider
           echo "=== Stress tests complete at $(date) ==="
 
       - name: Run chaos tests
