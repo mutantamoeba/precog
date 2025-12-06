@@ -95,6 +95,13 @@ except ImportError:
 # CI environment detection
 _is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
 
+# Database stress tests should skip in CI because:
+# 1. CI uses a shared PostgreSQL service container (not isolated testcontainers)
+# 2. Connection pool limits are shared across all test types
+# 3. Stress tests need isolated containers with configurable max_connections
+# Non-database stress tests (logger, config) can run in CI since they don't need isolation.
+SKIP_DB_STRESS_IN_CI = _is_ci
+
 
 def _apply_minimal_schema(connection: psycopg2.extensions.connection) -> None:
     """
@@ -512,6 +519,7 @@ def with_timeout(timeout_seconds: float = 30.0) -> Callable[[F], F]:
 # Re-export for easy importing
 __all__ = [
     "DOCKER_AVAILABLE",
+    "SKIP_DB_STRESS_IN_CI",
     "TESTCONTAINERS_AVAILABLE",
     "CISafeBarrier",
     "_is_ci",

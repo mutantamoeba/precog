@@ -47,6 +47,7 @@ from precog.database.crud_operations import (
 # Import stress testcontainers fixtures
 from tests.fixtures.stress_testcontainers import (
     DOCKER_AVAILABLE,
+    SKIP_DB_STRESS_IN_CI,
     CISafeBarrier,
     _is_ci,
     stress_db_connection,
@@ -56,11 +57,20 @@ from tests.fixtures.stress_testcontainers import (
 # Re-export fixtures for pytest discovery
 __all__ = ["stress_db_connection", "stress_postgres_container"]
 
-# Skip reason for when Docker is not available
+# Skip reasons for database stress tests
 _DOCKER_SKIP_REASON = (
     "Docker not available - stress tests require testcontainers. "
     "Start Docker Desktop to run stress tests locally."
 )
+_CI_SKIP_REASON = (
+    "Database stress tests skip in CI - they require isolated testcontainers with "
+    "configurable max_connections. The shared CI PostgreSQL service has limited "
+    "connection pools that these tests would overwhelm. Run locally with Docker."
+)
+
+# Combined skip condition: Skip if Docker not available OR if running in CI
+_SKIP_DB_STRESS = not DOCKER_AVAILABLE or SKIP_DB_STRESS_IN_CI
+_SKIP_REASON = _CI_SKIP_REASON if SKIP_DB_STRESS_IN_CI else _DOCKER_SKIP_REASON
 
 # CI-aware iteration counts - reduce scale in CI for faster completion
 # CI environments have limited resources and stricter timeouts
@@ -125,7 +135,7 @@ def setup_stress_teams(stress_postgres_container):
 
 
 @pytest.mark.stress
-@pytest.mark.skipif(not DOCKER_AVAILABLE, reason=_DOCKER_SKIP_REASON)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestHighVolumeVenueOperations:
     """Stress tests for venue CRUD under high load.
 
@@ -217,7 +227,7 @@ class TestHighVolumeVenueOperations:
 
 
 @pytest.mark.stress
-@pytest.mark.skipif(not DOCKER_AVAILABLE, reason=_DOCKER_SKIP_REASON)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestHighVolumeGameStateOperations:
     """Stress tests for game state CRUD under high load.
 
@@ -356,7 +366,7 @@ class TestHighVolumeGameStateOperations:
 
 
 @pytest.mark.race
-@pytest.mark.skipif(not DOCKER_AVAILABLE, reason=_DOCKER_SKIP_REASON)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestSCDType2RaceConditions:
     """Race condition tests for SCD Type 2 concurrent updates.
 
@@ -532,7 +542,7 @@ class TestSCDType2RaceConditions:
 
 
 @pytest.mark.chaos
-@pytest.mark.skipif(not DOCKER_AVAILABLE, reason=_DOCKER_SKIP_REASON)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestDatabaseFailureRecovery:
     """Chaos tests for database failure scenarios.
 

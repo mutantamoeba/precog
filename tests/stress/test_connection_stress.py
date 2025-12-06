@@ -53,6 +53,7 @@ import pytest
 # Import stress testcontainers fixtures
 from tests.fixtures.stress_testcontainers import (
     DOCKER_AVAILABLE,
+    SKIP_DB_STRESS_IN_CI,
     stress_db_connection,
     stress_postgres_container,
 )
@@ -65,14 +66,23 @@ __all__ = ["stress_db_connection", "stress_postgres_container"]
 pytestmark = [pytest.mark.stress, pytest.mark.slow, pytest.mark.database]
 
 
-# Skip reason for when Docker is not available
+# Skip reasons for database stress tests
 _DOCKER_SKIP_REASON = (
     "Docker not available - stress tests require testcontainers. "
     "Start Docker Desktop to run stress tests locally."
 )
+_CI_SKIP_REASON = (
+    "Database stress tests skip in CI - they require isolated testcontainers with "
+    "configurable max_connections. The shared CI PostgreSQL service has limited "
+    "connection pools that these tests would overwhelm. Run locally with Docker."
+)
+
+# Combined skip condition: Skip if Docker not available OR if running in CI
+_SKIP_DB_STRESS = not DOCKER_AVAILABLE or SKIP_DB_STRESS_IN_CI
+_SKIP_REASON = _CI_SKIP_REASON if SKIP_DB_STRESS_IN_CI else _DOCKER_SKIP_REASON
 
 
-@pytest.mark.skipif(not DOCKER_AVAILABLE, reason=_DOCKER_SKIP_REASON)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestConnectionPoolExhaustion:
     """Stress tests for connection pool behavior under exhaustion.
 
@@ -162,7 +172,7 @@ class TestConnectionPoolExhaustion:
         assert results["queued_success"] == 1 or wait_time > 0.1
 
 
-@pytest.mark.skipif(not DOCKER_AVAILABLE, reason=_DOCKER_SKIP_REASON)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestConnectionRapidCycles:
     """Stress tests for rapid connection/disconnection cycles.
 
@@ -234,7 +244,7 @@ class TestConnectionRapidCycles:
             assert result is not None
 
 
-@pytest.mark.skipif(not DOCKER_AVAILABLE, reason=_DOCKER_SKIP_REASON)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestConcurrentQueryExecution:
     """Stress tests for concurrent query execution.
 
@@ -335,7 +345,7 @@ class TestConcurrentQueryExecution:
             execute_query("DROP TABLE IF EXISTS _stress_test_table")
 
 
-@pytest.mark.skipif(not DOCKER_AVAILABLE, reason=_DOCKER_SKIP_REASON)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestConnectionLeakDetection:
     """Stress tests for connection leak detection.
 
@@ -398,7 +408,7 @@ class TestConnectionLeakDetection:
             assert result is not None
 
 
-@pytest.mark.skipif(not DOCKER_AVAILABLE, reason=_DOCKER_SKIP_REASON)
+@pytest.mark.skipif(_SKIP_DB_STRESS, reason=_SKIP_REASON)
 class TestConnectionTimeout:
     """Stress tests for connection timeout scenarios.
 
