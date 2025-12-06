@@ -12,20 +12,22 @@ Related:
 - Pattern 2: Dual Versioning System (SCD Type 2)
 
 Usage:
-    pytest tests/stress/test_phase2c_crud_stress.py -v -m stress
-    pytest tests/stress/test_phase2c_crud_stress.py -v -m race
-    pytest tests/stress/test_phase2c_crud_stress.py -v -m chaos
+    pytest tests/stress/test_crud_operations_stress.py -v -m stress
+    pytest tests/stress/test_crud_operations_stress.py -v -m race
+    pytest tests/stress/test_crud_operations_stress.py -v -m chaos
 
-CI Skip Reason (Phase 1.9 Investigation):
-    These tests hang in CI because they create 50+ concurrent connections competing
-    for the shared PostgreSQL service container's limited connection pool. The tests
-    require testcontainers for proper database isolation where each test gets its own
-    PostgreSQL instance. See GitHub issue #168 for testcontainers implementation.
+Testcontainers Integration (Issue #168):
+    These tests now use testcontainers to provide isolated PostgreSQL instances.
+    Each test class gets a fresh database container with full schema, preventing
+    connection pool exhaustion issues that occurred with shared CI database services.
 
-    The tests run successfully locally where developers have dedicated database resources.
+    Benefits:
+    - Complete isolation between tests
+    - Full database schema with all tables and constraints
+    - No shared connection pool contention
+    - Works consistently in CI and locally
 """
 
-import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -42,14 +44,20 @@ from precog.database.crud_operations import (
     upsert_game_state,
 )
 
-# CI environment detection - same pattern as test_connection_stress.py
-# Tests run locally but xfail in CI where shared database causes hangs
-_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+# Import stress testcontainers fixtures
+from tests.fixtures.stress_testcontainers import (
+    DOCKER_AVAILABLE,
+    stress_db_connection,
+    stress_postgres_container,
+)
 
-_CI_XFAIL_REASON = (
-    "Stress tests require testcontainers for proper database isolation. "
-    "These tests hang in CI with shared PostgreSQL due to connection pool exhaustion. "
-    "Run locally with 'pytest tests/stress/ -v -m stress'. See GitHub issue #168."
+# Re-export fixtures for pytest discovery
+__all__ = ["stress_db_connection", "stress_postgres_container"]
+
+# Skip reason for when Docker is not available
+_DOCKER_SKIP_REASON = (
+    "Docker not available - stress tests require testcontainers. "
+    "Start Docker Desktop to run stress tests locally."
 )
 
 # =============================================================================
@@ -97,11 +105,16 @@ def setup_stress_teams(db_pool, clean_test_data):
 
 
 @pytest.mark.stress
-@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
+@pytest.mark.skipif(not DOCKER_AVAILABLE, reason=_DOCKER_SKIP_REASON)
 class TestHighVolumeVenueOperations:
-    """Stress tests for venue CRUD under high load."""
+    """Stress tests for venue CRUD under high load.
 
-    def test_create_100_venues_sequentially(self, db_pool, clean_test_data):
+    Uses testcontainers for isolated PostgreSQL instance per test class.
+    """
+
+    def test_create_100_venues_sequentially(
+        self, stress_postgres_container, db_pool, clean_test_data
+    ):
         """
         STRESS: Create 100 venues sequentially.
 
@@ -131,7 +144,7 @@ class TestHighVolumeVenueOperations:
         # Should complete in reasonable time (<10s for 100 inserts)
         assert elapsed < 10.0, f"100 inserts took {elapsed:.2f}s (too slow)"
 
-    def test_concurrent_venue_upserts(self, db_pool, clean_test_data):
+    def test_concurrent_venue_upserts(self, stress_postgres_container, db_pool, clean_test_data):
         """
         STRESS: 50 concurrent upserts on same ESPN venue ID.
 
@@ -178,15 +191,16 @@ class TestHighVolumeVenueOperations:
 
 
 @pytest.mark.stress
-@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
+@pytest.mark.skipif(not DOCKER_AVAILABLE, reason=_DOCKER_SKIP_REASON)
 class TestHighVolumeGameStateOperations:
-    """Stress tests for game state CRUD under high load."""
+    """Stress tests for game state CRUD under high load.
 
-    @pytest.mark.xfail(
-        reason="Stress tests require testcontainers for proper database isolation - "
-        "FK constraints cause fixture conflicts when running with shared database"
-    )
-    def test_rapid_game_state_updates(self, db_pool, clean_test_data, setup_stress_teams):
+    Uses testcontainers for isolated PostgreSQL instance per test class.
+    """
+
+    def test_rapid_game_state_updates(
+        self, stress_postgres_container, db_pool, clean_test_data, setup_stress_teams
+    ):
         """
         STRESS: 50 rapid sequential updates to single game state.
 
@@ -235,11 +249,9 @@ class TestHighVolumeGameStateOperations:
         # Should complete in reasonable time (<20s for 50 updates)
         assert elapsed < 20.0, f"50 updates took {elapsed:.2f}s (too slow)"
 
-    @pytest.mark.xfail(
-        reason="Stress tests require testcontainers for proper database isolation - "
-        "FK constraints cause fixture conflicts when running with shared database"
-    )
-    def test_parallel_updates_different_games(self, db_pool, clean_test_data, setup_stress_teams):
+    def test_parallel_updates_different_games(
+        self, stress_postgres_container, db_pool, clean_test_data, setup_stress_teams
+    ):
         """
         STRESS: 10 parallel threads updating 10 different games simultaneously.
 
@@ -311,15 +323,16 @@ class TestHighVolumeGameStateOperations:
 
 
 @pytest.mark.race
-@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
+@pytest.mark.skipif(not DOCKER_AVAILABLE, reason=_DOCKER_SKIP_REASON)
 class TestSCDType2RaceConditions:
-    """Race condition tests for SCD Type 2 concurrent updates."""
+    """Race condition tests for SCD Type 2 concurrent updates.
 
-    @pytest.mark.xfail(
-        reason="Race condition tests require testcontainers for proper database isolation - "
-        "FK constraints cause fixture conflicts when running with shared database"
-    )
-    def test_concurrent_upsert_same_game_state(self, db_pool, clean_test_data, setup_stress_teams):
+    Uses testcontainers for isolated PostgreSQL instance per test class.
+    """
+
+    def test_concurrent_upsert_same_game_state(
+        self, stress_postgres_container, db_pool, clean_test_data, setup_stress_teams
+    ):
         """
         RACE: Two threads update the same game simultaneously.
 
@@ -402,7 +415,9 @@ class TestSCDType2RaceConditions:
             f"(expected exactly 1). Errors: {results['errors']}"
         )
 
-    def test_read_during_write_consistency(self, db_pool, clean_test_data, setup_stress_teams):
+    def test_read_during_write_consistency(
+        self, stress_postgres_container, db_pool, clean_test_data, setup_stress_teams
+    ):
         """
         RACE: Read operations during concurrent writes.
 
@@ -487,11 +502,16 @@ class TestSCDType2RaceConditions:
 
 
 @pytest.mark.chaos
-@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
+@pytest.mark.skipif(not DOCKER_AVAILABLE, reason=_DOCKER_SKIP_REASON)
 class TestDatabaseFailureRecovery:
-    """Chaos tests for database failure scenarios."""
+    """Chaos tests for database failure scenarios.
 
-    def test_transaction_rollback_on_error(self, db_pool, clean_test_data, setup_stress_teams):
+    Uses testcontainers for isolated PostgreSQL instance per test class.
+    """
+
+    def test_transaction_rollback_on_error(
+        self, stress_postgres_container, db_pool, clean_test_data, setup_stress_teams
+    ):
         """
         CHAOS: Simulate error during game state update.
 
@@ -537,7 +557,9 @@ class TestDatabaseFailureRecovery:
         assert after_error["home_score"] == 7, "State changed despite error"
         assert after_error["home_team_id"] == teams[0], "Team changed despite error"
 
-    def test_recovery_after_connection_interrupt(self, db_pool, clean_test_data):
+    def test_recovery_after_connection_interrupt(
+        self, stress_postgres_container, db_pool, clean_test_data
+    ):
         """
         CHAOS: Test behavior when database connection is interrupted.
 
@@ -567,11 +589,9 @@ class TestDatabaseFailureRecovery:
         updated = get_venue_by_espn_id("CHAOS-VENUE-001")
         assert updated["venue_name"] == "Updated After Recovery"
 
-    @pytest.mark.xfail(
-        reason="Chaos tests require testcontainers for proper database isolation - "
-        "FK constraints cause fixture conflicts when running with shared database"
-    )
-    def test_data_integrity_under_system_stress(self, db_pool, clean_test_data, setup_stress_teams):
+    def test_data_integrity_under_system_stress(
+        self, stress_postgres_container, db_pool, clean_test_data, setup_stress_teams
+    ):
         """
         CHAOS: Combined stress + failure scenario.
 
