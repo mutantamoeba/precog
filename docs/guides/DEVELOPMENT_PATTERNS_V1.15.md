@@ -1,13 +1,27 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.14
+**Version:** 1.15
 **Created:** 2025-11-13
-**Last Updated:** 2025-12-02
+**Last Updated:** 2025-12-05
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.15:**
+- **Added Pattern 28: CI-Safe Stress Testing - xfail(run=False) for Threading-Based Tests (ALWAYS)**
+- Documents critical pattern from PR #167: Stress tests using `threading.Barrier()` or sustained loops can hang indefinitely in CI
+- The Problem: CI resource constraints cause threading barriers to timeout and time-based loops to exceed limits
+- The Solution: Use `@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)` to skip execution in CI
+- Critical insight: `run=False` prevents test body execution entirely (not just marking expected failures)
+- **⚠️ Clarified as TEMPORARY workaround**: xfail is temporary while testcontainers is implemented; ultimate goal is 100% test pass rate with NO xfails
+- Transition Plan: Phase 1.9 (xfail) -> Phase 2.0+ (testcontainers) -> Remove xfails (all tests pass)
+- Test Type Classification: Stress/race tests need xfail, chaos tests run normally, e2e tests use conditional skips
+- CI environment detection pattern: `os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"`
+- Local execution encouraged: Run stress tests locally with `pytest tests/stress/ -v -m stress`
+- Real-world trigger: PR #167 had CI jobs timing out at 10+ minutes due to stress test hangs
+- Cross-references: Pattern 21 (Validation-First), Pattern 13 (Test Coverage), PR #167, GitHub issue #168
+- Total addition: ~330 lines documenting CI-safe stress testing pattern with temporary workaround clarification
 **Changes in V1.14:**
 - **Added Pattern 26: Resource Cleanup for Testability (close() Methods) (ALWAYS)**
 - Mandates explicit close() methods on all classes managing external resources (HTTP sessions, database connections)
@@ -6934,6 +6948,233 @@ client = KalshiClient(
 
 ---
 
+## Pattern 28: CI-Safe Stress Testing - xfail(run=False) for Threading-Based Tests (ALWAYS)
+
+### The Problem
+
+Stress tests using `threading.Barrier()`, sustained `time.perf_counter()` loops, or concurrent operations can **hang indefinitely** in CI environments due to resource constraints:
+
+```
+# CI Log showing timeout:
+FAILED tests/stress/api_connectors/test_kalshi_client_stress.py - TIMEOUT after 600s
+```
+
+**Root Causes:**
+1. **Threading Barriers:** `threading.Barrier(20).wait()` requires all 20 threads to reach the barrier. In CI with limited CPU, thread scheduling delays can exceed the default timeout.
+2. **Time-based Loops:** `while time.perf_counter() - start < 5.0:` loops may take 10x longer on resource-constrained CI runners.
+3. **VCR Cassettes with Large Responses:** YAML parsing of multi-KB API responses can hang in CI (discovered in PR #167).
+
+### The Solution
+
+Use `xfail(run=False)` to **skip execution entirely** in CI while allowing tests to run locally:
+
+```python
+import os
+import pytest
+
+# CI environment detection - standardized pattern
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+
+_CI_XFAIL_REASON = (
+    "Stress tests use threading barriers that can hang in CI due to resource "
+    "constraints. Run locally with 'pytest tests/stress/ -v -m stress'. "
+    "See GitHub issue #168."
+)
+
+@pytest.mark.stress
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
+class TestRateLimitingStress:
+    """Stress tests for rate limiting under high load."""
+
+    def test_concurrent_requests_tracked(self):
+        """Test 100 concurrent requests are properly tracked."""
+        # This test uses threading.Barrier - would hang in CI
+        barrier = threading.Barrier(100)
+        # ... test implementation ...
+```
+
+### Critical Insight: run=False vs run=True
+
+| Parameter | Behavior | Use Case |
+|-----------|----------|----------|
+| `run=False` | **Skips test body entirely** | Threading barriers, sustained loops (would hang) |
+| `run=True` (default) | Runs test, marks as xfail if it fails | Flaky tests, known issues being fixed |
+
+**Always use `run=False` for stress tests** - they would hang CI, not just fail.
+
+### ⚠️ Important: This is a TEMPORARY Workaround
+
+**Current Status:** `xfail(run=False)` is a temporary solution while testcontainers is being implemented.
+
+**Long-Term Goal:** ALL tests should pass in CI with NO xfails or skips.
+
+| Timeline | Solution | Status |
+|----------|----------|--------|
+| **Now** | `xfail(run=False)` | ✅ In use - prevents CI hangs |
+| **Phase 2.0+** | Testcontainers | 🔵 Planned - proper resource isolation |
+| **Ultimate Goal** | All tests pass | 🎯 100% pass rate, no xfails |
+
+**Why Testcontainers Will Enable Full CI Execution:**
+1. **Resource Isolation:** Each test gets dedicated containers with guaranteed resources
+2. **No Threading Issues:** Containers provide predictable CPU/memory allocation
+3. **Parallel Execution:** Tests can run concurrently without resource contention
+4. **Identical Environments:** CI and local environments match exactly
+
+**Tracking:** See GitHub issue #168 for testcontainers implementation progress.
+
+**Transition Plan:**
+1. ✅ **Phase 1.9:** Add `xfail(run=False)` to prevent CI hangs (COMPLETE)
+2. 🔵 **Phase 2.0+:** Implement testcontainers for stress tests
+3. 🔵 **After testcontainers:** Remove `xfail` markers, run all tests in CI
+4. 🎯 **Goal:** 100% test pass rate with full stress test coverage
+
+### Test Type CI Behavior Classification
+
+| Test Type | CI Behavior | Pattern | Reasoning |
+|-----------|-------------|---------|-----------|
+| **Stress tests** | `xfail(run=False)` | Threading barriers, sustained loops | Would hang CI indefinitely |
+| **Race condition tests** | `xfail(run=False)` | Same as stress | Same threading issues |
+| **Chaos tests** | **RUN NORMALLY** | Mock injection, fault simulation | No blocking operations |
+| **E2E tests** | Conditional skip | `skipif(not _has_live_data)` | Depends on external data |
+| **Integration tests** | **RUN NORMALLY** | Real database, mocked APIs | Fast, deterministic |
+| **Security tests** | **RUN NORMALLY** | Input validation, auth checks | Fast, critical |
+
+### Implementation Pattern
+
+**File Structure:**
+```
+tests/
+├── stress/
+│   ├── conftest.py              # Common stress test fixtures
+│   ├── api_connectors/
+│   │   ├── test_kalshi_client_stress.py  # @xfail(run=False)
+│   │   ├── test_kalshi_auth_race.py      # @xfail(run=False)
+│   │   └── test_espn_rate_limits.py      # @xfail(run=False)
+│   └── database/
+│       └── test_connection_stress.py     # @xfail(run=False)
+├── chaos/
+│   └── api_connectors/
+│       ├── test_kalshi_client_chaos.py   # RUN NORMALLY (no barriers)
+│       └── test_espn_client_chaos.py     # RUN NORMALLY
+└── e2e/
+    └── test_espn_api_e2e.py              # skipif(not _has_live_data)
+```
+
+**Common Module Pattern (DRY):**
+```python
+# tests/stress/conftest.py
+import os
+import pytest
+
+# Centralized CI detection
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+
+_CI_XFAIL_REASON = (
+    "Stress tests use threading barriers that can hang in CI. "
+    "Run locally: pytest tests/stress/ -v -m stress. See GitHub issue #168."
+)
+
+def mark_stress_test(test_class):
+    """Apply standard stress test markers."""
+    return pytest.mark.xfail(
+        condition=_is_ci,
+        reason=_CI_XFAIL_REASON,
+        run=False
+    )(pytest.mark.stress(test_class))
+```
+
+### Wrong vs. Correct
+
+```python
+# WRONG: Tests run in CI and hang
+@pytest.mark.stress
+class TestStress:
+    def test_concurrent(self):
+        barrier = threading.Barrier(50)
+        # ... hangs in CI for 10+ minutes ...
+
+# WRONG: xfail without run=False still executes
+@pytest.mark.stress
+@pytest.mark.xfail(condition=_is_ci, reason="CI unstable")  # run=True by default!
+class TestStress:
+    def test_concurrent(self):
+        barrier = threading.Barrier(50)
+        # ... STILL hangs because test body executes ...
+
+# CORRECT: xfail with run=False skips execution entirely
+@pytest.mark.stress
+@pytest.mark.xfail(condition=_is_ci, reason=_CI_XFAIL_REASON, run=False)
+class TestStress:
+    def test_concurrent(self):
+        barrier = threading.Barrier(50)
+        # ... skipped in CI, runs locally ...
+```
+
+### When to Use Each Pattern
+
+| Scenario | Pattern | Example |
+|----------|---------|---------|
+| Threading with barriers | `xfail(run=False)` | Race condition tests, concurrent access |
+| Time-based loops | `xfail(run=False)` | Performance benchmarks, sustained load |
+| Large VCR cassettes | `xfail(run=False)` | API responses >10KB YAML |
+| Mock injection | RUN NORMALLY | Chaos tests injecting failures |
+| External data dependency | `skipif(not condition)` | E2E tests needing live games |
+| Known flaky test | `xfail(run=True)` | Intermittent failures being investigated |
+
+### Local Execution
+
+**Run stress tests locally (where resources are adequate):**
+```bash
+# All stress tests
+pytest tests/stress/ -v -m stress
+
+# Specific stress test module
+pytest tests/stress/api_connectors/test_kalshi_client_stress.py -v
+
+# With timing
+pytest tests/stress/ -v --durations=10
+```
+
+### CI Workflow Integration
+
+**GitHub Actions shows xfailed tests as expected:**
+```yaml
+# .github/workflows/test.yml
+- name: Run Tests
+  run: |
+    # Stress tests will show as "xfailed" (expected), not failures
+    pytest tests/ -v --tb=short
+
+    # CI output will show:
+    # tests/stress/test_kalshi_stress.py::TestStress XFAIL (CI skip)
+    # tests/integration/test_crud.py::TestCRUD PASSED
+```
+
+### Cross-References
+
+**Related Patterns:**
+- **Pattern 21 (Validation-First Architecture):** Stress tests are part of comprehensive validation
+- **Pattern 13 (Test Coverage Quality):** Stress tests complement unit/integration tests
+- **Pattern 27 (Dependency Injection):** DI enables mocking in stress tests
+
+**Related Files:**
+- `tests/stress/api_connectors/test_kalshi_client_stress.py` - Rate limiter stress tests
+- `tests/stress/api_connectors/test_kalshi_auth_race.py` - Auth race condition tests
+- `tests/stress/api_connectors/test_espn_rate_limits.py` - ESPN rate limit stress tests
+- `tests/chaos/api_connectors/test_kalshi_client_chaos.py` - Chaos tests (run normally)
+
+**Related Issues/PRs:**
+- **PR #167:** Phase 1.9 Test Infrastructure - Added xfail markers to all stress tests
+- **GitHub Issue #168:** Stress test CI behavior tracking
+
+**Real-World Trigger:**
+- **Session 2025-12-05:** PR #167 CI jobs timing out after 10+ minutes
+- **Root cause:** Stress tests with `threading.Barrier(20)` and `time.perf_counter()` loops
+- **Solution:** Added `xfail(run=False)` to ALL stress tests (4 test files, 30+ tests)
+- **Result:** CI completes in ~3 minutes with all checks passing
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -6965,6 +7206,7 @@ client = KalshiClient(
 | **25. ANSI Escape Code Handling** | Code review + CI Windows matrix | `strip_ansi(result.stdout)` | Pattern 5, PR #159 |
 | **26. Resource Cleanup** | Code review | `git grep "def close" -- '*.py'` | Pattern 20, Phase 1.9 |
 | **27. Dependency Injection** | Code review | `git grep "= None" -- '*.py'` (constructor params) | Pattern 13, Phase 1.9 |
+| **28. CI-Safe Stress Testing** | pytest markers | `pytest tests/stress/ -v -m stress` (local) | Pattern 21, PR #167 |
 
 ---
 
