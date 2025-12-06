@@ -566,8 +566,11 @@ def ensure_test_private_key():
 
     # Set environment variables for KalshiClient credential lookup in CI
     # When PRECOG_ENV=test (CI default), KalshiClient looks for TEST_KALSHI_* vars
-    os.environ["TEST_KALSHI_API_KEY"] = "test-key-id-for-ci-vcr-tests"
-    os.environ["TEST_KALSHI_PRIVATE_KEY_PATH"] = str(test_key_path)
+    # Only set if not already configured (preserves real credentials for local e2e tests)
+    if not os.getenv("TEST_KALSHI_API_KEY"):
+        os.environ["TEST_KALSHI_API_KEY"] = "test-key-id-for-ci-vcr-tests"
+    if not os.getenv("TEST_KALSHI_PRIVATE_KEY_PATH"):
+        os.environ["TEST_KALSHI_PRIVATE_KEY_PATH"] = str(test_key_path)
 
     return test_key_path
 
