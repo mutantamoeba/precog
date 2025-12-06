@@ -743,9 +743,10 @@ def postgres_container() -> Generator[dict[str, str], None, None]:
         pytest.skip("testcontainers not installed - run: pip install testcontainers[postgres]")
 
     # Start PostgreSQL container
+    # NOTE: testcontainers 4.x uses 'username' instead of deprecated 'user'
     container = PostgresContainer(
         image="postgres:15",
-        user="test_user",
+        username="test_user",
         password="test_password",
         dbname="precog_test",
     )

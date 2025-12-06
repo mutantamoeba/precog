@@ -232,9 +232,10 @@ def _stress_postgres_container_session() -> Generator[dict[str, str], None, None
         pytest.skip("Docker not available - start Docker Desktop to run stress tests")
 
     # Start PostgreSQL container with higher connection limits
+    # NOTE: testcontainers 4.x uses 'username' instead of deprecated 'user'
     container = PostgresContainer(
         image="postgres:15",
-        user="stress_user",
+        username="stress_user",
         password="stress_password",
         dbname="stress_test_db",
     ).with_command(
