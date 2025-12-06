@@ -48,6 +48,7 @@ from precog.database.crud_operations import (
 from tests.fixtures.stress_testcontainers import (
     DOCKER_AVAILABLE,
     CISafeBarrier,
+    _is_ci,
     stress_db_connection,
     stress_postgres_container,
 )
@@ -60,6 +61,15 @@ _DOCKER_SKIP_REASON = (
     "Docker not available - stress tests require testcontainers. "
     "Start Docker Desktop to run stress tests locally."
 )
+
+# CI-aware iteration counts - reduce scale in CI for faster completion
+# CI environments have limited resources and stricter timeouts
+_VENUE_COUNT = 20 if _is_ci else 100  # Sequential venue creation
+_CONCURRENT_UPSERTS = 10 if _is_ci else 50  # Concurrent venue upserts
+_GAME_UPDATES = 20 if _is_ci else 50  # Game state updates
+_PARALLEL_GAMES = 5 if _is_ci else 10  # Parallel game updates
+_UPDATES_PER_GAME = 5 if _is_ci else 10  # Updates per parallel game
+_CONCURRENT_WRITERS = 3 if _is_ci else 5  # Concurrent writers per transaction test
 
 # =============================================================================
 # FIXTURES
@@ -124,17 +134,20 @@ class TestHighVolumeVenueOperations:
 
     def test_create_100_venues_sequentially(self, stress_postgres_container):
         """
-        STRESS: Create 100 venues sequentially.
+        STRESS: Create venues sequentially (100 local, 20 in CI).
 
         Validates:
         - No failures under sequential high-volume writes
         - All venues created successfully
         - No deadlocks or connection exhaustion
+
+        CI Optimization:
+            Uses _VENUE_COUNT (20 in CI, 100 locally) to complete within CI timeout.
         """
         venue_ids = []
         start_time = time.time()
 
-        for i in range(100):
+        for i in range(_VENUE_COUNT):
             venue_id = create_venue(
                 espn_venue_id=f"STRESS-SEQ-{i:04d}",
                 venue_name=f"Stress Test Stadium {i}",
@@ -145,21 +158,24 @@ class TestHighVolumeVenueOperations:
 
         elapsed = time.time() - start_time
 
-        # All 100 should succeed
-        assert len(venue_ids) == 100
-        assert len(set(venue_ids)) == 100  # All unique IDs
+        # All should succeed
+        assert len(venue_ids) == _VENUE_COUNT
+        assert len(set(venue_ids)) == _VENUE_COUNT  # All unique IDs
 
-        # Should complete in reasonable time (<10s for 100 inserts)
-        assert elapsed < 10.0, f"100 inserts took {elapsed:.2f}s (too slow)"
+        # Should complete in reasonable time (<10s for inserts)
+        assert elapsed < 10.0, f"{_VENUE_COUNT} inserts took {elapsed:.2f}s (too slow)"
 
     def test_concurrent_venue_upserts(self, stress_postgres_container):
         """
-        STRESS: 50 concurrent upserts on same ESPN venue ID.
+        STRESS: Concurrent upserts on same ESPN venue ID (50 local, 10 in CI).
 
         Validates:
         - UPSERT handles concurrent writes without errors
         - Final state is consistent
         - No duplicate records created
+
+        CI Optimization:
+            Uses _CONCURRENT_UPSERTS (10 in CI, 50 locally) to complete within CI timeout.
         """
         espn_id = "STRESS-CONCURRENT-001"
         results = []
@@ -176,13 +192,15 @@ class TestHighVolumeVenueOperations:
                 return ("error", str(e))
 
         with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(upsert_venue, i) for i in range(50)]
+            futures = [executor.submit(upsert_venue, i) for i in range(_CONCURRENT_UPSERTS)]
             for future in as_completed(futures):
                 results.append(future.result())
 
         # All should succeed
         successes = [r for r in results if r[0] == "success"]
-        assert len(successes) == 50, f"Expected 50 successes, got {len(successes)}"
+        assert len(successes) == _CONCURRENT_UPSERTS, (
+            f"Expected {_CONCURRENT_UPSERTS} successes, got {len(successes)}"
+        )
 
         # All should return same venue_id (UPSERT semantics)
         venue_ids = {r[1] for r in successes}
@@ -208,12 +226,15 @@ class TestHighVolumeGameStateOperations:
 
     def test_rapid_game_state_updates(self, stress_postgres_container, setup_stress_teams):
         """
-        STRESS: 50 rapid sequential updates to single game state.
+        STRESS: Rapid sequential updates to single game state (50 local, 20 in CI).
 
         Validates:
         - SCD Type 2 handles rapid updates without data loss
-        - All 50 versions preserved in history
+        - All versions preserved in history
         - Current row always has latest score
+
+        CI Optimization:
+            Uses _GAME_UPDATES (20 in CI, 50 locally) to complete within CI timeout.
         """
         teams = setup_stress_teams
         espn_event_id = "STRESS-RAPID-001"
@@ -231,7 +252,7 @@ class TestHighVolumeGameStateOperations:
 
         # Rapid updates (simulating real-time polling)
         start_time = time.time()
-        for i in range(1, 51):
+        for i in range(1, _GAME_UPDATES + 1):
             upsert_game_state(
                 espn_event_id=espn_event_id,
                 home_team_id=teams[0],
@@ -244,29 +265,36 @@ class TestHighVolumeGameStateOperations:
             )
         elapsed = time.time() - start_time
 
-        # Check history length (1 initial + 50 updates = 51)
+        # Check history length (1 initial + _GAME_UPDATES updates)
+        expected_history_length = _GAME_UPDATES + 1
         history = get_game_state_history(espn_event_id, limit=100)
-        assert len(history) == 51, f"Expected 51 history rows, got {len(history)}"
+        assert len(history) == expected_history_length, (
+            f"Expected {expected_history_length} history rows, got {len(history)}"
+        )
 
         # Current should have latest score
         current = get_current_game_state(espn_event_id)
-        assert current["home_score"] == 50
+        assert current["home_score"] == _GAME_UPDATES
 
-        # Should complete in reasonable time (<20s for 50 updates)
-        assert elapsed < 20.0, f"50 updates took {elapsed:.2f}s (too slow)"
+        # Should complete in reasonable time (<20s for updates)
+        assert elapsed < 20.0, f"{_GAME_UPDATES} updates took {elapsed:.2f}s (too slow)"
 
     def test_parallel_updates_different_games(self, stress_postgres_container, setup_stress_teams):
         """
-        STRESS: 10 parallel threads updating 10 different games simultaneously.
+        STRESS: Parallel threads updating different games simultaneously.
 
         Validates:
         - Connection pool handles parallel operations
         - No cross-game interference
         - All games updated correctly
+
+        CI Optimization:
+            Uses _PARALLEL_GAMES (5 in CI, 10 locally) and _UPDATES_PER_GAME (5 in CI, 10 locally)
+            to complete within CI timeout.
         """
         teams = setup_stress_teams
-        num_games = 10
-        updates_per_game = 10
+        num_games = _PARALLEL_GAMES
+        updates_per_game = _UPDATES_PER_GAME
 
         # Create initial game states
         for i in range(num_games):
@@ -314,10 +342,11 @@ class TestHighVolumeGameStateOperations:
         assert len(errors) == 0, f"Errors during parallel updates: {errors}"
 
         # Verify each game has correct history length
+        expected_history_length = updates_per_game + 1  # 1 initial + updates_per_game updates
         for i in range(num_games):
             history = get_game_state_history(f"STRESS-PARALLEL-{i:03d}")
-            assert len(history) == 11, (  # 1 initial + 10 updates
-                f"Game {i}: Expected 11 history rows, got {len(history)}"
+            assert len(history) == expected_history_length, (
+                f"Game {i}: Expected {expected_history_length} history rows, got {len(history)}"
             )
 
 

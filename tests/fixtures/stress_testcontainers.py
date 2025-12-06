@@ -514,6 +514,7 @@ __all__ = [
     "DOCKER_AVAILABLE",
     "TESTCONTAINERS_AVAILABLE",
     "CISafeBarrier",
+    "_is_ci",
     "_stress_postgres_container_session",
     "stress_db_connection",
     "stress_postgres_container",
