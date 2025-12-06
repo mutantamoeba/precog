@@ -47,6 +47,7 @@ from precog.database.crud_operations import (
 # Import stress testcontainers fixtures
 from tests.fixtures.stress_testcontainers import (
     DOCKER_AVAILABLE,
+    CISafeBarrier,
     stress_db_connection,
     stress_postgres_container,
 )
@@ -357,7 +358,8 @@ class TestSCDType2RaceConditions:
         )
 
         results = {"thread_a": None, "thread_b": None, "errors": []}
-        barrier = threading.Barrier(2)
+        # Use CISafeBarrier with timeout to prevent CI hangs (Issue #168)
+        barrier = CISafeBarrier(2, timeout=10.0)
 
         def thread_a_update():
             try:
