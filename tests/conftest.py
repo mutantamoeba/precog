@@ -52,16 +52,20 @@ except ImportError:
 
 # Import stress testcontainers fixtures (Issue #168)
 # Function-scoped containers for stress tests that exhaust connection pools
+# NOTE: Must import _stress_postgres_container_session for pytest to discover
+# the session-scoped fixture that stress_postgres_container depends on
 try:
     from tests.fixtures.stress_testcontainers import (
         DOCKER_AVAILABLE as STRESS_DOCKER_AVAILABLE,
     )
     from tests.fixtures.stress_testcontainers import (
+        _stress_postgres_container_session,
         stress_db_connection,
         stress_postgres_container,
     )
 except ImportError:
     STRESS_DOCKER_AVAILABLE = False
+    _stress_postgres_container_session = None  # type: ignore[assignment, misc]
     stress_postgres_container = None  # type: ignore[assignment, misc]
     stress_db_connection = None  # type: ignore[assignment, misc]
 
