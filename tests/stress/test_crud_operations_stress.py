@@ -66,8 +66,17 @@ _DOCKER_SKIP_REASON = (
 
 
 @pytest.fixture
-def setup_stress_teams(db_pool, clean_test_data):
-    """Create teams for stress tests."""
+def setup_stress_teams(stress_postgres_container):
+    """Create teams for stress tests.
+
+    IMPORTANT: This fixture depends on stress_postgres_container, NOT db_pool.
+    The stress_postgres_container fixture handles pool initialization for CI/testcontainers.
+    Using db_pool here would cause conflicting pool initializations and deadlocks.
+
+    Args:
+        stress_postgres_container: The testcontainer/CI service fixture that
+            provides connection parameters and handles pool initialization.
+    """
     with get_cursor(commit=True) as cur:
         # Create 10 teams for high-volume tests
         # Note: Using columns from migration 010 schema (not migration 028 enhancements)
@@ -112,9 +121,7 @@ class TestHighVolumeVenueOperations:
     Uses testcontainers for isolated PostgreSQL instance per test class.
     """
 
-    def test_create_100_venues_sequentially(
-        self, stress_postgres_container, db_pool, clean_test_data
-    ):
+    def test_create_100_venues_sequentially(self, stress_postgres_container):
         """
         STRESS: Create 100 venues sequentially.
 
@@ -144,7 +151,7 @@ class TestHighVolumeVenueOperations:
         # Should complete in reasonable time (<10s for 100 inserts)
         assert elapsed < 10.0, f"100 inserts took {elapsed:.2f}s (too slow)"
 
-    def test_concurrent_venue_upserts(self, stress_postgres_container, db_pool, clean_test_data):
+    def test_concurrent_venue_upserts(self, stress_postgres_container):
         """
         STRESS: 50 concurrent upserts on same ESPN venue ID.
 
@@ -198,9 +205,7 @@ class TestHighVolumeGameStateOperations:
     Uses testcontainers for isolated PostgreSQL instance per test class.
     """
 
-    def test_rapid_game_state_updates(
-        self, stress_postgres_container, db_pool, clean_test_data, setup_stress_teams
-    ):
+    def test_rapid_game_state_updates(self, stress_postgres_container, setup_stress_teams):
         """
         STRESS: 50 rapid sequential updates to single game state.
 
@@ -249,9 +254,7 @@ class TestHighVolumeGameStateOperations:
         # Should complete in reasonable time (<20s for 50 updates)
         assert elapsed < 20.0, f"50 updates took {elapsed:.2f}s (too slow)"
 
-    def test_parallel_updates_different_games(
-        self, stress_postgres_container, db_pool, clean_test_data, setup_stress_teams
-    ):
+    def test_parallel_updates_different_games(self, stress_postgres_container, setup_stress_teams):
         """
         STRESS: 10 parallel threads updating 10 different games simultaneously.
 
@@ -330,9 +333,7 @@ class TestSCDType2RaceConditions:
     Uses testcontainers for isolated PostgreSQL instance per test class.
     """
 
-    def test_concurrent_upsert_same_game_state(
-        self, stress_postgres_container, db_pool, clean_test_data, setup_stress_teams
-    ):
+    def test_concurrent_upsert_same_game_state(self, stress_postgres_container, setup_stress_teams):
         """
         RACE: Two threads update the same game simultaneously.
 
@@ -415,9 +416,7 @@ class TestSCDType2RaceConditions:
             f"(expected exactly 1). Errors: {results['errors']}"
         )
 
-    def test_read_during_write_consistency(
-        self, stress_postgres_container, db_pool, clean_test_data, setup_stress_teams
-    ):
+    def test_read_during_write_consistency(self, stress_postgres_container, setup_stress_teams):
         """
         RACE: Read operations during concurrent writes.
 
@@ -509,9 +508,7 @@ class TestDatabaseFailureRecovery:
     Uses testcontainers for isolated PostgreSQL instance per test class.
     """
 
-    def test_transaction_rollback_on_error(
-        self, stress_postgres_container, db_pool, clean_test_data, setup_stress_teams
-    ):
+    def test_transaction_rollback_on_error(self, stress_postgres_container, setup_stress_teams):
         """
         CHAOS: Simulate error during game state update.
 
@@ -557,9 +554,7 @@ class TestDatabaseFailureRecovery:
         assert after_error["home_score"] == 7, "State changed despite error"
         assert after_error["home_team_id"] == teams[0], "Team changed despite error"
 
-    def test_recovery_after_connection_interrupt(
-        self, stress_postgres_container, db_pool, clean_test_data
-    ):
+    def test_recovery_after_connection_interrupt(self, stress_postgres_container):
         """
         CHAOS: Test behavior when database connection is interrupted.
 
@@ -590,7 +585,7 @@ class TestDatabaseFailureRecovery:
         assert updated["venue_name"] == "Updated After Recovery"
 
     def test_data_integrity_under_system_stress(
-        self, stress_postgres_container, db_pool, clean_test_data, setup_stress_teams
+        self, stress_postgres_container, setup_stress_teams
     ):
         """
         CHAOS: Combined stress + failure scenario.
