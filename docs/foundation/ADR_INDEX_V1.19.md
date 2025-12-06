@@ -1,9 +1,15 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.18
-**Last Updated:** 2025-12-03
+**Version:** 1.19
+**Last Updated:** 2025-12-06
 **Status:** ✅ Current
+**Changes in v1.19:**
+- **CI-SAFE STRESS TEST MARKERS (ISSUE #168):** Added ADR-099 (skipif vs xfail(run=False) for CI Stress Tests)
+- Documents decision to prefer `skipif(_is_ci)` over `xfail(run=False)` for stress tests that hang in CI
+- Cleaner semantic meaning: SKIPPED (intentional) vs XFAIL (misleading "expected failure")
+- Updated ARCHITECTURE_DECISIONS reference from V2.25 to V2.26
+- Total ADRs: 100 → 101 (1 new ADR added for test infrastructure)
 **Changes in v1.18:**
 - **ALEMBIC MIGRATION FRAMEWORK (PHASE 1.9):** Added ADR-056 (Alembic Migration Framework)
 - **TESTCONTAINERS FOR TEST ISOLATION (PHASE 1.9):** Added ADR-057 (Testcontainers - Planned)
@@ -262,9 +268,10 @@ This document provides a systematic index of all Precog architecture decisions u
 
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
-| ADR-056 | Alembic Migration Framework for Database Schema Management | 2025-12-03 | ✅ | 1.9 | ARCHITECTURE_DECISIONS_V2.25 |
-| ADR-057 | Testcontainers for Database Test Isolation | 2025-12-03 | 🔵 | 1.9+ | ARCHITECTURE_DECISIONS_V2.25 |
-| ADR-098 | TimescaleDB Deferred to Phase 6+ | 2025-12-03 | ✅ | 1.9 | ARCHITECTURE_DECISIONS_V2.25 |
+| ADR-056 | Alembic Migration Framework for Database Schema Management | 2025-12-03 | ✅ | 1.9 | ARCHITECTURE_DECISIONS_V2.26 |
+| ADR-057 | Testcontainers for Database Test Isolation | 2025-12-03 | 🔵 | 1.9+ | ARCHITECTURE_DECISIONS_V2.26 |
+| ADR-098 | TimescaleDB Deferred to Phase 6+ | 2025-12-03 | ✅ | 1.9 | ARCHITECTURE_DECISIONS_V2.26 |
+| ADR-099 | skipif vs xfail(run=False) for CI Stress Tests | 2025-12-06 | ✅ | 1.9 | ARCHITECTURE_DECISIONS_V2.26 |
 
 ### Phase 2: Production Monitoring Infrastructure (Planned)
 
@@ -640,7 +647,7 @@ Establish 8 Test Type Framework for comprehensive coverage:
   - 8 test directories in tests/ structure
 
 **References:**
-- TESTING_STRATEGY_V3.3.md (1,462 lines)
+- TESTING_STRATEGY_V3.4.md (1,462 lines)
 - REQ-TEST-012 through REQ-TEST-019
 - ADR-074 (Property-Based Testing)
 - ADR-075 (Multi-Source Warning Governance)
@@ -1304,11 +1311,12 @@ coverage_tiers:
 
 ---
 
-**Document Version:** 1.18
+**Document Version:** 1.19
 **Created:** 2025-10-21
-**Last Updated:** 2025-12-03
+**Last Updated:** 2025-12-06
 **Purpose:** Systematic architecture decision tracking and reference
 **Critical Changes:**
+- v1.19: Added ADR-099 for CI-safe stress test markers (Issue #168 - skipif vs xfail(run=False) decision)
 - v1.18: Added ADR-056 (Alembic Migration Framework) and ADR-057 (Testcontainers - Planned) for Phase 1.9 test infrastructure
 - v1.17: Added ADR-098 for TimescaleDB deferral (Phase 1.9 - defer until Phase 6+ when empirical bottlenecks emerge)
 - v1.15: Added ADR-094, ADR-095, ADR-096, ADR-097 for workflow enforcement infrastructure (Phase 1.5 - YAML-driven validation, auto-discovery pattern, parallel execution in git hooks, tier-specific coverage targets)
@@ -1320,6 +1328,6 @@ coverage_tiers:
 - v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.25.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.26.md
 
-**END OF ADR INDEX V1.18**
+**END OF ADR INDEX V1.19**

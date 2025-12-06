@@ -1,9 +1,18 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.43
-**Last Updated:** 2025-12-03
+**Version:** 2.44
+**Last Updated:** 2025-12-06
 **Status:** ✅ Current
+**Changes in v2.44:**
+- **CI-SAFE STRESS TESTING DOCUMENTATION (Issue #168)**: Updated 7 documents to new versions
+- MASTER_REQUIREMENTS V2.19 → V2.20: Added REQ-TEST-020 (CI-Safe Stress Test Requirements)
+- ARCHITECTURE_DECISIONS V2.25 → V2.26: Added ADR-099 (skipif vs xfail decision)
+- ADR_INDEX V1.18 → V1.19: Added ADR-099 entry
+- REQUIREMENT_INDEX V1.11 → V1.12: Added REQ-TEST-020 entry
+- TESTING_STRATEGY V3.3 → V3.4: Added CI-safe stress testing section
+- DEVELOPMENT_PATTERNS V1.15 → V1.16: Updated Pattern 28 (CI-safe stress testing)
+- TEST_ISOLATION_PATTERNS V1.0 → V1.1: Added ThreadPoolExecutor CI pattern
 **Changes in v2.43:**
 - **TIMESCALEDB DECISION (PHASE 1.9)**: Updated ARCHITECTURE_DECISIONS V2.23 → V2.24, ADR_INDEX V1.16 → V1.17
 - Added ADR-098: TimescaleDB Deferred to Phase 6+ (current PostgreSQL + SCD Type 2 sufficient for Phase 1-5)
@@ -17,9 +26,9 @@
 - REQ-TEST-022: Cleanup Fixture Ordering (reverse FK order)
 - REQ-TEST-023: Parallel Execution Safety (worker prefixes)
 - REQ-TEST-024: SCD Type 2 Test Isolation
-- All 5 new requirements cross-reference TEST_ISOLATION_PATTERNS_V1.0.md
+- All 5 new requirements cross-reference TEST_ISOLATION_PATTERNS_V1.1.md
 **Changes in v2.41:**
-- **PHASE 1.9 TEST ISOLATION PATTERNS**: Added TEST_ISOLATION_PATTERNS_V1.0.md to Testing & Quality Documents
+- **PHASE 1.9 TEST ISOLATION PATTERNS**: Added TEST_ISOLATION_PATTERNS_V1.1.md to Testing & Quality Documents
 - Documents 5 patterns for proper test isolation discovered during Phase 1.9
 - Addresses root causes of test failures: DB state contamination, FK dependency gaps, cleanup order issues
 - Part of Phase 1.9 Part A documentation work (~93 hours total effort)
@@ -402,15 +411,15 @@ Core architecture, requirements, and system design documents.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
-| **MASTER_REQUIREMENTS_V2.19.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.43.md** | ✅ | v2.43 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.43** (ADR-098: TimescaleDB Deferred to Phase 6+; ARCHITECTURE_DECISIONS V2.24; ADR_INDEX V1.17) |
-| **ARCHITECTURE_DECISIONS_V2.25.md** | ✅ | v2.24 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.24** (ADR-098: TimescaleDB Deferred to Phase 6+ - current PostgreSQL + SCD Type 2 sufficient for Phase 1-5; evaluation triggers: >1M rows/month, query bottlenecks, retention needs; migration path documented for future adoption) |
-| **REQUIREMENT_INDEX_V1.11.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
-| **ADR_INDEX_V1.18.md** | ✅ | v1.17 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 98 architecture decisions - **UPDATED V1.17** (ADR-098: TimescaleDB Deferred to Phase 6+ - Phase 1.9 Test Infrastructure; 97 → 98 total ADRs) |
+| **MASTER_REQUIREMENTS_V2.20.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
+| **MASTER_INDEX_V2.44.md** | ✅ | v2.43 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.43** (ADR-098: TimescaleDB Deferred to Phase 6+; ARCHITECTURE_DECISIONS V2.24; ADR_INDEX V1.17) |
+| **ARCHITECTURE_DECISIONS_V2.26.md** | ✅ | v2.24 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.24** (ADR-098: TimescaleDB Deferred to Phase 6+ - current PostgreSQL + SCD Type 2 sufficient for Phase 1-5; evaluation triggers: >1M rows/month, query bottlenecks, retention needs; migration path documented for future adoption) |
+| **REQUIREMENT_INDEX_V1.12.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
+| **ADR_INDEX_V1.19.md** | ✅ | v1.17 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 98 architecture decisions - **UPDATED V1.17** (ADR-098: TimescaleDB Deferred to Phase 6+ - Phase 1.9 Test Infrastructure; 97 → 98 total ADRs) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.7.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.6** |
-| **TESTING_STRATEGY_V3.3.md** | ✅ | v3.3 | `/docs/foundation/` | 2 | Phases 1-10 | 🔴 Critical | **UPDATED V3.3** - Added Test Isolation Patterns section (5 patterns: transaction-based, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2); based on Phase 1.9 findings (12+ test failures from DB state contamination); cross-references TEST_ISOLATION_PATTERNS_V1.0.md; V3.2: All 8 test types MANDATORY; V3.0: 8 test type framework |
-| **TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md** | ✅ | v2.1 | `/docs/foundation/` | 1.9 | Phases 1.5+ | 🔴 Critical | **UPDATED V2.1** - Added REQ-TEST-020 through REQ-TEST-024 (Test Isolation Requirements from Phase 1.9): transaction-based isolation, FK dependency chain management, cleanup fixture ordering, parallel execution safety, SCD Type 2 isolation; cross-references TEST_ISOLATION_PATTERNS_V1.0.md; V2.0: REQ-TEST-012-019 (8 test types, mock restrictions, fixture requirements, coverage standards) |
+| **TESTING_STRATEGY_V3.4.md** | ✅ | v3.3 | `/docs/foundation/` | 2 | Phases 1-10 | 🔴 Critical | **UPDATED V3.3** - Added Test Isolation Patterns section (5 patterns: transaction-based, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2); based on Phase 1.9 findings (12+ test failures from DB state contamination); cross-references TEST_ISOLATION_PATTERNS_V1.1.md; V3.2: All 8 test types MANDATORY; V3.0: 8 test type framework |
+| **TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md** | ✅ | v2.1 | `/docs/foundation/` | 1.9 | Phases 1.5+ | 🔴 Critical | **UPDATED V2.1** - Added REQ-TEST-020 through REQ-TEST-024 (Test Isolation Requirements from Phase 1.9): transaction-based isolation, FK dependency chain management, cleanup fixture ordering, parallel execution safety, SCD Type 2 isolation; cross-references TEST_ISOLATION_PATTERNS_V1.1.md; V2.0: REQ-TEST-012-019 (8 test types, mock restrictions, fixture requirements, coverage standards) |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
 | **DEVELOPMENT_PHILOSOPHY_V1.3.md** | ✅ | v1.3 | `/docs/foundation/` | 0.7 | All phases | 🔴 Critical | **UPDATED V1.3** - Added Section 1 subsection: Test Quality - When Tests Pass But Aren't Sufficient (lessons from Phase 1.5 TDD failure: 17/17 tests passing but 13/17 failed with real database; 6 lessons learned: mock sparingly, use test infrastructure, write tests before implementation, need 8 test types, stress test resources, coverage % ≠ quality; cross-references TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md, TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md) |
 
@@ -483,9 +492,9 @@ Test specifications, validation protocols, and quality assurance.
 | **PHASE_1.5_TEST_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🟡 High | **NEW** - Test plan for Phase 1.5 (Strategy Manager, Model Manager, Position Manager enhancements) with comprehensive test scenarios and success criteria |
 | **PHASE_2_TEST_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 2 | Phase 2 | 🟡 High | **NEW** - Comprehensive test plan for Phase 2 (ESPN API Client, Task Scheduler, Data Quality Validator, Historical Backfill) with 103+ tests across 8 test types |
 | **HYPOTHESIS_IMPLEMENTATION_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🟡 High | **NEW** - Property-based testing strategy with Hypothesis framework (3 test suites: Kelly Criterion, Edge Detection, Configuration Validation; 35+ tests implemented) |
-| **COMPREHENSIVE_TEST_AUDIT_PHASE_1.5_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🔴 Critical | **NEW** - Quality-focused analysis of 29 test files (520+ tests) per TESTING_STRATEGY_V3.3.md: tier-specific coverage analysis (Critical Path ≥90%, Business Logic ≥85%, Infrastructure ≥80%), 8-type test framework gaps, Pattern 13 compliance (real fixtures vs mocks), identifies exemplary test_attribution_comprehensive.py (only module with all 8 test types), critical gaps (2 integration files using mocks, missing stress/E2E tests), 30 improvement recommendations |
+| **COMPREHENSIVE_TEST_AUDIT_PHASE_1.5_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🔴 Critical | **NEW** - Quality-focused analysis of 29 test files (520+ tests) per TESTING_STRATEGY_V3.4.md: tier-specific coverage analysis (Critical Path ≥90%, Business Logic ≥85%, Infrastructure ≥80%), 8-type test framework gaps, Pattern 13 compliance (real fixtures vs mocks), identifies exemplary test_attribution_comprehensive.py (only module with all 8 test types), critical gaps (2 integration files using mocks, missing stress/E2E tests), 30 improvement recommendations |
 | **TEST_GAP_GITHUB_ISSUE_MAPPING_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 2 | 🔴 Critical | **NEW** - Comprehensive mapping of 15 high-priority test gaps to GitHub issues #101-#132: 2 CRITICAL (7-10h: fix integration test mocks, add E2E tests for Critical Path), 5 HIGH (21-29h: stress tests, property tests, Mypy regression, SCD violations, validation violations), 6 MEDIUM (21-27h: E2E for business logic, security tests, MASTER_INDEX gaps, manager query methods, TypedDict returns, schema validation), 2 LOW (14-18h deferred to Phase 5: performance tests, chaos tests); all test gaps from COMPREHENSIVE_TEST_AUDIT_PHASE_1.5_V1.0.md now have trackable GitHub issues for Phase 2 implementation; total effort: 49-66 hours (excluding deferred LOW priority) |
-| **TEST_ISOLATION_PATTERNS_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.9 | Phase 1.9 | 🔴 Critical | **NEW** - Phase 1.9 test isolation patterns documentation (~500 lines): 5 root causes of test failures (DB contamination, FK gaps, cleanup order, parallel interference, SCD leakage), 5 isolation patterns (transaction-based isolation, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2), implementation checklist for conftest.py fixes, anti-patterns to avoid; cross-references TESTING_STRATEGY V3.3, TEST_REQUIREMENTS_COMPREHENSIVE V2.1 |
+| **TEST_ISOLATION_PATTERNS_V1.1.md** | ✅ | v1.0 | `/docs/testing/` | 1.9 | Phase 1.9 | 🔴 Critical | **NEW** - Phase 1.9 test isolation patterns documentation (~500 lines): 5 root causes of test failures (DB contamination, FK gaps, cleanup order, parallel interference, SCD leakage), 5 isolation patterns (transaction-based isolation, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2), implementation checklist for conftest.py fixes, anti-patterns to avoid; cross-references TESTING_STRATEGY V3.3, TEST_REQUIREMENTS_COMPREHENSIVE V2.1 |
 | **MODEL_VALIDATION_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4 ✅ | 🟡 High | Elo vs. research, backtesting benchmarks |
 | **BACKTESTING_PROTOCOL_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4-5 ✅ | 🟡 High | Walk-forward validation, train/test splits |
 
@@ -518,7 +527,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 6-9 | Phases 6-9 | 🔴 Critical | **NEW** - End-to-end analytics architecture: 4-layer design (Collection→Storage→Aggregation→Presentation), dual processing (real-time <200ms + batch), 6 materialized views |
 | **AB_TESTING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 8 | Phase 8 | 🟡 High | **NEW** - Statistical methodology for strategy/model evaluation: Welch's t-test, Chi-square, sample size calculation (64 trades/variant), Bayesian analysis, experiment lifecycle |
 | **DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 9 | Phase 9 | 🟡 High | **NEW** - React 18 + Next.js 14 trading dashboard: component library (MetricCard, PositionCard), Socket.IO real-time (<200ms), SWR data fetching, Plotly.js charts, deployment |
-| **DEVELOPMENT_PATTERNS_V1.15.md** | ✅ | v1.15 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.15** - Added Pattern 28 (CI-Safe Stress Testing - xfail with run=False) - 28 total patterns; Pattern 28 documents critical insight from Phase 1.9: stress tests using threading.Barrier() can hang indefinitely in CI, solution is xfail(condition=_is_ci, run=False) to prevent test body execution entirely; cross-references PR #167, TESTING_STRATEGY_V3.3 |
+| **DEVELOPMENT_PATTERNS_V1.16.md** | ✅ | v1.15 | `/docs/guides/` | All | All phases | 🔴 Critical | **UPDATED V1.15** - Added Pattern 28 (CI-Safe Stress Testing - xfail with run=False) - 28 total patterns; Pattern 28 documents critical insight from Phase 1.9: stress tests using threading.Barrier() can hang indefinitely in CI, solution is xfail(condition=_is_ci, run=False) to prevent test body execution entirely; cross-references PR #167, TESTING_STRATEGY_V3.4 |
 | **SENTRY_INTEGRATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | Phase 2 | 🟡 High | **NEW** - 3-layer hybrid observability architecture: logger.py (audit trail) + Sentry (real-time) + alerts table (permanent record); implementation guide with code examples, testing procedures, troubleshooting |
 | **MANAGER_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Comprehensive architecture guide for 4 core managers (Model, Strategy, Position, Config); database schemas with field-by-field explanations; status lifecycle diagrams; immutable vs SCD Type 2 versioning patterns; design principles (pure psycopg2, decimal precision, two-level configs); ~900 lines; addresses user request to document manager architecture summary |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
@@ -684,7 +693,7 @@ Additional guides, references, and supporting documentation.
 **All Phase 0.5 deliverables complete (Days 1-10 + Standardization + Phase 1 Foundation):**
 - ✅ DATABASE_SCHEMA_SUMMARY_V1.6.md (added alerts table + 4 ML infrastructure placeholders)
 - ✅ MASTER_REQUIREMENTS_V2.7.md (added 34 requirements: REQ-METH, REQ-ALERT, REQ-ML)
-- ✅ REQUIREMENT_INDEX_V1.11.md V1.1 (updated with 89 total requirements)
+- ✅ REQUIREMENT_INDEX_V1.12.md V1.1 (updated with 89 total requirements)
 - ✅ ARCHITECTURE_DECISIONS_V2.5.md (ADR numbers added for all decisions)
 - ✅ ADR_INDEX.md (systematic ADR catalog)
 - ✅ PROJECT_OVERVIEW_V1.4.md
@@ -729,7 +738,7 @@ Additional guides, references, and supporting documentation.
 - PROJECT_OVERVIEW_V1.3.md (architecture)
 - MASTER_REQUIREMENTS_V2.7.md (requirements with REQ IDs - includes methods, alerts, ML)
 - ARCHITECTURE_DECISIONS_V2.5.md (design rationale with ADR numbers)
-- REQUIREMENT_INDEX_V1.11.md V1.1 (requirement catalog - 89 requirements)
+- REQUIREMENT_INDEX_V1.12.md V1.1 (requirement catalog - 89 requirements)
 - ADR_INDEX.md (ADR catalog)
 - CONFIGURATION_GUIDE_V3.1.md (config patterns)
 - DATABASE_SCHEMA_SUMMARY_V1.6.md (schema - 25 tables including alerts + ML placeholders)
@@ -842,7 +851,7 @@ Additional guides, references, and supporting documentation.
 | 2.30 | 2025-11-22 | **USER GUIDES FOR CORE MODULES (PHASE 1.5)**: Added 6 comprehensive user guides (~4,530 lines total: STRATEGY_MANAGER, MODEL_MANAGER, POSITION_MANAGER, CONFIG_LOADER, KALSHI_CLIENT, KALSHI_MARKET_TERMINOLOGY) |
 | 2.29 | 2025-11-22 | **PHASE 1.5 COMPLETION DOCUMENTATION**: Added PHASE_1.5_COMPLETION_REPORT.md + PHASE_1.5_DEFERRED_TASKS_V1.0.md; Phase 1.5 status: ⚠️ PASS WITH CONDITIONS (3/4 deliverables complete, 93.83% coverage) |
 | 2.5 | 2025-10-24 | **ALERTS & ML PLANNING**: Updated MASTER_REQUIREMENTS V2.6→V2.7 (34 new requirements), REQUIREMENT_INDEX V1.0→V1.1 (89 total reqs), DATABASE_SCHEMA_SUMMARY V1.5→V1.6 (alerts + 4 ML placeholders), system.yaml (notifications config); added 4 ML docs to planned (PROBABILITY_PRIMER, ELO_IMPLEMENTATION_GUIDE, MODEL_EVALUATION_GUIDE, MACHINE_LEARNING_ROADMAP); 25 total tables; ready for Phase 1 |
-| 2.4 | 2025-10-22 | Added REQUIREMENT_INDEX_V1.11.md and ADR_INDEX.md; updated MASTER_REQUIREMENTS V2.6, ARCHITECTURE_DECISIONS V2.5; updated document count 33 → 35; standardization complete |
+| 2.4 | 2025-10-22 | Added REQUIREMENT_INDEX_V1.12.md and ADR_INDEX.md; updated MASTER_REQUIREMENTS V2.6, ARCHITECTURE_DECISIONS V2.5; updated document count 33 → 35; standardization complete |
 | 2.3 | 2025-10-21 | Phase 0.5 complete: added 3 implementation guides (VERSIONING, TRAILING_STOP, POSITION_MANAGEMENT), updated 6 core docs (MASTER_REQUIREMENTS V2.5, DATABASE_SCHEMA V1.5, CONFIGURATION_GUIDE V3.1, DEVELOPMENT_PHASES V1.3, 3 YAML V2.0), added schema migration V1.5, Phase 5 split into 5a/5b |
 | 2.2 | 2025-10-17 | Updated all document versions (Master Requirements v2.3, Architecture Decisions v2.3, Project Overview v1.3, Configuration Guide v3.0, Database Schema v1.2); renamed all files to match internal versions; added Phase 0 completion documents |
 | 2.1 | 2025-10-12 | Added "Location" and "Phase Ties" columns; Session 7 handoff streamline (7 docs archived, 4 consolidated); added Handoff_Protocol_V1.0.md; marked Phase 0 at 100% |

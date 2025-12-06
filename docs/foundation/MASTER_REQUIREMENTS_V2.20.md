@@ -1,9 +1,15 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.19
-**Last Updated:** 2025-11-27
+**Version:** 2.20
+**Last Updated:** 2025-12-06
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.20:**
+- **CI-SAFE STRESS TESTING REQUIREMENT (ISSUE #168):** Added REQ-TEST-020 (CI-Safe Stress Test Requirements)
+- Documents requirement for stress tests to use `skipif(_is_ci)` marker to prevent CI hangs
+- ThreadPoolExecutor-based tests must skip in resource-constrained CI environments
+- Clear semantic markers: SKIPPED (intentional) vs XFAIL (misleading "expected failure")
+- **CROSS-REFERENCES:** ADR-099 (skipif vs xfail decision), Pattern 28 (DEVELOPMENT_PATTERNS_V1.16)
 **Changes in v2.19:**
 - **LIVE DATA MANAGEMENT REQUIREMENTS**: Added Section 4.12 with REQ-DATA-001 through REQ-DATA-005 (5 comprehensive live data requirements)
 - **REQ-DATA-001**: Game State Data Collection with SCD Type 2 Versioning (~1.8M records/year)
@@ -98,7 +104,7 @@
 - **PHASE 0.6C STATUS**: REQ-TEST-005, REQ-VALIDATION-001-003 marked as ✅ Complete
 - **PHASE 0.7 PLANNING**: REQ-TEST-006-008, REQ-CICD-001-003 marked as 🔵 Planned
 - **CROSS-REFERENCES**: Added ADR-038 through ADR-045 references
-- **DOCUMENTATION REFERENCES**: Added TESTING_STRATEGY_V3.3.md, VALIDATION_LINTING_ARCHITECTURE_V1.0.md
+- **DOCUMENTATION REFERENCES**: Added TESTING_STRATEGY_V3.4.md, VALIDATION_LINTING_ARCHITECTURE_V1.0.md
 **Changes in v2.8:**
 - **PHASE 0.6B DOCUMENTATION**: Updated all supplementary document references with standardized filenames (removed PHASE_ prefixes, standardized V1.0 format)
 - **NEW SECTION 4.10**: CLI Commands requirements (REQ-CLI-001 through REQ-CLI-005) - Typer framework with 5 core commands
@@ -284,12 +290,12 @@ precog/
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.19.md` - This document (requirements through Phase 10)
-  3. `MASTER_INDEX_V2.43.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.25.md` - All 97 ADRs with design rationale (Phase 0-4.5)
+  2. `MASTER_REQUIREMENTS_V2.20.md` - This document (requirements through Phase 10)
+  3. `MASTER_INDEX_V2.44.md` - Complete document inventory
+  4. `ARCHITECTURE_DECISIONS_V2.26.md` - All 97 ADRs with design rationale (Phase 0-4.5)
   5. `REQUIREMENT_INDEX.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.18.md` - Architecture decision index
-  7. `TESTING_STRATEGY_V3.3.md` - Test cases, coverage requirements, test isolation patterns
+  6. `ADR_INDEX_V1.19.md` - Architecture decision index
+  7. `TESTING_STRATEGY_V3.4.md` - Test cases, coverage requirements, test isolation patterns
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
 - **Supplementary Documents** (in `docs/supplementary/`):
@@ -1994,7 +2000,7 @@ pyyaml==6.0.1
 **Phase:** 0.6c
 **Priority:** High
 **Status:** ✅ Complete
-**Reference:** ADR-039, TESTING_STRATEGY_V3.3.md
+**Reference:** ADR-039, TESTING_STRATEGY_V3.4.md
 
 Test results must be persisted with timestamps for trend analysis and CI/CD integration:
 - Timestamped HTML reports in `test_results/YYYY-MM-DD_HHMMSS/`
@@ -2893,6 +2899,78 @@ def test_database_failure_recovery_e2e(clean_test_data, position_mgr):
 - All E2E tests use real infrastructure (database, config, logging)
 - External APIs mocked (Kalshi, ESPN) for deterministic testing
 - E2E tests catch integration bugs missed by unit/integration tests
+
+---
+
+### REQ-TEST-020: CI-Safe Stress Test Requirements (Issue #168)
+**Priority:** High
+**Phase:** 1.9 (Test Infrastructure & Process Hardening)
+**Status:** ✅ Complete (Implemented)
+**Cross-References:** ADR-099, Pattern 28 (DEVELOPMENT_PATTERNS_V1.16), TEST_ISOLATION_PATTERNS_V1.1
+
+**Problem Statement:**
+Stress tests using `ThreadPoolExecutor` with `as_completed()` can hang indefinitely in resource-constrained CI environments (GitHub Actions runners). These tests work locally but cause CI pipeline timeouts that cannot be interrupted even with `pytest-timeout`.
+
+**Why pytest-timeout Doesn't Help:**
+- `--timeout-method=thread` cannot interrupt blocking Python threads
+- ThreadPoolExecutor creates OS-level threads that hold GIL during I/O
+- `as_completed()` blocks on `threading.Event.wait()` which is uninterruptible
+- Result: Tests hang until GitHub Actions job-level timeout (6 hours default)
+
+**Requirement:**
+All stress tests that use `ThreadPoolExecutor`, `threading.Thread`, or other concurrent primitives MUST:
+
+1. **Use skipif for CI detection** (not xfail):
+```python
+import os
+import pytest
+
+# CI environment detection
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+_CI_SKIP_REASON = (
+    "Stress tests skip in CI - they can hang in resource-constrained environments. "
+    "Run locally: pytest tests/stress/test_*.py -v"
+)
+
+# Apply to all tests in module
+pytestmark = [
+    pytest.mark.stress,
+    pytest.mark.slow,
+    pytest.mark.skipif(_is_ci, reason=_CI_SKIP_REASON),
+]
+```
+
+2. **Use module-level pytestmark** for consistent application to all tests
+
+3. **Document CI strategy in module docstring**:
+```python
+"""
+CI Strategy (Issue #168):
+    Stress tests skip in CI to prevent timeouts and resource exhaustion.
+    These tests use ThreadPoolExecutor which can hang in resource-constrained
+    CI environments. Run locally for best results.
+"""
+```
+
+**Why skipif over xfail(run=False):**
+
+| Approach | pytest Output | Implied Meaning | Reality |
+|----------|--------------|-----------------|---------|
+| `xfail(run=False)` | XFAIL | "Test expected to fail" | Misleading - tests don't fail, they hang |
+| `skipif(_is_ci)` | SKIPPED | "Intentionally not run" | Accurate - clear semantic intent |
+
+**Affected Test Categories:**
+- `tests/stress/test_config_loader_stress.py` - ThreadPoolExecutor concurrent reads
+- `tests/stress/test_logger_stress.py` - ThreadPoolExecutor concurrent logging
+- `tests/stress/test_connection_stress.py` - ThreadPoolExecutor connection pool testing
+- Any future stress tests using concurrent.futures or threading
+
+**Success Criteria:**
+- All stress tests use `skipif(_is_ci)` pattern (not xfail)
+- CI pipelines complete in <10 minutes (no ThreadPoolExecutor hangs)
+- Local stress test execution still works (`pytest tests/stress/ -v`)
+- Clear SKIPPED output in CI logs with explanatory reason
+- Docstrings document CI strategy for maintainability
 
 ---
 
@@ -3812,4 +3890,4 @@ For questions or issues:
 
 ---
 
-**END OF MASTER REQUIREMENTS V2.6**
+**END OF MASTER REQUIREMENTS V2.20**
