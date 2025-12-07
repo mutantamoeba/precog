@@ -333,6 +333,12 @@ class TestESPNDataStructure:
             Situation data is only present for in-progress games.
             When present, values must be in valid ranges.
             In ESPNGameFull, situation is nested in state.situation.
+
+            Edge Cases:
+            - down == -1: ESPN returns this when there's no active down
+              (e.g., during kickoff, timeout, between plays, PAT attempts)
+            - distance == 0: Can occur during goal-line situations or
+              when no active play (e.g., after touchdown)
         """
         games = espn_client.get_live_games(league="nfl")
 
@@ -343,13 +349,17 @@ class TestESPNDataStructure:
             state = game["state"]
             situation = state.get("situation", {})
 
-            # If down is present, should be 1-4
-            if situation.get("down") is not None:
-                assert 1 <= situation["down"] <= 4
+            # If down is present and positive, should be 1-4
+            # ESPN returns -1 when no active down (kickoff, timeout, PAT, etc.)
+            down = situation.get("down")
+            if down is not None and down > 0:
+                assert 1 <= down <= 4, f"Invalid down value: {down}"
 
-            # If distance is present, should be positive
-            if situation.get("distance") is not None:
-                assert situation["distance"] > 0
+            # If distance is present and positive, validate range
+            # Can be 0 during goal-line or no-active-play situations
+            distance = situation.get("distance")
+            if distance is not None and distance > 0:
+                assert distance <= 99, f"Invalid distance: {distance}"
 
             # Timeouts should be 0-3
             assert 0 <= situation.get("home_timeouts", 3) <= 3
