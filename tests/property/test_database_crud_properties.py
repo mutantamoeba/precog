@@ -60,11 +60,38 @@ def setup_kalshi_platform(db_pool, clean_test_data):
 
     Property tests need platform/series/events for foreign key constraints
     when testing database CRUD operations on markets.
+
+    Design Note (Issue #175 fix):
+        This fixture cleans up markets at SETUP time, not teardown.
+        This prevents race conditions between sequential tests:
+
+        Old Design (BROKEN):
+        - Test 1 teardown: DELETE FROM platforms WHERE platform_id = 'kalshi'
+        - Test 2 setup: INSERT ... ON CONFLICT DO NOTHING (sees 'kalshi' exists)
+        - Test 1 teardown: COMMIT (deletes 'kalshi')
+        - Test 2: Tries to create market -> ForeignKeyViolation
+
+        New Design (FIXED):
+        - Test 1 setup: Clean markets, create platform (idempotent)
+        - Test 1: Creates markets
+        - Test 1: NO TEARDOWN
+        - Test 2 setup: Clean markets (removes Test 1's data), create platform
+        - Test 2: Creates markets
+
+        Benefits:
+        1. Each test starts with clean market state
+        2. No teardown race conditions
+        3. Platform/series/events persist (shared safely)
+        4. Issue #171 Layer 2 DB reset handles final cleanup
     """
     from precog.database.connection import get_cursor
 
     with get_cursor(commit=True) as cur:
-        # Create platform
+        # SETUP CLEANUP: Delete markets from previous test runs FIRST
+        # This prevents UniqueViolation from Hypothesis replaying saved examples
+        cur.execute("DELETE FROM markets WHERE platform_id = 'kalshi'")
+
+        # Create platform (idempotent - safe to call multiple times)
         cur.execute(
             """
             INSERT INTO platforms (platform_id, platform_type, display_name, base_url, status)
@@ -73,7 +100,7 @@ def setup_kalshi_platform(db_pool, clean_test_data):
         """
         )
 
-        # Create series for test markets
+        # Create series for test markets (idempotent)
         cur.execute(
             """
             INSERT INTO series (series_id, platform_id, external_id, title, category)
@@ -82,7 +109,7 @@ def setup_kalshi_platform(db_pool, clean_test_data):
         """
         )
 
-        # Create events for test markets
+        # Create events for test markets (idempotent)
         cur.execute(
             """
             INSERT INTO events (event_id, platform_id, series_id, external_id, category, title, status)
@@ -93,14 +120,8 @@ def setup_kalshi_platform(db_pool, clean_test_data):
         """
         )
 
-    yield
-
-    # Cleanup after test
-    with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM events WHERE platform_id = 'kalshi'")
-        cur.execute("DELETE FROM series WHERE platform_id = 'kalshi'")
-        cur.execute("DELETE FROM account_balance WHERE platform_id = 'kalshi'")
-        cur.execute("DELETE FROM platforms WHERE platform_id = 'kalshi'")
+    # NO TEARDOWN - Setup cleanup handles it, Issue #171 DB reset for final cleanup
+    return
 
 
 # =============================================================================
