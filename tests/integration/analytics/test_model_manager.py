@@ -624,13 +624,26 @@ def test_decimal_precision_no_float_contamination(clean_test_data, manager, mode
 
 
 def test_error_handling_invalid_model_type(clean_test_data, manager, model_factory):
-    """Test creating model with invalid model_type."""
-    invalid_config = model_factory.copy()
-    invalid_config["model_class"] = "invalid_type"  # Not in [elo, ensemble, ml, hybrid]
+    """Test creating model with invalid model_class value.
 
-    # Database constraint should reject invalid type
-    # Skip this test for now - database doesn't have CHECK constraint for model_type yet
-    pytest.skip("Database schema needs CHECK constraint for model_type validation")
+    Educational Note:
+        The model_class field is validated via FK constraint to the model_classes
+        lookup table (Migration 023). Valid values: elo, ensemble, ml, hybrid,
+        regression, neural_net, baseline.
+
+        Attempting to use an invalid model_class raises psycopg2.IntegrityError
+        (specifically ForeignKeyViolation subclass).
+
+    References:
+        - Migration 023: model_classes lookup table and FK constraint
+        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md: probability_models table
+    """
+    invalid_config = model_factory.copy()
+    invalid_config["model_class"] = "invalid_type"  # Not in model_classes lookup table
+
+    # FK constraint to model_classes table rejects invalid model_class values
+    with pytest.raises(psycopg2.IntegrityError):
+        manager.create_model(**invalid_config)
 
 
 def test_error_handling_duplicate_name_version(clean_test_data, manager, model_factory):

@@ -6,11 +6,6 @@ This test suite verifies:
 2. API key rotation properly rejects old keys
 3. Token expiry triggers re-authentication
 
-**IMPLEMENTATION STATUS:**
-    Some tests define REQUIREMENTS for features not yet implemented:
-    - Connection string sanitization: Requires logger credential masking (Phase 3+)
-    - API key rotation: Basic tests pass, some require credential setup
-
 Related Issue: GitHub Issue #129 (Security Tests)
 Related Pattern: Pattern 4 (Security - NO CREDENTIALS IN CODE)
 Related Requirement: REQ-SEC-009 (Connection Security)
@@ -27,7 +22,7 @@ import requests
 from psycopg2 import OperationalError
 
 from precog.api_connectors.kalshi_client import KalshiClient
-from precog.database.connection import get_connection
+from precog.database.connection import close_pool, get_connection
 from precog.utils.logger import setup_logging
 
 
@@ -46,19 +41,6 @@ def _kalshi_credentials_available() -> bool:
     key_path = os.getenv(f"{prefix}_KALSHI_PRIVATE_KEY_PATH")
 
     return bool(api_key and key_path)
-
-
-# Mark tests that require credential masking feature (not yet implemented)
-credential_masking_not_implemented = pytest.mark.xfail(
-    reason="Credential masking (REQ-SEC-009) not yet implemented - Phase 3+ feature",
-    strict=False,
-)
-
-# Mark tests that require connection pool reset (not easily testable with singleton)
-connection_pool_test_limitation = pytest.mark.xfail(
-    reason="Connection pool singleton pattern makes these tests flaky - requires pool reset",
-    strict=False,
-)
 
 
 def cleanup_logging_handlers() -> None:
@@ -93,7 +75,6 @@ FAKE_NEW_API_KEY = "new-api-key-xyz789-valid"
 # =============================================================================
 
 
-@connection_pool_test_limitation
 def test_connection_timeout_masks_password_in_error(monkeypatch) -> None:
     """
     Verify connection timeout errors mask password in connection string.
@@ -119,6 +100,9 @@ def test_connection_timeout_masks_password_in_error(monkeypatch) -> None:
         - Error message contains connection info (host, port, database)
         - Password replaced with ****
     """
+    # Reset the connection pool singleton to force re-initialization with new env vars
+    close_pool()
+
     # Setup fake database with timeout
     monkeypatch.setenv("DB_HOST", "192.0.2.1")  # TEST-NET (RFC 5737) - guaranteed timeout
     monkeypatch.setenv("DB_PORT", "5432")
@@ -148,7 +132,6 @@ def test_connection_timeout_masks_password_in_error(monkeypatch) -> None:
             cleanup_logging_handlers()
 
 
-@connection_pool_test_limitation
 def test_invalid_database_name_masks_password_in_error(monkeypatch) -> None:
     """
     Verify invalid database name errors mask password.
@@ -174,6 +157,9 @@ def test_invalid_database_name_masks_password_in_error(monkeypatch) -> None:
         - Error mentions database name
         - Password masked in any connection string
     """
+    # Reset the connection pool singleton to force re-initialization with new env vars
+    close_pool()
+
     # Setup connection to nonexistent database
     # Note: This test requires real database server, so we'll mock it
     with patch("psycopg2.pool.SimpleConnectionPool") as mock_pool:
@@ -212,7 +198,6 @@ def test_invalid_database_name_masks_password_in_error(monkeypatch) -> None:
                 cleanup_logging_handlers()
 
 
-@connection_pool_test_limitation
 def test_authentication_failed_masks_password_in_error(monkeypatch) -> None:
     """
     Verify authentication failed errors mask password.
@@ -238,6 +223,9 @@ def test_authentication_failed_masks_password_in_error(monkeypatch) -> None:
         - Error mentions user (for debugging)
         - Password masked in connection string
     """
+    # Reset the connection pool singleton to force re-initialization with new env vars
+    close_pool()
+
     with patch("psycopg2.pool.SimpleConnectionPool") as mock_pool:
         # Simulate authentication failure with connection string
         mock_pool.side_effect = OperationalError(

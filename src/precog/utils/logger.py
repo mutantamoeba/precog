@@ -296,8 +296,21 @@ def _mask_value_recursive(key: str, value: Any) -> Any:
     if not isinstance(value, str):
         value = str(value)
 
-    # Special handling for connection strings - sanitize password portion
-    if key_lower == "connection_string" or ("://" in value and "@" in value):
+    # Check for exception/error messages FIRST since they may contain embedded credentials
+    # Include "event" since log event messages often contain error details with credentials
+    if key_lower in (
+        "exception_message",
+        "error_message",
+        "message",
+        "exception",
+        "error",
+        "event",
+    ):
+        return sanitize_error_message(value)
+
+    # Special handling for pure connection strings - sanitize password portion
+    # Only applies when key is explicitly "connection_string" (not embedded in messages)
+    if key_lower == "connection_string":
         return sanitize_connection_string(value)
 
     # Mask sensitive field names completely
@@ -305,10 +318,6 @@ def _mask_value_recursive(key: str, value: Any) -> Any:
         sensitive in key_lower for sensitive in ["key", "secret", "password", "token", "auth"]
     ):
         return mask_credential(value)
-
-    # Check for exception/error messages that may contain credentials
-    if key_lower in ("exception_message", "error_message", "message", "exception", "error"):
-        return sanitize_error_message(value)
 
     # Check string values for embedded sensitive patterns (HTTP headers, etc.)
     if isinstance(value, str):
