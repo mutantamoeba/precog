@@ -2853,7 +2853,7 @@ Q: Did you update documentation?
 
 **Documentation:**
 - **DATABASE_SCHEMA_SUMMARY_V1.7.md:** Complete schema reference
-- **SCHEMA_MIGRATION_WORKFLOW_V1.0.md:** Detailed workflow guide (to be created)
+- **SCHEMA_MIGRATION_WORKFLOW_V2.0.md:** Comprehensive Alembic-based migration workflow guide
 
 ---
 

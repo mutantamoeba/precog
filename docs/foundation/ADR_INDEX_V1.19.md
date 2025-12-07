@@ -718,7 +718,7 @@ CREATE TABLE trades (
 **References:**
 - ARCHITECTURE_DECISIONS_V2.20.md (full ADR-089 with 433 lines of details)
 - DEVELOPMENT_PATTERNS_V1.5.md (Pattern 14: Schema Migration → CRUD Workflow)
-- SCHEMA_MIGRATION_WORKFLOW_V1.0.md (comprehensive migration guide)
+- SCHEMA_MIGRATION_WORKFLOW_V2.0.md (comprehensive Alembic migration guide)
 - DATABASE_SCHEMA_SUMMARY_V1.12.md (Migration 011 implementation)
 
 ---
