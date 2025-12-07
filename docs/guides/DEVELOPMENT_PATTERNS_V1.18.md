@@ -1,13 +1,22 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.17
+**Version:** 1.18
 **Created:** 2025-11-13
 **Last Updated:** 2025-12-07
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.18:**
+- **Added Pattern 30: Stale Bytecode Cleanup (ALWAYS on pytest-xdist)** (Issue #171)
+- Addresses "fixture not found" ghost tests from stale __pycache__/*.pyc files
+- When test files move/delete, bytecode remains until explicitly cleaned
+- pytest-xdist discovers tests from .pyc files, causing phantom test failures
+- Pre-push hook now includes Step 0.25: Clean stale bytecode before tests
+- Root cause: tests/unit/fixtures/test_transaction_fixtures.py moved to integration/
+- Prevention: `find tests/ -type d -name "__pycache__" -exec rm -rf {} +`
+- Cross-references: Issue #171, Pattern 29, pytest-xdist documentation
 **Changes in V1.17:**
 - **Added Pattern 29: Hybrid Test Isolation Strategy (ALWAYS for Database Tests)** (Issue #171)
 - Documents 3-layer isolation strategy: Transaction rollback (~0ms) -> Pre-push phase separation -> Testcontainers (stress tests)
@@ -7520,6 +7529,118 @@ def test_count_markets(db_transaction):
 
 ---
 
+## Pattern 30: Stale Bytecode Cleanup (ALWAYS on pytest-xdist)
+
+### Problem Statement
+
+When test files are moved or deleted, Python's `__pycache__` directories retain stale `.pyc` bytecode files. pytest-xdist workers discover tests by scanning these cached bytecode files, leading to "phantom" test failures where pytest tries to run tests that no longer exist in their original location.
+
+### Root Cause Discovery (Issue #171)
+
+During implementation of hybrid test isolation, `tests/unit/fixtures/test_transaction_fixtures.py` was moved to `tests/integration/fixtures/` (because it uses the database). However, the bytecode cache remained:
+
+```
+tests/unit/fixtures/__pycache__/test_transaction_fixtures.cpython-314-pytest-8.4.2.pyc
+```
+
+This caused 6 test errors:
+```
+ERROR tests/unit/fixtures/test_transaction_fixtures.py::TestTransactionRollback::test_insert_data_in_transaction
+E       fixture 'db_transaction' not found
+```
+
+The fixture wasn't found because:
+1. pytest-xdist found the old `.pyc` file and tried to run those tests
+2. The fixture imports only work in `tests/integration/` (due to conftest.py structure)
+3. Result: Ghost tests that can't find their fixtures
+
+### When This Happens
+
+| Scenario | Result |
+|----------|--------|
+| Delete a test file | Ghost tests appear in pytest-xdist discovery |
+| Move a test file | Tests discovered in BOTH old and new location |
+| Rename a test file | Old name still appears in test collection |
+| Refactor test structure | Stale tests with missing fixtures |
+
+### Solution: Pre-Push Hook Bytecode Cleanup
+
+Added Step 0.25 to pre-push hook (after branch check, before schema sync):
+
+```bash
+# Step 0.25: Clean Stale Bytecode (Pattern 30 - Prevents Ghost Tests)
+echo "🧹 [0.25/11] Cleaning stale bytecode cache..."
+find tests/ -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+echo "✅ Bytecode cache cleaned"
+```
+
+### Why This Pattern Matters
+
+**Without cleanup:**
+```
+$ git push
+...
+ERROR tests/unit/fixtures/test_transaction_fixtures.py::TestTransactionRollback::test_insert_data_in_transaction
+E       fixture 'db_transaction' not found
+# 6 errors, push blocked
+```
+
+**With cleanup:**
+```
+$ git push
+🧹 [0.25/11] Cleaning stale bytecode cache...
+✅ Bytecode cache cleaned
+...
+============================ 409 passed in 22.15s =============================
+✅ All pre-push checks passed!
+```
+
+### Manual Cleanup Commands
+
+If you encounter ghost tests outside of pre-push:
+
+```bash
+# Clean all test bytecode
+find tests/ -type d -name "__pycache__" -exec rm -rf {} +
+
+# Clean specific directory
+rm -rf tests/unit/fixtures/__pycache__
+
+# Clean entire project (more aggressive)
+find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
+
+# Alternative: pytest cache clear (doesn't clean bytecode)
+pytest --cache-clear  # Only clears pytest cache, NOT __pycache__
+```
+
+### Prevention Strategies
+
+1. **Pre-push hook cleanup** (automatic, implemented in Step 0.25)
+2. **Git hooks on checkout** (could add to post-checkout hook)
+3. **pytest-xdist with `--forked`** (slower but creates fresh processes)
+4. **Avoid moving test files** (refactor in place when possible)
+
+### Implementation Details
+
+**Why find + rm works:**
+- `find tests/ -type d -name "__pycache__"` finds all cache directories
+- `-exec rm -rf {} +` removes them in batch (faster than xargs)
+- `2>/dev/null || true` ignores "directory not found" errors (already deleted)
+
+**Why pytest --cache-clear doesn't help:**
+- pytest cache (`.pytest_cache/`) stores test result history
+- Python bytecode cache (`__pycache__/`) stores compiled `.pyc` files
+- These are different caches; only bytecode causes ghost tests
+
+### Cross-References
+
+- **GitHub Issue #171:** Root cause discovery during hybrid isolation implementation
+- **Pattern 29:** Hybrid Test Isolation Strategy (moved test files trigger this)
+- **pytest-xdist docs:** Worker processes discover tests from bytecode
+- **.git/hooks/pre-push:** Step 0.25 implementation
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -7553,6 +7674,7 @@ def test_count_markets(db_transaction):
 | **27. Dependency Injection** | Code review | `git grep "= None" -- '*.py'` (constructor params) | Pattern 13, Phase 1.9 |
 | **28. CI-Safe Stress Testing** | pytest markers (skipif) | `pytest tests/stress/ -v -m stress` (local only) | PR #167, Issue #168, ADR-057 |
 | **29. Hybrid Test Isolation** | Transaction fixtures + pre-push phases | `db_transaction`, `db_transaction_with_setup`, `db_savepoint` | Issue #171, ADR-057, Pattern 28 |
+| **30. Stale Bytecode Cleanup** | Pre-push hook (Step 0.25) | `find tests/ -type d -name "__pycache__" -exec rm -rf {} +` | Issue #171, Pattern 29, pytest-xdist |
 
 ---
 
