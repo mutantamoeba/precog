@@ -9,7 +9,7 @@
 - Documents requirement for stress tests to use `skipif(_is_ci)` marker to prevent CI hangs
 - ThreadPoolExecutor-based tests must skip in resource-constrained CI environments
 - Clear semantic markers: SKIPPED (intentional) vs XFAIL (misleading "expected failure")
-- **CROSS-REFERENCES:** ADR-099 (skipif vs xfail decision), Pattern 28 (DEVELOPMENT_PATTERNS_V1.16)
+- **CROSS-REFERENCES:** ADR-099 (skipif vs xfail decision), Pattern 28 (DEVELOPMENT_PATTERNS_V1.17)
 **Changes in v2.19:**
 - **LIVE DATA MANAGEMENT REQUIREMENTS**: Added Section 4.12 with REQ-DATA-001 through REQ-DATA-005 (5 comprehensive live data requirements)
 - **REQ-DATA-001**: Game State Data Collection with SCD Type 2 Versioning (~1.8M records/year)
@@ -2906,7 +2906,7 @@ def test_database_failure_recovery_e2e(clean_test_data, position_mgr):
 **Priority:** High
 **Phase:** 1.9 (Test Infrastructure & Process Hardening)
 **Status:** ✅ Complete (Implemented)
-**Cross-References:** ADR-099, Pattern 28 (DEVELOPMENT_PATTERNS_V1.16), TEST_ISOLATION_PATTERNS_V1.1
+**Cross-References:** ADR-099, Pattern 28 (DEVELOPMENT_PATTERNS_V1.17), TEST_ISOLATION_PATTERNS_V1.1
 
 **Problem Statement:**
 Stress tests using `ThreadPoolExecutor` with `as_completed()` can hang indefinitely in resource-constrained CI environments (GitHub Actions runners). These tests work locally but cause CI pipeline timeouts that cannot be interrupted even with `pytest-timeout`.
