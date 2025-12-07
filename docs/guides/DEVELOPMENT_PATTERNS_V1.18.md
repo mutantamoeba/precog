@@ -1,13 +1,32 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.16
+**Version:** 1.18
 **Created:** 2025-11-13
-**Last Updated:** 2025-12-06
+**Last Updated:** 2025-12-07
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.18:**
+- **Added Pattern 30: Stale Bytecode Cleanup (ALWAYS on pytest-xdist)** (Issue #171)
+- Addresses "fixture not found" ghost tests from stale __pycache__/*.pyc files
+- When test files move/delete, bytecode remains until explicitly cleaned
+- pytest-xdist discovers tests from .pyc files, causing phantom test failures
+- Pre-push hook now includes Step 0.25: Clean stale bytecode before tests
+- Root cause: tests/unit/fixtures/test_transaction_fixtures.py moved to integration/
+- Prevention: `find tests/ -type d -name "__pycache__" -exec rm -rf {} +`
+- Cross-references: Issue #171, Pattern 29, pytest-xdist documentation
+**Changes in V1.17:**
+- **Added Pattern 29: Hybrid Test Isolation Strategy (ALWAYS for Database Tests)** (Issue #171)
+- Documents 3-layer isolation strategy: Transaction rollback (~0ms) -> Pre-push phase separation -> Testcontainers (stress tests)
+- Transaction rollback provides ~0ms isolation for 90% of tests using PostgreSQL ROLLBACK
+- Pre-push hook phase separation with DB resets between test categories
+- Testcontainers (Layer 3) for stress tests requiring complete isolation
+- Removed xfail markers from CLI integration tests (now pass with testcontainers)
+- Includes fixture implementation guide: db_transaction, db_transaction_with_setup, db_savepoint
+- Cross-references: Issue #171, ADR-057, Pattern 28
+- Total addition: ~250 lines documenting hybrid test isolation
 **Changes in V1.16:**
 - **Pattern 28 Evolution: xfail(run=False) -> skipif(_is_ci)** (Issue #168)
 - Updated Pattern 28 title: "CI-Safe Stress Testing - skipif for Threading-Based Tests (ALWAYS)"
@@ -7231,6 +7250,397 @@ pytest tests/stress/ -v --durations=10
 
 ---
 
+## Pattern 29: Hybrid Test Isolation Strategy (ALWAYS for Database Tests)
+
+### Why This Pattern Exists
+
+**The Problem: Test Pollution**
+
+Database tests can fail when run in different orders due to:
+- **Stale data:** Previous tests leave data that affects assertions (e.g., `assert count == 1` fails when count == 5)
+- **Foreign key violations:** Tests assume empty tables but find existing data
+- **SCD Type 2 pollution:** Historical records accumulate across tests
+
+**Traditional Solutions (and their costs):**
+| Approach | Overhead/Test | 500 Tests | Problems |
+|----------|---------------|-----------|----------|
+| DELETE cleanup | 50-500ms | 25-250s | Slow, fragile FK ordering |
+| Truncate tables | 20-100ms | 10-50s | Locks, FK ordering |
+| Fresh container/test | 10-15s | 1.4-2 hours | Way too slow |
+
+**The Solution: Hybrid 3-Layer Isolation**
+
+| Layer | Mechanism | Overhead | Use Case |
+|-------|-----------|----------|----------|
+| **Layer 1** | Transaction rollback | ~0ms | 90% of tests (unit, integration) |
+| **Layer 2** | Pre-push phase separation | ~5s/reset | Test category boundaries |
+| **Layer 3** | Testcontainers | ~15s/container | Stress tests, connection pool exhaustion |
+
+### Layer 1: Transaction Rollback (Default - ~0ms)
+
+**How it works:**
+```
+BEGIN TRANSACTION  (test start)
+  INSERT INTO markets...
+  UPDATE positions...
+  SELECT * FROM trades...  (assertions)
+ROLLBACK  (test end - instant, no disk I/O)
+```
+
+**Fixtures provided:**
+
+```python
+# tests/fixtures/transaction_fixtures.py
+
+@pytest.fixture
+def db_transaction() -> Generator[psycopg2.extensions.cursor, None, None]:
+    """
+    Provide database cursor with automatic transaction rollback.
+
+    Every test using this fixture runs in an isolated transaction
+    that is ALWAYS rolled back, regardless of test success/failure.
+    """
+    conn = get_connection()
+    conn.autocommit = False
+    cursor = conn.cursor(cursor_factory=extras.RealDictCursor)
+
+    try:
+        yield cursor
+    finally:
+        conn.rollback()  # ALWAYS rollback - instant cleanup
+        cursor.close()
+        release_connection(conn)
+
+
+@pytest.fixture
+def db_transaction_with_setup(db_transaction):
+    """Transaction with standard test data pre-loaded."""
+    cursor = db_transaction
+
+    # Create test fixtures inside transaction (auto-rolled-back)
+    cursor.execute("""
+        INSERT INTO platforms (platform_id, ...) VALUES ('test_platform', ...)
+        ON CONFLICT (platform_id) DO NOTHING
+    """)
+    cursor.execute("""
+        INSERT INTO strategies (strategy_id, ...) VALUES (99901, ...)
+        ON CONFLICT (strategy_id) DO NOTHING
+    """)
+
+    yield cursor
+    # No cleanup needed - transaction rolled back by parent fixture
+
+
+@pytest.fixture
+def db_savepoint(db_transaction):
+    """Provide nested savepoints for sub-test isolation."""
+    cursor = db_transaction
+
+    class SavepointManager:
+        def create(self, name: str) -> str:
+            cursor.execute(f"SAVEPOINT {name}")
+            return name
+
+        def rollback_to(self, name: str) -> None:
+            cursor.execute(f"ROLLBACK TO SAVEPOINT {name}")
+
+    yield cursor, SavepointManager()
+```
+
+**Usage:**
+
+```python
+# ✅ CORRECT: Test with automatic isolation
+def test_create_market(db_transaction):
+    cursor = db_transaction
+    cursor.execute("INSERT INTO markets ...")
+    cursor.execute("SELECT COUNT(*) FROM markets")
+    assert cursor.fetchone()["count"] == 1
+    # Test ends -> ROLLBACK -> market doesn't exist in DB
+
+
+# ✅ CORRECT: Test with pre-loaded fixtures
+def test_create_position(db_transaction_with_setup):
+    cursor = db_transaction_with_setup
+    # test_platform, 99901 strategy already exist
+    cursor.execute("INSERT INTO positions ...")
+
+
+# ✅ CORRECT: Nested isolation with savepoints
+def test_rollback_behavior(db_savepoint):
+    cursor, savepoints = db_savepoint
+
+    sp1 = savepoints.create("before_insert")
+    cursor.execute("INSERT INTO markets ...")
+
+    # Rollback to savepoint
+    savepoints.rollback_to(sp1)
+
+    cursor.execute("SELECT COUNT(*) FROM markets")
+    assert cursor.fetchone()["count"] == 0  # Insert was rolled back
+```
+
+**When NOT to use transaction rollback:**
+- Tests that verify COMMIT behavior
+- Tests spanning multiple connections (multi-process)
+- Tests that intentionally test rollback
+- Stress tests that exhaust connection pools
+
+### Layer 2: Pre-Push Phase Separation (Test Boundaries)
+
+**How it works:**
+
+The pre-push hook runs tests in 4 phases with database resets between them:
+
+```bash
+# .git/hooks/pre-push (excerpt)
+
+reset_database() {
+    cd src/precog/database
+    alembic downgrade base >/dev/null 2>&1
+    alembic upgrade head >/dev/null 2>&1
+}
+
+# Phase A: Unit Tests (parallel, no DB)
+python -m pytest tests/unit/ --no-cov -n auto
+
+# Phase B: Integration + E2E Tests
+python -m pytest tests/integration/ tests/e2e/ --no-cov -p no:xdist
+reset_database
+
+# Phase C: Property Tests
+python -m pytest tests/property/ --no-cov -p no:xdist
+reset_database
+
+# Phase D: Remaining DB Tests
+python -m pytest tests/security/ tests/stress/ tests/chaos/ --no-cov -p no:xdist
+```
+
+**Why phase separation?**
+- Property tests generate thousands of edge cases -> pollution accumulates
+- Integration tests use VCR cassettes with specific data expectations
+- Stress tests push connection limits -> need clean pool state
+
+### Layer 3: Testcontainers (Complete Isolation)
+
+**When to use:**
+- Stress tests that exhaust connection pools
+- Tests requiring specific PostgreSQL configuration (max_connections)
+- Tests that intentionally corrupt database state
+
+**Fixture:**
+
+```python
+# tests/fixtures/stress_testcontainers.py
+
+@pytest.fixture(scope="session")
+def _stress_postgres_container_session():
+    """Session-scoped container - started once per test session."""
+    if _is_ci:
+        # CI uses service container (already running)
+        yield get_ci_connection_params()
+        return
+
+    # Local: Use testcontainers
+    container = PostgresContainer(
+        image="postgres:15",
+        username="stress_user",
+        password="stress_password",
+        dbname="stress_test_db",
+    ).with_command("postgres -c max_connections=200")
+
+    with container:
+        # Apply migrations once
+        _apply_full_schema(container)
+        yield get_container_params(container)
+
+
+@pytest.fixture
+def stress_postgres_container(_stress_postgres_container_session):
+    """Per-test fixture with pool reset for isolation."""
+    close_pool()
+    initialize_pool()
+    yield _stress_postgres_container_session
+    close_pool()
+```
+
+### Decision Tree: Which Layer to Use
+
+```
+Is this a stress test or connection pool test?
+├─ YES -> Layer 3 (testcontainers)
+└─ NO
+   ├─ Does test need to verify COMMIT behavior?
+   │  ├─ YES -> Use db_cursor_commit fixture (no rollback)
+   │  └─ NO -> Layer 1 (transaction rollback)
+   └─ Does test span multiple connections?
+      ├─ YES -> Layer 3 (testcontainers)
+      └─ NO -> Layer 1 (transaction rollback)
+```
+
+### Performance Comparison
+
+| Approach | 500 Unit Tests | 50 Integration | 20 Stress |
+|----------|----------------|----------------|-----------|
+| DELETE cleanup | 125s overhead | 25s overhead | 10s overhead |
+| Transaction rollback | ~0s overhead | ~0s overhead | N/A |
+| Testcontainers | N/A | N/A | 15s startup, 0s/test |
+| **Hybrid (this pattern)** | ~0s | ~10s (2 resets) | 15s |
+
+**Total hybrid overhead:** ~25s vs ~160s for DELETE-only approach
+
+### Common Mistakes
+
+```python
+# ❌ WRONG: Test calls commit() - breaks transaction isolation
+def test_with_commit(db_transaction):
+    cursor = db_transaction
+    cursor.execute("INSERT INTO markets ...")
+    cursor.connection.commit()  # BAD! Data persists after test
+
+# ✅ CORRECT: Let fixture handle transaction lifecycle
+def test_without_commit(db_transaction):
+    cursor = db_transaction
+    cursor.execute("INSERT INTO markets ...")
+    # No commit - fixture rolls back automatically
+
+
+# ❌ WRONG: Using xfail to hide isolation problems
+@pytest.mark.xfail(reason="Flaky due to database state")
+def test_count_markets(db_cursor):
+    ...
+
+# ✅ CORRECT: Use proper isolation
+def test_count_markets(db_transaction):
+    cursor = db_transaction
+    cursor.execute("INSERT INTO markets ...")  # Start fresh
+    cursor.execute("SELECT COUNT(*) ...")
+    assert cursor.fetchone()["count"] == 1  # Always passes
+```
+
+### Cross-References
+
+- **GitHub Issue #171:** Implement hybrid test isolation strategy
+- **ADR-057:** Testcontainers for Database Test Isolation
+- **Pattern 28:** CI-Safe Stress Testing (skipif for threading tests)
+- **tests/fixtures/transaction_fixtures.py:** Layer 1 implementation
+- **tests/fixtures/stress_testcontainers.py:** Layer 3 implementation
+- **.git/hooks/pre-push:** Layer 2 implementation (phase separation)
+
+---
+
+## Pattern 30: Stale Bytecode Cleanup (ALWAYS on pytest-xdist)
+
+### Problem Statement
+
+When test files are moved or deleted, Python's `__pycache__` directories retain stale `.pyc` bytecode files. pytest-xdist workers discover tests by scanning these cached bytecode files, leading to "phantom" test failures where pytest tries to run tests that no longer exist in their original location.
+
+### Root Cause Discovery (Issue #171)
+
+During implementation of hybrid test isolation, `tests/unit/fixtures/test_transaction_fixtures.py` was moved to `tests/integration/fixtures/` (because it uses the database). However, the bytecode cache remained:
+
+```
+tests/unit/fixtures/__pycache__/test_transaction_fixtures.cpython-314-pytest-8.4.2.pyc
+```
+
+This caused 6 test errors:
+```
+ERROR tests/unit/fixtures/test_transaction_fixtures.py::TestTransactionRollback::test_insert_data_in_transaction
+E       fixture 'db_transaction' not found
+```
+
+The fixture wasn't found because:
+1. pytest-xdist found the old `.pyc` file and tried to run those tests
+2. The fixture imports only work in `tests/integration/` (due to conftest.py structure)
+3. Result: Ghost tests that can't find their fixtures
+
+### When This Happens
+
+| Scenario | Result |
+|----------|--------|
+| Delete a test file | Ghost tests appear in pytest-xdist discovery |
+| Move a test file | Tests discovered in BOTH old and new location |
+| Rename a test file | Old name still appears in test collection |
+| Refactor test structure | Stale tests with missing fixtures |
+
+### Solution: Pre-Push Hook Bytecode Cleanup
+
+Added Step 0.25 to pre-push hook (after branch check, before schema sync):
+
+```bash
+# Step 0.25: Clean Stale Bytecode (Pattern 30 - Prevents Ghost Tests)
+echo "🧹 [0.25/11] Cleaning stale bytecode cache..."
+find tests/ -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+echo "✅ Bytecode cache cleaned"
+```
+
+### Why This Pattern Matters
+
+**Without cleanup:**
+```
+$ git push
+...
+ERROR tests/unit/fixtures/test_transaction_fixtures.py::TestTransactionRollback::test_insert_data_in_transaction
+E       fixture 'db_transaction' not found
+# 6 errors, push blocked
+```
+
+**With cleanup:**
+```
+$ git push
+🧹 [0.25/11] Cleaning stale bytecode cache...
+✅ Bytecode cache cleaned
+...
+============================ 409 passed in 22.15s =============================
+✅ All pre-push checks passed!
+```
+
+### Manual Cleanup Commands
+
+If you encounter ghost tests outside of pre-push:
+
+```bash
+# Clean all test bytecode
+find tests/ -type d -name "__pycache__" -exec rm -rf {} +
+
+# Clean specific directory
+rm -rf tests/unit/fixtures/__pycache__
+
+# Clean entire project (more aggressive)
+find . -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null
+
+# Alternative: pytest cache clear (doesn't clean bytecode)
+pytest --cache-clear  # Only clears pytest cache, NOT __pycache__
+```
+
+### Prevention Strategies
+
+1. **Pre-push hook cleanup** (automatic, implemented in Step 0.25)
+2. **Git hooks on checkout** (could add to post-checkout hook)
+3. **pytest-xdist with `--forked`** (slower but creates fresh processes)
+4. **Avoid moving test files** (refactor in place when possible)
+
+### Implementation Details
+
+**Why find + rm works:**
+- `find tests/ -type d -name "__pycache__"` finds all cache directories
+- `-exec rm -rf {} +` removes them in batch (faster than xargs)
+- `2>/dev/null || true` ignores "directory not found" errors (already deleted)
+
+**Why pytest --cache-clear doesn't help:**
+- pytest cache (`.pytest_cache/`) stores test result history
+- Python bytecode cache (`__pycache__/`) stores compiled `.pyc` files
+- These are different caches; only bytecode causes ghost tests
+
+### Cross-References
+
+- **GitHub Issue #171:** Root cause discovery during hybrid isolation implementation
+- **Pattern 29:** Hybrid Test Isolation Strategy (moved test files trigger this)
+- **pytest-xdist docs:** Worker processes discover tests from bytecode
+- **.git/hooks/pre-push:** Step 0.25 implementation
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -7263,6 +7673,8 @@ pytest tests/stress/ -v --durations=10
 | **26. Resource Cleanup** | Code review | `git grep "def close" -- '*.py'` | Pattern 20, Phase 1.9 |
 | **27. Dependency Injection** | Code review | `git grep "= None" -- '*.py'` (constructor params) | Pattern 13, Phase 1.9 |
 | **28. CI-Safe Stress Testing** | pytest markers (skipif) | `pytest tests/stress/ -v -m stress` (local only) | PR #167, Issue #168, ADR-057 |
+| **29. Hybrid Test Isolation** | Transaction fixtures + pre-push phases | `db_transaction`, `db_transaction_with_setup`, `db_savepoint` | Issue #171, ADR-057, Pattern 28 |
+| **30. Stale Bytecode Cleanup** | Pre-push hook (Step 0.25) | `find tests/ -type d -name "__pycache__" -exec rm -rf {} +` | Issue #171, Pattern 29, pytest-xdist |
 
 ---
 

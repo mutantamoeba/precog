@@ -10,7 +10,7 @@
 - Documents threading tests that hang in CI due to resource constraints
 - Solution: `pytest.mark.skipif(_is_ci)` for ThreadPoolExecutor/threading.Barrier tests
 - Helper classes: CISafeBarrier, with_timeout decorator
-- Reference: Pattern 28 (DEVELOPMENT_PATTERNS_V1.16.md)
+- Reference: Pattern 28 (DEVELOPMENT_PATTERNS_V1.18.md)
 
 ---
 
@@ -728,7 +728,7 @@ def with_timeout(timeout_seconds: float = 30.0):
 
 ### Reference
 
-- **Pattern 28:** DEVELOPMENT_PATTERNS_V1.16.md (comprehensive threading CI patterns)
+- **Pattern 28:** DEVELOPMENT_PATTERNS_V1.18.md (comprehensive threading CI patterns)
 - **Issue #168:** Testcontainers for database stress tests
 - **ADR-057:** Testcontainers for Database Test Isolation
 - **tests/fixtures/stress_testcontainers.py:** CISafeBarrier, with_timeout implementation

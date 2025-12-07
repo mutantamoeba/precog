@@ -69,6 +69,21 @@ except ImportError:
     stress_postgres_container = None  # type: ignore[assignment, misc]
     stress_db_connection = None  # type: ignore[assignment, misc]
 
+# Import transaction-based isolation fixtures (Issue #171 - Layer 1)
+# These provide ~0ms overhead test isolation via transaction rollback
+# Use db_transaction for most tests, db_transaction_with_setup for tests
+# needing standard test data (platform, series, event, strategy, model)
+try:
+    from tests.fixtures.transaction_fixtures import (
+        db_savepoint,
+        db_transaction,
+        db_transaction_with_setup,
+    )
+except ImportError:
+    db_transaction = None  # type: ignore[assignment, misc]
+    db_transaction_with_setup = None  # type: ignore[assignment, misc]
+    db_savepoint = None  # type: ignore[assignment, misc]
+
 # Import modules to test
 from precog.database.connection import (
     close_pool,
