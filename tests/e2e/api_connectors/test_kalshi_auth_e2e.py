@@ -313,10 +313,6 @@ class TestKalshiAuthEdgeCases:
             f"Unexpected status code: {response.status_code}"
         )
 
-    @pytest.mark.xfail(
-        reason="Timing-dependent test - modern CPUs execute too fast for reliable ms uniqueness",
-        strict=False,  # Allow XPASS - test may pass on slower systems or under load
-    )
     def test_rapid_requests_have_unique_timestamps(self, kalshi_auth):
         """Verify rapid sequential requests get different timestamps.
 
@@ -324,8 +320,8 @@ class TestKalshiAuthEdgeCases:
             Millisecond timestamps should be unique even for rapid requests.
             Duplicate timestamps could cause signature collisions.
 
-        Note: This test is marked xfail because on fast CPUs, 5 requests
-        can complete within 1-2 milliseconds, causing expected collisions.
+        Note: On fast CPUs, requests may complete within milliseconds, but
+        the test allows for some collision (requires 3/5 unique timestamps).
         """
         timestamps = []
         for _ in range(5):

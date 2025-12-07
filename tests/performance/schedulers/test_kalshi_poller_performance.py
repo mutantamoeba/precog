@@ -13,8 +13,15 @@ Related:
 Usage:
     pytest tests/performance/schedulers/test_kalshi_poller_performance.py -v -m performance
 
-Note: All tests skipped - schedulers module not yet implemented (Phase 1.9+).
-The KalshiMarketPoller class will be implemented in Phase 1.9.
+Educational Note:
+    KalshiMarketPoller provides scheduled polling of Kalshi market prices:
+    - Uses APScheduler for background job execution
+    - Configurable poll intervals (5-120 seconds)
+    - Thread-safe stats tracking
+    - Supports mocked clients for testing
+
+    These tests use mocked Kalshi clients to measure poller overhead
+    independent of network latency.
 """
 
 import time
@@ -23,7 +30,6 @@ from unittest.mock import MagicMock
 import pytest
 
 
-@pytest.mark.skip(reason="schedulers module not yet implemented - Phase 1.9+")
 @pytest.mark.performance
 class TestKalshiMarketPollerPerformance:
     """Performance benchmarks for Kalshi Market Poller operations."""
@@ -112,8 +118,12 @@ class TestKalshiMarketPollerPerformance:
 
         Educational Note:
             This tests the full poll_once cycle with a realistic
-            number of markets returned from the API.
+            number of markets returned from the API. Database sync
+            operations are mocked to isolate polling loop overhead
+            from database I/O latency.
         """
+        from unittest.mock import patch
+
         from precog.schedulers.kalshi_poller import KalshiMarketPoller
 
         # Create mock with realistic market data
@@ -143,11 +153,13 @@ class TestKalshiMarketPollerPerformance:
 
         latencies = []
 
-        for _ in range(50):
-            start = time.perf_counter()
-            poller.poll_once()
-            end = time.perf_counter()
-            latencies.append((end - start) * 1000)
+        # Mock database sync to isolate polling loop performance
+        with patch.object(poller, "_sync_market_to_db", return_value=None):
+            for _ in range(50):
+                start = time.perf_counter()
+                poller.poll_once()
+                end = time.perf_counter()
+                latencies.append((end - start) * 1000)
 
         p95 = sorted(latencies)[int(len(latencies) * 0.95)]
         assert p95 < 100, f"p95 processing time {p95:.2f}ms exceeds 100ms target"

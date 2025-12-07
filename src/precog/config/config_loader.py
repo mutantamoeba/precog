@@ -364,11 +364,13 @@ class ConfigLoader:
         if not config_name.endswith(".yaml"):
             config_name = f"{config_name}.yaml"
 
-        # Check cache first
+        # Check cache first (use get() for thread-safety - single atomic operation
+        # instead of `if key in dict` + `dict[key]` which can race with reload())
         cache_key = config_name.replace(".yaml", "")
-        if cache_key in self.configs:
+        cached = self.configs.get(cache_key)
+        if cached is not None:
             logger.debug(f"Config '{cache_key}' loaded from cache")
-            return self.configs[cache_key]
+            return cached
 
         # Load from file
         file_path = self.config_dir / config_name
@@ -445,15 +447,14 @@ class ConfigLoader:
             >>> print(environment)
             'demo'
         """
-        # Load config if not cached
-        if config_name not in self.configs:
+        # Load config if not cached (use get() for thread-safety)
+        config = self.configs.get(config_name)
+        if config is None:
             try:
-                self.load(config_name)
+                config = self.load(config_name)
             except FileNotFoundError:
                 logger.debug(f"Config '{config_name}' not found, returning default: {default}")
                 return default
-
-        config = self.configs[config_name]
 
         # If no key path, return entire config
         if key_path is None:

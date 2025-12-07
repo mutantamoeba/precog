@@ -12,6 +12,15 @@ Related:
 
 Usage:
     pytest tests/performance/analytics/test_model_manager_performance.py -v -m performance
+
+Educational Note:
+    The probability_models table stores ML model metadata with:
+    - model_class: FK to model_classes lookup table (elo, ensemble, ml, hybrid, etc.)
+    - config: JSONB field for model parameters (IMMUTABLE after creation)
+    - status: Lifecycle state (draft, testing, active, deprecated)
+
+    These performance tests measure raw SQL query performance, not ModelManager
+    overhead. In production, ModelManager adds validation and business logic.
 """
 
 import statistics
@@ -26,7 +35,6 @@ from precog.database.connection import get_cursor
 class TestModelManagerPerformance:
     """Performance benchmarks for ModelManager operations."""
 
-    @pytest.mark.skip(reason="models table not yet implemented - Phase 1.5+ (ModelManager)")
     def test_model_version_query_latency(self, db_pool, clean_test_data):
         """
         PERFORMANCE: Measure model version query latency.
@@ -34,16 +42,22 @@ class TestModelManagerPerformance:
         Benchmark:
         - Target: < 20ms per query (p95)
         - SLA: < 50ms per query (p99)
+
+        Educational Note:
+            This tests point queries on model_id, which uses the primary key
+            index for O(1) lookup. Performance should be consistent regardless
+            of table size.
         """
-        # Setup: Create test model
+        # Setup: Create test model in probability_models table
         with get_cursor(commit=True) as cur:
             cur.execute(
                 """
-                INSERT INTO models (
-                    model_name, model_version, model_type, description,
-                    status, row_current_ind
+                INSERT INTO probability_models (
+                    model_name, model_version, model_class, config,
+                    description, status
                 )
-                VALUES ('perf-test-model', 'v1.0.0', 'elo', 'Performance test', 'active', TRUE)
+                VALUES ('perf-test-model', 'v1.0.0', 'elo', '{"k_factor": 32}'::jsonb,
+                        'Performance test', 'active')
                 RETURNING model_id
                 """
             )
@@ -57,8 +71,8 @@ class TestModelManagerPerformance:
                 with get_cursor() as cur:
                     cur.execute(
                         """
-                        SELECT * FROM models
-                        WHERE model_id = %s AND row_current_ind = TRUE
+                        SELECT * FROM probability_models
+                        WHERE model_id = %s
                         """,
                         (model_id,),
                     )
@@ -75,15 +89,18 @@ class TestModelManagerPerformance:
 
         finally:
             with get_cursor(commit=True) as cur:
-                cur.execute("DELETE FROM models WHERE model_id = %s", (model_id,))
+                cur.execute("DELETE FROM probability_models WHERE model_id = %s", (model_id,))
 
-    @pytest.mark.skip(reason="models table not yet implemented - Phase 1.5+ (ModelManager)")
     def test_model_list_pagination_performance(self, db_pool, clean_test_data):
         """
         PERFORMANCE: Measure paginated model list query performance.
 
         Benchmark:
         - Target: < 30ms per page (p95)
+
+        Educational Note:
+            Pagination uses OFFSET/LIMIT pattern. For large tables, consider
+            keyset pagination (WHERE model_id > last_id) for better performance.
         """
         # Setup: Create test models
         model_ids = []
@@ -91,11 +108,12 @@ class TestModelManagerPerformance:
             for i in range(20):
                 cur.execute(
                     """
-                    INSERT INTO models (
-                        model_name, model_version, model_type, description,
-                        status, row_current_ind
+                    INSERT INTO probability_models (
+                        model_name, model_version, model_class, config,
+                        description, status
                     )
-                    VALUES (%s, 'v1.0.0', 'elo', 'Perf test', 'active', TRUE)
+                    VALUES (%s, 'v1.0.0', 'elo', '{"k_factor": 32}'::jsonb,
+                            'Perf test', 'active')
                     RETURNING model_id
                     """,
                     (f"perf-model-{i:03d}",),
@@ -110,8 +128,7 @@ class TestModelManagerPerformance:
                 with get_cursor() as cur:
                     cur.execute(
                         """
-                        SELECT * FROM models
-                        WHERE row_current_ind = TRUE
+                        SELECT * FROM probability_models
                         ORDER BY model_id
                         LIMIT 10 OFFSET 0
                         """
@@ -126,24 +143,29 @@ class TestModelManagerPerformance:
         finally:
             with get_cursor(commit=True) as cur:
                 for model_id in model_ids:
-                    cur.execute("DELETE FROM models WHERE model_id = %s", (model_id,))
+                    cur.execute("DELETE FROM probability_models WHERE model_id = %s", (model_id,))
 
-    @pytest.mark.skip(reason="models table not yet implemented - Phase 1.5+ (ModelManager)")
     def test_model_update_throughput(self, db_pool, clean_test_data):
         """
         PERFORMANCE: Measure model update throughput.
 
         Benchmark:
         - Target: >= 20 updates/sec
+
+        Educational Note:
+            Update operations acquire row-level locks. In production with
+            concurrent updates, throughput will be lower due to lock contention.
+            This test measures single-threaded baseline.
         """
         with get_cursor(commit=True) as cur:
             cur.execute(
                 """
-                INSERT INTO models (
-                    model_name, model_version, model_type, description,
-                    status, row_current_ind
+                INSERT INTO probability_models (
+                    model_name, model_version, model_class, config,
+                    description, status
                 )
-                VALUES ('perf-update-model', 'v1.0.0', 'elo', 'Test', 'active', TRUE)
+                VALUES ('perf-update-model', 'v1.0.0', 'elo', '{"k_factor": 32}'::jsonb,
+                        'Test', 'active')
                 RETURNING model_id
                 """
             )
@@ -157,7 +179,7 @@ class TestModelManagerPerformance:
                 with get_cursor(commit=True) as cur:
                     cur.execute(
                         """
-                        UPDATE models SET description = %s
+                        UPDATE probability_models SET description = %s
                         WHERE model_id = %s
                         """,
                         (f"Updated {i}", model_id),
@@ -170,4 +192,4 @@ class TestModelManagerPerformance:
 
         finally:
             with get_cursor(commit=True) as cur:
-                cur.execute("DELETE FROM models WHERE model_id = %s", (model_id,))
+                cur.execute("DELETE FROM probability_models WHERE model_id = %s", (model_id,))

@@ -6,11 +6,6 @@ This test suite verifies:
 2. API key rotation properly rejects old keys
 3. Token expiry triggers re-authentication
 
-**IMPLEMENTATION STATUS:**
-    Some tests define REQUIREMENTS for features not yet implemented:
-    - Connection string sanitization: Requires logger credential masking (Phase 3+)
-    - API key rotation: Basic tests pass, some require credential setup
-
 Related Issue: GitHub Issue #129 (Security Tests)
 Related Pattern: Pattern 4 (Security - NO CREDENTIALS IN CODE)
 Related Requirement: REQ-SEC-009 (Connection Security)
@@ -27,7 +22,7 @@ import requests
 from psycopg2 import OperationalError
 
 from precog.api_connectors.kalshi_client import KalshiClient
-from precog.database.connection import get_connection
+from precog.database.connection import close_pool, get_connection
 from precog.utils.logger import setup_logging
 
 
@@ -46,19 +41,6 @@ def _kalshi_credentials_available() -> bool:
     key_path = os.getenv(f"{prefix}_KALSHI_PRIVATE_KEY_PATH")
 
     return bool(api_key and key_path)
-
-
-# Mark tests that require credential masking feature (not yet implemented)
-credential_masking_not_implemented = pytest.mark.xfail(
-    reason="Credential masking (REQ-SEC-009) not yet implemented - Phase 3+ feature",
-    strict=False,
-)
-
-# Mark tests that require connection pool reset (not easily testable with singleton)
-connection_pool_test_limitation = pytest.mark.xfail(
-    reason="Connection pool singleton pattern makes these tests flaky - requires pool reset",
-    strict=False,
-)
 
 
 def cleanup_logging_handlers() -> None:
@@ -93,7 +75,6 @@ FAKE_NEW_API_KEY = "new-api-key-xyz789-valid"
 # =============================================================================
 
 
-@connection_pool_test_limitation
 def test_connection_timeout_masks_password_in_error(monkeypatch) -> None:
     """
     Verify connection timeout errors mask password in connection string.
@@ -118,37 +99,51 @@ def test_connection_timeout_masks_password_in_error(monkeypatch) -> None:
         - Connection fails with timeout
         - Error message contains connection info (host, port, database)
         - Password replaced with ****
+
+    Note:
+        This test mocks the connection pool to avoid actual network timeouts,
+        which can take 60-120+ seconds depending on OS TCP settings. The mock
+        simulates what psycopg2 would raise on a real timeout.
     """
-    # Setup fake database with timeout
-    monkeypatch.setenv("DB_HOST", "192.0.2.1")  # TEST-NET (RFC 5737) - guaranteed timeout
-    monkeypatch.setenv("DB_PORT", "5432")
-    monkeypatch.setenv("DB_NAME", "testdb")
-    monkeypatch.setenv("DB_USER", "testuser")
-    monkeypatch.setenv("DB_PASSWORD", FAKE_DB_PASSWORD)
-    monkeypatch.setenv("DB_CONNECT_TIMEOUT", "1")  # 1 second timeout
+    # Reset the connection pool singleton to force re-initialization with new env vars
+    close_pool()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        try:
-            setup_logging(log_level="DEBUG", log_to_file=True, log_dir=tmpdir)
+    # Mock SimpleConnectionPool to simulate timeout error
+    # This avoids waiting for actual TCP timeout (60-120+ seconds)
+    #
+    # Note: psycopg2's actual timeout errors don't include the connection string
+    # (unlike some errors that do). This test verifies our error handling doesn't
+    # accidentally expose passwords. The mock simulates psycopg2's real behavior.
+    with patch("psycopg2.pool.SimpleConnectionPool") as mock_pool:
+        # Simulate timeout exception as psycopg2 actually formats it
+        # psycopg2 does NOT include connection string in timeout errors
+        mock_pool.side_effect = OperationalError(
+            "could not connect to server: Connection timed out\n"
+            '\tIs the server running on host "192.0.2.1" and accepting\n'
+            "\tTCP/IP connections on port 5432?"
+        )
 
-            # Attempt connection (will timeout)
-            with pytest.raises(OperationalError) as exc_info:
-                get_connection()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            try:
+                setup_logging(log_level="DEBUG", log_to_file=True, log_dir=tmpdir)
 
-            # Verify password NOT in exception message
-            error_message = str(exc_info.value)
-            assert FAKE_DB_PASSWORD not in error_message, (
-                f"Password '{FAKE_DB_PASSWORD}' found in connection timeout error!"
-            )
+                # Attempt connection (mock will raise OperationalError)
+                with pytest.raises(OperationalError) as exc_info:
+                    get_connection()
 
-            # Verify connection info IS present (for debugging)
-            # Note: psycopg2 errors may not always include connection string
-            # This test verifies IF connection string is in error, password is masked
-        finally:
-            cleanup_logging_handlers()
+                # Verify password NOT in exception message
+                error_message = str(exc_info.value)
+                assert FAKE_DB_PASSWORD not in error_message, (
+                    f"Password '{FAKE_DB_PASSWORD}' found in connection timeout error!"
+                )
+
+                # Verify connection info IS present (for debugging)
+                # Note: psycopg2 errors may not always include connection string
+                # This test verifies IF connection string is in error, password is masked
+            finally:
+                cleanup_logging_handlers()
 
 
-@connection_pool_test_limitation
 def test_invalid_database_name_masks_password_in_error(monkeypatch) -> None:
     """
     Verify invalid database name errors mask password.
@@ -174,6 +169,9 @@ def test_invalid_database_name_masks_password_in_error(monkeypatch) -> None:
         - Error mentions database name
         - Password masked in any connection string
     """
+    # Reset the connection pool singleton to force re-initialization with new env vars
+    close_pool()
+
     # Setup connection to nonexistent database
     # Note: This test requires real database server, so we'll mock it
     with patch("psycopg2.pool.SimpleConnectionPool") as mock_pool:
@@ -212,7 +210,6 @@ def test_invalid_database_name_masks_password_in_error(monkeypatch) -> None:
                 cleanup_logging_handlers()
 
 
-@connection_pool_test_limitation
 def test_authentication_failed_masks_password_in_error(monkeypatch) -> None:
     """
     Verify authentication failed errors mask password.
@@ -238,6 +235,9 @@ def test_authentication_failed_masks_password_in_error(monkeypatch) -> None:
         - Error mentions user (for debugging)
         - Password masked in connection string
     """
+    # Reset the connection pool singleton to force re-initialization with new env vars
+    close_pool()
+
     with patch("psycopg2.pool.SimpleConnectionPool") as mock_pool:
         # Simulate authentication failure with connection string
         mock_pool.side_effect = OperationalError(

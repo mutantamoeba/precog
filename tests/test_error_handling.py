@@ -1,16 +1,17 @@
 """
 Error Handling Tests
 ====================
-Phase 1.5 test additions to increase coverage from 87% to 90%+
+Tests error paths and edge cases for database and configuration handling.
 
-Tests error paths and edge cases that were missing from initial test suite:
-- Connection pool exhaustion
-- Database connection loss/reconnection
-- Invalid configuration files
-- Missing environment variables
-- Logging errors
+Tests included:
+- Transaction rollback on connection loss
+- Invalid YAML configuration files
+- Missing configuration files
+- Foreign key constraint violations
 
-Target: 90%+ coverage before Phase 2
+Note: Tests for features not yet implemented (connection pool control,
+environment variable expansion, type validation, logger file params)
+were removed in Issue #175 cleanup.
 """
 
 import psycopg2
@@ -21,32 +22,8 @@ from precog.config.config_loader import ConfigLoader
 from precog.database.connection import get_connection
 
 # ============================================================================
-# Connection Pool Error Handling (HIGH PRIORITY)
+# Connection Error Handling
 # ============================================================================
-
-
-def test_connection_pool_exhaustion():
-    """
-    Test behavior when all connections in pool are exhausted.
-
-    Expected: Either queue/wait for available connection or raise PoolTimeout error
-    Coverage: database/connection.py lines 81-83 (pool exhaustion handling)
-    """
-    pytest.skip(
-        "Connection pool initialized at module import (connection.py:348-352); cannot control pool size in tests"
-    )
-
-
-def test_database_connection_failure_and_reconnection():
-    """
-    Test behavior when database connection is lost mid-operation.
-
-    Expected: Retry connection with exponential backoff, don't crash
-    Coverage: database/connection.py lines 273-277 (connection retry logic)
-    """
-    pytest.skip(
-        "Connection pool initialized at module import (connection.py:348-352); cannot reinitialize with test credentials"
-    )
 
 
 def test_transaction_rollback_on_connection_loss():
@@ -91,7 +68,7 @@ def test_transaction_rollback_on_connection_loss():
 
 
 # ============================================================================
-# Configuration Error Handling (MEDIUM PRIORITY)
+# Configuration Error Handling
 # ============================================================================
 
 
@@ -140,75 +117,9 @@ def test_config_loader_missing_required_file():
     assert "nonexistent_config" in error_msg
 
 
-def test_config_loader_missing_environment_variable():
-    """
-    Test behavior when referenced environment variable doesn't exist.
-
-    Expected: Clear error message indicating which env var is missing
-    Future Feature: Environment variable expansion within YAML files (e.g., ${DATABASE_HOST})
-    """
-    pytest.skip(
-        "Environment variable expansion not implemented in ConfigLoader.load(); "
-        "no support for ${VAR} substitution in YAML files"
-    )
-
-
-def test_config_loader_invalid_data_type():
-    """
-    Test behavior when config value has wrong data type.
-
-    Expected: Type validation error with clear message
-    Future Feature: Schema validation against expected types for config values
-    """
-    pytest.skip(
-        "Type validation not implemented in ConfigLoader.load(); "
-        "only Decimal conversion performed, no schema validation"
-    )
-
-
 # ============================================================================
-# Logging Error Handling (LOW PRIORITY)
+# Database CRUD Error Handling
 # ============================================================================
-
-
-def test_logger_file_permission_error():
-    """
-    Test behavior when log file directory has no write permissions.
-
-    Expected: Fallback to console logging or raise clear error
-    Coverage: utils/logger.py lines 204-211 (file handler errors)
-    """
-    pytest.skip("get_logger() doesn't accept log_file parameter; logging configured globally")
-
-
-def test_logger_disk_full_simulation():
-    """
-    Test behavior when disk is full and log write fails.
-
-    Expected: Don't crash application, handle gracefully
-    Coverage: utils/logger.py lines 204-211 (write errors)
-
-    Note: Difficult to simulate true disk full without root permissions.
-    This test ensures logger doesn't crash on write errors.
-    """
-    pytest.skip("get_logger() doesn't accept log_file parameter; logging configured globally")
-
-
-# ============================================================================
-# Database CRUD Error Handling (MEDIUM PRIORITY)
-# ============================================================================
-
-
-def test_crud_operation_with_null_violation():
-    """
-    Test CRUD operations handle NOT NULL constraint violations.
-
-    Expected: Raise IntegrityError with clear constraint name
-    Coverage: database/crud_operations.py lines 336-337 (constraint violations)
-    """
-    pytest.skip(
-        "event_id column allows NULL in database schema (see DATABASE_SCHEMA_SUMMARY_V1.7.md line 142); no NOT NULL constraint to test"
-    )
 
 
 def test_crud_operation_with_foreign_key_violation():
@@ -236,23 +147,3 @@ def test_crud_operation_with_foreign_key_violation():
 
     error_msg = str(exc_info.value).lower()
     assert "foreign key" in error_msg or "violates" in error_msg
-
-
-# ============================================================================
-# Test Summary
-# ============================================================================
-"""
-Expected Coverage Increase:
-
-Current: 87.16% (335 statements, 43 missed)
-Target: 90%+ (335 statements, <34 missed)
-
-These 10 tests target:
-- connection.py: 8 missed lines -> 4 missed (50% improvement)
-- config_loader.py: 20 missed lines -> 15 missed (25% improvement)
-- crud_operations.py: 5 missed lines -> 2 missed (60% improvement)
-- logger.py: 6 missed lines -> 4 missed (33% improvement)
-
-Estimated New Coverage: 89-91%
-Estimated Run Time: ~5 seconds
-"""

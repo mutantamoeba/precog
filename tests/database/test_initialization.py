@@ -19,7 +19,6 @@ Reference:
 
 import os
 import subprocess
-import sys
 import uuid
 from collections.abc import Generator
 from pathlib import Path
@@ -546,10 +545,6 @@ class TestApplyMigrations:
             except OSError:
                 pass
 
-    @pytest.mark.skipif(
-        sys.platform == "win32",
-        reason="Symlink-based path traversal test not applicable on Windows",
-    )
     def test_apply_migrations_path_traversal(self) -> None:
         """Test migration application rejects path traversal attacks.
 
@@ -560,6 +555,11 @@ class TestApplyMigrations:
             This test creates a migration directory with a symlink that tries
             to point outside the migration directory. The security validation
             should detect this and mark it as failed.
+
+        Platform Compatibility:
+            - Linux/macOS: Symlinks always work
+            - Windows: Requires Developer Mode or elevated privileges
+            - If symlink creation fails, test skips gracefully with explanation
 
         Coverage:
             This test covers lines 210-211 (path traversal security check).
@@ -595,9 +595,15 @@ class TestApplyMigrations:
                 # Either way, we shouldn't apply malicious migration
                 assert "002_malicious.sql" in failed or applied < 2
 
-            except OSError:
+            except OSError as e:
                 # Symlink creation failed (permissions issue)
-                pytest.skip("Cannot create symlinks on this platform - permission denied")
+                # On Windows, enable Developer Mode: Settings > Update & Security > For developers
+                skip_msg = (
+                    f"Symlink creation failed: {e}. "
+                    "On Windows, enable Developer Mode to allow symlinks without elevation. "
+                    "This test validates path traversal security (CWE-22)."
+                )
+                pytest.skip(skip_msg)
 
         finally:
             # Cleanup
