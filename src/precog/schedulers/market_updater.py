@@ -43,6 +43,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any, ClassVar, TypedDict
 
+from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
@@ -127,6 +128,8 @@ class MarketUpdater:
         poll_interval: int = DEFAULT_POLL_INTERVAL,
         idle_interval: int = DEFAULT_IDLE_INTERVAL,
         espn_client: ESPNClient | None = None,
+        persist_jobs: bool = False,
+        job_store_url: str | None = None,
     ) -> None:
         """
         Initialize the MarketUpdater.
@@ -136,19 +139,32 @@ class MarketUpdater:
             poll_interval: Seconds between polls when games are active.
             idle_interval: Seconds between checks when no games active.
             espn_client: Optional ESPNClient instance (for testing/mocking).
+            persist_jobs: If True, persist scheduled jobs to database.
+            job_store_url: SQLAlchemy URL for job store (required if persist_jobs=True).
 
         Raises:
             ValueError: If poll_interval < 5 or idle_interval < 15.
+            ValueError: If persist_jobs=True but job_store_url not provided.
+
+        Educational Note:
+            Job persistence enables the scheduler to survive restarts. When enabled,
+            scheduled jobs are stored in a SQLite/PostgreSQL database and restored
+            when the scheduler starts again. This is important for production
+            deployments where you don't want to miss polls during restarts.
         """
         if poll_interval < 5:
             raise ValueError("poll_interval must be at least 5 seconds")
         if idle_interval < 15:
             raise ValueError("idle_interval must be at least 15 seconds")
+        if persist_jobs and not job_store_url:
+            raise ValueError("job_store_url required when persist_jobs=True")
 
         self.leagues = leagues or self.DEFAULT_LEAGUES.copy()
         self.poll_interval = poll_interval
         self.idle_interval = idle_interval
         self.espn_client = espn_client or ESPNClient()
+        self.persist_jobs = persist_jobs
+        self.job_store_url = job_store_url
 
         # State tracking
         self._scheduler: BackgroundScheduler | None = None
@@ -163,10 +179,12 @@ class MarketUpdater:
         }
 
         logger.info(
-            "MarketUpdater initialized: leagues=%s, poll_interval=%ds, idle_interval=%ds",
+            "MarketUpdater initialized: leagues=%s, poll_interval=%ds, idle_interval=%ds, "
+            "persist_jobs=%s",
             self.leagues,
             self.poll_interval,
             self.idle_interval,
+            self.persist_jobs,
         )
 
     @property
@@ -195,17 +213,30 @@ class MarketUpdater:
             We use BackgroundScheduler instead of BlockingScheduler because
             we want the calling code to continue executing. The scheduler
             manages its own thread pool for job execution.
+
+            When job persistence is enabled via persist_jobs=True, jobs are
+            stored in a SQLite/PostgreSQL database. This means:
+            - Jobs survive scheduler restarts
+            - Missed executions are tracked and handled
+            - Multiple scheduler instances can share the same job store
         """
         with self._lock:
             if self._enabled:
                 raise RuntimeError("MarketUpdater is already running")
 
+            # Configure job stores if persistence is enabled
+            jobstores = {}
+            if self.persist_jobs and self.job_store_url:
+                jobstores["default"] = SQLAlchemyJobStore(url=self.job_store_url)
+                logger.info("Job persistence enabled with SQLAlchemy store")
+
             self._scheduler = BackgroundScheduler(
+                jobstores=jobstores,
                 job_defaults={
                     "coalesce": True,  # Combine missed runs into one
                     "max_instances": 1,  # Only one poll job at a time
                     "misfire_grace_time": 30,  # Grace period for late jobs
-                }
+                },
             )
 
             # Add the polling job
@@ -272,6 +303,109 @@ class MarketUpdater:
             total_updated += updated
 
         return {"games_fetched": total_fetched, "games_updated": total_updated}
+
+    def refresh_scoreboards(
+        self,
+        leagues: list[str] | None = None,
+        active_only: bool = True,
+    ) -> dict[str, Any]:
+        """
+        Refresh ESPN scoreboard data for specified leagues.
+
+        This is the primary method for fetching live game data from ESPN.
+        Unlike poll_once() which is a generic polling method, refresh_scoreboards()
+        specifically targets ESPN scoreboard data and provides more detailed results.
+
+        Args:
+            leagues: List of leagues to refresh. Defaults to configured leagues.
+            active_only: If True, only fetch scoreboards for leagues with active games.
+                        Saves API calls when no games are currently in progress.
+
+        Returns:
+            Dictionary with detailed results:
+            {
+                "leagues_polled": ["nfl", "ncaaf"],
+                "games_by_league": {"nfl": 5, "ncaaf": 8},
+                "total_games_fetched": 13,
+                "total_games_updated": 10,
+                "active_games": 3,
+                "timestamp": "2025-12-07T20:00:00+00:00",
+                "elapsed_seconds": 1.25
+            }
+
+        Usage:
+            >>> updater = MarketUpdater(leagues=["nfl", "ncaaf"])
+            >>> result = updater.refresh_scoreboards()
+            >>> print(f"Updated {result['total_games_updated']} games")
+
+        Educational Note:
+            This method is designed for on-demand scoreboard refresh, which is
+            useful for:
+            - CLI commands that need current game data
+            - Pre-trade verification of game states
+            - Manual updates outside the scheduled polling interval
+            - Testing and debugging scoreboard data flow
+        """
+        start_time = datetime.now(UTC)
+        target_leagues = leagues or self.leagues
+
+        # If active_only, filter to leagues with active games in database
+        if active_only:
+            active_leagues = []
+            for league in target_leagues:
+                if get_live_games(league=league):
+                    active_leagues.append(league)
+            # If no active games found, still poll all leagues to discover new games
+            if active_leagues:
+                target_leagues = active_leagues
+                logger.debug("Active games found in: %s", active_leagues)
+            else:
+                logger.debug("No active games found, polling all configured leagues")
+
+        games_by_league: dict[str, int] = {}
+        total_fetched = 0
+        total_updated = 0
+        active_count = 0
+
+        for league in target_leagues:
+            try:
+                fetched, updated = self._poll_league(league)
+                games_by_league[league] = fetched
+                total_fetched += fetched
+                total_updated += updated
+
+                # Count currently active games
+                live = get_live_games(league=league)
+                active_count += len(live) if live else 0
+
+            except ESPNAPIError as e:
+                logger.warning("ESPN API error for %s: %s", league, e)
+                games_by_league[league] = 0
+            except Exception as e:
+                logger.error("Error refreshing %s scoreboard: %s", league, e)
+                games_by_league[league] = 0
+
+        elapsed = (datetime.now(UTC) - start_time).total_seconds()
+
+        result: dict[str, Any] = {
+            "leagues_polled": target_leagues,
+            "games_by_league": games_by_league,
+            "total_games_fetched": total_fetched,
+            "total_games_updated": total_updated,
+            "active_games": active_count,
+            "timestamp": start_time.isoformat(),
+            "elapsed_seconds": round(elapsed, 3),
+        }
+
+        logger.info(
+            "Scoreboard refresh complete: %d leagues, %d games fetched, %d updated in %.2fs",
+            len(target_leagues),
+            total_fetched,
+            total_updated,
+            elapsed,
+        )
+
+        return result
 
     def _poll_all_leagues(self) -> None:
         """
@@ -601,6 +735,8 @@ def create_market_updater(
     leagues: list[str] | None = None,
     poll_interval: int = 15,
     idle_interval: int = 60,
+    persist_jobs: bool = False,
+    job_store_url: str | None = None,
 ) -> MarketUpdater:
     """
     Factory function to create a configured MarketUpdater.
@@ -609,18 +745,36 @@ def create_market_updater(
         leagues: Leagues to poll (default: ["nfl", "ncaaf"])
         poll_interval: Seconds between polls when active (default: 15)
         idle_interval: Seconds between polls when idle (default: 60)
+        persist_jobs: If True, persist scheduled jobs to database.
+        job_store_url: SQLAlchemy URL for job store (required if persist_jobs=True).
 
     Returns:
         Configured MarketUpdater instance
 
     Example:
+        >>> # Basic usage
         >>> updater = create_market_updater(leagues=["nfl", "nba"])
         >>> updater.start()
+        >>>
+        >>> # With job persistence (survives restarts)
+        >>> updater = create_market_updater(
+        ...     leagues=["nfl"],
+        ...     persist_jobs=True,
+        ...     job_store_url="sqlite:///jobs.db"
+        ... )
+
+    Educational Note:
+        Job persistence is recommended for production deployments. Without it,
+        if the process restarts, all scheduled jobs are lost and must be
+        re-created. With persistence, jobs are stored in SQLite or PostgreSQL
+        and automatically restored on restart.
     """
     return MarketUpdater(
         leagues=leagues,
         poll_interval=poll_interval,
         idle_interval=idle_interval,
+        persist_jobs=persist_jobs,
+        job_store_url=job_store_url,
     )
 
 
@@ -642,3 +796,38 @@ def run_single_poll(leagues: list[str] | None = None) -> dict[str, int]:
     """
     updater = MarketUpdater(leagues=leagues)
     return updater.poll_once()
+
+
+def refresh_all_scoreboards(
+    leagues: list[str] | None = None,
+    active_only: bool = True,
+) -> dict[str, Any]:
+    """
+    Refresh ESPN scoreboard data for specified leagues.
+
+    Convenience function that creates a MarketUpdater and calls refresh_scoreboards().
+    Useful for CLI commands and one-off data refreshes.
+
+    Args:
+        leagues: Leagues to refresh (default: ["nfl", "ncaaf"])
+        active_only: If True, only refresh leagues with active games.
+
+    Returns:
+        Dictionary with detailed results:
+        {
+            "leagues_polled": ["nfl", "ncaaf"],
+            "games_by_league": {"nfl": 5, "ncaaf": 8},
+            "total_games_fetched": 13,
+            "total_games_updated": 10,
+            "active_games": 3,
+            "timestamp": "2025-12-07T20:00:00+00:00",
+            "elapsed_seconds": 1.25
+        }
+
+    Example:
+        >>> result = refresh_all_scoreboards(["nfl"])
+        >>> print(f"Active games: {result['active_games']}")
+        >>> print(f"Updated in {result['elapsed_seconds']}s")
+    """
+    updater = MarketUpdater(leagues=leagues)
+    return updater.refresh_scoreboards(active_only=active_only)
