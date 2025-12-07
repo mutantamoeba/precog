@@ -66,6 +66,7 @@ from precog.schedulers.market_data_manager import (
 from precog.schedulers.market_updater import (
     MarketUpdater,
     create_market_updater,
+    refresh_all_scoreboards,
     run_single_poll,
 )
 
@@ -80,6 +81,7 @@ __all__ = [
     "create_market_data_manager",
     "create_market_updater",
     "create_websocket_handler",
+    "refresh_all_scoreboards",
     "run_single_kalshi_poll",
     "run_single_poll",
 ]
