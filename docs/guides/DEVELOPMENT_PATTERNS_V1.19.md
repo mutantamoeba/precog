@@ -1,13 +1,21 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.18
+**Version:** 1.19
 **Created:** 2025-11-13
 **Last Updated:** 2025-12-07
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.19:**
+- **Added Pattern 31: Pre-Push Log Persistence (Quality of Life)** (Issue #174)
+- Pre-push hook now generates JSON summaries alongside text logs
+- Created `scripts/analyze_test_history.py` for trend analysis and flaky test detection
+- JSON includes: timestamp, branch, success, duration, test counts, failed test names
+- Enables debugging failed pushes after terminal is closed
+- Enables comparison between pre-push and CI results
+- Total addition: ~110 lines in DEVELOPMENT_PATTERNS, ~400 lines in analyze_test_history.py
 **Changes in V1.18:**
 - **Added Pattern 30: Stale Bytecode Cleanup (ALWAYS on pytest-xdist)** (Issue #171)
 - Addresses "fixture not found" ghost tests from stale __pycache__/*.pyc files
@@ -7641,6 +7649,119 @@ pytest --cache-clear  # Only clears pytest cache, NOT __pycache__
 
 ---
 
+## Pattern 31: Pre-Push Log Persistence (Quality of Life)
+
+**Category:** Testing Infrastructure
+**Introduced:** Phase 1.9 (Issue #174)
+**Enforcement:** Pre-push hook automatically generates logs
+
+### Problem
+
+Pre-push hook test results are output to terminal only and lost after execution:
+- Impossible to debug failed pushes after terminal is closed
+- Unable to compare pre-push vs CI results retrospectively
+- No historical data for test performance trends
+- Cannot detect flaky tests without manual tracking
+
+### Solution
+
+Store pre-push test results persistently with both human-readable logs and machine-parseable JSON:
+
+```
+.pre-push-logs/
+├── pre-push-20251207-105506.log   # Human-readable full output
+├── pre-push-20251207-105506.json  # Machine-parseable summary
+├── pre-push-20251207-143022.log
+├── pre-push-20251207-143022.json
+└── ...
+```
+
+### Implementation
+
+The pre-push hook (`.git/hooks/pre-push`) automatically:
+1. Captures start time for duration calculation
+2. Saves full output to timestamped `.log` file
+3. Generates `.json` summary with test counts and failed tests
+4. Stores both files in `.pre-push-logs/` (gitignored)
+
+**JSON Summary Format:**
+```json
+{
+    "timestamp": "2025-12-07T10:55:06-05:00",
+    "branch": "feature/my-feature",
+    "success": true,
+    "duration_seconds": 185,
+    "total_passed": 1320,
+    "total_failed": 0,
+    "total_skipped": 2,
+    "phases": {
+        "Phase A (Unit)": {"passed": 409, "failed": 0, "skipped": 0},
+        "Phase B (Integration)": {"passed": 341, "failed": 0, "skipped": 1},
+        "Phase C (Property)": {"passed": 110, "failed": 0, "skipped": 0},
+        "Phase D (Other)": {"passed": 460, "failed": 0, "skipped": 1}
+    },
+    "failed_tests": [],
+    "log_file": "/path/to/.pre-push-logs/pre-push-20251207-105506.log"
+}
+```
+
+### Analysis Script
+
+Use `scripts/analyze_test_history.py` to analyze historical test results:
+
+```bash
+# Show last 10 runs
+python scripts/analyze_test_history.py
+
+# Show last N runs
+python scripts/analyze_test_history.py --last 5
+
+# Show detailed view with per-phase breakdown
+python scripts/analyze_test_history.py --detailed
+
+# Export to JSON for external analysis
+python scripts/analyze_test_history.py --json
+
+# Show only flaky tests
+python scripts/analyze_test_history.py --flaky
+```
+
+**Example Output:**
+```
+Test Result Trends (last 10 runs)
+=================================
+Total Runs: 10
+Pass Rate: 100.0%
+Average Duration: 152.3s
+
+Phase Breakdown:
+  Phase A (Unit):        409/409 (100%) - avg 22.1s
+  Phase B (Integration): 341/341 (100%) - avg 31.2s
+  Phase C (Property):    110/110 (100%) - avg 30.5s
+  Phase D (Other):       460/460 (100%) - avg 68.5s
+
+Flaky Tests (passed sometimes, failed others):
+  - None detected
+```
+
+### Benefits
+
+1. **Debugging:** Review failed pre-push output after terminal is closed
+2. **Trend Analysis:** Track test performance over time
+3. **Flaky Detection:** Identify tests that pass sometimes and fail others
+4. **CI Comparison:** Compare local pre-push results with CI failures
+5. **Duration Tracking:** Monitor for test suite performance regressions
+
+### Cross-References
+
+- **GitHub Issue #174:** Feature request and implementation
+- **Pattern 29:** Hybrid Test Isolation (generates the logs being persisted)
+- **Pattern 30:** Stale Bytecode Cleanup (another pre-push step)
+- **.git/hooks/pre-push:** Log generation implementation
+- **scripts/analyze_test_history.py:** Analysis script
+
+---
+
 ## Pattern Quick Reference
 
 | Pattern | Enforcement | Key Command | Related ADR/REQ |
@@ -7675,6 +7796,7 @@ pytest --cache-clear  # Only clears pytest cache, NOT __pycache__
 | **28. CI-Safe Stress Testing** | pytest markers (skipif) | `pytest tests/stress/ -v -m stress` (local only) | PR #167, Issue #168, ADR-057 |
 | **29. Hybrid Test Isolation** | Transaction fixtures + pre-push phases | `db_transaction`, `db_transaction_with_setup`, `db_savepoint` | Issue #171, ADR-057, Pattern 28 |
 | **30. Stale Bytecode Cleanup** | Pre-push hook (Step 0.25) | `find tests/ -type d -name "__pycache__" -exec rm -rf {} +` | Issue #171, Pattern 29, pytest-xdist |
+| **31. Pre-Push Log Persistence** | Pre-push hook (automatic) | `python scripts/analyze_test_history.py` | Issue #174, Pattern 29/30 |
 
 ---
 
