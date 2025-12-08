@@ -18,7 +18,7 @@ Usage:
     >>> if result.has_errors:
     ...     print(f"Errors: {result.errors}")
 
-Reference: docs/foundation/DEVELOPMENT_PHASES_V1.7.md Phase 2
+Reference: docs/foundation/DEVELOPMENT_PHASES_V1.9.md Phase 2
 Related: Issue #186 (P2-004: Data Quality Validation)
 """
 
