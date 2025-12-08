@@ -26,7 +26,7 @@
 - **MULTI-SOURCE RECONCILIATION:** Added GameStateWithConfidence dataclass and confidence scoring
 - **GAMESTATEROVIDER ABSTRACTION:** Added source_confidence property and use_free_only parameter
 - ✅ **Added:** ADR-076 (Sports Data Source Tiering Strategy) in ARCHITECTURE_DECISIONS_V2.25.md
-- ✅ **Documented:** STRATEGY_DEVELOPMENT_GUIDE_V1.0.md as Phase 4 deliverable in DEVELOPMENT_PHASES_V1.7.md
+- ✅ **Documented:** STRATEGY_DEVELOPMENT_GUIDE_V1.0.md as Phase 4 deliverable in DEVELOPMENT_PHASES_V1.9.md
 
 ---
 

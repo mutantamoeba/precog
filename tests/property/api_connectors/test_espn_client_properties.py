@@ -251,7 +251,7 @@ class TestStatusMappingInvariants:
         client = ESPNClient()
         game_full = client._parse_event(event)
 
-        known_statuses = {"scheduled", "in_progress", "halftime", "final", "unknown"}
+        known_statuses = {"pre", "scheduled", "in_progress", "halftime", "final", "unknown"}
 
         if game_full:
             assert game_full["state"]["game_status"] in known_statuses, (

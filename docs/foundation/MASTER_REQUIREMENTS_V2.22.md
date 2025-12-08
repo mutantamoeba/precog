@@ -1,9 +1,20 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.20
-**Last Updated:** 2025-12-06
+**Version:** 2.22
+**Last Updated:** 2025-12-07
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.22:**
+- **BASEPOLLER UNIFIED DESIGN PATTERN:** Added REQ-SCHED-003 for BasePoller abstract class
+- **REQ-SCHED-003:** BasePoller with Template Method pattern, {Platform}{Entity}Poller naming, generic stats
+- **CROSS-REFERENCES:** ADR-103, src/precog/schedulers/base_poller.py
+- Total requirements: 127 -> 128
+**Changes in v2.21:**
+- **PHASE 2.5 SCHEDULER REQUIREMENTS:** Added Section 4.13 with REQ-SCHED-001, REQ-SCHED-002, REQ-OBSERV-003
+- **REQ-SCHED-001:** APScheduler-based live data polling (MarketUpdater, KalshiMarketPoller)
+- **REQ-SCHED-002:** Service Supervisor pattern for multi-service orchestration
+- **REQ-OBSERV-003:** CloudWatch/ELK log aggregation (Deferred to Phase 4)
+- **CROSS-REFERENCES:** ADR-100, ADR-101, ADR-102, scripts/run_data_collector.py
 **Changes in v2.20:**
 - **CI-SAFE STRESS TESTING REQUIREMENT (ISSUE #168):** Added REQ-TEST-020 (CI-Safe Stress Test Requirements)
 - Documents requirement for stress tests to use `skipif(_is_ci)` marker to prevent CI hangs
@@ -290,11 +301,11 @@ precog/
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.20.md` - This document (requirements through Phase 10)
-  3. `MASTER_INDEX_V2.44.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.26.md` - All 97 ADRs with design rationale (Phase 0-4.5)
-  5. `REQUIREMENT_INDEX.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.19.md` - Architecture decision index
+  2. `MASTER_REQUIREMENTS_V2.22.md` - This document (requirements through Phase 10)
+  3. `MASTER_INDEX_V2.46.md` - Complete document inventory
+  4. `ARCHITECTURE_DECISIONS_V2.28.md` - All 105 ADRs with design rationale (Phase 0-4.5)
+  5. `REQUIREMENT_INDEX_V1.14.md` - Systematic requirement catalog
+  6. `ADR_INDEX_V1.21.md` - Architecture decision index
   7. `TESTING_STRATEGY_V3.4.md` - Test cases, coverage requirements, test isolation patterns
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
@@ -3591,6 +3602,141 @@ Implement real-time production error tracking, crash reporting, and performance 
   - Performance regression detection
   - Proactive alerting (catch issues before users report)
   - Integration with Codecov: See which untested code is causing errors
+
+**REQ-OBSERV-003: Log Aggregation with CloudWatch/ELK (Deferred)**
+
+**Phase:** 4
+**Priority:** Medium
+**Status:** 📋 Deferred
+**Reference:** ADR-102, scripts/run_data_collector.py
+
+Implement centralized log aggregation for production observability:
+
+- **CloudWatch Integration**:
+  - Log groups per service (espn-poller, kalshi-poller, trade-executor)
+  - Log streams per instance/deployment
+  - CloudWatch Logs Insights queries for troubleshooting
+  - IAM roles for secure log shipping
+
+- **ELK Stack Alternative**:
+  - Elasticsearch for log storage and search
+  - Logstash for log processing and enrichment
+  - Kibana dashboards for visualization
+
+- **JSON Logging Ready**:
+  - Service Supervisor already produces structured JSON logs
+  - Fields: timestamp, level, service, event, context, metrics
+
+- **Alert Thresholds**:
+  - Error rate >5 errors/minute triggers alert
+  - Service down >60 seconds triggers alert
+  - Custom alert callbacks for Slack/PagerDuty integration
+
+- **Deferred Rationale**:
+  - Phase 2.5: File-based logging sufficient for development
+  - Phase 4: Trading execution requires production-grade observability
+
+---
+
+### 4.13 Scheduler Requirements
+
+**REQ-SCHED-001: APScheduler-Based Live Data Polling**
+
+**Phase:** 2.5
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** ADR-100, src/precog/schedulers/market_updater.py
+
+Implement production-grade scheduling for live data collection:
+
+- **APScheduler Integration**:
+  - BackgroundScheduler for thread-pool based job execution
+  - IntervalTrigger for configurable poll intervals (15-60 seconds)
+  - SQLAlchemyJobStore for job persistence (optional)
+
+- **MarketUpdater Class**:
+  - Multi-league polling (NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
+  - Error isolation (per-league failure doesn't crash others)
+  - Statistics tracking (polls_completed, games_updated, errors)
+  - Graceful shutdown with signal handling
+
+- **KalshiMarketPoller Class**:
+  - Series-based polling (KXNFLGAME, etc.)
+  - Rate limit compliance (100 req/min)
+  - Market state synchronization to database
+
+- **Configuration**:
+  - Poll interval: 15 seconds (live games), 60 seconds (idle)
+  - Timeout: 10 seconds per request
+  - Retry: 3 attempts with exponential backoff
+
+**REQ-SCHED-002: Service Supervisor Pattern**
+
+**Phase:** 2.5
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** ADR-100, scripts/run_data_collector.py
+
+Implement centralized service supervision for all event loops:
+
+- **EventLoopService Protocol**:
+  - All services implement: start(), stop(), is_running(), get_stats()
+  - Enables uniform management of heterogeneous services
+
+- **ServiceSupervisor Class**:
+  - Service lifecycle management (start, stop, restart)
+  - Health monitoring (periodic health checks)
+  - Metrics aggregation (unified statistics)
+  - Auto-restart with exponential backoff
+  - Alert callbacks for threshold breaches
+
+- **Extensibility**:
+  - Plugin architecture for future services
+  - Phase 3: Edge Calculator
+  - Phase 4: Strategy Evaluator
+  - Phase 5: Trade Executor, Position Manager
+
+- **Production Features**:
+  - Signal handling (SIGINT, SIGTERM)
+  - Rotating file logs (10 MB, 5 backups)
+  - JSON logging for CloudWatch/ELK compatibility
+  - Health check interval: 60 seconds
+  - Metrics output interval: 300 seconds
+
+---
+
+**REQ-SCHED-003: BasePoller Unified Design Pattern**
+
+**Phase:** 2.5
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** ADR-103, src/precog/schedulers/base_poller.py
+
+Implement a unified base class for all APScheduler-based polling services:
+
+- **BasePoller Abstract Class**:
+  - Template Method pattern for consistent polling infrastructure
+  - APScheduler BackgroundScheduler integration
+  - Thread-safe statistics with threading.Lock
+  - EventLoopService protocol compliance
+
+- **Naming Convention**:
+  - REST Pollers: `{Platform}{Entity}Poller` (ESPNGamePoller, KalshiMarketPoller)
+  - WebSocket Handlers: `{Platform}{Entity}Handler` (KalshiWebSocketHandler)
+  - Clear distinction: "Poller" for REST polling, "Handler" for push-based streaming
+
+- **Generic Statistics (PollerStats TypedDict)**:
+  - `items_fetched` (not platform-specific like `markets_fetched`)
+  - `items_updated`
+  - `items_created`
+  - `polls_completed`, `errors`, `last_poll`, `last_error`
+
+- **Implementation Requirements**:
+  - Subclasses implement `_poll_all()` for platform-specific logic
+  - BasePoller provides start(), stop(), poll_once(), is_running(), enabled
+  - Backward compatibility aliases during transition period
+
+---
 
 **REQ-SEC-009: Sensitive Data Masking in Logs**
 

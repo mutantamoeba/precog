@@ -1328,7 +1328,7 @@ Same-game markets are **correlated** (spread, total points, halftime winner).
 - Phase 5+ implementation can proceed with validated architecture
 
 **See Also:**
-- `docs/foundation/DEVELOPMENT_PHASES_V1.7.md` - Phase 4.5 detailed phase description
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` - Phase 4.5 detailed phase description
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.0.md` - 25 strategic tasks organized by category
 - `docs/foundation/ARCHITECTURE_DECISIONS_V2.13.md` - ADR-076 and ADR-077 (full analysis)
 

@@ -1,18 +1,23 @@
 """
-Kalshi market price polling service using APScheduler.
+Kalshi market price polling service extending BasePoller.
 
 This module provides the KalshiMarketPoller class that polls Kalshi APIs at
 configurable intervals and syncs market prices to the database using SCD Type 2
 versioning.
 
 Key Features:
-- APScheduler-based polling (configurable 30-120 second intervals)
+- Extends BasePoller for consistent APScheduler-based polling
 - Filters for specific series (e.g., KXNFLGAME for NFL markets)
 - Sub-penny Decimal price precision (NEVER float!)
 - SCD Type 2 versioning for price history
 - Rate limiting compliance (100 req/min)
 - Error recovery with logging
 - Clean shutdown handling
+
+Naming Convention:
+    {Platform}{Entity}Poller pattern:
+    - KalshiMarketPoller: Polls Kalshi for market prices
+    - ESPNGamePoller: Polls ESPN for game states (see espn_game_poller.py)
 
 Educational Notes:
 ------------------
@@ -32,18 +37,12 @@ Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
 Related Requirements:
     - REQ-API-001: Kalshi API Integration
     - REQ-DATA-005: Market Price Data Collection
+Related ADR: ADR-100 (Service Supervisor Pattern)
 """
 
 import logging
-import signal
-import sys
-import threading
-from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, ClassVar, TypedDict
-
-from apscheduler.schedulers.background import BackgroundScheduler
-from apscheduler.triggers.interval import IntervalTrigger
+from typing import ClassVar
 
 from precog.api_connectors.kalshi_client import KalshiClient
 from precog.api_connectors.types import ProcessedMarketData
@@ -52,33 +51,22 @@ from precog.database.crud_operations import (
     get_current_market,
     update_market_with_versioning,
 )
+from precog.schedulers.base_poller import BasePoller
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 
-class _PollerStats(TypedDict):
-    """Type definition for poller statistics."""
-
-    polls_completed: int
-    markets_fetched: int
-    markets_updated: int
-    markets_created: int
-    errors: int
-    last_poll: str | None
-    last_error: str | None
-
-
-class KalshiMarketPoller:
+class KalshiMarketPoller(BasePoller):
     """
     Kalshi market price polling service.
 
     Polls Kalshi APIs at regular intervals and syncs market prices to the database.
-    Uses APScheduler for reliable job scheduling with automatic retry on errors.
+    Extends BasePoller for consistent APScheduler-based polling with health monitoring.
 
     Attributes:
         series_tickers: List of series to poll (e.g., ["KXNFLGAME", "KXNCAAFGAME"])
-        poll_interval: Seconds between polls (default: 60, minimum: 30)
+        poll_interval: Seconds between polls (default: 15, minimum: 5)
         environment: Kalshi environment ("demo" or "prod")
         enabled: Whether polling is currently enabled
 
@@ -98,18 +86,19 @@ class KalshiMarketPoller:
         >>> poller.start()
 
     Educational Note:
-        The poller uses a BackgroundScheduler which runs jobs in a thread pool.
-        This allows the main application to continue running while polls happen
-        in the background. The scheduler handles job execution, retries, and
-        timing automatically.
+        The poller uses BasePoller's BackgroundScheduler which runs jobs in a
+        thread pool. This allows the main application to continue running while
+        polls happen in the background. The scheduler handles job execution,
+        retries, and timing automatically.
 
-    Reference: Phase 2 Live Data Integration
+    Reference: Phase 2.5 Live Data Collection Service
+    Related: ADR-100 (Service Supervisor Pattern)
     """
 
-    # Default configuration
-    DEFAULT_SERIES_TICKERS: ClassVar[list[str]] = ["KXNFLGAME"]
+    # Class-level configuration
+    MIN_POLL_INTERVAL: ClassVar[int] = 5  # seconds (rate limit: 100 req/min)
     DEFAULT_POLL_INTERVAL: ClassVar[int] = 15  # seconds (balanced for near real-time)
-    MIN_POLL_INTERVAL: ClassVar[int] = 5  # minimum seconds (rate limit: 100 req/min)
+    DEFAULT_SERIES_TICKERS: ClassVar[list[str]] = ["KXNFLGAME"]
     MAX_MARKETS_PER_REQUEST: ClassVar[int] = 200  # Kalshi API limit
 
     # Rate limit guidance:
@@ -125,7 +114,7 @@ class KalshiMarketPoller:
     def __init__(
         self,
         series_tickers: list[str] | None = None,
-        poll_interval: int = DEFAULT_POLL_INTERVAL,
+        poll_interval: int | None = None,
         environment: str = "demo",
         kalshi_client: KalshiClient | None = None,
     ) -> None:
@@ -135,42 +124,25 @@ class KalshiMarketPoller:
         Args:
             series_tickers: List of series to poll (e.g., ["KXNFLGAME"]).
                 Defaults to NFL game markets only.
-            poll_interval: Seconds between polls. Minimum 30 seconds.
+            poll_interval: Seconds between polls. Minimum 5 seconds.
             environment: Kalshi environment ("demo" or "prod").
             kalshi_client: Optional KalshiClient instance (for testing/mocking).
 
         Raises:
-            ValueError: If poll_interval < 30 or environment invalid.
+            ValueError: If poll_interval < 5 or environment invalid.
         """
-        if poll_interval < self.MIN_POLL_INTERVAL:
-            raise ValueError(
-                f"poll_interval must be at least {self.MIN_POLL_INTERVAL} seconds. "
-                "Kalshi rate limit is 100 req/min. At 5s interval with pagination, "
-                "you use ~12-36 req/min (safe). Faster risks rate limiting."
-            )
         if environment not in ("demo", "prod"):
             raise ValueError("environment must be 'demo' or 'prod'")
 
+        # Initialize base class (handles scheduler, stats, etc.)
+        super().__init__(poll_interval=poll_interval, logger=logger)
+
+        # Kalshi-specific configuration
         self.series_tickers = series_tickers or self.DEFAULT_SERIES_TICKERS.copy()
-        self.poll_interval = poll_interval
         self.environment = environment
 
         # Initialize Kalshi client (or use provided mock)
         self.kalshi_client = kalshi_client or KalshiClient(environment=environment)
-
-        # State tracking
-        self._scheduler: BackgroundScheduler | None = None
-        self._enabled = False
-        self._lock = threading.Lock()
-        self._stats: _PollerStats = {
-            "polls_completed": 0,
-            "markets_fetched": 0,
-            "markets_updated": 0,
-            "markets_created": 0,
-            "errors": 0,
-            "last_poll": None,
-            "last_error": None,
-        }
 
         logger.info(
             "KalshiMarketPoller initialized: series=%s, poll_interval=%ds, env=%s",
@@ -179,89 +151,43 @@ class KalshiMarketPoller:
             self.environment,
         )
 
-    @property
-    def enabled(self) -> bool:
-        """Whether the poller is currently running."""
-        return self._enabled
+    def _get_job_name(self) -> str:
+        """Return human-readable name for the polling job."""
+        return "Kalshi Market Price Poll"
 
-    @property
-    def stats(self) -> _PollerStats:
-        """Current statistics about polling activity."""
-        with self._lock:
-            return self._stats.copy()
-
-    def start(self) -> None:
+    def _poll_once(self) -> dict[str, int]:
         """
-        Start the polling scheduler.
+        Execute a single poll cycle for all configured series.
 
-        Initializes APScheduler and begins polling at the configured interval.
-        The scheduler runs in a background thread, allowing the main program
-        to continue execution.
-
-        Raises:
-            RuntimeError: If already started.
-
-        Educational Note:
-            We use BackgroundScheduler instead of BlockingScheduler because
-            we want the calling code to continue executing. The scheduler
-            manages its own thread pool for job execution.
+        Returns:
+            Dictionary with counts: items_fetched, items_updated, items_created
         """
-        with self._lock:
-            if self._enabled:
-                raise RuntimeError("KalshiMarketPoller is already running")
+        total_fetched = 0
+        total_updated = 0
+        total_created = 0
 
-            self._scheduler = BackgroundScheduler(
-                job_defaults={
-                    "coalesce": True,  # Combine missed runs into one
-                    "max_instances": 1,  # Only one poll job at a time
-                    "misfire_grace_time": 60,  # Grace period for late jobs
-                }
-            )
+        for series in self.series_tickers:
+            try:
+                fetched, updated, created = self._poll_series(series)
+                total_fetched += fetched
+                total_updated += updated
+                total_created += created
+            except Exception as e:
+                # Log but don't re-raise - allow other series to continue
+                logger.error("Error polling series %s: %s", series, e)
+                with self._lock:
+                    self._stats["errors"] += 1
+                    self._stats["last_error"] = str(e)
 
-            # Add the polling job
-            self._scheduler.add_job(
-                self._poll_all_series,
-                IntervalTrigger(seconds=self.poll_interval),
-                id="poll_kalshi",
-                name="Kalshi Market Price Poll",
-                replace_existing=True,
-            )
+        return {
+            "items_fetched": total_fetched,
+            "items_updated": total_updated,
+            "items_created": total_created,
+        }
 
-            self._scheduler.start()
-            self._enabled = True
-
-        logger.info("KalshiMarketPoller started - polling every %d seconds", self.poll_interval)
-
-        # Run initial poll immediately
-        self._poll_all_series()
-
-    def stop(self, wait: bool = True) -> None:
-        """
-        Stop the polling scheduler.
-
-        Args:
-            wait: If True, wait for running jobs to complete before returning.
-
-        Educational Note:
-            The 'wait' parameter is important for clean shutdown. Setting it
-            to True ensures any in-progress database operations complete
-            before the scheduler terminates.
-        """
-        with self._lock:
-            if not self._enabled:
-                logger.warning("KalshiMarketPoller is not running")
-                return
-
-            if self._scheduler:
-                self._scheduler.shutdown(wait=wait)
-                self._scheduler = None
-
-            self._enabled = False
-
-        # Close Kalshi client to clean up HTTP connections
+    def _on_stop(self) -> None:
+        """Clean up Kalshi client on stop."""
         self.kalshi_client.close()
-
-        logger.info("KalshiMarketPoller stopped")
 
     def poll_once(self, series_tickers: list[str] | None = None) -> dict[str, int]:
         """
@@ -273,7 +199,7 @@ class KalshiMarketPoller:
             series_tickers: Optional list of series to poll. Defaults to configured series.
 
         Returns:
-            Dictionary with counts: {"markets_fetched": N, "markets_updated": M, "markets_created": P}
+            Dictionary with counts: {"items_fetched": N, "items_updated": M, "items_created": P}
         """
         target_series = series_tickers or self.series_tickers
         total_fetched = 0
@@ -287,58 +213,10 @@ class KalshiMarketPoller:
             total_created += created
 
         return {
-            "markets_fetched": total_fetched,
-            "markets_updated": total_updated,
-            "markets_created": total_created,
+            "items_fetched": total_fetched,
+            "items_updated": total_updated,
+            "items_created": total_created,
         }
-
-    def _poll_all_series(self) -> None:
-        """
-        Poll all configured series and update market prices.
-
-        This is the main scheduled job that runs at each interval.
-        Handles errors gracefully to prevent scheduler job failures.
-        """
-        start_time = datetime.now(UTC)
-        total_fetched = 0
-        total_updated = 0
-        total_created = 0
-
-        try:
-            for series in self.series_tickers:
-                try:
-                    fetched, updated, created = self._poll_series(series)
-                    total_fetched += fetched
-                    total_updated += updated
-                    total_created += created
-                except Exception as e:
-                    # Log but don't re-raise - allow other series to continue
-                    logger.error("Error polling series %s: %s", series, e)
-                    with self._lock:
-                        self._stats["errors"] += 1
-                        self._stats["last_error"] = str(e)
-
-            with self._lock:
-                self._stats["polls_completed"] += 1
-                self._stats["markets_fetched"] += total_fetched
-                self._stats["markets_updated"] += total_updated
-                self._stats["markets_created"] += total_created
-                self._stats["last_poll"] = start_time.isoformat()
-
-            elapsed = (datetime.now(UTC) - start_time).total_seconds()
-            logger.debug(
-                "Poll completed: %d markets fetched, %d updated, %d created in %.2fs",
-                total_fetched,
-                total_updated,
-                total_created,
-                elapsed,
-            )
-
-        except Exception as e:
-            logger.exception("Unexpected error in poll cycle: %s", e)
-            with self._lock:
-                self._stats["errors"] += 1
-                self._stats["last_error"] = str(e)
 
     def _poll_series(self, series_ticker: str) -> tuple[int, int, int]:
         """
@@ -515,28 +393,6 @@ class KalshiMarketPoller:
         # TODO: Add CRUD operation to count open markets
         return 0
 
-    def setup_signal_handlers(self) -> None:
-        """
-        Set up signal handlers for graceful shutdown.
-
-        Registers handlers for SIGINT (Ctrl+C) and SIGTERM to ensure
-        clean shutdown of the scheduler.
-
-        Educational Note:
-            Signal handlers are important for production services.
-            Without them, a Ctrl+C might leave database connections
-            open or API sessions active.
-        """
-
-        def shutdown_handler(signum: int, frame: Any) -> None:
-            logger.info("Received signal %d, shutting down...", signum)
-            self.stop(wait=True)
-            sys.exit(0)
-
-        signal.signal(signal.SIGINT, shutdown_handler)
-        signal.signal(signal.SIGTERM, shutdown_handler)
-        logger.debug("Signal handlers registered")
-
 
 # =============================================================================
 # Convenience Functions
@@ -587,11 +443,11 @@ def run_single_kalshi_poll(
         environment: Kalshi environment (default: "demo")
 
     Returns:
-        Dictionary with {"markets_fetched": N, "markets_updated": M, "markets_created": P}
+        Dictionary with {"items_fetched": N, "items_updated": M, "items_created": P}
 
     Example:
         >>> result = run_single_kalshi_poll(["KXNFLGAME"], environment="demo")
-        >>> print(f"Fetched {result['markets_fetched']} markets")
+        >>> print(f"Fetched {result['items_fetched']} markets")
     """
     poller = KalshiMarketPoller(
         series_tickers=series_tickers,

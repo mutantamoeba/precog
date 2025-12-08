@@ -1,9 +1,22 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.44
-**Last Updated:** 2025-12-06
+**Version:** 2.46
+**Last Updated:** 2025-12-07
 **Status:** ✅ Current
+**Changes in v2.46:**
+- **BASEPOLLER UNIFIED DESIGN PATTERN**: Updated 4 foundation documents for BasePoller architecture
+- ARCHITECTURE_DECISIONS V2.27 → V2.28: Added ADR-103 (BasePoller Unified Design Pattern)
+- ADR_INDEX V1.20 → V1.21: Added ADR-103 entry (104 → 105 total ADRs)
+- MASTER_REQUIREMENTS V2.21 → V2.22: Added REQ-SCHED-003 for BasePoller design pattern
+- REQUIREMENT_INDEX V1.13 → V1.14: Added REQ-SCHED-003 entry (127 → 128 total requirements)
+**Changes in v2.45:**
+- **PHASE 2.5 SERVICE SUPERVISOR INFRASTRUCTURE**: Updated 4 foundation documents for live data collection
+- ARCHITECTURE_DECISIONS V2.26 → V2.27: Added ADR-100 (Service Supervisor Pattern), ADR-101 (ESPN Status Mapping), ADR-102 (CloudWatch/ELK Deferred)
+- ADR_INDEX V1.19 → V1.20: Added Phase 2.5 section with 3 new ADRs (101 → 104 total ADRs)
+- MASTER_REQUIREMENTS V2.20 → V2.21: Added REQ-SCHED-001, REQ-SCHED-002, REQ-OBSERV-003 for scheduler infrastructure
+- REQUIREMENT_INDEX V1.12 → V1.13: Added SCHED category and scheduler requirements (124 → 127 total requirements)
+- Added PHASE_2.5_DEFERRED_TASKS_V1.0.md to utility documents (6 deferred tasks: CloudWatch, ELK, Alerts, Dashboard, NCAAW, Rate Limits)
 **Changes in v2.44:**
 - **CI-SAFE STRESS TESTING DOCUMENTATION (Issue #168)**: Updated 7 documents to new versions
 - MASTER_REQUIREMENTS V2.19 → V2.20: Added REQ-TEST-020 (CI-Safe Stress Test Requirements)
@@ -264,7 +277,7 @@
 - Updated PHASE_0.7_DEFERRED_TASKS V1.1 → V1.2 (marked all 8 tasks complete: DEF-001 through DEF-008)
 - Added validation script maintenance reminders to CLAUDE.md (Pattern 1, Pattern 2, SESSION_HANDOFF template)
 - Updated PHASE_COMPLETION_ASSESSMENT_PROTOCOL_V1.0.md (8-step → 9-step: added validation scripts step)
-- Updated DEVELOPMENT_PHASES_V1.7.md (added validation reminders to all 6 phase test planning checklists)
+- Updated DEVELOPMENT_PHASES_V1.9.md (added validation reminders to all 6 phase test planning checklists)
 - Comprehensive Defense in Depth documentation (4-layer validation architecture)
 - Phase 0.7 status: 100% complete (pre-commit hooks, pre-push hooks, branch protection, schema validation, all deferred tasks done)
 **Changes in v2.11:**
@@ -411,13 +424,13 @@ Core architecture, requirements, and system design documents.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
-| **MASTER_REQUIREMENTS_V2.20.md** | ✅ | v2.18 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.18** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion protocol automation, configuration synchronization; 113 → 119 total requirements) |
-| **MASTER_INDEX_V2.44.md** | ✅ | v2.43 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.43** (ADR-098: TimescaleDB Deferred to Phase 6+; ARCHITECTURE_DECISIONS V2.24; ADR_INDEX V1.17) |
-| **ARCHITECTURE_DECISIONS_V2.26.md** | ✅ | v2.24 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (98 total) - **UPDATED V2.24** (ADR-098: TimescaleDB Deferred to Phase 6+ - current PostgreSQL + SCD Type 2 sufficient for Phase 1-5; evaluation triggers: >1M rows/month, query bottlenecks, retention needs; migration path documented for future adoption) |
-| **REQUIREMENT_INDEX_V1.12.md** | ✅ | v1.8 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 119 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.8** (added REQ-VALIDATION-007 through 012: Workflow Enforcement Infrastructure requirements - SCD Type 2 query validation, property-based test coverage, real test fixtures enforcement, phase start/completion automation, configuration synchronization; 113 → 119 total) |
-| **ADR_INDEX_V1.19.md** | ✅ | v1.17 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 98 architecture decisions - **UPDATED V1.17** (ADR-098: TimescaleDB Deferred to Phase 6+ - Phase 1.9 Test Infrastructure; 97 → 98 total ADRs) |
+| **MASTER_REQUIREMENTS_V2.22.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.22** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
+| **MASTER_INDEX_V2.46.md** | ✅ | v2.46 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.46** (BasePoller Unified Design Pattern: ADR-103, REQ-SCHED-003; 105 total ADRs, 128 total requirements) |
+| **ARCHITECTURE_DECISIONS_V2.28.md** | ✅ | v2.28 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (105 total) - **UPDATED V2.28** (ADR-103: BasePoller Unified Design Pattern with Template Method, {Platform}{Entity}Poller naming convention) |
+| **REQUIREMENT_INDEX_V1.14.md** | ✅ | v1.14 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 128 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.14** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
+| **ADR_INDEX_V1.21.md** | ✅ | v1.21 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 105 architecture decisions - **UPDATED V1.21** (added ADR-103 for BasePoller Unified Design Pattern; 104 → 105 total ADRs) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
-| **DEVELOPMENT_PHASES_V1.7.md** | ✅ | v1.6 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **CURRENT V1.6** |
+| **DEVELOPMENT_PHASES_V1.9.md** | ✅ | v1.9 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **UPDATED V1.9** (Phase 2.5 Service Runner complete, monitoring deferred to Phase 4) |
 | **TESTING_STRATEGY_V3.4.md** | ✅ | v3.3 | `/docs/foundation/` | 2 | Phases 1-10 | 🔴 Critical | **UPDATED V3.3** - Added Test Isolation Patterns section (5 patterns: transaction-based, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2); based on Phase 1.9 findings (12+ test failures from DB state contamination); cross-references TEST_ISOLATION_PATTERNS_V1.1.md; V3.2: All 8 test types MANDATORY; V3.0: 8 test type framework |
 | **TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md** | ✅ | v2.1 | `/docs/foundation/` | 1.9 | Phases 1.5+ | 🔴 Critical | **UPDATED V2.1** - Added REQ-TEST-020 through REQ-TEST-024 (Test Isolation Requirements from Phase 1.9): transaction-based isolation, FK dependency chain management, cleanup fixture ordering, parallel execution safety, SCD Type 2 isolation; cross-references TEST_ISOLATION_PATTERNS_V1.1.md; V2.0: REQ-TEST-012-019 (8 test types, mock restrictions, fixture requirements, coverage standards) |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
@@ -506,7 +519,7 @@ Roadmap, timelines, and project management.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DEVELOPMENT_PHASES_V1.7.md** | ✅ | v1.6 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 0.5 complete, Phase 5 split into 5a/5b - UPDATED V1.6 |
+| **DEVELOPMENT_PHASES_V1.9.md** | ✅ | v1.9 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 2.5 progress: Service Runner complete, monitoring deferred - UPDATED V1.9 |
 | **DEPLOYMENT_GUIDE_V1.0.md** | 🔵 | - | `/docs/deployment/` | 1 | Phase 1 ✅ | 🟡 High | Local/AWS deployment stubs |
 | **USER_GUIDE_V1.0.md** | 🔵 | - | `/docs/guides/` | 5 | Phase 5 ✅ | 🟢 Medium | CLI examples (edges-list, trade-execute) |
 | **DEVELOPER_ONBOARDING_V1.0.md** | 🔵 | - | `/docs/utility/` | 0 | Phase 0 ✅ | 🟡 High | Merged with ENVIRONMENT_CHECKLIST, onboarding steps |
@@ -541,6 +554,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **KALSHI_CLIENT_USER_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Kalshi Client API usage guide (~850 lines): RSA-PSS authentication (automatic), rate limiting (100 req/min), error handling (exponential backoff), all API methods (get_markets/balance/positions/fills/settlements), pagination, common patterns (safe client initialization, environment-specific client, error-resilient calls), troubleshooting; complements API_INTEGRATION_GUIDE (API reference) |
 | **KALSHI_MARKET_TERMINOLOGY_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🟡 High | **NEW** - Kalshi market terminology guide (~430 lines): Binary prediction market structure (YES/NO outcomes vs BUY/SELL actions), side vs action fields, position vs trade tables, P&L calculation logic (YES profits on price increase, NO profits on price decrease), complete examples with position lifecycle, case sensitivity notes (Python UPPERCASE vs database lowercase); addresses common confusion about Kalshi API terminology |
 | **ESPN_DATA_MODEL_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | Phase 2 | 🔴 Critical | **NEW** - ESPN data model guide (~650 lines): Database schema (venues, team_rankings, game_states SCD Type 2), TypedDict definitions (ESPNTeamInfo, ESPNVenueInfo, ESPNGameState, etc.), CRUD operations (create_venue, upsert_game_state, get_game_state_history), JSONB situation schemas (football/basketball/hockey), multi-sport support (NFL, NCAAF, NBA, NCAAB, NHL, WNBA), query patterns, storage estimates (~1.1GB/year); Phase 2 Live Data Integration |
+| **LIVE_DATA_INTEGRATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2.5 | Phase 2.5 | 🔴 Critical | **NEW** - Live data integration guide (~500 lines): CLI scheduler commands (start/stop/status), ServiceSupervisor pattern (health monitoring, auto-restart), data collection services (ESPN MarketUpdater, Kalshi REST Poller, Kalshi WebSocket), configuration options (poll intervals, logging), monitoring and health checks, troubleshooting; Phase 2.5 Live Data Collection |
 | **MODEL_TRAINING_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 3+ | Phases 3+ | 🔴 Critical | **NEW (SESSION 9)** - Automated model training pipeline guide (~520 lines): hyperparameter tuning (grid search vs Bayesian optimization), cross-validation (time-series split prevents data leakage), model serialization (joblib for sklearn models), training metrics (accuracy, log loss, calibration ECE, Brier score), weekly training schedule (Sunday 3 AM); complements MODEL_MANAGER_USER_GUIDE Future Enhancements |
 | **EDGE_CALCULATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 3+ | Phases 3+ | 🔴 Critical | **NEW (SESSION 9)** - Real-time edge calculation guide (~410 lines): edge formula (model_predicted_prob - market_price), multi-model ensemble predictions (weighted average), confidence intervals (95% CI = ensemble_pred ± 1.96 * std_error), edge thresholding (filter opportunities where edge > min_edge), historical edge tracking, hourly calculation schedule, integration with trading system; complements MODEL_MANAGER_USER_GUIDE Future Enhancements |
 | **DATA_COLLECTION_GUIDE_V1.1.md** | ✅ | v1.1 | `/docs/guides/` | 3+ | Phases 3+ | 🔴 Critical | **UPDATED** - Automated data collection pipeline guide (~650 lines): V1.1 adds Section 11 Data Source Tiering Strategy (3-tier architecture: Tier 1 Historical FREE sportsdataverse-py/nflreadpy, Tier 2 Dev/Testing FREE ESPN hidden API, Tier 3 Production PAID $109-$1,599/mo); ESPN rate limiting (10 req/sec historical, 1 req/10 sec live); GameStateProvider abstraction; verified API pricing reference; strategy latency tolerance matrix. Original: multi-source collection, incremental updates, schema validation, exponential backoff. Cross-refs ADR-076. |
@@ -576,6 +590,7 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md** | 🔵 | - | `/docs/utility/` | 1.5 | Phase 1.5-4 | 🟡 High | **PLANNED** - Property-based testing roadmap for 74-91 additional tests across Phases 1.5-4 (merged into TEST_REQUIREMENTS_COMPREHENSIVE) |
 | **PHASE_1.5_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 2 Week 1 | 🟡 High | **NEW** - Configuration System Enhancement deferred to Phase 2 (DEF-P1.5-001: version resolution + override handling, 6-8 hours implementation estimate, requires live database integration) |
 | **PHASE_4_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 4.5 | Phase 4.5 | 🔴 Critical | **NEW** - Comprehensive research task documentation (11 tasks: DEF-009 to DEF-019, strategies HIGHEST PRIORITY, models, edge detection) - ~2800 lines, 74-92 hour total effort |
+| **PHASE_2.5_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 2.5 | Phase 3-4 | 🟡 High | **NEW** - Phase 2.5 deferred tasks (6 tasks: CloudWatch integration, ELK setup, alert thresholds, health dashboard, NCAAW seeding, rate limit YAML); GitHub issues #195-#198; 22-34 hours estimated effort |
 | **PHASE_2_TEST_COVERAGE_GAPS_V1.0.md** | 📦 | v1.0 | `/docs/utility/` | 2 | Phase 2 | 🔴 Critical | **ARCHIVED** - Subsumed by PHASE_1.9_TEST_INFRASTRUCTURE_PLAN_V1.0.md; Issue #155 closed, replaced by Issue #165 |
 | **PHASE_1.9_TEST_INFRASTRUCTURE_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.9 | Phase 1.9 | 🔴 Critical | **NEW** - BLOCKING phase for test infrastructure overhaul (~93 hours); addresses 2 failed, 33 skipped, 5 xfail tests, 10/11 modules missing test types; GitHub Issue #165 |
 | **STRATEGIC_WORK_ROADMAP_V1.1.md** | ✅ | v1.1 | `/docs/utility/` | 1-10 | All phases | 🔴 Critical | **UPDATED V1.1** - Master roadmap of 25 strategic tasks + Phases 6-9 analytics tasks (performance tracking, dashboards, A/B testing) organized by category |
@@ -697,7 +712,7 @@ Additional guides, references, and supporting documentation.
 - ✅ ARCHITECTURE_DECISIONS_V2.5.md (ADR numbers added for all decisions)
 - ✅ ADR_INDEX.md (systematic ADR catalog)
 - ✅ PROJECT_OVERVIEW_V1.4.md
-- ✅ DEVELOPMENT_PHASES_V1.7.md (Phase 5 split into 5a/5b)
+- ✅ DEVELOPMENT_PHASES_V1.9.md (Phase 5 split into 5a/5b)
 - ✅ system.yaml (added comprehensive notifications configuration)
 - ✅ position_management.yaml V2.0 (10 exit conditions)
 - ✅ probability_models.yaml V2.0 (versioning)
@@ -744,7 +759,7 @@ Additional guides, references, and supporting documentation.
 - DATABASE_SCHEMA_SUMMARY_V1.6.md (schema - 25 tables including alerts + ML placeholders)
 - API_INTEGRATION_GUIDE_V1.0.md (API docs)
 - KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md (critical reference)
-- DEVELOPMENT_PHASES_V1.7.md (roadmap)
+- DEVELOPMENT_PHASES_V1.9.md (roadmap)
 - GLOSSARY.md (terminology)
 - Handoff_Protocol_V1.0.md (process reference)
 - VERSIONING_GUIDE_V1.0.md (versioning patterns)
@@ -847,6 +862,7 @@ Additional guides, references, and supporting documentation.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 2.45 | 2025-12-07 | **PHASE 2.5 SERVICE SUPERVISOR INFRASTRUCTURE**: Updated 4 foundation documents (ARCHITECTURE_DECISIONS V2.27, ADR_INDEX V1.20, MASTER_REQUIREMENTS V2.21, REQUIREMENT_INDEX V1.13); added ADR-100, 101, 102, REQ-SCHED-001/002, REQ-OBSERV-003; added PHASE_2.5_DEFERRED_TASKS_V1.0.md |
 | 2.31 | 2025-11-23 | **PATTERN 21 + TEST GAP MAPPING (SESSION 5)**: Updated DEVELOPMENT_PATTERNS V1.8→V1.9 (added Pattern 19: Hypothesis Decimal Strategy, Pattern 20: Resource Management, Pattern 21: Validation-First Architecture - 21 total patterns); Pattern 21 documents 4-layer validation architecture (~450 lines); added TEST_GAP_GITHUB_ISSUE_MAPPING_V1.0.md (~300 lines) mapping 15 test gaps to GitHub issues #101-#132; document count: 35 → 36 |
 | 2.30 | 2025-11-22 | **USER GUIDES FOR CORE MODULES (PHASE 1.5)**: Added 6 comprehensive user guides (~4,530 lines total: STRATEGY_MANAGER, MODEL_MANAGER, POSITION_MANAGER, CONFIG_LOADER, KALSHI_CLIENT, KALSHI_MARKET_TERMINOLOGY) |
 | 2.29 | 2025-11-22 | **PHASE 1.5 COMPLETION DOCUMENTATION**: Added PHASE_1.5_COMPLETION_REPORT.md + PHASE_1.5_DEFERRED_TASKS_V1.0.md; Phase 1.5 status: ⚠️ PASS WITH CONDITIONS (3/4 deliverables complete, 93.83% coverage) |

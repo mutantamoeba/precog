@@ -1,9 +1,19 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.26
-**Last Updated:** December 6, 2025
+**Version:** 2.28
+**Last Updated:** December 8, 2025
 **Status:** ✅ Current
+**Changes in v2.28:**
+- **PHASE 2.5 BASEPOLLER UNIFIED DESIGN PATTERN:** Added ADR-103 for BasePoller abstract class architecture
+- ADR-103: BasePoller Unified Design Pattern - Template Method pattern for consistent polling infrastructure
+- Naming convention: {Platform}{Entity}Poller for REST, {Platform}{Entity}Handler for WebSocket
+- Generic statistics: items_fetched, items_updated, items_created (PollerStats TypedDict)
+**Changes in v2.27:**
+- **PHASE 2.5 LIVE DATA COLLECTION:** Added ADR-100, ADR-101, ADR-102 for Service Supervisor pattern, ESPN mappings, and CloudWatch/ELK deferral
+- ADR-100: Service Supervisor Pattern - Multi-service orchestration with health monitoring, auto-restart, metrics aggregation
+- ADR-101: ESPN Status/Season Type Mapping - Explicit ClassVar dictionaries for database constraint compliance
+- ADR-102: CloudWatch/ELK Integration - Deferred to Phase 4 with JSON logging ready
 **Changes in v2.26:**
 - **CI-SAFE STRESS TEST MARKERS (ISSUE #168):** Added ADR-099 (skipif vs xfail(run=False) for CI Stress Tests)
 - Documents decision to prefer `skipif(_is_ci)` over `xfail(run=False)` for stress tests that hang in CI
@@ -6782,7 +6792,7 @@ CREATE TABLE brier_score_metrics (...);
 
 **References:**
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.7.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -7539,7 +7549,7 @@ Cons:
 ### References
 
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.7.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -8306,7 +8316,7 @@ WebSocket for Position Monitoring (real-time):
 
 ### References
 
-- `docs/foundation/DEVELOPMENT_PHASES_V1.7.md` (Phase 7 Task #2: Frontend Development)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 7 Task #2: Frontend Development)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.9: Materialized Views)
 - Next.js Documentation: https://nextjs.org/docs
 - Recharts Documentation: https://recharts.org/
@@ -9226,9 +9236,9 @@ def run_holdout_validation(
 ### Related Documentation
 
 - `docs/guides/MODEL_EVALUATION_GUIDE_V1.0.md` (implementation guide - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.20.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.7.md` (Phase 2 Task #3, Phase 6 Task #1)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 2 Task #3, Phase 6 Task #1)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.7: Evaluation Runs Table)
 
 ---
@@ -9949,9 +9959,9 @@ ON position_risk_by_strategy(league, strategy_name);
 
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (comprehensive analytics implementation guide - to be created)
 - `docs/guides/DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md` (React dashboard + API integration - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.20.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.7.md` (Phase 6 Task #3, Phase 7 Task #2)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 6 Task #3, Phase 7 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.8: Materialized Views Reference)
 
 ---
@@ -10780,9 +10790,9 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 
 - `docs/guides/AB_TESTING_GUIDE_V1.0.md` (comprehensive A/B testing guide - to be created)
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (includes A/B testing architecture)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.20.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.7.md` (Phase 7 Task #3, Phase 8 Task #2)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 7 Task #3, Phase 8 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.9: A/B Tests Table)
 
 ---
@@ -11218,7 +11228,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 
 **References:**
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (materialized views already defined)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.20.md` (analytics requirements)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (analytics requirements)
 
 ---
 
@@ -11698,7 +11708,7 @@ CREATE TABLE strategies (
 ### References
 
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (edges table schema)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.7.md` (Phase 1.5 manager components)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 1.5 manager components)
 - `src/precog/trading/model_manager.py` (edge calculation logic - Phase 1.5 implementation)
 - `src/precog/trading/strategy_manager.py` (edge query logic - Phase 1.5 implementation)
 
@@ -12132,7 +12142,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 **Primary Documentation:**
 - TESTING_STRATEGY_V3.4.md (comprehensive 8 test type framework, 1,462 lines)
 - TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md (REQ-TEST-012 through REQ-TEST-019)
-- MASTER_REQUIREMENTS_V2.20.md (added 8 new test requirements)
+- MASTER_REQUIREMENTS_V2.22.md (added 8 new test requirements)
 - REQUIREMENT_INDEX.md (added REQ-TEST-012 through REQ-TEST-019)
 
 **Supporting Documentation:**
@@ -13181,7 +13191,7 @@ Result: Only enter when model confident AND market mispriced
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Comprehensive architectural analysis
 - `docs/guides/VERSIONING_GUIDE_V1.0.md` - Strategy/model versioning patterns
-- `MASTER_REQUIREMENTS_V2.20.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
+- `MASTER_REQUIREMENTS_V2.22.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -13601,7 +13611,7 @@ def validate_position_trade_attribution(position_id: str) -> bool:
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Attribution architecture analysis with tradeoffs
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` - Current schema (pre-attribution)
-- `MASTER_REQUIREMENTS_V2.20.md` - REQ-DB-006 (Decimal precision for all financial fields)
+- `MASTER_REQUIREMENTS_V2.22.md` - REQ-DB-006 (Decimal precision for all financial fields)
 
 **Status:** ✅ Decision approved, implementation in progress (Migrations 019-020 planned)
 
@@ -13976,7 +13986,7 @@ def sync_trades_full():
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Trade source tracking architectural analysis
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` - Kalshi API trade download patterns
-- `MASTER_REQUIREMENTS_V2.20.md` - REQ-API-001 (Kalshi API Integration)
+- `MASTER_REQUIREMENTS_V2.22.md` - REQ-API-001 (Kalshi API Integration)
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -14356,7 +14366,7 @@ def test_invalid_strategy_type_raises_foreign_key_error():
 - `src/precog/database/lookup_helpers.py` - Helper functions implementation
 - `tests/test_lookup_tables.py` - Comprehensive test suite (23 tests, 100% coverage)
 - `src/precog/database/migrations/migration_023_create_lookup_tables.py` - Migration script
-- `MASTER_REQUIREMENTS_V2.20.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
+- `MASTER_REQUIREMENTS_V2.22.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
 
 **Status:** ✅ Decision approved, implementation complete (Migration 023 applied, helper module created, 23 tests passing)
 
@@ -15197,6 +15207,306 @@ pytest tests/stress/test_config_loader_stress.py tests/stress/test_logger_stress
 
 ---
 
+## Decision #100/ADR-100: Service Supervisor Pattern for Data Collection (Phase 2.5)
+
+**Date:** December 7, 2025
+**Status:** ✅ Accepted
+**Phase:** Phase 2.5 (Live Data Collection)
+**Drivers:** Production reliability, multi-service orchestration, extensibility
+
+### Context
+
+Phase 2.5 introduces live data collection with multiple concurrent event loops:
+- ESPN Game State Poller (MarketUpdater)
+- Kalshi Market Price Poller (KalshiMarketPoller)
+- Kalshi WebSocket Handler (KalshiWebSocketHandler)
+
+Future phases will add more event loops:
+- Edge Calculator (Phase 3)
+- Strategy Evaluator (Phase 4)
+- Trade Executor (Phase 5)
+- Position Manager (Phase 5)
+
+We need an architecture that:
+1. Manages multiple services uniformly
+2. Provides health monitoring and automatic restarts
+3. Aggregates metrics across services
+4. Enables graceful shutdown coordination
+
+### Decision
+
+Implement a **Service Supervisor Pattern** with these components:
+
+1. **EventLoopService Protocol:** All services implement `start()`, `stop()`, `is_running()`, `get_stats()`
+2. **ServiceSupervisor Class:** Central manager for all services with:
+   - Error isolation (one service failure doesn't crash others)
+   - Health check loop (periodic monitoring)
+   - Metrics aggregation (unified statistics)
+   - Auto-restart with exponential backoff
+   - Alert callbacks for threshold breaches
+3. **Plugin Architecture:** New services added via `create_services()` factory
+
+### Implementation
+
+```python
+# scripts/run_data_collector.py
+class ServiceSupervisor:
+    def add_service(self, name: str, service: EventLoopService, config: ServiceConfig) -> None
+    def start_all(self) -> None
+    def stop_all(self) -> None
+    def _health_check_loop(self) -> None
+    def _metrics_loop(self) -> None
+```
+
+### Benefits
+
+- **Extensibility:** Future services plug in without changing supervisor code
+- **Reliability:** Auto-restart with backoff prevents cascade failures
+- **Observability:** Unified metrics and alerting
+- **Graceful Degradation:** Service failures isolated, others continue
+
+### Related Artifacts
+
+- **Script:** scripts/run_data_collector.py
+- **Protocol:** EventLoopService in run_data_collector.py
+- **Requirement:** REQ-SCHED-001 (APScheduler Live Data Polling)
+- **Requirement:** REQ-SCHED-002 (Service Supervisor Pattern)
+
+---
+
+## Decision #101/ADR-101: ESPN Status and Season Type Mapping Strategy (Phase 2)
+
+**Date:** December 7, 2025
+**Status:** ✅ Accepted
+**Phase:** Phase 2 (Live Data Integration)
+**Drivers:** Database constraint compliance, data integrity, ESPN API compatibility
+
+### Context
+
+ESPN API returns integer values for `season_type` and string values for `game_status`:
+- `season.type`: 1=preseason, 2=regular, 3=postseason, 4=offseason, 5=allstar
+- `status.type.name`: "STATUS_SCHEDULED", "STATUS_IN_PROGRESS", "STATUS_FINAL"
+- `status.type.description`: "Scheduled", "In Progress", "Final"
+- `status.type.state`: "pre", "in", "post"
+
+Our database has CHECK constraints:
+- `game_states_season_type_check`: preseason, regular, playoff, exhibition, allstar
+- `game_states_game_status_check`: pre, in_progress, halftime, final
+
+### Decision
+
+Implement explicit mapping dictionaries in ESPNClient with these rules:
+
+**SEASON_TYPE_MAP:**
+```python
+SEASON_TYPE_MAP = {
+    1: "preseason",
+    2: "regular",
+    3: "playoff",    # ESPN "postseason" -> our "playoff"
+    4: "exhibition", # ESPN "offseason"
+    5: "allstar",
+}
+```
+
+**STATUS_MAP:**
+```python
+STATUS_MAP = {
+    "pre": "pre",           # Keep ESPN's state value
+    "in": "in_progress",    # Map to our schema
+    "post": "final",        # Map to our schema
+}
+```
+
+### Rationale
+
+1. **Explicit Mapping:** ClassVar dictionaries make mapping visible and maintainable
+2. **Safe Defaults:** Unknown values default to common cases ("regular", "pre")
+3. **Database Compliance:** All mapped values satisfy CHECK constraints
+4. **ESPN State Usage:** Use `status.type.state` ("pre", "in", "post") as source, not description strings
+
+### Related Artifacts
+
+- **File:** src/precog/api_connectors/espn_client.py
+- **Migration:** 009_create_game_states.sql (CHECK constraints)
+- **ADR:** ADR-029 (ESPN Data Model)
+- **Requirement:** REQ-DATA-001 (Game State Data Collection)
+
+---
+
+## Decision #102/ADR-102: CloudWatch/ELK Log Aggregation (Deferred to Phase 4)
+
+**Date:** December 7, 2025
+**Status:** 📋 Deferred
+**Phase:** Target Phase 4
+**Drivers:** Production observability, log analysis, alerting
+
+### Context
+
+The Service Supervisor produces structured JSON logs compatible with:
+- AWS CloudWatch Logs Insights
+- Elasticsearch/Logstash (ELK Stack)
+- Datadog, Splunk
+
+Currently logging to rotating files in `logs/` directory.
+
+### Decision
+
+Defer CloudWatch/ELK integration to Phase 4 with this rationale:
+
+1. **Phase 2.5 Focus:** Get data collection working reliably first
+2. **Local Validation:** File-based logs sufficient for development/testing
+3. **Phase 4 Readiness:** When trading is live, observability becomes critical
+
+### Deferred Tasks
+
+- **DEF-P2.5-001:** CloudWatch Logs integration (log group, streams, IAM)
+- **DEF-P2.5-002:** ELK Stack setup (Elasticsearch, Logstash, Kibana)
+- **DEF-P2.5-003:** Alert thresholds for error rates
+- **DEF-P2.5-004:** Dashboard for service health metrics
+
+### Related Artifacts
+
+- **Script:** scripts/run_data_collector.py (JSONFormatter ready)
+- **Requirement:** REQ-OBSERV-003 (Log Aggregation - Deferred)
+- **ADR:** ADR-100 (Service Supervisor Pattern)
+
+---
+
+## Decision #103/ADR-103: BasePoller Unified Design Pattern (Phase 2.5)
+
+**Date:** December 7, 2025
+**Status:** ✅ Accepted
+**Phase:** Phase 2.5 (Live Data Collection)
+**Drivers:** Code reuse, consistent interface, maintainability, extensibility
+
+### Context
+
+Phase 2.5 introduced multiple polling services:
+- ESPN Game State Poller (MarketUpdater → renamed ESPNGamePoller)
+- Kalshi Market Price Poller (KalshiMarketPoller)
+
+Both pollers share significant common functionality:
+1. APScheduler BackgroundScheduler for job scheduling
+2. Thread-safe statistics tracking
+3. Start/stop lifecycle management
+4. EventLoopService protocol compliance
+5. Configurable polling intervals
+
+Without a shared base class, each poller duplicated ~150 lines of boilerplate code for:
+- Scheduler initialization and shutdown
+- Lock-protected statistics updates
+- Enabled state management
+- Error counting and tracking
+
+### Decision
+
+Implement a **BasePoller Abstract Class** using the Template Method pattern:
+
+**1. Naming Convention:**
+- REST Pollers: `{Platform}{Entity}Poller` (e.g., `ESPNGamePoller`, `KalshiMarketPoller`)
+- WebSocket Handlers: `{Platform}{Entity}Handler` (e.g., `KalshiWebSocketHandler`)
+- Handler suffix reserved for real-time streaming (WebSocket/SSE)
+
+**2. Generic Statistics Fields:**
+```python
+class PollerStats(TypedDict):
+    polls_completed: int
+    items_fetched: int    # Generic (was markets_fetched, games_fetched)
+    items_updated: int    # Generic (was markets_updated, games_updated)
+    items_created: int    # Generic (was markets_created, games_created)
+    errors: int
+    last_poll: str | None
+    last_error: str | None
+```
+
+**3. Template Method Pattern:**
+```python
+class BasePoller(ABC):
+    """Abstract base class for all APScheduler-based pollers."""
+
+    @abstractmethod
+    def _poll_all(self) -> dict[str, int]:
+        """Subclass implements platform-specific polling logic.
+
+        Returns:
+            dict with keys: items_fetched, items_updated, items_created
+        """
+        pass
+
+    def poll_once(self) -> dict[str, int]:
+        """Template method - handles stats, error tracking, locking."""
+        with self._lock:
+            result = self._poll_all()  # Delegate to subclass
+            self._update_stats(result)
+            return result
+```
+
+**4. Backward Compatibility:**
+```python
+# schedulers/__init__.py
+MarketUpdater = ESPNGamePoller  # Alias during transition
+create_market_updater = create_espn_poller
+run_single_poll = run_single_espn_poll
+```
+
+### Implementation
+
+**File Structure:**
+```
+src/precog/schedulers/
+├── __init__.py              # Exports + backward compatibility aliases
+├── base_poller.py           # BasePoller, PollerStats
+├── espn_game_poller.py      # ESPNGamePoller (extends BasePoller)
+├── kalshi_poller.py         # KalshiMarketPoller (extends BasePoller)
+├── kalshi_websocket.py      # KalshiWebSocketHandler (no BasePoller)
+└── service_supervisor.py    # ServiceSupervisor
+```
+
+**BasePoller Responsibilities:**
+- APScheduler initialization and lifecycle
+- Thread-safe `_lock` for statistics
+- `start()`, `stop()`, `is_running()`, `enabled` property
+- `poll_once()` template method with error handling
+- Generic `_stats` dictionary with `PollerStats` type
+
+**Subclass Responsibilities:**
+- Implement `_poll_all()` with platform-specific logic
+- Platform-specific client initialization
+- Database sync operations
+- Return `{items_fetched, items_updated, items_created}` dict
+
+### Benefits
+
+1. **Code Reuse:** ~150 lines of boilerplate eliminated per poller
+2. **Consistency:** All pollers share identical start/stop/stats interface
+3. **Thread Safety:** Centralized locking pattern prevents race conditions
+4. **Extensibility:** New pollers (PolymarketPricePoller, etc.) inherit infrastructure
+5. **Testability:** BasePoller can be tested independently of platform logic
+6. **Naming Clarity:** Convention distinguishes REST pollers from WebSocket handlers
+
+### Rationale for Naming
+
+**Why `ESPNGamePoller` not `ESPNGameStatePoller`?**
+- "Game" is the entity being polled
+- "State" is implicit (we're fetching current state)
+- Shorter names improve readability
+
+**Why keep `KalshiWebSocketHandler`?**
+- WebSocket handlers don't "poll" - they receive pushes
+- "Handler" conveys event-driven nature
+- Consistent with industry terminology (WebSocketHandler, EventHandler)
+
+### Related Artifacts
+
+- **Base Class:** src/precog/schedulers/base_poller.py
+- **ESPN Poller:** src/precog/schedulers/espn_game_poller.py
+- **Kalshi Poller:** src/precog/schedulers/kalshi_poller.py
+- **ADR-100:** Service Supervisor Pattern
+- **REQ-SCHED-001:** APScheduler Live Data Polling
+- **REQ-SCHED-003:** BasePoller Unified Design
+
+---
+
 ## Approval & Sign-off
 
 This document represents the architectural decisions as of October 22, 2025 (Phase 0.5 completion with standardization).
@@ -15207,9 +15517,11 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.26
-**Last Updated:** December 6, 2025
+**Document Version:** 2.28
+**Last Updated:** December 7, 2025
 **Critical Changes:**
+- v2.28: **BASEPOLLER UNIFIED DESIGN PATTERN** - Added Decision #103/ADR-103 (BasePoller abstract class with Template Method pattern, {Platform}{Entity}Poller naming convention, generic stats fields)
+- v2.27: **PHASE 2.5 LIVE DATA COLLECTION** - Added Decisions #100-102/ADR-100-102 (Service Supervisor Pattern, ESPN Status/Season Mapping, CloudWatch/ELK Deferral)
 - v2.26: **CI-SAFE STRESS TEST MARKERS (ISSUE #168)** - Added Decision #99/ADR-099 (skipif vs xfail(run=False) for CI Stress Tests): `skipif(_is_ci)` preferred over `xfail(run=False)` for clearer semantic meaning (SKIPPED vs XFAIL)
 - v2.24: **TIMESCALEDB DECISION (PHASE 6+)** - Added Decision #98/ADR-098 (TimescaleDB Deferred to Phase 6+): Current PostgreSQL + SCD Type 2 sufficient for Phase 1-5, triggers defined for re-evaluation
 - v2.21: **WORKFLOW ENFORCEMENT ARCHITECTURE** - Added Decisions #94-97/ADR-094-307 (YAML-Driven Validation, Auto-Discovery Pattern, Parallel Execution in Git Hooks, Tier-Specific Coverage Targets - Phase 1.5)
@@ -15233,4 +15545,4 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 **For complete ADR catalog, see:** ADR_INDEX_V1.4.md
 
-**END OF ARCHITECTURE DECISIONS V2.26**
+**END OF ARCHITECTURE DECISIONS V2.28**

@@ -1,9 +1,21 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.19
-**Last Updated:** 2025-12-06
+**Version:** 1.21
+**Last Updated:** 2025-12-07
 **Status:** ✅ Current
+**Changes in v1.21:**
+- **BASEPOLLER UNIFIED DESIGN PATTERN**: Added ADR-103 for BasePoller abstract class with Template Method pattern
+- **ADR-103:** BasePoller Unified Design Pattern - Shared APScheduler infrastructure, {Platform}{Entity}Poller naming convention, generic stats fields
+- Updated ARCHITECTURE_DECISIONS reference from V2.27 to V2.28
+- Total ADRs: 104 → 105 (1 new ADR added for Phase 2.5 polling architecture)
+**Changes in v1.20:**
+- **PHASE 2.5 SERVICE SUPERVISOR INFRASTRUCTURE**: Added ADR-100, ADR-101, ADR-102 for live data collection services
+- **ADR-100:** Service Supervisor Pattern for Data Collection - Multi-service orchestration with health monitoring
+- **ADR-101:** ESPN Status and Season Type Mapping Strategy - ClassVar dictionaries for database compliance
+- **ADR-102:** CloudWatch/ELK Log Aggregation (Deferred to Phase 4) - Production observability infrastructure
+- Updated ARCHITECTURE_DECISIONS reference from V2.26 to V2.27
+- Total ADRs: 101 → 104 (3 new ADRs added for Phase 2.5 infrastructure)
 **Changes in v1.19:**
 - **CI-SAFE STRESS TEST MARKERS (ISSUE #168):** Added ADR-099 (skipif vs xfail(run=False) for CI Stress Tests)
 - Documents decision to prefer `skipif(_is_ci)` over `xfail(run=False)` for stress tests that hang in CI
@@ -268,10 +280,10 @@ This document provides a systematic index of all Precog architecture decisions u
 
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
-| ADR-056 | Alembic Migration Framework for Database Schema Management | 2025-12-03 | ✅ | 1.9 | ARCHITECTURE_DECISIONS_V2.26 |
-| ADR-057 | Testcontainers for Database Test Isolation | 2025-12-03 | 🔵 | 1.9+ | ARCHITECTURE_DECISIONS_V2.26 |
-| ADR-098 | TimescaleDB Deferred to Phase 6+ | 2025-12-03 | ✅ | 1.9 | ARCHITECTURE_DECISIONS_V2.26 |
-| ADR-099 | skipif vs xfail(run=False) for CI Stress Tests | 2025-12-06 | ✅ | 1.9 | ARCHITECTURE_DECISIONS_V2.26 |
+| ADR-056 | Alembic Migration Framework for Database Schema Management | 2025-12-03 | ✅ | 1.9 | ARCHITECTURE_DECISIONS_V2.27 |
+| ADR-057 | Testcontainers for Database Test Isolation | 2025-12-03 | 🔵 | 1.9+ | ARCHITECTURE_DECISIONS_V2.27 |
+| ADR-098 | TimescaleDB Deferred to Phase 6+ | 2025-12-03 | ✅ | 1.9 | ARCHITECTURE_DECISIONS_V2.27 |
+| ADR-099 | skipif vs xfail(run=False) for CI Stress Tests | 2025-12-06 | ✅ | 1.9 | ARCHITECTURE_DECISIONS_V2.27 |
 
 ### Phase 2: Production Monitoring Infrastructure (Planned)
 
@@ -317,15 +329,15 @@ This document provides a systematic index of all Precog architecture decisions u
 
 ## Core Engine Decisions (100-199)
 
-### Phase 1: Core Trading Engine (Planned)
+### Phase 2.5: Live Data Collection Service Infrastructure
 
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
-| ADR-100 | TBD - Kalshi API Client Architecture | - | 🔵 | 1 | - |
-| ADR-101 | TBD - RSA-PSS Authentication Implementation | - | 🔵 | 1 | - |
-| ADR-102 | TBD - Error Handling Strategy | - | 🔵 | 1 | - |
-| ADR-103 | TBD - Rate Limiting Implementation | - | 🔵 | 1 | - |
-| ADR-104 | TBD - Trade Execution Workflow | - | 🔵 | 1 | - |
+| ADR-100 | Service Supervisor Pattern for Data Collection | 2025-12-07 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.28 |
+| ADR-101 | ESPN Status and Season Type Mapping Strategy | 2025-12-07 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.28 |
+| ADR-102 | CloudWatch/ELK Log Aggregation (Deferred to Phase 4) | 2025-12-07 | 🔵 | 4 | ARCHITECTURE_DECISIONS_V2.28 |
+| ADR-103 | BasePoller Unified Design Pattern | 2025-12-07 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.28 |
+| ADR-104 | TBD - Rate Limiting Implementation | - | 🔵 | 1 | - |
 
 ### Phase 2: Live Data Integration (Planned)
 
@@ -1281,9 +1293,9 @@ coverage_tiers:
 ---
 ## ADR Statistics
 
-**Total ADRs:** 100
-**Accepted (✅):** 51 (Phase 0-1.9 complete)
-**Proposed (🔵):** 49 (Phase 2-10)
+**Total ADRs:** 104
+**Accepted (✅):** 54 (Phase 0-2.5 complete)
+**Proposed (🔵):** 50 (Phase 2-10)
 **Rejected (❌):** 0
 **Superseded (⚠️):** 1 (ADR-089 Dual-Key Pattern superseded by schema implementation)
 
@@ -1292,12 +1304,13 @@ coverage_tiers:
 - Phase 0.5: 12 ADRs (100% accepted)
 - Phase 1: 12 ADRs (6 accepted for DB completion + 6 planned for API best practices)
 - Phase 1.5: 12 ADRs (100% accepted - property-based testing POC + schema standardization + no edge manager + 8 test type framework + dual-key pattern + trade/position attribution architecture [3 ADRs] + workflow enforcement infrastructure [4 ADRs])
-- Phase 1.9: 3 ADRs (2 accepted: Alembic + TimescaleDB deferral, 1 planned: Testcontainers)
+- Phase 1.9: 4 ADRs (3 accepted: Alembic + TimescaleDB deferral + CI-safe stress testing, 1 planned: Testcontainers)
 - Phase 0.6c: 5 ADRs (100% accepted - includes cross-platform standards)
 - Phase 0.7: 6 ADRs (2 accepted: Python 3.14 compatibility + Branch Protection + 4 planned)
+- **Phase 2.5: 3 ADRs (2 accepted: Service Supervisor + ESPN Mapping, 1 deferred: CloudWatch/ELK)** ⭐ NEW
 - Phase 2: 3 ADRs (0% - planned)
 - Phase 3: 2 ADRs (0% - planned)
-- Phase 4: 4 ADRs (0% - planned)
+- Phase 4: 5 ADRs (1 deferred: CloudWatch/ELK from Phase 2.5 + 4 planned)
 - Phase 5: 3 ADRs (0% - planned)
 
 ---
@@ -1311,11 +1324,12 @@ coverage_tiers:
 
 ---
 
-**Document Version:** 1.19
+**Document Version:** 1.20
 **Created:** 2025-10-21
-**Last Updated:** 2025-12-06
+**Last Updated:** 2025-12-07
 **Purpose:** Systematic architecture decision tracking and reference
 **Critical Changes:**
+- v1.20: Added ADR-100, ADR-101, ADR-102 for Phase 2.5 Service Supervisor infrastructure (live data collection services)
 - v1.19: Added ADR-099 for CI-safe stress test markers (Issue #168 - skipif vs xfail(run=False) decision)
 - v1.18: Added ADR-056 (Alembic Migration Framework) and ADR-057 (Testcontainers - Planned) for Phase 1.9 test infrastructure
 - v1.17: Added ADR-098 for TimescaleDB deferral (Phase 1.9 - defer until Phase 6+ when empirical bottlenecks emerge)
@@ -1328,6 +1342,6 @@ coverage_tiers:
 - v1.6: Added ADR-074 for property-based testing integration (Hypothesis framework POC complete)
 - v1.5: Added ADR-054 for Python 3.14 compatibility (Ruff security rules instead of Bandit)
 
-**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.26.md
+**For complete ADR details, see:** ARCHITECTURE_DECISIONS_V2.27.md
 
-**END OF ADR INDEX V1.19**
+**END OF ADR INDEX V1.20**
