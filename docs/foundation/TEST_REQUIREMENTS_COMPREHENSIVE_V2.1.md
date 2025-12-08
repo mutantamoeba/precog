@@ -1065,7 +1065,7 @@ SCD Type 2 state leakage causes:
 - `TESTING_GAPS_ANALYSIS.md` - Current test coverage analysis
 - `docs/foundation/TESTING_STRATEGY_V3.4.md` - Comprehensive testing strategy with 8 test types
 - `docs/testing/TEST_ISOLATION_PATTERNS_V1.1.md` - Detailed patterns for test isolation (Phase 1.9)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.20.md` - Master requirements document
+- `docs/foundation/MASTER_REQUIREMENTS_V2.21.md` - Master requirements document
 
 **Related ADRs:**
 - ADR-074: Property-Based Testing with Hypothesis

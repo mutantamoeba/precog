@@ -395,7 +395,7 @@ Related Guide: docs/guides/CONFIGURATION_GUIDE_V3.1.md (Environment variables)
 import os
 from datetime import datetime, timedelta
 from decimal import Decimal
-from typing import NoReturn
+from typing import Any, NoReturn
 
 import typer
 from dotenv import load_dotenv
@@ -412,6 +412,12 @@ from precog.database.crud_operations import (
     get_current_market,
     update_account_balance_with_versioning,
     update_market_with_versioning,
+)
+
+# Phase 2.5: Scheduler components
+from precog.schedulers import (
+    KalshiMarketPoller,
+    MarketUpdater,
 )
 from precog.utils.logger import get_logger
 
@@ -1959,6 +1965,458 @@ def show_environment(
         )
         console.print("[dim]All database operations will affect real data.[/dim]")
         console.print("[dim]Double-check commands before executing.[/dim]")
+
+    console.print()
+
+
+# =============================================================================
+# SCHEDULER COMMANDS (Phase 2.5 - Issue #193)
+# =============================================================================
+
+# Create scheduler sub-app
+scheduler_app = typer.Typer(
+    name="scheduler",
+    help="Data collection scheduler commands for ESPN game states and Kalshi market prices",
+)
+app.add_typer(scheduler_app, name="scheduler")
+
+# Global scheduler instances (for stop/status commands)
+_espn_updater: MarketUpdater | None = None
+_kalshi_poller: KalshiMarketPoller | None = None
+
+
+@scheduler_app.command(name="start")
+def scheduler_start(
+    espn: bool = typer.Option(
+        True,
+        "--espn/--no-espn",
+        help="Enable/disable ESPN game state polling",
+    ),
+    kalshi: bool = typer.Option(
+        True,
+        "--kalshi/--no-kalshi",
+        help="Enable/disable Kalshi market price polling",
+    ),
+    espn_interval: int = typer.Option(
+        15,
+        "--espn-interval",
+        help="ESPN poll interval in seconds (default: 15)",
+    ),
+    kalshi_interval: int = typer.Option(
+        15,
+        "--kalshi-interval",
+        help="Kalshi poll interval in seconds (default: 15)",
+    ),
+    kalshi_env: str = typer.Option(
+        "demo",
+        "--kalshi-env",
+        help="Kalshi environment (demo or prod)",
+    ),
+    leagues: str = typer.Option(
+        "nfl,ncaaf",
+        "--leagues",
+        help="Comma-separated list of ESPN leagues to poll",
+    ),
+    series: str = typer.Option(
+        "KXNFLGAME",
+        "--series",
+        help="Comma-separated list of Kalshi series to poll",
+    ),
+    foreground: bool = typer.Option(
+        False,
+        "--foreground",
+        "-f",
+        help="Run in foreground (blocks until Ctrl+C)",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose output",
+    ),
+) -> None:
+    """
+    Start data collection schedulers for ESPN and/or Kalshi.
+
+    **Data Collection Explained:**
+    This command starts background services that continuously poll external APIs
+    and store data in the database. Think of it as turning on a "data vacuum"
+    that keeps your database updated with the latest game states and market prices.
+
+    **What This Command Does:**
+    1. ESPN Polling: Fetches live game states (scores, periods, situations)
+    2. Kalshi Polling: Fetches market prices (yes/no bids, volumes)
+    3. Both run in background threads at configurable intervals
+
+    **When to Use:**
+    - Before game days to capture live data
+    - For long-running data collection (training data accumulation)
+    - Testing scheduler reliability
+
+    Example:
+        ```bash
+        # Start both ESPN and Kalshi polling (default)
+        python main.py scheduler start
+
+        # Start only ESPN polling
+        python main.py scheduler start --no-kalshi
+
+        # Start with custom intervals
+        python main.py scheduler start --espn-interval 30 --kalshi-interval 60
+
+        # Start in foreground mode (blocks until Ctrl+C)
+        python main.py scheduler start --foreground
+
+        # Start with production Kalshi credentials
+        python main.py scheduler start --kalshi-env prod
+        ```
+
+    Reference: docs/foundation/DEVELOPMENT_PHASES_V1.8.md (Phase 2.5)
+    Related Issue: GitHub Issue #193
+    """
+    global _espn_updater, _kalshi_poller
+
+    if verbose:
+        logger.info("Verbose mode enabled")
+
+    console.print("\n[bold cyan]Starting Data Collection Schedulers[/bold cyan]\n")
+
+    started_services = []
+
+    # Parse leagues and series
+    league_list = [lg.strip().lower() for lg in leagues.split(",")]
+    series_list = [s.strip() for s in series.split(",")]
+
+    # Start ESPN updater
+    if espn:
+        console.print("[1/2] Starting ESPN game state polling...")
+        console.print(f"  Leagues: {', '.join(league_list)}")
+        console.print(f"  Interval: {espn_interval} seconds")
+
+        try:
+            _espn_updater = MarketUpdater(
+                leagues=league_list,
+                poll_interval=espn_interval,
+            )
+            _espn_updater.start()
+            console.print("[green][OK] ESPN polling started[/green]")
+            started_services.append("ESPN")
+        except Exception as e:
+            console.print(f"[red][FAIL] Failed to start ESPN polling: {e}[/red]")
+            if verbose:
+                logger.error(f"ESPN polling error: {e}", exc_info=True)
+
+    # Start Kalshi poller
+    if kalshi:
+        console.print("\n[2/2] Starting Kalshi market price polling...")
+        console.print(f"  Environment: {kalshi_env}")
+        console.print(f"  Series: {', '.join(series_list)}")
+        console.print(f"  Interval: {kalshi_interval} seconds")
+
+        try:
+            _kalshi_poller = KalshiMarketPoller(
+                series_tickers=series_list,
+                poll_interval=kalshi_interval,
+                environment=kalshi_env,
+            )
+            _kalshi_poller.start()
+            console.print("[green][OK] Kalshi polling started[/green]")
+            started_services.append("Kalshi")
+        except ValueError as e:
+            # Likely missing credentials
+            console.print(f"[red][FAIL] Failed to start Kalshi polling: {e}[/red]")
+            console.print("[dim]Hint: Check KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH[/dim]")
+            if verbose:
+                logger.error(f"Kalshi polling error: {e}", exc_info=True)
+        except Exception as e:
+            console.print(f"[red][FAIL] Failed to start Kalshi polling: {e}[/red]")
+            if verbose:
+                logger.error(f"Kalshi polling error: {e}", exc_info=True)
+
+    # Summary
+    if started_services:
+        console.print(f"\n[bold green][OK] Started: {', '.join(started_services)}[/bold green]")
+
+        if foreground:
+            console.print("\n[dim]Running in foreground. Press Ctrl+C to stop.[/dim]")
+            try:
+                import signal as sig
+                import time
+
+                # Set up signal handler for graceful shutdown
+                def signal_handler(signum: int, frame: Any) -> None:
+                    console.print("\n[yellow]Received shutdown signal...[/yellow]")
+                    scheduler_stop_impl()
+                    raise typer.Exit(code=0)
+
+                sig.signal(sig.SIGINT, signal_handler)
+                sig.signal(sig.SIGTERM, signal_handler)
+
+                # Keep running and show periodic status
+                while True:
+                    time.sleep(60)
+                    # Show periodic status update
+                    if _espn_updater and _espn_updater.enabled:
+                        espn_stats = _espn_updater.stats
+                        console.print(
+                            f"[dim]ESPN: {espn_stats['polls_completed']} polls, "
+                            f"{espn_stats['games_updated']} games updated[/dim]"
+                        )
+                    if _kalshi_poller and _kalshi_poller.enabled:
+                        kalshi_stats = _kalshi_poller.stats
+                        console.print(
+                            f"[dim]Kalshi: {kalshi_stats['polls_completed']} polls, "
+                            f"{kalshi_stats['markets_updated']} markets updated[/dim]"
+                        )
+
+            except typer.Exit:
+                raise
+            except Exception as e:
+                console.print(f"[red]Error in foreground loop: {e}[/red]")
+                scheduler_stop_impl()
+                raise typer.Exit(code=1) from e
+        else:
+            console.print("\n[dim]Schedulers running in background.[/dim]")
+            console.print("[dim]Use 'python main.py scheduler status' to check progress.[/dim]")
+            console.print("[dim]Use 'python main.py scheduler stop' to stop.[/dim]")
+    else:
+        console.print("\n[yellow]No services started[/yellow]")
+        raise typer.Exit(code=1)
+
+
+def scheduler_stop_impl() -> None:
+    """Implementation of scheduler stop (shared by command and signal handler)."""
+    global _espn_updater, _kalshi_poller
+
+    stopped_services = []
+
+    if _espn_updater and _espn_updater.enabled:
+        console.print("Stopping ESPN polling...")
+        _espn_updater.stop()
+        _espn_updater = None
+        stopped_services.append("ESPN")
+
+    if _kalshi_poller and _kalshi_poller.enabled:
+        console.print("Stopping Kalshi polling...")
+        _kalshi_poller.stop()
+        _kalshi_poller = None
+        stopped_services.append("Kalshi")
+
+    if stopped_services:
+        console.print(f"[green][OK] Stopped: {', '.join(stopped_services)}[/green]")
+    else:
+        console.print("[yellow]No schedulers were running[/yellow]")
+
+
+@scheduler_app.command(name="stop")
+def scheduler_stop(
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose output",
+    ),
+) -> None:
+    """
+    Stop all running data collection schedulers.
+
+    Gracefully shuts down ESPN and Kalshi polling services, waiting for
+    any in-progress database operations to complete.
+
+    Example:
+        ```bash
+        python main.py scheduler stop
+        ```
+
+    Reference: docs/foundation/DEVELOPMENT_PHASES_V1.8.md (Phase 2.5)
+    """
+    if verbose:
+        logger.info("Verbose mode enabled")
+
+    console.print("\n[bold cyan]Stopping Data Collection Schedulers[/bold cyan]\n")
+    scheduler_stop_impl()
+
+
+@scheduler_app.command(name="status")
+def scheduler_status(
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose output",
+    ),
+) -> None:
+    """
+    Show status of data collection schedulers.
+
+    Displays current state, polling statistics, and recent activity for
+    both ESPN and Kalshi polling services.
+
+    Example:
+        ```bash
+        python main.py scheduler status
+        python main.py scheduler status --verbose
+        ```
+
+    Reference: docs/foundation/DEVELOPMENT_PHASES_V1.8.md (Phase 2.5)
+    """
+    if verbose:
+        logger.info("Verbose mode enabled")
+
+    console.print("\n[bold cyan]Data Collection Scheduler Status[/bold cyan]\n")
+
+    # ESPN Status
+    console.print("[bold]ESPN Game State Polling:[/bold]")
+    if _espn_updater and _espn_updater.enabled:
+        espn_stats = _espn_updater.stats
+        status_table = Table(show_header=False, box=None)
+        status_table.add_column("Field", style="cyan")
+        status_table.add_column("Value", style="white")
+
+        status_table.add_row("Status", "[green]Running[/green]")
+        status_table.add_row("Leagues", ", ".join(_espn_updater.leagues))
+        status_table.add_row("Poll Interval", f"{_espn_updater.poll_interval}s")
+        status_table.add_row("Polls Completed", str(espn_stats["polls_completed"]))
+        status_table.add_row("Games Updated", str(espn_stats["games_updated"]))
+        status_table.add_row("Errors", str(espn_stats["errors"]))
+        status_table.add_row("Last Poll", espn_stats["last_poll"] or "Never")
+        if espn_stats["last_error"]:
+            status_table.add_row("Last Error", f"[red]{espn_stats['last_error']}[/red]")
+
+        console.print(status_table)
+    else:
+        console.print("  [dim]Not running[/dim]")
+
+    console.print()
+
+    # Kalshi Status
+    console.print("[bold]Kalshi Market Price Polling:[/bold]")
+    if _kalshi_poller and _kalshi_poller.enabled:
+        kalshi_stats = _kalshi_poller.stats
+        status_table = Table(show_header=False, box=None)
+        status_table.add_column("Field", style="cyan")
+        status_table.add_column("Value", style="white")
+
+        status_table.add_row("Status", "[green]Running[/green]")
+        status_table.add_row("Environment", _kalshi_poller.environment)
+        status_table.add_row("Series", ", ".join(_kalshi_poller.series_tickers))
+        status_table.add_row("Poll Interval", f"{_kalshi_poller.poll_interval}s")
+        status_table.add_row("Polls Completed", str(kalshi_stats["polls_completed"]))
+        status_table.add_row("Markets Fetched", str(kalshi_stats["markets_fetched"]))
+        status_table.add_row("Markets Updated", str(kalshi_stats["markets_updated"]))
+        status_table.add_row("Markets Created", str(kalshi_stats["markets_created"]))
+        status_table.add_row("Errors", str(kalshi_stats["errors"]))
+        status_table.add_row("Last Poll", kalshi_stats["last_poll"] or "Never")
+        if kalshi_stats["last_error"]:
+            status_table.add_row("Last Error", f"[red]{kalshi_stats['last_error']}[/red]")
+
+        console.print(status_table)
+    else:
+        console.print("  [dim]Not running[/dim]")
+
+    console.print()
+
+
+@scheduler_app.command(name="poll-once")
+def scheduler_poll_once(
+    espn: bool = typer.Option(
+        True,
+        "--espn/--no-espn",
+        help="Poll ESPN game states",
+    ),
+    kalshi: bool = typer.Option(
+        True,
+        "--kalshi/--no-kalshi",
+        help="Poll Kalshi market prices",
+    ),
+    kalshi_env: str = typer.Option(
+        "demo",
+        "--kalshi-env",
+        help="Kalshi environment (demo or prod)",
+    ),
+    leagues: str = typer.Option(
+        "nfl,ncaaf",
+        "--leagues",
+        help="Comma-separated list of ESPN leagues to poll",
+    ),
+    series: str = typer.Option(
+        "KXNFLGAME",
+        "--series",
+        help="Comma-separated list of Kalshi series to poll",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Enable verbose output",
+    ),
+) -> None:
+    """
+    Execute a single poll cycle (no background scheduling).
+
+    Useful for testing, on-demand data refresh, or verifying API connectivity
+    without starting the full scheduler.
+
+    Example:
+        ```bash
+        # Poll both ESPN and Kalshi once
+        python main.py scheduler poll-once
+
+        # Poll only ESPN for NFL
+        python main.py scheduler poll-once --no-kalshi --leagues nfl
+
+        # Poll Kalshi production
+        python main.py scheduler poll-once --no-espn --kalshi-env prod
+        ```
+
+    Reference: docs/foundation/DEVELOPMENT_PHASES_V1.8.md (Phase 2.5)
+    """
+    if verbose:
+        logger.info("Verbose mode enabled")
+
+    console.print("\n[bold cyan]Executing Single Poll Cycle[/bold cyan]\n")
+
+    # Parse leagues and series
+    league_list = [lg.strip().lower() for lg in leagues.split(",")]
+    series_list = [s.strip() for s in series.split(",")]
+
+    # Poll ESPN
+    if espn:
+        console.print(f"[bold]Polling ESPN ({', '.join(league_list)})...[/bold]")
+        try:
+            updater = MarketUpdater(leagues=league_list)
+            result = updater.poll_once()
+            console.print(
+                f"[green][OK] ESPN: {result['games_fetched']} games fetched, "
+                f"{result['games_updated']} updated[/green]"
+            )
+        except Exception as e:
+            console.print(f"[red][FAIL] ESPN poll failed: {e}[/red]")
+            if verbose:
+                logger.error(f"ESPN poll error: {e}", exc_info=True)
+
+    # Poll Kalshi
+    if kalshi:
+        series_str = ", ".join(series_list)
+        console.print(f"\n[bold]Polling Kalshi ({series_str}, {kalshi_env})...[/bold]")
+        try:
+            poller = KalshiMarketPoller(
+                series_tickers=series_list,
+                environment=kalshi_env,
+            )
+            result = poller.poll_once()
+            console.print(
+                f"[green][OK] Kalshi: {result['markets_fetched']} markets fetched, "
+                f"{result['markets_updated']} updated, {result['markets_created']} created[/green]"
+            )
+            poller.kalshi_client.close()
+        except ValueError as e:
+            console.print(f"[red][FAIL] Kalshi poll failed: {e}[/red]")
+            console.print("[dim]Hint: Check KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH[/dim]")
+        except Exception as e:
+            console.print(f"[red][FAIL] Kalshi poll failed: {e}[/red]")
+            if verbose:
+                logger.error(f"Kalshi poll error: {e}", exc_info=True)
 
     console.print()
 

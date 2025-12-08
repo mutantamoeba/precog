@@ -1,10 +1,18 @@
 # Requirement Index
 
 ---
-**Version:** 1.12
-**Last Updated:** 2025-12-06
+**Version:** 1.13
+**Last Updated:** 2025-12-07
 **Status:** ✅ Current
 **Purpose:** Master index of all system requirements with systematic IDs
+**Changes in v1.13:**
+- **PHASE 2.5 SCHEDULER REQUIREMENTS ADDED**: Added REQ-SCHED-001, REQ-SCHED-002, REQ-OBSERV-003 for live data collection
+- **REQ-SCHED-001**: APScheduler-based Live Data Polling (ESPN MarketUpdater + Kalshi polling)
+- **REQ-SCHED-002**: Service Supervisor Pattern (Multi-service orchestration with health monitoring)
+- **REQ-OBSERV-003**: Log Aggregation with CloudWatch/ELK (Deferred to Phase 4)
+- **NEW CATEGORY**: SCHED (Scheduler) - APScheduler-based service orchestration
+- Updated MASTER_REQUIREMENTS reference to V2.21
+- Updated requirement statistics (124 → 127 total requirements)
 **Changes in v1.12:**
 - **REQ-TEST-020 ADDED**: CI-Safe Stress Test Requirements (Issue #168)
 - **PROBLEM**: Stress tests using ThreadPoolExecutor hang indefinitely in CI
@@ -129,6 +137,7 @@ This document provides a systematic index of all Precog requirements using categ
 | Analytics | ANALYTICS | Analytics infrastructure (materialized views, performance tracking) | 6-9 |
 | Reporting | REPORTING | Dashboards, reports, and data visualization | 7-9 |
 | Data | DATA | Live data management (game states, venues, rankings) | 2 |
+| Scheduler | SCHED | APScheduler-based service orchestration and polling | 2-2.5 |
 
 ---
 
@@ -194,11 +203,11 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-DATA-001 | Game State Data Collection (SCD Type 2 Versioning) | 2 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.20 |
-| REQ-DATA-002 | Venue Data Management (Normalized Table) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.20 |
-| REQ-DATA-003 | Multi-Sport Support (6 Leagues) | 2 | Critical | 🟡 | MASTER_REQUIREMENTS_V2.20 |
-| REQ-DATA-004 | Team Rankings Storage (Temporal Validity) | 2 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.20 |
-| REQ-DATA-005 | JSONB Situation Data (Sport-Specific Fields) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.20 |
+| REQ-DATA-001 | Game State Data Collection (SCD Type 2 Versioning) | 2 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.21 |
+| REQ-DATA-002 | Venue Data Management (Normalized Table) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.21 |
+| REQ-DATA-003 | Multi-Sport Support (6 Leagues) | 2 | Critical | 🟡 | MASTER_REQUIREMENTS_V2.21 |
+| REQ-DATA-004 | Team Rankings Storage (Temporal Validity) | 2 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.21 |
+| REQ-DATA-005 | JSONB Situation Data (Sport-Specific Fields) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.21 |
 
 **Details:**
 
@@ -441,7 +450,7 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-TEST-017 | Integration Test Requirements | 1.5+ | Critical | 🔵 | MASTER_REQUIREMENTS_V2.16 |
 | REQ-TEST-018 | Property-Based Test Requirements | 1+ | Critical | ✅ | MASTER_REQUIREMENTS_V2.16 |
 | REQ-TEST-019 | End-to-End Test Requirements | 2+ | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
-| REQ-TEST-020 | CI-Safe Stress Test Requirements | 1.9 | High | ✅ | MASTER_REQUIREMENTS_V2.20 |
+| REQ-TEST-020 | CI-Safe Stress Test Requirements | 1.9 | High | ✅ | MASTER_REQUIREMENTS_V2.21 |
 
 ---
 
@@ -455,12 +464,12 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-VALIDATION-004 | YAML Configuration Validation | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.12 |
 | REQ-VALIDATION-005 | CODE_REVIEW_TEMPLATE Automated Enforcement | 0.7c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
 | REQ-VALIDATION-006 | SECURITY_REVIEW_CHECKLIST Automated Enforcement | 0.7c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
-| REQ-VALIDATION-007 | SCD Type 2 Query Validation (Pattern 2) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.20 |
-| REQ-VALIDATION-008 | Property-Based Test Coverage (Pattern 10) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.20 |
-| REQ-VALIDATION-009 | Real Test Fixtures Enforcement (Pattern 13) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.20 |
-| REQ-VALIDATION-010 | Phase Start Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.20 |
-| REQ-VALIDATION-011 | Phase Completion Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.20 |
-| REQ-VALIDATION-012 | Configuration Synchronization (Pattern 8) | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.20 |
+| REQ-VALIDATION-007 | SCD Type 2 Query Validation (Pattern 2) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.21 |
+| REQ-VALIDATION-008 | Property-Based Test Coverage (Pattern 10) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.21 |
+| REQ-VALIDATION-009 | Real Test Fixtures Enforcement (Pattern 13) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.21 |
+| REQ-VALIDATION-010 | Phase Start Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.21 |
+| REQ-VALIDATION-011 | Phase Completion Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.21 |
+| REQ-VALIDATION-012 | Configuration Synchronization (Pattern 8) | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.21 |
 
 **Summary:** Phase 0.6c implemented automated code quality and documentation validation. Phase 0.7c added CODE_REVIEW_TEMPLATE and SECURITY_REVIEW_CHECKLIST enforcement via pre-commit/pre-push hooks. Phase 1 adds YAML configuration validation with 4-level checks (syntax, Decimal type safety, required keys, cross-file consistency). Phase 1.5 adds comprehensive workflow enforcement infrastructure: SCD Type 2 query validation (Pattern 2), property-based test coverage enforcement (Pattern 10), real test fixtures validation (Pattern 13), phase start/completion protocol automation (3-step and 10-step assessments), and configuration synchronization checks (Pattern 8).
 
@@ -486,8 +495,39 @@ This document provides a systematic index of all Precog requirements using categ
 |----|-------|-------|----------|--------|----------|
 | REQ-OBSERV-001 | Request Correlation IDs (B3 Standard) | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.14 |
 | REQ-OBSERV-002 | Sentry Production Error Tracking (Hybrid Architecture) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.14 |
+| REQ-OBSERV-003 | Log Aggregation with CloudWatch/ELK (Deferred to Phase 4) | 4 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.21 |
 
-**Summary:** Phase 1 implements distributed request tracing with B3 correlation IDs (OpenTelemetry/Zipkin compatible) for debugging distributed systems. Phase 2 adds Sentry for real-time production error tracking with hybrid architecture integrating logger.py (audit trail), Sentry (real-time alerts), and alerts table (permanent record).
+**Summary:** Phase 1 implements distributed request tracing with B3 correlation IDs (OpenTelemetry/Zipkin compatible) for debugging distributed systems. Phase 2 adds Sentry for real-time production error tracking with hybrid architecture integrating logger.py (audit trail), Sentry (real-time alerts), and alerts table (permanent record). Phase 4 adds centralized log aggregation (CloudWatch or ELK stack) for production monitoring.
+
+---
+
+## Scheduler Requirements (SCHED)
+
+**Overview:** APScheduler-based service orchestration for live data polling and real-time streaming. Implements Service Supervisor pattern for multi-service health monitoring.
+
+| ID | Title | Phase | Priority | Status | Document |
+|----|-------|-------|----------|--------|----------|
+| REQ-SCHED-001 | APScheduler-Based Live Data Polling | 2.5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.21 |
+| REQ-SCHED-002 | Service Supervisor Pattern | 2.5 | High | ✅ | MASTER_REQUIREMENTS_V2.21 |
+
+**Details:**
+
+**REQ-SCHED-001: APScheduler-Based Live Data Polling**
+- BackgroundScheduler for thread-pool job execution
+- ESPN MarketUpdater: Live game state polling (30s normal, 5s urgent)
+- Kalshi KalshiMarketPoller: Market price polling (configurable intervals)
+- KalshiWebSocketHandler: Real-time market streaming
+- Rate limiting integration with TokenBucket algorithm
+- Related: ADR-100, scripts/run_data_collector.py
+
+**REQ-SCHED-002: Service Supervisor Pattern**
+- Multi-service orchestration with health monitoring
+- EventLoopService Protocol: start(), stop(), is_running(), get_stats()
+- Auto-restart with exponential backoff (max 3 retries)
+- Metrics aggregation: poll counts, error rates, uptime
+- Alert callbacks for service failures (configurable)
+- JSON-formatted logging (CloudWatch/ELK compatible)
+- Related: ADR-100, scripts/run_data_collector.py
 
 ---
 
@@ -665,10 +705,10 @@ This document provides a systematic index of all Precog requirements using categ
 
 ## Requirement Statistics
 
-**Total Requirements:** 124
-**Completed (✅):** 28 (Phase 0-1, including REQ-SEC-009)
+**Total Requirements:** 127
+**Completed (✅):** 31 (Phase 0-2.5, including REQ-SCHED-001, REQ-SCHED-002)
 **In Progress (🟡):** 1 (REQ-DATA-003 - ESPN client complete, database pending)
-**Planned (🔵):** 95 (Phase 0.7, 1-10 including REQ-ML-001, REQ-ANALYTICS-001-004, REQ-REPORTING-001, REQ-DATA-001-005)
+**Planned (🔵):** 95 (Phase 0.7, 1-10 including REQ-ML-001, REQ-ANALYTICS-001-004, REQ-REPORTING-001, REQ-DATA-001-005, REQ-OBSERV-003)
 
 **By Category:**
 - System (SYS): 6 requirements
@@ -725,9 +765,9 @@ This document provides a systematic index of all Precog requirements using categ
 
 ---
 
-**Document Version:** 1.12
-**Last Updated:** 2025-12-06
+**Document Version:** 1.13
+**Last Updated:** 2025-12-07
 **Created:** 2025-10-21
 **Purpose:** Systematic requirement tracking and traceability
 
-**END OF REQUIREMENT INDEX V1.12**
+**END OF REQUIREMENT INDEX V1.13**
