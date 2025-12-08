@@ -538,13 +538,15 @@ class TestESPNDataPipeline:
             assert isinstance(state["home_score"], int)
             assert isinstance(state["away_score"], int)
 
-            # Status (in state)
+            # Status (in state) - refers to GAME STATE (pre/in/post = pregame/live/finished)
+            # NOT to be confused with SEASON TYPE (preseason/regular/postseason)
+            # Valid game_status values from STATUS_MAP + halftime + unknown fallback
             assert state["game_status"] in {
-                "scheduled",
-                "in_progress",
-                "halftime",
-                "final",
-                "unknown",
+                "pre",  # Pregame (game scheduled but not started)
+                "in_progress",  # Game is live
+                "halftime",  # Halftime break
+                "final",  # Game completed
+                "unknown",  # Fallback for unmapped ESPN states
             }
 
             # Rate limiting worked
