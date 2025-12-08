@@ -1,9 +1,14 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.21
+**Version:** 2.22
 **Last Updated:** 2025-12-07
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.22:**
+- **BASEPOLLER UNIFIED DESIGN PATTERN:** Added REQ-SCHED-003 for BasePoller abstract class
+- **REQ-SCHED-003:** BasePoller with Template Method pattern, {Platform}{Entity}Poller naming, generic stats
+- **CROSS-REFERENCES:** ADR-103, src/precog/schedulers/base_poller.py
+- Total requirements: 127 -> 128
 **Changes in v2.21:**
 - **PHASE 2.5 SCHEDULER REQUIREMENTS:** Added Section 4.13 with REQ-SCHED-001, REQ-SCHED-002, REQ-OBSERV-003
 - **REQ-SCHED-001:** APScheduler-based live data polling (MarketUpdater, KalshiMarketPoller)
@@ -296,11 +301,11 @@ precog/
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.21.md` - This document (requirements through Phase 10)
-  3. `MASTER_INDEX_V2.45.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.27.md` - All 97 ADRs with design rationale (Phase 0-4.5)
-  5. `REQUIREMENT_INDEX.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.20.md` - Architecture decision index
+  2. `MASTER_REQUIREMENTS_V2.22.md` - This document (requirements through Phase 10)
+  3. `MASTER_INDEX_V2.46.md` - Complete document inventory
+  4. `ARCHITECTURE_DECISIONS_V2.28.md` - All 105 ADRs with design rationale (Phase 0-4.5)
+  5. `REQUIREMENT_INDEX_V1.14.md` - Systematic requirement catalog
+  6. `ADR_INDEX_V1.21.md` - Architecture decision index
   7. `TESTING_STRATEGY_V3.4.md` - Test cases, coverage requirements, test isolation patterns
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
@@ -3697,6 +3702,39 @@ Implement centralized service supervision for all event loops:
   - JSON logging for CloudWatch/ELK compatibility
   - Health check interval: 60 seconds
   - Metrics output interval: 300 seconds
+
+---
+
+**REQ-SCHED-003: BasePoller Unified Design Pattern**
+
+**Phase:** 2.5
+**Priority:** High
+**Status:** ✅ Complete
+**Reference:** ADR-103, src/precog/schedulers/base_poller.py
+
+Implement a unified base class for all APScheduler-based polling services:
+
+- **BasePoller Abstract Class**:
+  - Template Method pattern for consistent polling infrastructure
+  - APScheduler BackgroundScheduler integration
+  - Thread-safe statistics with threading.Lock
+  - EventLoopService protocol compliance
+
+- **Naming Convention**:
+  - REST Pollers: `{Platform}{Entity}Poller` (ESPNGamePoller, KalshiMarketPoller)
+  - WebSocket Handlers: `{Platform}{Entity}Handler` (KalshiWebSocketHandler)
+  - Clear distinction: "Poller" for REST polling, "Handler" for push-based streaming
+
+- **Generic Statistics (PollerStats TypedDict)**:
+  - `items_fetched` (not platform-specific like `markets_fetched`)
+  - `items_updated`
+  - `items_created`
+  - `polls_completed`, `errors`, `last_poll`, `last_error`
+
+- **Implementation Requirements**:
+  - Subclasses implement `_poll_all()` for platform-specific logic
+  - BasePoller provides start(), stop(), poll_once(), is_running(), enabled
+  - Backward compatibility aliases during transition period
 
 ---
 

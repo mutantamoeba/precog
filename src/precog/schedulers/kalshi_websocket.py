@@ -276,6 +276,31 @@ class KalshiWebSocketHandler:
                 stats["uptime_seconds"] = time.time() - self._connect_time
             return stats
 
+    def is_running(self) -> bool:
+        """
+        Check if the WebSocket handler is currently running.
+
+        Implements EventLoopService Protocol for ServiceSupervisor compatibility.
+
+        Returns:
+            True if handler is running and connected, False otherwise
+        """
+        return self._enabled and self._state in (
+            ConnectionState.CONNECTED,
+            ConnectionState.CONNECTING,
+        )
+
+    def get_stats(self) -> dict[str, Any]:
+        """
+        Get current statistics as a dictionary.
+
+        Implements EventLoopService Protocol for ServiceSupervisor compatibility.
+
+        Returns:
+            Dictionary with WebSocket statistics
+        """
+        return dict(self.stats)
+
     def add_callback(self, callback: Callable[[str, Decimal, Decimal], None]) -> None:
         """
         Add a callback for price updates.

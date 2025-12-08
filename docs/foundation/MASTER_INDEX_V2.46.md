@@ -1,9 +1,15 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.45
+**Version:** 2.46
 **Last Updated:** 2025-12-07
 **Status:** ✅ Current
+**Changes in v2.46:**
+- **BASEPOLLER UNIFIED DESIGN PATTERN**: Updated 4 foundation documents for BasePoller architecture
+- ARCHITECTURE_DECISIONS V2.27 → V2.28: Added ADR-103 (BasePoller Unified Design Pattern)
+- ADR_INDEX V1.20 → V1.21: Added ADR-103 entry (104 → 105 total ADRs)
+- MASTER_REQUIREMENTS V2.21 → V2.22: Added REQ-SCHED-003 for BasePoller design pattern
+- REQUIREMENT_INDEX V1.13 → V1.14: Added REQ-SCHED-003 entry (127 → 128 total requirements)
 **Changes in v2.45:**
 - **PHASE 2.5 SERVICE SUPERVISOR INFRASTRUCTURE**: Updated 4 foundation documents for live data collection
 - ARCHITECTURE_DECISIONS V2.26 → V2.27: Added ADR-100 (Service Supervisor Pattern), ADR-101 (ESPN Status Mapping), ADR-102 (CloudWatch/ELK Deferred)
@@ -418,11 +424,11 @@ Core architecture, requirements, and system design documents.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
-| **MASTER_REQUIREMENTS_V2.21.md** | ✅ | v2.21 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.21** (added REQ-SCHED-001, REQ-SCHED-002, REQ-OBSERV-003 for Phase 2.5 scheduler infrastructure; 124 → 127 total requirements) |
-| **MASTER_INDEX_V2.45.md** | ✅ | v2.45 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.45** (Phase 2.5 Service Supervisor Infrastructure: ADR-100, 101, 102; REQ-SCHED-001, REQ-SCHED-002, REQ-OBSERV-003; PHASE_2.5_DEFERRED_TASKS added) |
-| **ARCHITECTURE_DECISIONS_V2.27.md** | ✅ | v2.27 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (104 total) - **UPDATED V2.27** (ADR-100: Service Supervisor Pattern, ADR-101: ESPN Status Mapping, ADR-102: CloudWatch/ELK Deferred to Phase 4; Phase 2.5 live data collection infrastructure) |
-| **REQUIREMENT_INDEX_V1.13.md** | ✅ | v1.13 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 127 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.13** (added SCHED category, REQ-SCHED-001, REQ-SCHED-002, REQ-OBSERV-003 for Phase 2.5 scheduler infrastructure; 124 → 127 total requirements) |
-| **ADR_INDEX_V1.20.md** | ✅ | v1.20 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 104 architecture decisions - **UPDATED V1.20** (added Phase 2.5 section with ADR-100, ADR-101, ADR-102 for Service Supervisor infrastructure; 101 → 104 total ADRs) |
+| **MASTER_REQUIREMENTS_V2.22.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.22** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
+| **MASTER_INDEX_V2.46.md** | ✅ | v2.46 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.46** (BasePoller Unified Design Pattern: ADR-103, REQ-SCHED-003; 105 total ADRs, 128 total requirements) |
+| **ARCHITECTURE_DECISIONS_V2.28.md** | ✅ | v2.28 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (105 total) - **UPDATED V2.28** (ADR-103: BasePoller Unified Design Pattern with Template Method, {Platform}{Entity}Poller naming convention) |
+| **REQUIREMENT_INDEX_V1.14.md** | ✅ | v1.14 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 128 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.14** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
+| **ADR_INDEX_V1.21.md** | ✅ | v1.21 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 105 architecture decisions - **UPDATED V1.21** (added ADR-103 for BasePoller Unified Design Pattern; 104 → 105 total ADRs) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.9.md** | ✅ | v1.9 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **UPDATED V1.9** (Phase 2.5 Service Runner complete, monitoring deferred to Phase 4) |
 | **TESTING_STRATEGY_V3.4.md** | ✅ | v3.3 | `/docs/foundation/` | 2 | Phases 1-10 | 🔴 Critical | **UPDATED V3.3** - Added Test Isolation Patterns section (5 patterns: transaction-based, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2); based on Phase 1.9 findings (12+ test failures from DB state contamination); cross-references TEST_ISOLATION_PATTERNS_V1.1.md; V3.2: All 8 test types MANDATORY; V3.0: 8 test type framework |

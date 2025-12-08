@@ -1,9 +1,14 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.20
+**Version:** 1.21
 **Last Updated:** 2025-12-07
 **Status:** ✅ Current
+**Changes in v1.21:**
+- **BASEPOLLER UNIFIED DESIGN PATTERN**: Added ADR-103 for BasePoller abstract class with Template Method pattern
+- **ADR-103:** BasePoller Unified Design Pattern - Shared APScheduler infrastructure, {Platform}{Entity}Poller naming convention, generic stats fields
+- Updated ARCHITECTURE_DECISIONS reference from V2.27 to V2.28
+- Total ADRs: 104 → 105 (1 new ADR added for Phase 2.5 polling architecture)
 **Changes in v1.20:**
 - **PHASE 2.5 SERVICE SUPERVISOR INFRASTRUCTURE**: Added ADR-100, ADR-101, ADR-102 for live data collection services
 - **ADR-100:** Service Supervisor Pattern for Data Collection - Multi-service orchestration with health monitoring
@@ -328,11 +333,11 @@ This document provides a systematic index of all Precog architecture decisions u
 
 | ADR | Title | Date | Status | Phase | Document |
 |-----|-------|------|--------|-------|----------|
-| ADR-100 | Service Supervisor Pattern for Data Collection | 2025-12-07 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.27 |
-| ADR-101 | ESPN Status and Season Type Mapping Strategy | 2025-12-07 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.27 |
-| ADR-102 | CloudWatch/ELK Log Aggregation (Deferred to Phase 4) | 2025-12-07 | 🔵 | 4 | ARCHITECTURE_DECISIONS_V2.27 |
-| ADR-103 | TBD - Rate Limiting Implementation | - | 🔵 | 1 | - |
-| ADR-104 | TBD - Trade Execution Workflow | - | 🔵 | 1 | - |
+| ADR-100 | Service Supervisor Pattern for Data Collection | 2025-12-07 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.28 |
+| ADR-101 | ESPN Status and Season Type Mapping Strategy | 2025-12-07 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.28 |
+| ADR-102 | CloudWatch/ELK Log Aggregation (Deferred to Phase 4) | 2025-12-07 | 🔵 | 4 | ARCHITECTURE_DECISIONS_V2.28 |
+| ADR-103 | BasePoller Unified Design Pattern | 2025-12-07 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.28 |
+| ADR-104 | TBD - Rate Limiting Implementation | - | 🔵 | 1 | - |
 
 ### Phase 2: Live Data Integration (Planned)
 
