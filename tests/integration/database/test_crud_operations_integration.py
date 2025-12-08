@@ -46,10 +46,13 @@ def setup_test_teams(db_pool, clean_test_data):
     Create test teams required for game_states and team_rankings.
 
     These tests need team records for FK constraints.
+
+    Note: Uses TEST-prefixed team codes to avoid conflicts with seed data.
+    Seed file 001_nfl_teams_initial_elo.sql already inserts 'KC', 'SF', etc.
     """
     with get_cursor(commit=True) as cur:
-        # Create test teams
-        # Note: Using columns from migration 010 schema (not migration 028 enhancements)
+        # Create test teams with unique codes to avoid seed data conflicts
+        # The teams table has a unique constraint on (team_code, sport)
         cur.execute(
             """
             INSERT INTO teams (
@@ -57,9 +60,9 @@ def setup_test_teams(db_pool, clean_test_data):
                 espn_team_id, conference, division, sport, current_elo_rating
             )
             VALUES
-                (9001, 'KC', 'Chiefs', '12', 'AFC', 'West', 'nfl', 1650),
-                (9002, 'SF', '49ers', '25', 'NFC', 'West', 'nfl', 1620),
-                (9003, 'OSU', 'Buckeyes', '194', 'Big Ten', 'East', 'nfl', 1600)
+                (9001, 'TEST-KC', 'Test Chiefs', 'TEST-12', 'AFC', 'West', 'nfl', 1650),
+                (9002, 'TEST-SF', 'Test 49ers', 'TEST-25', 'NFC', 'West', 'nfl', 1620),
+                (9003, 'TEST-OSU', 'Test Buckeyes', 'TEST-194', 'Big Ten', 'East', 'ncaaf', 1600)
             ON CONFLICT (team_id) DO NOTHING
         """
         )
@@ -520,7 +523,7 @@ class TestGameStateSituationJsonb:
         venue_id = setup_test_venue
 
         situation = {
-            "possession": "KC",
+            "possession": "TEST-KC",
             "down": 2,
             "distance": 7,
             "yardLine": 35,
@@ -545,7 +548,7 @@ class TestGameStateSituationJsonb:
 
         # PostgreSQL returns JSONB as dict
         retrieved_situation = state["situation"]
-        assert retrieved_situation["possession"] == "KC"
+        assert retrieved_situation["possession"] == "TEST-KC"
         assert retrieved_situation["down"] == 2
         assert retrieved_situation["isRedZone"] is False
 

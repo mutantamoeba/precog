@@ -201,7 +201,7 @@ class TestESPNResponseParsing:
         """
         games = espn_client.get_nfl_scoreboard()
 
-        known_statuses = {"scheduled", "in_progress", "halftime", "final", "unknown"}
+        known_statuses = {"pre", "scheduled", "in_progress", "halftime", "final", "unknown"}
 
         for game in games:
             # Status is in the state section
