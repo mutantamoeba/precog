@@ -6,8 +6,8 @@
 **Last Updated:** 2025-12-07
 **Status:** Complete
 **Phase:** 2.5 (Live Data Collection Service)
-**Related ADRs:** ADR-100 (Service Supervisor Pattern), ADR-029 (ESPN Data Model)
-**Related Requirements:** REQ-SCHED-001, REQ-SCHED-002, REQ-DATA-001, REQ-OBSERV-003
+**Related ADRs:** ADR-100 (Service Supervisor Pattern), ADR-103 (BasePoller Unified Design), ADR-029 (ESPN Data Model)
+**Related Requirements:** REQ-SCHED-001, REQ-SCHED-002, REQ-SCHED-003, REQ-DATA-001, REQ-OBSERV-003
 ---
 
 ## Overview
@@ -32,8 +32,8 @@ This guide documents the live data integration architecture for the Precog predi
            │                                 │                                 │
            ▼                                 ▼                                 ▼
 ┌─────────────────────┐          ┌─────────────────────┐          ┌─────────────────────┐
-│   ESPN MarketUpdater │         │  Kalshi REST Poller  │         │ Kalshi WebSocket    │
-│   (APScheduler)      │         │   (APScheduler)      │         │  (Real-time)        │
+│   ESPNGamePoller     │         │  KalshiMarketPoller  │         │ KalshiWebSocket     │
+│   (BasePoller)       │         │   (BasePoller)       │         │  Handler            │
 │   15s poll interval  │         │   30s poll interval  │         │  <1s latency        │
 └──────────┬──────────┘          └──────────┬──────────┘          └──────────┬──────────┘
            │                                 │                                 │

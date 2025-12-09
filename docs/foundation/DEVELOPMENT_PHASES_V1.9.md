@@ -1221,8 +1221,11 @@ python scripts/validate_phase_start.py --phase 2
 
 ### Reference
 - GitHub Issue #193: Phase 2.5 - Live Data Collection Service
-- `src/precog/schedulers/market_updater.py`: MarketUpdater class
-- `src/precog/schedulers/kalshi_poller.py`: KalshiMarketPoller class
+- **ADR-103**: BasePoller Unified Design Pattern (Template Method for polling infrastructure)
+- **REQ-SCHED-003**: Base Poller Infrastructure (generic statistics, thread-safe operations)
+- `src/precog/schedulers/base_poller.py`: BasePoller abstract class (shared infrastructure)
+- `src/precog/schedulers/espn_game_poller.py`: ESPNGamePoller class (extends BasePoller)
+- `src/precog/schedulers/kalshi_poller.py`: KalshiMarketPoller class (extends BasePoller)
 - `src/precog/validation/espn_validation.py`: Data validation
 
 ---
