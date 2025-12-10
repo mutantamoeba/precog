@@ -1,9 +1,14 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.21
-**Last Updated:** 2025-12-07
+**Version:** 1.22
+**Last Updated:** 2025-12-09
 **Status:** ✅ Current
+**Changes in v1.22:**
+- **TWO-AXIS ENVIRONMENT CONFIGURATION (PLANNED)**: Added ADR-105 for environment configuration architecture
+- **ADR-105:** Two-Axis Environment Configuration - PRECOG_ENV (database) + {MARKET}_MODE (API per market) with safety guardrails
+- Documents planned architecture for Issue #202 (deferred to Phase 2)
+- Total ADRs: 105 → 106 (1 new planned ADR added for configuration architecture)
 **Changes in v1.21:**
 - **BASEPOLLER UNIFIED DESIGN PATTERN**: Added ADR-103 for BasePoller abstract class with Template Method pattern
 - **ADR-103:** BasePoller Unified Design Pattern - Shared APScheduler infrastructure, {Platform}{Entity}Poller naming convention, generic stats fields
@@ -338,6 +343,7 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR-102 | CloudWatch/ELK Log Aggregation (Deferred to Phase 4) | 2025-12-07 | 🔵 | 4 | ARCHITECTURE_DECISIONS_V2.28 |
 | ADR-103 | BasePoller Unified Design Pattern | 2025-12-07 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.28 |
 | ADR-104 | TBD - Rate Limiting Implementation | - | 🔵 | 1 | - |
+| ADR-105 | Two-Axis Environment Configuration (Planned) | 2025-12-09 | 🔵 | 2 | PHASE_2.5_DEFERRED_TASKS_V1.1 |
 
 ### Phase 2: Live Data Integration (Planned)
 

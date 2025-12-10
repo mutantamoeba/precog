@@ -1,9 +1,9 @@
 # Phase 2.5 Deferred Tasks
 
 ---
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-12-07
-**Last Updated:** 2025-12-07
+**Last Updated:** 2025-12-09
 **Phase:** Phase 2.5 (Live Data Collection)
 **Status:** Active - Tasks Deferred to Future Phases
 ---
@@ -22,6 +22,7 @@ This document tracks tasks identified during Phase 2.5 (Live Data Collection) th
 | DEF-P2.5-004 | Service Health Dashboard | Low | Phase 4 | 4-6 |
 | DEF-P2.5-005 | NCAAW Team Seeding | Low | Phase 3 | 2-3 |
 | DEF-P2.5-006 | Rate Limit YAML Integration | Low | Phase 3 | 2-4 |
+| DEF-P2.5-007 | Two-Axis Environment Configuration | High | Phase 2 | 8-12 |
 
 ---
 
@@ -170,14 +171,66 @@ Integrate ConfigLoader with rate limiter for YAML-configurable rate limits.
 
 ---
 
+### DEF-P2.5-007: Two-Axis Environment Configuration
+
+**Priority:** High
+**Target Phase:** Phase 2
+**Estimated Hours:** 8-12
+**GitHub Issue:** #202
+**Reference:** ADR-105 (Planned)
+
+**Description:**
+Implement a two-axis environment configuration model that independently controls:
+1. **PRECOG_ENV:** Application environment (dev/test/staging/prod) -> controls database
+2. **{MARKET}_MODE:** Per-market API mode (demo/live) -> controls API endpoints
+
+**Problem Statement:**
+Current environment configuration has multiple issues:
+- `.env` has `ENVIRONMENT=development` but code checks `PRECOG_ENV` (not set)
+- Code falls back to `DB_NAME=precog_test`, causing confusion
+- No differentiation between API environments and database environments
+- Phase 1.5 TODO "Update connection.py to use environment-aware config" was never completed
+
+**Proposed Solution:**
+```bash
+# Axis 1: Application environment (controls database)
+PRECOG_ENV=staging  # -> uses precog_staging database
+
+# Axis 2: Market API modes (independent per market)
+KALSHI_MODE=demo         # -> uses demo-api.kalshi.co
+POLYMARKET_MODE=live     # -> uses production Polymarket API (future)
+```
+
+**Implementation Plan:**
+1. **Core Architecture (4-6h):** Create `src/precog/config/environment.py` with environment and market mode resolution
+2. **Safety Guardrails (2-3h):** Block dangerous combinations (e.g., test database + live API)
+3. **CLI Integration (2-3h):** Add `--env` and `--market-mode` CLI parameters
+
+**Rationale for Deferral:**
+- Current workaround: manually set `DB_NAME` in `.env` for each database
+- Not blocking live data collection (seeds work once applied to correct database)
+- Requires careful design for multi-market extensibility
+- Full implementation should wait until after Phase 2.5 core tasks complete
+
+**Acceptance Criteria:**
+- [ ] `PRECOG_ENV` consistently controls database selection
+- [ ] `{MARKET}_MODE` independently controls API endpoints per market
+- [ ] CLI `--env` parameter works for environment override
+- [ ] Dangerous combinations blocked with clear error messages
+- [ ] Documentation updated with new configuration approach
+
+---
+
 ## Cross-References
 
 - **ADR-100:** Service Supervisor Pattern
 - **ADR-101:** ESPN Status/Season Type Mapping
 - **ADR-102:** CloudWatch/ELK Log Aggregation (Deferred)
+- **ADR-105:** Two-Axis Environment Configuration (Planned)
 - **REQ-SCHED-001:** APScheduler-based Live Data Polling
 - **REQ-SCHED-002:** Service Supervisor Pattern
 - **REQ-OBSERV-003:** Log Aggregation (Deferred)
+- **REQ-CONFIG-TBD:** Environment Configuration Requirements (to be created)
 
 ---
 
@@ -185,8 +238,9 @@ Integrate ConfigLoader with rate limiter for YAML-configurable rate limits.
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2025-12-09 | Added DEF-P2.5-007: Two-Axis Environment Configuration (Issue #202) |
 | 1.0 | 2025-12-07 | Initial creation with 6 deferred tasks |
 
 ---
 
-**END OF PHASE_2.5_DEFERRED_TASKS_V1.0.md**
+**END OF PHASE_2.5_DEFERRED_TASKS_V1.1.md**

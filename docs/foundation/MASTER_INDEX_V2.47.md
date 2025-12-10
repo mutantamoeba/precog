@@ -1,9 +1,15 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.46
-**Last Updated:** 2025-12-07
+**Version:** 2.47
+**Last Updated:** 2025-12-09
 **Status:** ✅ Current
+**Changes in v2.47:**
+- **TWO-AXIS ENVIRONMENT CONFIGURATION (ADR-105)**: Updated 4 documents for environment config architecture (Issue #202)
+- ARCHITECTURE_DECISIONS V2.28 → V2.29: Added ADR-105 (Two-Axis Environment Configuration - Planned)
+- ADR_INDEX V1.21 → V1.22: Added ADR-105 entry in Phase 2.5 section (105 → 106 total ADRs)
+- DEVELOPMENT_PHASES V1.9 → V1.10: Added DEF-P2.5-007 deferred task reference
+- PHASE_2.5_DEFERRED_TASKS V1.0 → V1.1: Added DEF-P2.5-007 (Two-Axis Environment Config, HIGH priority)
 **Changes in v2.46:**
 - **BASEPOLLER UNIFIED DESIGN PATTERN**: Updated 4 foundation documents for BasePoller architecture
 - ARCHITECTURE_DECISIONS V2.27 → V2.28: Added ADR-103 (BasePoller Unified Design Pattern)
@@ -425,12 +431,12 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.22.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.22** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
-| **MASTER_INDEX_V2.46.md** | ✅ | v2.46 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.46** (BasePoller Unified Design Pattern: ADR-103, REQ-SCHED-003; 105 total ADRs, 128 total requirements) |
-| **ARCHITECTURE_DECISIONS_V2.28.md** | ✅ | v2.28 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (105 total) - **UPDATED V2.28** (ADR-103: BasePoller Unified Design Pattern with Template Method, {Platform}{Entity}Poller naming convention) |
+| **MASTER_INDEX_V2.47.md** | ✅ | v2.47 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.47** (Two-Axis Environment Config: ADR-105, DEF-P2.5-007; 106 total ADRs) |
+| **ARCHITECTURE_DECISIONS_V2.29.md** | ✅ | v2.29 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (106 total) - **UPDATED V2.29** (ADR-105: Two-Axis Environment Configuration - PRECOG_ENV + {MARKET}_MODE architecture for Issue #202) |
 | **REQUIREMENT_INDEX_V1.14.md** | ✅ | v1.14 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 128 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.14** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
-| **ADR_INDEX_V1.21.md** | ✅ | v1.21 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 105 architecture decisions - **UPDATED V1.21** (added ADR-103 for BasePoller Unified Design Pattern; 104 → 105 total ADRs) |
+| **ADR_INDEX_V1.22.md** | ✅ | v1.22 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 106 architecture decisions - **UPDATED V1.22** (added ADR-105 for Two-Axis Environment Configuration; 105 → 106 total ADRs) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
-| **DEVELOPMENT_PHASES_V1.9.md** | ✅ | v1.9 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **UPDATED V1.9** (Phase 2.5 Service Runner complete, monitoring deferred to Phase 4) |
+| **DEVELOPMENT_PHASES_V1.10.md** | ✅ | v1.10 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **UPDATED V1.10** (Added DEF-P2.5-007 deferred task for Two-Axis Environment Config) |
 | **TESTING_STRATEGY_V3.4.md** | ✅ | v3.3 | `/docs/foundation/` | 2 | Phases 1-10 | 🔴 Critical | **UPDATED V3.3** - Added Test Isolation Patterns section (5 patterns: transaction-based, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2); based on Phase 1.9 findings (12+ test failures from DB state contamination); cross-references TEST_ISOLATION_PATTERNS_V1.1.md; V3.2: All 8 test types MANDATORY; V3.0: 8 test type framework |
 | **TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md** | ✅ | v2.1 | `/docs/foundation/` | 1.9 | Phases 1.5+ | 🔴 Critical | **UPDATED V2.1** - Added REQ-TEST-020 through REQ-TEST-024 (Test Isolation Requirements from Phase 1.9): transaction-based isolation, FK dependency chain management, cleanup fixture ordering, parallel execution safety, SCD Type 2 isolation; cross-references TEST_ISOLATION_PATTERNS_V1.1.md; V2.0: REQ-TEST-012-019 (8 test types, mock restrictions, fixture requirements, coverage standards) |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
@@ -519,7 +525,7 @@ Roadmap, timelines, and project management.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DEVELOPMENT_PHASES_V1.9.md** | ✅ | v1.9 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 2.5 progress: Service Runner complete, monitoring deferred - UPDATED V1.9 |
+| **DEVELOPMENT_PHASES_V1.10.md** | ✅ | v1.10 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | Phase 2.5 progress: Service Runner complete, added DEF-P2.5-007 - UPDATED V1.10 |
 | **DEPLOYMENT_GUIDE_V1.0.md** | 🔵 | - | `/docs/deployment/` | 1 | Phase 1 ✅ | 🟡 High | Local/AWS deployment stubs |
 | **USER_GUIDE_V1.0.md** | 🔵 | - | `/docs/guides/` | 5 | Phase 5 ✅ | 🟢 Medium | CLI examples (edges-list, trade-execute) |
 | **DEVELOPER_ONBOARDING_V1.0.md** | 🔵 | - | `/docs/utility/` | 0 | Phase 0 ✅ | 🟡 High | Merged with ENVIRONMENT_CHECKLIST, onboarding steps |
@@ -590,7 +596,7 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md** | 🔵 | - | `/docs/utility/` | 1.5 | Phase 1.5-4 | 🟡 High | **PLANNED** - Property-based testing roadmap for 74-91 additional tests across Phases 1.5-4 (merged into TEST_REQUIREMENTS_COMPREHENSIVE) |
 | **PHASE_1.5_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 2 Week 1 | 🟡 High | **NEW** - Configuration System Enhancement deferred to Phase 2 (DEF-P1.5-001: version resolution + override handling, 6-8 hours implementation estimate, requires live database integration) |
 | **PHASE_4_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 4.5 | Phase 4.5 | 🔴 Critical | **NEW** - Comprehensive research task documentation (11 tasks: DEF-009 to DEF-019, strategies HIGHEST PRIORITY, models, edge detection) - ~2800 lines, 74-92 hour total effort |
-| **PHASE_2.5_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 2.5 | Phase 3-4 | 🟡 High | **NEW** - Phase 2.5 deferred tasks (6 tasks: CloudWatch integration, ELK setup, alert thresholds, health dashboard, NCAAW seeding, rate limit YAML); GitHub issues #195-#198; 22-34 hours estimated effort |
+| **PHASE_2.5_DEFERRED_TASKS_V1.1.md** | ✅ | v1.1 | `/docs/utility/` | 2.5 | Phase 3-4 | 🟡 High | **UPDATED V1.1** - Phase 2.5 deferred tasks (7 tasks: +DEF-P2.5-007 Two-Axis Env Config HIGH priority); GitHub issues #195-#202; ~30-46 hours estimated effort |
 | **PHASE_2_TEST_COVERAGE_GAPS_V1.0.md** | 📦 | v1.0 | `/docs/utility/` | 2 | Phase 2 | 🔴 Critical | **ARCHIVED** - Subsumed by PHASE_1.9_TEST_INFRASTRUCTURE_PLAN_V1.0.md; Issue #155 closed, replaced by Issue #165 |
 | **PHASE_1.9_TEST_INFRASTRUCTURE_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.9 | Phase 1.9 | 🔴 Critical | **NEW** - BLOCKING phase for test infrastructure overhaul (~93 hours); addresses 2 failed, 33 skipped, 5 xfail tests, 10/11 modules missing test types; GitHub Issue #165 |
 | **STRATEGIC_WORK_ROADMAP_V1.1.md** | ✅ | v1.1 | `/docs/utility/` | 1-10 | All phases | 🔴 Critical | **UPDATED V1.1** - Master roadmap of 25 strategic tasks + Phases 6-9 analytics tasks (performance tracking, dashboards, A/B testing) organized by category |
