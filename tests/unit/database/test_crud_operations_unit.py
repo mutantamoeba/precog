@@ -32,6 +32,7 @@ from precog.database.crud_operations import (
     get_game_state_history,
     get_games_by_date,
     get_live_games,
+    get_team_by_espn_id,
     get_team_rankings,
     get_venue_by_espn_id,
     get_venue_by_id,
@@ -101,6 +102,70 @@ class TestCreateVenueUnit:
         params = call_args[0][1]
         # indoor is the last parameter
         assert params[-1] is False
+
+    @pytest.mark.parametrize(
+        ("capacity_input", "expected_capacity"),
+        [
+            (50000, 50000),  # Normal capacity - unchanged
+            (76416, 76416),  # Large NFL stadium - unchanged
+            (0, None),  # ESPN returns 0 for unknown -> normalize to NULL
+            (-1, None),  # Invalid negative -> normalize to NULL
+            (-100, None),  # Large negative -> normalize to NULL
+            (None, None),  # Explicit NULL -> stays NULL
+        ],
+        ids=[
+            "normal_capacity",
+            "large_stadium",
+            "zero_capacity_normalized",
+            "negative_one_normalized",
+            "large_negative_normalized",
+            "explicit_none",
+        ],
+    )
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_create_venue_capacity_edge_cases(
+        self, mock_get_cursor, capacity_input, expected_capacity
+    ):
+        """Test venue capacity normalization for API edge cases.
+
+        Educational Note:
+            ESPN API sometimes returns 0 for unknown venue capacity.
+            Our DB constraint requires capacity > 0 OR capacity IS NULL.
+            This normalization layer converts invalid values (0, negative)
+            to NULL before database insertion to prevent constraint violations.
+
+            This test covers Antipattern 2 from TESTING_ANTIPATTERNS_V1.0.md:
+            "Not Testing API Edge Cases Against Database Constraints"
+
+        Reference:
+            - src/precog/database/crud_operations.py lines 1930-1933
+            - docs/utility/TESTING_ANTIPATTERNS_V1.0.md Antipattern 2
+        """
+        # Setup mock
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"venue_id": 1}
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        # Execute
+        result = create_venue(
+            espn_venue_id="test_venue",
+            venue_name="Test Stadium",
+            capacity=capacity_input,
+        )
+
+        # Verify venue was created
+        assert result == 1
+
+        # Verify capacity was normalized correctly in SQL params
+        call_args = mock_cursor.execute.call_args
+        params = call_args[0][1]
+        # params order: (espn_venue_id, venue_name, city, state, capacity, indoor)
+        actual_capacity = params[4]
+        assert actual_capacity == expected_capacity, (
+            f"Capacity {capacity_input} should normalize to {expected_capacity}, "
+            f"got {actual_capacity}"
+        )
 
 
 @pytest.mark.unit
@@ -480,3 +545,107 @@ class TestGetGamesByDateUnit:
         call_args = mock_fetch_all.call_args
         params = call_args[0][1]
         assert "nba" in params
+
+
+# =============================================================================
+# TEAM LOOKUP UNIT TESTS (Missing Teams Edge Cases)
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestGetTeamByEspnIdUnit:
+    """Unit tests for get_team_by_espn_id with edge cases.
+
+    Educational Note:
+        This test class specifically addresses Antipattern 1 from
+        TESTING_ANTIPATTERNS_V1.0.md: "Testing Against Empty/Unseeded Databases"
+
+        The problem: Unit tests that mock database calls hide the fact that
+        the teams table is empty in real databases. When ESPN returns data
+        with valid team IDs, lookups fail silently (returning None).
+
+        These tests explicitly cover the "team not found" scenarios to ensure
+        the code handles missing teams gracefully without crashing.
+
+    Reference:
+        - docs/utility/TESTING_ANTIPATTERNS_V1.0.md Antipattern 1
+        - src/precog/database/crud_operations.py get_team_by_espn_id
+    """
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_get_team_by_espn_id_returns_team_dict(self, mock_fetch_one):
+        """Test successful team lookup returns dictionary."""
+        mock_fetch_one.return_value = {
+            "team_id": 12,
+            "espn_team_id": "22",
+            "team_name": "Arizona Cardinals",
+            "team_abbreviation": "ARI",
+            "league": "nfl",
+        }
+
+        result = get_team_by_espn_id("22", league="nfl")
+
+        assert result is not None
+        assert result["team_id"] == 12
+        assert result["team_name"] == "Arizona Cardinals"
+        mock_fetch_one.assert_called_once()
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_get_team_by_espn_id_not_found_returns_none(self, mock_fetch_one):
+        """Test team not found returns None gracefully.
+
+        Educational Note:
+            This is the critical edge case that was missing from tests.
+            When teams table is empty or team doesn't exist, the function
+            returns None. Callers must handle this case.
+        """
+        mock_fetch_one.return_value = None
+
+        result = get_team_by_espn_id("99999", league="nfl")
+
+        assert result is None
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_get_team_by_espn_id_wrong_league_returns_none(self, mock_fetch_one):
+        """Test team exists but in wrong league returns None.
+
+        Educational Note:
+            A team might exist in the database (e.g., ESPN ID 22 for NFL),
+            but if we query with the wrong league filter, no match is found.
+        """
+        mock_fetch_one.return_value = None  # No match for this league
+
+        result = get_team_by_espn_id("22", league="nba")  # NFL team queried as NBA
+
+        assert result is None
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_get_team_by_espn_id_without_league_filter(self, mock_fetch_one):
+        """Test team lookup without league filter.
+
+        Educational Note:
+            When league is not specified, the query should still work
+            but might return unexpected results if team IDs are not unique
+            across leagues. This test ensures the function works without
+            the league parameter.
+        """
+        mock_fetch_one.return_value = {
+            "team_id": 42,
+            "espn_team_id": "500",
+            "team_name": "Generic Team",
+            "league": "nfl",
+        }
+
+        result = get_team_by_espn_id("500")  # No league filter
+
+        assert result is not None
+        assert result["team_id"] == 42
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_get_team_by_espn_id_empty_string_handled(self, mock_fetch_one):
+        """Test empty ESPN ID is handled gracefully."""
+        mock_fetch_one.return_value = None
+
+        result = get_team_by_espn_id("")
+
+        assert result is None
