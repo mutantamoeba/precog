@@ -1927,6 +1927,11 @@ def create_venue(
         - REQ-DATA-002: Venue Data Management
         - ADR-029: ESPN Data Model with Normalized Schema
     """
+    # Normalize capacity: ESPN API sometimes returns 0 for unknown capacity
+    # DB constraint requires capacity IS NULL OR capacity > 0
+    if capacity is not None and capacity <= 0:
+        capacity = None
+
     query = """
         INSERT INTO venues (
             espn_venue_id, venue_name, city, state, capacity, indoor

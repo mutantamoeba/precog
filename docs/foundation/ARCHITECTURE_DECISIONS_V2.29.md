@@ -1,9 +1,14 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.28
-**Last Updated:** December 8, 2025
+**Version:** 2.29
+**Last Updated:** December 9, 2025
 **Status:** ✅ Current
+**Changes in v2.29:**
+- **TWO-AXIS ENVIRONMENT CONFIGURATION (PLANNED):** Added ADR-105 for environment configuration architecture
+- ADR-105: Two-Axis Environment Configuration - PRECOG_ENV (database) + {MARKET}_MODE (API per market) with safety guardrails
+- Documents planned architecture for Issue #202 (deferred to Phase 2)
+- See PHASE_2.5_DEFERRED_TASKS_V1.1 for full implementation plan
 **Changes in v2.28:**
 - **PHASE 2.5 BASEPOLLER UNIFIED DESIGN PATTERN:** Added ADR-103 for BasePoller abstract class architecture
 - ADR-103: BasePoller Unified Design Pattern - Template Method pattern for consistent polling infrastructure
@@ -6792,7 +6797,7 @@ CREATE TABLE brier_score_metrics (...);
 
 **References:**
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.10.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -7549,7 +7554,7 @@ Cons:
 ### References
 
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.10.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -8316,7 +8321,7 @@ WebSocket for Position Monitoring (real-time):
 
 ### References
 
-- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 7 Task #2: Frontend Development)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.10.md` (Phase 7 Task #2: Frontend Development)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.9: Materialized Views)
 - Next.js Documentation: https://nextjs.org/docs
 - Recharts Documentation: https://recharts.org/
@@ -9238,7 +9243,7 @@ def run_holdout_validation(
 - `docs/guides/MODEL_EVALUATION_GUIDE_V1.0.md` (implementation guide - to be created)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 2 Task #3, Phase 6 Task #1)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.10.md` (Phase 2 Task #3, Phase 6 Task #1)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.7: Evaluation Runs Table)
 
 ---
@@ -9961,7 +9966,7 @@ ON position_risk_by_strategy(league, strategy_name);
 - `docs/guides/DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md` (React dashboard + API integration - to be created)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 6 Task #3, Phase 7 Task #2)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.10.md` (Phase 6 Task #3, Phase 7 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.8: Materialized Views Reference)
 
 ---
@@ -10792,7 +10797,7 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (includes A/B testing architecture)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 7 Task #3, Phase 8 Task #2)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.10.md` (Phase 7 Task #3, Phase 8 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.9: A/B Tests Table)
 
 ---
@@ -11708,7 +11713,7 @@ CREATE TABLE strategies (
 ### References
 
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (edges table schema)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 1.5 manager components)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.10.md` (Phase 1.5 manager components)
 - `src/precog/trading/model_manager.py` (edge calculation logic - Phase 1.5 implementation)
 - `src/precog/trading/strategy_manager.py` (edge query logic - Phase 1.5 implementation)
 
@@ -15507,6 +15512,57 @@ src/precog/schedulers/
 
 ---
 
+## Decision #105/ADR-105: Two-Axis Environment Configuration (Phase 2 - Planned)
+
+**Date:** December 9, 2025
+**Status:** 🔵 Planned
+**Phase:** Phase 2 (Live Data Integration)
+**Drivers:** Environment clarity, multi-market support, safety, maintainability
+**GitHub Issue:** #202
+
+### Context
+
+During Phase 2.5 development, we identified confusion around environment configuration:
+
+1. `.env` has `ENVIRONMENT=development` but code checks `PRECOG_ENV` (not set)
+2. Code falls back to `DB_NAME=precog_test`, causing seeds to go to wrong database
+3. No differentiation between API environments (demo/live) and database environments (dev/test/prod)
+4. Phase 1.5 TODO "Update connection.py to use environment-aware config" was never completed
+
+### Proposed Decision
+
+Implement a **two-axis environment configuration model**:
+
+**Axis 1 - Application Environment (PRECOG_ENV):**
+- Controls database selection: `precog_dev`, `precog_test`, `precog_staging`, `precog_prod`
+- Values: `development`, `test`, `staging`, `production`
+
+**Axis 2 - Market API Mode ({MARKET}_MODE):**
+- Controls API endpoints per prediction market
+- `KALSHI_MODE=demo` -> `demo-api.kalshi.co`
+- `KALSHI_MODE=live` -> `trading-api.kalshi.co`
+- Future: `POLYMARKET_MODE`, `PREDICTIT_MODE`, etc.
+
+**Safety Guardrails:**
+- Block dangerous combinations (e.g., test database + live API)
+- Require explicit confirmation for production configurations
+- CLI parameters `--env` and `--market-mode` for overrides
+
+### Implementation Plan
+
+1. **Core Architecture (4-6h):** Create `src/precog/config/environment.py`
+2. **Safety Guardrails (2-3h):** Block dangerous combinations
+3. **CLI Integration (2-3h):** Add `--env` and `--market-mode` parameters
+
+### Related Artifacts
+
+- **Detailed Documentation:** docs/utility/PHASE_2.5_DEFERRED_TASKS_V1.1.md (DEF-P2.5-007)
+- **GitHub Issue:** #202
+- **Phase 1.5 TODO:** connection.py environment-aware config (unresolved)
+- **ADR-TBD:** REQ-CONFIG-TBD (Environment Configuration Requirements)
+
+---
+
 ## Approval & Sign-off
 
 This document represents the architectural decisions as of October 22, 2025 (Phase 0.5 completion with standardization).
@@ -15517,9 +15573,10 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.28
-**Last Updated:** December 7, 2025
+**Document Version:** 2.29
+**Last Updated:** December 9, 2025
 **Critical Changes:**
+- v2.29: **TWO-AXIS ENVIRONMENT CONFIGURATION (PLANNED)** - Added Decision #105/ADR-105 for environment configuration architecture with PRECOG_ENV (database) + {MARKET}_MODE (API per market) with safety guardrails. Documented in PHASE_2.5_DEFERRED_TASKS_V1.1, Issue #202.
 - v2.28: **BASEPOLLER UNIFIED DESIGN PATTERN** - Added Decision #103/ADR-103 (BasePoller abstract class with Template Method pattern, {Platform}{Entity}Poller naming convention, generic stats fields)
 - v2.27: **PHASE 2.5 LIVE DATA COLLECTION** - Added Decisions #100-102/ADR-100-102 (Service Supervisor Pattern, ESPN Status/Season Mapping, CloudWatch/ELK Deferral)
 - v2.26: **CI-SAFE STRESS TEST MARKERS (ISSUE #168)** - Added Decision #99/ADR-099 (skipif vs xfail(run=False) for CI Stress Tests): `skipif(_is_ci)` preferred over `xfail(run=False)` for clearer semantic meaning (SKIPPED vs XFAIL)
