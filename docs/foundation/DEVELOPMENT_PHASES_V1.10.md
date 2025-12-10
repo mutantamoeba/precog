@@ -1209,6 +1209,28 @@ python scripts/validate_phase_start.py --phase 2
 - 📋 **Deferred Task Documentation**: `docs/utility/PHASE_2.5_DEFERRED_TASKS_V1.1.md`
 - **Rationale**: File-based logging sufficient for Phase 2.5 development; production observability for Phase 4
 
+#### 5. Database Seeding Infrastructure (Day 5-6) ✨ NEW
+- [✅] Alembic migration 0003: Composite unique constraint `UNIQUE(team_code, sport)` for multi-sport support
+- [✅] SQL seed files for all 6 sports: NFL (32), NBA (30), NHL (32), WNBA (12), NCAAF (79), NCAAB (89) = 274 teams total
+- [✅] SeedingManager architecture (framework + partial implementation):
+  - [✅] `SeedingConfig` dataclass with category, sport, database selection
+  - [✅] `SeedCategory` enum (teams, venues, historical_elo, team_rankings, archived_games, schedules)
+  - [✅] `SeedingStats` and `SeedingReport` TypedDicts for session tracking
+  - [✅] Venue seeding from ESPN API (operational)
+  - [🔵] Historical game seeding (framework only - needs week iteration logic)
+  - [🔵] Schedule seeding (framework only)
+- [  ] CLI commands: `seed all`, `seed teams`, `seed venues`, `seed verify`
+- **ADR-106**: Database Seeding Manager Architecture (Seeding vs Polling separation)
+- **REQ-DATA-004**: Multi-Sport Team Seeding
+- **REQ-DATA-005**: SeedingManager with configurable categories
+- **Migration**: `src/precog/database/alembic/versions/0003_fix_teams_composite_unique_constraint.py`
+- **Module**: `src/precog/database/seeding/` package (seeding_manager.py, __init__.py)
+
+**Key Design Decision (ADR-106):**
+- **SeedingManager**: Static/historical data (teams, venues, Elo, archived games) - runs on-demand/scheduled
+- **ESPNGamePoller**: Live/current data (in-progress games) - runs continuously (15-60s intervals)
+- No overlap: Seeder handles past seasons, Poller handles current games
+
 ### Deliverables
 - [  ] CLI commands: `scheduler start`, `scheduler stop`, `scheduler status`
 - [✅] Service runner script with graceful shutdown (ServiceSupervisor pattern, ADR-100)
