@@ -41,6 +41,8 @@ from urllib.parse import urlparse
 import requests
 from dotenv import load_dotenv
 
+from precog.config.environment import MarketMode, get_market_mode
+
 from .kalshi_auth import KalshiAuth
 from .rate_limiter import RateLimiter
 from .types import (
@@ -117,7 +119,7 @@ class KalshiClient:
 
     def __init__(
         self,
-        environment: str = "demo",
+        environment: str | None = None,
         auth: KalshiAuth | None = None,
         session: requests.Session | None = None,
         rate_limiter: RateLimiter | None = None,
@@ -126,7 +128,9 @@ class KalshiClient:
         Initialize Kalshi client.
 
         Args:
-            environment: "demo" or "prod"
+            environment: "demo" or "prod" (DEPRECATED: use KALSHI_MODE env var).
+                         If None (default), reads from KALSHI_MODE environment variable.
+                         Explicit value overrides KALSHI_MODE for backwards compatibility.
             auth: Optional KalshiAuth instance. If not provided, creates one
                   from environment variables. Useful for testing to inject mocks.
             session: Optional requests.Session. If not provided, creates new one.
@@ -139,6 +143,11 @@ class KalshiClient:
             EnvironmentError: If required env vars missing (when auth not provided)
 
         Example:
+            >>> # Preferred: use KALSHI_MODE environment variable
+            >>> # export KALSHI_MODE=demo
+            >>> client = KalshiClient()  # Reads from KALSHI_MODE
+            >>>
+            >>> # Legacy: explicit environment parameter (deprecated)
             >>> client = KalshiClient(environment="demo")
 
         Testing Example:
@@ -156,12 +165,29 @@ class KalshiClient:
             - Production: Parameters are None, so we create real instances
             - Testing: Inject mocks, avoiding real credentials/network
             This makes the class testable without environment setup.
-        """
-        if environment not in ["demo", "prod"]:
-            raise ValueError(f"Invalid environment: {environment}. Must be 'demo' or 'prod'")
 
-        self.environment = environment
-        self.base_url = self.BASE_URLS[environment]
+            Environment Resolution (Two-Axis Model):
+            - If `environment` parameter provided: Use it directly (backwards compatible)
+            - If `environment` is None: Read from KALSHI_MODE env var
+            - KALSHI_MODE values: "demo" (default) or "live"
+
+            See: docs/guides/ENVIRONMENT_CONFIGURATION_GUIDE_V1.0.md
+        """
+        # Resolve environment from parameter or KALSHI_MODE env var
+        if environment is not None:
+            # Explicit parameter (backwards compatibility)
+            if environment not in ["demo", "prod"]:
+                raise ValueError(f"Invalid environment: {environment}. Must be 'demo' or 'prod'")
+            resolved_env = environment
+        else:
+            # Use centralized market mode (two-axis model)
+            market_mode = get_market_mode("kalshi")
+            # Map MarketMode to API environment
+            resolved_env = "demo" if market_mode == MarketMode.DEMO else "prod"
+            logger.debug(f"Resolved Kalshi environment from KALSHI_MODE: {resolved_env}")
+
+        self.environment = resolved_env
+        self.base_url = self.BASE_URLS[resolved_env]
 
         # Use injected dependencies or create defaults
         if auth is not None:

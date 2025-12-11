@@ -134,6 +134,26 @@ property_test_requirements:
 # Reference: TESTING_GAPS_ANALYSIS.md lines 36-42 (Strategy Manager lesson learned)
 
 test_fixture_requirements:
+  # Database seeding tests require real DB but NOT clean_test_data
+  # Seeding tests verify static seed data (teams, etc.) which should persist
+  # clean_test_data is for ephemeral data cleanup, not seed data
+  database_seeding_tests:
+    description: "Tests for database seeding (static data verification)"
+    path_patterns:
+      - "tests/integration/database/seeding/"
+    required_fixtures:
+      - "db_pool"          # Real connection pool (not mocked)
+      - "db_cursor"        # Real database cursor
+      # NOTE: clean_test_data is intentionally NOT required for seeding tests
+      # Seeding tests verify static seed data (teams, etc.) that should persist
+
+    forbidden_patterns:
+      - "unittest.mock.patch('psycopg2.pool')"  # Don't mock connection pool
+      - "mock_connection = Mock()"              # Don't mock database connections
+
+    allowed_exceptions:
+      - "Dry run test"                          # Testing dry_run mode is expected
+
   # Database integration tests require real DB fixtures (Pattern 13 - Coverage Quality)
   # Lesson Learned: Mocking connection pools caused Strategy Manager tests to pass with bugs
   database_integration_tests:
@@ -142,6 +162,8 @@ test_fixture_requirements:
       - "tests/integration/database/"
       - "tests/integration/trading/"
       - "tests/integration/analytics/"
+    exclude_patterns:
+      - "tests/integration/database/seeding/"   # Handled by database_seeding_tests
     required_fixtures:
       - "db_pool"          # Real connection pool (not mocked)
       - "db_cursor"        # Real database cursor
