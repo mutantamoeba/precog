@@ -2863,13 +2863,24 @@ class TestShowEnvironment:
         assert "test" in output
         assert "low" in output  # Risk level
 
+    @patch.dict(
+        "os.environ",
+        {"PRECOG_ENV": "dev", "KALSHI_MODE": "demo"},
+        clear=False,
+    )
     @patch("main.load_environment_config")
     @patch("main.get_market_mode")
     @patch("main.get_app_environment")
     def test_env_shows_dev_environment(
         self, mock_get_app_env, mock_get_market_mode, mock_load_config, runner
     ):
-        """Test env command shows dev environment correctly."""
+        """Test env command shows dev environment correctly.
+
+        Note:
+            Uses @patch.dict to set PRECOG_ENV=dev to ensure environment
+            detection returns DEVELOPMENT even in parallel test execution
+            where DB_NAME may be set to precog_test.
+        """
         from precog.config.environment import (
             AppEnvironment,
             EnvironmentConfig,
@@ -2893,6 +2904,11 @@ class TestShowEnvironment:
         assert "development" in output  # Full name in two-axis model
         assert "low" in output  # Risk level
 
+    @patch.dict(
+        "os.environ",
+        {"PRECOG_ENV": "prod", "KALSHI_MODE": "live"},
+        clear=False,
+    )
     @patch("main.load_environment_config")
     @patch("main.get_market_mode")
     @patch("main.get_app_environment")
@@ -2906,6 +2922,11 @@ class TestShowEnvironment:
             - Displays 'production' environment
             - Shows CRITICAL risk level
             - Shows warning message
+
+        Note:
+            Uses @patch.dict to set PRECOG_ENV=prod to ensure environment
+            detection returns PRODUCTION even in parallel test execution
+            where DB_NAME may be set to precog_test.
         """
         from precog.config.environment import (
             AppEnvironment,

@@ -330,7 +330,7 @@ class TestESPNDataStructure:
         """Verify situation data (down, distance, possession) is valid.
 
         Educational Note:
-            Situation data is only present for in-progress games.
+            Situation data is only present for in-progress football games.
             When present, values must be in valid ranges.
             In ESPNGameFull, situation is nested in state.situation.
 
@@ -339,11 +339,22 @@ class TestESPNDataStructure:
               (e.g., during kickoff, timeout, between plays, PAT attempts)
             - distance == 0: Can occur during goal-line situations or
               when no active play (e.g., after touchdown)
+
+            Multi-League Strategy:
+            - NFL games are typically on Sunday/Monday/Thursday
+            - NCAAF games are on weekends (more frequent during season)
+            - We check both leagues to increase test coverage success rate
         """
+        # Try multiple football leagues for better test coverage
+        # NFL has limited game days, NCAAF has more games on weekends
         games = espn_client.get_live_games(league="nfl")
 
         if len(games) == 0:
-            pytest.skip("No live NFL games right now")
+            # Fall back to NCAAF (college football) if no NFL games
+            games = espn_client.get_live_games(league="ncaaf")
+
+        if len(games) == 0:
+            pytest.skip("No live football games (NFL or NCAAF) right now")
 
         for game in games:
             state = game["state"]
@@ -582,9 +593,27 @@ class TestESPNDataPipeline:
         Educational Note:
             This tests the filtering logic that separates live games
             from scheduled/completed games.
-        """
-        live_games = espn_client.get_live_games(league="nfl")
 
+            Multi-Sport Strategy:
+            Since live games are time-dependent, we check multiple leagues
+            to maximize the chance of finding active games:
+            - NFL: Sunday/Monday/Thursday during season
+            - NCAAF: Weekends (Saturdays primarily)
+            - NBA: Most nights October-April
+            - NCAAB: Most nights November-March
+            - NHL: Most nights October-April
+        """
+        # Try multiple leagues to find live games
+        # NCAA basketball (NCAAB) runs most evenings November-March
+        leagues_to_try = ["nfl", "ncaaf", "nba", "ncaab", "nhl"]
+        live_games = []
+
+        for league in leagues_to_try:
+            live_games = espn_client.get_live_games(league=league)
+            if len(live_games) > 0:
+                break
+
+        # If we found live games, verify they're all in-progress
         # All returned games should be in progress or halftime
         for game in live_games:
             status = game["state"]["game_status"]

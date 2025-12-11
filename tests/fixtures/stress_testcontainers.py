@@ -62,21 +62,41 @@ def _check_docker_available() -> bool:
     Educational Note:
         This check runs before container creation to provide a clear skip
         message rather than a cryptic Docker connection error.
+
+        On Windows, `docker info` may fail with exit code 1 due to named pipe
+        access issues even when Docker Desktop is running. We use multiple
+        fallback checks:
+        1. Try `docker info` (works on most Unix systems)
+        2. Try `docker version --format "{{.Server.Version}}"` (more reliable on Windows)
+        3. Try `docker ps` (simple connectivity check)
+
+        Reference: Issue #202 - Windows Docker Desktop compatibility
     """
     # Check if docker command exists
     if not shutil.which("docker"):
         return False
 
-    # Check if Docker daemon is running
-    try:
-        result = subprocess.run(
-            ["docker", "info"],
-            capture_output=True,
-            timeout=5,
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-        return False
+    # Check if Docker daemon is running with multiple fallback methods
+    # Windows Docker Desktop sometimes fails `docker info` but works with other commands
+    check_commands = [
+        ["docker", "info"],
+        ["docker", "version", "--format", "{{.Server.Version}}"],
+        ["docker", "ps", "-q"],
+    ]
+
+    for cmd in check_commands:
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                return True
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            continue
+
+    return False
 
 
 # Detect Docker availability at module load time
