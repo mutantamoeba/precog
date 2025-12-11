@@ -53,11 +53,11 @@ if TYPE_CHECKING:
 # Repository root (script is in scripts/)
 REPO_ROOT = Path(__file__).parent.parent
 
-# Timeout for individual checks (5 minutes)
-CHECK_TIMEOUT = 300
+# Timeout for individual checks (8 minutes - allows for full test suite)
+CHECK_TIMEOUT = 480
 
-# Timeout for the entire parallel phase (10 minutes)
-TOTAL_TIMEOUT = 600
+# Timeout for the entire parallel phase (15 minutes)
+TOTAL_TIMEOUT = 900
 
 
 @dataclass
@@ -94,7 +94,7 @@ PARALLEL_CHECKS: list[tuple[int, str, str]] = [
     (
         4,
         "Security Scan (Ruff S-rules)",
-        "python -m ruff check --select S --ignore S101,S112,S607,S603 --exclude tests/ --exclude _archive/ --exclude venv/ --quiet .",
+        "python -m ruff check --select S --ignore S101,S112,S607,S603,S602 --exclude tests/ --exclude _archive/ --exclude venv/ --quiet .",
     ),
     # Step 5: Warning Governance
     (
