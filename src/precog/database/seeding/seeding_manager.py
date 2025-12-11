@@ -51,6 +51,7 @@ from pathlib import Path
 from typing import Any, ClassVar, TypedDict
 
 from precog.api_connectors.espn_client import ESPNAPIError, ESPNClient
+from precog.database.connection import get_cursor
 from precog.database.crud_operations import (
     create_venue,
     get_team_by_espn_id,
@@ -466,7 +467,52 @@ class SeedingManager:
             logger.warning("Category %s not yet implemented", category.value)
 
     def _seed_teams_sql(self, sports: list[str]) -> None:
-        """Seed teams from SQL files."""
+        """Execute SQL seed files to populate team reference data.
+
+        This method reads SQL files from the configured seeds directory and
+        executes them against the database using the connection pool. Files
+        are processed in sorted order (by filename prefix) to ensure proper
+        dependencies are respected.
+
+        Args:
+            sports: List of sport codes to seed (e.g., ["nfl", "nba"]).
+                   Only SQL files matching these sports will be executed.
+
+        Educational Notes:
+        ------------------
+        SQL Seed File Naming Convention:
+            Files follow the pattern: {sequence}_{sport}_teams*.sql
+            - 001_nfl_teams_initial_elo.sql - NFL teams with base Elo
+            - 002_nfl_teams_espn_update.sql - ESPN ID updates for NFL
+            - 003_nba_teams.sql - NBA teams with ESPN IDs
+            - etc.
+
+            The sequence prefix ensures execution order:
+            - Lower numbers run first
+            - Allows 001 to create base data, 002 to update/extend it
+
+        Why Execute as Single Transaction?
+            Each SQL file is executed as one transaction. This ensures:
+            - All inserts in a file succeed or all fail (atomicity)
+            - ON CONFLICT clauses work properly for upserts
+            - Partial failures don't leave database in inconsistent state
+
+        ON CONFLICT Handling:
+            Our SQL files use ON CONFLICT (team_code, sport) DO UPDATE
+            This enables idempotent seeding:
+            - First run: INSERT creates new rows
+            - Subsequent runs: UPDATE refreshes existing data
+            - Safe to re-run without duplicating data
+
+        References:
+            - ADR-029: ESPN Data Model
+            - REQ-DATA-003: Multi-Sport Team Support
+            - PostgreSQL ON CONFLICT: https://www.postgresql.org/docs/current/sql-insert.html
+
+        Example:
+            >>> manager = SeedingManager()
+            >>> manager._seed_teams_sql(["nfl", "nba"])  # Seeds NFL and NBA teams
+        """
         stats = self._init_stats(SeedCategory.TEAMS)
         seeds_path = self.config.sql_seeds_path
 
@@ -484,15 +530,82 @@ class SeedingManager:
                 file_sport = parts[1].lower()
                 if file_sport in sports:
                     if self.config.dry_run:
-                        logger.info("[DRY RUN] Would execute: %s", sql_file)
+                        logger.info("[DRY RUN] Would execute: %s", sql_file.name)
                         stats["records_processed"] += 1
                     else:
-                        logger.info("Executing seed file: %s", sql_file)
-                        # Note: Actual SQL execution would happen via psycopg or subprocess
-                        # For now, we track it as "processed"
-                        stats["records_processed"] += 1
+                        self._execute_sql_file(sql_file, stats)
 
         self._category_stats[SeedCategory.TEAMS.value] = stats
+
+    def _execute_sql_file(self, sql_file: Path, stats: SeedingStats) -> None:
+        """Execute a single SQL seed file against the database.
+
+        This method reads the SQL file contents and executes them within a
+        transaction. The commit happens automatically via get_cursor context
+        manager on successful completion.
+
+        Args:
+            sql_file: Path to the SQL file to execute.
+            stats: SeedingStats dict to update with execution results.
+
+        Raises:
+            Exception: Re-raises any database errors after logging and
+                      updating stats. The calling method handles recovery.
+
+        Educational Notes:
+        ------------------
+        Transaction Isolation:
+            Using get_cursor(commit=True) ensures:
+            - Auto-commit on context manager exit (success)
+            - Auto-rollback on exception (failure)
+            - No partial state on errors
+
+        Row Count Tracking:
+            cur.rowcount gives the number of rows affected by the last
+            SQL statement. For multi-statement files (like our seed files
+            with single INSERT ... VALUES), this gives the total inserted.
+
+            Note: For files with multiple statements, we would need to
+            track cumulative rowcount or use RETURNING with counts.
+
+        Error Recovery Strategy:
+            On failure, we:
+            1. Log the error with file context
+            2. Increment error counter in stats
+            3. Continue to next file (fail-forward pattern)
+
+            This allows partial seeding success - if NBA file fails,
+            NFL data is still usable.
+
+        Example:
+            >>> stats = self._init_stats(SeedCategory.TEAMS)
+            >>> self._execute_sql_file(Path("seeds/003_nba_teams.sql"), stats)
+            >>> print(stats["records_created"])  # 30 for NBA teams
+        """
+        logger.info("Executing seed file: %s", sql_file.name)
+
+        try:
+            # Read SQL content from file
+            sql_content = sql_file.read_text(encoding="utf-8")
+
+            # Execute within transaction (auto-commit on success)
+            with get_cursor(commit=True) as cur:
+                cur.execute(sql_content)
+                rows_affected = cur.rowcount if cur.rowcount > 0 else 0
+
+                logger.info(
+                    "Seed file %s: %d rows affected",
+                    sql_file.name,
+                    rows_affected,
+                )
+
+                stats["records_processed"] += 1
+                stats["records_created"] += rows_affected
+
+        except Exception as e:
+            logger.error("Error executing seed file %s: %s", sql_file.name, e)
+            stats["errors"] += 1
+            # Don't re-raise - use fail-forward pattern to continue with other files
 
     def _seed_venues_sql(self, _sports: list[str]) -> None:
         """Seed venues from SQL files."""
@@ -677,23 +790,133 @@ class SeedingManager:
         return None
 
     def _verify_teams(self) -> dict[str, Any]:
-        """Verify team data exists."""
-        # Expected counts per sport
+        """Verify that team reference data exists in the database.
+
+        This method queries the database to count teams per sport and compares
+        against expected counts. It's designed to be called after seeding to
+        ensure data was properly loaded.
+
+        Returns:
+            dict with keys:
+                - expected: Total expected team count across all sports
+                - actual: Total actual team count from database
+                - by_sport: Dict mapping sport -> {expected, actual, ok}
+                - ok: True if all sports have expected counts
+                - missing_sports: List of sports with fewer teams than expected
+                - has_espn_ids: Count of teams with ESPN IDs populated
+
+        Educational Notes:
+        ------------------
+        Expected Counts Rationale:
+            - NFL: 32 teams (fixed, hasn't changed since 2002)
+            - NBA: 30 teams (fixed since 2004)
+            - NHL: 32 teams (added Seattle Kraken 2021)
+            - WNBA: 12 teams (may expand in future)
+            - NCAAF: 79 teams (FBS conferences we track)
+            - NCAAB: 89 teams (Power conferences + notable programs)
+
+        Why ESPN ID Verification?
+            Teams without ESPN IDs cannot be matched to live game data.
+            This count helps identify data quality issues before live
+            polling starts.
+
+        Verification vs Validation:
+            - Verification: Does data exist? (this method)
+            - Validation: Is data correct? (check team names, codes match)
+
+            We prioritize verification because:
+            1. Missing data causes immediate failures
+            2. Incorrect data causes subtle bugs
+            3. Verification is cheap (COUNT queries)
+            4. Validation requires more complex checks
+
+        Example:
+            >>> manager = SeedingManager()
+            >>> result = manager._verify_teams()
+            >>> print(result["ok"])  # True if all expected teams exist
+            >>> print(result["missing_sports"])  # ["wnba"] if WNBA not seeded
+        """
+        # Expected counts per sport - these are authoritative reference counts
         expected_counts = {
             "nfl": 32,
             "nba": 30,
             "nhl": 32,
             "wnba": 12,
-            "ncaaf": 79,  # FBS teams
-            "ncaab": 89,  # Top teams
+            "ncaaf": 79,  # FBS teams we track
+            "ncaab": 89,  # Major programs we track
         }
 
-        # This would query the database for actual counts
-        # For now, return placeholder
+        by_sport: dict[str, dict[str, Any]] = {}
+        missing_sports: list[str] = []
+        total_actual = 0
+        total_with_espn_id = 0
+
+        try:
+            with get_cursor() as cur:
+                # Get counts per sport
+                cur.execute("""
+                    SELECT
+                        sport,
+                        COUNT(*) as team_count,
+                        COUNT(espn_team_id) as with_espn_id
+                    FROM teams
+                    GROUP BY sport
+                    ORDER BY sport
+                """)
+                rows = cur.fetchall()
+
+                # Build sport-by-sport results
+                # NOTE: get_cursor() returns RealDictCursor, so rows are dicts
+                actual_counts = {}
+                espn_counts = {}
+                for row in rows:
+                    sport = row["sport"]
+                    count = row["team_count"]
+                    espn_count = row["with_espn_id"]
+                    actual_counts[sport] = count
+                    espn_counts[sport] = espn_count
+                    total_actual += count
+                    total_with_espn_id += espn_count
+
+                # Compare expected vs actual for each sport
+                for sport, expected in expected_counts.items():
+                    actual = actual_counts.get(sport, 0)
+                    has_espn = espn_counts.get(sport, 0)
+                    sport_ok = actual >= expected
+
+                    by_sport[sport] = {
+                        "expected": expected,
+                        "actual": actual,
+                        "has_espn_ids": has_espn,
+                        "ok": sport_ok,
+                    }
+
+                    if not sport_ok:
+                        missing_sports.append(sport)
+
+        except Exception as e:
+            logger.error("Error verifying teams: %s", e)
+            # Return failure result if we can't query
+            return {
+                "expected": sum(expected_counts.values()),
+                "actual": 0,
+                "by_sport": {},
+                "ok": False,
+                "missing_sports": list(expected_counts.keys()),
+                "has_espn_ids": 0,
+                "error": str(e),
+            }
+
+        total_expected = sum(expected_counts.values())
+        all_ok = len(missing_sports) == 0
+
         return {
-            "expected": sum(expected_counts.values()),
-            "actual": 274,  # Placeholder
-            "ok": True,
+            "expected": total_expected,
+            "actual": total_actual,
+            "by_sport": by_sport,
+            "ok": all_ok,
+            "missing_sports": missing_sports,
+            "has_espn_ids": total_with_espn_id,
         }
 
     def _init_stats(self, category: SeedCategory) -> SeedingStats:
