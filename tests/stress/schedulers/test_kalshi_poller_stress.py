@@ -62,9 +62,9 @@ class TestKalshiMarketPollerStress:
         # Execute 100 rapid poll cycles using the actual poll_once method
         for _ in range(100):
             result = poller.poll_once()
-            assert "markets_fetched" in result
-            assert "markets_updated" in result
-            assert "markets_created" in result
+            assert "items_fetched" in result
+            assert "items_updated" in result
+            assert "items_created" in result
 
         stats = poller.stats
         assert stats["errors"] == 0, f"Errors during stress: {stats['last_error']}"
@@ -208,5 +208,5 @@ class TestKalshiMarketPollerStress:
         # All stats should be valid dicts with expected keys
         for stats in stats_snapshots:
             assert "polls_completed" in stats
-            assert "markets_fetched" in stats
+            assert "items_fetched" in stats
             assert "errors" in stats

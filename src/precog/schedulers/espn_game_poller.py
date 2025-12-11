@@ -1,47 +1,47 @@
 """
-Live game state polling service using APScheduler.
+ESPN game state polling service extending BasePoller.
 
-This module provides the MarketUpdater class that polls ESPN APIs at configurable
+This module provides the ESPNGamePoller class that polls ESPN APIs at configurable
 intervals and syncs game states to the database using SCD Type 2 versioning.
 
 Key Features:
-- APScheduler-based polling (configurable 15-60 second intervals)
-- Conditional polling (only runs when games are active)
+- Extends BasePoller for consistent APScheduler-based polling
 - Multi-league support (NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
+- Conditional polling with idle interval (reduces API calls when no games active)
+- Optional job persistence via SQLAlchemy
+- SCD Type 2 versioning for game state history
 - Error recovery with logging
 - Clean shutdown handling
-- Thread-safe operation
+
+Naming Convention:
+    {Platform}{Entity}Poller pattern:
+    - ESPNGamePoller: Polls ESPN for game states
+    - KalshiMarketPoller: Polls Kalshi for market prices (see kalshi_poller.py)
 
 Educational Notes:
 ------------------
-APScheduler vs alternatives:
-    - APScheduler: Production-grade, supports persistence, cron, intervals
-    - schedule library: Simpler but less robust, no persistence
-    - asyncio: Good for async code, but we're using sync database operations
-
 Polling Strategy:
     - 15 seconds: Default for live games (captures most score changes)
-    - 60 seconds: Reduced rate when no games active (saves API calls)
-    - 0 seconds: Paused when outside game windows
+    - 60 seconds: Reduced rate when no games active (idle_interval)
+    - Conditional polling saves significant API calls over a season
 
-SCD Type 2 benefits:
+SCD Type 2 for Game States:
     - Every score change creates a new row (full game history)
     - Enables ML training on score progression
     - Provides audit trail for trading decisions
+    - Supports backtesting with historical game states
 
 Reference: docs/guides/ESPN_DATA_MODEL_V1.0.md
 Related Requirements:
-    - Phase 2: Live Data Integration
     - REQ-DATA-001: Game State Data Collection
+    - Phase 2: Live Data Integration
+Related ADR: ADR-100 (Service Supervisor Pattern)
 """
 
 import logging
-import signal
-import sys
-import threading
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, ClassVar, TypedDict
+from typing import Any, ClassVar
 
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -60,62 +60,67 @@ from precog.database.crud_operations import (
     get_team_by_espn_id,
     upsert_game_state,
 )
+from precog.schedulers.base_poller import BasePoller
 
 # Set up logging
 logger = logging.getLogger(__name__)
 
 
-class _UpdaterStats(TypedDict):
-    """Type definition for updater statistics."""
-
-    polls_completed: int
-    games_updated: int
-    errors: int
-    last_poll: str | None
-    last_error: str | None
-
-
-class MarketUpdater:
+class ESPNGamePoller(BasePoller):
     """
-    Live game state polling service.
+    ESPN game state polling service.
 
     Polls ESPN APIs at regular intervals and syncs game states to the database.
-    Uses APScheduler for reliable job scheduling with automatic retry on errors.
+    Extends BasePoller for consistent APScheduler-based polling with health monitoring.
 
     Attributes:
         leagues: List of leagues to poll (default: ["nfl", "ncaaf"])
         poll_interval: Seconds between polls when games active (default: 15)
         idle_interval: Seconds between checks when no games active (default: 60)
+        persist_jobs: Whether to persist scheduled jobs to database
         enabled: Whether polling is currently enabled
 
     Usage:
         >>> # Basic usage
-        >>> updater = MarketUpdater()
-        >>> updater.start()
+        >>> poller = ESPNGamePoller()
+        >>> poller.start()
         >>> # ... polling runs in background ...
-        >>> updater.stop()
+        >>> poller.stop()
         >>>
         >>> # Custom configuration
-        >>> updater = MarketUpdater(
+        >>> poller = ESPNGamePoller(
         ...     leagues=["nfl", "nba"],
         ...     poll_interval=30,
         ...     idle_interval=120
         ... )
-        >>> updater.start()
+        >>> poller.start()
+        >>>
+        >>> # With job persistence (survives restarts)
+        >>> poller = ESPNGamePoller(
+        ...     leagues=["nfl"],
+        ...     persist_jobs=True,
+        ...     job_store_url="sqlite:///jobs.db"
+        ... )
 
     Educational Note:
-        The updater uses a BackgroundScheduler which runs jobs in a thread pool.
-        This allows the main application to continue running while polls happen
-        in the background. The scheduler handles job execution, retries, and
-        timing automatically.
+        The poller uses BasePoller's BackgroundScheduler which runs jobs in a
+        thread pool. This allows the main application to continue running while
+        polls happen in the background. The scheduler handles job execution,
+        retries, and timing automatically.
 
-    Reference: Phase 2 Live Data Integration
+        Job persistence (via persist_jobs=True) enables the scheduler to survive
+        restarts - scheduled jobs are stored in SQLite/PostgreSQL and restored
+        automatically.
+
+    Reference: Phase 2.5 Live Data Collection Service
+    Related: ADR-100 (Service Supervisor Pattern)
     """
 
-    # Default configuration
+    # Class-level configuration
+    MIN_POLL_INTERVAL: ClassVar[int] = 5  # seconds
+    DEFAULT_POLL_INTERVAL: ClassVar[int] = 15  # seconds (balanced for live games)
+    DEFAULT_IDLE_INTERVAL: ClassVar[int] = 60  # seconds (when no games active)
     DEFAULT_LEAGUES: ClassVar[list[str]] = ["nfl", "ncaaf"]
-    DEFAULT_POLL_INTERVAL: ClassVar[int] = 15  # seconds
-    DEFAULT_IDLE_INTERVAL: ClassVar[int] = 60  # seconds
 
     # Game status mappings
     LIVE_STATUSES: ClassVar[set[str]] = {"in", "in_progress", "halftime"}
@@ -125,14 +130,14 @@ class MarketUpdater:
     def __init__(
         self,
         leagues: list[str] | None = None,
-        poll_interval: int = DEFAULT_POLL_INTERVAL,
-        idle_interval: int = DEFAULT_IDLE_INTERVAL,
+        poll_interval: int | None = None,
+        idle_interval: int | None = None,
         espn_client: ESPNClient | None = None,
         persist_jobs: bool = False,
         job_store_url: str | None = None,
     ) -> None:
         """
-        Initialize the MarketUpdater.
+        Initialize the ESPNGamePoller.
 
         Args:
             leagues: List of leagues to poll. Defaults to NFL and NCAAF.
@@ -145,84 +150,80 @@ class MarketUpdater:
         Raises:
             ValueError: If poll_interval < 5 or idle_interval < 15.
             ValueError: If persist_jobs=True but job_store_url not provided.
-
-        Educational Note:
-            Job persistence enables the scheduler to survive restarts. When enabled,
-            scheduled jobs are stored in a SQLite/PostgreSQL database and restored
-            when the scheduler starts again. This is important for production
-            deployments where you don't want to miss polls during restarts.
         """
-        if poll_interval < 5:
-            raise ValueError("poll_interval must be at least 5 seconds")
-        if idle_interval < 15:
+        effective_idle = idle_interval or self.DEFAULT_IDLE_INTERVAL
+        if effective_idle < 15:
             raise ValueError("idle_interval must be at least 15 seconds")
         if persist_jobs and not job_store_url:
             raise ValueError("job_store_url required when persist_jobs=True")
 
+        # Initialize base class (handles scheduler, stats, etc.)
+        super().__init__(poll_interval=poll_interval, logger=logger)
+
+        # ESPN-specific configuration
         self.leagues = leagues or self.DEFAULT_LEAGUES.copy()
-        self.poll_interval = poll_interval
-        self.idle_interval = idle_interval
-        self.espn_client = espn_client or ESPNClient()
+        self.idle_interval = effective_idle
         self.persist_jobs = persist_jobs
         self.job_store_url = job_store_url
 
-        # State tracking
-        self._scheduler: BackgroundScheduler | None = None
-        self._enabled = False
-        self._lock = threading.Lock()
-        self._stats: _UpdaterStats = {
-            "polls_completed": 0,
-            "games_updated": 0,
-            "errors": 0,
-            "last_poll": None,
-            "last_error": None,
-        }
+        # Initialize ESPN client (or use provided mock)
+        self.espn_client = espn_client or ESPNClient()
 
         logger.info(
-            "MarketUpdater initialized: leagues=%s, poll_interval=%ds, idle_interval=%ds, "
-            "persist_jobs=%s",
+            "ESPNGamePoller initialized: leagues=%s, poll_interval=%ds, "
+            "idle_interval=%ds, persist_jobs=%s",
             self.leagues,
             self.poll_interval,
             self.idle_interval,
             self.persist_jobs,
         )
 
-    @property
-    def enabled(self) -> bool:
-        """Whether the updater is currently running."""
-        return self._enabled
+    def _get_job_name(self) -> str:
+        """Return human-readable name for the polling job."""
+        return "ESPN Game State Poll"
 
-    @property
-    def stats(self) -> _UpdaterStats:
-        """Current statistics about polling activity."""
-        with self._lock:
-            return self._stats.copy()
+    def _poll_once(self) -> dict[str, int]:
+        """
+        Execute a single poll cycle for all configured leagues.
+
+        Returns:
+            Dictionary with counts: items_fetched, items_updated, items_created
+        """
+        total_fetched = 0
+        total_updated = 0
+        total_created = 0  # ESPN uses upsert, so created = 0 for now
+
+        for league in self.leagues:
+            try:
+                fetched, updated = self._poll_league(league)
+                total_fetched += fetched
+                total_updated += updated
+            except Exception as e:
+                # Log but don't re-raise - allow other leagues to continue
+                logger.error("Error polling %s: %s", league, e)
+                with self._lock:
+                    self._stats["errors"] += 1
+                    self._stats["last_error"] = str(e)
+
+        return {
+            "items_fetched": total_fetched,
+            "items_updated": total_updated,
+            "items_created": total_created,
+        }
 
     def start(self) -> None:
         """
-        Start the polling scheduler.
+        Start the polling scheduler with optional job persistence.
 
-        Initializes APScheduler and begins polling at the configured interval.
-        The scheduler runs in a background thread, allowing the main program
-        to continue execution.
+        Overrides BasePoller.start() to add job persistence support
+        via SQLAlchemy job store.
 
         Raises:
             RuntimeError: If already started.
-
-        Educational Note:
-            We use BackgroundScheduler instead of BlockingScheduler because
-            we want the calling code to continue executing. The scheduler
-            manages its own thread pool for job execution.
-
-            When job persistence is enabled via persist_jobs=True, jobs are
-            stored in a SQLite/PostgreSQL database. This means:
-            - Jobs survive scheduler restarts
-            - Missed executions are tracked and handled
-            - Multiple scheduler instances can share the same job store
         """
         with self._lock:
             if self._enabled:
-                raise RuntimeError("MarketUpdater is already running")
+                raise RuntimeError(f"{self.__class__.__name__} is already running")
 
             # Configure job stores if persistence is enabled
             jobstores = {}
@@ -235,51 +236,37 @@ class MarketUpdater:
                 job_defaults={
                     "coalesce": True,  # Combine missed runs into one
                     "max_instances": 1,  # Only one poll job at a time
-                    "misfire_grace_time": 30,  # Grace period for late jobs
+                    "misfire_grace_time": 60,  # Grace period for late jobs
                 },
             )
 
-            # Add the polling job
             self._scheduler.add_job(
-                self._poll_all_leagues,
+                self._poll_wrapper,
                 IntervalTrigger(seconds=self.poll_interval),
-                id="poll_espn",
-                name="ESPN Game State Poll",
+                id=f"poll_{self.__class__.__name__.lower()}",
+                name=self._get_job_name(),
                 replace_existing=True,
             )
 
             self._scheduler.start()
             self._enabled = True
 
-        logger.info("MarketUpdater started - polling every %d seconds", self.poll_interval)
+        logger.info(
+            "%s started - polling every %d seconds",
+            self.__class__.__name__,
+            self.poll_interval,
+        )
+
+        # Hook for subclass initialization
+        self._on_start()
 
         # Run initial poll immediately
-        self._poll_all_leagues()
+        self._poll_wrapper()
 
-    def stop(self, wait: bool = True) -> None:
-        """
-        Stop the polling scheduler.
-
-        Args:
-            wait: If True, wait for running jobs to complete before returning.
-
-        Educational Note:
-            The 'wait' parameter is important for clean shutdown. Setting it
-            to True ensures any in-progress database operations complete
-            before the scheduler terminates.
-        """
-        with self._lock:
-            if not self._enabled:
-                logger.warning("MarketUpdater is not running")
-                return
-
-            if self._scheduler:
-                self._scheduler.shutdown(wait=wait)
-                self._scheduler = None
-
-            self._enabled = False
-
-        logger.info("MarketUpdater stopped")
+    def _on_stop(self) -> None:
+        """Clean up ESPN client on stop."""
+        # ESPNClient uses requests Session, but doesn't need explicit cleanup
+        # This hook is here for consistency with other pollers
 
     def poll_once(self, leagues: list[str] | None = None) -> dict[str, int]:
         """
@@ -291,7 +278,7 @@ class MarketUpdater:
             leagues: Optional list of leagues to poll. Defaults to configured leagues.
 
         Returns:
-            Dictionary with counts: {"games_fetched": N, "games_updated": M}
+            Dictionary with counts: {"items_fetched": N, "items_updated": M, "items_created": P}
         """
         target_leagues = leagues or self.leagues
         total_fetched = 0
@@ -302,7 +289,11 @@ class MarketUpdater:
             total_fetched += fetched
             total_updated += updated
 
-        return {"games_fetched": total_fetched, "games_updated": total_updated}
+        return {
+            "items_fetched": total_fetched,
+            "items_updated": total_updated,
+            "items_created": 0,  # ESPN uses upsert
+        }
 
     def refresh_scoreboards(
         self,
@@ -334,8 +325,8 @@ class MarketUpdater:
             }
 
         Usage:
-            >>> updater = MarketUpdater(leagues=["nfl", "ncaaf"])
-            >>> result = updater.refresh_scoreboards()
+            >>> poller = ESPNGamePoller(leagues=["nfl", "ncaaf"])
+            >>> result = poller.refresh_scoreboards()
             >>> print(f"Updated {result['total_games_updated']} games")
 
         Educational Note:
@@ -406,46 +397,6 @@ class MarketUpdater:
         )
 
         return result
-
-    def _poll_all_leagues(self) -> None:
-        """
-        Poll all configured leagues and update game states.
-
-        This is the main scheduled job that runs at each interval.
-        Handles errors gracefully to prevent scheduler job failures.
-        """
-        start_time = datetime.now(UTC)
-        total_updated = 0
-
-        try:
-            for league in self.leagues:
-                try:
-                    _, updated = self._poll_league(league)
-                    total_updated += updated
-                except Exception as e:
-                    # Log but don't re-raise - allow other leagues to continue
-                    logger.error("Error polling %s: %s", league, e)
-                    with self._lock:
-                        self._stats["errors"] += 1
-                        self._stats["last_error"] = str(e)
-
-            with self._lock:
-                self._stats["polls_completed"] += 1
-                self._stats["games_updated"] += total_updated
-                self._stats["last_poll"] = start_time.isoformat()
-
-            elapsed = (datetime.now(UTC) - start_time).total_seconds()
-            logger.debug(
-                "Poll completed: %d games updated in %.2fs",
-                total_updated,
-                elapsed,
-            )
-
-        except Exception as e:
-            logger.exception("Unexpected error in poll cycle: %s", e)
-            with self._lock:
-                self._stats["errors"] += 1
-                self._stats["last_error"] = str(e)
 
     def _poll_league(self, league: str) -> tuple[int, int]:
         """
@@ -703,43 +654,21 @@ class MarketUpdater:
                 return True
         return False
 
-    def setup_signal_handlers(self) -> None:
-        """
-        Set up signal handlers for graceful shutdown.
-
-        Registers handlers for SIGINT (Ctrl+C) and SIGTERM to ensure
-        clean shutdown of the scheduler.
-
-        Educational Note:
-            Signal handlers are important for production services.
-            Without them, a Ctrl+C might leave database connections
-            open or jobs in an inconsistent state.
-        """
-
-        def shutdown_handler(signum: int, frame: Any) -> None:
-            logger.info("Received signal %d, shutting down...", signum)
-            self.stop(wait=True)
-            sys.exit(0)
-
-        signal.signal(signal.SIGINT, shutdown_handler)
-        signal.signal(signal.SIGTERM, shutdown_handler)
-        logger.debug("Signal handlers registered")
-
 
 # =============================================================================
 # Convenience Functions
 # =============================================================================
 
 
-def create_market_updater(
+def create_espn_poller(
     leagues: list[str] | None = None,
     poll_interval: int = 15,
     idle_interval: int = 60,
     persist_jobs: bool = False,
     job_store_url: str | None = None,
-) -> MarketUpdater:
+) -> ESPNGamePoller:
     """
-    Factory function to create a configured MarketUpdater.
+    Factory function to create a configured ESPNGamePoller.
 
     Args:
         leagues: Leagues to poll (default: ["nfl", "ncaaf"])
@@ -749,15 +678,15 @@ def create_market_updater(
         job_store_url: SQLAlchemy URL for job store (required if persist_jobs=True).
 
     Returns:
-        Configured MarketUpdater instance
+        Configured ESPNGamePoller instance
 
     Example:
         >>> # Basic usage
-        >>> updater = create_market_updater(leagues=["nfl", "nba"])
-        >>> updater.start()
+        >>> poller = create_espn_poller(leagues=["nfl", "nba"])
+        >>> poller.start()
         >>>
         >>> # With job persistence (survives restarts)
-        >>> updater = create_market_updater(
+        >>> poller = create_espn_poller(
         ...     leagues=["nfl"],
         ...     persist_jobs=True,
         ...     job_store_url="sqlite:///jobs.db"
@@ -769,7 +698,7 @@ def create_market_updater(
         re-created. With persistence, jobs are stored in SQLite or PostgreSQL
         and automatically restored on restart.
     """
-    return MarketUpdater(
+    return ESPNGamePoller(
         leagues=leagues,
         poll_interval=poll_interval,
         idle_interval=idle_interval,
@@ -778,9 +707,9 @@ def create_market_updater(
     )
 
 
-def run_single_poll(leagues: list[str] | None = None) -> dict[str, int]:
+def run_single_espn_poll(leagues: list[str] | None = None) -> dict[str, int]:
     """
-    Execute a single poll without starting the scheduler.
+    Execute a single ESPN poll without starting the scheduler.
 
     Useful for CLI commands or on-demand updates.
 
@@ -788,14 +717,14 @@ def run_single_poll(leagues: list[str] | None = None) -> dict[str, int]:
         leagues: Leagues to poll (default: ["nfl", "ncaaf"])
 
     Returns:
-        Dictionary with {"games_fetched": N, "games_updated": M}
+        Dictionary with {"items_fetched": N, "items_updated": M, "items_created": P}
 
     Example:
-        >>> result = run_single_poll(["nfl"])
-        >>> print(f"Updated {result['games_updated']} games")
+        >>> result = run_single_espn_poll(["nfl"])
+        >>> print(f"Updated {result['items_updated']} games")
     """
-    updater = MarketUpdater(leagues=leagues)
-    return updater.poll_once()
+    poller = ESPNGamePoller(leagues=leagues)
+    return poller.poll_once()
 
 
 def refresh_all_scoreboards(
@@ -805,7 +734,7 @@ def refresh_all_scoreboards(
     """
     Refresh ESPN scoreboard data for specified leagues.
 
-    Convenience function that creates a MarketUpdater and calls refresh_scoreboards().
+    Convenience function that creates an ESPNGamePoller and calls refresh_scoreboards().
     Useful for CLI commands and one-off data refreshes.
 
     Args:
@@ -829,5 +758,16 @@ def refresh_all_scoreboards(
         >>> print(f"Active games: {result['active_games']}")
         >>> print(f"Updated in {result['elapsed_seconds']}s")
     """
-    updater = MarketUpdater(leagues=leagues)
-    return updater.refresh_scoreboards(active_only=active_only)
+    poller = ESPNGamePoller(leagues=leagues)
+    return poller.refresh_scoreboards(active_only=active_only)
+
+
+# =============================================================================
+# Backward Compatibility Aliases
+# =============================================================================
+
+# Temporary aliases for backward compatibility during migration
+# TODO: Remove after all imports are updated (Phase 2.5 completion)
+MarketUpdater = ESPNGamePoller
+create_market_updater = create_espn_poller
+run_single_poll = run_single_espn_poll

@@ -327,7 +327,7 @@ class TestGameStateParsing:
         games = client.get_nfl_scoreboard()
 
         game = games[0]
-        assert game["state"]["game_status"] == "scheduled"
+        assert game["state"]["game_status"] == "pre"
         assert game["state"]["home_score"] == 0
         assert game["state"]["away_score"] == 0
 

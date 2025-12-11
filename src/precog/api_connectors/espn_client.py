@@ -446,10 +446,21 @@ class ESPNClient:
     HOCKEY_SPORTS: ClassVar[set[str]] = {"nhl"}
 
     # Game status mapping from ESPN to our internal format
+    # ESPN states: pre, in, post -> our database values: pre, in_progress, final
     STATUS_MAP: ClassVar[dict[str, str]] = {
-        "pre": "scheduled",
+        "pre": "pre",  # Keep as 'pre' to match database constraint
         "in": "in_progress",
         "post": "final",
+    }
+
+    # Season type mapping from ESPN integers to our database strings
+    # ESPN: 1=preseason, 2=regular, 3=postseason, 4=offseason
+    SEASON_TYPE_MAP: ClassVar[dict[int, str]] = {
+        1: "preseason",
+        2: "regular",
+        3: "playoff",  # postseason -> playoff in our schema
+        4: "exhibition",  # offseason
+        5: "allstar",  # all-star games
     }
 
     def __init__(
@@ -964,7 +975,9 @@ class ESPNClient:
                 "venue": venue_typed,
                 "broadcast": broadcast,
                 "neutral_site": competition.get("neutralSite", False),
-                "season_type": event.get("season", {}).get("type", 2),  # 2 = regular
+                "season_type": self.SEASON_TYPE_MAP.get(
+                    event.get("season", {}).get("type", 2), "regular"
+                ),
                 "week_number": event.get("week", {}).get("number"),
             }
 

@@ -10,7 +10,7 @@
 **Target Audience:** Product owner, development team, future contributors
 **Related Documents:**
 - `docs/foundation/ARCHITECTURE_DECISIONS_V2.13.md` (ADR-076, ADR-077 open questions, ADR-078, ADR-085 analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.7.md` (Phase 4.5 research phase)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.9.md` (Phase 4.5 research phase)
 - `docs/utility/PHASE_4_DEFERRED_TASKS_V1.0.md` (11 detailed research tasks)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md` (Performance tracking & analytics schema)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.13.md` (REQ-ANALYTICS-001 through 004, REQ-MODEL-EVAL-001/002)
@@ -59,7 +59,7 @@
 
 ### Purpose
 
-This document provides a **strategic roadmap** of 28 high-value tasks spanning Phases 1-10 of the Precog project. Unlike `DEVELOPMENT_PHASES_V1.7.md` (which provides chronological implementation details), this roadmap organizes work by **strategic category** and **priority**.
+This document provides a **strategic roadmap** of 28 high-value tasks spanning Phases 1-10 of the Precog project. Unlike `DEVELOPMENT_PHASES_V1.9.md` (which provides chronological implementation details), this roadmap organizes work by **strategic category** and **priority**.
 
 ### Philosophy
 
@@ -78,7 +78,7 @@ This document provides a **strategic roadmap** of 28 high-value tasks spanning P
 
 **For Developers:**
 - Check task dependencies before starting work (many tasks depend on ADR-076/ADR-077 research)
-- Cross-reference with `DEVELOPMENT_PHASES_V1.7.md` for implementation timing
+- Cross-reference with `DEVELOPMENT_PHASES_V1.9.md` for implementation timing
 - Use task descriptions as starting point for detailed design
 
 **For Researchers:**

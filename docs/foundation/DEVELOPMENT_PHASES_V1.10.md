@@ -1,9 +1,24 @@
 # Development Phases & Roadmap
 
 ---
-**Version:** 1.7
-**Last Updated:** 2025-11-28
+**Version:** 1.10
+**Last Updated:** 2025-12-09
 **Status:** ✅ Current
+**Changes in v1.10:**
+- **DEF-P2.5-007 ADDED**: Two-Axis Environment Configuration deferred task (Issue #202, ADR-105, HIGH priority)
+- **DEFERRED DOCS UPDATED**: `docs/utility/PHASE_2.5_DEFERRED_TASKS_V1.0.md` -> V1.1 (7 deferred tasks total)
+- **RATIONALE**: PRECOG_ENV (database) + {MARKET}_MODE (API per market) with safety guardrails
+**Changes in v1.9:**
+- **PHASE 2.5 PROGRESS UPDATE**: Service Runner Script task group marked ✅ complete
+- **SERVICE SUPERVISOR PATTERN**: Implemented ADR-100 (ServiceSupervisor with health monitoring, auto-restart)
+- **ESPN STATUS MAPPING**: Documented ADR-101 (ClassVar dictionaries for database constraint compliance)
+- **DEFERRED TO PHASE 4**: CloudWatch, ELK Stack, Alert Thresholds, Health Dashboard (ADR-102, REQ-OBSERV-003)
+- **DOCUMENTATION**: Added `docs/utility/PHASE_2.5_DEFERRED_TASKS_V1.0.md` with 6 deferred tasks
+**Changes in v1.8:**
+- **PHASE 2.5 ADDED**: New "Live Data Collection" phase between Phase 2 and Phase 3
+- **STRATEGIC DECISION**: Start collecting ESPN and Kalshi data immediately rather than waiting until Phase 5+
+- **RATIONALE**: Collecting training data early provides more data for Phase 3/4 model development
+- **SCOPE**: CLI scheduler commands, service runner script, data validation infrastructure
 **Changes in v1.7:**
 - **PHASE 4 DELIVERABLES**: Added STRATEGY_DEVELOPMENT_GUIDE_V1.0.md to Phase 4 deliverables (strategy design patterns, latency tolerance, data source selection, lag-aware strategy design)
 - **DISTINCTION CLARIFIED**: STRATEGY_DEVELOPMENT_GUIDE is for design patterns; STRATEGY_MANAGER_USER_GUIDE is for CRUD operations
@@ -1138,6 +1153,110 @@ python scripts/validate_phase_start.py --phase 2
 
 ---
 
+## Phase 2.5: Live Data Collection Service (Codename: "Collector")
+
+**Duration:** 1-2 weeks
+**Target:** December 2025
+**Status:** 🟡 In Progress
+**Goal:** Deploy data collection service to gather training data while continuing development
+
+### Strategic Rationale
+
+**Why Phase 2.5 Now?**
+- **Data Accumulation**: Starting collection early means more training data for Phase 3/4 model development
+- **Kalshi Trade History**: Capture manual trades being made now for strategy backtesting
+- **ESPN Game States**: Record live game data for pattern analysis
+- **Infrastructure Validation**: Test scheduler reliability in long-running scenarios
+
+**Why Not Wait Until Phase 5?**
+- 6+ months of additional training data accumulation
+- Discover data quality issues early (while infrastructure fresh in mind)
+- Validate APScheduler, database persistence, WebSocket reliability
+- Build operational confidence before trading goes live
+
+### Dependencies
+- Requires Phase 2: ESPN client, validation module, MarketUpdater class
+- Requires database: Teams seeded (Issue #187)
+
+### Tasks
+
+#### 1. CLI Scheduler Commands (Day 1-2)
+- [  ] `scheduler start` - Start background data polling
+- [  ] `scheduler stop` - Graceful shutdown of scheduler
+- [  ] `scheduler status` - Show running jobs, last poll times
+- [  ] Rich console output with job status tables
+
+#### 2. Service Runner Script (Day 2-3)
+- [✅] `scripts/run_data_collector.py` - Long-running service entry point (ServiceSupervisor pattern)
+- [✅] Graceful signal handling (SIGINT, SIGTERM) - signal handlers + shutdown coordination
+- [✅] Logging to file with rotation - structlog + RotatingFileHandler
+- [✅] Heartbeat/health check - ServiceSupervisor with health monitoring, auto-restart
+- **ADR-100**: Service Supervisor Pattern for Data Collection
+- **REQ-SCHED-002**: Service Supervisor Pattern with health monitoring
+
+#### 3. Kalshi Production Setup (Day 3)
+- [  ] Configure production API credentials in `.env`
+- [  ] Verify production API connectivity
+- [  ] Set up market polling for tracked series (KXNFLGAME, etc.)
+- [  ] Test fill/position fetching from production account
+
+#### 4. Data Validation & Monitoring (Day 4-5)
+- [⏭️] CloudWatch log integration - **DEFERRED** (DEF-P2.5-001, Phase 4)
+- [⏭️] ELK Stack setup - **DEFERRED** (DEF-P2.5-002, Phase 4)
+- [⏭️] Alert threshold configuration - **DEFERRED** (DEF-P2.5-003, Phase 4)
+- [⏭️] Service health dashboard - **DEFERRED** (DEF-P2.5-004, Phase 4)
+- [⏭️] Two-Axis Environment Configuration - **DEFERRED** (DEF-P2.5-007, Phase 2, Issue #202, ADR-105) 🟡 HIGH
+- 📋 **Deferred Task Documentation**: `docs/utility/PHASE_2.5_DEFERRED_TASKS_V1.1.md`
+- **Rationale**: File-based logging sufficient for Phase 2.5 development; production observability for Phase 4
+
+#### 5. Database Seeding Infrastructure (Day 5-6) ✨ NEW
+- [✅] Alembic migration 0003: Composite unique constraint `UNIQUE(team_code, sport)` for multi-sport support
+- [✅] SQL seed files for all 6 sports: NFL (32), NBA (30), NHL (32), WNBA (12), NCAAF (79), NCAAB (89) = 274 teams total
+- [✅] SeedingManager architecture (framework + partial implementation):
+  - [✅] `SeedingConfig` dataclass with category, sport, database selection
+  - [✅] `SeedCategory` enum (teams, venues, historical_elo, team_rankings, archived_games, schedules)
+  - [✅] `SeedingStats` and `SeedingReport` TypedDicts for session tracking
+  - [✅] Venue seeding from ESPN API (operational)
+  - [🔵] Historical game seeding (framework only - needs week iteration logic)
+  - [🔵] Schedule seeding (framework only)
+- [  ] CLI commands: `seed all`, `seed teams`, `seed venues`, `seed verify`
+- **ADR-106**: Database Seeding Manager Architecture (Seeding vs Polling separation)
+- **REQ-DATA-004**: Multi-Sport Team Seeding
+- **REQ-DATA-005**: SeedingManager with configurable categories
+- **Migration**: `src/precog/database/alembic/versions/0003_fix_teams_composite_unique_constraint.py`
+- **Module**: `src/precog/database/seeding/` package (seeding_manager.py, __init__.py)
+
+**Key Design Decision (ADR-106):**
+- **SeedingManager**: Static/historical data (teams, venues, Elo, archived games) - runs on-demand/scheduled
+- **ESPNGamePoller**: Live/current data (in-progress games) - runs continuously (15-60s intervals)
+- No overlap: Seeder handles past seasons, Poller handles current games
+
+### Deliverables
+- [  ] CLI commands: `scheduler start`, `scheduler stop`, `scheduler status`
+- [✅] Service runner script with graceful shutdown (ServiceSupervisor pattern, ADR-100)
+- [  ] Kalshi production configuration
+- [⏭️] Data monitoring/alerting - **DEFERRED** to Phase 4 (CloudWatch/ELK, REQ-OBSERV-003)
+- [  ] Updated main.py with scheduler command group
+
+### Success Criteria
+- [  ] Scheduler runs continuously for 24+ hours without failure
+- [  ] ESPN data ingestion: Game states captured for live games
+- [  ] Kalshi data ingestion: Market prices, positions, fills captured
+- [  ] Graceful restart: Service recovers from crashes/restarts
+- [  ] Logging: Clear audit trail of all data collection events
+- [  ] Zero data loss during service restarts
+
+### Reference
+- GitHub Issue #193: Phase 2.5 - Live Data Collection Service
+- **ADR-103**: BasePoller Unified Design Pattern (Template Method for polling infrastructure)
+- **REQ-SCHED-003**: Base Poller Infrastructure (generic statistics, thread-safe operations)
+- `src/precog/schedulers/base_poller.py`: BasePoller abstract class (shared infrastructure)
+- `src/precog/schedulers/espn_game_poller.py`: ESPNGamePoller class (extends BasePoller)
+- `src/precog/schedulers/kalshi_poller.py`: KalshiMarketPoller class (extends BasePoller)
+- `src/precog/validation/espn_validation.py`: Data validation
+
+---
+
 ## Phase 3: Data Processing (Codename: "Pipeline")
 
 **Duration:** 4 weeks
@@ -1146,7 +1265,7 @@ python scripts/validate_phase_start.py --phase 2
 **Goal:** Implement asynchronous data processing and WebSocket handlers (**NO odds calculation or edge detection in this phase**)
 
 ### Dependencies
-- Requires Phase 2: Live data integration operational
+- Requires Phase 2.5: Live data collection service running and validated
 
 ### ⚠️ BEFORE STARTING - RUN PHASE START VALIDATION
 

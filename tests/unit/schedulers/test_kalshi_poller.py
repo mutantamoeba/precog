@@ -149,9 +149,9 @@ class TestKalshiMarketPollerInit:
 
         stats = poller.stats
         assert stats["polls_completed"] == 0
-        assert stats["markets_fetched"] == 0
-        assert stats["markets_updated"] == 0
-        assert stats["markets_created"] == 0
+        assert stats["items_fetched"] == 0
+        assert stats["items_updated"] == 0
+        assert stats["items_created"] == 0
         assert stats["errors"] == 0
         assert stats["last_poll"] is None
         assert stats["last_error"] is None
@@ -168,7 +168,7 @@ class TestKalshiMarketPollerLifecycle:
     @pytest.mark.unit
     def test_start_sets_enabled(self, poller_with_mock_client):
         """Test that start() sets enabled to True."""
-        with patch.object(poller_with_mock_client, "_poll_all_series"):
+        with patch.object(poller_with_mock_client, "_poll_wrapper"):
             poller_with_mock_client.start()
             assert poller_with_mock_client.enabled is True
             poller_with_mock_client.stop()
@@ -176,7 +176,7 @@ class TestKalshiMarketPollerLifecycle:
     @pytest.mark.unit
     def test_start_twice_raises_error(self, poller_with_mock_client):
         """Test that calling start() twice raises RuntimeError."""
-        with patch.object(poller_with_mock_client, "_poll_all_series"):
+        with patch.object(poller_with_mock_client, "_poll_wrapper"):
             poller_with_mock_client.start()
 
             with pytest.raises(RuntimeError, match="already running"):
@@ -187,7 +187,7 @@ class TestKalshiMarketPollerLifecycle:
     @pytest.mark.unit
     def test_stop_sets_disabled(self, poller_with_mock_client):
         """Test that stop() sets enabled to False."""
-        with patch.object(poller_with_mock_client, "_poll_all_series"):
+        with patch.object(poller_with_mock_client, "_poll_wrapper"):
             poller_with_mock_client.start()
             poller_with_mock_client.stop()
             assert poller_with_mock_client.enabled is False
@@ -201,7 +201,7 @@ class TestKalshiMarketPollerLifecycle:
     @pytest.mark.unit
     def test_stop_closes_kalshi_client(self, poller_with_mock_client):
         """Test that stop() closes the Kalshi client."""
-        with patch.object(poller_with_mock_client, "_poll_all_series"):
+        with patch.object(poller_with_mock_client, "_poll_wrapper"):
             poller_with_mock_client.start()
             poller_with_mock_client.stop()
 
@@ -227,9 +227,9 @@ class TestKalshiMarketPollerPolling:
         ):
             result = poller_with_mock_client.poll_once()
 
-            assert result["markets_fetched"] == 2
-            assert result["markets_created"] == 2
-            assert result["markets_updated"] == 0
+            assert result["items_fetched"] == 2
+            assert result["items_created"] == 2
+            assert result["items_updated"] == 0
 
     @pytest.mark.unit
     def test_poll_once_updates_existing_markets(self, poller_with_mock_client, mock_market_data):
@@ -255,9 +255,9 @@ class TestKalshiMarketPollerPolling:
         ):
             result = poller_with_mock_client.poll_once()
 
-            assert result["markets_fetched"] == 1
-            assert result["markets_updated"] == 1
-            assert result["markets_created"] == 0
+            assert result["items_fetched"] == 1
+            assert result["items_updated"] == 1
+            assert result["items_created"] == 0
 
     @pytest.mark.unit
     def test_poll_once_skips_unchanged_markets(self, poller_with_mock_client, mock_market_data):
@@ -283,7 +283,7 @@ class TestKalshiMarketPollerPolling:
 
             # Should not call update since prices haven't changed
             mock_update.assert_not_called()
-            assert result["markets_updated"] == 0
+            assert result["items_updated"] == 0
 
     @pytest.mark.unit
     def test_poll_updates_stats(self, poller_with_mock_client, mock_market_data_list):
@@ -294,12 +294,12 @@ class TestKalshiMarketPollerPolling:
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
             patch("precog.schedulers.kalshi_poller.create_market", return_value="MKT-123"),
         ):
-            poller_with_mock_client._poll_all_series()
+            poller_with_mock_client._poll_wrapper()
 
             stats = poller_with_mock_client.stats
             assert stats["polls_completed"] == 1
-            assert stats["markets_fetched"] == 2
-            assert stats["markets_created"] == 2
+            assert stats["items_fetched"] == 2
+            assert stats["items_created"] == 2
             assert stats["last_poll"] is not None
 
     @pytest.mark.unit
@@ -308,7 +308,7 @@ class TestKalshiMarketPollerPolling:
         poller_with_mock_client.kalshi_client.get_markets.side_effect = Exception("API Error")
 
         # Should not raise, just log error
-        poller_with_mock_client._poll_all_series()
+        poller_with_mock_client._poll_wrapper()
 
         stats = poller_with_mock_client.stats
         assert stats["errors"] == 1
@@ -452,7 +452,7 @@ class TestKalshiPollerFactoryFunctions:
 
             result = run_single_kalshi_poll(["KXNFLGAME"], environment="demo")
 
-            assert "markets_fetched" in result
+            assert "items_fetched" in result
             mock_kalshi_client.close.assert_called_once()
 
 

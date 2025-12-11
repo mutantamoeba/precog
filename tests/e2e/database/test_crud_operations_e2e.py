@@ -43,9 +43,14 @@ from precog.database.crud_operations import (
 
 @pytest.fixture
 def setup_e2e_teams(db_pool, clean_test_data):
-    """Create realistic team data for E2E tests."""
+    """Create realistic team data for E2E tests.
+
+    Note: Uses E2E-prefixed team codes to avoid conflicts with seed data.
+    Seed file 001_nfl_teams_initial_elo.sql already inserts 'KC', 'LV', etc.
+    """
     with get_cursor(commit=True) as cur:
         # Note: Using columns from migration 010 schema (not migration 028 enhancements)
+        # E2E-prefixed codes avoid (team_code, sport) unique constraint violations
         cur.execute(
             """
             INSERT INTO teams (
@@ -53,19 +58,19 @@ def setup_e2e_teams(db_pool, clean_test_data):
                 espn_team_id, conference, division, sport, current_elo_rating
             )
             VALUES
-                (88001, 'KC', 'Chiefs', '12', 'AFC', 'West', 'nfl', 1650),
-                (88002, 'LV', 'Raiders', '13', 'AFC', 'West', 'nfl', 1480),
-                (88003, 'DET', 'Lions', '8', 'NFC', 'North', 'nfl', 1580),
-                (88004, 'CHI', 'Bears', '3', 'NFC', 'North', 'nfl', 1420)
+                (88001, 'E2E-KC', 'E2E Chiefs', 'E2E-12', 'AFC', 'West', 'nfl', 1650),
+                (88002, 'E2E-LV', 'E2E Raiders', 'E2E-13', 'AFC', 'West', 'nfl', 1480),
+                (88003, 'E2E-DET', 'E2E Lions', 'E2E-8', 'NFC', 'North', 'nfl', 1580),
+                (88004, 'E2E-CHI', 'E2E Bears', 'E2E-3', 'NFC', 'North', 'nfl', 1420)
             ON CONFLICT (team_id) DO NOTHING
         """
         )
 
     yield {
-        "kc": {"team_id": 88001, "espn_team_id": "12"},
-        "lv": {"team_id": 88002, "espn_team_id": "13"},
-        "det": {"team_id": 88003, "espn_team_id": "8"},
-        "chi": {"team_id": 88004, "espn_team_id": "3"},
+        "kc": {"team_id": 88001, "espn_team_id": "E2E-12"},
+        "lv": {"team_id": 88002, "espn_team_id": "E2E-13"},
+        "det": {"team_id": 88003, "espn_team_id": "E2E-8"},
+        "chi": {"team_id": 88004, "espn_team_id": "E2E-3"},
     }
 
     # Cleanup

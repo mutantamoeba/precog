@@ -112,7 +112,7 @@ class TestKalshiMarketPollerChaos:
             # Should not crash - may raise exception which is caught
             try:
                 result = poller.poll_once()
-                assert "markets_fetched" in result
+                assert "items_fetched" in result
             except Exception:
                 pass  # Some malformed data may cause errors, that's expected
 
@@ -158,7 +158,7 @@ class TestKalshiMarketPollerChaos:
         # Run multiple poll cycles with large data
         for _ in range(20):
             result = poller.poll_once()
-            assert result["markets_fetched"] == 500
+            assert result["items_fetched"] == 500
 
         # Should complete without OOM or issues
         stats = poller.stats

@@ -142,7 +142,7 @@ class TestKalshiMarketPollerRace:
                 return
             while not stop_event.is_set():
                 stats = poller.stats
-                stats_values.append(stats["markets_fetched"])
+                stats_values.append(stats["items_fetched"])
 
         with ThreadPoolExecutor(max_workers=10) as executor:
             futures = []
