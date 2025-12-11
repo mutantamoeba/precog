@@ -1,9 +1,9 @@
 # Phase 2.5 Deferred Tasks
 
 ---
-**Version:** 1.1
+**Version:** 1.2
 **Created:** 2025-12-07
-**Last Updated:** 2025-12-09
+**Last Updated:** 2025-12-10
 **Phase:** Phase 2.5 (Live Data Collection)
 **Status:** Active - Tasks Deferred to Future Phases
 ---
@@ -23,6 +23,7 @@ This document tracks tasks identified during Phase 2.5 (Live Data Collection) th
 | DEF-P2.5-005 | NCAAW Team Seeding | Low | Phase 3 | 2-3 |
 | DEF-P2.5-006 | Rate Limit YAML Integration | Low | Phase 3 | 2-4 |
 | DEF-P2.5-007 | Two-Axis Environment Configuration | High | Phase 2 | 8-12 |
+| DEF-P2.5-008 | PgBouncer Connection Pooling for Cloud | Medium | Phase 5+ | 4-6 |
 
 ---
 
@@ -221,6 +222,80 @@ POLYMARKET_MODE=live     # -> uses production Polymarket API (future)
 
 ---
 
+### DEF-P2.5-008: PgBouncer Connection Pooling for Cloud
+
+**Priority:** Medium
+**Target Phase:** Phase 5+ (Cloud Migration)
+**Estimated Hours:** 4-6
+**GitHub Issue:** #211
+**Reference:** ADR-008 (PostgreSQL Connection Strategy)
+
+**Description:**
+Implement PgBouncer connection pooling for cloud deployment to handle multiple app instances, background workers, and high-concurrency trading operations.
+
+**Current State:**
+- Local development uses `psycopg2.pool.SimpleConnectionPool` (minconn=2, maxconn=25)
+- App-level pooling sufficient for single-instance development
+- Connection pool exhaustion was a test isolation issue, not a fundamental pooling limitation
+- Current architecture is already PgBouncer-ready (centralized connection management in `connection.py`)
+
+**Why PgBouncer for Cloud:**
+```
+Local Dev (now)              Cloud (future)
++-------------+              +-------------+
+| App (1-2)   |              | App (N)     | <- Multiple instances
+| maxconn=25  |              | Workers     | <- Celery/background jobs
++------+------+              +------+------+
+       |                            |
+       | (direct)                   | (via PgBouncer)
+       |                            v
+       |                     +-------------+
+       |                     | PgBouncer   | <- Connection multiplexing
+       |                     | pool_mode=  |
+       |                     | transaction |
+       |                     +------+------+
+       |                            |
+       v                            v
++-------------+              +-------------+
+| PostgreSQL  |              | PostgreSQL  |
+| local       |              | (RDS/Cloud) |
++-------------+              +-------------+
+```
+
+**Implementation Plan:**
+1. **Evaluate Cloud Provider Options First (1h)**
+   - AWS RDS Proxy (managed connection pooling)
+   - Azure PostgreSQL Flexible Server (built-in PgBouncer)
+   - Google Cloud SQL (connection pooling available)
+   - Supabase/Neon (built-in pooling)
+
+2. **If Self-Managed PgBouncer Required (3-5h)**
+   - Docker Compose configuration for PgBouncer service
+   - Transaction pooling mode (`pool_mode = transaction`)
+   - Update `DB_HOST` to point to PgBouncer, not PostgreSQL directly
+   - Configure `max_client_conn` and `default_pool_size`
+   - No app code changes needed (`connection.py` abstracts this)
+
+3. **Testing & Validation (1h)**
+   - Load testing with multiple simulated app instances
+   - Verify connection multiplexing works correctly
+   - Test failover and connection draining
+
+**Rationale for Deferral:**
+- Local development doesn't need PgBouncer (app-level pooling sufficient)
+- Cloud providers often include managed connection pooling
+- No multiple app instances yet (PgBouncer benefits scale)
+- Focus on core trading features before infrastructure optimization
+
+**Acceptance Criteria:**
+- [ ] Cloud provider connection pooling options evaluated
+- [ ] Either managed pooling adopted OR self-managed PgBouncer configured
+- [ ] Multiple app instances can share PostgreSQL efficiently
+- [ ] Connection pool metrics visible in monitoring
+- [ ] Zero application code changes required (abstraction preserved)
+
+---
+
 ## Cross-References
 
 - **ADR-100:** Service Supervisor Pattern
@@ -238,6 +313,7 @@ POLYMARKET_MODE=live     # -> uses production Polymarket API (future)
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.2 | 2025-12-10 | Added DEF-P2.5-008: PgBouncer Connection Pooling for Cloud |
 | 1.1 | 2025-12-09 | Added DEF-P2.5-007: Two-Axis Environment Configuration (Issue #202) |
 | 1.0 | 2025-12-07 | Initial creation with 6 deferred tasks |
 
