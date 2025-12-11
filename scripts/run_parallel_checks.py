@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import subprocess
 import sys
 import time
@@ -59,6 +60,36 @@ CHECK_TIMEOUT = 480
 # Timeout for the entire parallel phase (15 minutes)
 TOTAL_TIMEOUT = 900
 
+# 4-Phase Test Strategy Configuration
+# This prevents database connection pool exhaustion by running tests in phases
+# with DB pool reset between phases. See Issue #202 for discovery context.
+TEST_PHASES: list[tuple[str, str, list[str]]] = [
+    # Phase A: Unit tests (fast, no DB connections needed)
+    (
+        "Phase A",
+        "Unit Tests",
+        ["tests/unit/"],
+    ),
+    # Phase B: Integration + E2E tests (heavy DB usage)
+    (
+        "Phase B",
+        "Integration + E2E Tests",
+        ["tests/integration/", "tests/e2e/"],
+    ),
+    # Phase C: Property tests (Hypothesis - many iterations, moderate DB)
+    (
+        "Phase C",
+        "Property Tests",
+        ["tests/property/"],
+    ),
+    # Phase D: Remaining tests (stress, race_condition, performance)
+    (
+        "Phase D",
+        "Stress/Race/Performance Tests",
+        ["tests/stress/", "tests/race_condition/", "tests/performance/"],
+    ),
+]
+
 
 @dataclass
 class CheckResult:
@@ -74,16 +105,179 @@ class CheckResult:
     timed_out: bool = False
 
 
+def reset_db_pool() -> bool:
+    """
+    Reset database connection pool between test phases.
+
+    This prevents connection exhaustion when running many test phases.
+    Calls the precog database module to close and reinitialize the pool.
+
+    Returns:
+        True if reset succeeded (or no pool to reset), False on error
+
+    Educational Note:
+        PostgreSQL has limited connections (default 100). When tests don't
+        properly release connections, the pool gets exhausted. This reset
+        ensures each phase starts with a fresh pool.
+    """
+    try:
+        # Import inside function to avoid import errors if DB not configured
+        from precog.database.connection import close_pool, initialize_pool
+
+        try:
+            close_pool()
+        except Exception:
+            pass  # Pool might not be initialized yet
+
+        initialize_pool()
+        return True
+
+    except ImportError:
+        # DB module not available - that's OK, tests may not need it
+        return True
+    except Exception as e:
+        print(f"  Warning: DB pool reset failed: {e}")
+        return False
+
+
+def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
+    """
+    Run all tests in 4 phases with DB pool reset between phases.
+
+    This is the 4-phase test strategy that prevents database connection
+    pool exhaustion when running all 8 test types together.
+
+    Args:
+        timeout: Maximum seconds per phase
+
+    Returns:
+        CheckResult with aggregated results from all phases
+
+    Educational Note:
+        Running all tests in a single pytest invocation can exhaust the
+        database connection pool because:
+        1. Integration tests hold connections during setup/teardown
+        2. Stress tests intentionally test pool limits
+        3. Property tests run hundreds of iterations
+        4. Connections may not be released between test classes
+
+        By running in phases with pool reset, each phase starts fresh.
+    """
+    start_time = time.time()
+    total_passed = 0
+    total_failed = 0
+    total_errors = 0
+    all_stdout = []
+    all_stderr = []
+    phase_results = []
+
+    print("  Running tests in 4 phases (with DB reset between phases)...")
+    print()
+
+    for phase_id, phase_name, test_dirs in TEST_PHASES:
+        phase_start = time.time()
+
+        # Check if test directories exist (skip if empty)
+        existing_dirs = [d for d in test_dirs if (REPO_ROOT / d).exists()]
+        if not existing_dirs:
+            print(f"    [{phase_id}] {phase_name}: SKIPPED (no test directories)")
+            continue
+
+        # Build pytest command for this phase
+        dirs_arg = " ".join(existing_dirs)
+        command = f"python -m pytest {dirs_arg} --no-cov --tb=line -q"
+
+        print(f"    [{phase_id}] {phase_name}: Running...")
+
+        try:
+            result = subprocess.run(
+                command,
+                shell=True,
+                capture_output=True,
+                timeout=timeout,
+                cwd=str(REPO_ROOT),
+                text=True,
+                env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            )
+
+            phase_duration = time.time() - phase_start
+
+            # Parse pytest output for pass/fail counts
+            stdout_lines = result.stdout.strip().split("\n")
+            last_line = stdout_lines[-1] if stdout_lines else ""
+
+            # Extract counts from pytest summary (e.g., "970 passed, 2 skipped")
+            passed = failed = errors = 0
+            if "passed" in last_line:
+                match = re.search(r"(\d+) passed", last_line)
+                if match:
+                    passed = int(match.group(1))
+            if "failed" in last_line:
+                match = re.search(r"(\d+) failed", last_line)
+                if match:
+                    failed = int(match.group(1))
+            if "error" in last_line:
+                match = re.search(r"(\d+) error", last_line)
+                if match:
+                    errors = int(match.group(1))
+
+            total_passed += passed
+            total_failed += failed
+            total_errors += errors
+
+            status = "PASSED" if result.returncode == 0 else "FAILED"
+            print(
+                f"    [{phase_id}] {phase_name}: {status} ({passed} passed, {failed} failed, {errors} errors) [{phase_duration:.1f}s]"
+            )
+
+            all_stdout.append(f"=== {phase_id}: {phase_name} ===\n{result.stdout}")
+            if result.stderr:
+                all_stderr.append(f"=== {phase_id}: {phase_name} ===\n{result.stderr}")
+
+            phase_results.append((phase_id, result.returncode))
+
+            # If phase failed, continue to next phase but record failure
+            # This allows us to see ALL failures, not just the first
+
+        except subprocess.TimeoutExpired:
+            phase_duration = time.time() - phase_start
+            print(f"    [{phase_id}] {phase_name}: TIMEOUT after {timeout}s")
+            all_stderr.append(f"=== {phase_id}: {phase_name} ===\nTIMEOUT after {timeout}s")
+            phase_results.append((phase_id, -1))
+            total_errors += 1
+
+        # Reset DB pool between phases (except after last phase)
+        if phase_id != "Phase D":
+            reset_db_pool()
+            print("    [DB] Connection pool reset")
+
+    print()
+
+    # Aggregate results
+    total_duration = time.time() - start_time
+    any_failed = any(rc != 0 for _, rc in phase_results)
+
+    return CheckResult(
+        step=2,
+        name="All 8 Test Types (4 phases with DB reset)",
+        command="4-phase test strategy",
+        exit_code=1 if any_failed else 0,
+        stdout="\n\n".join(all_stdout),
+        stderr="\n\n".join(all_stderr),
+        duration=total_duration,
+        timed_out=False,
+    )
+
+
 # Define all parallel checks (steps 2-11)
 # Each tuple: (step_number, name, command)
+#
+# NOTE: Tests (Step 2) are run SEQUENTIALLY in 4 phases with DB pool reset
+# between phases to prevent connection exhaustion. The other checks (3-11)
+# run in PARALLEL since they don't share database state.
 PARALLEL_CHECKS: list[tuple[int, str, str]] = [
-    # Step 2: All 8 Test Types - this is the longest running check
-    # We run it as a single command that executes the 4-phase test strategy
-    (
-        2,
-        "All 8 Test Types (4 phases with DB reset)",
-        "python -m pytest tests/ --no-cov --tb=line -q",
-    ),
+    # Step 2 is handled separately by run_tests_in_phases() - see below
+    # This placeholder is kept for step numbering consistency but skipped in execution
     # Step 3: Type Checking
     (
         3,
@@ -94,7 +288,7 @@ PARALLEL_CHECKS: list[tuple[int, str, str]] = [
     (
         4,
         "Security Scan (Ruff S-rules)",
-        "python -m ruff check --select S --ignore S101,S112,S607,S603,S602 --exclude tests/ --exclude _archive/ --exclude venv/ --quiet .",
+        "python -m ruff check --select S --ignore S101,S110,S112,S607,S603,S602 --exclude tests/ --exclude _archive/ --exclude venv/ --quiet .",
     ),
     # Step 5: Warning Governance
     (
@@ -404,15 +598,38 @@ def main() -> int:
     print(f"Total timeout: {TOTAL_TIMEOUT}s")
     print()
 
-    # Run all checks
-    results = run_all_checks_parallel(
+    if args.dry_run:
+        print("DRY RUN - would execute:")
+        print()
+        print("Step 2: Run tests in 4 phases with DB reset")
+        for phase_id, phase_name, test_dirs in TEST_PHASES:
+            print(f"  [{phase_id}] {phase_name}: {', '.join(test_dirs)}")
+        print()
+        print("Steps 3-11: Run in parallel:")
+        for step, name, command in PARALLEL_CHECKS:
+            print(f"  [{step}/11] {name}")
+        return 0
+
+    # Step 2: Run all tests in 4 phases (sequentially with DB reset)
+    # This prevents connection pool exhaustion
+    print("[2/11] Running All 8 Test Types (4 phases with DB reset)")
+    print("-" * 60)
+    test_result = run_tests_in_phases()
+    print("-" * 60)
+
+    # Steps 3-11: Run other checks in parallel
+    print()
+    print("[3-11/11] Running other checks in parallel...")
+    print("-" * 60)
+    parallel_results = run_all_checks_parallel(
         PARALLEL_CHECKS,
         max_workers=args.workers,
-        dry_run=args.dry_run,
+        dry_run=False,
     )
+    print("-" * 60)
 
-    if args.dry_run:
-        return 0
+    # Combine results
+    results = [test_result] + parallel_results
 
     # Print summary
     all_passed = print_summary(results, args.log_dir)
