@@ -49,6 +49,11 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2 import extras, pool
 
+from precog.config.environment import (
+    AppEnvironment,
+    get_app_environment,
+    get_database_name,
+)
 from precog.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -59,7 +64,7 @@ load_dotenv()
 # Connection pool (global singleton)
 _connection_pool: pool.SimpleConnectionPool | None = None
 
-# Valid environments
+# Valid environments (kept for backwards compatibility)
 VALID_ENVIRONMENTS = ("dev", "test", "staging", "prod")
 
 
@@ -67,7 +72,11 @@ def get_environment() -> str:
     """
     Determine current database environment.
 
-    Priority:
+    This is a wrapper around the new centralized environment system
+    in precog.config.environment. It returns short environment names
+    for backwards compatibility with existing code.
+
+    Priority (handled by get_app_environment):
     1. PRECOG_ENV environment variable (explicit)
     2. DB_NAME environment variable (inferred from name)
     3. Default to 'dev' (safe default)
@@ -84,24 +93,20 @@ def get_environment() -> str:
         Environment detection ensures you don't accidentally run
         destructive operations against production. Always verify
         the environment before running migrations or bulk deletes.
-    """
-    # Explicit environment selection (highest priority)
-    env = os.getenv("PRECOG_ENV")
-    if env:
-        if env not in VALID_ENVIRONMENTS:
-            msg = f"Invalid PRECOG_ENV: {env}. Must be one of {VALID_ENVIRONMENTS}"
-            raise ValueError(msg)
-        return env
 
-    # Infer from database name
-    db_name = os.getenv("DB_NAME", "precog_dev")
-    if "test" in db_name:
-        return "test"
-    if "staging" in db_name:
-        return "staging"
-    if "prod" in db_name:
-        return "prod"
-    return "dev"
+        This function now delegates to the centralized two-axis
+        environment system. See: docs/guides/ENVIRONMENT_CONFIGURATION_GUIDE_V1.0.md
+    """
+    app_env = get_app_environment()
+
+    # Map AppEnvironment enum to short string for backwards compatibility
+    mapping = {
+        AppEnvironment.DEVELOPMENT: "dev",
+        AppEnvironment.TEST: "test",
+        AppEnvironment.STAGING: "staging",
+        AppEnvironment.PRODUCTION: "prod",
+    }
+    return mapping[app_env]
 
 
 def require_environment(required: str) -> None:
@@ -253,7 +258,8 @@ def initialize_pool(
     maxconn = maxconn if maxconn is not None else int(os.getenv("DB_POOL_MAX_CONN", "25"))
     host = host or os.getenv("DB_HOST", "localhost")
     port = port or int(os.getenv("DB_PORT", "5432"))
-    database = database or os.getenv("DB_NAME", "precog_dev")
+    # Use centralized database name resolution (respects PRECOG_ENV)
+    database = database or get_database_name()
     user = user or os.getenv("DB_USER", "postgres")
     password = password or os.getenv("DB_PASSWORD")
 

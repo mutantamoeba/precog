@@ -2815,19 +2815,23 @@ class TestConfigValidate:
 
 
 class TestShowEnvironment:
-    """Test env command for displaying environment configuration.
+    """Test env command for displaying two-axis environment configuration.
 
-    Tests the new 'env' command added in Issue #161 for database
-    environment safety guards.
+    Tests the 'env' command updated in Issue #202 for two-axis environment
+    configuration (Application Environment + Market API Mode).
 
     Related:
-        - Issue #161: Database Environment Safety Guards
-        - docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
+        - Issue #202: Two-Axis Environment Configuration
+        - docs/guides/ENVIRONMENT_CONFIGURATION_GUIDE_V1.0.md
         - main.py: show_environment() function
     """
 
-    @patch("precog.database.connection.get_environment")
-    def test_env_shows_test_environment(self, mock_get_env, runner):
+    @patch("main.load_environment_config")
+    @patch("main.get_market_mode")
+    @patch("main.get_app_environment")
+    def test_env_shows_test_environment(
+        self, mock_get_app_env, mock_get_market_mode, mock_load_config, runner
+    ):
         """Test env command shows test environment correctly.
 
         Verifies:
@@ -2835,7 +2839,22 @@ class TestShowEnvironment:
             - Displays 'test' environment
             - Shows low risk level
         """
-        mock_get_env.return_value = "test"
+        from precog.config.environment import (
+            AppEnvironment,
+            EnvironmentConfig,
+            MarketMode,
+        )
+
+        mock_get_app_env.return_value = AppEnvironment.TEST
+        mock_get_market_mode.return_value = MarketMode.DEMO
+
+        # Mock the config for combination safety check
+        mock_config = EnvironmentConfig(
+            app_env=AppEnvironment.TEST,
+            kalshi_mode=MarketMode.DEMO,
+            database_name="precog_test",
+        )
+        mock_load_config.return_value = mock_config
 
         result = runner.invoke(app, ["env"])
 
@@ -2844,44 +2863,84 @@ class TestShowEnvironment:
         assert "test" in output
         assert "low" in output  # Risk level
 
-    @patch("precog.database.connection.get_environment")
-    def test_env_shows_dev_environment(self, mock_get_env, runner):
+    @patch("main.load_environment_config")
+    @patch("main.get_market_mode")
+    @patch("main.get_app_environment")
+    def test_env_shows_dev_environment(
+        self, mock_get_app_env, mock_get_market_mode, mock_load_config, runner
+    ):
         """Test env command shows dev environment correctly."""
-        mock_get_env.return_value = "dev"
+        from precog.config.environment import (
+            AppEnvironment,
+            EnvironmentConfig,
+            MarketMode,
+        )
+
+        mock_get_app_env.return_value = AppEnvironment.DEVELOPMENT
+        mock_get_market_mode.return_value = MarketMode.DEMO
+
+        mock_config = EnvironmentConfig(
+            app_env=AppEnvironment.DEVELOPMENT,
+            kalshi_mode=MarketMode.DEMO,
+            database_name="precog_dev",
+        )
+        mock_load_config.return_value = mock_config
 
         result = runner.invoke(app, ["env"])
 
         assert result.exit_code == 0
         output = strip_ansi(result.stdout).lower()
-        assert "dev" in output
+        assert "development" in output  # Full name in two-axis model
         assert "low" in output  # Risk level
 
-    @patch("precog.database.connection.get_environment")
-    def test_env_shows_prod_warning(self, mock_get_env, runner):
+    @patch("main.load_environment_config")
+    @patch("main.get_market_mode")
+    @patch("main.get_app_environment")
+    def test_env_shows_prod_warning(
+        self, mock_get_app_env, mock_get_market_mode, mock_load_config, runner
+    ):
         """Test env command shows warning for prod environment.
 
         Verifies:
             - Exit code 0
-            - Displays 'prod' environment
+            - Displays 'production' environment
             - Shows CRITICAL risk level
             - Shows warning message
         """
-        mock_get_env.return_value = "prod"
+        from precog.config.environment import (
+            AppEnvironment,
+            EnvironmentConfig,
+            MarketMode,
+        )
+
+        mock_get_app_env.return_value = AppEnvironment.PRODUCTION
+        mock_get_market_mode.return_value = MarketMode.LIVE
+
+        mock_config = EnvironmentConfig(
+            app_env=AppEnvironment.PRODUCTION,
+            kalshi_mode=MarketMode.LIVE,
+            database_name="precog_prod",
+        )
+        mock_load_config.return_value = mock_config
 
         result = runner.invoke(app, ["env"])
 
         assert result.exit_code == 0
         output = strip_ansi(result.stdout).lower()
-        assert "prod" in output
+        assert "production" in output  # Full name in two-axis model
         assert "critical" in output  # Risk level
         assert "warning" in output  # Warning message
 
-    @patch("precog.database.connection.get_environment")
+    @patch("main.load_environment_config")
+    @patch("main.get_market_mode")
+    @patch("main.get_app_environment")
     @patch.dict(
         "os.environ",
         {"PRECOG_ENV": "test", "DB_NAME": "precog_test", "DB_PASSWORD": "secret123"},
     )
-    def test_env_verbose_shows_env_vars(self, mock_get_env, runner):
+    def test_env_verbose_shows_env_vars(
+        self, mock_get_app_env, mock_get_market_mode, mock_load_config, runner
+    ):
         """Test env command with --verbose shows environment variables.
 
         Verifies:
@@ -2890,7 +2949,21 @@ class TestShowEnvironment:
             - Displays DB_NAME variable
             - Hides password (shows hidden/masked when DB_PASSWORD is set)
         """
-        mock_get_env.return_value = "test"
+        from precog.config.environment import (
+            AppEnvironment,
+            EnvironmentConfig,
+            MarketMode,
+        )
+
+        mock_get_app_env.return_value = AppEnvironment.TEST
+        mock_get_market_mode.return_value = MarketMode.DEMO
+
+        mock_config = EnvironmentConfig(
+            app_env=AppEnvironment.TEST,
+            kalshi_mode=MarketMode.DEMO,
+            database_name="precog_test",
+        )
+        mock_load_config.return_value = mock_config
 
         result = runner.invoke(app, ["env", "--verbose"])
 

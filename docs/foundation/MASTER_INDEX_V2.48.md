@@ -480,6 +480,7 @@ YAML configuration files and configuration guides.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **CONFIGURATION_GUIDE_V3.1.md** | ✅ | v3.1 | `/docs/guides/` | 0.5 | Phases 1-10 | 🟡 High | **MOVED** from /configuration/ - Comprehensive update with all 7 YAMLs, versioning, method abstraction |
+| **ENVIRONMENT_CONFIGURATION_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1 | Phases 1-10 | 🔴 Critical | Two-axis environment model: PRECOG_ENV (app env) + KALSHI_MODE (API mode) with safety guardrails |
 | **system.yaml** | ✅ | v1.0 | `/config/` | 1 | Phases 1-10 | 🔴 Critical | **UPDATED** - Added comprehensive notifications config (email, SMS, Slack, webhook, alert_routing) |
 | **trading.yaml** | ✅ | v1.0 | `/config/` | 1 | Phases 1-10 | 🔴 Critical | Trading parameters, Kelly fractions, DECIMAL examples |
 | **probability_models.yaml** | ✅ | v2.0 | `/config/` | 4 | Phases 4-9 | 🔴 Critical | Versioning support, immutable configs, educational docstrings - UPDATED Phase 0.5 |

@@ -404,6 +404,13 @@ from rich.table import Table
 
 # Local imports
 from precog.api_connectors.kalshi_client import KalshiClient
+from precog.config.environment import (
+    AppEnvironment,
+    MarketMode,
+    get_app_environment,
+    get_market_mode,
+    load_environment_config,
+)
 
 # Phase 1.5: Database CRUD operations
 from precog.database.crud_operations import (
@@ -438,6 +445,51 @@ console = Console()
 
 # Initialize logger
 logger = get_logger(__name__)
+
+
+@app.callback()
+def main_callback(
+    app_env: str | None = typer.Option(
+        None,
+        "--app-env",
+        help="Override application environment (dev, test, staging, prod). Sets PRECOG_ENV.",
+        envvar="PRECOG_ENV",
+    ),
+) -> None:
+    """
+    Precog CLI - Kalshi trading operations and data management.
+
+    Global Options:
+        --app-env: Override the application environment (database selection).
+                   Valid values: dev, test, staging, prod.
+                   Can also be set via PRECOG_ENV environment variable.
+
+    The CLI uses a two-axis environment model:
+        1. Application Environment (--app-env / PRECOG_ENV): Controls which database
+           to use (precog_dev, precog_test, precog_staging, precog_prod).
+        2. Market Mode (KALSHI_MODE): Controls API endpoints (demo/live).
+
+    Safety:
+        - Test environment NEVER uses live API (blocked at startup)
+        - Production environment ALWAYS uses live API (enforced)
+        - Dev/staging with live API shows warning
+
+    Reference: docs/guides/ENVIRONMENT_CONFIGURATION_GUIDE_V1.0.md
+    Related: Issue #202 (Two-Axis Environment Configuration)
+    """
+    if app_env is not None:
+        # Override PRECOG_ENV in current process
+        # This affects all subsequent environment lookups
+        try:
+            # Validate the environment value
+            validated_env = AppEnvironment.from_string(app_env)
+            os.environ["PRECOG_ENV"] = validated_env.value
+            logger.debug(f"Application environment set to: {validated_env.value}")
+        except ValueError:
+            cli_error(
+                f"Invalid --app-env value: '{app_env}'",
+                hint="Valid options: dev, test, staging, prod",
+            )
 
 
 def cli_error(message: str, hint: str | None = None) -> NoReturn:
@@ -1890,82 +1942,144 @@ def show_environment(
     ),
 ) -> None:
     """
-    Display current database environment configuration.
+    Display current two-axis environment configuration.
 
-    Shows the detected environment (dev, test, staging, prod) based on
-    PRECOG_ENV environment variable or DB_NAME inference. Use this to
-    verify which database you're connected to before running commands.
+    Shows both axes of the environment model:
+        1. Application Environment (PRECOG_ENV): Controls database selection
+        2. Market Mode (KALSHI_MODE): Controls API endpoints (demo/live)
+
+    The two-axis model allows independent configuration of:
+        - Internal infrastructure (database, logging, safety guards)
+        - External API connections (demo vs live prediction markets)
 
     Environment Detection Priority:
-        1. PRECOG_ENV environment variable (explicit)
-        2. DB_NAME environment variable (inferred from name)
-        3. Default to 'dev' (safe default)
+        1. --app-env CLI option (highest priority)
+        2. PRECOG_ENV environment variable
+        3. DB_NAME inference (from database name)
+        4. Default to 'development' (safe default)
 
     Example:
         python main.py env
         python main.py env --verbose
+        python main.py --app-env staging env
 
-    See: docs/guides/DATABASE_ENVIRONMENT_STRATEGY_V1.0.md
+    Reference: docs/guides/ENVIRONMENT_CONFIGURATION_GUIDE_V1.0.md
+    Related: Issue #202 (Two-Axis Environment Configuration)
     """
-    import os
-
-    from precog.database.connection import get_environment
-
     if verbose:
         logger.info("Verbose mode enabled")
 
-    # Get current environment
-    current_env = get_environment()
+    # Get current environment using the two-axis system
+    app_env = get_app_environment()
+    kalshi_mode = get_market_mode("kalshi")
 
-    # Environment colors and risk levels
-    env_info = {
-        "dev": {"color": "green", "risk": "Low", "desc": "Local development"},
-        "test": {"color": "blue", "risk": "Low", "desc": "Automated testing"},
-        "staging": {"color": "yellow", "risk": "Medium", "desc": "Pre-production validation"},
-        "prod": {"color": "red", "risk": "CRITICAL", "desc": "Live trading"},
+    # Environment colors and risk levels (Axis 1: Application Environment)
+    app_env_info = {
+        AppEnvironment.DEVELOPMENT: {"color": "green", "risk": "Low", "desc": "Local development"},
+        AppEnvironment.TEST: {"color": "blue", "risk": "Low", "desc": "Automated testing"},
+        AppEnvironment.STAGING: {
+            "color": "yellow",
+            "risk": "Medium",
+            "desc": "Pre-production validation",
+        },
+        AppEnvironment.PRODUCTION: {"color": "red", "risk": "CRITICAL", "desc": "Live trading"},
     }
 
-    info = env_info.get(current_env, {"color": "white", "risk": "Unknown", "desc": "Unknown"})
+    # Market mode info (Axis 2: Market API Mode)
+    market_mode_info = {
+        MarketMode.DEMO: {"color": "green", "risk": "None", "desc": "Demo API (fake money)"},
+        MarketMode.LIVE: {"color": "red", "risk": "FINANCIAL", "desc": "Live API (real money!)"},
+    }
 
-    # Display environment info
-    console.print()
-    console.print(
-        f"[bold {info['color']}]Current Environment: {current_env.upper()}[/bold {info['color']}]"
+    app_info = app_env_info.get(app_env, {"color": "white", "risk": "Unknown", "desc": "Unknown"})
+    market_info = market_mode_info.get(
+        kalshi_mode, {"color": "white", "risk": "Unknown", "desc": "Unknown"}
     )
+
+    # Display header
+    console.print()
+    console.print("[bold]Two-Axis Environment Configuration[/bold]")
     console.print()
 
-    # Create environment table
-    table = Table(title="Environment Configuration")
-    table.add_column("Setting", style="cyan", no_wrap=True)
-    table.add_column("Value", style="white")
+    # Create Axis 1 table: Application Environment
+    table1 = Table(title="Axis 1: Application Environment (Database)")
+    table1.add_column("Setting", style="cyan", no_wrap=True)
+    table1.add_column("Value", style="white")
 
-    table.add_row("Environment", f"[{info['color']}]{current_env}[/{info['color']}]")
-    table.add_row("Risk Level", f"[{info['color']}]{info['risk']}[/{info['color']}]")
-    table.add_row("Description", info["desc"])
+    table1.add_row("Environment", f"[{app_info['color']}]{app_env.value}[/{app_info['color']}]")
+    table1.add_row(
+        "Database", f"[{app_info['color']}]{app_env.database_name}[/{app_info['color']}]"
+    )
+    table1.add_row("Risk Level", f"[{app_info['color']}]{app_info['risk']}[/{app_info['color']}]")
+    table1.add_row("Description", app_info["desc"])
+
+    console.print(table1)
+    console.print()
+
+    # Create Axis 2 table: Market Mode
+    table2 = Table(title="Axis 2: Market API Mode (Kalshi)")
+    table2.add_column("Setting", style="cyan", no_wrap=True)
+    table2.add_column("Value", style="white")
+
+    table2.add_row("Mode", f"[{market_info['color']}]{kalshi_mode.value}[/{market_info['color']}]")
+    table2.add_row(
+        "Risk Level", f"[{market_info['color']}]{market_info['risk']}[/{market_info['color']}]"
+    )
+    table2.add_row("Description", market_info["desc"])
+
+    console.print(table2)
+    console.print()
+
+    # Validate combination and show safety status
+    try:
+        config = load_environment_config(validate=True)
+        safety = config.get_combination_safety()
+
+        safety_colors = {
+            "allowed": "green",
+            "warning": "yellow",
+            "blocked": "red",
+        }
+        safety_color = safety_colors.get(safety.value, "white")
+        console.print(
+            f"[bold]Combination Safety:[/bold] [{safety_color}]{safety.value.upper()}[/{safety_color}]"
+        )
+    except OSError as e:
+        console.print("[bold red]Combination Safety: BLOCKED[/bold red]")
+        console.print(f"[red]{e}[/red]")
 
     if verbose:
         # Show environment variables
-        table.add_row("", "")  # Spacer
-        table.add_row("[bold]Environment Variables[/bold]", "")
-        table.add_row("PRECOG_ENV", os.getenv("PRECOG_ENV", "[dim]not set[/dim]"))
-        table.add_row("DB_NAME", os.getenv("DB_NAME", "[dim]not set[/dim]"))
-        table.add_row("DB_HOST", os.getenv("DB_HOST", "[dim]not set[/dim]"))
-        table.add_row("DB_PORT", os.getenv("DB_PORT", "[dim]not set[/dim]"))
-        table.add_row("DB_USER", os.getenv("DB_USER", "[dim]not set[/dim]"))
-        table.add_row(
+        console.print()
+        table3 = Table(title="Environment Variables")
+        table3.add_column("Variable", style="cyan", no_wrap=True)
+        table3.add_column("Value", style="white")
+
+        table3.add_row("PRECOG_ENV", os.getenv("PRECOG_ENV", "[dim]not set[/dim]"))
+        table3.add_row(
+            "KALSHI_MODE", os.getenv("KALSHI_MODE", "[dim]not set (default: demo)[/dim]")
+        )
+        table3.add_row("", "")  # Spacer
+        table3.add_row("DB_NAME", os.getenv("DB_NAME", "[dim]not set[/dim]"))
+        table3.add_row("DB_HOST", os.getenv("DB_HOST", "[dim]not set[/dim]"))
+        table3.add_row("DB_PORT", os.getenv("DB_PORT", "[dim]not set[/dim]"))
+        table3.add_row("DB_USER", os.getenv("DB_USER", "[dim]not set[/dim]"))
+        table3.add_row(
             "DB_PASSWORD",
             "[dim]****** (hidden)[/dim]" if os.getenv("DB_PASSWORD") else "[dim]not set[/dim]",
         )
 
-    console.print(table)
+        console.print(table3)
 
-    # Show safety reminder for prod/staging
-    if current_env in ("prod", "staging"):
+    # Show safety warnings
+    if app_env == AppEnvironment.PRODUCTION or kalshi_mode == MarketMode.LIVE:
         console.print()
-        console.print(
-            f"[bold {info['color']}]WARNING:[/bold {info['color']}] You are in {current_env.upper()} environment!"
-        )
-        console.print("[dim]All database operations will affect real data.[/dim]")
+        if app_env == AppEnvironment.PRODUCTION:
+            console.print("[bold red]WARNING:[/bold red] Production database selected!")
+            console.print("[dim]All database operations will affect real data.[/dim]")
+        if kalshi_mode == MarketMode.LIVE:
+            console.print("[bold red]WARNING:[/bold red] Live API mode selected!")
+            console.print("[dim]Trading operations will use REAL MONEY.[/dim]")
         console.print("[dim]Double-check commands before executing.[/dim]")
 
     console.print()
