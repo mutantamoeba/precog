@@ -2701,6 +2701,295 @@ def scheduler_poll_once(
     console.print()
 
 
+# =============================================================================
+# Database Seeding Commands
+# =============================================================================
+
+
+@app.command(name="db-seed")
+def db_seed(
+    sports: str = typer.Option(
+        "nfl,nba,nhl,wnba,ncaaf,ncaab",
+        "--sports",
+        "-s",
+        help="Comma-separated list of sports to seed (e.g., nfl,nba)",
+    ),
+    categories: str = typer.Option(
+        "teams",
+        "--categories",
+        "-c",
+        help="Comma-separated list of categories to seed (teams,venues)",
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show what would be done without making changes"
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+) -> None:
+    """
+    Seed the database with static reference data.
+
+    **Database Seeding Explained:**
+    Seeding populates the database with required reference data like teams,
+    venues, and initial Elo ratings. This data is required before live
+    polling can work (e.g., ESPN game data references teams by ESPN ID).
+
+    **What This Command Does:**
+    1. Reads SQL seed files from src/precog/database/seeds/
+    2. Executes them against the database in order (001_, 002_, etc.)
+    3. Uses ON CONFLICT for idempotent upserts (safe to re-run)
+    4. Reports counts of records created/updated
+
+    **Seeding Categories:**
+    - teams: Team reference data with ESPN IDs (NFL, NBA, NHL, etc.)
+    - venues: Stadium/arena information (future)
+
+    **When to Use:**
+    - After initial database setup (db-init)
+    - After adding new sports support
+    - After database reset or migration
+
+    Args:
+        sports: Comma-separated sports (nfl,nba,nhl,wnba,ncaaf,ncaab)
+        categories: Comma-separated categories (teams,venues)
+        dry_run: Show what would be done without making changes
+        verbose: Show detailed output
+
+    Returns:
+        None: Exits with code 0 on success, 1 on failure
+
+    Educational Note:
+        Seeding is idempotent - running it multiple times is safe.
+        SQL files use ON CONFLICT DO UPDATE so existing data is refreshed,
+        not duplicated. This allows re-running after adding new teams
+        to seed files.
+
+    Example:
+        ```bash
+        # Seed all sports teams
+        python main.py db-seed
+
+        # Seed only NFL and NBA teams
+        python main.py db-seed --sports nfl,nba
+
+        # Dry run to see what would happen
+        python main.py db-seed --dry-run
+
+        # Verbose mode to see SQL execution details
+        python main.py db-seed --verbose
+        ```
+
+    References:
+        - ADR-029: ESPN Data Model
+        - REQ-DATA-003: Multi-Sport Team Support
+        - Phase 2.5: Live Data Collection Service
+    """
+    if verbose:
+        logger.info("Verbose mode enabled for seeding")
+
+    console.print("\n[bold cyan]Precog Database Seeding[/bold cyan]\n")
+
+    # Parse sports and categories
+    sport_list = [s.strip().lower() for s in sports.split(",")]
+    category_list = [c.strip().lower() for c in categories.split(",")]
+
+    console.print(f"[dim]Sports: {', '.join(sport_list)}[/dim]")
+    console.print(f"[dim]Categories: {', '.join(category_list)}[/dim]")
+    console.print()
+
+    try:
+        # Import SeedingManager
+        from precog.database.seeding import SeedingConfig, SeedingManager
+
+        # Create config
+        config = SeedingConfig(
+            sports=sport_list,
+            dry_run=dry_run,
+        )
+
+        # Create manager and run seeding
+        manager = SeedingManager(config=config)
+
+        if dry_run:
+            console.print("[yellow]Dry-run mode:[/yellow] Showing what would be done\n")
+
+        # Seed teams if requested
+        total_processed = 0
+        total_created = 0
+        total_errors = 0
+
+        if "teams" in category_list:
+            console.print("[1/2] Seeding teams...")
+            stats = manager.seed_teams(sports=sport_list)
+
+            # stats is a SeedingStats TypedDict - access as dict, not attributes
+            total_processed = stats["records_processed"]
+            total_created = stats["records_created"]
+            total_errors = stats["errors"]
+
+            console.print(
+                f"  [green][OK] Teams: {total_created} created, "
+                f"{total_processed} processed, {total_errors} errors[/green]"
+            )
+
+        # Verify seeding worked
+        console.print("\n[2/2] Verifying seeds...")
+        result = manager.verify_seeds()
+
+        # verify_seeds() returns {"success": bool, "categories": {"teams": {...}}}
+        teams = result.get("categories", {}).get("teams", {})
+        overall_success = result.get("success", False)
+
+        if overall_success:
+            console.print(
+                f"  [green][OK] All {teams.get('expected', '?')} expected teams found[/green]"
+            )
+        else:
+            console.print(
+                f"  [yellow][WARN] Expected {teams.get('expected', '?')}, "
+                f"found {teams.get('actual', '?')}[/yellow]"
+            )
+            if teams.get("missing_sports"):
+                console.print(
+                    f"  [yellow]Missing sports: {', '.join(teams['missing_sports'])}[/yellow]"
+                )
+
+        # Show summary using stats from seed_teams
+        console.print("\n[bold]Summary:[/bold]")
+        console.print(f"  Total processed: {total_processed}")
+        console.print(f"  Total created: {total_created}")
+        console.print(f"  Total errors: {total_errors}")
+
+        if total_errors > 0:
+            console.print("\n[red]Some seeding operations failed. Check logs for details.[/red]")
+            raise typer.Exit(code=1)
+
+        console.print("\n[green]Seeding completed successfully![/green]\n")
+
+    except ImportError as e:
+        console.print(f"[red][FAIL] Failed to import seeding module: {e}[/red]")
+        console.print("[dim]Hint: Ensure precog.database.seeding package exists[/dim]")
+        raise typer.Exit(code=1) from None
+    except Exception as e:
+        console.print(f"[red][FAIL] Seeding failed: {e}[/red]")
+        if verbose:
+            logger.error(f"Seeding error: {e}", exc_info=True)
+        raise typer.Exit(code=1) from None
+
+
+@app.command(name="db-verify-seeds")
+def db_verify_seeds(
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+) -> None:
+    """
+    Verify that required seed data exists in the database.
+
+    **Seed Verification Explained:**
+    This command checks that the database contains the expected reference
+    data (teams, venues, etc.) needed for live polling to work. Use this
+    to diagnose "team not found" errors.
+
+    **What This Command Checks:**
+    - Team counts per sport (NFL=32, NBA=30, etc.)
+    - Teams with ESPN IDs populated (required for live data matching)
+    - Missing sports that need seeding
+
+    **When to Use:**
+    - After running db-seed to verify it worked
+    - Debugging "team not found" warnings from pollers
+    - Before starting live polling for a new sport
+
+    Args:
+        verbose: Show detailed per-sport breakdown
+
+    Returns:
+        None: Exits with code 0 if all seeds exist, 1 if missing
+
+    Educational Note:
+        This verification is lightweight (COUNT queries only) and safe
+        to run frequently. It doesn't modify any data.
+
+    Example:
+        ```bash
+        # Quick verification
+        python main.py db-verify-seeds
+
+        # Detailed per-sport breakdown
+        python main.py db-verify-seeds --verbose
+        ```
+
+    References:
+        - ADR-029: ESPN Data Model
+        - REQ-DATA-003: Multi-Sport Team Support
+    """
+    console.print("\n[bold cyan]Precog Seed Verification[/bold cyan]\n")
+
+    try:
+        from precog.database.seeding import SeedingManager
+
+        manager = SeedingManager()
+        result = manager.verify_seeds()
+
+        # verify_seeds() returns {"success": bool, "categories": {"teams": {...}}}
+        # The teams data is nested under categories.teams
+        teams = result.get("categories", {}).get("teams", {})
+        overall_success = result.get("success", False)
+
+        # Overall status
+        if overall_success:
+            console.print("[green][OK] All required seeds present[/green]")
+            console.print(f"  Total teams: {teams.get('actual', '?')}/{teams.get('expected', '?')}")
+            console.print(f"  Teams with ESPN IDs: {teams.get('has_espn_ids', '?')}")
+        else:
+            console.print("[yellow][WARN] Some seeds missing[/yellow]")
+            console.print(f"  Total teams: {teams.get('actual', '?')}/{teams.get('expected', '?')}")
+            missing = teams.get("missing_sports", [])
+            if missing:
+                console.print(f"  Missing sports: {', '.join(missing)}")
+
+        # Detailed breakdown if verbose
+        by_sport = teams.get("by_sport", {})
+        if verbose and by_sport:
+            console.print("\n[bold]Per-Sport Breakdown:[/bold]")
+
+            from rich.table import Table
+
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("Sport")
+            table.add_column("Expected", justify="right")
+            table.add_column("Actual", justify="right")
+            table.add_column("ESPN IDs", justify="right")
+            table.add_column("Status")
+
+            for sport, data in sorted(by_sport.items()):
+                status = "[green]OK[/green]" if data.get("ok") else "[red]MISSING[/red]"
+                table.add_row(
+                    sport.upper(),
+                    str(data.get("expected", "?")),
+                    str(data.get("actual", "?")),
+                    str(data.get("has_espn_ids", "?")),
+                    status,
+                )
+
+            console.print(table)
+
+        if not overall_success:
+            console.print(
+                "\n[yellow]Hint: Run 'python main.py db-seed' to populate missing data[/yellow]"
+            )
+            raise typer.Exit(code=1)
+
+        console.print()
+
+    except ImportError as e:
+        console.print(f"[red][FAIL] Failed to import seeding module: {e}[/red]")
+        raise typer.Exit(code=1) from None
+    except Exception as e:
+        console.print(f"[red][FAIL] Verification failed: {e}[/red]")
+        if verbose:
+            logger.error(f"Verification error: {e}", exc_info=True)
+        raise typer.Exit(code=1) from None
+
+
 def main():
     """Main entry point for CLI."""
     app()
