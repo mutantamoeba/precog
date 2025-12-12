@@ -738,7 +738,7 @@ def with_timeout(timeout_seconds: float = 30.0):
 ## References
 
 **Related Documents:**
-- `docs/foundation/TESTING_STRATEGY_V3.4.md` - Test type requirements
+- `docs/foundation/TESTING_STRATEGY_V3.6.md` - Test type requirements
 - `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md` - REQ-TEST-012 through REQ-TEST-019
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md` - FK constraint definitions
 - `tests/conftest.py` - Current fixture implementations

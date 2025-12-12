@@ -665,7 +665,7 @@ Establish 8 Test Type Framework for comprehensive coverage:
   - 8 test directories in tests/ structure
 
 **References:**
-- TESTING_STRATEGY_V3.4.md (1,462 lines)
+- TESTING_STRATEGY_V3.6.md (1,462 lines)
 - REQ-TEST-012 through REQ-TEST-019
 - ADR-074 (Property-Based Testing)
 - ADR-075 (Multi-Source Warning Governance)

@@ -43,15 +43,16 @@ SRC_DIR = PROJECT_ROOT / "src" / "precog"
 TESTS_DIR = PROJECT_ROOT / "tests"
 
 # The 8 test types and their locations
+# Note: Some test types can exist in multiple directories (e.g., chaos in both stress/ and chaos/)
 TEST_TYPES = {
     "unit": {"dirs": ["unit"], "markers": ["unit"]},
     "property": {"dirs": ["property"], "markers": ["property"]},
     "integration": {"dirs": ["integration"], "markers": ["integration"]},
     "e2e": {"dirs": ["e2e"], "markers": ["e2e"]},
     "stress": {"dirs": ["stress"], "markers": ["stress"]},
-    "race": {"dirs": ["stress"], "markers": ["race"]},
+    "race": {"dirs": ["stress", "race"], "markers": ["race"]},
     "performance": {"dirs": ["performance"], "markers": ["performance"]},
-    "chaos": {"dirs": ["stress"], "markers": ["chaos"]},
+    "chaos": {"dirs": ["stress", "chaos"], "markers": ["chaos"]},
 }
 
 # Module tiers determine REQUIRED test types
@@ -152,16 +153,25 @@ def discover_tests_for_module(module_path: str) -> dict[str, list[str]]:
 
                     # Check for markers in the file
                     content = test_file.read_text(errors="ignore")
+                    marker_found = False
                     for marker in config["markers"]:
                         if (
                             f"@pytest.mark.{marker}" in content
                             or f"pytest.mark.{marker}" in content
                         ):
                             tests_found[test_type].append(rel_path)
+                            marker_found = True
                             break
-                    else:
-                        # If no marker found, still count as test type based on directory
-                        tests_found[test_type].append(rel_path)
+
+                    # For test types that share directories (race, chaos in stress/),
+                    # ONLY count if explicit marker is found.
+                    # For test types with unique directories (unit, property, etc.),
+                    # count based on directory if no marker found.
+                    if not marker_found:
+                        unique_dir_types = {"unit", "property", "integration", "e2e", "performance"}
+                        if test_type in unique_dir_types:
+                            # These types have dedicated directories, safe to count by location
+                            tests_found[test_type].append(rel_path)
 
     # Also search root tests/ directory (legacy location, treat as unit tests)
     for pattern in search_patterns:
@@ -225,7 +235,8 @@ def analyze_coverage_gaps(module: str, tests: dict[str, list[str]]) -> dict:
             break
 
     required = TIER_REQUIREMENTS.get(tier, [])
-    present = list(tests.keys())
+    # Only count test types that actually have tests (non-empty lists)
+    present = [t for t, files in tests.items() if files]
     missing = [t for t in required if t not in present]
 
     return {
