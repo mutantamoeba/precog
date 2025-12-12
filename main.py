@@ -3104,6 +3104,115 @@ def db_verify_seeds(
         raise typer.Exit(code=1) from None
 
 
+# =============================================================================
+# Run Services Command (Production Data Collection)
+# =============================================================================
+
+
+@app.command(name="run-services")
+def run_services(
+    stop: bool = typer.Option(False, "--stop", help="Stop running data collection service"),
+    status: bool = typer.Option(False, "--status", help="Check service status"),
+    no_espn: bool = typer.Option(False, "--no-espn", help="Disable ESPN game polling"),
+    no_kalshi: bool = typer.Option(False, "--no-kalshi", help="Disable Kalshi market polling"),
+    espn_interval: int = typer.Option(15, "--espn-interval", help="ESPN poll interval in seconds"),
+    kalshi_interval: int = typer.Option(
+        30, "--kalshi-interval", help="Kalshi poll interval in seconds"
+    ),
+    leagues: str = typer.Option(
+        "nfl,nba,nhl,ncaaf,ncaab",
+        "--leagues",
+        help="Comma-separated list of leagues to poll",
+    ),
+    health_interval: int = typer.Option(
+        60, "--health-interval", help="Health check interval in seconds"
+    ),
+    metrics_interval: int = typer.Option(
+        300, "--metrics-interval", help="Metrics reporting interval in seconds"
+    ),
+    debug: bool = typer.Option(False, "--debug", help="Enable debug logging"),
+) -> None:
+    """
+    Start the production data collection service.
+
+    **What This Command Does:**
+    Runs the Precog data collection services (ESPN game polling, Kalshi market
+    polling) with production-grade features: signal handling, PID management,
+    startup validation, and graceful shutdown.
+
+    **Services Started:**
+    - **ESPN Poller**: Fetches live game data for configured leagues
+    - **Kalshi Poller**: Fetches market prices and positions
+
+    **When to Use:**
+    - Local development: Run in foreground with Ctrl+C to stop
+    - Production: Run as systemd service or with process supervisor
+
+    **Examples:**
+        # Start all services (default)
+        python main.py run-services
+
+        # Start ESPN only
+        python main.py run-services --no-kalshi
+
+        # Custom intervals
+        python main.py run-services --espn-interval 30 --kalshi-interval 60
+
+        # Check if service is running
+        python main.py run-services --status
+
+        # Stop running service
+        python main.py run-services --stop
+
+        # Debug mode
+        python main.py run-services --debug
+
+    **Exit Codes:**
+    - 0: Clean shutdown
+    - 1: Startup error
+    - 3: Already running
+
+    **Signal Handling:**
+    - SIGTERM/SIGINT: Graceful shutdown (finish current operations)
+    - SIGHUP: Graceful shutdown (Unix only)
+
+    References:
+        - Issue #193: Phase 2.5 Live Data Collection Service
+        - ADR-100: Service Supervisor Pattern
+        - REQ-DATA-001: Live Data Collection
+    """
+    from precog.runners import DataCollectorService
+
+    # Parse leagues
+    league_list = [league.strip() for league in leagues.split(",")]
+
+    # Create service
+    service = DataCollectorService(
+        espn_enabled=not no_espn,
+        kalshi_enabled=not no_kalshi,
+        espn_interval=espn_interval,
+        kalshi_interval=kalshi_interval,
+        health_interval=health_interval,
+        metrics_interval=metrics_interval,
+        leagues=league_list,
+        debug=debug,
+    )
+
+    # Handle commands
+    if status:
+        exit_code = service.status()
+        raise typer.Exit(code=exit_code)
+
+    if stop:
+        exit_code = service.stop()
+        raise typer.Exit(code=exit_code)
+
+    # Start the service (blocks until shutdown)
+    console.print("\n[bold cyan]Starting Precog Data Collection Service[/bold cyan]\n")
+    exit_code = service.start()
+    raise typer.Exit(code=exit_code)
+
+
 def main():
     """Main entry point for CLI."""
     app()
