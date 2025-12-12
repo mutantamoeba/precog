@@ -45,7 +45,7 @@
 - **LIVE DATA MANAGEMENT REQUIREMENTS (PHASE 2)**: Added REQ-DATA-001 through REQ-DATA-005 (5 comprehensive live data requirements)
 - **NEW CATEGORY**: DATA (Live Data Management) - Game states, venues, multi-sport support, rankings, JSONB situation data
 - **SCD TYPE 2 VERSIONING**: REQ-DATA-001 implements SCD Type 2 for game state history (~1.8M records/year)
-- **MULTI-SPORT SUPPORT**: REQ-DATA-003 covers 6 leagues (NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
+- **MULTI-SPORT SUPPORT**: REQ-DATA-003 covers 7 leagues (NFL, NCAAF, NBA, NCAAB, NCAAW, NHL, WNBA)
 - **CROSS-REFERENCES**: ADR-029, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md, Migrations 026-029
 - Updated document references to V2.19
 - Updated requirement statistics (119 → 124 total requirements)
@@ -210,7 +210,7 @@ This document provides a systematic index of all Precog requirements using categ
 |----|-------|-------|----------|--------|----------|
 | REQ-DATA-001 | Game State Data Collection (SCD Type 2 Versioning) | 2 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.22 |
 | REQ-DATA-002 | Venue Data Management (Normalized Table) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.22 |
-| REQ-DATA-003 | Multi-Sport Support (6 Leagues) | 2 | Critical | 🟡 | MASTER_REQUIREMENTS_V2.22 |
+| REQ-DATA-003 | Multi-Sport Support (7 Leagues) | 2 | Critical | 🟡 | MASTER_REQUIREMENTS_V2.22 |
 | REQ-DATA-004 | Team Rankings Storage (Temporal Validity) | 2 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.22 |
 | REQ-DATA-005 | JSONB Situation Data (Sport-Specific Fields) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.22 |
 
@@ -232,7 +232,7 @@ This document provides a systematic index of all Precog requirements using categ
 - Related: ADR-029, Migration 026 (venues table)
 
 **REQ-DATA-003: Multi-Sport Support**
-- 6 leagues: NFL (~285 games), NCAAF (~800), NBA (~1,350), NCAAB (~5,500), NHL (~1,350), WNBA (~200)
+- 7 leagues: NFL (~285 games), NCAAF (~800), NBA (~1,350), NCAAB (~5,500), NCAAW (~1,000), NHL (~1,350), WNBA (~200)
 - Unified game_states table (no separate tables per sport)
 - Sport-specific data in JSONB situation field
 - Teams table extended with sport/league columns

@@ -2823,10 +2823,10 @@ def scheduler_poll_once(
 @app.command(name="db-seed")
 def db_seed(
     sports: str = typer.Option(
-        "nfl,nba,nhl,wnba,ncaaf,ncaab",
+        "nfl,nba,nhl,wnba,ncaaf,ncaab,ncaaw",
         "--sports",
         "-s",
-        help="Comma-separated list of sports to seed (e.g., nfl,nba)",
+        help="Comma-separated list of sports to seed (e.g., nfl,nba,ncaaw)",
     ),
     categories: str = typer.Option(
         "teams",
@@ -2863,7 +2863,7 @@ def db_seed(
     - After database reset or migration
 
     Args:
-        sports: Comma-separated sports (nfl,nba,nhl,wnba,ncaaf,ncaab)
+        sports: Comma-separated sports (nfl,nba,nhl,wnba,ncaaf,ncaab,ncaaw)
         categories: Comma-separated categories (teams,venues)
         dry_run: Show what would be done without making changes
         verbose: Show detailed output

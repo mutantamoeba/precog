@@ -171,7 +171,7 @@ class TestSeedingConfig:
         config = SeedingConfig()
 
         assert len(config.categories) == len(SeedCategory)
-        assert config.sports == ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab"]
+        assert config.sports == ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab", "ncaaw"]
         assert config.seasons == [2024, 2025]
         assert config.database == "dev"
         assert config.dry_run is False
@@ -386,11 +386,12 @@ class TestVerifySeeds:
     def test_verify_seeds_all_present(self, mock_get_cursor):
         """Test verify_seeds returns success when all teams present."""
         mock_cursor = MagicMock()
-        # Return full expected counts for all sports
+        # Return full expected counts for all sports (including ncaaw)
         mock_cursor.fetchall.return_value = [
             {"sport": "nba", "team_count": 30, "with_espn_id": 30},
             {"sport": "ncaab", "team_count": 89, "with_espn_id": 89},
             {"sport": "ncaaf", "team_count": 79, "with_espn_id": 79},
+            {"sport": "ncaaw", "team_count": 79, "with_espn_id": 79},
             {"sport": "nfl", "team_count": 32, "with_espn_id": 32},
             {"sport": "nhl", "team_count": 32, "with_espn_id": 32},
             {"sport": "wnba", "team_count": 12, "with_espn_id": 12},
@@ -405,8 +406,8 @@ class TestVerifySeeds:
 
         assert result["success"] is True
         assert result["categories"]["teams"]["ok"] is True
-        assert result["categories"]["teams"]["actual"] == 274
-        assert result["categories"]["teams"]["expected"] == 274
+        assert result["categories"]["teams"]["actual"] == 353  # 274 + 79 ncaaw
+        assert result["categories"]["teams"]["expected"] == 353
         assert len(result["categories"]["teams"]["missing_sports"]) == 0
 
     @patch("precog.database.seeding.seeding_manager.get_cursor")
@@ -695,7 +696,7 @@ class TestConvenienceFunctions:
 
         assert manager.config.database == "dev"
         assert manager.config.dry_run is False
-        assert len(manager.config.sports) == 6
+        assert len(manager.config.sports) == 7  # nfl, ncaaf, nba, nhl, wnba, ncaab, ncaaw
 
     @patch("precog.database.seeding.seeding_manager.ESPNClient")
     def test_create_seeding_manager_with_params(self, mock_client):
