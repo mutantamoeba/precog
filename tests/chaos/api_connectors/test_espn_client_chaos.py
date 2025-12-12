@@ -29,6 +29,7 @@ Educational Note:
 """
 
 import random
+import time
 from datetime import datetime, timedelta
 from unittest.mock import Mock, patch
 
@@ -36,6 +37,18 @@ import pytest
 import requests
 
 from tests.fixtures import ESPN_NFL_SCOREBOARD_LIVE
+
+
+@pytest.fixture(autouse=True)
+def fast_retries():
+    """Patch time.sleep to speed up retry tests in CI.
+
+    The ESPN client uses exponential backoff with real sleep calls.
+    In chaos tests that trigger retries, this can exceed CI timeouts.
+    This fixture makes sleep() a no-op for fast execution.
+    """
+    with patch.object(time, "sleep", return_value=None):
+        yield
 
 
 @pytest.mark.chaos
