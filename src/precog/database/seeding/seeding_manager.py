@@ -143,7 +143,7 @@ class SeedingConfig:
 
     categories: list[SeedCategory] = field(default_factory=lambda: list(SeedCategory))
     sports: list[str] = field(
-        default_factory=lambda: ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab"]
+        default_factory=lambda: ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab", "ncaaw"]
     )
     seasons: list[int] = field(default_factory=lambda: [2024, 2025])
     database: str = "dev"  # dev, test, or prod
@@ -210,12 +210,12 @@ class SeedingManager:
 
     # Sports that support each category
     SPORT_CATEGORY_SUPPORT: ClassVar[dict[SeedCategory, list[str]]] = {
-        SeedCategory.TEAMS: ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab"],
-        SeedCategory.VENUES: ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab"],
+        SeedCategory.TEAMS: ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab", "ncaaw"],
+        SeedCategory.VENUES: ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab", "ncaaw"],
         SeedCategory.HISTORICAL_ELO: ["nfl", "ncaaf"],  # Elo only for football
-        SeedCategory.TEAM_RANKINGS: ["nfl", "ncaaf", "nba", "ncaab"],
-        SeedCategory.ARCHIVED_GAMES: ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab"],
-        SeedCategory.SCHEDULES: ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab"],
+        SeedCategory.TEAM_RANKINGS: ["nfl", "ncaaf", "nba", "ncaab", "ncaaw"],
+        SeedCategory.ARCHIVED_GAMES: ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab", "ncaaw"],
+        SeedCategory.SCHEDULES: ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab", "ncaaw"],
     }
 
     def __init__(
@@ -844,6 +844,7 @@ class SeedingManager:
             "wnba": 12,
             "ncaaf": 79,  # FBS teams we track
             "ncaab": 89,  # Major programs we track
+            "ncaaw": 79,  # Major D1 women's programs we track
         }
 
         by_sport: dict[str, dict[str, Any]] = {}
@@ -978,7 +979,7 @@ def create_seeding_manager(
     category_list = [SeedCategory(c) for c in categories] if categories else None
     config = SeedingConfig(
         categories=category_list or list(SeedCategory),
-        sports=sports or ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab"],
+        sports=sports or ["nfl", "ncaaf", "nba", "nhl", "wnba", "ncaab", "ncaaw"],
         database=database,
         dry_run=dry_run,
     )
