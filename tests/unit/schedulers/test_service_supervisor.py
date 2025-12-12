@@ -750,7 +750,11 @@ class TestCreateServices:
         to add new services or mock services for testing.
     """
 
-    @patch.dict("os.environ", {"KALSHI_API_KEY_ID": ""}, clear=False)
+    @patch.dict(
+        "os.environ",
+        {"DEV_KALSHI_API_KEY": "", "DEV_KALSHI_PRIVATE_KEY_PATH": ""},
+        clear=False,
+    )
     def test_create_services_espn_only(self) -> None:
         """Verify create_services creates ESPN service when no Kalshi creds."""
         config = RunnerConfig()

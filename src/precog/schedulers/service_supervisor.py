@@ -48,6 +48,54 @@ from precog.schedulers.espn_game_poller import create_espn_poller
 from precog.schedulers.kalshi_poller import create_kalshi_poller
 from precog.schedulers.kalshi_websocket import create_websocket_handler
 
+# Set up logging early for helper functions
+logger = logging.getLogger(__name__)
+
+
+def _has_kalshi_credentials(environment: "Environment") -> bool:
+    """
+    Check if Kalshi API credentials are configured.
+
+    Uses the two-axis environment model credential naming convention:
+    - Production environment: PROD_KALSHI_API_KEY
+    - Other environments: {PRECOG_ENV}_KALSHI_API_KEY (defaults to DEV)
+
+    This matches the pattern used in kalshi_client.py and kalshi_websocket.py.
+
+    Args:
+        environment: The deployment environment (affects credential prefix for prod)
+
+    Returns:
+        True if both API key and private key path are configured
+
+    Reference: docs/guides/ENVIRONMENT_CONFIGURATION_GUIDE_V1.0.md
+    """
+    # Determine credential prefix based on environment
+    if environment == Environment.PRODUCTION:
+        cred_prefix = "PROD"
+    else:
+        # Non-production: use PRECOG_ENV, default to DEV
+        precog_env = os.getenv("PRECOG_ENV", "dev").upper()
+        valid_prefixes = {"DEV", "TEST", "STAGING"}
+        cred_prefix = precog_env if precog_env in valid_prefixes else "DEV"
+
+    api_key = os.getenv(f"{cred_prefix}_KALSHI_API_KEY")
+    key_path = os.getenv(f"{cred_prefix}_KALSHI_PRIVATE_KEY_PATH")
+
+    has_creds = bool(api_key and key_path)
+
+    if not has_creds:
+        logger.debug(
+            "Kalshi credentials not found: %s_KALSHI_API_KEY=%s, %s_KALSHI_PRIVATE_KEY_PATH=%s",
+            cred_prefix,
+            "set" if api_key else "not set",
+            cred_prefix,
+            "set" if key_path else "not set",
+        )
+
+    return has_creds
+
+
 # =============================================================================
 # Configuration Enums and Dataclasses
 # =============================================================================
@@ -654,8 +702,8 @@ def create_services(
                 logger.info("Created ESPN Game Poller (interval=%ds)", svc_config.poll_interval)
 
             elif name == "kalshi_rest":
-                # Check for Kalshi credentials
-                if os.getenv("KALSHI_API_KEY_ID"):
+                # Check for Kalshi credentials using two-axis naming convention
+                if _has_kalshi_credentials(config.environment):
                     kalshi_rest_service = create_kalshi_poller(
                         series_tickers=["KXNFLGAME"],
                         poll_interval=svc_config.poll_interval,
@@ -674,7 +722,7 @@ def create_services(
 
             elif name == "kalshi_ws":
                 # WebSocket for real-time updates
-                if os.getenv("KALSHI_API_KEY_ID"):
+                if _has_kalshi_credentials(config.environment):
                     kalshi_ws_service = create_websocket_handler(
                         environment=(
                             "demo" if config.environment != Environment.PRODUCTION else "prod"
