@@ -238,7 +238,7 @@ def test_game_processing(mock_get_team):
 
 - `docs/utility/PHASE_2_TEST_COVERAGE_GAPS_V1.0.md` - Test type coverage gaps
 - `docs/utility/PHASE_2.5_DEFERRED_TASKS_V1.1.md` - DEF-P2.5-007 (Two-Axis Environment Config)
-- `docs/foundation/TESTING_STRATEGY_V3.5.md` - Required test types
+- `docs/foundation/TESTING_STRATEGY_V3.6.md` - Required test types
 - `ADR-105` - Two-Axis Environment Configuration (Planned)
 
 ---

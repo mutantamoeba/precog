@@ -1,10 +1,15 @@
-# Testing Strategy V3.5
+# Testing Strategy V3.6
 
 **Document Type:** Foundation
 **Status:** ✅ Active
-**Version:** 3.5
+**Version:** 3.6
 **Created:** 2025-10-23
 **Last Updated:** 2025-12-11
+**Changes in V3.6:**
+- **Fast Chaos Tests Pattern (CI Optimization)** - Added pattern for keeping chaos tests fast in CI
+- Patch `time.sleep` to no-op for tests that trigger retry/backoff logic
+- Prevents 60s+ timeout failures while fully exercising retry logic
+- Reference: Issue #213 (ESPN chaos tests timing out in CI)
 **Changes in V3.5:**
 - **Test Failure Response Pattern (CRITICAL)** - Added Best Practice #6: When a test fails, fix the CODE DEFECT, not the test expectation
 - Decision tree for test failure response (fix code vs. fix test)
@@ -1084,6 +1089,49 @@ def test_database_connection_loss_recovery(db_pool, test_logger):
 ```bash
 pytest -m chaos -v
 ```
+
+**CI Optimization: Fast Chaos Tests Pattern** ⭐ **NEW V3.6**
+
+When chaos tests trigger retry logic with exponential backoff (e.g., 1s, 2s, 4s delays), the accumulated sleep time can exceed CI timeouts (typically 60s).
+
+**Solution:** Patch `time.sleep` to be a no-op using an autouse fixture:
+
+```python
+# tests/chaos/api_connectors/test_espn_client_chaos.py
+import time
+from unittest.mock import patch
+
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def fast_retries():
+    """Patch time.sleep to speed up retry tests in CI.
+
+    The client uses exponential backoff with real sleep calls.
+    In chaos tests that trigger retries, this can exceed CI timeouts.
+    This fixture makes sleep() a no-op for fast execution.
+    """
+    with patch.object(time, "sleep", return_value=None):
+        yield
+
+
+@pytest.mark.chaos
+class TestClientChaos:
+    def test_retry_behavior(self, mock_api):
+        # Retry logic still fully exercised - just faster
+        ...
+```
+
+**Why This Doesn't Reduce Test Effectiveness:**
+- ✅ Retry LOGIC still fully exercised (all retry attempts, exception handling, recovery paths)
+- ✅ Backoff CODE PATHS still validated (the code that calculates delays still runs)
+- ✅ Recovery behavior still tested (when mock eventually succeeds, client recovers correctly)
+- ⏭️ NOT testing: Whether `time.sleep(1)` actually waits 1 second (that's Python stdlib, not our code)
+
+**Result:** Tests complete in <0.1s instead of 60+ seconds, while still validating all retry/recovery behavior.
+
+**Reference:** Issue #213 (ESPN chaos tests timing out in CI)
 
 **When to Use:**
 - Testing disaster recovery (Phase 5+)
