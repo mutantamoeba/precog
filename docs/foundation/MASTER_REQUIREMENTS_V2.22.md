@@ -25,11 +25,11 @@
 - **LIVE DATA MANAGEMENT REQUIREMENTS**: Added Section 4.12 with REQ-DATA-001 through REQ-DATA-005 (5 comprehensive live data requirements)
 - **REQ-DATA-001**: Game State Data Collection with SCD Type 2 Versioning (~1.8M records/year)
 - **REQ-DATA-002**: Venue Data Management (Normalized Table) with ESPN venue ID linkage
-- **REQ-DATA-003**: Multi-Sport Support (6 Leagues: NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
+- **REQ-DATA-003**: Multi-Sport Support (7 Leagues: NFL, NCAAF, NBA, NCAAB, NCAAW, NHL, WNBA)
 - **REQ-DATA-004**: Team Rankings Storage with Temporal Validity (AP, Coaches, CFP, ESPN rankings)
 - **REQ-DATA-005**: JSONB Situation Data for Sport-Specific Fields (avoids 30+ nullable columns)
 - **CROSS-REFERENCES**: ADR-029, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md, Migrations 026-029
-- **STORAGE ESTIMATES**: ~1.1 GB/year for all 6 sports, ~9,485 games/year
+- **STORAGE ESTIMATES**: ~1.2 GB/year for all 7 sports, ~10,485 games/year
 **Changes in v2.18:**
 - **WORKFLOW ENFORCEMENT REQUIREMENTS**: Added REQ-VALIDATION-007 through REQ-VALIDATION-012 (6 comprehensive workflow enforcement requirements)
 - **PATTERN ENFORCEMENT**: Requirements enforce Pattern 2 (SCD Type 2 queries), Pattern 8 (Config Sync), Pattern 10 (Property-Based Testing), Pattern 13 (Test Coverage Quality)
@@ -1219,17 +1219,18 @@ Real-time game data collection, storage, and versioning for multi-sport predicti
   - Supports weather integration (indoor vs outdoor venues)
 - Storage Estimate: ~150 unique venues across all sports (<1 MB)
 
-**REQ-DATA-003: Multi-Sport Support (6 Leagues)**
+**REQ-DATA-003: Multi-Sport Support (7 Leagues)**
 - Phase: 2
 - Priority: Critical
-- Status: 🟡 In Progress (ESPN client endpoints complete, database pending)
+- Status: 🟡 In Progress (ESPN client endpoints complete, NCAAW seeding ✅, database schema pending)
 - Reference: ADR-029, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md
-- Description: Support 6 sports leagues with unified schema and sport-specific JSONB
+- Description: Support 7 sports leagues with unified schema and sport-specific JSONB
 - Supported Leagues:
   - **NFL**: National Football League (~285 games/season)
   - **NCAAF**: College Football (~800 games/season)
   - **NBA**: National Basketball Association (~1,350 games/season)
-  - **NCAAB**: College Basketball (~5,500 games/season)
+  - **NCAAB**: NCAA Men's Basketball (~5,500 games/season)
+  - **NCAAW**: NCAA Women's Basketball (~1,000 games/season)
   - **NHL**: National Hockey League (~1,350 games/season)
   - **WNBA**: Women's National Basketball Association (~200 games/season)
 - Schema Design:

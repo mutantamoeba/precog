@@ -1,9 +1,9 @@
 # Live Data Integration Guide
 
 ---
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-12-07
-**Last Updated:** 2025-12-07
+**Last Updated:** 2025-12-11
 **Status:** Complete
 **Phase:** 2.5 (Live Data Collection Service)
 **Related ADRs:** ADR-100 (Service Supervisor Pattern), ADR-103 (BasePoller Unified Design), ADR-029 (ESPN Data Model)
@@ -141,34 +141,74 @@ For production deployments, use the `ServiceSupervisor` which provides:
 
 ### Running the Data Collector Script
 
+The `scripts/run_data_collector.py` script provides production-grade background operation with:
+- PID file management for process supervision
+- Configurable log rotation
+- Graceful shutdown on system signals (SIGTERM, SIGINT, SIGHUP)
+- Startup validation (database, API credentials)
+- Cross-platform support (Windows and Linux)
+
 ```bash
-# Start all data collectors in development mode
+# Start in foreground (development)
 python scripts/run_data_collector.py
 
-# Start specific services
-python scripts/run_data_collector.py --services espn,kalshi_rest
+# Start ESPN polling only
+python scripts/run_data_collector.py --no-kalshi
 
-# Production mode with JSON logging
-python scripts/run_data_collector.py --env production
+# Start Kalshi polling only
+python scripts/run_data_collector.py --no-espn
 
-# Custom poll interval
-python scripts/run_data_collector.py --poll-interval 30
+# Custom poll intervals
+python scripts/run_data_collector.py --espn-interval 30 --kalshi-interval 60
 
-# Custom health check interval
-python scripts/run_data_collector.py --health-interval 120
+# Specify leagues to poll
+python scripts/run_data_collector.py --leagues nfl,nba,nhl,ncaaf,ncaab
+
+# Enable debug logging
+python scripts/run_data_collector.py --debug
+
+# Check status of running service
+python scripts/run_data_collector.py --status
+
+# Stop running service
+python scripts/run_data_collector.py --stop
 ```
 
 ### Script Options
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--env` | development | Environment (development/staging/production) |
-| `--services` | all | Comma-separated services (espn, kalshi_rest, kalshi_ws) |
-| `--poll-interval` | 15 | Seconds between polls |
-| `--log-level` | INFO | Logging level (DEBUG/INFO/WARNING/ERROR) |
-| `--log-dir` | logs/ | Directory for log files |
+| `--no-espn` | False | Disable ESPN game polling |
+| `--no-kalshi` | False | Disable Kalshi market polling |
+| `--espn-interval` | 15 | ESPN poll interval in seconds |
+| `--kalshi-interval` | 30 | Kalshi poll interval in seconds |
+| `--leagues` | nfl,nba,nhl,ncaaf,ncaab | Comma-separated list of leagues |
 | `--health-interval` | 60 | Health check interval in seconds |
 | `--metrics-interval` | 300 | Metrics output interval in seconds |
+| `--debug` | False | Enable debug logging |
+| `--status` | - | Check status of running service |
+| `--stop` | - | Stop running service |
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Clean shutdown |
+| 1 | Startup error (validation failed) |
+| 2 | Runtime error |
+| 3 | Already running (another instance detected) |
+
+### PID File Locations
+
+- **Linux (with write access):** `/var/run/precog/data_collector.pid`
+- **Linux (without write access):** `~/.precog/data_collector.pid`
+- **Windows:** `%USERPROFILE%\.precog\data_collector.pid`
+
+### Log File Locations
+
+- **Linux (with write access):** `/var/log/precog/data_collector_YYYY-MM-DD.log`
+- **Linux (without write access):** `~/.precog/logs/data_collector_YYYY-MM-DD.log`
+- **Windows:** `%USERPROFILE%\.precog\logs\data_collector_YYYY-MM-DD.log`
 
 ### Programmatic Usage
 
@@ -218,7 +258,7 @@ poller.stop()
 Polls ESPN Scoreboard API for live game states with SCD Type 2 versioning.
 
 **Key Features:**
-- Multi-league support (NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
+- Multi-league support (NFL, NCAAF, NBA, NCAAB, NCAAW, NHL, WNBA)
 - Configurable poll intervals (15-60 seconds)
 - Conditional polling (only when games active)
 - Error recovery with logging
@@ -458,4 +498,5 @@ If a service fails repeatedly:
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2025-12-11 | Updated service runner documentation with production features (PID files, signal handling, exit codes); Added NCAAW to supported leagues |
 | 1.0 | 2025-12-07 | Initial release covering CLI scheduler, ServiceSupervisor, and data collection services |
