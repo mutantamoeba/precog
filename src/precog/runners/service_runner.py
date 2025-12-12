@@ -1,41 +1,35 @@
-#!/usr/bin/env python3
 """
-Background Data Collection Service Runner.
+Data Collection Service Runner.
 
-This script provides production-grade background operation for the data collection
-services (ESPN game polling, Kalshi market polling). It wraps the CLI scheduler
-commands with proper signal handling, logging, and systemd/Windows service integration.
+Production-grade service management for data collection services (ESPN game polling,
+Kalshi market polling). Wraps ServiceSupervisor with proper signal handling, PID
+management, logging, and startup validation.
 
-Why This Exists:
-    While `python main.py scheduler start --foreground` works for development,
-    production deployments need:
+Why This Module Exists:
+    While ServiceSupervisor handles the core service management logic, production
+    deployments need additional features:
     1. PID file management for process supervision
-    2. Configurable log rotation
-    3. Graceful shutdown on system signals
-    4. Startup validation before entering main loop
-    5. Systemd/Windows service integration
+    2. Graceful shutdown on system signals (SIGTERM, SIGINT)
+    3. Startup validation before entering main loop
+    4. Status reporting for monitoring systems
+    5. Cross-platform support (Windows/Linux)
 
 Usage:
-    # Start in foreground (development)
-    python scripts/run_data_collector.py
+    # From CLI (recommended):
+    python main.py run-services
+    python main.py run-services --stop
+    python main.py run-services --status
 
-    # Start as daemon (production - Linux only)
-    python scripts/run_data_collector.py --daemon
-
-    # Start with custom config
-    python scripts/run_data_collector.py --config /etc/precog/collector.yaml
-
-    # Stop running daemon
-    python scripts/run_data_collector.py --stop
-
-    # Check status
-    python scripts/run_data_collector.py --status
+    # Programmatic:
+    from precog.runners import DataCollectorService
+    service = DataCollectorService(espn_enabled=True, kalshi_enabled=True)
+    exit_code = service.start()
 
 Exit Codes:
     0: Clean shutdown
     1: Startup error
     2: Runtime error
-    3: Already running (when --daemon)
+    3: Already running
 
 Reference:
     - Issue #193: Phase 2.5 Live Data Collection Service
@@ -47,7 +41,6 @@ Requirements: REQ-DATA-001, REQ-OBSERV-001
 
 from __future__ import annotations
 
-import argparse
 import atexit
 import logging
 import os
@@ -58,15 +51,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-# Add project root to path for imports
-PROJECT_ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(PROJECT_ROOT / "src"))
-
-# Now we can import precog modules
-from precog.config.environment import load_environment_config  # noqa: E402
-from precog.schedulers.espn_game_poller import create_espn_poller  # noqa: E402
-from precog.schedulers.kalshi_poller import create_kalshi_poller  # noqa: E402
-from precog.schedulers.service_supervisor import (  # noqa: E402
+from precog.config.environment import load_environment_config
+from precog.schedulers.espn_game_poller import create_espn_poller
+from precog.schedulers.kalshi_poller import create_kalshi_poller
+from precog.schedulers.service_supervisor import (
     Environment,
     RunnerConfig,
     ServiceConfig,
@@ -88,28 +76,47 @@ DEFAULT_KALSHI_INTERVAL = 30  # seconds
 DEFAULT_HEALTH_CHECK_INTERVAL = 60  # seconds
 DEFAULT_METRICS_INTERVAL = 300  # 5 minutes
 
+DEFAULT_LEAGUES = ["nfl", "nba", "nhl", "ncaaf", "ncaab"]
+
+
 # =============================================================================
-# Helper Functions
+# Platform Helper Functions
 # =============================================================================
 
 
 def get_pid_file() -> Path:
-    """Get platform-appropriate PID file path."""
+    """
+    Get platform-appropriate PID file path.
+
+    Returns:
+        Path to PID file location
+
+    Educational Note:
+        PID files store the process ID of a running daemon, allowing:
+        1. Detection of already-running instances
+        2. Targeted signal delivery for graceful shutdown
+        3. Process monitoring by external tools (systemd, monit)
+
+    Platform Behavior:
+        - Windows: ~/.precog/data_collector.pid
+        - Linux: /var/run/precog/data_collector.pid (if writable)
+                 ~/.precog/data_collector.pid (fallback)
+    """
     if sys.platform == "win32":
         pid_dir = WINDOWS_PID_FILE.parent
         pid_dir.mkdir(parents=True, exist_ok=True)
         return WINDOWS_PID_FILE
-    else:  # noqa: RET505 - explicit else needed for mypy cross-platform compatibility
-        # Use /var/run if available and writable, else fall back to user dir
+    else:  # noqa: RET505 - intentional for platform branching clarity
+        # Linux/macOS: Use /var/run if available and writable
         if DEFAULT_PID_FILE.parent.exists():
             try:
-                # Test write permission
                 test_file = DEFAULT_PID_FILE.parent / ".test_write"
                 test_file.touch()
                 test_file.unlink()
                 return DEFAULT_PID_FILE
             except PermissionError:
                 pass
+
         # Fall back to user directory
         fallback = Path.home() / ".precog" / "data_collector.pid"
         fallback.parent.mkdir(parents=True, exist_ok=True)
@@ -117,11 +124,21 @@ def get_pid_file() -> Path:
 
 
 def get_log_dir() -> Path:
-    """Get platform-appropriate log directory."""
+    """
+    Get platform-appropriate log directory.
+
+    Returns:
+        Path to log directory
+
+    Platform Behavior:
+        - Windows: ~/.precog/logs/
+        - Linux: /var/log/precog/ (if writable)
+                 ~/.precog/logs/ (fallback)
+    """
     if sys.platform == "win32":
         WINDOWS_LOG_DIR.mkdir(parents=True, exist_ok=True)
         return WINDOWS_LOG_DIR
-    else:  # noqa: RET505 - explicit else needed for mypy cross-platform compatibility
+    else:  # noqa: RET505 - intentional for platform branching clarity
         if DEFAULT_LOG_DIR.exists():
             try:
                 test_file = DEFAULT_LOG_DIR / ".test_write"
@@ -130,6 +147,7 @@ def get_log_dir() -> Path:
                 return DEFAULT_LOG_DIR
             except PermissionError:
                 pass
+
         fallback = Path.home() / ".precog" / "logs"
         fallback.parent.mkdir(parents=True, exist_ok=True)
         return fallback
@@ -142,7 +160,15 @@ def write_pid_file(pid_file: Path) -> None:
 
 
 def read_pid_file(pid_file: Path) -> int | None:
-    """Read PID from file, return None if not found or invalid."""
+    """
+    Read PID from file.
+
+    Args:
+        pid_file: Path to PID file
+
+    Returns:
+        PID as integer, or None if not found/invalid
+    """
     if not pid_file.exists():
         return None
     try:
@@ -160,7 +186,20 @@ def remove_pid_file(pid_file: Path) -> None:
 
 
 def is_process_running(pid: int) -> bool:
-    """Check if a process with given PID is running."""
+    """
+    Check if a process with given PID is running.
+
+    Args:
+        pid: Process ID to check
+
+    Returns:
+        True if process is running, False otherwise
+
+    Educational Note:
+        Uses platform-specific APIs:
+        - Windows: OpenProcess with SYNCHRONIZE access
+        - Unix: kill(pid, 0) - signal 0 tests if process exists
+    """
     if sys.platform == "win32":
         import ctypes
 
@@ -171,7 +210,8 @@ def is_process_running(pid: int) -> bool:
             kernel32.CloseHandle(handle)
             return True
         return False
-    else:  # noqa: RET505 - explicit else needed for mypy cross-platform compatibility
+    else:  # noqa: RET505 - intentional for platform branching clarity
+        # Unix: kill with signal 0 tests process existence
         try:
             os.kill(pid, 0)
             return True
@@ -189,6 +229,12 @@ def setup_logging(log_dir: Path, debug: bool = False) -> logging.Logger:
 
     Returns:
         Configured logger instance
+
+    Educational Note:
+        Production logging differs from development:
+        1. File-based with rotation for persistence
+        2. Both file and console handlers for flexibility
+        3. Structured format for log aggregation tools
     """
     log_level = logging.DEBUG if debug else logging.INFO
     log_file = log_dir / f"data_collector_{datetime.now():%Y-%m-%d}.log"
@@ -199,7 +245,7 @@ def setup_logging(log_dir: Path, debug: bool = False) -> logging.Logger:
         datefmt="%Y-%m-%d %H:%M:%S",
     )
 
-    # File handler with rotation
+    # File handler
     file_handler = logging.FileHandler(log_file, encoding="utf-8")
     file_handler.setLevel(log_level)
     file_handler.setFormatter(formatter)
@@ -232,9 +278,9 @@ class DataCollectorService:
     Production-grade data collection service manager.
 
     Wraps the ServiceSupervisor with additional production features:
-    - PID file management
+    - PID file management for process supervision
     - Signal handling for graceful shutdown
-    - Startup validation
+    - Startup validation (database, credentials, modules)
     - Status reporting
 
     Educational Note:
@@ -245,11 +291,23 @@ class DataCollectorService:
 
     Example:
         >>> service = DataCollectorService()
-        >>> service.start()  # Blocks until shutdown signal
+        >>> exit_code = service.start()  # Blocks until shutdown signal
+
         >>> # Or check status
         >>> service.status()
 
-    Reference: Issue #193 P2.5-004
+        >>> # Or stop running instance
+        >>> service.stop()
+
+    Attributes:
+        espn_enabled: Whether ESPN polling is enabled
+        kalshi_enabled: Whether Kalshi polling is enabled
+        espn_interval: ESPN poll interval in seconds
+        kalshi_interval: Kalshi poll interval in seconds
+        leagues: List of leagues to poll
+        debug: Whether debug logging is enabled
+
+    Reference: Issue #193, REQ-DATA-001
     """
 
     def __init__(
@@ -283,17 +341,26 @@ class DataCollectorService:
         self.kalshi_interval = kalshi_interval
         self.health_interval = health_interval
         self.metrics_interval = metrics_interval
-        self.leagues = leagues or ["nfl", "nba", "nhl", "ncaaf", "ncaab"]
+        self.leagues = leagues or DEFAULT_LEAGUES.copy()
         self.debug = debug
 
         self.pid_file = get_pid_file()
         self.log_dir = get_log_dir()
         self.logger: logging.Logger | None = None
         self.supervisor: ServiceSupervisor | None = None
-        self._shutdown_requested = False
+        self._shutdown_requested: bool = False
 
     def _setup_signal_handlers(self) -> None:
-        """Register signal handlers for graceful shutdown."""
+        """
+        Register signal handlers for graceful shutdown.
+
+        Educational Note:
+            Signal handlers allow external processes (init system, user)
+            to request graceful shutdown. We handle:
+            - SIGTERM: Termination request (systemd default)
+            - SIGINT: Keyboard interrupt (Ctrl+C)
+            - SIGHUP: Terminal hangup (optional, Unix only)
+        """
         signal.signal(signal.SIGTERM, self._signal_handler)
         signal.signal(signal.SIGINT, self._signal_handler)
         if hasattr(signal, "SIGHUP"):
@@ -316,14 +383,20 @@ class DataCollectorService:
             True if all validations pass, False otherwise
 
         Checks:
-            1. Database connection available
-            2. Required environment variables set
-            3. API credentials valid (if applicable)
+            1. Environment configuration loadable
+            2. Database connection available
+            3. Required modules installed
+            4. API credentials valid (for live mode)
+
+        Educational Note:
+            Fail-fast validation prevents the service from starting
+            in a broken state. Better to fail immediately with a clear
+            error than to start and fail mid-operation.
         """
         if self.logger:
             self.logger.info("Running startup validation...")
 
-        # Get environment config
+        # Load environment config
         try:
             env_config = load_environment_config()
             if self.logger:
@@ -352,7 +425,7 @@ class DataCollectorService:
                 self.logger.error("Database connection failed: %s", e)
             return False
 
-        # Validate ESPN if enabled
+        # Validate ESPN module if enabled
         if self.espn_enabled:
             import importlib.util
 
@@ -364,14 +437,13 @@ class DataCollectorService:
             if self.logger:
                 self.logger.info("ESPN client: OK")
 
-        # Validate Kalshi if enabled
+        # Validate Kalshi credentials if enabled in live mode
         if self.kalshi_enabled:
             kalshi_mode = os.getenv("KALSHI_MODE", "demo")
             if self.logger:
                 self.logger.info("Kalshi mode: %s", kalshi_mode)
 
             if kalshi_mode == "live":
-                # Check for required credentials
                 key_id = os.getenv("KALSHI_KEY_ID")
                 key_path = os.getenv("KALSHI_PRIVATE_KEY_PATH")
                 if not key_id or not key_path:
@@ -390,7 +462,17 @@ class DataCollectorService:
         return True
 
     def _create_supervisor(self) -> ServiceSupervisor:
-        """Create and configure the service supervisor."""
+        """
+        Create and configure the service supervisor.
+
+        Returns:
+            Configured ServiceSupervisor instance
+
+        Educational Note:
+            This method creates the ServiceSupervisor and configures
+            it with the appropriate services based on user settings.
+            The supervisor handles the actual service lifecycle.
+        """
         # Determine environment
         env_str = os.getenv("PRECOG_ENV", "dev")
         env_map = {
@@ -449,9 +531,17 @@ class DataCollectorService:
         Start the data collection service.
 
         Returns:
-            Exit code (0 = success, 1 = error)
+            Exit code:
+            - 0: Clean shutdown
+            - 1: Startup error
+            - 3: Already running
 
         This method blocks until shutdown is requested via signal.
+
+        Educational Note:
+            The main loop is simple: sleep and check for shutdown flag.
+            Actual work is done by ServiceSupervisor in background threads.
+            This allows the main thread to respond quickly to signals.
         """
         # Setup logging
         self.logger = setup_logging(self.log_dir, self.debug)
@@ -488,9 +578,7 @@ class DataCollectorService:
             self.logger.error("Failed to start services: %s", e)
             return 1
 
-        self.logger.info(
-            "Data collection started. Press Ctrl+C to stop.",
-        )
+        self.logger.info("Data collection started. Press Ctrl+C to stop.")
         self.logger.info(
             "ESPN: %s (every %ds), Kalshi: %s (every %ds)",
             "enabled" if self.espn_enabled else "disabled",
@@ -520,7 +608,14 @@ class DataCollectorService:
         Stop a running data collector service.
 
         Returns:
-            Exit code (0 = success, 1 = error)
+            Exit code:
+            - 0: Successfully stopped
+            - 1: Error stopping service
+
+        Educational Note:
+            This method finds the running process via PID file and sends
+            SIGTERM for graceful shutdown. If the process doesn't stop
+            within 30 seconds, SIGKILL is sent (Unix only).
         """
         pid = read_pid_file(self.pid_file)
         if not pid:
@@ -546,8 +641,8 @@ class DataCollectorService:
             else:
                 os.kill(pid, signal.SIGTERM)
 
-            # Wait for process to stop
-            for _ in range(30):  # 30 second timeout
+            # Wait for process to stop (30 second timeout)
+            for _ in range(30):
                 time.sleep(1)
                 if not is_process_running(pid):
                     print("Service stopped successfully.")
@@ -569,7 +664,9 @@ class DataCollectorService:
         Check status of data collector service.
 
         Returns:
-            Exit code (0 = running, 1 = not running)
+            Exit code:
+            - 0: Service is running
+            - 1: Service is not running
         """
         pid = read_pid_file(self.pid_file)
         if not pid:
@@ -580,131 +677,6 @@ class DataCollectorService:
             print(f"Status: RUNNING (PID {pid})")
             print(f"PID file: {self.pid_file}")
             return 0
+
         print(f"Status: NOT RUNNING (stale PID {pid})")
         return 1
-
-
-# =============================================================================
-# Main Entry Point
-# =============================================================================
-
-
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(
-        description="Precog Data Collection Service",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-    # Start in foreground (development)
-    python scripts/run_data_collector.py
-
-    # Start with custom intervals
-    python scripts/run_data_collector.py --espn-interval 30 --kalshi-interval 60
-
-    # Start ESPN only
-    python scripts/run_data_collector.py --no-kalshi
-
-    # Check status
-    python scripts/run_data_collector.py --status
-
-    # Stop running service
-    python scripts/run_data_collector.py --stop
-        """,
-    )
-
-    # Service control
-    parser.add_argument(
-        "--stop",
-        action="store_true",
-        help="Stop running data collector service",
-    )
-    parser.add_argument(
-        "--status",
-        action="store_true",
-        help="Check status of data collector service",
-    )
-
-    # Service configuration
-    parser.add_argument(
-        "--no-espn",
-        action="store_true",
-        help="Disable ESPN game polling",
-    )
-    parser.add_argument(
-        "--no-kalshi",
-        action="store_true",
-        help="Disable Kalshi market polling",
-    )
-    parser.add_argument(
-        "--espn-interval",
-        type=int,
-        default=DEFAULT_ESPN_INTERVAL,
-        help=f"ESPN poll interval in seconds (default: {DEFAULT_ESPN_INTERVAL})",
-    )
-    parser.add_argument(
-        "--kalshi-interval",
-        type=int,
-        default=DEFAULT_KALSHI_INTERVAL,
-        help=f"Kalshi poll interval in seconds (default: {DEFAULT_KALSHI_INTERVAL})",
-    )
-    parser.add_argument(
-        "--leagues",
-        type=str,
-        default="nfl,nba,nhl,ncaaf,ncaab",
-        help="Comma-separated list of leagues to poll (default: nfl,nba,nhl,ncaaf,ncaab)",
-    )
-
-    # Health and metrics
-    parser.add_argument(
-        "--health-interval",
-        type=int,
-        default=DEFAULT_HEALTH_CHECK_INTERVAL,
-        help=f"Health check interval in seconds (default: {DEFAULT_HEALTH_CHECK_INTERVAL})",
-    )
-    parser.add_argument(
-        "--metrics-interval",
-        type=int,
-        default=DEFAULT_METRICS_INTERVAL,
-        help=f"Metrics reporting interval in seconds (default: {DEFAULT_METRICS_INTERVAL})",
-    )
-
-    # Debug
-    parser.add_argument(
-        "--debug",
-        action="store_true",
-        help="Enable debug logging",
-    )
-
-    return parser.parse_args()
-
-
-def main() -> int:
-    """Main entry point."""
-    args = parse_args()
-
-    # Parse leagues
-    leagues = [league.strip() for league in args.leagues.split(",")]
-
-    # Create service
-    service = DataCollectorService(
-        espn_enabled=not args.no_espn,
-        kalshi_enabled=not args.no_kalshi,
-        espn_interval=args.espn_interval,
-        kalshi_interval=args.kalshi_interval,
-        health_interval=args.health_interval,
-        metrics_interval=args.metrics_interval,
-        leagues=leagues,
-        debug=args.debug,
-    )
-
-    # Handle commands
-    if args.status:
-        return service.status()
-    if args.stop:
-        return service.stop()
-    return service.start()
-
-
-if __name__ == "__main__":
-    sys.exit(main())
