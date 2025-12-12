@@ -1,10 +1,15 @@
-# Testing Strategy V3.4
+# Testing Strategy V3.5
 
 **Document Type:** Foundation
 **Status:** ✅ Active
-**Version:** 3.4
+**Version:** 3.5
 **Created:** 2025-10-23
-**Last Updated:** 2025-12-06
+**Last Updated:** 2025-12-11
+**Changes in V3.5:**
+- **Test Failure Response Pattern (CRITICAL)** - Added Best Practice #6: When a test fails, fix the CODE DEFECT, not the test expectation
+- Decision tree for test failure response (fix code vs. fix test)
+- Real-world example: ESPN chaos test revealing ChunkedEncodingError gap (Issue #207)
+- Key insight: Tests that reveal defects are VALUABLE - don't silence them
 **Changes in V3.4:**
 - **CI-Safe Stress Testing (Issue #168)** - Added CI behavior documentation to Stress Tests and Race Condition Tests sections
 - **skipif pattern:** Stress tests use `pytest.mark.skipif(_is_ci)` to skip in CI (prevents ThreadPoolExecutor/threading.Barrier hangs)
@@ -2597,6 +2602,75 @@ def test_create_position():
 - ✅ Empty inputs
 - ✅ None values
 - ✅ Error conditions
+
+---
+
+### 6. Test Failure Response (CRITICAL)
+
+**Principle:** When a test fails, fix the CODE DEFECT, not the test expectation.
+
+**The Wrong Response:**
+```python
+# Test fails: ChunkedEncodingError not caught by ESPN client
+def test_chunked_encoding_error(self):
+    with pytest.raises(ESPNAPIError):  # ❌ Fails - error not caught
+        client.get_nfl_scoreboard()
+
+# ❌ WRONG: Change test to expect the wrong behavior
+def test_chunked_encoding_error(self):
+    with pytest.raises(ChunkedEncodingError):  # ❌ Documents bug, doesn't fix it
+        client.get_nfl_scoreboard()
+```
+
+**The Right Response:**
+```python
+# ✅ CORRECT: Fix the production code to handle the error
+# In espn_client.py:
+except requests.exceptions.ChunkedEncodingError as e:
+    last_exception = e
+    logger.warning(f"Chunked encoding error: {e}")
+    # Retry logic...
+
+# Test now passes with correct expectation
+def test_chunked_encoding_error(self):
+    with pytest.raises(ESPNAPIError):  # ✅ Passes - error now handled
+        client.get_nfl_scoreboard()
+```
+
+**Decision Tree for Test Failures:**
+
+```
+Test fails
+├─ Is the test expectation WRONG?
+│   ├─ YES → Fix the test (rare - document why expectation was wrong)
+│   └─ NO → The code has a DEFECT
+│       ├─ Fix the production code FIRST
+│       ├─ Verify test passes with fix
+│       └─ Never change test to match buggy behavior
+```
+
+**When Test Expectations ARE Wrong:**
+- Test used incorrect expected value (typo, math error)
+- Test was based on misunderstanding of requirements
+- Requirements changed and test wasn't updated
+- Test was never correct (copy-paste error)
+
+**When Test Expectations ARE Correct (Fix Code):**
+- Test reveals unhandled exception type (like ChunkedEncodingError)
+- Test reveals missing error handling
+- Test reveals missing functionality
+- Test reveals regression from refactoring
+
+**Real-World Example (Phase 2 - Issue #207):**
+
+ESPN chaos test revealed `ChunkedEncodingError` was not handled:
+1. Test expected `ESPNAPIError` (correct - all request errors should wrap)
+2. Test failed - `ChunkedEncodingError` propagated unwrapped
+3. **Wrong fix:** Change test to expect `ChunkedEncodingError`
+4. **Right fix:** Add `ChunkedEncodingError` handling to `espn_client.py`
+5. Test now passes with original correct expectation
+
+**Key Insight:** Tests that reveal defects are VALUABLE. Don't silence them by changing expectations.
 
 ---
 

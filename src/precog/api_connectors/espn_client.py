@@ -825,6 +825,12 @@ class ESPNClient:
                     f"Connection error (attempt {attempt + 1}/{self.max_retries + 1}): {e}"
                 )
 
+            except requests.exceptions.ChunkedEncodingError as e:
+                last_exception = e
+                logger.warning(
+                    f"Chunked encoding error (attempt {attempt + 1}/{self.max_retries + 1}): {e}"
+                )
+
             except requests.HTTPError as e:
                 last_exception = e
                 status_code = e.response.status_code if e.response else 0
@@ -852,6 +858,10 @@ class ESPNClient:
         if isinstance(last_exception, requests.ConnectionError):
             raise ESPNAPIError(
                 f"Connection error after {self.max_retries + 1} attempts"
+            ) from last_exception
+        if isinstance(last_exception, requests.exceptions.ChunkedEncodingError):
+            raise ESPNAPIError(
+                f"Chunked encoding error after {self.max_retries + 1} attempts"
             ) from last_exception
         raise ESPNAPIError(
             f"Request failed after {self.max_retries + 1} attempts"

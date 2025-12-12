@@ -703,12 +703,23 @@ class TestErrorHandling:
 
 
 # =============================================================================
-# Edge Case Tests
+# Edge Case Tests (Chaos - Malformed Response Handling)
 # =============================================================================
 
 
+@pytest.mark.chaos
 class TestEdgeCases:
-    """Tests for edge cases and malformed data."""
+    """Tests for edge cases and malformed data.
+
+    These tests verify the client handles malformed API responses gracefully.
+    Marked as @pytest.mark.chaos per TESTING_STRATEGY_V3.2 - chaos tests cover
+    failure recovery scenarios including malformed responses.
+
+    Educational Note:
+        Chaos tests validate system resilience when things go wrong.
+        These tests ensure the ESPN client doesn't crash when receiving
+        unexpected or malformed data from the API.
+    """
 
     @patch("requests.Session.get")
     def test_handles_missing_events_key(self, mock_get: MagicMock):

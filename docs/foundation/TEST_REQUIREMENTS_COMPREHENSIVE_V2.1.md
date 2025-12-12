@@ -14,7 +14,7 @@
 - **Cross-references TEST_ISOLATION_PATTERNS_V1.1.md** for detailed implementation patterns
 **Changes in V2.0:**
 - **All 8 Test Types Now MANDATORY** - Removed N/A, OPT, P5+ designations
-- **Synced with TESTING_STRATEGY_V3.4** - Both documents now have identical requirements
+- **Synced with TESTING_STRATEGY_V3.5** - Both documents now have identical requirements
 - **Validation via Phase 2C** - CRUD tests uncovered 3 critical bugs proving all test types needed
 - **Lesson Learned:** Phase 2C race condition bug would have been caught by Race tests if they weren't OPT
 
@@ -86,7 +86,7 @@ Previous approach (V1.0) had tiered requirements based on "risk profiles." This 
 - **Performance:** Establishes latency baselines
 - **Chaos:** Validates failure recovery
 
-**Reference:** ADR-076 (Test Type Categories), TESTING_STRATEGY_V3.4
+**Reference:** ADR-076 (Test Type Categories), TESTING_STRATEGY_V3.5
 
 ---
 
@@ -1063,7 +1063,7 @@ SCD Type 2 state leakage causes:
 **Related Documents:**
 - `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Why we need these requirements
 - `TESTING_GAPS_ANALYSIS.md` - Current test coverage analysis
-- `docs/foundation/TESTING_STRATEGY_V3.4.md` - Comprehensive testing strategy with 8 test types
+- `docs/foundation/TESTING_STRATEGY_V3.5.md` - Comprehensive testing strategy with 8 test types
 - `docs/testing/TEST_ISOLATION_PATTERNS_V1.1.md` - Detailed patterns for test isolation (Phase 1.9)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` - Master requirements document
 
