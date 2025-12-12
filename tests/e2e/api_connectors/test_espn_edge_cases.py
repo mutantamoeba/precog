@@ -24,6 +24,11 @@ Educational Note:
     - Track counts for pattern detection
     - Provide structured results for debugging
 
+    Note on Type Annotations:
+        Some tests use `cast()` or `# type: ignore` for edge case data
+        that intentionally violates TypedDict contracts. This is correct
+        because we're testing how the validator handles malformed API data.
+
 Reference:
     - Issue #207: E2E Testing for ESPN Polling Edge Cases
     - ADR-101: ESPN Status and Season Type Mapping
@@ -32,6 +37,8 @@ Reference:
 
 Phase: 2 (Live Data Collection)
 """
+
+from typing import Any, cast
 
 import pytest
 import vcr
@@ -90,10 +97,12 @@ def minimal_team_info() -> ESPNTeamInfo:
 def minimal_venue_info() -> ESPNVenueInfo:
     """Create minimal venue info for synthetic tests."""
     return {
+        "espn_venue_id": "1",
         "venue_name": "Test Stadium",
-        "venue_city": "Test City",
-        "venue_state": "TS",
-        "venue_indoor": False,
+        "city": "Test City",
+        "state": "TS",
+        "capacity": 70000,
+        "indoor": False,
     }
 
 
@@ -124,8 +133,13 @@ class TestVenueEdgeCases:
             - London/Mexico City international games may have partial data
             - Some historical data has missing venue info
             - Exhibition games may omit venue
+
+            Note: We use cast() here because we're intentionally creating
+            malformed data to test the validator's edge case handling.
         """
-        game: ESPNGameFull = {
+        # Build as dict[str, Any] then cast - we're testing edge cases
+        # where real API data might have None values or missing fields
+        game_data: dict[str, Any] = {
             "metadata": {
                 "espn_event_id": "401547001",
                 "game_date": "2025-01-15T18:00:00Z",
@@ -149,25 +163,25 @@ class TestVenueEdgeCases:
                     "away_record": "0-0",
                     "rank": None,
                 },
-                "venue": None,  # Missing venue
+                # Missing venue - real API can return None for neutral site
                 "broadcast": "ESPN",
                 "neutral_site": True,  # Often correlates with missing venue
                 "season_type": "regular",
                 "week_number": 1,
-                "league": "nfl",
             },
             "state": {
                 "espn_event_id": "401547001",
                 "home_score": 0,
                 "away_score": 0,
                 "period": 0,
-                "clock_seconds": None,
+                "clock_seconds": 0.0,  # Pre-game has 0 seconds
                 "clock_display": "",
                 "game_status": "pre",
                 "situation": {},
-                "linescores": None,
+                "linescores": [],  # Empty before game starts
             },
         }
+        game = cast("ESPNGameFull", game_data)
 
         result = validator.validate_game_state(game)
 
@@ -210,15 +224,14 @@ class TestVenueEdgeCases:
                 },
                 "venue": {
                     "venue_name": "Caesars Superdome",
-                    "venue_city": "New Orleans",
-                    "venue_state": "LA",
-                    "venue_indoor": True,
+                    "city": "New Orleans",
+                    "state": "LA",
+                    "indoor": True,
                 },
                 "broadcast": "FOX",
                 "neutral_site": False,
                 "season_type": "regular",
                 "week_number": 10,
-                "league": "nfl",
             },
             "state": {
                 "espn_event_id": "401547002",
@@ -237,7 +250,7 @@ class TestVenueEdgeCases:
                     "home_timeouts": 3,
                     "away_timeouts": 3,
                 },
-                "linescores": None,
+                "linescores": [],
             },
         }
 
@@ -303,15 +316,14 @@ class TestGameStateEdgeCases:
                 },
                 "venue": {
                     "venue_name": "Arrowhead Stadium",
-                    "venue_city": "Kansas City",
-                    "venue_state": "MO",
-                    "venue_indoor": False,
+                    "city": "Kansas City",
+                    "state": "MO",
+                    "indoor": False,
                 },
                 "broadcast": "CBS",
                 "neutral_site": False,
                 "season_type": "postseason",
                 "week_number": 20,
-                "league": "nfl",
             },
             "state": {
                 "espn_event_id": "401547003",
@@ -330,7 +342,7 @@ class TestGameStateEdgeCases:
                     "home_timeouts": 2,
                     "away_timeouts": 1,
                 },
-                "linescores": None,
+                "linescores": [],
             },
         }
 
@@ -374,15 +386,14 @@ class TestGameStateEdgeCases:
                 },
                 "venue": {
                     "venue_name": "Cotton Bowl",
-                    "venue_city": "Dallas",
-                    "venue_state": "TX",
-                    "venue_indoor": False,
+                    "city": "Dallas",
+                    "state": "TX",
+                    "indoor": False,
                 },
                 "broadcast": "ABC",
                 "neutral_site": True,
                 "season_type": "regular",
                 "week_number": 8,
-                "league": "ncaaf",
             },
             "state": {
                 "espn_event_id": "401547004",
@@ -401,7 +412,7 @@ class TestGameStateEdgeCases:
                     "home_timeouts": 0,
                     "away_timeouts": 0,
                 },
-                "linescores": None,
+                "linescores": [],
             },
         }
 
@@ -422,8 +433,12 @@ class TestGameStateEdgeCases:
             - forfeit: One team declared loser
 
             We should handle these gracefully and log them.
+
+            Note: We use cast() here because we're intentionally creating
+            malformed data to test the validator's edge case handling.
         """
-        game: ESPNGameFull = {
+        # Build as dict[str, Any] then cast - testing malformed API data
+        game_data: dict[str, Any] = {
             "metadata": {
                 "espn_event_id": "401547005",
                 "game_date": "2025-01-15T18:00:00Z",
@@ -447,25 +462,25 @@ class TestGameStateEdgeCases:
                     "away_record": "0-0",
                     "rank": None,
                 },
-                "venue": None,
-                "broadcast": None,
+                "venue": None,  # Missing venue
+                "broadcast": None,  # Missing broadcast
                 "neutral_site": False,
                 "season_type": "regular",
                 "week_number": 1,
-                "league": "nfl",
             },
             "state": {
                 "espn_event_id": "401547005",
                 "home_score": 0,
                 "away_score": 0,
                 "period": 0,
-                "clock_seconds": None,
+                "clock_seconds": None,  # Unknown clock
                 "clock_display": "",
                 "game_status": "unknown",  # Unmapped status
                 "situation": {},
-                "linescores": None,
+                "linescores": [],  # Missing linescores
             },
         }
+        game = cast("ESPNGameFull", game_data)
 
         result = validator.validate_game_state(game)
 
@@ -791,9 +806,12 @@ class TestRegressionPrevention:
 
         Bug: Venue capacity returning null caused validation errors
         Fix: Made venue fields optional in validation
+
+        Note: We use cast() here because we're intentionally creating
+        malformed data to test the validator's edge case handling.
         """
-        # ESPN sometimes returns minimal venue data
-        game: ESPNGameFull = {
+        # Build as dict[str, Any] then cast - testing null venue fields
+        game_data: dict[str, Any] = {
             "metadata": {
                 "espn_event_id": "401547006",
                 "game_date": "2025-01-15T18:00:00Z",
@@ -819,15 +837,14 @@ class TestRegressionPrevention:
                 },
                 "venue": {
                     "venue_name": "Test Stadium",
-                    "venue_city": None,  # Null city
-                    "venue_state": None,  # Null state
-                    "venue_indoor": None,  # Null indoor
+                    "city": None,  # Null city
+                    "state": None,  # Null state
+                    "indoor": None,  # Null indoor
                 },
-                "broadcast": None,
+                "broadcast": None,  # Null broadcast
                 "neutral_site": False,
                 "season_type": "regular",
                 "week_number": 1,
-                "league": "nfl",
             },
             "state": {
                 "espn_event_id": "401547006",
@@ -838,9 +855,10 @@ class TestRegressionPrevention:
                 "clock_display": "10:00",
                 "game_status": "in_progress",
                 "situation": {},
-                "linescores": None,
+                "linescores": [],
             },
         }
+        game = cast("ESPNGameFull", game_data)
 
         result = validator.validate_game_state(game)
 
