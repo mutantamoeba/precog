@@ -99,21 +99,21 @@ def get_pid_file() -> Path:
         pid_dir = WINDOWS_PID_FILE.parent
         pid_dir.mkdir(parents=True, exist_ok=True)
         return WINDOWS_PID_FILE
-    # Use /var/run if available and writable, else fall back to user dir
-    # Note: Following code is unreachable on Windows (platform-specific)
-    if DEFAULT_PID_FILE.parent.exists():  # type: ignore[unreachable]
-        try:
-            # Test write permission
-            test_file = DEFAULT_PID_FILE.parent / ".test_write"
-            test_file.touch()
-            test_file.unlink()
-            return DEFAULT_PID_FILE
-        except PermissionError:
-            pass
-    # Fall back to user directory
-    fallback = Path.home() / ".precog" / "data_collector.pid"
-    fallback.parent.mkdir(parents=True, exist_ok=True)
-    return fallback
+    else:  # noqa: RET505 - explicit else needed for mypy cross-platform compatibility
+        # Use /var/run if available and writable, else fall back to user dir
+        if DEFAULT_PID_FILE.parent.exists():
+            try:
+                # Test write permission
+                test_file = DEFAULT_PID_FILE.parent / ".test_write"
+                test_file.touch()
+                test_file.unlink()
+                return DEFAULT_PID_FILE
+            except PermissionError:
+                pass
+        # Fall back to user directory
+        fallback = Path.home() / ".precog" / "data_collector.pid"
+        fallback.parent.mkdir(parents=True, exist_ok=True)
+        return fallback
 
 
 def get_log_dir() -> Path:
@@ -121,18 +121,18 @@ def get_log_dir() -> Path:
     if sys.platform == "win32":
         WINDOWS_LOG_DIR.mkdir(parents=True, exist_ok=True)
         return WINDOWS_LOG_DIR
-    # Note: Following code is unreachable on Windows (platform-specific)
-    if DEFAULT_LOG_DIR.exists():  # type: ignore[unreachable]
-        try:
-            test_file = DEFAULT_LOG_DIR / ".test_write"
-            test_file.touch()
-            test_file.unlink()
-            return DEFAULT_LOG_DIR
-        except PermissionError:
-            pass
-    fallback = Path.home() / ".precog" / "logs"
-    fallback.mkdir(parents=True, exist_ok=True)
-    return fallback
+    else:  # noqa: RET505 - explicit else needed for mypy cross-platform compatibility
+        if DEFAULT_LOG_DIR.exists():
+            try:
+                test_file = DEFAULT_LOG_DIR / ".test_write"
+                test_file.touch()
+                test_file.unlink()
+                return DEFAULT_LOG_DIR
+            except PermissionError:
+                pass
+        fallback = Path.home() / ".precog" / "logs"
+        fallback.parent.mkdir(parents=True, exist_ok=True)
+        return fallback
 
 
 def write_pid_file(pid_file: Path) -> None:
@@ -171,12 +171,12 @@ def is_process_running(pid: int) -> bool:
             kernel32.CloseHandle(handle)
             return True
         return False
-    # Note: Following code is unreachable on Windows (platform-specific)
-    try:  # type: ignore[unreachable]
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
+    else:  # noqa: RET505 - explicit else needed for mypy cross-platform compatibility
+        try:
+            os.kill(pid, 0)
+            return True
+        except OSError:
+            return False
 
 
 def setup_logging(log_dir: Path, debug: bool = False) -> logging.Logger:
