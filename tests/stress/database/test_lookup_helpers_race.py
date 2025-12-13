@@ -198,12 +198,22 @@ class TestGetValidCodesRace:
     @patch("precog.database.lookup_helpers.fetch_all")
     def test_concurrent_get_valid_codes_no_race(self, mock_fetch: MagicMock) -> None:
         """Verify concurrent valid code retrieval has no race conditions."""
-        mock_fetch.return_value = [
-            {"strategy_type_code": "type1"},
-            {"strategy_type_code": "type2"},
-            {"model_class_code": "class1"},
-            {"model_class_code": "class2"},
-        ]
+
+        # Each function expects its own field, so provide proper data for both
+        def mock_side_effect(query: str, *args, **kwargs):  # type: ignore[no-untyped-def]
+            if "strategy_type" in query.lower():
+                return [
+                    {"strategy_type_code": "type1"},
+                    {"strategy_type_code": "type2"},
+                ]
+            if "model_class" in query.lower():
+                return [
+                    {"model_class_code": "class1"},
+                    {"model_class_code": "class2"},
+                ]
+            return []
+
+        mock_fetch.side_effect = mock_side_effect
 
         results = []
         errors = []

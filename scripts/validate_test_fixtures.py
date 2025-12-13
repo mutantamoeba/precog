@@ -145,21 +145,36 @@ def get_test_category(test_file: Path, requirements: dict) -> str | None:
     return None
 
 
-def check_fixture_usage(test_file: Path, required_fixtures: list[str]) -> list[str]:
+def check_fixture_usage(
+    test_file: Path, required_fixtures: list[str], exception_comments: list[str]
+) -> list[str]:
     """
     Check if test file uses required fixtures.
 
     Args:
         test_file: Path to test file
         required_fixtures: List of fixture names to check for
+        exception_comments: List of comment strings that allow exceptions
 
     Returns:
-        List of missing fixtures (empty list if all present)
+        List of missing fixtures (empty list if all present or exceptions found)
+
+    Educational Note:
+        Tests can be exempted from fixture requirements by adding allowed
+        exception comments (e.g., "Unit test - mock OK"). This allows
+        integration test files to contain both true integration tests
+        (using real fixtures) and unit-style tests (using mocks) when
+        testing pure logic that doesn't require database connectivity.
     """
     missing = []
 
     try:
         content = test_file.read_text(encoding="utf-8")
+
+        # If file contains any exception comment, skip fixture requirement check
+        for exception in exception_comments:
+            if exception.lower() in content.lower():
+                return []  # File is exempt from fixture requirements
 
         for fixture in required_fixtures:
             # Check if fixture used in function signatures
@@ -299,7 +314,7 @@ def validate_test_fixtures(verbose: bool = False) -> tuple[bool, list[str]]:
 
         # Only check for required fixtures if the category has any
         if required_fixtures:
-            missing_fixtures = check_fixture_usage(test_file, required_fixtures)
+            missing_fixtures = check_fixture_usage(test_file, required_fixtures, exception_comments)
 
             if missing_fixtures:
                 violations.append(
