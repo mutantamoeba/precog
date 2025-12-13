@@ -25,11 +25,11 @@ class TestSchemaValidationE2E:
 
     def test_validate_real_schema_file(self) -> None:
         """Verify validation works with actual project schema file."""
-        # Look for actual schema file in project
+        # Look for actual schema file in project (current paths as of v1.7+)
         possible_paths = [
-            "database/precog_schema_v1.7.sql",
+            "src/precog/database/migrations/000_base_schema.sql",
             "src/precog/database/schema.sql",
-            "schema.sql",
+            "database/schema.sql",
         ]
 
         found_schema = None
@@ -42,7 +42,7 @@ class TestSchemaValidationE2E:
             result = validate_schema_file(found_schema)
             assert result is True
         else:
-            pytest.skip("No schema file found in expected locations")
+            pytest.skip("No schema file found. Expected one of: " + ", ".join(possible_paths))
 
     def test_validate_nonexistent_schema_returns_false(self) -> None:
         """Verify nonexistent schema file returns False."""
