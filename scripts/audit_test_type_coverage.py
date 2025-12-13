@@ -59,22 +59,51 @@ TEST_TYPES = {
 # Critical Path (90%+ coverage) needs ALL 8 types
 # Business Logic (85%+) needs 6 types (skip performance, chaos)
 # Infrastructure (80%+) needs 4 types (unit, integration, stress, race)
+#
+# Issue #217: Added missing modules (2025-12-13)
+# - Fixed analytics/ -> trading/ path errors
+# - Added service_supervisor, service_runner, kelly_criterion (critical)
+# - Added espn_game_poller, seeding_manager, espn_validation (business)
+# - Added base_poller, rate_limiter, environment, initialization, lookup_helpers (infra)
 MODULE_TIERS = {
     # Critical Path (90%+) - ALL 8 test types required
+    # API & Authentication
     "api_connectors/kalshi_client": "critical",
     "api_connectors/kalshi_auth": "critical",
+    # Schedulers & Service Management
     "schedulers/market_data_manager": "critical",
     "schedulers/kalshi_poller": "critical",
     "schedulers/kalshi_websocket": "critical",
+    "schedulers/service_supervisor": "critical",
+    "runners/service_runner": "critical",
+    # Trading Logic
+    "trading/kelly_criterion": "critical",
     # Business Logic (85%+) - 6 types required
-    "analytics/strategy_manager": "business",
+    # Analytics & Strategy
     "analytics/model_manager": "business",
-    "analytics/position_manager": "business",
+    "trading/strategy_manager": "business",
+    "trading/position_manager": "business",
+    # Data Operations
     "database/crud_operations": "business",
+    "database/seeding/seeding_manager": "business",
+    # Schedulers
+    "schedulers/espn_game_poller": "business",
+    # Validation
+    "validation/espn_validation": "business",
     # Infrastructure (80%+) - 4 types required
+    # API Clients
     "api_connectors/espn_client": "infrastructure",
+    "api_connectors/rate_limiter": "infrastructure",
+    # Configuration
     "config/config_loader": "infrastructure",
+    "config/environment": "infrastructure",
+    # Database
     "database/connection": "infrastructure",
+    "database/initialization": "infrastructure",
+    "database/lookup_helpers": "infrastructure",
+    # Schedulers Base
+    "schedulers/base_poller": "infrastructure",
+    # Utilities
     "utils/logger": "infrastructure",
 }
 
