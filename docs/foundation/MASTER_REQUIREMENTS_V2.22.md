@@ -115,7 +115,7 @@
 - **PHASE 0.6C STATUS**: REQ-TEST-005, REQ-VALIDATION-001-003 marked as ✅ Complete
 - **PHASE 0.7 PLANNING**: REQ-TEST-006-008, REQ-CICD-001-003 marked as 🔵 Planned
 - **CROSS-REFERENCES**: Added ADR-038 through ADR-045 references
-- **DOCUMENTATION REFERENCES**: Added TESTING_STRATEGY_V3.6.md, VALIDATION_LINTING_ARCHITECTURE_V1.0.md
+- **DOCUMENTATION REFERENCES**: Added TESTING_STRATEGY_V3.7.md, VALIDATION_LINTING_ARCHITECTURE_V1.0.md
 **Changes in v2.8:**
 - **PHASE 0.6B DOCUMENTATION**: Updated all supplementary document references with standardized filenames (removed PHASE_ prefixes, standardized V1.0 format)
 - **NEW SECTION 4.10**: CLI Commands requirements (REQ-CLI-001 through REQ-CLI-005) - Typer framework with 5 core commands
@@ -306,7 +306,7 @@ precog/
   4. `ARCHITECTURE_DECISIONS_V2.29.md` - All 105 ADRs with design rationale (Phase 0-4.5)
   5. `REQUIREMENT_INDEX_V1.14.md` - Systematic requirement catalog
   6. `ADR_INDEX_V1.22.md` - Architecture decision index
-  7. `TESTING_STRATEGY_V3.6.md` - Test cases, coverage requirements, test isolation patterns
+  7. `TESTING_STRATEGY_V3.7.md` - Test cases, coverage requirements, test isolation patterns
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
 - **Supplementary Documents** (in `docs/supplementary/`):
@@ -2012,7 +2012,7 @@ pyyaml==6.0.1
 **Phase:** 0.6c
 **Priority:** High
 **Status:** ✅ Complete
-**Reference:** ADR-039, TESTING_STRATEGY_V3.6.md
+**Reference:** ADR-039, TESTING_STRATEGY_V3.7.md
 
 Test results must be persisted with timestamps for trend analysis and CI/CD integration:
 - Timestamped HTML reports in `test_results/YYYY-MM-DD_HHMMSS/`
