@@ -142,28 +142,32 @@ def discover_tests_for_module(module_path: str) -> dict[str, list[str]]:
 
     Returns dict mapping test_type -> list of test files
 
-    Search strategy:
-    1. Type-specific directories (tests/unit/, tests/property/, etc.)
-    2. Root tests/ directory (legacy location, treated as unit tests)
-    3. Alternate naming patterns (e.g., test_database_crud_* for crud_operations)
+    Search strategy (STRICT matching to avoid false positives):
+    1. Exact module name match in test filename (e.g., test_config_loader*.py)
+    2. Directory structure match (e.g., tests/unit/config/test_config_loader.py)
+    3. Parent-prefixed name (e.g., test_database_crud_operations.py for database/crud_operations)
+
+    Educational Note (Issue #217 fix):
+        Previous implementation used loose partial matching (e.g., "manager" would match
+        all *_manager modules). This caused false positives where tests for strategy_manager
+        would count for position_manager, model_manager, etc.
+
+        The fix uses STRICT matching:
+        - Only exact module name matches count
+        - No partial word matching (no splitting on underscores)
+        - Tests must be in matching directory structure OR have exact module name in filename
     """
     module_name = Path(module_path).stem
     parent_dir = Path(module_path).parent
 
     tests_found: dict[str, list[str]] = defaultdict(list)
 
-    # Build search patterns for this module
-    # E.g., "crud_operations" -> ["crud_operations", "crud", "operations", "database_crud"]
+    # STRICT search patterns - only exact matches, no partial word matching
+    # E.g., "config_loader" -> ["config_loader"] (NOT ["config", "loader"])
     search_patterns = [module_name]
-    if "_" in module_name:
-        # Also search for parts
-        parts = module_name.split("_")
-        if len(parts) >= 2:
-            search_patterns.append(parts[0])  # e.g., "crud" from "crud_operations"
-            search_patterns.append(parts[-1])  # e.g., "operations" from "crud_operations"
-    # Add parent directory as prefix pattern (e.g., "database_crud" for database/crud_operations)
+    # Add parent-prefixed pattern for disambiguation (e.g., "database_crud_operations")
     parent_name = str(parent_dir).replace("/", "_").replace("\\", "_")
-    if parent_name:
+    if parent_name and parent_name != ".":
         search_patterns.append(f"{parent_name}_{module_name}")
 
     for test_type, config in TEST_TYPES.items():
