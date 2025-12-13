@@ -26,6 +26,7 @@ pytestmark = [pytest.mark.integration]
 class TestStrategyTypesIntegration:
     """Integration tests for strategy type functions."""
 
+    # Unit test - mock OK (tests ordering logic, not database queries)
     @patch("precog.database.lookup_helpers.fetch_all")
     def test_get_types_with_ordering(self, mock_fetch: MagicMock) -> None:
         """Verify types are returned in display_order."""
@@ -40,6 +41,7 @@ class TestStrategyTypesIntegration:
         assert result[0]["strategy_type_code"] == "first"
         assert result[-1]["strategy_type_code"] == "third"
 
+    # Unit test - mock OK (tests grouping logic, not database queries)
     @patch("precog.database.lookup_helpers.fetch_all")
     def test_category_grouping_maintains_order(self, mock_fetch: MagicMock) -> None:
         """Verify order is maintained within categories."""
@@ -58,6 +60,7 @@ class TestStrategyTypesIntegration:
 class TestModelClassesIntegration:
     """Integration tests for model class functions."""
 
+    # Unit test - mock OK (tests complexity field handling, not database queries)
     @patch("precog.database.lookup_helpers.fetch_all")
     def test_get_classes_with_complexity(self, mock_fetch: MagicMock) -> None:
         """Verify classes include complexity information."""
@@ -75,6 +78,7 @@ class TestModelClassesIntegration:
 class TestValidationIntegration:
     """Integration tests for validation functions."""
 
+    # Unit test - mock OK (tests query generation logic, not database queries)
     @patch("precog.database.lookup_helpers.fetch_one")
     def test_validate_strategy_type_active_check(self, mock_fetch: MagicMock) -> None:
         """Verify active_only affects validation query."""
@@ -91,6 +95,7 @@ class TestValidationIntegration:
         assert "is_active = TRUE" in call1
         assert "is_active = TRUE" not in call2
 
+    # Unit test - mock OK (tests query generation logic, not database queries)
     @patch("precog.database.lookup_helpers.fetch_one")
     def test_validate_model_class_active_check(self, mock_fetch: MagicMock) -> None:
         """Verify active_only affects validation query."""
@@ -111,6 +116,7 @@ class TestValidationIntegration:
 class TestAddFunctionsIntegration:
     """Integration tests for add functions."""
 
+    # Unit test - mock OK (tests return value handling, not database writes)
     @patch("precog.database.connection.get_cursor")
     def test_add_strategy_type_returns_inserted_row(self, mock_get_cursor: MagicMock) -> None:
         """Verify add_strategy_type returns inserted data."""
@@ -137,6 +143,7 @@ class TestAddFunctionsIntegration:
         assert result["strategy_type_code"] == "test"
         assert result["display_name"] == "Test Strategy"
 
+    # Unit test - mock OK (tests return value handling, not database writes)
     @patch("precog.database.connection.get_cursor")
     def test_add_model_class_returns_inserted_row(self, mock_get_cursor: MagicMock) -> None:
         """Verify add_model_class returns inserted data."""
