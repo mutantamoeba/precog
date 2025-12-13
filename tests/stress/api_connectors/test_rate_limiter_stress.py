@@ -223,8 +223,13 @@ class TestRateLimiterChaos:
 
     def test_zero_capacity_handling(self) -> None:
         """Test edge case of zero capacity bucket."""
+        # Zero capacity bucket raises ValueError when acquiring tokens
+        # because requested tokens > capacity is always true
         bucket = TokenBucket(capacity=0, refill_rate=1)
 
-        # Should never be able to acquire
-        assert not bucket.acquire(block=False)
+        # Verify capacity is 0
         assert bucket.get_available_tokens() == 0
+
+        # Trying to acquire with zero capacity raises ValueError
+        with pytest.raises(ValueError, match="exceeds capacity"):
+            bucket.acquire(block=False)
