@@ -104,10 +104,14 @@ class TestApplySchemaProperties:
 class TestGetDatabaseUrlProperties:
     """Property tests for get_database_url function."""
 
-    @given(st.text(min_size=1, max_size=200))
+    @given(st.text(min_size=1, max_size=200).filter(lambda x: "\x00" not in x))
     @settings(max_examples=30)
     def test_returns_exact_env_value(self, url: str) -> None:
-        """Function should return exact value from environment."""
+        """Function should return exact value from environment.
+
+        Note: Filter excludes null characters because Windows cannot set
+        environment variables containing null bytes (ValueError: embedded null character).
+        """
         import os
 
         old_value = os.environ.get("DATABASE_URL")
