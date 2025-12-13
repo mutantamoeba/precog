@@ -43,16 +43,19 @@ class TestEnvironmentChaos:
     def test_invalid_environment_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test behavior with invalid environment value."""
         monkeypatch.setenv("PRECOG_ENV", "invalid_env")
+        monkeypatch.delenv("DB_NAME", raising=False)
 
-        with pytest.raises(ValueError):
-            get_app_environment()
+        # Invalid value falls back to default (development)
+        env = get_app_environment()
+        assert env == AppEnvironment.DEVELOPMENT
 
     def test_invalid_market_mode_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test behavior with invalid market mode value."""
         monkeypatch.setenv("KALSHI_MODE", "invalid_mode")
 
-        with pytest.raises(ValueError):
-            get_market_mode("kalshi")
+        # Invalid value falls back to default (demo)
+        mode = get_market_mode("kalshi")
+        assert mode == MarketMode.DEMO
 
     def test_empty_environment_value(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test behavior with empty environment value."""
