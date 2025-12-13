@@ -22,17 +22,35 @@ from precog.database.initialization import (
 pytestmark = [pytest.mark.integration]
 
 
+def _get_database_url() -> str | None:
+    """Construct database URL from environment variables."""
+    # Try explicit DATABASE_URL first
+    if os.getenv("DATABASE_URL"):
+        return os.getenv("DATABASE_URL")
+
+    # Construct from individual variables
+    host = os.getenv("DB_HOST") or os.getenv("TEST_DB_HOST")
+    port = os.getenv("DB_PORT") or os.getenv("TEST_DB_PORT")
+    name = os.getenv("DB_NAME") or os.getenv("TEST_DB_NAME")
+    user = os.getenv("DB_USER") or os.getenv("TEST_DB_USER")
+    password = os.getenv("DB_PASSWORD") or os.getenv("TEST_DB_PASSWORD")
+
+    if all([host, port, name, user, password]):
+        return f"postgresql://{user}:{password}@{host}:{port}/{name}"
+    return None
+
+
 class TestApplySchemaIntegration:
     """Integration tests for schema application."""
 
     @pytest.mark.skipif(
-        not os.getenv("DATABASE_URL"), reason="DATABASE_URL not set - requires PostgreSQL"
+        not _get_database_url(), reason="No database credentials available - requires PostgreSQL"
     )
     def test_apply_schema_with_real_psql(self, tmp_path: Path) -> None:
         """Test schema application with actual psql command.
 
         Note:
-            This test requires psql to be installed and DATABASE_URL to be set.
+            This test requires psql to be installed and database credentials to be set.
             It creates a temporary schema file and attempts to apply it.
         """
         schema_file = tmp_path / "test_schema.sql"
@@ -43,13 +61,15 @@ class TestApplySchemaIntegration:
             );
         """)
 
-        db_url = os.getenv("DATABASE_URL")
+        db_url = _get_database_url()
+        assert db_url is not None  # Ensured by skipif decorator
         success, error = apply_schema(db_url, str(schema_file))
 
         # Should succeed or fail with "already exists" (which is OK)
         if not success:
             assert "already exists" in error.lower() or "psql" in error.lower()
 
+    # Unit test - mock OK (tests command construction logic, not database execution)
     @patch("precog.database.initialization.subprocess.run")
     def test_schema_application_uses_correct_command(
         self, mock_run: MagicMock, tmp_path: Path
@@ -72,6 +92,7 @@ class TestApplySchemaIntegration:
 class TestApplyMigrationsIntegration:
     """Integration tests for migration application."""
 
+    # Unit test - mock OK (tests ordering logic, not database execution)
     @patch("precog.database.initialization.subprocess.run")
     def test_migrations_applied_in_alphabetical_order(
         self, mock_run: MagicMock, tmp_path: Path
@@ -98,6 +119,7 @@ class TestApplyMigrationsIntegration:
         assert "002_second.sql" in str(calls[1])
         assert "003_third.sql" in str(calls[2])
 
+    # Error handling test (tests failure recovery logic)
     @patch("precog.database.initialization.subprocess.run")
     def test_continues_after_migration_failure(self, mock_run: MagicMock, tmp_path: Path) -> None:
         """Verify migration continues after individual failure."""
@@ -124,6 +146,7 @@ class TestApplyMigrationsIntegration:
 class TestValidateCriticalTablesIntegration:
     """Integration tests for table validation."""
 
+    # Unit test - mock OK (tests table counting logic, not database queries)
     @patch("precog.database.connection.fetch_all")
     def test_validates_default_critical_tables(self, mock_fetch: MagicMock) -> None:
         """Verify default critical tables are checked."""
@@ -135,6 +158,7 @@ class TestValidateCriticalTablesIntegration:
         assert mock_fetch.call_count == 8
         assert missing == []
 
+    # Unit test - mock OK (tests missing table reporting logic)
     @patch("precog.database.connection.fetch_all")
     def test_reports_missing_tables(self, mock_fetch: MagicMock) -> None:
         """Verify missing tables are correctly reported."""
@@ -156,6 +180,7 @@ class TestValidateCriticalTablesIntegration:
         assert "markets" in missing
         assert len(missing) == 2
 
+    # Unit test - mock OK (tests custom table list handling logic)
     @patch("precog.database.connection.fetch_all")
     def test_custom_table_list(self, mock_fetch: MagicMock) -> None:
         """Verify custom table list is used when provided."""

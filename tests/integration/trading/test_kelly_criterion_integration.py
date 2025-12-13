@@ -86,6 +86,7 @@ class TestKellyEdgeIntegration:
 class TestLoggerIntegration:
     """Integration tests for logger integration."""
 
+    # Unit test - mock OK (tests logging behavior, not database)
     @patch("precog.trading.kelly_criterion.logger")
     def test_kelly_logs_debug_info(self, mock_logger: MagicMock) -> None:
         """Test Kelly calculation logs debug info."""
@@ -97,6 +98,7 @@ class TestLoggerIntegration:
 
         mock_logger.debug.assert_called()
 
+    # Unit test - mock OK (tests logging behavior, not database)
     @patch("precog.trading.kelly_criterion.logger")
     def test_zero_edge_logs_reason(self, mock_logger: MagicMock) -> None:
         """Test zero edge logs reason for zero position."""
@@ -111,6 +113,7 @@ class TestLoggerIntegration:
         call_args = str(mock_logger.debug.call_args)
         assert "edge" in call_args.lower() or "Non-positive" in str(mock_logger.debug.call_args)
 
+    # Unit test - mock OK (tests logging behavior, not database)
     @patch("precog.trading.kelly_criterion.logger")
     def test_edge_logs_calculation(self, mock_logger: MagicMock) -> None:
         """Test edge calculation logs info."""
@@ -121,6 +124,7 @@ class TestLoggerIntegration:
 
         mock_logger.debug.assert_called()
 
+    # Unit test - mock OK (tests logging behavior, not database)
     @patch("precog.trading.kelly_criterion.logger")
     def test_position_capped_logs_warning(self, mock_logger: MagicMock) -> None:
         """Test position capped at bankroll logs info."""
