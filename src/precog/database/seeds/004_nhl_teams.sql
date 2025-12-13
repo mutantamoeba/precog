@@ -34,7 +34,9 @@ INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_
 ('WSH', 'Washington Capitals', 'Capitals', 'nhl', 'nhl', '15', 1540, 'Eastern', 'Metropolitan'),
 
 -- WESTERN CONFERENCE - Central Division
-('ARI', 'Utah Hockey Club', 'Utah HC', 'nhl', 'nhl', '53', 1380, 'Western', 'Central'),
+-- Utah Hockey Club (formerly Arizona Coyotes, relocated 2024)
+-- ESPN uses team_id 129764 with code 'UTA' after relocation
+('UTA', 'Utah Hockey Club', 'Utah HC', 'nhl', 'nhl', '129764', 1380, 'Western', 'Central'),
 ('CHI', 'Chicago Blackhawks', 'Blackhawks', 'nhl', 'nhl', '16', 1360, 'Western', 'Central'),
 ('COL', 'Colorado Avalanche', 'Avalanche', 'nhl', 'nhl', '17', 1580, 'Western', 'Central'),
 ('DAL', 'Dallas Stars', 'Stars', 'nhl', 'nhl', '25', 1600, 'Western', 'Central'),
@@ -49,7 +51,8 @@ INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_
 ('EDM', 'Edmonton Oilers', 'Oilers', 'nhl', 'nhl', '22', 1620, 'Western', 'Pacific'),
 ('LAK', 'Los Angeles Kings', 'Kings', 'nhl', 'nhl', '26', 1540, 'Western', 'Pacific'),
 ('SJS', 'San Jose Sharks', 'Sharks', 'nhl', 'nhl', '28', 1340, 'Western', 'Pacific'),
-('SEA', 'Seattle Kraken', 'Kraken', 'nhl', 'nhl', '55', 1460, 'Western', 'Pacific'),
+-- Seattle Kraken ESPN ID updated from 55 to 124292 per ESPN API
+('SEA', 'Seattle Kraken', 'Kraken', 'nhl', 'nhl', '124292', 1460, 'Western', 'Pacific'),
 ('VAN', 'Vancouver Canucks', 'Canucks', 'nhl', 'nhl', '23', 1560, 'Western', 'Pacific'),
 ('VGK', 'Vegas Golden Knights', 'Golden Knights', 'nhl', 'nhl', '54', 1600, 'Western', 'Pacific');
 

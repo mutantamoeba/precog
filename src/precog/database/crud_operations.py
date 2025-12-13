@@ -401,6 +401,210 @@ def validate_decimal(value: Any, param_name: str) -> Decimal:
 
 
 # =============================================================================
+# EVENT OPERATIONS
+# =============================================================================
+
+
+def get_event(event_id: str) -> dict[str, Any] | None:
+    """
+    Get an event by event_id.
+
+    Args:
+        event_id: The event identifier (primary key)
+
+    Returns:
+        Dictionary with event data, or None if not found
+
+    Example:
+        >>> event = get_event("KXNFL-24DEC22-KC-SEA")
+        >>> if event:
+        ...     print(event['title'])
+    """
+    query = """
+        SELECT *
+        FROM events
+        WHERE event_id = %s
+    """
+    return fetch_one(query, (event_id,))
+
+
+def create_event(
+    event_id: str,
+    platform_id: str,
+    external_id: str,
+    category: str,
+    title: str,
+    series_id: str | None = None,
+    subcategory: str | None = None,
+    description: str | None = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
+    status: str | None = None,
+    metadata: dict | None = None,
+) -> str:
+    """
+    Create a new event record.
+
+    Events are the parent entities for markets. Each market belongs to an event,
+    enforced via foreign key constraint (markets.event_id -> events.event_id).
+
+    Args:
+        event_id: Unique event identifier (primary key)
+        platform_id: Foreign key to platforms table (e.g., 'kalshi')
+        external_id: External ID from the platform API
+        category: Event category ('sports', 'politics', 'entertainment',
+                  'economics', 'weather', 'other')
+        title: Event title/description
+        series_id: Optional foreign key to series table
+        subcategory: Optional subcategory (e.g., 'nfl', 'nba')
+        description: Optional detailed description
+        start_time: Optional event start time (ISO format)
+        end_time: Optional event end time (ISO format)
+        status: Optional status ('scheduled', 'live', 'final', 'cancelled', 'postponed')
+        metadata: Optional additional metadata as JSONB
+
+    Returns:
+        event_id of the created event
+
+    Raises:
+        psycopg2.IntegrityError: If event_id already exists or platform_id invalid
+
+    Example:
+        >>> event_id = create_event(
+        ...     event_id="KXNFL-24DEC22-KC-SEA",
+        ...     platform_id="kalshi",
+        ...     external_id="KXNFL-24DEC22-KC-SEA",
+        ...     category="sports",
+        ...     title="Chiefs vs Seahawks - Dec 22, 2024",
+        ...     subcategory="nfl"
+        ... )
+
+    Educational Note:
+        Events represent real-world occurrences (games, elections, etc.) that
+        markets are based on. One event can have multiple markets:
+        - Event: "Chiefs vs Seahawks - Dec 22"
+        - Markets: "Chiefs to win", "Total points over 45.5", "Kelce 100+ yards"
+
+        The foreign key constraint ensures data integrity - you can't create
+        a market for a non-existent event.
+
+    Reference: docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+    """
+    query = """
+        INSERT INTO events (
+            event_id, platform_id, series_id, external_id,
+            category, subcategory, title, description,
+            start_time, end_time, status, metadata,
+            created_at, updated_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+        RETURNING event_id
+    """
+
+    params = (
+        event_id,
+        platform_id,
+        series_id,
+        external_id,
+        category,
+        subcategory,
+        title,
+        description,
+        start_time,
+        end_time,
+        status,
+        json.dumps(metadata) if metadata else None,
+    )
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, params)
+        result = cur.fetchone()
+        return cast("str", result["event_id"])
+
+
+def get_or_create_event(
+    event_id: str,
+    platform_id: str,
+    external_id: str,
+    category: str,
+    title: str,
+    series_id: str | None = None,
+    subcategory: str | None = None,
+    description: str | None = None,
+    start_time: str | None = None,
+    end_time: str | None = None,
+    status: str | None = None,
+    metadata: dict | None = None,
+) -> tuple[str, bool]:
+    """
+    Get an existing event or create it if it doesn't exist.
+
+    This is a convenience function that combines get_event() and create_event()
+    to handle the common pattern of "upsert" behavior for events.
+
+    Args:
+        event_id: Unique event identifier (primary key)
+        platform_id: Foreign key to platforms table
+        external_id: External ID from the platform API
+        category: Event category
+        title: Event title
+        series_id: Optional series foreign key
+        subcategory: Optional subcategory
+        description: Optional description
+        start_time: Optional start time
+        end_time: Optional end time
+        status: Optional status
+        metadata: Optional metadata
+
+    Returns:
+        Tuple of (event_id, created) where created is True if event was
+        newly created, False if it already existed.
+
+    Example:
+        >>> event_id, created = get_or_create_event(
+        ...     event_id="KXNFL-24DEC22-KC-SEA",
+        ...     platform_id="kalshi",
+        ...     external_id="KXNFL-24DEC22-KC-SEA",
+        ...     category="sports",
+        ...     title="Chiefs vs Seahawks - Dec 22, 2024"
+        ... )
+        >>> if created:
+        ...     print(f"Created new event: {event_id}")
+        ... else:
+        ...     print(f"Event already exists: {event_id}")
+
+    Educational Note:
+        This pattern is essential for polling services like KalshiMarketPoller.
+        When polling API data, the same events appear repeatedly. This function
+        ensures we don't attempt duplicate inserts (which would fail due to
+        primary key constraint) while still creating new events when they appear.
+
+    Reference: src/precog/schedulers/kalshi_poller.py
+    """
+    # Check if event already exists
+    existing = get_event(event_id)
+    if existing is not None:
+        return event_id, False
+
+    # Create new event
+    create_event(
+        event_id=event_id,
+        platform_id=platform_id,
+        external_id=external_id,
+        category=category,
+        title=title,
+        series_id=series_id,
+        subcategory=subcategory,
+        description=description,
+        start_time=start_time,
+        end_time=end_time,
+        status=status,
+        metadata=metadata,
+    )
+    return event_id, True
+
+
+# =============================================================================
 # MARKET OPERATIONS
 # =============================================================================
 

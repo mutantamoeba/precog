@@ -1,10 +1,17 @@
-# Testing Strategy V3.6
+# Testing Strategy V3.7
 
 **Document Type:** Foundation
 **Status:** ✅ Active
-**Version:** 3.6
+**Version:** 3.7
 **Created:** 2025-10-23
-**Last Updated:** 2025-12-11
+**Last Updated:** 2025-12-12
+**Changes in V3.7:**
+- **Three-Layer E2E Testing Gap Pattern (CRITICAL)** - Added Best Practice #7 documenting the API → Python → DATABASE testing gap
+- VCR cassettes and mock tests miss database constraint violations (status mapping, FK violations)
+- Three-layer model: API Client E2E (Layer 1), VCR Integration (Layer 2), Poller E2E (Layer 3)
+- When to add Poller E2E tests checklist (writes to DB, transforms data, has FK, has constraints)
+- Real-world example: kalshi_poller.py bugs discovered in Phase 2.5 (Issue #216 follow-on)
+- Reference: `tests/e2e/schedulers/test_kalshi_poller_e2e.py` (17 tests)
 **Changes in V3.6:**
 - **Fast Chaos Tests Pattern (CI Optimization)** - Added pattern for keeping chaos tests fast in CI
 - Patch `time.sleep` to no-op for tests that trigger retry/backoff logic
@@ -2719,6 +2726,105 @@ ESPN chaos test revealed `ChunkedEncodingError` was not handled:
 5. Test now passes with original correct expectation
 
 **Key Insight:** Tests that reveal defects are VALUABLE. Don't silence them by changing expectations.
+
+---
+
+### 7. Three-Layer E2E Testing Gap (CRITICAL)
+
+**Principle:** VCR/mock tests can hide database integration bugs. True E2E tests must exercise the complete data path.
+
+**The Problem (Phase 2.5 Discovery):**
+
+The `kalshi_poller.py` had two bugs that passed ALL existing tests but failed in production:
+1. **Status mapping bug:** API returns "active" but DB constraint only allows "open"
+2. **Foreign key bug:** Markets created without parent events
+
+**Why Existing Tests Missed These:**
+
+| Test Layer | What It Tests | What It Misses |
+|------------|--------------|----------------|
+| **API Client E2E** | API → Python objects | Database constraints, FK relationships |
+| **VCR Cassettes** | Recorded API → Python parsing | Database writes entirely |
+| **Mock-based Integration** | Component interactions | Real constraint violations |
+
+**The Three-Layer Testing Model:**
+
+```
+Layer 1: API Client E2E (test_kalshi_e2e.py)
+├── Tests: API authentication, response parsing, rate limiting
+├── Uses: Real API calls (mocked in CI)
+└── Catches: Auth failures, JSON parsing errors, type mismatches
+
+Layer 2: VCR Integration (test_kalshi_integration.py)
+├── Tests: API response handling without network calls
+├── Uses: Pre-recorded cassettes (fixtures/vcr_cassettes/)
+└── Catches: Parsing regressions, format changes, response shape
+
+Layer 3: Poller E2E (test_kalshi_poller_e2e.py) ⭐ THE MISSING LAYER
+├── Tests: API → Python → DATABASE complete path
+├── Uses: Real database with test transactions
+└── Catches: Status constraints, FK violations, Decimal precision
+```
+
+**Implementation Pattern:**
+
+```python
+# tests/e2e/schedulers/test_kalshi_poller_e2e.py
+@pytest.mark.e2e
+@pytest.mark.database
+class TestKalshiPollerDatabaseIntegration:
+    """E2E tests that exercise the complete API → Database path.
+
+    These tests caught bugs that VCR/mock tests missed:
+    1. Status mapping: API "active" → DB "open" (constraint violation)
+    2. Foreign keys: Events must exist before markets (FK violation)
+    3. Decimal precision: Prices must remain Decimal through DB round-trip
+    """
+
+    def test_poll_creates_events_before_markets(self, clean_test_markets):
+        """Verify events are created before markets (FK constraint).
+
+        This is THE test that would have caught the foreign key bug.
+        VCR tests passed because they don't write to database.
+        """
+        poller = KalshiPoller()
+        # ... poll real data, verify event exists before market
+
+    def test_poll_maps_status_correctly(self, clean_test_markets):
+        """Verify API status values are mapped to valid DB status values.
+
+        This is THE test that would have caught the status mapping bug.
+        API returns: 'active', 'unopened', 'finalized'
+        DB requires: 'open', 'closed', 'settled', 'halted'
+        """
+        # ... poll real data, verify status in allowed set
+```
+
+**When to Add Poller E2E Tests:**
+
+Add Layer 3 (Poller E2E) tests when ANY of these are true:
+- Module writes to database (not just reads)
+- Module transforms data before persistence
+- Module has foreign key relationships
+- Module has database constraints (CHECK, ENUM)
+- Module uses SCD Type 2 versioning
+
+**Real-World Example (Phase 2.5 - Issue #216 follow-on):**
+
+1. `kalshi_poller.py` had been deployed and tested
+2. All unit, integration, VCR tests passed (85%+ coverage)
+3. Production run hit `markets_status_check` constraint violation
+4. Root cause: API returns "active", DB constraint requires "open"
+5. **Missing:** E2E test that actually writes to database
+
+**Fix Applied:**
+- Added `STATUS_MAPPING` constant in `kalshi_poller.py`
+- Added `get_or_create_event()` for FK constraint
+- Created `tests/e2e/schedulers/test_kalshi_poller_e2e.py` (17 tests)
+
+**Key Insight:** 80%+ coverage means nothing if tests don't hit database constraints. VCR cassettes are valuable for API parsing regression but CANNOT catch database integration bugs.
+
+**Reference:** `tests/e2e/schedulers/test_kalshi_poller_e2e.py`, ADR-002 (Decimal Precision), REQ-TEST-019 (E2E Requirements)
 
 ---
 

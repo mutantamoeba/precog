@@ -49,6 +49,7 @@ from precog.api_connectors.types import ProcessedMarketData
 from precog.database.crud_operations import (
     create_market,
     get_current_market,
+    get_or_create_event,
     update_market_with_versioning,
 )
 from precog.schedulers.base_poller import BasePoller
@@ -110,6 +111,19 @@ class KalshiMarketPoller(BasePoller):
 
     # Platform ID for database records
     PLATFORM_ID: ClassVar[str] = "kalshi"
+
+    # Status mapping from Kalshi API to database schema
+    # Kalshi API returns: 'active', 'unopened', 'closed', 'settled', 'finalized'
+    # Database constraint allows: 'open', 'closed', 'settled', 'halted'
+    # Reference: docs/api-integration/Kalshi API Technical Reference
+    STATUS_MAPPING: ClassVar[dict[str, str]] = {
+        "active": "open",  # Kalshi 'active' = market is open for trading
+        "unopened": "halted",  # Kalshi 'unopened' = not yet open
+        "open": "open",  # Direct mapping (documented but rarely seen)
+        "closed": "closed",  # Direct mapping
+        "settled": "settled",  # Direct mapping
+        "finalized": "settled",  # Kalshi 'finalized' = settlement complete
+    }
 
     def __init__(
         self,
@@ -309,6 +323,17 @@ class KalshiMarketPoller(BasePoller):
             Legacy cent fields (yes_bid, yes_ask) are integers and less precise.
         """
         ticker = market.get("ticker", "")
+
+        # Map Kalshi API status to database schema status
+        # Kalshi returns 'active' but our DB constraint expects 'open'
+        api_status = market.get("status", "open")
+        db_status = self.STATUS_MAPPING.get(api_status, "open")
+        if api_status not in self.STATUS_MAPPING:
+            logger.warning(
+                "Unknown Kalshi status '%s' for market %s, defaulting to 'open'",
+                api_status,
+                ticker,
+            )
         if not ticker:
             logger.warning("Market missing ticker, skipping")
             return False
@@ -329,8 +354,40 @@ class KalshiMarketPoller(BasePoller):
         existing = get_current_market(ticker)
 
         if existing is None:
-            # Create new market
+            # Create new market - first ensure the event exists
             event_ticker = market.get("event_ticker", "")
+            series_ticker = market.get("series_ticker", "")
+
+            # Determine category from series ticker (e.g., KXNFLGAME -> sports/nfl)
+            # Default to 'sports' for game-related series, 'other' for unknown
+            category = "sports"  # Most Kalshi markets we poll are sports
+            subcategory = None
+            if "NFL" in series_ticker.upper():
+                subcategory = "nfl"
+            elif "NCAAF" in series_ticker.upper():
+                subcategory = "ncaaf"
+            elif "NBA" in series_ticker.upper():
+                subcategory = "nba"
+            elif "NHL" in series_ticker.upper():
+                subcategory = "nhl"
+            elif "MLB" in series_ticker.upper():
+                subcategory = "mlb"
+
+            # Get or create the event before creating the market
+            # This satisfies the foreign key constraint (markets.event_id -> events.event_id)
+            if event_ticker:
+                get_or_create_event(
+                    event_id=event_ticker,
+                    platform_id=self.PLATFORM_ID,
+                    external_id=event_ticker,
+                    category=category,
+                    title=market.get("title", event_ticker),
+                    subcategory=subcategory,
+                    metadata={
+                        "series_ticker": series_ticker,
+                    },
+                )
+
             create_market(
                 platform_id=self.PLATFORM_ID,
                 event_id=event_ticker,  # Use event_ticker as event_id
@@ -340,11 +397,11 @@ class KalshiMarketPoller(BasePoller):
                 yes_price=yes_price,
                 no_price=no_price,
                 market_type="binary",
-                status=market.get("status", "open"),
+                status=db_status,
                 volume=market.get("volume"),
                 open_interest=market.get("open_interest"),
                 metadata={
-                    "series_ticker": market.get("series_ticker"),
+                    "series_ticker": series_ticker,
                     "subtitle": market.get("subtitle"),
                     "open_time": market.get("open_time"),
                     "close_time": market.get("close_time"),
@@ -357,14 +414,14 @@ class KalshiMarketPoller(BasePoller):
 
         # Market exists - check if price changed (avoid unnecessary versioning)
         price_changed = existing["yes_price"] != yes_price or existing["no_price"] != no_price
-        status_changed = existing["status"] != market.get("status", "open")
+        status_changed = existing["status"] != db_status
 
         if price_changed or status_changed:
             update_market_with_versioning(
                 ticker=ticker,
                 yes_price=yes_price,
                 no_price=no_price,
-                status=market.get("status"),
+                status=db_status,
                 volume=market.get("volume"),
                 open_interest=market.get("open_interest"),
             )
