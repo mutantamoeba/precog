@@ -3,7 +3,7 @@
 Test Type Coverage Audit Script
 
 Audits the codebase to verify that all modules have required test types
-per TESTING_STRATEGY_V3.1.md:
+per TESTING_STRATEGY_V3.2.md:
 
 The 8 Test Types:
 1. Unit Tests        - Isolated function logic (tests/unit/)
@@ -11,20 +11,27 @@ The 8 Test Types:
 3. Integration Tests - REAL infrastructure (tests/integration/)
 4. End-to-End Tests  - Complete workflows (tests/e2e/)
 5. Stress Tests      - Infrastructure limits (tests/stress/)
-6. Race Tests        - Concurrent operation validation (tests/stress/ with @pytest.mark.race)
+6. Race Tests        - Concurrent operation validation (tests/race/)
 7. Performance Tests - Latency/throughput benchmarks (tests/performance/)
-8. Chaos Tests       - Failure recovery scenarios (tests/stress/ with @pytest.mark.chaos)
+8. Chaos Tests       - Failure recovery scenarios (tests/chaos/)
 
 Usage:
     python scripts/audit_test_type_coverage.py           # Full audit
     python scripts/audit_test_type_coverage.py --summary # Summary only
     python scripts/audit_test_type_coverage.py --json    # JSON output for CI
+    python scripts/audit_test_type_coverage.py --check-untracked  # Warn about untracked modules
 
 Exit Codes:
     0 - All required test types present
     1 - Missing required test types (blocks PR)
+    2 - Untracked modules found (with --check-untracked --strict)
 
-Reference: TESTING_STRATEGY_V3.1.md Section "The 8 Test Types"
+Reference: TESTING_STRATEGY_V3.2.md Section "The 8 Test Types"
+
+IMPORTANT FIX (2025-12-13):
+    Previously, modules not in MODULE_TIERS were silently ignored, causing test
+    gaps to go undetected. Now the script warns about untracked modules and can
+    optionally fail if any are found (--check-untracked --strict).
 """
 
 import argparse
@@ -136,34 +143,113 @@ def discover_modules() -> list[str]:
     return sorted(modules)
 
 
+def discover_testable_modules() -> list[str]:
+    """
+    Discover all TESTABLE Python modules in src/precog/.
+
+    Excludes:
+    - __init__.py files
+    - Files starting with underscore
+    - types.py files (TypedDict definitions only)
+    - Migration files (database/migrations/*, database/alembic/*)
+    - Seed data files
+
+    Returns:
+        List of module paths that should have test coverage.
+    """
+    modules = []
+    exclude_patterns = [
+        "types",  # TypedDict definition files
+        "migrations/",  # Database migrations
+        "alembic/",  # Alembic migrations
+        "seeds/",  # Seed data
+    ]
+
+    for py_file in SRC_DIR.rglob("*.py"):
+        if py_file.name.startswith("_"):
+            continue
+
+        relative = py_file.relative_to(SRC_DIR)
+        module_path = str(relative.with_suffix("")).replace(os.sep, "/")
+
+        # Skip excluded patterns
+        should_exclude = False
+        for pattern in exclude_patterns:
+            if pattern in module_path or module_path.endswith("types"):
+                should_exclude = True
+                break
+
+        if not should_exclude:
+            modules.append(module_path)
+
+    return sorted(modules)
+
+
+def find_untracked_modules() -> list[str]:
+    """
+    Find modules that exist but are NOT in MODULE_TIERS.
+
+    This is critical for preventing test gaps - any module not in MODULE_TIERS
+    will be silently ignored by the audit, potentially missing required tests.
+
+    Returns:
+        List of module paths that should be added to MODULE_TIERS.
+    """
+    testable = set(discover_testable_modules())
+    tracked = set(MODULE_TIERS.keys())
+
+    # Find modules that exist but aren't tracked
+    untracked = []
+    for module in testable:
+        # Check if this module or any parent path is tracked
+        is_tracked = False
+        for tracked_path in tracked:
+            if module == tracked_path or module.startswith(tracked_path + "/"):
+                is_tracked = True
+                break
+            # Also check if tracked path matches this module
+            if tracked_path in module:
+                is_tracked = True
+                break
+
+        if not is_tracked:
+            untracked.append(module)
+
+    return sorted(untracked)
+
+
 def discover_tests_for_module(module_path: str) -> dict[str, list[str]]:
     """
     Discover all tests for a given module across test type directories.
 
     Returns dict mapping test_type -> list of test files
 
-    Search strategy:
-    1. Type-specific directories (tests/unit/, tests/property/, etc.)
-    2. Root tests/ directory (legacy location, treated as unit tests)
-    3. Alternate naming patterns (e.g., test_database_crud_* for crud_operations)
+    Search strategy (STRICT matching to avoid false positives):
+    1. Exact module name match in test filename (e.g., test_config_loader*.py)
+    2. Directory structure match (e.g., tests/unit/config/test_config_loader.py)
+    3. Parent-prefixed name (e.g., test_database_crud_operations.py for database/crud_operations)
+
+    Educational Note (Issue #217 fix):
+        Previous implementation used loose partial matching (e.g., "manager" would match
+        all *_manager modules). This caused false positives where tests for strategy_manager
+        would count for position_manager, model_manager, etc.
+
+        The fix uses STRICT matching:
+        - Only exact module name matches count
+        - No partial word matching (no splitting on underscores)
+        - Tests must be in matching directory structure OR have exact module name in filename
     """
     module_name = Path(module_path).stem
     parent_dir = Path(module_path).parent
 
     tests_found: dict[str, list[str]] = defaultdict(list)
 
-    # Build search patterns for this module
-    # E.g., "crud_operations" -> ["crud_operations", "crud", "operations", "database_crud"]
+    # STRICT search patterns - only exact matches, no partial word matching
+    # E.g., "config_loader" -> ["config_loader"] (NOT ["config", "loader"])
     search_patterns = [module_name]
-    if "_" in module_name:
-        # Also search for parts
-        parts = module_name.split("_")
-        if len(parts) >= 2:
-            search_patterns.append(parts[0])  # e.g., "crud" from "crud_operations"
-            search_patterns.append(parts[-1])  # e.g., "operations" from "crud_operations"
-    # Add parent directory as prefix pattern (e.g., "database_crud" for database/crud_operations)
+    # Add parent-prefixed pattern for disambiguation (e.g., "database_crud_operations")
     parent_name = str(parent_dir).replace("/", "_").replace("\\", "_")
-    if parent_name:
+    if parent_name and parent_name != ".":
         search_patterns.append(f"{parent_name}_{module_name}")
 
     for test_type, config in TEST_TYPES.items():
@@ -346,17 +432,49 @@ def print_full_report(results: list[dict]) -> None:
                 print(f"      {status} {test_type:12} {test_count}")
 
 
-def output_json(results: list[dict]) -> None:
+def output_json(results: list[dict], untracked: list[str] | None = None) -> None:
     """Output results as JSON for CI integration."""
     output = {
         "summary": {
             "total": len(results),
             "passing": sum(1 for r in results if r["status"] == "PASS"),
             "failing": sum(1 for r in results if r["status"] == "FAIL"),
+            "untracked": len(untracked) if untracked else 0,
         },
         "modules": results,
     }
+    if untracked:
+        output["untracked_modules"] = untracked
     print(json.dumps(output, indent=2))
+
+
+def print_untracked_modules(untracked: list[str]) -> None:
+    """Print warning about untracked modules."""
+    if not untracked:
+        print("\n[OK] All testable modules are tracked in MODULE_TIERS")
+        return
+
+    print("\n" + "=" * 70)
+    print("WARNING: UNTRACKED MODULES FOUND")
+    print("=" * 70)
+    print(f"\nFound {len(untracked)} module(s) NOT in MODULE_TIERS:")
+    print("These modules are SILENTLY IGNORED by the audit!\n")
+
+    for module in untracked:
+        print(f"  - {module}")
+
+    print("\nTo fix: Add these to MODULE_TIERS in audit_test_type_coverage.py:")
+    print("  MODULE_TIERS = {")
+    for module in untracked:
+        # Suggest appropriate tier based on path
+        if "trading" in module or "analytics" in module:
+            tier = "business"
+        elif "api_connectors" in module or "scheduler" in module:
+            tier = "critical"
+        else:
+            tier = "infrastructure"
+        print(f'      "{module}": "{tier}",')
+    print("  }")
 
 
 # =============================================================================
@@ -373,43 +491,58 @@ def main():
         action="store_true",
         help="Exit 1 if any modules missing required types",
     )
+    parser.add_argument(
+        "--check-untracked",
+        action="store_true",
+        help="Check for and warn about modules not in MODULE_TIERS",
+    )
     args = parser.parse_args()
 
-    # Discover and analyze
-    results = []
-    for module in discover_modules():
-        tests = discover_tests_for_module(module)
-        analysis = analyze_coverage_gaps(module, tests)
-        results.append(analysis)
+    # Check for untracked modules first (critical for preventing silent gaps)
+    untracked = find_untracked_modules()
 
-    # Filter to only tracked modules (those with tier assignments)
-    tracked_results = [
-        r
-        for r in results
-        if r["tier"] != "infrastructure" or any(m in r["module"] for m in MODULE_TIERS)
-    ]
+    # Discover and analyze ONLY tracked modules
+    results = []
+    for module_path in MODULE_TIERS:
+        tests = discover_tests_for_module(module_path)
+        analysis = analyze_coverage_gaps(module_path, tests)
+        results.append(analysis)
 
     # Output
     if args.json:
-        output_json(tracked_results)
+        output_json(results, untracked if args.check_untracked else None)
     elif args.summary:
-        print_summary(tracked_results)
+        _passing, failing = print_summary(results)
+        if args.check_untracked:
+            print_untracked_modules(untracked)
     else:
-        print_full_report(tracked_results)
-        print_summary(tracked_results)
+        print_full_report(results)
+        _passing, failing = print_summary(results)
+        if args.check_untracked:
+            print_untracked_modules(untracked)
 
-    # Exit code
-    _, failing = (
-        print_summary(tracked_results)
-        if not args.json
-        else (0, sum(1 for r in tracked_results if r["status"] == "FAIL"))
-    )
+    # Calculate exit code
+    if args.json:
+        failing = sum(1 for r in results if r["status"] == "FAIL")
+
+    exit_code = 0
 
     if args.strict and failing > 0:
         print(f"\n[ERROR] {failing} modules missing required test types!")
-        sys.exit(1)
+        exit_code = 1
 
-    sys.exit(0)
+    if args.check_untracked and args.strict and untracked:
+        print(f"\n[ERROR] {len(untracked)} untracked modules found!")
+        exit_code = 2 if exit_code == 0 else exit_code
+
+    # Always warn about untracked modules in non-JSON mode (even without --check-untracked)
+    # This is a safety net to prevent silent test gaps
+    if not args.json and untracked and not args.check_untracked:
+        print(
+            f"\n[WARNING] {len(untracked)} untracked modules exist. Use --check-untracked for details."
+        )
+
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
