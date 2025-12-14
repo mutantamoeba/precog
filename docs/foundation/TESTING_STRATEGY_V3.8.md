@@ -1,10 +1,17 @@
-# Testing Strategy V3.7
+# Testing Strategy V3.8
 
 **Document Type:** Foundation
 **Status:** ✅ Active
-**Version:** 3.7
+**Version:** 3.8
 **Created:** 2025-10-23
-**Last Updated:** 2025-12-12
+**Last Updated:** 2025-12-13
+**Changes in V3.8:**
+- **Property Tests with Database Access Pattern (MANDATORY)** - Added documentation for `@pytest.mark.database` convention
+- Property tests split into DB-dependent (~25 tests) and non-DB (~385 tests)
+- Non-DB property tests run in PARALLEL with unit tests (saves ~43s per pre-push)
+- DB property tests run sequentially after pool reset to prevent connection exhaustion
+- Added code example for marking DB-dependent property test modules
+- Reference: `scripts/run_parallel_checks.py`, Issue #202
 **Changes in V3.7:**
 - **Three-Layer E2E Testing Gap Pattern (CRITICAL)** - Added Best Practice #7 documenting the API → Python → DATABASE testing gap
 - VCR cassettes and mock tests miss database constraint violations (status mapping, FK violations)
@@ -455,6 +462,56 @@ Phase 1.5 property tests discovered:
 - Hypothesis shrunk failure: `edge=0.473821` → minimal `edge=0.5000`
 - 3.32s execution time (100 examples × 26 properties)
 - Zero failures (properties hold for all generated inputs)
+
+#### Property Tests with Database Access (MANDATORY PATTERN)
+
+**Background:** Property tests run 100+ iterations per test, which can exhaust the
+database connection pool if many tests hold connections simultaneously. To optimize
+pre-push hook execution, property tests are split into two categories:
+
+| Category | Marker | Count | Execution |
+|----------|--------|-------|-----------|
+| **Non-DB property tests** | (none) | ~385 | Parallel with unit tests |
+| **DB property tests** | `@pytest.mark.database` | ~25 | Sequential after pool reset |
+
+**Time savings:** ~43 seconds per pre-push (non-DB property tests run in parallel with unit tests)
+
+**When to use `@pytest.mark.database`:**
+- Test uses `db_pool` or `clean_test_data` fixtures
+- Test imports from `precog.database.connection` and uses `get_cursor()`
+- Test performs actual database CRUD operations
+
+**How to mark a DB-dependent property test module:**
+```python
+# tests/property/test_my_db_properties.py
+"""Property tests for database operations."""
+
+import pytest
+
+# Mark ALL tests in this module as requiring database access
+# This enables parallel execution of non-DB property tests with unit tests
+pytestmark = pytest.mark.database
+
+# ... rest of test file
+```
+
+**DB Property Test Files (current):**
+1. `tests/property/test_database_crud_properties.py` - CRUD operations on markets
+2. `tests/property/test_crud_operations_properties.py` - Game state, venue, ranking operations
+3. `tests/property/test_strategy_versioning_properties.py` - Strategy version management
+
+**Pre-push hook execution (optimized):**
+```
+Phase A+C1: Unit + Non-DB Property Tests (PARALLEL)  ~52s (max of both)
+   [DB pool reset]
+Phase B: Integration + E2E Tests                      ~30s
+   [DB pool reset]
+Phase C2: DB Property Tests                           ~15s
+   [DB pool reset]
+Phase D: Stress/Race/Performance Tests                ~20s
+```
+
+**Reference:** `scripts/run_parallel_checks.py`, Issue #202 (DB pool exhaustion discovery)
 
 ---
 

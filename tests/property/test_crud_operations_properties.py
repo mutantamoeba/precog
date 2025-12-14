@@ -23,6 +23,12 @@ Educational Note:
 Usage:
     pytest tests/property/test_phase2c_crud_properties.py -v
     pytest tests/property/test_phase2c_crud_properties.py -v --hypothesis-show-statistics
+
+Note:
+    This module is marked with @pytest.mark.database because all tests require
+    database connection pool access. This enables the pre-push hook to run
+    non-DB property tests in parallel with unit tests while DB property tests
+    run sequentially after pool reset. See TESTING_STRATEGY V3.7 Section 12.
 """
 
 import uuid
@@ -43,6 +49,11 @@ from precog.database.crud_operations import (
     get_venue_by_espn_id,
     upsert_game_state,
 )
+
+# Mark ALL tests in this module as requiring database access
+# This enables parallel execution of non-DB property tests with unit tests
+# while DB property tests run sequentially after pool reset
+pytestmark = pytest.mark.database
 
 # =============================================================================
 # CUSTOM HYPOTHESIS STRATEGIES

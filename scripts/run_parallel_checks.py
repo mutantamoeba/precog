@@ -60,33 +60,48 @@ CHECK_TIMEOUT = 480
 # Timeout for the entire parallel phase (15 minutes)
 TOTAL_TIMEOUT = 900
 
-# 4-Phase Test Strategy Configuration
+# 5-Phase Test Strategy Configuration (Optimized with A+C1 Parallelization)
 # This prevents database connection pool exhaustion by running tests in phases
 # with DB pool reset between phases. See Issue #202 for discovery context.
-TEST_PHASES: list[tuple[str, str, list[str]]] = [
-    # Phase A: Unit tests (fast, no DB connections needed)
+#
+# Optimization (2025-12-13): Non-DB property tests run in PARALLEL with unit tests
+# - Phase A + C1 run together (neither needs DB) -> saves ~43s
+# - DB property tests (28 tests with @pytest.mark.database) run after pool reset
+# - See TESTING_STRATEGY V3.7 Section 12 for pattern documentation
+#
+# Test marker convention:
+# - Property tests WITH database access: add `pytestmark = pytest.mark.database`
+# - Property tests WITHOUT database: no marker needed (default)
+TEST_PHASES: list[tuple[str, str, list[str], str | None]] = [
+    # Phase A+C1: Unit tests + Non-DB property tests (PARALLEL - neither needs DB)
+    # This saves ~43s by running these concurrently
     (
-        "Phase A",
-        "Unit Tests",
-        ["tests/unit/"],
+        "Phase A+C1",
+        "Unit + Non-DB Property Tests (parallel)",
+        ["tests/unit/", "tests/property/"],
+        '-m "not database"',  # Exclude DB-dependent property tests (double quotes for Windows)
     ),
     # Phase B: Integration + E2E tests (heavy DB usage)
     (
         "Phase B",
         "Integration + E2E Tests",
         ["tests/integration/", "tests/e2e/"],
+        None,  # No marker filter
     ),
-    # Phase C: Property tests (Hypothesis - many iterations, moderate DB)
+    # Phase C2: DB-dependent property tests (need pool reset)
+    # Only 28 tests across 3 files with @pytest.mark.database
     (
-        "Phase C",
-        "Property Tests",
+        "Phase C2",
+        "DB Property Tests",
         ["tests/property/"],
+        '-m "database"',  # Only DB-dependent property tests (double quotes for Windows)
     ),
     # Phase D: Remaining tests (stress, race_condition, performance)
     (
         "Phase D",
         "Stress/Race/Performance Tests",
         ["tests/stress/", "tests/race_condition/", "tests/performance/"],
+        None,  # No marker filter
     ),
 ]
 
@@ -142,10 +157,12 @@ def reset_db_pool() -> bool:
 
 def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
     """
-    Run all tests in 4 phases with DB pool reset between phases.
+    Run all tests in optimized phases with DB pool reset between DB-heavy phases.
 
-    This is the 4-phase test strategy that prevents database connection
-    pool exhaustion when running all 8 test types together.
+    This is the optimized 4-phase test strategy that:
+    1. Runs non-DB tests in parallel (Phase A+C1: unit + non-DB property tests)
+    2. Prevents database connection pool exhaustion for DB-heavy phases
+    3. Saves ~43s by parallelizing tests that don't need DB
 
     Args:
         timeout: Maximum seconds per phase
@@ -161,7 +178,9 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
         3. Property tests run hundreds of iterations
         4. Connections may not be released between test classes
 
-        By running in phases with pool reset, each phase starts fresh.
+        Optimization (2025-12-13): Non-DB property tests are marked with
+        `pytestmark = pytest.mark.database` and filtered using `-m database`
+        or `-m 'not database'` to enable parallel execution with unit tests.
     """
     start_time = time.time()
     total_passed = 0
@@ -171,10 +190,10 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
     all_stderr = []
     phase_results = []
 
-    print("  Running tests in 4 phases (with DB reset between phases)...")
+    print("  Running tests in optimized phases (A+C1 parallel, DB phases sequential)...")
     print()
 
-    for phase_id, phase_name, test_dirs in TEST_PHASES:
+    for phase_id, phase_name, test_dirs, marker_filter in TEST_PHASES:
         phase_start = time.time()
 
         # Check if test directories exist (skip if empty)
@@ -186,6 +205,10 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
         # Build pytest command for this phase
         dirs_arg = " ".join(existing_dirs)
         command = f"python -m pytest {dirs_arg} --no-cov --tb=line -q"
+
+        # Add marker filter if specified (e.g., "-m 'not database'" or "-m 'database'")
+        if marker_filter:
+            command = f"{command} {marker_filter}"
 
         print(f"    [{phase_id}] {phase_name}: Running...")
 
@@ -259,8 +282,8 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
 
     return CheckResult(
         step=2,
-        name="All 8 Test Types (4 phases with DB reset)",
-        command="4-phase test strategy",
+        name="All 8 Test Types (optimized A+C1 parallel)",
+        command="optimized-phase test strategy",
         exit_code=1 if any_failed else 0,
         stdout="\n\n".join(all_stdout),
         stderr="\n\n".join(all_stderr),
@@ -278,11 +301,13 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
 PARALLEL_CHECKS: list[tuple[int, str, str]] = [
     # Step 2 is handled separately by run_tests_in_phases() - see below
     # This placeholder is kept for step numbering consistency but skipped in execution
-    # Step 3: Type Checking
+    # Step 3: Type Checking (with incremental caching)
+    # Mypy caches analysis results in .mypy_cache/ for faster subsequent runs
+    # First run: ~20-30s, subsequent runs: ~5-10s (only re-checks changed files)
     (
         3,
-        "Type Checking (Mypy)",
-        "python -m mypy . --exclude tests/ --exclude _archive/ --exclude venv/ --exclude .venv/ --ignore-missing-imports",
+        "Type Checking (Mypy, incremental)",
+        "python -m mypy . --incremental --cache-dir .mypy_cache --exclude tests/ --exclude _archive/ --exclude venv/ --exclude .venv/ --ignore-missing-imports",
     ),
     # Step 4: Security Scan
     (
@@ -601,18 +626,19 @@ def main() -> int:
     if args.dry_run:
         print("DRY RUN - would execute:")
         print()
-        print("Step 2: Run tests in 4 phases with DB reset")
-        for phase_id, phase_name, test_dirs in TEST_PHASES:
-            print(f"  [{phase_id}] {phase_name}: {', '.join(test_dirs)}")
+        print("Step 2: Run tests in optimized phases (A+C1 parallel, DB phases sequential)")
+        for phase_id, phase_name, test_dirs, marker_filter in TEST_PHASES:
+            filter_str = f" ({marker_filter})" if marker_filter else ""
+            print(f"  [{phase_id}] {phase_name}: {', '.join(test_dirs)}{filter_str}")
         print()
         print("Steps 3-11: Run in parallel:")
         for step, name, command in PARALLEL_CHECKS:
             print(f"  [{step}/11] {name}")
         return 0
 
-    # Step 2: Run all tests in 4 phases (sequentially with DB reset)
-    # This prevents connection pool exhaustion
-    print("[2/11] Running All 8 Test Types (4 phases with DB reset)")
+    # Step 2: Run all tests in optimized phases (A+C1 parallel, DB sequential)
+    # This prevents connection pool exhaustion while saving ~43s
+    print("[2/11] Running All 8 Test Types (optimized A+C1 parallel)")
     print("-" * 60)
     test_result = run_tests_in_phases()
     print("-" * 60)

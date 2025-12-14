@@ -33,6 +33,12 @@ Educational Note:
 Usage:
     pytest tests/property/test_strategy_versioning_properties.py -v
     pytest tests/property/test_strategy_versioning_properties.py -v --hypothesis-show-statistics
+
+Note:
+    This module is marked with @pytest.mark.database because all tests require
+    database connection pool access. This enables the pre-push hook to run
+    non-DB property tests in parallel with unit tests while DB property tests
+    run sequentially after pool reset. See TESTING_STRATEGY V3.7 Section 12.
 """
 
 import uuid
@@ -44,7 +50,6 @@ from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 from psycopg2 import IntegrityError
 
-# Import strategy CRUD operations
 from precog.database.crud_operations import (
     create_strategy,
     get_active_strategy_version,
@@ -53,7 +58,10 @@ from precog.database.crud_operations import (
     update_strategy_status,
 )
 
-# Import custom Hypothesis strategies
+# Mark ALL tests in this module as requiring database access
+# This enables parallel execution of non-DB property tests with unit tests
+# while DB property tests run sequentially after pool reset
+pytestmark = pytest.mark.database
 
 # =============================================================================
 # CUSTOM HYPOTHESIS STRATEGIES FOR STRATEGIES
