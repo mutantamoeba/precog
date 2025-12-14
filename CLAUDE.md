@@ -10,7 +10,7 @@
 - **Added Step 4: Pre-Planning Test Coverage Checklist** to Quick Session Start section
 - **Root Cause:** Phase 2C planning created todo list with only 2/8 test types (unit + integration)
 - **Solution:** Mandatory checklist requiring audit script run + 8-test-type verification before todo list creation
-- **References SESSION_WORKFLOW_GUIDE_V1.1.md Section 3** for full checklist details
+- **References SESSION_WORKFLOW_GUIDE_V1.2.md Section 3** for full checklist details
 - Total addition: ~5 lines in Quick Session Start
 **Changes in V1.21:**
 - **SESSION_HANDOFF.md Workflow Clarity** - Clarified that SESSION_HANDOFF.md is a historical record, not a task planner
@@ -617,7 +617,7 @@ git branch -vv | grep ahead || echo "All up-to-date"
 **Step 4: Pre-Planning Test Coverage Checklist (BEFORE creating todo list)** ⭐ **NEW**
 - Run `python scripts/audit_test_type_coverage.py --summary`
 - Ensure todo includes ALL 8 test types per TESTING_STRATEGY V3.2
-- Full checklist: SESSION_WORKFLOW_GUIDE_V1.1.md Section 3
+- Full checklist: SESSION_WORKFLOW_GUIDE_V1.2.md Section 3
 
 ### During Development Quick Reference
 
