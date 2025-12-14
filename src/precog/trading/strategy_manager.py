@@ -697,9 +697,31 @@ class StrategyManager:
 
         def str_to_decimal(obj: Any) -> Any:
             if isinstance(obj, str):
-                # Try to convert numeric strings to Decimal
+                # Only convert simple decimal patterns that match our storage format
+                # Valid patterns: "0.05", "-123.45", "42", "0.00001"
+                # Rejected: "+0", "1e10", "Infinity", "NaN", "0e0", " 123", "abc"
+                # Our _prepare_config_for_db stores Decimals as str(decimal) which produces
+                # formats like "0.05" (no leading +, no scientific notation)
+                stripped = obj.strip()
+                if not stripped:
+                    return obj
+
+                # Check for characters that indicate this isn't a simple decimal
+                # Scientific notation (e/E), Infinity, NaN, leading +, etc.
+                if "e" in stripped.lower():
+                    return obj
+                if stripped.startswith("+"):
+                    return obj
+                if stripped.lower() in ("infinity", "-infinity", "nan", "inf", "-inf"):
+                    return obj
+
+                # Try to convert simple numeric strings to Decimal
                 try:
-                    return Decimal(obj)
+                    result = Decimal(obj)
+                    # Only accept finite numbers - reject Infinity/NaN
+                    if result.is_finite():
+                        return result
+                    return obj  # Return as-is if Infinity/NaN
                 except (ValueError, TypeError, ArithmeticError):
                     return obj  # Return as-is if not numeric
             elif isinstance(obj, dict):

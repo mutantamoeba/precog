@@ -248,10 +248,29 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
             total_failed += failed
             total_errors += errors
 
+            # Extract failed test names from output for immediate visibility
+            failed_tests = []
+            for line in result.stdout.split("\n"):
+                # Match lines like "tests/...py::TestClass::test_name FAILED"
+                if line.strip().endswith(" FAILED"):
+                    failed_tests.append(line.strip().replace(" FAILED", ""))
+                # Also match lines starting with "FAILED tests/..." (pytest summary format)
+                elif line.strip().startswith("FAILED tests/"):
+                    # Extract just the test path, stop at " - " if present
+                    test_path = line.strip().replace("FAILED ", "").split(" - ")[0]
+                    if test_path not in failed_tests:  # Deduplicate
+                        failed_tests.append(test_path)
+
             status = "PASSED" if result.returncode == 0 else "FAILED"
             print(
                 f"    [{phase_id}] {phase_name}: {status} ({passed} passed, {failed} failed, {errors} errors) [{phase_duration:.1f}s]"
             )
+
+            # Print failed test names immediately for easy identification
+            if failed_tests:
+                print(f"    [!] Failed tests in {phase_id}:")
+                for test_name in failed_tests:
+                    print(f"        - {test_name}")
 
             all_stdout.append(f"=== {phase_id}: {phase_name} ===\n{result.stdout}")
             if result.stderr:
