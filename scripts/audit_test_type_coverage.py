@@ -97,6 +97,7 @@ MODULE_TIERS = {
     "schedulers/espn_game_poller": "business",
     # Validation
     "validation/espn_validation": "business",
+    "validation/kalshi_validation": "business",
     # Infrastructure (80%+) - 4 types required
     # API Clients
     "api_connectors/espn_client": "infrastructure",
@@ -448,17 +449,26 @@ def output_json(results: list[dict], untracked: list[str] | None = None) -> None
     print(json.dumps(output, indent=2))
 
 
-def print_untracked_modules(untracked: list[str]) -> None:
-    """Print warning about untracked modules."""
+def print_untracked_modules(untracked: list[str], as_error: bool = True) -> None:
+    """Print error/warning about untracked modules.
+
+    Args:
+        untracked: List of untracked module paths
+        as_error: If True, print as ERROR (blocking). If False, print as WARNING.
+    """
     if not untracked:
         print("\n[OK] All testable modules are tracked in MODULE_TIERS")
         return
 
+    severity = "ERROR" if as_error else "WARNING"
     print("\n" + "=" * 70)
-    print("WARNING: UNTRACKED MODULES FOUND")
+    print(f"{severity}: UNTRACKED MODULES FOUND")
     print("=" * 70)
     print(f"\nFound {len(untracked)} module(s) NOT in MODULE_TIERS:")
-    print("These modules are SILENTLY IGNORED by the audit!\n")
+    if as_error:
+        print("BLOCKING: Untracked modules MUST be added to MODULE_TIERS!\n")
+    else:
+        print("These modules are SILENTLY IGNORED by the audit!\n")
 
     for module in untracked:
         print(f"  - {module}")
@@ -527,20 +537,16 @@ def main():
 
     exit_code = 0
 
+    # ALWAYS fail on untracked modules (prevent silent test gaps)
+    # This is a blocking error, not a warning that gets ignored
+    if untracked:
+        print(f"\n[ERROR] {len(untracked)} untracked modules found - BLOCKING!")
+        print("       Add them to MODULE_TIERS in audit_test_type_coverage.py")
+        exit_code = 2
+
     if args.strict and failing > 0:
         print(f"\n[ERROR] {failing} modules missing required test types!")
-        exit_code = 1
-
-    if args.check_untracked and args.strict and untracked:
-        print(f"\n[ERROR] {len(untracked)} untracked modules found!")
-        exit_code = 2 if exit_code == 0 else exit_code
-
-    # Always warn about untracked modules in non-JSON mode (even without --check-untracked)
-    # This is a safety net to prevent silent test gaps
-    if not args.json and untracked and not args.check_untracked:
-        print(
-            f"\n[WARNING] {len(untracked)} untracked modules exist. Use --check-untracked for details."
-        )
+        exit_code = 1 if exit_code == 0 else exit_code
 
     sys.exit(exit_code)
 
