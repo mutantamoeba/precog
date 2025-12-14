@@ -590,6 +590,12 @@ def fetch_balance(
     try:
         # Fetch balance from API (returns Decimal directly)
         balance = client.get_balance()
+        if balance is None:
+            console.print(
+                "\n[yellow]Warning:[/yellow] Balance endpoint unavailable (DEMO API instability)"
+            )
+            console.print("  Use --environment prod for production balance")
+            raise typer.Exit(code=1)
         logger.info(f"Balance fetched successfully: {balance}")
 
         # Display balance in a nice table
@@ -907,6 +913,14 @@ def fetch_positions(
     try:
         # Fetch positions from API (returns list directly)
         positions = client.get_positions()
+
+        if positions is None:
+            console.print(
+                "\n[yellow]Warning:[/yellow] Positions endpoint unavailable (DEMO API instability)"
+            )
+            console.print("  Use --environment prod for production positions")
+            raise typer.Exit(code=1)
+
         logger.info(f"Fetched {len(positions)} positions")
 
         if not positions:

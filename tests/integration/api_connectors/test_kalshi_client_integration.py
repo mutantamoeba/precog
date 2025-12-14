@@ -131,8 +131,9 @@ class TestKalshiClientIntegration:
             balance = client.get_balance()
 
         # Verify Decimal type
+        # Fixture returns 65902 cents = $659.02
         assert isinstance(balance, Decimal)
-        assert balance == Decimal("1234.5678")
+        assert balance == Decimal("659.02")
 
     def test_get_positions_integration(self, monkeypatch):
         """Test get_positions() returns positions with Decimal prices."""
@@ -343,7 +344,8 @@ class TestKalshiClientErrorHandling:
             balance = client.get_balance()
 
         # Should succeed after retry
-        assert balance == Decimal("1234.5678")
+        # Fixture returns 65902 cents = $659.02
+        assert balance == Decimal("659.02")
 
     def test_400_bad_request_no_retry(self, monkeypatch):
         """Test 400 Bad Request does NOT retry (client error, won't fix itself)."""

@@ -59,6 +59,28 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 
+class KalshiDemoUnavailableError(Exception):
+    """
+    Raised when Kalshi DEMO environment portfolio endpoints are unavailable.
+
+    The Kalshi DEMO API occasionally experiences issues with its 'query-exchange'
+    service, causing 500 errors on portfolio-related endpoints (/portfolio/balance,
+    /portfolio/positions) while other endpoints (/markets, /orders) work fine.
+
+    This exception allows callers to handle DEMO unavailability gracefully,
+    for example by:
+    - Falling back to cached values
+    - Returning placeholder data for testing
+    - Logging and continuing with other operations
+
+    Educational Note:
+        DEMO and PROD are separate environments with separate credentials.
+        DEMO issues do NOT affect PROD trading capability.
+
+    Reference: GitHub Issue tracking Kalshi DEMO instability
+    """
+
+
 class KalshiClient:
     """
     High-level Kalshi API client.
@@ -611,51 +633,169 @@ class KalshiClient:
 
         return cast("ProcessedMarketData", market)
 
-    def get_balance(self) -> Decimal:
+    def get_balance(self, graceful_demo_fallback: bool = False) -> Decimal | None:
         """
-        Fetch account balance.
+        Fetch account cash balance in dollars.
+
+        Args:
+            graceful_demo_fallback: If True and running in DEMO environment,
+                return None instead of raising on 500 errors. Useful for testing
+                when DEMO API has issues. Default False (raises on error).
 
         Returns:
-            Account balance as Decimal
+            Account cash balance as Decimal (in dollars), or None if
+            graceful_demo_fallback is True and DEMO API is unavailable.
 
         Raises:
-            requests.HTTPError: If API request fails
+            requests.HTTPError: If API request fails (unless graceful_demo_fallback)
+            KalshiDemoUnavailableError: If DEMO API unavailable and not graceful
 
         Example:
             >>> client = KalshiClient("demo")
             >>> balance = client.get_balance()
             >>> print(f"Account balance: ${balance}")
-            Account balance: $1234.5678
+            Account balance: $659.02
+            >>>
+            >>> # Graceful fallback for testing
+            >>> balance = client.get_balance(graceful_demo_fallback=True)
+            >>> if balance is None:
+            ...     print("DEMO API unavailable, using cached value")
 
         Educational Note:
+            The Kalshi API returns balance in CENTS (integer).
+            We convert to dollars by dividing by 100.
             Demo environment starts with fake balance (usually $10,000).
             Production environment shows your real account balance.
+
+            The DEMO environment occasionally has issues with its 'query-exchange'
+            service. Use graceful_demo_fallback=True to handle this gracefully.
 
         Reference: REQ-CLI-002 (Balance Fetch Command)
         Related: REQ-SYS-003 (Decimal Precision)
         """
-        response = self._make_request("GET", "/portfolio/balance")
+        try:
+            response = self._make_request("GET", "/portfolio/balance")
+        except requests.HTTPError as e:
+            if (
+                self.environment == "demo"
+                and e.response is not None
+                and e.response.status_code == 500
+            ):
+                if graceful_demo_fallback:
+                    logger.warning(
+                        "DEMO API /portfolio/balance unavailable (500 error), returning None",
+                        extra={"environment": self.environment},
+                    )
+                    return None
+                raise KalshiDemoUnavailableError(
+                    "Kalshi DEMO API portfolio endpoints are currently unavailable. "
+                    "Use graceful_demo_fallback=True to handle gracefully."
+                ) from e
+            raise
 
-        # Parse balance as Decimal
-        balance_str = response.get("balance", "0")
-        balance = Decimal(str(balance_str))
+        # Parse balance as Decimal - API returns cents, convert to dollars
+        balance_cents = Decimal(str(response.get("balance", "0")))
+        balance_dollars = balance_cents / Decimal("100")
 
-        logger.info(f"Fetched balance: ${balance}", extra={"balance": str(balance)})
+        logger.info(
+            f"Fetched balance: ${balance_dollars:.2f}",
+            extra={"balance_cents": str(balance_cents), "balance_dollars": str(balance_dollars)},
+        )
 
-        return balance
+        return balance_dollars
+
+    def get_portfolio_value(
+        self, graceful_demo_fallback: bool = False
+    ) -> dict[str, Decimal] | None:
+        """
+        Fetch complete portfolio value including cash balance and positions.
+
+        Args:
+            graceful_demo_fallback: If True and running in DEMO environment,
+                return None instead of raising on 500 errors.
+
+        Returns:
+            Dictionary with 'balance' (cash) and 'portfolio_value' (total) in dollars,
+            or None if graceful_demo_fallback is True and DEMO API is unavailable.
+
+        Raises:
+            requests.HTTPError: If API request fails (unless graceful_demo_fallback)
+            KalshiDemoUnavailableError: If DEMO API unavailable and not graceful
+
+        Example:
+            >>> client = KalshiClient("prod")
+            >>> portfolio = client.get_portfolio_value()
+            >>> print(f"Cash: ${portfolio['balance']}, Total: ${portfolio['portfolio_value']}")
+            Cash: $659.02, Total: $1727.81
+
+        Educational Note:
+            - balance: Available cash (not tied up in positions)
+            - portfolio_value: Total value including open positions
+            Both values are returned by Kalshi in cents, converted to dollars here.
+
+        Reference: REQ-CLI-002 (Balance Fetch Command)
+        """
+        try:
+            response = self._make_request("GET", "/portfolio/balance")
+        except requests.HTTPError as e:
+            if (
+                self.environment == "demo"
+                and e.response is not None
+                and e.response.status_code == 500
+            ):
+                if graceful_demo_fallback:
+                    logger.warning(
+                        "DEMO API /portfolio/balance unavailable (500 error), returning None",
+                        extra={"environment": self.environment},
+                    )
+                    return None
+                raise KalshiDemoUnavailableError(
+                    "Kalshi DEMO API portfolio endpoints are currently unavailable. "
+                    "Use graceful_demo_fallback=True to handle gracefully."
+                ) from e
+            raise
+
+        # API returns cents, convert to dollars
+        balance_cents = Decimal(str(response.get("balance", "0")))
+        portfolio_cents = Decimal(str(response.get("portfolio_value", "0")))
+
+        result = {
+            "balance": balance_cents / Decimal("100"),
+            "portfolio_value": portfolio_cents / Decimal("100"),
+        }
+
+        logger.info(
+            f"Fetched portfolio: cash=${result['balance']:.2f}, total=${result['portfolio_value']:.2f}",
+            extra={
+                "balance": str(result["balance"]),
+                "portfolio_value": str(result["portfolio_value"]),
+            },
+        )
+
+        return result
 
     def get_positions(
-        self, status: str | None = None, ticker: str | None = None
-    ) -> list[ProcessedPositionData]:
+        self,
+        status: str | None = None,
+        ticker: str | None = None,
+        graceful_demo_fallback: bool = False,
+    ) -> list[ProcessedPositionData] | None:
         """
         Get current positions.
 
         Args:
             status: Filter by status ("open" or "closed")
             ticker: Filter by market ticker
+            graceful_demo_fallback: If True and running in DEMO environment,
+                return None instead of raising on 500 errors.
 
         Returns:
-            List of position dictionaries with Decimal prices
+            List of position dictionaries with Decimal prices, or None if
+            graceful_demo_fallback is True and DEMO API is unavailable.
+
+        Raises:
+            requests.HTTPError: If API request fails (unless graceful_demo_fallback)
+            KalshiDemoUnavailableError: If DEMO API unavailable and not graceful
 
         Example:
             >>> client = KalshiClient("demo")
@@ -671,7 +811,26 @@ class KalshiClient:
         if ticker:
             params["ticker"] = ticker
 
-        response = self._make_request("GET", "/portfolio/positions", params=params)
+        try:
+            response = self._make_request("GET", "/portfolio/positions", params=params)
+        except requests.HTTPError as e:
+            if (
+                self.environment == "demo"
+                and e.response is not None
+                and e.response.status_code == 500
+            ):
+                if graceful_demo_fallback:
+                    logger.warning(
+                        "DEMO API /portfolio/positions unavailable (500 error), returning None",
+                        extra={"environment": self.environment},
+                    )
+                    return None
+                raise KalshiDemoUnavailableError(
+                    "Kalshi DEMO API portfolio endpoints are currently unavailable. "
+                    "Use graceful_demo_fallback=True to handle gracefully."
+                ) from e
+            raise
+
         positions = response.get("positions", [])
 
         # Convert prices to Decimal

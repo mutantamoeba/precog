@@ -153,7 +153,8 @@ def test_fetch_balance_saves_to_database(
 
         # Verify CLI success
         assert result.exit_code == 0
-        assert "$235,084" in result.stdout  # Real balance from cassette (cents)
+        # Client now converts cents to dollars: 235084 cents = $2350.84
+        assert "$2,350" in result.stdout
         assert "Balance saved to database" in result.stdout
 
     # Verify database record created with real data
@@ -171,9 +172,9 @@ def test_fetch_balance_saves_to_database(
 
         assert db_result is not None, "Balance record not found in database"
 
-        # Verify Decimal precision (real API returns cents: 235084)
+        # Verify Decimal precision (API returns 235084 cents, client converts to $2350.84)
         assert isinstance(db_result["balance"], Decimal)
-        assert db_result["balance"] == Decimal("235084")  # Real value from cassette
+        assert db_result["balance"] == Decimal("2350.84")  # Dollars, not cents
         assert db_result["currency"] == "USD"
         assert db_result["row_current_ind"] is True
 
@@ -205,11 +206,12 @@ def test_fetch_balance_updates_with_scd_type2(
     monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "75b4b76e-d191-4855-b219-5c31cdcba1c8")
     monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "_keys/kalshi_demo_private.pem")
 
-    # FIRST FETCH: balance = $1000.00 (100000 cents)
+    # FIRST FETCH: balance = $1000.00 (100000 cents -> $1000.00 after conversion)
     with my_vcr.use_cassette("cli/balance_1000.yaml"):
         result = cli_runner.invoke(app, ["fetch-balance"])
         assert result.exit_code == 0, f"First fetch failed: {result.stdout}"
-        assert "$100,000" in result.stdout or "$1,000" in result.stdout
+        # Client converts 100000 cents to $1000.00
+        assert "$1,000" in result.stdout
 
     # Verify first balance record created with row_current_ind=TRUE
     from precog.database.connection import get_cursor
@@ -226,17 +228,19 @@ def test_fetch_balance_updates_with_scd_type2(
         records = cur.fetchall()
 
         assert len(records) == 1, f"Expected 1 balance record, got {len(records)}"
-        assert records[0]["balance"] == Decimal("100000")
+        # Client converts cents to dollars: 100000 cents = $1000
+        assert records[0]["balance"] == Decimal("1000")
         assert records[0]["row_current_ind"] is True
 
         # Save balance_id for later verification
         first_balance_id = records[0]["balance_id"]
 
-    # SECOND FETCH: balance = $1500.00 (150000 cents)
+    # SECOND FETCH: balance = $1500.00 (150000 cents -> $1500.00 after conversion)
     with my_vcr.use_cassette("cli/balance_1500.yaml"):
         result = cli_runner.invoke(app, ["fetch-balance"])
         assert result.exit_code == 0, f"Second fetch failed: {result.stdout}"
-        assert "$150,000" in result.stdout or "$1,500" in result.stdout
+        # Client converts 150000 cents to $1500.00
+        assert "$1,500" in result.stdout
 
     # Verify SCD Type 2 versioning:
     # - First record should be marked row_current_ind=FALSE
@@ -257,13 +261,15 @@ def test_fetch_balance_updates_with_scd_type2(
 
         # First record should be marked as NOT current
         assert records[0]["balance_id"] == first_balance_id
-        assert records[0]["balance"] == Decimal("100000")
+        # Client converts cents to dollars: 100000 cents = $1000
+        assert records[0]["balance"] == Decimal("1000")
         assert records[0]["row_current_ind"] is False, (
             "Old balance should be marked row_current_ind=FALSE"
         )
 
         # Second record should be current
-        assert records[1]["balance"] == Decimal("150000")
+        # Client converts cents to dollars: 150000 cents = $1500
+        assert records[1]["balance"] == Decimal("1500")
         assert records[1]["row_current_ind"] is True, (
             "New balance should be marked row_current_ind=TRUE"
         )

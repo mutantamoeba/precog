@@ -117,7 +117,10 @@ KALSHI_SINGLE_MARKET_RESPONSE = {
 }
 
 KALSHI_BALANCE_RESPONSE = {
-    "balance": "1234.5678"  # String format with 4 decimal places
+    # Note: Kalshi API returns balance in CENTS as integer, NOT dollars
+    # $659.02 is represented as 65902 cents
+    "balance": 65902,  # Integer cents (= $659.02)
+    "portfolio_value": 173084,  # Integer cents (= $1730.84)
 }
 
 KALSHI_POSITIONS_RESPONSE = {
