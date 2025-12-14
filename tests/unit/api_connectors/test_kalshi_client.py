@@ -514,7 +514,11 @@ class TestKalshiBalanceAndPositions:
     @pytest.mark.unit
     @pytest.mark.critical
     def test_get_balance_returns_decimal(self, mock_env_credentials, mock_load_private_key):
-        """Test get_balance() returns Decimal (NOT float)."""
+        """Test get_balance() returns Decimal in DOLLARS (NOT cents, NOT float).
+
+        The Kalshi API returns balance in integer cents (e.g., 65902 = $659.02).
+        Our get_balance() method converts to dollars for user-friendly output.
+        """
         client = KalshiClient(environment="demo")
 
         with patch.object(client.session, "request") as mock_request:
@@ -527,7 +531,8 @@ class TestKalshiBalanceAndPositions:
 
         # CRITICAL: Balance must be Decimal
         assert isinstance(balance, Decimal), "Balance must be Decimal type"
-        assert balance == Decimal("1234.5678")
+        # Fixture returns 65902 cents = $659.02
+        assert balance == Decimal("659.02")
 
     @pytest.mark.unit
     @pytest.mark.critical

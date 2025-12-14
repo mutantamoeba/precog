@@ -148,8 +148,9 @@ class TestClientLifecycle:
     def test_multiple_operations_same_client(self, client, mock_session) -> None:
         """Test multiple operations with same client instance."""
         # Setup responses for multiple calls
+        # Note: Kalshi API returns balance in integer cents, client converts to dollars
         mock_session.request.side_effect = [
-            create_mock_response({"balance": "1000.00"}),
+            create_mock_response({"balance": 100000}),  # 100000 cents = $1000.00
             create_mock_response({"markets": [{"ticker": "M1", "yes_ask_dollars": "0.50"}]}),
             create_mock_response({"positions": [{"ticker": "M1", "position": 10}]}),
         ]
@@ -160,7 +161,7 @@ class TestClientLifecycle:
         positions = client.get_positions()
 
         # Verify all succeeded
-        assert balance == Decimal("1000.00")
+        assert balance == Decimal("1000.00")  # Client converts cents to dollars
         assert len(markets) == 1
         assert len(positions) == 1
 
@@ -262,8 +263,8 @@ class TestPortfolioWorkflows:
     def test_complete_portfolio_overview(self, client, mock_session) -> None:
         """Test fetching complete portfolio overview."""
         mock_session.request.side_effect = [
-            # Balance
-            create_mock_response({"balance": "5000.00"}),
+            # Balance - Kalshi API returns integer cents, client converts to dollars
+            create_mock_response({"balance": 500000}),  # 500000 cents = $5000.00
             # Open positions
             create_mock_response(
                 {
@@ -304,7 +305,7 @@ class TestPortfolioWorkflows:
         fills = client.get_fills(limit=10)
 
         # Verify complete overview
-        assert balance == Decimal("5000.00")
+        assert balance == Decimal("5000.00")  # Client converts cents to dollars
         assert len(positions) == 2
         assert len(fills) == 1
 
@@ -369,17 +370,18 @@ class TestErrorRecovery:
     def test_retry_on_server_error(self, client, mock_session) -> None:
         """Test automatic retry on 5xx server errors."""
         # First two calls fail, third succeeds
+        # Note: Kalshi API returns balance in integer cents
         mock_session.request.side_effect = [
             create_mock_response({"error": "Server Error"}, 500),
             create_mock_response({"error": "Server Error"}, 503),
-            create_mock_response({"balance": "1000.00"}),
+            create_mock_response({"balance": 100000}),  # 100000 cents = $1000.00
         ]
 
         # Patch time.sleep to speed up test
         with patch("time.sleep"):
             balance = client.get_balance()
 
-        assert balance == Decimal("1000.00")
+        assert balance == Decimal("1000.00")  # Client converts cents to dollars
         assert mock_session.request.call_count == 3
 
     def test_no_retry_on_client_error(self, client, mock_session) -> None:
@@ -488,13 +490,23 @@ class TestDecimalPrecisionE2E:
         assert fill["no_price_fixed"] == Decimal("0.0400")
 
     def test_balance_decimal_precision(self, client, mock_session) -> None:
-        """Test balance maintains Decimal precision."""
-        mock_session.request.return_value = create_mock_response({"balance": "12345.6789"})
+        """Test balance maintains Decimal precision through cents-to-dollars conversion.
+
+        Kalshi API returns balance in integer cents. Our client converts to dollars
+        using Decimal arithmetic to avoid float precision issues.
+        """
+        # 1234567 cents = $12345.67
+        mock_session.request.return_value = create_mock_response({"balance": 1234567})
 
         balance = client.get_balance()
 
         assert isinstance(balance, Decimal)
-        assert balance == Decimal("12345.6789")
+        assert balance == Decimal("12345.67")
+
+        # Verify exact arithmetic - converting back to cents should be exact
+        # This would fail with float: float(12345.67) * 100 might not equal 1234567
+        balance_cents = balance * Decimal("100")
+        assert balance_cents == Decimal("1234567")
 
 
 # =============================================================================

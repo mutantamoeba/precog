@@ -145,12 +145,11 @@ class TestKalshiClientWithVCR:
         assert isinstance(balance, Decimal), f"Balance must be Decimal, got {type(balance)}"
 
         # Verify real balance from cassette (235084 cents = $2350.84)
-        assert balance == Decimal("235084"), "Should match recorded balance"
+        # Client now converts cents to dollars automatically
+        assert balance == Decimal("2350.84"), "Should match recorded balance"
 
-        # Educational Note: Kalshi returns cents, not dollars!
-        # Real API: {"balance": 235084} = $2350.84
-        # Our client currently returns raw cents (Decimal("235084"))
-        # Phase 1.5 will add cent-to-dollar conversion logic
+        # Educational Note: Kalshi API returns cents (235084),
+        # but our client converts to dollars ($2350.84)
 
     def test_get_positions_with_real_api_data(self, monkeypatch):
         """
@@ -308,13 +307,13 @@ class TestKalshiClientDecimalPrecisionWithVCR:
 
     def test_cent_to_dollar_conversion_accuracy(self, monkeypatch):
         """
-        Test that Kalshi cent values are handled correctly.
+        Test that Kalshi cent values are converted to dollars correctly.
 
         Kalshi API returns:
         - balance: 235084 (cents) = $2350.84
         - portfolio_value: 10197 (cents) = $101.97
 
-        Our client must preserve exact values (no float rounding).
+        Our client converts to dollars and preserves exact precision (no float rounding).
         """
         monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "75b4b76e-d191-4855-b219-5c31cdcba1c8")
         monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "_keys/kalshi_demo_private.pem")
@@ -323,15 +322,17 @@ class TestKalshiClientDecimalPrecisionWithVCR:
             client = KalshiClient(environment="demo")
             balance = client.get_balance()
 
-        # Verify exact cent value preserved
-        assert balance == Decimal("235084"), "Balance should be exact cents"
-
-        # Verify conversion to dollars maintains precision
-        balance_dollars = balance / Decimal("100")
-        assert balance_dollars == Decimal("2350.84"), "Dollar conversion should be exact"
+        # Client now returns dollars (converted from cents)
+        # API returns 235084 cents, client converts to $2350.84
+        assert balance == Decimal("2350.84"), "Balance should be in dollars"
 
         # Verify no float contamination
-        assert isinstance(balance_dollars, Decimal), "Result must remain Decimal after division"
+        assert isinstance(balance, Decimal), "Balance must be Decimal type"
+
+        # Verify exact arithmetic is possible
+        # This would fail with floats (2350.84 * 100 might not equal 235084 exactly)
+        balance_cents = balance * Decimal("100")
+        assert balance_cents == Decimal("235084"), "Conversion back to cents should be exact"
 
     def test_yes_no_price_complementarity(self, monkeypatch):
         """
