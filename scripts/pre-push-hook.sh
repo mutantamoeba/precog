@@ -174,14 +174,15 @@ NAMES[2]="🧪 All 8 Test Types (1196 tests - hybrid parallel/sequential)"
 OUTPUTS[2]="$TEMP_DIR/step_2.txt"
 
 # ==============================================================================
-# STEP 3: Type Checking (PARALLEL)
+# STEP 3: Type Checking (PARALLEL, with incremental caching)
+# Mypy caches in .mypy_cache/ - first run ~20-30s, subsequent ~5-10s
 # ==============================================================================
 {
     run_parallel_check 3 "Type Checking" \
-        python -m mypy . --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --exclude '.venv/' --ignore-missing-imports
+        python -m mypy . --incremental --cache-dir .mypy_cache --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --exclude '.venv/' --ignore-missing-imports
 } &
 PIDS[3]=$!
-NAMES[3]="🔍 Type Checking (Mypy)"
+NAMES[3]="🔍 Type Checking (Mypy, incremental)"
 OUTPUTS[3]="$TEMP_DIR/step_3.txt"
 
 # ==============================================================================

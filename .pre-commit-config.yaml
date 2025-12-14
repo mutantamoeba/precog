@@ -40,14 +40,15 @@ repos:
         types: [python]
         description: "Checks code formatting on staged Python files"
 
-      # Type checking: Mypy
+      # Type checking: Mypy (with incremental caching)
+      # Mypy caches in .mypy_cache/ - first run ~20-30s, subsequent ~5-10s
       - id: mypy
-        name: Mypy Type Checking
-        entry: python -m mypy . --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --exclude '.venv/' --ignore-missing-imports
+        name: Mypy Type Checking (incremental)
+        entry: python -m mypy . --incremental --cache-dir .mypy_cache --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --exclude '.venv/' --ignore-missing-imports
         language: system
         pass_filenames: false
         types: [python]
-        description: "Type checking with mypy"
+        description: "Type checking with mypy (uses .mypy_cache for faster runs)"
 
       # Security: Hardcoded credentials scan
       - id: security-credentials
