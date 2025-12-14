@@ -200,6 +200,13 @@ def is_process_running(pid: int) -> bool:
         - Windows: OpenProcess with SYNCHRONIZE access
         - Unix: kill(pid, 0) - signal 0 tests if process exists
     """
+    # PIDs must be positive (negative PIDs are invalid or have special meaning)
+    # - PID 0: kernel scheduler on Linux, invalid on Windows
+    # - PID -1: special "all processes" on Unix, invalid on Windows
+    # - PID < -1: process group IDs on Unix, invalid on Windows
+    if pid <= 0:
+        return False
+
     if sys.platform == "win32":
         import ctypes
 

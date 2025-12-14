@@ -467,23 +467,24 @@ class TestProcessDetectionInvariants:
         - Work across platforms
     """
 
-    @given(pid=st.integers(min_value=-1000, max_value=-1))
+    @given(pid=st.integers(min_value=-1000, max_value=0))
     @settings(max_examples=50)
-    def test_negative_pid_not_running(self, pid: int) -> None:
-        """Property: Negative PIDs are never running.
+    def test_non_positive_pid_not_running(self, pid: int) -> None:
+        """Property: Non-positive PIDs (<=0) are never considered running.
 
         Educational Note:
-            We only test negative PIDs because:
-            - PID 0 is the kernel scheduler on Linux (exists and is "running")
-            - PID 0 doesn't exist on Windows (returns False)
-            - Negative PIDs are invalid on ALL platforms
+            Our is_process_running() explicitly returns False for pid <= 0 because:
+            - Negative PIDs have special meanings in Unix (process groups)
+            - PID 0 is the kernel scheduler on Linux (not a user process)
+            - We want consistent behavior across platforms
+            - Real user processes always have positive PIDs
         """
         from precog.runners.service_runner import is_process_running
 
-        # Negative PIDs should never be running on any platform
+        # Non-positive PIDs should never be running (by design)
         result = is_process_running(pid)
         assert isinstance(result, bool), "is_process_running must return bool"
-        assert result is False, f"Negative PID {pid} should not be running"
+        assert result is False, f"Non-positive PID {pid} should not be running"
 
     def test_current_process_running(self) -> None:
         """Property: Current process is always running."""
