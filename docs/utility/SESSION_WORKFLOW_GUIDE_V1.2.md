@@ -1,13 +1,18 @@
 # Session Workflow Guide
 
 ---
-**Version:** 1.1
+**Version:** 1.2
 **Created:** 2025-11-15
-**Last Updated:** 2025-11-29
+**Last Updated:** 2025-12-14
 **Purpose:** Comprehensive guide to session workflows, phase transitions, and task tracking
 **Target Audience:** Claude Code AI assistant in all sessions
 **Extracted From:** CLAUDE.md V1.17 Section 3 (following V1.16 extraction pattern)
 **Status:** ✅ Current
+**Changes in V1.2:**
+- **Added Branch Naming Conventions section** - Comprehensive guide with table of prefixes (feature/, bugfix/, refactor/, docs/, test/)
+- **Common mistakes documented** - `fix/` vs `bugfix/`, direct push to main, etc.
+- **Examples added** - Clear examples for each branch type
+- **Root cause:** Frequent branch naming failures during development (`fix/` used instead of `bugfix/`)
 **Changes in V1.1:**
 - **Added Section 3: Pre-Planning Test Coverage Checklist (MANDATORY)** - Enforces TESTING_STRATEGY V3.2 8-test-type requirement before todo list creation
 - **Root Cause:** Phase 2C planning failure - only 2/8 test types included in todo list
@@ -477,7 +482,7 @@ git push --no-verify
 ```
 
 **What the pre-push hooks check (Steps 2-7 run in PARALLEL):**
-1. 🌿 **Branch name convention** - Verifies feature/, bugfix/, refactor/, docs/, test/ naming
+1. 🌿 **Branch name convention** - Verifies naming (see table below)
 2. 📋 **Quick validation** - validate_quick.sh (Ruff, docs, ~3 sec)
 3. 🧪 **Unit tests** (PARALLEL) - pytest test_config_loader.py test_logger.py (~10 sec)
 4. 🔍 **Type checking** (PARALLEL) - mypy on entire codebase (~20 sec)
@@ -497,6 +502,42 @@ git push --no-verify
 - All output captured to temp files
 - Results reported after all checks complete
 - If any check fails, full output displayed for debugging
+
+### Branch Naming Conventions (MANDATORY)
+
+The pre-push hook enforces these branch naming conventions. Pushes will be **blocked** if the branch name doesn't match.
+
+| Prefix | Use For | Example |
+|--------|---------|---------|
+| `feature/` | New features, enhancements | `feature/kalshi-api-client` |
+| `bugfix/` | Bug fixes (NOT `fix/`!) | `bugfix/balance-conversion-tests` |
+| `refactor/` | Code refactoring | `refactor/database-connection-pool` |
+| `docs/` | Documentation changes | `docs/api-integration-guide` |
+| `test/` | Test additions/improvements | `test/integration-coverage` |
+
+**Common Mistakes:**
+- ❌ `fix/something` → Use `bugfix/something` instead
+- ❌ `update/something` → Use `feature/something` or `refactor/something`
+- ❌ `hotfix/something` → Use `bugfix/something`
+- ❌ Direct push to `main` → Create a branch first
+
+**Examples:**
+```bash
+# New feature
+git checkout -b feature/position-manager
+
+# Bug fix (NOT fix/!)
+git checkout -b bugfix/decimal-precision-issue
+
+# Code refactoring
+git checkout -b refactor/extract-api-client
+
+# Documentation update
+git checkout -b docs/branch-naming-conventions
+
+# Adding tests
+git checkout -b test/property-based-testing
+```
 
 ### Before Pushing (CRITICAL - 2 minutes)
 
@@ -1248,4 +1289,4 @@ This guide provides comprehensive workflows for:
 
 ---
 
-**END OF SESSION_WORKFLOW_GUIDE_V1.1**
+**END OF SESSION_WORKFLOW_GUIDE_V1.2**
