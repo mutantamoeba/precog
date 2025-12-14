@@ -522,6 +522,45 @@ def run_all_checks_parallel(
     return results
 
 
+def cleanup_old_logs(log_dir: Path, keep_count: int = 10) -> int:
+    """
+    Remove old log files, keeping only the most recent ones.
+
+    Args:
+        log_dir: Directory containing log files
+        keep_count: Number of recent logs to keep (default: 10)
+
+    Returns:
+        Number of files deleted
+
+    Educational Note:
+        Pre-push logs can accumulate rapidly (20-25MB per run). Without cleanup,
+        a developer running 100 test cycles would accumulate ~2GB of logs.
+        This function maintains a rolling window of recent logs for debugging
+        while preventing unbounded disk usage.
+    """
+    if not log_dir.exists():
+        return 0
+
+    deleted = 0
+
+    # Clean up both .log and .json files (legacy format)
+    for pattern in ["pre-push-*.log", "pre-push-*.json"]:
+        log_files = sorted(log_dir.glob(pattern), key=lambda f: f.stat().st_mtime)
+
+        # Calculate how many to delete
+        files_to_delete = len(log_files) - keep_count
+        if files_to_delete > 0:
+            for log_file in log_files[:files_to_delete]:
+                try:
+                    log_file.unlink()
+                    deleted += 1
+                except OSError:
+                    pass  # Ignore errors (file in use, permissions, etc.)
+
+    return deleted
+
+
 def print_summary(results: list[CheckResult], log_dir: Path | None = None) -> bool:
     """
     Print summary of all check results.
@@ -632,6 +671,9 @@ def main() -> int:
 
     args = parser.parse_args()
 
+    # Clean up old logs before running (keep last 10)
+    deleted = cleanup_old_logs(args.log_dir, keep_count=10)
+
     print()
     print("=" * 60)
     print("Pre-Push Parallel Check Runner (Python)")
@@ -640,6 +682,8 @@ def main() -> int:
     print(f"Workers: {args.workers}")
     print(f"Check timeout: {CHECK_TIMEOUT}s per check")
     print(f"Total timeout: {TOTAL_TIMEOUT}s")
+    if deleted > 0:
+        print(f"Log cleanup: Removed {deleted} old log files (keeping last 10)")
     print()
 
     if args.dry_run:
