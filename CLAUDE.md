@@ -630,8 +630,8 @@ git branch -vv | grep ahead || echo "All up-to-date"
 - **To fix formatting:** Run `python -m ruff format .` manually before committing
 
 **Pre-push Hooks (Automatic):**
-- Run on `git push` automatically (~30-60 seconds)
-- 8 validation steps including tests, security, coverage
+- Run on `git push` automatically (~8-12 minutes)
+- 11 validation steps including ALL 8 test types (1196 tests), security, coverage
 - Reduces CI failures by 80-90%
 
 **Branch Protection (GitHub):**

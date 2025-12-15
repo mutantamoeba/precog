@@ -111,12 +111,15 @@ def setup_kalshi_platform(db_pool, clean_test_data):
 
     yield
 
-    # Cleanup after test
+    # Cleanup after test - delete child records but NOT the platform
+    # The 'kalshi' platform is seeded by Alembic migration and should persist
+    # Deleting it causes race conditions in parallel test execution (Issue #228)
     with get_cursor(commit=True) as cur:
+        cur.execute("DELETE FROM markets WHERE platform_id = 'kalshi'")
         cur.execute("DELETE FROM events WHERE platform_id = 'kalshi'")
         cur.execute("DELETE FROM series WHERE platform_id = 'kalshi'")
         cur.execute("DELETE FROM account_balance WHERE platform_id = 'kalshi'")
-        cur.execute("DELETE FROM platforms WHERE platform_id = 'kalshi'")
+        # NOTE: DO NOT delete platforms - causes FK violations in parallel tests
 
 
 # =============================================================================

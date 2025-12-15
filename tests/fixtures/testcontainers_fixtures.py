@@ -732,7 +732,7 @@ def postgres_container() -> Generator[dict[str, str], None, None]:
     Why Session Scope for Pre-Push:
         Pre-push runs ALL 8 test types (1196 tests). With class scope,
         we'd spin up ~50+ containers (one per test class). Session scope
-        spins up ONE container, making pre-push run in ~3-5 min vs ~30 min.
+        spins up ONE container, making pre-push run in ~8-12 min vs ~30+ min.
 
     Isolation Strategy:
         - Each test should use clean_test_data fixture for data isolation
