@@ -3118,6 +3118,202 @@ def db_verify_seeds(
         raise typer.Exit(code=1) from None
 
 
+@app.command(name="db-seed-historical")
+def db_seed_historical(
+    csv_file: str = typer.Option(
+        None,
+        "--csv",
+        "-f",
+        help="Path to CSV file with historical Elo data",
+    ),
+    sport: str = typer.Option(
+        "nfl",
+        "--sport",
+        "-s",
+        help="Sport code (nfl, ncaaf, nba, etc.)",
+    ),
+    seasons: str = typer.Option(
+        None,
+        "--seasons",
+        help="Comma-separated seasons to load (e.g., 2022,2023,2024)",
+    ),
+    source: str = typer.Option(
+        "fivethirtyeight",
+        "--source",
+        help="Data source format (fivethirtyeight, simple)",
+    ),
+    stats_only: bool = typer.Option(
+        False,
+        "--stats",
+        help="Show current historical Elo statistics without loading",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+) -> None:
+    """
+    Seed historical Elo ratings from CSV files.
+
+    **Historical Elo Seeding Explained:**
+    Loads historical Elo ratings from external data sources into the
+    historical_elo table. This data is used for model training, backtesting,
+    and analyzing historical team performance.
+
+    **Data Sources:**
+    - FiveThirtyEight: NFL Elo ratings from 1920 to present
+    - Simple CSV: Custom format with team_code, date, elo_rating columns
+
+    **FiveThirtyEight Format:**
+    The FiveThirtyEight NFL Elo CSV has game-by-game data with:
+    - date, season, team1, team2: Game identification
+    - elo1_pre, elo2_pre: Pre-game Elo ratings
+    - qbelo1_pre, qbelo2_pre: QB-adjusted ratings (NFL-specific)
+
+    **When to Use:**
+    - After initial database setup to load historical data
+    - Before running backtests or training ML models
+    - To update with new season data
+
+    Args:
+        csv_file: Path to CSV file (required unless --stats)
+        sport: Sport code (default: nfl)
+        seasons: Filter to specific seasons
+        source: CSV format (fivethirtyeight or simple)
+        stats_only: Show current data statistics
+        verbose: Show detailed output
+
+    Returns:
+        None: Exits with code 0 on success, 1 on failure
+
+    Example:
+        ```bash
+        # Show current historical Elo statistics
+        python main.py db-seed-historical --stats
+
+        # Load FiveThirtyEight NFL Elo data
+        python main.py db-seed-historical --csv nfl_elo.csv
+
+        # Load specific seasons only
+        python main.py db-seed-historical --csv nfl_elo.csv --seasons 2022,2023,2024
+
+        # Load simple CSV format
+        python main.py db-seed-historical --csv my_elo.csv --source simple --sport nba
+        ```
+
+    References:
+        - Issue #208: Historical Data Seeding
+        - Migration 030: historical_elo table
+        - FiveThirtyEight NFL Elo: https://github.com/fivethirtyeight/data/tree/master/nfl-elo
+    """
+    from pathlib import Path
+
+    console.print("\n[bold cyan]Precog Historical Elo Seeding[/bold cyan]\n")
+
+    try:
+        from precog.database.seeding import (
+            get_historical_elo_stats,
+            load_csv_elo,
+            load_fivethirtyeight_elo,
+        )
+
+        # Stats-only mode
+        if stats_only:
+            console.print("[dim]Fetching historical Elo statistics...[/dim]\n")
+
+            try:
+                stats = get_historical_elo_stats()
+
+                console.print(f"[bold]Total records:[/bold] {stats['total']}")
+
+                if stats["by_sport"]:
+                    console.print("\n[bold]By Sport:[/bold]")
+                    for sport_name, count in stats["by_sport"].items():
+                        console.print(f"  {sport_name.upper()}: {count:,}")
+
+                if stats["by_season"]:
+                    console.print("\n[bold]By Season (recent):[/bold]")
+                    for season, count in stats["by_season"].items():
+                        console.print(f"  {season}: {count:,}")
+
+                if stats["by_source"]:
+                    console.print("\n[bold]By Source:[/bold]")
+                    for source_name, count in stats["by_source"].items():
+                        console.print(f"  {source_name}: {count:,}")
+
+            except Exception as e:
+                console.print(f"[yellow]Note: {e}[/yellow]")
+                console.print("[dim]The historical_elo table may not exist yet.[/dim]")
+                console.print(
+                    "[dim]Run migration 030 first: python scripts/run_migrations.py[/dim]"
+                )
+
+            console.print()
+            return
+
+        # Require CSV file for loading
+        if not csv_file:
+            console.print("[red]Error: --csv option required for loading data[/red]")
+            console.print("[dim]Use --stats to view current data without loading[/dim]")
+            raise typer.Exit(code=1)
+
+        csv_path = Path(csv_file)
+        if not csv_path.exists():
+            console.print(f"[red]Error: CSV file not found: {csv_file}[/red]")
+            raise typer.Exit(code=1)
+
+        # Parse seasons filter
+        season_list = None
+        if seasons:
+            try:
+                season_list = [int(s.strip()) for s in seasons.split(",")]
+                console.print(f"[dim]Filtering to seasons: {season_list}[/dim]")
+            except ValueError:
+                console.print(f"[red]Error: Invalid seasons format: {seasons}[/red]")
+                raise typer.Exit(code=1) from None
+
+        console.print(f"[dim]Loading from: {csv_path}[/dim]")
+        console.print(f"[dim]Sport: {sport}[/dim]")
+        console.print(f"[dim]Source format: {source}[/dim]")
+        console.print()
+
+        # Load based on source format
+        if source == "fivethirtyeight":
+            result = load_fivethirtyeight_elo(csv_path, sport=sport, seasons=season_list)
+        elif source == "simple":
+            result = load_csv_elo(csv_path, sport=sport, source="imported")
+        else:
+            console.print(f"[red]Error: Unknown source format: {source}[/red]")
+            console.print("[dim]Supported formats: fivethirtyeight, simple[/dim]")
+            raise typer.Exit(code=1)
+
+        # Report results
+        console.print("[bold]Load Results:[/bold]")
+        console.print(f"  Records processed: {result.records_processed:,}")
+        console.print(f"  Records inserted: {result.records_inserted:,}")
+        console.print(f"  Records skipped: {result.records_skipped:,}")
+        console.print(f"  Errors: {result.errors}")
+
+        if result.records_skipped > 0:
+            console.print("\n[yellow]Note: Skipped records may be due to missing teams.[/yellow]")
+            console.print("[dim]Ensure teams are seeded first: python main.py db-seed[/dim]")
+
+        if result.errors > 0:
+            console.print("\n[red]Some errors occurred during loading.[/red]")
+            if verbose and result.error_messages:
+                for msg in result.error_messages[:10]:
+                    console.print(f"  [dim]{msg}[/dim]")
+            raise typer.Exit(code=1)
+
+        console.print("\n[green]Historical Elo seeding completed successfully![/green]\n")
+
+    except ImportError as e:
+        console.print(f"[red][FAIL] Failed to import seeding module: {e}[/red]")
+        raise typer.Exit(code=1) from None
+    except Exception as e:
+        console.print(f"[red][FAIL] Historical seeding failed: {e}[/red]")
+        if verbose:
+            logger.error(f"Historical seeding error: {e}", exc_info=True)
+        raise typer.Exit(code=1) from None
+
+
 # =============================================================================
 # Run Services Command (Production Data Collection)
 # =============================================================================
