@@ -1,9 +1,17 @@
 # Development Phases & Roadmap
 
 ---
-**Version:** 1.10
-**Last Updated:** 2025-12-09
+**Version:** 1.11
+**Last Updated:** 2025-12-15
 **Status:** ✅ Current
+**Changes in v1.11:**
+- **PHASE 2.5 CLI COMPLETE**: All scheduler CLI commands implemented and verified
+  - `scheduler start` - Start background data polling (simple + supervised modes)
+  - `scheduler stop` - Graceful shutdown of scheduler
+  - `scheduler status` - Show running jobs, last poll times
+  - `scheduler poll-once` - Single poll execution (bonus command)
+- **BUGFIX PR #231**: Fixed poll-once key names (`items_fetched` vs `games_fetched`)
+- **DELIVERABLES UPDATED**: CLI commands + main.py scheduler group marked complete
 **Changes in v1.10:**
 - **DEF-P2.5-007 ADDED**: Two-Axis Environment Configuration deferred task (Issue #202, ADR-105, HIGH priority)
 - **DEFERRED DOCS UPDATED**: `docs/utility/PHASE_2.5_DEFERRED_TASKS_V1.0.md` -> V1.1 (7 deferred tasks total)
@@ -1181,10 +1189,11 @@ python scripts/validate_phase_start.py --phase 2
 ### Tasks
 
 #### 1. CLI Scheduler Commands (Day 1-2)
-- [  ] `scheduler start` - Start background data polling
-- [  ] `scheduler stop` - Graceful shutdown of scheduler
-- [  ] `scheduler status` - Show running jobs, last poll times
-- [  ] Rich console output with job status tables
+- [✅] `scheduler start` - Start background data polling
+- [✅] `scheduler stop` - Graceful shutdown of scheduler
+- [✅] `scheduler status` - Show running jobs, last poll times
+- [✅] Rich console output with job status tables
+- [✅] `scheduler poll-once` - Single poll execution (bonus command)
 
 #### 2. Service Runner Script (Day 2-3)
 - [✅] `scripts/run_data_collector.py` - Long-running service entry point (ServiceSupervisor pattern)
@@ -1232,11 +1241,11 @@ python scripts/validate_phase_start.py --phase 2
 - No overlap: Seeder handles past seasons, Poller handles current games
 
 ### Deliverables
-- [  ] CLI commands: `scheduler start`, `scheduler stop`, `scheduler status`
+- [✅] CLI commands: `scheduler start`, `scheduler stop`, `scheduler status`, `poll-once`
 - [✅] Service runner script with graceful shutdown (ServiceSupervisor pattern, ADR-100)
 - [  ] Kalshi production configuration
 - [⏭️] Data monitoring/alerting - **DEFERRED** to Phase 4 (CloudWatch/ELK, REQ-OBSERV-003)
-- [  ] Updated main.py with scheduler command group
+- [✅] Updated main.py with scheduler command group
 
 ### Success Criteria
 - [  ] Scheduler runs continuously for 24+ hours without failure
