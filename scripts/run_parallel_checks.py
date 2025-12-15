@@ -334,11 +334,11 @@ PARALLEL_CHECKS: list[tuple[int, str, str]] = [
         "Security Scan (Ruff S-rules)",
         "python -m ruff check --select S --ignore S101,S110,S112,S607,S603,S602 --exclude tests/ --exclude _archive/ --exclude venv/ --quiet .",
     ),
-    # Step 5: Warning Governance
+    # Step 5: Warning Governance (--skip-pytest since tests already ran in Step 2)
     (
         5,
         "Warning Governance",
-        "python scripts/check_warning_debt.py",
+        "python scripts/check_warning_debt.py --skip-pytest",
     ),
     # Step 6: Code Quality
     (

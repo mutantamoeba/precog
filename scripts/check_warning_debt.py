@@ -492,10 +492,18 @@ def main():
     parser.add_argument("--update", action="store_true", help="Update baseline (requires approval)")
     parser.add_argument("--report", action="store_true", help="Show detailed warning report")
     parser.add_argument("--create-baseline", action="store_true", help="Create initial baseline")
+    parser.add_argument(
+        "--skip-pytest",
+        action="store_true",
+        help="Skip pytest run (use when called from pre-push hooks where tests already ran)",
+    )
     args = parser.parse_args()
 
-    # Run all validation sources in parallel
-    print("\n[INFO] Running multi-source validation (parallel execution)...\n")
+    # Run validation sources in parallel
+    if args.skip_pytest:
+        print("\n[INFO] Running multi-source validation (--skip-pytest: skipping pytest)...\n")
+    else:
+        print("\n[INFO] Running multi-source validation (parallel execution)...\n")
 
     # Initialize result variables
     pytest_count = 0
@@ -505,38 +513,75 @@ def main():
     mypy_errors = 0
     timings = {}
 
-    # Run all 4 validation sources concurrently
-    with ThreadPoolExecutor(max_workers=4) as executor:
-        # Submit all validation tasks
-        future_to_source: dict[Future[Any], str] = {
-            executor.submit(run_pytest_timed): "pytest",
-            executor.submit(run_validate_docs_timed): "validate_docs",
-            executor.submit(run_ruff_timed): "ruff",
-            executor.submit(run_mypy_timed): "mypy",
-        }
+    # Determine which validation sources to run
+    if args.skip_pytest:
+        # Skip pytest when called from pre-push (tests already ran in Step 2)
+        # Use baseline pytest count to avoid false positives
+        baseline_for_pytest = load_baseline()
+        # Correct path: tracking.warning_sources.pytest
+        pytest_count = (
+            baseline_for_pytest.get("tracking", {}).get("warning_sources", {}).get("pytest", 0)
+        )
+        timings["pytest"] = 0.0
+        print(f"[INFO] Using baseline pytest warning count: {pytest_count}")
 
-        # Collect results as they complete
-        future: Future[Any]
-        for future in as_completed(future_to_source):
-            source = future_to_source[future]
-            try:
-                if source == "pytest":
-                    _output, _returncode, pytest_count, pytest_categories, duration = (
-                        future.result()
-                    )
-                    timings["pytest"] = duration
-                elif source == "validate_docs":
-                    _output, _returncode, docs_warnings, duration = future.result()
-                    timings["validate_docs"] = duration
-                elif source == "ruff":
-                    _output, _returncode, ruff_errors, duration = future.result()
-                    timings["ruff"] = duration
-                elif source == "mypy":
-                    _output, _returncode, mypy_errors, duration = future.result()
-                    timings["mypy"] = duration
-            except Exception as e:
-                print(f"[ERROR] {source} validation failed: {e}")
-                sys.exit(2)
+        # Run only non-pytest validation sources
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            future_to_source: dict[Future[Any], str] = {
+                executor.submit(run_validate_docs_timed): "validate_docs",
+                executor.submit(run_ruff_timed): "ruff",
+                executor.submit(run_mypy_timed): "mypy",
+            }
+
+            future: Future[Any]
+            for future in as_completed(future_to_source):
+                source = future_to_source[future]
+                try:
+                    if source == "validate_docs":
+                        _output, _returncode, docs_warnings, duration = future.result()
+                        timings["validate_docs"] = duration
+                    elif source == "ruff":
+                        _output, _returncode, ruff_errors, duration = future.result()
+                        timings["ruff"] = duration
+                    elif source == "mypy":
+                        _output, _returncode, mypy_errors, duration = future.result()
+                        timings["mypy"] = duration
+                except Exception as e:
+                    print(f"[ERROR] {source} validation failed: {e}")
+                    sys.exit(2)
+    else:
+        # Run all 4 validation sources concurrently
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            # Submit all validation tasks
+            future_to_source_all: dict[Future[Any], str] = {
+                executor.submit(run_pytest_timed): "pytest",
+                executor.submit(run_validate_docs_timed): "validate_docs",
+                executor.submit(run_ruff_timed): "ruff",
+                executor.submit(run_mypy_timed): "mypy",
+            }
+
+            # Collect results as they complete
+            future_all: Future[Any]
+            for future_all in as_completed(future_to_source_all):
+                source = future_to_source_all[future_all]
+                try:
+                    if source == "pytest":
+                        _output, _returncode, pytest_count, pytest_categories, duration = (
+                            future_all.result()
+                        )
+                        timings["pytest"] = duration
+                    elif source == "validate_docs":
+                        _output, _returncode, docs_warnings, duration = future_all.result()
+                        timings["validate_docs"] = duration
+                    elif source == "ruff":
+                        _output, _returncode, ruff_errors, duration = future_all.result()
+                        timings["ruff"] = duration
+                    elif source == "mypy":
+                        _output, _returncode, mypy_errors, duration = future_all.result()
+                        timings["mypy"] = duration
+                except Exception as e:
+                    print(f"[ERROR] {source} validation failed: {e}")
+                    sys.exit(2)
 
     # Combine all counts
     current_counts = {

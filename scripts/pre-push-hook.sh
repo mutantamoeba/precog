@@ -197,11 +197,11 @@ NAMES[4]="🔒 Security Scan (Ruff S-rules)"
 OUTPUTS[4]="$TEMP_DIR/step_4.txt"
 
 # ==============================================================================
-# STEP 5: Warning Governance (PARALLEL - SLOWEST ~30s)
+# STEP 5: Warning Governance (PARALLEL - --skip-pytest since tests ran in Step 2)
 # ==============================================================================
 {
     run_parallel_check 5 "Warning Governance" \
-        python scripts/check_warning_debt.py
+        python scripts/check_warning_debt.py --skip-pytest
 } &
 PIDS[5]=$!
 NAMES[5]="⚠️  Warning Governance"

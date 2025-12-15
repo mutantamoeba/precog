@@ -1,9 +1,21 @@
-# Legacy Migrations (Pre-Alembic)
+# ============================================================
+# ARCHIVED - DO NOT USE - ARCHIVED - DO NOT USE - ARCHIVED
+# ============================================================
+#
+# This folder contains LEGACY migrations that are NO LONGER USED.
+# All new migrations MUST use Alembic: ../alembic/versions/
+#
+# See: docs/utility/SCHEMA_MIGRATION_WORKFLOW_V2.0.md
+#
+# ============================================================
+
+# Legacy Migrations (Pre-Alembic) - ARCHIVED
 
 ---
-**Status:** SUPERSEDED
+**Status:** ARCHIVED (DO NOT USE)
 **Superseded By:** Alembic migrations in `../alembic/versions/`
 **Date Deprecated:** 2025-12-07
+**Date Archived:** 2025-12-14
 
 ---
 

@@ -176,11 +176,18 @@ class TestMigrationIdempotency:
 
 
 class TestMigrationUtilsIntegration:
-    """Test migration utility functions from migration_utils.py."""
+    """Test migration utility functions from migration_utils.py.
+
+    Note: migration_utils.py is archived in _archived_legacy_migrations/
+    but these tests verify the utility functions still work correctly
+    for any legacy code that may reference them.
+    """
 
     def test_table_exists_function(self, db_pool, db_cursor, clean_test_data):
         """Test table_exists utility function."""
-        from precog.database.migrations.migration_utils import table_exists
+        from precog.database._archived_legacy_migrations.migration_utils import (
+            table_exists,
+        )
 
         # Known existing table
         assert table_exists("markets") is True
@@ -189,7 +196,9 @@ class TestMigrationUtilsIntegration:
 
     def test_column_exists_function(self, db_pool, db_cursor, clean_test_data):
         """Test column_exists utility function."""
-        from precog.database.migrations.migration_utils import column_exists
+        from precog.database._archived_legacy_migrations.migration_utils import (
+            column_exists,
+        )
 
         # Known existing column
         assert column_exists("markets", "ticker") is True
@@ -198,7 +207,9 @@ class TestMigrationUtilsIntegration:
 
     def test_index_exists_function(self, db_pool, db_cursor, clean_test_data):
         """Test index_exists utility function."""
-        from precog.database.migrations.migration_utils import index_exists
+        from precog.database._archived_legacy_migrations.migration_utils import (
+            index_exists,
+        )
 
         # Primary key index should exist
         assert index_exists("markets_pkey") is True
@@ -207,7 +218,9 @@ class TestMigrationUtilsIntegration:
 
     def test_safe_create_table(self, db_pool, db_cursor, clean_test_data):
         """Test safe_create_table function is idempotent."""
-        from precog.database.migrations.migration_utils import safe_create_table
+        from precog.database._archived_legacy_migrations.migration_utils import (
+            safe_create_table,
+        )
 
         create_sql = """
             CREATE TABLE _test_safe_table (
@@ -230,7 +243,7 @@ class TestMigrationUtilsIntegration:
 
     def test_safe_add_column(self, db_pool, db_cursor, clean_test_data):
         """Test safe_add_column function is idempotent."""
-        from precog.database.migrations.migration_utils import (
+        from precog.database._archived_legacy_migrations.migration_utils import (
             safe_add_column,
             safe_create_table,
         )

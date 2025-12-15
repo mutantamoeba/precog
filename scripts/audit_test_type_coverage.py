@@ -93,6 +93,7 @@ MODULE_TIERS = {
     # Data Operations
     "database/crud_operations": "business",
     "database/seeding/seeding_manager": "business",
+    "database/seeding/historical_elo_loader": "business",
     # Schedulers
     "schedulers/espn_game_poller": "business",
     # Validation
