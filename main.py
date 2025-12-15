@@ -2795,8 +2795,8 @@ def scheduler_poll_once(
             updater = MarketUpdater(leagues=league_list)
             result = updater.poll_once()
             console.print(
-                f"[green][OK] ESPN: {result['games_fetched']} games fetched, "
-                f"{result['games_updated']} updated[/green]"
+                f"[green][OK] ESPN: {result['items_fetched']} games fetched, "
+                f"{result['items_updated']} updated[/green]"
             )
         except Exception as e:
             console.print(f"[red][FAIL] ESPN poll failed: {e}[/red]")
@@ -2814,8 +2814,8 @@ def scheduler_poll_once(
             )
             result = poller.poll_once()
             console.print(
-                f"[green][OK] Kalshi: {result['markets_fetched']} markets fetched, "
-                f"{result['markets_updated']} updated, {result['markets_created']} created[/green]"
+                f"[green][OK] Kalshi: {result['items_fetched']} markets fetched, "
+                f"{result['items_updated']} updated, {result['items_created']} created[/green]"
             )
             poller.kalshi_client.close()
         except ValueError as e:
