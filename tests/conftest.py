@@ -203,6 +203,9 @@ def clean_test_data(db_cursor):
     # Cleanup before test (in reverse FK order)
     # Delete child records first - trades/positions reference strategies/models/markets
     db_cursor.execute("DELETE FROM trades WHERE market_id LIKE 'MKT-TEST-%'")
+    # Delete settlements (child of markets) - clean ALL settlements for test isolation
+    # Settlements table is append-only in production, but must be cleaned between tests
+    db_cursor.execute("DELETE FROM settlements")
     # Delete positions by test market pattern
     db_cursor.execute(
         "DELETE FROM positions WHERE market_id LIKE 'MKT-TEST-%' OR market_id LIKE 'KALSHI-%'"

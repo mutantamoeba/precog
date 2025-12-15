@@ -1,9 +1,11 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.49
-**Last Updated:** 2025-12-10
+**Version:** 2.50
+**Last Updated:** 2025-12-14
 **Status:** ✅ Current
+**Changes in v2.50:**
+- PHASE_2.5_DEFERRED_TASKS V1.2 → V1.3: Fixed reference to match actual file version
 **Changes in v2.49:**
 - PHASE_2.5_DEFERRED_TASKS V1.1 → V1.2: Added DEF-P2.5-008 (PgBouncer Connection Pooling for Cloud #211, Medium priority, Phase 5+)
 **Changes in v2.48:**
@@ -435,7 +437,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.22.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.22** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
-| **MASTER_INDEX_V2.49.md** | ✅ | v2.49 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.49** (PHASE_2.5_DEFERRED_TASKS V1.1->V1.2: added DEF-P2.5-008 PgBouncer #211) |
+| **MASTER_INDEX_V2.50.md** | ✅ | v2.50 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.50** (PHASE_2.5_DEFERRED_TASKS V1.2->V1.3: fixed reference to match actual file version) |
 | **ARCHITECTURE_DECISIONS_V2.29.md** | ✅ | v2.29 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (106 total) - **UPDATED V2.29** (ADR-105: Two-Axis Environment Configuration - PRECOG_ENV + {MARKET}_MODE architecture for Issue #202) |
 | **REQUIREMENT_INDEX_V1.14.md** | ✅ | v1.14 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 128 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.14** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
 | **ADR_INDEX_V1.22.md** | ✅ | v1.22 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 106 architecture decisions - **UPDATED V1.22** (added ADR-105 for Two-Axis Environment Configuration; 105 → 106 total ADRs) |
@@ -601,7 +603,7 @@ Handoffs, logs, maintenance protocols, and project management utilities.
 | **PHASE_1.5_DEFERRED_PROPERTY_TESTS_V1.0.md** | 🔵 | - | `/docs/utility/` | 1.5 | Phase 1.5-4 | 🟡 High | **PLANNED** - Property-based testing roadmap for 74-91 additional tests across Phases 1.5-4 (merged into TEST_REQUIREMENTS_COMPREHENSIVE) |
 | **PHASE_1.5_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.5 | Phase 2 Week 1 | 🟡 High | **NEW** - Configuration System Enhancement deferred to Phase 2 (DEF-P1.5-001: version resolution + override handling, 6-8 hours implementation estimate, requires live database integration) |
 | **PHASE_4_DEFERRED_TASKS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 4.5 | Phase 4.5 | 🔴 Critical | **NEW** - Comprehensive research task documentation (11 tasks: DEF-009 to DEF-019, strategies HIGHEST PRIORITY, models, edge detection) - ~2800 lines, 74-92 hour total effort |
-| **PHASE_2.5_DEFERRED_TASKS_V1.2.md** | ✅ | v1.2 | `/docs/utility/` | 2.5 | Phase 3-5+ | 🟡 High | **UPDATED V1.2** - Phase 2.5 deferred tasks (8 tasks: +DEF-P2.5-008 PgBouncer for Cloud #211); GitHub issues #195-#202, #211; ~34-52 hours estimated effort |
+| **PHASE_2.5_DEFERRED_TASKS_V1.3.md** | ✅ | v1.3 | `/docs/utility/` | 2.5 | Phase 3-5+ | 🟡 High | **UPDATED V1.3** - Phase 2.5 deferred tasks (8 tasks: +DEF-P2.5-008 PgBouncer for Cloud #211); GitHub issues #195-#202, #211; ~34-52 hours estimated effort |
 | **TESTING_ANTIPATTERNS_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 2.5 | N/A | 🟢 Medium | **NEW** - 4 testing antipatterns discovered during Phase 2.5 ESPN polling: (1) empty database testing, (2) API edge cases vs DB constraints, (3) environment config drift, (4) mock isolation masking integration issues |
 | **PHASE_2_TEST_COVERAGE_GAPS_V1.0.md** | 📦 | v1.0 | `/docs/utility/` | 2 | Phase 2 | 🔴 Critical | **ARCHIVED** - Subsumed by PHASE_1.9_TEST_INFRASTRUCTURE_PLAN_V1.0.md; Issue #155 closed, replaced by Issue #165 |
 | **PHASE_1.9_TEST_INFRASTRUCTURE_PLAN_V1.0.md** | ✅ | v1.0 | `/docs/utility/` | 1.9 | Phase 1.9 | 🔴 Critical | **NEW** - BLOCKING phase for test infrastructure overhaul (~93 hours); addresses 2 failed, 33 skipped, 5 xfail tests, 10/11 modules missing test types; GitHub Issue #165 |

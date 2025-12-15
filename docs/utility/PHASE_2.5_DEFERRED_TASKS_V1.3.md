@@ -1,9 +1,9 @@
 # Phase 2.5 Deferred Tasks
 
 ---
-**Version:** 1.2
+**Version:** 1.3
 **Created:** 2025-12-07
-**Last Updated:** 2025-12-10
+**Last Updated:** 2025-12-14
 **Phase:** Phase 2.5 (Live Data Collection)
 **Status:** Active - Tasks Deferred to Future Phases
 ---
@@ -14,16 +14,16 @@ This document tracks tasks identified during Phase 2.5 (Live Data Collection) th
 
 ## Deferred Tasks Summary
 
-| Task ID | Description | Priority | Target Phase | Estimated Hours |
-|---------|-------------|----------|--------------|-----------------|
-| DEF-P2.5-001 | CloudWatch Logs Integration | Medium | Phase 4 | 4-6 |
-| DEF-P2.5-002 | ELK Stack Setup | Medium | Phase 4 | 8-12 |
-| DEF-P2.5-003 | Alert Threshold Configuration | Medium | Phase 4 | 2-3 |
-| DEF-P2.5-004 | Service Health Dashboard | Low | Phase 4 | 4-6 |
-| DEF-P2.5-005 | NCAAW Team Seeding | Low | Phase 3 | 2-3 |
-| DEF-P2.5-006 | Rate Limit YAML Integration | Low | Phase 3 | 2-4 |
-| DEF-P2.5-007 | Two-Axis Environment Configuration | High | Phase 2 | 8-12 |
-| DEF-P2.5-008 | PgBouncer Connection Pooling for Cloud | Medium | Phase 5+ | 4-6 |
+| Task ID | Description | Priority | Target Phase | Estimated Hours | Status |
+|---------|-------------|----------|--------------|-----------------|--------|
+| DEF-P2.5-001 | CloudWatch Logs Integration | Medium | Phase 4 | 4-6 | Deferred |
+| DEF-P2.5-002 | ELK Stack Setup | Medium | Phase 4 | 8-12 | Deferred |
+| DEF-P2.5-003 | Alert Threshold Configuration | Medium | Phase 4 | 2-3 | Deferred |
+| DEF-P2.5-004 | Service Health Dashboard | Low | Phase 4 | 4-6 | Deferred |
+| DEF-P2.5-005 | NCAAW Team Seeding | Low | Phase 3 | 2-3 | Deferred |
+| DEF-P2.5-006 | Rate Limit YAML Integration | Low | Phase 3 | 2-4 | Deferred |
+| DEF-P2.5-007 | Two-Axis Environment Configuration | High | Phase 2 | 8-12 | ✅ COMPLETE |
+| DEF-P2.5-008 | PgBouncer Connection Pooling for Cloud | Medium | Phase 5+ | 4-6 | Deferred |
 
 ---
 
@@ -172,13 +172,15 @@ Integrate ConfigLoader with rate limiter for YAML-configurable rate limits.
 
 ---
 
-### DEF-P2.5-007: Two-Axis Environment Configuration
+### DEF-P2.5-007: Two-Axis Environment Configuration ✅ COMPLETE
 
 **Priority:** High
 **Target Phase:** Phase 2
 **Estimated Hours:** 8-12
-**GitHub Issue:** #202
-**Reference:** ADR-105 (Planned)
+**Actual Hours:** ~10
+**GitHub Issue:** #202 (CLOSED)
+**Reference:** ADR-105 (Implemented)
+**Status:** ✅ **COMPLETE** (2025-12-11)
 
 **Description:**
 Implement a two-axis environment configuration model that independently controls:
@@ -213,12 +215,12 @@ POLYMARKET_MODE=live     # -> uses production Polymarket API (future)
 - Requires careful design for multi-market extensibility
 - Full implementation should wait until after Phase 2.5 core tasks complete
 
-**Acceptance Criteria:**
-- [ ] `PRECOG_ENV` consistently controls database selection
-- [ ] `{MARKET}_MODE` independently controls API endpoints per market
-- [ ] CLI `--env` parameter works for environment override
-- [ ] Dangerous combinations blocked with clear error messages
-- [ ] Documentation updated with new configuration approach
+**Acceptance Criteria:** (All completed 2025-12-11)
+- [x] `PRECOG_ENV` consistently controls database selection → `src/precog/config/environment.py`
+- [x] `{MARKET}_MODE` independently controls API endpoints per market → `kalshi_client.py` uses `get_market_mode()`
+- [x] CLI `--env` parameter works for environment override → `main.py` has `--app-env` global + `--env` per-command
+- [x] Dangerous combinations blocked with clear error messages → `EnvironmentConfig.validate()` blocks TEST+LIVE, PROD+DEMO
+- [x] Documentation updated with new configuration approach → `docs/guides/ENVIRONMENT_CONFIGURATION_GUIDE_V1.0.md`
 
 ---
 
@@ -313,10 +315,11 @@ Local Dev (now)              Cloud (future)
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.3 | 2025-12-14 | Marked DEF-P2.5-007 as COMPLETE (environment.py implemented, Issue #202 closed) |
 | 1.2 | 2025-12-10 | Added DEF-P2.5-008: PgBouncer Connection Pooling for Cloud |
 | 1.1 | 2025-12-09 | Added DEF-P2.5-007: Two-Axis Environment Configuration (Issue #202) |
 | 1.0 | 2025-12-07 | Initial creation with 6 deferred tasks |
 
 ---
 
-**END OF PHASE_2.5_DEFERRED_TASKS_V1.1.md**
+**END OF PHASE_2.5_DEFERRED_TASKS_V1.3.md**

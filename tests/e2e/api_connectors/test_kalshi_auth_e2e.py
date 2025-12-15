@@ -34,6 +34,24 @@ import pytest
 import requests
 
 
+def _demo_portfolio_available() -> bool:
+    """Check if Kalshi DEMO API portfolio endpoints are currently available.
+
+    See: Issue #224 (Kalshi DEMO API portfolio endpoints intermittently unavailable)
+    """
+    if not _real_kalshi_credentials_available():
+        return False
+
+    try:
+        from precog.api_connectors.kalshi_client import KalshiClient
+
+        client = KalshiClient(environment="demo")
+        balance = client.get_balance(graceful_demo_fallback=True)
+        return balance is not None
+    except Exception:
+        return False
+
+
 def _real_kalshi_credentials_available() -> bool:
     """Check if REAL Kalshi credentials are available for E2E tests.
 
@@ -218,6 +236,10 @@ class TestKalshiAuthServerValidation:
             f"Authentication failed with status {response.status_code}: {response.text[:200]}"
         )
 
+    @pytest.mark.skipif(
+        not _demo_portfolio_available(),
+        reason="Kalshi DEMO API portfolio endpoints unavailable (Issue #224)",
+    )
     def test_signed_balance_request_is_accepted(self, kalshi_auth, kalshi_base_url):
         """Verify signed request to balance endpoint is accepted.
 
@@ -241,6 +263,10 @@ class TestKalshiAuthServerValidation:
             f"Balance request failed with status {response.status_code}: {response.text[:200]}"
         )
 
+    @pytest.mark.skipif(
+        not _demo_portfolio_available(),
+        reason="Kalshi DEMO API portfolio endpoints unavailable (Issue #224)",
+    )
     def test_invalid_signature_is_rejected(self, kalshi_auth, kalshi_base_url):
         """Verify server rejects invalid signatures on authenticated endpoints.
 

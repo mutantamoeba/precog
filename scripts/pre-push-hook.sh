@@ -6,7 +6,7 @@
 # 1. Quick validation (code quality + documentation) - SEQUENTIAL
 # 2-11. Advanced checks (tests, types, security, warnings, patterns) - PARALLEL
 #
-# Speed: ~3-5 minutes (Step 2 runs ALL 8 test types per Phase 1.9 requirement)
+# Speed: ~8-12 minutes (Step 2 runs ALL 8 test types per Phase 1.9 requirement)
 # Bypass: git push --no-verify (ONLY during Phase 1.9 fix work with approval)
 #
 # **PHASE 1.9 REQUIREMENT (Issue #165):**
@@ -19,7 +19,7 @@
 # - Step 0 (branch check): MUST run first (safety)
 # - Step 1 (quick validation): MUST run second (catches syntax errors)
 # - Steps 2-11: Run in parallel (all independent)
-#   - Step 2: ALL 8 Test Types (3-5 min) # MANDATORY per Phase 1.9
+#   - Step 2: ALL 8 Test Types (~7-8 min) # MANDATORY per Phase 1.9
 #   - Step 3: Type checking (20s)
 #   - Step 4: Security scan (10s)
 #   - Step 5: Warning governance (30s)
@@ -96,7 +96,7 @@ fi
 
 echo ""
 echo "⚡ Starting parallel validation (steps 2-11)..."
-echo "   This will take ~3-5 minutes (Step 2 runs ALL 8 test types per Phase 1.9)"
+echo "   This will take ~8-12 minutes (Step 2 runs ALL 8 test types per Phase 1.9)"
 echo ""
 
 # ==============================================================================
@@ -146,7 +146,7 @@ run_parallel_check() {
 # STRATEGY (matches CI configuration):
 #   - Unit/property tests run in PARALLEL (-n auto): Fast, all mocked, no DB conflicts
 #   - Database tests run SEQUENTIALLY (-p no:xdist): Reliable, avoids deadlocks
-#   - Total time: ~2 min (vs 5 min all-sequential, vs 47s all-parallel-with-errors)
+#   - Total time: ~7-8 min (measured; varies by machine/parallel workers)
 #
 # If tests fail due to database contamination, FIX THE ROOT CAUSE:
 #   - Add proper transaction-based isolation
