@@ -142,6 +142,10 @@ def parse_fivethirtyeight_csv(
     FiveThirtyEight format has one row per game, with both teams' ratings.
     This function extracts pre-game ratings for each team.
 
+    Supports two column formats:
+    - Full format: elo1_pre, qbelo1_pre, qb1, qb1_value_pre (original 538 API)
+    - Simple format: elo1 (nfl-elo-game repo, no QB data)
+
     Args:
         file_path: Path to the CSV file
         sport: Sport code (default: "nfl")
@@ -178,9 +182,9 @@ def parse_fivethirtyeight_csv(
                 logger.warning("Invalid date in row: %s", row)
                 continue
 
-            # Extract team 1 data
+            # Extract team 1 data (support both "elo1_pre" and "elo1" column names)
             team1_code = normalize_team_code(row.get("team1", ""))
-            elo1_pre = row.get("elo1_pre", "")
+            elo1_pre = row.get("elo1_pre") or row.get("elo1", "")
             qbelo1_pre = row.get("qbelo1_pre", "")
             qb1 = row.get("qb1", "")
             qb1_value = row.get("qb1_value_pre", "")
@@ -202,9 +206,9 @@ def parse_fivethirtyeight_csv(
                 except (ValueError, TypeError) as e:
                     logger.warning("Error parsing team1 data: %s - %s", row, e)
 
-            # Extract team 2 data
+            # Extract team 2 data (support both "elo2_pre" and "elo2" column names)
             team2_code = normalize_team_code(row.get("team2", ""))
-            elo2_pre = row.get("elo2_pre", "")
+            elo2_pre = row.get("elo2_pre") or row.get("elo2", "")
             qbelo2_pre = row.get("qbelo2_pre", "")
             qb2 = row.get("qb2", "")
             qb2_value = row.get("qb2_value_pre", "")

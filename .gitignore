@@ -147,3 +147,11 @@ tmp/
 docs/_build/
 site/
 _wip/
+
+# ============================================================================
+# DATA FILES (Downloaded by user, not committed)
+# ============================================================================
+# Historical Elo data (large CSV files downloaded from external sources)
+data/historical/*.csv
+# Keep README files to document data sources
+!data/historical/README.md
