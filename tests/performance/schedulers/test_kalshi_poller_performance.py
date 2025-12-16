@@ -121,19 +121,25 @@ class TestKalshiMarketPollerPerformance:
             number of markets returned from the API. Database sync
             operations are mocked to isolate polling loop overhead
             from database I/O latency.
+
+        Database Isolation:
+            _sync_market_to_db is patched to prevent real DB writes.
+            The event_ticker uses correct format (includes date) for realism.
         """
         from unittest.mock import patch
 
         from precog.schedulers.kalshi_poller import KalshiMarketPoller
 
-        # Create mock with realistic market data
+        # Create mock with realistic market data using CORRECT event_ticker format
+        # IMPORTANT: event_ticker must include date (e.g., KXNFLGAME-25DEC15)
+        # NOT just series ticker (KXNFLGAME) - the series is a different field
         mock_client = MagicMock()
         mock_client.get_markets.return_value = [
             {
-                "ticker": f"KXNFL-{i:04d}",
-                "event_ticker": "KXNFLGAME",
+                "ticker": f"KXNFLGAME-25DEC15-PERF-{i:04d}",
+                "event_ticker": "KXNFLGAME-25DEC15-PERF",  # CORRECT: includes date
                 "series_ticker": "KXNFLGAME",
-                "title": f"Test Market {i}",
+                "title": f"Performance Test Market {i}",
                 "yes_ask": 50 + (i % 10),
                 "no_ask": 50 - (i % 10),
                 "status": "open",

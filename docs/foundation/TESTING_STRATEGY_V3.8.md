@@ -2122,7 +2122,7 @@ All critical paths tested:
 python -m pytest tests/ --cov=src/precog --cov-report=term-missing
 
 # Compare to DEVELOPMENT_PHASES targets
-grep "≥" docs/foundation/DEVELOPMENT_PHASES_V1.10.md
+grep "≥" docs/foundation/DEVELOPMENT_PHASES_V1.11.md
 
 # Verify gaps documented in PR descriptions
 gh pr list --state merged --search "merged:>=2025-11-01"
@@ -2170,7 +2170,7 @@ connection.py         81.82%  (target: 80%, gap: +1.82pp ✅)
 - Write tests before/during implementation (TDD/test-driven)
 
 ### Cross-References
-- **DEVELOPMENT_PHASES_V1.10.md:** Phase-specific module targets
+- **DEVELOPMENT_PHASES_V1.11.md:** Phase-specific module targets
 - **Phase Completion Protocol (CLAUDE.md Step 5):** Coverage validation checklist
 - **Pattern 10:** Property-Based Testing (achieving high coverage with generated inputs)
 - **DEVELOPMENT_PHILOSOPHY_V1.3.md:** Test-Driven Development principle
