@@ -241,6 +241,7 @@ module = [
     "psycopg2.*",
     "factory.*",
     "faker.*",
+    "vcr.*",
 ]
 ignore_missing_imports = true  # External libraries without type stubs
 

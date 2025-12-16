@@ -94,6 +94,13 @@ MODULE_TIERS = {
     "database/crud_operations": "business",
     "database/seeding/seeding_manager": "business",
     "database/seeding/historical_elo_loader": "business",
+    "database/seeding/historical_games_loader": "business",
+    "database/seeding/historical_odds_loader": "business",
+    # Data Sources (Issue #229)
+    "database/seeding/sources/base_source": "infrastructure",
+    "database/seeding/sources/fivethirtyeight": "business",
+    "database/seeding/sources/betting_csv": "business",
+    "database/seeding/sources/sports/nfl_data_py_adapter": "business",
     # Schedulers
     "schedulers/espn_game_poller": "business",
     # Validation

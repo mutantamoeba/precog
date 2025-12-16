@@ -9,7 +9,12 @@ Tests follow the project's testing patterns:
 - Pattern 7: Educational docstrings
 - Pattern 10: Property-based testing for data validation
 
-Related:
+Related Requirements:
+- REQ-DATA-006: Historical Games Data Seeding
+- REQ-DATA-007: Historical Odds Data Seeding
+- REQ-DATA-008: Data Source Adapter Architecture
+
+Related Architecture:
 - ADR-106: Historical Data Collection Architecture
 - ADR-103: BasePoller Unified Design Pattern
 - Issue #229: Expanded Historical Data Sources
