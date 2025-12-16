@@ -10,12 +10,17 @@ Related:
 - TESTING_STRATEGY V3.3: All 8 test types required
 - schedulers/kalshi_poller module coverage
 
+IMPORTANT - Database Isolation:
+    These tests mock the database layer to prevent test data from polluting
+    the real database. Chaos tests are designed to test API/network resilience,
+    not database functionality.
+
 Usage:
     pytest tests/chaos/schedulers/test_kalshi_poller_chaos.py -v -m chaos
 """
 
 import random
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -116,7 +121,13 @@ class TestKalshiMarketPollerChaos:
             except Exception:
                 pass  # Some malformed data may cause errors, that's expected
 
-    def test_memory_pressure_during_polling(self):
+    @patch("precog.schedulers.kalshi_poller.create_market")
+    @patch("precog.schedulers.kalshi_poller.update_market_with_versioning")
+    @patch("precog.schedulers.kalshi_poller.get_or_create_event")
+    @patch("precog.schedulers.kalshi_poller.get_current_market")
+    def test_memory_pressure_during_polling(
+        self, mock_get_current, mock_get_event, mock_update_market, mock_create_market
+    ):
         """
         CHAOS: Polling with large data volumes.
 
@@ -128,20 +139,35 @@ class TestKalshiMarketPollerChaos:
         Educational Note:
             With many markets, the poll_once method should process
             them efficiently without excessive memory usage.
+
+        Database Isolation:
+            This test mocks all database functions to prevent test data
+            from polluting the real database. The 500 synthetic markets
+            should NEVER be written to any real database.
         """
         from precog.schedulers.kalshi_poller import KalshiMarketPoller
 
         mock_client = MagicMock()
         mock_client.close.return_value = None
 
-        # Generate large response (500 markets)
+        # Mock database functions to prevent real writes
+        mock_get_current.return_value = None  # Market doesn't exist (will create new)
+        mock_get_event.return_value = {"event_id": "KXNFLGAME-25DEC15-CHAOS"}
+        mock_update_market.return_value = None  # No update needed for new markets
+        mock_create_market.return_value = {"market_id": 1}
+
+        # Generate large response (500 markets) with CORRECT event_ticker format
+        # IMPORTANT: event_ticker must include date (e.g., KXNFLGAME-25DEC15)
+        # NOT just series ticker (KXNFLGAME) - that was the bug!
         large_response = [
             {
-                "ticker": f"KXNFL-{i:06d}",
-                "event_ticker": "KXNFLGAME",
-                "title": f"Market {i}",
+                "ticker": f"KXNFLGAME-25DEC15-CHAOS-{i:06d}",
+                "event_ticker": "KXNFLGAME-25DEC15-CHAOS",  # CORRECT: includes date
+                "series_ticker": "KXNFLGAME",
+                "title": f"Chaos Test Market {i}",
                 "yes_ask": 50,
                 "no_ask": 50,
+                "status": "open",
             }
             for i in range(500)
         ]
@@ -163,6 +189,10 @@ class TestKalshiMarketPollerChaos:
         # Should complete without OOM or issues
         stats = poller.stats
         assert stats["errors"] == 0
+
+        # Verify database mocks were called (proving no real DB writes)
+        assert mock_get_event.call_count > 0
+        assert mock_create_market.call_count > 0
 
     def test_network_partition_simulation(self):
         """
