@@ -1,9 +1,16 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.22
-**Last Updated:** 2025-12-09
+**Version:** 1.23
+**Last Updated:** 2025-12-15
 **Status:** ✅ Current
+**Changes in v1.23:**
+- **HISTORICAL DATA COLLECTION ARCHITECTURE (PHASE 2.5)**: Added ADR-106 for historical data seeding architecture
+- **ADR-106:** Historical Data Collection Architecture - Unified source adapter pattern for batch historical data seeding
+- Documents hybrid A+B architecture: BaseDataSource mirrors BasePoller (ADR-103), sport-specific Python library adapters
+- Capability matrix (games, odds, elo), TypedDict records, FileBasedSourceMixin vs APIBasedSourceMixin
+- Related requirements: REQ-DATA-006, REQ-DATA-007, REQ-DATA-008 (Issue #229)
+- Total ADRs: 106 → 107 (1 new ADR added for Phase 2.5 historical data infrastructure)
 **Changes in v1.22:**
 - **TWO-AXIS ENVIRONMENT CONFIGURATION (PLANNED)**: Added ADR-105 for environment configuration architecture
 - **ADR-105:** Two-Axis Environment Configuration - PRECOG_ENV (database) + {MARKET}_MODE (API per market) with safety guardrails
@@ -344,6 +351,7 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR-103 | BasePoller Unified Design Pattern | 2025-12-07 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.28 |
 | ADR-104 | TBD - Rate Limiting Implementation | - | 🔵 | 1 | - |
 | ADR-105 | Two-Axis Environment Configuration (Planned) | 2025-12-09 | 🔵 | 2 | PHASE_2.5_DEFERRED_TASKS_V1.1 |
+| ADR-106 | Historical Data Collection Architecture | 2025-12-15 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.30 |
 
 ### Phase 2: Live Data Integration (Planned)
 
@@ -581,7 +589,7 @@ Standardize on `approach`/`domain` for both probability_models and strategies ta
 
 **References:**
 - Migration 011 implementation
-- DATABASE_SCHEMA_SUMMARY_V1.12.md
+- DATABASE_SCHEMA_SUMMARY_V1.13.md
 - scripts/validate_schema.py (DEF-P1-008)
 - REQ-DB-006
 
@@ -619,7 +627,7 @@ Phase 1.5 architecture: **3 managers** (Strategy, Model, Position) - NOT 4
 
 **References:**
 - DEVELOPMENT_PHASES_V1.4.md (Phase 1.5 deliverables)
-- DATABASE_SCHEMA_SUMMARY_V1.12.md (edges table)
+- DATABASE_SCHEMA_SUMMARY_V1.13.md (edges table)
 - REQ-TRADING-001, REQ-ML-001
 
 ---
@@ -737,7 +745,7 @@ CREATE TABLE trades (
 - ARCHITECTURE_DECISIONS_V2.20.md (full ADR-089 with 433 lines of details)
 - DEVELOPMENT_PATTERNS_V1.5.md (Pattern 14: Schema Migration → CRUD Workflow)
 - SCHEMA_MIGRATION_WORKFLOW_V2.0.md (comprehensive Alembic migration guide)
-- DATABASE_SCHEMA_SUMMARY_V1.12.md (Migration 011 implementation)
+- DATABASE_SCHEMA_SUMMARY_V1.13.md (Migration 011 implementation)
 
 ---
 
@@ -866,7 +874,7 @@ Use EXPLICIT COLUMNS (not JSONB) for trade and position attribution fields.
 **References:**
 - ARCHITECTURE_DECISIONS_V2.20.md (full ADR-091 with performance benchmarks)
 - docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md (JSONB vs explicit columns tradeoff analysis)
-- DATABASE_SCHEMA_SUMMARY_V1.12.md (current schema pre-attribution)
+- DATABASE_SCHEMA_SUMMARY_V1.13.md (current schema pre-attribution)
 - ADR-002 (Decimal Precision - all fields DECIMAL(10,4) not FLOAT)
 
 ---
@@ -1023,7 +1031,7 @@ ALTER TABLE probability_models
 **References:**
 - ARCHITECTURE_DECISIONS_V2.20.md (full ADR-093 with 378 lines of implementation details)
 - MASTER_REQUIREMENTS_V2.17.md (REQ-DB-015: Strategy Type Lookup Table, REQ-DB-016: Model Class Lookup Table)
-- DATABASE_SCHEMA_SUMMARY_V1.12.md (FK constraint implementation details)
+- DATABASE_SCHEMA_SUMMARY_V1.13.md (FK constraint implementation details)
 - docs/database/LOOKUP_TABLES_DESIGN.md (complete design specification)
 - Migration 023: migration_023_create_lookup_tables.py
 - src/precog/database/lookup_helpers.py (helper functions)
@@ -1299,8 +1307,8 @@ coverage_tiers:
 ---
 ## ADR Statistics
 
-**Total ADRs:** 104
-**Accepted (✅):** 54 (Phase 0-2.5 complete)
+**Total ADRs:** 105
+**Accepted (✅):** 55 (Phase 0-2.5 complete)
 **Proposed (🔵):** 50 (Phase 2-10)
 **Rejected (❌):** 0
 **Superseded (⚠️):** 1 (ADR-089 Dual-Key Pattern superseded by schema implementation)
@@ -1313,7 +1321,7 @@ coverage_tiers:
 - Phase 1.9: 4 ADRs (3 accepted: Alembic + TimescaleDB deferral + CI-safe stress testing, 1 planned: Testcontainers)
 - Phase 0.6c: 5 ADRs (100% accepted - includes cross-platform standards)
 - Phase 0.7: 6 ADRs (2 accepted: Python 3.14 compatibility + Branch Protection + 4 planned)
-- **Phase 2.5: 3 ADRs (2 accepted: Service Supervisor + ESPN Mapping, 1 deferred: CloudWatch/ELK)** ⭐ NEW
+- **Phase 2.5: 4 ADRs (3 accepted: Service Supervisor + ESPN Mapping + Historical Data Collection, 1 deferred: CloudWatch/ELK)** ⭐ UPDATED
 - Phase 2: 3 ADRs (0% - planned)
 - Phase 3: 2 ADRs (0% - planned)
 - Phase 4: 5 ADRs (1 deferred: CloudWatch/ELK from Phase 2.5 + 4 planned)
@@ -1330,11 +1338,12 @@ coverage_tiers:
 
 ---
 
-**Document Version:** 1.20
+**Document Version:** 1.23
 **Created:** 2025-10-21
-**Last Updated:** 2025-12-07
+**Last Updated:** 2025-12-15
 **Purpose:** Systematic architecture decision tracking and reference
 **Critical Changes:**
+- v1.23: Added ADR-106 for Historical Data Collection Architecture (Phase 2.5 - unified source adapter pattern for batch historical data seeding)
 - v1.20: Added ADR-100, ADR-101, ADR-102 for Phase 2.5 Service Supervisor infrastructure (live data collection services)
 - v1.19: Added ADR-099 for CI-safe stress test markers (Issue #168 - skipif vs xfail(run=False) decision)
 - v1.18: Added ADR-056 (Alembic Migration Framework) and ADR-057 (Testcontainers - Planned) for Phase 1.9 test infrastructure

@@ -213,6 +213,9 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-DATA-003 | Multi-Sport Support (7 Leagues) | 2 | Critical | 🟡 | MASTER_REQUIREMENTS_V2.22 |
 | REQ-DATA-004 | Team Rankings Storage (Temporal Validity) | 2 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.22 |
 | REQ-DATA-005 | JSONB Situation Data (Sport-Specific Fields) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.22 |
+| REQ-DATA-006 | Historical Games Data Seeding | 2.5 | High | 🟡 | MASTER_REQUIREMENTS_V2.22 |
+| REQ-DATA-007 | Historical Odds Data Seeding | 2.5 | High | 🟡 | MASTER_REQUIREMENTS_V2.22 |
+| REQ-DATA-008 | Data Source Adapter Architecture | 2.5 | Medium | 🟡 | MASTER_REQUIREMENTS_V2.22 |
 
 **Details:**
 
@@ -256,6 +259,29 @@ This document provides a systematic index of all Precog requirements using categ
 - GIN index on situation field for flexible queries
 - TypedDict: ESPNSituationData in espn_client.py for compile-time safety
 - Related: ADR-029, ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md
+
+**REQ-DATA-006: Historical Games Data Seeding**
+- Seed historical game results from external sources for backtesting
+- Sources: FiveThirtyEight CSV, nfl_data_py, nba_api, pybaseball, cfbd
+- Schema: historical_games table (Migration 0006)
+- Volume: ~500,000 historical games across all sports
+- Related: ADR-106, Issue #229, historical_games_loader.py
+
+**REQ-DATA-007: Historical Odds Data Seeding**
+- Seed historical betting lines for CLV analysis and backtesting
+- Sources: Kaggle/GitHub betting datasets (NFL 1967-present)
+- Schema: historical_odds table (Migration 0007)
+- Use cases: CLV analysis, market efficiency research, strategy backtesting
+- Volume: ~100,000 historical odds records
+- Related: ADR-106, Issue #229, historical_odds_loader.py
+
+**REQ-DATA-008: Data Source Adapter Architecture**
+- Consistent adapter pattern for diverse data sources
+- BaseDataSource abstract class mirrors BasePoller (ADR-103)
+- FileBasedSourceMixin for CSV sources, APIBasedSourceMixin for Python libraries
+- Record types: GameRecord, OddsRecord, EloRecord (TypedDict)
+- Implemented: FiveThirtyEightSource, BettingCSVSource, NFLDataPyAdapter
+- Related: ADR-106, ADR-103, src/precog/database/seeding/sources/
 
 ---
 

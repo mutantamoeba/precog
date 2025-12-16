@@ -413,9 +413,9 @@ ORDER BY snapshot_time DESC LIMIT 1;
 
 ## References
 
-- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (positions table)
+- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (positions table)
 - **Manager Architecture**: `docs/guides/MANAGER_ARCHITECTURE_GUIDE_V1.0.md` (Section 3)
-- **Trades Table**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (lines 800-900)
+- **Trades Table**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (lines 800-900)
 - **SCD Type 2 Pattern**: Kimball Group, "The Data Warehouse Toolkit" (Chapter 5)
 - **Related ADRs**:
   - ADR-018 (Strategy Versioning - immutable configs)

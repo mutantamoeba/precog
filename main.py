@@ -3314,6 +3314,239 @@ def db_seed_historical(
         raise typer.Exit(code=1) from None
 
 
+@app.command(name="db-seed-odds")
+def db_seed_odds(
+    data_dir: str = typer.Option(
+        None,
+        "--dir",
+        "-d",
+        help="Path to directory containing historical odds CSV files",
+    ),
+    sport: str = typer.Option(
+        "nfl",
+        "--sport",
+        "-s",
+        help="Sport code (nfl, ncaaf, nba, etc.)",
+    ),
+    seasons: str = typer.Option(
+        None,
+        "--seasons",
+        help="Comma-separated seasons to load (e.g., 2020,2021,2022)",
+    ),
+    stats_only: bool = typer.Option(
+        False,
+        "--stats",
+        help="Show current historical odds statistics without loading",
+    ),
+    link_games: bool = typer.Option(
+        True,
+        "--link/--no-link",
+        help="Link odds to historical_games table (default: True)",
+    ),
+    link_orphans: bool = typer.Option(
+        False,
+        "--link-orphans",
+        help="Link unlinked odds records to historical_games",
+    ),
+    verbose: bool = typer.Option(False, "--verbose", "-v", help="Show detailed output"),
+) -> None:
+    """
+    Seed historical betting odds from CSV files.
+
+    **Historical Odds Seeding Explained:**
+    Loads historical betting lines (spreads, totals, moneylines) from external
+    data sources into the historical_odds table. This data enables:
+    - Closing Line Value (CLV) analysis
+    - Market efficiency research
+    - Backtesting betting strategies
+
+    **Data Sources:**
+    - Betting CSV files (Kaggle NFL betting data, etc.)
+    - Files should include: date, home_team, away_team, spread, total
+
+    **What is CLV?**
+    Closing Line Value = Your bet price vs the closing line.
+    Beating the closing line is the best predictor of long-term profitability.
+    This table enables historical CLV analysis across thousands of games.
+
+    **When to Use:**
+    - After seeding historical games (db-seed-historical)
+    - Before running backtesting analysis
+    - To update with new season betting data
+
+    Args:
+        data_dir: Path to directory with CSV files (required unless --stats)
+        sport: Sport code (default: nfl)
+        seasons: Filter to specific seasons
+        stats_only: Show current data statistics
+        link_games: Link odds to historical_games (default: True)
+        link_orphans: Link existing unlinked odds records
+        verbose: Show detailed output
+
+    Returns:
+        None: Exits with code 0 on success, 1 on failure
+
+    Example:
+        ```bash
+        # Show current historical odds statistics
+        python main.py db-seed-odds --stats
+
+        # Load historical NFL odds from CSV directory
+        python main.py db-seed-odds --dir data/historical/nfl_betting/
+
+        # Load specific seasons only
+        python main.py db-seed-odds --dir data/historical/ --seasons 2021,2022,2023
+
+        # Link orphan odds records to games
+        python main.py db-seed-odds --link-orphans
+        ```
+
+    References:
+        - Issue #229: Expanded Historical Data Sources
+        - Migration 0007: historical_odds table
+        - ADR-106: Historical Data Collection Architecture
+    """
+    from pathlib import Path
+
+    console.print("\n[bold cyan]Precog Historical Odds Seeding[/bold cyan]\n")
+
+    try:
+        from precog.database.seeding import (
+            get_historical_odds_stats,
+            link_orphan_odds_to_games,
+            load_odds_from_source,
+        )
+        from precog.database.seeding.sources import BettingCSVSource
+
+        # Link orphans mode
+        if link_orphans:
+            console.print("[dim]Linking orphan odds records to historical_games...[/dim]\n")
+
+            try:
+                linked = link_orphan_odds_to_games()
+                console.print(f"[green]Linked {linked:,} odds records to games[/green]\n")
+            except Exception as e:
+                console.print(f"[yellow]Note: {e}[/yellow]")
+                console.print("[dim]The historical_odds table may not exist yet.[/dim]")
+
+            return
+
+        # Stats-only mode
+        if stats_only:
+            console.print("[dim]Fetching historical odds statistics...[/dim]\n")
+
+            try:
+                stats = get_historical_odds_stats()
+
+                console.print(f"[bold]Total records:[/bold] {stats['total']:,}")
+
+                if stats.get("by_sport"):
+                    console.print("\n[bold]By Sport:[/bold]")
+                    for sport_name, count in stats["by_sport"].items():
+                        console.print(f"  {sport_name.upper()}: {count:,}")
+
+                if stats.get("by_season"):
+                    console.print("\n[bold]By Season (recent):[/bold]")
+                    for season, count in stats["by_season"].items():
+                        console.print(f"  {season}: {count:,}")
+
+                if stats.get("by_source"):
+                    console.print("\n[bold]By Source:[/bold]")
+                    for source_name, count in stats["by_source"].items():
+                        console.print(f"  {source_name}: {count:,}")
+
+                if stats.get("by_sportsbook"):
+                    console.print("\n[bold]By Sportsbook:[/bold]")
+                    for book, count in stats["by_sportsbook"].items():
+                        console.print(f"  {book}: {count:,}")
+
+                linked = stats.get("linked_to_games", 0)
+                unlinked = stats.get("unlinked", 0)
+                if linked or unlinked:
+                    console.print("\n[bold]Game Linkage:[/bold]")
+                    console.print(f"  Linked: {linked:,}")
+                    console.print(f"  Unlinked: {unlinked:,}")
+                    if unlinked > 0:
+                        console.print(
+                            "[dim]  Tip: Run --link-orphans to link unlinked records[/dim]"
+                        )
+
+            except Exception as e:
+                console.print(f"[yellow]Note: {e}[/yellow]")
+                console.print("[dim]The historical_odds table may not exist yet.[/dim]")
+                console.print(
+                    "[dim]Run migration 0007 first: python scripts/run_migrations.py[/dim]"
+                )
+
+            console.print()
+            return
+
+        # Require data directory for loading
+        if not data_dir:
+            console.print("[red]Error: --dir option required for loading data[/red]")
+            console.print("[dim]Use --stats to view current data without loading[/dim]")
+            raise typer.Exit(code=1)
+
+        data_path = Path(data_dir)
+        if not data_path.exists():
+            console.print(f"[red]Error: Directory not found: {data_dir}[/red]")
+            raise typer.Exit(code=1)
+
+        # Parse seasons filter
+        season_list = None
+        if seasons:
+            try:
+                season_list = [int(s.strip()) for s in seasons.split(",")]
+                console.print(f"[dim]Filtering to seasons: {season_list}[/dim]")
+            except ValueError:
+                console.print(f"[red]Error: Invalid seasons format: {seasons}[/red]")
+                raise typer.Exit(code=1) from None
+
+        console.print(f"[dim]Loading from: {data_path}[/dim]")
+        console.print(f"[dim]Sport: {sport}[/dim]")
+        console.print(f"[dim]Link to games: {link_games}[/dim]")
+        console.print()
+
+        # Create source adapter and load
+        source_adapter = BettingCSVSource(data_dir=data_path)
+        result = load_odds_from_source(
+            source_adapter,
+            sport=sport,
+            seasons=season_list,
+            link_games=link_games,
+        )
+
+        # Report results
+        console.print("[bold]Load Results:[/bold]")
+        console.print(f"  Records processed: {result.records_processed:,}")
+        console.print(f"  Records inserted: {result.records_inserted:,}")
+        console.print(f"  Records skipped: {result.records_skipped:,}")
+        console.print(f"  Errors: {result.errors}")
+
+        if result.records_skipped > 0 and verbose:
+            console.print(
+                "\n[yellow]Note: Some records skipped (duplicates or invalid data).[/yellow]"
+            )
+
+        if result.errors > 0:
+            console.print("\n[red]Some errors occurred during loading.[/red]")
+            if verbose and result.error_messages:
+                for msg in result.error_messages[:10]:
+                    console.print(f"  [dim]{msg}[/dim]")
+            raise typer.Exit(code=1)
+
+        console.print("\n[green]Historical odds seeding completed successfully![/green]\n")
+
+    except ImportError as e:
+        console.print(f"[red][FAIL] Failed to import seeding module: {e}[/red]")
+        raise typer.Exit(code=1) from None
+    except Exception as e:
+        console.print(f"[red][FAIL] Historical odds seeding failed: {e}[/red]")
+        if verbose:
+            logger.error(f"Historical odds seeding error: {e}", exc_info=True)
+        raise typer.Exit(code=1) from None
+
+
 # =============================================================================
 # Run Services Command (Production Data Collection)
 # =============================================================================
