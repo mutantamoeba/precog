@@ -45,7 +45,7 @@
 - **BENEFITS DOCUMENTED**: Add new enum values via INSERT (no migration), rich metadata (display_name, description, category), UI-friendly dropdown queries
 - **HELPER MODULE**: REQ-DB-015 and REQ-DB-016 reference src/precog/database/lookup_helpers.py for validation functions
 - **COMPREHENSIVE TESTING**: 23 tests with 100% coverage of lookup_helpers.py, FK constraint enforcement tests
-- **CROSS-REFERENCES**: Both requirements link to ADR-093 (Lookup Tables for Business Enums), Migration 023, DATABASE_SCHEMA_SUMMARY_V1.12
+- **CROSS-REFERENCES**: Both requirements link to ADR-093 (Lookup Tables for Business Enums), Migration 023, DATABASE_SCHEMA_SUMMARY_V1.13
 - **TABLE COUNT UPDATE**: Updated total tables from 25 to 29 (added strategy_types and model_classes lookup tables)
 **Changes in v2.16:**
 - **TEST COVERAGE STANDARDS**: Added REQ-TEST-012 through REQ-TEST-019 (8 comprehensive test coverage requirements)
@@ -85,7 +85,7 @@
 - **SECTION 4.9 EXTENDED**: Added model validation requirements (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
   - REQ-MODEL-EVAL-001: Model Validation Framework (backtesting, cross-validation, holdout validation with activation criteria)
   - REQ-MODEL-EVAL-002: Calibration Testing (Brier score ≤0.20, ECE ≤0.10, log loss ≤0.50, reliability diagrams)
-- **CROSS-REFERENCES**: Added references to DATABASE_SCHEMA_SUMMARY_V1.12.md (7 new tables + 2 materialized views), ADR-078, ADR-080, ADR-081, ADR-082, DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md, MODEL_EVALUATION_GUIDE_V1.0.md
+- **CROSS-REFERENCES**: Added references to DATABASE_SCHEMA_SUMMARY_V1.13.md (7 new tables + 2 materialized views), ADR-078, ADR-080, ADR-081, ADR-082, DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md, MODEL_EVALUATION_GUIDE_V1.0.md
 - **DATABASE INTEGRATION**: References new performance_metrics, evaluation_runs, model_predictions, performance_metrics_archive tables and strategy_performance_summary, model_calibration_summary materialized views
 - **USER REQUIREMENTS**: Addresses user's concerns (1) detailed historical performance tracking with database tables, (2) JSONB config storage decision (ADR-078)
 **Changes in v2.12:**
@@ -303,9 +303,9 @@ precog/
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
   2. `MASTER_REQUIREMENTS_V2.22.md` - This document (requirements through Phase 10)
   3. `MASTER_INDEX_V2.50.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.29.md` - All 105 ADRs with design rationale (Phase 0-4.5)
+  4. `ARCHITECTURE_DECISIONS_V2.30.md` - All 107 ADRs with design rationale (Phase 0-4.5)
   5. `REQUIREMENT_INDEX_V1.14.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.22.md` - Architecture decision index
+  6. `ADR_INDEX_V1.23.md` - Architecture decision index
   7. `TESTING_STRATEGY_V3.8.md` - Test cases, coverage requirements, test isolation patterns
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
@@ -527,7 +527,7 @@ Replace CHECK constraint for `strategies.approach` with lookup table for extensi
 **Cross-references:**
 - ADR-093: Lookup Tables for Business Enums
 - Migration 023: Create Lookup Tables
-- DATABASE_SCHEMA_SUMMARY_V1.12.md: Lookup Tables section
+- DATABASE_SCHEMA_SUMMARY_V1.13.md: Lookup Tables section
 - LOOKUP_TABLES_DESIGN.md: Complete design specification
 
 **REQ-DB-016: Model Class Lookup Table**
@@ -572,7 +572,7 @@ Replace CHECK constraint for `probability_models.approach` with lookup table for
 **Cross-references:**
 - ADR-093: Lookup Tables for Business Enums
 - Migration 023: Create Lookup Tables
-- DATABASE_SCHEMA_SUMMARY_V1.12.md: Lookup Tables section
+- DATABASE_SCHEMA_SUMMARY_V1.13.md: Lookup Tables section
 - LOOKUP_TABLES_DESIGN.md: Complete design specification
 
 #### Operational Tables (29 tables)
@@ -617,7 +617,7 @@ Replace CHECK constraint for `probability_models.approach` with lookup table for
 
 **Total Tables:** 25 operational (21 original + 2 lookup tables + 2 additional) + 4 ML placeholders = 29 tables
 
-**Detailed schema with indexes, constraints, and sample queries**: See `DATABASE_SCHEMA_SUMMARY_V1.12.md`
+**Detailed schema with indexes, constraints, and sample queries**: See `DATABASE_SCHEMA_SUMMARY_V1.13.md`
 
 ### 4.3 Critical Database Rules
 
@@ -763,7 +763,7 @@ Trading methods bundle complete trading approaches (strategy + model + position 
 - Status: 🔵 Planned
 - Description: Track paper_roi, live_roi, sharpe_ratio, win_rate, total_trades per method version
 
-**Implementation Note:** Methods table designed in Phase 0.5 (ADR-021) but implementation deferred to Phase 4-5 when strategy and model versioning systems are fully operational. See DATABASE_SCHEMA_SUMMARY_V1.12.md for complete schema.
+**Implementation Note:** Methods table designed in Phase 0.5 (ADR-021) but implementation deferred to Phase 4-5 when strategy and model versioning systems are fully operational. See DATABASE_SCHEMA_SUMMARY_V1.13.md for complete schema.
 
 ---
 
@@ -867,7 +867,7 @@ Centralized alert and notification system for critical events, errors, and syste
 - **MEDIUM**: gain_threshold, system_warning → console + file + database
 - **LOW**: informational → file + database
 
-**Implementation:** See DATABASE_SCHEMA_SUMMARY_V1.12.md for alerts table schema. Configuration in system.yaml (notifications section). Implementation in utils/notification_manager.py and utils/alert_manager.py.
+**Implementation:** See DATABASE_SCHEMA_SUMMARY_V1.13.md for alerts table schema. Configuration in system.yaml (notifications section). Implementation in utils/notification_manager.py and utils/alert_manager.py.
 
 ---
 
@@ -914,7 +914,7 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 - Phase: 1.5-2
 - Priority: Critical
 - Status: 🔵 Planned
-- Reference: DATABASE_SCHEMA_SUMMARY_V1.12.md (evaluation_runs, predictions tables), ADR-082 (Model Evaluation Framework)
+- Reference: DATABASE_SCHEMA_SUMMARY_V1.13.md (evaluation_runs, predictions tables), ADR-082 (Model Evaluation Framework)
 - Description: Comprehensive framework for validating probability model performance before deployment to live trading
 - Validation Types:
   - **Backtesting**: Test model on historical data (2019-2024 archives) with known outcomes
@@ -940,7 +940,7 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 - Phase: 1.5-2
 - Priority: Critical
 - Status: 🔵 Planned
-- Reference: DATABASE_SCHEMA_SUMMARY_V1.12.md (predictions table), MODEL_EVALUATION_GUIDE_V1.0.md
+- Reference: DATABASE_SCHEMA_SUMMARY_V1.13.md (predictions table), MODEL_EVALUATION_GUIDE_V1.0.md
 - Description: Validate model probability calibration to ensure predicted probabilities match actual outcome frequencies
 - Calibration Metrics:
   - **Brier Score**: Mean squared error between predicted probabilities and actual outcomes (0 = perfect, 1 = worst)
@@ -1037,7 +1037,7 @@ Comprehensive performance tracking, model validation, and analytics infrastructu
 - Phase: 1.5-2
 - Priority: Critical
 - Status: 🔵 Planned
-- Reference: ADR-078 (Config Storage), DATABASE_SCHEMA_SUMMARY_V1.12.md (Section 8)
+- Reference: ADR-078 (Config Storage), DATABASE_SCHEMA_SUMMARY_V1.13.md (Section 8)
 - Description: Collect and store performance metrics for strategies, models, methods, edges, and ensembles across multiple time-series aggregation periods
 - Metrics Tracked:
   - **Trading Performance**: ROI, win_rate, sharpe_ratio, sortino_ratio, max_drawdown, avg_trade_size, total_pnl, unrealized_pnl
@@ -1053,7 +1053,7 @@ Comprehensive performance tracking, model validation, and analytics infrastructu
 - Phase: 1.5-2
 - Priority: Critical
 - Status: 🔵 Planned
-- Reference: DATABASE_SCHEMA_SUMMARY_V1.12.md (performance_metrics table)
+- Reference: DATABASE_SCHEMA_SUMMARY_V1.13.md (performance_metrics table)
 - Description: Store performance metrics at 8 aggregation levels with automated retention policies
 - Aggregation Periods:
   1. **trade**: Individual trade-level metrics (sample_size = 1)
@@ -1097,7 +1097,7 @@ Comprehensive performance tracking, model validation, and analytics infrastructu
 - Phase: 2+
 - Priority: High
 - Status: 🔵 Planned
-- Reference: DATABASE_SCHEMA_SUMMARY_V1.12.md (performance_metrics_archive table)
+- Reference: DATABASE_SCHEMA_SUMMARY_V1.13.md (performance_metrics_archive table)
 - Description: Implement automated archival and retrieval for historical performance data
 - Archival Triggers:
   - **Age-Based**: Metrics older than 18 months (hot → warm), 42 months (warm → cold)
@@ -1123,7 +1123,7 @@ Comprehensive performance tracking, model validation, and analytics infrastructu
 - Phase: 6-7
 - Priority: High
 - Status: 🔵 Planned
-- Reference: ADR-081 (Dashboard Architecture), DATABASE_SCHEMA_SUMMARY_V1.12.md (materialized views), DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md
+- Reference: ADR-081 (Dashboard Architecture), DATABASE_SCHEMA_SUMMARY_V1.13.md (materialized views), DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md
 - Description: Web-based performance dashboard for visualizing strategy/model performance, calibration, and system health
 - Technology Stack:
   - **Frontend**: React + Next.js (TypeScript)
@@ -1301,9 +1301,92 @@ Real-time game data collection, storage, and versioning for multi-sport predicti
 **Cross-References:**
 - ADR-029: ESPN Data Model with Normalized Schema
 - ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md: Complete implementation plan
-- DATABASE_SCHEMA_SUMMARY_V1.12.md (planned): Schema documentation with new tables
+- DATABASE_SCHEMA_SUMMARY_V1.13.md (planned): Schema documentation with new tables
 - Migrations 026-029: Database migrations for new tables
 - src/precog/api_connectors/espn_client.py: TypedDict implementations
+
+---
+
+### 4.13 Historical Data Seeding Requirements (Phase 2.5)
+
+**Overview:**
+Historical data seeding requirements for backtesting and model validation.
+Complements live data polling (REQ-DATA-001-005) with batch import capabilities.
+
+**REQ-DATA-006: Historical Games Data Seeding**
+- Phase: 2.5
+- Priority: High
+- Status: 🟡 In Progress
+- Reference: ADR-106 (Historical Data Collection Architecture), Issue #229
+- Description: Seed historical game results from external sources for backtesting
+- Data Sources:
+  - FiveThirtyEight CSV (NFL/NBA/MLB: 1920-present)
+  - nfl_data_py Python library (NFL: 2000-present)
+  - nba_api Python library (NBA: 1946-present)
+  - pybaseball Python library (MLB: 1871-present)
+  - cfbd Python library (NCAAF: 2000-present)
+- Schema: historical_games table (Migration 0006)
+  - Game identification: sport, season, game_date, home/away_team_code
+  - Results: home_score, away_score
+  - Context: is_neutral_site, is_playoff, game_type, venue_name
+  - Provenance: source, source_file, external_game_id
+- Volume Estimate: ~500,000 historical games across all sports
+- Related: historical_games_loader.py, sources/fivethirtyeight.py
+
+**REQ-DATA-007: Historical Odds Data Seeding**
+- Phase: 2.5
+- Priority: High
+- Status: 🟡 In Progress
+- Reference: ADR-106 (Historical Data Collection Architecture), Issue #229
+- Description: Seed historical betting lines for CLV analysis and backtesting
+- Data Sources:
+  - Kaggle/GitHub betting datasets (NFL: 1967-present)
+  - Odds Portal archives (various sports)
+- Schema: historical_odds table (Migration 0007)
+  - Game identification: sport, game_date, home/away_team_code, sportsbook
+  - Spreads: spread_home_open, spread_home_close, spread_home_odds_*
+  - Moneylines: moneyline_home_open/close, moneyline_away_open/close
+  - Totals: total_open, total_close, over_odds_*
+  - Results: home_covered, game_went_over
+  - Provenance: source, source_file
+- Use Cases:
+  - Closing Line Value (CLV) analysis
+  - Market efficiency research
+  - Backtest betting strategies
+- Volume Estimate: ~100,000 historical odds records
+- Related: historical_odds_loader.py, sources/betting_csv.py
+
+**REQ-DATA-008: Data Source Adapter Architecture**
+- Phase: 2.5
+- Priority: Medium
+- Status: 🟡 In Progress
+- Reference: ADR-106 (Historical Data Collection Architecture), ADR-103 (BasePoller)
+- Description: Consistent adapter pattern for diverse data sources
+- Architecture:
+  - BaseDataSource abstract class (mirrors BasePoller pattern)
+  - FileBasedSourceMixin: CSV file sources
+  - APIBasedSourceMixin: Python library sources
+  - Record types: GameRecord, OddsRecord, EloRecord (TypedDict)
+  - LoadResult: Statistics tracking (records_processed, inserted, skipped)
+- Implemented Adapters:
+  - FiveThirtyEightSource: Games + Elo from CSV
+  - BettingCSVSource: Odds from betting datasets
+  - NFLDataPySource: NFL games from nfl_data_py
+  - (Planned) NBAApiSource, PybaseballSource, CFBDSource
+- Design Principles:
+  - Separation of concerns (schedulers/ vs database/seeding/)
+  - Two-layer architecture (loaders vs sources)
+  - Template Method pattern with abstract methods
+  - Optional dependencies (pip install precog[historical])
+- Related: src/precog/database/seeding/sources/, base_source.py
+
+**Cross-References (Historical Data):**
+- ADR-106: Historical Data Collection Architecture
+- ADR-103: BasePoller Unified Design Pattern (parallel for live data)
+- Issue #229: Expanded Historical Data Sources
+- Migration 0006: historical_games table
+- Migration 0007: historical_odds table
+- src/precog/database/seeding/sources/: Source adapters
 
 ---
 
@@ -1368,7 +1451,7 @@ Real-time game data collection, storage, and versioning for multi-sport predicti
   - ✅ MASTER_INDEX V2.3 updated
 
 **Documentation**:
-- `DATABASE_SCHEMA_SUMMARY_V1.12.md`
+- `DATABASE_SCHEMA_SUMMARY_V1.13.md`
 - `VERSIONING_GUIDE_V1.0.md`
 - `TRAILING_STOP_GUIDE_V1.0.md`
 - `POSITION_MANAGEMENT_GUIDE_V1.0.md`
@@ -1516,7 +1599,7 @@ Real-time game data collection, storage, and versioning for multi-sport predicti
 - CLI commands: `main.py fetch-series`, `fetch-events`, `fetch-markets`
 - Unit tests for pagination, market data CRUD, and decimal precision
 
-**Documentation**: `API_INTEGRATION_GUIDE.md` (Kalshi pagination), `DATABASE_SCHEMA_SUMMARY_V1.12.md` (relationships)
+**Documentation**: `API_INTEGRATION_GUIDE.md` (Kalshi pagination), `DATABASE_SCHEMA_SUMMARY_V1.13.md` (relationships)
 
 ---
 
@@ -3936,7 +4019,7 @@ Automatic masking of sensitive data in all log output for GDPR/PCI compliance:
 
 **Reference Documentation:**
 6. `API_INTEGRATION_GUIDE.md` - Detailed API specifications
-7. `DATABASE_SCHEMA_SUMMARY_V1.12.md` - Full schema with versioning tables
+7. `DATABASE_SCHEMA_SUMMARY_V1.13.md` - Full schema with versioning tables
 8. `EDGE_DETECTION_SPEC.md` - Mathematical formulas
 9. `CONFIGURATION_GUIDE.md` - YAML configuration reference (includes versioning configs)
 10. `ARCHITECTURE_DECISIONS.md` - Design rationale and trade-offs

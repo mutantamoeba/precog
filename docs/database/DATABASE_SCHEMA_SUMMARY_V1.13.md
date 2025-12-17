@@ -1,9 +1,39 @@
 # Database Schema Summary
 
 ---
-**Version:** 1.12
-**Last Updated:** 2025-11-27
-**Status:** ✅ Current - Live Sports Data Infrastructure (Phase 2)
+**Version:** 1.13
+**Last Updated:** 2025-12-15
+**Status:** ✅ Current - Historical Data Infrastructure (Phase 2.5)
+**Changes in v1.13:**
+- **HISTORICAL DATA INFRASTRUCTURE**: Added 3 migrations (005-007) for backtesting data
+- **Migration 0005: Create Historical Elo Table**
+  - Added `historical_elo` table for FiveThirtyEight and other Elo data sources
+  - Fields: historical_elo_id (PK), team_id (FK), sport, date, elo_rating, qb_adjusted_elo, season, source
+  - Indexes: idx_historical_elo_team, idx_historical_elo_date, idx_historical_elo_sport_date
+  - CHECK constraints: elo_rating 100-2500, season 1900-2100
+  - **Use Case:** Model training with decades of historical team strength data
+- **Migration 0006: Create Historical Games Table**
+  - Added `historical_games` table for historical game results from multiple sources
+  - Fields: historical_game_id (PK), sport, season, game_date, home/away_team_code, home/away_score
+  - Data Provenance: source, source_game_id, source_file for auditability
+  - Unique constraint: (sport, game_date, home_team_code, away_team_code)
+  - **Use Case:** Backtesting strategies against thousands of historical games
+- **Migration 0007: Create Historical Odds Table**
+  - Added `historical_odds` table for historical betting lines (spreads, totals, moneylines)
+  - Fields: historical_odds_id (PK), historical_game_id (FK), sport, game_date, home/away_team_code
+  - Betting lines: spread_home_open/close, total_open/close, moneyline_home/away_open/close
+  - Result tracking: home_covered, game_went_over (for quick CLV analysis)
+  - Links to historical_games with nullable FK (supports orphan records)
+  - **Use Case:** Closing Line Value (CLV) analysis, market efficiency research, backtesting
+- **New Source Adapters:** `src/precog/database/seeding/sources/` package
+  - BaseDataSource: Abstract interface mirroring BasePoller pattern (ADR-103)
+  - FiveThirtyEightSource: NFL Elo + game data from FiveThirtyEight CSV
+  - BettingCSVSource: Betting odds from Kaggle/historical CSV files
+- **New CLI Commands:** `db-seed-odds` command for loading historical betting data
+- **Architecture Decision:** ADR-106: Historical Data Collection Architecture
+- **Requirements:** REQ-DATA-005 (Historical Elo), REQ-DATA-006 (Historical Games), REQ-DATA-007 (Historical Odds), REQ-DATA-008 (Historical Backtesting)
+- **Table Count:** 35 tables (was 32) - Added historical_elo, historical_games, historical_odds
+- **Next Steps:** Load FiveThirtyEight data, Kaggle NFL betting data, create backtesting framework
 **Changes in v1.12:**
 - **LIVE SPORTS DATA INFRASTRUCTURE**: Added 4 migrations (011-014) for ESPN data model
 - **Migration 011: Create Venues Table**
@@ -2519,6 +2549,240 @@ SELECT espn_event_id, situation->>'possession' AS possession,
        (situation->>'down')::INT AS down, (situation->>'distance')::INT AS distance
 FROM game_states
 WHERE row_current_ind = TRUE AND league = 'nfl' AND game_status = 'in_progress';
+```
+
+### 11. Historical Data (Phase 2.5 - NEW in v1.13)
+
+**Note:** These tables support historical data seeding for backtesting and model training. Part of Issue #229 (Expanded Historical Data Sources).
+
+#### historical_elo
+```sql
+CREATE TABLE historical_elo (
+    historical_elo_id SERIAL PRIMARY KEY,
+    team_id INTEGER REFERENCES teams(team_id) ON DELETE SET NULL,
+
+    -- Game/team identification (external source may not have team_id)
+    sport VARCHAR(20) NOT NULL,            -- 'nfl', 'ncaaf', etc.
+    team_code VARCHAR(10) NOT NULL,        -- Team code from source data
+    date DATE NOT NULL,
+
+    -- Elo ratings
+    elo_rating DECIMAL(10,2) NOT NULL,     -- Base Elo rating
+    qb_adjusted_elo DECIMAL(10,2),         -- QB-adjusted (NFL-specific)
+
+    -- Season context
+    season INTEGER NOT NULL,
+
+    -- Data provenance
+    source VARCHAR(50) NOT NULL,           -- 'fivethirtyeight', 'imported', etc.
+    source_file VARCHAR(255),              -- Original filename
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    -- Unique constraint: one Elo per team per date per source
+    CONSTRAINT uq_historical_elo_team_date_source
+        UNIQUE (sport, team_code, date, source)
+);
+
+-- Indexes
+CREATE INDEX idx_historical_elo_team ON historical_elo(team_id);
+CREATE INDEX idx_historical_elo_date ON historical_elo(date);
+CREATE INDEX idx_historical_elo_sport_date ON historical_elo(sport, date);
+CREATE INDEX idx_historical_elo_sport_season ON historical_elo(sport, season);
+CREATE INDEX idx_historical_elo_source ON historical_elo(source);
+
+-- CHECK constraints
+ALTER TABLE historical_elo ADD CONSTRAINT historical_elo_sport_check
+    CHECK (sport IN ('nfl', 'nba', 'mlb', 'nhl', 'ncaaf', 'ncaab', 'ncaaw', 'wnba', 'soccer'));
+ALTER TABLE historical_elo ADD CONSTRAINT historical_elo_elo_check
+    CHECK (elo_rating BETWEEN 100 AND 2500);
+ALTER TABLE historical_elo ADD CONSTRAINT historical_elo_season_check
+    CHECK (season BETWEEN 1900 AND 2100);
+```
+
+**Purpose:** Store historical Elo ratings from FiveThirtyEight and other sources. Used for model training, historical analysis, and backtesting with decades of team strength data.
+
+**Key Features:**
+- **Multiple Sources:** FiveThirtyEight, custom imports
+- **QB-Adjusted:** NFL-specific quarterback impact on Elo
+- **Data Provenance:** Track original source and file
+- **Optional FK:** team_id nullable for historical teams without mapping
+
+#### historical_games
+```sql
+CREATE TABLE historical_games (
+    historical_game_id SERIAL PRIMARY KEY,
+
+    -- Game identification
+    sport VARCHAR(20) NOT NULL,
+    season INTEGER NOT NULL,
+    game_date DATE NOT NULL,
+
+    -- Teams (using codes, not IDs, for historical data)
+    home_team_code VARCHAR(10) NOT NULL,
+    away_team_code VARCHAR(10) NOT NULL,
+
+    -- Scores
+    home_score INTEGER,
+    away_score INTEGER,
+
+    -- Game metadata
+    neutral_site BOOLEAN DEFAULT FALSE,
+    playoff BOOLEAN DEFAULT FALSE,
+
+    -- Data provenance
+    source VARCHAR(50) NOT NULL DEFAULT 'imported',
+    source_game_id VARCHAR(50),            -- Original game ID from source
+    source_file VARCHAR(255),
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    -- Unique constraint: one game per matchup per date
+    CONSTRAINT uq_historical_games_matchup
+        UNIQUE (sport, game_date, home_team_code, away_team_code)
+);
+
+-- Indexes
+CREATE INDEX idx_historical_games_sport ON historical_games(sport);
+CREATE INDEX idx_historical_games_date ON historical_games(game_date);
+CREATE INDEX idx_historical_games_season ON historical_games(season);
+CREATE INDEX idx_historical_games_source ON historical_games(source);
+CREATE INDEX idx_historical_games_home_team ON historical_games(home_team_code);
+CREATE INDEX idx_historical_games_away_team ON historical_games(away_team_code);
+
+-- Composite index for game lookup
+CREATE INDEX idx_historical_games_lookup ON historical_games(sport, game_date, home_team_code, away_team_code);
+
+-- CHECK constraints
+ALTER TABLE historical_games ADD CONSTRAINT historical_games_sport_check
+    CHECK (sport IN ('nfl', 'nba', 'mlb', 'nhl', 'ncaaf', 'ncaab', 'ncaaw', 'wnba', 'soccer'));
+ALTER TABLE historical_games ADD CONSTRAINT historical_games_season_check
+    CHECK (season BETWEEN 1900 AND 2100);
+```
+
+**Purpose:** Store historical game results from FiveThirtyEight, Kaggle, and other sources. Central table for backtesting, model validation, and historical analysis.
+
+**Key Features:**
+- **Team Codes:** Uses codes (e.g., "KC", "BUF") rather than FK IDs for historical flexibility
+- **Data Provenance:** Track original source and game ID
+- **Matchup Uniqueness:** One record per game per source
+
+#### historical_odds
+```sql
+CREATE TABLE historical_odds (
+    historical_odds_id SERIAL PRIMARY KEY,
+    historical_game_id INTEGER REFERENCES historical_games(historical_game_id) ON DELETE CASCADE,
+
+    -- Game identification (for matching when game_id not available)
+    sport VARCHAR(20) NOT NULL,
+    game_date DATE NOT NULL,
+    home_team_code VARCHAR(10) NOT NULL,
+    away_team_code VARCHAR(10) NOT NULL,
+
+    -- Sportsbook info
+    sportsbook VARCHAR(50),                -- 'consensus', 'pinnacle', etc.
+
+    -- Spread (point spread)
+    spread_home_open DECIMAL(5,1),         -- -3.5, +7.0
+    spread_home_close DECIMAL(5,1),
+    spread_home_odds_open INTEGER,         -- -110, +105
+    spread_home_odds_close INTEGER,
+
+    -- Moneyline
+    moneyline_home_open INTEGER,           -- -150, +130
+    moneyline_home_close INTEGER,
+    moneyline_away_open INTEGER,
+    moneyline_away_close INTEGER,
+
+    -- Total (over/under)
+    total_open DECIMAL(5,1),               -- 45.5, 52.0
+    total_close DECIMAL(5,1),
+    over_odds_open INTEGER,                -- -110
+    over_odds_close INTEGER,
+
+    -- Result info (for quick win/cover lookup)
+    home_covered BOOLEAN,                  -- Did home cover spread?
+    game_went_over BOOLEAN,                -- Did total go over?
+
+    -- Data provenance
+    source VARCHAR(50) NOT NULL DEFAULT 'imported',
+    source_file VARCHAR(255),
+
+    -- Metadata
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+
+    -- Unique constraint: one odds record per game per sportsbook
+    CONSTRAINT uq_historical_odds_game_book
+        UNIQUE (sport, game_date, home_team_code, away_team_code, sportsbook)
+);
+
+-- Indexes
+CREATE INDEX idx_historical_odds_game ON historical_odds(historical_game_id);
+CREATE INDEX idx_historical_odds_sport ON historical_odds(sport);
+CREATE INDEX idx_historical_odds_date ON historical_odds(game_date);
+CREATE INDEX idx_historical_odds_source ON historical_odds(source);
+CREATE INDEX idx_historical_odds_sportsbook ON historical_odds(sportsbook);
+
+-- Composite index for game lookup
+CREATE INDEX idx_historical_odds_game_lookup ON historical_odds(sport, game_date, home_team_code, away_team_code);
+
+-- CHECK constraints
+ALTER TABLE historical_odds ADD CONSTRAINT historical_odds_sport_check
+    CHECK (sport IN ('nfl', 'nba', 'mlb', 'nhl', 'ncaaf', 'ncaab', 'ncaaw', 'wnba', 'soccer'));
+ALTER TABLE historical_odds ADD CONSTRAINT historical_odds_source_check
+    CHECK (source IN ('kaggle', 'odds_portal', 'action_network', 'pinnacle', 'manual', 'imported', 'betting_csv', 'fivethirtyeight', 'consensus'));
+ALTER TABLE historical_odds ADD CONSTRAINT historical_odds_spread_check
+    CHECK (spread_home_open IS NULL OR (spread_home_open BETWEEN -100 AND 100));
+ALTER TABLE historical_odds ADD CONSTRAINT historical_odds_total_check
+    CHECK (total_open IS NULL OR (total_open BETWEEN 0 AND 500));
+```
+
+**Purpose:** Store historical betting lines from Kaggle, Odds Portal, and other sources. Enables Closing Line Value (CLV) analysis and backtesting betting strategies.
+
+**Key Features:**
+- **Open & Close Lines:** Track line movement for CLV analysis
+- **Result Tracking:** home_covered and game_went_over for quick analysis
+- **Optional Game Link:** FK nullable for orphan records before games are seeded
+- **Multi-Sportsbook:** Support different sportsbook sources
+
+**Educational Note: Closing Line Value (CLV)**
+CLV = Your bet price vs the closing line. If you bet a -3.5 spread that closes at -4.5, you had positive CLV of 1 point. Beating the closing line is the best predictor of long-term profitability in sports betting. This table enables historical CLV analysis across thousands of games.
+
+**Example Queries:**
+
+```sql
+-- Get historical Elo for KC Chiefs 2023 season
+SELECT date, elo_rating, qb_adjusted_elo
+FROM historical_elo
+WHERE sport = 'nfl' AND team_code = 'KC' AND season = 2023
+ORDER BY date;
+
+-- Get all games for 2023 NFL season
+SELECT game_date, home_team_code, away_team_code, home_score, away_score
+FROM historical_games
+WHERE sport = 'nfl' AND season = 2023
+ORDER BY game_date;
+
+-- Analyze CLV - games where home team beat closing spread
+SELECT hg.game_date, hg.home_team_code, hg.away_team_code,
+       ho.spread_home_close, (hg.home_score - hg.away_score) AS actual_margin,
+       CASE WHEN (hg.home_score - hg.away_score) > -ho.spread_home_close
+            THEN 'Home Covered' ELSE 'Home Did Not Cover' END AS result
+FROM historical_games hg
+JOIN historical_odds ho ON hg.historical_game_id = ho.historical_game_id
+WHERE hg.sport = 'nfl' AND hg.season = 2023;
+
+-- Link orphan odds records to games
+UPDATE historical_odds o
+SET historical_game_id = g.historical_game_id
+FROM historical_games g
+WHERE o.historical_game_id IS NULL
+  AND o.sport = g.sport
+  AND o.game_date = g.game_date
+  AND o.home_team_code = g.home_team_code
+  AND o.away_team_code = g.away_team_code;
 ```
 
 ## Helper Views (NEW in v1.4)

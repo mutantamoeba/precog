@@ -11,6 +11,7 @@ Usage:
 """
 
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -28,7 +29,7 @@ from precog.database.seeding import (
 
 
 @pytest.fixture
-def temp_seeds_dir() -> Path:
+def temp_seeds_dir() -> Iterator[Path]:
     """Create a temporary directory with mock SQL seed files."""
     with tempfile.TemporaryDirectory() as tmpdir:
         seeds_path = Path(tmpdir)
@@ -552,8 +553,8 @@ class TestInputValidation:
 
     def test_none_values_where_unexpected(self) -> None:
         """Test None values in fields that might expect them."""
-        # sql_seeds_path can be None
-        config = SeedingConfig(sql_seeds_path=None, use_api=False)
+        # sql_seeds_path can be None - testing edge case intentionally
+        config = SeedingConfig(sql_seeds_path=None, use_api=False)  # type: ignore[arg-type]
         assert config.sql_seeds_path is None
 
 

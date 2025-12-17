@@ -26,6 +26,21 @@ test = [
     "testcontainers[postgres]>=4.13.0",
 ]
 
+# Optional dependencies for historical data sources (Issue #229, ADR-106)
+# Install with: pip install -e ".[historical]"
+historical = [
+    "nfl_data_py>=0.3.0",      # NFL schedules, play-by-play, rosters
+    "nba_api>=1.4.0",          # NBA games, stats, player data
+    "pybaseball>=2.2.0",       # MLB stats, retrosheet data
+    "cfbd>=4.5.0",             # College football data, rankings
+]
+
+# All optional dependencies
+all = [
+    "precog[test]",
+    "precog[historical]",
+]
+
 # Package configuration (src layout)
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -226,6 +241,7 @@ module = [
     "psycopg2.*",
     "factory.*",
     "faker.*",
+    "vcr.*",
 ]
 ignore_missing_imports = true  # External libraries without type stubs
 

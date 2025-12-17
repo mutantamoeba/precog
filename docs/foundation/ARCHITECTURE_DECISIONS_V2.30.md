@@ -1,9 +1,15 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.29
-**Last Updated:** December 9, 2025
+**Version:** 2.30
+**Last Updated:** December 15, 2025
 **Status:** ✅ Current
+**Changes in v2.30:**
+- **HISTORICAL DATA COLLECTION ARCHITECTURE (PHASE 2.5):** Added ADR-106 for BaseDataSource pattern
+- ADR-106: Historical Data Collection Architecture - BaseDataSource abstract class mirrors BasePoller (ADR-103)
+- Source adapters: FiveThirtyEightSource, BettingCSVSource, NFLDataPyAdapter
+- Hybrid architecture separates live polling (schedulers/) from batch seeding (database/seeding/)
+- Issue #229: Expanded Historical Data Sources
 **Changes in v2.29:**
 - **TWO-AXIS ENVIRONMENT CONFIGURATION (PLANNED):** Added ADR-105 for environment configuration architecture
 - ADR-105: Two-Axis Environment Configuration - PRECOG_ENV (database) + {MARKET}_MODE (API per market) with safety guardrails
@@ -6339,7 +6345,7 @@ CREATE TABLE model_config_params (
 - ADR-079: Performance Tracking Architecture (query patterns inform this decision)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (current JSONB schema)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (current JSONB schema)
 - `config/probability_models.yaml` (config examples)
 - `config/trade_strategies.yaml` (strategy config examples)
 
@@ -6796,7 +6802,7 @@ CREATE TABLE brier_score_metrics (...);
 - STRAT-026: Performance Metrics Infrastructure Implementation (Phase 1.5-2, 18-22h)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8: Performance Tracking & Analytics)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (Section 8: Performance Tracking & Analytics)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
@@ -7553,7 +7559,7 @@ Cons:
 
 ### References
 
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8: Performance Tracking & Analytics)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (Section 8: Performance Tracking & Analytics)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
@@ -8322,7 +8328,7 @@ WebSocket for Position Monitoring (real-time):
 ### References
 
 - `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 7 Task #2: Frontend Development)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.9: Materialized Views)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (Section 8.9: Materialized Views)
 - Next.js Documentation: https://nextjs.org/docs
 - Recharts Documentation: https://recharts.org/
 - React Query Documentation: https://tanstack.com/query/latest
@@ -9244,7 +9250,7 @@ def run_holdout_validation(
 - `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 2 Task #3, Phase 6 Task #1)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.7: Evaluation Runs Table)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (Section 8.7: Evaluation Runs Table)
 
 ---
 
@@ -9967,7 +9973,7 @@ ON position_risk_by_strategy(league, strategy_name);
 - `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 6 Task #3, Phase 7 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.8: Materialized Views Reference)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (Section 8.8: Materialized Views Reference)
 
 ---
 
@@ -10798,7 +10804,7 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 - `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 7 Task #3, Phase 8 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (Section 8.9: A/B Tests Table)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (Section 8.9: A/B Tests Table)
 
 ---
 
@@ -11232,7 +11238,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 - ADR-018: Immutable Versions Pattern (JSONB supports atomic config versioning)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (materialized views already defined)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (materialized views already defined)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (analytics requirements)
 
 ---
@@ -11401,7 +11407,7 @@ python scripts/validate_schema.py --ci
 ```
 
 **Future Expansion (Phase 2+):**
-- Parse DATABASE_SCHEMA_SUMMARY_V1.12.md directly (vs. hardcoded schemas)
+- Parse DATABASE_SCHEMA_SUMMARY_V1.13.md directly (vs. hardcoded schemas)
 - Add more tables: markets, positions, trades, etc.
 - Integrate into CI/CD pipeline (blocks PRs if schema drift detected)
 
@@ -11535,7 +11541,7 @@ CREATE TABLE strategies (
 **References:**
 - `src/precog/database/migrations/migration_011_standardize_classification_fields.py` (implementation)
 - `scripts/validate_schema.py` (automated validation)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (updated schemas)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (updated schemas)
 - `docs/utility/PHASE_1_DEFERRED_TASKS_V1.0.md` (DEF-P1-008 completed)
 
 ---
@@ -11712,7 +11718,7 @@ CREATE TABLE strategies (
 
 ### References
 
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` (edges table schema)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (edges table schema)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 1.5 manager components)
 - `src/precog/trading/model_manager.py` (edge calculation logic - Phase 1.5 implementation)
 - `src/precog/trading/strategy_manager.py` (edge query logic - Phase 1.5 implementation)
@@ -12277,7 +12283,7 @@ Decision to use pytest as the primary testing framework with coverage, async sup
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.13.md
 
 Decision to enforce referential integrity using PostgreSQL foreign key constraints on all relationship columns.
 
@@ -12285,7 +12291,7 @@ Decision to enforce referential integrity using PostgreSQL foreign key constrain
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.13.md
 
 Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key relationships.
 
@@ -12293,7 +12299,7 @@ Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.13.md
 
 Decision to create database views that filter for current rows (row_current_ind = TRUE) to simplify application queries.
 
@@ -12317,7 +12323,7 @@ Decision to implement 2-stage partial exits (50% at +15%, 25% at +25%, 25% with 
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.13.md
 
 Decision to use append-only table for position_exits to maintain complete exit event history.
 
@@ -12325,7 +12331,7 @@ Decision to use append-only table for position_exits to maintain complete exit e
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.12.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.13.md
 
 Decision to log all exit order attempts (filled and unfilled) to exit_attempts table for debugging "why didn't my exit fill?" issues.
 
@@ -13615,7 +13621,7 @@ def validate_position_trade_attribution(position_id: str) -> bool:
 ### Related Documentation
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Attribution architecture analysis with tradeoffs
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` - Current schema (pre-attribution)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` - Current schema (pre-attribution)
 - `MASTER_REQUIREMENTS_V2.22.md` - REQ-DB-006 (Decimal precision for all financial fields)
 
 **Status:** ✅ Decision approved, implementation in progress (Migrations 019-020 planned)
@@ -14367,7 +14373,7 @@ def test_invalid_strategy_type_raises_foreign_key_error():
 ### Related Documentation
 
 - `docs/database/LOOKUP_TABLES_DESIGN.md` - Complete design specification with UI examples
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` - Updated schema documentation
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` - Updated schema documentation
 - `src/precog/database/lookup_helpers.py` - Helper functions implementation
 - `tests/test_lookup_tables.py` - Comprehensive test suite (23 tests, 100% coverage)
 - `src/precog/database/migrations/migration_023_create_lookup_tables.py` - Migration script
@@ -15563,6 +15569,142 @@ Implement a **two-axis environment configuration model**:
 
 ---
 
+## Decision #106/ADR-106: Historical Data Collection Architecture (Phase 2.5)
+
+**Date:** December 15, 2025
+**Status:** ✅ Accepted
+**Phase:** Phase 2.5 (Historical Data Seeding)
+**Drivers:** Code consistency, extensibility, maintainability, separation of concerns
+**GitHub Issue:** #229
+
+### Context
+
+Issue #229 (Expanded Historical Data Sources) requires loading historical data from multiple sources:
+- **CSV Sources:** FiveThirtyEight (Elo + games), Kaggle betting data
+- **Python Libraries:** nfl_data_py, nba_api, pybaseball, cfbd
+
+Design challenge: How to organize data loading code consistently while:
+1. Supporting diverse data formats (CSV files vs. API libraries)
+2. Loading different data types (games, odds, Elo ratings)
+3. Maintaining consistency with existing patterns (BasePoller for live data)
+4. Allowing easy addition of new sources
+
+User concern: "Is our modular and script design appropriate? The approach seems inconsistent - historical_games_loader, historical_odds_loader, nfl_data_loader, nba_data_loader, etc."
+
+### Decision
+
+Implement a **hybrid architecture** combining:
+- **Option A:** Unified source adapter pattern (mirrors BasePoller)
+- **Option B:** Sport-specific organization for Python libraries
+
+**Architecture:**
+```
+src/precog/
+├── schedulers/                    # LIVE data (polling - ADR-103)
+│   ├── base_poller.py            # BasePoller abstract class
+│   ├── espn_poller.py            # Live game states
+│   └── kalshi_poller.py          # Live market prices
+│
+└── database/seeding/             # HISTORICAL data (batch import)
+    ├── base_source.py            # BaseDataSource abstract class
+    │
+    ├── # Data Type Loaders (WHAT gets loaded)
+    ├── historical_games_loader.py   # Game results → historical_games
+    ├── historical_odds_loader.py    # Betting lines → historical_odds
+    ├── historical_elo_loader.py     # Elo ratings → historical_elo
+    │
+    └── sources/                  # Source Adapters (WHERE from)
+        ├── fivethirtyeight.py    # CSV: Games + Elo from 538
+        ├── betting_csv.py        # CSV: Odds from betting datasets
+        └── sports/               # Sport-specific Python libraries
+            ├── nfl_data_py_adapter.py  # nfl_data_py library
+            ├── nba_api_adapter.py      # nba_api library
+            ├── pybaseball_adapter.py   # pybaseball library
+            └── cfbd_adapter.py         # cfbd library
+```
+
+**Design Principles:**
+
+1. **Separation of Concerns:**
+   - `schedulers/`: Live data polling (continuous, real-time)
+   - `database/seeding/`: Historical data seeding (batch, one-time)
+
+2. **Two-Layer Architecture:**
+   - **Data Type Loaders:** Handle database operations, schema mapping
+   - **Source Adapters:** Handle data fetching, parsing, normalization
+
+3. **Parallel to BasePoller (ADR-103):**
+   - `BaseDataSource` mirrors `BasePoller` pattern
+   - Template Method pattern with abstract methods
+   - Consistent statistics tracking (`LoadResult` vs `PollerStats`)
+   - Mixin classes for source types (`FileBasedSourceMixin`, `APIBasedSourceMixin`)
+
+4. **Record Type Definitions:**
+   - `GameRecord`: Maps to historical_games table
+   - `OddsRecord`: Maps to historical_odds table
+   - `EloRecord`: Maps to historical_elo table
+
+### Implementation
+
+**BaseDataSource Abstract Class:**
+```python
+class BaseDataSource(ABC):
+    source_name: str = "unknown"
+    supported_sports: list[str] = []
+
+    def load_games(self, sport: str, seasons: list[int]) -> Iterator[GameRecord]:
+        raise NotImplementedError()
+
+    def load_odds(self, sport: str, seasons: list[int]) -> Iterator[OddsRecord]:
+        raise NotImplementedError()
+
+    def load_elo(self, sport: str, seasons: list[int]) -> Iterator[EloRecord]:
+        raise NotImplementedError()
+```
+
+**Capability Matrix:**
+| Source | Games | Odds | Elo |
+|--------|-------|------|-----|
+| FiveThirtyEight | ✅ | ❌ | ✅ |
+| Betting CSV | ✅ | ✅ | ❌ |
+| nfl_data_py | ✅ | ❌ | ❌ |
+| nba_api | ✅ | ❌ | ❌ |
+| pybaseball | ✅ | ❌ | ❌ |
+| cfbd | ✅ | ❌ | ❌ |
+
+**Optional Dependencies:**
+```toml
+[project.optional-dependencies]
+historical = [
+    "nfl_data_py>=0.3.0",
+    "nba_api>=1.4.0",
+    "pybaseball>=2.2.0",
+    "cfbd>=4.5.0",
+]
+```
+
+### Benefits
+
+1. **Consistency:** Mirrors BasePoller pattern for live data
+2. **Extensibility:** Easy to add new sources or sports
+3. **Separation:** Clear boundary between live polling and batch seeding
+4. **Type Safety:** TypedDict records for compile-time checking
+5. **Testability:** Sources can be tested independently
+
+### Related Artifacts
+
+- **Base Source:** src/precog/database/seeding/sources/base_source.py
+- **FiveThirtyEight Adapter:** src/precog/database/seeding/sources/fivethirtyeight.py
+- **Betting CSV Adapter:** src/precog/database/seeding/sources/betting_csv.py
+- **NFL Adapter:** src/precog/database/seeding/sources/sports/nfl_data_py_adapter.py
+- **Migration 0006:** historical_games table
+- **Migration 0007:** historical_odds table
+- **ADR-103:** BasePoller Unified Design Pattern (parallel for live data)
+- **Issue #229:** Expanded Historical Data Sources
+- **REQ-DATA-001:** Historical Game Data Seeding
+
+---
+
 ## Approval & Sign-off
 
 This document represents the architectural decisions as of October 22, 2025 (Phase 0.5 completion with standardization).
@@ -15573,9 +15715,10 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.29
-**Last Updated:** December 9, 2025
+**Document Version:** 2.30
+**Last Updated:** December 15, 2025
 **Critical Changes:**
+- v2.30: **HISTORICAL DATA COLLECTION ARCHITECTURE** - Added Decision #106/ADR-106 for BaseDataSource pattern (mirrors BasePoller ADR-103) with source adapters for FiveThirtyEight, betting CSV, and sport-specific Python libraries. Hybrid architecture separates live polling (schedulers/) from batch seeding (database/seeding/). Issue #229.
 - v2.29: **TWO-AXIS ENVIRONMENT CONFIGURATION (PLANNED)** - Added Decision #105/ADR-105 for environment configuration architecture with PRECOG_ENV (database) + {MARKET}_MODE (API per market) with safety guardrails. Documented in PHASE_2.5_DEFERRED_TASKS_V1.1, Issue #202.
 - v2.28: **BASEPOLLER UNIFIED DESIGN PATTERN** - Added Decision #103/ADR-103 (BasePoller abstract class with Template Method pattern, {Platform}{Entity}Poller naming convention, generic stats fields)
 - v2.27: **PHASE 2.5 LIVE DATA COLLECTION** - Added Decisions #100-102/ADR-100-102 (Service Supervisor Pattern, ESPN Status/Season Mapping, CloudWatch/ELK Deferral)

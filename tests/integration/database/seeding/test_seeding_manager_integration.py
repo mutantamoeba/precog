@@ -361,7 +361,7 @@ class TestSeedAllIntegration:
         assert report is not None
         assert isinstance(report, dict)
         # Report should have standard fields from SeedingReport TypedDict
-        assert "success" in report or "categories_seeded" in report
+        assert "success" in report  # Required field in SeedingReport
 
 
 # =============================================================================

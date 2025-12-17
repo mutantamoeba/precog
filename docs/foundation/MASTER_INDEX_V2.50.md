@@ -156,7 +156,7 @@
 - **METADATA-RICH ENUMS**: Lookup tables store display_name, description, category, display_order, complexity_level, icon_name, help_text for UI-friendly queries
 - **HELPER MODULE**: Created lookup_helpers.py with validation/query functions (get_strategy_types(), validate_strategy_type(), add_strategy_type())
 - **COMPREHENSIVE TESTING**: 23 tests with 100% coverage for lookup table infrastructure
-- Cross-references: ADR-093 ↔ REQ-DB-015/016 ↔ Migration 023 ↔ DATABASE_SCHEMA_SUMMARY_V1.12 ↔ lookup_helpers.py
+- Cross-references: ADR-093 ↔ REQ-DB-015/016 ↔ Migration 023 ↔ DATABASE_SCHEMA_SUMMARY_V1.13 ↔ lookup_helpers.py
 **Changes in v2.26:**
 - **TRADE & POSITION ATTRIBUTION ARCHITECTURE (PHASE 1.5)**: Complete attribution system for performance analytics and strategy A/B testing
 - Created SCHEMA_ANALYSIS_2025-11-21.md (800+ lines) - Comprehensive architectural analysis identifying 5 schema gaps, design options & tradeoffs, user Q&A, final decisions for attribution architecture
@@ -438,9 +438,9 @@ Core architecture, requirements, and system design documents.
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.22.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.22** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
 | **MASTER_INDEX_V2.50.md** | ✅ | v2.50 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.50** (PHASE_2.5_DEFERRED_TASKS V1.2->V1.3: fixed reference to match actual file version) |
-| **ARCHITECTURE_DECISIONS_V2.29.md** | ✅ | v2.29 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (106 total) - **UPDATED V2.29** (ADR-105: Two-Axis Environment Configuration - PRECOG_ENV + {MARKET}_MODE architecture for Issue #202) |
+| **ARCHITECTURE_DECISIONS_V2.30.md** | ✅ | v2.30 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (107 total) - **UPDATED V2.30** (ADR-106: Historical Data Collection Architecture - BaseDataSource pattern for Issue #229) |
 | **REQUIREMENT_INDEX_V1.14.md** | ✅ | v1.14 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 128 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.14** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
-| **ADR_INDEX_V1.22.md** | ✅ | v1.22 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 106 architecture decisions - **UPDATED V1.22** (added ADR-105 for Two-Axis Environment Configuration; 105 → 106 total ADRs) |
+| **ADR_INDEX_V1.23.md** | ✅ | v1.23 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 107 architecture decisions - **UPDATED V1.23** (added ADR-106 for Historical Data Collection Architecture; 106 → 107 total ADRs) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
 | **DEVELOPMENT_PHASES_V1.11.md** | ✅ | v1.10 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **UPDATED V1.10** (Added DEF-P2.5-007 deferred task for Two-Axis Environment Config) |
 | **TESTING_STRATEGY_V3.8.md** | ✅ | v3.8 | `/docs/foundation/` | 2 | Phases 1-10 | 🔴 Critical | **UPDATED V3.8** - Property Tests with DB Access pattern: `@pytest.mark.database` for DB-dependent property tests (~25 tests) enabling parallel execution with unit tests (~43s savings); Mypy incremental caching (~27s savings); V3.7: Three-Layer E2E Testing Gap Pattern; V3.6: Fast Chaos Tests; V3.5: Test Failure Response; V3.4: CI-Safe Stress Testing; V3.3: Test Isolation; V3.2: All 8 test types MANDATORY |
@@ -470,7 +470,7 @@ Schema design, data models, and database architecture.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DATABASE_SCHEMA_SUMMARY_V1.12.md** | ✅ | v1.12 | `/docs/database/` | 0.5-2 | Phases 1-10 | 🔴 Critical | **UPDATED V1.12** - Live sports data infrastructure (Phase 2): Added venues, team_rankings, game_states (SCD Type 2) tables; Enhanced teams table with display_name and league; 32 tables total (was 29); Added Section 10 with comprehensive table definitions |
+| **DATABASE_SCHEMA_SUMMARY_V1.13.md** | ✅ | v1.13 | `/docs/database/` | 0.5-2 | Phases 1-10 | 🔴 Critical | **UPDATED V1.13** - Historical data seeding (Phase 2.5): Added historical_elo, historical_games, historical_odds tables for backtesting; migrations 0005-0007; 35 tables total (was 32); Section 11 historical data |
 | **DATABASE_TABLES_REFERENCE.md** | ✅ | v1.0 | `/docs/database/` | 1 | Phases 1-10 | 🟡 High | Quick lookup for all tables, common queries (Phase 1) |
 | **ODDS_RESEARCH_COMPREHENSIVE.md** | ✅ | v1.0 | `/docs/database/` | 4 | Phase 4, 9 | 🟡 High | Historical odds methodology, merged into models |
 | **DATA_DICTIONARY.md** | 🔵 | - | `/docs/database/` | 6-7 | Phases 6-10 | 🟡 High | Comprehensive data dictionary - all columns documented (planned Phase 6-7) |

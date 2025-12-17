@@ -11,6 +11,7 @@ Usage:
 """
 
 import tempfile
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -28,7 +29,7 @@ from precog.database.seeding import (
 
 
 @pytest.fixture
-def temp_seeds_dir() -> Path:
+def temp_seeds_dir() -> Iterator[Path]:
     """Create a temporary directory with mock SQL seed files."""
     with tempfile.TemporaryDirectory() as tmpdir:
         seeds_path = Path(tmpdir)
