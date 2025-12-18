@@ -93,17 +93,26 @@ class TestSystemInfoInvariants:
 
     @given(
         st.dictionaries(
-            keys=st.text(
-                min_size=1, max_size=20, alphabet=st.characters(whitelist_categories=("L", "N"))
+            # Windows env vars: ASCII alphanumeric + underscore only, must start with letter
+            keys=st.from_regex(r"^[A-Z][A-Z0-9_]{0,19}$", fullmatch=True),
+            values=st.text(
+                min_size=0,
+                max_size=50,
+                # Only printable ASCII to avoid encoding issues on Windows
+                alphabet=st.characters(min_codepoint=32, max_codepoint=126),
             ),
-            values=st.text(min_size=0, max_size=50),
             min_size=0,
-            max_size=20,
+            max_size=10,  # Reduced to avoid env pollution
         )
     )
     @settings(max_examples=20)
     def test_info_with_various_env_configs(self, env_vars: dict):
-        """Info command should handle any environment configuration."""
+        """Info command should handle any environment configuration.
+
+        Note: Keys are constrained to valid Windows environment variable names
+        (ASCII alphanumeric + underscore, starting with a letter) to ensure
+        cross-platform compatibility.
+        """
         with patch.dict("os.environ", env_vars, clear=False):
             result = runner.invoke(app, ["system", "info"])
             assert result.exit_code in [0, 1, 2]
