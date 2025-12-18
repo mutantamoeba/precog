@@ -24,6 +24,7 @@ from precog.database.crud_operations import (
     create_game_state,
     create_team_ranking,
     create_venue,
+    game_state_changed,
     get_current_game_state,
     get_current_rankings,
     get_game_state_history,
@@ -588,3 +589,229 @@ class TestGameStateSituationJsonb:
         # Cleanup
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-GAME-LINES'")
+
+
+# =============================================================================
+# STATE CHANGE DETECTION INTEGRATION TESTS (Issue #234)
+# =============================================================================
+
+
+@pytest.mark.integration
+class TestGameStateChangedIntegration:
+    """Integration tests for state change detection with real database.
+
+    Related: Issue #234 - State change detection to reduce SCD Type 2 row bloat.
+    """
+
+    def test_game_state_changed_with_real_db_state(
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
+    ):
+        """Test game_state_changed with actual database state retrieval."""
+        teams = setup_test_teams
+        venue_id = setup_test_venue
+
+        # Create initial game state
+        create_game_state(
+            espn_event_id="INT-CHANGE-001",
+            home_team_id=teams["home_team_id"],
+            away_team_id=teams["away_team_id"],
+            venue_id=venue_id,
+            home_score=7,
+            away_score=3,
+            period=1,
+            game_status="in_progress",
+            league="nfl",
+        )
+
+        # Get current state from DB
+        current = get_current_game_state("INT-CHANGE-001")
+        assert current is not None
+
+        # Same state should NOT trigger change
+        result = game_state_changed(
+            current,
+            home_score=7,
+            away_score=3,
+            period=1,
+            game_status="in_progress",
+        )
+        assert result is False
+
+        # Score change should trigger change
+        result = game_state_changed(
+            current,
+            home_score=14,
+            away_score=3,
+            period=1,
+            game_status="in_progress",
+        )
+        assert result is True
+
+        # Cleanup
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-CHANGE-001'")
+
+    def test_upsert_with_skip_if_unchanged(
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
+    ):
+        """Test upsert_game_state skip_if_unchanged parameter reduces row creation."""
+        teams = setup_test_teams
+        venue_id = setup_test_venue
+
+        # Create initial state
+        create_game_state(
+            espn_event_id="INT-CHANGE-002",
+            home_team_id=teams["home_team_id"],
+            away_team_id=teams["away_team_id"],
+            venue_id=venue_id,
+            home_score=0,
+            away_score=0,
+            period=0,
+            game_status="pre",
+            league="nfl",
+        )
+
+        # Try to upsert with same state - should skip
+        upsert_game_state(
+            espn_event_id="INT-CHANGE-002",
+            home_score=0,
+            away_score=0,
+            period=0,
+            game_status="pre",
+            league="nfl",
+            skip_if_unchanged=True,
+        )
+
+        # Check history - should still be 1 row
+        history = get_game_state_history("INT-CHANGE-002")
+        assert len(history) == 1
+
+        # Now upsert with actual change
+        upsert_game_state(
+            espn_event_id="INT-CHANGE-002",
+            home_score=7,
+            away_score=0,
+            period=1,
+            game_status="in_progress",
+            league="nfl",
+            skip_if_unchanged=True,
+        )
+
+        # Check history - should be 2 rows now
+        history = get_game_state_history("INT-CHANGE-002")
+        assert len(history) == 2
+
+        # Cleanup
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-CHANGE-002'")
+
+    def test_state_change_with_situation_data(
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
+    ):
+        """Test state change detection includes situation field comparison."""
+        teams = setup_test_teams
+        venue_id = setup_test_venue
+
+        initial_situation = {
+            "possession": "TEST-KC",
+            "down": 1,
+            "distance": 10,
+            "yard_line": 25,
+            "is_red_zone": False,
+        }
+
+        # Create initial state with situation
+        create_game_state(
+            espn_event_id="INT-CHANGE-003",
+            home_team_id=teams["home_team_id"],
+            away_team_id=teams["away_team_id"],
+            venue_id=venue_id,
+            home_score=7,
+            away_score=3,
+            period=2,
+            game_status="in_progress",
+            situation=initial_situation,
+            league="nfl",
+        )
+
+        current = get_current_game_state("INT-CHANGE-003")
+
+        # Same core state + same situation = no change
+        result = game_state_changed(
+            current,
+            home_score=7,
+            away_score=3,
+            period=2,
+            game_status="in_progress",
+            situation=initial_situation,
+        )
+        assert result is False
+
+        # Possession change should trigger
+        new_situation = initial_situation.copy()
+        new_situation["possession"] = "TEST-SF"
+        result = game_state_changed(
+            current,
+            home_score=7,
+            away_score=3,
+            period=2,
+            game_status="in_progress",
+            situation=new_situation,
+        )
+        assert result is True
+
+        # Down change should trigger
+        new_situation = initial_situation.copy()
+        new_situation["down"] = 2
+        result = game_state_changed(
+            current,
+            home_score=7,
+            away_score=3,
+            period=2,
+            game_status="in_progress",
+            situation=new_situation,
+        )
+        assert result is True
+
+        # Cleanup
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-CHANGE-003'")
+
+    def test_clock_changes_ignored_in_state_comparison(
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
+    ):
+        """Test that clock changes alone do not create new SCD rows."""
+        teams = setup_test_teams
+        venue_id = setup_test_venue
+
+        # Create initial state
+        create_game_state(
+            espn_event_id="INT-CHANGE-004",
+            home_team_id=teams["home_team_id"],
+            away_team_id=teams["away_team_id"],
+            venue_id=venue_id,
+            home_score=7,
+            away_score=3,
+            period=2,
+            clock_seconds=720,
+            clock_display="12:00",
+            game_status="in_progress",
+            league="nfl",
+        )
+
+        # Get current and verify game_state_changed ignores clock
+        current = get_current_game_state("INT-CHANGE-004")
+
+        # Clock changed from 720 to 600, but core state unchanged
+        result = game_state_changed(
+            current,
+            home_score=7,
+            away_score=3,
+            period=2,
+            game_status="in_progress",
+        )
+        assert result is False  # Clock is NOT compared
+
+        # Cleanup
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-CHANGE-004'")

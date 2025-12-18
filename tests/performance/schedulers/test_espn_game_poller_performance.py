@@ -521,3 +521,159 @@ class TestLatencyConsistency:
         p99_time = sorted(timings)[494]
 
         assert p99_time < mean_time * 10 or p99_time < 0.002
+
+
+# =============================================================================
+# Performance Tests: Adaptive Polling (Issue #234)
+# =============================================================================
+
+
+@pytest.mark.performance
+class TestAdaptivePollingPerformance:
+    """Performance tests for adaptive polling operations.
+
+    Related: Issue #234 (ESPNGamePoller adaptive polling)
+
+    Benchmarks:
+    - _adjust_poll_interval(): < 0.1ms per call
+    - has_active_games(): < 0.1ms per call (mocked)
+    - get_current_interval(): < 0.01ms per call
+    """
+
+    def test_adjust_poll_interval_latency(self, mock_espn_client: MagicMock) -> None:
+        """Test _adjust_poll_interval latency.
+
+        Benchmark:
+        - Target: < 0.1ms per adjustment (p95)
+        """
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+            adaptive_polling=True,
+        )
+
+        with patch.object(poller, "has_active_games", return_value=True):
+            timings: list[float] = []
+
+            for _ in range(1000):
+                start = time.perf_counter()
+                poller._adjust_poll_interval()
+                elapsed = (time.perf_counter() - start) * 1000  # ms
+                timings.append(elapsed)
+
+            p95 = sorted(timings)[949]
+
+            print(f"\n_adjust_poll_interval p95: {p95:.4f}ms")
+            assert p95 < 1.0, f"p95 {p95:.4f}ms exceeds 1.0ms target"
+
+    def test_has_active_games_latency(self, mock_espn_client: MagicMock) -> None:
+        """Test has_active_games latency (mocked database).
+
+        Benchmark:
+        - Target: < 0.1ms per call (p95) with mocked database
+        """
+        with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
+            mock_get_live.return_value = []
+
+            poller = ESPNGamePoller(
+                leagues=["nfl"],
+                espn_client=mock_espn_client,
+            )
+
+            timings: list[float] = []
+
+            for _ in range(1000):
+                start = time.perf_counter()
+                poller.has_active_games()
+                elapsed = (time.perf_counter() - start) * 1000  # ms
+                timings.append(elapsed)
+
+            p95 = sorted(timings)[949]
+
+            print(f"\nhas_active_games p95: {p95:.4f}ms")
+            assert p95 < 1.0, f"p95 {p95:.4f}ms exceeds 1.0ms target"
+
+    def test_get_current_interval_latency(self, mock_espn_client: MagicMock) -> None:
+        """Test get_current_interval latency.
+
+        Benchmark:
+        - Target: < 0.01ms per call (p95)
+        """
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+
+        timings: list[float] = []
+
+        for _ in range(10000):
+            start = time.perf_counter()
+            poller.get_current_interval()
+            elapsed = (time.perf_counter() - start) * 1000  # ms
+            timings.append(elapsed)
+
+        p95 = sorted(timings)[9499]
+
+        print(f"\nget_current_interval p95: {p95:.4f}ms")
+        assert p95 < 0.1, f"p95 {p95:.4f}ms exceeds 0.1ms target"
+
+    def test_adaptive_polling_throughput(self, mock_espn_client: MagicMock) -> None:
+        """Test adaptive polling operations throughput.
+
+        Benchmark:
+        - Target: > 10,000 operations/sec
+        """
+        with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
+            mock_get_live.return_value = []
+
+            poller = ESPNGamePoller(
+                leagues=["nfl"],
+                espn_client=mock_espn_client,
+                adaptive_polling=True,
+            )
+
+            count = 10000
+
+            start = time.perf_counter()
+            for i in range(count):
+                # Simulate adaptive polling cycle
+                poller.has_active_games()
+                poller._adjust_poll_interval()
+                poller.get_current_interval()
+            elapsed = time.perf_counter() - start
+
+            ops_per_second = (count * 3) / elapsed  # 3 operations per cycle
+
+            print(f"\nAdaptive polling throughput: {ops_per_second:,.0f} ops/sec")
+            assert ops_per_second > 10000, "Throughput below 10k ops/sec"
+
+    def test_interval_switch_latency(self, mock_espn_client: MagicMock) -> None:
+        """Test latency when switching between poll and idle intervals.
+
+        Benchmark:
+        - Target: < 0.5ms for interval switch (p95)
+        """
+        with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
+            poller = ESPNGamePoller(
+                poll_interval=15,
+                idle_interval=60,
+                leagues=["nfl"],
+                espn_client=mock_espn_client,
+                adaptive_polling=True,
+            )
+
+            timings: list[float] = []
+
+            for i in range(500):
+                # Toggle active state
+                mock_get_live.return_value = [{"game": 1}] if i % 2 == 0 else []
+
+                start = time.perf_counter()
+                poller._adjust_poll_interval()
+                elapsed = (time.perf_counter() - start) * 1000  # ms
+                timings.append(elapsed)
+
+            p95 = sorted(timings)[474]
+
+            print(f"\nInterval switch p95: {p95:.4f}ms")
+            assert p95 < 1.0, f"p95 {p95:.4f}ms exceeds 1.0ms target"

@@ -464,3 +464,184 @@ class TestOverallThroughput:
         print(f"\nMixed workload (80% reads, 20% writes) throughput: {throughput:.1f} ops/sec")
 
         assert throughput > 50, f"Throughput {throughput:.1f} ops/sec below 50 target"
+
+
+# =============================================================================
+# PERFORMANCE BENCHMARKS: State Change Detection (Issue #234)
+# =============================================================================
+
+
+@pytest.mark.performance
+class TestStateChangeDetectionPerformance:
+    """Performance benchmarks for game_state_changed() function.
+
+    Tests latency of state comparison operations.
+
+    Related: Issue #234 (ESPNGamePoller state change detection)
+    """
+
+    def test_state_comparison_latency(self):
+        """
+        PERFORMANCE: Measure state comparison latency.
+
+        Benchmark:
+        - Target: < 0.1ms per comparison (p95)
+        - SLA: < 0.5ms per comparison (p99)
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"down": 2, "distance": 8, "possession": "home"},
+        }
+
+        latencies = []
+
+        for i in range(1000):
+            start = time.perf_counter()
+            game_state_changed(
+                current=current,
+                home_score=14 + (i % 5),
+                away_score=7,
+                period=2,
+                game_status="in_progress",
+                situation={"down": 2, "distance": 8, "possession": "home"},
+            )
+            elapsed = (time.perf_counter() - start) * 1000  # ms
+            latencies.append(elapsed)
+
+        latencies.sort()
+        p50 = statistics.median(latencies)
+        p95 = latencies[int(len(latencies) * 0.95)]
+        p99 = latencies[int(len(latencies) * 0.99)]
+
+        print("\nState Comparison latencies (ms):")
+        print(f"  p50: {p50:.4f}")
+        print(f"  p95: {p95:.4f}")
+        print(f"  p99: {p99:.4f}")
+
+        assert p95 < 0.5, f"p95 latency {p95:.4f}ms exceeds 0.5ms target"
+        assert p99 < 1.0, f"p99 latency {p99:.4f}ms exceeds 1.0ms SLA"
+
+    def test_situation_comparison_latency(self):
+        """
+        PERFORMANCE: Measure situation dict comparison latency.
+
+        Benchmark:
+        - Target: < 0.1ms per comparison (p95)
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        current = {
+            "home_score": 0,
+            "away_score": 0,
+            "period": 1,
+            "game_status": "in_progress",
+            "situation": {
+                "down": 1,
+                "distance": 10,
+                "yard_line": 25,
+                "possession": "home",
+                "in_red_zone": False,
+                "goal_to_go": False,
+            },
+        }
+
+        latencies = []
+
+        for i in range(1000):
+            new_situation = {
+                "down": (i % 4) + 1,
+                "distance": (i % 10) + 1,
+                "yard_line": i % 100,
+                "possession": "home" if i % 2 == 0 else "away",
+                "in_red_zone": i % 5 == 0,
+                "goal_to_go": i % 20 == 0,
+            }
+
+            start = time.perf_counter()
+            game_state_changed(
+                current=current,
+                home_score=0,
+                away_score=0,
+                period=1,
+                game_status="in_progress",
+                situation=new_situation,
+            )
+            elapsed = (time.perf_counter() - start) * 1000  # ms
+            latencies.append(elapsed)
+
+        latencies.sort()
+        p95 = latencies[int(len(latencies) * 0.95)]
+
+        print(f"\nSituation Dict Comparison p95: {p95:.4f}ms")
+        assert p95 < 0.5, f"p95 latency {p95:.4f}ms exceeds 0.5ms target"
+
+    def test_state_comparison_throughput(self):
+        """
+        PERFORMANCE: Measure state comparison throughput.
+
+        Benchmark:
+        - Target: > 100,000 comparisons/sec
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        current = {
+            "home_score": 21,
+            "away_score": 14,
+            "period": 3,
+            "game_status": "in_progress",
+            "situation": {"down": 2, "distance": 5},
+        }
+
+        count = 100000
+
+        start = time.perf_counter()
+        for i in range(count):
+            game_state_changed(
+                current=current,
+                home_score=21 + (i % 2),
+                away_score=14,
+                period=3,
+                game_status="in_progress",
+                situation={"down": 2, "distance": 5},
+            )
+        elapsed = time.perf_counter() - start
+
+        throughput = count / elapsed
+        print(f"\nState Comparison throughput: {throughput:,.0f} ops/sec")
+
+        assert throughput > 50000, f"Throughput {throughput:,.0f} ops/sec below 50k target"
+
+    def test_none_current_comparison_latency(self):
+        """
+        PERFORMANCE: Measure None current state comparison latency.
+
+        Benchmark:
+        - Target: < 0.05ms per comparison (p95) - faster path
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        latencies = []
+
+        for i in range(1000):
+            start = time.perf_counter()
+            game_state_changed(
+                current=None,
+                home_score=i,
+                away_score=0,
+                period=1,
+                game_status="pre",
+                situation=None,
+            )
+            elapsed = (time.perf_counter() - start) * 1000  # ms
+            latencies.append(elapsed)
+
+        latencies.sort()
+        p95 = latencies[int(len(latencies) * 0.95)]
+
+        print(f"\nNone Current Comparison p95: {p95:.4f}ms")
+        assert p95 < 0.5, f"p95 latency {p95:.4f}ms exceeds 0.5ms target"

@@ -366,3 +366,354 @@ class TestVenueDataEnrichment:
             cur.execute("SELECT COUNT(*) FROM venues WHERE espn_venue_id = 'E2E-NAMING-001'")
             result = cur.fetchone()
             assert result["count"] == 1
+
+
+# =============================================================================
+# E2E TESTS: STATE CHANGE DETECTION WORKFLOW (Issue #234)
+# =============================================================================
+
+
+@pytest.mark.e2e
+@pytest.mark.critical
+class TestStateChangeDetectionWorkflow:
+    """E2E tests for state change detection to reduce SCD Type 2 row bloat.
+
+    Related: Issue #234 - State change detection for game state polling
+    Reference: TESTING_STRATEGY V3.2 - E2E tests for complete workflow validation
+
+    Problem: Without state change detection, each poll creates a new historical row
+    even when nothing meaningful changed (e.g., just clock tick).
+
+    Solution: game_state_changed() compares core fields (score, period, status,
+    situation) and skip_if_unchanged parameter prevents redundant row creation.
+
+    Expected Row Reduction: ~1000 rows/game -> ~50-100 rows/game (90%+ reduction)
+    """
+
+    def test_complete_game_polling_with_state_change_detection(
+        self, db_pool, clean_test_data, setup_e2e_teams
+    ):
+        """
+        E2E: Simulate realistic polling during a game with state change detection.
+
+        Workflow:
+        1. Create pre-game state
+        2. Simulate 15-second polls where clock ticks but nothing changes
+        3. Verify NO new rows created for clock-only changes
+        4. Simulate actual state changes (score, period)
+        5. Verify new rows created only for meaningful changes
+        6. Compare final row count with vs without state change detection
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        teams = setup_e2e_teams
+
+        # Clean up any existing test data
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM game_states WHERE espn_event_id = 'E2E-STATE-GAME-001'")
+            cur.execute("DELETE FROM venues WHERE espn_venue_id = 'E2E-STATE-001'")
+
+        # Create venue for the game
+        venue_id = create_venue(
+            espn_venue_id="E2E-STATE-001",
+            venue_name="State Change Stadium",
+            city="Test City",
+            state="TS",
+        )
+
+        # Step 1: Create pre-game state
+        create_game_state(
+            espn_event_id="E2E-STATE-GAME-001",
+            home_team_id=teams["kc"]["team_id"],
+            away_team_id=teams["lv"]["team_id"],
+            venue_id=venue_id,
+            home_score=0,
+            away_score=0,
+            period=0,
+            game_status="pre",
+            league="nfl",
+        )
+
+        # Verify initial state
+        history = get_game_state_history("E2E-STATE-GAME-001")
+        assert len(history) == 1
+
+        # Step 2: Simulate 5 clock-tick polls (no meaningful changes)
+        # Each poll is 15 seconds later - clock changes but nothing else
+        current = get_current_game_state("E2E-STATE-GAME-001")
+        for clock_value in [900, 885, 870, 855, 840]:
+            # Check if state changed (should NOT)
+            changed = game_state_changed(
+                current,
+                home_score=0,
+                away_score=0,
+                period=1,
+                game_status="in_progress",
+            )
+            # First poll - period 0->1 is a change
+            if current["period"] == 0:
+                assert changed is True
+                upsert_game_state(
+                    espn_event_id="E2E-STATE-GAME-001",
+                    home_score=0,
+                    away_score=0,
+                    period=1,
+                    clock_seconds=Decimal(str(clock_value)),
+                    clock_display=f"{clock_value // 60}:{clock_value % 60:02d}",
+                    game_status="in_progress",
+                    league="nfl",
+                    skip_if_unchanged=True,
+                )
+                current = get_current_game_state("E2E-STATE-GAME-001")
+            else:
+                # Clock-only changes should NOT create new row
+                upsert_game_state(
+                    espn_event_id="E2E-STATE-GAME-001",
+                    home_score=0,
+                    away_score=0,
+                    period=1,
+                    clock_seconds=Decimal(str(clock_value)),
+                    clock_display=f"{clock_value // 60}:{clock_value % 60:02d}",
+                    game_status="in_progress",
+                    league="nfl",
+                    skip_if_unchanged=True,
+                )
+
+        # Step 3: Verify only 2 rows (pre + game start) - NOT 6 rows!
+        history = get_game_state_history("E2E-STATE-GAME-001")
+        assert len(history) == 2, (
+            f"Expected 2 rows, got {len(history)} - clock changes should not create rows"
+        )
+
+        # Step 4: Simulate actual score change (TD)
+        upsert_game_state(
+            espn_event_id="E2E-STATE-GAME-001",
+            home_score=7,  # Touchdown!
+            away_score=0,
+            period=1,
+            clock_seconds=Decimal("720"),
+            clock_display="12:00",
+            game_status="in_progress",
+            league="nfl",
+            skip_if_unchanged=True,
+        )
+
+        # Should have 3 rows now
+        history = get_game_state_history("E2E-STATE-GAME-001")
+        assert len(history) == 3
+
+        # Step 5: Simulate more clock ticks (no score change)
+        for _ in range(3):
+            upsert_game_state(
+                espn_event_id="E2E-STATE-GAME-001",
+                home_score=7,
+                away_score=0,
+                period=1,
+                clock_seconds=Decimal("600"),
+                game_status="in_progress",
+                league="nfl",
+                skip_if_unchanged=True,
+            )
+
+        # Still 3 rows (clock ticks ignored)
+        history = get_game_state_history("E2E-STATE-GAME-001")
+        assert len(history) == 3
+
+        # Step 6: Period change (Q1 -> Q2)
+        upsert_game_state(
+            espn_event_id="E2E-STATE-GAME-001",
+            home_score=7,
+            away_score=0,
+            period=2,  # New period!
+            game_status="in_progress",
+            league="nfl",
+            skip_if_unchanged=True,
+        )
+
+        # Should have 4 rows
+        history = get_game_state_history("E2E-STATE-GAME-001")
+        assert len(history) == 4
+
+        # Summary: 10+ polls created only 4 rows (vs 10+ without detection)
+        # This is the 90%+ row reduction promised by Issue #234
+
+    def test_situation_changes_create_rows(self, db_pool, clean_test_data, setup_e2e_teams):
+        """
+        E2E: Verify situation field changes (possession, down) create new rows.
+
+        This is critical for football where possession changes are significant
+        events that should be recorded.
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        teams = setup_e2e_teams
+
+        # Clean up any existing test data
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM game_states WHERE espn_event_id = 'E2E-SIT-GAME-001'")
+            cur.execute("DELETE FROM venues WHERE espn_venue_id = 'E2E-SIT-001'")
+
+        venue_id = create_venue(
+            espn_venue_id="E2E-SIT-001",
+            venue_name="Situation Stadium",
+            city="Test City",
+            state="TS",
+        )
+
+        # Create game in progress
+        create_game_state(
+            espn_event_id="E2E-SIT-GAME-001",
+            home_team_id=teams["kc"]["team_id"],
+            away_team_id=teams["lv"]["team_id"],
+            venue_id=venue_id,
+            home_score=7,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+            league="nfl",
+            situation={"possession": "KC", "down": 1, "distance": 10, "yard_line": 25},
+        )
+
+        initial_history = get_game_state_history("E2E-SIT-GAME-001")
+        assert len(initial_history) == 1
+
+        current = get_current_game_state("E2E-SIT-GAME-001")
+
+        # Situation change: KC advances to 2nd down
+        new_situation = {"possession": "KC", "down": 2, "distance": 7, "yard_line": 32}
+        changed = game_state_changed(
+            current,
+            home_score=7,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+            situation=new_situation,
+        )
+        assert changed is True
+
+        upsert_game_state(
+            espn_event_id="E2E-SIT-GAME-001",
+            home_score=7,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+            league="nfl",
+            situation=new_situation,
+            skip_if_unchanged=True,
+        )
+
+        # Should have 2 rows
+        history = get_game_state_history("E2E-SIT-GAME-001")
+        assert len(history) == 2
+
+        # Turnover: Possession changes to LV
+        turnover_situation = {"possession": "LV", "down": 1, "distance": 10, "yard_line": 68}
+        current = get_current_game_state("E2E-SIT-GAME-001")
+        changed = game_state_changed(
+            current,
+            home_score=7,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+            situation=turnover_situation,
+        )
+        assert changed is True
+
+        upsert_game_state(
+            espn_event_id="E2E-SIT-GAME-001",
+            home_score=7,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+            league="nfl",
+            situation=turnover_situation,
+            skip_if_unchanged=True,
+        )
+
+        # Should have 3 rows (possession change is significant)
+        history = get_game_state_history("E2E-SIT-GAME-001")
+        assert len(history) == 3
+
+    def test_status_transitions_workflow(self, db_pool, clean_test_data, setup_e2e_teams):
+        """
+        E2E: Verify complete game status transitions create appropriate rows.
+
+        Status progression: pre -> in_progress -> halftime -> in_progress -> final
+        """
+        teams = setup_e2e_teams
+
+        # Clean up any existing test data
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM game_states WHERE espn_event_id = 'E2E-STATUS-GAME-001'")
+            cur.execute("DELETE FROM venues WHERE espn_venue_id = 'E2E-STATUS-001'")
+
+        venue_id = create_venue(
+            espn_venue_id="E2E-STATUS-001",
+            venue_name="Status Stadium",
+            city="Test City",
+            state="TS",
+        )
+
+        # Pre-game
+        create_game_state(
+            espn_event_id="E2E-STATUS-GAME-001",
+            home_team_id=teams["det"]["team_id"],
+            away_team_id=teams["chi"]["team_id"],
+            venue_id=venue_id,
+            home_score=0,
+            away_score=0,
+            game_status="pre",
+            league="nfl",
+        )
+
+        # Game starts
+        upsert_game_state(
+            espn_event_id="E2E-STATUS-GAME-001",
+            home_score=0,
+            away_score=0,
+            period=1,
+            game_status="in_progress",
+            league="nfl",
+            skip_if_unchanged=True,
+        )
+
+        # Halftime
+        upsert_game_state(
+            espn_event_id="E2E-STATUS-GAME-001",
+            home_score=14,
+            away_score=10,
+            period=2,
+            game_status="halftime",
+            league="nfl",
+            skip_if_unchanged=True,
+        )
+
+        # Second half starts
+        upsert_game_state(
+            espn_event_id="E2E-STATUS-GAME-001",
+            home_score=14,
+            away_score=10,
+            period=3,
+            game_status="in_progress",
+            league="nfl",
+            skip_if_unchanged=True,
+        )
+
+        # Game ends
+        upsert_game_state(
+            espn_event_id="E2E-STATUS-GAME-001",
+            home_score=28,
+            away_score=21,
+            period=4,
+            game_status="final",
+            league="nfl",
+            skip_if_unchanged=True,
+        )
+
+        # Verify 5 rows: pre, in_progress, halftime, in_progress, final
+        history = get_game_state_history("E2E-STATUS-GAME-001")
+        assert len(history) == 5
+
+        # Verify status progression
+        statuses = [h["game_status"] for h in reversed(history)]
+        assert statuses == ["pre", "in_progress", "halftime", "in_progress", "final"]

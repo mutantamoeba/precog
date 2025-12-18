@@ -2604,6 +2604,81 @@ def get_current_game_state(espn_event_id: str) -> dict[str, Any] | None:
     return fetch_one(query, (espn_event_id,))
 
 
+def game_state_changed(
+    current: dict[str, Any] | None,
+    home_score: int,
+    away_score: int,
+    period: int,
+    game_status: str,
+    situation: dict | None = None,
+) -> bool:
+    """
+    Check if game state has meaningfully changed from current database state.
+
+    Used by upsert_game_state to avoid creating duplicate SCD Type 2 rows
+    when game state hasn't changed. This reduces database bloat during
+    high-frequency polling (e.g., every 15-30 seconds during live games).
+
+    Args:
+        current: Current game state from database (None if no existing state)
+        home_score: New home team score
+        away_score: New away team score
+        period: New period number
+        game_status: New game status
+        situation: New situation data (downs, possession, etc.)
+
+    Returns:
+        True if state has changed and a new row should be created,
+        False if state is the same and no update needed.
+
+    Educational Note:
+        We intentionally DO NOT compare clock_seconds or clock_display because:
+        - Clock changes every few seconds during play
+        - This would create ~1000+ rows per game instead of ~50-100
+        - Score, period, status, and situation changes are what matter for trading
+
+        We DO compare:
+        - home_score, away_score: Core game state
+        - period: Quarter/half transitions
+        - game_status: Pre/in_progress/halftime/final transitions
+        - situation: Possession, down/distance changes (significant for NFL)
+
+    Example:
+        >>> current = get_current_game_state("401547417")
+        >>> if game_state_changed(current, 14, 7, 2, "in_progress", {"possession": "KC"}):
+        ...     upsert_game_state("401547417", home_score=14, ...)
+
+    References:
+        - Issue #234: State Change Detection requirement
+        - REQ-DATA-001: Game State Data Collection
+    """
+    # No current state = always insert (new game)
+    if current is None:
+        return True
+
+    # Compare core state fields
+    if current.get("home_score") != home_score:
+        return True
+    if current.get("away_score") != away_score:
+        return True
+    if current.get("period") != period:
+        return True
+    if current.get("game_status") != game_status:
+        return True
+
+    # Compare situation (JSONB field) if provided
+    # Only compare if new situation is provided - ignore if None
+    if situation is not None:
+        current_situation = current.get("situation") or {}
+        # Compare key situation fields for football
+        situation_keys = ["possession", "down", "distance", "yard_line", "is_red_zone"]
+        for key in situation_keys:
+            if situation.get(key) != current_situation.get(key):
+                return True
+
+    return False
+
+
 def upsert_game_state(
     espn_event_id: str,
     home_team_id: int | None = None,
@@ -2624,7 +2699,8 @@ def upsert_game_state(
     situation: dict | None = None,
     linescores: list | None = None,
     data_source: str = "espn",
-) -> int:
+    skip_if_unchanged: bool = True,
+) -> int | None:
     """
     Insert or update game state with SCD Type 2 versioning.
 
@@ -2636,9 +2712,13 @@ def upsert_game_state(
     Args:
         (same as create_game_state)
         data_source: Source of game data (default: 'espn')
+        skip_if_unchanged: If True, skip update when state hasn't meaningfully
+            changed (score, period, status, situation). Default True.
+            Set to False to always create a new row (legacy behavior).
 
     Returns:
-        id (surrogate key) of newly created record
+        id (surrogate key) of newly created record, or None if skipped due to
+        no state change (when skip_if_unchanged=True).
 
     Educational Note:
         SCD Type 2 UPSERT pattern:
@@ -2646,8 +2726,13 @@ def upsert_game_state(
         2. If exists: UPDATE to close it (row_current_ind=FALSE, row_end_ts=NOW)
         3. INSERT new row with row_current_ind=TRUE
 
-        This preserves complete history - every score change, clock update,
-        situation change is recorded as a separate row.
+        State Change Detection (Issue #234):
+        When skip_if_unchanged=True (default), we check if meaningful state has
+        changed before creating a new row. This prevents database bloat from
+        high-frequency polling (~1000 rows/game -> ~50-100 rows/game).
+
+        "Meaningful" changes include: score, period, game_status, situation.
+        Clock changes are intentionally ignored (changes every few seconds).
 
     Example:
         >>> # Update score during game
@@ -2660,11 +2745,22 @@ def upsert_game_state(
         ...     game_status="in_progress",
         ...     situation={"possession": "KC", "down": 2, "distance": 7}
         ... )
+        >>> if state_id is None:
+        ...     print("No state change - update skipped")
 
     References:
         - REQ-DATA-001: Game State Data Collection (SCD Type 2)
+        - Issue #234: State Change Detection
         - Pattern 2: Dual Versioning System
     """
+    # State change detection (Issue #234)
+    # Check if meaningful state has changed before creating a new SCD row
+    if skip_if_unchanged:
+        current = get_current_game_state(espn_event_id)
+        if not game_state_changed(current, home_score, away_score, period, game_status, situation):
+            # No meaningful change - return existing ID or None
+            return current.get("id") if current else None
+
     # Use a SINGLE transaction for all operations to maintain atomicity
     # This ensures that if INSERT fails, the UPDATE is also rolled back
     #

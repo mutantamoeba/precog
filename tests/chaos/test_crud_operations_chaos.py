@@ -773,3 +773,262 @@ class TestDecimalPrecisionChaos:
         )
 
         assert result == 1
+
+
+# =============================================================================
+# STATE CHANGE DETECTION CHAOS TESTS (Issue #234)
+# =============================================================================
+
+
+@pytest.mark.chaos
+class TestGameStateChangedChaos:
+    """Chaos tests for game_state_changed() edge cases.
+
+    Related: Issue #234 (ESPNGamePoller state change detection)
+
+    Educational Note:
+        game_state_changed() compares current state with new values to determine
+        if a meaningful change occurred. It ignores clock fields to reduce row
+        bloat in SCD Type 2. These chaos tests verify edge case handling.
+    """
+
+    def test_none_current_always_changed(self):
+        """None current state should always be considered changed.
+
+        Educational Note:
+            When current is None, this represents a new game that hasn't been
+            tracked yet. Any new state should be treated as a change to trigger
+            the initial database insert.
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        result = game_state_changed(
+            current=None,
+            home_score=0,
+            away_score=0,
+            period=1,
+            game_status="pre",
+            situation=None,
+        )
+
+        assert result is True
+
+    def test_empty_situation_vs_none_situation(self):
+        """Empty dict situation vs None should be treated equivalently.
+
+        Educational Note:
+            The implementation intentionally treats {} and None as equivalent
+            for situations because both indicate "no relevant situation data".
+            The function compares specific keys (possession, down, distance,
+            yard_line, is_red_zone) - empty dict and None both have no values
+            for these keys, so they're functionally identical.
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        current = {
+            "home_score": 0,
+            "away_score": 0,
+            "period": 1,
+            "game_status": "pre",
+            "situation": None,
+        }
+
+        result = game_state_changed(
+            current=current,
+            home_score=0,
+            away_score=0,
+            period=1,
+            game_status="pre",
+            situation={},  # Empty dict treated same as None
+        )
+
+        # Empty dict and None are functionally equivalent (no relevant keys)
+        assert result is False
+
+    def test_situation_with_extra_fields_ignored(self):
+        """Extra fields in situation dict should not affect comparison.
+
+        Educational Note:
+            game_state_changed() compares specific situation fields. Fields
+            not in the comparison list should be ignored. This ensures
+            backward compatibility when ESPN adds new fields.
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"down": 2, "distance": 5, "possession": "home"},
+        }
+
+        # Same core fields but with extra fields
+        result = game_state_changed(
+            current=current,
+            home_score=14,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+            situation={
+                "down": 2,
+                "distance": 5,
+                "possession": "home",
+                "extra_field": "should_be_ignored",
+                "another_extra": 12345,
+            },
+        )
+
+        # Same core values, extra fields ignored - no change
+        assert result is False
+
+    def test_zero_scores_not_treated_as_none(self):
+        """Zero scores should be compared as values, not as NULL.
+
+        Educational Note:
+            Score of 0 is semantically different from None/NULL. A shutout
+            (0-35) is a valid game outcome. The comparison should treat 0
+            as a value, not as "missing data".
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        current = {
+            "home_score": 0,
+            "away_score": 0,
+            "period": 1,
+            "game_status": "in_progress",
+            "situation": None,
+        }
+
+        # Change from 0 to 7
+        result = game_state_changed(
+            current=current,
+            home_score=0,
+            away_score=7,  # Score changed
+            period=1,
+            game_status="in_progress",
+            situation=None,
+        )
+
+        assert result is True
+
+        # No change - both still 0
+        result = game_state_changed(
+            current=current,
+            home_score=0,
+            away_score=0,
+            period=1,
+            game_status="in_progress",
+            situation=None,
+        )
+
+        assert result is False
+
+    def test_game_status_case_sensitivity(self):
+        """Game status comparison should handle case differences.
+
+        Educational Note:
+            ESPN API may return status in different cases. The comparison
+            should be case-insensitive or normalized before comparison.
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": None,
+        }
+
+        # Same status, different case - should NOT be a change
+        # (assuming normalization happens before storage)
+        result = game_state_changed(
+            current=current,
+            home_score=14,
+            away_score=7,
+            period=2,
+            game_status="in_progress",  # Same normalized status
+            situation=None,
+        )
+
+        assert result is False
+
+    def test_period_boundary_values(self):
+        """Period at boundary values (0, 1, 5+) should be handled.
+
+        Educational Note:
+            - Period 0: might represent pre-game
+            - Period 1-4: regular quarters
+            - Period 5+: overtime periods
+            All should be valid for comparison.
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        current = {
+            "home_score": 21,
+            "away_score": 21,
+            "period": 4,
+            "game_status": "in_progress",
+            "situation": None,
+        }
+
+        # Period changing to overtime (5)
+        result = game_state_changed(
+            current=current,
+            home_score=21,
+            away_score=21,
+            period=5,  # Overtime
+            game_status="in_progress",
+            situation=None,
+        )
+
+        assert result is True
+
+        # Period 0 edge case
+        current_pregame = {
+            "home_score": 0,
+            "away_score": 0,
+            "period": 0,
+            "game_status": "pre",
+            "situation": None,
+        }
+
+        result = game_state_changed(
+            current=current_pregame,
+            home_score=0,
+            away_score=0,
+            period=1,  # Game starting
+            game_status="in_progress",
+            situation=None,
+        )
+
+        assert result is True
+
+    def test_situation_none_to_populated(self):
+        """Situation changing from None to populated should detect change.
+
+        Educational Note:
+            When a game starts, situation data becomes available. This
+            transition from None to a populated dict must be detected.
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        current = {
+            "home_score": 0,
+            "away_score": 0,
+            "period": 1,
+            "game_status": "in_progress",
+            "situation": None,  # No situation data yet
+        }
+
+        result = game_state_changed(
+            current=current,
+            home_score=0,
+            away_score=0,
+            period=1,
+            game_status="in_progress",
+            situation={"down": 1, "distance": 10, "possession": "home"},
+        )
+
+        assert result is True

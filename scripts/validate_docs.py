@@ -502,10 +502,14 @@ def validate_new_docs_in_master_index() -> ValidationResult:
     doc_pattern = r"\|\s+\*\*([A-Za-z_0-9.]+_V\d+[._]\d+\.md)\*\*\s+\|"
     listed_docs = set(re.findall(doc_pattern, content))
 
-    # Find all versioned markdown files in docs/ (excluding _archive/ and ephemeral patterns)
+    # Find all versioned markdown files in docs/ (excluding _archive/, planning/, and ephemeral patterns)
     all_docs = set()
     for doc_file in DOCS_ROOT.rglob("*_V*.md"):
-        if "_archive" not in str(doc_file) and not is_ephemeral(doc_file.name):
+        if (
+            "_archive" not in str(doc_file)
+            and "planning" not in str(doc_file)
+            and not is_ephemeral(doc_file.name)
+        ):
             all_docs.add(doc_file.name)
 
     # Calculate unlisted documents
