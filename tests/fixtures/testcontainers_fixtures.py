@@ -700,7 +700,7 @@ try:
     TESTCONTAINERS_AVAILABLE = True
 except ImportError:
     TESTCONTAINERS_AVAILABLE = False
-    PostgresContainer = None  # type: ignore[misc, assignment]
+    PostgresContainer = None
 
 
 @pytest.fixture(scope="session")

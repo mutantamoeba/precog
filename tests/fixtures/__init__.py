@@ -161,9 +161,10 @@ try:
 except ImportError:
     # testcontainers not installed - fixtures will skip tests
     TESTCONTAINERS_AVAILABLE = False
-    postgres_container = None  # type: ignore[assignment, misc]
-    container_db_connection = None  # type: ignore[assignment, misc]
-    container_cursor = None  # type: ignore[assignment, misc]
+    # These fixtures are only available when testcontainers is installed
+    postgres_container = None  # type: ignore[assignment]
+    container_db_connection = None  # type: ignore[assignment]
+    container_cursor = None  # type: ignore[assignment]
 
 
 def _check_docker_available() -> bool:

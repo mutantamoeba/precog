@@ -186,7 +186,17 @@ jobs:
           #       - test_database_crud_properties.py
           #       - test_strategy_versioning_properties.py
           # Integration/E2E/stress/chaos tests need PostgreSQL - run in Linux-only job
-          python -m pytest tests/unit/ tests/property/ -v --cov=src/precog --cov-report=xml --cov-report=html --cov-report=term-missing -n auto --ignore=tests/property/test_crud_operations_properties.py --ignore=tests/property/test_database_crud_properties.py --ignore=tests/property/test_strategy_versioning_properties.py
+          # Issue #238: Added --junitxml for GitHub PR annotations
+          python -m pytest tests/unit/ tests/property/ -v --tb=short --junitxml=test-results.xml --cov=src/precog --cov-report=xml --cov-report=html --cov-report=term-missing -n auto --ignore=tests/property/test_crud_operations_properties.py --ignore=tests/property/test_database_crud_properties.py --ignore=tests/property/test_strategy_versioning_properties.py
+
+      - name: Publish Test Results
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: 'test-results.xml'
+          check_name: 'Test Results (${{ matrix.os }}, Python ${{ matrix.python-version }})'
+          fail_on_failure: false
+          include_passed: false
 
       - name: Upload coverage to Codecov
         if: matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14'
@@ -205,9 +215,11 @@ jobs:
         with:
           name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
           path: |
+            test-results.xml
             test_results/
             htmlcov/
             coverage.xml
+          retention-days: 7
 
   integration-tests:
     name: Integration Tests (PostgreSQL)
@@ -296,8 +308,9 @@ jobs:
         run: |
           # Property tests that require real PostgreSQL (SCD Type-2, Decimal precision, strategy versioning)
           # --timeout=120: Kill individual tests that hang for >2 minutes
+          # Issue #238: Added --junitxml for GitHub PR annotations
           echo "=== Starting property tests at $(date) ==="
-          python -m pytest tests/property/test_crud_operations_properties.py tests/property/test_database_crud_properties.py tests/property/test_strategy_versioning_properties.py -v --tb=short --timeout=120
+          python -m pytest tests/property/test_crud_operations_properties.py tests/property/test_database_crud_properties.py tests/property/test_strategy_versioning_properties.py -v --tb=short --timeout=120 --junitxml=property-test-results.xml
           echo "=== Property tests complete at $(date) ==="
 
       # Phase 1.9 DIAGNOSTIC: Split into separate steps to identify hang source
@@ -306,8 +319,9 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: |
+          # Issue #238: Added --junitxml for GitHub PR annotations
           echo "=== Starting integration tests at $(date) ==="
-          python -m pytest tests/integration/ -v --tb=short --timeout=60 -p no:cacheprovider
+          python -m pytest tests/integration/ -v --tb=short --timeout=60 -p no:cacheprovider --junitxml=integration-test-results.xml
           echo "=== Integration tests complete at $(date) ==="
 
       - name: Run security tests
@@ -315,8 +329,9 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: |
+          # Issue #238: Added --junitxml for GitHub PR annotations
           echo "=== Starting security tests at $(date) ==="
-          python -m pytest tests/security/ -v --tb=short --timeout=60 -p no:cacheprovider
+          python -m pytest tests/security/ -v --tb=short --timeout=60 -p no:cacheprovider --junitxml=security-test-results.xml
           echo "=== Security tests complete at $(date) ==="
 
       - name: Run stress tests
@@ -324,10 +339,11 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: |
-          echo "=== Starting stress tests at $(date) ==="
+          # Issue #238: Added --junitxml for GitHub PR annotations
           # Use --timeout-method=thread because stress tests use threading/ThreadPoolExecutor
           # SIGALRM (default on Linux) can't interrupt threads, thread method can
-          python -m pytest tests/stress/ -v --tb=short --timeout=60 --timeout-method=thread -p no:cacheprovider
+          echo "=== Starting stress tests at $(date) ==="
+          python -m pytest tests/stress/ -v --tb=short --timeout=60 --timeout-method=thread -p no:cacheprovider --junitxml=stress-test-results.xml
           echo "=== Stress tests complete at $(date) ==="
 
       - name: Run chaos tests
@@ -335,8 +351,9 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: |
+          # Issue #238: Added --junitxml for GitHub PR annotations
           echo "=== Starting chaos tests at $(date) ==="
-          python -m pytest tests/chaos/ -v --tb=short --timeout=60 -p no:cacheprovider
+          python -m pytest tests/chaos/ -v --tb=short --timeout=60 -p no:cacheprovider --junitxml=chaos-test-results.xml
           echo "=== Chaos tests complete at $(date) ==="
 
       - name: Run E2E + performance tests
@@ -345,7 +362,29 @@ jobs:
           # E2E tests will skip if API credentials not configured
           # Performance tests validate speed requirements
           # --timeout=60: Kill individual tests that hang for >1 minute
-          python -m pytest tests/e2e/ tests/performance/ -v --tb=short --timeout=60
+          # Issue #238: Added --junitxml for GitHub PR annotations
+          python -m pytest tests/e2e/ tests/performance/ -v --tb=short --timeout=60 --junitxml=e2e-performance-test-results.xml
+
+      # Issue #238: Publish test results as PR annotations
+      - name: Publish Integration Test Results
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: '*-test-results.xml'
+          check_name: 'Integration Test Results (PostgreSQL)'
+          fail_on_failure: false
+          include_passed: false
+
+      # Issue #238: Upload all test artifacts on failure for debugging
+      - name: Archive test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-results-failure
+          path: |
+            *-test-results.xml
+            .hypothesis/
+          retention-days: 14
 
   validate-quick:
     name: Quick Validation Suite
