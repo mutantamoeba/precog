@@ -475,6 +475,7 @@ class TestUpsertGameStateUnit:
             home_score=7,
             away_score=3,
             game_status="in_progress",
+            skip_if_unchanged=False,  # Bypass state check to avoid DB call
         )
 
         # Verify close query was first execute call

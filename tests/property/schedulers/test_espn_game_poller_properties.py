@@ -455,9 +455,13 @@ class TestAdaptivePollingInvariants:
     @settings(max_examples=30)
     def test_adjust_poll_interval_idempotent(self, poll_interval: int, idle_interval: int) -> None:
         """Calling _adjust_poll_interval twice with same state is idempotent."""
-        with patch("precog.schedulers.espn_game_poller.ESPNClient") as mock_client:
+        with (
+            patch("precog.schedulers.espn_game_poller.ESPNClient") as mock_client,
+            patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live,
+        ):
             mock_instance = mock_client.return_value
             mock_instance.get_scoreboard.return_value = []
+            mock_get_live.return_value = []  # No active games
 
             poller = ESPNGamePoller(
                 poll_interval=poll_interval,
