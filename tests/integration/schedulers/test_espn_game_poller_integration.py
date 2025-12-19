@@ -445,3 +445,203 @@ class TestMultiLeaguePolling:
 
         # Both leagues should have been attempted
         assert mock_espn_client.get_scoreboard.call_count == 2
+
+
+# =============================================================================
+# Integration Tests: Adaptive Polling (Issue #234)
+# =============================================================================
+
+
+@pytest.mark.integration
+class TestAdaptivePollingIntegration:
+    """Integration tests for adaptive polling with scheduler lifecycle.
+
+    Related: Issue #234 - Adaptive polling to reduce API load during idle periods.
+    """
+
+    @patch("precog.schedulers.espn_game_poller.get_live_games")
+    def test_adaptive_polling_with_scheduler(
+        self,
+        mock_get_live: MagicMock,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test adaptive polling adjusts interval during scheduler lifecycle."""
+        # Start with no active games
+        mock_get_live.return_value = []
+
+        poller = ESPNGamePoller(
+            poll_interval=5,
+            idle_interval=60,
+            adaptive_polling=True,
+            espn_client=mock_espn_client,
+        )
+
+        # Before adjustment, should use poll_interval
+        assert poller.get_current_interval() == 5
+
+        # After adjustment with no games, should use idle_interval
+        poller._adjust_poll_interval()
+        assert poller.get_current_interval() == 60
+
+        # Simulate games becoming active
+        mock_get_live.return_value = [{"game_id": 1}]
+        poller._adjust_poll_interval()
+        assert poller.get_current_interval() == 5
+
+    @patch("precog.schedulers.espn_game_poller.get_live_games")
+    def test_adaptive_polling_state_transitions(
+        self,
+        mock_get_live: MagicMock,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test adaptive polling tracks state transitions correctly."""
+        mock_get_live.return_value = []
+
+        poller = ESPNGamePoller(
+            poll_interval=5,
+            idle_interval=60,
+            adaptive_polling=True,
+            espn_client=mock_espn_client,
+        )
+
+        # Initial state is None
+        assert poller._last_active_state is None
+
+        # First adjustment sets state
+        poller._adjust_poll_interval()
+        assert poller._last_active_state is False  # No games = inactive
+
+        # Simulate active games
+        mock_get_live.return_value = [{"game_id": 1}]
+        poller._adjust_poll_interval()
+        assert poller._last_active_state is True  # Has games = active
+
+        # Back to no games
+        mock_get_live.return_value = []
+        poller._adjust_poll_interval()
+        assert poller._last_active_state is False  # No games = inactive
+
+    def test_disabled_adaptive_polling_keeps_poll_interval(
+        self,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test disabled adaptive polling always uses poll_interval."""
+        poller = ESPNGamePoller(
+            poll_interval=15,
+            idle_interval=60,
+            adaptive_polling=False,
+            espn_client=mock_espn_client,
+        )
+
+        # Should always use poll_interval
+        assert poller.get_current_interval() == 15
+
+        # _adjust_poll_interval should be a no-op
+        poller._adjust_poll_interval()
+        assert poller.get_current_interval() == 15
+
+    @patch("precog.schedulers.espn_game_poller.get_live_games")
+    def test_poll_wrapper_triggers_adaptive_adjustment(
+        self,
+        mock_get_live: MagicMock,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test _poll_wrapper calls _adjust_poll_interval when enabled."""
+        mock_get_live.return_value = []
+
+        poller = ESPNGamePoller(
+            poll_interval=5,
+            idle_interval=60,
+            adaptive_polling=True,
+            espn_client=mock_espn_client,
+        )
+
+        # Before poll
+        assert poller._last_active_state is None
+
+        # Run poll wrapper
+        poller._poll_wrapper()
+
+        # Should have been adjusted
+        assert poller._last_active_state is False
+        assert poller.get_current_interval() == 60
+
+    @patch("precog.schedulers.espn_game_poller.get_live_games")
+    def test_adaptive_polling_during_running_scheduler(
+        self,
+        mock_get_live: MagicMock,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test adaptive polling works during live scheduler run."""
+        # Start with no games
+        mock_get_live.return_value = []
+
+        poller = ESPNGamePoller(
+            poll_interval=5,
+            idle_interval=60,
+            adaptive_polling=True,
+            espn_client=mock_espn_client,
+        )
+        poller.start()
+
+        try:
+            # Let first poll run
+            time.sleep(1)
+
+            # Should have adjusted to idle
+            assert poller.get_current_interval() == 60
+            assert poller._last_active_state is False
+
+        finally:
+            poller.stop()
+
+
+@pytest.mark.integration
+class TestHasActiveGamesIntegration:
+    """Integration tests for has_active_games method."""
+
+    @patch("precog.schedulers.espn_game_poller.get_live_games")
+    def test_has_active_games_checks_all_leagues(
+        self,
+        mock_get_live: MagicMock,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test has_active_games checks all configured leagues."""
+
+        # NFL has games, NCAAF doesn't
+        def mock_live(league: str) -> list:
+            if league == "nfl":
+                return [{"game_id": 1}]
+            return []
+
+        mock_get_live.side_effect = mock_live
+
+        poller = ESPNGamePoller(
+            leagues=["nfl", "ncaaf"],
+            espn_client=mock_espn_client,
+        )
+
+        # Should return True because NFL has games
+        assert poller.has_active_games() is True
+
+        # Check both leagues were checked
+        assert mock_get_live.call_count == 1  # Short-circuits on first True
+
+    @patch("precog.schedulers.espn_game_poller.get_live_games")
+    def test_has_active_games_no_games(
+        self,
+        mock_get_live: MagicMock,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test has_active_games returns False when no games."""
+        mock_get_live.return_value = []
+
+        poller = ESPNGamePoller(
+            leagues=["nfl", "ncaaf"],
+            espn_client=mock_espn_client,
+        )
+
+        assert poller.has_active_games() is False
+
+        # Should have checked both leagues
+        assert mock_get_live.call_count == 2

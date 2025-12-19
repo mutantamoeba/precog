@@ -396,3 +396,197 @@ class TestErrorHandlingInvariants:
 
             # Error count should be incremented
             assert poller.stats["errors"] >= 1
+
+
+# =============================================================================
+# Property Tests: Adaptive Polling Invariants (Issue #234)
+# =============================================================================
+
+
+@pytest.mark.property
+class TestAdaptivePollingInvariants:
+    """Property tests for adaptive polling behavior."""
+
+    @given(adaptive=st.booleans())
+    @settings(max_examples=20)
+    def test_adaptive_polling_flag_preserved(self, adaptive: bool) -> None:
+        """Adaptive polling flag should be preserved after initialization."""
+        with patch("precog.schedulers.espn_game_poller.ESPNClient"):
+            poller = ESPNGamePoller(adaptive_polling=adaptive)
+            assert poller.adaptive_polling == adaptive
+
+    @given(
+        poll_interval=valid_poll_interval,
+        idle_interval=valid_idle_interval,
+    )
+    @settings(max_examples=50)
+    def test_current_interval_bounds(self, poll_interval: int, idle_interval: int) -> None:
+        """Current interval should be within expected bounds."""
+        with patch("precog.schedulers.espn_game_poller.ESPNClient"):
+            poller = ESPNGamePoller(
+                poll_interval=poll_interval,
+                idle_interval=idle_interval,
+                adaptive_polling=True,
+            )
+
+            current = poller.get_current_interval()
+
+            # Current interval should be one of the two configured values
+            assert current in (poll_interval, idle_interval)
+
+    @given(poll_interval=valid_poll_interval)
+    @settings(max_examples=30)
+    def test_disabled_adaptive_uses_poll_interval(self, poll_interval: int) -> None:
+        """When adaptive polling disabled, current interval is always poll_interval."""
+        with patch("precog.schedulers.espn_game_poller.ESPNClient"):
+            poller = ESPNGamePoller(
+                poll_interval=poll_interval,
+                adaptive_polling=False,
+            )
+
+            current = poller.get_current_interval()
+
+            assert current == poll_interval
+
+    @given(
+        poll_interval=valid_poll_interval,
+        idle_interval=valid_idle_interval,
+    )
+    @settings(max_examples=30)
+    def test_adjust_poll_interval_idempotent(self, poll_interval: int, idle_interval: int) -> None:
+        """Calling _adjust_poll_interval twice with same state is idempotent."""
+        with (
+            patch("precog.schedulers.espn_game_poller.ESPNClient") as mock_client,
+            patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live,
+        ):
+            mock_instance = mock_client.return_value
+            mock_instance.get_scoreboard.return_value = []
+            mock_get_live.return_value = []  # No active games
+
+            poller = ESPNGamePoller(
+                poll_interval=poll_interval,
+                idle_interval=idle_interval,
+                adaptive_polling=True,
+            )
+
+            # First call
+            poller._adjust_poll_interval()
+            interval1 = poller.get_current_interval()
+            state1 = poller._last_active_state
+
+            # Second call (same state)
+            poller._adjust_poll_interval()
+            interval2 = poller.get_current_interval()
+            state2 = poller._last_active_state
+
+            # Should be identical
+            assert interval1 == interval2
+            assert state1 == state2
+
+    @given(poll_interval=valid_poll_interval)
+    @settings(max_examples=20)
+    def test_adjust_noop_when_disabled(self, poll_interval: int) -> None:
+        """_adjust_poll_interval should do nothing when adaptive_polling=False."""
+        with patch("precog.schedulers.espn_game_poller.ESPNClient") as mock_client:
+            mock_instance = mock_client.return_value
+
+            poller = ESPNGamePoller(
+                poll_interval=poll_interval,
+                adaptive_polling=False,
+            )
+
+            # Capture initial state
+            initial_interval = poller._current_interval
+            initial_last_state = poller._last_active_state
+
+            # Call adjust
+            poller._adjust_poll_interval()
+
+            # State should be unchanged
+            assert poller._current_interval == initial_interval
+            assert poller._last_active_state == initial_last_state
+            # get_scoreboard should NOT have been called
+            mock_instance.get_scoreboard.assert_not_called()
+
+
+@pytest.mark.property
+class TestAdaptivePollingIntervalSelection:
+    """Property tests for interval selection logic."""
+
+    @given(
+        poll_interval=valid_poll_interval,
+        idle_interval=valid_idle_interval,
+    )
+    @settings(max_examples=30)
+    def test_active_games_use_poll_interval(self, poll_interval: int, idle_interval: int) -> None:
+        """When active games exist, should use poll_interval."""
+        with (
+            patch("precog.schedulers.espn_game_poller.ESPNClient"),
+            patch("precog.schedulers.espn_game_poller.get_live_games") as mock_live,
+        ):
+            # Simulate active game in database
+            mock_live.return_value = [{"game_id": 1, "status": "in_progress"}]
+
+            poller = ESPNGamePoller(
+                poll_interval=poll_interval,
+                idle_interval=idle_interval,
+                adaptive_polling=True,
+            )
+
+            poller._adjust_poll_interval()
+
+            assert poller.get_current_interval() == poll_interval
+
+    @given(
+        poll_interval=valid_poll_interval,
+        idle_interval=valid_idle_interval,
+    )
+    @settings(max_examples=30)
+    def test_no_active_games_use_idle_interval(
+        self, poll_interval: int, idle_interval: int
+    ) -> None:
+        """When no active games, should use idle_interval."""
+        with (
+            patch("precog.schedulers.espn_game_poller.ESPNClient"),
+            patch("precog.schedulers.espn_game_poller.get_live_games") as mock_live,
+        ):
+            # No games or all finished
+            mock_live.return_value = []
+
+            poller = ESPNGamePoller(
+                poll_interval=poll_interval,
+                idle_interval=idle_interval,
+                adaptive_polling=True,
+            )
+
+            poller._adjust_poll_interval()
+
+            assert poller.get_current_interval() == idle_interval
+
+    @given(
+        poll_interval=valid_poll_interval,
+        idle_interval=valid_idle_interval,
+    )
+    @settings(max_examples=20)
+    def test_interval_state_consistency(self, poll_interval: int, idle_interval: int) -> None:
+        """_current_interval and _last_active_state should be consistent."""
+        with (
+            patch("precog.schedulers.espn_game_poller.ESPNClient"),
+            patch("precog.schedulers.espn_game_poller.get_live_games") as mock_live,
+        ):
+            mock_live.return_value = []
+
+            poller = ESPNGamePoller(
+                poll_interval=poll_interval,
+                idle_interval=idle_interval,
+                adaptive_polling=True,
+            )
+
+            poller._adjust_poll_interval()
+
+            # If no active games, _last_active_state should be False
+            # and interval should be idle_interval
+            if poller._last_active_state is False:
+                assert poller._current_interval == idle_interval
+            elif poller._last_active_state is True:
+                assert poller._current_interval == poll_interval

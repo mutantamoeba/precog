@@ -574,3 +574,250 @@ class TestClassConstants:
         """Test COMPLETED_STATUSES constant."""
         assert "post" in ESPNGamePoller.COMPLETED_STATUSES
         assert "final" in ESPNGamePoller.COMPLETED_STATUSES
+
+
+# =============================================================================
+# Unit Tests: Adaptive Polling
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestAdaptivePollingInitialization:
+    """Unit tests for adaptive polling initialization.
+
+    Educational Note:
+        Adaptive polling dynamically adjusts the poll interval based on
+        whether games are actively in progress:
+        - Active games: poll_interval (default 15s)
+        - No active games: idle_interval (default 60s)
+
+        This reduces API load and database writes during idle periods
+        while maintaining responsiveness during live games.
+
+    Reference:
+        - Issue #234: ESPNGamePoller for Live Game State Collection
+        - REQ-DATA-001: Game State Data Collection
+    """
+
+    def test_adaptive_polling_enabled_by_default(self, mock_espn_client: MagicMock) -> None:
+        """Test adaptive polling is enabled by default."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+
+        assert poller.adaptive_polling is True
+
+    def test_adaptive_polling_can_be_disabled(self, mock_espn_client: MagicMock) -> None:
+        """Test adaptive polling can be explicitly disabled."""
+        poller = ESPNGamePoller(
+            espn_client=mock_espn_client,
+            adaptive_polling=False,
+        )
+
+        assert poller.adaptive_polling is False
+
+    def test_current_interval_defaults_to_poll_interval(self, mock_espn_client: MagicMock) -> None:
+        """Test _current_interval starts at poll_interval."""
+        poller = ESPNGamePoller(
+            poll_interval=30,
+            espn_client=mock_espn_client,
+        )
+
+        assert poller._current_interval == 30
+
+    def test_last_active_state_starts_as_none(self, mock_espn_client: MagicMock) -> None:
+        """Test _last_active_state starts as None."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+
+        assert poller._last_active_state is None
+
+
+@pytest.mark.unit
+class TestGetCurrentInterval:
+    """Unit tests for get_current_interval method."""
+
+    def test_get_current_interval_returns_current(self, mock_espn_client: MagicMock) -> None:
+        """Test get_current_interval returns the current interval."""
+        poller = ESPNGamePoller(
+            poll_interval=20,
+            espn_client=mock_espn_client,
+        )
+
+        assert poller.get_current_interval() == 20
+
+    def test_get_current_interval_after_adjustment(self, mock_espn_client: MagicMock) -> None:
+        """Test get_current_interval after manual adjustment."""
+        poller = ESPNGamePoller(
+            poll_interval=15,
+            idle_interval=60,
+            espn_client=mock_espn_client,
+        )
+
+        # Simulate interval adjustment
+        poller._current_interval = 60
+
+        assert poller.get_current_interval() == 60
+
+
+@pytest.mark.unit
+class TestAdjustPollInterval:
+    """Unit tests for _adjust_poll_interval method.
+
+    Educational Note:
+        The _adjust_poll_interval method is called after each poll to
+        determine if the interval should change based on active game status.
+
+        Key behaviors:
+        1. Only adjusts when active state changes (not on every poll)
+        2. Uses poll_interval when games are active
+        3. Uses idle_interval when no games are active
+        4. Reschedules APScheduler job when interval changes
+    """
+
+    @patch("precog.schedulers.espn_game_poller.get_live_games")
+    def test_adjust_increases_interval_when_no_active_games(
+        self,
+        mock_get_live: MagicMock,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test interval increases when no active games."""
+        mock_get_live.return_value = []  # No active games
+        poller = ESPNGamePoller(
+            poll_interval=15,
+            idle_interval=60,
+            espn_client=mock_espn_client,
+        )
+
+        poller._adjust_poll_interval()
+
+        assert poller._current_interval == 60
+        assert poller._last_active_state is False
+
+    @patch("precog.schedulers.espn_game_poller.get_live_games")
+    def test_adjust_decreases_interval_when_games_active(
+        self,
+        mock_get_live: MagicMock,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test interval decreases when games are active."""
+        mock_get_live.return_value = [{"game_id": 1}]  # Active game
+        poller = ESPNGamePoller(
+            poll_interval=15,
+            idle_interval=60,
+            espn_client=mock_espn_client,
+        )
+        # Simulate previously idle
+        poller._current_interval = 60
+        poller._last_active_state = False
+
+        poller._adjust_poll_interval()
+
+        assert poller._current_interval == 15
+        assert poller._last_active_state is True
+
+    @patch("precog.schedulers.espn_game_poller.get_live_games")
+    def test_adjust_no_change_when_same_state(
+        self,
+        mock_get_live: MagicMock,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test interval doesn't change when state unchanged."""
+        mock_get_live.return_value = []  # No active games
+        poller = ESPNGamePoller(
+            poll_interval=15,
+            idle_interval=60,
+            espn_client=mock_espn_client,
+        )
+        # Already in idle state
+        poller._current_interval = 60
+        poller._last_active_state = False
+
+        poller._adjust_poll_interval()
+
+        # Should stay at idle interval
+        assert poller._current_interval == 60
+
+    @patch("precog.schedulers.espn_game_poller.get_live_games")
+    def test_adjust_first_call_transitions_from_none(
+        self,
+        mock_get_live: MagicMock,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test first adjustment transitions from None state."""
+        mock_get_live.return_value = []  # No active games
+        poller = ESPNGamePoller(
+            poll_interval=15,
+            idle_interval=60,
+            espn_client=mock_espn_client,
+        )
+        assert poller._last_active_state is None
+
+        poller._adjust_poll_interval()
+
+        # Should transition and set state
+        assert poller._last_active_state is False
+        assert poller._current_interval == 60
+
+    @patch("precog.schedulers.espn_game_poller.get_live_games")
+    def test_adjust_disabled_does_nothing(
+        self,
+        mock_get_live: MagicMock,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test adjustment does nothing when adaptive_polling=False."""
+        poller = ESPNGamePoller(
+            poll_interval=15,
+            idle_interval=60,
+            espn_client=mock_espn_client,
+            adaptive_polling=False,
+        )
+        original_interval = poller._current_interval
+
+        poller._adjust_poll_interval()
+
+        # Should not call get_live_games or change anything
+        mock_get_live.assert_not_called()
+        assert poller._current_interval == original_interval
+
+
+@pytest.mark.unit
+class TestPollWrapperAdaptive:
+    """Unit tests for _poll_wrapper with adaptive polling."""
+
+    @patch("precog.schedulers.espn_game_poller.get_live_games")
+    def test_poll_wrapper_calls_adjust_when_enabled(
+        self,
+        mock_get_live: MagicMock,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test _poll_wrapper calls _adjust_poll_interval when enabled."""
+        mock_get_live.return_value = []
+        mock_espn_client.get_scoreboard.return_value = []
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+            adaptive_polling=True,
+        )
+
+        poller._poll_wrapper()
+
+        # Should have called get_live_games for adjustment
+        mock_get_live.assert_called()
+
+    def test_poll_wrapper_skips_adjust_when_disabled(
+        self,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test _poll_wrapper skips adjustment when disabled."""
+        mock_espn_client.get_scoreboard.return_value = []
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+            adaptive_polling=False,
+        )
+
+        # Mock _adjust_poll_interval to verify it's not called
+        poller._adjust_poll_interval = MagicMock()
+
+        poller._poll_wrapper()
+
+        # Should not have called adjustment
+        poller._adjust_poll_interval.assert_not_called()

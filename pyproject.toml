@@ -157,6 +157,13 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 "src/precog/trading/strategy_manager.py" = ["S608"]
 "src/precog/analytics/model_manager.py" = ["S608"]
 "src/precog/database/lookup_helpers.py" = ["S608"]
+"src/precog/cli/db.py" = ["S608"]  # table_name from trusted sources (CRITICAL_TABLES constant, information_schema)
+
+# CLI-specific patterns (Typer framework uses function calls in defaults)
+"src/precog/cli/**/*.py" = [
+    "B008",   # typer.Option() in defaults is standard Typer pattern
+    "DTZ007", # Naive datetime ok for CLI date parsing (local time)
+]
 
 # Test-specific ignores (patterns acceptable in tests but not production code)
 "tests/**/*.py" = [

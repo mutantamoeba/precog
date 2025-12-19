@@ -72,6 +72,10 @@ TEST_TYPES = {
 # - Added service_supervisor, service_runner, kelly_criterion (critical)
 # - Added espn_game_poller, seeding_manager, espn_validation (business)
 # - Added base_poller, rate_limiter, environment, initialization, lookup_helpers (infra)
+# Issue #234: Added CLI modules (2025-12-16)
+# - Added cli/scheduler (critical), cli/kalshi, cli/espn, cli/db, cli/data (business)
+# - Added cli/config, cli/system (infrastructure)
+# - Added cli/_future/* modules (experimental - not implemented yet)
 MODULE_TIERS = {
     # Critical Path (90%+) - ALL 8 test types required
     # API & Authentication
@@ -122,6 +126,22 @@ MODULE_TIERS = {
     "schedulers/base_poller": "infrastructure",
     # Utilities
     "utils/logger": "infrastructure",
+    # CLI Modules (Issue #234)
+    # Critical - manages service scheduling
+    "cli/scheduler": "critical",
+    # Business - API and data operations
+    "cli/kalshi": "business",
+    "cli/espn": "business",
+    "cli/db": "business",
+    "cli/data": "business",
+    # Infrastructure - utility and config
+    "cli/config": "infrastructure",
+    "cli/system": "infrastructure",
+    # Experimental - future features not yet implemented
+    "cli/_future/model": "experimental",
+    "cli/_future/position": "experimental",
+    "cli/_future/strategy": "experimental",
+    "cli/_future/trade": "experimental",
 }
 
 # Required test types per tier

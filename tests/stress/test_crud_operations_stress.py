@@ -709,3 +709,512 @@ class TestDatabaseFailureRecovery:
             assert current_count == 1, (
                 f"Game {i}: Expected exactly 1 current row, found {current_count}"
             )
+
+
+# =============================================================================
+# STRESS TESTS: State Change Detection (Issue #234)
+# =============================================================================
+
+
+@pytest.mark.stress
+class TestStateChangeDetectionStress:
+    """Stress tests for game_state_changed() function under high load.
+
+    Tests the state comparison logic under various stress scenarios
+    without requiring database connections.
+
+    Related: Issue #234 (ESPNGamePoller state change detection)
+    """
+
+    def test_high_volume_state_comparisons(self):
+        """
+        STRESS: Perform 10,000 state comparisons rapidly.
+
+        Validates:
+        - State comparison handles high volume without performance degradation
+        - Consistent results across all comparisons
+        - No memory issues with repeated comparisons
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        # Base current state
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"down": 2, "distance": 8, "possession": "home"},
+        }
+
+        start_time = time.time()
+
+        # Test with identical state (should return False)
+        false_count = 0
+        for _ in range(5000):
+            if not game_state_changed(
+                current=current,
+                home_score=14,
+                away_score=7,
+                period=2,
+                game_status="in_progress",
+                situation={"down": 2, "distance": 8, "possession": "home"},
+            ):
+                false_count += 1
+
+        # Test with different state (should return True)
+        true_count = 0
+        for i in range(5000):
+            if game_state_changed(
+                current=current,
+                home_score=14 + (i % 3),  # Varying scores
+                away_score=7,
+                period=2,
+                game_status="in_progress",
+                situation={"down": 2, "distance": 8, "possession": "home"},
+            ):
+                true_count += 1
+
+        elapsed = time.time() - start_time
+
+        # All identical comparisons should return False
+        assert false_count == 5000, f"Expected 5000 False, got {false_count}"
+
+        # Most varying comparisons should return True (i%3 != 0 means ~3333 True)
+        expected_true = sum(1 for i in range(5000) if i % 3 != 0)
+        assert true_count == expected_true, f"Expected {expected_true} True, got {true_count}"
+
+        # Should complete in reasonable time (<5s for 10,000 comparisons)
+        assert elapsed < 5.0, f"10,000 comparisons took {elapsed:.2f}s (too slow)"
+
+    def test_situation_dict_comparison_stress(self):
+        """
+        STRESS: Rapid situation dictionary comparisons.
+
+        Validates:
+        - Dict comparison handles complex nested structures
+        - Consistent behavior with varying dict sizes
+        - No memory accumulation from dict operations
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        base_situation = {
+            "down": 1,
+            "distance": 10,
+            "yard_line": 25,
+            "possession": "home",
+            "in_red_zone": False,
+            "goal_to_go": False,
+        }
+
+        current = {
+            "home_score": 0,
+            "away_score": 0,
+            "period": 1,
+            "game_status": "in_progress",
+            "situation": base_situation,
+        }
+
+        # Test with many different situation variations
+        changes_detected = 0
+        for i in range(1000):
+            # Create varying situations
+            new_situation = {
+                "down": (i % 4) + 1,  # 1-4
+                "distance": (i % 10) + 1,  # 1-10
+                "yard_line": i % 100,  # 0-99
+                "possession": "home" if i % 2 == 0 else "away",
+                "in_red_zone": i % 5 == 0,
+                "goal_to_go": i % 20 == 0,
+            }
+
+            if game_state_changed(
+                current=current,
+                home_score=0,
+                away_score=0,
+                period=1,
+                game_status="in_progress",
+                situation=new_situation,
+            ):
+                changes_detected += 1
+
+        # Most should be changes (only identical situations won't be)
+        assert changes_detected > 900, f"Expected >900 changes, got {changes_detected}"
+
+    def test_none_current_state_stress(self):
+        """
+        STRESS: Rapid comparisons with None current state.
+
+        Validates:
+        - None handling is consistent under load
+        - Always returns True for None current (new game)
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        true_count = 0
+        for i in range(5000):
+            if game_state_changed(
+                current=None,
+                home_score=i % 100,
+                away_score=i % 50,
+                period=(i % 4) + 1,
+                game_status="in_progress" if i % 2 == 0 else "pre",
+                situation={"down": i % 4 + 1},
+            ):
+                true_count += 1
+
+        # ALL should return True when current is None
+        assert true_count == 5000, f"Expected all 5000 True, got {true_count}"
+
+    def test_concurrent_state_comparisons(self):
+        """
+        STRESS: Concurrent state comparisons from multiple threads.
+
+        Validates:
+        - game_state_changed() is thread-safe
+        - No race conditions in comparison logic
+        - Consistent results across threads
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        current = {
+            "home_score": 21,
+            "away_score": 14,
+            "period": 3,
+            "game_status": "in_progress",
+            "situation": {"down": 3, "distance": 5},
+        }
+
+        results = {"true_count": 0, "false_count": 0, "errors": []}
+        lock = threading.Lock()
+
+        def compare_states(thread_id: int):
+            local_true = 0
+            local_false = 0
+            try:
+                for i in range(500):
+                    # Alternate between same and different states
+                    if i % 2 == 0:
+                        # Same state - should be False
+                        result = game_state_changed(
+                            current=current,
+                            home_score=21,
+                            away_score=14,
+                            period=3,
+                            game_status="in_progress",
+                            situation={"down": 3, "distance": 5},
+                        )
+                        if not result:
+                            local_false += 1
+                    else:
+                        # Different state - should be True
+                        # Use thread_id + 1 to ensure all threads get different score than base (21)
+                        result = game_state_changed(
+                            current=current,
+                            home_score=21 + thread_id + 1,
+                            away_score=14,
+                            period=3,
+                            game_status="in_progress",
+                            situation={"down": 3, "distance": 5},
+                        )
+                        if result:
+                            local_true += 1
+
+                with lock:
+                    results["true_count"] += local_true
+                    results["false_count"] += local_false
+            except Exception as e:
+                with lock:
+                    results["errors"].append(f"Thread {thread_id}: {e}")
+
+        threads = [threading.Thread(target=compare_states, args=(i,)) for i in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        # No errors
+        assert len(results["errors"]) == 0, f"Errors: {results['errors']}"
+
+        # Each thread does 250 same-state checks (should be False)
+        # and 250 different-state checks (should be True)
+        expected_false = 10 * 250  # 2500
+        expected_true = 10 * 250  # 2500
+
+        assert results["false_count"] == expected_false, (
+            f"Expected {expected_false} False, got {results['false_count']}"
+        )
+        assert results["true_count"] == expected_true, (
+            f"Expected {expected_true} True, got {results['true_count']}"
+        )
+
+
+# =============================================================================
+# RACE TESTS: State Change Detection (Issue #234)
+# =============================================================================
+
+
+@pytest.mark.race
+class TestStateChangeDetectionRace:
+    """Race condition tests for game_state_changed() function.
+
+    Tests thread safety and concurrent access patterns for state comparison.
+
+    Related: Issue #234 (ESPNGamePoller state change detection)
+    """
+
+    def test_race_concurrent_reads_same_current_state(self):
+        """
+        RACE: Multiple threads reading same current state dict.
+
+        Validates:
+        - Concurrent reads don't corrupt shared state
+        - All threads get consistent results
+        - No segfaults or dict corruption
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        # Shared current state (read-only in practice)
+        current = {
+            "home_score": 21,
+            "away_score": 14,
+            "period": 3,
+            "game_status": "in_progress",
+            "situation": {"down": 2, "distance": 5, "yard_line": 45},
+        }
+
+        results = {"successes": 0, "failures": 0, "errors": []}
+        lock = threading.Lock()
+        barrier = CISafeBarrier(10, timeout=10.0)
+
+        def concurrent_read(thread_id: int):
+            try:
+                barrier.wait()  # Synchronize start
+                for _ in range(100):
+                    # All threads compare against same current state
+                    result = game_state_changed(
+                        current=current,
+                        home_score=21,
+                        away_score=14,
+                        period=3,
+                        game_status="in_progress",
+                        situation={"down": 2, "distance": 5, "yard_line": 45},
+                    )
+                    with lock:
+                        if result is False:  # Expected - state unchanged
+                            results["successes"] += 1
+                        else:
+                            results["failures"] += 1
+            except Exception as e:
+                with lock:
+                    results["errors"].append(f"Thread {thread_id}: {e}")
+
+        threads = [threading.Thread(target=concurrent_read, args=(i,)) for i in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        assert len(results["errors"]) == 0, f"Errors: {results['errors']}"
+        assert results["successes"] == 1000  # 10 threads * 100 calls
+        assert results["failures"] == 0
+
+    def test_race_mixed_reads_different_states(self):
+        """
+        RACE: Threads comparing against different state variations.
+
+        Validates:
+        - No cross-thread interference
+        - Each thread gets correct result for its comparison
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        current = {
+            "home_score": 10,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"down": 1, "distance": 10},
+        }
+
+        results = {"true_count": 0, "false_count": 0, "errors": []}
+        lock = threading.Lock()
+        barrier = CISafeBarrier(10, timeout=10.0)
+
+        def mixed_comparisons(thread_id: int):
+            try:
+                local_true = 0
+                local_false = 0
+                barrier.wait()  # Synchronize start
+
+                for i in range(100):
+                    # Even threads: no change (False expected)
+                    # Odd threads: score change (True expected)
+                    if thread_id % 2 == 0:
+                        result = game_state_changed(
+                            current=current,
+                            home_score=10,
+                            away_score=7,
+                            period=2,
+                            game_status="in_progress",
+                            situation={"down": 1, "distance": 10},
+                        )
+                        if not result:
+                            local_false += 1
+                    else:
+                        result = game_state_changed(
+                            current=current,
+                            home_score=10 + i,  # Different score
+                            away_score=7,
+                            period=2,
+                            game_status="in_progress",
+                            situation={"down": 1, "distance": 10},
+                        )
+                        if result:
+                            local_true += 1
+
+                with lock:
+                    results["true_count"] += local_true
+                    results["false_count"] += local_false
+            except Exception as e:
+                with lock:
+                    results["errors"].append(f"Thread {thread_id}: {e}")
+
+        threads = [threading.Thread(target=mixed_comparisons, args=(i,)) for i in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        assert len(results["errors"]) == 0, f"Errors: {results['errors']}"
+        # 5 even threads * 100 = 500 False
+        # 5 odd threads * 100 = 500 True (i=0 gives same score, so 99 True per thread... actually i>0 means True)
+        # Wait, i starts at 0, so home_score=10+0=10 which is same as current
+        # i=1-99 gives different score = 99 True per odd thread * 5 = 495 True
+        # Actually wait, let me recalculate:
+        # - Even threads (0,2,4,6,8): 5 threads * 100 iterations = 500 False expected
+        # - Odd threads (1,3,5,7,9): each thread loops 100 times with home_score=10+i
+        #   - i=0: home_score=10 (same as current) -> False (but we only count True)
+        #   - i=1-99: home_score=11-109 -> True (99 True per thread * 5 = 495)
+        assert results["false_count"] == 500  # 5 even threads * 100
+        assert results["true_count"] == 495  # 5 odd threads * 99 (i>0)
+
+    def test_race_situation_dict_concurrent_access(self):
+        """
+        RACE: Concurrent access to situation dict comparison.
+
+        Validates:
+        - Dict comparison is atomic from caller's perspective
+        - No partial dict reads/corruption
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        base_situation = {
+            "down": 3,
+            "distance": 7,
+            "yard_line": 35,
+            "possession": "home",
+            "in_red_zone": False,
+        }
+
+        current = {
+            "home_score": 14,
+            "away_score": 14,
+            "period": 4,
+            "game_status": "in_progress",
+            "situation": base_situation,
+        }
+
+        results = {"consistent": 0, "errors": []}
+        lock = threading.Lock()
+        barrier = CISafeBarrier(20, timeout=10.0)
+
+        def check_situation(thread_id: int):
+            try:
+                barrier.wait()  # Synchronize start
+                for i in range(50):
+                    # Create unique situation per iteration
+                    new_situation = {
+                        "down": (thread_id + i) % 4 + 1,
+                        "distance": (thread_id + i) % 10 + 1,
+                        "yard_line": (thread_id * 5 + i) % 100,
+                        "possession": "home" if (thread_id + i) % 2 == 0 else "away",
+                        "in_red_zone": (thread_id + i) % 3 == 0,
+                    }
+
+                    result = game_state_changed(
+                        current=current,
+                        home_score=14,
+                        away_score=14,
+                        period=4,
+                        game_status="in_progress",
+                        situation=new_situation,
+                    )
+
+                    # Result should be boolean (True or False)
+                    if isinstance(result, bool):
+                        with lock:
+                            results["consistent"] += 1
+            except Exception as e:
+                with lock:
+                    results["errors"].append(f"Thread {thread_id}: {e}")
+
+        threads = [threading.Thread(target=check_situation, args=(i,)) for i in range(20)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        assert len(results["errors"]) == 0, f"Errors: {results['errors']}"
+        assert results["consistent"] == 1000  # 20 threads * 50 calls
+
+    def test_race_none_current_concurrent(self):
+        """
+        RACE: Multiple threads handling None current state.
+
+        Validates:
+        - None handling is thread-safe
+        - All threads correctly detect new game state
+        """
+        from precog.database.crud_operations import game_state_changed
+
+        results = {"all_true": 0, "not_true": 0, "errors": []}
+        lock = threading.Lock()
+        barrier = CISafeBarrier(10, timeout=10.0)
+
+        def check_none_current(thread_id: int):
+            try:
+                barrier.wait()
+                local_true = 0
+                local_not_true = 0
+
+                for i in range(100):
+                    result = game_state_changed(
+                        current=None,  # New game scenario
+                        home_score=thread_id + i,
+                        away_score=i,
+                        period=1,
+                        game_status="pre",
+                        situation=None,
+                    )
+                    if result is True:
+                        local_true += 1
+                    else:
+                        local_not_true += 1
+
+                with lock:
+                    results["all_true"] += local_true
+                    results["not_true"] += local_not_true
+            except Exception as e:
+                with lock:
+                    results["errors"].append(f"Thread {thread_id}: {e}")
+
+        threads = [threading.Thread(target=check_none_current, args=(i,)) for i in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        assert len(results["errors"]) == 0, f"Errors: {results['errors']}"
+        # ALL should return True when current is None
+        assert results["all_true"] == 1000  # 10 threads * 100
+        assert results["not_true"] == 0

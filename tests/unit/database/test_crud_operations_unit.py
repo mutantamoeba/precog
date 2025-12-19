@@ -27,6 +27,7 @@ from precog.database.crud_operations import (
     create_game_state,
     create_team_ranking,
     create_venue,
+    game_state_changed,
     get_current_game_state,
     get_current_rankings,
     get_game_state_history,
@@ -474,6 +475,7 @@ class TestUpsertGameStateUnit:
             home_score=7,
             away_score=3,
             game_status="in_progress",
+            skip_if_unchanged=False,  # Bypass state check to avoid DB call
         )
 
         # Verify close query was first execute call
@@ -649,3 +651,294 @@ class TestGetTeamByEspnIdUnit:
         result = get_team_by_espn_id("")
 
         assert result is None
+
+
+# =============================================================================
+# GAME STATE CHANGE DETECTION UNIT TESTS
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestGameStateChangedUnit:
+    """Unit tests for game_state_changed function.
+
+    Educational Note:
+        The game_state_changed function determines if a game state has
+        meaningfully changed to avoid creating duplicate SCD Type 2 rows.
+
+        We intentionally DO NOT compare clock_seconds or clock_display because:
+        - Clock changes every few seconds during play
+        - This would create ~1000+ rows per game instead of ~50-100
+
+        We DO compare:
+        - home_score, away_score: Core game state
+        - period: Quarter/half transitions
+        - game_status: Pre/in_progress/halftime/final transitions
+        - situation: Possession, down/distance changes (significant for NFL)
+
+    Reference:
+        - Issue #234: ESPNGamePoller for Live Game State Collection
+        - REQ-DATA-001: Game State Data Collection (SCD Type 2)
+    """
+
+    def test_game_state_changed_no_current_state_returns_true(self):
+        """Test that new game (no current state) always returns True."""
+
+        result = game_state_changed(
+            current=None,
+            home_score=0,
+            away_score=0,
+            period=1,
+            game_status="pre",
+        )
+
+        assert result is True
+
+    def test_game_state_changed_same_state_returns_false(self):
+        """Test that identical state returns False (no change)."""
+
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+        }
+
+        result = game_state_changed(
+            current=current,
+            home_score=14,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+        )
+
+        assert result is False
+
+    def test_game_state_changed_score_change_returns_true(self):
+        """Test that score change is detected."""
+
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+        }
+
+        # Home team scores
+        result = game_state_changed(
+            current=current,
+            home_score=21,  # Changed from 14 to 21
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+        )
+
+        assert result is True
+
+    def test_game_state_changed_away_score_change_returns_true(self):
+        """Test that away score change is detected."""
+
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+        }
+
+        # Away team scores
+        result = game_state_changed(
+            current=current,
+            home_score=14,
+            away_score=14,  # Changed from 7 to 14
+            period=2,
+            game_status="in_progress",
+        )
+
+        assert result is True
+
+    def test_game_state_changed_period_change_returns_true(self):
+        """Test that period change is detected."""
+
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+        }
+
+        # Quarter change
+        result = game_state_changed(
+            current=current,
+            home_score=14,
+            away_score=7,
+            period=3,  # Changed from 2 to 3
+            game_status="in_progress",
+        )
+
+        assert result is True
+
+    def test_game_state_changed_status_change_returns_true(self):
+        """Test that game status change is detected."""
+
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+        }
+
+        # Halftime
+        result = game_state_changed(
+            current=current,
+            home_score=14,
+            away_score=7,
+            period=2,
+            game_status="halftime",  # Changed from in_progress
+        )
+
+        assert result is True
+
+    def test_game_state_changed_situation_possession_change_returns_true(self):
+        """Test that possession change in situation is detected."""
+
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"possession": "KC", "down": 1, "distance": 10},
+        }
+
+        # Possession change (turnover)
+        result = game_state_changed(
+            current=current,
+            home_score=14,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+            situation={"possession": "DEN", "down": 1, "distance": 10},  # Changed
+        )
+
+        assert result is True
+
+    def test_game_state_changed_situation_down_change_returns_true(self):
+        """Test that down change in situation is detected."""
+
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"possession": "KC", "down": 1, "distance": 10},
+        }
+
+        # Down change
+        result = game_state_changed(
+            current=current,
+            home_score=14,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+            situation={"possession": "KC", "down": 2, "distance": 7},  # Changed
+        )
+
+        assert result is True
+
+    def test_game_state_changed_situation_red_zone_change_returns_true(self):
+        """Test that red zone change in situation is detected."""
+
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"is_red_zone": False},
+        }
+
+        # Entered red zone
+        result = game_state_changed(
+            current=current,
+            home_score=14,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+            situation={"is_red_zone": True},  # Changed
+        )
+
+        assert result is True
+
+    def test_game_state_changed_no_situation_change_returns_false(self):
+        """Test that same situation returns False."""
+
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"possession": "KC", "down": 2, "distance": 7},
+        }
+
+        result = game_state_changed(
+            current=current,
+            home_score=14,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+            situation={"possession": "KC", "down": 2, "distance": 7},  # Same
+        )
+
+        assert result is False
+
+    def test_game_state_changed_new_situation_no_current_returns_true(self):
+        """Test that new situation when current has none returns True."""
+
+        current = {
+            "home_score": 0,
+            "away_score": 0,
+            "period": 1,
+            "game_status": "pre",
+            "situation": None,
+        }
+
+        result = game_state_changed(
+            current=current,
+            home_score=0,
+            away_score=0,
+            period=1,
+            game_status="in_progress",  # Status changed
+            situation={"possession": "KC", "down": 1, "distance": 10},
+        )
+
+        assert result is True
+
+    def test_game_state_changed_ignores_clock_seconds(self):
+        """Test that clock_seconds changes are intentionally ignored.
+
+        Educational Note:
+            We explicitly DO NOT track clock_seconds changes because:
+            - Clock changes every few seconds during live play
+            - Tracking clock would create ~1000+ rows per game
+            - Score, period, status, and situation capture meaningful state
+
+            This test verifies the design decision from Issue #234.
+        """
+
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+            "clock_seconds": 845,  # This should be ignored
+        }
+
+        # Only clock changed - should return False (no meaningful change)
+        result = game_state_changed(
+            current=current,
+            home_score=14,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+            # clock_seconds is not a parameter of game_state_changed
+        )
+
+        assert result is False

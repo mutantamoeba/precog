@@ -170,15 +170,15 @@ config/
 ```yaml
 # position_management.yaml
 trailing_stop:
-  activation_threshold: 0.10  # user-customizable: 0.05-0.20
-  initial_distance: 0.05      # user-customizable: 0.02-0.10
+  activation_threshold: "0.10"  # user-customizable: 0.05-0.20
+  initial_distance: "0.05"      # user-customizable: 0.02-0.10
 ```
 
 **To change trailing stop activation to 15%:**
 ```yaml
 trailing_stop:
-  activation_threshold: 0.15  # Changed from 0.10
-  initial_distance: 0.05
+  activation_threshold: "0.15"  # Changed from 0.10
+  initial_distance: "0.05"
 ```
 
 **Limitations:**
@@ -489,11 +489,11 @@ position_sizing:
   method: kelly  # Options: kelly, fixed, fixed_fraction
 
   kelly:
-    default_fraction: 0.25  # Quarter Kelly (conservative)
-    min_edge_threshold: 0.05  # 5% minimum edge
-    max_position_pct: 0.05  # 5% of bankroll maximum
-    min_position_dollars: 10.00
-    max_position_dollars: 500.00
+    default_fraction: "0.25"  # Quarter Kelly (conservative)
+    min_edge_threshold: "0.05"  # 5% minimum edge
+    max_position_pct: "0.05"  # 5% of bankroll maximum
+    min_position_dollars: "10.00"
+    max_position_dollars: "500.00"
 ```
 
 **Trade Execution**
@@ -501,7 +501,7 @@ position_sizing:
 execution:
   default_order_type: limit  # market or limit
   limit_order_timeout_seconds: 30
-  max_slippage_pct: 0.02  # 2% maximum slippage
+  max_slippage_pct: "0.02"  # 2% maximum slippage
   retry_on_failure: true
   max_retries: 3
   retry_backoff_seconds: 5
@@ -511,7 +511,7 @@ execution:
 ```yaml
 market_filters:
   min_volume_contracts: 100
-  max_spread_pct: 0.05  # 5% maximum spread
+  max_spread_pct: "0.05"  # 5% maximum spread
   exclude_categories:
     - "politics"  # Too unpredictable
 
@@ -532,12 +532,12 @@ circuit_breakers:
     window_minutes: 5
 
   edge_anomaly:
-    threshold_pct: 0.30  # 30% edges are suspicious
+    threshold_pct: "0.30"  # 30% edges are suspicious
     count: 3
     window_minutes: 10
 
   rapid_loss:
-    loss_dollars: 200.00
+    loss_dollars: "200.00"
     window_minutes: 15
 ```
 
@@ -554,13 +554,13 @@ circuit_breakers:
 pre_game_entry:
   enabled: true
 
-  min_hours_before_game: 0.5   # 30 minutes minimum
-  max_hours_before_game: 24.0  # 24 hours maximum
+  min_hours_before_game: "0.5"   # 30 minutes minimum
+  max_hours_before_game: "24.0"  # 24 hours maximum
 
   sports_config:
     nfl:
       enabled: true
-      required_confidence: 0.08  # 8% minimum edge
+      required_confidence: "0.08"  # 8% minimum edge
       allowed_markets:
         - "game_winner"
         - "total_points"
@@ -569,7 +569,7 @@ pre_game_entry:
       max_key_injuries: 1
       weather_limits:
         max_wind_mph: 20
-        max_precipitation: 0.3
+        max_precipitation: "0.3"
         exclude_snow: true
 ```
 
@@ -582,7 +582,7 @@ halftime_entry:
   sports_config:
     nfl:
       enabled: true
-      required_confidence: 0.06  # 6% minimum edge
+      required_confidence: "0.06"  # 6% minimum edge
       allowed_markets:
         - "second_half_winner"
         - "second_half_total"
@@ -590,10 +590,10 @@ halftime_entry:
         - "will_score_next"
 
       analysis_factors:
-        weight_possession_yardage: 0.4
-        weight_score_differential: 0.2
-        weight_turnover_margin: 0.2
-        weight_time_of_possession: 0.2
+        weight_possession_yardage: "0.4"
+        weight_score_differential: "0.2"
+        weight_turnover_margin: "0.2"
+        weight_time_of_possession: "0.2"
         blowout_threshold: 17
         close_game_threshold: 7
 ```
@@ -602,13 +602,13 @@ halftime_entry:
 ```yaml
 settlement_arbitrage:
   enabled: true
-  min_win_probability: 0.98  # 98% or higher
+  min_win_probability: "0.98"  # 98% or higher
   max_time_remaining_seconds: 120  # 2 minutes or less
-  min_edge: 0.02  # 2% minimum (lower than other strategies)
+  min_edge: "0.02"  # 2% minimum (lower than other strategies)
 
   # These are nearly risk-free, so can size bigger
-  kelly_fraction_override: 0.50
-  max_position_override: 1000.00
+  kelly_fraction_override: "0.50"
+  max_position_override: "1000.00"
 ```
 
 ---
@@ -659,10 +659,10 @@ monitoring:
   health_score:
     enabled: true
     factors:
-      edge_remaining: 0.40
-      time_remaining: 0.20
-      liquidity_depth: 0.20
-      unrealized_pnl: 0.20
+      edge_remaining: "0.40"
+      time_remaining: "0.20"
+      liquidity_depth: "0.20"
+      unrealized_pnl: "0.20"
 ```
 
 **Exit Rules**
@@ -671,12 +671,12 @@ exit_rules:
   mandatory:
     negative_edge:
       enabled: true
-      threshold: -0.03  # -3% edge
+      threshold: "-0.03"  # -3% edge
 
     late_game_loss:
       enabled: true
       minutes_remaining: 10
-      loss_threshold_pct: 0.20
+      loss_threshold_pct: "0.20"
 
   discretionary:
     profit_target:
@@ -873,13 +873,13 @@ partial_exits:
   enabled: true
   stages:
     - name: "first_target"
-      profit_threshold: 0.15  # +15% profit
-      exit_percentage: 50     # Exit 50% of position
+      profit_threshold: "0.15"  # +15% profit
+      exit_percentage: 50       # Exit 50% of position
       description: "Initial profit taking to reduce risk"
 
     - name: "second_target"
-      profit_threshold: 0.25  # +25% profit
-      exit_percentage: 25     # Exit another 25%
+      profit_threshold: "0.25"  # +25% profit
+      exit_percentage: 25       # Exit another 25%
       description: "Further de-risking, let 25% ride with trailing stop"
 
 # Remaining 25% rides with trailing stop for maximum upside
@@ -913,8 +913,8 @@ Configuration to handle illiquid markets:
 
 ```yaml
 liquidity:
-  max_spread: 0.03  # Maximum 3¢ spread
-  min_volume: 50    # Minimum 50 contracts
+  max_spread: "0.03"  # Maximum 3¢ spread
+  min_volume: 50      # Minimum 50 contracts
 
   exit_on_illiquid: true   # Auto-exit if market becomes illiquid
   alert_on_illiquid: true  # Alert user when illiquidity detected
@@ -1073,18 +1073,18 @@ platforms:
             series_tickers:
               - "KXNFLGAME"
             min_liquidity: 100
-            max_spread: 0.05
-            kelly_fraction: 0.25
-            min_edge: 0.05
+            max_spread: "0.05"
+            kelly_fraction: "0.25"
+            min_edge: "0.05"
 
           ncaaf:
             enabled: true
             series_tickers:
               - "KXNCAAFGAME"
             min_liquidity: 50
-            max_spread: 0.06
-            kelly_fraction: 0.20
-            min_edge: 0.06
+            max_spread: "0.06"
+            kelly_fraction: "0.20"
+            min_edge: "0.06"
 ```
 
 ---
@@ -1341,12 +1341,12 @@ else:
 # Beginner settings (trading.yaml)
 position_sizing:
   kelly:
-    default_fraction: 0.25  # Quarter Kelly
-    min_edge_threshold: 0.08  # 8% minimum edge
-    max_position_pct: 0.03  # 3% max per position
+    default_fraction: "0.25"  # Quarter Kelly
+    min_edge_threshold: "0.08"  # 8% minimum edge
+    max_position_pct: "0.03"  # 3% max per position
 
 account:
-  daily_loss_limit_dollars: 200.00
+  daily_loss_limit_dollars: "200.00"
   max_trades_per_day: 20
 ```
 
@@ -1441,13 +1441,13 @@ All YAML files are validated on load to prevent configuration errors.
 #### Type Validation
 
 ```yaml
-# CORRECT
-kelly_fraction: 0.25          # float ✓
+# CORRECT (Pattern 1: Decimal Precision - use strings for decimal values)
+kelly_fraction: "0.25"        # string → Decimal ✓
 max_position_size: 1000       # int ✓
 enabled: true                 # bool ✓
 
 # INCORRECT
-kelly_fraction: "0.25"        # string ✗ (should be float)
+kelly_fraction: 0.25          # float ✗ (causes precision loss, use string)
 max_position_size: 1000.5     # float ✗ (should be int)
 enabled: "true"               # string ✗ (should be bool)
 ```
@@ -1456,11 +1456,11 @@ enabled: "true"               # string ✗ (should be bool)
 
 ```yaml
 # CORRECT
-kelly_fraction: 0.25          # 0.05 ≤ value ≤ 0.50 ✓
+kelly_fraction: "0.25"        # 0.05 ≤ value ≤ 0.50 ✓
 
 # INCORRECT
-kelly_fraction: 0.60          # > 0.50 ✗ (over-betting, dangerous)
-kelly_fraction: 0.02          # < 0.05 ✗ (too conservative, system won't trade)
+kelly_fraction: "0.60"        # > 0.50 ✗ (over-betting, dangerous)
+kelly_fraction: "0.02"        # < 0.05 ✗ (too conservative, system won't trade)
 ```
 
 #### Required Fields
@@ -1565,10 +1565,10 @@ max_position_size: 1000
 **2. Out of Range**
 ```yaml
 # ERROR
-kelly_fraction: 0.75  # > 0.50 maximum
+kelly_fraction: "0.75"  # > 0.50 maximum
 
 # FIX
-kelly_fraction: 0.25
+kelly_fraction: "0.25"
 ```
 
 **3. Missing Required Field**
