@@ -15,12 +15,19 @@ Related:
 Coverage Target: 80%+ for cli/system.py (infrastructure tier)
 """
 
+import re
 from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
 from precog.cli.system import app
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text for reliable string matching."""
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
 
 # ============================================================================
 # Fixtures
@@ -46,7 +53,7 @@ class TestSystemHelp:
         result = runner.invoke(app, ["--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "health" in output_lower
         assert "version" in output_lower
         assert "info" in output_lower
@@ -56,7 +63,7 @@ class TestSystemHelp:
         result = runner.invoke(app, ["health", "--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "--verbose" in output_lower
 
 
@@ -74,7 +81,7 @@ class TestSystemHealth:
 
         # Should attempt health check
         assert result.exit_code in [0, 1]
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "database" in output_lower or "health" in output_lower or "check" in output_lower
 
     @patch("precog.database.connection.get_connection")
@@ -97,7 +104,7 @@ class TestSystemHealth:
 
         # Should report failure gracefully
         assert result.exit_code in [0, 1]
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "failed" in output_lower or "error" in output_lower or "health" in output_lower
 
     @patch("precog.database.connection.get_connection")
@@ -122,7 +129,7 @@ class TestSystemVersion:
 
         assert result.exit_code in [0, 1]
         # Should show some version-related info
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "version" in output_lower or "precog" in output_lower or "0." in output_lower
 
     def test_version_no_crash(self, runner):
@@ -141,7 +148,7 @@ class TestSystemInfo:
         result = runner.invoke(app, ["info"])
 
         assert result.exit_code in [0, 1]
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         # Should show some system info
         assert "python" in output_lower or "system" in output_lower or "info" in output_lower
 
@@ -151,7 +158,7 @@ class TestSystemInfo:
 
         assert result.exit_code in [0, 1]
         # Python info should be present
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "python" in output_lower or "3." in output_lower
 
 

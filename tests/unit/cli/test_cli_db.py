@@ -16,12 +16,19 @@ Related:
 Coverage Target: 85%+ for cli/db.py (business tier)
 """
 
+import re
 from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
 from precog.cli.db import CRITICAL_TABLES, app
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text for reliable string matching."""
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
 
 # ============================================================================
 # Fixtures
@@ -47,7 +54,7 @@ class TestDbHelp:
         result = runner.invoke(app, ["--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "init" in output_lower
         assert "status" in output_lower
         assert "migrate" in output_lower
@@ -58,7 +65,7 @@ class TestDbHelp:
         result = runner.invoke(app, ["init", "--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "--dry-run" in output_lower or "--verbose" in output_lower
 
 
@@ -112,7 +119,7 @@ class TestDbInit:
 
         # Dry run should show what would be done
         assert result.exit_code in [0, 1]
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "dry" in output_lower or "would" in output_lower
 
 

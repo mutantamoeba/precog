@@ -24,10 +24,18 @@ Note:
     - test_cli_data.py: Data commands (seed, verify, sources, stats)
 """
 
+import re
+
 import pytest
 from typer.testing import CliRunner
 
 from precog.cli import app, register_commands
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text for reliable string matching."""
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
 
 # ============================================================================
 # Fixtures
@@ -65,8 +73,9 @@ class TestMainEntryPoint:
 
         assert result.exit_code == 0
         # Should show command groups
-        assert "kalshi" in result.stdout.lower() or "Commands" in result.stdout
-        assert "espn" in result.stdout.lower() or "scheduler" in result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
+        assert "kalshi" in output_lower or "commands" in output_lower
+        assert "espn" in output_lower or "scheduler" in output_lower
 
     def test_version_accessible(self, runner):
         """Test system version command is accessible."""
@@ -80,7 +89,7 @@ class TestMainEntryPoint:
         result = runner.invoke(app, ["--help"])
 
         # All command groups should be visible
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         expected_groups = ["kalshi", "espn", "data", "db", "scheduler", "config", "system"]
 
         for group in expected_groups:
@@ -95,7 +104,7 @@ class TestSubcommandAccess:
         result = runner.invoke(app, ["kalshi", "--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "balance" in output_lower or "markets" in output_lower
 
     def test_espn_help(self, runner):
@@ -103,7 +112,7 @@ class TestSubcommandAccess:
         result = runner.invoke(app, ["espn", "--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "scores" in output_lower or "live" in output_lower
 
     def test_db_help(self, runner):
@@ -111,7 +120,7 @@ class TestSubcommandAccess:
         result = runner.invoke(app, ["db", "--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "init" in output_lower or "status" in output_lower
 
     def test_scheduler_help(self, runner):
@@ -119,7 +128,7 @@ class TestSubcommandAccess:
         result = runner.invoke(app, ["scheduler", "--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "start" in output_lower or "stop" in output_lower
 
     def test_config_help(self, runner):
@@ -127,7 +136,7 @@ class TestSubcommandAccess:
         result = runner.invoke(app, ["config", "--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "show" in output_lower or "env" in output_lower
 
     def test_system_help(self, runner):
@@ -135,7 +144,7 @@ class TestSubcommandAccess:
         result = runner.invoke(app, ["system", "--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "health" in output_lower or "version" in output_lower
 
     def test_data_help(self, runner):
@@ -143,7 +152,7 @@ class TestSubcommandAccess:
         result = runner.invoke(app, ["data", "--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "seed" in output_lower or "verify" in output_lower
 
 

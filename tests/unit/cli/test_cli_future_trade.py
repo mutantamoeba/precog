@@ -18,10 +18,18 @@ Related:
 Coverage Target: Unit tests only (experimental tier)
 """
 
+import re
+
 import pytest
 from typer.testing import CliRunner
 
 from precog.cli._future.trade import app
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text for reliable string matching."""
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
 
 # ============================================================================
 # Fixtures
@@ -47,7 +55,7 @@ class TestTradeHelp:
         result = runner.invoke(app, ["--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "execute" in output_lower
         assert "cancel" in output_lower
         assert "history" in output_lower
@@ -58,7 +66,7 @@ class TestTradeHelp:
         result = runner.invoke(app, ["--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "phase 5" in output_lower or "not implemented" in output_lower
 
 
@@ -73,7 +81,7 @@ class TestTradeExecute:
 
         # Should fail with not implemented
         assert result.exit_code != 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "not" in output_lower
         assert "implement" in output_lower
 
@@ -82,7 +90,7 @@ class TestTradeExecute:
         result = runner.invoke(app, ["execute", "--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "--market" in output_lower
         assert "--side" in output_lower
         assert "--quantity" in output_lower
@@ -97,7 +105,7 @@ class TestTradeCancel:
 
         # Should fail with not implemented
         assert result.exit_code != 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "not" in output_lower
         assert "implement" in output_lower
 
@@ -117,7 +125,7 @@ class TestTradeHistory:
 
         # Should fail with not implemented
         assert result.exit_code != 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "not" in output_lower
         assert "implement" in output_lower
 
@@ -137,7 +145,7 @@ class TestTradeEdges:
 
         # Should fail with not implemented
         assert result.exit_code != 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "not" in output_lower
         assert "implement" in output_lower
 
@@ -146,7 +154,7 @@ class TestTradeEdges:
         result = runner.invoke(app, ["edges", "--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         # Should mention filtering options
         assert "--min-edge" in output_lower or "edge" in output_lower
 

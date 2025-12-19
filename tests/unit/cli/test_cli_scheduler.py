@@ -16,12 +16,19 @@ Related:
 Coverage Target: 85%+ for cli/scheduler.py (critical tier)
 """
 
+import re
 from unittest.mock import MagicMock, patch
 
 import pytest
 from typer.testing import CliRunner
 
 from precog.cli.scheduler import app
+
+
+def strip_ansi(text: str) -> str:
+    """Remove ANSI escape codes from text for reliable string matching."""
+    return re.sub(r"\x1b\[[0-9;]*m", "", text)
+
 
 # ============================================================================
 # Fixtures
@@ -47,7 +54,7 @@ class TestSchedulerHelp:
         result = runner.invoke(app, ["--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "start" in output_lower
         assert "stop" in output_lower
         assert "status" in output_lower
@@ -58,7 +65,7 @@ class TestSchedulerHelp:
         result = runner.invoke(app, ["start", "--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         # Should show interval options
         assert "--espn" in output_lower or "--kalshi" in output_lower or "interval" in output_lower
 
@@ -156,7 +163,7 @@ class TestSchedulerPollOnce:
         result = runner.invoke(app, ["poll-once", "--help"])
 
         assert result.exit_code == 0
-        output_lower = result.stdout.lower()
+        output_lower = strip_ansi(result.stdout).lower()
         assert "--espn" in output_lower or "--kalshi" in output_lower or "--league" in output_lower
 
 
