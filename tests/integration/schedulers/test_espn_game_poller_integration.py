@@ -174,11 +174,15 @@ class TestPollExecution:
 
         Uses robust polling-based wait instead of fixed sleep to prevent flaky CI.
         Note: MIN_POLL_INTERVAL is 5 seconds, so we use 5s and wait for 2+ polls.
+
+        Adaptive polling is disabled because mocked clients don't populate the database,
+        so has_active_games() returns False and the poller would switch to idle_interval (60s).
         """
         poller = ESPNGamePoller(
             poll_interval=5,  # Minimum allowed interval (MIN_POLL_INTERVAL=5)
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            adaptive_polling=False,  # Prevents switch to idle_interval (60s)
         )
         poller.start()
 
@@ -206,7 +210,11 @@ class TestPollExecution:
         mock_get_team: MagicMock,
         mock_espn_client: MagicMock,
     ) -> None:
-        """Test poll results are accumulated in stats."""
+        """Test poll results are accumulated in stats.
+
+        Adaptive polling is disabled because mocked clients don't populate the database,
+        so has_active_games() returns False and the poller would switch to idle_interval (60s).
+        """
         mock_get_team.return_value = {"team_id": 1}
         mock_create_venue.return_value = 100
 
@@ -229,6 +237,7 @@ class TestPollExecution:
             poll_interval=5,  # Minimum allowed interval (MIN_POLL_INTERVAL=5)
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            adaptive_polling=False,  # Prevents switch to idle_interval (60s)
         )
         poller.start()
 
@@ -259,7 +268,11 @@ class TestErrorHandlingIntegration:
     """Integration tests for error handling in scheduler context."""
 
     def test_poll_error_doesnt_stop_scheduler(self, mock_espn_client: MagicMock) -> None:
-        """Test poll errors don't crash the scheduler."""
+        """Test poll errors don't crash the scheduler.
+
+        Adaptive polling is disabled because mocked clients don't populate the database,
+        so has_active_games() returns False and the poller would switch to idle_interval (60s).
+        """
         # First 2 calls error, then succeed
         call_count = 0
 
@@ -276,6 +289,7 @@ class TestErrorHandlingIntegration:
             poll_interval=5,  # Minimum allowed interval (MIN_POLL_INTERVAL=5)
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            adaptive_polling=False,  # Prevents switch to idle_interval (60s)
         )
         poller.start()
 
