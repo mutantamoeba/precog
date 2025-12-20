@@ -12,12 +12,47 @@ Usage:
 
 import threading
 import time
+from collections.abc import Callable
 from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from precog.schedulers.espn_game_poller import ESPNGamePoller
+
+# =============================================================================
+# Test Helpers - Robust Polling-Based Waiting
+# =============================================================================
+
+
+def wait_for_condition(
+    condition_fn: Callable[[], bool],
+    timeout: float = 10.0,
+    poll_interval: float = 0.1,
+    description: str = "condition",
+) -> bool:
+    """Wait for a condition to become true, with timeout.
+
+    This is a robust alternative to time.sleep() for timing-sensitive tests.
+    Instead of sleeping for a fixed duration and hoping the condition is met,
+    this actively polls until the condition is true or timeout is reached.
+
+    Args:
+        condition_fn: Zero-argument callable that returns True when condition is met.
+        timeout: Maximum time to wait in seconds (default: 10s).
+        poll_interval: How often to check the condition (default: 0.1s).
+        description: Description for error messages.
+
+    Returns:
+        True if condition was met within timeout, False otherwise.
+    """
+    start = time.time()
+    while time.time() - start < timeout:
+        if condition_fn():
+            return True
+        time.sleep(poll_interval)
+    return False
+
 
 # =============================================================================
 # Fixtures
@@ -137,22 +172,27 @@ class TestPollExecution:
     def test_poll_executes_on_schedule(self, mock_espn_client: MagicMock) -> None:
         """Test polls execute according to interval.
 
-        Note: Uses 1s interval instead of production 5s to reduce test flakiness.
-        At 1s interval with 4s sleep, we should reliably get 3+ polls.
+        Uses robust polling-based wait instead of fixed sleep to prevent flaky CI.
+        Note: MIN_POLL_INTERVAL is 5 seconds, so we use 5s and wait for 2+ polls.
         """
         poller = ESPNGamePoller(
-            poll_interval=1,  # Fast interval for testing (production uses 5-60s)
+            poll_interval=5,  # Minimum allowed interval (MIN_POLL_INTERVAL=5)
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
         poller.start()
 
         try:
-            # With 1s interval and 4s sleep, expect at least 3 polls (t=0, t=1, t=2, t=3)
-            time.sleep(4)
-
-            # Should have at least 2 polls (generous margin)
-            assert mock_espn_client.get_scoreboard.call_count >= 2
+            # Wait for at least 2 polls using condition-based waiting
+            # With 5s interval, 2 polls takes ~10s, so use 15s timeout for safety
+            success = wait_for_condition(
+                lambda: mock_espn_client.get_scoreboard.call_count >= 2,
+                timeout=15.0,
+                description="at least 2 polls",
+            )
+            assert success, (
+                f"Expected at least 2 polls, got {mock_espn_client.get_scoreboard.call_count}"
+            )
         finally:
             poller.stop()
 
@@ -186,15 +226,21 @@ class TestPollExecution:
         mock_espn_client.get_scoreboard.return_value = [game_data]
 
         poller = ESPNGamePoller(
-            poll_interval=1,  # Fast interval for testing
+            poll_interval=5,  # Minimum allowed interval (MIN_POLL_INTERVAL=5)
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
         poller.start()
 
         try:
-            # With 1s interval and 4s sleep, expect 3+ polls
-            time.sleep(4)
+            # Wait for at least 2 polls using condition-based waiting
+            # With 5s interval, 2 polls takes ~10s, so use 15s timeout for safety
+            success = wait_for_condition(
+                lambda: poller.stats["polls_completed"] >= 2,
+                timeout=15.0,
+                description="at least 2 completed polls",
+            )
+            assert success, f"Expected at least 2 polls, got {poller.stats['polls_completed']}"
 
             stats = poller.stats
             assert stats["polls_completed"] >= 2
@@ -227,15 +273,23 @@ class TestErrorHandlingIntegration:
         mock_espn_client.get_scoreboard.side_effect = mock_scoreboard
 
         poller = ESPNGamePoller(
-            poll_interval=1,  # Fast interval for testing
+            poll_interval=5,  # Minimum allowed interval (MIN_POLL_INTERVAL=5)
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
         poller.start()
 
         try:
-            # With 1s interval and 5s sleep, expect 4+ polls (2 errors, then success)
-            time.sleep(5)
+            # Wait for at least 4 polls (2 errors + 2 successes) using condition-based waiting
+            # With 5s interval, 4 polls takes ~20s, so use 25s timeout for safety
+            success = wait_for_condition(
+                lambda: mock_espn_client.get_scoreboard.call_count >= 4,
+                timeout=25.0,
+                description="at least 4 poll attempts",
+            )
+            assert success, (
+                f"Expected at least 4 polls, got {mock_espn_client.get_scoreboard.call_count}"
+            )
 
             # Scheduler should still be running
             assert poller.enabled is True
