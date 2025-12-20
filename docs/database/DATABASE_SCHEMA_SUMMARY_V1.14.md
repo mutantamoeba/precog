@@ -1,9 +1,33 @@
 # Database Schema Summary
 
 ---
-**Version:** 1.13
-**Last Updated:** 2025-12-15
-**Status:** ✅ Current - Historical Data Infrastructure (Phase 2.5)
+**Version:** 1.14
+**Last Updated:** 2025-12-20
+**Status:** ✅ Current - Execution Environment Architecture (Phase 2)
+**Changes in v1.14:**
+- **EXECUTION ENVIRONMENT ARCHITECTURE**: Added Migration 0008 for paper trading and backtesting support
+- **Migration 0008: Add Execution Environment** (Planned - Issue #242)
+  - Added PostgreSQL ENUM type: `execution_environment AS ENUM ('live', 'paper', 'backtest')`
+  - Added `trades.execution_environment` column (execution_environment NOT NULL DEFAULT 'live')
+  - Added `positions.execution_environment` column (execution_environment NOT NULL DEFAULT 'live')
+  - Added indexes: `idx_trades_environment`, `idx_positions_environment`
+  - **Three Environments:**
+    - `live`: Production trading with Kalshi Production API (real money)
+    - `paper`: Integration testing with Kalshi Demo/Sandbox API (no real money, real slippage)
+    - `backtest`: Historical data simulation (no API calls, idealized fills)
+  - **Two Orthogonal Dimensions:**
+    - `trade_source` (WHO): 'automated', 'manual' - Already exists from Migration 018
+    - `execution_environment` (WHERE): 'live', 'paper', 'backtest' - NEW
+  - **Convenience Views:**
+    - `live_trades` / `live_positions` - Production data only
+    - `paper_trades` / `paper_positions` - Demo testing data
+    - `backtest_trades` / `backtest_positions` - Historical simulation data
+    - `training_data_trades` - Non-production data for model training
+  - **Use Cases:** Paper trading validation, backtesting strategies, cross-environment performance comparison
+- **Architecture Decision:** ADR-107: Single-Database Architecture with Execution Environments
+- **Requirements:** REQ-DB-017 (Execution Environment Tracking) - Planned
+- **Migration Safe:** Default to 'live' for existing data, indexes for common queries
+- **Next Steps:** Create Migration 0008 SQL file, update CRUD operations with environment filtering
 **Changes in v1.13:**
 - **HISTORICAL DATA INFRASTRUCTURE**: Added 3 migrations (005-007) for backtesting data
 - **Migration 0005: Create Historical Elo Table**
@@ -815,6 +839,9 @@ CREATE TABLE positions (
     edge_at_entry DECIMAL(10,4),         -- Edge when position opened (calculated_probability - market_price_at_entry), IMMUTABLE, can be negative
     market_price_at_entry DECIMAL(10,4) CHECK (market_price_at_entry IS NULL OR (market_price_at_entry >= 0 AND market_price_at_entry <= 1)),  -- Kalshi price at entry (IMMUTABLE API snapshot)
 
+    -- ⭐ EXECUTION ENVIRONMENT (NEW in v1.14 - Migration 0008)
+    execution_environment execution_environment NOT NULL DEFAULT 'live',  -- 'live', 'paper', 'backtest' - Migration 0008
+
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     row_current_ind BOOLEAN DEFAULT TRUE  -- ✅ VERSIONED DATA (quantity/price/stop changes)
@@ -831,6 +858,8 @@ CREATE INDEX idx_positions_model_id ON positions(model_id) WHERE model_id IS NOT
 CREATE INDEX idx_positions_calculated_probability ON positions(calculated_probability) WHERE calculated_probability IS NOT NULL;  -- NEW in v1.10 - Partial index
 CREATE INDEX idx_positions_edge_at_entry ON positions(edge_at_entry) WHERE edge_at_entry IS NOT NULL;  -- NEW in v1.10 - Partial index
 CREATE INDEX idx_positions_market_price_at_entry ON positions(market_price_at_entry) WHERE market_price_at_entry IS NOT NULL;  -- NEW in v1.10 - Partial index
+-- ⭐ EXECUTION ENVIRONMENT INDEX (NEW in v1.14)
+CREATE INDEX idx_positions_environment ON positions(execution_environment);  -- NEW in v1.14 - Filter by environment
 ```
 
 **Attribution Architecture (v1.10):**
@@ -872,6 +901,8 @@ CREATE TABLE trades (
     confidence_at_execution VARCHAR,
     -- ⭐ ATTRIBUTION ARCHITECTURE (NEW in v1.10 - Migrations 018-019)
     trade_source trade_source_type NOT NULL DEFAULT 'automated',  -- 'automated' (app) or 'manual' (Kalshi UI) - Migration 018
+    -- ⭐ EXECUTION ENVIRONMENT (NEW in v1.14 - Migration 0008)
+    execution_environment execution_environment NOT NULL DEFAULT 'live',  -- 'live', 'paper', 'backtest' - Migration 0008
     calculated_probability DECIMAL(10,4) CHECK (calculated_probability IS NULL OR (calculated_probability >= 0 AND calculated_probability <= 1)),  -- Model prediction at execution (snapshot) - Migration 019
     market_price DECIMAL(10,4) CHECK (market_price IS NULL OR (market_price >= 0 AND market_price <= 1)),  -- Kalshi price at execution (API snapshot) - Migration 019
     edge_value DECIMAL(10,4),            -- Calculated edge (calculated_probability - market_price), can be negative - Migration 019
@@ -891,6 +922,8 @@ CREATE INDEX idx_trades_source ON trades(trade_source);       -- NEW in v1.10 - 
 CREATE INDEX idx_trades_calculated_probability ON trades(calculated_probability) WHERE calculated_probability IS NOT NULL;  -- NEW in v1.10 - Partial index
 CREATE INDEX idx_trades_market_price ON trades(market_price) WHERE market_price IS NOT NULL;                                -- NEW in v1.10 - Partial index
 CREATE INDEX idx_trades_edge_value ON trades(edge_value) WHERE edge_value IS NOT NULL;                                      -- NEW in v1.10 - Partial index
+-- ⭐ EXECUTION ENVIRONMENT INDEX (NEW in v1.14)
+CREATE INDEX idx_trades_environment ON trades(execution_environment);  -- NEW in v1.14 - Filter by environment
 ```
 
 **Attribution Architecture (v1.10):**
@@ -2830,6 +2863,52 @@ LEFT JOIN probability_models pm ON t.model_id = pm.model_id
 ORDER BY t.created_at DESC;
 ```
 **Purpose:** Complete trade attribution showing EXACT strategy and model versions used
+
+### Execution Environment Views (NEW in v1.14)
+
+These convenience views filter by execution environment for common queries:
+
+```sql
+-- Live trading only (production data)
+CREATE VIEW live_trades AS
+SELECT * FROM trades WHERE execution_environment = 'live';
+
+CREATE VIEW live_positions AS
+SELECT * FROM positions WHERE execution_environment = 'live' AND row_current_ind = TRUE;
+
+-- Paper trading only (demo API testing)
+CREATE VIEW paper_trades AS
+SELECT * FROM trades WHERE execution_environment = 'paper';
+
+CREATE VIEW paper_positions AS
+SELECT * FROM positions WHERE execution_environment = 'paper' AND row_current_ind = TRUE;
+
+-- Backtesting only (historical simulation)
+CREATE VIEW backtest_trades AS
+SELECT * FROM trades WHERE execution_environment = 'backtest';
+
+CREATE VIEW backtest_positions AS
+SELECT * FROM positions WHERE execution_environment = 'backtest' AND row_current_ind = TRUE;
+
+-- Non-production data for model training
+CREATE VIEW training_data_trades AS
+SELECT * FROM trades WHERE execution_environment IN ('paper', 'backtest');
+```
+
+**Purpose:** Isolate data by execution environment for:
+- **Production dashboards:** Use `live_trades` and `live_positions` for real P&L reporting
+- **Paper trading validation:** Use `paper_*` views to test strategies without real money
+- **Backtesting analysis:** Use `backtest_*` views for historical simulation results
+- **Model training:** Use `training_data_trades` to train on paper + backtest data without polluting production metrics
+- **Cross-environment comparison:** Query raw tables with explicit `WHERE execution_environment = ...` to compare performance across environments
+
+**Key Difference - Paper vs Backtest:**
+| Aspect | Paper Trading | Backtesting |
+|--------|--------------|-------------|
+| API | Kalshi Demo/Sandbox | None (simulated) |
+| Timing | Real-time execution | As-fast-as-possible |
+| Slippage | Real market slippage | Idealized fills |
+| Use Case | Integration testing, latency validation | Strategy validation, historical analysis |
 
 ## Relationships Diagram (Updated for v1.4)
 
