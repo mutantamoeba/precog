@@ -15,9 +15,12 @@ CI Strategy (aligns with stress test pattern from Issue #168):
     achieved ~1066 polls/sec vs expected 5000+ locally - a 5x variance that makes
     absolute throughput thresholds unreliable.
 
-    **Latency tests** run in CI because they test maximum acceptable time (upper bounds),
-    which remain valid even on slower runners - slower is fine, we just ensure it's
-    not TOO slow.
+    **Tight latency tests** (TestPollWrapperLatency) skip in CI because sub-millisecond
+    thresholds (e.g., avg < 1ms) are equally sensitive to CPU variability. CI showed
+    avg 1.02ms vs expected <1ms - a 2% variance that causes flaky failures.
+
+    **Generous latency tests** (TestInitializationLatency, TestStatsAccessLatency) run
+    in CI because their thresholds (10-20ms) are high enough to tolerate CI variability.
 
     Run locally for full performance validation:
         pytest tests/performance/schedulers/test_espn_game_poller_performance.py -v
@@ -36,11 +39,12 @@ from precog.schedulers.espn_game_poller import ESPNGamePoller
 # CI Environment Detection (Pattern from stress tests - Issue #168)
 # =============================================================================
 
-# CI runners have variable performance - throughput tests skip in CI
+# CI runners have variable performance - throughput and tight latency tests skip in CI
 _is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
 _CI_SKIP_REASON = (
-    "Throughput tests skip in CI - shared runners have variable CPU performance "
-    "(observed ~1066 polls/sec vs expected 5000+). Run locally for validation: "
+    "Performance tests with tight thresholds skip in CI - shared runners have variable "
+    "CPU performance (throughput: ~1066 vs 5000+ polls/sec; latency: avg 1.02ms vs <1ms). "
+    "Run locally for validation: "
     "pytest tests/performance/schedulers/test_espn_game_poller_performance.py -v"
 )
 
@@ -167,8 +171,14 @@ class TestStatsAccessLatency:
 
 
 @pytest.mark.performance
+@pytest.mark.skipif(_is_ci, reason=_CI_SKIP_REASON)
 class TestPollWrapperLatency:
-    """Performance tests for poll wrapper latency."""
+    """Performance tests for poll wrapper latency.
+
+    Note:
+        Skipped in CI - tight latency thresholds (<1ms avg) are sensitive to
+        shared runner CPU variability. See module docstring for details.
+    """
 
     def test_poll_wrapper_latency(self, mock_espn_client: MagicMock) -> None:
         """Test poll wrapper overhead is minimal."""
