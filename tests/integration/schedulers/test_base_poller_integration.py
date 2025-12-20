@@ -8,6 +8,14 @@ Related Requirements: REQ-DATA-001, REQ-OBSERV-001
 
 Usage:
     pytest tests/integration/schedulers/test_base_poller_integration.py -v -m integration
+
+    # Skip slow scheduler tests during fast development cycles:
+    pytest tests/integration/schedulers/ -v -m "not slow"
+
+Note:
+    These tests use 5-second poll intervals (MIN_POLL_INTERVAL) with 15-25s timeouts
+    to verify scheduler behavior. This makes them inherently slower than typical
+    integration tests. Use the 'slow' marker to skip them in fast feedback loops.
 """
 
 import threading
@@ -18,6 +26,15 @@ from typing import Any
 import pytest
 
 from precog.schedulers.base_poller import BasePoller, PollerStats
+
+# Mark ALL tests in this module as slow and with 60-second timeout
+# This allows skipping with: pytest -m "not slow"
+# Timeout prevents individual tests from hanging indefinitely
+pytestmark = [
+    pytest.mark.slow,
+    pytest.mark.timeout(60),
+    pytest.mark.integration,
+]
 
 # =============================================================================
 # Test Helpers - Robust Polling-Based Waiting

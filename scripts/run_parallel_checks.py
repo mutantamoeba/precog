@@ -72,6 +72,14 @@ TOTAL_TIMEOUT = 900
 # Test marker convention:
 # - Property tests WITH database access: add `pytestmark = pytest.mark.database`
 # - Property tests WITHOUT database: no marker needed (default)
+# - Slow tests (scheduler integration): add `pytestmark = pytest.mark.slow`
+#
+# Performance Optimization (2025-12-20):
+# - Local pre-push: Skip slow tests (saves ~5-10 min from scheduler tests)
+# - CI: Runs ALL tests including slow ones (full validation)
+# - Use --run-slow to include slow tests locally if needed
+SKIP_SLOW_TESTS = True  # Default: skip slow tests in local pre-push for faster feedback
+
 TEST_PHASES: list[tuple[str, str, list[str], str | None]] = [
     # Phase A+C1: Unit tests + Non-DB property tests (PARALLEL - neither needs DB)
     # This saves ~43s by running these concurrently
@@ -82,11 +90,12 @@ TEST_PHASES: list[tuple[str, str, list[str], str | None]] = [
         '-m "not database"',  # Exclude DB-dependent property tests (double quotes for Windows)
     ),
     # Phase B: Integration + E2E tests (heavy DB usage)
+    # NOTE: Slow tests (scheduler integration) skipped by default - see SKIP_SLOW_TESTS
     (
         "Phase B",
         "Integration + E2E Tests",
         ["tests/integration/", "tests/e2e/"],
-        None,  # No marker filter
+        '-m "not slow"' if SKIP_SLOW_TESTS else None,  # Skip slow scheduler tests locally
     ),
     # Phase C2: DB-dependent property tests (need pool reset)
     # Only 28 tests across 3 files with @pytest.mark.database

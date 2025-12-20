@@ -8,6 +8,14 @@ Related Requirements: REQ-DATA-001 (Game State Data Collection)
 
 Usage:
     pytest tests/integration/schedulers/test_espn_game_poller_integration.py -v -m integration
+
+    # Skip slow scheduler tests during fast development cycles:
+    pytest tests/integration/schedulers/ -v -m "not slow"
+
+Note:
+    These tests use 5-second poll intervals (MIN_POLL_INTERVAL) with 15-25s timeouts
+    to verify scheduler behavior. This makes them inherently slower than typical
+    integration tests. Use the 'slow' marker to skip them in fast feedback loops.
 """
 
 import threading
@@ -19,6 +27,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from precog.schedulers.espn_game_poller import ESPNGamePoller
+
+# Mark ALL tests in this module as slow and with 60-second timeout
+# This allows skipping with: pytest -m "not slow"
+# Timeout prevents individual tests from hanging indefinitely
+pytestmark = [
+    pytest.mark.slow,
+    pytest.mark.timeout(60),
+    pytest.mark.integration,
+]
 
 # =============================================================================
 # Test Helpers - Robust Polling-Based Waiting
