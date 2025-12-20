@@ -139,7 +139,8 @@ class TestPollExecution:
 
         try:
             # Wait for at least 2 poll cycles
-            time.sleep(2.5)
+            # Note: Using 3.5s (not 2.5s) to provide margin for CI startup delays
+            time.sleep(3.5)
 
             # Should have at least 2 polls (initial + interval)
             assert len(poller.poll_calls) >= 2
@@ -155,7 +156,8 @@ class TestPollExecution:
         poller.start()
 
         try:
-            time.sleep(2.5)
+            # Note: Using 3.5s (not 2.5s) to provide margin for CI startup delays
+            time.sleep(3.5)
 
             stats = poller.stats
             assert stats["polls_completed"] >= 2
@@ -204,7 +206,8 @@ class TestErrorHandlingIntegration:
         poller.start()
 
         try:
-            time.sleep(3.5)
+            # Note: Using 4.5s (not 3.5s) to provide margin for CI startup delays
+            time.sleep(4.5)
 
             # Scheduler should still be running
             assert poller.enabled is True

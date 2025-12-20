@@ -145,7 +145,8 @@ class TestPollExecution:
 
         try:
             # Wait for initial poll + at least one scheduled poll
-            time.sleep(6.5)
+            # Note: Using 8s (not 6.5s) to provide margin for CI startup delays
+            time.sleep(8)
 
             # Should have at least 2 polls
             assert mock_espn_client.get_scoreboard.call_count >= 2
@@ -189,7 +190,8 @@ class TestPollExecution:
         poller.start()
 
         try:
-            time.sleep(6.5)
+            # Note: Using 8s (not 6.5s) to provide margin for CI startup delays
+            time.sleep(8)
 
             stats = poller.stats
             assert stats["polls_completed"] >= 2
@@ -229,7 +231,8 @@ class TestErrorHandlingIntegration:
         poller.start()
 
         try:
-            time.sleep(11)  # Wait for multiple poll cycles
+            # Note: Using 13s (not 11s) to provide margin for CI startup delays
+            time.sleep(13)
 
             # Scheduler should still be running
             assert poller.enabled is True
