@@ -135,23 +135,23 @@ class TestPollExecution:
     """Integration tests for poll execution."""
 
     def test_poll_executes_on_schedule(self, mock_espn_client: MagicMock) -> None:
-        """Test polls execute according to interval."""
+        """Test polls execute according to interval.
+
+        Note: Uses 1s interval instead of production 5s to reduce test flakiness.
+        At 1s interval with 4s sleep, we should reliably get 3+ polls.
+        """
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=1,  # Fast interval for testing (production uses 5-60s)
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
         poller.start()
 
         try:
-            # Wait for initial poll + at least one scheduled poll
-            # Note: Using 12s (2.5x poll_interval) to account for:
-            # - CI startup delays (1-2s)
-            # - APScheduler thread scheduling variability
-            # - Adaptive polling reschedule on first poll
-            time.sleep(12)
+            # With 1s interval and 4s sleep, expect at least 3 polls (t=0, t=1, t=2, t=3)
+            time.sleep(4)
 
-            # Should have at least 2 polls
+            # Should have at least 2 polls (generous margin)
             assert mock_espn_client.get_scoreboard.call_count >= 2
         finally:
             poller.stop()
@@ -186,15 +186,15 @@ class TestPollExecution:
         mock_espn_client.get_scoreboard.return_value = [game_data]
 
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=1,  # Fast interval for testing
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
         poller.start()
 
         try:
-            # Note: Using 12s (2.5x poll_interval) to account for CI delays
-            time.sleep(12)
+            # With 1s interval and 4s sleep, expect 3+ polls
+            time.sleep(4)
 
             stats = poller.stats
             assert stats["polls_completed"] >= 2
@@ -227,19 +227,19 @@ class TestErrorHandlingIntegration:
         mock_espn_client.get_scoreboard.side_effect = mock_scoreboard
 
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=1,  # Fast interval for testing
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
         poller.start()
 
         try:
-            # Note: Using 17s (3.5x poll_interval) to ensure 2+ error cycles on CI
-            time.sleep(17)
+            # With 1s interval and 5s sleep, expect 4+ polls (2 errors, then success)
+            time.sleep(5)
 
             # Scheduler should still be running
             assert poller.enabled is True
-            # Errors should be tracked
+            # Errors should be tracked (first 2 calls error)
             assert poller.stats["errors"] >= 2
         finally:
             poller.stop()
