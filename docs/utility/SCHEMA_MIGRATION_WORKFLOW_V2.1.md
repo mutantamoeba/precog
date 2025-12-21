@@ -1,13 +1,16 @@
 # Schema Migration Workflow Guide
 
 ---
-**Version:** 2.0
+**Version:** 2.1
 **Created:** 2025-11-19
-**Last Updated:** 2025-12-07
+**Last Updated:** 2025-12-20
 **Purpose:** Step-by-step workflow for database schema migrations using Alembic
 **Target Audience:** Developers implementing database schema changes
 **Companion Document:** Pattern 14 in DEVELOPMENT_PATTERNS_V1.20.md
 **Status:** Current
+**Changes in V2.1:**
+- Updated "Current Migration State" table with migrations 0003-0008
+- Added migration 0008 (execution_environment column, ADR-107)
 **Changes in V2.0:**
 - **BREAKING CHANGE:** Alembic is now the EXCLUSIVE migration tool
 - Removed all references to legacy SQL/Python migration system
@@ -157,12 +160,18 @@ The `src/precog/database/migrations/` folder contains **legacy migrations** that
 |-----------------|-------------|------|
 | 0001 | Initial baseline schema (captures legacy migrations 000-016) | 2025-12-05 |
 | 0002 | Add audit columns to lookup tables (Issue #121) | 2025-12-07 |
+| 0003 | Fix teams composite unique constraint | 2025-12-10 |
+| 0004 | Add NCAAW support | 2025-12-12 |
+| 0005 | Create historical_elo table (Issue #229) | 2025-12-15 |
+| 0006 | Create historical_games table (Issue #229) | 2025-12-15 |
+| 0007 | Create historical_odds table (Issue #229) | 2025-12-15 |
+| 0008 | Add execution_environment column (ADR-107, Issue #241) | 2025-12-20 |
 
 To check current state:
 ```bash
 cd src/precog/database
 DB_NAME=precog_test python -m alembic current
-# Output: 0002 (head)
+# Output: 0008 (head)
 ```
 
 ---
