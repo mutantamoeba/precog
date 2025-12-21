@@ -455,10 +455,10 @@ class TestStateManagementWorkflows:
         handler._state = ConnectionState.CONNECTING
         assert handler.state == ConnectionState.CONNECTING
 
-        handler._state = ConnectionState.CONNECTED
+        handler._state = ConnectionState.CONNECTED  # type: ignore[unreachable]
         handler._enabled = True
         assert handler.state == ConnectionState.CONNECTED
-        assert handler.is_running() is True  # type: ignore[unreachable]
+        assert handler.is_running() is True
 
         # Simulate disconnect
         handler._state = ConnectionState.RECONNECTING

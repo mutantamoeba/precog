@@ -282,7 +282,7 @@ class TestSignalHandlerRace:
         This test verifies that the service gracefully handles being
         instantiated from non-main threads.
         """
-        errors = []
+        errors: list[Exception] = []
         services = []
         lock = threading.Lock()
 
@@ -297,7 +297,7 @@ class TestSignalHandlerRace:
                 # Expected for signal-related operations from non-main thread
                 if "signal only works in main thread" in str(e):
                     with lock:
-                        services.append(None)  # Record that we tried
+                        services.append(None)  # type: ignore[arg-type]
                 else:
                     with lock:
                         errors.append(e)

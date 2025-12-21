@@ -319,7 +319,7 @@ class TestStatsCopyIsolation:
 
         def get_stats_copy() -> None:
             copy = poller.stats
-            copies.append(copy)
+            copies.append(copy)  # type: ignore[arg-type]
 
         threads = [threading.Thread(target=get_stats_copy) for _ in range(10)]
         for t in threads:

@@ -51,7 +51,7 @@ class TestMalformedData:
     def test_missing_metadata(self, validator: ESPNDataValidator) -> None:
         """Test handling of missing metadata."""
         game = {"state": {"home_score": 14, "away_score": 7}}
-        result = validator.validate_game_state(game)
+        result = validator.validate_game_state(game)  # type: ignore[arg-type]
         assert not result.is_valid
 
     def test_missing_state(self, validator: ESPNDataValidator) -> None:
@@ -60,7 +60,7 @@ class TestMalformedData:
             "metadata": {"espn_event_id": "123", "league": "nfl"},
         }
         # Should not crash
-        result = validator.validate_game_state(game)
+        result = validator.validate_game_state(game)  # type: ignore[arg-type]
         assert result.game_id == "123"
 
     def test_none_values_in_metadata(self, validator: ESPNDataValidator) -> None:
@@ -74,7 +74,7 @@ class TestMalformedData:
             },
             "state": {"home_score": 14, "away_score": 7},
         }
-        result = validator.validate_game_state(game)
+        result = validator.validate_game_state(game)  # type: ignore[arg-type]
         # Should report errors/warnings but not crash
         assert result.has_errors or result.has_warnings
 
@@ -89,7 +89,7 @@ class TestMalformedData:
                 "clock_seconds": None,
             },
         }
-        validator.validate_game_state(game)
+        validator.validate_game_state(game)  # type: ignore[arg-type]
         # Should not crash
 
 
@@ -183,7 +183,7 @@ class TestWrongTypes:
         }
         # Should handle without crash (Python comparison may work)
         try:
-            validator.validate_game_state(game)
+            validator.validate_game_state(game)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             pass  # Expected for comparison
 
@@ -195,7 +195,7 @@ class TestWrongTypes:
         }
         # Should handle gracefully or raise expected exception
         try:
-            validator.validate_game_state(game)
+            validator.validate_game_state(game)  # type: ignore[arg-type]
         except (TypeError, AttributeError, ValueError):
             pass  # Expected - validator may not handle non-dict metadata
 
@@ -211,7 +211,7 @@ class TestWrongTypes:
         }
         # Should handle gracefully or raise expected exception
         try:
-            result = validator.validate_game_state(game)
+            result = validator.validate_game_state(game)  # type: ignore[arg-type]
             # If no exception, should have errors or warnings for wrong types
             assert result.has_errors or result.has_warnings
         except (TypeError, AttributeError):
@@ -275,7 +275,7 @@ class TestEdgeCaseSituations:
     def test_numeric_possession(self, validator: ESPNDataValidator) -> None:
         """Test numeric possession (wrong type)."""
         result = validator.validate_situation(
-            situation={"down": 1, "distance": 10, "possession": 12},
+            situation={"down": 1, "distance": 10, "possession": 12},  # type: ignore[typeddict-item]
             league="nfl",
         )
         # Should warn about non-string possession
@@ -316,7 +316,7 @@ class TestUnknownLeagues:
             "metadata": {"espn_event_id": "123", "league": ""},
             "state": {"home_score": 14, "away_score": 7},
         }
-        validator.validate_game_state(game)
+        validator.validate_game_state(game)  # type: ignore[arg-type]
         # Should handle gracefully
 
 
@@ -347,7 +347,7 @@ class TestMultipleValidationIssues:
             },
         }
 
-        result = validator.validate_game_state(game)
+        result = validator.validate_game_state(game)  # type: ignore[arg-type]
 
         # Should have multiple errors
         assert not result.is_valid
@@ -367,7 +367,7 @@ class TestMultipleValidationIssues:
             },
         }
 
-        result = validator.validate_game_state(game)
+        result = validator.validate_game_state(game)  # type: ignore[arg-type]
 
         # Should find all errors, not stop at first
         assert len(result.errors) >= 3
@@ -389,7 +389,7 @@ class TestAnomalyTrackingChaos:
                 "metadata": {"espn_event_id": f"chaos_game_{i}", "league": "nfl"},
                 "state": {"home_score": -1, "away_score": 0, "period": 1},
             }
-            validator.validate_game_state(game)
+            validator.validate_game_state(game)  # type: ignore[arg-type]
 
         all_counts = validator.get_all_anomaly_counts()
         assert len(all_counts) == 500
@@ -402,7 +402,7 @@ class TestAnomalyTrackingChaos:
         }
 
         for _ in range(100):
-            validator.validate_game_state(game)
+            validator.validate_game_state(game)  # type: ignore[arg-type]
 
         count = validator.get_anomaly_count("repeat_test")
         assert count >= 100
@@ -517,14 +517,14 @@ class TestErrorRecovery:
             "metadata": {"espn_event_id": "invalid", "league": "nfl"},
             "state": {"home_score": -999, "away_score": -999, "period": -99},
         }
-        validator.validate_game_state(invalid_game)
+        validator.validate_game_state(invalid_game)  # type: ignore[arg-type]
 
         # Should still work for valid data
         valid_game = {
             "metadata": {"espn_event_id": "valid", "league": "nfl"},
             "state": {"home_score": 14, "away_score": 7, "period": 2},
         }
-        result = validator.validate_game_state(valid_game)
+        result = validator.validate_game_state(valid_game)  # type: ignore[arg-type]
         assert result.is_valid
 
     def test_validator_usable_after_exception_in_data(self, validator: ESPNDataValidator) -> None:
@@ -537,7 +537,7 @@ class TestErrorRecovery:
 
         for bad_input in problematic_inputs:
             try:
-                validator.validate_game_state(bad_input)
+                validator.validate_game_state(bad_input)  # type: ignore[arg-type]
             except (TypeError, AttributeError, KeyError):
                 pass  # May raise, but validator should survive
 
@@ -546,5 +546,5 @@ class TestErrorRecovery:
             "metadata": {"espn_event_id": "after_bad", "league": "nfl"},
             "state": {"home_score": 14, "away_score": 7},
         }
-        validator.validate_game_state(valid_game)
+        validator.validate_game_state(valid_game)  # type: ignore[arg-type]
         # Should process without crash

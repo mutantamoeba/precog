@@ -197,7 +197,7 @@ class TestStatsUnderLoad:
         for i in range(500):
             poller._poll_wrapper()
             if i % 10 == 0:
-                stats_reads.append(poller.stats)
+                stats_reads.append(poller.stats)  # type: ignore[arg-type]
 
         # All stats reads should be valid
         assert len(stats_reads) == 50
@@ -788,7 +788,9 @@ class TestAdaptivePollingRace:
                                 results["false_count"] += 1  # type: ignore[operator]
             except Exception as e:
                 with lock:
-                    results["errors"].append(str(e))
+                    errors_list = results["errors"]
+                    assert isinstance(errors_list, list)
+                    errors_list.append(str(e))
 
         threads = [threading.Thread(target=check_active_games, args=(i,)) for i in range(10)]
         for t in threads:
@@ -944,7 +946,9 @@ class TestAdaptivePollingRace:
                         transitions["count"] += local_transitions  # type: ignore[operator]
             except Exception as e:
                 with lock:
-                    transitions["errors"].append(str(e))  # type: ignore[union-attr]
+                    errors_list = transitions["errors"]
+                    assert isinstance(errors_list, list)
+                    errors_list.append(str(e))
 
         threads = [threading.Thread(target=toggle_state, args=(i,)) for i in range(5)]
         for t in threads:

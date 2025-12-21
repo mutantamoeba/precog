@@ -441,7 +441,7 @@ class TestESPNErrorHandling:
         from precog.api_connectors.espn_client import ESPNAPIError, ESPNClient
 
         # Create client with impossibly short timeout
-        client = ESPNClient(timeout_seconds=0.001)
+        client = ESPNClient(timeout_seconds=0.001)  # Sub-millisecond to guarantee timeout
 
         # Should raise timeout error
         with pytest.raises((ESPNAPIError, requests.Timeout)):

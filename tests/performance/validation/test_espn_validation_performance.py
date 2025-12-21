@@ -84,13 +84,13 @@ class TestSingleValidationLatency:
         """Test full game state validation completes within threshold."""
         # Warm up
         for _ in range(10):
-            validator.validate_game_state(valid_nfl_game)
+            validator.validate_game_state(valid_nfl_game)  # type: ignore[arg-type]
 
         # Measure
         latencies = []
         for _ in range(100):
             start = time.perf_counter()
-            validator.validate_game_state(valid_nfl_game)
+            validator.validate_game_state(valid_nfl_game)  # type: ignore[arg-type]
             latency = (time.perf_counter() - start) * 1000  # ms
             latencies.append(latency)
 
@@ -178,7 +178,7 @@ class TestValidationThroughput:
 
         start = time.perf_counter()
         for _ in range(iterations):
-            validator.validate_game_state(valid_nfl_game)
+            validator.validate_game_state(valid_nfl_game)  # type: ignore[arg-type]
         elapsed = time.perf_counter() - start
 
         throughput = iterations / elapsed
@@ -215,7 +215,7 @@ class TestValidationThroughput:
             validator.validate_score(i % 50, i % 30)
             validator.validate_clock(Decimal(str(i % 900)), (i % 4) + 1, "nfl")
             validator.validate_situation({"down": (i % 4) + 1, "distance": 10}, "nfl")
-            validator.validate_game_state(valid_nfl_game)
+            validator.validate_game_state(valid_nfl_game)  # type: ignore[arg-type]
         elapsed = time.perf_counter() - start
 
         # 4 operations per iteration
@@ -260,7 +260,7 @@ class TestBatchValidationPerformance:
 
             start = time.perf_counter()
             for game in games:
-                validator.validate_game_state(game)
+                validator.validate_game_state(game)  # type: ignore[arg-type]
             elapsed = time.perf_counter() - start
 
             results[batch_size] = {
@@ -302,7 +302,7 @@ class TestBatchValidationPerformance:
 
         start = time.perf_counter()
         for game in games:
-            validator.validate_game_state(game)
+            validator.validate_game_state(game)  # type: ignore[arg-type]
         elapsed = time.perf_counter() - start
 
         total_games = len(games)
@@ -330,14 +330,14 @@ class TestAnomalyTrackingOverhead:
         validator_tracking = ESPNDataValidator(track_anomalies=True)
         start = time.perf_counter()
         for _ in range(iterations):
-            validator_tracking.validate_game_state(valid_nfl_game)
+            validator_tracking.validate_game_state(valid_nfl_game)  # type: ignore[arg-type]
         tracking_elapsed = time.perf_counter() - start
 
         # Without tracking
         validator_no_tracking = ESPNDataValidator(track_anomalies=False)
         start = time.perf_counter()
         for _ in range(iterations):
-            validator_no_tracking.validate_game_state(valid_nfl_game)
+            validator_no_tracking.validate_game_state(valid_nfl_game)  # type: ignore[arg-type]
         no_tracking_elapsed = time.perf_counter() - start
 
         # Tracking overhead should be minimal (<20%)
@@ -355,7 +355,7 @@ class TestAnomalyTrackingOverhead:
                 "metadata": {"espn_event_id": f"game_{i}", "league": "nfl"},
                 "state": {"home_score": -1, "away_score": 0, "period": 1},  # Invalid
             }
-            validator.validate_game_state(game)
+            validator.validate_game_state(game)  # type: ignore[arg-type]
 
         # Access all counts
         start = time.perf_counter()
@@ -406,7 +406,7 @@ class TestMemoryEfficiency:
 
         # Many validations
         for _ in range(10000):
-            validator.validate_game_state(valid_nfl_game)
+            validator.validate_game_state(valid_nfl_game)  # type: ignore[arg-type]
 
         gc.collect()
 
@@ -424,7 +424,7 @@ class TestMemoryEfficiency:
                 "metadata": {"espn_event_id": f"mem_game_{i}", "league": "nfl"},
                 "state": {"home_score": -1, "away_score": 0, "period": 1},
             }
-            validator.validate_game_state(game)
+            validator.validate_game_state(game)  # type: ignore[arg-type]
 
         assert len(validator.get_all_anomaly_counts()) == 500
 

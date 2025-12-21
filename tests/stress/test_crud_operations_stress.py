@@ -284,6 +284,7 @@ class TestHighVolumeGameStateOperations:
 
         # Current should have latest score
         current = get_current_game_state(espn_event_id)
+        assert current is not None
         assert current["home_score"] == _GAME_UPDATES
 
         # Should complete in reasonable time (<20s for updates)
@@ -414,7 +415,9 @@ class TestSCDType2RaceConditions:
                 )
                 results["thread_a"] = "success"
             except Exception as e:
-                results["errors"].append(f"Thread A: {e}")
+                errors_list = results["errors"]
+                assert isinstance(errors_list, list)
+                errors_list.append(f"Thread A: {e}")
 
         def thread_b_update():
             try:
@@ -430,7 +433,9 @@ class TestSCDType2RaceConditions:
                 )
                 results["thread_b"] = "success"
             except Exception as e:
-                results["errors"].append(f"Thread B: {e}")
+                errors_list = results["errors"]
+                assert isinstance(errors_list, list)
+                errors_list.append(f"Thread B: {e}")
 
         t1 = threading.Thread(target=thread_a_update)
         t2 = threading.Thread(target=thread_b_update)
@@ -574,6 +579,7 @@ class TestDatabaseFailureRecovery:
 
         # Get initial state
         initial = get_current_game_state(espn_event_id)
+        assert initial is not None
         assert initial["home_score"] == 7
 
         # Attempt update with invalid team_id (FK violation)
@@ -592,6 +598,7 @@ class TestDatabaseFailureRecovery:
 
         # Verify original state preserved
         after_error = get_current_game_state(espn_event_id)
+        assert after_error is not None
         assert after_error["home_score"] == 7, "State changed despite error"
         assert after_error["home_team_id"] == teams[0], "Team changed despite error"
 
@@ -623,6 +630,7 @@ class TestDatabaseFailureRecovery:
         assert updated_id == venue_id  # Same venue
 
         updated = get_venue_by_espn_id("CHAOS-VENUE-001")
+        assert updated is not None
         assert updated["venue_name"] == "Updated After Recovery"
 
     def test_data_integrity_under_system_stress(
@@ -924,7 +932,9 @@ class TestStateChangeDetectionStress:
                     results["false_count"] += local_false  # type: ignore[operator]
             except Exception as e:
                 with lock:
-                    results["errors"].append(f"Thread {thread_id}: {e}")  # type: ignore[union-attr]
+                    errors_list = results["errors"]
+                    assert isinstance(errors_list, list)
+                    errors_list.append(f"Thread {thread_id}: {e}")
 
         threads = [threading.Thread(target=compare_states, args=(i,)) for i in range(10)]
         for t in threads:
@@ -1003,12 +1013,14 @@ class TestStateChangeDetectionRace:
                     )
                     with lock:
                         if result is False:  # Expected - state unchanged
-                            results["successes"] += 1
+                            results["successes"] += 1  # type: ignore[operator]
                         else:
-                            results["failures"] += 1
+                            results["failures"] += 1  # type: ignore[operator]
             except Exception as e:
                 with lock:
-                    results["errors"].append(f"Thread {thread_id}: {e}")
+                    errors_list = results["errors"]
+                    assert isinstance(errors_list, list)
+                    errors_list.append(f"Thread {thread_id}: {e}")
 
         threads = [threading.Thread(target=concurrent_read, args=(i,)) for i in range(10)]
         for t in threads:
@@ -1081,7 +1093,9 @@ class TestStateChangeDetectionRace:
                     results["false_count"] += local_false  # type: ignore[operator]
             except Exception as e:
                 with lock:
-                    results["errors"].append(f"Thread {thread_id}: {e}")  # type: ignore[union-attr]
+                    errors_list = results["errors"]
+                    assert isinstance(errors_list, list)
+                    errors_list.append(f"Thread {thread_id}: {e}")
 
         threads = [threading.Thread(target=mixed_comparisons, args=(i,)) for i in range(10)]
         for t in threads:
@@ -1159,10 +1173,12 @@ class TestStateChangeDetectionRace:
                     # Result should be boolean (True or False)
                     if isinstance(result, bool):
                         with lock:
-                            results["consistent"] += 1
+                            results["consistent"] += 1  # type: ignore[operator]
             except Exception as e:
                 with lock:
-                    results["errors"].append(f"Thread {thread_id}: {e}")
+                    errors_list = results["errors"]
+                    assert isinstance(errors_list, list)
+                    errors_list.append(f"Thread {thread_id}: {e}")
 
         threads = [threading.Thread(target=check_situation, args=(i,)) for i in range(20)]
         for t in threads:
@@ -1210,11 +1226,13 @@ class TestStateChangeDetectionRace:
                         local_not_true += 1
 
                 with lock:
-                    results["all_true"] += local_true
-                    results["not_true"] += local_not_true
+                    results["all_true"] += local_true  # type: ignore[operator]
+                    results["not_true"] += local_not_true  # type: ignore[operator]
             except Exception as e:
                 with lock:
-                    results["errors"].append(f"Thread {thread_id}: {e}")
+                    errors_list = results["errors"]
+                    assert isinstance(errors_list, list)
+                    errors_list.append(f"Thread {thread_id}: {e}")
 
         threads = [threading.Thread(target=check_none_current, args=(i,)) for i in range(10)]
         for t in threads:

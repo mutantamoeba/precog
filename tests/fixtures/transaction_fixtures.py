@@ -209,8 +209,7 @@ def db_transaction_with_setup(
         ON CONFLICT (model_id) DO NOTHING
     """)
 
-    return cursor
-
+    yield cursor  # noqa: PT022 - yield required for Generator type
     # Rollback handled by parent fixture (db_transaction)
 
 
@@ -283,8 +282,7 @@ def db_savepoint(
     cursor = db_transaction
     manager = SavepointManager(cursor)
 
-    return cursor, manager
-
+    yield cursor, manager  # noqa: PT022 - yield required for Generator type
     # Rollback handled by parent fixture
 
 

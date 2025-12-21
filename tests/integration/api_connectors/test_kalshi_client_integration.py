@@ -159,6 +159,7 @@ class TestKalshiClientIntegration:
             positions = client.get_positions()
 
         # Verify results
+        assert positions is not None
         assert len(positions) == 2
         assert positions[0]["ticker"] == "KXNFLGAME-25DEC15-KC-YES"
 

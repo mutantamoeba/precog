@@ -249,6 +249,8 @@ module = [
     "factory.*",
     "faker.*",
     "vcr.*",
+    "testcontainers.*",
+    "apscheduler.*",
 ]
 ignore_missing_imports = true  # External libraries without type stubs
 

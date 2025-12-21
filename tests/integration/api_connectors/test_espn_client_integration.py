@@ -472,7 +472,7 @@ class TestESPNResponseVariationsIntegration:
         malformed_response = {
             "events": [
                 {"id": "123"},  # Missing competitions
-                ESPN_NFL_SCOREBOARD_LIVE["events"][0],  # Valid event
+                ESPN_NFL_SCOREBOARD_LIVE["events"][0],  # type: ignore[index]  # Valid event
             ]
         }
 

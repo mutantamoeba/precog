@@ -188,7 +188,7 @@ class TestMultiSportValidation:
         self, validator: ESPNDataValidator, nfl_game_in_progress: dict[str, Any]
     ) -> None:
         """Test full validation of NFL game state."""
-        result = validator.validate_game_state(nfl_game_in_progress)
+        result = validator.validate_game_state(nfl_game_in_progress)  # type: ignore[arg-type]
 
         assert result.is_valid
         assert not result.has_errors
@@ -198,7 +198,7 @@ class TestMultiSportValidation:
         self, validator: ESPNDataValidator, nba_game_in_progress: dict[str, Any]
     ) -> None:
         """Test full validation of NBA game state."""
-        result = validator.validate_game_state(nba_game_in_progress)
+        result = validator.validate_game_state(nba_game_in_progress)  # type: ignore[arg-type]
 
         assert result.is_valid
         assert not result.has_errors
@@ -208,7 +208,7 @@ class TestMultiSportValidation:
         self, validator: ESPNDataValidator, pregame_state: dict[str, Any]
     ) -> None:
         """Test validation of pre-game state."""
-        result = validator.validate_game_state(pregame_state)
+        result = validator.validate_game_state(pregame_state)  # type: ignore[arg-type]
 
         assert result.is_valid
         # May have info about period 0 (pre-game)
@@ -217,7 +217,7 @@ class TestMultiSportValidation:
         self, validator: ESPNDataValidator, final_game_state: dict[str, Any]
     ) -> None:
         """Test validation of final game state."""
-        result = validator.validate_game_state(final_game_state)
+        result = validator.validate_game_state(final_game_state)  # type: ignore[arg-type]
 
         assert result.is_valid
         assert not result.has_errors
@@ -242,7 +242,7 @@ class TestStateTransitionValidation:
         game["state"]["home_score"] = 7
         game["state"]["away_score"] = 0
 
-        result1 = validator.validate_game_state(game)
+        result1 = validator.validate_game_state(game)  # type: ignore[arg-type]
         assert result1.is_valid
 
         # Score increases
@@ -250,7 +250,7 @@ class TestStateTransitionValidation:
         game["state"]["home_score"] = 14
         game["state"]["away_score"] = 7
 
-        result2 = validator.validate_game_state(game, previous_state)
+        result2 = validator.validate_game_state(game, previous_state)  # type: ignore[arg-type]
         assert result2.is_valid
         assert not result2.has_warnings  # No decrease warnings
 
@@ -264,7 +264,7 @@ class TestStateTransitionValidation:
         # Validate each period
         for period in range(1, 5):
             game["state"]["period"] = period
-            result = validator.validate_game_state(game)
+            result = validator.validate_game_state(game)  # type: ignore[arg-type]
             assert result.is_valid, f"Period {period} should be valid"
 
     def test_overtime_period(
@@ -275,7 +275,7 @@ class TestStateTransitionValidation:
         game["state"] = dict(game["state"])
         game["state"]["period"] = 5  # OT
 
-        result = validator.validate_game_state(game)
+        result = validator.validate_game_state(game)  # type: ignore[arg-type]
         assert result.is_valid
 
     def test_clock_countdown(
@@ -289,7 +289,7 @@ class TestStateTransitionValidation:
         clock_values = [Decimal("900"), Decimal("600"), Decimal("300"), Decimal("0")]
         for clock in clock_values:
             game["state"]["clock_seconds"] = clock
-            result = validator.validate_game_state(game)
+            result = validator.validate_game_state(game)  # type: ignore[arg-type]
             assert result.is_valid, f"Clock {clock} should be valid"
 
 
@@ -313,25 +313,25 @@ class TestFootballSituationIntegration:
         # First and 10
         game["state"]["situation"]["down"] = 1
         game["state"]["situation"]["distance"] = 10
-        result = validator.validate_game_state(game)
+        result = validator.validate_game_state(game)  # type: ignore[arg-type]
         assert result.is_valid
 
         # Second and 7
         game["state"]["situation"]["down"] = 2
         game["state"]["situation"]["distance"] = 7
-        result = validator.validate_game_state(game)
+        result = validator.validate_game_state(game)  # type: ignore[arg-type]
         assert result.is_valid
 
         # Third and 2
         game["state"]["situation"]["down"] = 3
         game["state"]["situation"]["distance"] = 2
-        result = validator.validate_game_state(game)
+        result = validator.validate_game_state(game)  # type: ignore[arg-type]
         assert result.is_valid
 
         # Fourth and 1
         game["state"]["situation"]["down"] = 4
         game["state"]["situation"]["distance"] = 1
-        result = validator.validate_game_state(game)
+        result = validator.validate_game_state(game)  # type: ignore[arg-type]
         assert result.is_valid
 
     def test_special_teams_situation(
@@ -346,7 +346,7 @@ class TestFootballSituationIntegration:
             "possession": "KC",
         }
 
-        result = validator.validate_game_state(game)
+        result = validator.validate_game_state(game)  # type: ignore[arg-type]
         assert result.is_valid  # -1 is valid for non-play situations
 
     def test_goal_line_situation(
@@ -363,7 +363,7 @@ class TestFootballSituationIntegration:
             "is_red_zone": True,
         }
 
-        result = validator.validate_game_state(game)
+        result = validator.validate_game_state(game)  # type: ignore[arg-type]
         assert result.is_valid
 
 
@@ -387,7 +387,7 @@ class TestAnomalyDetectionIntegration:
         ]
 
         for game in games:
-            validator.validate_game_state(game)
+            validator.validate_game_state(game)  # type: ignore[arg-type]
 
         all_counts = validator.get_all_anomaly_counts()
         assert len(all_counts) == 3
@@ -403,7 +403,7 @@ class TestAnomalyDetectionIntegration:
 
         # Multiple validations with same issue
         for _ in range(5):
-            validator.validate_game_state(game)
+            validator.validate_game_state(game)  # type: ignore[arg-type]
 
         count = validator.get_anomaly_count("pattern_test")
         assert count >= 5, "Should track repeated anomalies"
@@ -428,8 +428,8 @@ class TestStrictModeIntegration:
         game["metadata"] = dict(game["metadata"])
         game["metadata"]["venue"]["capacity"] = -1  # Invalid capacity (warning)
 
-        normal_result = normal_validator.validate_game_state(game)
-        strict_result = strict_validator.validate_game_state(game)
+        normal_result = normal_validator.validate_game_state(game)  # type: ignore[arg-type]
+        strict_result = strict_validator.validate_game_state(game)  # type: ignore[arg-type]
 
         # Both should have warnings
         assert normal_result.has_warnings
@@ -457,7 +457,7 @@ class TestStrictModeIntegration:
             },
         }
 
-        result = strict_validator.validate_game_state(valid_game)
+        result = strict_validator.validate_game_state(valid_game)  # type: ignore[arg-type]
         assert result.is_valid
 
 
@@ -483,7 +483,7 @@ class TestRealWorldDataPatterns:
             },
         }
 
-        result = validator.validate_game_state(minimal_game)
+        result = validator.validate_game_state(minimal_game)  # type: ignore[arg-type]
         # Should have warnings for missing optional data
         assert result.has_warnings
 
@@ -495,7 +495,7 @@ class TestRealWorldDataPatterns:
         game["state"] = dict(game["state"])
         game["state"]["situation"] = {}  # Empty during timeout
 
-        result = validator.validate_game_state(game)
+        result = validator.validate_game_state(game)  # type: ignore[arg-type]
         assert result.is_valid
 
     def test_ncaab_two_halves(self, validator: ESPNDataValidator) -> None:
@@ -515,7 +515,7 @@ class TestRealWorldDataPatterns:
             },
         }
 
-        result = validator.validate_game_state(ncaab_game)
+        result = validator.validate_game_state(ncaab_game)  # type: ignore[arg-type]
         assert result.is_valid
 
     def test_nhl_three_periods(self, validator: ESPNDataValidator) -> None:
@@ -535,7 +535,7 @@ class TestRealWorldDataPatterns:
             },
         }
 
-        result = validator.validate_game_state(nhl_game)
+        result = validator.validate_game_state(nhl_game)  # type: ignore[arg-type]
         assert result.is_valid
 
 
@@ -552,7 +552,7 @@ class TestFactoryFunctionIntegration:
         """Test factory function with default configuration."""
         validator = create_validator()
 
-        result = validator.validate_game_state(nfl_game_in_progress)
+        result = validator.validate_game_state(nfl_game_in_progress)  # type: ignore[arg-type]
         assert result.is_valid
 
         # Default settings
@@ -563,7 +563,7 @@ class TestFactoryFunctionIntegration:
         """Test factory function with custom configuration."""
         validator = create_validator(strict_mode=True, track_anomalies=False)
 
-        result = validator.validate_game_state(nfl_game_in_progress)
+        result = validator.validate_game_state(nfl_game_in_progress)  # type: ignore[arg-type]
         assert result.is_valid
 
         # Custom settings
@@ -580,7 +580,7 @@ class TestFactoryFunctionIntegration:
             "state": {"home_score": -1, "away_score": 0, "period": 1},
         }
 
-        validator1.validate_game_state(game)
+        validator1.validate_game_state(game)  # type: ignore[arg-type]
 
         # Validator2 should not have validator1's anomaly counts
         assert validator2.get_anomaly_count("test123") == 0

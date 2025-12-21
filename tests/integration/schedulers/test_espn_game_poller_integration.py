@@ -375,7 +375,7 @@ class TestStatsThreadSafety:
             def read_stats() -> None:
                 for _ in range(50):
                     try:
-                        stats_snapshots.append(poller.stats)
+                        stats_snapshots.append(poller.stats)  # type: ignore[arg-type]
                         time.sleep(0.02)
                     except Exception as e:
                         errors.append(e)

@@ -299,10 +299,10 @@ class TestBatchOperations:
             start = time.perf_counter()
             for pos in positions:
                 manager.calculate_position_pnl(
-                    entry_price=pos["entry"],
-                    current_price=pos["current"],
-                    quantity=pos["quantity"],
-                    side=pos["side"],
+                    entry_price=pos["entry"],  # type: ignore[arg-type]
+                    current_price=pos["current"],  # type: ignore[arg-type]
+                    quantity=pos["quantity"],  # type: ignore[arg-type]
+                    side=pos["side"],  # type: ignore[arg-type]
                 )
             elapsed = time.perf_counter() - start
 

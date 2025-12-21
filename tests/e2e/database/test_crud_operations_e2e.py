@@ -456,6 +456,7 @@ class TestStateChangeDetectionWorkflow:
                 game_status="in_progress",
             )
             # First poll - period 0->1 is a change
+            assert current is not None
             if current["period"] == 0:
                 assert changed is True
                 upsert_game_state(

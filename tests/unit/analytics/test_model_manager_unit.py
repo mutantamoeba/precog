@@ -326,8 +326,8 @@ class TestRoundTripConversion:
 
         assert restored["k_factor"] == original["k_factor"]
         assert restored["home_advantage"] == original["home_advantage"]
-        assert restored["nested"]["value"] == original["nested"]["value"]
-        assert restored["nested"]["list"][0] == original["nested"]["list"][0]
+        assert restored["nested"]["value"] == original["nested"]["value"]  # type: ignore[index]
+        assert restored["nested"]["list"][0] == original["nested"]["list"][0]  # type: ignore[index]
         assert restored["name"] == original["name"]
 
     def test_precision_preserved_in_roundtrip(self, manager: ModelManager) -> None:

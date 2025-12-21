@@ -670,7 +670,7 @@ class TestValidationSummary:
             {"ticker": "GOOD", "status": "open"},
             {"ticker": "BAD", "volume": -100},  # Error
         ]
-        results = validator.validate_markets(markets)  # type: ignore[arg-type]
+        results = validator.validate_markets(markets)
         summary = validator.get_validation_summary(results)
         assert summary["total"] == 2
         assert summary["error_count"] == 1

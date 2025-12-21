@@ -62,10 +62,10 @@ class TestESPNClientPerformance:
             events = mock_response.get("events", [])
             for event in events:
                 _ = event.get("id")
-                _ = event.get("status", {}).get("type", {}).get("state")
+                _ = event.get("status", {}).get("type", {}).get("state")  # type: ignore[attr-defined]
                 competitions = event.get("competitions", [])
                 for comp in competitions:
-                    competitors = comp.get("competitors", [])
+                    competitors = comp.get("competitors", [])  # type: ignore[attr-defined]
                     for competitor in competitors:
                         _ = competitor.get("team", {}).get("abbreviation")
                         _ = competitor.get("score")

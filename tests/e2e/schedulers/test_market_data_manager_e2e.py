@@ -478,6 +478,8 @@ class TestMultiTickerManagement:
                 price_a = manager.get_current_price("TICKER-A")
                 price_b = manager.get_current_price("TICKER-B")
 
+                assert price_a is not None
+                assert price_b is not None
                 assert price_a["yes_price"] == Decimal("0.65")  # Updated
                 assert price_b["yes_price"] == Decimal("0.70")  # Unchanged
 

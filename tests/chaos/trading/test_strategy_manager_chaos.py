@@ -602,10 +602,10 @@ class TestUpdateOperationsEdgeCases:
         )
 
         try:
-            manager.update_status(
+            manager.update_status(  # type: ignore[call-arg]
                 strategy_id=-1,
                 new_status="testing",
-                current_status="draft",
+                current_status="draft",  # Intentional invalid arg for chaos test
             )
         except (ValueError, Exception):
             pass  # Invalid ID
@@ -623,9 +623,9 @@ class TestUpdateOperationsEdgeCases:
         )
 
         try:
-            manager.update_metrics(
+            manager.update_metrics(  # type: ignore[call-arg]
                 strategy_id=1,
-                total_pnl=Decimal("999999999999999.9999"),
+                total_pnl=Decimal("999999999999999.9999"),  # Intentional invalid args
                 total_trades=999999999,
                 win_rate=Decimal("1.0001"),  # > 100%
             )
@@ -644,9 +644,9 @@ class TestUpdateOperationsEdgeCases:
         )
 
         try:
-            manager.update_metrics(
+            manager.update_metrics(  # type: ignore[call-arg]
                 strategy_id=1,
-                total_trades=-5,
+                total_trades=-5,  # Intentional invalid arg for chaos test
             )
         except (ValueError, Exception):
             pass  # Negative trades invalid

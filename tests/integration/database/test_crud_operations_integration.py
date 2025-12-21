@@ -16,6 +16,7 @@ Usage:
 """
 
 from datetime import datetime
+from decimal import Decimal
 
 import pytest
 
@@ -798,7 +799,7 @@ class TestGameStateChangedIntegration:
             home_score=7,
             away_score=3,
             period=2,
-            clock_seconds=720,
+            clock_seconds=Decimal(720),
             clock_display="12:00",
             game_status="in_progress",
             league="nfl",

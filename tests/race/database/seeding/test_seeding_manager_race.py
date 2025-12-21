@@ -166,7 +166,7 @@ class TestConcurrentSessionOperations:
             try:
                 stats = manager._init_stats(category)
                 with lock:
-                    results.append(stats)
+                    results.append(stats)  # type: ignore[arg-type]
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -213,7 +213,7 @@ class TestConcurrentSeedingOperations:
                 manager = SeedingManager(config=config)
                 report = manager.seed_all()
                 with lock:
-                    reports.append(report)
+                    reports.append(report)  # type: ignore[arg-type]
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -249,7 +249,7 @@ class TestConcurrentSeedingOperations:
                 manager = SeedingManager(config=config)
                 report = manager.seed_all()
                 with lock:
-                    reports.append((sport, report))
+                    reports.append((sport, report))  # type: ignore[arg-type]
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -299,7 +299,7 @@ class TestMultipleManagerInstances:
                 manager = managers[idx]
                 report = manager.seed_all()
                 with lock:
-                    reports.append(report)
+                    reports.append(report)  # type: ignore[arg-type]
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -336,7 +336,7 @@ class TestMultipleManagerInstances:
                 manager = SeedingManager(config=config)
                 report = manager.seed_all()
                 with lock:
-                    reports.append(report)
+                    reports.append(report)  # type: ignore[arg-type]
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -583,7 +583,7 @@ class TestDataConsistency:
                 manager = SeedingManager(config=config)
                 report = manager.seed_all()
                 with lock:
-                    reports.append(report)
+                    reports.append(report)  # type: ignore[arg-type]
             except Exception as e:
                 with lock:
                     errors.append(e)

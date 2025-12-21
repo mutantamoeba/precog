@@ -202,7 +202,9 @@ class TestErrorConditions:
         poller._poll_wrapper()
 
         assert poller.stats["errors"] == 1
-        assert "\u2603" in poller.stats["last_error"]
+        last_err = poller.stats["last_error"]
+        assert last_err is not None
+        assert "\u2603" in last_err
 
     def test_very_long_error_message(self) -> None:
         """Test error with very long message."""
@@ -216,7 +218,9 @@ class TestErrorConditions:
 
         assert poller.stats["errors"] == 1
         # Message should be captured (may be truncated by implementation)
-        assert len(poller.stats["last_error"]) > 0
+        last_err = poller.stats["last_error"]
+        assert last_err is not None
+        assert len(last_err) > 0
 
 
 # =============================================================================

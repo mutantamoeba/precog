@@ -136,11 +136,12 @@ class TestSourceCoordination:
         mock_poller = integrated_manager["poller"]
         mock_ws = integrated_manager["ws"]
 
-        # Track call order
-        mock_poller.poll_once.side_effect = lambda: (
-            call_order.append("poll"),
-            {"markets_fetched": 10, "markets_updated": 5, "markets_created": 5},
-        )[1]
+        # Track call order - use function to track and return
+        def poll_side_effect() -> dict[str, int]:
+            call_order.append("poll")
+            return {"markets_fetched": 10, "markets_updated": 5, "markets_created": 5}
+
+        mock_poller.poll_once.side_effect = poll_side_effect
         mock_poller.start.side_effect = lambda: call_order.append("poller_start")
         mock_ws.start.side_effect = lambda: call_order.append("ws_start")
 
