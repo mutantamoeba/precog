@@ -19,6 +19,7 @@ Usage:
 """
 
 import tempfile
+from collections.abc import Iterator
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -65,7 +66,7 @@ def betting_csv_file(betting_csv_content: str) -> Path:
 
 
 @pytest.fixture
-def betting_csv_dir(betting_csv_content: str) -> Path:
+def betting_csv_dir(betting_csv_content: str) -> Iterator[Path]:
     """Create a temp directory with properly named betting CSV.
 
     Educational Note:

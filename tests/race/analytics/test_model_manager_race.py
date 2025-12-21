@@ -115,7 +115,7 @@ class TestConcurrentSerialization:
                 parsed = json.loads(json_str)
                 restored = manager._parse_config_from_db(parsed)
                 with lock:
-                    results.append((original, restored))
+                    results.append((original, restored))  # type: ignore[arg-type]
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -129,9 +129,9 @@ class TestConcurrentSerialization:
 
         assert len(errors) == 0
         assert len(results) == 20
-        for original, restored in results:
-            assert original["id"] == restored["id"]
-            assert original["value"] == restored["value"]
+        for orig, rest in results:
+            assert orig["id"] == rest["id"]  # type: ignore[index]
+            assert orig["value"] == rest["value"]  # type: ignore[index]
 
 
 # =============================================================================

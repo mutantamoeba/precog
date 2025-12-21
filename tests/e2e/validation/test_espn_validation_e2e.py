@@ -63,7 +63,7 @@ class TestCompleteGameWorkflow:
             },
         }
 
-        result = validator.validate_game_state(pregame)
+        result = validator.validate_game_state(pregame)  # type: ignore[arg-type]
         assert result.is_valid, "Pre-game state should be valid"
 
         # First quarter starts
@@ -79,7 +79,7 @@ class TestCompleteGameWorkflow:
             },
         }
 
-        result = validator.validate_game_state(q1_start)
+        result = validator.validate_game_state(q1_start)  # type: ignore[arg-type]
         assert result.is_valid, "Q1 start should be valid"
 
         # First scoring play
@@ -94,7 +94,7 @@ class TestCompleteGameWorkflow:
             },
         }
 
-        result = validator.validate_game_state(first_score)
+        result = validator.validate_game_state(first_score)  # type: ignore[arg-type]
         assert result.is_valid, "First score should be valid"
 
         # Halftime
@@ -109,7 +109,7 @@ class TestCompleteGameWorkflow:
             },
         }
 
-        result = validator.validate_game_state(halftime)
+        result = validator.validate_game_state(halftime)  # type: ignore[arg-type]
         assert result.is_valid, "Halftime should be valid"
 
         # Final
@@ -124,7 +124,7 @@ class TestCompleteGameWorkflow:
             },
         }
 
-        result = validator.validate_game_state(final)
+        result = validator.validate_game_state(final)  # type: ignore[arg-type]
         assert result.is_valid, "Final state should be valid"
 
     def test_nba_game_lifecycle(self, validator: ESPNDataValidator) -> None:
@@ -182,7 +182,7 @@ class TestCompleteGameWorkflow:
                 "state": state,
             }
 
-            result = validator.validate_game_state(game)
+            result = validator.validate_game_state(game)  # type: ignore[arg-type]
             assert result.is_valid, f"State {i} should be valid"
 
 
@@ -210,7 +210,7 @@ class TestScoreCorrectionWorkflow:
             "metadata": metadata,
             "state": {"home_score": 14, "away_score": 7, "period": 2},
         }
-        validator.validate_game_state(initial)
+        validator.validate_game_state(initial)  # type: ignore[arg-type]
 
         # Corrected state (home score decreased - official correction)
         corrected = {
@@ -219,7 +219,7 @@ class TestScoreCorrectionWorkflow:
         }
         previous = {"home_score": 14, "away_score": 7}
 
-        result = validator.validate_game_state(corrected, previous)
+        result = validator.validate_game_state(corrected, previous)  # type: ignore[arg-type]
 
         # Should have warning about score decrease
         assert result.has_warnings
@@ -247,7 +247,7 @@ class TestScoreCorrectionWorkflow:
 
         for state, prev in states:
             game = {"metadata": metadata, "state": {**state, "period": 2}}
-            validator.validate_game_state(game, prev)
+            validator.validate_game_state(game, prev)  # type: ignore[arg-type]
 
         # Should track multiple anomalies
         count = validator.get_anomaly_count(game_id)
@@ -299,7 +299,7 @@ class TestMultiGameSession:
                 },
             }
 
-            result = validator.validate_game_state(game)
+            result = validator.validate_game_state(game)  # type: ignore[arg-type]
             results.append(result)
 
         # All games should be valid
@@ -335,7 +335,7 @@ class TestMultiGameSession:
                 },
             }
 
-            result = validator.validate_game_state(game)
+            result = validator.validate_game_state(game)  # type: ignore[arg-type]
             assert result.is_valid, f"{league} game should be valid"
 
 
@@ -376,7 +376,7 @@ class TestDataQualityMonitoring:
                     "period": 2,
                 },
             }
-            validator.validate_game_state(game)
+            validator.validate_game_state(game)  # type: ignore[arg-type]
 
         # Generate report
         all_counts = validator.get_all_anomaly_counts()
@@ -396,7 +396,7 @@ class TestDataQualityMonitoring:
             "metadata": {"espn_event_id": "batch1", "league": "nfl"},
             "state": {"home_score": -1, "away_score": 0, "period": 1},
         }
-        validator.validate_game_state(game1)
+        validator.validate_game_state(game1)  # type: ignore[arg-type]
         assert validator.get_anomaly_count("batch1") > 0
 
         # Reset for new batch
@@ -407,7 +407,7 @@ class TestDataQualityMonitoring:
             "metadata": {"espn_event_id": "batch2", "league": "nfl"},
             "state": {"home_score": -1, "away_score": 0, "period": 1},
         }
-        validator.validate_game_state(game2)
+        validator.validate_game_state(game2)  # type: ignore[arg-type]
 
         # First batch counts should be gone
         assert validator.get_anomaly_count("batch1") == 0
@@ -442,7 +442,7 @@ class TestErrorRecoveryWorkflow:
                 },
             }
 
-            result = validator.validate_game_state(game)
+            result = validator.validate_game_state(game)  # type: ignore[arg-type]
             results.append(result)
 
         # First and third should be valid
@@ -458,7 +458,7 @@ class TestErrorRecoveryWorkflow:
             "state": {"home_score": 14, "away_score": 7},
         }
 
-        result = validator.validate_game_state(malformed)
+        result = validator.validate_game_state(malformed)  # type: ignore[arg-type]
 
         # Should report error for missing event ID
         assert not result.is_valid
@@ -470,7 +470,7 @@ class TestErrorRecoveryWorkflow:
             "state": {"home_score": 14, "away_score": 7, "period": 2},
         }
 
-        result = validator.validate_game_state(valid_game)
+        result = validator.validate_game_state(valid_game)  # type: ignore[arg-type]
         assert result.is_valid
 
 
@@ -503,7 +503,7 @@ class TestOvertimeScenarios:
                 "clock_seconds": Decimal("0"),
             },
         }
-        result = validator.validate_game_state(regulation_end)
+        result = validator.validate_game_state(regulation_end)  # type: ignore[arg-type]
         assert result.is_valid
 
         # Overtime
@@ -517,7 +517,7 @@ class TestOvertimeScenarios:
                 "situation": {"down": 1, "distance": 10, "possession": "KC"},
             },
         }
-        result = validator.validate_game_state(overtime)
+        result = validator.validate_game_state(overtime)  # type: ignore[arg-type]
         assert result.is_valid
 
         # OT win
@@ -531,7 +531,7 @@ class TestOvertimeScenarios:
                 "game_status": "final",
             },
         }
-        result = validator.validate_game_state(ot_final)
+        result = validator.validate_game_state(ot_final)  # type: ignore[arg-type]
         assert result.is_valid
 
     def test_nba_multiple_overtime(self, validator: ESPNDataValidator) -> None:
@@ -556,7 +556,7 @@ class TestOvertimeScenarios:
                     "clock_seconds": Decimal("300"),
                 },
             }
-            result = validator.validate_game_state(game)
+            result = validator.validate_game_state(game)  # type: ignore[arg-type]
             assert result.is_valid, f"OT period {ot} should be valid"
 
 
@@ -596,7 +596,7 @@ class TestProductionPipeline:
                 },
             }
 
-            result = validator.validate_game_state(game)
+            result = validator.validate_game_state(game)  # type: ignore[arg-type]
 
             if result.is_valid:
                 valid_count += 1
@@ -650,7 +650,7 @@ class TestProductionPipeline:
                 },
             }
 
-            result = validator.validate_game_state(game, prev_state)
+            result = validator.validate_game_state(game, prev_state)  # type: ignore[arg-type]
             assert result.is_valid, f"Update {update} should be valid"
 
             prev_state = {

@@ -172,6 +172,7 @@ class TestLoadResultProperties:
             error_messages=errors,
             errors=len(errors),
         )
+        assert result.error_messages is not None
         assert len(result.error_messages) == len(errors)
         for i, msg in enumerate(errors):
             assert result.error_messages[i] == msg

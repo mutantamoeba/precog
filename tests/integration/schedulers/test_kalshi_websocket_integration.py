@@ -468,7 +468,7 @@ class TestThreadSafetyIntegration:
             for _ in range(100):
                 stats = handler.stats
                 with lock:
-                    results.append(stats)
+                    results.append(stats)  # type: ignore[arg-type]
 
         threads = [threading.Thread(target=read_stats) for _ in range(5)]
         for t in threads:

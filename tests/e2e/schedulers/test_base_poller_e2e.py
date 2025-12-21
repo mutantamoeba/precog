@@ -73,7 +73,7 @@ class TestCompletePollingWorkflow:
         assert poller.enabled is True
 
         # Step 3: Let it run for several cycles
-        time.sleep(3.5)
+        time.sleep(3.5)  # type: ignore[unreachable]
 
         # Step 4: Verify polling occurred
         assert poller.stats["polls_completed"] >= 3
@@ -246,9 +246,9 @@ class TestMultiplePollers:
             assert poller2.stats["polls_completed"] > 0, "Poller2 should have completed polls"
         finally:
             # Ensure cleanup even if test fails
-            if poller1.is_running:
+            if poller1.is_running():
                 poller1.stop()
-            if poller2.is_running:
+            if poller2.is_running():
                 poller2.stop()
 
 

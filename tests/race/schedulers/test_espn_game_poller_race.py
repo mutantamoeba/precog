@@ -18,6 +18,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from precog.schedulers.base_poller import PollerStats
 from precog.schedulers.espn_game_poller import ESPNGamePoller
 
 # =============================================================================
@@ -55,10 +56,10 @@ class TestConcurrentStatsAccess:
         for _ in range(10):
             poller._poll_wrapper()
 
-        results: list[dict[str, Any]] = []
+        results: list[PollerStats] = []
         errors: list[Exception] = []
 
-        def read_stats() -> dict[str, Any]:
+        def read_stats() -> PollerStats:
             return poller.stats
 
         with ThreadPoolExecutor(max_workers=20) as executor:
@@ -318,7 +319,7 @@ class TestStatsCopyIsolation:
 
         def get_stats_copy() -> None:
             copy = poller.stats
-            copies.append(copy)
+            copies.append(copy)  # type: ignore[arg-type]
 
         threads = [threading.Thread(target=get_stats_copy) for _ in range(10)]
         for t in threads:

@@ -238,6 +238,7 @@ class TestESPNDataIngestionWorkflow:
 
         # Verify final state
         final_state = get_current_game_state("E2E-401547418")
+        assert final_state is not None
         assert final_state["game_status"] == "final"
         assert final_state["home_score"] == 31
 
@@ -309,6 +310,8 @@ class TestESPNDataIngestionWorkflow:
         # Verify trending up
         week_12_rank = next((r for r in det_rankings if r["week"] == 12), None)
         week_13_rank = next((r for r in det_rankings if r["week"] == 13), None)
+        assert week_12_rank is not None
+        assert week_13_rank is not None
         assert week_12_rank["rank"] == 5
         assert week_13_rank["rank"] == 3
         assert week_13_rank["rank"] < week_12_rank["rank"]  # Improved
@@ -359,6 +362,7 @@ class TestVenueDataEnrichment:
 
         # Verify name updated
         venue = get_venue_by_espn_id("E2E-NAMING-001")
+        assert venue is not None
         assert venue["venue_name"] == "GEHA Field at Arrowhead Stadium"
 
         # Verify only ONE record exists (no history - venues don't use SCD Type 2)
@@ -441,6 +445,7 @@ class TestStateChangeDetectionWorkflow:
         # Step 2: Simulate 5 clock-tick polls (no meaningful changes)
         # Each poll is 15 seconds later - clock changes but nothing else
         current = get_current_game_state("E2E-STATE-GAME-001")
+        assert current is not None  # Game state must exist at this point
         for clock_value in [900, 885, 870, 855, 840]:
             # Check if state changed (should NOT)
             changed = game_state_changed(
@@ -451,6 +456,7 @@ class TestStateChangeDetectionWorkflow:
                 game_status="in_progress",
             )
             # First poll - period 0->1 is a change
+            assert current is not None
             if current["period"] == 0:
                 assert changed is True
                 upsert_game_state(

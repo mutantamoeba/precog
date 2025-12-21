@@ -27,7 +27,7 @@ import pytest
 # Add scripts to path for import
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "scripts"))
 
-from seed_multi_sport_teams import (
+from seed_multi_sport_teams import (  # type: ignore[import-not-found]
     SEED_CONFIGS,
     SEEDS_DIR,
     SPORT_SEEDS,

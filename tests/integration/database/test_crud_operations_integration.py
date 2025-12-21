@@ -16,6 +16,7 @@ Usage:
 """
 
 from datetime import datetime
+from decimal import Decimal
 
 import pytest
 
@@ -152,6 +153,7 @@ class TestVenueIntegration:
 
         # Verify update applied
         venue = get_venue_by_espn_id("INT-UPSERT-001")
+        assert venue is not None
         assert venue["venue_name"] == "New Stadium Name"
         assert venue["city"] == "New City"
 
@@ -182,6 +184,7 @@ class TestVenueIntegration:
         )
 
         venue = get_venue_by_id(venue_id)
+        assert venue is not None
         assert venue["city"] is None
         assert venue["state"] is None
         assert venue["capacity"] is None
@@ -371,6 +374,7 @@ class TestGameStateIntegration:
 
         # Verify current is latest
         current = get_current_game_state("INT-GAME-002")
+        assert current is not None
         assert current["home_score"] == 7
         assert current["row_current_ind"] is True
 
@@ -545,6 +549,7 @@ class TestGameStateSituationJsonb:
 
         # Retrieve and verify
         state = get_current_game_state("INT-GAME-JSONB")
+        assert state is not None
         assert state["situation"] is not None
 
         # PostgreSQL returns JSONB as dict
@@ -582,6 +587,7 @@ class TestGameStateSituationJsonb:
         )
 
         state = get_current_game_state("INT-GAME-LINES")
+        assert state is not None
         assert state["linescores"] is not None
         assert len(state["linescores"]) == 4
         assert state["linescores"][0]["home"] == 7
@@ -793,7 +799,7 @@ class TestGameStateChangedIntegration:
             home_score=7,
             away_score=3,
             period=2,
-            clock_seconds=720,
+            clock_seconds=Decimal(720),
             clock_display="12:00",
             game_status="in_progress",
             league="nfl",

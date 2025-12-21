@@ -46,9 +46,9 @@ try:
     )
 except ImportError:
     TESTCONTAINERS_AVAILABLE = False
-    postgres_container = None  # type: ignore[assignment, misc]
-    container_db_connection = None  # type: ignore[assignment, misc]
-    container_cursor = None  # type: ignore[assignment, misc]
+    postgres_container = None  # type: ignore[assignment]
+    container_db_connection = None  # type: ignore[assignment]
+    container_cursor = None  # type: ignore[assignment]
 
 # Import stress testcontainers fixtures (Issue #168)
 # Function-scoped containers for stress tests that exhaust connection pools
@@ -65,9 +65,9 @@ try:
     )
 except ImportError:
     STRESS_DOCKER_AVAILABLE = False
-    _stress_postgres_container_session = None  # type: ignore[assignment, misc]
-    stress_postgres_container = None  # type: ignore[assignment, misc]
-    stress_db_connection = None  # type: ignore[assignment, misc]
+    _stress_postgres_container_session = None  # type: ignore[assignment]
+    stress_postgres_container = None  # type: ignore[assignment]
+    stress_db_connection = None  # type: ignore[assignment]
 
 # Import transaction-based isolation fixtures (Issue #171 - Layer 1)
 # These provide ~0ms overhead test isolation via transaction rollback
@@ -80,9 +80,9 @@ try:
         db_transaction_with_setup,
     )
 except ImportError:
-    db_transaction = None  # type: ignore[assignment, misc]
-    db_transaction_with_setup = None  # type: ignore[assignment, misc]
-    db_savepoint = None  # type: ignore[assignment, misc]
+    db_transaction = None  # type: ignore[assignment]
+    db_transaction_with_setup = None  # type: ignore[assignment]
+    db_savepoint = None  # type: ignore[assignment]
 
 # Import modules to test
 from precog.database.connection import (

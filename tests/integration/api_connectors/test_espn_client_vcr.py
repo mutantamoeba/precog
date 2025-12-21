@@ -337,7 +337,7 @@ class TestESPNClientStructureWithVCR:
         for field in optional_fields:
             # Just check type if present
             if field in metadata:
-                assert metadata[field] is not None or True  # Can be None
+                assert metadata[field] is not None or True  # type: ignore[literal-required]
 
     def test_espn_team_info_structure(self):
         """
@@ -437,7 +437,7 @@ class TestESPNClientStructureWithVCR:
         for field in football_fields:
             if field in situation:
                 # Just verify the field exists and has reasonable type
-                value = situation[field]
+                value = situation[field]  # type: ignore[literal-required]
                 # down, distance, yard_line can be int or None
                 # is_red_zone should be bool
                 if field == "is_red_zone":

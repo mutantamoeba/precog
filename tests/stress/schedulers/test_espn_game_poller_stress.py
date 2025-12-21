@@ -197,7 +197,7 @@ class TestStatsUnderLoad:
         for i in range(500):
             poller._poll_wrapper()
             if i % 10 == 0:
-                stats_reads.append(poller.stats)
+                stats_reads.append(poller.stats)  # type: ignore[arg-type]
 
         # All stats reads should be valid
         assert len(stats_reads) == 50
@@ -643,8 +643,8 @@ class TestAdaptivePollingStress:
                 poller._adjust_poll_interval()
 
                 current_state = poller._last_active_state
-                if last_state is not None and last_state != current_state:
-                    if last_state and not current_state:
+                if last_state is not None and last_state != current_state:  # type: ignore[unreachable]
+                    if last_state and not current_state:  # type: ignore[unreachable]
                         transition_count["active_to_idle"] += 1
                     elif not last_state and current_state:
                         transition_count["idle_to_active"] += 1
@@ -783,12 +783,14 @@ class TestAdaptivePollingRace:
                         result = poller.has_active_games()
                         with lock:
                             if result:
-                                results["true_count"] += 1
+                                results["true_count"] += 1  # type: ignore[operator]
                             else:
-                                results["false_count"] += 1
+                                results["false_count"] += 1  # type: ignore[operator]
             except Exception as e:
                 with lock:
-                    results["errors"].append(str(e))
+                    errors_list = results["errors"]
+                    assert isinstance(errors_list, list)
+                    errors_list.append(str(e))
 
         threads = [threading.Thread(target=check_active_games, args=(i,)) for i in range(10)]
         for t in threads:
@@ -796,9 +798,11 @@ class TestAdaptivePollingRace:
         for t in threads:
             t.join(timeout=30)
 
-        assert len(results["errors"]) == 0, f"Errors: {results['errors']}"
+        errors_list = results["errors"]
+        assert isinstance(errors_list, list), f"Expected list, got {type(errors_list)}"
+        assert len(errors_list) == 0, f"Errors: {errors_list}"
         # Total calls should be 1000
-        assert results["true_count"] + results["false_count"] == 1000
+        assert results["true_count"] + results["false_count"] == 1000  # type: ignore[operator]
 
     def test_race_get_current_interval_during_adjustment(self, mock_espn_client: MagicMock) -> None:
         """
@@ -934,15 +938,17 @@ class TestAdaptivePollingRace:
                         poller._adjust_poll_interval()
 
                         current = poller._last_active_state
-                        if last_state is not None and last_state != current:
-                            local_transitions += 1
+                        if last_state is not None and last_state != current:  # type: ignore[unreachable]
+                            local_transitions += 1  # type: ignore[unreachable]
                         last_state = current
 
                     with lock:
-                        transitions["count"] += local_transitions
+                        transitions["count"] += local_transitions  # type: ignore[operator]
             except Exception as e:
                 with lock:
-                    transitions["errors"].append(str(e))
+                    errors_list = transitions["errors"]
+                    assert isinstance(errors_list, list)
+                    errors_list.append(str(e))
 
         threads = [threading.Thread(target=toggle_state, args=(i,)) for i in range(5)]
         for t in threads:
@@ -950,6 +956,8 @@ class TestAdaptivePollingRace:
         for t in threads:
             t.join(timeout=30)
 
-        assert len(transitions["errors"]) == 0, f"Errors: {transitions['errors']}"
+        errors_list = transitions["errors"]
+        assert isinstance(errors_list, list), f"Expected list, got {type(errors_list)}"
+        assert len(errors_list) == 0, f"Errors: {errors_list}"
         # Should have many transitions (threads rapidly toggling)
-        assert transitions["count"] > 0
+        assert transitions["count"] > 0  # type: ignore[operator]

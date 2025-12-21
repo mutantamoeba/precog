@@ -12,6 +12,7 @@ Usage:
 
 import tempfile
 import threading
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,7 @@ from precog.database.seeding import (
 
 
 @pytest.fixture
-def temp_seeds_dir() -> Path:
+def temp_seeds_dir() -> Iterator[Path]:
     """Create a temporary directory with mock SQL seed files."""
     with tempfile.TemporaryDirectory() as tmpdir:
         seeds_path = Path(tmpdir)
@@ -165,7 +166,7 @@ class TestConcurrentSessionOperations:
             try:
                 stats = manager._init_stats(category)
                 with lock:
-                    results.append(stats)
+                    results.append(stats)  # type: ignore[arg-type]
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -212,7 +213,7 @@ class TestConcurrentSeedingOperations:
                 manager = SeedingManager(config=config)
                 report = manager.seed_all()
                 with lock:
-                    reports.append(report)
+                    reports.append(report)  # type: ignore[arg-type]
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -248,7 +249,7 @@ class TestConcurrentSeedingOperations:
                 manager = SeedingManager(config=config)
                 report = manager.seed_all()
                 with lock:
-                    reports.append((sport, report))
+                    reports.append((sport, report))  # type: ignore[arg-type]
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -298,7 +299,7 @@ class TestMultipleManagerInstances:
                 manager = managers[idx]
                 report = manager.seed_all()
                 with lock:
-                    reports.append(report)
+                    reports.append(report)  # type: ignore[arg-type]
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -335,7 +336,7 @@ class TestMultipleManagerInstances:
                 manager = SeedingManager(config=config)
                 report = manager.seed_all()
                 with lock:
-                    reports.append(report)
+                    reports.append(report)  # type: ignore[arg-type]
             except Exception as e:
                 with lock:
                     errors.append(e)
@@ -582,7 +583,7 @@ class TestDataConsistency:
                 manager = SeedingManager(config=config)
                 report = manager.seed_all()
                 with lock:
-                    reports.append(report)
+                    reports.append(report)  # type: ignore[arg-type]
             except Exception as e:
                 with lock:
                     errors.append(e)

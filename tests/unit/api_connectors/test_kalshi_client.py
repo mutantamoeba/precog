@@ -549,6 +549,7 @@ class TestKalshiBalanceAndPositions:
             positions = client.get_positions()
 
         # Verify Decimal types in all positions
+        assert positions is not None
         for position in positions:
             assert isinstance(position["user_average_price"], Decimal)
             assert isinstance(position["total_cost"], Decimal)

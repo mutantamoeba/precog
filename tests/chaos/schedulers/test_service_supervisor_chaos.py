@@ -312,7 +312,7 @@ class TestMetricsChaos:
 
         service = MockService()
         service._running = True
-        service.get_stats = MagicMock(side_effect=RuntimeError("Stats error"))
+        object.__setattr__(service, "get_stats", MagicMock(side_effect=RuntimeError("Stats error")))
         svc_config = ServiceConfig(name="broken", enabled=True)
         supervisor.add_service("broken", service, svc_config)
 

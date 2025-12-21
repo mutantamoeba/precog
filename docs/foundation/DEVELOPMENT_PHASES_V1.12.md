@@ -1,9 +1,21 @@
 # Development Phases & Roadmap
 
 ---
-**Version:** 1.11
-**Last Updated:** 2025-12-15
+**Version:** 1.12
+**Last Updated:** 2025-12-21
 **Status:** ✅ Current
+**Changes in v1.12:**
+- **PHASE 2.5 CLOUD INFRASTRUCTURE**: Added Task 6 - Railway cloud deployment with TimescaleDB
+  - Create Railway project with TimescaleDB service
+  - Deploy FastAPI data collection service to cloud
+  - Configure production environment variables
+  - **ADR-108**: Hybrid Cloud Architecture for Live Data Collection
+- **PHASE 3.5 WEB INTERFACE ADDED**: New phase for React frontend monitoring dashboard
+  - Data monitoring dashboard (game states, market prices)
+  - System health dashboard (scheduler, services)
+  - Placed BEFORE Phase 4/5 per user requirement for monitoring before execution
+  - Duration: 2-3 weeks, Target: February 2026
+- **STRATEGIC URGENCY**: Start live data collection ASAP before NFL season ends
 **Changes in v1.11:**
 - **PHASE 2.5 CLI COMPLETE**: All scheduler CLI commands implemented and verified
   - `scheduler start` - Start background data polling (simple + supervised modes)
@@ -1240,10 +1252,27 @@ python scripts/validate_phase_start.py --phase 2
 - **ESPNGamePoller**: Live/current data (in-progress games) - runs continuously (15-60s intervals)
 - No overlap: Seeder handles past seasons, Poller handles current games
 
+#### 6. Cloud Infrastructure Setup (Day 6-8) ✨ NEW
+- [  ] Create Railway project with TimescaleDB service
+- [  ] Configure environment variables (KALSHI_MODE, DATABASE_URL, etc.)
+- [  ] Deploy FastAPI data collection service to Railway
+- [  ] Verify ESPN data collection in production environment
+- [  ] Verify Kalshi data collection in production environment
+- [  ] Set up health monitoring endpoint for service reliability
+- **ADR-108**: Hybrid Cloud Architecture for Live Data Collection
+- **REQ-DEPLOY-001**: Railway Deployment Infrastructure (to be created)
+
+**Hybrid Architecture (ADR-108):**
+- **Local PostgreSQL**: Fast unit/integration tests (~seconds)
+- **Railway TimescaleDB**: Production data collection (live ESPN/Kalshi)
+- **Data Sync**: Periodic sync for model training (weekly pg_dump)
+- **Frontend**: React monitoring dashboard (Phase 3.5)
+
 ### Deliverables
 - [✅] CLI commands: `scheduler start`, `scheduler stop`, `scheduler status`, `poll-once`
 - [✅] Service runner script with graceful shutdown (ServiceSupervisor pattern, ADR-100)
 - [  ] Kalshi production configuration
+- [  ] Railway cloud deployment with TimescaleDB (ADR-108)
 - [⏭️] Data monitoring/alerting - **DEFERRED** to Phase 4 (CloudWatch/ELK, REQ-OBSERV-003)
 - [✅] Updated main.py with scheduler command group
 
@@ -1425,6 +1454,74 @@ python scripts/validate_phase_start.py --phase 3
 - [  ] **NO edge detection or odds calculation implemented yet**
 
 **Critical Note:** Phase 3 is pure data processing/ingestion. Odds models, edge detection, and trade signals are Phase 4+.
+
+---
+
+## Phase 3.5: Web Interface (Codename: "Dashboard")
+
+**Duration:** 2-3 weeks
+**Target:** February 2026
+**Status:** 🔵 Planned
+**Goal:** Deploy React frontend for monitoring data collection and system status before Phase 5 execution
+
+### Strategic Rationale
+
+**Why Frontend Before Phase 5?**
+- **Monitoring Visibility**: Watch live data collection without command-line tools
+- **System Health**: Visual dashboard for scheduler status, data quality, errors
+- **User Experience**: Intuitive interface for non-technical monitoring
+- **Testing Interface**: Prepare for Phase 5 trade monitoring before it's needed
+
+**Why Not Wait Until Phase 5?**
+- Frontend development takes time - start early to have it ready
+- Easier to iterate on UI while data collection is stable
+- Catch data issues visually (missing games, stale prices)
+- Build operational confidence with monitoring before trading goes live
+
+### Dependencies
+- Requires Phase 2.5: Railway deployment with TimescaleDB
+- Requires Phase 3: Data processing pipelines (for WebSocket feeds)
+
+### Tasks
+
+#### 1. Frontend Project Setup (Day 1-2)
+- [  ] Create React frontend project with TypeScript
+- [  ] Configure Railway deployment for static hosting
+- [  ] Set up API client for FastAPI backend
+- [  ] Implement authentication (optional, if needed)
+
+#### 2. Data Monitoring Dashboard (Day 3-5)
+- [  ] Live game state display (current NFL/NCAAF games)
+- [  ] Market price tracking (Kalshi market snapshots)
+- [  ] Data quality indicators (last updated, record counts)
+- [  ] Error/warning log display
+
+#### 3. System Health Dashboard (Day 6-8)
+- [  ] Scheduler status visualization (running jobs, intervals)
+- [  ] Service health indicators (FastAPI, TimescaleDB)
+- [  ] Historical uptime/availability charts
+- [  ] Alert configuration UI
+
+#### 4. Future Phase Preparation (Day 9-10)
+- [  ] Edge detection visualization (placeholder for Phase 4)
+- [  ] Position tracking layout (placeholder for Phase 5)
+- [  ] P&L dashboard skeleton (placeholder for Phase 5)
+
+### Deliverables
+- [  ] React frontend deployed to Railway
+- [  ] Data monitoring dashboard (game states, market prices)
+- [  ] System health dashboard (scheduler, services)
+- [  ] API integration with FastAPI backend
+
+### Success Criteria
+- [  ] Frontend accessible via Railway public URL
+- [  ] Live data updates display correctly
+- [  ] System health accurately reflected
+- [  ] Mobile-responsive design
+
+### Reference
+- **ADR-108**: Hybrid Cloud Architecture for Live Data Collection
+- **REQ-UI-001**: Web Interface for Monitoring (to be created)
 
 ---
 

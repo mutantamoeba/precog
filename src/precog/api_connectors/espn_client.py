@@ -466,7 +466,7 @@ class ESPNClient:
     def __init__(
         self,
         rate_limit_per_hour: int = 500,
-        timeout_seconds: int = 10,
+        timeout_seconds: float = 10,
         max_retries: int = 3,
     ):
         """
@@ -474,7 +474,7 @@ class ESPNClient:
 
         Args:
             rate_limit_per_hour: Maximum requests allowed per hour (default 500)
-            timeout_seconds: Request timeout in seconds (default 10)
+            timeout_seconds: Request timeout in seconds (default 10, supports float for sub-second)
             max_retries: Maximum retry attempts for failed requests (default 3)
 
         Educational Note:

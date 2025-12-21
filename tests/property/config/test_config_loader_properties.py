@@ -610,7 +610,7 @@ class TestKeyPathProperties:
         """
         # Build nested dict
         value = "leaf_value"
-        nested = value
+        nested: str | dict[str, Any] = value
         for key in reversed(keys):
             nested = {key: nested}
 

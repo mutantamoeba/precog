@@ -348,7 +348,7 @@ class TestAnomalyTrackingProperties:
         }
 
         for _ in range(num_validations):
-            validator.validate_game_state(game_state)
+            validator.validate_game_state(game_state)  # type: ignore[arg-type]
 
         count = validator.get_anomaly_count("test123")
         # At least one anomaly per validation
@@ -377,7 +377,7 @@ class TestAnomalyTrackingProperties:
                 "metadata": {"espn_event_id": game_id, "league": "nfl"},
                 "state": {"home_score": -1, "away_score": 0, "period": 1},
             }
-            validator.validate_game_state(game_state)
+            validator.validate_game_state(game_state)  # type: ignore[arg-type]
 
         # Reset
         validator.reset_anomaly_counts()

@@ -82,7 +82,7 @@ class TestMarketDataManagerPerformance:
                 processed.append(
                     {
                         "ticker": update["ticker"],
-                        "spread": update["yes_price"] + update["no_price"],
+                        "spread": update["yes_price"] + update["no_price"],  # type: ignore[operator]
                         "volume": update["volume"],
                     }
                 )

@@ -338,7 +338,8 @@ class TestRecoveryBehavior:
 
         for weird_data in weird_data_cases:
             try:
-                validator.validate_market_data(weird_data)
+                # Deliberately pass invalid types to test error handling
+                validator.validate_market_data(weird_data)  # type: ignore[arg-type]
             except (TypeError, ValueError):
                 pass  # Some exceptions are expected
 

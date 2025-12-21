@@ -361,7 +361,7 @@ class TestVenueHandling:
             "indoor": True,
         }
 
-        venue_id = poller._ensure_venue_normalized(venue_info)
+        venue_id = poller._ensure_venue_normalized(venue_info)  # type: ignore[arg-type]
 
         assert venue_id == 100
         mock_create_venue.assert_called_once()
@@ -378,7 +378,7 @@ class TestVenueHandling:
 
         venue_info = {"venue_name": "Test Stadium"}
 
-        venue_id = poller._ensure_venue_normalized(venue_info)
+        venue_id = poller._ensure_venue_normalized(venue_info)  # type: ignore[arg-type]
 
         assert venue_id is None
 
@@ -754,7 +754,7 @@ class TestAdjustPollInterval:
 
         # Should transition and set state
         assert poller._last_active_state is False
-        assert poller._current_interval == 60
+        assert poller._current_interval == 60  # type: ignore[unreachable]
 
     @patch("precog.schedulers.espn_game_poller.get_live_games")
     def test_adjust_disabled_does_nothing(
@@ -815,9 +815,10 @@ class TestPollWrapperAdaptive:
         )
 
         # Mock _adjust_poll_interval to verify it's not called
-        poller._adjust_poll_interval = MagicMock()
+        mock_adjust = MagicMock()
+        object.__setattr__(poller, "_adjust_poll_interval", mock_adjust)
 
         poller._poll_wrapper()
 
         # Should not have called adjustment
-        poller._adjust_poll_interval.assert_not_called()
+        mock_adjust.assert_not_called()

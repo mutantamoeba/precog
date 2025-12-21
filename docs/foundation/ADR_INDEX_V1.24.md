@@ -1,9 +1,17 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.23
-**Last Updated:** 2025-12-15
+**Version:** 1.24
+**Last Updated:** 2025-12-21
 **Status:** ✅ Current
+**Changes in v1.24:**
+- **CLOUD INFRASTRUCTURE ARCHITECTURE (PHASE 2.5)**: Added ADR-107, ADR-108 for cloud deployment
+- **ADR-107:** Single-Database Architecture with Execution Environments (live/paper/backtest column)
+- **ADR-108:** Hybrid Cloud Architecture for Live Data Collection (Railway + TimescaleDB)
+- Documents local PostgreSQL for testing, Railway TimescaleDB for production
+- Phase 3.5 Web Interface added for React monitoring dashboard before Phase 5
+- Related: Issue #247 (Railway deployment), Issue #241 (single database)
+- Total ADRs: 107 → 109 (2 new ADRs added for cloud infrastructure)
 **Changes in v1.23:**
 - **HISTORICAL DATA COLLECTION ARCHITECTURE (PHASE 2.5)**: Added ADR-106 for historical data seeding architecture
 - **ADR-106:** Historical Data Collection Architecture - Unified source adapter pattern for batch historical data seeding
@@ -351,7 +359,9 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR-103 | BasePoller Unified Design Pattern | 2025-12-07 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.28 |
 | ADR-104 | TBD - Rate Limiting Implementation | - | 🔵 | 1 | - |
 | ADR-105 | Two-Axis Environment Configuration (Planned) | 2025-12-09 | 🔵 | 2 | PHASE_2.5_DEFERRED_TASKS_V1.1 |
-| ADR-106 | Historical Data Collection Architecture | 2025-12-15 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.30 |
+| ADR-106 | Historical Data Collection Architecture | 2025-12-15 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.31 |
+| ADR-107 | Single-Database Architecture with Execution Environments | 2025-12-20 | ✅ | 2 | ADR-107_Single_Database_Execution_Environments.md |
+| ADR-108 | Hybrid Cloud Architecture for Live Data Collection | 2025-12-21 | ✅ | 2.5 | ADR-108_Hybrid_Cloud_Architecture.md |
 
 ### Phase 2: Live Data Integration (Planned)
 

@@ -201,6 +201,7 @@ class TestLoadResult:
         assert result.records_inserted == 90
         assert result.records_skipped == 10
         assert result.errors == 2
+        assert result.error_messages is not None
         assert len(result.error_messages) == 2
 
 

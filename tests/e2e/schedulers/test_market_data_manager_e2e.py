@@ -478,6 +478,8 @@ class TestMultiTickerManagement:
                 price_a = manager.get_current_price("TICKER-A")
                 price_b = manager.get_current_price("TICKER-B")
 
+                assert price_a is not None
+                assert price_b is not None
                 assert price_a["yes_price"] == Decimal("0.65")  # Updated
                 assert price_b["yes_price"] == Decimal("0.70")  # Unchanged
 
@@ -532,7 +534,7 @@ class TestGracefulShutdown:
                 manager.stop()
 
                 assert not mock_poller.enabled
-                assert not mock_ws.enabled
+                assert not mock_ws.enabled  # type: ignore[unreachable]
 
     def test_shutdown_under_load(self) -> None:
         """Test clean shutdown while receiving updates."""
@@ -678,6 +680,7 @@ class TestDecimalPrecisionE2E:
 
                 # Verify cache stores Decimal
                 price = manager.get_current_price("PRECISE-TICKER")
+                assert price is not None
                 assert isinstance(price["yes_price"], Decimal)
                 assert price["yes_price"] == Decimal("0.4975")
 
@@ -711,6 +714,7 @@ class TestDecimalPrecisionE2E:
                 # Verify all preserved exactly
                 for i, price in enumerate(sub_penny_prices):
                     cached = manager.get_current_price(f"T-{i}")
+                    assert cached is not None
                     assert cached["yes_price"] == price
 
                 manager.stop()

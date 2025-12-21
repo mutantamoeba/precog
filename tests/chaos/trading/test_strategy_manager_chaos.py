@@ -44,11 +44,18 @@ class TestMalformedConfigData:
     """Chaos tests for malformed config data handling."""
 
     def test_none_config(self, manager: StrategyManager) -> None:
-        """Test handling of None config."""
+        """Test handling of None config.
+
+        Educational Note:
+            _prepare_config_for_db() returns a JSON string, not a Python object.
+            For None input, json.dumps(None) returns 'null' which is valid JSON.
+            The function gracefully handles this edge case.
+        """
         try:
-            result = manager._prepare_config_for_db(None)  # type: ignore
-            # If it returns something, parse should handle None too
-            assert result is not None or result is None
+            result = manager._prepare_config_for_db(None)  # type: ignore[arg-type]
+            # Function returns JSON string - 'null' is valid JSON for None input
+            assert isinstance(result, str)  # type: ignore[unreachable]
+            assert result == "null"  # json.dumps(None) returns 'null'
         except (TypeError, AttributeError):
             pass  # Expected - None not iterable
 
@@ -602,10 +609,10 @@ class TestUpdateOperationsEdgeCases:
         )
 
         try:
-            manager.update_status(
+            manager.update_status(  # type: ignore[call-arg]
                 strategy_id=-1,
                 new_status="testing",
-                current_status="draft",
+                current_status="draft",  # Intentional invalid arg for chaos test
             )
         except (ValueError, Exception):
             pass  # Invalid ID
@@ -623,9 +630,9 @@ class TestUpdateOperationsEdgeCases:
         )
 
         try:
-            manager.update_metrics(
+            manager.update_metrics(  # type: ignore[call-arg]
                 strategy_id=1,
-                total_pnl=Decimal("999999999999999.9999"),
+                total_pnl=Decimal("999999999999999.9999"),  # Intentional invalid args
                 total_trades=999999999,
                 win_rate=Decimal("1.0001"),  # > 100%
             )
@@ -644,9 +651,9 @@ class TestUpdateOperationsEdgeCases:
         )
 
         try:
-            manager.update_metrics(
+            manager.update_metrics(  # type: ignore[call-arg]
                 strategy_id=1,
-                total_trades=-5,
+                total_trades=-5,  # Intentional invalid arg for chaos test
             )
         except (ValueError, Exception):
             pass  # Negative trades invalid
@@ -673,7 +680,7 @@ class TestExceptionHandling:
 
         for msg in messages:
             try:
-                raise ImmutabilityError(msg)  # type: ignore
+                raise ImmutabilityError(msg)  # Test with various message types
             except ImmutabilityError as e:
                 assert msg is None or str(e) == str(msg)
             except TypeError:

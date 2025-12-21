@@ -139,10 +139,8 @@ def test_decimal_never_becomes_float(price):
     assert isinstance(halved, Decimal), "Division created non-Decimal"
     assert isinstance(added, Decimal), "Addition created non-Decimal"
     assert isinstance(subtracted, Decimal), "Subtraction created non-Decimal"
-
-    # Extra paranoid: check they're not float
-    assert not isinstance(doubled, float), "Multiplication created float!"
-    assert not isinstance(halved, float), "Division created float!"
+    # Note: isinstance(x, Decimal) already guarantees x is not float
+    # since Decimal and float are disjoint types
 
 
 @given(price=kalshi_prices)

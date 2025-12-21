@@ -178,6 +178,7 @@ class TestLoadResultEdgeCases:
         """Test LoadResult with many error messages."""
         errors = [f"Error {i}" for i in range(1000)]
         result = LoadResult(errors=1000, error_messages=errors)
+        assert result.error_messages is not None
         assert len(result.error_messages) == 1000
 
 

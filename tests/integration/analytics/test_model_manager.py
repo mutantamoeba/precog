@@ -615,7 +615,7 @@ def test_decimal_precision_no_float_contamination(clean_test_data, manager, mode
     for key, value in config.items():
         if isinstance(value, (int, float, Decimal)):
             assert isinstance(value, Decimal), f"{key} should be Decimal, got {type(value)}"
-            assert not isinstance(value, float), f"{key} contaminated with float: {value}"
+            assert not isinstance(value, float), f"{key} contaminated with float: {value}"  # type: ignore[unreachable]
 
 
 # ============================================================================

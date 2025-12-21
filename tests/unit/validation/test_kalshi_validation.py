@@ -666,7 +666,7 @@ class TestValidationSummary:
 
     def test_summary_with_errors(self, validator: KalshiDataValidator) -> None:
         """Summary counts errors correctly."""
-        markets = [
+        markets: list[dict[str, object]] = [
             {"ticker": "GOOD", "status": "open"},
             {"ticker": "BAD", "volume": -100},  # Error
         ]

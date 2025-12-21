@@ -414,7 +414,7 @@ class TestLifecycleWorkflow:
         assert poller.enabled is True
 
         # Let it poll
-        time.sleep(2)
+        time.sleep(2)  # type: ignore[unreachable]
         assert poller.stats["polls_completed"] >= 1
 
         # Stop
@@ -598,7 +598,7 @@ class TestAdaptivePollingWorkflow:
             assert poller._last_active_state is True
 
             # Simulate games ending
-            mock_get_live.return_value = []
+            mock_get_live.return_value = []  # type: ignore[unreachable]
             poller._adjust_poll_interval()
 
             # Should return to idle interval
