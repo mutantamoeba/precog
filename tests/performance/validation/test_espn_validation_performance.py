@@ -479,7 +479,7 @@ class TestDecimalHandlingPerformance:
         # Float inputs (will be converted)
         start = time.perf_counter()
         for i in range(iterations):
-            validator.validate_clock(450.0, 2, "nfl")  # type: ignore
+            validator.validate_clock(450.0, 2, "nfl")
         float_elapsed = time.perf_counter() - start
 
         # Conversion overhead should be minimal (<50%)

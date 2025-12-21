@@ -273,7 +273,7 @@ class TestClockValidation:
     def test_float_clock_converted_to_decimal(self, validator: ESPNDataValidator) -> None:
         """Float clock should be handled (converted to Decimal)."""
         result = validator.validate_clock(
-            clock_seconds=450.5,  # type: ignore  # Testing float handling
+            clock_seconds=450.5,  # Testing float handling
             period=2,
             league="nfl",
         )

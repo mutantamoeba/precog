@@ -177,8 +177,8 @@ class TestWrongTypes:
         game = {
             "metadata": {"espn_event_id": "123", "league": "nfl"},
             "state": {
-                "home_score": "fourteen",  # type: ignore
-                "away_score": "seven",  # type: ignore
+                "home_score": "fourteen",  # Intentionally wrong type for chaos test
+                "away_score": "seven",  # Intentionally wrong type for chaos test
             },
         }
         # Should handle without crash (Python comparison may work)
@@ -221,8 +221,8 @@ class TestWrongTypes:
         """Test handling of boolean as score."""
         # Note: In Python, True == 1 and False == 0
         validator.validate_score(
-            home_score=True,  # type: ignore
-            away_score=False,  # type: ignore
+            home_score=True,  # Intentionally wrong type (bool is subtype of int)
+            away_score=False,  # Intentionally wrong type (bool is subtype of int)
         )
         # May pass due to Python's boolean-int equivalence
         # But should not crash

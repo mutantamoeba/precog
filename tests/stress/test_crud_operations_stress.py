@@ -396,7 +396,7 @@ class TestSCDType2RaceConditions:
             league="nfl",
         )
 
-        results = {"thread_a": None, "thread_b": None, "errors": []}
+        results: dict[str, object] = {"thread_a": None, "thread_b": None, "errors": []}
         # Use CISafeBarrier with timeout to prevent CI hangs (Issue #168)
         barrier = CISafeBarrier(2, timeout=10.0)
 

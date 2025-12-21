@@ -148,7 +148,7 @@ class TestESPNClientChaos:
 
         client = self._create_espn_client()
 
-        malformed_responses = [
+        malformed_responses: list[object] = [
             None,  # No response
             "",  # Empty string
             "not json at all",  # Invalid JSON

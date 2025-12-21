@@ -55,6 +55,7 @@ class TestLoadResult:
         assert result.records_updated == 5
         assert result.records_skipped == 3
         assert result.errors == 2
+        assert result.error_messages is not None
         assert len(result.error_messages) == 2
 
     def test_addition_combines_results(self) -> None:

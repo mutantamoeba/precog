@@ -264,7 +264,7 @@ class ESPNCompetitorFactory(BaseFactory):
     linescores = factory.LazyFunction(
         lambda: [{"value": fake.random_int(min=0, max=14)} for _ in range(4)]
     )
-    statistics = []
+    statistics: list[dict[str, object]] = []
     records = factory.LazyFunction(
         lambda: [
             {"name": "overall", "summary": f"{fake.random_int(0, 14)}-{fake.random_int(0, 14)}"},

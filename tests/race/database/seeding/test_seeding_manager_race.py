@@ -12,6 +12,7 @@ Usage:
 
 import tempfile
 import threading
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,7 @@ from precog.database.seeding import (
 
 
 @pytest.fixture
-def temp_seeds_dir() -> Path:
+def temp_seeds_dir() -> Iterator[Path]:
     """Create a temporary directory with mock SQL seed files."""
     with tempfile.TemporaryDirectory() as tmpdir:
         seeds_path = Path(tmpdir)

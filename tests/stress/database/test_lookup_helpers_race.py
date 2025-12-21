@@ -200,7 +200,7 @@ class TestGetValidCodesRace:
         """Verify concurrent valid code retrieval has no race conditions."""
 
         # Each function expects its own field, so provide proper data for both
-        def mock_side_effect(query: str, *args, **kwargs):  # type: ignore[no-untyped-def]
+        def mock_side_effect(query: str, *args: object, **kwargs: object) -> list[dict[str, str]]:
             if "strategy_type" in query.lower():
                 return [
                     {"strategy_type_code": "type1"},

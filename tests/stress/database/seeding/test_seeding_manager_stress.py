@@ -13,6 +13,7 @@ Usage:
 import gc
 import tempfile
 import time
+from collections.abc import Iterator
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
@@ -30,7 +31,7 @@ from precog.database.seeding import (
 
 
 @pytest.fixture
-def temp_seeds_dir_large() -> Path:
+def temp_seeds_dir_large() -> Iterator[Path]:
     """Create a temporary directory with many mock SQL seed files."""
     with tempfile.TemporaryDirectory() as tmpdir:
         seeds_path = Path(tmpdir)

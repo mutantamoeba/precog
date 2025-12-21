@@ -46,9 +46,9 @@ class TestMalformedConfigData:
     def test_none_config(self, manager: StrategyManager) -> None:
         """Test handling of None config."""
         try:
-            result = manager._prepare_config_for_db(None)  # type: ignore
-            # If it returns something, parse should handle None too
-            assert result is not None or result is None
+            result = manager._prepare_config_for_db(None)  # type: ignore[arg-type]
+            # If it returns something, verify it's valid (either dict or None)
+            assert isinstance(result, (dict, type(None)))
         except (TypeError, AttributeError):
             pass  # Expected - None not iterable
 
@@ -673,7 +673,7 @@ class TestExceptionHandling:
 
         for msg in messages:
             try:
-                raise ImmutabilityError(msg)  # type: ignore
+                raise ImmutabilityError(msg)  # Test with various message types
             except ImmutabilityError as e:
                 assert msg is None or str(e) == str(msg)
             except TypeError:
