@@ -1,0 +1,2045 @@
+{
+  "summary": {
+    "total": 43,
+    "passing": 43,
+    "failing": 0,
+    "untracked": 0
+  },
+  "modules": [
+    {
+      "module": "api_connectors/kalshi_client",
+      "tier": "critical",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/api_connectors/test_kalshi_client.py"
+        ],
+        "property": [
+          "property/api_connectors/test_kalshi_client_properties.py"
+        ],
+        "integration": [
+          "integration/api_connectors/test_kalshi_client_vcr.py",
+          "integration/api_connectors/test_kalshi_client_integration.py"
+        ],
+        "e2e": [
+          "e2e/api_connectors/test_kalshi_client_e2e.py"
+        ],
+        "stress": [
+          "stress/api_connectors/test_kalshi_client_stress.py"
+        ],
+        "race": [
+          "stress/api_connectors/test_kalshi_client_race.py"
+        ],
+        "performance": [
+          "performance/api_connectors/test_kalshi_client_performance.py"
+        ],
+        "chaos": [
+          "chaos/api_connectors/test_kalshi_client_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "api_connectors/kalshi_auth",
+      "tier": "critical",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/api_connectors/test_kalshi_auth_unit.py"
+        ],
+        "property": [
+          "property/api_connectors/test_kalshi_auth_properties.py"
+        ],
+        "integration": [
+          "integration/api_connectors/test_kalshi_auth_integration.py"
+        ],
+        "e2e": [
+          "e2e/api_connectors/test_kalshi_auth_e2e.py"
+        ],
+        "stress": [
+          "stress/api_connectors/test_kalshi_auth_stress.py"
+        ],
+        "race": [
+          "stress/api_connectors/test_kalshi_auth_race.py"
+        ],
+        "performance": [
+          "performance/api_connectors/test_kalshi_auth_performance.py"
+        ],
+        "chaos": [
+          "chaos/api_connectors/test_kalshi_auth_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "schedulers/market_data_manager",
+      "tier": "critical",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/schedulers/test_market_data_manager.py"
+        ],
+        "property": [
+          "property/schedulers/test_market_data_manager_properties.py"
+        ],
+        "integration": [
+          "integration/schedulers/test_market_data_manager_integration.py"
+        ],
+        "e2e": [
+          "e2e/schedulers/test_market_data_manager_e2e.py"
+        ],
+        "stress": [
+          "stress/schedulers/test_market_data_manager_stress.py"
+        ],
+        "race": [
+          "stress/schedulers/test_market_data_manager_stress.py"
+        ],
+        "performance": [
+          "performance/schedulers/test_market_data_manager_performance.py"
+        ],
+        "chaos": [
+          "stress/schedulers/test_market_data_manager_stress.py"
+        ]
+      }
+    },
+    {
+      "module": "schedulers/kalshi_poller",
+      "tier": "critical",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/schedulers/test_kalshi_poller.py"
+        ],
+        "property": [
+          "property/schedulers/test_kalshi_poller_properties.py"
+        ],
+        "integration": [
+          "integration/schedulers/test_kalshi_poller_integration.py"
+        ],
+        "e2e": [
+          "e2e/schedulers/test_kalshi_poller_e2e.py"
+        ],
+        "stress": [
+          "stress/schedulers/test_kalshi_poller_stress.py"
+        ],
+        "race": [
+          "stress/schedulers/test_kalshi_poller_race.py"
+        ],
+        "performance": [
+          "performance/schedulers/test_kalshi_poller_performance.py"
+        ],
+        "chaos": [
+          "chaos/schedulers/test_kalshi_poller_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "schedulers/kalshi_websocket",
+      "tier": "critical",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/schedulers/test_kalshi_websocket.py"
+        ],
+        "property": [
+          "property/schedulers/test_kalshi_websocket_properties.py"
+        ],
+        "integration": [
+          "integration/schedulers/test_kalshi_websocket_integration.py"
+        ],
+        "e2e": [
+          "e2e/schedulers/test_kalshi_websocket_e2e.py"
+        ],
+        "stress": [
+          "stress/schedulers/test_kalshi_websocket_stress.py"
+        ],
+        "race": [
+          "stress/schedulers/test_kalshi_websocket_race.py"
+        ],
+        "performance": [
+          "performance/schedulers/test_kalshi_websocket_performance.py"
+        ],
+        "chaos": [
+          "chaos/schedulers/test_kalshi_websocket_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "schedulers/service_supervisor",
+      "tier": "critical",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/schedulers/test_service_supervisor.py"
+        ],
+        "property": [
+          "property/schedulers/test_service_supervisor_properties.py"
+        ],
+        "integration": [
+          "integration/schedulers/test_service_supervisor_integration.py"
+        ],
+        "e2e": [
+          "e2e/schedulers/test_service_supervisor_e2e.py"
+        ],
+        "stress": [
+          "stress/schedulers/test_service_supervisor_stress.py"
+        ],
+        "race": [
+          "stress/schedulers/test_service_supervisor_race.py"
+        ],
+        "performance": [
+          "performance/schedulers/test_service_supervisor_performance.py"
+        ],
+        "chaos": [
+          "chaos/schedulers/test_service_supervisor_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "runners/service_runner",
+      "tier": "critical",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/runners/test_service_runner.py"
+        ],
+        "property": [
+          "property/runners/test_service_runner_properties.py"
+        ],
+        "integration": [
+          "integration/runners/test_service_runner_integration.py"
+        ],
+        "e2e": [
+          "e2e/runners/test_service_runner_e2e.py"
+        ],
+        "stress": [
+          "stress/runners/test_service_runner_stress.py"
+        ],
+        "race": [
+          "stress/runners/test_service_runner_race.py"
+        ],
+        "performance": [
+          "performance/runners/test_service_runner_performance.py"
+        ],
+        "chaos": [
+          "chaos/runners/test_service_runner_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "trading/kelly_criterion",
+      "tier": "critical",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/trading/test_kelly_criterion_unit.py"
+        ],
+        "property": [
+          "property/test_kelly_criterion_properties.py"
+        ],
+        "integration": [
+          "integration/trading/test_kelly_criterion_integration.py"
+        ],
+        "e2e": [
+          "e2e/trading/test_kelly_criterion_e2e.py"
+        ],
+        "stress": [
+          "stress/trading/test_kelly_criterion_stress.py"
+        ],
+        "race": [
+          "stress/trading/test_kelly_criterion_race.py"
+        ],
+        "performance": [
+          "performance/trading/test_kelly_criterion_performance.py"
+        ],
+        "chaos": [
+          "chaos/trading/test_kelly_criterion_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "analytics/model_manager",
+      "tier": "business",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/analytics/test_model_manager_unit.py"
+        ],
+        "property": [
+          "property/analytics/test_model_manager_properties.py"
+        ],
+        "integration": [
+          "integration/analytics/test_model_manager.py"
+        ],
+        "e2e": [
+          "e2e/analytics/test_model_manager_e2e.py"
+        ],
+        "stress": [
+          "stress/analytics/test_model_manager_stress.py"
+        ],
+        "race": [
+          "race/analytics/test_model_manager_race.py"
+        ],
+        "performance": [
+          "performance/analytics/test_model_manager_performance.py"
+        ],
+        "chaos": [
+          "chaos/analytics/test_model_manager_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "trading/strategy_manager",
+      "tier": "business",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/trading/test_strategy_manager_unit.py"
+        ],
+        "property": [
+          "property/trading/test_strategy_manager_properties.py"
+        ],
+        "integration": [
+          "integration/trading/test_strategy_manager.py"
+        ],
+        "e2e": [
+          "e2e/trading/test_strategy_manager_e2e.py"
+        ],
+        "stress": [
+          "stress/trading/test_strategy_manager_stress.py"
+        ],
+        "race": [
+          "race/trading/test_strategy_manager_race.py"
+        ],
+        "performance": [
+          "performance/trading/test_strategy_manager_performance.py"
+        ],
+        "chaos": [
+          "chaos/trading/test_strategy_manager_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "trading/position_manager",
+      "tier": "business",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/trading/test_position_manager_trailing_stops.py"
+        ],
+        "property": [
+          "property/trading/test_position_manager_properties.py"
+        ],
+        "integration": [
+          "integration/trading/test_position_manager.py"
+        ],
+        "e2e": [
+          "e2e/trading/test_position_manager_e2e.py"
+        ],
+        "stress": [
+          "stress/trading/test_position_manager_stress.py"
+        ],
+        "race": [
+          "race/trading/test_position_manager_race.py"
+        ],
+        "performance": [
+          "performance/trading/test_position_manager_performance.py"
+        ],
+        "chaos": [
+          "chaos/trading/test_position_manager_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "database/crud_operations",
+      "tier": "business",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/database/test_crud_operations_unit.py",
+          "test_crud_operations.py"
+        ],
+        "property": [
+          "property/test_crud_operations_properties.py",
+          "property/database/test_crud_operations_properties.py"
+        ],
+        "integration": [
+          "integration/database/test_crud_operations_integration.py"
+        ],
+        "e2e": [
+          "e2e/database/test_crud_operations_e2e.py"
+        ],
+        "stress": [
+          "stress/test_crud_operations_stress.py"
+        ],
+        "race": [
+          "stress/test_crud_operations_stress.py"
+        ],
+        "performance": [
+          "performance/test_crud_operations_performance.py"
+        ],
+        "chaos": [
+          "stress/test_crud_operations_stress.py",
+          "chaos/test_crud_operations_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "database/seeding/seeding_manager",
+      "tier": "business",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/database/seeding/test_seeding_manager.py"
+        ],
+        "property": [
+          "property/database/seeding/test_seeding_manager_properties.py"
+        ],
+        "integration": [
+          "integration/database/seeding/test_seeding_manager_integration.py"
+        ],
+        "e2e": [
+          "e2e/database/seeding/test_seeding_manager_e2e.py"
+        ],
+        "stress": [
+          "stress/database/seeding/test_seeding_manager_stress.py"
+        ],
+        "race": [
+          "race/database/seeding/test_seeding_manager_race.py"
+        ],
+        "performance": [
+          "performance/database/seeding/test_seeding_manager_performance.py"
+        ],
+        "chaos": [
+          "chaos/database/seeding/test_seeding_manager_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "database/seeding/historical_elo_loader",
+      "tier": "business",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/database/seeding/test_historical_elo_loader.py"
+        ],
+        "property": [
+          "property/database/seeding/test_historical_elo_loader_properties.py"
+        ],
+        "integration": [
+          "integration/database/seeding/test_historical_elo_loader_integration.py"
+        ],
+        "e2e": [
+          "e2e/database/seeding/test_historical_elo_loader_e2e.py"
+        ],
+        "stress": [
+          "stress/database/seeding/test_historical_elo_loader_stress.py"
+        ],
+        "race": [
+          "race/database/seeding/test_historical_elo_loader_race.py"
+        ],
+        "performance": [
+          "performance/database/seeding/test_historical_elo_loader_performance.py"
+        ],
+        "chaos": [
+          "chaos/database/seeding/test_historical_elo_loader_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "database/seeding/historical_games_loader",
+      "tier": "experimental",
+      "required": [
+        "unit"
+      ],
+      "present": [
+        "unit"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/database/seeding/test_historical_games_loader.py"
+        ]
+      }
+    },
+    {
+      "module": "database/seeding/historical_odds_loader",
+      "tier": "experimental",
+      "required": [
+        "unit"
+      ],
+      "present": [
+        "unit"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/database/seeding/test_historical_odds_loader.py"
+        ]
+      }
+    },
+    {
+      "module": "database/seeding/sources/base_source",
+      "tier": "experimental",
+      "required": [
+        "unit"
+      ],
+      "present": [
+        "unit"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/database/seeding/test_base_source.py"
+        ]
+      }
+    },
+    {
+      "module": "database/seeding/sources/fivethirtyeight",
+      "tier": "experimental",
+      "required": [
+        "unit"
+      ],
+      "present": [
+        "unit"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/database/seeding/test_fivethirtyeight_source.py"
+        ]
+      }
+    },
+    {
+      "module": "database/seeding/sources/betting_csv",
+      "tier": "experimental",
+      "required": [
+        "unit"
+      ],
+      "present": [
+        "unit"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/database/seeding/test_betting_csv_source.py"
+        ]
+      }
+    },
+    {
+      "module": "database/seeding/sources/sports/nfl_data_py_adapter",
+      "tier": "experimental",
+      "required": [
+        "unit"
+      ],
+      "present": [
+        "unit"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/database/seeding/test_nfl_data_py_adapter.py"
+        ]
+      }
+    },
+    {
+      "module": "schedulers/espn_game_poller",
+      "tier": "business",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/schedulers/test_espn_game_poller_unit.py"
+        ],
+        "property": [
+          "property/schedulers/test_espn_game_poller_properties.py"
+        ],
+        "integration": [
+          "integration/schedulers/test_espn_game_poller_integration.py"
+        ],
+        "e2e": [
+          "e2e/schedulers/test_espn_game_poller_e2e.py"
+        ],
+        "stress": [
+          "stress/schedulers/test_espn_game_poller_stress.py"
+        ],
+        "race": [
+          "stress/schedulers/test_espn_game_poller_stress.py",
+          "race/schedulers/test_espn_game_poller_race.py"
+        ],
+        "performance": [
+          "performance/schedulers/test_espn_game_poller_performance.py"
+        ],
+        "chaos": [
+          "chaos/schedulers/test_espn_game_poller_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "validation/espn_validation",
+      "tier": "business",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/validation/test_espn_validation.py"
+        ],
+        "property": [
+          "property/validation/test_espn_validation_properties.py"
+        ],
+        "integration": [
+          "integration/validation/test_espn_validation_integration.py"
+        ],
+        "e2e": [
+          "e2e/validation/test_espn_validation_e2e.py"
+        ],
+        "stress": [
+          "stress/validation/test_espn_validation_stress.py"
+        ],
+        "race": [
+          "stress/validation/test_espn_validation_race.py"
+        ],
+        "performance": [
+          "performance/validation/test_espn_validation_performance.py"
+        ],
+        "chaos": [
+          "chaos/validation/test_espn_validation_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "validation/kalshi_validation",
+      "tier": "business",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/validation/test_kalshi_validation.py"
+        ],
+        "property": [
+          "property/validation/test_kalshi_validation_properties.py"
+        ],
+        "integration": [
+          "integration/validation/test_kalshi_validation_integration.py"
+        ],
+        "e2e": [
+          "e2e/validation/test_kalshi_validation_e2e.py"
+        ],
+        "stress": [
+          "stress/validation/test_kalshi_validation_stress.py"
+        ],
+        "race": [
+          "stress/validation/test_kalshi_validation_race.py"
+        ],
+        "performance": [
+          "performance/validation/test_kalshi_validation_performance.py"
+        ],
+        "chaos": [
+          "chaos/validation/test_kalshi_validation_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "api_connectors/espn_client",
+      "tier": "infrastructure",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/api_connectors/test_espn_client.py"
+        ],
+        "property": [
+          "property/api_connectors/test_espn_client_properties.py"
+        ],
+        "integration": [
+          "integration/api_connectors/test_espn_client_integration.py",
+          "integration/api_connectors/test_espn_client_vcr.py"
+        ],
+        "e2e": [
+          "e2e/api_connectors/test_espn_client_e2e.py"
+        ],
+        "stress": [
+          "stress/api_connectors/test_espn_client_stress.py"
+        ],
+        "race": [
+          "race/api_connectors/test_espn_client_race.py"
+        ],
+        "performance": [
+          "performance/api_connectors/test_espn_client_performance.py"
+        ],
+        "chaos": [
+          "chaos/api_connectors/test_espn_client_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "api_connectors/rate_limiter",
+      "tier": "infrastructure",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/api_connectors/test_rate_limiter.py"
+        ],
+        "property": [
+          "property/api_connectors/test_rate_limiter_properties.py"
+        ],
+        "integration": [
+          "integration/api_connectors/test_rate_limiter_integration.py"
+        ],
+        "e2e": [
+          "e2e/api_connectors/test_rate_limiter_e2e.py"
+        ],
+        "stress": [
+          "stress/api_connectors/test_rate_limiter_stress.py"
+        ],
+        "race": [
+          "stress/api_connectors/test_rate_limiter_stress.py"
+        ],
+        "performance": [
+          "performance/api_connectors/test_rate_limiter_performance.py"
+        ],
+        "chaos": [
+          "stress/api_connectors/test_rate_limiter_stress.py"
+        ]
+      }
+    },
+    {
+      "module": "config/config_loader",
+      "tier": "infrastructure",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos",
+        "unit"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "property": [
+          "property/config/test_config_loader_properties.py"
+        ],
+        "integration": [
+          "integration/config/test_config_loader_integration.py"
+        ],
+        "e2e": [
+          "e2e/config/test_config_loader_e2e.py"
+        ],
+        "stress": [
+          "stress/test_config_loader_stress.py"
+        ],
+        "race": [
+          "stress/config/test_config_loader_race.py"
+        ],
+        "performance": [
+          "performance/config/test_config_loader_performance.py"
+        ],
+        "chaos": [
+          "chaos/config/test_config_loader_chaos.py"
+        ],
+        "unit": [
+          "test_config_loader.py"
+        ]
+      }
+    },
+    {
+      "module": "config/environment",
+      "tier": "infrastructure",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/config/test_environment.py"
+        ],
+        "property": [
+          "property/config/test_environment_properties.py"
+        ],
+        "integration": [
+          "integration/config/test_environment_integration.py"
+        ],
+        "e2e": [
+          "e2e/config/test_environment_e2e.py"
+        ],
+        "stress": [
+          "stress/config/test_environment_stress.py"
+        ],
+        "race": [
+          "stress/config/test_environment_race.py"
+        ],
+        "performance": [
+          "performance/config/test_environment_performance.py"
+        ],
+        "chaos": [
+          "stress/config/test_environment_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "database/connection",
+      "tier": "infrastructure",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos",
+        "unit"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "property": [
+          "property/database/test_connection_property.py"
+        ],
+        "integration": [
+          "integration/database/test_connection_integration.py"
+        ],
+        "e2e": [
+          "e2e/database/test_connection_e2e.py"
+        ],
+        "stress": [
+          "stress/test_connection_stress.py"
+        ],
+        "race": [
+          "stress/database/test_connection_race.py"
+        ],
+        "performance": [
+          "performance/database/test_connection_performance.py"
+        ],
+        "chaos": [
+          "chaos/database/test_connection_chaos.py"
+        ],
+        "unit": [
+          "test_database_connection.py"
+        ]
+      }
+    },
+    {
+      "module": "database/initialization",
+      "tier": "infrastructure",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/database/test_initialization_unit.py"
+        ],
+        "property": [
+          "property/database/test_initialization_properties.py"
+        ],
+        "integration": [
+          "integration/database/test_initialization_integration.py"
+        ],
+        "e2e": [
+          "e2e/database/test_initialization_e2e.py"
+        ],
+        "stress": [
+          "stress/database/test_initialization_stress.py"
+        ],
+        "race": [
+          "stress/database/test_initialization_race.py"
+        ],
+        "performance": [
+          "performance/database/test_initialization_performance.py"
+        ],
+        "chaos": [
+          "chaos/database/test_initialization_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "database/lookup_helpers",
+      "tier": "infrastructure",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/database/test_lookup_helpers_unit.py"
+        ],
+        "property": [
+          "property/database/test_lookup_helpers_properties.py"
+        ],
+        "integration": [
+          "integration/database/test_lookup_helpers_integration.py"
+        ],
+        "e2e": [
+          "e2e/database/test_lookup_helpers_e2e.py"
+        ],
+        "stress": [
+          "stress/database/test_lookup_helpers_stress.py"
+        ],
+        "race": [
+          "stress/database/test_lookup_helpers_race.py"
+        ],
+        "performance": [
+          "performance/database/test_lookup_helpers_performance.py"
+        ],
+        "chaos": [
+          "chaos/database/test_lookup_helpers_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "schedulers/base_poller",
+      "tier": "infrastructure",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/schedulers/test_base_poller_unit.py"
+        ],
+        "property": [
+          "property/schedulers/test_base_poller_properties.py"
+        ],
+        "integration": [
+          "integration/schedulers/test_base_poller_integration.py"
+        ],
+        "e2e": [
+          "e2e/schedulers/test_base_poller_e2e.py"
+        ],
+        "stress": [
+          "stress/schedulers/test_base_poller_stress.py"
+        ],
+        "race": [
+          "race/schedulers/test_base_poller_race.py"
+        ],
+        "performance": [
+          "performance/schedulers/test_base_poller_performance.py"
+        ],
+        "chaos": [
+          "chaos/schedulers/test_base_poller_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "utils/logger",
+      "tier": "infrastructure",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos",
+        "unit"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "property": [
+          "property/utils/test_logger_property.py"
+        ],
+        "integration": [
+          "integration/utils/test_logger_integration.py"
+        ],
+        "e2e": [
+          "e2e/utils/test_logger_e2e.py"
+        ],
+        "stress": [
+          "stress/test_logger_stress.py"
+        ],
+        "race": [
+          "stress/utils/test_logger_race.py"
+        ],
+        "performance": [
+          "performance/utils/test_logger_performance.py"
+        ],
+        "chaos": [
+          "chaos/utils/test_logger_chaos.py"
+        ],
+        "unit": [
+          "test_logger.py"
+        ]
+      }
+    },
+    {
+      "module": "cli/scheduler",
+      "tier": "critical",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/cli/test_cli_scheduler.py"
+        ],
+        "property": [
+          "property/cli/test_cli_scheduler_properties.py"
+        ],
+        "integration": [
+          "integration/cli/test_cli_scheduler_integration.py"
+        ],
+        "e2e": [
+          "e2e/cli/test_cli_scheduler_e2e.py"
+        ],
+        "stress": [
+          "stress/cli/test_cli_scheduler_stress.py"
+        ],
+        "race": [
+          "race/cli/test_cli_scheduler_race.py"
+        ],
+        "performance": [
+          "performance/cli/test_cli_scheduler_performance.py"
+        ],
+        "chaos": [
+          "chaos/cli/test_cli_scheduler_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "cli/kalshi",
+      "tier": "business",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/schedulers/test_kalshi_websocket.py",
+          "unit/schedulers/test_kalshi_poller.py",
+          "unit/api_connectors/test_kalshi_client.py",
+          "unit/api_connectors/test_kalshi_auth_unit.py",
+          "unit/validation/test_kalshi_validation.py"
+        ],
+        "property": [
+          "property/schedulers/test_kalshi_poller_properties.py",
+          "property/schedulers/test_kalshi_websocket_properties.py",
+          "property/api_connectors/test_kalshi_client_properties.py",
+          "property/api_connectors/test_kalshi_auth_properties.py",
+          "property/validation/test_kalshi_validation_properties.py"
+        ],
+        "integration": [
+          "integration/schedulers/test_kalshi_poller_integration.py",
+          "integration/schedulers/test_kalshi_websocket_integration.py",
+          "integration/api_connectors/test_kalshi_client_vcr.py",
+          "integration/api_connectors/test_kalshi_client_integration.py",
+          "integration/api_connectors/test_kalshi_auth_integration.py",
+          "integration/validation/test_kalshi_validation_integration.py"
+        ],
+        "e2e": [
+          "e2e/schedulers/test_kalshi_poller_e2e.py",
+          "e2e/schedulers/test_kalshi_websocket_e2e.py",
+          "e2e/api_connectors/test_kalshi_auth_e2e.py",
+          "e2e/api_connectors/test_kalshi_client_e2e.py",
+          "e2e/api_connectors/test_kalshi_e2e.py",
+          "e2e/validation/test_kalshi_validation_e2e.py"
+        ],
+        "stress": [
+          "stress/schedulers/test_kalshi_poller_stress.py",
+          "stress/schedulers/test_kalshi_websocket_stress.py",
+          "stress/api_connectors/test_kalshi_auth_stress.py",
+          "stress/api_connectors/test_kalshi_client_stress.py",
+          "stress/validation/test_kalshi_validation_stress.py"
+        ],
+        "race": [
+          "stress/schedulers/test_kalshi_websocket_race.py",
+          "stress/schedulers/test_kalshi_poller_race.py",
+          "stress/api_connectors/test_kalshi_client_race.py",
+          "stress/api_connectors/test_kalshi_auth_race.py",
+          "stress/validation/test_kalshi_validation_race.py"
+        ],
+        "performance": [
+          "performance/schedulers/test_kalshi_websocket_performance.py",
+          "performance/schedulers/test_kalshi_poller_performance.py",
+          "performance/api_connectors/test_kalshi_auth_performance.py",
+          "performance/api_connectors/test_kalshi_client_performance.py",
+          "performance/validation/test_kalshi_validation_performance.py"
+        ],
+        "chaos": [
+          "chaos/schedulers/test_kalshi_poller_chaos.py",
+          "chaos/schedulers/test_kalshi_websocket_chaos.py",
+          "chaos/api_connectors/test_kalshi_auth_chaos.py",
+          "chaos/api_connectors/test_kalshi_client_chaos.py",
+          "chaos/validation/test_kalshi_validation_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "cli/espn",
+      "tier": "business",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/schedulers/test_espn_game_poller_unit.py",
+          "unit/api_connectors/test_espn_client.py",
+          "unit/validation/test_espn_validation.py"
+        ],
+        "property": [
+          "property/schedulers/test_espn_game_poller_properties.py",
+          "property/api_connectors/test_espn_client_properties.py",
+          "property/validation/test_espn_validation_properties.py"
+        ],
+        "integration": [
+          "integration/schedulers/test_espn_game_poller_integration.py",
+          "integration/api_connectors/test_espn_client_integration.py",
+          "integration/api_connectors/test_espn_client_vcr.py",
+          "integration/validation/test_espn_validation_integration.py"
+        ],
+        "e2e": [
+          "e2e/schedulers/test_espn_game_poller_e2e.py",
+          "e2e/api_connectors/test_espn_e2e.py",
+          "e2e/api_connectors/test_espn_client_e2e.py",
+          "e2e/api_connectors/test_espn_edge_cases.py",
+          "e2e/validation/test_espn_validation_e2e.py"
+        ],
+        "stress": [
+          "stress/schedulers/test_espn_game_poller_stress.py",
+          "stress/api_connectors/test_espn_client_stress.py",
+          "stress/validation/test_espn_validation_stress.py"
+        ],
+        "race": [
+          "stress/schedulers/test_espn_game_poller_stress.py",
+          "stress/validation/test_espn_validation_race.py",
+          "race/schedulers/test_espn_game_poller_race.py",
+          "race/api_connectors/test_espn_client_race.py"
+        ],
+        "performance": [
+          "performance/schedulers/test_espn_game_poller_performance.py",
+          "performance/api_connectors/test_espn_client_performance.py",
+          "performance/validation/test_espn_validation_performance.py"
+        ],
+        "chaos": [
+          "chaos/schedulers/test_espn_game_poller_chaos.py",
+          "chaos/api_connectors/test_espn_client_chaos.py",
+          "chaos/validation/test_espn_validation_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "cli/db",
+      "tier": "business",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/cli/test_cli_db.py"
+        ],
+        "property": [
+          "property/cli/test_cli_db_properties.py"
+        ],
+        "integration": [
+          "integration/cli/test_cli_db_integration.py"
+        ],
+        "e2e": [
+          "e2e/cli/test_cli_db_e2e.py"
+        ],
+        "stress": [
+          "stress/cli/test_cli_db_stress.py"
+        ],
+        "race": [
+          "race/cli/test_cli_db_race.py"
+        ],
+        "performance": [
+          "performance/cli/test_cli_db_performance.py"
+        ],
+        "chaos": [
+          "chaos/cli/test_cli_db_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "cli/data",
+      "tier": "business",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/schedulers/test_market_data_manager.py",
+          "unit/database/seeding/test_nfl_data_py_adapter.py",
+          "test_database_connection.py"
+        ],
+        "property": [
+          "property/test_database_crud_properties.py",
+          "property/schedulers/test_market_data_manager_properties.py"
+        ],
+        "integration": [
+          "integration/schedulers/test_market_data_manager_integration.py"
+        ],
+        "e2e": [
+          "e2e/schedulers/test_market_data_manager_e2e.py"
+        ],
+        "stress": [
+          "stress/schedulers/test_market_data_manager_stress.py"
+        ],
+        "race": [
+          "stress/schedulers/test_market_data_manager_stress.py"
+        ],
+        "performance": [
+          "performance/schedulers/test_market_data_manager_performance.py"
+        ],
+        "chaos": [
+          "stress/schedulers/test_market_data_manager_stress.py"
+        ]
+      }
+    },
+    {
+      "module": "cli/config",
+      "tier": "infrastructure",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos",
+        "unit"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "property": [
+          "property/test_config_validation_properties.py",
+          "property/config/test_config_loader_properties.py"
+        ],
+        "integration": [
+          "integration/config/test_config_loader_integration.py"
+        ],
+        "e2e": [
+          "e2e/config/test_config_loader_e2e.py"
+        ],
+        "stress": [
+          "stress/test_config_loader_stress.py"
+        ],
+        "race": [
+          "stress/config/test_config_loader_race.py"
+        ],
+        "performance": [
+          "performance/config/test_config_loader_performance.py"
+        ],
+        "chaos": [
+          "chaos/config/test_config_loader_chaos.py"
+        ],
+        "unit": [
+          "test_config_loader.py"
+        ]
+      }
+    },
+    {
+      "module": "cli/system",
+      "tier": "infrastructure",
+      "required": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/cli/test_cli_system.py"
+        ],
+        "property": [
+          "property/cli/test_cli_system_properties.py"
+        ],
+        "integration": [
+          "integration/cli/test_cli_system_integration.py"
+        ],
+        "e2e": [
+          "e2e/cli/test_cli_system_e2e.py"
+        ],
+        "stress": [
+          "stress/cli/test_cli_system_stress.py"
+        ],
+        "race": [
+          "race/cli/test_cli_system_race.py"
+        ],
+        "performance": [
+          "performance/cli/test_cli_system_performance.py"
+        ],
+        "chaos": [
+          "chaos/cli/test_cli_system_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "cli/_future/model",
+      "tier": "experimental",
+      "required": [
+        "unit"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/analytics/test_model_manager_unit.py"
+        ],
+        "property": [
+          "property/analytics/test_model_manager_properties.py"
+        ],
+        "integration": [
+          "integration/analytics/test_model_manager.py"
+        ],
+        "e2e": [
+          "e2e/analytics/test_model_manager_e2e.py"
+        ],
+        "stress": [
+          "stress/analytics/test_model_manager_stress.py"
+        ],
+        "race": [
+          "race/analytics/test_model_manager_race.py"
+        ],
+        "performance": [
+          "performance/analytics/test_model_manager_performance.py"
+        ],
+        "chaos": [
+          "chaos/analytics/test_model_manager_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "cli/_future/position",
+      "tier": "experimental",
+      "required": [
+        "unit"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/trading/test_position_manager_trailing_stops.py"
+        ],
+        "property": [
+          "property/trading/test_position_manager_properties.py"
+        ],
+        "integration": [
+          "integration/trading/test_position_manager.py"
+        ],
+        "e2e": [
+          "e2e/trading/test_position_manager_e2e.py"
+        ],
+        "stress": [
+          "stress/trading/test_position_manager_stress.py"
+        ],
+        "race": [
+          "race/trading/test_position_manager_race.py"
+        ],
+        "performance": [
+          "performance/trading/test_position_manager_performance.py"
+        ],
+        "chaos": [
+          "chaos/trading/test_position_manager_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "cli/_future/strategy",
+      "tier": "experimental",
+      "required": [
+        "unit"
+      ],
+      "present": [
+        "unit",
+        "property",
+        "integration",
+        "e2e",
+        "stress",
+        "race",
+        "performance",
+        "chaos"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/trading/test_strategy_manager_unit.py"
+        ],
+        "property": [
+          "property/test_strategy_versioning_properties.py",
+          "property/trading/test_strategy_manager_properties.py"
+        ],
+        "integration": [
+          "integration/trading/test_strategy_manager.py"
+        ],
+        "e2e": [
+          "e2e/trading/test_strategy_manager_e2e.py"
+        ],
+        "stress": [
+          "stress/trading/test_strategy_manager_stress.py"
+        ],
+        "race": [
+          "race/trading/test_strategy_manager_race.py"
+        ],
+        "performance": [
+          "performance/trading/test_strategy_manager_performance.py"
+        ],
+        "chaos": [
+          "chaos/trading/test_strategy_manager_chaos.py"
+        ]
+      }
+    },
+    {
+      "module": "cli/_future/trade",
+      "tier": "experimental",
+      "required": [
+        "unit"
+      ],
+      "present": [
+        "unit"
+      ],
+      "missing": [],
+      "status": "PASS",
+      "tests": {
+        "unit": [
+          "unit/cli/test_cli_future_trade.py"
+        ]
+      }
+    }
+  ]
+}

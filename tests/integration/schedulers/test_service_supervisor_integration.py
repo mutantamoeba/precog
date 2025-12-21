@@ -511,7 +511,7 @@ class TestLifecycleIntegration:
         # 3. Start
         supervisor.start_all()
         assert supervisor.is_running
-        assert service.is_running()
+        assert service.is_running()  # type: ignore[unreachable]
 
         # 4. Run (let it poll)
         time.sleep(0.5)

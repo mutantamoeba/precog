@@ -48,7 +48,7 @@ class TestMalformedConfigData:
         try:
             result = manager._prepare_config_for_db(None)  # type: ignore[arg-type]
             # If it returns something, verify it's valid (either dict or None)
-            assert isinstance(result, (dict, type(None)))
+            assert isinstance(result, (dict, type(None)))  # type: ignore[unreachable]
         except (TypeError, AttributeError):
             pass  # Expected - None not iterable
 

@@ -243,7 +243,7 @@ class TestSeedCategory:
             which simplifies code that works with category names from configs.
         """
         assert SeedCategory.TEAMS == "teams"
-        assert SeedCategory.VENUES == "venues"
+        assert SeedCategory.VENUES == "venues"  # type: ignore[unreachable]
 
 
 # =============================================================================

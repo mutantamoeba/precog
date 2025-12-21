@@ -373,7 +373,7 @@ class TestServiceSupervisorCore:
         supervisor.start_all()
         assert supervisor.is_running is True
 
-        supervisor.stop_all()
+        supervisor.stop_all()  # type: ignore[unreachable]
         assert supervisor.is_running is False
 
     def test_uptime_seconds_increases(
@@ -516,7 +516,7 @@ class TestHealthMonitoring:
         time.sleep(1.5)  # Wait for health check
 
         assert supervisor.services["test"].healthy is False
-        assert supervisor.services["test"].consecutive_failures >= 1
+        assert supervisor.services["test"].consecutive_failures >= 1  # type: ignore[unreachable]
         supervisor.stop_all()
 
     def test_health_check_updates_timestamp(

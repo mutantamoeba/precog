@@ -355,7 +355,7 @@ class TestValidationSummaryIntegration:
             {"ticker": "", "status": "open"},  # Invalid
         ]
 
-        results = validator.validate_markets(markets)
+        results = validator.validate_markets(markets)  # type: ignore[arg-type]
         summary = validator.get_validation_summary(results)
 
         assert summary["total"] == 2

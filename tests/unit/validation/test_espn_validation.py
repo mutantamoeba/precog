@@ -12,6 +12,7 @@ Related: src/precog/validation/espn_validation.py
 """
 
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -39,8 +40,12 @@ def strict_validator() -> ESPNDataValidator:
 
 
 @pytest.fixture
-def valid_game_state() -> dict:
-    """Create a valid ESPN game state for testing."""
+def valid_game_state() -> dict[str, Any]:
+    """Create a valid ESPN game state for testing.
+
+    Note: Returns dict[str, Any] because tests modify the structure.
+    Use type: ignore[arg-type] when passing to validate_game_state.
+    """
     return {
         "metadata": {
             "espn_event_id": "401547389",
@@ -375,7 +380,7 @@ class TestFullGameStateValidation:
 
     def test_valid_game_state(self, validator: ESPNDataValidator, valid_game_state: dict) -> None:
         """Valid game state should pass all checks."""
-        result = validator.validate_game_state(valid_game_state)
+        result = validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
         assert result.is_valid
         assert not result.has_errors
 
@@ -384,7 +389,7 @@ class TestFullGameStateValidation:
     ) -> None:
         """Missing ESPN event ID should error."""
         del valid_game_state["metadata"]["espn_event_id"]
-        result = validator.validate_game_state(valid_game_state)
+        result = validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
         assert not result.is_valid
         assert any("espn_event_id" in e.field for e in result.errors)
 
@@ -393,7 +398,7 @@ class TestFullGameStateValidation:
     ) -> None:
         """Missing team should warn."""
         del valid_game_state["metadata"]["home_team"]
-        result = validator.validate_game_state(valid_game_state)
+        result = validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
         assert result.has_warnings
         assert any("home_team" in w.field for w in result.warnings)
 
@@ -402,13 +407,13 @@ class TestFullGameStateValidation:
     ) -> None:
         """Invalid venue capacity should warn."""
         valid_game_state["metadata"]["venue"]["capacity"] = -100
-        result = validator.validate_game_state(valid_game_state)
+        result = validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
         assert result.has_warnings
         assert any("capacity" in w.field for w in result.warnings)
 
     def test_game_id_in_result(self, validator: ESPNDataValidator, valid_game_state: dict) -> None:
         """Game ID should be preserved in result."""
-        result = validator.validate_game_state(valid_game_state)
+        result = validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
         assert result.game_id == "401547389"
 
 
@@ -424,7 +429,7 @@ class TestAnomalyTracking:
         """Anomalies should be tracked per game."""
         # Add an error
         valid_game_state["state"]["home_score"] = -1
-        validator.validate_game_state(valid_game_state)
+        validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
 
         count = validator.get_anomaly_count("401547389")
         assert count >= 1
@@ -434,8 +439,8 @@ class TestAnomalyTracking:
     ) -> None:
         """Multiple validations should accumulate counts."""
         valid_game_state["state"]["home_score"] = -1
-        validator.validate_game_state(valid_game_state)
-        validator.validate_game_state(valid_game_state)
+        validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
+        validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
 
         count = validator.get_anomaly_count("401547389")
         assert count >= 2
@@ -445,7 +450,7 @@ class TestAnomalyTracking:
     ) -> None:
         """Reset should clear all counts."""
         valid_game_state["state"]["home_score"] = -1
-        validator.validate_game_state(valid_game_state)
+        validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
 
         validator.reset_anomaly_counts()
         assert validator.get_anomaly_count("401547389") == 0
@@ -455,7 +460,7 @@ class TestAnomalyTracking:
     ) -> None:
         """Should return all tracked games."""
         valid_game_state["state"]["home_score"] = -1
-        validator.validate_game_state(valid_game_state)
+        validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
 
         all_counts = validator.get_all_anomaly_counts()
         assert "401547389" in all_counts
@@ -464,7 +469,7 @@ class TestAnomalyTracking:
         """Tracking disabled should not store counts."""
         validator = ESPNDataValidator(track_anomalies=False)
         valid_game_state["state"]["home_score"] = -1
-        validator.validate_game_state(valid_game_state)
+        validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
 
         assert validator.get_anomaly_count("401547389") == 0
 

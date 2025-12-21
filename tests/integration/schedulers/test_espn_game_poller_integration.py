@@ -117,7 +117,7 @@ class TestSchedulerLifecycle:
 
         try:
             assert poller._scheduler is not None
-            assert poller.enabled is True
+            assert poller.enabled is True  # type: ignore[unreachable]
             assert poller.is_running() is True
         finally:
             poller.stop()
@@ -135,7 +135,7 @@ class TestSchedulerLifecycle:
         poller.stop()
 
         assert poller.enabled is False
-        assert poller.is_running() is False
+        assert poller.is_running() is False  # type: ignore[unreachable]
 
     def test_multiple_start_stop_cycles(self, mock_espn_client: MagicMock) -> None:
         """Test poller handles multiple start/stop cycles."""
@@ -603,7 +603,7 @@ class TestAdaptivePollingIntegration:
         assert poller._last_active_state is False  # No games = inactive
 
         # Simulate active games
-        mock_get_live.return_value = [{"game_id": 1}]
+        mock_get_live.return_value = [{"game_id": 1}]  # type: ignore[unreachable]
         poller._adjust_poll_interval()
         assert poller._last_active_state is True  # Has games = active
 
@@ -655,7 +655,7 @@ class TestAdaptivePollingIntegration:
 
         # Should have been adjusted
         assert poller._last_active_state is False
-        assert poller.get_current_interval() == 60
+        assert poller.get_current_interval() == 60  # type: ignore[unreachable]
 
     @patch("precog.schedulers.espn_game_poller.get_live_games")
     def test_adaptive_polling_during_running_scheduler(

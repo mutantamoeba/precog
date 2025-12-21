@@ -252,6 +252,18 @@ module = [
 ]
 ignore_missing_imports = true  # External libraries without type stubs
 
+# Planned/optional modules - ignore until implemented
+[[tool.mypy.overrides]]
+module = [
+    "nfl_data_py",                                              # Optional sports data library
+    "precog.database.seeding.sources.sports.nba_api_adapter",   # Planned adapter
+    "precog.database.seeding.sources.sports.pybaseball_adapter",# Planned adapter
+    "precog.database.seeding.sources.sports.cfbd_adapter",      # Planned adapter
+    "precog.schedulers.kalshi_market_poller",                   # Planned scheduler
+    "precog.schedulers.market_updater",                         # Planned scheduler
+]
+ignore_missing_imports = true  # Planned modules - remove when implemented
+
 # ==============================================================================
 # PYTEST CONFIGURATION (Testing)
 # ==============================================================================

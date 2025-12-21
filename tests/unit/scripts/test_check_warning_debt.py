@@ -30,7 +30,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent / "scripts"))
 
 # Script imports - not a proper package
-from check_warning_debt import (
+from check_warning_debt import (  # type: ignore[import-not-found]
     categorize_warnings,
     check_baseline,
     extract_mypy_errors,

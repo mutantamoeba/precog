@@ -754,7 +754,7 @@ class TestAdjustPollInterval:
 
         # Should transition and set state
         assert poller._last_active_state is False
-        assert poller._current_interval == 60
+        assert poller._current_interval == 60  # type: ignore[unreachable]
 
     @patch("precog.schedulers.espn_game_poller.get_live_games")
     def test_adjust_disabled_does_nothing(

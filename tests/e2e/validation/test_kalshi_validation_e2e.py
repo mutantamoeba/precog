@@ -268,8 +268,11 @@ class TestErrorDetectionFlow:
         ]
 
         for market in invalid_markets:
-            result = validator.validate_market_data(market)
-            assert result.has_errors, f"Should detect error in {market.get('ticker', 'empty')}"
+            # Deliberately pass potentially invalid types to test validation
+            result = validator.validate_market_data(market)  # type: ignore[arg-type]
+            assert result.has_errors, (
+                f"Should detect error in {market.get('ticker', 'empty') if isinstance(market, dict) else 'empty'}"
+            )
 
     def test_detect_invalid_balance(self, validator: KalshiDataValidator) -> None:
         """Test detection of invalid balance scenarios."""
@@ -280,7 +283,8 @@ class TestErrorDetectionFlow:
         ]
 
         for balance in invalid_balances:
-            result = validator.validate_balance(balance)
+            # Testing invalid types - float is not allowed
+            result = validator.validate_balance(balance)  # type: ignore[arg-type]
             assert result.has_errors
 
 

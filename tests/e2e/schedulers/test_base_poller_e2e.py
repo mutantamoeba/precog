@@ -73,7 +73,7 @@ class TestCompletePollingWorkflow:
         assert poller.enabled is True
 
         # Step 3: Let it run for several cycles
-        time.sleep(3.5)
+        time.sleep(3.5)  # type: ignore[unreachable]
 
         # Step 4: Verify polling occurred
         assert poller.stats["polls_completed"] >= 3

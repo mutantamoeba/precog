@@ -39,7 +39,9 @@ from precog.cli._common import (
 )
 
 if TYPE_CHECKING:
-    from precog.schedulers.kalshi_market_poller import KalshiMarketPoller
+    from precog.schedulers.kalshi_market_poller import (
+        KalshiMarketPoller,
+    )
     from precog.schedulers.market_updater import MarketUpdater
     from precog.schedulers.service_supervisor import ServiceSupervisor
 

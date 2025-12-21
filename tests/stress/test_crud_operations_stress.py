@@ -920,11 +920,11 @@ class TestStateChangeDetectionStress:
                             local_true += 1
 
                 with lock:
-                    results["true_count"] += local_true
-                    results["false_count"] += local_false
+                    results["true_count"] += local_true  # type: ignore[operator]
+                    results["false_count"] += local_false  # type: ignore[operator]
             except Exception as e:
                 with lock:
-                    results["errors"].append(f"Thread {thread_id}: {e}")
+                    results["errors"].append(f"Thread {thread_id}: {e}")  # type: ignore[union-attr]
 
         threads = [threading.Thread(target=compare_states, args=(i,)) for i in range(10)]
         for t in threads:
@@ -933,7 +933,9 @@ class TestStateChangeDetectionStress:
             t.join(timeout=30)
 
         # No errors
-        assert len(results["errors"]) == 0, f"Errors: {results['errors']}"
+        errors_list = results["errors"]
+        assert isinstance(errors_list, list), f"Expected list, got {type(errors_list)}"
+        assert len(errors_list) == 0, f"Errors: {errors_list}"
 
         # Each thread does 250 same-state checks (should be False)
         # and 250 different-state checks (should be True)
@@ -1014,7 +1016,9 @@ class TestStateChangeDetectionRace:
         for t in threads:
             t.join(timeout=30)
 
-        assert len(results["errors"]) == 0, f"Errors: {results['errors']}"
+        errors_list = results["errors"]
+        assert isinstance(errors_list, list), f"Expected list, got {type(errors_list)}"
+        assert len(errors_list) == 0, f"Errors: {errors_list}"
         assert results["successes"] == 1000  # 10 threads * 100 calls
         assert results["failures"] == 0
 
@@ -1073,11 +1077,11 @@ class TestStateChangeDetectionRace:
                             local_true += 1
 
                 with lock:
-                    results["true_count"] += local_true
-                    results["false_count"] += local_false
+                    results["true_count"] += local_true  # type: ignore[operator]
+                    results["false_count"] += local_false  # type: ignore[operator]
             except Exception as e:
                 with lock:
-                    results["errors"].append(f"Thread {thread_id}: {e}")
+                    results["errors"].append(f"Thread {thread_id}: {e}")  # type: ignore[union-attr]
 
         threads = [threading.Thread(target=mixed_comparisons, args=(i,)) for i in range(10)]
         for t in threads:
@@ -1085,7 +1089,9 @@ class TestStateChangeDetectionRace:
         for t in threads:
             t.join(timeout=30)
 
-        assert len(results["errors"]) == 0, f"Errors: {results['errors']}"
+        errors_list = results["errors"]
+        assert isinstance(errors_list, list), f"Expected list, got {type(errors_list)}"
+        assert len(errors_list) == 0, f"Errors: {errors_list}"
         # 5 even threads * 100 = 500 False
         # 5 odd threads * 100 = 500 True (i=0 gives same score, so 99 True per thread... actually i>0 means True)
         # Wait, i starts at 0, so home_score=10+0=10 which is same as current
@@ -1164,7 +1170,9 @@ class TestStateChangeDetectionRace:
         for t in threads:
             t.join(timeout=30)
 
-        assert len(results["errors"]) == 0, f"Errors: {results['errors']}"
+        errors_list = results["errors"]
+        assert isinstance(errors_list, list), f"Expected list, got {type(errors_list)}"
+        assert len(errors_list) == 0, f"Errors: {errors_list}"
         assert results["consistent"] == 1000  # 20 threads * 50 calls
 
     def test_race_none_current_concurrent(self):
@@ -1214,7 +1222,9 @@ class TestStateChangeDetectionRace:
         for t in threads:
             t.join(timeout=30)
 
-        assert len(results["errors"]) == 0, f"Errors: {results['errors']}"
+        errors_list = results["errors"]
+        assert isinstance(errors_list, list), f"Expected list, got {type(errors_list)}"
+        assert len(errors_list) == 0, f"Errors: {errors_list}"
         # ALL should return True when current is None
         assert results["all_true"] == 1000  # 10 threads * 100
         assert results["not_true"] == 0

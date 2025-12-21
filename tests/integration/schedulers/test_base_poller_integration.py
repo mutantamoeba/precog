@@ -150,7 +150,7 @@ class TestSchedulerLifecycle:
 
         try:
             assert poller._scheduler is not None
-            assert poller.enabled is True
+            assert poller.enabled is True  # type: ignore[unreachable]
             assert poller.is_running() is True
         finally:
             poller.stop()
@@ -165,7 +165,7 @@ class TestSchedulerLifecycle:
         poller.stop()
 
         assert poller.enabled is False
-        assert poller.is_running() is False
+        assert poller.is_running() is False  # type: ignore[unreachable]
 
     def test_multiple_start_stop_cycles(self) -> None:
         """Test poller handles multiple start/stop cycles."""
