@@ -11,7 +11,7 @@ Usage:
 """
 
 import json
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import pytest
@@ -332,8 +332,16 @@ class TestEdgeCaseProperties:
         # Int preserved (but numeric strings become Decimal)
         # Bool preserved
         assert result["bool"] == mixed_values["bool"]
-        # Non-numeric string preserved
-        if not mixed_values["str"].replace(".", "").replace("-", "").isdigit():
+        # Non-numeric string preserved (accounting for whitespace stripping)
+        # The parser strips whitespace before trying to convert to Decimal
+        # So strings like '0\x85' (where \x85 is Unicode whitespace) become '0'
+        stripped = mixed_values["str"].strip()
+        try:
+            # If stripped string can be converted to Decimal, it will be
+            Decimal(stripped)
+            # Conversion succeeded - no assertion about original preservation
+        except (ValueError, TypeError, ArithmeticError, InvalidOperation):
+            # Conversion failed - original should be preserved
             assert result["str"] == mixed_values["str"]
 
 
