@@ -5,7 +5,7 @@
 # This folder contains LEGACY migrations that are NO LONGER USED.
 # All new migrations MUST use Alembic: ../alembic/versions/
 #
-# See: docs/utility/SCHEMA_MIGRATION_WORKFLOW_V2.0.md
+# See: docs/utility/SCHEMA_MIGRATION_WORKFLOW_V2.1.md
 #
 # ============================================================
 
@@ -62,7 +62,7 @@ These files are kept for:
 
 ### For New Migrations
 
-See: `docs/utility/SCHEMA_MIGRATION_WORKFLOW_V2.0.md`
+See: `docs/utility/SCHEMA_MIGRATION_WORKFLOW_V2.1.md`
 
 ---
 

@@ -5470,7 +5470,7 @@ The `0001_initial_baseline_schema.py` migration consolidates all previous schema
 - ⚠️ Existing test data in dev DBs may need recreation after migration
 - ⚠️ Learning curve for team members unfamiliar with Alembic
 
-**Reference:** `src/precog/database/alembic/`, REQ-DB-025, SCHEMA_MIGRATION_WORKFLOW_V2.0.md
+**Reference:** `src/precog/database/alembic/`, REQ-DB-025, SCHEMA_MIGRATION_WORKFLOW_V2.1.md
 
 ---
 
