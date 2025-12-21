@@ -80,7 +80,7 @@ POST /trade-api/v2/portfolio/orders
 
 ## Our Database Schema
 
-### positions table (line 718 of DATABASE_SCHEMA_SUMMARY_V1.13.md)
+### positions table (line 718 of DATABASE_SCHEMA_SUMMARY_V1.14.md)
 
 ```sql
 CREATE TABLE positions (
@@ -98,7 +98,7 @@ CREATE TABLE positions (
 
 ---
 
-### trades table (line 795 of DATABASE_SCHEMA_SUMMARY_V1.13.md)
+### trades table (line 795 of DATABASE_SCHEMA_SUMMARY_V1.14.md)
 
 ```sql
 CREATE TABLE trades (
@@ -409,7 +409,7 @@ side VARCHAR NOT NULL,  -- 'yes', 'no'
 
 ### Database Schema
 
-- **DATABASE_SCHEMA_SUMMARY_V1.13.md:**
+- **DATABASE_SCHEMA_SUMMARY_V1.14.md:**
   - Line 718: positions.side ('yes', 'no')
   - Line 795: trades.side ('buy', 'sell')
 

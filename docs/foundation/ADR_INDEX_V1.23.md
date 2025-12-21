@@ -589,7 +589,7 @@ Standardize on `approach`/`domain` for both probability_models and strategies ta
 
 **References:**
 - Migration 011 implementation
-- DATABASE_SCHEMA_SUMMARY_V1.13.md
+- DATABASE_SCHEMA_SUMMARY_V1.14.md
 - scripts/validate_schema.py (DEF-P1-008)
 - REQ-DB-006
 
@@ -627,7 +627,7 @@ Phase 1.5 architecture: **3 managers** (Strategy, Model, Position) - NOT 4
 
 **References:**
 - DEVELOPMENT_PHASES_V1.4.md (Phase 1.5 deliverables)
-- DATABASE_SCHEMA_SUMMARY_V1.13.md (edges table)
+- DATABASE_SCHEMA_SUMMARY_V1.14.md (edges table)
 - REQ-TRADING-001, REQ-ML-001
 
 ---
@@ -745,7 +745,7 @@ CREATE TABLE trades (
 - ARCHITECTURE_DECISIONS_V2.20.md (full ADR-089 with 433 lines of details)
 - DEVELOPMENT_PATTERNS_V1.5.md (Pattern 14: Schema Migration → CRUD Workflow)
 - SCHEMA_MIGRATION_WORKFLOW_V2.0.md (comprehensive Alembic migration guide)
-- DATABASE_SCHEMA_SUMMARY_V1.13.md (Migration 011 implementation)
+- DATABASE_SCHEMA_SUMMARY_V1.14.md (Migration 011 implementation)
 
 ---
 
@@ -874,7 +874,7 @@ Use EXPLICIT COLUMNS (not JSONB) for trade and position attribution fields.
 **References:**
 - ARCHITECTURE_DECISIONS_V2.20.md (full ADR-091 with performance benchmarks)
 - docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md (JSONB vs explicit columns tradeoff analysis)
-- DATABASE_SCHEMA_SUMMARY_V1.13.md (current schema pre-attribution)
+- DATABASE_SCHEMA_SUMMARY_V1.14.md (current schema pre-attribution)
 - ADR-002 (Decimal Precision - all fields DECIMAL(10,4) not FLOAT)
 
 ---
@@ -1031,7 +1031,7 @@ ALTER TABLE probability_models
 **References:**
 - ARCHITECTURE_DECISIONS_V2.20.md (full ADR-093 with 378 lines of implementation details)
 - MASTER_REQUIREMENTS_V2.17.md (REQ-DB-015: Strategy Type Lookup Table, REQ-DB-016: Model Class Lookup Table)
-- DATABASE_SCHEMA_SUMMARY_V1.13.md (FK constraint implementation details)
+- DATABASE_SCHEMA_SUMMARY_V1.14.md (FK constraint implementation details)
 - docs/database/LOOKUP_TABLES_DESIGN.md (complete design specification)
 - Migration 023: migration_023_create_lookup_tables.py
 - src/precog/database/lookup_helpers.py (helper functions)

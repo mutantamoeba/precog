@@ -6,7 +6,7 @@
 **Database:** precog_dev
 **Schema:** public
 **Total Tables:** 32
-**Purpose:** Quick reference for developers - detailed data dictionary in DATABASE_SCHEMA_SUMMARY_V1.13.md
+**Purpose:** Quick reference for developers - detailed data dictionary in DATABASE_SCHEMA_SUMMARY_V1.14.md
 ---
 
 ## Quick Summary: All 32 Tables in precog_dev
@@ -161,7 +161,7 @@ ORDER BY gs.league, gs.game_date;
 
 ---
 
-**For complete schema details:** See `DATABASE_SCHEMA_SUMMARY_V1.13.md`
+**For complete schema details:** See `DATABASE_SCHEMA_SUMMARY_V1.14.md`
 **For comprehensive data dictionary:** Planned for Phase 6-7
 
 **END OF REFERENCE**

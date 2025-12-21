@@ -8,14 +8,37 @@ Related Requirements: REQ-DATA-001, REQ-OBSERV-001
 
 Usage:
     pytest tests/performance/schedulers/test_base_poller_performance.py -v -m performance
+
+CI Strategy (aligns with stress test pattern from Issue #168):
+    **Throughput tests** (TestThroughput) skip in CI because they require consistent
+    CPU performance that shared CI runners cannot provide.
+
+    **Latency tests** run in CI because they test maximum acceptable time (upper bounds),
+    which remain valid even on slower runners.
+
+    Run locally for full performance validation:
+        pytest tests/performance/schedulers/test_base_poller_performance.py -v
 """
 
+import os
 import statistics
 import time
 
 import pytest
 
 from precog.schedulers.base_poller import BasePoller
+
+# =============================================================================
+# CI Environment Detection (Pattern from stress tests - Issue #168)
+# =============================================================================
+
+# CI runners have variable performance - throughput tests skip in CI
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+_CI_SKIP_REASON = (
+    "Throughput tests skip in CI - shared runners have variable CPU performance. "
+    "Run locally for validation: "
+    "pytest tests/performance/schedulers/test_base_poller_performance.py -v"
+)
 
 # =============================================================================
 # Concrete Test Implementation
@@ -215,8 +238,14 @@ class TestPollWrapperLatency:
 
 
 @pytest.mark.performance
+@pytest.mark.skipif(_is_ci, reason=_CI_SKIP_REASON)
 class TestThroughput:
-    """Performance tests for throughput."""
+    """Performance tests for throughput.
+
+    Note:
+        Skipped in CI - throughput tests require consistent CPU performance
+        that shared runners cannot provide. See module docstring for details.
+    """
 
     def test_polls_per_second(self) -> None:
         """Test polling throughput."""

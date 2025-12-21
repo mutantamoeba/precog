@@ -8,14 +8,95 @@ Related Requirements: REQ-DATA-001, REQ-OBSERV-001
 
 Usage:
     pytest tests/integration/schedulers/test_base_poller_integration.py -v -m integration
+
+    # Skip slow scheduler tests during fast development cycles:
+    pytest tests/integration/schedulers/ -v -m "not slow"
+
+Note:
+    These tests use 5-second poll intervals (MIN_POLL_INTERVAL) with 15-25s timeouts
+    to verify scheduler behavior. This makes them inherently slower than typical
+    integration tests. Use the 'slow' marker to skip them in fast feedback loops.
 """
 
 import threading
 import time
+from collections.abc import Callable
+from typing import Any
 
 import pytest
 
 from precog.schedulers.base_poller import BasePoller, PollerStats
+
+# Mark ALL tests in this module as slow and with 60-second timeout
+# This allows skipping with: pytest -m "not slow"
+# Timeout prevents individual tests from hanging indefinitely
+pytestmark = [
+    pytest.mark.slow,
+    pytest.mark.timeout(60),
+    pytest.mark.integration,
+]
+
+# =============================================================================
+# Test Helpers - Robust Polling-Based Waiting
+# =============================================================================
+
+
+def wait_for_condition(
+    condition_fn: Callable[[], bool],
+    timeout: float = 10.0,
+    poll_interval: float = 0.1,
+    description: str = "condition",
+) -> bool:
+    """Wait for a condition to become true, with timeout.
+
+    This is a robust alternative to time.sleep() for timing-sensitive tests.
+    Instead of sleeping for a fixed duration and hoping the condition is met,
+    this actively polls until the condition is true or timeout is reached.
+
+    Args:
+        condition_fn: Zero-argument callable that returns True when condition is met.
+        timeout: Maximum time to wait in seconds (default: 10s).
+        poll_interval: How often to check the condition (default: 0.1s).
+        description: Description for error messages.
+
+    Returns:
+        True if condition was met within timeout, False otherwise.
+
+    Example:
+        # Instead of: time.sleep(3.5); assert len(poller.poll_calls) >= 2
+        # Use:
+        success = wait_for_condition(
+            lambda: len(poller.poll_calls) >= 2,
+            timeout=10.0,
+            description="at least 2 polls"
+        )
+        assert success, "Expected at least 2 polls within timeout"
+    """
+    start = time.time()
+    while time.time() - start < timeout:
+        if condition_fn():
+            return True
+        time.sleep(poll_interval)
+    return False
+
+
+def wait_for_polls(poller: Any, min_polls: int, timeout: float = 10.0) -> bool:
+    """Wait for poller to complete at least min_polls poll cycles.
+
+    Args:
+        poller: Poller instance with poll_calls list or stats dict.
+        min_polls: Minimum number of polls required.
+        timeout: Maximum time to wait in seconds.
+
+    Returns:
+        True if enough polls completed within timeout, False otherwise.
+    """
+    return wait_for_condition(
+        lambda: len(poller.poll_calls) >= min_polls,
+        timeout=timeout,
+        description=f"at least {min_polls} polls",
+    )
+
 
 # =============================================================================
 # Concrete Test Implementation
@@ -138,10 +219,14 @@ class TestPollExecution:
         poller.start()
 
         try:
-            # Wait for at least 2 poll cycles
-            time.sleep(2.5)
+            # Use robust polling-based wait instead of fixed sleep
+            # This adapts to actual scheduler behavior rather than assuming timing
+            success = wait_for_polls(poller, min_polls=2, timeout=10.0)
 
             # Should have at least 2 polls (initial + interval)
+            assert success, (
+                f"Expected at least 2 polls within 10s timeout, got {len(poller.poll_calls)}"
+            )
             assert len(poller.poll_calls) >= 2
         finally:
             poller.stop()
@@ -155,7 +240,12 @@ class TestPollExecution:
         poller.start()
 
         try:
-            time.sleep(2.5)
+            # Use robust polling-based wait instead of fixed sleep
+            success = wait_for_polls(poller, min_polls=2, timeout=10.0)
+
+            assert success, (
+                f"Expected at least 2 polls within 10s timeout, got {len(poller.poll_calls)}"
+            )
 
             stats = poller.stats
             assert stats["polls_completed"] >= 2
@@ -204,10 +294,27 @@ class TestErrorHandlingIntegration:
         poller.start()
 
         try:
-            time.sleep(3.5)
+            # Use robust polling-based wait for error recovery
+            # Wait until we have 2 errors AND 1 successful poll
+            def error_recovery_complete() -> bool:
+                stats = poller.stats
+                return stats["errors"] >= 2 and stats["polls_completed"] >= 1
+
+            success = wait_for_condition(
+                error_recovery_complete,
+                timeout=15.0,  # Extra time for error recovery
+                description="2 errors and 1 successful poll",
+            )
 
             # Scheduler should still be running
             assert poller.enabled is True
+
+            assert success, (
+                f"Expected error recovery within 15s timeout. "
+                f"Got errors={poller.stats['errors']}, "
+                f"polls_completed={poller.stats['polls_completed']}"
+            )
+
             # Errors should be tracked
             assert poller.stats["errors"] >= 2
             # Should have recovered and done successful polls

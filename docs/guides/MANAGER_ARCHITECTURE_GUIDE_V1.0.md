@@ -140,7 +140,7 @@ active_models = manager.get_models_by_status("active")
 ```
 
 ### **Reference**
-- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (lines 277-374)
+- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (lines 277-374)
 - **Implementation**: `src/precog/analytics/model_manager.py`
 - **Tests**: `tests/unit/analytics/test_model_manager.py` (36 tests, 97.3% pass rate)
 - **Requirements**: REQ-MODEL-001 through REQ-MODEL-005
@@ -253,7 +253,7 @@ active_strategies = manager.get_strategies_by_status("active")
 ```
 
 ### **Reference**
-- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (lines 376-476)
+- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (lines 376-476)
 - **Implementation**: `src/precog/trading/strategy_manager.py`
 - **Tests**: `tests/unit/trading/test_strategy_manager.py` (13 tests, 100% pass rate)
 - **Requirements**: REQ-STRAT-001 through REQ-STRAT-005
@@ -441,7 +441,7 @@ open_positions = manager.get_positions_by_status("open")
 ```
 
 ### **Reference**
-- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md` (lines 507-545)
+- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (lines 507-545)
 - **Implementation**: **NOT YET IMPLEMENTED** (Phase 1.5 pending)
 - **Tests**: **NOT YET WRITTEN** (Phase 1.5 pending)
 - **Requirements**: REQ-POS-001 through REQ-POS-008
@@ -891,7 +891,7 @@ kelly_fraction = config['kelly_fraction']
 ## 6. Documentation References
 
 ### **Database Schema**
-- **`docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md`** - Complete schema (25 tables)
+- **`docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md`** - Complete schema (25 tables)
   - Lines 277-374: `probability_models` table
   - Lines 376-476: `strategies` table
   - Lines 507-545: `positions` table

@@ -420,7 +420,7 @@ GameState = ESPNGameState
 
 - **ADR-029:** ESPN Data Model with Normalized Schema
 - **DEVELOPMENT_PHASES_V1.6.md:** Phase 2 section (lines 954-1099)
-- **DATABASE_SCHEMA_SUMMARY_V1.13.md:** Current schema reference
+- **DATABASE_SCHEMA_SUMMARY_V1.14.md:** Current schema reference
 - **src/precog/api_connectors/espn_client.py:** TypedDict implementations
 - **TESTING_STRATEGY_V3.3.md:** Test type requirements
 

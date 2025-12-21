@@ -1989,7 +1989,7 @@ model = manager.create_model(
 - **Data Collection Guide:** `docs/supplementary/DATA_COLLECTION_GUIDE_V1.0.md`
 
 ### Foundation Documents
-- **Database Schema:** `docs/database/DATABASE_SCHEMA_SUMMARY_V1.13.md`
+- **Database Schema:** `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md`
 - **Development Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.6.md`
 - **Development Phases:** `docs/foundation/DEVELOPMENT_PHASES_V1.5.md`
 

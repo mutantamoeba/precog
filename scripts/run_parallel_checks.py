@@ -41,6 +41,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -57,6 +58,96 @@ REPO_ROOT = Path(__file__).parent.parent
 # Timeout for individual checks (8 minutes - allows for full test suite)
 CHECK_TIMEOUT = 480
 
+
+def run_subprocess_with_file_capture(
+    command: str,
+    timeout: int,
+    cwd: str | Path,
+) -> tuple[int, str, str, bool]:
+    """
+    Run a subprocess with file-based output capture to avoid Windows pipe deadlock.
+
+    On Windows, subprocess.run() with capture_output=True can deadlock when the
+    subprocess outputs more data than the pipe buffer can hold (~4KB). This happens
+    because:
+    1. The subprocess writes to stdout/stderr pipes
+    2. When buffers fill, the subprocess blocks waiting for the parent to read
+    3. But subprocess.run() doesn't read until the process completes
+    4. Result: deadlock where child waits for parent to read, parent waits for child to exit
+
+    This function avoids the deadlock by redirecting output to temporary files instead
+    of pipes. Files have no buffer limit, so the subprocess never blocks.
+
+    Args:
+        command: Shell command to execute
+        timeout: Maximum seconds to wait
+        cwd: Working directory for the subprocess
+
+    Returns:
+        Tuple of (exit_code, stdout, stderr, timed_out)
+
+    Educational Note:
+        This is a well-known Windows issue. Python's subprocess documentation
+        recommends using Popen.communicate() for large output, but even that
+        can have issues on Windows. File-based capture is the most reliable
+        cross-platform solution for commands that produce significant output.
+
+    Reference:
+        - https://docs.python.org/3/library/subprocess.html#subprocess.Popen.communicate
+        - Issue #238: Pre-push hook intermittent timeouts
+    """
+    # Create temporary files for stdout and stderr using mkstemp
+    # NamedTemporaryFile has Windows issues with reopening, so we use mkstemp
+    # which gives us a file descriptor and path that we fully control
+    stdout_fd, stdout_path = tempfile.mkstemp(suffix=".stdout.txt", text=True)
+    stderr_fd, stderr_path = tempfile.mkstemp(suffix=".stderr.txt", text=True)
+
+    # Close the file descriptors immediately - we'll reopen with proper encoding
+    os.close(stdout_fd)
+    os.close(stderr_fd)
+
+    try:
+        # Open files for subprocess to write to
+        with open(stdout_path, "w", encoding="utf-8") as stdout_f:
+            with open(stderr_path, "w", encoding="utf-8") as stderr_f:
+                try:
+                    result = subprocess.run(
+                        command,
+                        shell=True,
+                        stdout=stdout_f,
+                        stderr=stderr_f,
+                        timeout=timeout,
+                        cwd=str(cwd),
+                        text=True,
+                        env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                    )
+                    exit_code = result.returncode
+                    timed_out = False
+
+                except subprocess.TimeoutExpired:
+                    exit_code = -1
+                    timed_out = True
+
+        # Read output from files
+        with open(stdout_path, encoding="utf-8", errors="replace") as f:
+            stdout = f.read()
+        with open(stderr_path, encoding="utf-8", errors="replace") as f:
+            stderr = f.read()
+
+        return exit_code, stdout, stderr, timed_out
+
+    finally:
+        # Clean up temporary files
+        try:
+            os.unlink(stdout_path)
+        except OSError:
+            pass
+        try:
+            os.unlink(stderr_path)
+        except OSError:
+            pass
+
+
 # Timeout for the entire parallel phase (15 minutes)
 TOTAL_TIMEOUT = 900
 
@@ -72,6 +163,14 @@ TOTAL_TIMEOUT = 900
 # Test marker convention:
 # - Property tests WITH database access: add `pytestmark = pytest.mark.database`
 # - Property tests WITHOUT database: no marker needed (default)
+# - Slow tests (scheduler integration): add `pytestmark = pytest.mark.slow`
+#
+# Performance Optimization (2025-12-20):
+# - Local pre-push: Skip slow tests (saves ~5-10 min from scheduler tests)
+# - CI: Runs ALL tests including slow ones (full validation)
+# - Use --run-slow to include slow tests locally if needed
+SKIP_SLOW_TESTS = True  # Default: skip slow tests in local pre-push for faster feedback
+
 TEST_PHASES: list[tuple[str, str, list[str], str | None]] = [
     # Phase A+C1: Unit tests + Non-DB property tests (PARALLEL - neither needs DB)
     # This saves ~43s by running these concurrently
@@ -82,11 +181,12 @@ TEST_PHASES: list[tuple[str, str, list[str], str | None]] = [
         '-m "not database"',  # Exclude DB-dependent property tests (double quotes for Windows)
     ),
     # Phase B: Integration + E2E tests (heavy DB usage)
+    # NOTE: Slow tests (scheduler integration) skipped by default - see SKIP_SLOW_TESTS
     (
         "Phase B",
         "Integration + E2E Tests",
         ["tests/integration/", "tests/e2e/"],
-        None,  # No marker filter
+        '-m "not slow"' if SKIP_SLOW_TESTS else None,  # Skip slow scheduler tests locally
     ),
     # Phase C2: DB-dependent property tests (need pool reset)
     # Only 28 tests across 3 files with @pytest.mark.database
@@ -212,21 +312,23 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
 
         print(f"    [{phase_id}] {phase_name}: Running...")
 
-        try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                timeout=timeout,
-                cwd=str(REPO_ROOT),
-                text=True,
-                env={**os.environ, "PYTHONUNBUFFERED": "1"},
-            )
+        # Use file-based capture to avoid Windows pipe deadlock (Issue #238)
+        exit_code, stdout, stderr, phase_timed_out = run_subprocess_with_file_capture(
+            command=command,
+            timeout=timeout,
+            cwd=REPO_ROOT,
+        )
 
-            phase_duration = time.time() - phase_start
+        phase_duration = time.time() - phase_start
 
+        if phase_timed_out:
+            print(f"    [{phase_id}] {phase_name}: TIMEOUT after {timeout}s")
+            all_stderr.append(f"=== {phase_id}: {phase_name} ===\nTIMEOUT after {timeout}s")
+            phase_results.append((phase_id, -1))
+            total_errors += 1
+        else:
             # Parse pytest output for pass/fail counts
-            stdout_lines = result.stdout.strip().split("\n")
+            stdout_lines = stdout.strip().split("\n")
             last_line = stdout_lines[-1] if stdout_lines else ""
 
             # Extract counts from pytest summary (e.g., "970 passed, 2 skipped")
@@ -250,7 +352,7 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
 
             # Extract failed test names from output for immediate visibility
             failed_tests = []
-            for line in result.stdout.split("\n"):
+            for line in stdout.split("\n"):
                 # Match lines like "tests/...py::TestClass::test_name FAILED"
                 if line.strip().endswith(" FAILED"):
                     failed_tests.append(line.strip().replace(" FAILED", ""))
@@ -261,7 +363,7 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
                     if test_path not in failed_tests:  # Deduplicate
                         failed_tests.append(test_path)
 
-            status = "PASSED" if result.returncode == 0 else "FAILED"
+            status = "PASSED" if exit_code == 0 else "FAILED"
             print(
                 f"    [{phase_id}] {phase_name}: {status} ({passed} passed, {failed} failed, {errors} errors) [{phase_duration:.1f}s]"
             )
@@ -272,21 +374,14 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
                 for test_name in failed_tests:
                     print(f"        - {test_name}")
 
-            all_stdout.append(f"=== {phase_id}: {phase_name} ===\n{result.stdout}")
-            if result.stderr:
-                all_stderr.append(f"=== {phase_id}: {phase_name} ===\n{result.stderr}")
+            all_stdout.append(f"=== {phase_id}: {phase_name} ===\n{stdout}")
+            if stderr:
+                all_stderr.append(f"=== {phase_id}: {phase_name} ===\n{stderr}")
 
-            phase_results.append((phase_id, result.returncode))
+            phase_results.append((phase_id, exit_code))
 
             # If phase failed, continue to next phase but record failure
             # This allows us to see ALL failures, not just the first
-
-        except subprocess.TimeoutExpired:
-            phase_duration = time.time() - phase_start
-            print(f"    [{phase_id}] {phase_name}: TIMEOUT after {timeout}s")
-            all_stderr.append(f"=== {phase_id}: {phase_name} ===\nTIMEOUT after {timeout}s")
-            phase_results.append((phase_id, -1))
-            total_errors += 1
 
         # Reset DB pool between phases (except after last phase)
         if phase_id != "Phase D":
@@ -383,6 +478,9 @@ def run_check(step: int, name: str, command: str, timeout: int = CHECK_TIMEOUT) 
     """
     Run a single validation check with timeout.
 
+    Uses file-based output capture to avoid Windows pipe deadlock issues.
+    See run_subprocess_with_file_capture() for details on the deadlock problem.
+
     Args:
         step: Step number (2-11)
         name: Human-readable name of the check
@@ -395,42 +493,35 @@ def run_check(step: int, name: str, command: str, timeout: int = CHECK_TIMEOUT) 
     start_time = time.time()
 
     try:
-        # Run the command with timeout
-        # shell=True is needed for complex commands with pipes/redirects
-        # We're running our own trusted scripts, so this is safe
-        result = subprocess.run(
-            command,
-            shell=True,
-            capture_output=True,
+        # Use file-based capture to avoid Windows pipe deadlock (Issue #238)
+        exit_code, stdout, stderr, timed_out = run_subprocess_with_file_capture(
+            command=command,
             timeout=timeout,
-            cwd=str(REPO_ROOT),
-            text=True,
-            env={**os.environ, "PYTHONUNBUFFERED": "1"},
+            cwd=REPO_ROOT,
         )
 
         duration = time.time() - start_time
+
+        if timed_out:
+            return CheckResult(
+                step=step,
+                name=name,
+                command=command,
+                exit_code=-1,
+                stdout=stdout,
+                stderr=f"TIMEOUT: Check exceeded {timeout}s limit\n{stderr}",
+                duration=duration,
+                timed_out=True,
+            )
 
         return CheckResult(
             step=step,
             name=name,
             command=command,
-            exit_code=result.returncode,
-            stdout=result.stdout,
-            stderr=result.stderr,
+            exit_code=exit_code,
+            stdout=stdout,
+            stderr=stderr,
             duration=duration,
-        )
-
-    except subprocess.TimeoutExpired:
-        duration = time.time() - start_time
-        return CheckResult(
-            step=step,
-            name=name,
-            command=command,
-            exit_code=-1,
-            stdout="",
-            stderr=f"TIMEOUT: Check exceeded {timeout}s limit",
-            duration=duration,
-            timed_out=True,
         )
 
     except Exception as e:
