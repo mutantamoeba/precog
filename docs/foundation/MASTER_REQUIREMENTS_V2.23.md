@@ -1,9 +1,15 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.22
-**Last Updated:** 2025-12-07
+**Version:** 2.23
+**Last Updated:** 2025-12-21
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.23:**
+- **EXECUTION ENVIRONMENT TRACKING:** Added REQ-DB-017 (Execution Environment Tracking)
+- **REQ-DB-017:** execution_environment ENUM column for single-database architecture
+- **DISCRIMINATOR COLUMN PATTERN:** Tags trades/positions as 'live', 'paper', or 'backtest'
+- **CROSS-REFERENCES:** ADR-107, Migration 0008, Issue #242
+- Total requirements: 128 -> 129
 **Changes in v2.22:**
 - **BASEPOLLER UNIFIED DESIGN PATTERN:** Added REQ-SCHED-003 for BasePoller abstract class
 - **REQ-SCHED-003:** BasePoller with Template Method pattern, {Platform}{Entity}Poller naming, generic stats
@@ -301,10 +307,10 @@ precog/
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.22.md` - This document (requirements through Phase 10)
+  2. `MASTER_REQUIREMENTS_V2.23.md` - This document (requirements through Phase 10)
   3. `MASTER_INDEX_V2.50.md` - Complete document inventory
   4. `ARCHITECTURE_DECISIONS_V2.31.md` - All 109 ADRs with design rationale (Phase 0-4.5)
-  5. `REQUIREMENT_INDEX_V1.14.md` - Systematic requirement catalog
+  5. `REQUIREMENT_INDEX_V1.15.md` - Systematic requirement catalog
   6. `ADR_INDEX_V1.24.md` - Architecture decision index
   7. `TESTING_STRATEGY_V3.8.md` - Test cases, coverage requirements, test isolation patterns
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
@@ -574,6 +580,50 @@ Replace CHECK constraint for `probability_models.approach` with lookup table for
 - Migration 023: Create Lookup Tables
 - DATABASE_SCHEMA_SUMMARY_V1.14.md: Lookup Tables section
 - LOOKUP_TABLES_DESIGN.md: Complete design specification
+
+**REQ-DB-017: Execution Environment Tracking**
+
+**Phase:** 2.5
+**Priority:** High
+**Status:** ✅ Complete
+
+Add `execution_environment` ENUM column to trades and positions tables for single-database architecture.
+
+**Requirements:**
+- Create PostgreSQL ENUM type: `execution_environment AS ENUM ('live', 'paper', 'backtest')`
+- Add `execution_environment` column to `trades` table (NOT NULL, DEFAULT 'live')
+- Add `execution_environment` column to `positions` table (NOT NULL, DEFAULT 'live')
+- Create indexes for filtered queries: `idx_trades_execution_environment`, `idx_positions_execution_environment`
+- Create convenience views: `live_trades`, `paper_trades`, `backtest_trades`, `live_positions`, `paper_positions`, `backtest_positions`, `training_data_trades`
+
+**Environment Definitions:**
+- `live`: Production trading with real money (Kalshi Production API)
+- `paper`: Demo/sandbox testing with fake money (Kalshi Demo API)
+- `backtest`: Historical simulation (no API calls, as-fast-as-possible)
+
+**Design Rationale:**
+- **Single-Database Architecture:** One database with discriminator column (vs separate databases per environment)
+- **Orthogonal to trade_source:** `trade_source` = WHO created (automated/manual), `execution_environment` = WHERE executed (live/paper/backtest)
+- **Backward Compatible:** DEFAULT 'live' ensures existing data works unchanged
+- **Cross-Environment Analysis:** Easy comparison of paper vs live performance
+
+**Benefits:**
+- ✅ Simplicity: One database to manage, one schema to migrate
+- ✅ Data integrity: No duplication, single source of truth
+- ✅ Unified analytics: Dashboard shows all environments in one place
+- ✅ Model training: Access all data (live, paper, backtest) for training
+
+**Implementation:**
+- Migration: `0008_add_execution_environment_column.py`
+- CRUD operations: `create_trade()`, `create_position()`, `get_trades_by_market()`, `get_recent_trades()`, `get_current_positions()`
+- Type alias: `ExecutionEnvironment = Literal["live", "paper", "backtest"]`
+- Tests: 10 integration tests in `tests/test_crud_operations.py`
+
+**Cross-references:**
+- ADR-107: Single-Database Architecture with Execution Environments
+- Migration 0008: Add execution_environment column
+- Issue #242: Execution Environment Integration
+- DATABASE_SCHEMA_SUMMARY_V1.14.md: Trades and Positions tables
 
 #### Operational Tables (29 tables)
 

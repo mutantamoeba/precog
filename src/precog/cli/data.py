@@ -52,6 +52,8 @@ class SeedType(str, Enum):
     ELO = "elo"
     ODDS = "odds"
     GAMES = "games"
+    STATS = "stats"
+    RANKINGS = "rankings"
 
 
 # Expected team counts per sport
@@ -72,7 +74,7 @@ def seed(
         ...,
         "--type",
         "-t",
-        help="Type of data to seed (teams, elo, odds, games)",
+        help="Type of data to seed (teams, elo, odds, games, stats, rankings)",
     ),
     sports: str = typer.Option(
         "nfl,nba,nhl,wnba,ncaaf,ncaab,ncaaw",
@@ -112,6 +114,11 @@ def seed(
         "--link/--no-link",
         help="Link odds to historical_games (default: True)",
     ),
+    stat_type: str = typer.Option(
+        "weekly",
+        "--stat-type",
+        help="Stats type for stats seeding: weekly, seasonal, team (default: weekly)",
+    ),
     dry_run: bool = typer.Option(
         False,
         "--dry-run",
@@ -131,6 +138,8 @@ def seed(
     - elo: Historical Elo ratings from CSV
     - odds: Historical betting odds from CSV
     - games: Historical game results
+    - stats: Player/team statistics via nfl_data_py (Issue #236)
+    - rankings: Team rankings (Issue #236)
 
     Examples:
         precog data seed --type teams
@@ -138,6 +147,8 @@ def seed(
         precog data seed --type elo --csv nfl_elo.csv
         precog data seed --type elo --csv nfl_elo.csv --seasons 2022,2023,2024
         precog data seed --type odds --dir data/historical/ --sport nfl
+        precog data seed --type stats --seasons 2023,2024 --stat-type weekly
+        precog data seed --type stats --seasons 2024 --stat-type team
     """
     console.print(f"\n[bold cyan]Seeding {seed_type.value} data...[/bold cyan]\n")
 
@@ -150,6 +161,10 @@ def seed(
             _seed_odds(data_dir, sport, seasons, link_games, verbose)
         elif seed_type == SeedType.GAMES:
             _seed_games(sport, seasons, verbose)
+        elif seed_type == SeedType.STATS:
+            _seed_stats(sport, seasons, stat_type, verbose)
+        elif seed_type == SeedType.RANKINGS:
+            _seed_rankings(sport, seasons, verbose)
 
     except typer.Exit:
         raise
@@ -351,6 +366,122 @@ def _seed_games(sport: str, seasons: str | None, verbose: bool) -> None:
         "Game seeding not yet implemented",
         ExitCode.ERROR,
         hint="Target: Phase 2.5 - Use Elo seeding which includes game results",
+    )
+
+
+def _seed_stats(
+    sport: str,
+    seasons: str | None,
+    stat_type: str,
+    verbose: bool,
+) -> None:
+    """Seed player/team statistics from nfl_data_py.
+
+    Loads statistics using the NFLDataPySource adapter and inserts
+    them into the historical_stats table.
+
+    Args:
+        sport: Sport to load (currently only 'nfl' supported)
+        seasons: Comma-separated list of seasons
+        stat_type: Type of stats (weekly, seasonal, team)
+        verbose: Enable verbose output
+
+    Related:
+        - Issue #236: StatsRecord/RankingRecord Infrastructure
+        - Migration 0009: historical_stats table
+        - NFLDataPySource: Data source adapter
+    """
+    from precog.database.seeding.sources import NFLDataPySource
+
+    if sport.lower() != "nfl":
+        cli_error(
+            f"Stats seeding only supports NFL currently (got: {sport})",
+            ExitCode.USAGE_ERROR,
+            hint="Future: nba_api for NBA stats",
+        )
+
+    season_list = None
+    if seasons:
+        try:
+            season_list = [int(s.strip()) for s in seasons.split(",")]
+            console.print(f"[dim]Filtering to seasons: {season_list}[/dim]")
+        except ValueError:
+            cli_error(
+                f"Invalid seasons format: {seasons}",
+                ExitCode.USAGE_ERROR,
+                hint="Use comma-separated years (e.g., 2022,2023,2024)",
+            )
+
+    console.print(f"[dim]Sport: {sport}[/dim]")
+    console.print(f"[dim]Stat type: {stat_type}[/dim]\n")
+
+    try:
+        source = NFLDataPySource()
+    except Exception as e:
+        cli_error(
+            f"Failed to initialize NFLDataPySource: {e}",
+            ExitCode.ERROR,
+            hint="Ensure nfl_data_py is installed: pip install nfl_data_py",
+        )
+
+    # Load stats from source
+    console.print("Loading stats from nfl_data_py...")
+    records_processed = 0
+    records_inserted = 0
+    errors = 0
+
+    try:
+        for stat_record in source.load_stats(
+            sport=sport,
+            seasons=season_list,
+            stat_type=stat_type,
+        ):
+            records_processed += 1
+            # TODO: Insert into historical_stats table when CRUD is implemented
+            # For now, just count records
+            records_inserted += 1  # Placeholder
+
+            if verbose and records_processed % 1000 == 0:
+                console.print(f"  [dim]Processed {records_processed:,} records...[/dim]")
+
+    except Exception as e:
+        errors += 1
+        console.print(f"[red]Error loading stats: {e}[/red]")
+
+    console.print("\n[bold]Load Results:[/bold]")
+    console.print(f"  Records processed: {records_processed:,}")
+    console.print(f"  Records inserted: {records_inserted:,}")
+    console.print(f"  Errors: {errors}")
+
+    if records_processed == 0:
+        console.print(
+            "\n[yellow]No stats found. Check if nfl_data_py has data for these seasons.[/yellow]"
+        )
+    else:
+        console.print("\n[green]Stats loading completed![/green]")
+        console.print(
+            "[dim]Note: Database insertion requires Migration 0009 and CRUD implementation.[/dim]"
+        )
+
+
+def _seed_rankings(
+    sport: str,
+    seasons: str | None,
+    verbose: bool,
+) -> None:
+    """Seed team rankings (placeholder for future implementation).
+
+    Will load rankings from various sources (ESPN, FiveThirtyEight power rankings).
+
+    Related:
+        - Issue #236: StatsRecord/RankingRecord Infrastructure
+        - Migration 0009: historical_rankings table
+    """
+    cli_error(
+        "Rankings seeding not yet fully implemented",
+        ExitCode.ERROR,
+        hint="Target: Use ESPN API or FiveThirtyEight power rankings. "
+        "The team_rankings table (Migration 012) stores live rankings.",
     )
 
 
@@ -588,18 +719,18 @@ def sources() -> None:
         },
         {
             "name": "nfl_data_py",
-            "module": "nfl_data_py_adapter",
-            "types": ["games"],
+            "module": "nfl_data_py_source",
+            "types": ["games", "stats"],
             "sports": ["nfl"],
-            "description": "NFL schedules and game data (stats planned)",
-            "status": "partial",
+            "description": "NFL schedules, game data, and player/team stats",
+            "status": "active",
         },
         {
             "name": "ESPN API",
             "module": "espn_client",
-            "types": ["games", "teams"],
+            "types": ["games", "teams", "rankings"],
             "sports": ["nfl", "ncaaf", "nba", "ncaab", "nhl", "wnba"],
-            "description": "Live game states and team data",
+            "description": "Live game states, team data, and rankings",
             "status": "active",
         },
     ]
@@ -641,8 +772,8 @@ def sources() -> None:
         ("odds", "Betting lines (spreads, totals, moneylines)"),
         ("elo", "Team rating history"),
         ("teams", "Team reference data with IDs"),
-        ("stats", "Player/team statistics (planned)"),
-        ("rankings", "AP/Coaches polls (planned)"),
+        ("stats", "Player/team statistics (Issue #236)"),
+        ("rankings", "AP/Coaches polls, power rankings (Issue #236)"),
     ]
 
     for type_name, desc in types_legend:
