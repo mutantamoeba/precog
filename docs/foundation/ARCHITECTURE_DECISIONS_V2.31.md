@@ -1,9 +1,14 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.30
-**Last Updated:** December 15, 2025
+**Version:** 2.31
+**Last Updated:** December 21, 2025
 **Status:** ✅ Current
+**Changes in v2.31:**
+- **HYBRID CLOUD ARCHITECTURE (PHASE 2.5):** Added ADR-107, ADR-108 for cloud deployment
+- ADR-107: Single-Database Architecture with Execution Environments - One database for all environments with execution_environment column ('live', 'paper', 'backtest')
+- ADR-108: Hybrid Cloud Architecture for Live Data Collection - Local PostgreSQL for testing, Railway TimescaleDB for production
+- Supports Issue #247 (Railway Deployment) and Phase 3.5 (React Frontend)
 **Changes in v2.30:**
 - **HISTORICAL DATA COLLECTION ARCHITECTURE (PHASE 2.5):** Added ADR-106 for BaseDataSource pattern
 - ADR-106: Historical Data Collection Architecture - BaseDataSource abstract class mirrors BasePoller (ADR-103)
@@ -6803,7 +6808,7 @@ CREATE TABLE brier_score_metrics (...);
 
 **References:**
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -7560,7 +7565,7 @@ Cons:
 ### References
 
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -8327,7 +8332,7 @@ WebSocket for Position Monitoring (real-time):
 
 ### References
 
-- `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 7 Task #2: Frontend Development)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 7 Task #2: Frontend Development)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8.9: Materialized Views)
 - Next.js Documentation: https://nextjs.org/docs
 - Recharts Documentation: https://recharts.org/
@@ -9249,7 +9254,7 @@ def run_holdout_validation(
 - `docs/guides/MODEL_EVALUATION_GUIDE_V1.0.md` (implementation guide - to be created)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 2 Task #3, Phase 6 Task #1)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 2 Task #3, Phase 6 Task #1)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8.7: Evaluation Runs Table)
 
 ---
@@ -9972,7 +9977,7 @@ ON position_risk_by_strategy(league, strategy_name);
 - `docs/guides/DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md` (React dashboard + API integration - to be created)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 6 Task #3, Phase 7 Task #2)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 6 Task #3, Phase 7 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8.8: Materialized Views Reference)
 
 ---
@@ -10803,7 +10808,7 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (includes A/B testing architecture)
 - `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 7 Task #3, Phase 8 Task #2)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 7 Task #3, Phase 8 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8.9: A/B Tests Table)
 
 ---
@@ -11719,7 +11724,7 @@ CREATE TABLE strategies (
 ### References
 
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (edges table schema)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.11.md` (Phase 1.5 manager components)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 1.5 manager components)
 - `src/precog/trading/model_manager.py` (edge calculation logic - Phase 1.5 implementation)
 - `src/precog/trading/strategy_manager.py` (edge query logic - Phase 1.5 implementation)
 
@@ -15705,6 +15710,74 @@ historical = [
 
 ---
 
+## Decision #107/ADR-107: Single-Database Architecture with Execution Environments
+
+**Date:** December 20, 2025
+**Status:** ✅ Accepted
+**Phase:** Phase 2 (Database Architecture Enhancement)
+**Drivers:** Simplicity, data integrity, model training with production context, unified analytics
+**GitHub Issue:** #241
+
+### Decision
+
+Implement a **single-database architecture** with **execution_environment column** to distinguish data origin. All trades and positions are stored in one database, differentiated by execution_environment ENUM ('live', 'paper', 'backtest').
+
+### Consequences
+
+**Positive:**
+- No data duplication across environments
+- Unified analytics and comparison
+- Simpler migrations and schema management
+- Models can train with production context
+
+**Negative:**
+- Requires careful WHERE clauses in queries
+- Production data visible during development (mitigated by execution_environment filtering)
+
+### References
+
+- `docs/foundation/ADR-107_Single_Database_Execution_Environments.md` (full ADR)
+- Migration 0008 (planned): Add execution_environment column
+
+---
+
+## Decision #108/ADR-108: Hybrid Cloud Architecture for Live Data Collection
+
+**Date:** December 21, 2025
+**Status:** ✅ Accepted
+**Phase:** Phase 2.5 (Live Data Collection Service)
+**Drivers:** Data accumulation urgency, development flexibility, cost optimization
+**GitHub Issue:** #247
+
+### Decision
+
+Implement a **Hybrid Cloud Architecture** with clear separation:
+
+1. **Local PostgreSQL**: Fast unit/integration tests (~seconds)
+2. **Railway TimescaleDB**: Production data collection (live ESPN/Kalshi)
+3. **Data Sync**: Periodic sync for model training (weekly pg_dump)
+4. **React Frontend**: Monitoring dashboard deployed before Phase 5
+
+### Consequences
+
+**Positive:**
+- Fast local development (no network latency for tests)
+- Real production data for model training
+- Urgent data collection can start immediately
+- Frontend for monitoring before execution phase
+
+**Negative:**
+- Periodic data sync required for local model training
+- Two databases to manage (local + cloud)
+
+### References
+
+- `docs/foundation/ADR-108_Hybrid_Cloud_Architecture.md` (full ADR)
+- ADR-107: Single-Database Architecture (complementary)
+- Phase 3.5: Web Interface (React frontend)
+
+---
+
 ## Approval & Sign-off
 
 This document represents the architectural decisions as of October 22, 2025 (Phase 0.5 completion with standardization).
@@ -15715,9 +15788,10 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.30
-**Last Updated:** December 15, 2025
+**Document Version:** 2.31
+**Last Updated:** December 21, 2025
 **Critical Changes:**
+- v2.31: **CLOUD INFRASTRUCTURE ARCHITECTURE** - Added Decisions #107-108/ADR-107-108 (Single-Database Architecture with execution_environment, Hybrid Cloud Architecture for Railway deployment with TimescaleDB). Phase 3.5 Web Interface added. Issues #241, #247.
 - v2.30: **HISTORICAL DATA COLLECTION ARCHITECTURE** - Added Decision #106/ADR-106 for BaseDataSource pattern (mirrors BasePoller ADR-103) with source adapters for FiveThirtyEight, betting CSV, and sport-specific Python libraries. Hybrid architecture separates live polling (schedulers/) from batch seeding (database/seeding/). Issue #229.
 - v2.29: **TWO-AXIS ENVIRONMENT CONFIGURATION (PLANNED)** - Added Decision #105/ADR-105 for environment configuration architecture with PRECOG_ENV (database) + {MARKET}_MODE (API per market) with safety guardrails. Documented in PHASE_2.5_DEFERRED_TASKS_V1.1, Issue #202.
 - v2.28: **BASEPOLLER UNIFIED DESIGN PATTERN** - Added Decision #103/ADR-103 (BasePoller abstract class with Template Method pattern, {Platform}{Entity}Poller naming convention, generic stats fields)
@@ -15745,4 +15819,4 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 **For complete ADR catalog, see:** ADR_INDEX_V1.4.md
 
-**END OF ARCHITECTURE DECISIONS V2.28**
+**END OF ARCHITECTURE DECISIONS V2.31**

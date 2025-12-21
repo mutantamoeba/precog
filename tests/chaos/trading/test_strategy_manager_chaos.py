@@ -44,11 +44,18 @@ class TestMalformedConfigData:
     """Chaos tests for malformed config data handling."""
 
     def test_none_config(self, manager: StrategyManager) -> None:
-        """Test handling of None config."""
+        """Test handling of None config.
+
+        Educational Note:
+            _prepare_config_for_db() returns a JSON string, not a Python object.
+            For None input, json.dumps(None) returns 'null' which is valid JSON.
+            The function gracefully handles this edge case.
+        """
         try:
             result = manager._prepare_config_for_db(None)  # type: ignore[arg-type]
-            # If it returns something, verify it's valid (either dict or None)
-            assert isinstance(result, (dict, type(None)))  # type: ignore[unreachable]
+            # Function returns JSON string - 'null' is valid JSON for None input
+            assert isinstance(result, str)  # type: ignore[unreachable]
+            assert result == "null"  # json.dumps(None) returns 'null'
         except (TypeError, AttributeError):
             pass  # Expected - None not iterable
 
