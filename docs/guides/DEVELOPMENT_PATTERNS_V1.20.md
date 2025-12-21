@@ -1,13 +1,25 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.19
+**Version:** 1.20
 **Created:** 2025-11-13
-**Last Updated:** 2025-12-07
+**Last Updated:** 2025-12-21
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.20:**
+- **Enhanced Pattern 28: Added Performance Tests with Latency Thresholds** (PR #240, Issue #238)
+- Added "Performance tests (latency thresholds)" to Test Type CI Behavior Classification table
+- Key difference: Stress tests HANG in CI, performance tests RUN but FAIL due to variable CPU scheduling
+- Example: `test_kalshi_client_performance.py` p99=43.58ms in CI vs <20ms locally (over 2x variance)
+- Applied same `skipif(_is_ci)` pattern but for different root cause (CPU variability, not threading hangs)
+- **Added Pattern 32: Windows Subprocess Pipe Deadlock Prevention (ALWAYS for Large Output)**
+- Problem: `subprocess.run()` with `capture_output=True` can deadlock on Windows when output exceeds pipe buffer (~4KB)
+- Solution: File-based capture using `tempfile.mkstemp()` instead of pipe capture
+- Implemented in `scripts/run_parallel_checks.py` after pre-push hook intermittent failures
+- Critical for any script running subprocesses with potentially large output (test runners, build tools)
+- Total addition: ~180 lines documenting both patterns
 **Changes in V1.19:**
 - **Added Pattern 31: Pre-Push Log Persistence (Quality of Life)** (Issue #174)
 - Pre-push hook now generates JSON summaries alongside text logs
@@ -7095,6 +7107,7 @@ class TestRateLimitingStress:
 | **Stress tests** | `skipif(_is_ci)` | Threading barriers, ThreadPoolExecutor, sustained loops | Would hang CI indefinitely |
 | **Race condition tests** | `skipif(_is_ci)` | Same as stress | Same threading issues |
 | **Database stress** | `skipif(_is_ci)` | Testcontainers + ThreadPoolExecutor | Connection pool exhaustion tests |
+| **Performance tests (latency)** | `skipif(_is_ci)` | Tight thresholds (<20ms p99) | Variable CPU on shared runners (Issue #238) |
 | **Chaos tests** | **RUN NORMALLY** | Mock injection, fault simulation | No blocking operations |
 | **E2E tests** | Conditional skip | `skipif(not _has_live_data)` | Depends on external data |
 | **Integration tests** | **RUN NORMALLY** | Real database, mocked APIs | Fast, deterministic |
@@ -7797,6 +7810,170 @@ Flaky Tests (passed sometimes, failed others):
 | **29. Hybrid Test Isolation** | Transaction fixtures + pre-push phases | `db_transaction`, `db_transaction_with_setup`, `db_savepoint` | Issue #171, ADR-057, Pattern 28 |
 | **30. Stale Bytecode Cleanup** | Pre-push hook (Step 0.25) | `find tests/ -type d -name "__pycache__" -exec rm -rf {} +` | Issue #171, Pattern 29, pytest-xdist |
 | **31. Pre-Push Log Persistence** | Pre-push hook (automatic) | `python scripts/analyze_test_history.py` | Issue #174, Pattern 29/30 |
+| **32. Windows Subprocess Pipe Deadlock** | File-based capture for large output | `tempfile.mkstemp()` + file I/O | Issue #238, Pattern 5, PR #240 |
+
+---
+
+## Pattern 32: Windows Subprocess Pipe Deadlock Prevention (ALWAYS for Large Output)
+
+### The Problem
+
+When using `subprocess.run()` with `capture_output=True` on Windows, the process can **deadlock indefinitely** when the subprocess produces more output than the pipe buffer can hold (~4KB on Windows, ~64KB on Linux).
+
+```python
+# WRONG - Can deadlock on Windows with large output
+result = subprocess.run(
+    "pytest tests/ -v",  # May produce 100KB+ of output
+    capture_output=True,
+    shell=True,
+    timeout=600,
+)
+# If pytest output exceeds pipe buffer, this call HANGS FOREVER
+# The timeout parameter DOES NOT help - deadlock occurs before timeout check
+```
+
+**Root Cause:**
+1. `capture_output=True` creates OS pipes for stdout/stderr
+2. Parent process waits for child to complete
+3. Child process writes to pipe until buffer is full, then blocks waiting for parent to read
+4. Parent is waiting for child → Child is waiting for parent → **DEADLOCK**
+
+**Symptoms:**
+- Pre-push hook hangs indefinitely with no output
+- Subprocess.run() never returns despite having a timeout
+- Works on small test suites but fails on large ones
+- Works on Linux but fails on Windows (smaller pipe buffer)
+
+### The Solution
+
+Use **file-based capture** instead of pipe capture. Write subprocess output to temporary files, then read after completion:
+
+```python
+import os
+import subprocess
+import tempfile
+from pathlib import Path
+
+
+def run_subprocess_with_file_capture(
+    command: str,
+    timeout: int,
+    cwd: str | Path,
+) -> tuple[int, str, str, bool]:
+    """
+    Run a subprocess with file-based output capture to avoid Windows pipe deadlock.
+
+    Args:
+        command: Shell command to execute
+        timeout: Maximum execution time in seconds
+        cwd: Working directory for the subprocess
+
+    Returns:
+        Tuple of (exit_code, stdout, stderr, timed_out)
+
+    Educational Note:
+        Windows subprocess pipes have ~4KB buffer limits. When output exceeds this
+        without being read, deadlock occurs. File-based capture avoids this by
+        writing to disk instead of memory-limited pipes.
+    """
+    # Create temporary files for stdout and stderr using mkstemp
+    # mkstemp returns (file_descriptor, path) - we close fd immediately
+    # and reopen with proper encoding to avoid SIM115 lint error
+    stdout_fd, stdout_path = tempfile.mkstemp(suffix=".stdout.txt", text=True)
+    stderr_fd, stderr_path = tempfile.mkstemp(suffix=".stderr.txt", text=True)
+
+    # Close the file descriptors immediately - we'll reopen with proper encoding
+    os.close(stdout_fd)
+    os.close(stderr_fd)
+
+    try:
+        # Open files for subprocess to write to
+        with open(stdout_path, "w", encoding="utf-8") as stdout_f:
+            with open(stderr_path, "w", encoding="utf-8") as stderr_f:
+                try:
+                    result = subprocess.run(
+                        command,
+                        shell=True,
+                        stdout=stdout_f,
+                        stderr=stderr_f,
+                        timeout=timeout,
+                        cwd=str(cwd),
+                        text=True,
+                        env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                    )
+                    exit_code = result.returncode
+                    timed_out = False
+                except subprocess.TimeoutExpired:
+                    exit_code = -1
+                    timed_out = True
+
+        # Read output from files AFTER subprocess completes
+        with open(stdout_path, encoding="utf-8", errors="replace") as f:
+            stdout = f.read()
+        with open(stderr_path, encoding="utf-8", errors="replace") as f:
+            stderr = f.read()
+
+        return exit_code, stdout, stderr, timed_out
+    finally:
+        # Clean up temporary files
+        try:
+            os.unlink(stdout_path)
+        except OSError:
+            pass
+        try:
+            os.unlink(stderr_path)
+        except OSError:
+            pass
+```
+
+### When to Use This Pattern
+
+| Scenario | Use File Capture? | Reasoning |
+|----------|-------------------|-----------|
+| Running pytest with many tests | ✅ YES | Can produce 100KB+ output |
+| Running build tools (npm, pip) | ✅ YES | Verbose output possible |
+| Simple status commands (git status) | ❌ NO | Output is small, pipe is fine |
+| Any subprocess on Windows | ⚠️ Consider | Windows has smaller pipe buffers |
+| Pre-push/pre-commit hooks | ✅ YES | Must handle worst-case output |
+
+### Wrong vs. Correct
+
+```python
+# WRONG - Uses pipes, can deadlock on Windows with large output
+def run_check(command: str, timeout: int) -> tuple[int, str, str]:
+    result = subprocess.run(
+        command,
+        capture_output=True,  # ❌ Pipe-based capture
+        shell=True,
+        timeout=timeout,
+        text=True,
+    )
+    return result.returncode, result.stdout, result.stderr
+
+
+# CORRECT - Uses file-based capture, handles any output size
+def run_check(command: str, timeout: int) -> tuple[int, str, str, bool]:
+    return run_subprocess_with_file_capture(command, timeout, Path.cwd())
+```
+
+### Implementation Notes
+
+1. **Use `tempfile.mkstemp()`** instead of `NamedTemporaryFile` to avoid Ruff SIM115 lint errors
+2. **Close file descriptors immediately** and reopen with `open()` for proper encoding handling
+3. **Always clean up temp files** in a `finally` block
+4. **Use `errors="replace"`** when reading output to handle encoding issues gracefully
+5. **Set `PYTHONUNBUFFERED=1`** to ensure subprocess output is flushed immediately
+
+### Related Files
+
+- `scripts/run_parallel_checks.py` - Production implementation (PR #240)
+- `tests/performance/` - Tests that produce large output
+
+### Cross-References
+
+- **Pattern 5:** Cross-Platform Compatibility (Windows/Linux)
+- **Pattern 31:** Pre-Push Log Persistence
+- **Issue #238:** CI test failure diagnostics
 
 ---
 
