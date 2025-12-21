@@ -22,7 +22,7 @@
 - **REQ-TEST-020 ADDED**: CI-Safe Stress Test Requirements (Issue #168)
 - **PROBLEM**: Stress tests using ThreadPoolExecutor hang indefinitely in CI
 - **SOLUTION**: Use `skipif(_is_ci)` to skip stress tests in resource-constrained CI environments
-- **CROSS-REFS**: ADR-099 (skipif vs xfail decision), Pattern 28 (DEVELOPMENT_PATTERNS_V1.19)
+- **CROSS-REFS**: ADR-099 (skipif vs xfail decision), Pattern 28 (DEVELOPMENT_PATTERNS_V1.20)
 - Updated MASTER_REQUIREMENTS reference to V2.20
 **Changes in v1.11:**
 - **REQ-SEC-009 COMPLETION**: Marked Sensitive Data Masking in Logs as ✅ Complete
