@@ -1,0 +1,75 @@
+# Docker Ignore File
+# Files and directories to exclude from Docker build context
+# This speeds up builds and reduces image size
+
+# Version control
+.git
+.gitignore
+
+# Python artifacts
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info
+.eggs
+dist
+build
+*.egg
+
+# Virtual environments
+.venv
+venv
+ENV
+env
+
+# IDE/Editor settings
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# Test artifacts
+.pytest_cache
+.mypy_cache
+.ruff_cache
+htmlcov
+.coverage
+coverage.xml
+*.cover
+test-results/
+
+# Documentation and archives
+docs/
+_archive/
+_sessions/
+_knowledge/
+
+# Local environment files (secrets!)
+.env
+.env.*
+!.env.template
+_keys/
+
+# CI/CD artifacts
+.github/
+
+# Local testing
+*.log
+*.tmp
+*.bak
+
+# Database files
+*.db
+*.sqlite
+
+# OS artifacts
+.DS_Store
+Thumbs.db
+
+# Large data files that shouldn't be in container
+data/
+*.csv
+*.json.gz
