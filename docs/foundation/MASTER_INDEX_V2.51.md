@@ -1,9 +1,11 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.50
-**Last Updated:** 2025-12-14
+**Version:** 2.51
+**Last Updated:** 2025-12-21
 **Status:** ✅ Current
+**Changes in v2.51:**
+- Added DATABASE_ENVIRONMENT_GUIDE_V1.0.md to guides (data seeding approach, cloud strategy, scheduling - complements DATABASE_ENVIRONMENT_STRATEGY)
 **Changes in v2.50:**
 - PHASE_2.5_DEFERRED_TASKS V1.2 → V1.3: Fixed reference to match actual file version
 **Changes in v2.49:**
@@ -437,7 +439,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.23.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.22** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
-| **MASTER_INDEX_V2.50.md** | ✅ | v2.50 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.50** (PHASE_2.5_DEFERRED_TASKS V1.2->V1.3: fixed reference to match actual file version) |
+| **MASTER_INDEX_V2.51.md** | ✅ | v2.51 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.51** (added DATABASE_ENVIRONMENT_GUIDE_V1.0.md for data seeding approach and cloud strategy) |
 | **ARCHITECTURE_DECISIONS_V2.31.md** | ✅ | v2.31 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (109 total) - **UPDATED V2.31** (ADR-107/108: Single-Database + Hybrid Cloud Architecture, Issue #241/#247) |
 | **REQUIREMENT_INDEX_V1.15.md** | ✅ | v1.14 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 128 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.14** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
 | **ADR_INDEX_V1.24.md** | ✅ | v1.24 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 109 architecture decisions - **UPDATED V1.24** (added ADR-107/108 for cloud infrastructure; 107 → 109 total ADRs) |
@@ -558,6 +560,7 @@ Phase-specific implementation guides created in Phase 0.5.
 | **MANAGER_ARCHITECTURE_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **NEW** - Comprehensive architecture guide for 4 core managers (Model, Strategy, Position, Config); database schemas with field-by-field explanations; status lifecycle diagrams; immutable vs SCD Type 2 versioning patterns; design principles (pure psycopg2, decimal precision, two-level configs); ~900 lines; addresses user request to document manager architecture summary |
 | **POSTGRESQL_SETUP_GUIDE.md** | ✅ | v1.0 | `/docs/guides/` | 0 | Phase 1 | 🟡 High | **MOVED** from /supplementary/ - Database installation and configuration (Windows/Linux/Mac) |
 | **DATABASE_ENVIRONMENT_STRATEGY_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 2 | All phases | 🟡 High | **NEW** - Database environment management (~570 lines): 4 environments (dev/test/staging/prod), environment selection (PRECOG_ENV), migration workflow, test isolation strategy, safety guards (require_environment), .env templates; addresses database development management process question |
+| **DATABASE_ENVIRONMENT_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1 | All phases | 🟡 High | **NEW** - Data seeding and environment architecture (~250 lines): data categories (historical/market/live/mode/strategy/trade), cloud-first seeding strategy, data refresh scheduling, environment-specific behavior, data sources (nfl_data_py, FiveThirtyEight, ESPN, Kalshi); complements DATABASE_ENVIRONMENT_STRATEGY |
 | **COLUMN_RENAME_DEPRECATION_PATTERN_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1.5 | All phases | 🟡 High | **NEW** - Safe column rename pattern (~225 lines): 3-phase expand-contract migration (add new column → deprecate old → remove old), dual-write strategy, deprecation warnings, timeline guidelines; addresses PR #93 M-10 review recommendation; cross-references ADR-018, ADR-019, ADR-020 (Dual Versioning) |
 | **DEVELOPER_SETUP_GUIDE_V1.0.md** | ✅ | v1.0 | `/docs/guides/` | 1 | Phase 1.5 | 🟡 High | **NEW** - Comprehensive developer onboarding guide (Python 3.12+, PostgreSQL 15+, Git, GitHub CLI, pre-commit hooks); platform-specific instructions (Windows/macOS/Linux); addresses gh CLI dependency risk from Phase Completion assessment |
 | **STRATEGY_MANAGER_USER_GUIDE_V1.1.md** | ✅ | v1.1 | `/docs/guides/` | 1.5 | Phases 1.5+ | 🔴 Critical | **UPDATED V1.1** - Strategy Manager API usage guide (~850 lines): create/update/archive strategies, A/B testing workflow, version management, performance tracking, common patterns (safe initialization, active strategy queries, multi-version testing), troubleshooting |
