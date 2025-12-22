@@ -37,10 +37,13 @@ Reference:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from precog.database.connection import get_cursor
+from precog.database.seeding.batch_result import (
+    BatchInsertResult,
+    ErrorHandlingMode,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -55,27 +58,18 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 
-@dataclass
-class LoadResult:
-    """Result of loading historical odds data."""
-
-    records_processed: int = 0
-    records_inserted: int = 0
-    records_updated: int = 0
-    records_skipped: int = 0
-    errors: int = 0
-    error_messages: list[str] = field(default_factory=list)
-
-    def __add__(self, other: LoadResult) -> LoadResult:
-        """Combine two LoadResults."""
-        return LoadResult(
-            records_processed=self.records_processed + other.records_processed,
-            records_inserted=self.records_inserted + other.records_inserted,
-            records_updated=self.records_updated + other.records_updated,
-            records_skipped=self.records_skipped + other.records_skipped,
-            errors=self.errors + other.errors,
-            error_messages=self.error_messages + other.error_messages,
-        )
+# Type alias for backward compatibility (Issue #255)
+# BatchInsertResult provides:
+#   - total_records (aliased as records_processed)
+#   - successful (aliased as records_inserted)
+#   - skipped (aliased as records_skipped)
+#   - failed (aliased as errors)
+#   - error_messages property (compatibility)
+#   - PLUS: failed_records list with FailedRecord details
+#
+# Note: The __add__ method for combining results is not preserved.
+# Use BatchInsertResult.merge() or manually combine if needed.
+LoadResult = BatchInsertResult
 
 
 # =============================================================================
@@ -245,7 +239,8 @@ def bulk_insert_historical_odds(
     records: Iterator[OddsRecord],
     batch_size: int = 1000,
     link_games: bool = True,
-) -> LoadResult:
+    error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
+) -> BatchInsertResult:
     """
     Bulk insert historical odds records with batching.
 
@@ -253,17 +248,29 @@ def bulk_insert_historical_odds(
         records: Iterator of OddsRecord
         batch_size: Number of records per batch (default: 1000)
         link_games: Whether to look up historical_game_id (default: True)
+        error_mode: How to handle errors (default: FAIL - stop on first error)
+            - FAIL: Raise exception on first error
+            - SKIP: Skip failed records, continue processing
+            - COLLECT: Collect all failures, continue processing
 
     Returns:
-        LoadResult with statistics
+        BatchInsertResult with statistics and any failed records
+
+    Example:
+        >>> result = bulk_insert_historical_odds(
+        ...     records,
+        ...     error_mode=ErrorHandlingMode.COLLECT
+        ... )
+        >>> if result.has_failures:
+        ...     print(result.get_failure_summary())
     """
-    result = LoadResult()
+    result = BatchInsertResult(error_mode=error_mode, operation="bulk_insert_historical_odds")
 
     batch: list[tuple[Any, ...]] = []
     game_id_cache: dict[tuple[str, Any, str, str], int | None] = {}
 
-    for record in records:
-        result.records_processed += 1
+    for record_index, record in enumerate(records):
+        result.total_records += 1
 
         # Look up historical_game_id (with caching)
         historical_game_id: int | None = None
@@ -316,13 +323,13 @@ def bulk_insert_historical_odds(
         # Flush batch when full
         if len(batch) >= batch_size:
             inserted = _flush_odds_batch(batch)
-            result.records_inserted += inserted
+            result.successful += inserted
             batch = []
 
     # Flush remaining records
     if batch:
         inserted = _flush_odds_batch(batch)
-        result.records_inserted += inserted
+        result.successful += inserted
 
     return result
 
@@ -380,7 +387,8 @@ def load_odds_from_source(
     sport: str = "nfl",
     seasons: list[int] | None = None,
     link_games: bool = True,
-) -> LoadResult:
+    error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
+) -> BatchInsertResult:
     """
     Load historical odds from a source adapter into the database.
 
@@ -389,15 +397,25 @@ def load_odds_from_source(
         sport: Sport code (default: "nfl")
         seasons: Filter to specific seasons (default: all)
         link_games: Whether to look up historical_game_id (default: True)
+        error_mode: How to handle errors (default: FAIL - stop on first error)
+            - FAIL: Raise exception on first error
+            - SKIP: Skip failed records, continue processing
+            - COLLECT: Collect all failures, continue processing
 
     Returns:
-        LoadResult with statistics
+        BatchInsertResult with statistics
 
     Example:
         >>> from precog.database.seeding.sources import BettingCSVSource
         >>> source = BettingCSVSource(data_dir=Path("data/historical"))
         >>> result = load_odds_from_source(source, sport="nfl", seasons=[2023])
         >>> print(f"Loaded {result.records_inserted} odds records")
+        >>> # With error collection
+        >>> result = load_odds_from_source(
+        ...     source, error_mode=ErrorHandlingMode.COLLECT
+        ... )
+        >>> if result.has_failures:
+        ...     print(result.get_failure_summary())
     """
     logger.info(
         "Loading historical odds: source=%s, sport=%s, seasons=%s",
@@ -407,7 +425,7 @@ def load_odds_from_source(
     )
 
     records = source_adapter.load_odds(sport=sport, seasons=seasons)
-    result = bulk_insert_historical_odds(records, link_games=link_games)
+    result = bulk_insert_historical_odds(records, link_games=link_games, error_mode=error_mode)
 
     logger.info(
         "Historical odds load complete: processed=%d, inserted=%d, skipped=%d",

@@ -326,9 +326,8 @@ def bulk_insert_historical_games(
 
     batch: list[tuple[Any, ...]] = []
     team_id_cache: dict[tuple[str, str], int | None] = {}
-    record_index = 0
 
-    for record in records:
+    for record_index, record in enumerate(records):
         result.total_records += 1
 
         # Look up team_ids (with caching)
@@ -363,7 +362,6 @@ def bulk_insert_historical_games(
                 result.add_skip()
             elif error_mode == ErrorHandlingMode.COLLECT:
                 result.add_failure(record_index, dict(record), error)
-            record_index += 1
             continue
 
         batch.append(
@@ -392,8 +390,6 @@ def bulk_insert_historical_games(
             inserted = _flush_games_batch(batch)
             result.successful += inserted
             batch = []
-
-        record_index += 1
 
     # Flush remaining records
     if batch:
