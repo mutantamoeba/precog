@@ -31,8 +31,14 @@ Team Code Mapping:
 
     The TEAM_CODE_MAPPING dict handles these translations.
 
+Error Handling Modes (Issue #255):
+    - FAIL: Stop on first error (default, current behavior)
+    - SKIP: Skip failed records, continue processing
+    - COLLECT: Process all records, return detailed failure list
+
 Reference:
     - Issue #208: Historical Data Seeding
+    - Issue #255: Batch Insert Error Handling
     - Migration 030: Create historical_elo table
     - ADR-029: ESPN Data Model
 """
@@ -41,12 +47,16 @@ from __future__ import annotations
 
 import csv
 import logging
-from dataclasses import dataclass
+import time
 from datetime import date, datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from precog.database.connection import get_cursor
+from precog.database.seeding.batch_result import (
+    BatchInsertResult,
+    ErrorHandlingMode,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -75,20 +85,11 @@ class HistoricalEloRecord(TypedDict):
     source_file: str | None
 
 
-@dataclass
-class LoadResult:
-    """Result of loading historical Elo data."""
-
-    records_processed: int = 0
-    records_inserted: int = 0
-    records_updated: int = 0
-    records_skipped: int = 0
-    errors: int = 0
-    error_messages: list[str] | None = None
-
-    def __post_init__(self) -> None:
-        if self.error_messages is None:
-            self.error_messages = []
+# LoadResult is now an alias for BatchInsertResult for backward compatibility.
+# BatchInsertResult has compatibility properties (records_processed, records_inserted, etc.)
+# that make it work with code expecting LoadResult field names.
+# See Issue #255 for migration details.
+LoadResult = BatchInsertResult
 
 
 # =============================================================================
@@ -375,24 +376,52 @@ def insert_historical_elo(record: HistoricalEloRecord) -> bool:
 def bulk_insert_historical_elo(
     records: Iterator[HistoricalEloRecord],
     batch_size: int = 1000,
-) -> LoadResult:
+    error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
+) -> BatchInsertResult:
     """
-    Bulk insert historical Elo records with batching.
+    Bulk insert historical Elo records with batching and configurable error handling.
 
     Args:
         records: Iterator of HistoricalEloRecord
         batch_size: Number of records per batch (default: 1000)
+        error_mode: How to handle errors (default: FAIL)
+            - FAIL: Stop on first error, raise exception
+            - SKIP: Skip failed records, continue processing
+            - COLLECT: Process all records, collect failures for analysis
 
     Returns:
-        LoadResult with statistics
+        BatchInsertResult with statistics and failure details
+
+    Educational Note:
+        The error_mode parameter (Issue #255) allows flexible error handling:
+        - Use FAIL for transactional integrity (all-or-nothing)
+        - Use SKIP for "best effort" imports
+        - Use COLLECT for data quality analysis (see ALL failures)
+
+    Example:
+        >>> result = bulk_insert_historical_elo(
+        ...     records,
+        ...     error_mode=ErrorHandlingMode.COLLECT,
+        ... )
+        >>> if result.has_failures:
+        ...     print(result.get_failure_summary())
     """
-    result = LoadResult()
+    start_time = time.perf_counter()
+    result = BatchInsertResult(
+        operation="Historical Elo Insert",
+        error_mode=error_mode,
+    )
 
     batch: list[tuple[Any, ...]] = []
+    # Track record index to original record for failure reporting
+    batch_indices: list[int] = []
+    batch_records: list[dict[str, Any]] = []
+
     team_id_cache: dict[tuple[str, str], int | None] = {}
 
     for record in records:
-        result.records_processed += 1
+        record_index = result.total_records
+        result.total_records += 1
 
         # Look up team_id (with caching)
         cache_key = (record["team_code"], record["sport"])
@@ -404,7 +433,20 @@ def bulk_insert_historical_elo(
 
         team_id = team_id_cache[cache_key]
         if not team_id:
-            result.records_skipped += 1
+            # Team not found - handle according to error_mode
+            if error_mode == ErrorHandlingMode.COLLECT:
+                result.add_failure(
+                    record_index=record_index,
+                    record_data=dict(record),
+                    error=ValueError(f"Team not found: {record['team_code']} ({record['sport']})"),
+                    context="team_lookup",
+                )
+            elif error_mode == ErrorHandlingMode.SKIP:
+                result.add_skip()
+            else:  # FAIL mode
+                result.elapsed_time = time.perf_counter() - start_time
+                msg = f"Team not found: {record['team_code']} ({record['sport']})"
+                raise ValueError(msg)
             continue
 
         batch.append(
@@ -421,18 +463,23 @@ def bulk_insert_historical_elo(
                 record["source_file"],
             )
         )
+        batch_indices.append(record_index)
+        batch_records.append(dict(record))
 
         # Flush batch when full
         if len(batch) >= batch_size:
             inserted = _flush_batch(batch)
-            result.records_inserted += inserted
+            result.successful += inserted
             batch = []
+            batch_indices = []
+            batch_records = []
 
     # Flush remaining records
     if batch:
         inserted = _flush_batch(batch)
-        result.records_inserted += inserted
+        result.successful += inserted
 
+    result.elapsed_time = time.perf_counter() - start_time
     return result
 
 
@@ -480,7 +527,8 @@ def load_fivethirtyeight_elo(
     file_path: Path,
     sport: str = "nfl",
     seasons: list[int] | None = None,
-) -> LoadResult:
+    error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
+) -> BatchInsertResult:
     """
     Load FiveThirtyEight Elo data into the database.
 
@@ -488,9 +536,13 @@ def load_fivethirtyeight_elo(
         file_path: Path to FiveThirtyEight CSV file
         sport: Sport code (default: "nfl")
         seasons: Filter to specific seasons (default: all)
+        error_mode: How to handle errors (default: FAIL)
+            - FAIL: Stop on first error, raise exception
+            - SKIP: Skip failed records, continue processing
+            - COLLECT: Process all records, collect failures for analysis
 
     Returns:
-        LoadResult with statistics
+        BatchInsertResult with statistics and failure details
 
     Example:
         >>> result = load_fivethirtyeight_elo(
@@ -498,17 +550,26 @@ def load_fivethirtyeight_elo(
         ...     seasons=[2022, 2023, 2024]
         ... )
         >>> print(f"Loaded {result.records_inserted} records")
+        >>>
+        >>> # With error collection for data quality analysis
+        >>> result = load_fivethirtyeight_elo(
+        ...     Path("nfl_elo.csv"),
+        ...     error_mode=ErrorHandlingMode.COLLECT
+        ... )
+        >>> if result.has_failures:
+        ...     print(result.get_failure_summary())
     """
     logger.info("Loading FiveThirtyEight Elo data from %s", file_path)
 
     records = parse_fivethirtyeight_csv(file_path, sport, seasons)
-    result = bulk_insert_historical_elo(records)
+    result = bulk_insert_historical_elo(records, error_mode=error_mode)
 
     logger.info(
-        "FiveThirtyEight load complete: processed=%d, inserted=%d, skipped=%d",
+        "FiveThirtyEight load complete: processed=%d, inserted=%d, skipped=%d, failed=%d",
         result.records_processed,
         result.records_inserted,
         result.records_skipped,
+        result.failed,
     )
 
     return result
@@ -518,7 +579,8 @@ def load_csv_elo(
     file_path: Path,
     sport: str,
     source: str = "imported",
-) -> LoadResult:
+    error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
+) -> BatchInsertResult:
     """
     Load Elo data from a simple CSV file.
 
@@ -526,20 +588,22 @@ def load_csv_elo(
         file_path: Path to CSV file
         sport: Sport code
         source: Data source identifier
+        error_mode: How to handle errors (default: FAIL)
 
     Returns:
-        LoadResult with statistics
+        BatchInsertResult with statistics and failure details
     """
     logger.info("Loading Elo data from %s", file_path)
 
     records = parse_simple_csv(file_path, sport, source)
-    result = bulk_insert_historical_elo(records)
+    result = bulk_insert_historical_elo(records, error_mode=error_mode)
 
     logger.info(
-        "CSV load complete: processed=%d, inserted=%d, skipped=%d",
+        "CSV load complete: processed=%d, inserted=%d, skipped=%d, failed=%d",
         result.records_processed,
         result.records_inserted,
         result.records_skipped,
+        result.failed,
     )
 
     return result

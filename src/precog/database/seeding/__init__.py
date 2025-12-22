@@ -11,6 +11,8 @@ Key Components:
     - Historical Elo Loader: CSV loading for FiveThirtyEight and other sources
     - Historical Odds Loader: Betting odds from CSV and other sources
     - Source Adapters: Unified data source interfaces (FiveThirtyEight, betting CSV, Python libraries)
+    - BatchInsertResult: Detailed result tracking for batch operations (Issue #255)
+    - ErrorHandlingMode: Configurable error handling (FAIL/SKIP/COLLECT)
 
 Usage:
     >>> from precog.database.seeding import SeedingManager, SeedCategory
@@ -34,12 +36,27 @@ Usage:
     >>> from precog.database.seeding.sources import BettingCSVSource
     >>> source = BettingCSVSource(data_dir=Path("data/historical"))
     >>> result = load_odds_from_source(source, sport="nfl", seasons=[2023])
+    >>>
+    >>> # Load with error handling modes (Issue #255)
+    >>> from precog.database.seeding import ErrorHandlingMode
+    >>> result = load_fivethirtyeight_elo(
+    ...     Path("nfl_elo.csv"),
+    ...     error_mode=ErrorHandlingMode.COLLECT  # Collect all failures
+    ... )
+    >>> if result.has_failures:
+    ...     print(result.get_failure_summary())
 
 Reference: Phase 2.5 - Live Data Collection Service
 Related: ADR-029 (ESPN Data Model), ADR-106 (Historical Data Collection), REQ-DATA-003-008
-GitHub Issue: #208 (Historical Data Seeding), #229 (Expanded Historical Data Sources)
+GitHub Issue: #208 (Historical Data Seeding), #229 (Expanded Historical Data Sources), #255 (Batch Insert Error Handling)
 """
 
+from precog.database.seeding.batch_result import (
+    BatchInsertResult,
+    ErrorHandlingMode,
+    FailedRecord,
+    process_batch_with_error_handling,
+)
 from precog.database.seeding.historical_elo_loader import (
     HistoricalEloRecord,
     LoadResult,
@@ -68,6 +85,9 @@ from precog.database.seeding.seeding_manager import (
 )
 
 __all__ = [
+    "BatchInsertResult",
+    "ErrorHandlingMode",
+    "FailedRecord",
     "HistoricalEloRecord",
     "LoadResult",
     "OddsLoadResult",
@@ -84,6 +104,7 @@ __all__ = [
     "load_csv_elo",
     "load_fivethirtyeight_elo",
     "load_odds_from_source",
+    "process_batch_with_error_handling",
     "seed_all_teams",
     "verify_required_seeds",
 ]
