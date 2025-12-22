@@ -30,6 +30,7 @@ Team Code Normalization:
 
 Reference:
     - Issue #229: Expanded Historical Data Sources
+    - Issue #254: Add progress bars for large seeding operations
     - Migration 0007: Create historical_odds table
     - ADR-106: Historical Data Collection Architecture
 """
@@ -41,6 +42,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from precog.database.connection import get_cursor
+from precog.database.seeding.progress import print_load_summary, seeding_progress
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -245,79 +247,102 @@ def bulk_insert_historical_odds(
     records: Iterator[OddsRecord],
     batch_size: int = 1000,
     link_games: bool = True,
+    *,
+    total: int | None = None,
+    show_progress: bool = True,
 ) -> LoadResult:
     """
-    Bulk insert historical odds records with batching.
+    Bulk insert historical odds records with batching and progress display.
 
     Args:
         records: Iterator of OddsRecord
         batch_size: Number of records per batch (default: 1000)
         link_games: Whether to look up historical_game_id (default: True)
+        total: Expected total records (enables determinate progress bar)
+        show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
         LoadResult with statistics
+
+    Example:
+        >>> result = bulk_insert_historical_odds(
+        ...     records,
+        ...     batch_size=500,
+        ...     link_games=True,
+        ...     total=5000,
+        ...     show_progress=True,
+        ... )
     """
     result = LoadResult()
 
     batch: list[tuple[Any, ...]] = []
     game_id_cache: dict[tuple[str, Any, str, str], int | None] = {}
 
-    for record in records:
-        result.records_processed += 1
+    with seeding_progress(
+        "Loading betting odds...",
+        total=total,
+        show_progress=show_progress,
+    ) as (progress, task):
+        for record in records:
+            result.records_processed += 1
 
-        # Look up historical_game_id (with caching)
-        historical_game_id: int | None = None
-        if link_games:
-            cache_key = (
-                record["sport"],
-                record["game_date"],
-                record["home_team_code"],
-                record["away_team_code"],
-            )
-            if cache_key not in game_id_cache:
-                game_id_cache[cache_key] = lookup_historical_game_id(
+            # Look up historical_game_id (with caching)
+            historical_game_id: int | None = None
+            if link_games:
+                cache_key = (
                     record["sport"],
                     record["game_date"],
                     record["home_team_code"],
                     record["away_team_code"],
                 )
-            historical_game_id = game_id_cache[cache_key]
+                if cache_key not in game_id_cache:
+                    game_id_cache[cache_key] = lookup_historical_game_id(
+                        record["sport"],
+                        record["game_date"],
+                        record["home_team_code"],
+                        record["away_team_code"],
+                    )
+                historical_game_id = game_id_cache[cache_key]
 
-        source = normalize_source_name(record["source"])
-        sportsbook = record.get("sportsbook") or "consensus"
+            source = normalize_source_name(record["source"])
+            sportsbook = record.get("sportsbook") or "consensus"
 
-        batch.append(
-            (
-                historical_game_id,
-                record["sport"],
-                record["game_date"],
-                record["home_team_code"],
-                record["away_team_code"],
-                sportsbook,
-                record.get("spread_home_open"),
-                record.get("spread_home_close"),
-                record.get("spread_home_odds_open"),
-                record.get("spread_home_odds_close"),
-                record.get("moneyline_home_open"),
-                record.get("moneyline_home_close"),
-                record.get("moneyline_away_open"),
-                record.get("moneyline_away_close"),
-                record.get("total_open"),
-                record.get("total_close"),
-                record.get("over_odds_open"),
-                record.get("over_odds_close"),
-                record.get("home_covered"),
-                record.get("game_went_over"),
-                source,
-                record.get("source_file"),
+            batch.append(
+                (
+                    historical_game_id,
+                    record["sport"],
+                    record["game_date"],
+                    record["home_team_code"],
+                    record["away_team_code"],
+                    sportsbook,
+                    record.get("spread_home_open"),
+                    record.get("spread_home_close"),
+                    record.get("spread_home_odds_open"),
+                    record.get("spread_home_odds_close"),
+                    record.get("moneyline_home_open"),
+                    record.get("moneyline_home_close"),
+                    record.get("moneyline_away_open"),
+                    record.get("moneyline_away_close"),
+                    record.get("total_open"),
+                    record.get("total_close"),
+                    record.get("over_odds_open"),
+                    record.get("over_odds_close"),
+                    record.get("home_covered"),
+                    record.get("game_went_over"),
+                    source,
+                    record.get("source_file"),
+                )
             )
-        )
 
-        # Flush batch when full
-        if len(batch) >= batch_size:
-            inserted = _flush_odds_batch(batch)
-            result.records_inserted += inserted
-            batch = []
+            # Update progress
+            if progress and task is not None:
+                progress.advance(task)
+
+            # Flush batch when full
+            if len(batch) >= batch_size:
+                inserted = _flush_odds_batch(batch)
+                result.records_inserted += inserted
+                batch = []
 
     # Flush remaining records
     if batch:
@@ -380,6 +405,8 @@ def load_odds_from_source(
     sport: str = "nfl",
     seasons: list[int] | None = None,
     link_games: bool = True,
+    *,
+    show_progress: bool = True,
 ) -> LoadResult:
     """
     Load historical odds from a source adapter into the database.
@@ -389,6 +416,7 @@ def load_odds_from_source(
         sport: Sport code (default: "nfl")
         seasons: Filter to specific seasons (default: all)
         link_games: Whether to look up historical_game_id (default: True)
+        show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
         LoadResult with statistics
@@ -396,7 +424,9 @@ def load_odds_from_source(
     Example:
         >>> from precog.database.seeding.sources import BettingCSVSource
         >>> source = BettingCSVSource(data_dir=Path("data/historical"))
-        >>> result = load_odds_from_source(source, sport="nfl", seasons=[2023])
+        >>> result = load_odds_from_source(
+        ...     source, sport="nfl", seasons=[2023], show_progress=True
+        ... )
         >>> print(f"Loaded {result.records_inserted} odds records")
     """
     logger.info(
@@ -407,13 +437,25 @@ def load_odds_from_source(
     )
 
     records = source_adapter.load_odds(sport=sport, seasons=seasons)
-    result = bulk_insert_historical_odds(records, link_games=link_games)
+    result = bulk_insert_historical_odds(
+        records, link_games=link_games, show_progress=show_progress
+    )
 
     logger.info(
         "Historical odds load complete: processed=%d, inserted=%d, skipped=%d",
         result.records_processed,
         result.records_inserted,
         result.records_skipped,
+    )
+
+    # Print summary table
+    print_load_summary(
+        f"Historical Odds Load ({source_adapter.source_name})",
+        processed=result.records_processed,
+        inserted=result.records_inserted,
+        skipped=result.records_skipped,
+        errors=result.errors,
+        show_summary=show_progress,
     )
 
     return result

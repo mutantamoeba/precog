@@ -98,6 +98,8 @@ MODULE_TIERS = {
     "database/crud_operations": "business",
     "database/seeding/seeding_manager": "business",
     "database/seeding/historical_elo_loader": "business",
+    # Progress bar utilities (Issue #254) - New utility, tests will be expanded
+    "database/seeding/progress": "experimental",
     # Data Sources (Issue #229) - Experimental tier until full test suite built
     # These are new modules; tests will be expanded incrementally
     "database/seeding/historical_games_loader": "experimental",
