@@ -755,9 +755,8 @@ Track validation health over time:
 # Mypy cache
 .mypy_cache/
 
-# Test results (keep history.json, ignore timestamped runs)
+# Test results (ignore all test result artifacts)
 test_results/*/
-!test_results/README.md
 
 # Coverage reports
 coverage.xml
