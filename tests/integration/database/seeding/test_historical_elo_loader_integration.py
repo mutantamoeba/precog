@@ -23,6 +23,7 @@ from decimal import Decimal
 
 import pytest
 
+from precog.database.seeding.batch_result import ErrorHandlingMode
 from precog.database.seeding.historical_elo_loader import (
     HistoricalEloRecord,
     LoadResult,
@@ -126,7 +127,12 @@ class TestBulkInsertIntegration:
         assert result.errors == 0
 
     def test_bulk_insert_skips_unknown_teams(self, db_pool, db_cursor) -> None:
-        """Verify bulk insert skips records with unknown team codes."""
+        """Verify bulk insert skips records with unknown team codes.
+
+        Educational Note:
+            With Issue #255, the default error_mode is FAIL which raises
+            an exception. To get skip behavior, use SKIP mode explicitly.
+        """
         records = [
             HistoricalEloRecord(
                 team_code="UNKNOWN_TEAM_XYZ",
@@ -142,7 +148,10 @@ class TestBulkInsertIntegration:
             )
         ]
 
-        result = bulk_insert_historical_elo(iter(records))
+        result = bulk_insert_historical_elo(
+            iter(records),
+            error_mode=ErrorHandlingMode.SKIP,
+        )
 
         assert result.records_processed == 1
         assert result.records_skipped == 1
