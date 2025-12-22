@@ -258,9 +258,15 @@ Related Guide: docs/guides/VERSIONING_GUIDE_V1.0.md
 import json
 from datetime import datetime
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from .connection import fetch_all, fetch_one, get_cursor
+
+# Type alias for execution environment - matches database ENUM (Migration 0008)
+# - 'live': Production trading with Kalshi Production API (real money)
+# - 'paper': Integration testing with Kalshi Demo/Sandbox API (no real money)
+# - 'backtest': Historical data simulation (no API calls)
+ExecutionEnvironment = Literal["live", "paper", "backtest"]
 
 
 class DecimalEncoder(json.JSONEncoder):
@@ -871,6 +877,8 @@ def create_position(
     # ⭐ ATTRIBUTION ARCHITECTURE (Migration 020) - NEW parameters
     calculated_probability: Decimal | None = None,
     market_price_at_entry: Decimal | None = None,
+    # ⭐ EXECUTION ENVIRONMENT (Migration 0008, ADR-107) - NEW parameter
+    execution_environment: ExecutionEnvironment = "live",
 ) -> int:
     """
     Create new position with status = 'open' and immutable entry-time attribution.
@@ -888,6 +896,8 @@ def create_position(
         position_metadata: Additional metadata
         calculated_probability: Model's predicted win probability at entry (immutable snapshot)
         market_price_at_entry: Kalshi market price at entry (immutable snapshot)
+        execution_environment: Execution context - 'live' (production), 'paper' (demo),
+            or 'backtest' (simulation). Default 'live'. See ADR-107.
 
     Returns:
         id (surrogate key) of newly created position
@@ -916,7 +926,8 @@ def create_position(
         ...     entry_price=Decimal("0.5200"),
         ...     stop_loss_price=Decimal("0.4800"),
         ...     calculated_probability=Decimal("0.6250"),  # Model prediction
-        ...     market_price_at_entry=Decimal("0.5200")    # Kalshi price
+        ...     market_price_at_entry=Decimal("0.5200"),   # Kalshi price
+        ...     execution_environment='paper'              # Demo API testing
         ... )
         >>> # Returns surrogate id (e.g., 1), position_id auto-set to 'POS-1'
         >>> # edge_at_entry automatically set to 0.1050 (0.6250 - 0.5200)
@@ -948,9 +959,10 @@ def create_position(
             target_price, stop_loss_price,
             trailing_stop_state, position_metadata,
             status, row_current_ind, entry_time,
-            calculated_probability, edge_at_entry, market_price_at_entry
+            calculated_probability, edge_at_entry, market_price_at_entry,
+            execution_environment
         )
-        VALUES ('TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'open', TRUE, NOW(), %s, %s, %s)
+        VALUES ('TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'open', TRUE, NOW(), %s, %s, %s, %s)
         RETURNING id
     """
 
@@ -968,6 +980,7 @@ def create_position(
         calculated_probability,
         edge_at_entry,
         market_price_at_entry,
+        execution_environment,
     )
 
     with get_cursor(commit=True) as cur:
@@ -988,7 +1001,9 @@ def create_position(
 
 
 def get_current_positions(
-    status: str | None = None, market_id: str | None = None
+    status: str | None = None,
+    market_id: str | None = None,
+    execution_environment: ExecutionEnvironment | None = None,
 ) -> list[dict[str, Any]]:
     """
     Get current positions (row_current_ind = TRUE).
@@ -996,14 +1011,18 @@ def get_current_positions(
     Args:
         status: Filter by status ('open', 'closed', etc.)
         market_id: Filter by market_id
+        execution_environment: Filter by environment ('live', 'paper', 'backtest').
+            If None, returns positions from all environments.
 
     Returns:
         List of current positions
 
     Example:
         >>> open_positions = get_current_positions(status='open')
-        >>> for pos in open_positions:
-        ...     print(pos['market_id'], pos['quantity'], pos['entry_price'])
+        >>> # Only paper trading positions
+        >>> paper_positions = get_current_positions(execution_environment='paper')
+        >>> # Open positions in live environment
+        >>> live_open = get_current_positions(status='open', execution_environment='live')
     """
     query = """
         SELECT p.*, m.ticker, m.yes_price as current_market_price
@@ -1021,6 +1040,10 @@ def get_current_positions(
     if market_id:
         query += " AND p.market_id = %s"
         params.append(market_id)
+
+    if execution_environment is not None:
+        query += " AND p.execution_environment = %s"
+        params.append(execution_environment)
 
     query += " ORDER BY p.entry_time DESC"
 
@@ -1233,6 +1256,8 @@ def create_trade(
     trade_source: str = "automated",
     calculated_probability: Decimal | None = None,
     market_price: Decimal | None = None,
+    # ⭐ EXECUTION ENVIRONMENT (Migration 0008, ADR-107) - NEW parameter
+    execution_environment: ExecutionEnvironment = "live",
 ) -> int:
     """
     Record executed trade with strategy and model attribution.
@@ -1250,6 +1275,8 @@ def create_trade(
         trade_source: Trade origin ('automated' or 'manual') - default 'automated'
         calculated_probability: Model-predicted win probability at execution (0.0-1.0)
         market_price: Kalshi market price at execution (0.0-1.0)
+        execution_environment: Execution context - 'live' (production), 'paper' (demo),
+            or 'backtest' (simulation). Default 'live'. See ADR-107.
 
     Returns:
         trade_id of newly created trade
@@ -1279,7 +1306,8 @@ def create_trade(
         ...     position_id=123,
         ...     trade_source='automated',
         ...     calculated_probability=Decimal("0.6500"),
-        ...     market_price=Decimal("0.5800")
+        ...     market_price=Decimal("0.5800"),
+        ...     execution_environment='paper'  # Demo API testing
         ... )
         >>> # edge_value automatically calculated: 0.6500 - 0.5800 = 0.0700
     """
@@ -1294,9 +1322,10 @@ def create_trade(
             side, quantity, price,
             position_internal_id, order_type,
             trade_metadata, execution_time,
-            trade_source, calculated_probability, market_price, edge_value
+            trade_source, calculated_probability, market_price, edge_value,
+            execution_environment
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s, %s)
         RETURNING trade_id
     """
 
@@ -1314,6 +1343,7 @@ def create_trade(
         calculated_probability,
         market_price,
         edge_value,
+        execution_environment,
     )
 
     with get_cursor(commit=True) as cur:
@@ -1322,21 +1352,28 @@ def create_trade(
         return cast("int", result["trade_id"])
 
 
-def get_trades_by_market(market_id: str, limit: int = 100) -> list[dict[str, Any]]:
+def get_trades_by_market(
+    market_id: str,
+    limit: int = 100,
+    execution_environment: ExecutionEnvironment | None = None,
+) -> list[dict[str, Any]]:
     """
     Get all trades for a specific market.
 
     Args:
         market_id: Market to query
         limit: Maximum number of trades (default: 100)
+        execution_environment: Filter by environment ('live', 'paper', 'backtest').
+            If None, returns trades from all environments.
 
     Returns:
         List of trades, newest first
 
     Example:
+        >>> # All trades for market
         >>> trades = get_trades_by_market(market_id=42, limit=20)
-        >>> for trade in trades:
-        ...     print(trade['side'], trade['quantity'], trade['price'])
+        >>> # Only paper trades (demo API testing)
+        >>> paper_trades = get_trades_by_market(market_id=42, execution_environment='paper')
     """
     query = """
         SELECT t.*, m.ticker
@@ -1344,19 +1381,32 @@ def get_trades_by_market(market_id: str, limit: int = 100) -> list[dict[str, Any
         JOIN markets m ON t.market_id = m.market_id
         WHERE t.market_id = %s
           AND m.row_current_ind = TRUE
-        ORDER BY t.execution_time DESC
-        LIMIT %s
     """
-    return fetch_all(query, (market_id, limit))
+    params: list[str | int] = [market_id]
+
+    if execution_environment is not None:
+        query += " AND t.execution_environment = %s"
+        params.append(execution_environment)
+
+    query += " ORDER BY t.execution_time DESC LIMIT %s"
+    params.append(limit)
+
+    return fetch_all(query, tuple(params))
 
 
-def get_recent_trades(strategy_id: int | None = None, limit: int = 100) -> list[dict[str, Any]]:
+def get_recent_trades(
+    strategy_id: int | None = None,
+    limit: int = 100,
+    execution_environment: ExecutionEnvironment | None = None,
+) -> list[dict[str, Any]]:
     """
     Get recent trades across all markets.
 
     Args:
         strategy_id: Filter by strategy version (optional)
         limit: Maximum number of trades (default: 100)
+        execution_environment: Filter by environment ('live', 'paper', 'backtest').
+            If None, returns trades from all environments.
 
     Returns:
         List of recent trades, newest first
@@ -1364,6 +1414,7 @@ def get_recent_trades(strategy_id: int | None = None, limit: int = 100) -> list[
     Example:
         >>> recent = get_recent_trades(limit=50)
         >>> strategy_trades = get_recent_trades(strategy_id=1, limit=50)
+        >>> paper_trades = get_recent_trades(execution_environment='paper')
     """
     query = """
         SELECT t.*, m.ticker, s.strategy_name, pm.model_name
@@ -1373,11 +1424,15 @@ def get_recent_trades(strategy_id: int | None = None, limit: int = 100) -> list[
         JOIN probability_models pm ON t.model_id = pm.model_id
         WHERE m.row_current_ind = TRUE
     """
-    params = []
+    params: list[int | str] = []
 
     if strategy_id:
         query += " AND t.strategy_id = %s"
         params.append(strategy_id)
+
+    if execution_environment is not None:
+        query += " AND t.execution_environment = %s"
+        params.append(execution_environment)
 
     query += " ORDER BY t.execution_time DESC LIMIT %s"
     params.append(limit)

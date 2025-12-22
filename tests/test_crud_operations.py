@@ -694,3 +694,183 @@ def test_decimal_encoder_fallback_for_non_decimal():
     assert parsed["price"] == "0.4975"
     assert parsed["count"] == 42
     assert parsed["active"] is True
+
+
+# =============================================================================
+# EXECUTION ENVIRONMENT TESTS (Migration 0008, ADR-107)
+# =============================================================================
+
+
+@pytest.mark.integration
+def test_create_trade_with_execution_environment(
+    db_pool, clean_test_data, sample_market_data, sample_trade_data
+):
+    """Test creating trades with execution_environment parameter.
+
+    Verifies Migration 0008 integration - trades can be tagged with
+    'live', 'paper', or 'backtest' execution context.
+    """
+    market_id = create_market(**sample_market_data)
+
+    # Create trade with paper environment (demo API testing)
+    trade_id = create_trade(market_id=market_id, **sample_trade_data, execution_environment="paper")
+    assert trade_id is not None
+
+    # Retrieve and verify execution_environment is set
+    trades = get_trades_by_market(market_id, limit=1)
+    assert len(trades) == 1
+    assert trades[0]["execution_environment"] == "paper"
+
+
+@pytest.mark.integration
+def test_create_trade_default_execution_environment(
+    db_pool, clean_test_data, sample_market_data, sample_trade_data
+):
+    """Test that trades default to 'live' execution_environment."""
+    market_id = create_market(**sample_market_data)
+
+    # Create trade without specifying execution_environment
+    trade_id = create_trade(market_id=market_id, **sample_trade_data)
+    assert trade_id is not None
+
+    # Verify default is 'live'
+    trades = get_trades_by_market(market_id, limit=1)
+    assert len(trades) == 1
+    assert trades[0]["execution_environment"] == "live"
+
+
+@pytest.mark.integration
+def test_get_trades_by_market_with_environment_filter(
+    db_pool, clean_test_data, sample_market_data, sample_trade_data
+):
+    """Test filtering trades by execution_environment."""
+    market_id = create_market(**sample_market_data)
+
+    # Create trades in different environments
+    create_trade(market_id=market_id, **sample_trade_data, execution_environment="live")
+    create_trade(market_id=market_id, **sample_trade_data, execution_environment="paper")
+    create_trade(market_id=market_id, **sample_trade_data, execution_environment="paper")
+    create_trade(market_id=market_id, **sample_trade_data, execution_environment="backtest")
+
+    # Filter by paper environment
+    paper_trades = get_trades_by_market(market_id, limit=10, execution_environment="paper")
+    assert len(paper_trades) == 2
+    assert all(t["execution_environment"] == "paper" for t in paper_trades)
+
+    # Filter by live environment
+    live_trades = get_trades_by_market(market_id, limit=10, execution_environment="live")
+    assert len(live_trades) == 1
+    assert live_trades[0]["execution_environment"] == "live"
+
+    # No filter returns all
+    all_trades = get_trades_by_market(market_id, limit=10)
+    assert len(all_trades) == 4
+
+
+@pytest.mark.integration
+def test_get_recent_trades_with_environment_filter(
+    db_pool, clean_test_data, sample_market_data, sample_trade_data
+):
+    """Test filtering recent trades by execution_environment."""
+    market_id = create_market(**sample_market_data)
+
+    # Create trades in different environments
+    create_trade(market_id=market_id, **sample_trade_data, execution_environment="live")
+    create_trade(market_id=market_id, **sample_trade_data, execution_environment="paper")
+
+    # Filter by paper environment
+    paper_trades = get_recent_trades(limit=10, execution_environment="paper")
+    assert len(paper_trades) >= 1
+    assert all(t["execution_environment"] == "paper" for t in paper_trades)
+
+
+@pytest.mark.integration
+def test_create_position_with_execution_environment(
+    db_pool, clean_test_data, sample_market_data, sample_position_data
+):
+    """Test creating positions with execution_environment parameter.
+
+    Verifies Migration 0008 integration - positions can be tagged with
+    'live', 'paper', or 'backtest' execution context.
+    """
+    create_market(**sample_market_data)
+
+    # Create position with paper environment
+    pos_id = create_position(**sample_position_data, execution_environment="paper")
+    assert pos_id is not None
+
+    # Retrieve and verify execution_environment is set
+    positions = get_current_positions(execution_environment="paper")
+    assert len(positions) >= 1
+    assert any(p["id"] == pos_id for p in positions)
+
+
+@pytest.mark.integration
+def test_create_position_default_execution_environment(
+    db_pool, clean_test_data, sample_market_data, sample_position_data
+):
+    """Test that positions default to 'live' execution_environment."""
+    create_market(**sample_market_data)
+
+    # Create position without specifying execution_environment
+    pos_id = create_position(**sample_position_data)
+    assert pos_id is not None
+
+    # Verify default is 'live' by filtering
+    live_positions = get_current_positions(execution_environment="live")
+    assert any(p["id"] == pos_id for p in live_positions)
+
+
+@pytest.mark.integration
+def test_get_current_positions_with_environment_filter(
+    db_pool, clean_test_data, sample_market_data, sample_position_data
+):
+    """Test filtering positions by execution_environment."""
+    create_market(**sample_market_data)
+
+    # Create positions in different environments
+    live_pos_id = create_position(**sample_position_data, execution_environment="live")
+    paper_pos_id = create_position(**sample_position_data, execution_environment="paper")
+    backtest_pos_id = create_position(**sample_position_data, execution_environment="backtest")
+
+    # Filter by paper environment
+    paper_positions = get_current_positions(execution_environment="paper")
+    assert any(p["id"] == paper_pos_id for p in paper_positions)
+    assert not any(p["id"] == live_pos_id for p in paper_positions)
+    assert not any(p["id"] == backtest_pos_id for p in paper_positions)
+
+    # Filter by live environment
+    live_positions = get_current_positions(execution_environment="live")
+    assert any(p["id"] == live_pos_id for p in live_positions)
+
+    # No filter returns all (at least our 3)
+    all_positions = get_current_positions()
+    assert any(p["id"] == live_pos_id for p in all_positions)
+    assert any(p["id"] == paper_pos_id for p in all_positions)
+    assert any(p["id"] == backtest_pos_id for p in all_positions)
+
+
+@pytest.mark.integration
+def test_get_current_positions_combined_filters(
+    db_pool, clean_test_data, sample_market_data, sample_position_data
+):
+    """Test combining status and execution_environment filters."""
+    create_market(**sample_market_data)
+
+    # Create open position in paper environment
+    paper_pos_id = create_position(**sample_position_data, execution_environment="paper")
+
+    # Filter by status AND environment
+    open_paper_positions = get_current_positions(status="open", execution_environment="paper")
+    assert any(p["id"] == paper_pos_id for p in open_paper_positions)
+
+    # Close the position
+    close_position(paper_pos_id, exit_price=Decimal("0.6000"))
+
+    # Now should not appear in open filter
+    open_paper_positions = get_current_positions(status="open", execution_environment="paper")
+    assert not any(p["id"] == paper_pos_id for p in open_paper_positions)
+
+    # But should appear in closed filter
+    closed_paper_positions = get_current_positions(status="closed", execution_environment="paper")
+    assert any(p["id"] == paper_pos_id for p in closed_paper_positions)
