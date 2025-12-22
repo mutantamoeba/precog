@@ -1,10 +1,15 @@
 # Requirement Index
 
 ---
-**Version:** 1.14
-**Last Updated:** 2025-12-07
+**Version:** 1.15
+**Last Updated:** 2025-12-21
 **Status:** ✅ Current
 **Purpose:** Master index of all system requirements with systematic IDs
+**Changes in v1.15:**
+- **EXECUTION ENVIRONMENT TRACKING**: Added REQ-DB-017 for single-database architecture
+- **REQ-DB-017**: execution_environment ENUM column for trades/positions tables
+- Updated MASTER_REQUIREMENTS reference to V2.23
+- Updated requirement statistics (128 → 129 total requirements)
 **Changes in v1.14:**
 - **BASEPOLLER UNIFIED DESIGN PATTERN**: Added REQ-SCHED-003 for BasePoller abstract class
 - **REQ-SCHED-003**: BasePoller with Template Method pattern, {Platform}{Entity}Poller naming, generic stats
@@ -199,6 +204,7 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-DB-008 | Database Connection Pooling | 1 | High | ✅ | MASTER_REQUIREMENTS_V2.9 |
 | REQ-DB-015 | Strategy Type Lookup Table | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.17 |
 | REQ-DB-016 | Model Class Lookup Table | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.17 |
+| REQ-DB-017 | Execution Environment Tracking | 2.5 | High | ✅ | MASTER_REQUIREMENTS_V2.23 |
 
 ---
 
@@ -208,14 +214,14 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-DATA-001 | Game State Data Collection (SCD Type 2 Versioning) | 2 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.22 |
-| REQ-DATA-002 | Venue Data Management (Normalized Table) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.22 |
-| REQ-DATA-003 | Multi-Sport Support (7 Leagues) | 2 | Critical | 🟡 | MASTER_REQUIREMENTS_V2.22 |
-| REQ-DATA-004 | Team Rankings Storage (Temporal Validity) | 2 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.22 |
-| REQ-DATA-005 | JSONB Situation Data (Sport-Specific Fields) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.22 |
-| REQ-DATA-006 | Historical Games Data Seeding | 2.5 | High | 🟡 | MASTER_REQUIREMENTS_V2.22 |
-| REQ-DATA-007 | Historical Odds Data Seeding | 2.5 | High | 🟡 | MASTER_REQUIREMENTS_V2.22 |
-| REQ-DATA-008 | Data Source Adapter Architecture | 2.5 | Medium | 🟡 | MASTER_REQUIREMENTS_V2.22 |
+| REQ-DATA-001 | Game State Data Collection (SCD Type 2 Versioning) | 2 | Critical | 🔵 | MASTER_REQUIREMENTS_V2.23 |
+| REQ-DATA-002 | Venue Data Management (Normalized Table) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.23 |
+| REQ-DATA-003 | Multi-Sport Support (7 Leagues) | 2 | Critical | 🟡 | MASTER_REQUIREMENTS_V2.23 |
+| REQ-DATA-004 | Team Rankings Storage (Temporal Validity) | 2 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.23 |
+| REQ-DATA-005 | JSONB Situation Data (Sport-Specific Fields) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.23 |
+| REQ-DATA-006 | Historical Games Data Seeding | 2.5 | High | 🟡 | MASTER_REQUIREMENTS_V2.23 |
+| REQ-DATA-007 | Historical Odds Data Seeding | 2.5 | High | 🟡 | MASTER_REQUIREMENTS_V2.23 |
+| REQ-DATA-008 | Data Source Adapter Architecture | 2.5 | Medium | 🟡 | MASTER_REQUIREMENTS_V2.23 |
 
 **Details:**
 
@@ -481,7 +487,7 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-TEST-017 | Integration Test Requirements | 1.5+ | Critical | 🔵 | MASTER_REQUIREMENTS_V2.16 |
 | REQ-TEST-018 | Property-Based Test Requirements | 1+ | Critical | ✅ | MASTER_REQUIREMENTS_V2.16 |
 | REQ-TEST-019 | End-to-End Test Requirements | 2+ | High | 🔵 | MASTER_REQUIREMENTS_V2.16 |
-| REQ-TEST-020 | CI-Safe Stress Test Requirements | 1.9 | High | ✅ | MASTER_REQUIREMENTS_V2.22 |
+| REQ-TEST-020 | CI-Safe Stress Test Requirements | 1.9 | High | ✅ | MASTER_REQUIREMENTS_V2.23 |
 
 ---
 
@@ -495,12 +501,12 @@ This document provides a systematic index of all Precog requirements using categ
 | REQ-VALIDATION-004 | YAML Configuration Validation | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.12 |
 | REQ-VALIDATION-005 | CODE_REVIEW_TEMPLATE Automated Enforcement | 0.7c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
 | REQ-VALIDATION-006 | SECURITY_REVIEW_CHECKLIST Automated Enforcement | 0.7c | High | ✅ | MASTER_REQUIREMENTS_V2.12 |
-| REQ-VALIDATION-007 | SCD Type 2 Query Validation (Pattern 2) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.22 |
-| REQ-VALIDATION-008 | Property-Based Test Coverage (Pattern 10) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.22 |
-| REQ-VALIDATION-009 | Real Test Fixtures Enforcement (Pattern 13) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.22 |
-| REQ-VALIDATION-010 | Phase Start Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.22 |
-| REQ-VALIDATION-011 | Phase Completion Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.22 |
-| REQ-VALIDATION-012 | Configuration Synchronization (Pattern 8) | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.22 |
+| REQ-VALIDATION-007 | SCD Type 2 Query Validation (Pattern 2) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.23 |
+| REQ-VALIDATION-008 | Property-Based Test Coverage (Pattern 10) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.23 |
+| REQ-VALIDATION-009 | Real Test Fixtures Enforcement (Pattern 13) | 1.5 | High | ✅ | MASTER_REQUIREMENTS_V2.23 |
+| REQ-VALIDATION-010 | Phase Start Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.23 |
+| REQ-VALIDATION-011 | Phase Completion Protocol Automation | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.23 |
+| REQ-VALIDATION-012 | Configuration Synchronization (Pattern 8) | 1.5 | Medium | ✅ | MASTER_REQUIREMENTS_V2.23 |
 
 **Summary:** Phase 0.6c implemented automated code quality and documentation validation. Phase 0.7c added CODE_REVIEW_TEMPLATE and SECURITY_REVIEW_CHECKLIST enforcement via pre-commit/pre-push hooks. Phase 1 adds YAML configuration validation with 4-level checks (syntax, Decimal type safety, required keys, cross-file consistency). Phase 1.5 adds comprehensive workflow enforcement infrastructure: SCD Type 2 query validation (Pattern 2), property-based test coverage enforcement (Pattern 10), real test fixtures validation (Pattern 13), phase start/completion protocol automation (3-step and 10-step assessments), and configuration synchronization checks (Pattern 8).
 
@@ -526,7 +532,7 @@ This document provides a systematic index of all Precog requirements using categ
 |----|-------|-------|----------|--------|----------|
 | REQ-OBSERV-001 | Request Correlation IDs (B3 Standard) | 1 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.14 |
 | REQ-OBSERV-002 | Sentry Production Error Tracking (Hybrid Architecture) | 2 | High | 🔵 | MASTER_REQUIREMENTS_V2.14 |
-| REQ-OBSERV-003 | Log Aggregation with CloudWatch/ELK (Deferred to Phase 4) | 4 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.22 |
+| REQ-OBSERV-003 | Log Aggregation with CloudWatch/ELK (Deferred to Phase 4) | 4 | Medium | 🔵 | MASTER_REQUIREMENTS_V2.23 |
 
 **Summary:** Phase 1 implements distributed request tracing with B3 correlation IDs (OpenTelemetry/Zipkin compatible) for debugging distributed systems. Phase 2 adds Sentry for real-time production error tracking with hybrid architecture integrating logger.py (audit trail), Sentry (real-time alerts), and alerts table (permanent record). Phase 4 adds centralized log aggregation (CloudWatch or ELK stack) for production monitoring.
 
@@ -538,9 +544,9 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-SCHED-001 | APScheduler-Based Live Data Polling | 2.5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.22 |
-| REQ-SCHED-002 | Service Supervisor Pattern | 2.5 | High | ✅ | MASTER_REQUIREMENTS_V2.22 |
-| REQ-SCHED-003 | BasePoller Unified Design Pattern | 2.5 | High | ✅ | MASTER_REQUIREMENTS_V2.22 |
+| REQ-SCHED-001 | APScheduler-Based Live Data Polling | 2.5 | Critical | ✅ | MASTER_REQUIREMENTS_V2.23 |
+| REQ-SCHED-002 | Service Supervisor Pattern | 2.5 | High | ✅ | MASTER_REQUIREMENTS_V2.23 |
+| REQ-SCHED-003 | BasePoller Unified Design Pattern | 2.5 | High | ✅ | MASTER_REQUIREMENTS_V2.23 |
 
 **Details:**
 

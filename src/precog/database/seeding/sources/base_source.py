@@ -206,6 +206,98 @@ class EloRecord(TypedDict):
     source_file: str | None
 
 
+class StatsRecord(TypedDict):
+    """Player or team statistics record for database insertion.
+
+    Represents aggregated statistics for a player or team over a time period.
+    Maps to the historical_stats table (Migration 0009).
+
+    Use Cases:
+        - Player weekly stats (passing yards, touchdowns, etc.)
+        - Player seasonal stats (season totals)
+        - Team stats (offensive yards, defensive points allowed, etc.)
+        - Advanced metrics (EPA, DVOA, etc.)
+
+    Fields:
+        sport: Sport code (nfl, nba, mlb, etc.)
+        season: Season year (e.g., 2023 for 2023-24 season)
+        week: Week number (None for seasonal aggregates)
+        team_code: Team abbreviation (e.g., "KC") - required for team stats
+        player_id: External player ID from source (None for team stats)
+        player_name: Player name for display (None for team stats)
+        stat_category: Category of stats (passing, rushing, receiving, defense, etc.)
+        stats: JSONB dictionary of stat fields (flexible schema)
+        source: Data source identifier (e.g., "nfl_data_py")
+        source_file: Source file name (for CSV sources, None for API)
+
+    Example stats dict:
+        - Passing: {"attempts": 35, "completions": 28, "yards": 312, "td": 3, "int": 1}
+        - Rushing: {"carries": 22, "yards": 145, "td": 2, "fumbles": 0}
+        - Team Defense: {"points_allowed": 17, "yards_allowed": 289, "sacks": 4}
+
+    Related:
+        - Migration 0009: historical_stats table
+        - Issue #236: StatsRecord/RankingRecord infrastructure
+        - nfl_data_py: import_weekly_data(), import_seasonal_data()
+    """
+
+    sport: str
+    season: int
+    week: int | None
+    team_code: str | None
+    player_id: str | None
+    player_name: str | None
+    stat_category: str
+    stats: dict[str, Any]
+    source: str
+    source_file: str | None
+
+
+class RankingRecord(TypedDict):
+    """Team ranking record for database insertion.
+
+    Represents a team's ranking in a poll or rating system at a point in time.
+    Maps to the historical_rankings table (Migration 0009).
+
+    Use Cases:
+        - AP Poll rankings (weekly during season)
+        - Coaches Poll rankings
+        - CFP Committee rankings (for college football)
+        - ESPN Power Rankings
+        - FPI/SP+ computer rankings
+
+    Fields:
+        sport: Sport code (nfl, ncaaf, ncaab, etc.)
+        season: Season year
+        week: Week number (or poll week for college)
+        team_code: Team abbreviation (e.g., "ALA" for Alabama)
+        rank: Current rank in the poll (1 = best)
+        previous_rank: Previous week's rank (None if unranked or first poll)
+        points: Poll points received (for polls with voting, None otherwise)
+        first_place_votes: Number of first-place votes (None if not applicable)
+        poll_type: Type of poll (AP, Coaches, CFP, ESPN, FPI, etc.)
+        source: Data source identifier (e.g., "cfbd")
+        source_file: Source file name (for CSV sources, None for API)
+
+    Related:
+        - Migration 0009: historical_rankings table
+        - Issue #236: StatsRecord/RankingRecord infrastructure
+        - cfbd: College football rankings data
+    """
+
+    sport: str
+    season: int
+    week: int
+    team_code: str
+    rank: int
+    previous_rank: int | None
+    points: int | None
+    first_place_votes: int | None
+    poll_type: str
+    source: str
+    source_file: str | None
+
+
 # =============================================================================
 # Load Result Tracking
 # =============================================================================
@@ -391,6 +483,65 @@ class BaseDataSource(ABC):  # noqa: B024 - Template method pattern, subclasses o
         """
         raise NotImplementedError(f"{self.source_name} does not support Elo data loading")
 
+    def load_stats(
+        self,
+        sport: str = "nfl",
+        seasons: list[int] | None = None,
+        stat_type: str = "weekly",
+        **kwargs: Any,
+    ) -> Iterator[StatsRecord]:
+        """Load player or team statistics from this source.
+
+        Args:
+            sport: Sport code to load
+            seasons: Filter to specific seasons (None = all available)
+            stat_type: Type of stats to load:
+                - "weekly": Per-week player stats
+                - "seasonal": Season totals
+                - "team": Team-level stats
+            **kwargs: Source-specific options
+
+        Yields:
+            StatsRecord for each stat entry
+
+        Raises:
+            NotImplementedError: If source doesn't support stats data
+            DataSourceError: If loading fails
+
+        Example:
+            >>> for stat in source.load_stats(seasons=[2023], stat_type="weekly"):
+            ...     print(f"{stat['player_name']}: {stat['stats']['yards']} yards")
+        """
+        raise NotImplementedError(f"{self.source_name} does not support stats data loading")
+
+    def load_rankings(
+        self,
+        sport: str = "ncaaf",
+        seasons: list[int] | None = None,
+        poll_type: str | None = None,
+        **kwargs: Any,
+    ) -> Iterator[RankingRecord]:
+        """Load team rankings from this source.
+
+        Args:
+            sport: Sport code to load (primarily ncaaf, ncaab)
+            seasons: Filter to specific seasons (None = all available)
+            poll_type: Filter to specific poll (AP, Coaches, CFP, etc.)
+            **kwargs: Source-specific options
+
+        Yields:
+            RankingRecord for each ranking entry
+
+        Raises:
+            NotImplementedError: If source doesn't support rankings data
+            DataSourceError: If loading fails
+
+        Example:
+            >>> for ranking in source.load_rankings(seasons=[2023], poll_type="AP"):
+            ...     print(f"#{ranking['rank']} {ranking['team_code']}")
+        """
+        raise NotImplementedError(f"{self.source_name} does not support rankings data loading")
+
     # -------------------------------------------------------------------------
     # Capability Discovery
     # -------------------------------------------------------------------------
@@ -427,16 +578,38 @@ class BaseDataSource(ABC):  # noqa: B024 - Template method pattern, subclasses o
         except Exception:
             return True
 
+    def supports_stats(self) -> bool:
+        """Check if this source can load player/team stats data."""
+        try:
+            iter(self.load_stats())
+            return True
+        except NotImplementedError:
+            return False
+        except Exception:
+            return True
+
+    def supports_rankings(self) -> bool:
+        """Check if this source can load team rankings data."""
+        try:
+            iter(self.load_rankings())
+            return True
+        except NotImplementedError:
+            return False
+        except Exception:
+            return True
+
     def get_capabilities(self) -> dict[str, bool]:
         """Return dictionary of this source's capabilities.
 
         Returns:
-            Dict with keys 'games', 'odds', 'elo' and boolean values
+            Dict with keys for each data type and boolean values
         """
         return {
             "games": self.supports_games(),
             "odds": self.supports_odds(),
             "elo": self.supports_elo(),
+            "stats": self.supports_stats(),
+            "rankings": self.supports_rankings(),
         }
 
     # -------------------------------------------------------------------------

@@ -9252,7 +9252,7 @@ def run_holdout_validation(
 ### Related Documentation
 
 - `docs/guides/MODEL_EVALUATION_GUIDE_V1.0.md` (implementation guide - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.23.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 2 Task #3, Phase 6 Task #1)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8.7: Evaluation Runs Table)
@@ -9975,7 +9975,7 @@ ON position_risk_by_strategy(league, strategy_name);
 
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (comprehensive analytics implementation guide - to be created)
 - `docs/guides/DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md` (React dashboard + API integration - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.23.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 6 Task #3, Phase 7 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8.8: Materialized Views Reference)
@@ -10806,7 +10806,7 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 
 - `docs/guides/AB_TESTING_GUIDE_V1.0.md` (comprehensive A/B testing guide - to be created)
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (includes A/B testing architecture)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.23.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 7 Task #3, Phase 8 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8.9: A/B Tests Table)
@@ -11244,7 +11244,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 
 **References:**
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (materialized views already defined)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.22.md` (analytics requirements)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.23.md` (analytics requirements)
 
 ---
 
@@ -12158,7 +12158,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 **Primary Documentation:**
 - TESTING_STRATEGY_V3.8.md (comprehensive 8 test type framework, 1,462 lines)
 - TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md (REQ-TEST-012 through REQ-TEST-019)
-- MASTER_REQUIREMENTS_V2.22.md (added 8 new test requirements)
+- MASTER_REQUIREMENTS_V2.23.md (added 8 new test requirements)
 - REQUIREMENT_INDEX.md (added REQ-TEST-012 through REQ-TEST-019)
 
 **Supporting Documentation:**
@@ -13207,7 +13207,7 @@ Result: Only enter when model confident AND market mispriced
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Comprehensive architectural analysis
 - `docs/guides/VERSIONING_GUIDE_V1.0.md` - Strategy/model versioning patterns
-- `MASTER_REQUIREMENTS_V2.22.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
+- `MASTER_REQUIREMENTS_V2.23.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -13627,7 +13627,7 @@ def validate_position_trade_attribution(position_id: str) -> bool:
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Attribution architecture analysis with tradeoffs
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` - Current schema (pre-attribution)
-- `MASTER_REQUIREMENTS_V2.22.md` - REQ-DB-006 (Decimal precision for all financial fields)
+- `MASTER_REQUIREMENTS_V2.23.md` - REQ-DB-006 (Decimal precision for all financial fields)
 
 **Status:** ✅ Decision approved, implementation in progress (Migrations 019-020 planned)
 
@@ -14002,7 +14002,7 @@ def sync_trades_full():
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Trade source tracking architectural analysis
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` - Kalshi API trade download patterns
-- `MASTER_REQUIREMENTS_V2.22.md` - REQ-API-001 (Kalshi API Integration)
+- `MASTER_REQUIREMENTS_V2.23.md` - REQ-API-001 (Kalshi API Integration)
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -14382,7 +14382,7 @@ def test_invalid_strategy_type_raises_foreign_key_error():
 - `src/precog/database/lookup_helpers.py` - Helper functions implementation
 - `tests/test_lookup_tables.py` - Comprehensive test suite (23 tests, 100% coverage)
 - `src/precog/database/migrations/migration_023_create_lookup_tables.py` - Migration script
-- `MASTER_REQUIREMENTS_V2.22.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
+- `MASTER_REQUIREMENTS_V2.23.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
 
 **Status:** ✅ Decision approved, implementation complete (Migration 023 applied, helper module created, 23 tests passing)
 

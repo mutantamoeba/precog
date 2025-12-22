@@ -106,6 +106,8 @@ MODULE_TIERS = {
     "database/seeding/sources/fivethirtyeight": "experimental",
     "database/seeding/sources/betting_csv": "experimental",
     "database/seeding/sources/sports/nfl_data_py_adapter": "experimental",
+    # Issue #236: NFLDataPySource for stats loading
+    "database/seeding/sources/nfl_data_py_source": "experimental",
     # Schedulers
     "schedulers/espn_game_poller": "business",
     # Validation

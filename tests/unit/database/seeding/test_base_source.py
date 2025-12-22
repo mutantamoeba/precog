@@ -41,6 +41,8 @@ from precog.database.seeding.sources.base_source import (
     GameRecord,
     LoadResult,
     OddsRecord,
+    RankingRecord,
+    StatsRecord,
 )
 
 # =============================================================================
@@ -307,6 +309,173 @@ class TestEloRecord:
         assert record["season"] == 2023
 
 
+class TestStatsRecord:
+    """Test suite for StatsRecord TypedDict (Issue #236).
+
+    Educational Note:
+        StatsRecord supports flexible player/team statistics using JSONB.
+        The stats field can contain different schemas per sport/category
+        (e.g., NFL passing stats differ from NBA shooting stats).
+    """
+
+    def test_stats_record_player_structure(self) -> None:
+        """Verify StatsRecord works for player statistics."""
+        record: StatsRecord = {
+            "sport": "nfl",
+            "season": 2023,
+            "week": 1,
+            "team_code": "KC",
+            "player_id": "00-0033873",
+            "player_name": "Patrick Mahomes",
+            "stat_category": "passing",
+            "stats": {
+                "completions": 30,
+                "attempts": 39,
+                "passing_yards": 334,
+                "passing_tds": 3,
+                "interceptions": 0,
+            },
+            "source": "nfl_data_py",
+            "source_file": None,
+        }
+
+        assert record["player_name"] == "Patrick Mahomes"
+        assert record["stat_category"] == "passing"
+        assert record["stats"]["passing_yards"] == 334
+
+    def test_stats_record_team_structure(self) -> None:
+        """Verify StatsRecord works for team statistics."""
+        record: StatsRecord = {
+            "sport": "nfl",
+            "season": 2023,
+            "week": None,  # Season-level stat
+            "team_code": "KC",
+            "player_id": None,  # Team stat, no player
+            "player_name": None,
+            "stat_category": "team_offense",
+            "stats": {
+                "games_played": 17,
+                "total_points": 496,
+                "points_per_game": 29.2,
+            },
+            "source": "nfl_data_py",
+            "source_file": None,
+        }
+
+        assert record["team_code"] == "KC"
+        assert record["player_id"] is None
+        assert record["stats"]["total_points"] == 496
+
+    def test_stats_record_flexible_schema(self) -> None:
+        """Verify stats field accepts different stat schemas.
+
+        Educational Note:
+            JSONB enables storing different stat types without schema changes.
+            This is crucial for multi-sport support where each sport has
+            different statistical categories.
+        """
+        nfl_rushing: StatsRecord = {
+            "sport": "nfl",
+            "season": 2023,
+            "week": 1,
+            "team_code": "SF",
+            "player_id": "00-0035644",
+            "player_name": "Christian McCaffrey",
+            "stat_category": "rushing",
+            "stats": {"carries": 18, "rushing_yards": 85, "rushing_tds": 1},
+            "source": "nfl_data_py",
+            "source_file": None,
+        }
+
+        nfl_receiving: StatsRecord = {
+            "sport": "nfl",
+            "season": 2023,
+            "week": 1,
+            "team_code": "SF",
+            "player_id": "00-0035644",
+            "player_name": "Christian McCaffrey",
+            "stat_category": "receiving",
+            "stats": {"targets": 5, "receptions": 4, "receiving_yards": 33},
+            "source": "nfl_data_py",
+            "source_file": None,
+        }
+
+        # Same player can have different stat categories
+        assert nfl_rushing["stat_category"] == "rushing"
+        assert nfl_receiving["stat_category"] == "receiving"
+        assert "rushing_yards" in nfl_rushing["stats"]
+        assert "receiving_yards" in nfl_receiving["stats"]
+
+
+class TestRankingRecord:
+    """Test suite for RankingRecord TypedDict (Issue #236).
+
+    Educational Note:
+        RankingRecord supports various ranking types: AP Poll, CFP,
+        Coaches Poll, Elo-derived power rankings, etc. Not all rankings
+        have voting points (e.g., Elo rankings).
+    """
+
+    def test_ranking_record_ap_poll(self) -> None:
+        """Verify RankingRecord works for AP Poll rankings."""
+        record: RankingRecord = {
+            "sport": "ncaaf",
+            "season": 2023,
+            "week": 1,
+            "team_code": "UGA",
+            "rank": 1,
+            "previous_rank": None,  # First week of season
+            "points": 1566,
+            "first_place_votes": 63,
+            "poll_type": "ap_poll",
+            "source": "espn",
+            "source_file": None,
+        }
+
+        assert record["rank"] == 1
+        assert record["poll_type"] == "ap_poll"
+        assert record["first_place_votes"] == 63
+
+    def test_ranking_record_cfp(self) -> None:
+        """Verify RankingRecord works for CFP rankings."""
+        record: RankingRecord = {
+            "sport": "ncaaf",
+            "season": 2023,
+            "week": 10,
+            "team_code": "OSU",
+            "rank": 2,
+            "previous_rank": 3,
+            "points": None,  # CFP doesn't use points
+            "first_place_votes": None,  # CFP doesn't use votes
+            "poll_type": "cfp",
+            "source": "espn",
+            "source_file": None,
+        }
+
+        assert record["poll_type"] == "cfp"
+        assert record["points"] is None
+        assert record["previous_rank"] == 3
+
+    def test_ranking_record_elo_power_ranking(self) -> None:
+        """Verify RankingRecord works for Elo-derived rankings."""
+        record: RankingRecord = {
+            "sport": "nfl",
+            "season": 2023,
+            "week": 5,
+            "team_code": "KC",
+            "rank": 1,
+            "previous_rank": 2,
+            "points": None,  # Elo doesn't use poll points
+            "first_place_votes": None,
+            "poll_type": "elo",
+            "source": "fivethirtyeight",
+            "source_file": "nfl_elo.csv",
+        }
+
+        assert record["poll_type"] == "elo"
+        assert record["sport"] == "nfl"
+
+
 # =============================================================================
 # BASE DATA SOURCE TESTS
 # =============================================================================
@@ -385,6 +554,32 @@ class TestBaseDataSource:
         assert caps["games"] is False
         assert caps["odds"] is False
         assert caps["elo"] is False
+        assert caps["stats"] is False
+        assert caps["rankings"] is False
+
+    def test_load_stats_raises_not_implemented(self) -> None:
+        """Verify base load_stats raises NotImplementedError (Issue #236)."""
+        source = ConcreteSource()
+
+        with pytest.raises(NotImplementedError):
+            list(source.load_stats())
+
+    def test_load_rankings_raises_not_implemented(self) -> None:
+        """Verify base load_rankings raises NotImplementedError (Issue #236)."""
+        source = ConcreteSource()
+
+        with pytest.raises(NotImplementedError):
+            list(source.load_rankings())
+
+    def test_supports_stats_default_false(self) -> None:
+        """Verify supports_stats returns False by default (Issue #236)."""
+        source = ConcreteSource()
+        assert source.supports_stats() is False
+
+    def test_supports_rankings_default_false(self) -> None:
+        """Verify supports_rankings returns False by default (Issue #236)."""
+        source = ConcreteSource()
+        assert source.supports_rankings() is False
 
 
 # =============================================================================
