@@ -560,6 +560,7 @@ PRECOG_PROD_CONFIRMED=yes PRECOG_ENV=prod python scripts/apply_migration.py
 
 ## References
 
+- **DATABASE_ENVIRONMENT_GUIDE_V1.0.md**: Data seeding, categories, cloud strategy, scheduling (companion guide)
 - **ADR-008:** PostgreSQL Connection Strategy
 - **REQ-DB-002:** Connection Pooling Requirements
 - **docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md:** Schema documentation

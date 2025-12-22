@@ -1,0 +1,32 @@
+# Railway Configuration for Precog
+# Documentation: https://docs.railway.app/reference/config-as-code
+#
+# This file tells Railway how to build and run the application.
+# Railway will use the Dockerfile if present, but this provides fallback config.
+
+[build]
+# Use Dockerfile for build (preferred for src/ layout projects)
+builder = "dockerfile"
+
+# Alternative: Use Nixpacks with custom install command
+# Uncomment if you prefer Nixpacks over Dockerfile
+# builder = "nixpacks"
+# buildCommand = "pip install -e ."
+
+[deploy]
+# Number of instances (1 for cost efficiency during development)
+numReplicas = 1
+
+# Health check path (if running a web server)
+# healthcheckPath = "/health"
+# healthcheckTimeout = 300
+
+# Environment variables that should be set in Railway dashboard:
+# - DATABASE_URL: PostgreSQL connection string
+# - KALSHI_API_KEY: Kalshi API key (if using Kalshi)
+# - KALSHI_API_SECRET: Kalshi API secret
+# - PRECOG_ENV: production
+
+# Restart policy
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
