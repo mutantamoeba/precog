@@ -39,11 +39,11 @@ from precog.cli._common import (
 )
 
 if TYPE_CHECKING:
-    from precog.schedulers.kalshi_market_poller import (
+    from precog.schedulers import (
+        ESPNGamePoller,
         KalshiMarketPoller,
+        ServiceSupervisor,
     )
-    from precog.schedulers.market_updater import MarketUpdater
-    from precog.schedulers.service_supervisor import ServiceSupervisor
 
 app = typer.Typer(
     name="scheduler",
@@ -52,7 +52,7 @@ app = typer.Typer(
 )
 
 # Global scheduler instances (for stop/status commands)
-_espn_updater: MarketUpdater | None = None
+_espn_updater: ESPNGamePoller | None = None
 _kalshi_poller: KalshiMarketPoller | None = None
 _supervisor: ServiceSupervisor | None = None
 
@@ -400,8 +400,7 @@ def start(
     """
     global _espn_updater, _kalshi_poller
 
-    from precog.schedulers.kalshi_market_poller import KalshiMarketPoller
-    from precog.schedulers.market_updater import MarketUpdater
+    from precog.schedulers import ESPNGamePoller, KalshiMarketPoller
     from precog.utils.logger import get_logger
 
     logger = get_logger(__name__)
@@ -442,7 +441,7 @@ def start(
         console.print(f"  Interval: {espn_interval} seconds")
 
         try:
-            _espn_updater = MarketUpdater(
+            _espn_updater = ESPNGamePoller(
                 leagues=league_list,
                 poll_interval=espn_interval,
             )
@@ -685,8 +684,7 @@ def poll_once(
         precog scheduler poll-once --no-kalshi --leagues nfl
         precog scheduler poll-once --no-espn --kalshi-env prod
     """
-    from precog.schedulers.kalshi_market_poller import KalshiMarketPoller
-    from precog.schedulers.market_updater import MarketUpdater
+    from precog.schedulers import ESPNGamePoller, KalshiMarketPoller
     from precog.utils.logger import get_logger
 
     logger = get_logger(__name__)
@@ -704,8 +702,8 @@ def poll_once(
     if espn:
         console.print(f"[bold]Polling ESPN ({', '.join(league_list)})...[/bold]")
         try:
-            updater = MarketUpdater(leagues=league_list)
-            result = updater.poll_once()
+            poller = ESPNGamePoller(leagues=league_list)
+            result = poller.poll_once()
             console.print(
                 f"[green][OK] ESPN: {result['items_fetched']} games fetched, "
                 f"{result['items_updated']} updated[/green]"
@@ -720,16 +718,16 @@ def poll_once(
         series_str = ", ".join(series_list)
         console.print(f"\n[bold]Polling Kalshi ({series_str}, {kalshi_env})...[/bold]")
         try:
-            poller = KalshiMarketPoller(
+            kalshi_poller = KalshiMarketPoller(
                 series_tickers=series_list,
                 environment=kalshi_env,
             )
-            result = poller.poll_once()
+            result = kalshi_poller.poll_once()
             console.print(
                 f"[green][OK] Kalshi: {result['items_fetched']} markets fetched, "
                 f"{result['items_updated']} updated, {result['items_created']} created[/green]"
             )
-            poller.kalshi_client.close()
+            kalshi_poller.kalshi_client.close()
         except ValueError as e:
             console.print(f"[red][FAIL] Kalshi poll failed: {e}[/red]")
             console.print("[dim]Hint: Check KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH[/dim]")
