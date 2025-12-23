@@ -189,3 +189,63 @@ class TestSchedulerEdgeCases:
 
         # Should succeed with no-op or warn
         assert result.exit_code in [0, 1]
+
+
+class TestSchedulerImportVerification:
+    """Verify runtime imports work correctly.
+
+    These tests catch import path bugs that TYPE_CHECKING guards would hide.
+    The bug where scheduler.py imported from non-existent 'kalshi_market_poller'
+    wasn't caught because the bad import was inside if TYPE_CHECKING block.
+
+    Educational Note:
+        TYPE_CHECKING blocks only execute during static analysis (mypy),
+        not at runtime. Runtime imports inside functions are only validated
+        when those functions are called - not when the module is imported.
+        These tests explicitly verify those runtime imports work.
+    """
+
+    def test_scheduler_module_imports_exist(self):
+        """Verify all scheduler modules referenced by CLI exist."""
+        # These imports would fail if the modules don't exist
+        from precog.schedulers import ESPNGamePoller, KalshiMarketPoller
+
+        assert ESPNGamePoller is not None
+        assert KalshiMarketPoller is not None
+
+    def test_scheduler_factory_functions_exist(self):
+        """Verify factory functions are importable."""
+        from precog.schedulers import create_espn_poller, create_kalshi_poller
+
+        assert callable(create_espn_poller)
+        assert callable(create_kalshi_poller)
+
+    def test_service_supervisor_imports_exist(self):
+        """Verify ServiceSupervisor and related classes exist."""
+        from precog.schedulers import ServiceSupervisor, create_supervisor
+
+        assert ServiceSupervisor is not None
+        assert callable(create_supervisor)
+
+    def test_backward_compatibility_aliases_work(self):
+        """Verify deprecated aliases still work for backward compatibility."""
+        from precog.schedulers import ESPNGamePoller, MarketUpdater
+
+        # MarketUpdater should be an alias for ESPNGamePoller
+        assert MarketUpdater is ESPNGamePoller
+
+    def test_cli_start_imports_work(self):
+        """Test that the start command's runtime imports resolve correctly.
+
+        This catches bugs where TYPE_CHECKING imports hide broken runtime imports.
+        """
+        # Simulate what happens inside scheduler.py start() function
+        from precog.schedulers import ESPNGamePoller, KalshiMarketPoller
+
+        # Verify the classes are actually usable (not just importable)
+        assert hasattr(ESPNGamePoller, "start")
+        assert hasattr(ESPNGamePoller, "stop")
+        assert hasattr(ESPNGamePoller, "poll_once")
+        assert hasattr(KalshiMarketPoller, "start")
+        assert hasattr(KalshiMarketPoller, "stop")
+        assert hasattr(KalshiMarketPoller, "poll_once")
