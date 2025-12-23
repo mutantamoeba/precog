@@ -33,6 +33,7 @@ Team Code Mapping:
 
 Reference:
     - Issue #208: Historical Data Seeding
+    - Issue #254: Add progress bars for large seeding operations
     - Migration 030: Create historical_elo table
     - ADR-029: ESPN Data Model
 """
@@ -47,6 +48,7 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from precog.database.connection import get_cursor
+from precog.database.seeding.progress import print_load_summary, seeding_progress
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -375,58 +377,82 @@ def insert_historical_elo(record: HistoricalEloRecord) -> bool:
 def bulk_insert_historical_elo(
     records: Iterator[HistoricalEloRecord],
     batch_size: int = 1000,
+    *,
+    total: int | None = None,
+    show_progress: bool = True,
 ) -> LoadResult:
     """
-    Bulk insert historical Elo records with batching.
+    Bulk insert historical Elo records with batching and progress display.
 
     Args:
         records: Iterator of HistoricalEloRecord
         batch_size: Number of records per batch (default: 1000)
+        total: Expected total records (enables determinate progress bar)
+        show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
         LoadResult with statistics
+
+    Example:
+        >>> result = bulk_insert_historical_elo(
+        ...     records,
+        ...     batch_size=500,
+        ...     total=5000,
+        ...     show_progress=True,
+        ... )
     """
     result = LoadResult()
 
     batch: list[tuple[Any, ...]] = []
     team_id_cache: dict[tuple[str, str], int | None] = {}
 
-    for record in records:
-        result.records_processed += 1
+    with seeding_progress(
+        "Loading Elo ratings...",
+        total=total,
+        show_progress=show_progress,
+    ) as (progress, task):
+        for record in records:
+            result.records_processed += 1
 
-        # Look up team_id (with caching)
-        cache_key = (record["team_code"], record["sport"])
-        if cache_key not in team_id_cache:
-            team_id_cache[cache_key] = get_team_id_by_code(
-                record["team_code"],
-                record["sport"],
+            # Look up team_id (with caching)
+            cache_key = (record["team_code"], record["sport"])
+            if cache_key not in team_id_cache:
+                team_id_cache[cache_key] = get_team_id_by_code(
+                    record["team_code"],
+                    record["sport"],
+                )
+
+            team_id = team_id_cache[cache_key]
+            if not team_id:
+                result.records_skipped += 1
+                if progress and task is not None:
+                    progress.advance(task)
+                continue
+
+            batch.append(
+                (
+                    team_id,
+                    record["sport"],
+                    record["season"],
+                    record["rating_date"],
+                    record["elo_rating"],
+                    record["qb_adjusted_elo"],
+                    record["qb_name"],
+                    record["qb_value"],
+                    record["source"],
+                    record["source_file"],
+                )
             )
 
-        team_id = team_id_cache[cache_key]
-        if not team_id:
-            result.records_skipped += 1
-            continue
+            # Update progress
+            if progress and task is not None:
+                progress.advance(task)
 
-        batch.append(
-            (
-                team_id,
-                record["sport"],
-                record["season"],
-                record["rating_date"],
-                record["elo_rating"],
-                record["qb_adjusted_elo"],
-                record["qb_name"],
-                record["qb_value"],
-                record["source"],
-                record["source_file"],
-            )
-        )
-
-        # Flush batch when full
-        if len(batch) >= batch_size:
-            inserted = _flush_batch(batch)
-            result.records_inserted += inserted
-            batch = []
+            # Flush batch when full
+            if len(batch) >= batch_size:
+                inserted = _flush_batch(batch)
+                result.records_inserted += inserted
+                batch = []
 
     # Flush remaining records
     if batch:
@@ -480,6 +506,8 @@ def load_fivethirtyeight_elo(
     file_path: Path,
     sport: str = "nfl",
     seasons: list[int] | None = None,
+    *,
+    show_progress: bool = True,
 ) -> LoadResult:
     """
     Load FiveThirtyEight Elo data into the database.
@@ -488,6 +516,7 @@ def load_fivethirtyeight_elo(
         file_path: Path to FiveThirtyEight CSV file
         sport: Sport code (default: "nfl")
         seasons: Filter to specific seasons (default: all)
+        show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
         LoadResult with statistics
@@ -495,20 +524,31 @@ def load_fivethirtyeight_elo(
     Example:
         >>> result = load_fivethirtyeight_elo(
         ...     Path("nfl_elo.csv"),
-        ...     seasons=[2022, 2023, 2024]
+        ...     seasons=[2022, 2023, 2024],
+        ...     show_progress=True,
         ... )
         >>> print(f"Loaded {result.records_inserted} records")
     """
     logger.info("Loading FiveThirtyEight Elo data from %s", file_path)
 
     records = parse_fivethirtyeight_csv(file_path, sport, seasons)
-    result = bulk_insert_historical_elo(records)
+    result = bulk_insert_historical_elo(records, show_progress=show_progress)
 
     logger.info(
         "FiveThirtyEight load complete: processed=%d, inserted=%d, skipped=%d",
         result.records_processed,
         result.records_inserted,
         result.records_skipped,
+    )
+
+    # Print summary table
+    print_load_summary(
+        "FiveThirtyEight Elo Load",
+        processed=result.records_processed,
+        inserted=result.records_inserted,
+        skipped=result.records_skipped,
+        errors=result.errors,
+        show_summary=show_progress,
     )
 
     return result
@@ -518,6 +558,8 @@ def load_csv_elo(
     file_path: Path,
     sport: str,
     source: str = "imported",
+    *,
+    show_progress: bool = True,
 ) -> LoadResult:
     """
     Load Elo data from a simple CSV file.
@@ -526,6 +568,7 @@ def load_csv_elo(
         file_path: Path to CSV file
         sport: Sport code
         source: Data source identifier
+        show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
         LoadResult with statistics
@@ -533,13 +576,23 @@ def load_csv_elo(
     logger.info("Loading Elo data from %s", file_path)
 
     records = parse_simple_csv(file_path, sport, source)
-    result = bulk_insert_historical_elo(records)
+    result = bulk_insert_historical_elo(records, show_progress=show_progress)
 
     logger.info(
         "CSV load complete: processed=%d, inserted=%d, skipped=%d",
         result.records_processed,
         result.records_inserted,
         result.records_skipped,
+    )
+
+    # Print summary table
+    print_load_summary(
+        f"CSV Elo Load ({source})",
+        processed=result.records_processed,
+        inserted=result.records_inserted,
+        skipped=result.records_skipped,
+        errors=result.errors,
+        show_summary=show_progress,
     )
 
     return result

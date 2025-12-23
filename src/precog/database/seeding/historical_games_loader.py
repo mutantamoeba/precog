@@ -29,6 +29,7 @@ Team Code Mapping:
 
 Reference:
     - Issue #229: Expanded Historical Data Sources
+    - Issue #254: Add progress bars for large seeding operations
     - Migration 0006: Create historical_games table
     - ADR-029: ESPN Data Model
 """
@@ -45,6 +46,7 @@ from precog.database.connection import get_cursor
 from precog.database.seeding.historical_elo_loader import (
     normalize_team_code,
 )
+from precog.database.seeding.progress import print_load_summary, seeding_progress
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -296,75 +298,99 @@ def get_team_id_by_code(team_code: str, sport: str) -> int | None:
 def bulk_insert_historical_games(
     records: Iterator[HistoricalGameRecord],
     batch_size: int = 1000,
+    *,
+    total: int | None = None,
+    show_progress: bool = True,
 ) -> LoadResult:
     """
-    Bulk insert historical game records with batching.
+    Bulk insert historical game records with batching and progress display.
 
     Args:
         records: Iterator of HistoricalGameRecord
         batch_size: Number of records per batch (default: 1000)
+        total: Expected total records (enables determinate progress bar)
+        show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
         LoadResult with statistics
+
+    Example:
+        >>> result = bulk_insert_historical_games(
+        ...     records,
+        ...     batch_size=500,
+        ...     total=5000,
+        ...     show_progress=True,
+        ... )
     """
     result = LoadResult()
 
     batch: list[tuple[Any, ...]] = []
     team_id_cache: dict[tuple[str, str], int | None] = {}
 
-    for record in records:
-        result.records_processed += 1
+    with seeding_progress(
+        "Loading game results...",
+        total=total,
+        show_progress=show_progress,
+    ) as (progress, task):
+        for record in records:
+            result.records_processed += 1
 
-        # Look up team_ids (with caching)
-        home_cache_key = (record["home_team_code"], record["sport"])
-        away_cache_key = (record["away_team_code"], record["sport"])
+            # Look up team_ids (with caching)
+            home_cache_key = (record["home_team_code"], record["sport"])
+            away_cache_key = (record["away_team_code"], record["sport"])
 
-        if home_cache_key not in team_id_cache:
-            team_id_cache[home_cache_key] = get_team_id_by_code(
-                record["home_team_code"],
-                record["sport"],
+            if home_cache_key not in team_id_cache:
+                team_id_cache[home_cache_key] = get_team_id_by_code(
+                    record["home_team_code"],
+                    record["sport"],
+                )
+
+            if away_cache_key not in team_id_cache:
+                team_id_cache[away_cache_key] = get_team_id_by_code(
+                    record["away_team_code"],
+                    record["sport"],
+                )
+
+            home_team_id = team_id_cache[home_cache_key]
+            away_team_id = team_id_cache[away_cache_key]
+
+            # Skip if BOTH teams not found (allows for defunct teams)
+            if not home_team_id and not away_team_id:
+                result.records_skipped += 1
+                if progress and task is not None:
+                    progress.advance(task)
+                continue
+
+            batch.append(
+                (
+                    record["sport"],
+                    record["season"],
+                    record["game_date"],
+                    record["home_team_code"],
+                    record["away_team_code"],
+                    home_team_id,
+                    away_team_id,
+                    record["home_score"],
+                    record["away_score"],
+                    record["is_neutral_site"],
+                    record["is_playoff"],
+                    record["game_type"],
+                    record["venue_name"],
+                    record["source"],
+                    record["source_file"],
+                    record["external_game_id"],
+                )
             )
 
-        if away_cache_key not in team_id_cache:
-            team_id_cache[away_cache_key] = get_team_id_by_code(
-                record["away_team_code"],
-                record["sport"],
-            )
+            # Update progress
+            if progress and task is not None:
+                progress.advance(task)
 
-        home_team_id = team_id_cache[home_cache_key]
-        away_team_id = team_id_cache[away_cache_key]
-
-        # Skip if BOTH teams not found (allows for defunct teams)
-        if not home_team_id and not away_team_id:
-            result.records_skipped += 1
-            continue
-
-        batch.append(
-            (
-                record["sport"],
-                record["season"],
-                record["game_date"],
-                record["home_team_code"],
-                record["away_team_code"],
-                home_team_id,
-                away_team_id,
-                record["home_score"],
-                record["away_score"],
-                record["is_neutral_site"],
-                record["is_playoff"],
-                record["game_type"],
-                record["venue_name"],
-                record["source"],
-                record["source_file"],
-                record["external_game_id"],
-            )
-        )
-
-        # Flush batch when full
-        if len(batch) >= batch_size:
-            inserted = _flush_games_batch(batch)
-            result.records_inserted += inserted
-            batch = []
+            # Flush batch when full
+            if len(batch) >= batch_size:
+                inserted = _flush_games_batch(batch)
+                result.records_inserted += inserted
+                batch = []
 
     # Flush remaining records
     if batch:
@@ -423,6 +449,8 @@ def load_fivethirtyeight_games(
     file_path: Path,
     sport: str = "nfl",
     seasons: list[int] | None = None,
+    *,
+    show_progress: bool = True,
 ) -> LoadResult:
     """
     Load FiveThirtyEight game data into the database.
@@ -431,6 +459,7 @@ def load_fivethirtyeight_games(
         file_path: Path to FiveThirtyEight CSV file
         sport: Sport code (default: "nfl")
         seasons: Filter to specific seasons (default: all)
+        show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
         LoadResult with statistics
@@ -438,20 +467,31 @@ def load_fivethirtyeight_games(
     Example:
         >>> result = load_fivethirtyeight_games(
         ...     Path("nfl_elo.csv"),
-        ...     seasons=[2022, 2023]
+        ...     seasons=[2022, 2023],
+        ...     show_progress=True,
         ... )
         >>> print(f"Loaded {result.records_inserted} games")
     """
     logger.info("Loading FiveThirtyEight game data from %s", file_path)
 
     records = parse_fivethirtyeight_games_csv(file_path, sport, seasons)
-    result = bulk_insert_historical_games(records)
+    result = bulk_insert_historical_games(records, show_progress=show_progress)
 
     logger.info(
         "FiveThirtyEight games load complete: processed=%d, inserted=%d, skipped=%d",
         result.records_processed,
         result.records_inserted,
         result.records_skipped,
+    )
+
+    # Print summary table
+    print_load_summary(
+        "FiveThirtyEight Games Load",
+        processed=result.records_processed,
+        inserted=result.records_inserted,
+        skipped=result.records_skipped,
+        errors=result.errors,
+        show_summary=show_progress,
     )
 
     return result
@@ -461,6 +501,8 @@ def load_csv_games(
     file_path: Path,
     sport: str,
     source: str = "imported",
+    *,
+    show_progress: bool = True,
 ) -> LoadResult:
     """
     Load game data from a simple CSV file.
@@ -469,6 +511,7 @@ def load_csv_games(
         file_path: Path to CSV file
         sport: Sport code
         source: Data source identifier
+        show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
         LoadResult with statistics
@@ -476,13 +519,23 @@ def load_csv_games(
     logger.info("Loading game data from %s", file_path)
 
     records = parse_simple_games_csv(file_path, sport, source)
-    result = bulk_insert_historical_games(records)
+    result = bulk_insert_historical_games(records, show_progress=show_progress)
 
     logger.info(
         "CSV games load complete: processed=%d, inserted=%d, skipped=%d",
         result.records_processed,
         result.records_inserted,
         result.records_skipped,
+    )
+
+    # Print summary table
+    print_load_summary(
+        f"CSV Games Load ({source})",
+        processed=result.records_processed,
+        inserted=result.records_inserted,
+        skipped=result.records_skipped,
+        errors=result.errors,
+        show_summary=show_progress,
     )
 
     return result
