@@ -1,0 +1,202 @@
+/*
+ * Precog Dark Theme
+ *
+ * Default sci-fi dark theme with subtle thematic elements.
+ * Inspired by: Blade Runner, TRON, classic terminal interfaces
+ *
+ * Color Palette:
+ *   Primary:    Cyan (#00CED1)
+ *   Accent:     Amber (#FF8C00)
+ *   Background: Deep Navy (#0A1929)
+ *   Success:    Electric Green (#00FF7F)
+ *   Danger:     Neon Red (#FF3131)
+ *   Muted:      Steel Blue (#4A6FA5)
+ *
+ * Reference: Issue #268
+ */
+
+/* ============================================
+   Global Styles
+   ============================================ */
+
+Screen {
+    background: #0A1929;
+}
+
+Header {
+    background: #001F3F;
+    color: #00CED1;
+    dock: top;
+    height: 1;
+}
+
+Footer {
+    background: #001F3F;
+    color: #4A6FA5;
+    dock: bottom;
+}
+
+/* ============================================
+   ASCII Header
+   ============================================ */
+
+#ascii-header {
+    background: #0A1929;
+    color: #00CED1;
+    text-align: center;
+    padding: 1 2;
+    margin-bottom: 1;
+}
+
+/* ============================================
+   Menu Container
+   ============================================ */
+
+#menu-container {
+    width: 100%;
+    height: auto;
+    align: center middle;
+    padding: 1 4;
+}
+
+#menu-columns {
+    width: 100%;
+    height: auto;
+}
+
+.menu-column {
+    width: 50%;
+    height: auto;
+    padding: 0 2;
+}
+
+.menu-section-header {
+    text-style: bold;
+    color: #FF8C00;
+    padding: 0 0 1 0;
+    text-align: center;
+}
+
+/* ============================================
+   Menu Buttons
+   ============================================ */
+
+MenuOption {
+    width: 100%;
+    height: 3;
+    margin: 0 0 1 0;
+    background: #0D2137;
+    color: #00CED1;
+    border: tall #1A3A5C;
+    text-align: left;
+    padding: 0 2;
+}
+
+MenuOption:hover {
+    background: #1A3A5C;
+    border: tall #00CED1;
+}
+
+MenuOption:focus {
+    background: #1A3A5C;
+    border: tall #FF8C00;
+    text-style: bold;
+}
+
+MenuOption.-active {
+    background: #00CED1;
+    color: #0A1929;
+}
+
+/* ============================================
+   Status Bar
+   ============================================ */
+
+#status-bar {
+    dock: bottom;
+    width: 100%;
+    height: 1;
+    background: #001F3F;
+    padding: 0 2;
+    margin-top: 1;
+}
+
+#status-bar Static {
+    width: 1fr;
+    text-align: center;
+    color: #4A6FA5;
+}
+
+/* ============================================
+   Notifications
+   ============================================ */
+
+Toast {
+    background: #1A3A5C;
+    color: #00CED1;
+    border: round #00CED1;
+}
+
+Toast.-information {
+    border: round #00CED1;
+}
+
+Toast.-warning {
+    background: #3D2A00;
+    border: round #FF8C00;
+    color: #FF8C00;
+}
+
+Toast.-error {
+    background: #3D0000;
+    border: round #FF3131;
+    color: #FF3131;
+}
+
+/* ============================================
+   General Elements
+   ============================================ */
+
+Button {
+    background: #0D2137;
+    color: #00CED1;
+    border: tall #1A3A5C;
+}
+
+Button:hover {
+    background: #1A3A5C;
+    border: tall #00CED1;
+}
+
+Button:focus {
+    border: tall #FF8C00;
+}
+
+Label {
+    color: #B8C5D6;
+}
+
+Input {
+    background: #0D2137;
+    color: #00CED1;
+    border: tall #1A3A5C;
+}
+
+Input:focus {
+    border: tall #FF8C00;
+}
+
+DataTable {
+    background: #0A1929;
+    color: #B8C5D6;
+}
+
+DataTable > .datatable--header {
+    background: #001F3F;
+    color: #00CED1;
+    text-style: bold;
+}
+
+DataTable > .datatable--cursor {
+    background: #1A3A5C;
+}

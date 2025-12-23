@@ -35,10 +35,18 @@ historical = [
     "cfbd>=4.5.0",             # College football data, rankings
 ]
 
+# Optional dependencies for Terminal UI (Issue #268)
+# Install with: pip install -e ".[tui]"
+tui = [
+    "textual>=0.47.0",         # Modern TUI framework
+    "textual-dev>=1.0.0",      # Development tools (console, devtools)
+]
+
 # All optional dependencies
 all = [
     "precog[test]",
     "precog[historical]",
+    "precog[tui]",
 ]
 
 # Package configuration (src layout)

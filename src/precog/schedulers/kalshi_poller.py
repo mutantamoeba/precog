@@ -382,6 +382,7 @@ class KalshiMarketPoller(BasePoller):
                     external_id=event_ticker,
                     category=category,
                     title=market.get("title", event_ticker),
+                    series_id=series_ticker,  # Link event to its series (e.g., KXNFLGAME)
                     subcategory=subcategory,
                     metadata={
                         "series_ticker": series_ticker,
