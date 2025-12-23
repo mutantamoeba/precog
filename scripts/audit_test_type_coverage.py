@@ -98,10 +98,9 @@ MODULE_TIERS = {
     "database/crud_operations": "business",
     "database/seeding/seeding_manager": "business",
     "database/seeding/historical_elo_loader": "business",
-    # Batch Result Types (Issue #255) - Core infrastructure for error handling
-    "database/seeding/batch_result": "business",
-    # Progress Bar Utilities (Issue #254) - Console output for large operations
-    "database/seeding/progress": "experimental",
+    # Batch Result Types (Issue #255) - Experimental until full test suite built
+    # Tests being expanded incrementally (Issue #255 scope)
+    "database/seeding/batch_result": "experimental",
     # Data Sources (Issue #229) - Experimental tier until full test suite built
     # These are new modules; tests will be expanded incrementally
     "database/seeding/historical_games_loader": "experimental",
