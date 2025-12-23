@@ -142,7 +142,13 @@ class TestHistoricalEloRecordProperties:
 
 @pytest.mark.property
 class TestLoadResultProperties:
-    """Property tests for LoadResult data structure."""
+    """Property tests for LoadResult data structure.
+
+    Educational Note:
+        Issue #255 unified LoadResult with BatchInsertResult. These tests
+        verify the backward-compatible property aliases work correctly
+        with generated test data.
+    """
 
     @given(
         processed=st.integers(min_value=0, max_value=100000),
@@ -153,12 +159,17 @@ class TestLoadResultProperties:
     def test_load_result_counts_non_negative(
         self, processed: int, inserted: int, skipped: int
     ) -> None:
-        """All counts in LoadResult should be non-negative."""
+        """All counts in LoadResult should be non-negative.
+
+        Note: LoadResult is now an alias for BatchInsertResult (Issue #255).
+        Uses new BatchInsertResult API with backward-compatible property aliases.
+        """
         result = LoadResult(
-            records_processed=processed,
-            records_inserted=inserted,
-            records_skipped=skipped,
+            total_records=processed,
+            successful=inserted,
+            skipped=skipped,
         )
+        # Test via backward-compatible property aliases
         assert result.records_processed >= 0
         assert result.records_inserted >= 0
         assert result.records_skipped >= 0
@@ -166,13 +177,19 @@ class TestLoadResultProperties:
     @given(errors=st.lists(st.text(min_size=1, max_size=100), min_size=0, max_size=10))
     @settings(max_examples=30)
     def test_error_messages_preserved(self, errors: list[str]) -> None:
-        """Error messages should be preserved in LoadResult."""
-        result = LoadResult(
-            records_processed=0,
-            error_messages=errors,
-            errors=len(errors),
-        )
+        """Error messages should be preserved in LoadResult.
+
+        Note: BatchInsertResult tracks errors via add_failure() method.
+        The error_messages property returns string representations of failures.
+        """
+        result = LoadResult(total_records=len(errors))
+
+        # Add each error as a failure
+        for i, msg in enumerate(errors):
+            result.add_failure(i, {"index": i}, ValueError(msg))
+
         assert result.error_messages is not None
         assert len(result.error_messages) == len(errors)
+        # Verify error messages are captured (may include formatting)
         for i, msg in enumerate(errors):
-            assert result.error_messages[i] == msg
+            assert msg in result.error_messages[i]
