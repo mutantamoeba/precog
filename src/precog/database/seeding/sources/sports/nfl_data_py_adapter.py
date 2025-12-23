@@ -36,6 +36,7 @@ from precog.database.seeding.sources.base_source import (
     DataSourceError,
     GameRecord,
 )
+from precog.database.seeding.team_history import resolve_team_code
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -44,24 +45,44 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Team Code Mapping
+# Team Code Mapping - Unified Module
 # =============================================================================
 
-# nfl_data_py uses different team codes in some cases
-NFL_TEAM_CODE_MAPPING: dict[str, str] = {
-    "LA": "LAR",  # nfl_data_py uses LA for Rams
-    "JAC": "JAX",  # Jacksonville
-    "LV": "LV",  # Las Vegas (correct)
-    "OAK": "LV",  # Oakland -> Las Vegas
-    "SD": "LAC",  # San Diego -> LA Chargers
-    "STL": "LAR",  # St. Louis -> LA Rams
+# Team history imported at top of file (Issue #257)
+# See precog.database.seeding.team_history for comprehensive multi-sport tracking
+
+# Additional nfl_data_py-specific mappings not in main history
+# (e.g., different abbreviation styles used by this library)
+# Note: LA in current nfl_data_py data means LA Rams (not historical LA Raiders)
+NFL_DATA_PY_SPECIFIC: dict[str, str] = {
+    "JAC": "JAX",  # nfl_data_py uses JAC for Jacksonville
+    "LA": "LAR",  # nfl_data_py uses LA for current LA Rams (not historical Raiders)
 }
 
 
 def normalize_nfl_team_code(code: str) -> str:
-    """Normalize nfl_data_py team code to database format."""
+    """Normalize nfl_data_py team code to database format.
+
+    Uses the unified team history module for relocation mappings,
+    plus additional nfl_data_py-specific abbreviation corrections.
+
+    Args:
+        code: Team code from nfl_data_py
+
+    Returns:
+        Normalized team code for database lookup
+
+    Note:
+        Issue #257: Now uses unified team history for relocations.
+    """
     code = code.upper().strip()
-    return NFL_TEAM_CODE_MAPPING.get(code, code)
+
+    # First check nfl_data_py-specific mappings
+    if code in NFL_DATA_PY_SPECIFIC:
+        return NFL_DATA_PY_SPECIFIC[code]
+
+    # Then use unified team history for relocations
+    return resolve_team_code("nfl", code)
 
 
 class NFLDataPySource(APIBasedSourceMixin, BaseDataSource):

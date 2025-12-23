@@ -100,6 +100,8 @@ MODULE_TIERS = {
     "database/seeding/historical_elo_loader": "business",
     # Progress bar utilities (Issue #254) - New utility, tests will be expanded
     "database/seeding/progress": "experimental",
+    # Team History (Issue #257) - New unified team relocation tracking
+    "database/seeding/team_history": "experimental",
     # Data Sources (Issue #229) - Experimental tier until full test suite built
     # These are new modules; tests will be expanded incrementally
     "database/seeding/historical_games_loader": "experimental",

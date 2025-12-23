@@ -33,7 +33,6 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from precog.database.seeding.historical_elo_loader import (
-    TEAM_CODE_MAPPING,
     HistoricalEloRecord,
     LoadResult,
     bulk_insert_historical_elo,
@@ -41,6 +40,7 @@ from precog.database.seeding.historical_elo_loader import (
     parse_fivethirtyeight_csv,
     parse_simple_csv,
 )
+from precog.database.seeding.team_history import TEAM_CODE_MAPPING
 
 # =============================================================================
 # FIXTURES

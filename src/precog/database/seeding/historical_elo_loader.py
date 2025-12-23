@@ -49,6 +49,7 @@ from typing import TYPE_CHECKING, Any, TypedDict
 
 from precog.database.connection import get_cursor
 from precog.database.seeding.progress import print_load_summary, seeding_progress
+from precog.database.seeding.team_history import resolve_team_code
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -94,27 +95,23 @@ class LoadResult:
 
 
 # =============================================================================
-# Team Code Mapping
+# Team Code Mapping - Unified Module
 # =============================================================================
 
-# FiveThirtyEight team codes -> Database team codes
-# Most codes match, this handles exceptions
-TEAM_CODE_MAPPING: dict[str, str] = {
-    # Historical team name changes
-    "WSH": "WAS",  # Washington Commanders (was Redskins, Football Team)
-    "OAK": "LV",  # Oakland Raiders -> Las Vegas Raiders (2020)
-    "SD": "LAC",  # San Diego Chargers -> LA Chargers (2017)
-    "STL": "LAR",  # St. Louis Rams -> LA Rams (2016)
-    # Add more mappings as needed
-}
+# Team history imported at top of file (Issue #257)
+# See precog.database.seeding.team_history for comprehensive multi-sport tracking
 
 
-def normalize_team_code(code: str) -> str:
+def normalize_team_code(code: str, sport: str = "nfl") -> str:
     """
     Normalize a team code from external source to database format.
 
+    This function wraps the unified team history module's resolve_team_code()
+    for backward compatibility with existing code.
+
     Args:
         code: Team code from external source (e.g., FiveThirtyEight)
+        sport: Sport code (default: "nfl" for FiveThirtyEight NFL data)
 
     Returns:
         Normalized team code for database lookup
@@ -124,8 +121,14 @@ def normalize_team_code(code: str) -> str:
         'WAS'
         >>> normalize_team_code("KC")
         'KC'
+        >>> normalize_team_code("OAK")
+        'LV'
+
+    Note:
+        Uses the unified team history module (Issue #257) which provides
+        comprehensive tracking of all major sports team relocations.
     """
-    return TEAM_CODE_MAPPING.get(code.upper(), code.upper())
+    return resolve_team_code(sport, code)
 
 
 # =============================================================================
