@@ -11,11 +11,13 @@ Related Requirements:
 Related Architecture:
     - ADR-106: Historical Data Collection Architecture
     - Issue #229: Expanded Historical Data Sources
+    - Issue #255: Batch Insert Error Handling
 
 Usage:
     pytest tests/unit/database/seeding/test_historical_odds_loader.py -v
 """
 
+from precog.database.seeding.batch_result import BatchInsertResult, ErrorHandlingMode
 from precog.database.seeding.historical_odds_loader import (
     SOURCE_NAME_MAPPING,
     LoadResult,
@@ -28,64 +30,60 @@ from precog.database.seeding.historical_odds_loader import (
 
 
 class TestLoadResult:
-    """Test suite for LoadResult dataclass."""
+    """Test suite for LoadResult dataclass.
+
+    Note: LoadResult is now an alias for BatchInsertResult (Issue #255).
+    These tests verify backward compatibility with the old LoadResult API.
+    """
 
     def test_default_values(self) -> None:
         """Verify LoadResult initializes with zero counts."""
         result = LoadResult()
+        # Test backward-compatible property access
         assert result.records_processed == 0
         assert result.records_inserted == 0
-        assert result.records_updated == 0
         assert result.records_skipped == 0
         assert result.errors == 0
         assert result.error_messages == []
+        # Also verify it's actually BatchInsertResult
+        assert isinstance(result, BatchInsertResult)
 
     def test_custom_initialization(self) -> None:
-        """Verify LoadResult accepts custom values."""
+        """Verify LoadResult accepts custom values using BatchInsertResult API."""
         result = LoadResult(
-            records_processed=100,
-            records_inserted=90,
-            records_updated=5,
-            records_skipped=3,
-            errors=2,
-            error_messages=["Error 1", "Error 2"],
+            total_records=100,
+            successful=90,
+            skipped=3,
+            failed=2,
         )
+        # Add failures to populate error_messages
+        result.add_failure(0, {"id": 1}, ValueError("Error 1"))
+        result.add_failure(1, {"id": 2}, ValueError("Error 2"))
+
+        # Test backward-compatible property access
         assert result.records_processed == 100
         assert result.records_inserted == 90
-        assert result.records_updated == 5
         assert result.records_skipped == 3
-        assert result.errors == 2
+        assert result.errors == 4  # 2 initial + 2 added
         assert result.error_messages is not None
         assert len(result.error_messages) == 2
 
-    def test_addition_combines_results(self) -> None:
-        """Verify LoadResult addition aggregates statistics correctly.
+    def test_type_alias_equivalence(self) -> None:
+        """Verify LoadResult is an alias for BatchInsertResult."""
+        assert LoadResult is BatchInsertResult
 
-        Educational Note:
-            When loading from multiple sources or files, we need to combine
-            results. The __add__ method enables: total = result1 + result2
-        """
-        result1 = LoadResult(
-            records_processed=50,
-            records_inserted=45,
-            records_skipped=5,
-            error_messages=["Error A"],
-        )
-        result2 = LoadResult(
-            records_processed=30,
-            records_inserted=28,
-            records_skipped=2,
-            error_messages=["Error B", "Error C"],
-        )
+    def test_error_mode_support(self) -> None:
+        """Verify LoadResult supports error_mode parameter (Issue #255)."""
+        result = LoadResult(error_mode=ErrorHandlingMode.COLLECT)
+        assert result.error_mode == ErrorHandlingMode.COLLECT
 
-        combined = result1 + result2
+    def test_has_failures_property(self) -> None:
+        """Verify has_failures property works for error detection."""
+        result = LoadResult(total_records=10, successful=10)
+        assert result.has_failures is False
 
-        assert combined.records_processed == 80
-        assert combined.records_inserted == 73
-        assert combined.records_skipped == 7
-        assert len(combined.error_messages) == 3
-        assert "Error A" in combined.error_messages
-        assert "Error B" in combined.error_messages
+        result.add_failure(0, {"id": 1}, ValueError("Test error"))
+        assert result.has_failures is True
 
 
 # =============================================================================

@@ -98,6 +98,9 @@ MODULE_TIERS = {
     "database/crud_operations": "business",
     "database/seeding/seeding_manager": "business",
     "database/seeding/historical_elo_loader": "business",
+    # Batch Result Types (Issue #255) - Experimental until full test suite built
+    # Tests being expanded incrementally (Issue #255 scope)
+    "database/seeding/batch_result": "experimental",
     # Progress bar utilities (Issue #254) - New utility, tests will be expanded
     "database/seeding/progress": "experimental",
     # Team History (Issue #257) - New unified team relocation tracking

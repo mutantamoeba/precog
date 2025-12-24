@@ -18,6 +18,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from precog.database.seeding.batch_result import ErrorHandlingMode
 from precog.database.seeding.historical_elo_loader import (
     HistoricalEloRecord,
     LoadResult,
@@ -160,26 +161,49 @@ class TestLoadResultEdgeCases:
         assert result.errors == 0
 
     def test_very_large_counts(self) -> None:
-        """Test LoadResult with very large counts."""
+        """Test LoadResult with very large counts.
+
+        Educational Note:
+            Issue #255 unified LoadResult with BatchInsertResult.
+            Constructor uses new field names: total_records, successful, skipped.
+            The old names (records_processed, records_inserted) are property aliases.
+        """
         large = 10**9
         result = LoadResult(
-            records_processed=large,
-            records_inserted=large,
-            records_skipped=large,
+            total_records=large,
+            successful=large,
+            skipped=large,
         )
+        # Access via backward-compatible property alias
         assert result.records_processed == large
 
     def test_negative_counts_accepted(self) -> None:
-        """Test that LoadResult accepts negative counts (no validation)."""
-        result = LoadResult(records_processed=-1)
+        """Test that LoadResult accepts negative counts (no validation).
+
+        Educational Note:
+            Constructor uses new field name total_records.
+        """
+        result = LoadResult(total_records=-1)
+        # Access via backward-compatible property alias
         assert result.records_processed == -1
 
     def test_many_error_messages(self) -> None:
-        """Test LoadResult with many error messages."""
-        errors = [f"Error {i}" for i in range(1000)]
-        result = LoadResult(errors=1000, error_messages=errors)
+        """Test LoadResult with many error messages.
+
+        Educational Note:
+            Issue #255: error_messages is now a property derived from failed_records.
+            Use add_failure() to add failed records with error details.
+        """
+        result = LoadResult(total_records=1000)
+        for i in range(1000):
+            result.add_failure(
+                record_index=i,
+                record_data={"id": i},
+                error=ValueError(f"Error {i}"),
+            )
         assert result.error_messages is not None
         assert len(result.error_messages) == 1000
+        assert result.failed == 1000
 
 
 # =============================================================================
@@ -200,7 +224,12 @@ class TestBulkInsertEdgeCases:
     @patch("precog.database.seeding.historical_elo_loader.get_team_id_by_code")
     @patch("precog.database.seeding.historical_elo_loader._flush_batch")
     def test_all_teams_unknown(self, mock_flush: MagicMock, mock_get_team: MagicMock) -> None:
-        """Test bulk insert when all teams are unknown."""
+        """Test bulk insert when all teams are unknown.
+
+        Educational Note:
+            Issue #255: Default error_mode is now FAIL, which raises exceptions.
+            To get skip behavior for unknown teams, use SKIP mode explicitly.
+        """
         mock_get_team.return_value = None  # All teams not found
         mock_flush.return_value = 0
 
@@ -220,7 +249,11 @@ class TestBulkInsertEdgeCases:
             for i in range(10)
         ]
 
-        result = bulk_insert_historical_elo(iter(records))
+        # Use SKIP mode to avoid raising exceptions for unknown teams
+        result = bulk_insert_historical_elo(
+            iter(records),
+            error_mode=ErrorHandlingMode.SKIP,
+        )
 
         assert result.records_processed == 10
         assert result.records_skipped == 10

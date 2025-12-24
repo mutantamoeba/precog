@@ -38,11 +38,14 @@ from __future__ import annotations
 
 import csv
 import logging
-from dataclasses import dataclass
 from datetime import date, datetime
 from typing import TYPE_CHECKING, Any, TypedDict
 
 from precog.database.connection import get_cursor
+from precog.database.seeding.batch_result import (
+    BatchInsertResult,
+    ErrorHandlingMode,
+)
 from precog.database.seeding.historical_elo_loader import (
     normalize_team_code,
 )
@@ -79,20 +82,15 @@ class HistoricalGameRecord(TypedDict):
     external_game_id: str | None
 
 
-@dataclass
-class LoadResult:
-    """Result of loading historical game data."""
-
-    records_processed: int = 0
-    records_inserted: int = 0
-    records_updated: int = 0
-    records_skipped: int = 0
-    errors: int = 0
-    error_messages: list[str] | None = None
-
-    def __post_init__(self) -> None:
-        if self.error_messages is None:
-            self.error_messages = []
+# Type alias for backward compatibility (Issue #255)
+# BatchInsertResult provides:
+#   - total_records (aliased as records_processed)
+#   - successful (aliased as records_inserted)
+#   - skipped (aliased as records_skipped)
+#   - failed (aliased as errors)
+#   - error_messages property (compatibility)
+#   - PLUS: failed_records list with FailedRecord details
+LoadResult = BatchInsertResult
 
 
 # =============================================================================
@@ -298,31 +296,41 @@ def get_team_id_by_code(team_code: str, sport: str) -> int | None:
 def bulk_insert_historical_games(
     records: Iterator[HistoricalGameRecord],
     batch_size: int = 1000,
+    error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
     *,
     total: int | None = None,
     show_progress: bool = True,
-) -> LoadResult:
+) -> BatchInsertResult:
     """
-    Bulk insert historical game records with batching and progress display.
+    Bulk insert historical game records with batching, progress display, and error handling.
 
     Args:
         records: Iterator of HistoricalGameRecord
         batch_size: Number of records per batch (default: 1000)
+        error_mode: How to handle errors (default: FAIL - stop on first error)
+            - FAIL: Raise exception on first unknown team
+            - SKIP: Skip records with unknown teams, continue processing
+            - COLLECT: Collect all failures, continue processing
         total: Expected total records (enables determinate progress bar)
         show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
-        LoadResult with statistics
+        BatchInsertResult with statistics and any failed records
+
+    Raises:
+        ValueError: When error_mode is FAIL and both teams are unknown
 
     Example:
+        >>> # Collect all failures for diagnostics
         >>> result = bulk_insert_historical_games(
         ...     records,
-        ...     batch_size=500,
-        ...     total=5000,
+        ...     error_mode=ErrorHandlingMode.COLLECT,
         ...     show_progress=True,
         ... )
+        >>> if result.has_failures:
+        ...     print(result.get_failure_summary())
     """
-    result = LoadResult()
+    result = BatchInsertResult(error_mode=error_mode, operation="bulk_insert_historical_games")
 
     batch: list[tuple[Any, ...]] = []
     team_id_cache: dict[tuple[str, str], int | None] = {}
@@ -332,8 +340,8 @@ def bulk_insert_historical_games(
         total=total,
         show_progress=show_progress,
     ) as (progress, task):
-        for record in records:
-            result.records_processed += 1
+        for record_index, record in enumerate(records):
+            result.total_records += 1
 
             # Look up team_ids (with caching)
             home_cache_key = (record["home_team_code"], record["sport"])
@@ -354,9 +362,19 @@ def bulk_insert_historical_games(
             home_team_id = team_id_cache[home_cache_key]
             away_team_id = team_id_cache[away_cache_key]
 
-            # Skip if BOTH teams not found (allows for defunct teams)
+            # Handle case where BOTH teams not found (allows for defunct teams)
             if not home_team_id and not away_team_id:
-                result.records_skipped += 1
+                error = ValueError(
+                    f"Both teams unknown: home={record['home_team_code']}, "
+                    f"away={record['away_team_code']} for sport={record['sport']}"
+                )
+                if error_mode == ErrorHandlingMode.FAIL:
+                    result.add_failure(record_index, dict(record), error)
+                    raise error
+                if error_mode == ErrorHandlingMode.SKIP:
+                    result.add_skip()
+                elif error_mode == ErrorHandlingMode.COLLECT:
+                    result.add_failure(record_index, dict(record), error)
                 if progress and task is not None:
                     progress.advance(task)
                 continue
@@ -389,13 +407,13 @@ def bulk_insert_historical_games(
             # Flush batch when full
             if len(batch) >= batch_size:
                 inserted = _flush_games_batch(batch)
-                result.records_inserted += inserted
+                result.successful += inserted
                 batch = []
 
     # Flush remaining records
     if batch:
         inserted = _flush_games_batch(batch)
-        result.records_inserted += inserted
+        result.successful += inserted
 
     return result
 
@@ -449,9 +467,10 @@ def load_fivethirtyeight_games(
     file_path: Path,
     sport: str = "nfl",
     seasons: list[int] | None = None,
+    error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
     *,
     show_progress: bool = True,
-) -> LoadResult:
+) -> BatchInsertResult:
     """
     Load FiveThirtyEight game data into the database.
 
@@ -459,10 +478,14 @@ def load_fivethirtyeight_games(
         file_path: Path to FiveThirtyEight CSV file
         sport: Sport code (default: "nfl")
         seasons: Filter to specific seasons (default: all)
+        error_mode: How to handle errors (default: FAIL - stop on first error)
+            - FAIL: Raise exception on first unknown team
+            - SKIP: Skip records with unknown teams, continue processing
+            - COLLECT: Collect all failures, continue processing
         show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
-        LoadResult with statistics
+        BatchInsertResult with statistics
 
     Example:
         >>> result = load_fivethirtyeight_games(
@@ -471,11 +494,20 @@ def load_fivethirtyeight_games(
         ...     show_progress=True,
         ... )
         >>> print(f"Loaded {result.records_inserted} games")
+        >>> # With error collection
+        >>> result = load_fivethirtyeight_games(
+        ...     Path("nfl_elo.csv"),
+        ...     error_mode=ErrorHandlingMode.COLLECT
+        ... )
+        >>> if result.has_failures:
+        ...     print(result.get_failure_summary())
     """
     logger.info("Loading FiveThirtyEight game data from %s", file_path)
 
     records = parse_fivethirtyeight_games_csv(file_path, sport, seasons)
-    result = bulk_insert_historical_games(records, show_progress=show_progress)
+    result = bulk_insert_historical_games(
+        records, error_mode=error_mode, show_progress=show_progress
+    )
 
     logger.info(
         "FiveThirtyEight games load complete: processed=%d, inserted=%d, skipped=%d",
@@ -501,9 +533,10 @@ def load_csv_games(
     file_path: Path,
     sport: str,
     source: str = "imported",
+    error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
     *,
     show_progress: bool = True,
-) -> LoadResult:
+) -> BatchInsertResult:
     """
     Load game data from a simple CSV file.
 
@@ -511,15 +544,18 @@ def load_csv_games(
         file_path: Path to CSV file
         sport: Sport code
         source: Data source identifier
+        error_mode: How to handle errors (default: FAIL - stop on first error)
         show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
-        LoadResult with statistics
+        BatchInsertResult with statistics
     """
     logger.info("Loading game data from %s", file_path)
 
     records = parse_simple_games_csv(file_path, sport, source)
-    result = bulk_insert_historical_games(records, show_progress=show_progress)
+    result = bulk_insert_historical_games(
+        records, error_mode=error_mode, show_progress=show_progress
+    )
 
     logger.info(
         "CSV games load complete: processed=%d, inserted=%d, skipped=%d",

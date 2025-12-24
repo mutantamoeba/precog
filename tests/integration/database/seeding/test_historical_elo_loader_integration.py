@@ -23,6 +23,7 @@ from decimal import Decimal
 
 import pytest
 
+from precog.database.seeding.batch_result import ErrorHandlingMode
 from precog.database.seeding.historical_elo_loader import (
     HistoricalEloRecord,
     LoadResult,
@@ -32,6 +33,76 @@ from precog.database.seeding.historical_elo_loader import (
 # =============================================================================
 # FIXTURES
 # =============================================================================
+
+
+@pytest.fixture
+def setup_test_teams(db_pool, db_cursor):
+    """
+    Create test teams required for Elo record inserts.
+
+    Educational Note:
+        These tests need team records for FK constraints. The bulk_insert_historical_elo
+        function looks up teams by (team_code, sport) to get the team_id for insertion.
+        Without these teams, the loader will fail with "Team not found" errors.
+
+    Note:
+        The teams table has a unique constraint on (team_code, sport).
+        - In CI: No seed data exists, so teams are created fresh
+        - In local dev: Seed data already has KC/BUF, so INSERT is skipped
+
+        We use ON CONFLICT (team_code, sport) DO NOTHING to handle both cases.
+        The fixture tracks which team_ids to use (seed data or newly created).
+    """
+    from precog.database.connection import get_cursor
+
+    # First check if teams already exist (from seed data)
+    with get_cursor(commit=False) as cur:
+        cur.execute("SELECT team_id FROM teams WHERE team_code = 'KC' AND sport = 'nfl'")
+        kc_row = cur.fetchone()
+        cur.execute("SELECT team_id FROM teams WHERE team_code = 'BUF' AND sport = 'nfl'")
+        buf_row = cur.fetchone()
+
+    # Track whether we created new teams (for cleanup)
+    created_team_ids = []
+
+    if kc_row and buf_row:
+        # Teams exist from seed data - use those
+        kc_team_id = kc_row["team_id"]
+        buf_team_id = buf_row["team_id"]
+    else:
+        # Teams don't exist (CI environment) - create them
+        with get_cursor(commit=True) as cur:
+            cur.execute(
+                """
+                INSERT INTO teams (
+                    team_id, team_code, team_name,
+                    conference, division, sport, current_elo_rating
+                )
+                VALUES
+                    (98001, 'KC', 'Kansas City Chiefs', 'AFC', 'West', 'nfl', 1624),
+                    (98002, 'BUF', 'Buffalo Bills', 'AFC', 'East', 'nfl', 1618)
+                ON CONFLICT (team_code, sport) DO NOTHING
+                RETURNING team_id
+            """
+            )
+        kc_team_id = 98001
+        buf_team_id = 98002
+        created_team_ids = [98001, 98002]
+
+    yield {"kc_team_id": kc_team_id, "buf_team_id": buf_team_id}
+
+    # Cleanup - only remove teams we created (not seed data)
+    if created_team_ids:
+        with get_cursor(commit=True) as cur:
+            # First delete any historical_elo records referencing these teams
+            cur.execute(
+                "DELETE FROM historical_elo WHERE team_id = ANY(%s)",
+                (created_team_ids,),
+            )
+            cur.execute(
+                "DELETE FROM teams WHERE team_id = ANY(%s)",
+                (created_team_ids,),
+            )
 
 
 @pytest.fixture
@@ -110,7 +181,9 @@ class TestTeamLookupIntegration:
 class TestBulkInsertIntegration:
     """Integration tests for bulk insert operations."""
 
-    def test_bulk_insert_returns_result(self, db_pool, db_cursor, sample_elo_records) -> None:
+    def test_bulk_insert_returns_result(
+        self, db_pool, db_cursor, setup_test_teams, sample_elo_records
+    ) -> None:
         """Verify bulk insert returns LoadResult."""
         result = bulk_insert_historical_elo(iter(sample_elo_records))
 
@@ -126,7 +199,12 @@ class TestBulkInsertIntegration:
         assert result.errors == 0
 
     def test_bulk_insert_skips_unknown_teams(self, db_pool, db_cursor) -> None:
-        """Verify bulk insert skips records with unknown team codes."""
+        """Verify bulk insert skips records with unknown team codes.
+
+        Educational Note:
+            With Issue #255, the default error_mode is FAIL which raises
+            an exception. To get skip behavior, use SKIP mode explicitly.
+        """
         records = [
             HistoricalEloRecord(
                 team_code="UNKNOWN_TEAM_XYZ",
@@ -142,7 +220,10 @@ class TestBulkInsertIntegration:
             )
         ]
 
-        result = bulk_insert_historical_elo(iter(records))
+        result = bulk_insert_historical_elo(
+            iter(records),
+            error_mode=ErrorHandlingMode.SKIP,
+        )
 
         assert result.records_processed == 1
         assert result.records_skipped == 1
@@ -158,7 +239,9 @@ class TestBulkInsertIntegration:
 class TestDataIntegrityIntegration:
     """Integration tests for data integrity after bulk insert."""
 
-    def test_decimal_precision_preserved(self, db_pool, db_cursor, sample_elo_records) -> None:
+    def test_decimal_precision_preserved(
+        self, db_pool, db_cursor, setup_test_teams, sample_elo_records
+    ) -> None:
         """Verify Decimal precision is preserved in database.
 
         Educational Note:

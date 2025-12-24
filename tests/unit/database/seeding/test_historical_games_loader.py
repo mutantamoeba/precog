@@ -11,6 +11,7 @@ Related Requirements:
 Related Architecture:
     - ADR-106: Historical Data Collection Architecture
     - Issue #229: Expanded Historical Data Sources
+    - Issue #255: Batch Insert Error Handling
 
 Usage:
     pytest tests/unit/database/seeding/test_historical_games_loader.py -v
@@ -20,6 +21,7 @@ import tempfile
 from datetime import date
 from pathlib import Path
 
+from precog.database.seeding.batch_result import BatchInsertResult, ErrorHandlingMode
 from precog.database.seeding.historical_games_loader import (
     HistoricalGameRecord,
     LoadResult,
@@ -33,35 +35,52 @@ from precog.database.seeding.historical_games_loader import (
 
 
 class TestLoadResult:
-    """Test suite for LoadResult dataclass."""
+    """Test suite for LoadResult dataclass.
+
+    Note: LoadResult is now an alias for BatchInsertResult (Issue #255).
+    These tests verify backward compatibility with the old LoadResult API.
+    """
 
     def test_default_values(self) -> None:
         """Verify LoadResult initializes with zero counts."""
         result = LoadResult()
+        # Test backward-compatible property access
         assert result.records_processed == 0
         assert result.records_inserted == 0
-        assert result.records_updated == 0
         assert result.records_skipped == 0
         assert result.errors == 0
         assert result.error_messages == []
+        # Also verify it's actually BatchInsertResult
+        assert isinstance(result, BatchInsertResult)
 
     def test_custom_initialization(self) -> None:
-        """Verify LoadResult accepts custom values."""
+        """Verify LoadResult accepts custom values using BatchInsertResult API."""
         result = LoadResult(
-            records_processed=100,
-            records_inserted=90,
-            records_updated=5,
-            records_skipped=3,
-            errors=2,
-            error_messages=["Error 1", "Error 2"],
+            total_records=100,
+            successful=90,
+            skipped=3,
+            failed=2,
         )
+        # Add failures to populate error_messages
+        result.add_failure(0, {"id": 1}, ValueError("Error 1"))
+        result.add_failure(1, {"id": 2}, ValueError("Error 2"))
+
+        # Test backward-compatible property access
         assert result.records_processed == 100
         assert result.records_inserted == 90
-        assert result.records_updated == 5
         assert result.records_skipped == 3
-        assert result.errors == 2
+        assert result.errors == 4  # 2 initial + 2 added
         assert result.error_messages is not None
         assert len(result.error_messages) == 2
+
+    def test_type_alias_equivalence(self) -> None:
+        """Verify LoadResult is an alias for BatchInsertResult."""
+        assert LoadResult is BatchInsertResult
+
+    def test_error_mode_support(self) -> None:
+        """Verify LoadResult supports error_mode parameter (Issue #255)."""
+        result = LoadResult(error_mode=ErrorHandlingMode.COLLECT)
+        assert result.error_mode == ErrorHandlingMode.COLLECT
 
 
 # =============================================================================

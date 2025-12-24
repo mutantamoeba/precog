@@ -178,31 +178,45 @@ class TestLoadResult:
         assert result.error_messages == []
 
     def test_error_messages_initialization(self):
-        """Verify error_messages defaults to empty list, not None.
+        """Verify error_messages defaults to empty list.
 
         Educational Note:
-            The __post_init__ method ensures error_messages is never None,
-            which prevents NoneType errors when appending.
+            BatchInsertResult (now aliased as LoadResult) uses failed_records
+            internally and exposes error_messages as a compatibility property.
         """
-        result = LoadResult(records_processed=10)
+        result = LoadResult(total_records=10)
         assert result.error_messages is not None
         assert isinstance(result.error_messages, list)
+        assert len(result.error_messages) == 0
 
     def test_custom_values(self):
-        """Verify LoadResult accepts custom values."""
+        """Verify LoadResult/BatchInsertResult accepts custom values.
+
+        Educational Note:
+            LoadResult is now an alias for BatchInsertResult with compatibility
+            properties. Use new field names (total_records, successful) but
+            old names (records_processed, records_inserted) work for reads.
+        """
         result = LoadResult(
-            records_processed=100,
-            records_inserted=90,
-            records_skipped=10,
-            errors=2,
-            error_messages=["Error 1", "Error 2"],
+            total_records=100,
+            successful=90,
+            skipped=10,
+            failed=2,
         )
-        assert result.records_processed == 100
-        assert result.records_inserted == 90
-        assert result.records_skipped == 10
-        assert result.errors == 2
-        assert result.error_messages is not None
-        assert len(result.error_messages) == 2
+        # Add some failures to test error_messages
+        result.add_failure(0, {"id": 1}, ValueError("Error 1"))
+        result.add_failure(1, {"id": 2}, ValueError("Error 2"))
+
+        # Test both new and compatibility property names
+        assert result.total_records == 100
+        assert result.records_processed == 100  # Compatibility alias
+        assert result.successful == 90
+        assert result.records_inserted == 90  # Compatibility alias
+        assert result.skipped == 10
+        assert result.records_skipped == 10  # Compatibility alias
+        assert result.failed == 4  # 2 initial + 2 added
+        assert result.errors == 4  # Compatibility alias
+        assert len(result.error_messages) == 2  # From add_failure calls
 
 
 # =============================================================================
@@ -429,13 +443,17 @@ class TestBulkInsertHistoricalElo:
 
     @patch("precog.database.seeding.historical_elo_loader.get_team_id_by_code")
     @patch("precog.database.seeding.historical_elo_loader._flush_batch")
-    def test_bulk_insert_skips_unknown_teams(self, mock_flush: MagicMock, mock_get_team: MagicMock):
-        """Verify unknown teams are skipped.
+    def test_bulk_insert_skips_unknown_teams_in_skip_mode(
+        self, mock_flush: MagicMock, mock_get_team: MagicMock
+    ):
+        """Verify unknown teams are skipped in SKIP error mode.
 
         Educational Note:
-            If a team_code doesn't exist in the teams table, the record
-            should be skipped rather than causing an error.
+            In SKIP mode, if a team_code doesn't exist in the teams table,
+            the record is skipped rather than causing an error.
         """
+        from precog.database.seeding.batch_result import ErrorHandlingMode
+
         mock_get_team.return_value = None  # Team not found
         mock_flush.return_value = 0
 
@@ -455,11 +473,85 @@ class TestBulkInsertHistoricalElo:
             for _ in range(3)
         ]
 
-        result = bulk_insert_historical_elo(iter(records))
+        result = bulk_insert_historical_elo(iter(records), error_mode=ErrorHandlingMode.SKIP)
 
         assert result.records_processed == 3
         assert result.records_skipped == 3
         assert result.records_inserted == 0
+
+    @patch("precog.database.seeding.historical_elo_loader.get_team_id_by_code")
+    def test_bulk_insert_fails_on_unknown_team_in_fail_mode(self, mock_get_team: MagicMock):
+        """Verify unknown teams raise error in FAIL mode (default).
+
+        Educational Note:
+            In FAIL mode (default), the first error stops processing and
+            raises an exception. This ensures transactional integrity.
+        """
+        import pytest
+
+        from precog.database.seeding.batch_result import ErrorHandlingMode
+
+        mock_get_team.return_value = None  # Team not found
+
+        records = [
+            HistoricalEloRecord(
+                team_code="UNKNOWN",
+                sport="nfl",
+                season=2023,
+                rating_date=date(2023, 9, 7),
+                elo_rating=Decimal("1500.00"),
+                qb_adjusted_elo=None,
+                qb_name=None,
+                qb_value=None,
+                source="test",
+                source_file=None,
+            )
+        ]
+
+        with pytest.raises(ValueError, match="Team not found"):
+            bulk_insert_historical_elo(iter(records), error_mode=ErrorHandlingMode.FAIL)
+
+    @patch("precog.database.seeding.historical_elo_loader.get_team_id_by_code")
+    @patch("precog.database.seeding.historical_elo_loader._flush_batch")
+    def test_bulk_insert_collects_unknown_teams_in_collect_mode(
+        self, mock_flush: MagicMock, mock_get_team: MagicMock
+    ):
+        """Verify unknown teams are tracked in COLLECT error mode.
+
+        Educational Note:
+            In COLLECT mode, all records are processed and failures are
+            collected with details for later analysis.
+        """
+        from precog.database.seeding.batch_result import ErrorHandlingMode
+
+        mock_get_team.return_value = None  # Team not found
+        mock_flush.return_value = 0
+
+        records = [
+            HistoricalEloRecord(
+                team_code="UNKNOWN",
+                sport="nfl",
+                season=2023,
+                rating_date=date(2023, 9, 7),
+                elo_rating=Decimal("1500.00"),
+                qb_adjusted_elo=None,
+                qb_name=None,
+                qb_value=None,
+                source="test",
+                source_file=None,
+            )
+            for _ in range(3)
+        ]
+
+        result = bulk_insert_historical_elo(iter(records), error_mode=ErrorHandlingMode.COLLECT)
+
+        assert result.records_processed == 3
+        assert result.failed == 3
+        assert len(result.failed_records) == 3
+        # Verify failure details are captured
+        assert result.failed_records[0].error_type == "ValueError"
+        assert "Team not found" in result.failed_records[0].error_message
+        assert result.failed_records[0].context == "team_lookup"
 
     @patch("precog.database.seeding.historical_elo_loader.get_team_id_by_code")
     @patch("precog.database.seeding.historical_elo_loader._flush_batch")

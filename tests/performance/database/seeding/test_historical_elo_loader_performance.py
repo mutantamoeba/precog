@@ -167,23 +167,34 @@ class TestCSVParsingThroughput:
 
 @pytest.mark.performance
 class TestLoadResultLatency:
-    """Performance tests for LoadResult creation latency."""
+    """Performance tests for LoadResult creation latency.
+
+    Educational Note:
+        Issue #255 unified LoadResult with BatchInsertResult. These tests
+        verify that the new BatchInsertResult dataclass maintains acceptable
+        creation latency for high-throughput batch operations.
+    """
 
     def test_load_result_creation_latency(self) -> None:
-        """Test LoadResult creation meets latency threshold."""
+        """Test LoadResult creation meets latency threshold.
+
+        Note: LoadResult is now an alias for BatchInsertResult (Issue #255).
+        Uses new BatchInsertResult API parameters.
+        """
         iterations = 1000
         latencies_us: list[float] = []
 
         for i in range(iterations):
             start = time.perf_counter()
             result = LoadResult(
-                records_processed=1000,
-                records_inserted=900,
-                records_updated=50,
-                records_skipped=50,
-                errors=5,
-                error_messages=["Error 1", "Error 2"],
+                total_records=1000,
+                successful=900,
+                skipped=50,
+                failed=5,
             )
+            # Add some failures to simulate real-world usage
+            result.add_failure(0, {"index": 0}, ValueError("Error 1"))
+            result.add_failure(1, {"index": 1}, ValueError("Error 2"))
             elapsed = (time.perf_counter() - start) * 1_000_000
             latencies_us.append(elapsed)
             del result
@@ -191,8 +202,9 @@ class TestLoadResultLatency:
         avg_latency = statistics.mean(latencies_us)
         p99_latency = sorted(latencies_us)[int(iterations * 0.99)]
 
-        assert avg_latency < 50, f"Avg latency {avg_latency:.3f}us exceeds 50us"
-        assert p99_latency < 200, f"P99 latency {p99_latency:.3f}us exceeds 200us"
+        # Slightly relaxed thresholds due to add_failure() calls
+        assert avg_latency < 100, f"Avg latency {avg_latency:.3f}us exceeds 100us"
+        assert p99_latency < 300, f"P99 latency {p99_latency:.3f}us exceeds 300us"
 
 
 # =============================================================================
