@@ -29,6 +29,7 @@ Team Code Mapping:
 
 Reference:
     - Issue #229: Expanded Historical Data Sources
+    - Issue #254: Add progress bars for large seeding operations
     - Migration 0006: Create historical_games table
     - ADR-029: ESPN Data Model
 """
@@ -48,6 +49,7 @@ from precog.database.seeding.batch_result import (
 from precog.database.seeding.historical_elo_loader import (
     normalize_team_code,
 )
+from precog.database.seeding.progress import print_load_summary, seeding_progress
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -297,7 +299,7 @@ def bulk_insert_historical_games(
     error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
 ) -> BatchInsertResult:
     """
-    Bulk insert historical game records with batching.
+    Bulk insert historical game records with batching and progress display.
 
     Args:
         records: Iterator of HistoricalGameRecord
@@ -330,21 +332,56 @@ def bulk_insert_historical_games(
     for record_index, record in enumerate(records):
         result.total_records += 1
 
-        # Look up team_ids (with caching)
-        home_cache_key = (record["home_team_code"], record["sport"])
-        away_cache_key = (record["away_team_code"], record["sport"])
+            # Look up team_ids (with caching)
+            home_cache_key = (record["home_team_code"], record["sport"])
+            away_cache_key = (record["away_team_code"], record["sport"])
 
-        if home_cache_key not in team_id_cache:
-            team_id_cache[home_cache_key] = get_team_id_by_code(
-                record["home_team_code"],
-                record["sport"],
+            if home_cache_key not in team_id_cache:
+                team_id_cache[home_cache_key] = get_team_id_by_code(
+                    record["home_team_code"],
+                    record["sport"],
+                )
+
+            if away_cache_key not in team_id_cache:
+                team_id_cache[away_cache_key] = get_team_id_by_code(
+                    record["away_team_code"],
+                    record["sport"],
+                )
+
+            home_team_id = team_id_cache[home_cache_key]
+            away_team_id = team_id_cache[away_cache_key]
+
+            # Skip if BOTH teams not found (allows for defunct teams)
+            if not home_team_id and not away_team_id:
+                result.records_skipped += 1
+                if progress and task is not None:
+                    progress.advance(task)
+                continue
+
+            batch.append(
+                (
+                    record["sport"],
+                    record["season"],
+                    record["game_date"],
+                    record["home_team_code"],
+                    record["away_team_code"],
+                    home_team_id,
+                    away_team_id,
+                    record["home_score"],
+                    record["away_score"],
+                    record["is_neutral_site"],
+                    record["is_playoff"],
+                    record["game_type"],
+                    record["venue_name"],
+                    record["source"],
+                    record["source_file"],
+                    record["external_game_id"],
+                )
             )
 
-        if away_cache_key not in team_id_cache:
-            team_id_cache[away_cache_key] = get_team_id_by_code(
-                record["away_team_code"],
-                record["sport"],
-            )
+            # Update progress
+            if progress and task is not None:
+                progress.advance(task)
 
         home_team_id = team_id_cache[home_cache_key]
         away_team_id = team_id_cache[away_cache_key]
@@ -468,7 +505,8 @@ def load_fivethirtyeight_games(
     Example:
         >>> result = load_fivethirtyeight_games(
         ...     Path("nfl_elo.csv"),
-        ...     seasons=[2022, 2023]
+        ...     seasons=[2022, 2023],
+        ...     show_progress=True,
         ... )
         >>> print(f"Loaded {result.records_inserted} games")
         >>> # With error collection
@@ -489,6 +527,16 @@ def load_fivethirtyeight_games(
         result.records_processed,
         result.records_inserted,
         result.records_skipped,
+    )
+
+    # Print summary table
+    print_load_summary(
+        "FiveThirtyEight Games Load",
+        processed=result.records_processed,
+        inserted=result.records_inserted,
+        skipped=result.records_skipped,
+        errors=result.errors,
+        show_summary=show_progress,
     )
 
     return result
@@ -522,6 +570,16 @@ def load_csv_games(
         result.records_processed,
         result.records_inserted,
         result.records_skipped,
+    )
+
+    # Print summary table
+    print_load_summary(
+        f"CSV Games Load ({source})",
+        processed=result.records_processed,
+        inserted=result.records_inserted,
+        skipped=result.records_skipped,
+        errors=result.errors,
+        show_summary=show_progress,
     )
 
     return result

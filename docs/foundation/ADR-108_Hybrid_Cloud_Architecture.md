@@ -1,8 +1,8 @@
 # ADR-108: Hybrid Cloud Architecture for Live Data Collection
 
 ---
-**Version:** 1.0
-**Date:** December 21, 2025
+**Version:** 1.1
+**Date:** December 22, 2025
 **Status:** Accepted
 **Phase:** Phase 2.5 (Live Data Collection Service)
 **Drivers:** Data accumulation urgency, development flexibility, cost optimization
@@ -195,16 +195,32 @@ git pull origin main
 
 ## Cost Considerations
 
-**Railway Free Tier:**
-- 500 hours/month execution time
-- 5GB PostgreSQL storage
-- Sufficient for Phase 2.5-3 development
+**Railway Pricing Model** (Usage-Based):
+- **Memory:** $0.00000386/GB-second (~$10/GB/month for 24/7)
+- **CPU:** $0.00000772/vCPU-second (~$20/vCPU/month for 24/7)
+- Reference: https://railway.com/pricing
 
-**Estimated Monthly Costs (Production):**
-- TimescaleDB (5GB): ~$5/month
-- FastAPI Backend: ~$5/month (usage-based)
-- React Frontend: ~$0 (static hosting)
-- **Total:** ~$10-15/month during development
+**Railway Trial Credits:**
+- $5 one-time trial credit
+- Sufficient for initial setup and testing
+
+**Estimated Monthly Costs:**
+
+| Scenario | TimescaleDB | FastAPI | Frontend | Total |
+|----------|-------------|---------|----------|-------|
+| **Development** (intermittent use) | ~$5-10 | ~$3-5 | ~$0 | **~$10-15/month** |
+| **Production** (24/7 light) | ~$15-20 | ~$8-10 | ~$0 | **~$20-30/month** |
+| **Production** (scaled) | ~$25-35 | ~$15-20 | ~$0 | **~$35-50/month** |
+
+**Component Specifications:**
+- TimescaleDB: 1GB RAM, 0.5 vCPU base (scales with usage)
+- FastAPI Backend: 512MB RAM, 0.25 vCPU base (scales with load)
+- React Frontend: Static hosting (~$0, or use Vercel/Netlify free tier)
+
+**Cost Optimization Tips:**
+1. Use Railway's auto-sleep for development environments
+2. Scale down during off-peak hours (no NFL games)
+3. Use scheduled jobs instead of continuous polling where possible
 
 ## Consequences
 

@@ -9,36 +9,21 @@ Tests all system CLI commands:
 Related:
     - Issue #204: CLI Refactor
     - Issue #234: 8 Test Type Coverage
+    - Issue #258: Create shared CLI test fixtures
     - src/precog/cli/system.py
     - REQ-CLI-001: CLI Framework (Typer)
 
 Coverage Target: 80%+ for cli/system.py (infrastructure tier)
+
+Note:
+    Uses shared CLI fixtures from tests/conftest.py (cli_runner)
+    and helpers from tests/helpers/cli_helpers.py (strip_ansi).
 """
 
-import re
 from unittest.mock import MagicMock, patch
 
-import pytest
-from typer.testing import CliRunner
-
 from precog.cli.system import app
-
-
-def strip_ansi(text: str) -> str:
-    """Remove ANSI escape codes from text for reliable string matching."""
-    return re.sub(r"\x1b\[[0-9;]*m", "", text)
-
-
-# ============================================================================
-# Fixtures
-# ============================================================================
-
-
-@pytest.fixture
-def runner() -> CliRunner:
-    """Create Typer CLI test runner."""
-    return CliRunner()
-
+from tests.helpers.cli_helpers import strip_ansi
 
 # ============================================================================
 # Test Classes
@@ -48,9 +33,9 @@ def runner() -> CliRunner:
 class TestSystemHelp:
     """Test system help and command structure."""
 
-    def test_system_help_shows_commands(self, runner):
+    def test_system_help_shows_commands(self, cli_runner):
         """Test system --help shows all available commands."""
-        result = runner.invoke(app, ["--help"])
+        result = cli_runner.invoke(app, ["--help"])
 
         assert result.exit_code == 0
         output_lower = strip_ansi(result.stdout).lower()
@@ -58,9 +43,9 @@ class TestSystemHelp:
         assert "version" in output_lower
         assert "info" in output_lower
 
-    def test_health_help_shows_options(self, runner):
+    def test_health_help_shows_options(self, cli_runner):
         """Test health --help shows available options."""
-        result = runner.invoke(app, ["health", "--help"])
+        result = cli_runner.invoke(app, ["health", "--help"])
 
         assert result.exit_code == 0
         output_lower = strip_ansi(result.stdout).lower()
@@ -71,13 +56,13 @@ class TestSystemHealth:
     """Test system health command."""
 
     @patch("precog.database.connection.get_connection")
-    def test_health_database_check(self, mock_get_conn, runner):
+    def test_health_database_check(self, mock_get_conn, cli_runner):
         """Test health check includes database connectivity."""
         mock_conn = MagicMock()
         mock_conn.execute.return_value = MagicMock()
         mock_get_conn.return_value = mock_conn
 
-        result = runner.invoke(app, ["health"])
+        result = cli_runner.invoke(app, ["health"])
 
         # Should attempt health check
         assert result.exit_code in [0, 1]
@@ -85,22 +70,22 @@ class TestSystemHealth:
         assert "database" in output_lower or "health" in output_lower or "check" in output_lower
 
     @patch("precog.database.connection.get_connection")
-    def test_health_verbose(self, mock_get_conn, runner):
+    def test_health_verbose(self, mock_get_conn, cli_runner):
         """Test health check with verbose flag."""
         mock_conn = MagicMock()
         mock_conn.execute.return_value = MagicMock()
         mock_get_conn.return_value = mock_conn
 
-        result = runner.invoke(app, ["health", "--verbose"])
+        result = cli_runner.invoke(app, ["health", "--verbose"])
 
         assert result.exit_code in [0, 1]
 
     @patch("precog.database.connection.get_connection")
-    def test_health_database_failure(self, mock_get_conn, runner):
+    def test_health_database_failure(self, mock_get_conn, cli_runner):
         """Test health check when database is down."""
         mock_get_conn.side_effect = Exception("Connection refused")
 
-        result = runner.invoke(app, ["health"])
+        result = cli_runner.invoke(app, ["health"])
 
         # Should report failure gracefully
         assert result.exit_code in [0, 1]
@@ -109,12 +94,12 @@ class TestSystemHealth:
 
     @patch("precog.database.connection.get_connection")
     @patch.dict("os.environ", {"KALSHI_API_KEY_ID": "", "KALSHI_PRIVATE_KEY_PATH": ""})
-    def test_health_missing_credentials(self, mock_get_conn, runner):
+    def test_health_missing_credentials(self, mock_get_conn, cli_runner):
         """Test health check with missing API credentials."""
         mock_conn = MagicMock()
         mock_get_conn.return_value = mock_conn
 
-        result = runner.invoke(app, ["health"])
+        result = cli_runner.invoke(app, ["health"])
 
         # Should note missing credentials
         assert result.exit_code in [0, 1]
@@ -123,18 +108,18 @@ class TestSystemHealth:
 class TestSystemVersion:
     """Test system version command."""
 
-    def test_version_shows_info(self, runner):
+    def test_version_shows_info(self, cli_runner):
         """Test version command shows version information."""
-        result = runner.invoke(app, ["version"])
+        result = cli_runner.invoke(app, ["version"])
 
         assert result.exit_code in [0, 1]
         # Should show some version-related info
         output_lower = strip_ansi(result.stdout).lower()
         assert "version" in output_lower or "precog" in output_lower or "0." in output_lower
 
-    def test_version_no_crash(self, runner):
+    def test_version_no_crash(self, cli_runner):
         """Test version command doesn't crash."""
-        result = runner.invoke(app, ["version"])
+        result = cli_runner.invoke(app, ["version"])
 
         # Should not raise exception
         assert result.exception is None or result.exit_code in [0, 1]
@@ -143,18 +128,18 @@ class TestSystemVersion:
 class TestSystemInfo:
     """Test system info command."""
 
-    def test_info_shows_diagnostics(self, runner):
+    def test_info_shows_diagnostics(self, cli_runner):
         """Test info command shows system diagnostics."""
-        result = runner.invoke(app, ["info"])
+        result = cli_runner.invoke(app, ["info"])
 
         assert result.exit_code in [0, 1]
         output_lower = strip_ansi(result.stdout).lower()
         # Should show some system info
         assert "python" in output_lower or "system" in output_lower or "info" in output_lower
 
-    def test_info_shows_python_version(self, runner):
+    def test_info_shows_python_version(self, cli_runner):
         """Test info shows Python version."""
-        result = runner.invoke(app, ["info"])
+        result = cli_runner.invoke(app, ["info"])
 
         assert result.exit_code in [0, 1]
         # Python info should be present
@@ -165,14 +150,14 @@ class TestSystemInfo:
 class TestSystemEdgeCases:
     """Test edge cases and error handling."""
 
-    def test_invalid_subcommand(self, runner):
+    def test_invalid_subcommand(self, cli_runner):
         """Test invalid system subcommand."""
-        result = runner.invoke(app, ["invalid-subcommand"])
+        result = cli_runner.invoke(app, ["invalid-subcommand"])
 
         assert result.exit_code != 0
 
     @patch("precog.database.connection.get_connection")
-    def test_health_all_checks_pass(self, mock_get_conn, runner):
+    def test_health_all_checks_pass(self, mock_get_conn, cli_runner):
         """Test health when all checks pass."""
         mock_conn = MagicMock()
         mock_conn.execute.return_value = MagicMock()
@@ -182,19 +167,19 @@ class TestSystemEdgeCases:
             "os.environ",
             {"KALSHI_API_KEY_ID": "test-key", "KALSHI_PRIVATE_KEY_PATH": "/path/to/key.pem"},
         ):
-            result = runner.invoke(app, ["health"])
+            result = cli_runner.invoke(app, ["health"])
 
         assert result.exit_code in [0, 1]
 
     @patch("precog.database.connection.get_connection")
-    def test_health_partial_failure(self, mock_get_conn, runner):
+    def test_health_partial_failure(self, mock_get_conn, cli_runner):
         """Test health with partial failures (some checks pass, some fail)."""
         mock_conn = MagicMock()
         mock_conn.execute.return_value = MagicMock()
         mock_get_conn.return_value = mock_conn
 
         with patch.dict("os.environ", {"KALSHI_API_KEY_ID": "", "KALSHI_PRIVATE_KEY_PATH": ""}):
-            result = runner.invoke(app, ["health"])
+            result = cli_runner.invoke(app, ["health"])
 
         # Should complete and report partial status
         assert result.exit_code in [0, 1]

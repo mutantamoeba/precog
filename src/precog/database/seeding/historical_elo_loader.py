@@ -93,27 +93,23 @@ LoadResult = BatchInsertResult
 
 
 # =============================================================================
-# Team Code Mapping
+# Team Code Mapping - Unified Module
 # =============================================================================
 
-# FiveThirtyEight team codes -> Database team codes
-# Most codes match, this handles exceptions
-TEAM_CODE_MAPPING: dict[str, str] = {
-    # Historical team name changes
-    "WSH": "WAS",  # Washington Commanders (was Redskins, Football Team)
-    "OAK": "LV",  # Oakland Raiders -> Las Vegas Raiders (2020)
-    "SD": "LAC",  # San Diego Chargers -> LA Chargers (2017)
-    "STL": "LAR",  # St. Louis Rams -> LA Rams (2016)
-    # Add more mappings as needed
-}
+# Team history imported at top of file (Issue #257)
+# See precog.database.seeding.team_history for comprehensive multi-sport tracking
 
 
-def normalize_team_code(code: str) -> str:
+def normalize_team_code(code: str, sport: str = "nfl") -> str:
     """
     Normalize a team code from external source to database format.
 
+    This function wraps the unified team history module's resolve_team_code()
+    for backward compatibility with existing code.
+
     Args:
         code: Team code from external source (e.g., FiveThirtyEight)
+        sport: Sport code (default: "nfl" for FiveThirtyEight NFL data)
 
     Returns:
         Normalized team code for database lookup
@@ -123,8 +119,14 @@ def normalize_team_code(code: str) -> str:
         'WAS'
         >>> normalize_team_code("KC")
         'KC'
+        >>> normalize_team_code("OAK")
+        'LV'
+
+    Note:
+        Uses the unified team history module (Issue #257) which provides
+        comprehensive tracking of all major sports team relocations.
     """
-    return TEAM_CODE_MAPPING.get(code.upper(), code.upper())
+    return resolve_team_code(sport, code)
 
 
 # =============================================================================
@@ -423,12 +425,34 @@ def bulk_insert_historical_elo(
         record_index = result.total_records
         result.total_records += 1
 
-        # Look up team_id (with caching)
-        cache_key = (record["team_code"], record["sport"])
-        if cache_key not in team_id_cache:
-            team_id_cache[cache_key] = get_team_id_by_code(
-                record["team_code"],
-                record["sport"],
+            # Look up team_id (with caching)
+            cache_key = (record["team_code"], record["sport"])
+            if cache_key not in team_id_cache:
+                team_id_cache[cache_key] = get_team_id_by_code(
+                    record["team_code"],
+                    record["sport"],
+                )
+
+            team_id = team_id_cache[cache_key]
+            if not team_id:
+                result.records_skipped += 1
+                if progress and task is not None:
+                    progress.advance(task)
+                continue
+
+            batch.append(
+                (
+                    team_id,
+                    record["sport"],
+                    record["season"],
+                    record["rating_date"],
+                    record["elo_rating"],
+                    record["qb_adjusted_elo"],
+                    record["qb_name"],
+                    record["qb_value"],
+                    record["source"],
+                    record["source_file"],
+                )
             )
 
         team_id = team_id_cache[cache_key]
@@ -547,7 +571,8 @@ def load_fivethirtyeight_elo(
     Example:
         >>> result = load_fivethirtyeight_elo(
         ...     Path("nfl_elo.csv"),
-        ...     seasons=[2022, 2023, 2024]
+        ...     seasons=[2022, 2023, 2024],
+        ...     show_progress=True,
         ... )
         >>> print(f"Loaded {result.records_inserted} records")
         >>>
@@ -570,6 +595,16 @@ def load_fivethirtyeight_elo(
         result.records_inserted,
         result.records_skipped,
         result.failed,
+    )
+
+    # Print summary table
+    print_load_summary(
+        "FiveThirtyEight Elo Load",
+        processed=result.records_processed,
+        inserted=result.records_inserted,
+        skipped=result.records_skipped,
+        errors=result.errors,
+        show_summary=show_progress,
     )
 
     return result
@@ -604,6 +639,16 @@ def load_csv_elo(
         result.records_inserted,
         result.records_skipped,
         result.failed,
+    )
+
+    # Print summary table
+    print_load_summary(
+        f"CSV Elo Load ({source})",
+        processed=result.records_processed,
+        inserted=result.records_inserted,
+        skipped=result.records_skipped,
+        errors=result.errors,
+        show_summary=show_progress,
     )
 
     return result

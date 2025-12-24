@@ -30,6 +30,7 @@ Team Code Normalization:
 
 Reference:
     - Issue #229: Expanded Historical Data Sources
+    - Issue #254: Add progress bars for large seeding operations
     - Migration 0007: Create historical_odds table
     - ADR-106: Historical Data Collection Architecture
 """
@@ -242,7 +243,7 @@ def bulk_insert_historical_odds(
     error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
 ) -> BatchInsertResult:
     """
-    Bulk insert historical odds records with batching.
+    Bulk insert historical odds records with batching and progress display.
 
     Args:
         records: Iterator of OddsRecord
@@ -272,53 +273,53 @@ def bulk_insert_historical_odds(
     for record_index, record in enumerate(records):
         result.total_records += 1
 
-        # Look up historical_game_id (with caching)
-        historical_game_id: int | None = None
-        if link_games:
-            cache_key = (
-                record["sport"],
-                record["game_date"],
-                record["home_team_code"],
-                record["away_team_code"],
-            )
-            if cache_key not in game_id_cache:
-                game_id_cache[cache_key] = lookup_historical_game_id(
+            # Look up historical_game_id (with caching)
+            historical_game_id: int | None = None
+            if link_games:
+                cache_key = (
                     record["sport"],
                     record["game_date"],
                     record["home_team_code"],
                     record["away_team_code"],
                 )
-            historical_game_id = game_id_cache[cache_key]
+                if cache_key not in game_id_cache:
+                    game_id_cache[cache_key] = lookup_historical_game_id(
+                        record["sport"],
+                        record["game_date"],
+                        record["home_team_code"],
+                        record["away_team_code"],
+                    )
+                historical_game_id = game_id_cache[cache_key]
 
-        source = normalize_source_name(record["source"])
-        sportsbook = record.get("sportsbook") or "consensus"
+            source = normalize_source_name(record["source"])
+            sportsbook = record.get("sportsbook") or "consensus"
 
-        batch.append(
-            (
-                historical_game_id,
-                record["sport"],
-                record["game_date"],
-                record["home_team_code"],
-                record["away_team_code"],
-                sportsbook,
-                record.get("spread_home_open"),
-                record.get("spread_home_close"),
-                record.get("spread_home_odds_open"),
-                record.get("spread_home_odds_close"),
-                record.get("moneyline_home_open"),
-                record.get("moneyline_home_close"),
-                record.get("moneyline_away_open"),
-                record.get("moneyline_away_close"),
-                record.get("total_open"),
-                record.get("total_close"),
-                record.get("over_odds_open"),
-                record.get("over_odds_close"),
-                record.get("home_covered"),
-                record.get("game_went_over"),
-                source,
-                record.get("source_file"),
+            batch.append(
+                (
+                    historical_game_id,
+                    record["sport"],
+                    record["game_date"],
+                    record["home_team_code"],
+                    record["away_team_code"],
+                    sportsbook,
+                    record.get("spread_home_open"),
+                    record.get("spread_home_close"),
+                    record.get("spread_home_odds_open"),
+                    record.get("spread_home_odds_close"),
+                    record.get("moneyline_home_open"),
+                    record.get("moneyline_home_close"),
+                    record.get("moneyline_away_open"),
+                    record.get("moneyline_away_close"),
+                    record.get("total_open"),
+                    record.get("total_close"),
+                    record.get("over_odds_open"),
+                    record.get("over_odds_close"),
+                    record.get("home_covered"),
+                    record.get("game_went_over"),
+                    source,
+                    record.get("source_file"),
+                )
             )
-        )
 
         # Flush batch when full
         if len(batch) >= batch_size:
@@ -408,7 +409,9 @@ def load_odds_from_source(
     Example:
         >>> from precog.database.seeding.sources import BettingCSVSource
         >>> source = BettingCSVSource(data_dir=Path("data/historical"))
-        >>> result = load_odds_from_source(source, sport="nfl", seasons=[2023])
+        >>> result = load_odds_from_source(
+        ...     source, sport="nfl", seasons=[2023], show_progress=True
+        ... )
         >>> print(f"Loaded {result.records_inserted} odds records")
         >>> # With error collection
         >>> result = load_odds_from_source(
@@ -432,6 +435,16 @@ def load_odds_from_source(
         result.records_processed,
         result.records_inserted,
         result.records_skipped,
+    )
+
+    # Print summary table
+    print_load_summary(
+        f"Historical Odds Load ({source_adapter.source_name})",
+        processed=result.records_processed,
+        inserted=result.records_inserted,
+        skipped=result.records_skipped,
+        errors=result.errors,
+        show_summary=show_progress,
     )
 
     return result

@@ -101,9 +101,9 @@ class TestNormalizationEdgeCases:
         assert result == "KC!"
 
     def test_whitespace_code(self) -> None:
-        """Test normalizing code with whitespace."""
+        """Test normalizing code with whitespace - whitespace is stripped."""
         result = normalize_team_code(" KC ")
-        assert result == " KC "  # Whitespace preserved
+        assert result == "KC"  # Whitespace stripped for clean team codes
 
 
 # =============================================================================

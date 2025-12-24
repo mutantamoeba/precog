@@ -54,6 +54,71 @@ app = typer.Typer(
 )
 
 
+def _register_tui_command() -> None:
+    """Register the TUI command for launching the terminal interface.
+
+    The TUI provides an interactive terminal interface with full access to
+    all Precog functionality. Requires the 'tui' optional dependencies.
+
+    Reference: Issue #268
+    """
+
+    @app.command()
+    def tui(
+        theme: str = typer.Option(
+            "precog_dark",
+            "--theme",
+            "-t",
+            help="Theme to use: precog_dark, precog_classic, precog_acid, precog_cyberpunk",
+        ),
+    ) -> None:
+        """Launch the interactive Terminal User Interface.
+
+        The TUI provides a full-featured terminal interface for interacting
+        with the Precog system. Use keyboard navigation to access all
+        functionality including market overview, positions, trading,
+        and system configuration.
+
+        Themes:
+            precog_dark (default): Sci-fi dark theme with subtle accents
+            precog_classic: Clean, minimal interface
+            precog_acid: Full ACiD BBS aesthetic
+            precog_cyberpunk: Neon-heavy variant
+
+        Examples:
+            precog tui                     Launch with default theme
+            precog tui --theme=acid        Launch with ACiD BBS theme
+            precog tui -t cyberpunk        Launch with cyberpunk theme
+
+        Reference: Issue #268
+        """
+        try:
+            from precog.tui import PrecogApp
+        except ImportError as e:
+            typer.echo(
+                "Error: TUI dependencies not installed.\n"
+                "Install with: pip install -e '.[tui]'\n"
+                f"Details: {e}",
+                err=True,
+            )
+            raise typer.Exit(1) from e
+
+        # Validate theme
+        valid_themes = ["precog_dark", "precog_classic", "precog_acid", "precog_cyberpunk"]
+        if theme not in valid_themes:
+            typer.echo(
+                f"Invalid theme: {theme}\nValid themes: {', '.join(valid_themes)}",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        # Launch TUI
+        tui_app = PrecogApp()
+        if theme in PrecogApp.THEMES:
+            tui_app._current_theme_index = PrecogApp.THEMES.index(theme)
+        tui_app.run()
+
+
 def register_commands() -> None:
     """Register all command groups with the main app.
 
@@ -65,7 +130,8 @@ def register_commands() -> None:
     1. Data access (kalshi, espn)
     2. Data management (data, db)
     3. Operations (scheduler, config, system)
-    4. Future stubs (strategy, model, position, trade)
+    4. Interactive interfaces (tui)
+    5. Future stubs (strategy, model, position, trade)
     """
     # Import command modules (deferred for performance)
     from precog.cli import config as config_cmd
@@ -84,6 +150,9 @@ def register_commands() -> None:
     app.add_typer(scheduler_cmd.app, name="scheduler", help="Service management")
     app.add_typer(config_cmd.app, name="config", help="Configuration management")
     app.add_typer(system_cmd.app, name="system", help="System utilities")
+
+    # Register TUI command (Issue #268)
+    _register_tui_command()
 
     # Register future command stubs (Phase 4-5)
     from precog.cli._future import model as model_cmd
