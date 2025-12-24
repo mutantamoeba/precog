@@ -555,3 +555,118 @@ class TestBasePollerIntegration:
             # Very low interval should raise ValueError
             with pytest.raises(ValueError, match="poll_interval must be at least"):
                 KalshiMarketPoller(poll_interval=1, environment="demo")
+
+
+# =============================================================================
+# Integration Tests: Series Sync
+# =============================================================================
+
+
+@pytest.fixture
+def sample_series_data() -> list[dict[str, Any]]:
+    """Create sample series data for testing sync functionality."""
+    return [
+        {
+            "ticker": "KXNFLGAME",
+            "title": "NFL Game Markets",
+            "category": "Sports",
+            "tags": ["Football"],
+            "frequency": "daily",
+        },
+        {
+            "ticker": "KXNBAGAME",
+            "title": "NBA Game Markets",
+            "category": "Sports",
+            "tags": ["Basketball"],
+            "frequency": "daily",
+        },
+    ]
+
+
+class TestSeriesSyncIntegration:
+    """Integration tests for series sync functionality."""
+
+    def test_sync_series_calls_client_get_sports_series(
+        self,
+        poller_with_mock_client: KalshiMarketPoller,
+        mock_kalshi_client: MagicMock,
+        sample_series_data: list[dict[str, Any]],
+    ) -> None:
+        """sync_series should call the client's get_sports_series method."""
+        mock_kalshi_client.get_sports_series.return_value = sample_series_data
+
+        with patch("precog.schedulers.kalshi_poller.get_or_create_series") as mock_crud:
+            mock_crud.return_value = ("series-1", True)
+            result = poller_with_mock_client.sync_series()
+
+        mock_kalshi_client.get_sports_series.assert_called_once()
+        assert result["series_fetched"] == 2
+
+    def test_sync_series_creates_database_records(
+        self,
+        poller_with_mock_client: KalshiMarketPoller,
+        mock_kalshi_client: MagicMock,
+        sample_series_data: list[dict[str, Any]],
+    ) -> None:
+        """sync_series should create database records for each series."""
+        mock_kalshi_client.get_sports_series.return_value = sample_series_data
+
+        with patch("precog.schedulers.kalshi_poller.get_or_create_series") as mock_crud:
+            mock_crud.return_value = ("series-1", True)
+            result = poller_with_mock_client.sync_series()
+
+        # Should call get_or_create_series for each series
+        assert mock_crud.call_count == 2
+        assert result["series_created"] == 2
+
+    def test_sync_series_updates_existing_records(
+        self,
+        poller_with_mock_client: KalshiMarketPoller,
+        mock_kalshi_client: MagicMock,
+        sample_series_data: list[dict[str, Any]],
+    ) -> None:
+        """sync_series should report updated records when series exists."""
+        mock_kalshi_client.get_sports_series.return_value = sample_series_data
+
+        with patch("precog.schedulers.kalshi_poller.get_or_create_series") as mock_crud:
+            # Return False for created (i.e., series already existed)
+            mock_crud.return_value = ("series-1", False)
+            result = poller_with_mock_client.sync_series()
+
+        assert result["series_created"] == 0
+        assert result["series_updated"] == 2
+
+    def test_sync_series_handles_empty_response(
+        self,
+        poller_with_mock_client: KalshiMarketPoller,
+        mock_kalshi_client: MagicMock,
+    ) -> None:
+        """sync_series should handle empty response from API gracefully."""
+        mock_kalshi_client.get_sports_series.return_value = []
+
+        result = poller_with_mock_client.sync_series()
+
+        assert result["series_fetched"] == 0
+        assert result["series_created"] == 0
+        assert result["series_updated"] == 0
+
+    def test_sync_single_series_maps_category_correctly(
+        self,
+        poller_with_mock_client: KalshiMarketPoller,
+    ) -> None:
+        """_sync_single_series should map Kalshi category to lowercase."""
+        series_data = {
+            "ticker": "KXNFLGAME",
+            "title": "NFL Game Markets",
+            "category": "Sports",
+            "tags": ["Football"],
+            "frequency": "daily",
+        }
+
+        with patch("precog.schedulers.kalshi_poller.get_or_create_series") as mock_crud:
+            mock_crud.return_value = ("series-1", True)
+            poller_with_mock_client._sync_single_series(series_data)
+
+        # Verify the category was lowercased
+        call_args = mock_crud.call_args
+        assert call_args.kwargs["category"] == "sports"

@@ -37,6 +37,7 @@ Reference:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import re
 import subprocess
@@ -44,7 +45,7 @@ import sys
 import tempfile
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -54,6 +55,9 @@ if TYPE_CHECKING:
 
 # Repository root (script is in scripts/)
 REPO_ROOT = Path(__file__).parent.parent
+
+# Artifacts directory for test reports (aligned with CI)
+ARTIFACTS_DIR = REPO_ROOT / ".pre-push-artifacts"
 
 # Timeout for individual checks (8 minutes - allows for full test suite)
 CHECK_TIMEOUT = 480
@@ -207,6 +211,23 @@ TEST_PHASES: list[tuple[str, str, list[str], str | None]] = [
 
 
 @dataclass
+class PhaseResult:
+    """Result of a single test phase (for detailed tracking)."""
+
+    phase_id: str
+    phase_name: str
+    test_dirs: list[str]
+    passed: int = 0
+    failed: int = 0
+    errors: int = 0
+    skipped: int = 0
+    duration: float = 0.0
+    exit_code: int = 0
+    failed_tests: list[str] = field(default_factory=list)
+    junit_file: str | None = None
+
+
+@dataclass
 class CheckResult:
     """Result of a single validation check."""
 
@@ -218,6 +239,12 @@ class CheckResult:
     stderr: str
     duration: float
     timed_out: bool = False
+    # Enhanced fields for CI parity
+    phase_results: list[PhaseResult] = field(default_factory=list)
+    total_passed: int = 0
+    total_failed: int = 0
+    total_errors: int = 0
+    total_skipped: int = 0
 
 
 def reset_db_pool() -> bool:
@@ -263,6 +290,7 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
     1. Runs non-DB tests in parallel (Phase A+C1: unit + non-DB property tests)
     2. Prevents database connection pool exhaustion for DB-heavy phases
     3. Saves ~43s by parallelizing tests that don't need DB
+    4. Generates JUnit XML reports for each phase (CI parity - Issue #238)
 
     Args:
         timeout: Maximum seconds per phase
@@ -281,16 +309,25 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
         Optimization (2025-12-13): Non-DB property tests are marked with
         `pytestmark = pytest.mark.database` and filtered using `-m database`
         or `-m 'not database'` to enable parallel execution with unit tests.
+
+        CI Parity (2025-12-24): JUnit XML reports generated per phase for
+        consistent reporting between local pre-push and CI pipeline.
     """
     start_time = time.time()
     total_passed = 0
     total_failed = 0
     total_errors = 0
+    total_skipped = 0
     all_stdout = []
     all_stderr = []
-    phase_results = []
+    phase_results: list[PhaseResult] = []
+    exit_codes: list[tuple[str, int]] = []
+
+    # Ensure artifacts directory exists for JUnit XML files
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
 
     print("  Running tests in optimized phases (A+C1 parallel, DB phases sequential)...")
+    print(f"  JUnit XML reports will be saved to: {ARTIFACTS_DIR}")
     print()
 
     for phase_id, phase_name, test_dirs, marker_filter in TEST_PHASES:
@@ -302,9 +339,13 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
             print(f"    [{phase_id}] {phase_name}: SKIPPED (no test directories)")
             continue
 
-        # Build pytest command for this phase
+        # Generate JUnit XML filename for this phase (CI parity)
+        junit_filename = f"prepush-{phase_id.lower().replace(' ', '-')}-results.xml"
+        junit_path = ARTIFACTS_DIR / junit_filename
+
+        # Build pytest command for this phase with JUnit XML output
         dirs_arg = " ".join(existing_dirs)
-        command = f"python -m pytest {dirs_arg} --no-cov --tb=line -q"
+        command = f"python -m pytest {dirs_arg} --no-cov --tb=line -q --junitxml={junit_path}"
 
         # Add marker filter if specified (e.g., "-m 'not database'" or "-m 'database'")
         if marker_filter:
@@ -324,15 +365,25 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
         if phase_timed_out:
             print(f"    [{phase_id}] {phase_name}: TIMEOUT after {timeout}s")
             all_stderr.append(f"=== {phase_id}: {phase_name} ===\nTIMEOUT after {timeout}s")
-            phase_results.append((phase_id, -1))
+            exit_codes.append((phase_id, -1))
             total_errors += 1
+            phase_results.append(
+                PhaseResult(
+                    phase_id=phase_id,
+                    phase_name=phase_name,
+                    test_dirs=existing_dirs,
+                    errors=1,
+                    duration=phase_duration,
+                    exit_code=-1,
+                )
+            )
         else:
             # Parse pytest output for pass/fail counts
             stdout_lines = stdout.strip().split("\n")
             last_line = stdout_lines[-1] if stdout_lines else ""
 
             # Extract counts from pytest summary (e.g., "970 passed, 2 skipped")
-            passed = failed = errors = 0
+            passed = failed = errors = skipped = 0
             if "passed" in last_line:
                 match = re.search(r"(\d+) passed", last_line)
                 if match:
@@ -345,10 +396,15 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
                 match = re.search(r"(\d+) error", last_line)
                 if match:
                     errors = int(match.group(1))
+            if "skipped" in last_line:
+                match = re.search(r"(\d+) skipped", last_line)
+                if match:
+                    skipped = int(match.group(1))
 
             total_passed += passed
             total_failed += failed
             total_errors += errors
+            total_skipped += skipped
 
             # Extract failed test names from output for immediate visibility
             failed_tests = []
@@ -378,7 +434,24 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
             if stderr:
                 all_stderr.append(f"=== {phase_id}: {phase_name} ===\n{stderr}")
 
-            phase_results.append((phase_id, exit_code))
+            exit_codes.append((phase_id, exit_code))
+
+            # Track detailed phase result (CI parity)
+            phase_results.append(
+                PhaseResult(
+                    phase_id=phase_id,
+                    phase_name=phase_name,
+                    test_dirs=existing_dirs,
+                    passed=passed,
+                    failed=failed,
+                    errors=errors,
+                    skipped=skipped,
+                    duration=phase_duration,
+                    exit_code=exit_code,
+                    failed_tests=failed_tests,
+                    junit_file=str(junit_path) if junit_path.exists() else None,
+                )
+            )
 
             # If phase failed, continue to next phase but record failure
             # This allows us to see ALL failures, not just the first
@@ -392,7 +465,7 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
 
     # Aggregate results
     total_duration = time.time() - start_time
-    any_failed = any(rc != 0 for _, rc in phase_results)
+    any_failed = any(rc != 0 for _, rc in exit_codes)
 
     return CheckResult(
         step=2,
@@ -403,6 +476,12 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
         stderr="\n\n".join(all_stderr),
         duration=total_duration,
         timed_out=False,
+        # Enhanced fields for CI parity
+        phase_results=phase_results,
+        total_passed=total_passed,
+        total_failed=total_failed,
+        total_errors=total_errors,
+        total_skipped=total_skipped,
     )
 
 
@@ -652,6 +731,128 @@ def cleanup_old_logs(log_dir: Path, keep_count: int = 10) -> int:
     return deleted
 
 
+def generate_json_summary(
+    results: list[CheckResult],
+    branch: str,
+    start_time: float,
+    success: bool,
+) -> Path:
+    """
+    Generate a machine-readable JSON summary of test results.
+
+    This provides CI parity for local pre-push validation, enabling:
+    1. Trend analysis over time (scripts/analyze_prepush_history.py)
+    2. Consistent reporting format between local and CI
+    3. Easy parsing by external tools (IDEs, dashboards)
+
+    Args:
+        results: List of CheckResult objects from all checks
+        branch: Current git branch name
+        start_time: Unix timestamp when validation started
+        success: Whether all checks passed
+
+    Returns:
+        Path to the generated JSON file
+
+    Educational Note:
+        This JSON format mirrors the structure used in CI artifacts (Issue #238).
+        Fields are intentionally verbose to support future analysis needs.
+        The "phases" array provides drill-down capability for test failures.
+
+    Reference:
+        - CI parity: .github/workflows/ci.yml uses mikepenz/action-junit-report
+        - Issue #238: JUnit enhancements for CI
+        - Issue #174: Pre-push history analysis
+    """
+    ARTIFACTS_DIR.mkdir(parents=True, exist_ok=True)
+
+    timestamp = datetime.now()
+    duration = time.time() - start_time
+
+    # Find the test result (step 2) for detailed phase info
+    test_result = next((r for r in results if r.step == 2), None)
+
+    # Build phase summary
+    phases = []
+    if test_result and test_result.phase_results:
+        for pr in test_result.phase_results:
+            phases.append(
+                {
+                    "phase_id": pr.phase_id,
+                    "phase_name": pr.phase_name,
+                    "test_dirs": pr.test_dirs,
+                    "passed": pr.passed,
+                    "failed": pr.failed,
+                    "errors": pr.errors,
+                    "skipped": pr.skipped,
+                    "duration_seconds": round(pr.duration, 2),
+                    "exit_code": pr.exit_code,
+                    "failed_tests": pr.failed_tests,
+                    "junit_file": pr.junit_file,
+                }
+            )
+
+    # Build check summary (steps 3-11)
+    other_checks = []
+    for r in results:
+        if r.step != 2:
+            other_checks.append(
+                {
+                    "step": r.step,
+                    "name": r.name,
+                    "passed": r.exit_code == 0,
+                    "duration_seconds": round(r.duration, 2),
+                    "timed_out": r.timed_out,
+                }
+            )
+
+    # Aggregate test counts
+    total_passed = test_result.total_passed if test_result else 0
+    total_failed = test_result.total_failed if test_result else 0
+    total_errors = test_result.total_errors if test_result else 0
+    total_skipped = test_result.total_skipped if test_result else 0
+
+    # Collect all failed test names across phases
+    all_failed_tests = []
+    if test_result and test_result.phase_results:
+        for pr in test_result.phase_results:
+            all_failed_tests.extend(pr.failed_tests)
+
+    summary = {
+        "timestamp": timestamp.isoformat(),
+        "branch": branch,
+        "success": success,
+        "duration_seconds": round(duration, 2),
+        "tests": {
+            "total_passed": total_passed,
+            "total_failed": total_failed,
+            "total_errors": total_errors,
+            "total_skipped": total_skipped,
+            "total": total_passed + total_failed + total_errors,
+        },
+        "phases": phases,
+        "other_checks": other_checks,
+        "failed_tests": all_failed_tests[:50],  # Limit to avoid huge files
+        "junit_files": [p["junit_file"] for p in phases if p.get("junit_file")],
+        "artifacts_dir": str(ARTIFACTS_DIR),
+    }
+
+    # Write JSON summary
+    json_filename = f"prepush-summary-{timestamp.strftime('%Y%m%d-%H%M%S')}.json"
+    json_path = ARTIFACTS_DIR / json_filename
+
+    with open(json_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2)
+
+    # Also write a "latest" symlink/copy for easy access
+    latest_path = ARTIFACTS_DIR / "prepush-summary-latest.json"
+    with open(latest_path, "w", encoding="utf-8") as f:
+        json.dump(summary, f, indent=2)
+
+    print(f"  JSON summary: {json_path}")
+    return json_path
+
+
 def print_summary(results: list[CheckResult], log_dir: Path | None = None) -> bool:
     """
     Print summary of all check results.
@@ -737,6 +938,23 @@ def print_summary(results: list[CheckResult], log_dir: Path | None = None) -> bo
     return len(failed) == 0
 
 
+def get_current_branch() -> str:
+    """Get the current git branch name."""
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            cwd=REPO_ROOT,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            return result.stdout.strip()
+    except Exception:
+        pass
+    return "unknown"
+
+
 def main() -> int:
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -762,19 +980,49 @@ def main() -> int:
 
     args = parser.parse_args()
 
+    # Record start time for JSON summary (CI parity)
+    validation_start_time = time.time()
+
+    # Get branch name for reporting
+    branch = get_current_branch()
+
     # Clean up old logs before running (keep last 10)
     deleted = cleanup_old_logs(args.log_dir, keep_count=10)
+
+    # Also clean old artifacts (keep last 20 runs for each type)
+    # Clean JSON summaries
+    artifact_patterns = [
+        "prepush-summary-*.json",  # JSON summaries
+        "prepush-*.xml",  # JUnit XML reports
+    ]
+    artifacts_deleted = 0
+    for pattern in artifact_patterns:
+        if ARTIFACTS_DIR.exists():
+            old_files = sorted(ARTIFACTS_DIR.glob(pattern), key=lambda f: f.stat().st_mtime)
+            for old_file in old_files[:-20]:  # Keep last 20 of each type
+                try:
+                    old_file.unlink()
+                    artifacts_deleted += 1
+                except OSError:
+                    pass
 
     print()
     print("=" * 60)
     print("Pre-Push Parallel Check Runner (Python)")
     print("=" * 60)
     print(f"Repository: {REPO_ROOT}")
+    print(f"Branch: {branch}")
     print(f"Workers: {args.workers}")
     print(f"Check timeout: {CHECK_TIMEOUT}s per check")
     print(f"Total timeout: {TOTAL_TIMEOUT}s")
-    if deleted > 0:
-        print(f"Log cleanup: Removed {deleted} old log files (keeping last 10)")
+    print(f"Artifacts: {ARTIFACTS_DIR}")
+    if deleted > 0 or artifacts_deleted > 0:
+        cleanup_msg = []
+        if deleted > 0:
+            cleanup_msg.append(f"{deleted} old logs")
+        if artifacts_deleted > 0:
+            cleanup_msg.append(f"{artifacts_deleted} old artifacts")
+        print(f"Cleanup: Removed {', '.join(cleanup_msg)} (keeping last 10/20)")
     print()
 
     if args.dry_run:
@@ -814,10 +1062,23 @@ def main() -> int:
     # Print summary
     all_passed = print_summary(results, args.log_dir)
 
+    # Generate JSON summary for CI parity and trend analysis
+    print()
+    print("-" * 60)
+    print("Generating artifacts (CI parity)...")
+    generate_json_summary(
+        results=results,
+        branch=branch,
+        start_time=validation_start_time,
+        success=all_passed,
+    )
+    print("-" * 60)
+
     if all_passed:
         print()
         print("=" * 60)
         print("[OK] All pre-push checks passed!")
+        print(f"     Artifacts: {ARTIFACTS_DIR}")
         print("=" * 60)
         return 0
 

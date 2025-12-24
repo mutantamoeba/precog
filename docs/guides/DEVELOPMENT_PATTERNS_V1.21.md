@@ -1,13 +1,20 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.20
+**Version:** 1.21
 **Created:** 2025-11-13
-**Last Updated:** 2025-12-21
+**Last Updated:** 2025-12-24
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.21:**
+- **Added Pattern 33: API Vocabulary Alignment (ALWAYS for External API Integration)**
+- When integrating external APIs, adapt database schema to match API vocabulary rather than creating translation layers
+- Real-world trigger: Kalshi API sends frequency values ('daily', 'weekly', 'event') but DB constraint used ('single', 'recurring', 'continuous')
+- Solution: Migration 0011 updated CHECK constraint to match API vocabulary
+- Benefits: Simpler code (no translation), better developer experience, aligns with source of truth
+- Total addition: ~120 lines documenting API vocabulary alignment pattern
 **Changes in V1.20:**
 - **Enhanced Pattern 28: Added Performance Tests with Latency Thresholds** (PR #240, Issue #238)
 - Added "Performance tests (latency thresholds)" to Test Type CI Behavior Classification table
@@ -7974,6 +7981,109 @@ def run_check(command: str, timeout: int) -> tuple[int, str, str, bool]:
 - **Pattern 5:** Cross-Platform Compatibility (Windows/Linux)
 - **Pattern 31:** Pre-Push Log Persistence
 - **Issue #238:** CI test failure diagnostics
+
+
+---
+
+## Pattern 33: API Vocabulary Alignment (ALWAYS for External API Integration)
+
+**Context:** When integrating with external APIs (Kalshi, ESPN, etc.), your database schema terminology may differ from the API's terminology. This creates unnecessary translation code and cognitive overhead.
+
+**Problem:** Our original schema used internal terminology:
+- Database constraint: `frequency IN ('single', 'recurring', 'continuous')`
+- Kalshi API returns: `frequency: 'daily' | 'weekly' | 'event'`
+
+This mismatch requires:
+1. Translation code at the API boundary
+2. Documentation explaining the mapping
+3. Developers to learn two vocabularies
+4. Potential for translation bugs
+
+**Solution:** Adapt your schema to match the API vocabulary.
+
+### The Pattern
+
+1. **Identify vocabulary mismatch** during API integration
+2. **Create migration** to update database constraints
+3. **Update existing data** if needed (with mapping)
+4. **Use API vocabulary** in all new code
+
+### Implementation Example
+
+**Migration 0011: Update frequency constraint**
+```python
+def upgrade() -> None:
+    # Step 1: Drop old constraint
+    op.execute("ALTER TABLE series DROP CONSTRAINT IF EXISTS series_frequency_check")
+
+    # Step 2: Migrate existing data
+    op.execute("UPDATE series SET frequency = 'event' WHERE frequency = 'single'")
+    op.execute("UPDATE series SET frequency = 'daily' WHERE frequency IN ('recurring', 'continuous')")
+
+    # Step 3: Add new constraint with API vocabulary
+    op.execute("""
+        ALTER TABLE series
+        ADD CONSTRAINT series_frequency_check
+        CHECK (frequency IN ('daily', 'weekly', 'monthly', 'event', 'once'))
+    """)
+```
+
+### Decision Tree
+
+| Scenario | Action |
+|----------|--------|
+| **API is authoritative source** | Adapt schema to API vocabulary |
+| **Your schema is the standard** | Document and translate at boundary |
+| **Multiple APIs with conflicts** | Create domain vocabulary, translate at each boundary |
+| **Legacy data constraints** | Migrate data, then update constraint |
+
+### When to Use This Pattern
+
+- **USE for:** External API integrations (Kalshi, ESPN, etc.), any system where the external vocabulary is clearer, new tables without existing data
+
+- **CONSIDER carefully for:** Tables with millions of rows (migration cost), published APIs others consume (breaking change)
+
+- **AVOID for:** Internal-only systems with established vocabulary, when multiple APIs conflict on terminology
+
+### Wrong vs. Correct
+
+```python
+# WRONG - Translation layer at boundary
+def _sync_single_series(self, series_data: SeriesData) -> bool:
+    # Translating API vocabulary to internal vocabulary
+    frequency_map = {
+        'daily': 'recurring',
+        'weekly': 'recurring',
+        'event': 'single',
+    }
+    db_frequency = frequency_map.get(series_data.get('frequency'), 'single')
+
+    create_series(
+        frequency=db_frequency,  # Using internal vocabulary
+        ...
+    )
+
+
+# CORRECT - Schema matches API vocabulary
+def _sync_single_series(self, series_data: SeriesData) -> bool:
+    create_series(
+        frequency=series_data.get('frequency'),  # Direct passthrough
+        ...
+    )
+```
+
+### Related Files
+
+- `src/precog/database/alembic/versions/0011_update_series_frequency_constraint.py` - Migration example
+- `src/precog/api_connectors/types.py` - TypedDict with API vocabulary
+- `src/precog/schedulers/kalshi_poller.py` - Clean API integration
+
+### Cross-References
+
+- **Pattern 6:** TypedDict for API Responses
+- **Pattern 8:** Configuration File Synchronization
+- **Migration 0011:** First implementation of this pattern
+
 
 ---
 

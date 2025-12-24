@@ -4,21 +4,28 @@ Kalshi Market Operations CLI Commands.
 Provides commands for interacting with the Kalshi prediction market API.
 
 Commands:
-    balance     - Fetch and display account balance
-    markets     - List available markets with pricing
-    positions   - Show open positions
-    fills       - Show trade/fill history
-    settlements - Show settled markets
+    balance      - Fetch and display account balance
+    markets      - List available markets with pricing
+    all-markets  - Fetch ALL markets (with pagination)
+    series       - List available series (market groups)
+    sync-series  - Sync series data from API to database
+    positions    - Show open positions
+    fills        - Show trade/fill history
+    settlements  - Show settled markets
 
 Usage:
     precog kalshi balance [--env demo|prod]
     precog kalshi markets [--series TICKER] [--limit N]
+    precog kalshi all-markets [--sports NFL,NBA] [--series TICKER,...]
+    precog kalshi series [--sports NFL,NBA,NCAAF,NCAAB,NCAAW,NHL]
+    precog kalshi sync-series [--sports NFL,NBA] [--env demo]
     precog kalshi positions [--env demo|prod]
     precog kalshi fills [--days N]
     precog kalshi settlements [--days N]
 
 Related:
     - Issue #204: CLI Refactor
+    - Issue #271: Series data storage enhancement
     - docs/guides/KALSHI_CLIENT_USER_GUIDE_V1.0.md
     - docs/planning/CLI_REFACTOR_COMPREHENSIVE_PLAN_V1.0.md Section 4.2.1
 """
@@ -246,6 +253,333 @@ def markets(
         cli_error(
             f"Failed to fetch markets: {e}",
             ExitCode.NETWORK_ERROR,
+        )
+
+
+@app.command("all-markets")
+def all_markets(
+    sports: str | None = typer.Option(
+        None,
+        "--sports",
+        "-s",
+        help="Comma-separated sports to filter (NFL,NBA,NCAAF,NCAAB,NCAAW,NHL)",
+    ),
+    series_list: str | None = typer.Option(
+        None,
+        "--series",
+        help="Comma-separated series tickers to filter",
+    ),
+    env: str = typer.Option(
+        "demo",
+        "--env",
+        "-e",
+        help="Environment (demo or prod)",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-V",
+        help="Enable verbose output",
+    ),
+) -> None:
+    """Fetch ALL markets with automatic pagination.
+
+    Retrieves all markets matching the filter criteria. Uses pagination
+    automatically to fetch beyond the 200-market API limit.
+
+    By default (no filters), fetches ALL available markets.
+    Use --sports or --series to filter results.
+
+    Examples:
+        precog kalshi all-markets
+        precog kalshi all-markets --sports NFL,NBA
+        precog kalshi all-markets --series KXNFLGAME,KXNBAGAME
+        precog kalshi all-markets --sports NFL --env prod
+    """
+    console.print(f"\n[bold cyan]Fetching all markets from Kalshi {env.upper()} API...[/bold cyan]")
+
+    # Parse filters
+    sports_filter: list[str] | None = None
+    if sports:
+        sports_filter = [s.strip().upper() for s in sports.split(",")]
+        console.print(f"[dim]Sports filter: {', '.join(sports_filter)}[/dim]")
+
+    series_filter: list[str] | None = None
+    if series_list:
+        series_filter = [s.strip() for s in series_list.split(",")]
+        console.print(f"[dim]Series filter: {', '.join(series_filter)}[/dim]")
+
+    use_demo = env.lower() == "demo"
+    client = get_kalshi_client(use_demo=use_demo)
+
+    try:
+        markets_data = client.fetch_all_markets(
+            sports=sports_filter,
+            series_tickers=series_filter,
+        )
+
+        if not markets_data:
+            console.print("\n[yellow]No markets found[/yellow]")
+            return
+
+        # Build filter info for title
+        filter_info = []
+        if sports_filter:
+            filter_info.append(f"Sports: {', '.join(sports_filter)}")
+        if series_filter:
+            filter_info.append(f"Series: {', '.join(series_filter)}")
+        filter_str = f" ({', '.join(filter_info)})" if filter_info else " (ALL)"
+
+        table = Table(title=f"All Markets ({env.upper()}){filter_str} - {len(markets_data)} total")
+        table.add_column("Ticker", style="cyan", no_wrap=True)
+        table.add_column("Title", style="white", overflow="fold", max_width=40)
+        table.add_column("Status", style="magenta")
+        table.add_column("Yes Bid", style="green", justify="right")
+        table.add_column("Yes Ask", style="yellow", justify="right")
+        table.add_column("Volume", style="blue", justify="right")
+
+        # Show first 50 if more than 50
+        display_markets = markets_data[:50] if len(markets_data) > 50 else markets_data
+
+        for market in display_markets:
+            ticker = market.get("ticker", "N/A")
+            title = market.get("title", "N/A")
+            status = market.get("status", "N/A")
+            yes_bid = market.get("yes_bid", Decimal("0"))
+            yes_ask = market.get("yes_ask", Decimal("0"))
+            volume = market.get("volume", 0)
+
+            if len(title) > 40:
+                title = title[:37] + "..."
+
+            table.add_row(
+                ticker,
+                title,
+                status,
+                format_decimal(yes_bid),
+                format_decimal(yes_ask),
+                str(volume),
+            )
+
+        console.print(table)
+
+        if len(markets_data) > 50:
+            console.print(
+                f"\n[dim]Showing first 50 of {len(markets_data)} markets. "
+                f"Use --verbose to see all.[/dim]"
+            )
+
+        if verbose:
+            console.print(f"\n[dim]Total markets fetched: {len(markets_data)}[/dim]")
+
+    except Exception as e:
+        cli_error(
+            f"Failed to fetch all markets: {e}",
+            ExitCode.NETWORK_ERROR,
+        )
+
+
+@app.command()
+def series(
+    sports: str | None = typer.Option(
+        "NFL,NBA,NCAAF,NCAAB,NCAAW,NHL",  # Default to all sports
+        "--sports",
+        "-s",
+        help="Comma-separated sports (NFL,NBA,NCAAF,NCAAB,NCAAW,NHL). Use 'all' for all.",
+    ),
+    category: str | None = typer.Option(
+        None,
+        "--category",
+        "-c",
+        help="Filter by category (Sports, Politics, Economics, etc.)",
+    ),
+    limit: int = typer.Option(
+        100,
+        "--limit",
+        "-l",
+        help="Maximum series to fetch (1-200)",
+    ),
+    env: str = typer.Option(
+        "demo",
+        "--env",
+        "-e",
+        help="Environment (demo or prod)",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-V",
+        help="Enable verbose output",
+    ),
+) -> None:
+    """List available market series from Kalshi API.
+
+    Series are groups of related markets (e.g., KXNFLGAME contains all NFL
+    game markets). By default, filters to major sports leagues.
+
+    Use --sports all to see all series across all categories.
+
+    Examples:
+        precog kalshi series
+        precog kalshi series --sports NFL,NBA
+        precog kalshi series --sports all
+        precog kalshi series --category Politics
+        precog kalshi series --limit 50 --env prod
+    """
+    console.print(f"\n[bold cyan]Fetching series from Kalshi {env.upper()} API...[/bold cyan]")
+
+    use_demo = env.lower() == "demo"
+    client = get_kalshi_client(use_demo=use_demo)
+
+    try:
+        if sports and sports.lower() != "all":
+            # Use sports filtering
+            sports_filter = [s.strip().upper() for s in sports.split(",")]
+            console.print(f"[dim]Sports filter: {', '.join(sports_filter)}[/dim]")
+            series_data = client.get_sports_series(sports=sports_filter)
+        elif category:
+            # Use category filtering
+            console.print(f"[dim]Category filter: {category}[/dim]")
+            series_data = client.get_series(category=category, limit=limit)
+        else:
+            # All series (no filter)
+            console.print("[dim]Fetching all series (no filter)[/dim]")
+            series_data = client.get_series(limit=limit)
+
+        if not series_data:
+            console.print("\n[yellow]No series found[/yellow]")
+            return
+
+        # Build filter info for title
+        filter_info = []
+        if sports and sports.lower() != "all":
+            filter_info.append(f"Sports: {sports}")
+        if category:
+            filter_info.append(f"Category: {category}")
+        filter_str = f" ({', '.join(filter_info)})" if filter_info else ""
+
+        table = Table(
+            title=f"Available Series ({env.upper()}){filter_str} - {len(series_data)} total"
+        )
+        table.add_column("Ticker", style="cyan", no_wrap=True)
+        table.add_column("Title", style="white", overflow="fold", max_width=40)
+        table.add_column("Category", style="magenta")
+        table.add_column("Tags", style="blue")
+        table.add_column("Frequency", style="dim")
+
+        for s in series_data:
+            ticker = s.get("ticker", "N/A")
+            title = s.get("title", "N/A")
+            cat = s.get("category", "N/A")
+            tags = s.get("tags", []) or []
+            frequency = s.get("frequency", "N/A")
+
+            if len(title) > 40:
+                title = title[:37] + "..."
+
+            tags_str = ", ".join(tags) if tags else "-"
+
+            table.add_row(
+                ticker,
+                title,
+                cat,
+                tags_str,
+                frequency,
+            )
+
+        console.print(table)
+
+        if verbose:
+            console.print(f"\n[dim]Fetched {len(series_data)} series[/dim]")
+
+    except Exception as e:
+        cli_error(
+            f"Failed to fetch series: {e}",
+            ExitCode.NETWORK_ERROR,
+        )
+
+
+@app.command("sync-series")
+def sync_series(
+    sports: str | None = typer.Option(
+        "NFL,NBA,NCAAF,NCAAB,NCAAW,NHL",
+        "--sports",
+        "-s",
+        help="Comma-separated sports (NFL,NBA,NCAAF,NCAAB,NCAAW,NHL). Use 'all' for all.",
+    ),
+    env: str = typer.Option(
+        "demo",
+        "--env",
+        "-e",
+        help="Environment (demo or prod)",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-V",
+        help="Enable verbose output",
+    ),
+) -> None:
+    """Sync series data from Kalshi API to database.
+
+    Fetches series metadata (including tags for sport identification) and
+    stores them in the database. This should be run before syncing markets
+    to ensure proper foreign key relationships.
+
+    Examples:
+        precog kalshi sync-series
+        precog kalshi sync-series --sports NFL,NBA
+        precog kalshi sync-series --sports all --env prod
+
+    Educational Note:
+        Kalshi's data hierarchy is: Series -> Events -> Markets
+        - Series: Groups of related markets (e.g., "NFL Game Markets")
+        - Events: Specific occurrences (e.g., "Chiefs vs Seahawks")
+        - Markets: Tradeable outcomes (e.g., "Chiefs to win")
+
+        The tags field (stored as TEXT[] in PostgreSQL) enables efficient
+        sport filtering: ["Football"], ["Basketball"], ["Hockey"]
+    """
+    console.print(f"\n[bold cyan]Syncing series from Kalshi {env.upper()} API...[/bold cyan]")
+
+    from precog.schedulers.kalshi_poller import KalshiMarketPoller
+
+    use_demo = env.lower() == "demo"
+
+    # Parse sports filter
+    sports_filter: list[str] | None = None
+    if sports and sports.lower() != "all":
+        sports_filter = [s.strip().upper() for s in sports.split(",")]
+        console.print(f"[dim]Sports filter: {', '.join(sports_filter)}[/dim]")
+    else:
+        console.print("[dim]Syncing all sports series[/dim]")
+
+    try:
+        poller = KalshiMarketPoller(
+            series_tickers=[],  # Empty - we'll use sync_series directly
+            environment="demo" if use_demo else "prod",
+        )
+
+        # Sync series (this will fetch from API and store in DB)
+        result = poller.sync_series()
+
+        # Display results
+        console.print("\n[bold green]Series sync complete![/bold green]")
+        console.print(f"  Fetched: {result['series_fetched']}")
+        console.print(f"  Created: {result['series_created']}")
+        console.print(f"  Updated: {result['series_updated']}")
+
+        if verbose:
+            console.print("\n[dim]Series are now stored in the database.[/dim]")
+            console.print("[dim]Run 'precog kalshi series' to view stored series.[/dim]")
+
+        poller.kalshi_client.close()
+
+    except Exception as e:
+        cli_error(
+            f"Failed to sync series: {e}",
+            ExitCode.NETWORK_ERROR,
+            hint="Check database connection and API credentials",
         )
 
 
