@@ -46,10 +46,12 @@ from precog.config.environment import MarketMode, get_market_mode
 from .kalshi_auth import KalshiAuth
 from .rate_limiter import RateLimiter
 from .types import (
+    OrderData,
     ProcessedFillData,
     ProcessedMarketData,
     ProcessedPositionData,
     ProcessedSettlementData,
+    SeriesData,
 )
 
 # Load environment variables
@@ -511,6 +513,13 @@ class KalshiClient:
             # Fill price fields (sub-penny format: *_fixed suffix)
             "yes_price_fixed",
             "no_price_fixed",
+            # Order price fields (sub-penny format: *_dollars suffix)
+            "yes_price_dollars",
+            "no_price_dollars",
+            "taker_fees",
+            "maker_fees",
+            "taker_fill_cost",
+            "maker_fill_cost",
             # Other market fields with *_dollars suffix
             "liquidity_dollars",
             "notional_value_dollars",
@@ -933,3 +942,285 @@ class KalshiClient:
         logger.info(f"Fetched {len(settlements)} settlements", extra={"count": len(settlements)})
 
         return cast("list[ProcessedSettlementData]", settlements)
+
+    # =========================================================================
+    # Order Management Methods (Trading)
+    # =========================================================================
+
+    def place_order(
+        self,
+        ticker: str,
+        side: str,
+        action: str,
+        count: int,
+        price: Decimal | None = None,
+        order_type: str = "limit",
+        time_in_force: str = "good_till_canceled",
+        client_order_id: str | None = None,
+    ) -> OrderData:
+        """
+        Place a new order on a market.
+
+        Args:
+            ticker: Market ticker (e.g., "KXNFLGAME-25DEC15-KC-YES")
+            side: "yes" or "no" - which outcome you're betting on
+            action: "buy" or "sell" - entering or exiting position
+            count: Number of contracts (min 1)
+            price: Price in dollars as Decimal (e.g., Decimal("0.65"))
+                   Required for limit orders, ignored for market orders.
+            order_type: "limit" (default) or "market"
+            time_in_force: "good_till_canceled" (default), "fill_or_kill",
+                          or "immediate_or_cancel"
+            client_order_id: Optional custom ID for tracking
+
+        Returns:
+            OrderData with order details including order_id and status
+
+        Raises:
+            ValueError: If required parameters are invalid
+            requests.HTTPError: If API request fails
+
+        Example:
+            >>> client = KalshiClient("demo")
+            >>> # Buy 10 YES contracts at $0.65
+            >>> order = client.place_order(
+            ...     ticker="KXNFLGAME-25DEC15-KC-YES",
+            ...     side="yes",
+            ...     action="buy",
+            ...     count=10,
+            ...     price=Decimal("0.65"),
+            ... )
+            >>> print(f"Order ID: {order['order_id']}, Status: {order['status']}")
+            Order ID: abc123, Status: resting
+
+        Educational Note:
+            Order Flow:
+            1. You submit order with price and quantity
+            2. If matches exist at your price, you get immediate fills
+            3. Remaining quantity "rests" in the order book
+            4. Status: "resting" (waiting) → "executed" (filled) or "canceled"
+
+            Pricing:
+            - Use Decimal for price to ensure precision (never float!)
+            - YES price + NO price always = $1.00
+            - If you buy YES at $0.65, someone is selling NO at $0.35
+
+            Cost Calculation:
+            - Buying: cost = price * count (e.g., $0.65 * 10 = $6.50)
+            - Selling: you receive price * count back
+
+        Reference:
+            - REQ-TRADE-001 (Order Placement)
+            - docs/guides/KALSHI_MARKET_TERMINOLOGY_GUIDE_V1.0.md
+        """
+        # Validate parameters
+        if side not in ("yes", "no"):
+            raise ValueError(f"side must be 'yes' or 'no', got '{side}'")
+        if action not in ("buy", "sell"):
+            raise ValueError(f"action must be 'buy' or 'sell', got '{action}'")
+        if count < 1:
+            raise ValueError(f"count must be >= 1, got {count}")
+        if order_type not in ("limit", "market"):
+            raise ValueError(f"order_type must be 'limit' or 'market', got '{order_type}'")
+        if order_type == "limit" and price is None:
+            raise ValueError("price is required for limit orders")
+
+        # Build request body
+        request_body: dict[str, Any] = {
+            "ticker": ticker,
+            "side": side,
+            "action": action,
+            "count": count,
+            "type": order_type,
+        }
+
+        # Add price for limit orders (use *_dollars for sub-penny precision)
+        if price is not None:
+            # Convert Decimal to string format expected by API
+            price_str = f"{price:.4f}"
+            if side == "yes":
+                request_body["yes_price_dollars"] = price_str
+            else:
+                request_body["no_price_dollars"] = price_str
+
+        # Add optional parameters
+        if time_in_force != "good_till_canceled":
+            request_body["time_in_force"] = time_in_force
+        if client_order_id:
+            request_body["client_order_id"] = client_order_id
+
+        # Make request
+        logger.info(
+            f"Placing order: {action} {count}x {side} @ ${price} on {ticker}",
+            extra={
+                "ticker": ticker,
+                "side": side,
+                "action": action,
+                "count": count,
+                "price": str(price) if price else None,
+                "order_type": order_type,
+            },
+        )
+
+        response = self._make_request("POST", "/portfolio/orders", json_data=request_body)
+        order = response.get("order", {})
+
+        # Convert price fields to Decimal
+        self._convert_prices_to_decimal(order)
+
+        logger.info(
+            f"Order placed: {order.get('order_id')} - Status: {order.get('status')}",
+            extra={
+                "order_id": order.get("order_id"),
+                "status": order.get("status"),
+                "fill_count": order.get("fill_count", 0),
+                "remaining_count": order.get("remaining_count", count),
+            },
+        )
+
+        return cast("OrderData", order)
+
+    def cancel_order(self, order_id: str) -> OrderData:
+        """
+        Cancel an existing order.
+
+        Args:
+            order_id: The order ID to cancel (from place_order response)
+
+        Returns:
+            OrderData with updated status (should be "canceled")
+
+        Raises:
+            requests.HTTPError: If order doesn't exist or already filled
+
+        Example:
+            >>> client = KalshiClient("demo")
+            >>> order = client.place_order(...)
+            >>> # Changed my mind, cancel it
+            >>> canceled = client.cancel_order(order['order_id'])
+            >>> print(f"Status: {canceled['status']}")
+            Status: canceled
+
+        Educational Note:
+            You can only cancel orders that are "resting" (not yet filled).
+            If an order is already "executed" (filled), cancellation fails.
+            Partial fills: If 5 of 10 contracts filled, canceling removes
+            the remaining 5 from the order book.
+
+        Reference: REQ-TRADE-002 (Order Cancellation)
+        """
+        logger.info(f"Canceling order: {order_id}", extra={"order_id": order_id})
+
+        response = self._make_request("DELETE", f"/portfolio/orders/{order_id}")
+        order = response.get("order", {})
+
+        # Convert price fields to Decimal
+        self._convert_prices_to_decimal(order)
+
+        logger.info(
+            f"Order canceled: {order_id} - Status: {order.get('status')}",
+            extra={
+                "order_id": order_id,
+                "status": order.get("status"),
+                "remaining_count": order.get("remaining_count", 0),
+            },
+        )
+
+        return cast("OrderData", order)
+
+    def get_order(self, order_id: str) -> OrderData:
+        """
+        Get details of a specific order.
+
+        Args:
+            order_id: The order ID to look up
+
+        Returns:
+            OrderData with current order details
+
+        Example:
+            >>> order = client.get_order("abc123")
+            >>> print(f"Status: {order['status']}, Filled: {order['fill_count']}")
+
+        Reference: REQ-TRADE-003 (Order Status)
+        """
+        response = self._make_request("GET", f"/portfolio/orders/{order_id}")
+        order = response.get("order", {})
+
+        self._convert_prices_to_decimal(order)
+
+        return cast("OrderData", order)
+
+    # =========================================================================
+    # Series Discovery Methods
+    # =========================================================================
+
+    def get_series(
+        self,
+        category: str | None = None,
+        status: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> list[SeriesData]:
+        """
+        Get available market series.
+
+        A series groups related markets (e.g., KXNFLGAME contains all NFL game markets).
+        Use this to discover what series are available for trading.
+
+        Args:
+            category: Filter by category (e.g., "sports", "politics", "economics")
+            status: Filter by status ("active", "inactive", "closed")
+            limit: Max results per page (default 100)
+            cursor: Pagination cursor
+
+        Returns:
+            List of SeriesData with series details
+
+        Example:
+            >>> client = KalshiClient("demo")
+            >>> # Get all sports series
+            >>> series_list = client.get_series(category="sports")
+            >>> for s in series_list:
+            ...     print(f"{s['ticker']}: {s['title']}")
+            KXNFLGAME: NFL Game Markets
+            KXNBAGAME: NBA Game Markets
+            KXNCAAFGAME: NCAAF Game Markets
+
+        Educational Note:
+            Series Hierarchy on Kalshi:
+            - Category (sports, politics, economics, etc.)
+              └── Series (KXNFLGAME, KXPRES2024, etc.)
+                  └── Events (individual games, elections, etc.)
+                      └── Markets (specific outcome contracts)
+
+            Why This Matters:
+            - Series tickers are used to filter get_markets()
+            - Knowing available series helps automate market discovery
+            - Tags help identify related series across categories
+
+        Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
+        """
+        params: dict[str, Any] = {"limit": limit}
+
+        if category:
+            params["category"] = category
+        if status:
+            params["status"] = status
+        if cursor:
+            params["cursor"] = cursor
+
+        response = self._make_request("GET", "/series", params=params)
+        # Handle null response (API returns {"series": null} for some filters)
+        series_list = response.get("series") or []
+
+        logger.info(
+            f"Fetched {len(series_list)} series",
+            extra={
+                "count": len(series_list),
+                "category": category,
+                "has_more": "cursor" in response,
+            },
+        )
+
+        return cast("list[SeriesData]", series_list)

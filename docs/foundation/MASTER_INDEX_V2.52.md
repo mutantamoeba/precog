@@ -1,9 +1,11 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.51
-**Last Updated:** 2025-12-21
+**Version:** 2.52
+**Last Updated:** 2025-12-24
 **Status:** ✅ Current
+**Changes in v2.52:**
+- Added TRADING_TEST_ARCHITECTURE_V1.0.md to Testing & Quality Documents: 4-layer testing architecture addressing Kalshi DEMO 503 errors (Unit → VCR → Simulation → Smoke tests)
 **Changes in v2.51:**
 - Added DATABASE_ENVIRONMENT_GUIDE_V1.0.md to guides (data seeding approach, cloud strategy, scheduling - complements DATABASE_ENVIRONMENT_STRATEGY)
 **Changes in v2.50:**
@@ -439,7 +441,7 @@ Core architecture, requirements, and system design documents.
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
 | **MASTER_REQUIREMENTS_V2.23.md** | ✅ | v2.22 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.22** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
-| **MASTER_INDEX_V2.51.md** | ✅ | v2.51 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.51** (added DATABASE_ENVIRONMENT_GUIDE_V1.0.md for data seeding approach and cloud strategy) |
+| **MASTER_INDEX_V2.52.md** | ✅ | v2.52 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.52** (added TRADING_TEST_ARCHITECTURE_V1.0.md for 4-layer trading test strategy) |
 | **ARCHITECTURE_DECISIONS_V2.31.md** | ✅ | v2.31 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (109 total) - **UPDATED V2.31** (ADR-107/108: Single-Database + Hybrid Cloud Architecture, Issue #241/#247) |
 | **REQUIREMENT_INDEX_V1.15.md** | ✅ | v1.14 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 128 requirements (REQ-{CATEGORY}-{NUMBER}) - **UPDATED V1.14** (added REQ-SCHED-003 for BasePoller Unified Design Pattern; 127 → 128 total requirements) |
 | **ADR_INDEX_V1.24.md** | ✅ | v1.24 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 109 architecture decisions - **UPDATED V1.24** (added ADR-107/108 for cloud infrastructure; 107 → 109 total ADRs) |
@@ -523,6 +525,7 @@ Test specifications, validation protocols, and quality assurance.
 | **COMPREHENSIVE_TEST_AUDIT_PHASE_1.5_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 1.5 | 🔴 Critical | **NEW** - Quality-focused analysis of 29 test files (520+ tests) per TESTING_STRATEGY_V3.6.md: tier-specific coverage analysis (Critical Path ≥90%, Business Logic ≥85%, Infrastructure ≥80%), 8-type test framework gaps, Pattern 13 compliance (real fixtures vs mocks), identifies exemplary test_attribution_comprehensive.py (only module with all 8 test types), critical gaps (2 integration files using mocks, missing stress/E2E tests), 30 improvement recommendations |
 | **TEST_GAP_GITHUB_ISSUE_MAPPING_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 1.5 | Phase 2 | 🔴 Critical | **NEW** - Comprehensive mapping of 15 high-priority test gaps to GitHub issues #101-#132: 2 CRITICAL (7-10h: fix integration test mocks, add E2E tests for Critical Path), 5 HIGH (21-29h: stress tests, property tests, Mypy regression, SCD violations, validation violations), 6 MEDIUM (21-27h: E2E for business logic, security tests, MASTER_INDEX gaps, manager query methods, TypedDict returns, schema validation), 2 LOW (14-18h deferred to Phase 5: performance tests, chaos tests); all test gaps from COMPREHENSIVE_TEST_AUDIT_PHASE_1.5_V1.0.md now have trackable GitHub issues for Phase 2 implementation; total effort: 49-66 hours (excluding deferred LOW priority) |
 | **TEST_ISOLATION_PATTERNS_V1.1.md** | ✅ | v1.0 | `/docs/testing/` | 1.9 | Phase 1.9 | 🔴 Critical | **NEW** - Phase 1.9 test isolation patterns documentation (~500 lines): 5 root causes of test failures (DB contamination, FK gaps, cleanup order, parallel interference, SCD leakage), 5 isolation patterns (transaction-based isolation, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2), implementation checklist for conftest.py fixes, anti-patterns to avoid; cross-references TESTING_STRATEGY V3.3, TEST_REQUIREMENTS_COMPREHENSIVE V2.1 |
+| **TRADING_TEST_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/testing/` | 5 | Phase 5a | 🔴 Critical | **NEW** - 4-layer testing architecture for trading module addressing Kalshi DEMO 503 errors: Layer 1 (Unit tests with mocks), Layer 2 (VCR cassettes from PROD), Layer 3 (SimulatedKalshiClient for paper trading), Layer 4 (Minimal PROD smoke tests); covers trailing stops, position sizing, order walking, exit evaluation; includes SimulatedKalshiClient design |
 | **MODEL_VALIDATION_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4 ✅ | 🟡 High | Elo vs. research, backtesting benchmarks |
 | **BACKTESTING_PROTOCOL_V1.0.md** | 🔵 | - | `/docs/testing/` | 4 | Phase 4-5 ✅ | 🟡 High | Walk-forward validation, train/test splits |
 

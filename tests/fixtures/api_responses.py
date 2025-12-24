@@ -237,6 +237,127 @@ KALSHI_ERROR_400_RESPONSE = {
 }
 
 # =============================================================================
+# Kalshi Order Responses (place_order, cancel_order, get_order)
+# =============================================================================
+
+KALSHI_ORDER_RESPONSE = {
+    "order": {
+        "order_id": "order_abc123def456",
+        "user_id": "user_789xyz",
+        "client_order_id": "my-custom-id-001",
+        "ticker": "KXNFLGAME-25DEC15-KC-YES",
+        "side": "yes",
+        "action": "buy",
+        "type": "limit",
+        "status": "resting",
+        # Kalshi dual format: legacy cents + sub-penny dollars
+        "yes_price": 65,
+        "no_price": 35,
+        "yes_price_dollars": "0.6500",
+        "no_price_dollars": "0.3500",
+        "initial_count": 10,
+        "remaining_count": 10,
+        "fill_count": 0,
+        "taker_fees": "0.0000",
+        "maker_fees": "0.0000",
+        "taker_fill_cost": "0.0000",
+        "maker_fill_cost": "0.0000",
+        "created_time": "2025-12-24T10:00:00Z",
+        "expiration_time": "2025-12-15T17:00:00Z",
+        "last_update_time": "2025-12-24T10:00:00Z",
+        "queue_position": 5,
+        "time_in_force": "good_till_canceled",
+    }
+}
+
+KALSHI_ORDER_PARTIAL_FILL_RESPONSE = {
+    "order": {
+        "order_id": "order_abc123def456",
+        "user_id": "user_789xyz",
+        "client_order_id": "my-custom-id-001",
+        "ticker": "KXNFLGAME-25DEC15-KC-YES",
+        "side": "yes",
+        "action": "buy",
+        "type": "limit",
+        "status": "resting",
+        "yes_price": 65,
+        "no_price": 35,
+        "yes_price_dollars": "0.6500",
+        "no_price_dollars": "0.3500",
+        "initial_count": 10,
+        "remaining_count": 4,  # 6 filled, 4 remaining
+        "fill_count": 6,
+        "taker_fees": "0.0600",
+        "maker_fees": "0.0000",
+        "taker_fill_cost": "3.9000",
+        "maker_fill_cost": "0.0000",
+        "created_time": "2025-12-24T10:00:00Z",
+        "expiration_time": "2025-12-15T17:00:00Z",
+        "last_update_time": "2025-12-24T10:00:15Z",
+        "queue_position": 0,
+        "time_in_force": "good_till_canceled",
+    }
+}
+
+KALSHI_ORDER_CANCELED_RESPONSE = {
+    "order": {
+        "order_id": "order_abc123def456",
+        "user_id": "user_789xyz",
+        "client_order_id": "my-custom-id-001",
+        "ticker": "KXNFLGAME-25DEC15-KC-YES",
+        "side": "yes",
+        "action": "buy",
+        "type": "limit",
+        "status": "canceled",  # Order was canceled
+        "yes_price": 65,
+        "no_price": 35,
+        "yes_price_dollars": "0.6500",
+        "no_price_dollars": "0.3500",
+        "initial_count": 10,
+        "remaining_count": 0,  # No more remaining
+        "fill_count": 6,  # Partial fill before cancel
+        "taker_fees": "0.0600",
+        "maker_fees": "0.0000",
+        "taker_fill_cost": "3.9000",
+        "maker_fill_cost": "0.0000",
+        "created_time": "2025-12-24T10:00:00Z",
+        "expiration_time": "2025-12-15T17:00:00Z",
+        "last_update_time": "2025-12-24T10:01:00Z",
+        "queue_position": 0,
+        "time_in_force": "good_till_canceled",
+    }
+}
+
+KALSHI_ORDER_EXECUTED_RESPONSE = {
+    "order": {
+        "order_id": "order_filled_fully",
+        "user_id": "user_789xyz",
+        "client_order_id": "my-custom-id-002",
+        "ticker": "KXNFLGAME-25DEC15-KC-YES",
+        "side": "yes",
+        "action": "buy",
+        "type": "market",
+        "status": "executed",  # Fully filled
+        "yes_price": 63,
+        "no_price": 37,
+        "yes_price_dollars": "0.6275",
+        "no_price_dollars": "0.3725",
+        "initial_count": 10,
+        "remaining_count": 0,
+        "fill_count": 10,  # All filled
+        "taker_fees": "0.1000",
+        "maker_fees": "0.0000",
+        "taker_fill_cost": "6.2750",
+        "maker_fill_cost": "0.0000",
+        "created_time": "2025-12-24T10:00:00Z",
+        "expiration_time": "2025-12-15T17:00:00Z",
+        "last_update_time": "2025-12-24T10:00:01Z",
+        "queue_position": 0,
+        "time_in_force": "fill_or_kill",
+    }
+}
+
+# =============================================================================
 # Expected Parsed Results (After Decimal Conversion)
 # =============================================================================
 

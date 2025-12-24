@@ -1,0 +1,202 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://api.elections.kalshi.com/trade-api/v2/markets?limit=1&series_ticker=KXNFLGAME
+  response:
+    body:
+      string: '{"cursor":"CgsItdWLygYQ-LqNUhIZS1hORkxHQU1FLTI1REVDMjdCQUxHQi1HQg","markets":[{"can_close_early":true,"category":"","close_time":"2026-01-11T01:00:00Z","created_time":"2025-12-17T17:39:01.172187Z","custom_strike":{"football_team":"08c52d1f-7ce1-445f-be72-97de0554ecc8"},"early_close_condition":"This
+        market will close and expire after a winner is declared.","event_ticker":"KXNFLGAME-25DEC27BALGB","expected_expiration_time":"2025-12-28T04:00:00Z","expiration_time":"2026-01-11T01:00:00Z","expiration_value":"","last_price":62,"last_price_dollars":"0.6200","latest_expiration_time":"2026-01-11T01:00:00Z","liquidity":409848786,"liquidity_dollars":"4098487.8600","market_type":"binary","no_ask":39,"no_ask_dollars":"0.3900","no_bid":38,"no_bid_dollars":"0.3800","no_sub_title":"Green
+        Bay","notional_value":100,"notional_value_dollars":"1.0000","open_interest":13244,"open_time":"2025-12-17T17:43:00Z","previous_price":58,"previous_price_dollars":"0.5800","previous_yes_ask":59,"previous_yes_ask_dollars":"0.5900","previous_yes_bid":58,"previous_yes_bid_dollars":"0.5800","price_level_structure":"linear_cent","price_ranges":[{"end":"1.0000","start":"0.0000","step":"0.0100"}],"response_price_units":"usd_cent","result":"","risk_limit_cents":0,"rules_primary":"If
+        Green Bay wins the Baltimore at Green Bay professional football game originally
+        scheduled for Dec 27, 2025, then the market resolves to Yes.","rules_secondary":"The
+        following market refers to the team who is the winner (or participant awarded
+        a tie) in the Baltimore at Green Bay professional football game originally
+        scheduled for Dec 27, 2025. If this game is postponed or delayed, the market
+        will remain open and close after the rescheduled game has finished (within
+        two weeks). If the cancelled game is not played or is rescheduled further
+        than two weeks out, the market will resolve to a fair price for each team
+        in accordance with the rules. If the game is declared a tie, the market will
+        resolve to 50/50 for both teams.","settlement_timer_seconds":300,"status":"active","strike_type":"structured","subtitle":"","tick_size":1,"ticker":"KXNFLGAME-25DEC27BALGB-GB","title":"Baltimore
+        at Green Bay Winner?","volume":16126,"volume_24h":7143,"yes_ask":62,"yes_ask_dollars":"0.6200","yes_bid":61,"yes_bid_dollars":"0.6100","yes_sub_title":"Green
+        Bay"}]}
+
+        '
+    headers:
+      Cache-Control:
+      - public, max-age=5
+      Connection:
+      - keep-alive
+      Content-Security-Policy:
+      - default-src 'none';
+      Content-Type:
+      - application/json
+      Date:
+      - Wed, 24 Dec 2025 06:24:46 GMT
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      Transfer-Encoding:
+      - chunked
+      Via:
+      - 1.1 3d063e2b1b9a35235e000394a7bf1aa0.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - LmjQAjYR3RTCkQlcG60yO0pVqV3hY9K9xZypwvMOTuhVL7s-MNdbOQ==
+      X-Amz-Cf-Pop:
+      - ORD58-P15
+      X-Cache:
+      - Miss from cloudfront
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: '{"ticker": "KXNFLGAME-25DEC27BALGB-GB", "side": "yes", "action": "buy",
+      "count": 1, "type": "limit", "yes_price_dollars": "0.0200", "client_order_id":
+      "vcr-test-1766557486"}'
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '173'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.5
+    method: POST
+    uri: https://api.elections.kalshi.com/trade-api/v2/portfolio/orders
+  response:
+    body:
+      string: '{"order":{"action":"buy","client_order_id":"vcr-test-1766557486","created_time":"2025-12-24T06:24:47.592321Z","expiration_time":null,"fill_count":0,"initial_count":1,"last_update_time":"2025-12-24T06:24:47.592321Z","maker_fees":0,"maker_fill_cost":0,"maker_fill_cost_dollars":"","no_price":98,"no_price_dollars":"0.9800","order_group_id":null,"order_id":"b9ef0c93-b795-44ff-b0a1-ddc9113a4e01","queue_position":0,"remaining_count":1,"side":"yes","status":"resting","taker_fees":0,"taker_fill_cost":0,"taker_fill_cost_dollars":"","ticker":"KXNFLGAME-25DEC27BALGB-GB","type":"limit","user_id":"e18fea31-729b-41b7-8f3e-eb25f8e13682","yes_price":2,"yes_price_dollars":"0.0200"}}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '673'
+      Content-Security-Policy:
+      - default-src 'none';
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Wed, 24 Dec 2025 06:24:47 GMT
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      Via:
+      - 1.1 c8cdc9fbc50901560b8834415670070e.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - TxI9N6szPqdF0XaBWABY24IqG4kT2-rdW1YHZr9KIpzi2WaNApuyaQ==
+      X-Amz-Cf-Pop:
+      - ORD58-P15
+      X-Cache:
+      - Miss from cloudfront
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 201
+      message: Created
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://api.elections.kalshi.com/trade-api/v2/portfolio/orders/b9ef0c93-b795-44ff-b0a1-ddc9113a4e01
+  response:
+    body:
+      string: '{"order":{"action":"buy","client_order_id":"vcr-test-1766557486","created_time":"2025-12-24T06:24:47.592321Z","expiration_time":null,"fill_count":0,"initial_count":1,"last_update_time":"2025-12-24T06:24:47.592321Z","maker_fees":0,"maker_fill_cost":0,"maker_fill_cost_dollars":"","no_price":98,"no_price_dollars":"0.9800","order_group_id":null,"order_id":"b9ef0c93-b795-44ff-b0a1-ddc9113a4e01","queue_position":0,"remaining_count":1,"side":"yes","status":"resting","taker_fees":0,"taker_fill_cost":0,"taker_fill_cost_dollars":"","ticker":"KXNFLGAME-25DEC27BALGB-GB","type":"limit","user_id":"e18fea31-729b-41b7-8f3e-eb25f8e13682","yes_price":2,"yes_price_dollars":"0.0200"}}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '673'
+      Content-Security-Policy:
+      - default-src 'none';
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Wed, 24 Dec 2025 06:24:48 GMT
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      Via:
+      - 1.1 3e28c58d01cb4a09a670a0a6055529e0.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - 9W_EJTK9t_DcKzZ4IlN_SD6fSa1GAzTF9VMJ3HLIPVCCQg8Gmr2rNg==
+      X-Amz-Cf-Pop:
+      - ORD58-P15
+      X-Cache:
+      - Miss from cloudfront
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '0'
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.5
+    method: DELETE
+    uri: https://api.elections.kalshi.com/trade-api/v2/portfolio/orders/b9ef0c93-b795-44ff-b0a1-ddc9113a4e01
+  response:
+    body:
+      string: '{"order":{"action":"buy","client_order_id":"vcr-test-1766557486","created_time":"2025-12-24T06:24:47.592321Z","expiration_time":null,"fill_count":0,"initial_count":1,"last_update_time":"2025-12-24T06:24:50.290971Z","maker_fees":0,"maker_fill_cost":0,"maker_fill_cost_dollars":"","no_price":98,"no_price_dollars":"0.9800","order_group_id":null,"order_id":"b9ef0c93-b795-44ff-b0a1-ddc9113a4e01","queue_position":0,"remaining_count":0,"side":"yes","status":"canceled","taker_fees":0,"taker_fill_cost":0,"taker_fill_cost_dollars":"","ticker":"KXNFLGAME-25DEC27BALGB-GB","type":"limit","user_id":"e18fea31-729b-41b7-8f3e-eb25f8e13682","yes_price":2,"yes_price_dollars":"0.0200"},"reduced_by":1}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Length:
+      - '689'
+      Content-Security-Policy:
+      - default-src 'none';
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Wed, 24 Dec 2025 06:24:50 GMT
+      Strict-Transport-Security:
+      - max-age=31536000; includeSubDomains
+      Via:
+      - 1.1 6e69d9dbc818bfddcebd15ac17cb5b24.cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - JimdDeYkew9fIKi5U2VMgQZSrXe_uN9gXu3K8WiLpGxZ1X4D9_46Gg==
+      X-Amz-Cf-Pop:
+      - ORD58-P15
+      X-Cache:
+      - Miss from cloudfront
+      X-Content-Type-Options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1
