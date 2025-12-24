@@ -112,6 +112,10 @@ MODULE_TIERS = {
     "database/seeding/sources/sports/nfl_data_py_adapter": "experimental",
     # Issue #236: NFLDataPySource for stats loading
     "database/seeding/sources/nfl_data_py_source": "experimental",
+    # TUI (Issue #268) - Terminal User Interface modules
+    "tui/app": "experimental",
+    "tui/screens/main_menu": "experimental",
+    "tui/widgets/header": "experimental",
     # Schedulers
     "schedulers/espn_game_poller": "business",
     # Validation
