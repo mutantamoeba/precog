@@ -1,0 +1,78 @@
+interactions:
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://demo-api.kalshi.co/trade-api/v2/series?limit=10
+  response:
+    body:
+      string: '{"cursor":"","series":[{"ticker":"KXNFLGAME","title":"NFL Game Winners","category":"Sports","frequency":"event_specific","settlement_sources":[{"name":"ESPN","url":"https://www.espn.com/nfl/"}],"tags":["football","nfl"]},{"ticker":"KXNBAGAME","title":"NBA Game Winners","category":"Sports","frequency":"event_specific","settlement_sources":[{"name":"ESPN","url":"https://www.espn.com/nba/"}],"tags":["basketball","nba"]},{"ticker":"KXPRES2024","title":"2024 Presidential Election","category":"Politics","frequency":"once","settlement_sources":[{"name":"AP News","url":"https://apnews.com/"}],"tags":["election","politics"]}]}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Tue, 24 Dec 2025 07:00:00 GMT
+      Via:
+      - 1.1 cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - cassette-generated
+      content-security-policy:
+      - default-src 'none';
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+- request:
+    body: null
+    headers:
+      Accept:
+      - '*/*'
+      Accept-Encoding:
+      - gzip, deflate, zstd
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json
+      User-Agent:
+      - python-requests/2.32.5
+    method: GET
+    uri: https://demo-api.kalshi.co/trade-api/v2/series?category=sports&limit=5
+  response:
+    body:
+      string: '{"cursor":"","series":null}'
+    headers:
+      Connection:
+      - keep-alive
+      Content-Type:
+      - application/json; charset=utf-8
+      Date:
+      - Tue, 24 Dec 2025 07:00:01 GMT
+      Via:
+      - 1.1 cloudfront.net (CloudFront)
+      X-Amz-Cf-Id:
+      - cassette-generated
+      content-security-policy:
+      - default-src 'none';
+      strict-transport-security:
+      - max-age=31536000; includeSubDomains
+      x-content-type-options:
+      - nosniff
+    status:
+      code: 200
+      message: OK
+version: 1
