@@ -4,24 +4,30 @@ Tests database CLI commands with real database interactions using testcontainers
 
 References:
     - REQ-TEST-003: Integration testing with testcontainers
+    - Issue #258: Create shared CLI test fixtures
     - TESTING_STRATEGY V3.2: 8 test types required
+
+Note:
+    Uses shared CLI fixtures from tests/conftest.py (cli_runner, cli_app).
 """
 
 from unittest.mock import MagicMock, patch
 
-from typer.testing import CliRunner
+import pytest
 
 from precog.cli import app, register_commands
 
-# Register commands once for all tests
-register_commands()
-runner = CliRunner()
+
+@pytest.fixture(autouse=True)
+def setup_commands():
+    """Ensure commands are registered before each test."""
+    register_commands()
 
 
 class TestDbInitIntegration:
     """Integration tests for db init command."""
 
-    def test_init_with_successful_connection(self) -> None:
+    def test_init_with_successful_connection(self, cli_runner) -> None:
         """Test init with successful database connection.
 
         Integration: Tests database initialization sequence.
@@ -33,12 +39,12 @@ class TestDbInitIntegration:
             mock_test.return_value = True
             mock_schema.return_value = True
 
-            result = runner.invoke(app, ["db", "init"])
+            result = cli_runner.invoke(app, ["db", "init"])
 
             assert result.exit_code in [0, 1, 2, 3, 4, 5]
             mock_test.assert_called()
 
-    def test_init_with_connection_failure(self) -> None:
+    def test_init_with_connection_failure(self, cli_runner) -> None:
         """Test init with failed database connection.
 
         Integration: Tests error handling on connection failure.
@@ -46,12 +52,12 @@ class TestDbInitIntegration:
         with patch("precog.database.connection.test_connection") as mock_test:
             mock_test.side_effect = Exception("Connection refused")
 
-            result = runner.invoke(app, ["db", "init"])
+            result = cli_runner.invoke(app, ["db", "init"])
 
             # Should exit with error code
             assert result.exit_code in [0, 1, 2, 3, 4, 5]
 
-    def test_init_force_reinitialize(self) -> None:
+    def test_init_force_reinitialize(self, cli_runner) -> None:
         """Test init with force flag.
 
         Integration: Tests forced reinitialization.
@@ -63,7 +69,7 @@ class TestDbInitIntegration:
             mock_test.return_value = True
             mock_schema.return_value = True
 
-            result = runner.invoke(app, ["db", "init", "--force"])
+            result = cli_runner.invoke(app, ["db", "init", "--force"])
 
             assert result.exit_code in [0, 1, 2, 3, 4, 5]
 
@@ -71,7 +77,7 @@ class TestDbInitIntegration:
 class TestDbStatusIntegration:
     """Integration tests for db status command."""
 
-    def test_status_with_healthy_connection(self) -> None:
+    def test_status_with_healthy_connection(self, cli_runner) -> None:
         """Test status with healthy database.
 
         Integration: Tests connection health check.
@@ -80,11 +86,11 @@ class TestDbStatusIntegration:
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
-            result = runner.invoke(app, ["db", "status"])
+            result = cli_runner.invoke(app, ["db", "status"])
 
             assert result.exit_code in [0, 1, 2]
 
-    def test_status_with_unhealthy_connection(self) -> None:
+    def test_status_with_unhealthy_connection(self, cli_runner) -> None:
         """Test status with unhealthy database.
 
         Integration: Tests error reporting on connection failure.
@@ -92,12 +98,12 @@ class TestDbStatusIntegration:
         with patch("precog.database.connection.get_connection") as mock_conn:
             mock_conn.side_effect = Exception("Connection failed")
 
-            result = runner.invoke(app, ["db", "status"])
+            result = cli_runner.invoke(app, ["db", "status"])
 
             # Should report error but not crash
             assert result.exit_code in [0, 1, 2, 3, 4, 5]
 
-    def test_status_with_table_info(self) -> None:
+    def test_status_with_table_info(self, cli_runner) -> None:
         """Test status includes table information.
 
         Integration: Tests table enumeration.
@@ -107,7 +113,7 @@ class TestDbStatusIntegration:
             mock_conn.return_value.__enter__ = MagicMock(return_value=mock_context)
             mock_conn.return_value.__exit__ = MagicMock()
 
-            result = runner.invoke(app, ["db", "status", "--verbose"])
+            result = cli_runner.invoke(app, ["db", "status", "--verbose"])
 
             assert result.exit_code in [0, 1, 2]
 
@@ -115,7 +121,7 @@ class TestDbStatusIntegration:
 class TestDbMigrateIntegration:
     """Integration tests for db migrate command."""
 
-    def test_migrate_to_latest(self) -> None:
+    def test_migrate_to_latest(self, cli_runner) -> None:
         """Test migration to latest version.
 
         Integration: Tests migration runner.
@@ -124,11 +130,11 @@ class TestDbMigrateIntegration:
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
-            result = runner.invoke(app, ["db", "migrate"])
+            result = cli_runner.invoke(app, ["db", "migrate"])
 
             assert result.exit_code in [0, 1, 2, 3]
 
-    def test_migrate_dry_run(self) -> None:
+    def test_migrate_dry_run(self, cli_runner) -> None:
         """Test migration dry run.
 
         Integration: Tests dry run mode shows pending migrations.
@@ -137,11 +143,11 @@ class TestDbMigrateIntegration:
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
-            result = runner.invoke(app, ["db", "migrate", "--dry-run"])
+            result = cli_runner.invoke(app, ["db", "migrate", "--dry-run"])
 
             assert result.exit_code in [0, 1, 2, 3]
 
-    def test_migrate_to_specific_version(self) -> None:
+    def test_migrate_to_specific_version(self, cli_runner) -> None:
         """Test migration to specific version.
 
         Integration: Tests targeted migration.
@@ -150,7 +156,7 @@ class TestDbMigrateIntegration:
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
-            result = runner.invoke(app, ["db", "migrate", "--target", "005"])
+            result = cli_runner.invoke(app, ["db", "migrate", "--target", "005"])
 
             assert result.exit_code in [0, 1, 2, 3]
 
@@ -158,7 +164,7 @@ class TestDbMigrateIntegration:
 class TestDbTablesIntegration:
     """Integration tests for db tables command."""
 
-    def test_tables_list(self) -> None:
+    def test_tables_list(self, cli_runner) -> None:
         """Test listing database tables.
 
         Integration: Tests table enumeration from database.
@@ -167,11 +173,11 @@ class TestDbTablesIntegration:
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
-            result = runner.invoke(app, ["db", "tables"])
+            result = cli_runner.invoke(app, ["db", "tables"])
 
             assert result.exit_code in [0, 1, 2]
 
-    def test_tables_with_filter(self) -> None:
+    def test_tables_with_filter(self, cli_runner) -> None:
         """Test table listing with filter.
 
         Integration: Tests filtered table enumeration.
@@ -180,11 +186,11 @@ class TestDbTablesIntegration:
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
-            result = runner.invoke(app, ["db", "tables", "--filter", "game"])
+            result = cli_runner.invoke(app, ["db", "tables", "--filter", "game"])
 
             assert result.exit_code in [0, 1, 2]
 
-    def test_tables_with_counts(self) -> None:
+    def test_tables_with_counts(self, cli_runner) -> None:
         """Test table listing with row counts.
 
         Integration: Tests row counting queries.
@@ -193,7 +199,7 @@ class TestDbTablesIntegration:
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
-            result = runner.invoke(app, ["db", "tables", "--counts"])
+            result = cli_runner.invoke(app, ["db", "tables", "--counts"])
 
             assert result.exit_code in [0, 1, 2]
 
@@ -201,7 +207,7 @@ class TestDbTablesIntegration:
 class TestDbCriticalTablesIntegration:
     """Integration tests for critical table checks."""
 
-    def test_critical_tables_exist(self) -> None:
+    def test_critical_tables_exist(self, cli_runner) -> None:
         """Test that critical tables are checked.
 
         Integration: Tests critical table verification.
@@ -210,7 +216,7 @@ class TestDbCriticalTablesIntegration:
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
-            result = runner.invoke(app, ["db", "status", "--check-critical"])
+            result = cli_runner.invoke(app, ["db", "status", "--check-critical"])
 
             assert result.exit_code in [0, 1, 2]
 
@@ -218,7 +224,7 @@ class TestDbCriticalTablesIntegration:
 class TestDbTransactionIntegration:
     """Integration tests for database transaction handling."""
 
-    def test_commands_use_transactions(self) -> None:
+    def test_commands_use_transactions(self, cli_runner) -> None:
         """Test that commands properly use transactions.
 
         Integration: Tests transaction management.
@@ -228,7 +234,7 @@ class TestDbTransactionIntegration:
             mock_conn.return_value.__enter__ = MagicMock(return_value=mock_context)
             mock_conn.return_value.__exit__ = MagicMock()
 
-            result = runner.invoke(app, ["db", "init", "--force"])
+            result = cli_runner.invoke(app, ["db", "init", "--force"])
 
             # Verify connection was used
             assert result.exit_code in [0, 1, 2, 3, 4, 5]

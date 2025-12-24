@@ -4,25 +4,31 @@ Tests CLI module resilience under fault injection and error conditions.
 
 References:
     - REQ-TEST-008: Chaos testing
+    - Issue #258: Create shared CLI test fixtures
     - TESTING_STRATEGY V3.2: 8 test types required
+
+Note:
+    Uses shared CLI fixtures from tests/conftest.py (cli_runner, cli_app).
 """
 
 import random
 from unittest.mock import MagicMock, patch
 
-from typer.testing import CliRunner
+import pytest
 
 from precog.cli import app, register_commands
 
-# Register commands once for all tests
-register_commands()
-runner = CliRunner()
+
+@pytest.fixture(autouse=True)
+def setup_commands():
+    """Ensure commands are registered before each test."""
+    register_commands()
 
 
 class TestSchedulerChaos:
     """Chaos tests for scheduler CLI."""
 
-    def test_supervisor_random_failures(self) -> None:
+    def test_supervisor_random_failures(self, cli_runner) -> None:
         """Test scheduler handles random supervisor failures.
 
         Chaos: Random failures during 20 invocations.
@@ -42,14 +48,14 @@ class TestSchedulerChaos:
 
             successes = 0
             for _ in range(20):
-                result = runner.invoke(app, ["scheduler", "status"])
+                result = cli_runner.invoke(app, ["scheduler", "status"])
                 if result.exit_code in [0, 1, 2]:
                     successes += 1
 
             # Should handle failures gracefully
             assert successes >= 10, f"Only {successes} successes out of 20"
 
-    def test_poll_with_intermittent_failures(self) -> None:
+    def test_poll_with_intermittent_failures(self, cli_runner) -> None:
         """Test poll-once with intermittent failures.
 
         Chaos: Alternating success/failure pattern.
@@ -69,7 +75,7 @@ class TestSchedulerChaos:
 
             results = []
             for _ in range(15):
-                result = runner.invoke(app, ["scheduler", "poll-once", "--league", "nfl"])
+                result = cli_runner.invoke(app, ["scheduler", "poll-once", "--league", "nfl"])
                 results.append(result.exit_code)
 
             # All should complete (success or graceful failure)
@@ -79,7 +85,7 @@ class TestSchedulerChaos:
 class TestDbChaos:
     """Chaos tests for db CLI."""
 
-    def test_connection_random_failures(self) -> None:
+    def test_connection_random_failures(self, cli_runner) -> None:
         """Test db handles random connection failures.
 
         Chaos: Random connection failures.
@@ -98,13 +104,13 @@ class TestDbChaos:
         with patch("precog.database.connection.get_connection", side_effect=random_connection):
             results = []
             for _ in range(20):
-                result = runner.invoke(app, ["db", "status"])
+                result = cli_runner.invoke(app, ["db", "status"])
                 results.append(result.exit_code)
 
             # All should complete (don't crash)
             assert len(results) == 20
 
-    def test_init_with_flaky_connection(self) -> None:
+    def test_init_with_flaky_connection(self, cli_runner) -> None:
         """Test init with flaky database connection.
 
         Chaos: Connection that works sometimes.
@@ -120,7 +126,7 @@ class TestDbChaos:
         with patch("precog.database.connection.test_connection", side_effect=flaky_test):
             results = []
             for _ in range(5):
-                result = runner.invoke(app, ["db", "init"])
+                result = cli_runner.invoke(app, ["db", "init"])
                 results.append(result.exit_code)
 
             # All should complete gracefully
@@ -130,7 +136,7 @@ class TestDbChaos:
 class TestSystemChaos:
     """Chaos tests for system CLI."""
 
-    def test_health_with_component_failures(self) -> None:
+    def test_health_with_component_failures(self, cli_runner) -> None:
         """Test health check with random component failures.
 
         Chaos: Components fail randomly.
@@ -149,13 +155,13 @@ class TestSystemChaos:
         with patch("precog.database.connection.get_connection", side_effect=random_health):
             results = []
             for _ in range(20):
-                result = runner.invoke(app, ["system", "health"])
+                result = cli_runner.invoke(app, ["system", "health"])
                 results.append(result.exit_code)
 
             # All should complete (graceful degradation)
             assert len(results) == 20
 
-    def test_info_with_missing_data(self) -> None:
+    def test_info_with_missing_data(self, cli_runner) -> None:
         """Test info command with missing configuration data.
 
         Chaos: Configuration partially unavailable.
@@ -167,7 +173,7 @@ class TestSystemChaos:
 
             results = []
             for _ in range(10):
-                result = runner.invoke(app, ["system", "info"])
+                result = cli_runner.invoke(app, ["system", "info"])
                 results.append(result.exit_code)
 
             # All should complete
@@ -177,7 +183,7 @@ class TestSystemChaos:
 class TestCrossModuleChaos:
     """Chaos tests across CLI modules."""
 
-    def test_cascading_failures(self) -> None:
+    def test_cascading_failures(self, cli_runner) -> None:
         """Test handling of cascading failures across modules.
 
         Chaos: One failure causes others to fail.
@@ -194,13 +200,13 @@ class TestCrossModuleChaos:
 
             results = []
             for cmd in commands:
-                result = runner.invoke(app, cmd)
+                result = cli_runner.invoke(app, cmd)
                 results.append((cmd[0], result.exit_code))
 
             # All should complete (not crash)
             assert len(results) == 3
 
-    def test_recovery_after_failures(self) -> None:
+    def test_recovery_after_failures(self, cli_runner) -> None:
         """Test CLI recovery after failures.
 
         Chaos: Failures then recovery.
@@ -219,7 +225,7 @@ class TestCrossModuleChaos:
         with patch("precog.database.connection.get_connection", side_effect=recovering_connection):
             results = []
             for i in range(6):
-                result = runner.invoke(app, ["db", "status"])
+                result = cli_runner.invoke(app, ["db", "status"])
                 results.append(result.exit_code)
 
             # Later calls should succeed
@@ -229,7 +235,7 @@ class TestCrossModuleChaos:
 class TestResourceExhaustion:
     """Chaos tests for resource exhaustion scenarios."""
 
-    def test_handles_timeout_scenarios(self) -> None:
+    def test_handles_timeout_scenarios(self, cli_runner) -> None:
         """Test CLI handles timeout-like conditions.
 
         Chaos: Simulated slow operations.
@@ -242,12 +248,12 @@ class TestResourceExhaustion:
 
             results = []
             for _ in range(10):
-                result = runner.invoke(app, ["db", "status"])
+                result = cli_runner.invoke(app, ["db", "status"])
                 results.append(result.exit_code)
 
             assert all(code in [0, 1, 2] for code in results)
 
-    def test_handles_memory_pressure(self) -> None:
+    def test_handles_memory_pressure(self, cli_runner) -> None:
         """Test CLI handles memory pressure scenarios.
 
         Chaos: Large response data.
@@ -261,5 +267,5 @@ class TestResourceExhaustion:
             }
             mock_supervisor.return_value = mock_instance
 
-            result = runner.invoke(app, ["scheduler", "status"])
+            result = cli_runner.invoke(app, ["scheduler", "status"])
             assert result.exit_code in [0, 1, 2]

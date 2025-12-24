@@ -793,6 +793,81 @@ def sample_strategy(db_pool, clean_test_data, sample_strategy_config_nested) -> 
     )
 
 
+# =============================================================================
+# CLI TEST FIXTURES (Issue #258)
+# =============================================================================
+
+
+@pytest.fixture
+def cli_runner():
+    """
+    Provide a CliRunner instance for Typer CLI testing.
+
+    This fixture provides the Typer test runner used to invoke CLI commands
+    in an isolated environment. Output is captured for assertion.
+
+    Scope: function - new runner for each test
+
+    Usage:
+        def test_cli_command(cli_runner, cli_app):
+            result = cli_runner.invoke(cli_app, ["system", "version"])
+            assert result.exit_code == 0
+
+    Educational Note:
+        CliRunner provides test isolation for CLI applications:
+        - Captures stdout/stderr for inspection
+        - Isolates environment variables
+        - Simulates terminal input/output
+        - Returns Result object with exit_code, stdout, exception
+
+    Related:
+        - tests/helpers/cli_helpers.py: Shared CLI testing utilities
+        - REQ-CLI-001: CLI Framework (Typer)
+    """
+    from typer.testing import CliRunner
+
+    return CliRunner()
+
+
+@pytest.fixture
+def cli_app():
+    """
+    Provide the Precog CLI Typer application with all commands registered.
+
+    This fixture returns the main Typer app after registering all subcommands.
+    Use with cli_runner fixture to invoke CLI commands in tests.
+
+    Scope: function - fresh app for each test
+
+    Usage:
+        def test_db_init(cli_runner, cli_app):
+            result = cli_runner.invoke(cli_app, ["db", "init"])
+            assert "Database" in result.stdout
+
+    Educational Note:
+        Precog CLI uses Typer's subcommand pattern:
+        - main.py: Root app with register_commands()
+        - cli/db.py: Database subcommands (init, status, migrate)
+        - cli/system.py: System subcommands (version, health)
+        - cli/markets.py: Market subcommands (list, fetch)
+        - cli/api.py: API subcommands (status, balance)
+        - cli/data.py: Data subcommands (seed, clear)
+        - cli/pollers.py: Poller subcommands (start, stop, status)
+
+        Each test gets a fresh app to ensure command registration isolation.
+
+    Related:
+        - main.py: CLI entry point
+        - tests/helpers/cli_helpers.py: Shared CLI testing utilities
+        - REQ-CLI-001: CLI Framework (Typer)
+    """
+    from main import app, register_commands
+
+    # Register all CLI subcommands
+    register_commands()
+    return app
+
+
 def pytest_configure(config):
     """
     Register custom markers and enforce test environment.
