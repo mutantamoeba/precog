@@ -78,8 +78,24 @@ def unique_series_id() -> str:
 
 
 @pytest.fixture
-def created_series(unique_series_id: str) -> Generator[dict[str, Any], None, None]:
-    """Create a test series and clean up after test."""
+def created_series(db_pool, db_cursor, clean_test_data, unique_series_id: str) -> Generator[dict[str, Any], None, None]:  # fmt: skip
+    """Create a test series and clean up after test.
+
+    Args:
+        db_pool: Database connection pool fixture (Pattern 13 - real infrastructure)
+        db_cursor: Database cursor fixture (Pattern 13 - real infrastructure)
+        clean_test_data: Test data cleanup fixture (Pattern 13 - ensures isolation)
+        unique_series_id: Unique ID for the test series
+
+    Yields:
+        Dictionary containing the created series data
+
+    Educational Note:
+        Pattern 13 (Real Fixtures for Integration Tests) requires database integration
+        tests to use db_pool, db_cursor, and clean_test_data fixtures instead of mocks.
+        This was a Phase 1.5 lesson learned - mocking connection pools caused Strategy
+        Manager tests to pass despite critical bugs.
+    """
     series_id = create_series(
         series_id=unique_series_id,
         platform_id="kalshi",

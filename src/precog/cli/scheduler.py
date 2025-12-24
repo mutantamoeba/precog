@@ -555,6 +555,156 @@ def stop(
     _scheduler_stop_impl()
 
 
+def _show_db_backed_status(verbose: bool) -> bool:
+    """
+    Show scheduler status from database (cross-process IPC).
+
+    This enables `scheduler status` to see the state of services started
+    by a separate `scheduler start` process.
+
+    Args:
+        verbose: Enable verbose output
+
+    Returns:
+        True if database status was found and displayed, False otherwise
+
+    Educational Note:
+        The database table approach solves the IPC problem:
+        - `scheduler start` (Process A) writes status to DB via heartbeat
+        - `scheduler status` (Process B) reads status from DB
+        - This works across processes, unlike in-memory global variables
+
+    Reference:
+        - Migration 0012: scheduler_status table
+        - Issue #255: Scheduler status shows "not running"
+    """
+    from datetime import UTC, datetime, timedelta
+
+    from precog.database.crud_operations import list_scheduler_services
+
+    try:
+        # Query database for all services on this host
+        services = list_scheduler_services(include_stale=True, stale_threshold_seconds=120)
+
+        if not services:
+            return False  # No database entries, fall back to in-process check
+
+        console.print("[bold magenta]Database-Backed Status (Cross-Process IPC)[/bold magenta]")
+        console.print("[dim]Status persisted across processes via database[/dim]\n")
+
+        # Create summary table
+        summary_table = Table(title="Scheduler Services")
+        summary_table.add_column("Service", style="cyan")
+        summary_table.add_column("Host", style="dim")
+        summary_table.add_column("PID", style="dim")
+        summary_table.add_column("Status", style="white")
+        summary_table.add_column("Started", style="dim")
+        summary_table.add_column("Last Heartbeat", style="dim")
+        summary_table.add_column("Stale?", style="yellow")
+
+        stale_threshold = timedelta(seconds=120)
+        now = datetime.now(UTC)
+
+        for svc in services:
+            service_name = svc.get("service_name", "unknown")
+            host_id = svc.get("host_id", "unknown")
+            pid = str(svc.get("pid") or "-")
+            status = svc.get("status", "unknown")
+            started_at = svc.get("started_at")
+            last_heartbeat = svc.get("last_heartbeat")
+            error_message = svc.get("error_message")
+
+            # Format status with color
+            if status == "running":
+                status_display = "[green]running[/green]"
+            elif status == "starting":
+                status_display = "[yellow]starting[/yellow]"
+            elif status == "stopping":
+                status_display = "[yellow]stopping[/yellow]"
+            elif status == "stopped":
+                status_display = "[dim]stopped[/dim]"
+            elif status == "failed":
+                status_display = "[red]failed[/red]"
+            else:
+                status_display = status
+
+            # Format timestamps
+            started_str = started_at.strftime("%H:%M:%S") if started_at else "-"
+
+            # Check if stale (no heartbeat in threshold period)
+            is_stale = False
+            if last_heartbeat:
+                # Handle timezone-aware comparison
+                if last_heartbeat.tzinfo is None:
+                    last_heartbeat = last_heartbeat.replace(tzinfo=UTC)
+                age = now - last_heartbeat
+                is_stale = age > stale_threshold
+                heartbeat_str = f"{age.total_seconds():.0f}s ago"
+            else:
+                heartbeat_str = "-"
+                is_stale = True
+
+            stale_display = "[yellow]YES[/yellow]" if is_stale else "[green]no[/green]"
+
+            summary_table.add_row(
+                service_name,
+                host_id,
+                pid,
+                status_display,
+                started_str,
+                heartbeat_str,
+                stale_display,
+            )
+
+        console.print(summary_table)
+        console.print()
+
+        # Show detailed stats for verbose mode
+        if verbose:
+            for svc in services:
+                service_name = svc.get("service_name", "unknown")
+                stats = svc.get("stats") or {}
+                error_message = svc.get("error_message")
+
+                if stats or error_message:
+                    console.print(f"[bold]{service_name} Details:[/bold]")
+                    if stats:
+                        for key, value in stats.items():
+                            console.print(f"  {key}: {value}")
+                    if error_message:
+                        console.print(f"  [red]Last Error: {error_message}[/red]")
+                    console.print()
+
+        # Show hint about stale services
+        stale_count = sum(
+            1
+            for svc in services
+            if svc.get("last_heartbeat") is None
+            or (
+                now
+                - (
+                    svc["last_heartbeat"].replace(tzinfo=UTC)
+                    if svc["last_heartbeat"].tzinfo is None
+                    else svc["last_heartbeat"]
+                )
+            )
+            > stale_threshold
+        )
+        if stale_count > 0:
+            console.print(
+                f"[yellow]Note: {stale_count} service(s) have stale heartbeats "
+                "(>120s since last update).[/yellow]"
+            )
+            console.print("[dim]This may indicate crashed processes.[/dim]\n")
+
+        return True
+
+    except Exception as e:
+        if verbose:
+            console.print(f"[dim]Database status check failed: {e}[/dim]")
+        return False  # Fall back to in-process check
+
+
 @app.command()
 def status(
     verbose: bool = typer.Option(
@@ -569,6 +719,11 @@ def status(
     Displays current state, polling statistics, and recent activity for
     both ESPN and Kalshi polling services.
 
+    This command uses database-backed status for cross-process visibility:
+    - When `scheduler start` runs in a separate process, this command
+      can still see its status via the database
+    - Falls back to in-process status if database has no entries
+
     Examples:
         precog scheduler status
         precog scheduler status --verbose
@@ -581,6 +736,18 @@ def status(
         logger.info("Verbose mode enabled")
 
     console.print("\n[bold cyan]Data Collection Scheduler Status[/bold cyan]\n")
+
+    # First, try database-backed status (cross-process IPC)
+    # This allows seeing status of schedulers started by other processes
+    if _show_db_backed_status(verbose):
+        # If we have in-process supervisor too, show it
+        if _supervisor and _supervisor.is_running:
+            console.print("[bold]In-Process Supervisor (Same Process):[/bold]")
+            _show_supervisor_status(verbose)
+        return
+
+    # Fall back to in-process status (same process only)
+    console.print("[dim]No database status found - checking in-process state...[/dim]\n")
 
     # Check if running in supervised mode
     if _supervisor and _supervisor.is_running:
