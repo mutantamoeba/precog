@@ -9,6 +9,11 @@ Reference:
 
 from __future__ import annotations
 
+import pytest
+
+# Skip all tests in this module if textual is not installed (optional dependency)
+pytest.importorskip("textual")
+
 
 class TestAsciiHeader:
     """Test AsciiHeader widget class."""
