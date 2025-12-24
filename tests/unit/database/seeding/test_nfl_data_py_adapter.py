@@ -20,10 +20,10 @@ Note:
 """
 
 from precog.database.seeding.sources.sports.nfl_data_py_adapter import (
-    NFL_TEAM_CODE_MAPPING,
     NFLDataPySource,
     normalize_nfl_team_code,
 )
+from precog.database.seeding.team_history import resolve_team_code
 
 # =============================================================================
 # Team Code Mapping Tests
@@ -126,5 +126,6 @@ class TestTeamCodeMappingCompleteness:
             "OAK": "LV",  # Oakland Raiders -> Las Vegas Raiders
         }
 
+        # Now using unified team history module (Issue #257)
         for old_code, new_code in relocation_mappings.items():
-            assert NFL_TEAM_CODE_MAPPING.get(old_code) == new_code
+            assert resolve_team_code("nfl", old_code) == new_code
