@@ -39,6 +39,76 @@ from precog.database.seeding.historical_elo_loader import (
 
 
 @pytest.fixture
+def setup_test_teams(db_pool, db_cursor):
+    """
+    Create test teams required for Elo record inserts.
+
+    Educational Note:
+        These tests need team records for FK constraints. The bulk_insert_historical_elo
+        function looks up teams by (team_code, sport) to get the team_id for insertion.
+        Without these teams, the loader will fail with "Team not found" errors.
+
+    Note:
+        The teams table has a unique constraint on (team_code, sport).
+        - In CI: No seed data exists, so teams are created fresh
+        - In local dev: Seed data already has KC/BUF, so INSERT is skipped
+
+        We use ON CONFLICT (team_code, sport) DO NOTHING to handle both cases.
+        The fixture tracks which team_ids to use (seed data or newly created).
+    """
+    from precog.database.connection import get_cursor
+
+    # First check if teams already exist (from seed data)
+    with get_cursor(commit=False) as cur:
+        cur.execute("SELECT team_id FROM teams WHERE team_code = 'KC' AND sport = 'nfl'")
+        kc_row = cur.fetchone()
+        cur.execute("SELECT team_id FROM teams WHERE team_code = 'BUF' AND sport = 'nfl'")
+        buf_row = cur.fetchone()
+
+    # Track whether we created new teams (for cleanup)
+    created_team_ids = []
+
+    if kc_row and buf_row:
+        # Teams exist from seed data - use those
+        kc_team_id = kc_row["team_id"]
+        buf_team_id = buf_row["team_id"]
+    else:
+        # Teams don't exist (CI environment) - create them
+        with get_cursor(commit=True) as cur:
+            cur.execute(
+                """
+                INSERT INTO teams (
+                    team_id, team_code, team_name,
+                    conference, division, sport, current_elo_rating
+                )
+                VALUES
+                    (98001, 'KC', 'Kansas City Chiefs', 'AFC', 'West', 'nfl', 1624),
+                    (98002, 'BUF', 'Buffalo Bills', 'AFC', 'East', 'nfl', 1618)
+                ON CONFLICT (team_code, sport) DO NOTHING
+                RETURNING team_id
+            """
+            )
+        kc_team_id = 98001
+        buf_team_id = 98002
+        created_team_ids = [98001, 98002]
+
+    yield {"kc_team_id": kc_team_id, "buf_team_id": buf_team_id}
+
+    # Cleanup - only remove teams we created (not seed data)
+    if created_team_ids:
+        with get_cursor(commit=True) as cur:
+            # First delete any historical_elo records referencing these teams
+            cur.execute(
+                "DELETE FROM historical_elo WHERE team_id = ANY(%s)",
+                (created_team_ids,),
+            )
+            cur.execute(
+                "DELETE FROM teams WHERE team_id = ANY(%s)",
+                (created_team_ids,),
+            )
+
+
+@pytest.fixture
 def valid_elo_records() -> list[HistoricalEloRecord]:
     """Create valid Elo records for testing.
 
@@ -156,7 +226,7 @@ class TestCollectModeIntegration:
     """
 
     def test_collect_mode_continues_after_failures(
-        self, db_pool, db_cursor, mixed_elo_records
+        self, db_pool, db_cursor, setup_test_teams, mixed_elo_records
     ) -> None:
         """Verify COLLECT mode processes all records despite failures.
 
@@ -187,7 +257,7 @@ class TestCollectModeIntegration:
             assert "Team not found" in failure.error_message
 
     def test_collect_mode_returns_batch_insert_result(
-        self, db_pool, db_cursor, valid_elo_records
+        self, db_pool, db_cursor, setup_test_teams, valid_elo_records
     ) -> None:
         """Verify COLLECT mode returns BatchInsertResult type."""
         result = bulk_insert_historical_elo(
@@ -199,7 +269,9 @@ class TestCollectModeIntegration:
         assert result.error_mode == ErrorHandlingMode.COLLECT
         assert result.operation == "Historical Elo Insert"
 
-    def test_collect_mode_tracks_success_rate(self, db_pool, db_cursor, mixed_elo_records) -> None:
+    def test_collect_mode_tracks_success_rate(
+        self, db_pool, db_cursor, setup_test_teams, mixed_elo_records
+    ) -> None:
         """Verify COLLECT mode calculates success rate correctly.
 
         Educational Note:
@@ -228,7 +300,9 @@ class TestSkipModeIntegration:
         detailed error tracking.
     """
 
-    def test_skip_mode_increments_skip_counter(self, db_pool, db_cursor, mixed_elo_records) -> None:
+    def test_skip_mode_increments_skip_counter(
+        self, db_pool, db_cursor, setup_test_teams, mixed_elo_records
+    ) -> None:
         """Verify SKIP mode tracks skipped records."""
         result = bulk_insert_historical_elo(
             iter(mixed_elo_records),
@@ -242,7 +316,7 @@ class TestSkipModeIntegration:
         assert result.records_skipped >= 2
 
     def test_skip_mode_does_not_track_failure_details(
-        self, db_pool, db_cursor, mixed_elo_records
+        self, db_pool, db_cursor, setup_test_teams, mixed_elo_records
     ) -> None:
         """Verify SKIP mode does not populate failed_records list.
 
@@ -272,14 +346,16 @@ class TestFailModeIntegration:
         all-or-nothing batch semantics.
     """
 
-    def test_fail_mode_is_default(self, db_pool, db_cursor, valid_elo_records) -> None:
+    def test_fail_mode_is_default(
+        self, db_pool, db_cursor, setup_test_teams, valid_elo_records
+    ) -> None:
         """Verify FAIL mode is the default error handling mode."""
         result = bulk_insert_historical_elo(iter(valid_elo_records))
 
         assert result.error_mode == ErrorHandlingMode.FAIL
 
     def test_fail_mode_succeeds_with_valid_data(
-        self, db_pool, db_cursor, valid_elo_records
+        self, db_pool, db_cursor, setup_test_teams, valid_elo_records
     ) -> None:
         """Verify FAIL mode succeeds when all data is valid."""
         result = bulk_insert_historical_elo(
@@ -311,7 +387,9 @@ class TestBackwardCompatibilityIntegration:
         - error_messages -> string list from failed_records
     """
 
-    def test_loadresult_property_aliases(self, db_pool, db_cursor, valid_elo_records) -> None:
+    def test_loadresult_property_aliases(
+        self, db_pool, db_cursor, setup_test_teams, valid_elo_records
+    ) -> None:
         """Verify LoadResult property aliases work correctly."""
         result = bulk_insert_historical_elo(iter(valid_elo_records))
 
@@ -327,7 +405,9 @@ class TestBackwardCompatibilityIntegration:
         assert result.records_skipped == result.skipped
         assert result.errors == result.failed
 
-    def test_error_messages_returns_list(self, db_pool, db_cursor, valid_elo_records) -> None:
+    def test_error_messages_returns_list(
+        self, db_pool, db_cursor, setup_test_teams, valid_elo_records
+    ) -> None:
         """Verify error_messages property returns list of strings."""
         result = bulk_insert_historical_elo(iter(valid_elo_records))
 
@@ -352,7 +432,7 @@ class TestResultSerializationIntegration:
         API responses, and pipeline reporting.
     """
 
-    def test_result_to_dict(self, db_pool, db_cursor, valid_elo_records) -> None:
+    def test_result_to_dict(self, db_pool, db_cursor, setup_test_teams, valid_elo_records) -> None:
         """Verify result can be serialized to dictionary."""
         result = bulk_insert_historical_elo(
             iter(valid_elo_records),
@@ -372,7 +452,9 @@ class TestResultSerializationIntegration:
         assert "failed_records" in d
         assert "elapsed_time" in d
 
-    def test_result_failure_summary(self, db_pool, db_cursor, valid_elo_records) -> None:
+    def test_result_failure_summary(
+        self, db_pool, db_cursor, setup_test_teams, valid_elo_records
+    ) -> None:
         """Verify get_failure_summary() returns readable string."""
         result = bulk_insert_historical_elo(iter(valid_elo_records))
 
