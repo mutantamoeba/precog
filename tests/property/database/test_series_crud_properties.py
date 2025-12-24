@@ -24,7 +24,7 @@ from precog.database.crud_operations import (
     update_series,
 )
 
-pytestmark = [pytest.mark.property]
+pytestmark = [pytest.mark.property, pytest.mark.integration]
 
 
 # =============================================================================
