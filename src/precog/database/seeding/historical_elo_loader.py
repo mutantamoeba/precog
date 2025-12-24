@@ -57,6 +57,8 @@ from precog.database.seeding.batch_result import (
     BatchInsertResult,
     ErrorHandlingMode,
 )
+from precog.database.seeding.progress import print_load_summary, seeding_progress
+from precog.database.seeding.team_history import resolve_team_code
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -379,9 +381,12 @@ def bulk_insert_historical_elo(
     records: Iterator[HistoricalEloRecord],
     batch_size: int = 1000,
     error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
+    *,
+    total: int | None = None,
+    show_progress: bool = True,
 ) -> BatchInsertResult:
     """
-    Bulk insert historical Elo records with batching and configurable error handling.
+    Bulk insert historical Elo records with batching, progress display, and error handling.
 
     Args:
         records: Iterator of HistoricalEloRecord
@@ -390,6 +395,8 @@ def bulk_insert_historical_elo(
             - FAIL: Stop on first error, raise exception
             - SKIP: Skip failed records, continue processing
             - COLLECT: Process all records, collect failures for analysis
+        total: Expected total records (enables determinate progress bar)
+        show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
         BatchInsertResult with statistics and failure details
@@ -404,6 +411,7 @@ def bulk_insert_historical_elo(
         >>> result = bulk_insert_historical_elo(
         ...     records,
         ...     error_mode=ErrorHandlingMode.COLLECT,
+        ...     show_progress=True,
         ... )
         >>> if result.has_failures:
         ...     print(result.get_failure_summary())
@@ -415,15 +423,16 @@ def bulk_insert_historical_elo(
     )
 
     batch: list[tuple[Any, ...]] = []
-    # Track record index to original record for failure reporting
-    batch_indices: list[int] = []
-    batch_records: list[dict[str, Any]] = []
-
     team_id_cache: dict[tuple[str, str], int | None] = {}
 
-    for record in records:
-        record_index = result.total_records
-        result.total_records += 1
+    with seeding_progress(
+        "Loading Elo ratings...",
+        total=total,
+        show_progress=show_progress,
+    ) as (progress, task):
+        for record in records:
+            record_index = result.total_records
+            result.total_records += 1
 
             # Look up team_id (with caching)
             cache_key = (record["team_code"], record["sport"])
@@ -435,7 +444,22 @@ def bulk_insert_historical_elo(
 
             team_id = team_id_cache[cache_key]
             if not team_id:
-                result.records_skipped += 1
+                # Team not found - handle according to error_mode
+                if error_mode == ErrorHandlingMode.COLLECT:
+                    result.add_failure(
+                        record_index=record_index,
+                        record_data=dict(record),
+                        error=ValueError(
+                            f"Team not found: {record['team_code']} ({record['sport']})"
+                        ),
+                        context="team_lookup",
+                    )
+                elif error_mode == ErrorHandlingMode.SKIP:
+                    result.add_skip()
+                else:  # FAIL mode
+                    result.elapsed_time = time.perf_counter() - start_time
+                    msg = f"Team not found: {record['team_code']} ({record['sport']})"
+                    raise ValueError(msg)
                 if progress and task is not None:
                     progress.advance(task)
                 continue
@@ -455,48 +479,15 @@ def bulk_insert_historical_elo(
                 )
             )
 
-        team_id = team_id_cache[cache_key]
-        if not team_id:
-            # Team not found - handle according to error_mode
-            if error_mode == ErrorHandlingMode.COLLECT:
-                result.add_failure(
-                    record_index=record_index,
-                    record_data=dict(record),
-                    error=ValueError(f"Team not found: {record['team_code']} ({record['sport']})"),
-                    context="team_lookup",
-                )
-            elif error_mode == ErrorHandlingMode.SKIP:
-                result.add_skip()
-            else:  # FAIL mode
-                result.elapsed_time = time.perf_counter() - start_time
-                msg = f"Team not found: {record['team_code']} ({record['sport']})"
-                raise ValueError(msg)
-            continue
+            # Update progress
+            if progress and task is not None:
+                progress.advance(task)
 
-        batch.append(
-            (
-                team_id,
-                record["sport"],
-                record["season"],
-                record["rating_date"],
-                record["elo_rating"],
-                record["qb_adjusted_elo"],
-                record["qb_name"],
-                record["qb_value"],
-                record["source"],
-                record["source_file"],
-            )
-        )
-        batch_indices.append(record_index)
-        batch_records.append(dict(record))
-
-        # Flush batch when full
-        if len(batch) >= batch_size:
-            inserted = _flush_batch(batch)
-            result.successful += inserted
-            batch = []
-            batch_indices = []
-            batch_records = []
+            # Flush batch when full
+            if len(batch) >= batch_size:
+                inserted = _flush_batch(batch)
+                result.successful += inserted
+                batch = []
 
     # Flush remaining records
     if batch:
@@ -552,6 +543,8 @@ def load_fivethirtyeight_elo(
     sport: str = "nfl",
     seasons: list[int] | None = None,
     error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
+    *,
+    show_progress: bool = True,
 ) -> BatchInsertResult:
     """
     Load FiveThirtyEight Elo data into the database.
@@ -564,6 +557,7 @@ def load_fivethirtyeight_elo(
             - FAIL: Stop on first error, raise exception
             - SKIP: Skip failed records, continue processing
             - COLLECT: Process all records, collect failures for analysis
+        show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
         BatchInsertResult with statistics and failure details
@@ -587,7 +581,7 @@ def load_fivethirtyeight_elo(
     logger.info("Loading FiveThirtyEight Elo data from %s", file_path)
 
     records = parse_fivethirtyeight_csv(file_path, sport, seasons)
-    result = bulk_insert_historical_elo(records, error_mode=error_mode)
+    result = bulk_insert_historical_elo(records, error_mode=error_mode, show_progress=show_progress)
 
     logger.info(
         "FiveThirtyEight load complete: processed=%d, inserted=%d, skipped=%d, failed=%d",
@@ -615,6 +609,8 @@ def load_csv_elo(
     sport: str,
     source: str = "imported",
     error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
+    *,
+    show_progress: bool = True,
 ) -> BatchInsertResult:
     """
     Load Elo data from a simple CSV file.
@@ -624,6 +620,7 @@ def load_csv_elo(
         sport: Sport code
         source: Data source identifier
         error_mode: How to handle errors (default: FAIL)
+        show_progress: Whether to show progress bar (auto-disabled in CI)
 
     Returns:
         BatchInsertResult with statistics and failure details
@@ -631,7 +628,7 @@ def load_csv_elo(
     logger.info("Loading Elo data from %s", file_path)
 
     records = parse_simple_csv(file_path, sport, source)
-    result = bulk_insert_historical_elo(records, error_mode=error_mode)
+    result = bulk_insert_historical_elo(records, error_mode=error_mode, show_progress=show_progress)
 
     logger.info(
         "CSV load complete: processed=%d, inserted=%d, skipped=%d, failed=%d",
