@@ -44,6 +44,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -115,6 +116,18 @@ def run_subprocess_with_file_capture(
         with open(stdout_path, "w", encoding="utf-8") as stdout_f:
             with open(stderr_path, "w", encoding="utf-8") as stderr_f:
                 try:
+                    # Build environment with reduced log noise but preserving test output
+                    # Issue #255: JUnit XML parsing is primary source for counts (immune to
+                    # stdout pollution), but we keep stdout for debugging failures
+                    test_env = {
+                        **os.environ,
+                        "PYTHONUNBUFFERED": "1",
+                        # Reduce structlog noise (only errors) - warnings were polluting stdout
+                        # but keep failure output visible for debugging
+                        "STRUCTLOG_LOG_LEVEL": "WARNING",
+                        # Set precog logger to WARNING to reduce integration test noise
+                        "LOG_LEVEL": "WARNING",
+                    }
                     result = subprocess.run(
                         command,
                         shell=True,
@@ -123,7 +136,7 @@ def run_subprocess_with_file_capture(
                         timeout=timeout,
                         cwd=str(cwd),
                         text=True,
-                        env={**os.environ, "PYTHONUNBUFFERED": "1"},
+                        env=test_env,
                     )
                     exit_code = result.returncode
                     timed_out = False
@@ -282,6 +295,72 @@ def reset_db_pool() -> bool:
         return False
 
 
+def parse_junit_xml(junit_path: Path) -> tuple[int, int, int, int] | None:
+    """
+    Parse JUnit XML file to extract test counts.
+
+    This is more reliable than parsing stdout because:
+    1. JUnit XML is a structured format with defined attributes
+    2. Not affected by log output, warnings, or other stdout pollution
+    3. Used by CI systems (GitHub Actions, Jenkins) for reporting
+
+    Args:
+        junit_path: Path to the JUnit XML file
+
+    Returns:
+        Tuple of (passed, failed, errors, skipped) or None if parsing fails
+
+    Educational Note:
+        JUnit XML format has a <testsuite> root element with these attributes:
+        - tests: Total number of tests
+        - failures: Tests that failed assertions
+        - errors: Tests that raised exceptions
+        - skipped: Tests that were skipped
+        - Passed tests = tests - failures - errors - skipped
+
+    Reference:
+        - Issue #255: Pre-push stdout parsing vulnerability
+        - JUnit XML Schema: https://llg.cubic.org/docs/junit/
+    """
+    if not junit_path.exists():
+        return None
+
+    try:
+        tree = ET.parse(junit_path)
+        root = tree.getroot()
+
+        # Handle both single testsuite and testsuites container
+        if root.tag == "testsuites":
+            # Sum up all testsuites
+            total_tests = 0
+            total_failures = 0
+            total_errors = 0
+            total_skipped = 0
+            for testsuite in root.findall("testsuite"):
+                total_tests += int(testsuite.get("tests", 0))
+                total_failures += int(testsuite.get("failures", 0))
+                total_errors += int(testsuite.get("errors", 0))
+                total_skipped += int(testsuite.get("skipped", 0))
+        else:
+            # Single testsuite (pytest default)
+            total_tests = int(root.get("tests", 0))
+            total_failures = int(root.get("failures", 0))
+            total_errors = int(root.get("errors", 0))
+            total_skipped = int(root.get("skipped", 0))
+
+        # Calculate passed tests
+        passed = total_tests - total_failures - total_errors - total_skipped
+
+        return (passed, total_failures, total_errors, total_skipped)
+
+    except ET.ParseError as e:
+        print(f"  Warning: Failed to parse JUnit XML {junit_path}: {e}")
+        return None
+    except Exception as e:
+        print(f"  Warning: Error reading JUnit XML {junit_path}: {e}")
+        return None
+
+
 def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
     """
     Run all tests in optimized phases with DB pool reset between DB-heavy phases.
@@ -378,28 +457,38 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
                 )
             )
         else:
-            # Parse pytest output for pass/fail counts
-            stdout_lines = stdout.strip().split("\n")
-            last_line = stdout_lines[-1] if stdout_lines else ""
-
-            # Extract counts from pytest summary (e.g., "970 passed, 2 skipped")
+            # Parse test counts from JUnit XML (primary) or stdout (fallback)
+            # JUnit XML is more reliable because it's not affected by log output
+            # pollution from structlog or other libraries (Issue #255)
             passed = failed = errors = skipped = 0
-            if "passed" in last_line:
-                match = re.search(r"(\d+) passed", last_line)
-                if match:
-                    passed = int(match.group(1))
-            if "failed" in last_line:
-                match = re.search(r"(\d+) failed", last_line)
-                if match:
-                    failed = int(match.group(1))
-            if "error" in last_line:
-                match = re.search(r"(\d+) error", last_line)
-                if match:
-                    errors = int(match.group(1))
-            if "skipped" in last_line:
-                match = re.search(r"(\d+) skipped", last_line)
-                if match:
-                    skipped = int(match.group(1))
+
+            junit_counts = parse_junit_xml(junit_path)
+            if junit_counts:
+                # Use JUnit XML counts (most reliable)
+                passed, failed, errors, skipped = junit_counts
+            else:
+                # Fallback to stdout parsing (legacy behavior)
+                # This may be unreliable if logs corrupt stdout
+                stdout_lines = stdout.strip().split("\n")
+                last_line = stdout_lines[-1] if stdout_lines else ""
+
+                # Extract counts from pytest summary (e.g., "970 passed, 2 skipped")
+                if "passed" in last_line:
+                    match = re.search(r"(\d+) passed", last_line)
+                    if match:
+                        passed = int(match.group(1))
+                if "failed" in last_line:
+                    match = re.search(r"(\d+) failed", last_line)
+                    if match:
+                        failed = int(match.group(1))
+                if "error" in last_line:
+                    match = re.search(r"(\d+) error", last_line)
+                    if match:
+                        errors = int(match.group(1))
+                if "skipped" in last_line:
+                    match = re.search(r"(\d+) skipped", last_line)
+                    if match:
+                        skipped = int(match.group(1))
 
             total_passed += passed
             total_failed += failed
