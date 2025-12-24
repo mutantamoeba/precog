@@ -110,7 +110,8 @@ jobs:
         # S608=hardcoded-sql-expression (validated with allowlists in migrations)
         # S110=try-except-pass (logged in migration_utils.py)
         # S602=subprocess-shell (shell=True safe for trusted scripts with hardcoded commands)
-        run: python -m ruff check --select S --ignore S101,S112,S607,S603,S608,S110,S602 --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' .
+        # S314=xml-parse (trusted local JUnit XML from pytest, not untrusted external data)
+        run: python -m ruff check --select S --ignore S101,S112,S314,S607,S603,S608,S110,S602 --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' .
 
       - name: Run Safety dependency vulnerability scanner
         run: python -m safety check --json
