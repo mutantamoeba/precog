@@ -1214,6 +1214,18 @@ class KalshiClient:
         # Handle null response (API returns {"series": null} for some filters)
         series_list = response.get("series") or []
 
+        # Client-side filtering: Kalshi demo API ignores category/limit params
+        # Apply filtering here to ensure consistent behavior across environments
+        if category:
+            # Case-insensitive category matching
+            series_list = [
+                s for s in series_list if s.get("category", "").lower() == category.lower()
+            ]
+
+        # Apply limit client-side (API may return more than requested)
+        if limit and len(series_list) > limit:
+            series_list = series_list[:limit]
+
         logger.info(
             f"Fetched {len(series_list)} series",
             extra={

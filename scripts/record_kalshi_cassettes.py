@@ -88,7 +88,8 @@ def record_get_series():
     Record VCR cassette for get_series() endpoint.
 
     Records:
-    - First 10 series (no category filter for compatibility)
+    - First 10 series (no category filter)
+    - Sports category series (category filter test)
     - Full response structure for testing
 
     Output: tests/cassettes/kalshi_get_series.yaml
@@ -101,8 +102,8 @@ def record_get_series():
     with my_vcr.use_cassette("kalshi_get_series.yaml"):
         client = KalshiClient(environment="demo")
 
-        # Record series without category filter (more reliable)
-        print("Fetching series (limit=10)...")
+        # Record 1: Series without category filter
+        print("Fetching series (limit=10, no filter)...")
         series = client.get_series(limit=10)
 
         print(f"Received {len(series)} series")
@@ -110,6 +111,24 @@ def record_get_series():
             print(f"First series: {series[0].get('ticker', 'N/A')}")
             print(f"  Title: {series[0].get('title', 'N/A')}")
             print(f"  Category: {series[0].get('category', 'N/A')}")
+
+        # Collect all categories from unfiltered results
+        categories_found = set()
+        for s in series:
+            cat = s.get("category")
+            if cat:
+                categories_found.add(cat)
+        print(f"Categories in response: {sorted(categories_found)}")
+
+        time.sleep(1)  # Rate limit safety
+
+        # Record 2: Series WITH Sports category filter
+        print("\nFetching series with category=Sports filter...")
+        sports_series = client.get_series(category="Sports", limit=5)
+
+        print(f"Received {len(sports_series)} Sports series")
+        for s in sports_series[:3]:  # Show first 3
+            print(f"  - {s.get('ticker', 'N/A')}: {s.get('title', 'N/A')}")
 
     print("-" * 50)
     print("SUCCESS: Cassette saved to tests/cassettes/kalshi_get_series.yaml")

@@ -487,30 +487,33 @@ class TestKalshiClientSeriesWithVCR:
                 assert "name" in first_source, "Source should have name"
                 assert "url" in first_source, "Source should have url"
 
-    def test_get_series_empty_filter_returns_empty_list(self, monkeypatch):
+    def test_get_series_with_category_filter(self, monkeypatch):
         """
-        Test that category filter returning null is handled gracefully.
+        Test that category filter returns matching series.
 
-        The Kalshi API returns {"series": null} for some category filters
-        (e.g., category="sports" on DEMO). Client should return empty list.
+        Filters series by category (e.g., "Sports") and verifies
+        only matching series are returned.
 
         Educational Note:
-            API responses can return:
-            - {"series": [...]} - Normal response with data
-            - {"series": null} - Empty result for filter (NOT an error!)
-            - {"series": []} - Empty but explicit array
-
-            Our client handles all three cases by returning [].
+            Kalshi API category filter:
+            - Case-sensitive: "Sports" not "sports"
+            - Returns only series matching the category
+            - Empty category returns all series
         """
         monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "75b4b76e-d191-4855-b219-5c31cdcba1c8")
         monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "_keys/kalshi_demo_private.pem")
 
         with my_vcr.use_cassette("kalshi_get_series.yaml"):
             client = KalshiClient(environment="demo")
-            # This uses the cassette which recorded a category=sports filter
-            # that returned null on DEMO API
-            series = client.get_series(category="sports", limit=5)
+            # Filter by Sports category (case-sensitive)
+            series = client.get_series(category="Sports", limit=5)
 
-        # Should return empty list, not None or error
-        assert isinstance(series, list), "Series should be list even when null returned"
-        # Note: The cassette may have recorded null for this specific filter
+        # Should return sports series
+        assert isinstance(series, list), "Series should be a list"
+        assert len(series) >= 1, "Should have at least 1 sports series"
+
+        # Verify all returned series are in Sports category
+        for s in series:
+            assert s.get("category") == "Sports", (
+                f"Expected Sports category, got {s.get('category')}"
+            )
