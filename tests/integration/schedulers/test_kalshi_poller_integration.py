@@ -477,12 +477,22 @@ class TestEventCreationIntegration:
     )
     def test_subcategory_determined_from_series(
         self,
-        poller_with_mock_client: KalshiMarketPoller,
         mock_kalshi_client: MagicMock,
         series_ticker: str,
         expected_subcategory: str | None,
     ) -> None:
-        """Subcategory should be determined from series ticker."""
+        """Subcategory should be determined from series ticker.
+
+        Educational Note:
+            The poller must be configured with the SAME series_ticker as the market
+            data. This reflects real-world behavior: when polling KXNCAAFGAME, the
+            API returns markets from that series, and subcategory is determined from
+            the series_ticker parameter passed through the polling chain.
+
+            The fix in PR #XXX ensures series_ticker is passed explicitly from
+            _poll_series to _sync_market_to_db, since Kalshi's API doesn't include
+            series_ticker in market response objects (it's only a filter parameter).
+        """
         market = {
             "ticker": f"{series_ticker}-TEST",
             "title": "Test",
@@ -490,14 +500,24 @@ class TestEventCreationIntegration:
             "yes_ask_dollars": Decimal("0.50"),
             "no_ask_dollars": Decimal("0.50"),
             "event_ticker": "EVT-TEST",
-            "series_ticker": series_ticker,
+            # Note: series_ticker in market dict is for reference only;
+            # real API doesn't include this field in responses
         }
         mock_kalshi_client.get_markets.return_value = [market]
 
-        with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
-            with patch("precog.schedulers.kalshi_poller.create_market"):
-                with patch("precog.schedulers.kalshi_poller.get_or_create_event") as mock_event:
-                    poller_with_mock_client.poll_once()
+        # Create poller configured for THIS specific series
+        with patch("precog.schedulers.kalshi_poller.KalshiClient", return_value=mock_kalshi_client):
+            poller = KalshiMarketPoller(
+                series_tickers=[series_ticker],  # Match the series being tested
+                poll_interval=15,
+                environment="demo",
+            )
+            poller.kalshi_client = mock_kalshi_client
+
+            with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
+                with patch("precog.schedulers.kalshi_poller.create_market"):
+                    with patch("precog.schedulers.kalshi_poller.get_or_create_event") as mock_event:
+                        poller.poll_once()
 
         call_kwargs = mock_event.call_args[1]
         assert call_kwargs["subcategory"] == expected_subcategory

@@ -282,7 +282,8 @@ class KalshiMarketPoller(BasePoller):
 
         for market in all_markets:
             try:
-                result = self._sync_market_to_db(market)
+                # Pass series_ticker explicitly - the API response may not include it
+                result = self._sync_market_to_db(market, series_ticker=series_ticker)
                 if result is True:
                     markets_created += 1
                 elif result is False:
@@ -302,7 +303,9 @@ class KalshiMarketPoller(BasePoller):
 
         return len(all_markets), markets_updated, markets_created
 
-    def _sync_market_to_db(self, market: ProcessedMarketData) -> bool | None:
+    def _sync_market_to_db(
+        self, market: ProcessedMarketData, series_ticker: str = ""
+    ) -> bool | None:
         """
         Sync a single market to the database.
 
@@ -311,6 +314,9 @@ class KalshiMarketPoller(BasePoller):
 
         Args:
             market: Market data from Kalshi API (with Decimal prices)
+            series_ticker: Series ticker (e.g., "KXNFLGAME") - must be passed
+                explicitly because the Kalshi API response doesn't include it
+                in the market object (it's only a filter parameter).
 
         Returns:
             True if market was created
@@ -321,6 +327,11 @@ class KalshiMarketPoller(BasePoller):
             We use *_dollars fields from the API for sub-penny precision.
             These are already converted to Decimal by KalshiClient.
             Legacy cent fields (yes_bid, yes_ask) are integers and less precise.
+
+            The series_ticker must be passed explicitly because:
+            - Kalshi API accepts series_ticker as a query filter parameter
+            - But the market objects in the response don't include series_ticker
+            - So market.get("series_ticker") would return empty string
         """
         ticker = market.get("ticker", "")
 
@@ -356,21 +367,22 @@ class KalshiMarketPoller(BasePoller):
         if existing is None:
             # Create new market - first ensure the event exists
             event_ticker = market.get("event_ticker", "")
-            series_ticker = market.get("series_ticker", "")
+            # Use the passed series_ticker parameter, fall back to market dict if available
+            effective_series = series_ticker or market.get("series_ticker", "")
 
             # Determine category from series ticker (e.g., KXNFLGAME -> sports/nfl)
             # Default to 'sports' for game-related series, 'other' for unknown
             category = "sports"  # Most Kalshi markets we poll are sports
             subcategory = None
-            if "NFL" in series_ticker.upper():
+            if "NFL" in effective_series.upper():
                 subcategory = "nfl"
-            elif "NCAAF" in series_ticker.upper():
+            elif "NCAAF" in effective_series.upper():
                 subcategory = "ncaaf"
-            elif "NBA" in series_ticker.upper():
+            elif "NBA" in effective_series.upper():
                 subcategory = "nba"
-            elif "NHL" in series_ticker.upper():
+            elif "NHL" in effective_series.upper():
                 subcategory = "nhl"
-            elif "MLB" in series_ticker.upper():
+            elif "MLB" in effective_series.upper():
                 subcategory = "mlb"
 
             # Get or create the event before creating the market
@@ -382,10 +394,10 @@ class KalshiMarketPoller(BasePoller):
                     external_id=event_ticker,
                     category=category,
                     title=market.get("title", event_ticker),
-                    series_id=series_ticker,  # Link event to its series (e.g., KXNFLGAME)
+                    series_id=effective_series,  # Link event to its series (e.g., KXNFLGAME)
                     subcategory=subcategory,
                     metadata={
-                        "series_ticker": series_ticker,
+                        "series_ticker": effective_series,
                     },
                 )
 
@@ -402,7 +414,7 @@ class KalshiMarketPoller(BasePoller):
                 volume=market.get("volume"),
                 open_interest=market.get("open_interest"),
                 metadata={
-                    "series_ticker": series_ticker,
+                    "series_ticker": effective_series,
                     "subtitle": market.get("subtitle"),
                     "open_time": market.get("open_time"),
                     "close_time": market.get("close_time"),
