@@ -326,6 +326,9 @@ def parse_junit_xml(junit_path: Path) -> tuple[int, int, int, int] | None:
         return None
 
     try:
+        # Note: We're parsing our own generated JUnit XML files from pytest,
+        # not untrusted external data. These files are created by pytest's
+        # --junitxml flag in the same process flow.
         tree = ET.parse(junit_path)
         root = tree.getroot()
 
