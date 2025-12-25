@@ -1,9 +1,36 @@
 # Development Phases & Roadmap
 
 ---
-**Version:** 1.12
-**Last Updated:** 2025-12-21
+**Version:** 1.14
+**Last Updated:** 2025-12-24
 **Status:** ✅ Current
+**Changes in v1.14:**
+- **PHASE 2.7 HISTORICAL DATA SEEDING ADDED**: New phase for loading historical data BEFORE Phase 3 model training
+  - Historical odds loading (spreads, totals, moneylines) for model training features
+  - Historical EPA loading (NFL offensive/defensive metrics)
+  - Team_id FK additions to historical tables for proper joins
+  - **Migration 0013**: Add team_id FK to `historical_odds`, `historical_stats`, `historical_rankings`
+  - **NEW TABLE**: `historical_epa` for NFL EPA metrics from nflreadpy
+  - **NEW TABLE**: `elo_calculation_log` for Elo computation audit trail
+  - Duration: 1-2 weeks, Target: January 2026
+- **SCHEMA CLARIFICATION**: Phase 2.6 uses EXISTING `historical_elo` table with `source='calculated'` (not new table)
+- **ODDS PHASE SCOPE SPLIT**: Historical odds loading (Phase 2.7) vs Real-time odds polling (Phase 4)
+- Updated Phase 3 dependencies to include Phase 2.7 (historical data for model training)
+**Changes in v1.13:**
+- **PHASE 2.6 ELO RATING COMPUTATION ADDED**: New phase for multi-sport Elo computation module
+  - Core Elo engine with FiveThirtyEight methodology (8 sports: NFL, NBA, NHL, MLB, WNBA, NCAAF, NCAAB, MLS)
+  - Sport-specific K-factors, home advantage, margin of victory multipliers
+  - EPA integration for NFL (FREE via nflreadpy)
+  - EloPoller integration with ServiceSupervisor (ADR-100, ADR-103)
+  - CLI commands: bootstrap, show, predict, history, update
+  - TUI dashboard with Textual
+  - Duration: 3-4 weeks, Target: January 2026
+  - **Issue #273**: Comprehensive Elo Rating Computation Module
+  - **ADR-109**: Elo Rating Computation Engine Architecture
+  - **REQ-ELO-001 through REQ-ELO-007**: Elo computation requirements
+- **DATA SOURCE MIGRATION**: nfl_data_py deprecated (Sep 2025) → nflreadpy
+- **FiveThirtyEight SHUTDOWN**: March 2025 - all Elo must now be computed
+- Updated Phase 3 dependencies to include Phase 2.6
 **Changes in v1.12:**
 - **PHASE 2.5 CLOUD INFRASTRUCTURE**: Added Task 6 - Railway cloud deployment with TimescaleDB
   - Create Railway project with TimescaleDB service
@@ -1295,6 +1322,307 @@ python scripts/validate_phase_start.py --phase 2
 
 ---
 
+## Phase 2.6: Elo Rating Computation (Codename: "Ratings")
+
+**Duration:** 3-4 weeks
+**Target:** January 2026
+**Status:** 🔵 Planned
+**Goal:** Implement multi-sport Elo rating computation from game results with full CRUD, pollers, CLI, and TUI support
+
+### Strategic Rationale
+
+**Why Compute Elo Ourselves?**
+- **FiveThirtyEight Shutdown**: March 2025 - historical Elo data source no longer maintained
+- **Stale GitHub Data**: NFL (Feb 2021), NBA (June 2015), MLB (corrupted)
+- **Solution**: Compute Elo using FiveThirtyEight's published methodology from game results
+
+**Why Phase 2.6 Now?**
+- **Dependency Chain**: Phase 2.5 (data collection) provides game results → Phase 2.6 computes Elo
+- **Model Training**: Elo ratings are critical features for Phase 3/4 prediction models
+- **Data Quality**: Bootstrap historical ratings before real-time updates begin
+
+### Dependencies
+- Requires Phase 2.5: Live data collection service (game results available)
+- Requires Phase 2: Teams seeded in database (274 teams across 6 sports)
+
+### Data Source Overview
+
+| Sport | Library | Elo Source | Key Features |
+|-------|---------|------------|--------------|
+| **NFL** | nflreadpy | COMPUTE | play-by-play, EPA, schedules (21 load functions) |
+| **NBA/WNBA** | nba_api | COMPUTE | game logs, stats, box scores |
+| **NHL** | nhl-api-py | COMPUTE | schedules, standings, EDGE data |
+| **MLB** | pybaseball | COMPUTE | Statcast, game logs |
+| **NCAAF** | cfbd | COMPUTE | games, drives, plays |
+| **NCAAB** | cbbd | COMPUTE | games, stats, rankings |
+| **MLS** | itscalledsoccer | COMPUTE | xG, goals added |
+
+**Migration Required:**
+- **Deprecate**: nfl_data_py (archived September 2025)
+- **Migrate to**: nflreadpy (actively maintained, uses Polars)
+
+### Tasks
+
+#### 1. Core Elo Engine (Week 1)
+- [ ] Create `src/precog/ratings/` module structure
+- [ ] Implement EloEngine class with FiveThirtyEight methodology:
+  - [ ] `calculate_expected_score(rating_a, rating_b)` - probability formula
+  - [ ] `calculate_mov_multiplier(point_diff, elo_diff)` - margin of victory
+  - [ ] `update_rating(old_elo, k, actual, expected, mov)` - rating update
+  - [ ] `apply_home_advantage(sport)` - sport-specific home field
+  - [ ] `apply_season_regression(old_elo, sport)` - mean reversion
+- [ ] Sport-specific K-factors configuration:
+  | Sport | K-Factor | Home Adv | Mean Reversion |
+  |-------|----------|----------|----------------|
+  | NFL | 20 | 65 pts | 1/3 toward 1500 |
+  | NBA | 20 | 100 pts | 1/4 toward 1505 |
+  | NHL | 6 | 50 pts | 1/4 toward 1505 |
+  | MLB | 4 | 24 pts | 1/2 toward 1500 |
+  | WNBA | 28 | 80 pts | 1/4 toward 1300 |
+  | NCAAF | 20 | 65 pts | 1/3 toward 1500 |
+  | NCAAB | 20 | 65 pts | 1/3 toward 1500 |
+  | MLS | 32 | 65 pts | 1/3 toward 1500 |
+- **ADR-109**: Elo Rating Computation Engine Architecture
+- **REQ-ELO-001**: Core Elo algorithm with sport-specific parameters
+- **REQ-ELO-002**: Margin of Victory multiplier
+
+#### 2. Data Adapters (Week 1-2)
+- [ ] Create BaseDataAdapter interface:
+  - [ ] `fetch_games(season, week)` - get game results
+  - [ ] `fetch_team_info(team_id)` - get team metadata
+  - [ ] `fetch_historical_games(start, end)` - bulk historical
+  - [ ] `normalize_game_result()` -> GameResult TypedDict
+- [ ] Implement sport-specific adapters:
+  - [ ] NFLDataAdapter (nflreadpy) - includes EPA integration
+  - [ ] NBADataAdapter (nba_api) - handles NBA + WNBA
+  - [ ] NHLDataAdapter (nhl-api-py)
+  - [ ] MLBDataAdapter (pybaseball)
+  - [ ] NCAAFDataAdapter (cfbd)
+  - [ ] NCAABDataAdapter (cbbd)
+  - [ ] MLSDataAdapter (itscalledsoccer)
+- **REQ-ELO-003**: Data adapters for all supported sports
+
+#### 3. EPA Integration for NFL (Week 1)
+- [ ] Extract EPA columns from nflreadpy `load_pbp()`:
+  - [ ] `epa` - Expected Points Added per play
+  - [ ] `qb_epa` - EPA attributed to QB
+  - [ ] `total_home_epa` / `total_away_epa` - cumulative game EPA
+- [ ] Store EPA alongside Elo in database
+- [ ] **NOTE**: DVOA is proprietary (FTN subscription required) - NOT implementing
+- **REQ-ELO-004**: EPA metrics integration (NFL)
+
+#### 4. Database Schema & CRUD (Week 2)
+**SCHEMA STRATEGY**: Use EXISTING `historical_elo` table with `source='calculated'`
+- [ ] **EXISTING**: Use `historical_elo` table (Migration 0005) with `source='calculated'`
+  - Table already has: `team_id` (FK), `sport`, `rating_date`, `elo_rating`, `qb_adjusted_elo`, `season`, `source`
+  - Insert computed Elo with `source='calculated'` to distinguish from imported data
+- [ ] **NEW**: Create `elo_calculation_log` table (Migration 0013 - see Phase 2.7):
+  - Audit trail for every Elo calculation
+  - Fields: game reference, teams, scores, elo before/after, k_factor, expected/actual scores
+  - Enables debugging and calculation verification
+- [ ] **NEW**: Create `historical_epa` table (Migration 0013 - see Phase 2.7):
+  - Separate from Elo (NFL-specific, different granularity)
+  - Fields: offensive/defensive EPA metrics, elo_adjustment derived from EPA
+- [ ] Implement CRUD operations:
+  - [ ] `create_elo_rating()` - insert with source='calculated'
+  - [ ] `get_elo_rating()` - retrieve by team/date
+  - [ ] `get_team_elo_history()` - full history (filter by source)
+  - [ ] `update_elo_after_game()` - process game result + log to audit table
+  - [ ] `bulk_compute_elo()` - batch processing
+  - [ ] `get_current_ratings()` - all current ratings
+  - [ ] `get_elo_matchup_prediction()` - predict outcome
+- **REQ-ELO-005**: Elo CRUD operations leveraging existing historical_elo table
+
+#### 5. Historical Bootstrapping (Week 2)
+- [ ] Implement historical data fetching (2020-present for all sports)
+- [ ] Bootstrap algorithm:
+  1. Initialize all teams at 1500
+  2. Process games chronologically
+  3. Apply season regression at year boundaries
+  4. Validate against FiveThirtyEight 2020-2021 data (NFL)
+- [ ] Validation threshold: +/-15 points vs FiveThirtyEight
+- **REQ-ELO-006**: Historical bootstrapping (2020-present)
+
+#### 6. EloPoller & ServiceSupervisor Integration (Week 3)
+- [ ] Implement EloPoller (extends BasePoller, ADR-103):
+  - [ ] `_poll_all()` - poll all configured sports
+  - [ ] `_poll_sport(sport)` - poll single sport
+  - [ ] `_get_unprocessed_games(sport)` - find games needing Elo update
+- [ ] Integrate with ServiceSupervisor (ADR-100):
+  - [ ] Health monitoring
+  - [ ] Auto-restart on failure
+  - [ ] Configurable poll intervals (default: 5 minutes)
+- [ ] Create `config/elo_config.yaml`:
+  - [ ] Enabled sports list
+  - [ ] K-factors, home advantage, mean reversion per sport
+  - [ ] Poll intervals and health check settings
+- **REQ-ELO-007**: Real-time Elo updates via EloPoller
+
+#### 7. CLI Commands (Week 3)
+- [ ] Add `elo` command group to main.py:
+  - [ ] `elo bootstrap <sport>` - compute historical ratings
+  - [ ] `elo show <team>` - display current rating
+  - [ ] `elo predict <team1> <team2>` - matchup prediction
+  - [ ] `elo history <team>` - rating history chart
+  - [ ] `elo update` - process recent games
+- [ ] Rich console output with tables and formatting
+- [ ] Integration with Typer framework
+
+#### 8. TUI Dashboard (Week 3-4)
+- [ ] Create `src/precog/tui/elo_dashboard.py`:
+  - [ ] EloLeaderboard widget - top 20 teams by rating
+  - [ ] EloPredictions widget - upcoming game predictions
+  - [ ] EloHistory widget - rating trend chart
+- [ ] Textual keybindings:
+  - [ ] `n/p` - next/previous sport
+  - [ ] `r` - refresh data
+  - [ ] `q` - quit
+- [ ] Real-time updates via polling
+
+#### 9. Testing & Validation (Week 4)
+- [ ] Unit tests: EloEngine calculations, data adapters
+- [ ] Integration tests: Database CRUD, poller integration
+- [ ] Property tests: Rating invariants (ratings bounded, zero-sum changes)
+- [ ] Validation tests: Compare to FiveThirtyEight historical data
+- [ ] Coverage target: >= 85% for ratings module
+- [ ] All 8 test types per TESTING_STRATEGY V3.2
+
+### Deliverables
+- [ ] `src/precog/ratings/` module with EloEngine
+- [ ] `src/precog/ratings/adapters/` with sport-specific adapters
+- [ ] Database migrations for team_elo_ratings, elo_calculation_log
+- [ ] CRUD operations in `src/precog/database/crud_operations.py`
+- [ ] EloPoller in `src/precog/schedulers/elo_poller.py`
+- [ ] CLI commands: `elo bootstrap`, `elo show`, `elo predict`, `elo update`
+- [ ] TUI dashboard: `elo dashboard` command
+- [ ] Configuration: `config/elo_config.yaml`
+- [ ] Documentation: ELO_COMPUTATION_GUIDE_V1.0.md (complete)
+
+### Success Criteria
+- [ ] Elo ratings computed for all 8 supported sports (2020-present)
+- [ ] NFL computed Elo matches FiveThirtyEight within +/-15 points (2020-2021)
+- [ ] EPA metrics integrated for NFL from nflreadpy
+- [ ] Coverage >= 85% for ratings module
+- [ ] All CRUD operations functional with SCD Type 2
+- [ ] EloPoller running via ServiceSupervisor
+- [ ] CLI commands operational (bootstrap, show, predict, update)
+- [ ] TUI dashboard displaying live ratings
+
+### Reference
+- GitHub Issue #273: Comprehensive Elo Rating Computation Module
+- **ADR-109**: Elo Rating Computation Engine Architecture
+- **REQ-ELO-001 through REQ-ELO-007**: Elo computation requirements
+- `docs/guides/ELO_COMPUTATION_GUIDE_V1.1.md`: Comprehensive methodology guide (updated with schema clarifications)
+- `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md`: All data sources
+- FiveThirtyEight methodology references (NFL, NBA, NHL)
+
+---
+
+## Phase 2.7: Historical Data Seeding (Codename: "Seedbed")
+
+**Duration:** 1-2 weeks
+**Target:** January 2026
+**Status:** 🔵 Planned
+**Goal:** Load historical odds and EPA data for Phase 3 model training, add team_id FKs to historical tables
+
+### Strategic Rationale
+
+**Why Phase 2.7 Now?**
+- **Model Training Dependency**: Phase 3 models need historical odds/EPA as training features
+- **Schema Gap**: Historical tables (`historical_odds`, `historical_stats`, `historical_rankings`) lack `team_id` FK for proper joins
+- **Data Quality**: Load and validate historical data BEFORE model training begins
+
+**Historical Odds for Model Training:**
+- Closing lines indicate "true" probability (efficient market hypothesis)
+- Models learn from historical odds + outcomes → better predictions
+- Closing Line Value (CLV) analysis requires historical betting data
+
+### Dependencies
+- Requires Phase 2.6: Elo rating computation module (Elo used alongside odds/EPA)
+- Requires Phase 2.5: Teams seeded in database (team_id FK resolution)
+
+### Tasks
+
+#### 1. Migration 0013: Schema Enhancements (Day 1-2)
+- [ ] Add `team_id` FK to tables missing it:
+  - [ ] `historical_odds`: Add `home_team_id`, `away_team_id` (FK to teams)
+  - [ ] `historical_stats`: Add `team_id` (FK to teams)
+  - [ ] `historical_rankings`: Add `team_id` (FK to teams)
+- [ ] Create `historical_epa` table (NFL EPA metrics):
+  - [ ] `team_id` (FK), `sport`, `season`, `week`
+  - [ ] EPA fields: `off_epa_per_play`, `def_epa_per_play`, etc.
+  - [ ] `elo_adjustment` (derived from EPA differential)
+  - [ ] Indexes: team_season, season_week, source
+- [ ] Create `elo_calculation_log` table (audit trail):
+  - [ ] Game reference, teams, scores
+  - [ ] Elo before/after, k_factor, expected/actual scores
+  - [ ] Calculation source (bootstrap, realtime, backfill)
+- [ ] Backfill `team_id` FK from `team_code` mapping for existing data
+- **REQ-DATA-009**: Team_id FK for historical table joins
+
+#### 2. Historical Odds Loading (Day 2-4)
+- [ ] Create `OddsSeeder` following BaseDataSource pattern (ADR-106):
+  - [ ] `fetch_odds(season, sport)` - get odds from CSV/API
+  - [ ] `normalize_odds()` -> OddsRecord TypedDict
+  - [ ] `resolve_team_ids()` - map team_code to team_id
+- [ ] Load from sources:
+  - [ ] Kaggle NFL betting data (2010-present)
+  - [ ] SportsBettingDime or similar for NCAAF
+  - [ ] NBA/NHL odds datasets
+- [ ] Validate loaded data:
+  - [ ] Team_id resolution success rate (target: >95%)
+  - [ ] Odds completeness (spreads + totals + moneylines)
+  - [ ] Date range coverage
+- **REQ-DATA-010**: Historical odds loading with team_id FK
+
+#### 3. Historical EPA Loading (Day 3-4)
+- [ ] Create `EPASeeder` for NFL EPA data:
+  - [ ] Use nflreadpy `load_pbp()` for play-by-play EPA
+  - [ ] Aggregate to team-week level
+  - [ ] Compute offensive/defensive splits
+- [ ] Load EPA data:
+  - [ ] NFL EPA (1999-present via nflreadpy)
+  - [ ] Weekly and season-level aggregates
+- [ ] Compute Elo adjustments:
+  - [ ] EPA differential → Elo adjustment (-50 to +50)
+  - [ ] Store in `historical_epa.elo_adjustment`
+- **REQ-DATA-011**: Historical EPA loading (NFL)
+
+#### 4. Data Validation & Quality (Day 5)
+- [ ] Create validation scripts:
+  - [ ] `validate_historical_odds.py` - completeness, FK resolution
+  - [ ] `validate_historical_epa.py` - NFL coverage, value ranges
+  - [ ] `validate_team_id_fks.py` - FK resolution across all tables
+- [ ] Report metrics:
+  - [ ] Records loaded per table
+  - [ ] Team_id resolution rate
+  - [ ] Date range coverage
+  - [ ] Missing data gaps
+
+### Deliverables
+- [ ] Migration 0013: `historical_epa`, `elo_calculation_log`, team_id FKs
+- [ ] `OddsSeeder` in `src/precog/database/seeding/sources/`
+- [ ] `EPASeeder` in `src/precog/database/seeding/sources/`
+- [ ] CLI commands: `db seed-odds`, `db seed-epa`
+- [ ] Validation scripts for data quality
+- [ ] Updated DATABASE_SCHEMA_SUMMARY_V1.15.md
+
+### Success Criteria
+- [ ] team_id FK added to all 3 historical tables
+- [ ] historical_epa table created and populated (NFL 1999-present)
+- [ ] elo_calculation_log table created
+- [ ] Historical odds loaded: NFL (2010+), NCAAF (2015+), NBA (2015+)
+- [ ] Team_id resolution rate > 95% for all tables
+- [ ] Validation scripts pass with no critical errors
+
+### Reference
+- **Migration 0013**: Team_id FKs, historical_epa, elo_calculation_log
+- **REQ-DATA-009 through REQ-DATA-011**: Historical data requirements
+- `docs/guides/ELO_COMPUTATION_GUIDE_V1.1.md`: EPA table schema
+- `docs/guides/DATA_COLLECTION_GUIDE_V1.2.md`: Data source details
+
+---
+
 ## Phase 3: Data Processing (Codename: "Pipeline")
 
 **Duration:** 4 weeks
@@ -1304,6 +1632,8 @@ python scripts/validate_phase_start.py --phase 2
 
 ### Dependencies
 - Requires Phase 2.5: Live data collection service running and validated
+- Requires Phase 2.6: Elo rating computation module (Elo ratings used as model features)
+- Requires Phase 2.7: Historical data seeding (historical odds/EPA for model training)
 
 ### ⚠️ BEFORE STARTING - RUN PHASE START VALIDATION
 

@@ -1,76 +1,190 @@
-# Historical Elo Data
+# Historical Data Cache
 
-This directory contains historical Elo ratings data for sports teams.
+This directory contains cached historical data for reproducibility, backtesting, and production migration.
 
-## Data Source: FiveThirtyEight NFL Elo
+## Directory Structure
 
-The NFL Elo dataset contains game-by-game Elo ratings from 1920 to 2020.
+```
+data/historical/
+├── README.md                    # This file
+├── nfl_elo.csv                  # FiveThirtyEight NFL Elo (1920-2020)
+├── nba_elo.csv                  # FiveThirtyEight NBA Elo (historic)
+├── mlb_elo.csv                  # FiveThirtyEight MLB Elo (historic)
+├── mlb_elo_new.csv              # FiveThirtyEight MLB Elo (updated)
+├── nhl_elo_new.csv              # FiveThirtyEight NHL Elo (updated)
+├── nfl_betting.csv              # NFL betting data
+├── espn/                        # ESPN API cache
+│   ├── nfl/                     # NFL game data by date
+│   │   └── 2024-12-25.json
+│   ├── nba/
+│   ├── mlb/
+│   └── nhl/
+├── kalshi/                      # Kalshi API cache
+│   ├── markets/                 # Market snapshots by date
+│   │   └── 2024-12-25.json
+│   ├── series/                  # Series definitions by date
+│   │   └── 2024-12-25.json
+│   └── positions/               # Position snapshots by date
+│       └── 2024-12-25.json
+└── python_libs/                 # Python library cache docs (data stored externally)
+    └── README.md                # Cache location documentation
+```
 
-### Download Instructions
+## Data Sources
 
+### 1. FiveThirtyEight Elo (CSV Files)
+
+**Location:** `data/historical/*.csv`
+**Format:** CSV with Elo ratings, game scores, probabilities
+**Coverage:**
+- NFL: 1920-2020 (~16,810 games)
+- NBA: Historic seasons
+- MLB: Historic + updated
+- NHL: Updated dataset
+
+**Download:**
 ```bash
-# Download from FiveThirtyEight's nfl-elo-game repository
+# NFL Elo
 curl -L "https://raw.githubusercontent.com/fivethirtyeight/nfl-elo-game/master/data/nfl_games.csv" -o data/historical/nfl_elo.csv
+
+# NBA Elo
+curl -L "https://raw.githubusercontent.com/fivethirtyeight/data/master/nba-raptor/historical_RAPTOR_by_team.csv" -o data/historical/nba_elo.csv
 ```
 
-### Data Format
-
-| Column | Description |
-|--------|-------------|
-| date | Game date (YYYY-MM-DD) |
-| season | Season year |
-| neutral | 1 if neutral site, 0 otherwise |
-| playoff | 1 if playoff game, 0 if regular season |
-| team1 | Team 1 code (e.g., KC, BUF) |
-| team2 | Team 2 code |
-| elo1 | Team 1 pre-game Elo rating |
-| elo2 | Team 2 pre-game Elo rating |
-| elo_prob1 | Team 1 win probability |
-| score1 | Team 1 final score |
-| score2 | Team 2 final score |
-| result1 | 1 if team1 won, 0 otherwise |
-
-### Coverage
-
-- **Seasons**: 1920 - 2020 (101 seasons)
-- **Records**: ~16,810 games (33,620 team-game records)
-- **Teams**: 123 unique team codes (includes defunct franchises)
-
-### Loading Data
-
-Use the historical Elo loader to parse and seed the database:
-
+**Usage:**
 ```python
-from pathlib import Path
-from precog.database.seeding.historical_elo_loader import (
-    parse_fivethirtyeight_csv,
-    load_fivethirtyeight_elo,
-)
-
-# Parse specific seasons
-records = list(parse_fivethirtyeight_csv(
-    Path("data/historical/nfl_elo.csv"),
-    seasons=[2018, 2019, 2020]
-))
-
-# Or load directly into database
-result = load_fivethirtyeight_elo(
-    Path("data/historical/nfl_elo.csv"),
-    seasons=[2018, 2019, 2020]
-)
-print(f"Loaded {result.records_inserted} records")
+from precog.database.seeding.historical_elo_loader import load_fivethirtyeight_elo
+result = load_fivethirtyeight_elo(Path("data/historical/nfl_elo.csv"), seasons=[2019, 2020])
 ```
 
-### Data Availability Note
+### 2. ESPN Historical API (JSON Cache)
 
-FiveThirtyEight's live NFL Elo API (`projects.fivethirtyeight.com/nfl-api/`) was
-deprecated in late 2023. This archived dataset from their GitHub repository
-contains data through the 2020 season. For more recent data, consider:
+**Location:** `data/historical/espn/{sport}/{YYYY-MM-DD}.json`
+**Format:** JSON with game details, scores, teams
+**Rate Limit:** 500 requests/hour
 
-- [nfeloqb](https://github.com/greerreNFL/nfeloqb) - Community-maintained QB Elo model
-- [nfelo](https://github.com/greerreNFL/nfelo) - Community-maintained team Elo rankings
+**Usage:**
+```python
+from precog.database.seeding.historical_games_loader import fetch_and_cache_games
+games = fetch_and_cache_games("nfl", date(2024, 12, 25))
+```
+
+**CLI Commands:**
+```bash
+# Seed games from ESPN
+python main.py data seed-espn --sport nfl --start 2024-09-01 --end 2024-12-25
+
+# Check cache statistics
+python main.py data cache-stats --sport nfl
+```
+
+### 3. Kalshi API (JSON Cache)
+
+**Location:** `data/historical/kalshi/{type}/{YYYY-MM-DD}.json`
+**Format:** JSON with Decimal prices stored as strings for precision
+**Types:** markets, series, positions, orders
+
+**Usage:**
+```python
+from precog.database.seeding.kalshi_historical_cache import fetch_and_cache_markets
+markets = fetch_and_cache_markets(client, date.today())
+```
+
+**CLI Commands:**
+```bash
+# Cache all Kalshi data
+python main.py data cache-kalshi --type all
+
+# Cache specific data type
+python main.py data cache-kalshi --type markets --category sports
+
+# Check cache statistics
+python main.py data kalshi-cache-stats
+```
+
+### 4. Python Sports Libraries
+
+These libraries manage their own caches externally. See `python_libs/README.md` for details.
+
+| Library | Cache Location | Data Coverage |
+|---------|----------------|---------------|
+| `pybaseball` | `~/.pybaseball/cache` | MLB stats since 2008 |
+| `nfl_data_py` | Auto-managed | NFL play-by-play since 1999 |
+| `nba_api` | `~/.nba_api/` | NBA stats since 1946 |
+| `nflreadpy` | Auto-managed | NFL advanced stats |
+
+**CLI Commands:**
+```bash
+# Seed from Python library
+python main.py data seed-lib --source pybaseball --seasons 2023,2024
+
+# Available sources: nfl_data_py, nflreadpy, nba_api, pybaseball
+```
+
+## Cache JSON Format
+
+### ESPN Cache Structure
+```json
+{
+  "cached_at": "2024-12-25T10:30:00",
+  "sport": "nfl",
+  "game_date": "2024-12-25",
+  "source": "espn_scoreboard_api",
+  "count": 3,
+  "data": [
+    {
+      "game_id": "401547123",
+      "home_team": "KC",
+      "away_team": "LVR",
+      "home_score": 31,
+      "away_score": 17,
+      "status": "final"
+    }
+  ]
+}
+```
+
+### Kalshi Cache Structure
+```json
+{
+  "cached_at": "2024-12-25T10:30:00",
+  "cache_date": "2024-12-25",
+  "cache_type": "markets",
+  "source": "kalshi_api",
+  "count": 150,
+  "data": [
+    {
+      "ticker": "NFLSF-25DEC25-KC",
+      "title": "Chiefs vs Raiders",
+      "yes_bid": "0.4975",
+      "yes_ask": "0.5025"
+    }
+  ]
+}
+```
+
+Note: Kalshi prices are stored as **strings** (e.g., `"0.4975"`) to preserve
+Decimal precision. Use `Decimal(value)` when loading.
+
+## TimescaleDB Migration
+
+This cache structure supports migration to production TimescaleDB:
+
+1. **Reproducibility:** Load cached data without API calls
+2. **Backtesting:** Replay historical market states
+3. **Production Migration:** Export to cloud TimescaleDB using:
+   ```python
+   from precog.database.seeding.kalshi_historical_cache import load_from_cache
+   from precog.database.crud_operations import insert_markets
+
+   # Load from cache, insert to production DB
+   markets = load_from_cache("markets", date(2024, 12, 25))
+   insert_markets(production_session, markets)
+   ```
 
 ## License
 
-FiveThirtyEight data is available under Creative Commons Attribution 4.0 license.
-See: https://github.com/fivethirtyeight/data
+- **FiveThirtyEight:** Creative Commons Attribution 4.0
+- **ESPN:** Personal/research use only
+- **Kalshi:** Subject to API terms of service
+- **Python Libraries:** Various open source licenses

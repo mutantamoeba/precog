@@ -8,6 +8,10 @@
 **Phase:** 2.5 (Live Data Collection Service)
 **Related ADRs:** ADR-100 (Service Supervisor Pattern), ADR-103 (BasePoller Unified Design), ADR-029 (ESPN Data Model)
 **Related Requirements:** REQ-SCHED-001, REQ-SCHED-002, REQ-SCHED-003, REQ-DATA-001, REQ-OBSERV-003
+**Related Documents:**
+- `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` - Comprehensive data source specification (8 sources)
+- `docs/guides/ESPN_DATA_MODEL_V1.0.md` - ESPN schema and TypedDicts
+- `docs/guides/ELO_COMPUTATION_GUIDE_V1.0.md` 🔵 **PLANNED** - Real-time Elo updates from game states
 ---
 
 ## Overview

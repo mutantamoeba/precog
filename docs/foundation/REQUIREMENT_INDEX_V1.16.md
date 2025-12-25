@@ -1,10 +1,22 @@
 # Requirement Index
 
 ---
-**Version:** 1.15
-**Last Updated:** 2025-12-21
+**Version:** 1.16
+**Last Updated:** 2025-12-25
 **Status:** ✅ Current
 **Purpose:** Master index of all system requirements with systematic IDs
+**Changes in v1.16:**
+- **ELO RATING SYSTEM (PHASE 2C)**: Added REQ-ELO-001 through REQ-ELO-007 for Elo rating computation
+- **NEW CATEGORY**: ELO - Elo rating system for sports predictions
+- **REQ-ELO-001**: Elo Engine Core (K-factor, home advantage, margin multiplier)
+- **REQ-ELO-002**: Sports-Specific Parameters (NFL K=20, NBA K=25, MLB K=15)
+- **REQ-ELO-003**: Historical Game Processing (batch updates from games table)
+- **REQ-ELO-004**: Team Rating Storage (elo_ratings table, current + history)
+- **REQ-ELO-005**: Rating Retrieval API (get ratings by team, date, sport)
+- **REQ-ELO-006**: Win Probability Calculation (expected score from ratings)
+- **REQ-ELO-007**: Rating Validation (bounds checking, K-factor constraints)
+- Updated MASTER_REQUIREMENTS reference to V2.24
+- Updated requirement statistics (129 → 136 total requirements)
 **Changes in v1.15:**
 - **EXECUTION ENVIRONMENT TRACKING**: Added REQ-DB-017 for single-database architecture
 - **REQ-DB-017**: execution_environment ENUM column for trades/positions tables
@@ -574,6 +586,62 @@ This document provides a systematic index of all Precog requirements using categ
 - Thread-safe statistics with threading.Lock
 - Backward compatibility aliases (MarketUpdater → ESPNGamePoller)
 - Related: ADR-103, src/precog/schedulers/base_poller.py
+
+---
+
+## Elo Rating Requirements (ELO)
+
+| ID | Title | Phase | Priority | Status | Document |
+|----|-------|-------|----------|--------|----------|
+| REQ-ELO-001 | Elo Engine Core | 2C | Critical | ✅ | MASTER_REQUIREMENTS_V2.24 |
+| REQ-ELO-002 | Sports-Specific Parameters | 2C | High | ✅ | MASTER_REQUIREMENTS_V2.24 |
+| REQ-ELO-003 | Historical Game Processing | 2C | High | ✅ | MASTER_REQUIREMENTS_V2.24 |
+| REQ-ELO-004 | Team Rating Storage | 2C | High | ✅ | MASTER_REQUIREMENTS_V2.24 |
+| REQ-ELO-005 | Rating Retrieval API | 2C | High | ✅ | MASTER_REQUIREMENTS_V2.24 |
+| REQ-ELO-006 | Win Probability Calculation | 2C | Critical | ✅ | MASTER_REQUIREMENTS_V2.24 |
+| REQ-ELO-007 | Rating Validation | 2C | Medium | ✅ | MASTER_REQUIREMENTS_V2.24 |
+
+**REQ-ELO-001: Elo Engine Core**
+- Core Elo calculation with configurable K-factor (default 20)
+- Home field advantage adjustment (default 65 Elo points)
+- Margin of victory multiplier for more accurate updates
+- Related: ADR-109, src/precog/analytics/elo_engine.py
+
+**REQ-ELO-002: Sports-Specific Parameters**
+- NFL: K=20, HFA=65 points, MOV multiplier=0.002
+- NBA: K=25, HFA=100 points, MOV multiplier=0.001
+- MLB: K=15, HFA=50 points, MOV multiplier=0.003
+- Related: config/sports.yaml, ELO_COMPUTATION_GUIDE_V1.1
+
+**REQ-ELO-003: Historical Game Processing**
+- Batch processing of historical games from games table
+- Chronological ordering for accurate rating evolution
+- Team initialization at 1500 Elo for new teams
+- Related: src/precog/analytics/elo_engine.py
+
+**REQ-ELO-004: Team Rating Storage**
+- elo_ratings table with current ratings per team/sport
+- elo_rating_history for historical rating tracking
+- team_id FK to teams table
+- Related: DATABASE_SCHEMA_SUMMARY_V1.15
+
+**REQ-ELO-005: Rating Retrieval API**
+- get_team_rating(team_id, sport, as_of_date=None)
+- get_all_ratings(sport, as_of_date=None)
+- get_rating_history(team_id, sport, start_date, end_date)
+- Related: src/precog/analytics/elo_engine.py
+
+**REQ-ELO-006: Win Probability Calculation**
+- expected_score = 1 / (1 + 10^((opponent_elo - team_elo) / 400))
+- Adjustable for home/away (add/subtract HFA)
+- Returns Decimal for precision
+- Related: ADR-002 (Decimal Precision), ADR-109
+
+**REQ-ELO-007: Rating Validation**
+- Elo bounds: 800-2200 (with warnings for extremes)
+- K-factor validation: 5-50 range
+- HFA validation: 0-200 points
+- Related: src/precog/analytics/elo_engine.py
 
 ---
 

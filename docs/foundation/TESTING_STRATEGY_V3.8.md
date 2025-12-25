@@ -34,7 +34,7 @@
 - **skipif pattern:** Stress tests use `pytest.mark.skipif(_is_ci)` to skip in CI (prevents ThreadPoolExecutor/threading.Barrier hangs)
 - **Root causes documented:** ThreadPoolExecutor deadlocks, threading barrier timeouts, pytest-timeout SIGALRM limitations
 - **Local-only testing:** Stress tests run locally with adequate resources; CI runs functional tests only
-- **Reference:** Pattern 28 (DEVELOPMENT_PATTERNS_V1.21.md), Issue #168, ADR-057 (testcontainers)
+- **Reference:** Pattern 28 (DEVELOPMENT_PATTERNS_V1.22.md), Issue #168, ADR-057 (testcontainers)
 **Changes in V3.3:**
 - **Test Isolation Patterns Section (NEW)** - Added comprehensive test isolation requirements based on Phase 1.9 findings
 - **5 Isolation Patterns Documented** - Transaction-based isolation, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2 isolation
@@ -901,7 +901,7 @@ pytestmark = [
 pytest tests/stress/ -v -m stress
 ```
 
-**Reference:** REQ-TEST-016 (Stress Test Requirements), Pattern 28 (DEVELOPMENT_PATTERNS_V1.21.md), Issue #168
+**Reference:** REQ-TEST-016 (Stress Test Requirements), Pattern 28 (DEVELOPMENT_PATTERNS_V1.22.md), Issue #168
 
 ---
 
@@ -2122,7 +2122,7 @@ All critical paths tested:
 python -m pytest tests/ --cov=src/precog --cov-report=term-missing
 
 # Compare to DEVELOPMENT_PHASES targets
-grep "≥" docs/foundation/DEVELOPMENT_PHASES_V1.12.md
+grep "≥" docs/foundation/DEVELOPMENT_PHASES_V1.14.md
 
 # Verify gaps documented in PR descriptions
 gh pr list --state merged --search "merged:>=2025-11-01"
@@ -2170,7 +2170,7 @@ connection.py         81.82%  (target: 80%, gap: +1.82pp ✅)
 - Write tests before/during implementation (TDD/test-driven)
 
 ### Cross-References
-- **DEVELOPMENT_PHASES_V1.12.md:** Phase-specific module targets
+- **DEVELOPMENT_PHASES_V1.14.md:** Phase-specific module targets
 - **Phase Completion Protocol (CLAUDE.md Step 5):** Coverage validation checklist
 - **Pattern 10:** Property-Based Testing (achieving high coverage with generated inputs)
 - **DEVELOPMENT_PHILOSOPHY_V1.3.md:** Test-Driven Development principle
@@ -3093,9 +3093,9 @@ pytest --cov=module tests/unit/test_new_feature.py
 - **Fixtures:** `tests/conftest.py` - Shared fixtures (db_pool, db_cursor, clean_test_data REQUIRED)
 - **Factories:** `tests/fixtures/factories.py` - Test data factories
 - **Scripts:** `scripts/test_*.sh`, `scripts/validate_*.sh` - Execution scripts
-- **Requirements:** `docs/foundation/MASTER_REQUIREMENTS_V2.23.md` - REQ-TEST-012 through REQ-TEST-019
-- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.31.md` - ADR-074, ADR-076 (Test Type Categories)
-- **Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.21.md` - Pattern 13 (Test Coverage Quality), Pattern 26 (Resource Cleanup), Pattern 27 (Dependency Injection), Pattern 28 (CI-Safe Stress Testing)
+- **Requirements:** `docs/foundation/MASTER_REQUIREMENTS_V2.24.md` - REQ-TEST-012 through REQ-TEST-019
+- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.32.md` - ADR-074, ADR-076 (Test Type Categories)
+- **Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.22.md` - Pattern 13 (Test Coverage Quality), Pattern 26 (Resource Cleanup), Pattern 27 (Dependency Injection), Pattern 28 (CI-Safe Stress Testing)
 - **Root Cause Analysis:** `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Phase 1.5 TDD failure lessons learned
 - **Validation:** `docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Overall quality infrastructure
 

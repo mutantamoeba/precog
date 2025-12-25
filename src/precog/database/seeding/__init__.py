@@ -57,6 +57,10 @@ from precog.database.seeding.batch_result import (
     FailedRecord,
     process_batch_with_error_handling,
 )
+from precog.database.seeding.epa_seeder import (
+    EPASeeder,
+    seed_epa_from_cli,
+)
 from precog.database.seeding.historical_elo_loader import (
     HistoricalEloRecord,
     LoadResult,
@@ -86,6 +90,7 @@ from precog.database.seeding.seeding_manager import (
 
 __all__ = [
     "BatchInsertResult",
+    "EPASeeder",
     "ErrorHandlingMode",
     "FailedRecord",
     "HistoricalEloRecord",
@@ -106,5 +111,6 @@ __all__ = [
     "load_odds_from_source",
     "process_batch_with_error_handling",
     "seed_all_teams",
+    "seed_epa_from_cli",
     "verify_required_seeds",
 ]

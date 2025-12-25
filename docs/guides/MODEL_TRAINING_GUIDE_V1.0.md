@@ -19,6 +19,11 @@
 - ADR-111: Cross-Validation Strategy (5-Fold Time-Series Split)
 - ADR-112: Model Serialization Format (Joblib for sklearn models)
 
+**Related Documents:**
+- `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` - Training data sources (nflreadpy, nba_api, etc.)
+- `docs/guides/ELO_COMPUTATION_GUIDE_V1.0.md` 🔵 **PLANNED** - Elo-specific methodology and K-factors
+- `docs/guides/DATA_COLLECTION_GUIDE_V1.2.md` - Historical data collection process
+
 ---
 
 ## Table of Contents

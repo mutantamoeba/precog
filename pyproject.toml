@@ -26,10 +26,11 @@ test = [
     "testcontainers[postgres]>=4.13.0",
 ]
 
-# Optional dependencies for historical data sources (Issue #229, ADR-106)
+# Optional dependencies for historical data sources (Issue #229, ADR-106, ADR-109)
 # Install with: pip install -e ".[historical]"
 historical = [
-    "nfl_data_py>=0.3.0",      # NFL schedules, play-by-play, rosters
+    "nflreadpy>=0.1.0",        # NFL schedules, play-by-play, EPA (replaces nfl_data_py)
+    "polars>=1.0.0",           # High-performance DataFrames (nflreadpy dependency)
     "nba_api>=1.4.0",          # NBA games, stats, player data
     "pybaseball>=2.2.0",       # MLB stats, retrosheet data
     "cfbd>=4.5.0",             # College football data, rankings
@@ -259,13 +260,17 @@ module = [
     "vcr.*",
     "testcontainers.*",
     "apscheduler.*",
+    "polars",                                                   # nflreadpy dependency (Polars DataFrames)
+    "polars.*",
 ]
 ignore_missing_imports = true  # External libraries without type stubs
 
 # Planned/optional modules - ignore until implemented
 [[tool.mypy.overrides]]
 module = [
-    "nfl_data_py",                                              # Optional sports data library
+    "nfl_data_py",                                              # Optional sports data library (deprecated)
+    "nflreadpy",                                                # NFL data with EPA (replaces nfl_data_py)
+    "nflreadpy.*",
     "precog.database.seeding.sources.sports.nba_api_adapter",   # Planned adapter
     "precog.database.seeding.sources.sports.pybaseball_adapter",# Planned adapter
     "precog.database.seeding.sources.sports.cfbd_adapter",      # Planned adapter

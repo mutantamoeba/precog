@@ -1,9 +1,15 @@
 # Architecture Decision Record Index
 
 ---
-**Version:** 1.24
-**Last Updated:** 2025-12-21
+**Version:** 1.25
+**Last Updated:** 2025-12-25
 **Status:** ✅ Current
+**Changes in v1.25:**
+- **ELO RATING SYSTEM (PHASE 2C)**: Added ADR-109 for Elo rating computation architecture
+- **ADR-109:** Elo Rating System for Sports Predictions - K-factor tuning, home advantage, margin multiplier
+- Documents sports-specific Elo with configurable parameters (K=20, HFA=65, margin multiplier=0.002)
+- Related requirements: REQ-ELO-001 through REQ-ELO-007
+- Total ADRs: 109 → 110 (1 new ADR for Elo rating system)
 **Changes in v1.24:**
 - **CLOUD INFRASTRUCTURE ARCHITECTURE (PHASE 2.5)**: Added ADR-107, ADR-108 for cloud deployment
 - **ADR-107:** Single-Database Architecture with Execution Environments (live/paper/backtest column)
@@ -362,6 +368,7 @@ This document provides a systematic index of all Precog architecture decisions u
 | ADR-106 | Historical Data Collection Architecture | 2025-12-15 | ✅ | 2.5 | ARCHITECTURE_DECISIONS_V2.31 |
 | ADR-107 | Single-Database Architecture with Execution Environments | 2025-12-20 | ✅ | 2 | ADR-107_Single_Database_Execution_Environments.md |
 | ADR-108 | Hybrid Cloud Architecture for Live Data Collection | 2025-12-21 | ✅ | 2.5 | ADR-108_Hybrid_Cloud_Architecture.md |
+| ADR-109 | Elo Rating System for Sports Predictions | 2025-12-24 | ✅ | 2C | ARCHITECTURE_DECISIONS_V2.32.md |
 
 ### Phase 2: Live Data Integration (Planned)
 
@@ -599,7 +606,7 @@ Standardize on `approach`/`domain` for both probability_models and strategies ta
 
 **References:**
 - Migration 011 implementation
-- DATABASE_SCHEMA_SUMMARY_V1.14.md
+- DATABASE_SCHEMA_SUMMARY_V1.15.md
 - scripts/validate_schema.py (DEF-P1-008)
 - REQ-DB-006
 
@@ -637,7 +644,7 @@ Phase 1.5 architecture: **3 managers** (Strategy, Model, Position) - NOT 4
 
 **References:**
 - DEVELOPMENT_PHASES_V1.4.md (Phase 1.5 deliverables)
-- DATABASE_SCHEMA_SUMMARY_V1.14.md (edges table)
+- DATABASE_SCHEMA_SUMMARY_V1.15.md (edges table)
 - REQ-TRADING-001, REQ-ML-001
 
 ---
@@ -755,7 +762,7 @@ CREATE TABLE trades (
 - ARCHITECTURE_DECISIONS_V2.20.md (full ADR-089 with 433 lines of details)
 - DEVELOPMENT_PATTERNS_V1.5.md (Pattern 14: Schema Migration → CRUD Workflow)
 - SCHEMA_MIGRATION_WORKFLOW_V2.1.md (comprehensive Alembic migration guide)
-- DATABASE_SCHEMA_SUMMARY_V1.14.md (Migration 011 implementation)
+- DATABASE_SCHEMA_SUMMARY_V1.15.md (Migration 011 implementation)
 
 ---
 
@@ -884,7 +891,7 @@ Use EXPLICIT COLUMNS (not JSONB) for trade and position attribution fields.
 **References:**
 - ARCHITECTURE_DECISIONS_V2.20.md (full ADR-091 with performance benchmarks)
 - docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md (JSONB vs explicit columns tradeoff analysis)
-- DATABASE_SCHEMA_SUMMARY_V1.14.md (current schema pre-attribution)
+- DATABASE_SCHEMA_SUMMARY_V1.15.md (current schema pre-attribution)
 - ADR-002 (Decimal Precision - all fields DECIMAL(10,4) not FLOAT)
 
 ---
@@ -1041,7 +1048,7 @@ ALTER TABLE probability_models
 **References:**
 - ARCHITECTURE_DECISIONS_V2.20.md (full ADR-093 with 378 lines of implementation details)
 - MASTER_REQUIREMENTS_V2.17.md (REQ-DB-015: Strategy Type Lookup Table, REQ-DB-016: Model Class Lookup Table)
-- DATABASE_SCHEMA_SUMMARY_V1.14.md (FK constraint implementation details)
+- DATABASE_SCHEMA_SUMMARY_V1.15.md (FK constraint implementation details)
 - docs/database/LOOKUP_TABLES_DESIGN.md (complete design specification)
 - Migration 023: migration_023_create_lookup_tables.py
 - src/precog/database/lookup_helpers.py (helper functions)

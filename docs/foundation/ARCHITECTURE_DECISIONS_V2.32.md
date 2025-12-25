@@ -1,9 +1,17 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.31
-**Last Updated:** December 21, 2025
+**Version:** 2.32
+**Last Updated:** December 24, 2025
 **Status:** ✅ Current
+**Changes in v2.32:**
+- **ELO RATING COMPUTATION ENGINE (PHASE 3):** Added ADR-109 for multi-sport Elo computation
+- ADR-109: Elo Rating Computation Engine Architecture - Multi-sport Elo computation with sport-specific K-factors, EPA integration, and real-time updates
+- Supports Issue #273 (Elo Module Planning), DATA_SOURCES_SPECIFICATION_V1.0.md
+- **DATA SOURCE UPDATES:** Documents FiveThirtyEight shutdown (March 2025) requiring Elo computation from game results
+- **EPA AVAILABLE FREE:** Pre-computed in nflreadpy load_pbp() (372 columns)
+- **DVOA UNAVAILABLE:** Proprietary FTN metric, requires subscription
+- Cross-references: REQ-ELO-001 through REQ-ELO-007, ELO_COMPUTATION_GUIDE_V1.1.md (planned)
 **Changes in v2.31:**
 - **HYBRID CLOUD ARCHITECTURE (PHASE 2.5):** Added ADR-107, ADR-108 for cloud deployment
 - ADR-107: Single-Database Architecture with Execution Environments - One database for all environments with execution_environment column ('live', 'paper', 'backtest')
@@ -59,7 +67,7 @@
 - GameStateProvider abstraction pattern for swappable data sources
 - Multi-source reconciler for cross-checking free sources and marking confidence levels
 - Strategy latency tolerance requirements: 30-60s acceptable for most strategies, sub-second needed only for live in-game scalping
-- Updates to docs/guides/DATA_COLLECTION_GUIDE_V1.1.md → V1.1
+- Updates to docs/guides/DATA_COLLECTION_GUIDE_V1.2.md → V1.1
 **Changes in v2.22:**
 - **ESPN DATA MODEL ARCHITECTURE (PHASE 2):** Added ADR-029 (ESPN Data Model with Normalized Schema)
 - Documents normalized 4-table schema for ESPN data: venues, game_states (SCD Type 2), teams (enhanced), team_rankings
@@ -3028,7 +3036,7 @@ class LatencyTracker:
 - REQ-DATA-003: Multi-Source Data Reconciliation
 
 **Related Documentation:**
-- docs/guides/DATA_COLLECTION_GUIDE_V1.1.md (implementation guide with tiering strategy)
+- docs/guides/DATA_COLLECTION_GUIDE_V1.2.md (implementation guide with tiering strategy)
 - docs/supplementary/SPORTS_PROBABILITIES_RESEARCH_V1.0.md (EPA research)
 - docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md (Kalshi integration)
 
@@ -6350,7 +6358,7 @@ CREATE TABLE model_config_params (
 - ADR-079: Performance Tracking Architecture (query patterns inform this decision)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (current JSONB schema)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (current JSONB schema)
 - `config/probability_models.yaml` (config examples)
 - `config/trade_strategies.yaml` (strategy config examples)
 
@@ -6807,8 +6815,8 @@ CREATE TABLE brier_score_metrics (...);
 - STRAT-026: Performance Metrics Infrastructure Implementation (Phase 1.5-2, 18-22h)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (Section 8: Performance Tracking & Analytics)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -7564,8 +7572,8 @@ Cons:
 
 ### References
 
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (Section 8: Performance Tracking & Analytics)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -8332,8 +8340,8 @@ WebSocket for Position Monitoring (real-time):
 
 ### References
 
-- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 7 Task #2: Frontend Development)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8.9: Materialized Views)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 7 Task #2: Frontend Development)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (Section 8.9: Materialized Views)
 - Next.js Documentation: https://nextjs.org/docs
 - Recharts Documentation: https://recharts.org/
 - React Query Documentation: https://tanstack.com/query/latest
@@ -9252,10 +9260,10 @@ def run_holdout_validation(
 ### Related Documentation
 
 - `docs/guides/MODEL_EVALUATION_GUIDE_V1.0.md` (implementation guide - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.23.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.24.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 2 Task #3, Phase 6 Task #1)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8.7: Evaluation Runs Table)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 2 Task #3, Phase 6 Task #1)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (Section 8.7: Evaluation Runs Table)
 
 ---
 
@@ -9975,10 +9983,10 @@ ON position_risk_by_strategy(league, strategy_name);
 
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (comprehensive analytics implementation guide - to be created)
 - `docs/guides/DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md` (React dashboard + API integration - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.23.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.24.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 6 Task #3, Phase 7 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8.8: Materialized Views Reference)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 6 Task #3, Phase 7 Task #2)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (Section 8.8: Materialized Views Reference)
 
 ---
 
@@ -10806,10 +10814,10 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 
 - `docs/guides/AB_TESTING_GUIDE_V1.0.md` (comprehensive A/B testing guide - to be created)
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (includes A/B testing architecture)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.23.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.24.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 7 Task #3, Phase 8 Task #2)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (Section 8.9: A/B Tests Table)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 7 Task #3, Phase 8 Task #2)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (Section 8.9: A/B Tests Table)
 
 ---
 
@@ -11243,8 +11251,8 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 - ADR-018: Immutable Versions Pattern (JSONB supports atomic config versioning)
 
 **References:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (materialized views already defined)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.23.md` (analytics requirements)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (materialized views already defined)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.24.md` (analytics requirements)
 
 ---
 
@@ -11412,7 +11420,7 @@ python scripts/validate_schema.py --ci
 ```
 
 **Future Expansion (Phase 2+):**
-- Parse DATABASE_SCHEMA_SUMMARY_V1.14.md directly (vs. hardcoded schemas)
+- Parse DATABASE_SCHEMA_SUMMARY_V1.15.md directly (vs. hardcoded schemas)
 - Add more tables: markets, positions, trades, etc.
 - Integrate into CI/CD pipeline (blocks PRs if schema drift detected)
 
@@ -11546,7 +11554,7 @@ CREATE TABLE strategies (
 **References:**
 - `src/precog/database/migrations/migration_011_standardize_classification_fields.py` (implementation)
 - `scripts/validate_schema.py` (automated validation)
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (updated schemas)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (updated schemas)
 - `docs/utility/PHASE_1_DEFERRED_TASKS_V1.0.md` (DEF-P1-008 completed)
 
 ---
@@ -11723,8 +11731,8 @@ CREATE TABLE strategies (
 
 ### References
 
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (edges table schema)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.12.md` (Phase 1.5 manager components)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (edges table schema)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 1.5 manager components)
 - `src/precog/trading/model_manager.py` (edge calculation logic - Phase 1.5 implementation)
 - `src/precog/trading/strategy_manager.py` (edge query logic - Phase 1.5 implementation)
 
@@ -12158,12 +12166,12 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 **Primary Documentation:**
 - TESTING_STRATEGY_V3.8.md (comprehensive 8 test type framework, 1,462 lines)
 - TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md (REQ-TEST-012 through REQ-TEST-019)
-- MASTER_REQUIREMENTS_V2.23.md (added 8 new test requirements)
+- MASTER_REQUIREMENTS_V2.24.md (added 8 new test requirements)
 - REQUIREMENT_INDEX.md (added REQ-TEST-012 through REQ-TEST-019)
 
 **Supporting Documentation:**
 - DEVELOPMENT_PHILOSOPHY_V1.3.md (updated TDD section with Phase 1.5 lesson learned)
-- DEVELOPMENT_PATTERNS_V1.21.md (added Pattern 13: Test Coverage Quality, Patterns 26-28: Resource Cleanup, Dependency Injection, CI-Safe Stress Testing)
+- DEVELOPMENT_PATTERNS_V1.22.md (added Pattern 13: Test Coverage Quality, Patterns 26-28: Resource Cleanup, Dependency Injection, CI-Safe Stress Testing)
 - PHASE_1.5_TEST_PLAN_V1.0.md (test planning for manager components)
 
 **Development Guides:**
@@ -12234,7 +12242,7 @@ tests/
 - `docs/foundation/TESTING_STRATEGY_V3.8.md` (comprehensive 8 test type framework)
 - `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md` (REQ-TEST-012 through REQ-TEST-019)
 - `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md` (TDD section with Phase 1.5 lessons)
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.21.md` (Pattern 13: Test Coverage Quality, Patterns 26-28)
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.22.md` (Pattern 13: Test Coverage Quality, Patterns 26-28)
 
 **Code:**
 - `tests/conftest.py` (db_pool, clean_test_data fixtures)
@@ -12288,7 +12296,7 @@ Decision to use pytest as the primary testing framework with coverage, async sup
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.14.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.15.md
 
 Decision to enforce referential integrity using PostgreSQL foreign key constraints on all relationship columns.
 
@@ -12296,7 +12304,7 @@ Decision to enforce referential integrity using PostgreSQL foreign key constrain
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.14.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.15.md
 
 Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key relationships.
 
@@ -12304,7 +12312,7 @@ Decision on when to use ON DELETE CASCADE vs. ON DELETE RESTRICT for foreign key
 
 **Status:** ✅ Accepted
 **Phase:** 0
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.14.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.15.md
 
 Decision to create database views that filter for current rows (row_current_ind = TRUE) to simplify application queries.
 
@@ -12328,7 +12336,7 @@ Decision to implement 2-stage partial exits (50% at +15%, 25% at +25%, 25% with 
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.14.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.15.md
 
 Decision to use append-only table for position_exits to maintain complete exit event history.
 
@@ -12336,7 +12344,7 @@ Decision to use append-only table for position_exits to maintain complete exit e
 
 **Status:** ✅ Accepted
 **Phase:** 0.5
-**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.14.md
+**Documented in:** DATABASE_SCHEMA_SUMMARY_V1.15.md
 
 Decision to log all exit order attempts (filled and unfilled) to exit_attempts table for debugging "why didn't my exit fill?" issues.
 
@@ -13207,7 +13215,7 @@ Result: Only enter when model confident AND market mispriced
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Comprehensive architectural analysis
 - `docs/guides/VERSIONING_GUIDE_V1.0.md` - Strategy/model versioning patterns
-- `MASTER_REQUIREMENTS_V2.23.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
+- `MASTER_REQUIREMENTS_V2.24.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -13626,8 +13634,8 @@ def validate_position_trade_attribution(position_id: str) -> bool:
 ### Related Documentation
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Attribution architecture analysis with tradeoffs
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` - Current schema (pre-attribution)
-- `MASTER_REQUIREMENTS_V2.23.md` - REQ-DB-006 (Decimal precision for all financial fields)
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` - Current schema (pre-attribution)
+- `MASTER_REQUIREMENTS_V2.24.md` - REQ-DB-006 (Decimal precision for all financial fields)
 
 **Status:** ✅ Decision approved, implementation in progress (Migrations 019-020 planned)
 
@@ -14002,7 +14010,7 @@ def sync_trades_full():
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Trade source tracking architectural analysis
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` - Kalshi API trade download patterns
-- `MASTER_REQUIREMENTS_V2.23.md` - REQ-API-001 (Kalshi API Integration)
+- `MASTER_REQUIREMENTS_V2.24.md` - REQ-API-001 (Kalshi API Integration)
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -14378,11 +14386,11 @@ def test_invalid_strategy_type_raises_foreign_key_error():
 ### Related Documentation
 
 - `docs/database/LOOKUP_TABLES_DESIGN.md` - Complete design specification with UI examples
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` - Updated schema documentation
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` - Updated schema documentation
 - `src/precog/database/lookup_helpers.py` - Helper functions implementation
 - `tests/test_lookup_tables.py` - Comprehensive test suite (23 tests, 100% coverage)
 - `src/precog/database/migrations/migration_023_create_lookup_tables.py` - Migration script
-- `MASTER_REQUIREMENTS_V2.23.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
+- `MASTER_REQUIREMENTS_V2.24.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
 
 **Status:** ✅ Decision approved, implementation complete (Migration 023 applied, helper module created, 23 tests passing)
 
@@ -15216,7 +15224,7 @@ pytest tests/stress/test_config_loader_stress.py tests/stress/test_logger_stress
 ### Related Artifacts
 
 - **Issue:** #168 (Testcontainers for Database Stress Tests)
-- **Pattern:** Pattern 28 in DEVELOPMENT_PATTERNS_V1.21.md
+- **Pattern:** Pattern 28 in DEVELOPMENT_PATTERNS_V1.22.md
 - **Testing Strategy:** TESTING_STRATEGY_V3.8.md Section 5.3.4 (Stress Tests CI Behavior)
 - **Isolation Patterns:** TEST_ISOLATION_PATTERNS_V1.1.md Pattern 6 (CI-Safe ThreadPoolExecutor)
 - **Requirement:** REQ-TEST-020 (CI-Safe Stress Testing)
@@ -15778,6 +15786,133 @@ Implement a **Hybrid Cloud Architecture** with clear separation:
 
 ---
 
+## Decision #109/ADR-109: Elo Rating Computation Engine Architecture
+
+**Date:** December 24, 2025
+**Status:** Proposed
+**Phase:** 3
+**Related Issues:** #273 (Elo Module Planning)
+**Related REQs:** REQ-ELO-001 through REQ-ELO-007
+
+### Context
+
+After FiveThirtyEight's shutdown in March 2025, pre-computed Elo ratings are no longer available for download. The Precog system requires accurate probability estimates for prediction market trading, making Elo computation a critical capability.
+
+Additionally, the `nfl_data_py` library was archived in September 2025 and replaced by `nflreadpy`, requiring migration of all NFL data access code.
+
+### Decision
+
+Implement a multi-sport Elo computation engine with the following architecture:
+
+#### 1. Core Elo Engine (`src/precog/analytics/elo_engine.py`)
+
+```python
+from decimal import Decimal
+from typing import Literal
+
+SportType = Literal["nfl", "nba", "nhl", "mlb", "ncaaf", "ncaab"]
+
+K_FACTORS: dict[SportType, int] = {
+    "nfl": 20,    # Short season, high variance
+    "nba": 20,    # Long season, moderate variance
+    "nhl": 6,     # Low scoring variance
+    "mlb": 4,     # Very long season, low game variance
+    "ncaaf": 20,  # Short season, high variance
+    "ncaab": 20,  # Moderate season
+}
+
+class EloEngine:
+    """Multi-sport Elo computation engine."""
+
+    def calculate_expected_score(
+        self,
+        rating_self: Decimal,
+        rating_opponent: Decimal
+    ) -> Decimal:
+        """Calculate expected score using Elo formula."""
+        exponent = (rating_opponent - rating_self) / Decimal("400")
+        return Decimal("1") / (Decimal("1") + Decimal("10") ** exponent)
+
+    def update_rating(
+        self,
+        current_rating: Decimal,
+        actual_score: Decimal,  # 1.0 = win, 0.5 = draw, 0.0 = loss
+        expected_score: Decimal,
+        k_factor: int
+    ) -> Decimal:
+        """Update Elo rating after a game."""
+        return current_rating + Decimal(k_factor) * (actual_score - expected_score)
+```
+
+#### 2. Sport-Specific Data Sources
+
+| Sport | Library | Function | Data Available | Date Range |
+|-------|---------|----------|----------------|------------|
+| NFL | nflreadpy | `load_schedules()` | Game results | 1999-present |
+| NBA | nba_api | `LeagueGameFinder` | Game results | 1946-present |
+| NHL | nhl-api-py | `schedule` module | Game results | 1917-present |
+| MLB | pybaseball | `schedule_and_record()` | Game results | 1871-present |
+| NCAAF | cfbd | Games API | Game results | 2000-present |
+| NCAAB | sportsdataverse | Games module | Game results | 2002-present |
+
+#### 3. EPA Integration (NFL Only)
+
+EPA (Expected Points Added) is available **FREE** in nflreadpy's `load_pbp()` function with 372 columns including:
+- `epa`, `qb_epa` - Per-play and QB-specific EPA
+- `total_home_epa`, `total_away_epa` - Cumulative game EPA
+- `air_epa`, `yac_epa` - Air yards vs YAC EPA
+
+**DVOA is NOT available** - proprietary FTN metric requiring subscription.
+
+#### 4. Database Schema
+
+```sql
+CREATE TABLE team_elo_ratings (
+    id SERIAL PRIMARY KEY,
+    team_id INTEGER NOT NULL REFERENCES teams(id),
+    sport VARCHAR(10) NOT NULL,
+    elo_rating DECIMAL(8,2) NOT NULL,
+    effective_date DATE NOT NULL,
+    game_id INTEGER REFERENCES game_states(id),
+    previous_elo DECIMAL(8,2),
+    elo_change DECIMAL(6,2),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(team_id, effective_date)
+);
+
+CREATE INDEX idx_team_elo_team_date ON team_elo_ratings(team_id, effective_date DESC);
+CREATE INDEX idx_team_elo_sport_date ON team_elo_ratings(sport, effective_date DESC);
+```
+
+### Consequences
+
+**Positive:**
+- Full control over Elo computation methodology
+- Multi-sport support with sport-specific K-factors
+- Integration with live game states for real-time updates
+- EPA enhancement for NFL predictions (free)
+- Historical bootstrapping capability
+
+**Negative:**
+- Requires initial data collection and processing (~100K+ games)
+- No DVOA integration possible (proprietary)
+- Must maintain data source adapters for each sport
+
+### Alternatives Considered
+
+1. **Continue using FiveThirtyEight data** - Rejected: Service shut down March 2025
+2. **Purchase pre-computed Elo** - Rejected: No reliable commercial source exists
+3. **Use betting odds as proxy** - Rejected: Different from true probability estimates
+
+### References
+
+- `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` - Data source details
+- `docs/guides/ELO_COMPUTATION_GUIDE_V1.1.md` (planned) - Implementation guide
+- Issue #273: Elo Module Planning
+- REQ-ELO-001 through REQ-ELO-007 in MASTER_REQUIREMENTS_V2.24.md
+
+---
+
 ## Approval & Sign-off
 
 This document represents the architectural decisions as of October 22, 2025 (Phase 0.5 completion with standardization).
@@ -15788,9 +15923,10 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.31
-**Last Updated:** December 21, 2025
+**Document Version:** 2.32
+**Last Updated:** December 24, 2025
 **Critical Changes:**
+- v2.32: **ELO RATING COMPUTATION ENGINE** - Added Decision #109/ADR-109 (Elo Rating Computation Engine Architecture with multi-sport support, sport-specific K-factors, EPA integration, data source migration). Issue #273, REQ-ELO-001 through REQ-ELO-007. FiveThirtyEight shutdown noted, nfl_data_py deprecation documented.
 - v2.31: **CLOUD INFRASTRUCTURE ARCHITECTURE** - Added Decisions #107-108/ADR-107-108 (Single-Database Architecture with execution_environment, Hybrid Cloud Architecture for Railway deployment with TimescaleDB). Phase 3.5 Web Interface added. Issues #241, #247.
 - v2.30: **HISTORICAL DATA COLLECTION ARCHITECTURE** - Added Decision #106/ADR-106 for BaseDataSource pattern (mirrors BasePoller ADR-103) with source adapters for FiveThirtyEight, betting CSV, and sport-specific Python libraries. Hybrid architecture separates live polling (schedulers/) from batch seeding (database/seeding/). Issue #229.
 - v2.29: **TWO-AXIS ENVIRONMENT CONFIGURATION (PLANNED)** - Added Decision #105/ADR-105 for environment configuration architecture with PRECOG_ENV (database) + {MARKET}_MODE (API per market) with safety guardrails. Documented in PHASE_2.5_DEFERRED_TASKS_V1.1, Issue #202.

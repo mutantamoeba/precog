@@ -1,13 +1,26 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.21
+**Version:** 1.22
 **Created:** 2025-11-13
-**Last Updated:** 2025-12-24
+**Last Updated:** 2025-12-25
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.22:**
+- **Added Pattern 34: Two-Layer Schema Architecture for Historical Data Seeding (ALWAYS for External Data)**
+- Seeding Layer (team_code VARCHAR) for flexible external data loading from CSV, APIs, scraped data
+- Production Layer (team_id INTEGER FK) for referential integrity, efficient joins, and constraint enforcement
+- Documents dual-column strategy: both team_code and team_id coexist, nullable FKs enable gradual backfill
+- Real-world trigger: Issue #273 historical data seeding needed flexible loading before team mappings exist
+- Applied across 7 historical tables: historical_elo, historical_games, historical_odds, historical_epa, historical_stats, historical_rankings, elo_calculation_log
+- **Enhanced Pattern 18: Added SCD Type 2 Column Preservation Failure section (CRITICAL BUG PATTERN)**
+- Documents insidious bug: adding columns to SCD Type 2 tables requires updating ALL versioning operations
+- Real-world trigger: execution_environment column added but not preserved in close_position() SCD version
+- Includes column preservation checklist (6 items), prevention strategies, test pattern to catch bug
+- Bug behavior: tests pass, but queries fail silently due to NULL in new column
+- Total addition: ~400 lines documenting both patterns
 **Changes in V1.21:**
 - **Added Pattern 33: API Vocabulary Alignment (ALWAYS for External API Integration)**
 - When integrating external APIs, adapt database schema to match API vocabulary rather than creating translation layers
@@ -2845,6 +2858,119 @@ Q: Did you update documentation?
 - Phase 5+ (not Phase 1-2) - Premature optimization
 - Only when query performance degrades (>100ms for current positions)
 - Keep at least 30 days of history for debugging
+
+### SCD Type 2 Column Preservation Failure (CRITICAL BUG PATTERN)
+
+**The Problem:** When adding new columns to SCD Type 2 tables, developers update the CREATE (initial INSERT) but forget to update the VERSION (UPDATE→INSERT for SCD Type 2) operations.
+
+**Real-World Example (December 2025):**
+- Added `execution_environment` column to `positions` table via migration
+- Updated `create_position()` to include new column ✅
+- **FORGOT** to update `close_position()` to preserve column in closed version ❌
+
+**Bug Behavior:**
+```python
+# Position created with execution_environment="paper"
+pos_id = create_position(market_id=1, execution_environment="paper", ...)
+
+# Position closed - BUT execution_environment was NULL in closed version!
+closed_id = close_position(position_id=pos_id, exit_price=Decimal("0.60"), ...)
+
+# Query for closed paper positions returns NOTHING (because env is NULL)
+closed = get_current_positions(status="closed", execution_environment="paper")
+# closed == []  # Bug! Should have found the closed position
+```
+
+**Root Cause in close_position():**
+```python
+# WRONG - Missing execution_environment column
+cur.execute("""
+    INSERT INTO positions (
+        position_id, market_id, strategy_id, model_id, side,
+        quantity, entry_price, exit_price, current_price,
+        realized_pnl,
+        target_price, stop_loss_price,
+        trailing_stop_state, position_metadata,
+        status, entry_time, exit_time
+        -- ❌ MISSING: execution_environment
+    )
+    VALUES (...)
+""", (...))  # execution_environment gets default NULL
+
+# CORRECT - Preserve ALL columns from original position
+cur.execute("""
+    INSERT INTO positions (
+        position_id, market_id, strategy_id, model_id, side,
+        quantity, entry_price, exit_price, current_price,
+        realized_pnl,
+        target_price, stop_loss_price,
+        trailing_stop_state, position_metadata,
+        status, entry_time, exit_time, execution_environment  -- ✅ Added
+    )
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'closed', %s, NOW(), %s)
+""", (
+    current["position_id"],
+    # ... other columns ...
+    current["execution_environment"],  # ✅ Preserve from original
+))
+```
+
+**Column Preservation Checklist for SCD Type 2 Migrations:**
+
+When adding a new column to an SCD Type 2 table:
+
+1. **Migration:** Add column with appropriate default
+2. **create_*() function:** Include new column in initial INSERT ✅
+3. **update_*() function:** Preserve column in new SCD version ⚠️ EASILY FORGOTTEN
+4. **close_*() function:** Preserve column in final SCD version ⚠️ EASILY FORGOTTEN
+5. **get_*() function:** Include column in SELECT if needed for queries
+6. **Tests:** Add test that verifies column survives SCD versioning
+
+**Prevention Strategies:**
+
+| Strategy | Implementation |
+|----------|----------------|
+| **Code review checklist** | "Does close_*() preserve all columns from current?" |
+| **SELECT * in versioning** | Fetch all columns, pass all to INSERT (but verify explicitly) |
+| **Integration test** | Create→Update→Close→Verify all columns preserved |
+| **Pre-push hook** | Validate INSERT column count matches table schema |
+
+**Test Pattern to Catch This Bug:**
+```python
+def test_close_position_preserves_execution_environment(db_pool, clean_test_data):
+    """Verify execution_environment survives close_position() SCD versioning."""
+    # Create position with paper environment
+    pos_id = create_position(
+        market_id=market_id,
+        execution_environment="paper",  # Explicitly set
+        ...
+    )
+
+    # Close position (creates new SCD Type 2 row)
+    closed_id = close_position(
+        position_id=pos_id,
+        exit_price=Decimal("0.60"),
+        ...
+    )
+
+    # ✅ CRITICAL: Verify execution_environment preserved in closed version
+    closed_positions = get_current_positions(
+        status="closed",
+        execution_environment="paper"  # Filter by original value
+    )
+    assert any(p["id"] == closed_id for p in closed_positions), \
+        "execution_environment lost during close_position() SCD versioning!"
+```
+
+**Why This Bug Is Insidious:**
+1. **Tests pass with simple assertions** - checking exit_price, status works fine
+2. **Column gets NULL** - no error thrown, just silent data loss
+3. **Queries fail silently** - filter by column returns no results
+4. **Found only by specific tests** - must explicitly test column preservation
+
+**Related Files:**
+- `src/precog/database/crud_operations.py:close_position()` - Fixed in Issue #273
+- `tests/test_crud_operations.py` - 4 tests added for execution_environment
 
 ### Cross-References
 
@@ -8087,6 +8213,240 @@ def _sync_single_series(self, series_data: SeriesData) -> bool:
 
 ---
 
+## Pattern 34: Two-Layer Schema Architecture for Historical Data Seeding (ALWAYS for External Data)
+
+**Priority:** 🔴 CRITICAL
+**Applicability:** ALWAYS for tables that store data from external sources (CSV, APIs, web scraping)
+**Implementation Requirement:** Design schema with dual identifiers from the start
+**Introduced:** Phase 2.7 (Issue #273 - Comprehensive Elo Rating Computation Module)
+
+### Why This Pattern Matters
+
+When seeding historical data from external sources (FiveThirtyEight Elo, ESPN game results, betting odds CSVs), you face a chicken-and-egg problem:
+
+1. **External data uses string identifiers** (team codes like "KC", "BUF", "LAL")
+2. **Production queries need foreign keys** for efficient joins and referential integrity
+3. **Team mappings may not exist** when you first load the historical data
+4. **Different sources use different codes** ("KC" vs "KAN" vs "Kansas City")
+
+### The Two-Layer Solution
+
+Create tables with **both** identifier columns:
+
+| Layer | Column | Type | Purpose |
+|-------|--------|------|---------|
+| **Seeding Layer** | `team_code` | VARCHAR(10) | Flexible external data loading (from CSV, APIs, scraped data) |
+| **Production Layer** | `team_id` | INTEGER FK | Referential integrity, efficient joins, constraint enforcement |
+
+### Key Design Decisions
+
+1. **`team_code` is NOT NULL** - Required for data loading (source of truth from external data)
+2. **`team_id` is NULLABLE** - Allows gradual backfill after team mappings are established
+3. **Both columns coexist** - Neither replaces the other; they serve different purposes
+4. **FK uses `ON DELETE SET NULL`** - Prevents cascading deletes from breaking historical records
+
+### Implementation Across Historical Tables
+
+| Table | Seeding Column(s) | Production FK(s) | Migration |
+|-------|-------------------|------------------|-----------|
+| `historical_elo` | `team_code` (V1.22: should add) | `team_id` NOT NULL | 0005 |
+| `historical_games` | `home_team_code`, `away_team_code` | `home_team_id`, `away_team_id` | 0006 |
+| `historical_odds` | `home_team_code`, `away_team_code` | `home_team_id`, `away_team_id` | 0007 + 0013 |
+| `historical_epa` | `team_code` | `team_id` | 0013 |
+| `historical_stats` | `team_code` | `team_id` | 0009 + 0013 |
+| `historical_rankings` | `team_code` | `team_id` | 0009 + 0013 |
+| `elo_calculation_log` | `home_team_code`, `away_team_code` | `home_team_id`, `away_team_id` | 0013 |
+
+### Migration Example
+
+**Adding team_id FK to existing table (Migration 0013):**
+
+```python
+def upgrade() -> None:
+    """Add team_id FK columns to historical tables."""
+    # Add nullable FK columns for gradual backfill
+    op.add_column(
+        "historical_odds",
+        sa.Column(
+            "home_team_id",
+            sa.Integer(),
+            sa.ForeignKey("teams.team_id", ondelete="SET NULL"),
+            nullable=True,  # Nullable for gradual backfill
+            comment="FK to teams table for home team (backfill from home_team_code)",
+        ),
+    )
+    op.add_column(
+        "historical_odds",
+        sa.Column(
+            "away_team_id",
+            sa.Integer(),
+            sa.ForeignKey("teams.team_id", ondelete="SET NULL"),
+            nullable=True,
+            comment="FK to teams table for away team (backfill from away_team_code)",
+        ),
+    )
+
+    # Create partial indexes (only for non-null values)
+    op.create_index(
+        "idx_historical_odds_home_team_id",
+        "historical_odds",
+        ["home_team_id"],
+        postgresql_where=sa.text("home_team_id IS NOT NULL"),
+    )
+```
+
+### Backfill Workflow
+
+After team seed data exists, run a backfill to populate `team_id` from `team_code`:
+
+```sql
+-- Backfill team_id from team_code mapping
+UPDATE historical_epa h
+SET team_id = t.team_id
+FROM teams t
+WHERE h.team_code = t.abbreviation
+  AND t.sport = h.sport
+  AND h.team_id IS NULL;
+
+-- Verify backfill coverage
+SELECT
+    COUNT(*) as total,
+    COUNT(team_id) as with_fk,
+    COUNT(*) - COUNT(team_id) as missing_fk
+FROM historical_epa;
+```
+
+### Query Patterns
+
+**During seeding (use team_code):**
+```python
+# Seeder doesn't need team_id - uses team_code for deduplication
+def _upsert_epa_record(self, record: EPARecord, season: int) -> Literal["inserted", "updated", "skipped"]:
+    team_code = record["team_code"]
+    team_id = self._resolve_team_id(team_code)  # Optional FK resolution
+
+    # Insert with both columns
+    cur.execute("""
+        INSERT INTO historical_epa (team_id, team_code, season, ...)
+        VALUES (%s, %s, %s, ...)
+    """, (team_id, team_code, season, ...))
+```
+
+**During production queries (use team_id for joins):**
+```python
+# Production queries use team_id for efficient joins
+def get_team_epa_for_game(team_id: int, season: int, week: int) -> EPARecord:
+    result = conn.execute(text("""
+        SELECT e.*, t.name as team_name, t.conference
+        FROM historical_epa e
+        JOIN teams t ON e.team_id = t.team_id  -- Efficient FK join
+        WHERE e.team_id = :team_id
+          AND e.season = :season
+          AND e.week = :week
+    """), {"team_id": team_id, "season": season, "week": week})
+```
+
+### Code Mapping Between Layers
+
+Create a mapping utility to translate between layers:
+
+```python
+def resolve_team_id(conn: Connection, team_code: str, sport: str = "nfl") -> int | None:
+    """Resolve team code to team_id from teams table.
+
+    Args:
+        conn: Database connection
+        team_code: Team abbreviation (e.g., "KC", "BUF")
+        sport: Sport code (default "nfl")
+
+    Returns:
+        team_id if found, None otherwise
+
+    Educational Note:
+        This function bridges the two-layer architecture:
+        - Input: team_code (seeding layer identifier)
+        - Output: team_id (production layer FK)
+
+        The mapping is established by the teams seed data, which
+        must be loaded BEFORE calling this function.
+    """
+    result = conn.execute(
+        text("""
+            SELECT team_id FROM teams
+            WHERE abbreviation = :team_code
+              AND sport = :sport
+            LIMIT 1
+        """),
+        {"team_code": team_code, "sport": sport},
+    )
+    row = result.fetchone()
+    return row[0] if row else None
+```
+
+### Decision Tree
+
+| Scenario | Recommended Approach |
+|----------|---------------------|
+| **New historical table** | Create with BOTH team_code AND team_id columns from the start |
+| **Existing table without team_id** | Add team_id via migration, backfill after teams seeded |
+| **External source with unknown codes** | Map to canonical codes first, then resolve to team_id |
+| **Multiple sources with conflicting codes** | Create mapping table: `team_code_aliases(source, code, canonical_code)` |
+
+### Wrong vs. Correct
+
+```python
+# WRONG - Using only team_id (can't load if teams don't exist)
+op.create_table(
+    "historical_epa",
+    sa.Column("team_id", sa.Integer(), sa.ForeignKey("teams.team_id"), nullable=False),
+    # ... Can't seed if teams table is empty!
+)
+
+# WRONG - Using only team_code (no referential integrity)
+op.create_table(
+    "historical_epa",
+    sa.Column("team_code", sa.String(10), nullable=False),
+    # ... No FK constraint, orphan records possible
+)
+
+# CORRECT - Two-layer architecture
+op.create_table(
+    "historical_epa",
+    sa.Column("team_id", sa.Integer(), sa.ForeignKey("teams.team_id"), nullable=True),
+    sa.Column("team_code", sa.String(10), nullable=False),
+    # ... Flexible seeding + production integrity
+)
+```
+
+### Common Mistakes
+
+| Mistake | Problem | Solution |
+|---------|---------|----------|
+| Making `team_id` NOT NULL | Can't seed before teams exist | Use `nullable=True`, backfill later |
+| Omitting `team_code` | Lose external reference, can't debug source issues | Always keep original identifier |
+| Using `ON DELETE CASCADE` | Historical data deleted when team is removed | Use `ON DELETE SET NULL` |
+| Not indexing `team_code` | Slow seeding lookups | Add index on `(team_code, season)` |
+| Backfilling before teams loaded | All records get NULL team_id | Seed teams first, then backfill |
+
+### Related Files
+
+- `src/precog/database/alembic/versions/0005_create_historical_elo_table.py` - Initial pattern
+- `src/precog/database/alembic/versions/0006_create_historical_games_table.py` - Dual FK example
+- `src/precog/database/alembic/versions/0013_add_epa_audit_and_team_fks.py` - Comprehensive FK additions
+- `src/precog/database/seeding/epa_seeder.py` - `_resolve_team_id()` implementation
+- `src/precog/database/seeding/historical_elo_loader.py` - Seeding with team_code
+
+### Cross-References
+
+- **Issue #273:** Comprehensive Elo Rating Computation Module (original trigger)
+- **Pattern 33:** API Vocabulary Alignment (complementary - align vocabulary AND schema layers)
+- **Pattern 13:** Test Coverage Quality (test both seeding and production query paths)
+- **ADR-109:** Elo Computation Architecture (documents Elo-specific schema decisions)
+- **Migration 0013:** First comprehensive application across multiple tables
+
+
+---
+
 ## Related Documentation
 
 ### Foundation Documents
@@ -8119,7 +8479,7 @@ def _sync_single_series(self, series_data: SeriesData) -> bool:
 
 ---
 
-**END OF DEVELOPMENT_PATTERNS_V1.16.md**
+**END OF DEVELOPMENT_PATTERNS_V1.22.md**
 
 ★ Insight ─────────────────────────────────────
 This extraction serves two critical purposes:

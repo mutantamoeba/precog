@@ -135,10 +135,12 @@ Related ADR: ADR-048 (Logging Strategy)
 """
 
 import logging
+import os
 import re
 import sys
 from datetime import datetime
 from decimal import Decimal
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Any
 
@@ -434,6 +436,20 @@ def setup_logging(
             handler.close()
             root_logger.removeHandler(handler)
 
+    # Create rotating file handler if log file is enabled
+    # - maxBytes: 10MB per file (prevents 164MB+ log files seen in test runs)
+    # - backupCount: 5 files (keeps precog_2025-12-25.log, .1, .2, .3, .4, .5)
+    # - Total max disk usage: 60MB (10MB x 6 files)
+    file_handler = None
+    if log_file:
+        file_handler = RotatingFileHandler(
+            log_file,
+            mode="a",
+            maxBytes=10 * 1024 * 1024,  # 10MB
+            backupCount=5,
+            encoding="utf-8",
+        )
+
     # force=True: Clear remaining handlers before adding new ones
     logging.basicConfig(
         level=getattr(logging, log_level.upper()),
@@ -441,8 +457,8 @@ def setup_logging(
         handlers=[
             # Console handler (always enabled)
             logging.StreamHandler(sys.stdout),
-            # File handler (if enabled)
-            *([logging.FileHandler(log_file, mode="a", encoding="utf-8")] if log_file else []),
+            # File handler with rotation (if enabled)
+            *([file_handler] if file_handler else []),
         ],
         force=True,  # Clear old handlers before adding new ones
     )
@@ -576,15 +592,19 @@ class LogContext:
 
 
 # Initialize default logger on module import
+# Log level can be controlled via environment variables:
+# - LOG_LEVEL=WARNING (preferred, simple)
+# - STRUCTLOG_LOG_LEVEL=WARNING (more specific)
+# This allows tests to reduce log noise without code changes
+_default_log_level = os.getenv("STRUCTLOG_LOG_LEVEL") or os.getenv("LOG_LEVEL") or "INFO"
+
 try:
-    logger = setup_logging()
+    logger = setup_logging(log_level=_default_log_level)
 except Exception as e:
     # Fallback to basic logging if setup fails (e.g., during testing)
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     logger = structlog.get_logger()
     # Don't log the warning if we're in test environment (pytest sets PYTEST_CURRENT_TEST)
-    import os
-
     if "PYTEST_CURRENT_TEST" not in os.environ:
         # Use logging.warning instead of print (since basicConfig already set up)
         logging.warning(f"Logging setup failed: {e}")

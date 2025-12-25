@@ -8,6 +8,9 @@
 **Phase:** 2 (Live Data Integration)
 **Related ADR:** ADR-029 (ESPN Data Model with Normalized Schema)
 **Related Requirements:** REQ-DATA-001 through REQ-DATA-005
+**Related Documents:**
+- `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` - ESPN as fallback data source for all sports
+- `docs/guides/ELO_COMPUTATION_GUIDE_V1.0.md` 🔵 **PLANNED** - Uses game_states for Elo updates
 ---
 
 ## Overview

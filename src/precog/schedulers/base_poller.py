@@ -253,17 +253,23 @@ class BasePoller(ABC):
         # Run initial poll immediately
         self._poll_wrapper()
 
-    def stop(self, wait: bool = True) -> None:
+    def stop(self, wait: bool = True, timeout: float = 5.0) -> None:
         """
-        Stop the polling scheduler.
+        Stop the polling scheduler with timeout support.
 
         Args:
             wait: If True, wait for running jobs to complete before returning.
+            timeout: Maximum seconds to wait for shutdown (default 5.0).
+                     Only used when wait=True. Prevents indefinite hangs.
 
         Educational Note:
-            The 'wait' parameter ensures clean shutdown. Setting it to True
-            ensures any in-progress database operations complete before the
-            scheduler terminates.
+            APScheduler's shutdown(wait=True) can hang indefinitely if a job
+            is still running in the thread pool executor. This implementation
+            uses a separate thread to enforce a timeout, falling back to
+            forced shutdown if the timeout is exceeded.
+
+            This is critical for test cleanup and graceful service shutdowns
+            where we can't wait indefinitely for stalled jobs.
         """
         with self._lock:
             if not self._enabled:
@@ -273,8 +279,39 @@ class BasePoller(ABC):
             # Hook for subclass cleanup
             self._on_stop()
 
-            if self._scheduler:
-                self._scheduler.shutdown(wait=wait)
+            scheduler = self._scheduler
+            if scheduler:
+                if wait and timeout > 0:
+                    # Use threaded shutdown with timeout to prevent hangs
+                    shutdown_complete = threading.Event()
+
+                    def _shutdown_worker() -> None:
+                        try:
+                            scheduler.shutdown(wait=True)
+                        except Exception as e:
+                            self.logger.warning("Shutdown error: %s", e)
+                        finally:
+                            shutdown_complete.set()
+
+                    shutdown_thread = threading.Thread(target=_shutdown_worker, daemon=True)
+                    shutdown_thread.start()
+
+                    # Wait for clean shutdown with timeout
+                    if not shutdown_complete.wait(timeout=timeout):
+                        self.logger.warning(
+                            "%s shutdown timed out after %.1fs, forcing stop",
+                            self.__class__.__name__,
+                            timeout,
+                        )
+                        # Force shutdown without waiting
+                        try:
+                            scheduler.shutdown(wait=False)
+                        except Exception:
+                            pass  # Already shutting down
+                else:
+                    # Immediate shutdown (no wait)
+                    scheduler.shutdown(wait=False)
+
                 self._scheduler = None
 
             self._enabled = False
