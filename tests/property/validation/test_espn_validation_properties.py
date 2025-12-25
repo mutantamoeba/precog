@@ -356,8 +356,10 @@ class TestAnomalyTrackingProperties:
 
     @given(
         game_ids=st.lists(
+            # Use ASCII-only alphanumeric to avoid Windows cp1252 logging issues
+            # when tests run in parallel (realistic: ESPN game IDs are ASCII)
             st.text(
-                alphabet=st.characters(whitelist_categories=("Nd", "Lu")),
+                alphabet="ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
                 min_size=5,
                 max_size=10,
             ),

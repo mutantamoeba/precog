@@ -24,16 +24,36 @@ Test Key Generation:
     environments both have valid test keys without exposing real credentials.
 """
 
-import os
-import shutil
-import tempfile
-from decimal import Decimal
-from pathlib import Path
-from typing import Any
+# =============================================================================
+# STRUCTLOG WARNING FILTER (Python 3.14+ compatibility)
+# =============================================================================
+# Must be BEFORE any imports that trigger logging. This intentionally violates
+# E402 (module level import not at top of file) because the warning filter MUST
+# be registered before structlog is imported anywhere in the test suite.
+# Suppresses: "Remove `format_exc_info` from your processor chain if you want
+# pretty exceptions." This warning is raised inside Python's logging emit chain
+# which bypasses pytest's filterwarnings. Using warnings.filterwarnings() at
+# import time catches it at the Python level.
+# Reference: structlog/dev.py:742 (ConsoleRenderer)
+# =============================================================================
+import warnings
 
-import pytest
+warnings.filterwarnings(
+    "ignore",
+    message=r"Remove.*format_exc_info.*",
+    category=UserWarning,
+)
 
-from precog.config.config_loader import ConfigLoader
+import os  # noqa: E402
+import shutil  # noqa: E402
+import tempfile  # noqa: E402
+from decimal import Decimal  # noqa: E402
+from pathlib import Path  # noqa: E402
+from typing import Any  # noqa: E402
+
+import pytest  # noqa: E402
+
+from precog.config.config_loader import ConfigLoader  # noqa: E402
 
 # Import testcontainers fixtures for property tests (ADR-057)
 # These are re-exported here so pytest can discover them
@@ -85,14 +105,14 @@ except ImportError:
     db_savepoint = None  # type: ignore[assignment]
 
 # Import modules to test
-from precog.database.connection import (
+from precog.database.connection import (  # noqa: E402
     close_pool,
     get_cursor,
     get_environment,
     initialize_pool,
 )
-from precog.database.crud_operations import create_strategy
-from precog.utils.logger import setup_logging
+from precog.database.crud_operations import create_strategy  # noqa: E402
+from precog.utils.logger import setup_logging  # noqa: E402
 
 # =============================================================================
 # DATABASE FIXTURES
