@@ -1,9 +1,9 @@
 # Database Environment & Data Seeding Guide
 
 ---
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2025-12-21
-**Last Updated:** 2025-12-21
+**Last Updated:** 2025-12-25
 **Purpose:** Document database environment strategy, data seeding approach, and scheduling
 **Related:** ADR-106 (Historical Data Collection), REQ-DB-001 through REQ-DB-017
 ---
@@ -188,13 +188,39 @@ scheduler.add_job(poll_market_prices, 'interval', seconds=30)
 
 ### External Data Sources
 
-| Source | Data Types | Sports | Status |
-|--------|------------|--------|--------|
-| **nfl_data_py** | Games, stats, rosters | NFL | Adapter ready |
-| **FiveThirtyEight** | Elo ratings, forecasts | NFL, NCAAF | Planned |
-| **ESPN API** | Scores, schedules, odds | Multiple | Integrated |
-| **Kalshi API** | Markets, positions, trades | N/A | Integrated |
-| **Kaggle datasets** | Historical rankings | NCAAF | Planned |
+| Source | Data Types | Sports | Status | Verified |
+|--------|------------|--------|--------|----------|
+| **ESPN API** | Teams, scores, schedules | NFL, NBA, NHL, WNBA, NCAAF, NCAAB, MLB, MLS | ✅ Integrated | 2025-12-25 |
+| **nfl_data_py** | Games, stats, rosters | NFL | ✅ Adapter ready | 2025-12-21 |
+| **FiveThirtyEight** | Elo ratings, forecasts | NFL, NBA, MLB | ⚠️ Defunct (Mar 2025) | N/A |
+| **Kalshi API** | Markets, positions, trades | Prediction Markets | ✅ Integrated | 2025-12-24 |
+| **Kaggle datasets** | Historical rankings | NCAAF, NFL | 🔵 Planned | TBD |
+
+### Data Source Verification Log
+
+**ESPN API Team IDs** (Verified 2025-12-25):
+- MLB: 30 teams verified via `https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams`
+- MLS: 30 teams verified via `https://site.api.espn.com/apis/site/v2/sports/soccer/usa.1/teams`
+- NFL/NBA/NHL/WNBA: Previously verified and seeded
+
+**FiveThirtyEight Status** (Checked 2025-12-25):
+- FiveThirtyEight was shut down by ABC News/Disney in March 2025
+- API endpoints now redirect to ABC News politics pages
+- Historical data on GitHub is outdated (NFL: Feb 2021, NBA: June 2015, MLB: corrupted)
+- **Alternative**: Compute Elo from game results using nfl_data_py schedules
+
+**Seeded Team Counts** (As of 2025-12-25):
+| Sport | League | Teams | Source |
+|-------|--------|-------|--------|
+| MLB | mlb | 30 | ESPN API |
+| MLS | mls | 30 | ESPN API |
+| NBA | nba | 30 | ESPN API |
+| NCAAB | ncaab | 89 | ESPN API |
+| NCAAF | ncaaf | 79 | ESPN API |
+| NFL | nfl | 32 | ESPN API |
+| NHL | nhl | 32 | ESPN API |
+| WNBA | wnba | 12 | ESPN API |
+| **Total** | | **334** | |
 
 ### Data Source Adapters
 
@@ -245,4 +271,5 @@ class BaseDataSource(ABC):
 
 | Version | Date | Changes |
 |---------|------|---------|
+| 1.1 | 2025-12-25 | Added Data Source Verification Log, documented FiveThirtyEight shutdown, updated seeded team counts (334 total), added ESPN API verification dates |
 | 1.0 | 2025-12-21 | Initial creation with environment strategy, seeding approach, and scheduling |

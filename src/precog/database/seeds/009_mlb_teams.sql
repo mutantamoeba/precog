@@ -1,14 +1,17 @@
 -- Seed Data: MLB Teams with ESPN IDs
--- Date: 2025-12-24
+-- Date: 2025-12-25
 -- Phase: 2 (Live Data Integration)
 -- Purpose: Seed MLB teams with ESPN team IDs for prediction market coverage
 -- Related: ADR-029 (ESPN Data Model), REQ-DATA-003 (Multi-Sport Support)
+-- Source: ESPN API (https://site.api.espn.com/apis/site/v2/sports/baseball/mlb/teams)
+-- Verified: 2025-12-25
 
 -- ============================================================================
--- MLB TEAMS - ALL 30 TEAMS (2024 SEASON)
+-- MLB TEAMS - ALL 30 TEAMS (2025 SEASON)
 -- ============================================================================
--- Initial Elo: 1500 = average, ~1600 = playoff contender, ~1400 = rebuilding
--- ESPN IDs verified against ESPN API
+-- Initial Elo: Estimated based on 2024 performance (not from FiveThirtyEight)
+-- ESPN IDs: VERIFIED against actual ESPN API on 2025-12-25
+-- Note: Oakland Athletics now listed as "Athletics" (moving to Sacramento)
 
 INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_id, current_elo_rating, conference, division) VALUES
 
@@ -54,8 +57,10 @@ INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_
 ('SF', 'San Francisco Giants', 'Giants', 'mlb', 'mlb', '26', 1480, 'NL', 'NL West'),
 ('COL', 'Colorado Rockies', 'Rockies', 'mlb', 'mlb', '27', 1400, 'NL', 'NL West')
 
-ON CONFLICT (team_code) DO UPDATE SET
+ON CONFLICT (team_code, sport) DO UPDATE SET
     espn_team_id = EXCLUDED.espn_team_id,
+    team_name = EXCLUDED.team_name,
+    display_name = EXCLUDED.display_name,
     current_elo_rating = EXCLUDED.current_elo_rating,
     conference = EXCLUDED.conference,
     division = EXCLUDED.division,
