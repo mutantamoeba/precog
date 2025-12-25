@@ -189,8 +189,9 @@ OUTPUTS[3]="$TEMP_DIR/step_3.txt"
 # STEP 4: Security Scan (PARALLEL)
 # ==============================================================================
 {
+    # S314=xml-parse (trusted local JUnit XML from pytest, not untrusted external data)
     run_parallel_check 4 "Security Scan" \
-        python -m ruff check --select S --ignore S101,S112,S607,S603 --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --quiet .
+        python -m ruff check --select S --ignore S101,S112,S314,S607,S603 --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --quiet .
 } &
 PIDS[4]=$!
 NAMES[4]="🔒 Security Scan (Ruff S-rules)"

@@ -312,7 +312,9 @@ class TestStatsMonitoring:
             for i in range(1, len(stats_history)):
                 assert stats_history[i] >= stats_history[i - 1]
         finally:
-            poller.stop()
+            # Use wait=False to avoid timeout during scheduler shutdown
+            # when a poll is in progress (E2E test doesn't need clean shutdown)
+            poller.stop(wait=False)
 
 
 # =============================================================================

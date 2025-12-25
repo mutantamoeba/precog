@@ -35,6 +35,7 @@ Requirements: REQ-DATA-001, REQ-OBSERV-001
 
 import logging
 import os
+import socket
 import threading
 import time
 from collections.abc import Callable
@@ -44,6 +45,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Protocol, cast
 
+from precog.database.crud_operations import upsert_scheduler_status
 from precog.schedulers.espn_game_poller import create_espn_poller
 from precog.schedulers.kalshi_poller import create_kalshi_poller
 from precog.schedulers.kalshi_websocket import create_websocket_handler
@@ -321,6 +323,63 @@ class ServiceSupervisor:
         self._alert_callbacks: list[Callable[[str, str, dict[str, Any]], None]] = []
 
     @property
+    def host_id(self) -> str:
+        """Get hostname for database status tracking."""
+        return socket.gethostname()
+
+    def _update_db_status(
+        self,
+        service_name: str,
+        status: str,
+        *,
+        stats: dict[str, Any] | None = None,
+        config: dict[str, Any] | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        """
+        Update service status in database for cross-process IPC.
+
+        This enables the `scheduler status` CLI command to query the current
+        state of running services from any process.
+
+        Args:
+            service_name: Service identifier (e.g., 'espn', 'kalshi_rest')
+            status: Service status ('starting', 'running', 'stopping', 'stopped', 'failed')
+            stats: Optional service metrics
+            config: Optional service configuration
+            error_message: Optional error message for 'failed' status
+
+        Educational Note:
+            The database table approach solves the IPC problem where:
+            - `scheduler start` runs in process A (long-running)
+            - `scheduler status` runs in process B (one-shot query)
+            - Process B can't see process A's in-memory state
+            - Solution: Process A writes status to DB, process B reads from DB
+
+        Reference:
+            - Migration 0012: scheduler_status table
+            - Issue #255: Scheduler status shows "not running"
+        """
+        try:
+            upsert_scheduler_status(
+                host_id=self.host_id,
+                service_name=service_name,
+                status=status,
+                pid=os.getpid(),
+                started_at=self._start_time,
+                stats=stats,
+                config=config,
+                error_message=error_message,
+            )
+        except Exception as e:
+            # Don't let DB errors crash the service - log and continue
+            self.logger.warning(
+                "Failed to update scheduler status in database: %s",
+                e,
+                extra={"service": service_name, "status": status},
+            )
+
+    @property
     def is_running(self) -> bool:
         """Check if supervisor is running."""
         return self._start_time is not None and not self._shutdown_event.is_set()
@@ -452,10 +511,18 @@ class ServiceSupervisor:
             raise ValueError(f"Service {name} has no instance")
 
         self.logger.info("Starting service: %s", name)
+
+        # Report 'starting' status to database
+        self._update_db_status(name, "starting")
+
         state.service.start()
         state.started_at = datetime.now(UTC)
         state.healthy = True
         state.consecutive_failures = 0
+
+        # Report 'running' status to database
+        self._update_db_status(name, "running")
+
         self.logger.info(
             "Service started: %s",
             name,
@@ -467,6 +534,8 @@ class ServiceSupervisor:
         Stop all services gracefully.
 
         Signals shutdown, then stops each service with timeout.
+        Updates database status for each service to enable cross-process
+        status queries to show accurate state.
         """
         self.logger.info("Shutting down all services...")
         self._shutdown_event.set()
@@ -475,10 +544,19 @@ class ServiceSupervisor:
             try:
                 if state.service and state.service.is_running():
                     self.logger.info("Stopping service: %s", name)
+                    # Report 'stopping' status to database
+                    self._update_db_status(name, "stopping")
                     state.service.stop()
+                    # Report 'stopped' status to database
+                    self._update_db_status(name, "stopped")
                     self.logger.info("Service stopped: %s", name)
+                else:
+                    # Mark as stopped even if not running (cleanup)
+                    self._update_db_status(name, "stopped")
             except Exception as e:
                 self.logger.error("Error stopping service %s: %s", name, e)
+                # Report 'failed' status with error message
+                self._update_db_status(name, "failed", error_message=str(e))
 
         # Wait for monitoring threads
         if self._health_thread and self._health_thread.is_alive():
@@ -517,7 +595,18 @@ class ServiceSupervisor:
                     self.logger.error("Health check failed for %s: %s", name, e)
 
     def _check_service_health(self, name: str, state: ServiceState) -> None:
-        """Check health of a single service."""
+        """
+        Check health of a single service and update database heartbeat.
+
+        This method serves dual purposes:
+        1. Internal health monitoring (restart decisions, alerting)
+        2. External status visibility (heartbeat updates for cross-process IPC)
+
+        The heartbeat update ensures that `scheduler status` can:
+        - See current service state
+        - Detect stale/crashed services (heartbeat older than threshold)
+        - Display service-specific stats (polls, errors, etc.)
+        """
         state.last_health_check = datetime.now(UTC)
 
         if state.service is None:
@@ -531,6 +620,13 @@ class ServiceSupervisor:
                 "Service %s is not running (failures=%d)",
                 name,
                 state.consecutive_failures,
+            )
+
+            # Report 'failed' status to database
+            self._update_db_status(
+                name,
+                "failed",
+                error_message=f"Service not running (consecutive_failures={state.consecutive_failures})",
             )
 
             # Attempt restart if under retry limit
@@ -561,8 +657,19 @@ class ServiceSupervisor:
 
         state.healthy = True
 
+        # Update heartbeat in database with current stats
+        # This is the "lease renewal" that keeps the service marked as running
+        self._update_db_status(name, "running", stats=stats)
+
     def _attempt_restart(self, name: str, state: ServiceState) -> None:
-        """Attempt to restart a failed service with exponential backoff."""
+        """
+        Attempt to restart a failed service with exponential backoff.
+
+        Updates database status throughout the restart lifecycle:
+        - 'starting' when restart attempt begins
+        - 'running' on successful restart
+        - 'failed' if restart attempt fails
+        """
         if state.service is None or state.config is None:
             return
 
@@ -578,15 +685,25 @@ class ServiceSupervisor:
         time.sleep(delay)
 
         try:
+            # Report 'starting' status before restart attempt
+            self._update_db_status(name, "starting")
+
             state.service.start()
             state.restart_count += 1
             state.started_at = datetime.now(UTC)
             state.healthy = True
             state.consecutive_failures = 0
+
+            # Report 'running' status on successful restart
+            self._update_db_status(name, "running")
+
             self.logger.info("Service %s restarted successfully", name)
         except Exception as e:
             self.logger.error("Restart failed for %s: %s", name, e)
             state.last_error = str(e)
+
+            # Report 'failed' status with error message
+            self._update_db_status(name, "failed", error_message=str(e))
 
     def _metrics_loop(self) -> None:
         """

@@ -64,7 +64,7 @@ def upgrade() -> None:
             category VARCHAR(50) NOT NULL CHECK (category IN ('sports', 'politics', 'entertainment', 'economics', 'weather', 'other')),
             subcategory VARCHAR(50),
             title VARCHAR(255) NOT NULL,
-            frequency VARCHAR(20) CHECK (frequency IN ('single', 'recurring', 'continuous')),
+            frequency VARCHAR(20) CHECK (frequency IN ('daily', 'weekly', 'monthly', 'event', 'once')),
             metadata JSONB,
             created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
             updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()

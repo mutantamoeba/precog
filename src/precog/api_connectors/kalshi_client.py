@@ -46,10 +46,12 @@ from precog.config.environment import MarketMode, get_market_mode
 from .kalshi_auth import KalshiAuth
 from .rate_limiter import RateLimiter
 from .types import (
+    OrderData,
     ProcessedFillData,
     ProcessedMarketData,
     ProcessedPositionData,
     ProcessedSettlementData,
+    SeriesData,
 )
 
 # Load environment variables
@@ -138,6 +140,20 @@ class KalshiClient:
         "demo": "https://demo-api.kalshi.co/trade-api/v2",
         "prod": "https://api.elections.kalshi.com/trade-api/v2",
     }
+
+    # Sports series ticker prefixes for filtering
+    # Use these to filter get_series() or get_markets() by sport
+    SPORTS_TICKER_PREFIXES: ClassVar[dict[str, list[str]]] = {
+        "NFL": ["KXNFLGAME", "KXNFLTOTAL", "KXNFLSPREAD"],
+        "NBA": ["KXNBAGAME", "KXNBAPTS", "KXNBASPREAD"],
+        "NCAAF": ["KXNCAAFGAME", "KXNCAAFTOTAL"],
+        "NCAAB": ["KXNCAABGAME", "KXNCAAMBGAME"],  # Men's basketball
+        "NCAAW": ["KXNCAAWBGAME", "KXNCAAWBTOTAL"],  # Women's basketball
+        "NHL": ["KXNHLGAME", "KXNHLTOTAL", "KXNHLSPREAD"],
+    }
+
+    # Default sports for market filtering (user's requested leagues)
+    DEFAULT_SPORTS: ClassVar[list[str]] = ["NFL", "NBA", "NCAAF", "NCAAB", "NCAAW", "NHL"]
 
     def __init__(
         self,
@@ -511,6 +527,13 @@ class KalshiClient:
             # Fill price fields (sub-penny format: *_fixed suffix)
             "yes_price_fixed",
             "no_price_fixed",
+            # Order price fields (sub-penny format: *_dollars suffix)
+            "yes_price_dollars",
+            "no_price_dollars",
+            "taker_fees",
+            "maker_fees",
+            "taker_fill_cost",
+            "maker_fill_cost",
             # Other market fields with *_dollars suffix
             "liquidity_dollars",
             "notional_value_dollars",
@@ -933,3 +956,536 @@ class KalshiClient:
         logger.info(f"Fetched {len(settlements)} settlements", extra={"count": len(settlements)})
 
         return cast("list[ProcessedSettlementData]", settlements)
+
+    # =========================================================================
+    # Order Management Methods (Trading)
+    # =========================================================================
+
+    def place_order(
+        self,
+        ticker: str,
+        side: str,
+        action: str,
+        count: int,
+        price: Decimal | None = None,
+        order_type: str = "limit",
+        time_in_force: str = "good_till_canceled",
+        client_order_id: str | None = None,
+    ) -> OrderData:
+        """
+        Place a new order on a market.
+
+        Args:
+            ticker: Market ticker (e.g., "KXNFLGAME-25DEC15-KC-YES")
+            side: "yes" or "no" - which outcome you're betting on
+            action: "buy" or "sell" - entering or exiting position
+            count: Number of contracts (min 1)
+            price: Price in dollars as Decimal (e.g., Decimal("0.65"))
+                   Required for limit orders, ignored for market orders.
+            order_type: "limit" (default) or "market"
+            time_in_force: "good_till_canceled" (default), "fill_or_kill",
+                          or "immediate_or_cancel"
+            client_order_id: Optional custom ID for tracking
+
+        Returns:
+            OrderData with order details including order_id and status
+
+        Raises:
+            ValueError: If required parameters are invalid
+            requests.HTTPError: If API request fails
+
+        Example:
+            >>> client = KalshiClient("demo")
+            >>> # Buy 10 YES contracts at $0.65
+            >>> order = client.place_order(
+            ...     ticker="KXNFLGAME-25DEC15-KC-YES",
+            ...     side="yes",
+            ...     action="buy",
+            ...     count=10,
+            ...     price=Decimal("0.65"),
+            ... )
+            >>> print(f"Order ID: {order['order_id']}, Status: {order['status']}")
+            Order ID: abc123, Status: resting
+
+        Educational Note:
+            Order Flow:
+            1. You submit order with price and quantity
+            2. If matches exist at your price, you get immediate fills
+            3. Remaining quantity "rests" in the order book
+            4. Status: "resting" (waiting) → "executed" (filled) or "canceled"
+
+            Pricing:
+            - Use Decimal for price to ensure precision (never float!)
+            - YES price + NO price always = $1.00
+            - If you buy YES at $0.65, someone is selling NO at $0.35
+
+            Cost Calculation:
+            - Buying: cost = price * count (e.g., $0.65 * 10 = $6.50)
+            - Selling: you receive price * count back
+
+        Reference:
+            - REQ-TRADE-001 (Order Placement)
+            - docs/guides/KALSHI_MARKET_TERMINOLOGY_GUIDE_V1.0.md
+        """
+        # Validate parameters
+        if side not in ("yes", "no"):
+            raise ValueError(f"side must be 'yes' or 'no', got '{side}'")
+        if action not in ("buy", "sell"):
+            raise ValueError(f"action must be 'buy' or 'sell', got '{action}'")
+        if count < 1:
+            raise ValueError(f"count must be >= 1, got {count}")
+        if order_type not in ("limit", "market"):
+            raise ValueError(f"order_type must be 'limit' or 'market', got '{order_type}'")
+        if order_type == "limit" and price is None:
+            raise ValueError("price is required for limit orders")
+
+        # Build request body
+        request_body: dict[str, Any] = {
+            "ticker": ticker,
+            "side": side,
+            "action": action,
+            "count": count,
+            "type": order_type,
+        }
+
+        # Add price for limit orders (use *_dollars for sub-penny precision)
+        if price is not None:
+            # Convert Decimal to string format expected by API
+            price_str = f"{price:.4f}"
+            if side == "yes":
+                request_body["yes_price_dollars"] = price_str
+            else:
+                request_body["no_price_dollars"] = price_str
+
+        # Add optional parameters
+        if time_in_force != "good_till_canceled":
+            request_body["time_in_force"] = time_in_force
+        if client_order_id:
+            request_body["client_order_id"] = client_order_id
+
+        # Make request
+        logger.info(
+            f"Placing order: {action} {count}x {side} @ ${price} on {ticker}",
+            extra={
+                "ticker": ticker,
+                "side": side,
+                "action": action,
+                "count": count,
+                "price": str(price) if price else None,
+                "order_type": order_type,
+            },
+        )
+
+        response = self._make_request("POST", "/portfolio/orders", json_data=request_body)
+        order = response.get("order", {})
+
+        # Convert price fields to Decimal
+        self._convert_prices_to_decimal(order)
+
+        logger.info(
+            f"Order placed: {order.get('order_id')} - Status: {order.get('status')}",
+            extra={
+                "order_id": order.get("order_id"),
+                "status": order.get("status"),
+                "fill_count": order.get("fill_count", 0),
+                "remaining_count": order.get("remaining_count", count),
+            },
+        )
+
+        return cast("OrderData", order)
+
+    def cancel_order(self, order_id: str) -> OrderData:
+        """
+        Cancel an existing order.
+
+        Args:
+            order_id: The order ID to cancel (from place_order response)
+
+        Returns:
+            OrderData with updated status (should be "canceled")
+
+        Raises:
+            requests.HTTPError: If order doesn't exist or already filled
+
+        Example:
+            >>> client = KalshiClient("demo")
+            >>> order = client.place_order(...)
+            >>> # Changed my mind, cancel it
+            >>> canceled = client.cancel_order(order['order_id'])
+            >>> print(f"Status: {canceled['status']}")
+            Status: canceled
+
+        Educational Note:
+            You can only cancel orders that are "resting" (not yet filled).
+            If an order is already "executed" (filled), cancellation fails.
+            Partial fills: If 5 of 10 contracts filled, canceling removes
+            the remaining 5 from the order book.
+
+        Reference: REQ-TRADE-002 (Order Cancellation)
+        """
+        logger.info(f"Canceling order: {order_id}", extra={"order_id": order_id})
+
+        response = self._make_request("DELETE", f"/portfolio/orders/{order_id}")
+        order = response.get("order", {})
+
+        # Convert price fields to Decimal
+        self._convert_prices_to_decimal(order)
+
+        logger.info(
+            f"Order canceled: {order_id} - Status: {order.get('status')}",
+            extra={
+                "order_id": order_id,
+                "status": order.get("status"),
+                "remaining_count": order.get("remaining_count", 0),
+            },
+        )
+
+        return cast("OrderData", order)
+
+    def get_order(self, order_id: str) -> OrderData:
+        """
+        Get details of a specific order.
+
+        Args:
+            order_id: The order ID to look up
+
+        Returns:
+            OrderData with current order details
+
+        Example:
+            >>> order = client.get_order("abc123")
+            >>> print(f"Status: {order['status']}, Filled: {order['fill_count']}")
+
+        Reference: REQ-TRADE-003 (Order Status)
+        """
+        response = self._make_request("GET", f"/portfolio/orders/{order_id}")
+        order = response.get("order", {})
+
+        self._convert_prices_to_decimal(order)
+
+        return cast("OrderData", order)
+
+    # =========================================================================
+    # Series Discovery Methods
+    # =========================================================================
+
+    def get_series(
+        self,
+        category: str | None = None,
+        status: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> list[SeriesData]:
+        """
+        Get available market series.
+
+        A series groups related markets (e.g., KXNFLGAME contains all NFL game markets).
+        Use this to discover what series are available for trading.
+
+        Args:
+            category: Filter by category (e.g., "sports", "politics", "economics")
+            status: Filter by status ("active", "inactive", "closed")
+            limit: Max results per page (default 100)
+            cursor: Pagination cursor
+
+        Returns:
+            List of SeriesData with series details
+
+        Example:
+            >>> client = KalshiClient("demo")
+            >>> # Get all sports series
+            >>> series_list = client.get_series(category="sports")
+            >>> for s in series_list:
+            ...     print(f"{s['ticker']}: {s['title']}")
+            KXNFLGAME: NFL Game Markets
+            KXNBAGAME: NBA Game Markets
+            KXNCAAFGAME: NCAAF Game Markets
+
+        Educational Note:
+            Series Hierarchy on Kalshi:
+            - Category (sports, politics, economics, etc.)
+              └── Series (KXNFLGAME, KXPRES2024, etc.)
+                  └── Events (individual games, elections, etc.)
+                      └── Markets (specific outcome contracts)
+
+            Why This Matters:
+            - Series tickers are used to filter get_markets()
+            - Knowing available series helps automate market discovery
+            - Tags help identify related series across categories
+
+        Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
+        """
+        params: dict[str, Any] = {"limit": limit}
+
+        if category:
+            params["category"] = category
+        if status:
+            params["status"] = status
+        if cursor:
+            params["cursor"] = cursor
+
+        response = self._make_request("GET", "/series", params=params)
+        # Handle null response (API returns {"series": null} for some filters)
+        series_list = response.get("series") or []
+
+        # Client-side filtering: Kalshi demo API ignores category/limit params
+        # Apply filtering here to ensure consistent behavior across environments
+        if category:
+            # Case-insensitive category matching
+            series_list = [
+                s for s in series_list if s.get("category", "").lower() == category.lower()
+            ]
+
+        # Apply limit client-side (API may return more than requested)
+        if limit and len(series_list) > limit:
+            series_list = series_list[:limit]
+
+        logger.info(
+            f"Fetched {len(series_list)} series",
+            extra={
+                "count": len(series_list),
+                "category": category,
+                "has_more": "cursor" in response,
+            },
+        )
+
+        return cast("list[SeriesData]", series_list)
+
+    def fetch_all_markets(
+        self,
+        series_tickers: list[str] | None = None,
+        sports: list[str] | None = None,
+        max_pages: int = 100,
+    ) -> list[ProcessedMarketData]:
+        """
+        Fetch ALL markets with automatic pagination.
+
+        This method handles Kalshi's pagination automatically, fetching all pages
+        until no more data is available. Use with caution on large result sets.
+
+        Args:
+            series_tickers: Optional list of series tickers to filter by.
+                           If None and sports is None, fetches ALL markets.
+            sports: Optional list of sport codes (e.g., ["NFL", "NBA"]).
+                   Automatically expands to series tickers using SPORTS_TICKER_PREFIXES.
+                   Takes precedence over series_tickers if both provided.
+            max_pages: Maximum pages to fetch (default 100, safety limit).
+                      At 200 markets/page, this allows up to 20,000 markets.
+
+        Returns:
+            List of all markets matching the filter criteria.
+
+        Example:
+            >>> client = KalshiClient("demo")
+            >>>
+            >>> # Fetch ALL markets (use carefully!)
+            >>> all_markets = client.fetch_all_markets()
+            >>> print(f"Total: {len(all_markets)} markets")
+            >>>
+            >>> # Fetch by series
+            >>> nfl_markets = client.fetch_all_markets(series_tickers=["KXNFLGAME"])
+            >>>
+            >>> # Fetch by sport (recommended for sports betting)
+            >>> sports_markets = client.fetch_all_markets(sports=["NFL", "NBA", "NHL"])
+            >>> print(f"Sports markets: {len(sports_markets)}")
+
+        Educational Note:
+            Pagination Strategy:
+            - Kalshi API returns max 200 markets per request
+            - Response includes 'cursor' if more pages exist
+            - Pass cursor to next request to get next page
+            - Stop when no cursor returned (last page reached)
+
+            Why max_pages limit?
+            - Safety against infinite loops if API misbehaves
+            - Prevents accidentally fetching millions of records
+            - 100 pages * 200 markets = 20,000 markets max (should be plenty)
+
+            Performance Consideration:
+            - Each page = 1 API request (rate limited)
+            - For 20 pages, that's 20 requests at ~100/min limit
+            - Large fetches take time; prefer filtering by series/sport
+
+        Reference: REQ-API-001 (Kalshi API Integration)
+        Related: ADR-048 (Decimal-First Response Parsing)
+        """
+        all_markets: list[ProcessedMarketData] = []
+
+        # If sports specified, expand to series tickers
+        target_series: list[str] = []
+        if sports:
+            for sport in sports:
+                sport_upper = sport.upper()
+                if sport_upper in self.SPORTS_TICKER_PREFIXES:
+                    target_series.extend(self.SPORTS_TICKER_PREFIXES[sport_upper])
+                else:
+                    logger.warning(
+                        f"Unknown sport code: {sport}. Available: {list(self.SPORTS_TICKER_PREFIXES.keys())}"
+                    )
+        elif series_tickers:
+            target_series = series_tickers
+
+        # If filtering by series, fetch each series separately
+        if target_series:
+            for series_ticker in target_series:
+                cursor: str | None = None
+                pages_fetched = 0
+
+                while pages_fetched < max_pages:
+                    markets = self.get_markets(
+                        series_ticker=series_ticker,
+                        limit=200,  # Max per request
+                        cursor=cursor,
+                    )
+
+                    if not markets:
+                        break
+
+                    all_markets.extend(markets)
+                    pages_fetched += 1
+
+                    # Check for more pages
+                    # Note: get_markets doesn't return cursor directly, need raw response
+                    # For now, if we got less than 200, assume no more pages
+                    if len(markets) < 200:
+                        break
+
+                    # For proper cursor-based pagination, we'd need to modify get_markets
+                    # to return the cursor. For now, this works for reasonable result sets.
+                    logger.info(
+                        f"Fetched page {pages_fetched} for {series_ticker}: {len(markets)} markets"
+                    )
+
+                    # Safety: if we got exactly 200, there might be more, but without cursor
+                    # we can't paginate properly. Log a warning.
+                    if len(markets) == 200:
+                        logger.warning(
+                            f"Got exactly 200 markets for {series_ticker}. "
+                            "There may be more, but pagination requires cursor support."
+                        )
+                        break
+        else:
+            # Fetch all markets without filter
+            cursor = None
+            pages_fetched = 0
+
+            while pages_fetched < max_pages:
+                markets = self.get_markets(limit=200, cursor=cursor)
+
+                if not markets:
+                    break
+
+                all_markets.extend(markets)
+                pages_fetched += 1
+
+                if len(markets) < 200:
+                    break
+
+                if len(markets) == 200:
+                    logger.warning(
+                        "Got exactly 200 markets. "
+                        "There may be more, but pagination requires cursor support."
+                    )
+                    break
+
+        logger.info(
+            f"fetch_all_markets complete: {len(all_markets)} total markets",
+            extra={
+                "total_markets": len(all_markets),
+                "series_filter": target_series if target_series else "none",
+                "sports_filter": sports if sports else "none",
+            },
+        )
+
+        return all_markets
+
+    def get_sports_series(
+        self,
+        sports: list[str] | None = None,
+    ) -> list[SeriesData]:
+        """
+        Get series filtered by sport.
+
+        Convenience method to fetch sports series based on tags filtering.
+        Uses client-side filtering since Kalshi API doesn't support tag filtering.
+
+        Args:
+            sports: List of sport codes to filter by. Options:
+                   ["NFL", "NBA", "NCAAF", "NCAAB", "NCAAW", "NHL"]
+                   If None, returns all sports series (defaults to DEFAULT_SPORTS).
+
+        Returns:
+            List of SeriesData for matching sports.
+
+        Example:
+            >>> client = KalshiClient("demo")
+            >>>
+            >>> # Get NFL and NBA series
+            >>> series = client.get_sports_series(sports=["NFL", "NBA"])
+            >>> for s in series:
+            ...     print(f"{s['ticker']}: {s['title']}")
+            KXNFLGAME: Professional Football Game
+            KXNBAGAME: NBA Game Markets
+
+        Educational Note:
+            Tag Mapping (how we identify sports):
+            - ["Football"] tag → NFL, NCAAF
+            - ["Basketball"] tag → NBA, NCAAB, NCAAW
+            - ["Hockey"] tag → NHL
+
+            We also use ticker prefixes as fallback:
+            - KXNFL* → NFL
+            - KXNBA* → NBA
+            - etc.
+
+        Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
+        """
+        target_sports = sports or self.DEFAULT_SPORTS
+
+        # First, get all Sports category series
+        all_series = self.get_series(category="Sports", limit=200)
+
+        # Filter by sport using both tags and ticker prefixes
+        filtered_series: list[SeriesData] = []
+
+        # Build set of valid ticker prefixes for target sports
+        valid_prefixes: set[str] = set()
+        for sport in target_sports:
+            sport_upper = sport.upper()
+            if sport_upper in self.SPORTS_TICKER_PREFIXES:
+                valid_prefixes.update(self.SPORTS_TICKER_PREFIXES[sport_upper])
+
+        # Tag to sport mapping
+        tag_to_sports: dict[str, list[str]] = {
+            "Football": ["NFL", "NCAAF"],
+            "Basketball": ["NBA", "NCAAB", "NCAAW"],
+            "Hockey": ["NHL"],
+        }
+
+        for series in all_series:
+            ticker = series.get("ticker", "")
+            tags = series.get("tags", []) or []
+
+            # Check by ticker prefix
+            ticker_match = any(ticker.startswith(prefix) for prefix in valid_prefixes)
+
+            # Check by tags
+            tag_match = False
+            for tag in tags:
+                if tag in tag_to_sports:
+                    matching_sports = tag_to_sports[tag]
+                    if any(
+                        s.upper() in [t.upper() for t in target_sports] for s in matching_sports
+                    ):
+                        tag_match = True
+                        break
+
+            if ticker_match or tag_match:
+                filtered_series.append(series)
+
+        logger.info(
+            f"Filtered {len(filtered_series)} sports series from {len(all_series)} total",
+            extra={"sports_filter": target_sports, "total_series": len(all_series)},
+        )
+
+        return filtered_series

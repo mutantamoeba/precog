@@ -110,7 +110,8 @@ jobs:
         # S608=hardcoded-sql-expression (validated with allowlists in migrations)
         # S110=try-except-pass (logged in migration_utils.py)
         # S602=subprocess-shell (shell=True safe for trusted scripts with hardcoded commands)
-        run: python -m ruff check --select S --ignore S101,S112,S607,S603,S608,S110,S602 --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' .
+        # S314=xml-parse (trusted local JUnit XML from pytest, not untrusted external data)
+        run: python -m ruff check --select S --ignore S101,S112,S314,S607,S603,S608,S110,S602 --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' .
 
       - name: Run Safety dependency vulnerability scanner
         run: python -m safety check --json
@@ -191,9 +192,10 @@ jobs:
           #       - test_crud_operations_properties.py
           #       - test_database_crud_properties.py
           #       - test_strategy_versioning_properties.py
+          #       - database/test_series_crud_properties.py
           # Integration/E2E/stress/chaos tests need PostgreSQL - run in Linux-only job
           # Issue #238: Added --junitxml for GitHub PR annotations
-          python -m pytest tests/unit/ tests/property/ -v --tb=short --junitxml=test-results.xml --cov=src/precog --cov-report=xml --cov-report=html --cov-report=term-missing -n auto --ignore=tests/property/test_crud_operations_properties.py --ignore=tests/property/test_database_crud_properties.py --ignore=tests/property/test_strategy_versioning_properties.py
+          python -m pytest tests/unit/ tests/property/ -v --tb=short --junitxml=test-results.xml --cov=src/precog --cov-report=xml --cov-report=html --cov-report=term-missing -n auto --ignore=tests/property/test_crud_operations_properties.py --ignore=tests/property/test_database_crud_properties.py --ignore=tests/property/test_strategy_versioning_properties.py --ignore=tests/property/database/test_series_crud_properties.py
 
       - name: Publish Test Results
         uses: mikepenz/action-junit-report@v4
@@ -312,11 +314,11 @@ jobs:
         env:
           PYTHONUNBUFFERED: "1"
         run: |
-          # Property tests that require real PostgreSQL (SCD Type-2, Decimal precision, strategy versioning)
+          # Property tests that require real PostgreSQL (SCD Type-2, Decimal precision, strategy versioning, series CRUD)
           # --timeout=120: Kill individual tests that hang for >2 minutes
           # Issue #238: Added --junitxml for GitHub PR annotations
           echo "=== Starting property tests at $(date) ==="
-          python -m pytest tests/property/test_crud_operations_properties.py tests/property/test_database_crud_properties.py tests/property/test_strategy_versioning_properties.py -v --tb=short --timeout=120 --junitxml=property-test-results.xml
+          python -m pytest tests/property/test_crud_operations_properties.py tests/property/test_database_crud_properties.py tests/property/test_strategy_versioning_properties.py tests/property/database/test_series_crud_properties.py -v --tb=short --timeout=120 --junitxml=property-test-results.xml
           echo "=== Property tests complete at $(date) ==="
 
       # Phase 1.9 DIAGNOSTIC: Split into separate steps to identify hang source

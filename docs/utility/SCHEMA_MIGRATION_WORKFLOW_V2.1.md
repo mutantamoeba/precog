@@ -6,7 +6,7 @@
 **Last Updated:** 2025-12-20
 **Purpose:** Step-by-step workflow for database schema migrations using Alembic
 **Target Audience:** Developers implementing database schema changes
-**Companion Document:** Pattern 14 in DEVELOPMENT_PATTERNS_V1.20.md
+**Companion Document:** Pattern 14 in DEVELOPMENT_PATTERNS_V1.21.md
 **Status:** Current
 **Changes in V2.1:**
 - Updated "Current Migration State" table with migrations 0003-0008

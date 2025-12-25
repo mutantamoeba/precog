@@ -26,7 +26,7 @@
 - Documents requirement for stress tests to use `skipif(_is_ci)` marker to prevent CI hangs
 - ThreadPoolExecutor-based tests must skip in resource-constrained CI environments
 - Clear semantic markers: SKIPPED (intentional) vs XFAIL (misleading "expected failure")
-- **CROSS-REFERENCES:** ADR-099 (skipif vs xfail decision), Pattern 28 (DEVELOPMENT_PATTERNS_V1.20)
+- **CROSS-REFERENCES:** ADR-099 (skipif vs xfail decision), Pattern 28 (DEVELOPMENT_PATTERNS_V1.21)
 **Changes in v2.19:**
 - **LIVE DATA MANAGEMENT REQUIREMENTS**: Added Section 4.12 with REQ-DATA-001 through REQ-DATA-005 (5 comprehensive live data requirements)
 - **REQ-DATA-001**: Game State Data Collection with SCD Type 2 Versioning (~1.8M records/year)
@@ -308,7 +308,7 @@ precog/
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
   2. `MASTER_REQUIREMENTS_V2.23.md` - This document (requirements through Phase 10)
-  3. `MASTER_INDEX_V2.51.md` - Complete document inventory
+  3. `MASTER_INDEX_V2.52.md` - Complete document inventory
   4. `ARCHITECTURE_DECISIONS_V2.31.md` - All 109 ADRs with design rationale (Phase 0-4.5)
   5. `REQUIREMENT_INDEX_V1.15.md` - Systematic requirement catalog
   6. `ADR_INDEX_V1.24.md` - Architecture decision index
@@ -3051,7 +3051,7 @@ def test_database_failure_recovery_e2e(clean_test_data, position_mgr):
 **Priority:** High
 **Phase:** 1.9 (Test Infrastructure & Process Hardening)
 **Status:** ✅ Complete (Implemented)
-**Cross-References:** ADR-099, Pattern 28 (DEVELOPMENT_PATTERNS_V1.20), TEST_ISOLATION_PATTERNS_V1.1
+**Cross-References:** ADR-099, Pattern 28 (DEVELOPMENT_PATTERNS_V1.21), TEST_ISOLATION_PATTERNS_V1.1
 
 **Problem Statement:**
 Stress tests using `ThreadPoolExecutor` with `as_completed()` can hang indefinitely in resource-constrained CI environments (GitHub Actions runners). These tests work locally but cause CI pipeline timeouts that cannot be interrupted even with `pytest-timeout`.

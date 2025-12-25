@@ -947,3 +947,375 @@ class TestKalshiIntegration:
             client.close()
 
         mock_close.assert_called_once()
+
+
+# =============================================================================
+# Order Management Tests (place_order, cancel_order, get_order)
+# =============================================================================
+
+
+class TestKalshiOrderManagement:
+    """
+    Unit tests for order management methods.
+
+    Tests cover:
+    - place_order() parameter validation and API interaction
+    - cancel_order() cancellation flow
+    - get_order() status retrieval
+    - Decimal price conversion for all order types
+
+    Educational Note:
+        Order Management is critical for trading because:
+        - place_order: Entry point for all trades
+        - cancel_order: Emergency exit when market conditions change
+        - get_order: Monitor order status (resting → executed/canceled)
+
+        All tests mock the API to verify:
+        1. Request body construction (correct parameters sent)
+        2. Response parsing (Decimal conversion applied)
+        3. Error handling (validation, HTTP errors)
+    """
+
+    @pytest.mark.unit
+    @pytest.mark.critical
+    def test_place_order_limit_yes_side(self, mock_env_credentials, mock_load_private_key):
+        """Test placing a limit order on YES side with correct request body."""
+        from tests.fixtures.api_responses import KALSHI_ORDER_RESPONSE
+
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_ORDER_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            order = client.place_order(
+                ticker="KXNFLGAME-25DEC15-KC-YES",
+                side="yes",
+                action="buy",
+                count=10,
+                price=Decimal("0.6500"),
+                order_type="limit",
+            )
+
+        # Verify request was made with correct parameters
+        call_kwargs = mock_request.call_args.kwargs
+        assert call_kwargs["method"] == "POST"
+        assert "/portfolio/orders" in call_kwargs["url"]
+
+        request_body = call_kwargs["json"]
+        assert request_body["ticker"] == "KXNFLGAME-25DEC15-KC-YES"
+        assert request_body["side"] == "yes"
+        assert request_body["action"] == "buy"
+        assert request_body["count"] == 10
+        assert request_body["yes_price_dollars"] == "0.6500"
+        assert "no_price_dollars" not in request_body  # Only yes_price for yes side
+
+        # Verify response parsing
+        assert order["order_id"] == "order_abc123def456"
+        assert order["status"] == "resting"
+        assert order["fill_count"] == 0
+
+    @pytest.mark.unit
+    @pytest.mark.critical
+    def test_place_order_limit_no_side(self, mock_env_credentials, mock_load_private_key):
+        """Test placing a limit order on NO side uses no_price_dollars."""
+        from tests.fixtures.api_responses import KALSHI_ORDER_RESPONSE
+
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_ORDER_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            _order = client.place_order(
+                ticker="KXNFLGAME-25DEC15-KC-YES",
+                side="no",
+                action="buy",
+                count=5,
+                price=Decimal("0.3500"),
+                order_type="limit",
+            )
+
+        # Verify no_price_dollars used for no side
+        call_kwargs = mock_request.call_args.kwargs
+        request_body = call_kwargs["json"]
+        assert request_body["no_price_dollars"] == "0.3500"
+        assert "yes_price_dollars" not in request_body  # Only no_price for no side
+
+    @pytest.mark.unit
+    def test_place_order_market_order_no_price(self, mock_env_credentials, mock_load_private_key):
+        """Test market orders don't require price parameter."""
+        from tests.fixtures.api_responses import KALSHI_ORDER_EXECUTED_RESPONSE
+
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_ORDER_EXECUTED_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            order = client.place_order(
+                ticker="KXNFLGAME-25DEC15-KC-YES",
+                side="yes",
+                action="buy",
+                count=10,
+                price=None,  # No price for market order
+                order_type="market",
+            )
+
+        # Verify no price in request body
+        call_kwargs = mock_request.call_args.kwargs
+        request_body = call_kwargs["json"]
+        assert "yes_price_dollars" not in request_body
+        assert "no_price_dollars" not in request_body
+        assert request_body["type"] == "market"
+
+        # Market orders should be executed immediately
+        assert order["status"] == "executed"
+        assert order["fill_count"] == 10
+
+    @pytest.mark.unit
+    def test_place_order_with_client_order_id(self, mock_env_credentials, mock_load_private_key):
+        """Test custom client_order_id is passed to API."""
+        from tests.fixtures.api_responses import KALSHI_ORDER_RESPONSE
+
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_ORDER_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            _order = client.place_order(
+                ticker="KXNFLGAME-25DEC15-KC-YES",
+                side="yes",
+                action="buy",
+                count=10,
+                price=Decimal("0.6500"),
+                client_order_id="my-tracking-id-123",
+            )
+
+        call_kwargs = mock_request.call_args.kwargs
+        request_body = call_kwargs["json"]
+        assert request_body["client_order_id"] == "my-tracking-id-123"
+
+    @pytest.mark.unit
+    def test_place_order_with_fill_or_kill(self, mock_env_credentials, mock_load_private_key):
+        """Test fill_or_kill time_in_force is passed correctly."""
+        from tests.fixtures.api_responses import KALSHI_ORDER_EXECUTED_RESPONSE
+
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_ORDER_EXECUTED_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            _order = client.place_order(
+                ticker="KXNFLGAME-25DEC15-KC-YES",
+                side="yes",
+                action="buy",
+                count=10,
+                price=Decimal("0.6500"),
+                time_in_force="fill_or_kill",
+            )
+
+        call_kwargs = mock_request.call_args.kwargs
+        request_body = call_kwargs["json"]
+        assert request_body["time_in_force"] == "fill_or_kill"
+
+    @pytest.mark.unit
+    def test_place_order_validation_invalid_side(self, mock_env_credentials, mock_load_private_key):
+        """Test place_order rejects invalid side parameter."""
+        client = KalshiClient(environment="demo")
+
+        with pytest.raises(ValueError) as exc_info:
+            client.place_order(
+                ticker="KXNFLGAME-25DEC15-KC-YES",
+                side="invalid",  # Invalid side
+                action="buy",
+                count=10,
+                price=Decimal("0.65"),
+            )
+
+        assert "side must be 'yes' or 'no'" in str(exc_info.value)
+
+    @pytest.mark.unit
+    def test_place_order_validation_invalid_action(
+        self, mock_env_credentials, mock_load_private_key
+    ):
+        """Test place_order rejects invalid action parameter."""
+        client = KalshiClient(environment="demo")
+
+        with pytest.raises(ValueError) as exc_info:
+            client.place_order(
+                ticker="KXNFLGAME-25DEC15-KC-YES",
+                side="yes",
+                action="invalid",  # Invalid action
+                count=10,
+                price=Decimal("0.65"),
+            )
+
+        assert "action must be 'buy' or 'sell'" in str(exc_info.value)
+
+    @pytest.mark.unit
+    def test_place_order_validation_invalid_count(
+        self, mock_env_credentials, mock_load_private_key
+    ):
+        """Test place_order rejects count < 1."""
+        client = KalshiClient(environment="demo")
+
+        with pytest.raises(ValueError) as exc_info:
+            client.place_order(
+                ticker="KXNFLGAME-25DEC15-KC-YES",
+                side="yes",
+                action="buy",
+                count=0,  # Invalid count
+                price=Decimal("0.65"),
+            )
+
+        assert "count must be >= 1" in str(exc_info.value)
+
+    @pytest.mark.unit
+    def test_place_order_validation_limit_requires_price(
+        self, mock_env_credentials, mock_load_private_key
+    ):
+        """Test limit orders require price parameter."""
+        client = KalshiClient(environment="demo")
+
+        with pytest.raises(ValueError) as exc_info:
+            client.place_order(
+                ticker="KXNFLGAME-25DEC15-KC-YES",
+                side="yes",
+                action="buy",
+                count=10,
+                price=None,  # No price for limit order
+                order_type="limit",
+            )
+
+        assert "price is required for limit orders" in str(exc_info.value)
+
+    @pytest.mark.unit
+    def test_place_order_decimal_conversion(self, mock_env_credentials, mock_load_private_key):
+        """Test order response prices are converted to Decimal."""
+        from tests.fixtures.api_responses import KALSHI_ORDER_RESPONSE
+
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_ORDER_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            order = client.place_order(
+                ticker="KXNFLGAME-25DEC15-KC-YES",
+                side="yes",
+                action="buy",
+                count=10,
+                price=Decimal("0.6500"),
+            )
+
+        # Verify Decimal conversion applied
+        assert isinstance(order.get("yes_price_dollars"), Decimal)
+        assert order["yes_price_dollars"] == Decimal("0.6500")
+        assert isinstance(order.get("no_price_dollars"), Decimal)
+        assert order["no_price_dollars"] == Decimal("0.3500")
+
+    @pytest.mark.unit
+    @pytest.mark.critical
+    def test_cancel_order_success(self, mock_env_credentials, mock_load_private_key):
+        """Test cancel_order makes DELETE request and returns canceled order."""
+        from tests.fixtures.api_responses import KALSHI_ORDER_CANCELED_RESPONSE
+
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_ORDER_CANCELED_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            order = client.cancel_order("order_abc123def456")
+
+        # Verify DELETE request made
+        call_kwargs = mock_request.call_args.kwargs
+        assert call_kwargs["method"] == "DELETE"
+        assert "/portfolio/orders/order_abc123def456" in call_kwargs["url"]
+
+        # Verify canceled status
+        assert order["status"] == "canceled"
+        assert order["order_id"] == "order_abc123def456"
+
+    @pytest.mark.unit
+    def test_cancel_order_decimal_conversion(self, mock_env_credentials, mock_load_private_key):
+        """Test cancel_order response has Decimal conversion applied."""
+        from tests.fixtures.api_responses import KALSHI_ORDER_CANCELED_RESPONSE
+
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_ORDER_CANCELED_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            order = client.cancel_order("order_abc123def456")
+
+        # Verify Decimal conversion
+        assert isinstance(order.get("taker_fees"), Decimal)
+        assert isinstance(order.get("taker_fill_cost"), Decimal)
+
+    @pytest.mark.unit
+    @pytest.mark.critical
+    def test_get_order_success(self, mock_env_credentials, mock_load_private_key):
+        """Test get_order retrieves order by ID with correct request."""
+        from tests.fixtures.api_responses import KALSHI_ORDER_PARTIAL_FILL_RESPONSE
+
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_ORDER_PARTIAL_FILL_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            order = client.get_order("order_abc123def456")
+
+        # Verify GET request made
+        call_kwargs = mock_request.call_args.kwargs
+        assert call_kwargs["method"] == "GET"
+        assert "/portfolio/orders/order_abc123def456" in call_kwargs["url"]
+
+        # Verify order data returned
+        assert order["order_id"] == "order_abc123def456"
+        assert order["status"] == "resting"
+        assert order["fill_count"] == 6
+        assert order["remaining_count"] == 4
+
+    @pytest.mark.unit
+    def test_get_order_decimal_conversion(self, mock_env_credentials, mock_load_private_key):
+        """Test get_order response has Decimal conversion applied."""
+        from tests.fixtures.api_responses import KALSHI_ORDER_PARTIAL_FILL_RESPONSE
+
+        client = KalshiClient(environment="demo")
+
+        with patch.object(client.session, "request") as mock_request:
+            mock_response = Mock()
+            mock_response.json.return_value = KALSHI_ORDER_PARTIAL_FILL_RESPONSE
+            mock_response.raise_for_status = Mock()
+            mock_request.return_value = mock_response
+
+            order = client.get_order("order_abc123def456")
+
+        # Verify Decimal conversion
+        assert isinstance(order.get("yes_price_dollars"), Decimal)
+        assert isinstance(order.get("taker_fill_cost"), Decimal)
+        assert order["taker_fill_cost"] == Decimal("3.9000")

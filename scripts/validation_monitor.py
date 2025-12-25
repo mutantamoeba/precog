@@ -359,7 +359,8 @@ def run_prepush_monitored() -> int:
         ("Type Checking", "python -m mypy . --exclude tests/ --exclude _archive/ --exclude venv/"),
         (
             "Security Scan",
-            "python -m ruff check --select S --ignore S101,S112,S607,S603 --exclude tests/ --quiet .",
+            # S314=xml-parse (trusted local JUnit XML from pytest, not untrusted external data)
+            "python -m ruff check --select S --ignore S101,S112,S314,S607,S603 --exclude tests/ --quiet .",
         ),
     ]
 

@@ -45,11 +45,12 @@ from decimal import Decimal
 from typing import ClassVar
 
 from precog.api_connectors.kalshi_client import KalshiClient
-from precog.api_connectors.types import ProcessedMarketData
+from precog.api_connectors.types import ProcessedMarketData, SeriesData
 from precog.database.crud_operations import (
     create_market,
     get_current_market,
     get_or_create_event,
+    get_or_create_series,
     update_market_with_versioning,
 )
 from precog.schedulers.base_poller import BasePoller
@@ -203,6 +204,168 @@ class KalshiMarketPoller(BasePoller):
         """Clean up Kalshi client on stop."""
         self.kalshi_client.close()
 
+    def sync_series(self, series_tickers: list[str] | None = None) -> dict[str, int]:
+        """
+        Sync series data from Kalshi API to database.
+
+        This should be called before syncing markets to ensure series records
+        exist in the database (required for foreign key relationships in events).
+
+        Args:
+            series_tickers: Optional list of specific series to sync.
+                If None, fetches all sports series from the API.
+
+        Returns:
+            Dictionary with counts: {"series_fetched": N, "series_created": M, "series_updated": P}
+
+        Educational Note:
+            Kalshi's data hierarchy is: Series → Events → Markets
+            - Series: Groups of related markets (e.g., "NFL Game Markets")
+            - Events: Specific occurrences (e.g., "Chiefs vs Seahawks - Dec 22")
+            - Markets: Tradeable outcomes (e.g., "Chiefs to win")
+
+            We sync series first because:
+            1. Events reference series (events.series_id → series.series_id)
+            2. Markets reference events (markets.event_id → events.event_id)
+            3. Without series records, FK constraints would fail
+
+            The tags field is particularly valuable for sport filtering:
+            - ["Football"] → NFL, NCAAF
+            - ["Basketball"] → NBA, NCAAB, NCAAW
+            - ["Hockey"] → NHL
+
+        Reference:
+            - Migration 0010: Added tags column with GIN index
+            - src/precog/database/crud_operations.py (get_or_create_series)
+        """
+        logger.debug("Syncing series data from Kalshi API")
+
+        series_fetched = 0
+        series_created = 0
+        series_updated = 0
+
+        try:
+            # Fetch series from API
+            if series_tickers:
+                # Fetch specific series by ticker
+                api_series_list = []
+                for ticker in series_tickers:
+                    fetched_series = self.kalshi_client.get_series(limit=100)
+                    # Filter to matching ticker
+                    for s in fetched_series:
+                        if s.get("ticker") == ticker:
+                            api_series_list.append(s)
+                            break
+            else:
+                # Fetch all sports series (using our configured sports)
+                api_series_list = self.kalshi_client.get_sports_series()
+
+            series_fetched = len(api_series_list)
+            logger.debug("Fetched %d series from Kalshi API", series_fetched)
+
+            # Sync each series to database
+            for series_item in api_series_list:
+                try:
+                    result = self._sync_single_series(series_item)
+                    if result is True:
+                        series_created += 1
+                    elif result is False:
+                        series_updated += 1
+                except Exception as e:
+                    s_ticker = series_item.get("ticker", "unknown")
+                    logger.error("Error syncing series %s: %s", s_ticker, e)
+
+        except Exception as e:
+            logger.error("Error fetching series from API: %s", e)
+
+        logger.info(
+            "Series sync complete: fetched=%d, created=%d, updated=%d",
+            series_fetched,
+            series_created,
+            series_updated,
+        )
+
+        return {
+            "series_fetched": series_fetched,
+            "series_created": series_created,
+            "series_updated": series_updated,
+        }
+
+    def _sync_single_series(self, series_data: SeriesData) -> bool | None:
+        """
+        Sync a single series to the database.
+
+        Args:
+            series_data: Series data from Kalshi API
+
+        Returns:
+            True if series was created
+            False if series was updated
+            None if series was skipped (no changes)
+
+        Educational Note:
+            The category mapping is important because Kalshi's API uses
+            descriptive categories like "Sports" but our DB constraint
+            requires lowercase values: 'sports', 'politics', etc.
+        """
+        ticker = series_data.get("ticker", "")
+        if not ticker:
+            logger.warning("Series missing ticker, skipping")
+            return None
+
+        # Map Kalshi category to database category (lowercase)
+        api_category = series_data.get("category", "other")
+        db_category = api_category.lower() if api_category else "other"
+
+        # Ensure category matches DB constraint
+        valid_categories = {"sports", "politics", "entertainment", "economics", "weather", "other"}
+        if db_category not in valid_categories:
+            db_category = "other"
+
+        # Extract tags (important for sport filtering)
+        tags = series_data.get("tags", [])
+
+        # Determine subcategory from tags or ticker
+        subcategory = None
+        if tags:
+            if "Football" in tags:
+                if "NFL" in ticker.upper():
+                    subcategory = "nfl"
+                elif "NCAAF" in ticker.upper():
+                    subcategory = "ncaaf"
+            elif "Basketball" in tags:
+                if "NBA" in ticker.upper():
+                    subcategory = "nba"
+                elif "NCAAB" in ticker.upper():
+                    subcategory = "ncaab"
+                elif "NCAAW" in ticker.upper():
+                    subcategory = "ncaaw"
+            elif "Hockey" in tags:
+                subcategory = "nhl"
+
+        # Use get_or_create_series with update_if_exists=True to keep data fresh
+        _, created = get_or_create_series(
+            series_id=ticker,
+            platform_id=self.PLATFORM_ID,
+            external_id=ticker,
+            category=db_category,
+            title=series_data.get("title", ticker),
+            subcategory=subcategory,
+            frequency=series_data.get("frequency"),
+            tags=tags if tags else None,
+            metadata={
+                "settlement_sources": series_data.get("settlement_sources"),
+                "contract_terms_url": series_data.get("contract_terms_url"),
+            },
+            update_if_exists=True,
+        )
+
+        if created:
+            logger.debug("Created series: %s", ticker)
+            return True
+        logger.debug("Updated series: %s", ticker)
+        return False
+
     def poll_once(self, series_tickers: list[str] | None = None) -> dict[str, int]:
         """
         Execute a single poll cycle manually.
@@ -282,7 +445,8 @@ class KalshiMarketPoller(BasePoller):
 
         for market in all_markets:
             try:
-                result = self._sync_market_to_db(market)
+                # Pass series_ticker explicitly - the API response may not include it
+                result = self._sync_market_to_db(market, series_ticker=series_ticker)
                 if result is True:
                     markets_created += 1
                 elif result is False:
@@ -302,7 +466,9 @@ class KalshiMarketPoller(BasePoller):
 
         return len(all_markets), markets_updated, markets_created
 
-    def _sync_market_to_db(self, market: ProcessedMarketData) -> bool | None:
+    def _sync_market_to_db(
+        self, market: ProcessedMarketData, series_ticker: str = ""
+    ) -> bool | None:
         """
         Sync a single market to the database.
 
@@ -311,6 +477,9 @@ class KalshiMarketPoller(BasePoller):
 
         Args:
             market: Market data from Kalshi API (with Decimal prices)
+            series_ticker: Series ticker (e.g., "KXNFLGAME") - must be passed
+                explicitly because the Kalshi API response doesn't include it
+                in the market object (it's only a filter parameter).
 
         Returns:
             True if market was created
@@ -321,6 +490,11 @@ class KalshiMarketPoller(BasePoller):
             We use *_dollars fields from the API for sub-penny precision.
             These are already converted to Decimal by KalshiClient.
             Legacy cent fields (yes_bid, yes_ask) are integers and less precise.
+
+            The series_ticker must be passed explicitly because:
+            - Kalshi API accepts series_ticker as a query filter parameter
+            - But the market objects in the response don't include series_ticker
+            - So market.get("series_ticker") would return empty string
         """
         ticker = market.get("ticker", "")
 
@@ -356,21 +530,22 @@ class KalshiMarketPoller(BasePoller):
         if existing is None:
             # Create new market - first ensure the event exists
             event_ticker = market.get("event_ticker", "")
-            series_ticker = market.get("series_ticker", "")
+            # Use the passed series_ticker parameter, fall back to market dict if available
+            effective_series = series_ticker or market.get("series_ticker", "")
 
             # Determine category from series ticker (e.g., KXNFLGAME -> sports/nfl)
             # Default to 'sports' for game-related series, 'other' for unknown
             category = "sports"  # Most Kalshi markets we poll are sports
             subcategory = None
-            if "NFL" in series_ticker.upper():
+            if "NFL" in effective_series.upper():
                 subcategory = "nfl"
-            elif "NCAAF" in series_ticker.upper():
+            elif "NCAAF" in effective_series.upper():
                 subcategory = "ncaaf"
-            elif "NBA" in series_ticker.upper():
+            elif "NBA" in effective_series.upper():
                 subcategory = "nba"
-            elif "NHL" in series_ticker.upper():
+            elif "NHL" in effective_series.upper():
                 subcategory = "nhl"
-            elif "MLB" in series_ticker.upper():
+            elif "MLB" in effective_series.upper():
                 subcategory = "mlb"
 
             # Get or create the event before creating the market
@@ -382,10 +557,10 @@ class KalshiMarketPoller(BasePoller):
                     external_id=event_ticker,
                     category=category,
                     title=market.get("title", event_ticker),
-                    series_id=series_ticker,  # Link event to its series (e.g., KXNFLGAME)
+                    series_id=effective_series,  # Link event to its series (e.g., KXNFLGAME)
                     subcategory=subcategory,
                     metadata={
-                        "series_ticker": series_ticker,
+                        "series_ticker": effective_series,
                     },
                 )
 
@@ -402,7 +577,7 @@ class KalshiMarketPoller(BasePoller):
                 volume=market.get("volume"),
                 open_interest=market.get("open_interest"),
                 metadata={
-                    "series_ticker": series_ticker,
+                    "series_ticker": effective_series,
                     "subtitle": market.get("subtitle"),
                     "open_time": market.get("open_time"),
                     "close_time": market.get("close_time"),

@@ -368,3 +368,152 @@ class TestKalshiClientDecimalPrecisionWithVCR:
         # But passes with Decimal:
         # >>> Decimal("0.96") + Decimal("0.04")
         # Decimal("1.00")  # ✅ Exact!
+
+
+@pytest.mark.integration
+@pytest.mark.api
+@pytest.mark.timeout(30)
+class TestKalshiClientSeriesWithVCR:
+    """
+    Test Kalshi Series API using VCR cassettes with REAL API data.
+
+    The Series endpoint provides discovery of available market categories.
+
+    Educational Note:
+        Kalshi Market Hierarchy:
+        - Category (sports, politics, entertainment, etc.)
+          └── Series (KXNFLGAME, KXPRES2024, etc.)
+              └── Events (individual games, elections)
+                  └── Markets (specific outcome contracts)
+
+        Why Series API Matters:
+        - Dynamic discovery of available markets
+        - No hardcoding of series tickers
+        - Enables automated market monitoring
+
+    Reference: Issue #257, SESSION_HANDOFF.md Priority 2 tasks
+    """
+
+    def test_get_series_with_real_api_data(self, monkeypatch):
+        """
+        Test get_series() with REAL recorded Kalshi series data.
+
+        Uses cassette: kalshi_get_series.yaml
+        - Real series from multiple categories
+        - Real tickers, titles, and settlement sources
+        - Validates series structure matches API specification
+        """
+        monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "75b4b76e-d191-4855-b219-5c31cdcba1c8")
+        monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "_keys/kalshi_demo_private.pem")
+
+        with my_vcr.use_cassette("kalshi_get_series.yaml"):
+            client = KalshiClient(environment="demo")
+            series = client.get_series(limit=10)
+
+        # Verify real data structure
+        assert isinstance(series, list), "Series should be a list"
+        assert len(series) >= 1, "Should return at least 1 series from cassette"
+
+        # Verify first series structure (real data)
+        first_series = series[0]
+        assert "ticker" in first_series, "Series must have ticker"
+        assert "title" in first_series, "Series must have title"
+        assert "category" in first_series, "Series must have category"
+
+        # Verify ticker format (Kalshi series tickers start with KX)
+        ticker = first_series.get("ticker", "")
+        assert ticker.startswith("KX"), f"Series ticker should start with KX, got {ticker}"
+
+    def test_series_categories_are_valid(self, monkeypatch):
+        """
+        Test that returned series have valid categories.
+
+        Kalshi organizes series into categories like:
+        - Sports (KXNFLGAME, KXNBAGAME)
+        - Politics (KXPRES2024)
+        - Entertainment (KXOSCARS)
+        - Economics (KXCPI)
+        - etc.
+
+        This test validates the category field is populated.
+        """
+        monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "75b4b76e-d191-4855-b219-5c31cdcba1c8")
+        monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "_keys/kalshi_demo_private.pem")
+
+        with my_vcr.use_cassette("kalshi_get_series.yaml"):
+            client = KalshiClient(environment="demo")
+            series = client.get_series(limit=10)
+
+        # Check categories are present and non-empty
+        categories_found = set()
+        for s in series:
+            cat = s.get("category")
+            if cat:
+                categories_found.add(cat)
+
+        # Should have at least one category from cassette
+        assert len(categories_found) >= 1, "Should have at least 1 category"
+
+        # Log categories for debugging
+        # Common categories: Sports, Politics, Entertainment, Economics, World
+        print(f"Categories found in cassette: {sorted(categories_found)}")
+
+    def test_series_settlement_sources_structure(self, monkeypatch):
+        """
+        Test that series include settlement source information.
+
+        Settlement sources are critical for understanding how markets resolve.
+        Each series specifies authoritative sources for outcome determination.
+
+        Example: KXNFLGAME uses ESPN/Fox Sports for settlement
+        """
+        monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "75b4b76e-d191-4855-b219-5c31cdcba1c8")
+        monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "_keys/kalshi_demo_private.pem")
+
+        with my_vcr.use_cassette("kalshi_get_series.yaml"):
+            client = KalshiClient(environment="demo")
+            series = client.get_series(limit=10)
+
+        # Find a series with settlement sources
+        series_with_sources = [s for s in series if s.get("settlement_sources")]
+
+        if series_with_sources:
+            # Verify settlement source structure
+            sources = series_with_sources[0]["settlement_sources"]
+            assert isinstance(sources, list), "settlement_sources should be a list"
+
+            if sources:
+                first_source = sources[0]
+                assert "name" in first_source, "Source should have name"
+                assert "url" in first_source, "Source should have url"
+
+    def test_get_series_with_category_filter(self, monkeypatch):
+        """
+        Test that category filter returns matching series.
+
+        Filters series by category (e.g., "Sports") and verifies
+        only matching series are returned.
+
+        Educational Note:
+            Kalshi API category filter:
+            - Case-sensitive: "Sports" not "sports"
+            - Returns only series matching the category
+            - Empty category returns all series
+        """
+        monkeypatch.setenv("KALSHI_DEMO_KEY_ID", "75b4b76e-d191-4855-b219-5c31cdcba1c8")
+        monkeypatch.setenv("KALSHI_DEMO_KEYFILE", "_keys/kalshi_demo_private.pem")
+
+        with my_vcr.use_cassette("kalshi_get_series.yaml"):
+            client = KalshiClient(environment="demo")
+            # Filter by Sports category (case-sensitive)
+            series = client.get_series(category="Sports", limit=5)
+
+        # Should return sports series
+        assert isinstance(series, list), "Series should be a list"
+        assert len(series) >= 1, "Should have at least 1 sports series"
+
+        # Verify all returned series are in Sports category
+        for s in series:
+            assert s.get("category") == "Sports", (
+                f"Expected Sports category, got {s.get('category')}"
+            )
