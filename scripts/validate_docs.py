@@ -352,6 +352,14 @@ def validate_cross_references() -> ValidationResult:
 
     broken_refs = []
 
+    # Exclusion patterns for known placeholders/examples in documentation
+    # These are intentional example filenames that don't represent real files
+    placeholder_patterns = [
+        r"YOUR_",  # Placeholder templates (YOUR_DOCUMENT_V1.5.md)
+        r"EXAMPLE_",  # Example filenames
+        r"<[A-Z_]+>",  # Template variables like <FILENAME>
+    ]
+
     for doc_file in foundation_files:
         if "_archive" in str(doc_file):
             continue
@@ -360,9 +368,11 @@ def validate_cross_references() -> ValidationResult:
 
         # Find references to other markdown files
         # Patterns: "docs/path/FILE.md", "supplementary/FILE.md", "foundation/FILE.md"
+        # Also handles data/ directory references
         # Supports both V1.0 and V1.0.1 version formats (semantic versioning)
         ref_patterns = [
-            r"docs/([a-z_/]+/[A-Z_0-9]+(?:_V\d+\.\d+(?:\.\d+)?)?\.md)",  # Full path
+            r"docs/([a-z_/]+/[A-Z_0-9]+(?:_V\d+\.\d+(?:\.\d+)?)?\.md)",  # Full path in docs/
+            r"data/([a-z_/]+/[A-Z_0-9]+(?:_V\d+\.\d+(?:\.\d+)?)?\.md)",  # Full path in data/
             r"([a-z_]+/[A-Z_0-9]+(?:_V\d+\.\d+(?:\.\d+)?)?\.md)",  # Relative path
             r"`([A-Z_0-9]+_V\d+\.\d+(?:\.\d+)?\.md)`",  # Inline code reference
         ]
@@ -370,15 +380,39 @@ def validate_cross_references() -> ValidationResult:
         for pattern in ref_patterns:
             refs = re.findall(pattern, content)
             for ref in refs:
+                # Skip known placeholder patterns
+                is_placeholder = False
+                for placeholder in placeholder_patterns:
+                    if re.search(placeholder, ref):
+                        is_placeholder = True
+                        break
+                if is_placeholder:
+                    continue
+
                 # Try to find the referenced file
                 ref_path = Path(ref)
                 found = False
 
-                # Search in docs/ directory
+                # Search in docs/ directory first
                 for candidate in DOCS_ROOT.rglob(ref_path.name):
                     if "_archive" not in str(candidate):
                         found = True
                         break
+
+                # If not found in docs/, also search in data/ directory
+                if not found:
+                    data_dir = PROJECT_ROOT / "data"
+                    if data_dir.exists():
+                        for candidate in data_dir.rglob(ref_path.name):
+                            found = True
+                            break
+
+                # Also check project root for README.md files
+                if not found and ref_path.name == "README.md":
+                    # Check if the full path exists relative to project root
+                    full_path = PROJECT_ROOT / ref
+                    if full_path.exists():
+                        found = True
 
                 if not found:
                     broken_refs.append(f"{doc_file.name} -> {ref}")

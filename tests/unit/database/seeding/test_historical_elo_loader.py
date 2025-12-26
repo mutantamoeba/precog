@@ -40,7 +40,7 @@ from precog.database.seeding.historical_elo_loader import (
     parse_fivethirtyeight_csv,
     parse_simple_csv,
 )
-from precog.database.seeding.team_history import TEAM_CODE_MAPPING
+from precog.database.seeding.team_history import SPORT_CODE_MAPPINGS, TEAM_CODE_MAPPING
 
 # =============================================================================
 # FIXTURES
@@ -147,16 +147,30 @@ class TestNormalizeTeamCode:
         assert normalize_team_code("KC") == "KC"
 
     def test_team_code_mapping_completeness(self):
-        """Verify known relocations are in the mapping.
+        """Verify known relocations are in the sport-specific mappings.
 
         Educational Note:
             This test documents which team relocations we handle.
             Add to this list when teams relocate.
+
+            SPORT_CODE_MAPPINGS is the primary mapping (sport-specific).
+            TEAM_CODE_MAPPING is legacy (backward compatibility only).
         """
-        expected_mappings = {"WSH": "WAS", "OAK": "LV", "SD": "LAC", "STL": "LAR"}
-        for source, target in expected_mappings.items():
-            assert source in TEAM_CODE_MAPPING
-            assert TEAM_CODE_MAPPING[source] == target
+        # Legacy TEAM_CODE_MAPPING only contains cross-sport universal mapping
+        assert "WSH" in TEAM_CODE_MAPPING
+        assert TEAM_CODE_MAPPING["WSH"] == "WAS"
+
+        # NFL-specific relocations are in SPORT_CODE_MAPPINGS
+        nfl_mappings = SPORT_CODE_MAPPINGS["nfl"]
+        nfl_expected = {"OAK": "LV", "SD": "LAC", "STL": "LAR", "WSH": "WAS"}
+        for source, target in nfl_expected.items():
+            assert source in nfl_mappings, f"NFL mapping missing: {source}"
+            assert nfl_mappings[source] == target
+
+        # Verify other sports have their mappings
+        assert "nba" in SPORT_CODE_MAPPINGS
+        assert "mlb" in SPORT_CODE_MAPPINGS
+        assert "nhl" in SPORT_CODE_MAPPINGS
 
 
 # =============================================================================

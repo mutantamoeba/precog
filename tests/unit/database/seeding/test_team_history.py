@@ -15,6 +15,7 @@ Test Coverage:
 """
 
 from precog.database.seeding.team_history import (
+    SPORT_CODE_MAPPINGS,
     TEAM_CODE_MAPPING,
     TEAM_HISTORY,
     get_all_historical_codes,
@@ -326,12 +327,46 @@ class TestBackwardCompatibility:
     """Tests for backward compatibility with existing code."""
 
     def test_team_code_mapping_dict(self) -> None:
-        """TEAM_CODE_MAPPING dict should have common mappings."""
-        assert TEAM_CODE_MAPPING["OAK"] == "LV"
-        assert TEAM_CODE_MAPPING["SD"] == "LAC"
-        assert TEAM_CODE_MAPPING["STL"] == "LAR"
-        assert TEAM_CODE_MAPPING["SEA"] == "OKC"
-        assert TEAM_CODE_MAPPING["MON"] == "WAS"
+        """TEAM_CODE_MAPPING legacy dict should have safe cross-sport mappings."""
+        # Legacy dict is now minimal - only safe cross-sport mappings
+        assert TEAM_CODE_MAPPING["WSH"] == "WAS"
+
+    def test_sport_code_mappings_dict(self) -> None:
+        """SPORT_CODE_MAPPINGS should have sport-specific mappings."""
+        # NFL-specific mappings
+        assert SPORT_CODE_MAPPINGS["nfl"]["OAK"] == "LV"
+        assert SPORT_CODE_MAPPINGS["nfl"]["SD"] == "LAC"
+        assert SPORT_CODE_MAPPINGS["nfl"]["STL"] == "LAR"
+
+        # NBA-specific mappings
+        assert SPORT_CODE_MAPPINGS["nba"]["SEA"] == "OKC"
+        assert SPORT_CODE_MAPPINGS["nba"]["NJN"] == "BKN"
+
+        # MLB-specific mappings
+        assert SPORT_CODE_MAPPINGS["mlb"]["MON"] == "WAS"
+        assert SPORT_CODE_MAPPINGS["mlb"]["BRO"] == "LAD"
+
+        # NHL-specific mappings
+        assert SPORT_CODE_MAPPINGS["nhl"]["ATL"] == "WPG"
+        assert SPORT_CODE_MAPPINGS["nhl"]["VEG"] == "VGK"
+
+    def test_no_cross_sport_contamination(self) -> None:
+        """Bug fix: SEA should not map to OKC in NHL (only NBA).
+
+        Issue: #257 - Seattle Kraken (NHL) was incorrectly mapping to
+        Oklahoma City Thunder (NBA) due to sport-agnostic mapping.
+        """
+        # NHL SEA (Seattle Kraken) should stay as SEA
+        assert resolve_team_code("nhl", "SEA") == "SEA"
+
+        # NBA SEA (Seattle SuperSonics) should map to OKC
+        assert resolve_team_code("nba", "SEA") == "OKC"
+
+        # NHL ATL (Atlanta Thrashers) should map to WPG
+        assert resolve_team_code("nhl", "ATL") == "WPG"
+
+        # NFL ATL (Atlanta Falcons) should stay as ATL
+        assert resolve_team_code("nfl", "ATL") == "ATL"
 
     def test_normalize_team_code_legacy(self) -> None:
         """normalize_team_code() should work for backward compatibility."""

@@ -435,13 +435,13 @@ def test_connection_pool_concurrent_stress(db_pool):
 ---
 
 **Related Documents:**
-- `docs/foundation/TESTING_STRATEGY_V3.8.md` (will be updated to V3.0)
+- `docs/foundation/TESTING_STRATEGY_V3.9.md` (will be updated to V3.0)
 - `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md` - REQ-TEST-012 through REQ-TEST-019
 - `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Detailed post-mortem
 - `TESTING_GAPS_ANALYSIS.md` - Current test coverage gaps
 - `CLAUDE.md` Section 7 (Common Tasks - Task 1)
 **Related Documents:**
-- `docs/foundation/TESTING_STRATEGY_V3.8.md`
+- `docs/foundation/TESTING_STRATEGY_V3.9.md`
 - `CLAUDE.md` Section 7 (Common Tasks - Task 1)
 
 ---
@@ -987,7 +987,7 @@ def is_market_tradeable(m):
 
 2. **Cascade to:**
    - REQUIREMENT_INDEX.md (add to table)
-   - DEVELOPMENT_PHASES_V1.14.md (add to phase tasks)
+   - DEVELOPMENT_PHASES_V1.15.md (add to phase tasks)
    - MASTER_INDEX_V2.11.md (update version if renamed)
    - SESSION_HANDOFF.md (document change)
 
@@ -2120,7 +2120,7 @@ Logger module was Phase 1 deliverable but missing from coverage targets checklis
 **Related Documents:**
 - `CLAUDE.md` Section 3, Step 2 (Phase start coverage validation)
 - `CLAUDE.md` Section 9, Step 1 (Phase completion coverage verification)
-- `DEVELOPMENT_PHASES_V1.14.md` (Phase-specific coverage targets)
+- `DEVELOPMENT_PHASES_V1.15.md` (Phase-specific coverage targets)
 
 ---
 
@@ -2147,7 +2147,7 @@ Before marking any feature complete, validate ALL principles followed:
 ## Related Documentation
 
 **Testing & Validation:**
-- `docs/foundation/TESTING_STRATEGY_V3.8.md` - Testing infrastructure
+- `docs/foundation/TESTING_STRATEGY_V3.9.md` - Testing infrastructure
 - `docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality
 
 **Process & Workflow:**

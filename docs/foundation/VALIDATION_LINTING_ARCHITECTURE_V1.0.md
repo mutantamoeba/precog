@@ -262,9 +262,9 @@ Running validation checks...
 #### Auto-Fixable Issues
 
 1. **Version header mismatches**
-   - Filename: `MASTER_REQUIREMENTS_V2.24.md`
-   - Header: `Version: 2.11`
-   - Fix: Update header to `2.11`
+   - Filename: `YOUR_DOCUMENT_V1.5.md`
+   - Header: `Version: 1.3`
+   - Auto-fix: Update header to match filename version (e.g., "1.5")
 
 2. **Missing documents in MASTER_INDEX**
    - Reports unlisted documents (manual addition recommended)
@@ -880,9 +880,9 @@ pytest tests/unit/test_specific.py --pdb
 
 ## Related Documents
 
-- **Testing:** `TESTING_STRATEGY_V3.8.md` - Comprehensive testing infrastructure
-- **Requirements:** `MASTER_REQUIREMENTS_V2.24.md` - REQ-VALIDATION-001, REQ-VALIDATION-002
-- **ADRs:** `ARCHITECTURE_DECISIONS_V2.32.md` - ADR-048 (Ruff), ADR-050 (Doc Validation), ADR-051 (Layered Validation), ADR-054 (Bandit→Ruff Migration), ADR-075 (Multi-Source Warning Governance), ADR-076 (Dynamic Ensemble Weights), ADR-077 (Strategy vs Method Separation)
+- **Testing:** `TESTING_STRATEGY_V3.9.md` - Comprehensive testing infrastructure
+- **Requirements:** `MASTER_REQUIREMENTS_V2.25.md` - REQ-VALIDATION-001, REQ-VALIDATION-002
+- **ADRs:** `ARCHITECTURE_DECISIONS_V2.33.md` - ADR-048 (Ruff), ADR-050 (Doc Validation), ADR-051 (Layered Validation), ADR-054 (Bandit→Ruff Migration), ADR-075 (Multi-Source Warning Governance), ADR-076 (Dynamic Ensemble Weights), ADR-077 (Strategy vs Method Separation)
 - **Process:** `CLAUDE.md V1.1` - Section 5 (Document Cohesion), Section 9 (Phase Completion Protocol)
 - **Configuration:** `pyproject.toml` - All tool configurations
 

@@ -1,9 +1,17 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.24
-**Last Updated:** 2025-12-24
+**Version:** 2.25
+**Last Updated:** 2025-12-26
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.25:**
+- **NEIL PAINE DATA SOURCE MIGRATION:** Updated all FiveThirtyEight references to Neil Paine GitHub archives
+- **REQ-ELO-008:** Added Elo Validation Against Reference Data requirement (NHL validated: 11.2 avg diff)
+- **DATA SOURCE UPDATES:** Neil Paine (former FiveThirtyEight editor) maintains authoritative Elo archives
+- **NEIL PAINE COVERAGE:** NFL (35,899 records, 1920-present), NBA (151,411 records, 1946-present), NHL (137,679 records, 1917-present)
+- **MLB BLOCKED:** Issue #278 - pybaseball/Baseball Reference blocking automated requests
+- **CROSS-REFERENCES:** ADR-110 (Neil Paine Data Sources), ADR-111 (Sport-Specific Mappings), ADR-112 (team_season_records VIEW)
+- Total requirements: 136 -> 137
 **Changes in v2.24:**
 - **ELO RATING COMPUTATION & ADVANCED METRICS:** Added Section 4.14 with REQ-ELO-001 through REQ-ELO-007
 - **REQ-ELO-001:** Multi-Sport Elo Computation Engine (NFL, NBA, NHL, MLB, NCAAF, NCAAB)
@@ -135,7 +143,7 @@
 - **PHASE 0.6C STATUS**: REQ-TEST-005, REQ-VALIDATION-001-003 marked as ✅ Complete
 - **PHASE 0.7 PLANNING**: REQ-TEST-006-008, REQ-CICD-001-003 marked as 🔵 Planned
 - **CROSS-REFERENCES**: Added ADR-038 through ADR-045 references
-- **DOCUMENTATION REFERENCES**: Added TESTING_STRATEGY_V3.8.md, VALIDATION_LINTING_ARCHITECTURE_V1.0.md
+- **DOCUMENTATION REFERENCES**: Added TESTING_STRATEGY_V3.9.md, VALIDATION_LINTING_ARCHITECTURE_V1.0.md
 **Changes in v2.8:**
 - **PHASE 0.6B DOCUMENTATION**: Updated all supplementary document references with standardized filenames (removed PHASE_ prefixes, standardized V1.0 format)
 - **NEW SECTION 4.10**: CLI Commands requirements (REQ-CLI-001 through REQ-CLI-005) - Typer framework with 5 core commands
@@ -321,12 +329,12 @@ precog/
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.24.md` - This document (requirements through Phase 10)
-  3. `MASTER_INDEX_V2.52.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.32.md` - All 109 ADRs with design rationale (Phase 0-4.5)
-  5. `REQUIREMENT_INDEX_V1.16.md` - Systematic requirement catalog
+  2. `MASTER_REQUIREMENTS_V2.25.md` - This document (requirements through Phase 10)
+  3. `MASTER_INDEX_V2.53.md` - Complete document inventory
+  4. `ARCHITECTURE_DECISIONS_V2.33.md` - All 112 ADRs with design rationale (Phase 0-4.5)
+  5. `REQUIREMENT_INDEX_V1.17.md` - Systematic requirement catalog
   6. `ADR_INDEX_V1.25.md` - Architecture decision index
-  7. `TESTING_STRATEGY_V3.8.md` - Test cases, coverage requirements, test isolation patterns
+  7. `TESTING_STRATEGY_V3.9.md` - Test cases, coverage requirements, test isolation patterns
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
 - **Supplementary Documents** (in `docs/supplementary/`):
@@ -1384,10 +1392,10 @@ Complements live data polling (REQ-DATA-001-005) with batch import capabilities.
 - Reference: ADR-106 (Historical Data Collection Architecture), Issue #229
 - Description: Seed historical game results from external sources for backtesting
 - Data Sources:
-  - FiveThirtyEight CSV (NFL/NBA/MLB: 1920-present)
+  - Neil Paine GitHub Archives (NFL: 1920-present, NBA: 1946-present, NHL: 1917-present)
   - nfl_data_py Python library (NFL: 2000-present)
   - nba_api Python library (NBA: 1946-present)
-  - pybaseball Python library (MLB: 1871-present)
+  - pybaseball Python library (MLB: 1871-present) ⚠️ Currently blocked - Issue #278
   - cfbd Python library (NCAAF: 2000-present)
 - Schema: historical_games table (Migration 0006)
   - Game identification: sport, season, game_date, home/away_team_code
@@ -1395,7 +1403,7 @@ Complements live data polling (REQ-DATA-001-005) with batch import capabilities.
   - Context: is_neutral_site, is_playoff, game_type, venue_name
   - Provenance: source, source_file, external_game_id
 - Volume Estimate: ~500,000 historical games across all sports
-- Related: historical_games_loader.py, sources/fivethirtyeight.py
+- Related: historical_games_loader.py, sources/neil_paine.py
 
 **REQ-DATA-007: Historical Odds Data Seeding**
 - Phase: 2.5
@@ -1433,10 +1441,10 @@ Complements live data polling (REQ-DATA-001-005) with batch import capabilities.
   - Record types: GameRecord, OddsRecord, EloRecord (TypedDict)
   - LoadResult: Statistics tracking (records_processed, inserted, skipped)
 - Implemented Adapters:
-  - FiveThirtyEightSource: Games + Elo from CSV
+  - NeilPaineSource: Games + Elo from Neil Paine GitHub archives (NFL, NBA, NHL)
   - BettingCSVSource: Odds from betting datasets
   - NFLDataPySource: NFL games from nfl_data_py
-  - (Planned) NBAApiSource, PybaseballSource, CFBDSource
+  - (Planned) NBAApiSource, PybaseballSource (blocked), CFBDSource
 - Design Principles:
   - Separation of concerns (schedulers/ vs database/seeding/)
   - Two-layer architecture (loaders vs sources)
@@ -2159,7 +2167,7 @@ pyyaml==6.0.1
 **Phase:** 0.6c
 **Priority:** High
 **Status:** ✅ Complete
-**Reference:** ADR-039, TESTING_STRATEGY_V3.8.md
+**Reference:** ADR-039, TESTING_STRATEGY_V3.9.md
 
 Test results must be persisted with timestamps for trend analysis and CI/CD integration:
 - Timestamped HTML reports in `test_results/YYYY-MM-DD_HHMMSS/`
@@ -3997,10 +4005,12 @@ Bootstrap Elo ratings from historical game results:
   - Progress tracking for long historical runs
   - Checkpointing for resumable processing
 
-- **FiveThirtyEight Migration**:
-  - FiveThirtyEight shut down March 2025
-  - Historical Elo data is now **stale**
-  - Must compute Elo from game results for all sports
+- **Neil Paine Archives (FiveThirtyEight Replacement)**:
+  - FiveThirtyEight shut down June 2023 (API sunset)
+  - Neil Paine (former FiveThirtyEight sports editor) maintains GitHub archives
+  - Authoritative source: NFL, NBA, NHL Elo ratings (MIT License)
+  - Validated: NHL computed Elo vs Neil Paine = 11.2 avg Elo point difference
+  - MLB: Blocked by pybaseball (Issue #278) - alternative sources documented
 
 ---
 
@@ -4099,6 +4109,46 @@ Integrate data from multiple sources for comprehensive Elo computation:
   - `nfl_data_py` was **archived September 2025**
   - All code must use `nflreadpy` instead
   - Import change: `from nflreadpy import ...`
+
+---
+
+**REQ-ELO-008: Elo Validation Against Reference Data**
+
+**Phase:** 2C
+**Priority:** High
+**Status:** ✅ Complete (NHL validated)
+**Reference:** ADR-110 (Neil Paine Data Sources), ADR-111 (Sport-Specific Mappings)
+
+Validate computed Elo ratings against authoritative reference data:
+
+- **Validation Sources**:
+  - Neil Paine GitHub Archives (authoritative for NFL, NBA, NHL)
+  - Former FiveThirtyEight sports editor maintains archives
+  - MIT License for all data
+
+- **Validation Metrics**:
+  - Average Elo point difference vs reference
+  - Maximum deviation from reference
+  - Correlation coefficient with reference ratings
+  - Percentage within acceptable tolerance (±20 Elo points)
+
+- **Validation Results (Phase 2C)**:
+  | Sport | Comparisons | Avg Diff | Max Diff | Status |
+  |-------|-------------|----------|----------|--------|
+  | NHL   | 10,597      | 11.2     | ~50      | ✅ Validated |
+  | NFL   | Pending     | -        | -        | 🔵 Planned |
+  | NBA   | Pending     | -        | -        | 🔵 Planned |
+  | MLB   | Blocked     | -        | -        | ⚠️ Issue #278 |
+
+- **Acceptance Criteria**:
+  - Average difference ≤ 15 Elo points (acceptable)
+  - Correlation coefficient ≥ 0.95 with reference data
+  - No systematic bias (home/away, season start/end)
+
+- **Cross-Sport Bug Prevention**:
+  - Sport-specific team code mappings (ADR-111)
+  - SPORT_CODE_MAPPINGS nested dict prevents cross-sport contamination
+  - Example: SEA → OKC only in NBA, not NHL
 
 ---
 

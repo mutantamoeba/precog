@@ -1,10 +1,15 @@
-# Testing Strategy V3.8
+# Testing Strategy V3.9
 
 **Document Type:** Foundation
 **Status:** ✅ Active
-**Version:** 3.8
+**Version:** 3.9
 **Created:** 2025-10-23
-**Last Updated:** 2025-12-13
+**Last Updated:** 2025-12-26
+**Changes in V3.9:**
+- **JUnit XML Artifacts Documentation** - Added comprehensive documentation for pre-push test diagnostics
+- Documents `.pre-push-artifacts/` location with JUnit XML files and summary JSON
+- Added "Quick Diagnosis Workflow" section with 4-step troubleshooting guide
+- Reference: Issue #238, PR #240 (JUnit logging implementation)
 **Changes in V3.8:**
 - **Property Tests with Database Access Pattern (MANDATORY)** - Added documentation for `@pytest.mark.database` convention
 - Property tests split into DB-dependent (~25 tests) and non-DB (~385 tests)
@@ -2122,7 +2127,7 @@ All critical paths tested:
 python -m pytest tests/ --cov=src/precog --cov-report=term-missing
 
 # Compare to DEVELOPMENT_PHASES targets
-grep "≥" docs/foundation/DEVELOPMENT_PHASES_V1.14.md
+grep "≥" docs/foundation/DEVELOPMENT_PHASES_V1.15.md
 
 # Verify gaps documented in PR descriptions
 gh pr list --state merged --search "merged:>=2025-11-01"
@@ -2170,7 +2175,7 @@ connection.py         81.82%  (target: 80%, gap: +1.82pp ✅)
 - Write tests before/during implementation (TDD/test-driven)
 
 ### Cross-References
-- **DEVELOPMENT_PHASES_V1.14.md:** Phase-specific module targets
+- **DEVELOPMENT_PHASES_V1.15.md:** Phase-specific module targets
 - **Phase Completion Protocol (CLAUDE.md Step 5):** Coverage validation checklist
 - **Pattern 10:** Property-Based Testing (achieving high coverage with generated inputs)
 - **DEVELOPMENT_PHILOSOPHY_V1.3.md:** Test-Driven Development principle
@@ -2913,6 +2918,61 @@ Add Layer 3 (Poller E2E) tests when ANY of these are true:
 pytest -m "not slow"  # Skip slow tests locally
 ```
 
+**Pre-Push Hook Implementation:**
+
+The pre-push hook (`scripts/run_parallel_checks.py`) runs all 8 test types in parallel phases
+and generates JUnit XML reports for diagnostic purposes.
+
+**Test Execution Phases:**
+| Phase | Name | Tests |
+|-------|------|-------|
+| A+C1 | Unit + Non-DB Property Tests | `tests/unit/`, `tests/property/` (non-DB) |
+| B | Integration + E2E Tests | `tests/integration/`, `tests/e2e/` |
+| C2 | DB Property Tests | `tests/property/` (DB-dependent) |
+| D | Stress/Race/Performance Tests | `tests/stress/`, `tests/performance/` |
+
+**JUnit XML Artifacts Location:**
+
+All test results are stored in `.pre-push-artifacts/` (gitignored):
+
+```
+.pre-push-artifacts/
+├── prepush-summary-latest.json    # Quick overview: pass/fail counts, duration
+├── prepush-phase-a+c1-results.xml # JUnit XML for Phase A+C1
+├── prepush-phase-b-results.xml    # JUnit XML for Phase B
+├── prepush-phase-c2-results.xml   # JUnit XML for Phase C2
+├── prepush-phase-d-results.xml    # JUnit XML for Phase D
+└── prepush-*.log                  # Detailed console output per step
+```
+
+**Quick Diagnosis Workflow:**
+
+1. **Check summary first:**
+   ```bash
+   cat .pre-push-artifacts/prepush-summary-latest.json | python -m json.tool
+   ```
+   Look for `"success": false` and `"errors"` count per phase.
+
+2. **Find failing phase:**
+   ```bash
+   # Example: Phase D has 18 errors
+   grep -A5 '"phase_id": "Phase D"' .pre-push-artifacts/prepush-summary-latest.json
+   ```
+
+3. **Parse JUnit XML for specific failures:**
+   ```bash
+   # Find all <error> or <failure> elements
+   grep -E "<(error|failure)" .pre-push-artifacts/prepush-phase-d-results.xml
+   ```
+
+4. **View detailed error messages:**
+   ```bash
+   # Full XML shows stack traces and error details
+   cat .pre-push-artifacts/prepush-phase-d-results.xml
+   ```
+
+**Reference:** Issue #238, PR #240 (JUnit logging implementation)
+
 ---
 
 ### Automated CI/CD (Phase 0.7 - Planned)
@@ -3093,8 +3153,8 @@ pytest --cov=module tests/unit/test_new_feature.py
 - **Fixtures:** `tests/conftest.py` - Shared fixtures (db_pool, db_cursor, clean_test_data REQUIRED)
 - **Factories:** `tests/fixtures/factories.py` - Test data factories
 - **Scripts:** `scripts/test_*.sh`, `scripts/validate_*.sh` - Execution scripts
-- **Requirements:** `docs/foundation/MASTER_REQUIREMENTS_V2.24.md` - REQ-TEST-012 through REQ-TEST-019
-- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.32.md` - ADR-074, ADR-076 (Test Type Categories)
+- **Requirements:** `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` - REQ-TEST-012 through REQ-TEST-019
+- **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.33.md` - ADR-074, ADR-076 (Test Type Categories)
 - **Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.22.md` - Pattern 13 (Test Coverage Quality), Pattern 26 (Resource Cleanup), Pattern 27 (Dependency Injection), Pattern 28 (CI-Safe Stress Testing)
 - **Root Cause Analysis:** `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Phase 1.5 TDD failure lessons learned
 - **Validation:** `docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Overall quality infrastructure

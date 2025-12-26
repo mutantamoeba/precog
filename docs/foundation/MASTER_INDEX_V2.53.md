@@ -1,9 +1,16 @@
 # Precog Documentation Master Index
 
 ---
-**Version:** 2.52
-**Last Updated:** 2025-12-24
+**Version:** 2.53
+**Last Updated:** 2025-12-26
 **Status:** ✅ Current
+**Changes in v2.53:**
+- **NEIL PAINE DATA SOURCE MIGRATION**: Updated all FiveThirtyEight references to Neil Paine GitHub archives
+- ARCHITECTURE_DECISIONS V2.32 → V2.33: Added ADR-110 (Neil Paine Data Sources), ADR-111 (Sport-Specific Mappings), ADR-112 (team_season_records VIEW)
+- MASTER_REQUIREMENTS V2.24 → V2.25: Added REQ-ELO-008 (Elo Validation Against Reference Data)
+- DEVELOPMENT_PHASES V1.14 → V1.15: Updated Phase 2C progress, Neil Paine migration
+- REQUIREMENT_INDEX V1.16 → V1.17: Added REQ-ELO-008 (136 → 137 total requirements)
+- NHL Elo validation complete: 10,597 comparisons, 11.2 avg Elo point difference
 **Changes in v2.52:**
 - Added TRADING_TEST_ARCHITECTURE_V1.0.md to Testing & Quality Documents: 4-layer testing architecture addressing Kalshi DEMO 503 errors (Unit → VCR → Simulation → Smoke tests)
 **Changes in v2.51:**
@@ -440,14 +447,14 @@ Core architecture, requirements, and system design documents.
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
 | **PROJECT_OVERVIEW_V1.5.md** | ✅ | v1.5 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | System architecture, tech stack, directory tree - **UPDATED V1.5** (added Observability & Monitoring: Codecov + Sentry hybrid architecture, sentry-sdk==2.0.0) |
-| **MASTER_REQUIREMENTS_V2.24.md** | ✅ | v2.24 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.24** (added REQ-ELO-001 through REQ-ELO-007 for Elo Rating System; 135 total requirements) |
-| **MASTER_INDEX_V2.52.md** | ✅ | v2.52 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.52** (added TRADING_TEST_ARCHITECTURE_V1.0.md for 4-layer trading test strategy) |
-| **ARCHITECTURE_DECISIONS_V2.32.md** | ✅ | v2.32 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (110 total) - **UPDATED V2.32** (ADR-109: Elo Rating System; Data Collection Guide V1.2) |
-| **REQUIREMENT_INDEX_V1.16.md** | ✅ | v1.16 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 136 requirements - **UPDATED V1.16** (added REQ-ELO-001 through REQ-ELO-007 for Elo Rating System; 129 → 136 total requirements) |
+| **MASTER_REQUIREMENTS_V2.25.md** | ✅ | v2.25 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Complete requirements through Phase 10 with REQ IDs - **UPDATED V2.25** (added REQ-ELO-008 for Elo Validation; Neil Paine data sources; 137 total requirements) |
+| **MASTER_INDEX_V2.53.md** | ✅ | v2.53 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | THIS FILE - complete document inventory - **UPDATED V2.53** (Neil Paine data migration; document version updates: MASTER_REQUIREMENTS V2.25, DEVELOPMENT_PHASES V1.15, REQUIREMENT_INDEX V1.17, ARCHITECTURE_DECISIONS V2.33) |
+| **ARCHITECTURE_DECISIONS_V2.33.md** | ✅ | v2.33 | `/docs/foundation/` | 0 | Phases 1-10 | 🟡 High | Design rationale with ADR numbers (112 total) - **UPDATED V2.33** (ADR-110, ADR-111, ADR-112: Neil Paine, Sport-Specific Mappings, team_season_records VIEW) |
+| **REQUIREMENT_INDEX_V1.17.md** | ✅ | v1.17 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 137 requirements - **UPDATED V1.17** (added REQ-ELO-008 for Elo Validation; 136 → 137 total requirements) |
 | **ADR_INDEX_V1.25.md** | ✅ | v1.25 | `/docs/foundation/` | 0 | All phases | 🔴 Critical | Systematic catalog of all 110 architecture decisions - **UPDATED V1.25** (added ADR-109 for Elo Rating System; 109 → 110 total ADRs) |
 | **GLOSSARY.md** | ✅ | n/a | `/docs/foundation/` | 0 | All phases | 🟢 Medium | Terminology reference (living document, no version) |
-| **DEVELOPMENT_PHASES_V1.14.md** | ✅ | v1.14 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **UPDATED V1.14** (Phase 2C historical data seeding, Elo computation tasks) |
-| **TESTING_STRATEGY_V3.8.md** | ✅ | v3.8 | `/docs/foundation/` | 2 | Phases 1-10 | 🔴 Critical | **UPDATED V3.8** - Property Tests with DB Access pattern: `@pytest.mark.database` for DB-dependent property tests (~25 tests) enabling parallel execution with unit tests (~43s savings); Mypy incremental caching (~27s savings); V3.7: Three-Layer E2E Testing Gap Pattern; V3.6: Fast Chaos Tests; V3.5: Test Failure Response; V3.4: CI-Safe Stress Testing; V3.3: Test Isolation; V3.2: All 8 test types MANDATORY |
+| **DEVELOPMENT_PHASES_V1.15.md** | ✅ | v1.15 | `/docs/foundation/` | 0 | All phases | 🟡 High | Complete roadmap Phase 0-10 - **UPDATED V1.15** (Neil Paine data migration, NHL Elo validation complete, Phase 2C progress) |
+| **TESTING_STRATEGY_V3.9.md** | ✅ | v3.8 | `/docs/foundation/` | 2 | Phases 1-10 | 🔴 Critical | **UPDATED V3.8** - Property Tests with DB Access pattern: `@pytest.mark.database` for DB-dependent property tests (~25 tests) enabling parallel execution with unit tests (~43s savings); Mypy incremental caching (~27s savings); V3.7: Three-Layer E2E Testing Gap Pattern; V3.6: Fast Chaos Tests; V3.5: Test Failure Response; V3.4: CI-Safe Stress Testing; V3.3: Test Isolation; V3.2: All 8 test types MANDATORY |
 | **TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md** | ✅ | v2.1 | `/docs/foundation/` | 1.9 | Phases 1.5+ | 🔴 Critical | **UPDATED V2.1** - Added REQ-TEST-020 through REQ-TEST-024 (Test Isolation Requirements from Phase 1.9): transaction-based isolation, FK dependency chain management, cleanup fixture ordering, parallel execution safety, SCD Type 2 isolation; cross-references TEST_ISOLATION_PATTERNS_V1.1.md; V2.0: REQ-TEST-012-019 (8 test types, mock restrictions, fixture requirements, coverage standards) |
 | **VALIDATION_LINTING_ARCHITECTURE_V1.0.md** | ✅ | v1.0 | `/docs/foundation/` | 0.6c | Phases 0.6c-0.7 | 🟡 High | **NEW** - Code quality and documentation validation architecture (Phase 0.6c) |
 | **DEVELOPMENT_PHILOSOPHY_V1.3.md** | ✅ | v1.3 | `/docs/foundation/` | 0.7 | All phases | 🔴 Critical | **UPDATED V1.3** - Added Section 1 subsection: Test Quality - When Tests Pass But Aren't Sufficient (lessons from Phase 1.5 TDD failure: 17/17 tests passing but 13/17 failed with real database; 6 lessons learned: mock sparingly, use test infrastructure, write tests before implementation, need 8 test types, stress test resources, coverage % ≠ quality; cross-references TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md, TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md) |
@@ -537,7 +544,7 @@ Roadmap, timelines, and project management.
 
 | Document | Status | Version | Location | Phase | Phase Ties | Priority | Notes |
 |----------|--------|---------|----------|-------|------------|----------|-------|
-| **DEVELOPMENT_PHASES_V1.14.md** | ✅ | v1.14 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | **UPDATED V1.14** - Phase 2C historical data seeding, Elo computation tasks |
+| **DEVELOPMENT_PHASES_V1.15.md** | ✅ | v1.15 | `/docs/foundation/` | 0.5 | All phases | 🟡 High | **UPDATED V1.15** - Neil Paine data migration, NHL Elo validation complete, Phase 2C progress |
 | **DEPLOYMENT_GUIDE_V1.0.md** | 🔵 | - | `/docs/deployment/` | 1 | Phase 1 ✅ | 🟡 High | Local/AWS deployment stubs |
 | **USER_GUIDE_V1.0.md** | 🔵 | - | `/docs/guides/` | 5 | Phase 5 ✅ | 🟢 Medium | CLI examples (edges-list, trade-execute) |
 | **DEVELOPER_ONBOARDING_V1.0.md** | 🔵 | - | `/docs/utility/` | 0 | Phase 0 ✅ | 🟡 High | Merged with ENVIRONMENT_CHECKLIST, onboarding steps |
