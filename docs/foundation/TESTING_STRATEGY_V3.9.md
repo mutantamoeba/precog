@@ -1,10 +1,15 @@
-# Testing Strategy V3.8
+# Testing Strategy V3.9
 
 **Document Type:** Foundation
 **Status:** ✅ Active
-**Version:** 3.8
+**Version:** 3.9
 **Created:** 2025-10-23
-**Last Updated:** 2025-12-13
+**Last Updated:** 2025-12-26
+**Changes in V3.9:**
+- **JUnit XML Artifacts Documentation** - Added comprehensive documentation for pre-push test diagnostics
+- Documents `.pre-push-artifacts/` location with JUnit XML files and summary JSON
+- Added "Quick Diagnosis Workflow" section with 4-step troubleshooting guide
+- Reference: Issue #238, PR #240 (JUnit logging implementation)
 **Changes in V3.8:**
 - **Property Tests with Database Access Pattern (MANDATORY)** - Added documentation for `@pytest.mark.database` convention
 - Property tests split into DB-dependent (~25 tests) and non-DB (~385 tests)
@@ -2912,6 +2917,61 @@ Add Layer 3 (Poller E2E) tests when ANY of these are true:
 ./scripts/validate_all.sh
 pytest -m "not slow"  # Skip slow tests locally
 ```
+
+**Pre-Push Hook Implementation:**
+
+The pre-push hook (`scripts/run_parallel_checks.py`) runs all 8 test types in parallel phases
+and generates JUnit XML reports for diagnostic purposes.
+
+**Test Execution Phases:**
+| Phase | Name | Tests |
+|-------|------|-------|
+| A+C1 | Unit + Non-DB Property Tests | `tests/unit/`, `tests/property/` (non-DB) |
+| B | Integration + E2E Tests | `tests/integration/`, `tests/e2e/` |
+| C2 | DB Property Tests | `tests/property/` (DB-dependent) |
+| D | Stress/Race/Performance Tests | `tests/stress/`, `tests/performance/` |
+
+**JUnit XML Artifacts Location:**
+
+All test results are stored in `.pre-push-artifacts/` (gitignored):
+
+```
+.pre-push-artifacts/
+├── prepush-summary-latest.json    # Quick overview: pass/fail counts, duration
+├── prepush-phase-a+c1-results.xml # JUnit XML for Phase A+C1
+├── prepush-phase-b-results.xml    # JUnit XML for Phase B
+├── prepush-phase-c2-results.xml   # JUnit XML for Phase C2
+├── prepush-phase-d-results.xml    # JUnit XML for Phase D
+└── prepush-*.log                  # Detailed console output per step
+```
+
+**Quick Diagnosis Workflow:**
+
+1. **Check summary first:**
+   ```bash
+   cat .pre-push-artifacts/prepush-summary-latest.json | python -m json.tool
+   ```
+   Look for `"success": false` and `"errors"` count per phase.
+
+2. **Find failing phase:**
+   ```bash
+   # Example: Phase D has 18 errors
+   grep -A5 '"phase_id": "Phase D"' .pre-push-artifacts/prepush-summary-latest.json
+   ```
+
+3. **Parse JUnit XML for specific failures:**
+   ```bash
+   # Find all <error> or <failure> elements
+   grep -E "<(error|failure)" .pre-push-artifacts/prepush-phase-d-results.xml
+   ```
+
+4. **View detailed error messages:**
+   ```bash
+   # Full XML shows stack traces and error details
+   cat .pre-push-artifacts/prepush-phase-d-results.xml
+   ```
+
+**Reference:** Issue #238, PR #240 (JUnit logging implementation)
 
 ---
 

@@ -80,8 +80,9 @@ def upgrade() -> None:
 
             -- Source 2: game_states (live ESPN data, current season only)
             -- Only include final games not already in historical_games
+            -- Note: game_states doesn't have sport column; derive from teams table
             SELECT
-                gs.sport,
+                ht.sport,  -- Sport from teams table (home/away have same sport)
                 EXTRACT(YEAR FROM gs.game_date)::INTEGER AS season,
                 gs.game_date,
                 ht.team_code AS home_team_code,
@@ -97,7 +98,7 @@ def upgrade() -> None:
               AND NOT EXISTS (
                   -- Avoid duplicates if game already in historical_games
                   SELECT 1 FROM historical_games hg
-                  WHERE hg.sport = gs.sport
+                  WHERE hg.sport = ht.sport  -- Use teams.sport, not game_states.sport
                     AND hg.game_date = gs.game_date
                     AND hg.home_team_code = ht.team_code
                     AND hg.away_team_code = at.team_code
