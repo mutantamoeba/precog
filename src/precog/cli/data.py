@@ -1552,3 +1552,269 @@ def seed_lib(
     else:
         console.print(f"\n[yellow]No games found for seasons {season_list}[/yellow]")
         console.print(f"[dim]Check if {source.value} has data for these seasons[/dim]")
+
+
+# =============================================================================
+# Elo Rating Computation Commands
+# =============================================================================
+
+
+class EloSport(str, Enum):
+    """Sports supported for Elo computation."""
+
+    NFL = "nfl"
+    NBA = "nba"
+    NHL = "nhl"
+    MLB = "mlb"
+    NCAAF = "ncaaf"
+    NCAAB = "ncaab"
+    WNBA = "wnba"
+    MLS = "mls"
+
+
+@app.command("compute-elo")
+def compute_elo(
+    sport: EloSport = typer.Argument(
+        ...,
+        help="Sport to compute Elo ratings for",
+    ),
+    seasons: str = typer.Option(
+        "",
+        "--seasons",
+        "-s",
+        help="Comma-separated seasons (e.g., '2019,2020'). Default: all available.",
+    ),
+    skip_computed: bool = typer.Option(
+        True,
+        "--skip-computed/--recompute",
+        help="Skip games already in elo_calculation_log (default: skip)",
+    ),
+    show_ratings: bool = typer.Option(
+        False,
+        "--show-ratings",
+        "-r",
+        help="Show team ratings after computation",
+    ),
+    top_n: int = typer.Option(
+        10,
+        "--top",
+        "-n",
+        help="Number of top teams to show (requires --show-ratings)",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-v",
+        help="Show detailed progress",
+    ),
+) -> None:
+    """Compute Elo ratings from historical games.
+
+    This command processes games chronologically and computes Elo ratings
+    using the FiveThirtyEight-style algorithm. Results are stored in
+    elo_calculation_log for audit trail.
+
+    Example:
+        precog data compute-elo nfl
+        precog data compute-elo nba --seasons 2019,2020 --show-ratings
+        precog data compute-elo nfl --recompute  # Force recomputation
+    """
+    from precog.analytics.elo_computation_service import (
+        EloComputationService,
+        get_elo_computation_stats,
+    )
+    from precog.database.connection import get_connection
+
+    # Parse seasons
+    season_list: list[int] | None = None
+    if seasons:
+        try:
+            season_list = [int(s.strip()) for s in seasons.split(",")]
+        except ValueError:
+            cli_error(
+                f"Invalid seasons format: {seasons}",
+                ExitCode.USAGE_ERROR,
+                hint="Use comma-separated years: --seasons 2019,2020",
+            )
+
+    console.print(f"\n[bold]Computing Elo Ratings for {sport.value.upper()}[/bold]")
+    console.print(f"  Seasons: {season_list if season_list else 'all available'}")
+    console.print(f"  Skip computed: {skip_computed}")
+    console.print()
+
+    try:
+        with get_connection() as conn:
+            # Create service (use 'backfill' since we're computing historical data)
+            service = EloComputationService(
+                conn,
+                calculation_source="backfill",
+                calculation_version="1.0",
+            )
+
+            # Compute ratings (use simple print for Windows cp1252 compatibility)
+            console.print(f"Processing {sport.value.upper()} games...")
+
+            result = service.compute_ratings(
+                sport=sport.value,
+                seasons=season_list,
+                skip_computed=skip_computed,
+            )
+
+            console.print("Done!")
+
+            # Display results
+            console.print("\n[bold]Computation Results:[/bold]")
+
+            results_table = Table(show_header=False, box=None, padding=(0, 2))
+            results_table.add_column("Metric", style="dim")
+            results_table.add_column("Value", style="bold")
+
+            results_table.add_row("Sport", result.sport.upper())
+            results_table.add_row("Seasons", str(result.seasons))
+            results_table.add_row("Games Processed", f"{result.games_processed:,}")
+            results_table.add_row("Games Skipped", f"{result.games_skipped:,}")
+            results_table.add_row("Teams Updated", str(result.teams_updated))
+            results_table.add_row("Logs Inserted", f"{result.logs_inserted:,}")
+            results_table.add_row("Duration", f"{result.duration_seconds:.2f}s")
+
+            console.print(results_table)
+
+            if result.errors:
+                console.print("\n[red]Errors:[/red]")
+                for error in result.errors:
+                    console.print(f"  - {error}")
+
+            # Show ratings if requested
+            if show_ratings and result.games_processed > 0:
+                ratings = service.get_team_rating_details(sport.value)
+
+                if ratings:
+                    # Sort by rating descending
+                    sorted_teams = sorted(
+                        ratings.items(),
+                        key=lambda x: x[1]["rating"],
+                        reverse=True,
+                    )[:top_n]
+
+                    console.print(f"\n[bold]Top {top_n} Teams by Elo Rating:[/bold]")
+
+                    ratings_table = Table(box=None)
+                    ratings_table.add_column("Rank", style="dim", width=4)
+                    ratings_table.add_column("Team", style="bold", width=8)
+                    ratings_table.add_column("Rating", justify="right", width=8)
+                    ratings_table.add_column("Games", justify="right", width=6)
+                    ratings_table.add_column("Change", justify="right", width=8)
+                    ratings_table.add_column("Peak", justify="right", width=8)
+
+                    for i, (team, data) in enumerate(sorted_teams, 1):
+                        change = data["rating_change"]
+                        change_str = f"{change:+.1f}"
+                        change_style = "green" if change > 0 else "red" if change < 0 else "dim"
+
+                        ratings_table.add_row(
+                            str(i),
+                            team,
+                            f"{data['rating']:.0f}",
+                            str(data["games_played"]),
+                            f"[{change_style}]{change_str}[/{change_style}]",
+                            f"{data['peak_rating']:.0f}",
+                        )
+
+                    console.print(ratings_table)
+
+            # Show overall stats
+            if verbose:
+                stats = get_elo_computation_stats(conn)
+                console.print("\n[bold]Overall Elo Computation Stats:[/bold]")
+                console.print(f"  Total calculations: {stats['total_calculations']:,}")
+                for sport_name, sport_stats in stats["by_sport"].items():
+                    console.print(
+                        f"  {sport_name.upper()}: {sport_stats['count']:,} "
+                        f"({sport_stats['first_date']} to {sport_stats['last_date']})"
+                    )
+
+            if result.games_processed > 0:
+                echo_success(
+                    f"Computed {result.games_processed:,} Elo ratings for {sport.value.upper()}"
+                )
+            elif result.games_skipped > 0:
+                console.print(
+                    f"\n[yellow]All {result.games_skipped:,} games already computed. "
+                    f"Use --recompute to recalculate.[/yellow]"
+                )
+            else:
+                console.print(
+                    f"\n[yellow]No games found for {sport.value.upper()} "
+                    f"seasons {season_list}[/yellow]"
+                )
+
+    except Exception as e:
+        cli_error(
+            f"Elo computation failed: {e}",
+            ExitCode.ERROR,
+            hint="Check database connection and historical_games data",
+        )
+
+
+@app.command("elo-stats")
+def elo_stats(
+    sport: EloSport | None = typer.Argument(
+        None,
+        help="Sport to show stats for (optional)",
+    ),
+) -> None:
+    """Show Elo computation statistics from elo_calculation_log.
+
+    Example:
+        precog data elo-stats        # Show all sports
+        precog data elo-stats nfl    # Show NFL only
+    """
+    from precog.analytics.elo_computation_service import get_elo_computation_stats
+    from precog.database.connection import get_connection
+
+    console.print("\n[bold]Elo Computation Statistics[/bold]\n")
+
+    try:
+        with get_connection() as conn:
+            stats = get_elo_computation_stats(conn)
+
+            if stats["total_calculations"] == 0:
+                console.print("[yellow]No Elo computations found in database.[/yellow]")
+                console.print(
+                    "[dim]Run 'precog data compute-elo <sport>' to compute ratings.[/dim]"
+                )
+                return
+
+            # Filter by sport if specified
+            if sport:
+                if sport.value in stats["by_sport"]:
+                    stats["by_sport"] = {sport.value: stats["by_sport"][sport.value]}
+                else:
+                    console.print(
+                        f"[yellow]No computations found for {sport.value.upper()}[/yellow]"
+                    )
+                    return
+
+            # Create table
+            table = Table(title="Elo Calculations by Sport")
+            table.add_column("Sport", style="bold")
+            table.add_column("Games", justify="right")
+            table.add_column("First Date")
+            table.add_column("Last Date")
+
+            for sport_name, sport_stats in sorted(stats["by_sport"].items()):
+                table.add_row(
+                    sport_name.upper(),
+                    f"{sport_stats['count']:,}",
+                    sport_stats["first_date"] or "-",
+                    sport_stats["last_date"] or "-",
+                )
+
+            console.print(table)
+            console.print(f"\n[bold]Total:[/bold] {stats['total_calculations']:,} calculations")
+
+    except Exception as e:
+        cli_error(
+            f"Failed to get Elo stats: {e}",
+            ExitCode.ERROR,
+        )

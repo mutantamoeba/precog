@@ -93,6 +93,7 @@ MODULE_TIERS = {
     # Analytics & Strategy
     "analytics/model_manager": "business",
     "analytics/elo_engine": "experimental",  # Phase 2C: New, tests being expanded
+    "analytics/elo_computation_service": "experimental",  # Phase 2C: Elo computation orchestration
     "trading/strategy_manager": "business",
     "trading/position_manager": "business",
     # Data Operations
