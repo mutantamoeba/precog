@@ -1,18 +1,26 @@
 # Elo Computation Guide
 
 ---
-**Version:** 1.1
+**Version:** 1.2
 **Created:** 2025-12-24
-**Last Updated:** 2025-12-24
+**Last Updated:** 2025-12-26
 **Status:** Active
 **Phase:** 2.6 (Elo Rating Computation)
-**Related ADRs:** ADR-109 (Elo Rating Computation Engine)
+**Related ADRs:** ADR-109 (Elo Rating Computation Engine), ADR-111 (Era Registry Pattern)
 **Related Requirements:** REQ-ELO-001 through REQ-ELO-007
 **Related Documents:**
 - `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` - Data source details
 - `docs/guides/DATA_COLLECTION_GUIDE_V1.2.md` - Historical data collection
 - `docs/guides/MODEL_TRAINING_GUIDE_V1.0.md` - Model training with Elo features
 - `docs/guides/EDGE_CALCULATION_GUIDE_V1.0.md` - Using Elo for edge calculation
+- `data/historical/README.md` - Historical data cache documentation
+**Changes in v1.2:**
+- **NEW DATA SOURCE**: Added Neil Paine NHL Elo data (137,678 games 1917-2025)
+- **MLB STRATEGY**: Documented MLB Elo computation from pybaseball game results
+- **ERA REGISTRY**: Added Era Registry pattern for time-based K-factor configurations
+- **FIVETHIRTYEIGHT STATUS**: Clarified shutdown and available cached data
+- **W/L/D TRACKING**: Added `team_season_records` VIEW (Migration 0014)
+- **PIPELINE DIAGRAM**: Updated data flow to show EloComputationService architecture
 **Changes in v1.1:**
 - **SCHEMA CLARIFICATION**: Updated to use EXISTING `historical_elo` table with `source='calculated'` (not new table)
 - **NEW TABLE**: Added `historical_epa` table schema for NFL EPA metrics (separate from Elo)
@@ -89,6 +97,110 @@ This guide documents the Elo rating computation system for the Precog prediction
 - Real-time updates as games complete
 - Custom K-factors optimized for our use case
 - Integration with proprietary features (EPA, home-field adjustments)
+
+---
+
+## Data Sources Status (December 2025)
+
+### FiveThirtyEight Shutdown Impact
+
+FiveThirtyEight was shut down after Disney's acquisition and merged with ABC News.
+- All API endpoints (`projects.fivethirtyeight.com/*`) now redirect to ABC News
+- GitHub repository (`fivethirtyeight/data`) removed all CSV files, only READMEs remain
+- **No new data available from official sources**
+
+### Available Historical Data
+
+| Sport | Source | Status | Coverage | Location |
+|-------|--------|--------|----------|----------|
+| NFL | FiveThirtyEight (cached) | ✅ VALID | 1920-2020 (~16,810 games) | `data/historical/nfl_elo.csv` |
+| NBA | FiveThirtyEight (cached) | ✅ VALID | Historic seasons | `data/historical/nba_elo.csv` |
+| NHL | Neil Paine GitHub | ✅ VALID | 1917-2025 (~137,678 games) | `data/historical/nhl_elo.csv` |
+| MLB | Computed from pybaseball | ⚠️ COMPUTE | No pre-computed source | Via `PybaseballSource` |
+
+### NHL Elo: Neil Paine Dataset
+
+Downloaded from [Neil Paine's NHL-Player-And-Team-Ratings](https://github.com/Neil-Paine-1/NHL-Player-And-Team-Ratings):
+
+```
+Format: game_ID, season, date, team1, team2, elo1_pre, elo2_pre, elo1_post, elo2_post,
+        score1, score2, prob1, prob2, is_home
+Records: 137,678 games (1917-2025)
+Note: Each game appears TWICE (once per team perspective)
+      Filter by is_home=1 to get unique games
+```
+
+**Loader:** `parse_neil_paine_nhl_csv()` and `load_neil_paine_nhl_elo()` in `historical_elo_loader.py`
+
+### MLB Elo: Computation Strategy
+
+Since no reliable pre-computed MLB Elo source exists, we compute from game results:
+
+```
+Step 1: PybaseballSource.load_games() → GameRecord objects
+Step 2: bulk_insert_historical_games() → historical_games table
+Step 3: EloComputationService.compute_ratings(sport="mlb") → elo_calculation_log
+Step 4: sync_ratings_to_teams() → teams.current_elo_rating (optional)
+```
+
+This approach provides:
+- Full traceability (every calculation audited in elo_calculation_log)
+- Customizable parameters (K-factor, home advantage via Era Registry)
+- Consistency with NFL/NBA/NHL computation pipeline
+
+### Era Registry Pattern (ADR-111)
+
+For time-based K-factor configurations, use the Era Registry pattern:
+
+```python
+from precog.analytics.era_registry import EraRegistry
+
+registry = EraRegistry(sport="nfl")
+
+# Automatically selects correct K-factor for the era
+k_factor = registry.get_k_factor(game_date=date(2024, 12, 25))
+home_advantage = registry.get_home_advantage(game_date=date(2024, 12, 25))
+```
+
+See `src/precog/analytics/era_registry.py` for implementation.
+
+---
+
+## Win/Loss/Draw Tracking
+
+### team_season_records VIEW (Migration 0014)
+
+Team season records are derived from `historical_games` via a VIEW:
+
+```sql
+-- Get current season standings
+SELECT * FROM team_season_records
+WHERE sport = 'nfl' AND season = 2024
+ORDER BY win_pct DESC;
+
+-- Get team historical records
+SELECT * FROM team_season_records
+WHERE team_code = 'KC'
+ORDER BY season DESC;
+```
+
+**Columns:**
+- `sport`, `season`, `team_code`
+- `games_played`, `wins`, `losses`, `draws`
+- `home_games`, `away_games`, `home_wins`, `away_wins`
+- `win_pct`, `points_for`, `points_against`, `point_differential`
+- `record_display` (e.g., "10-3" or "10-3-1")
+
+### current_season_standings VIEW
+
+Convenience view with team names and Elo ratings:
+
+```sql
+SELECT team_name, wins, losses, win_pct, current_elo_rating
+FROM current_season_standings
+WHERE sport = 'nfl'
+ORDER BY win_pct DESC;
+```
 
 ---
 

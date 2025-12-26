@@ -651,6 +651,192 @@ def load_csv_elo(
     return result
 
 
+# =============================================================================
+# Neil Paine NHL Elo Loader
+# =============================================================================
+
+
+def parse_neil_paine_nhl_csv(
+    file_path: Path,
+    seasons: list[int] | None = None,
+) -> Iterator[HistoricalEloRecord]:
+    """
+    Parse Neil Paine's NHL Elo CSV and yield historical Elo records.
+
+    Neil Paine's NHL Elo data format differs from FiveThirtyEight:
+    - Each game appears TWICE (once per team's perspective)
+    - is_home=1 indicates team1 is the home team
+    - Only process rows where is_home=1 to avoid duplicates
+    - Historical team codes (MTW, OTS, etc.) from 1917-2025
+
+    Data Source: github.com/Neil-Paine-1/NHL-Player-And-Team-Ratings
+
+    Educational Note:
+        Neil Paine's NHL Elo provides comprehensive historical coverage:
+        - 137,678 games from 1917-2025
+        - Includes playoff indicator, overtime flag, neutral site
+        - Pre-computed elo1_pre/elo2_pre and elo1_post/elo2_post
+        - Uses similar methodology to FiveThirtyEight (K=6, home advantage ~33)
+
+    Args:
+        file_path: Path to nhl_elo.csv file
+        seasons: Filter to specific seasons (default: all)
+
+    Yields:
+        HistoricalEloRecord for each team in each game (only home-perspective rows)
+
+    Example:
+        >>> records = list(parse_neil_paine_nhl_csv(Path("nhl_elo.csv"), seasons=[2024, 2025]))
+        >>> len(records)  # ~2400 records for 2 seasons (82 games x 32 teams / 2 x 2)
+    """
+    source_file = file_path.name
+    seen_games: set[str] = set()  # Track processed game_IDs to avoid duplicates
+
+    with open(file_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+
+        for row in reader:
+            # Only process rows where is_home=1 (home team perspective)
+            # This ensures we only process each game once
+            if row.get("is_home") != "1":
+                continue
+
+            # Skip already-seen games (extra safety for duplicates)
+            game_id = row.get("game_ID", "")
+            if game_id in seen_games:
+                continue
+            seen_games.add(game_id)
+
+            # Parse season and check filter
+            try:
+                season = int(row.get("season", "0"))
+            except ValueError:
+                continue
+
+            if seasons and season not in seasons:
+                continue
+
+            # Parse date
+            try:
+                date_str = row.get("date", "")
+                rating_date = datetime.strptime(date_str, "%Y-%m-%d").date()  # noqa: DTZ007
+            except ValueError:
+                logger.warning("Invalid date in row: %s", row)
+                continue
+
+            # Skip games that haven't been played yet (scores are NA)
+            score1 = row.get("score1", "NA")
+            score2 = row.get("score2", "NA")
+            if score1 == "NA" or score2 == "NA":
+                continue
+
+            # Extract team 1 data (home team since is_home=1)
+            team1_code = normalize_team_code(row.get("team1", ""), sport="nhl")
+            elo1_pre = row.get("elo1_pre", "")
+
+            if team1_code and elo1_pre:
+                try:
+                    yield HistoricalEloRecord(
+                        team_code=team1_code,
+                        sport="nhl",
+                        season=season,
+                        rating_date=rating_date,
+                        elo_rating=Decimal(elo1_pre),
+                        qb_adjusted_elo=None,  # NHL doesn't have QB adjustment
+                        qb_name=None,
+                        qb_value=None,
+                        source="neil_paine",
+                        source_file=source_file,
+                    )
+                except (ValueError, TypeError) as e:
+                    logger.warning("Error parsing team1 data: %s - %s", row, e)
+
+            # Extract team 2 data (away team)
+            team2_code = normalize_team_code(row.get("team2", ""), sport="nhl")
+            elo2_pre = row.get("elo2_pre", "")
+
+            if team2_code and elo2_pre:
+                try:
+                    yield HistoricalEloRecord(
+                        team_code=team2_code,
+                        sport="nhl",
+                        season=season,
+                        rating_date=rating_date,
+                        elo_rating=Decimal(elo2_pre),
+                        qb_adjusted_elo=None,
+                        qb_name=None,
+                        qb_value=None,
+                        source="neil_paine",
+                        source_file=source_file,
+                    )
+                except (ValueError, TypeError) as e:
+                    logger.warning("Error parsing team2 data: %s - %s", row, e)
+
+
+def load_neil_paine_nhl_elo(
+    file_path: Path,
+    seasons: list[int] | None = None,
+    error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
+    *,
+    show_progress: bool = True,
+) -> BatchInsertResult:
+    """
+    Load Neil Paine NHL Elo data into the database.
+
+    This function imports pre-computed NHL Elo ratings from Neil Paine's
+    GitHub repository. The data covers 1917-2025 with comprehensive
+    historical team coverage.
+
+    Educational Note:
+        Unlike MLB (which has no pre-computed source), NHL has Neil Paine's
+        excellent historical Elo dataset. This provides:
+        - Immediate historical coverage without computation
+        - Validation baseline for our EloEngine
+        - Consistent methodology with FiveThirtyEight
+
+    Args:
+        file_path: Path to nhl_elo.csv file
+        seasons: Filter to specific seasons (default: all)
+        error_mode: How to handle errors (default: FAIL)
+        show_progress: Whether to show progress bar
+
+    Returns:
+        BatchInsertResult with statistics and failure details
+
+    Example:
+        >>> from pathlib import Path
+        >>> result = load_neil_paine_nhl_elo(
+        ...     Path("data/historical/nhl_elo.csv"),
+        ...     seasons=[2020, 2021, 2022, 2023, 2024]
+        ... )
+        >>> print(f"Loaded {result.records_inserted} NHL Elo records")
+    """
+    logger.info("Loading Neil Paine NHL Elo data from %s", file_path)
+
+    records = parse_neil_paine_nhl_csv(file_path, seasons)
+    result = bulk_insert_historical_elo(records, error_mode=error_mode, show_progress=show_progress)
+
+    logger.info(
+        "Neil Paine NHL load complete: processed=%d, inserted=%d, skipped=%d, failed=%d",
+        result.records_processed,
+        result.records_inserted,
+        result.records_skipped,
+        result.failed,
+    )
+
+    # Print summary table
+    print_load_summary(
+        "Neil Paine NHL Elo Load",
+        processed=result.records_processed,
+        inserted=result.records_inserted,
+        skipped=result.records_skipped,
+        errors=result.errors,
+        show_summary=show_progress,
+    )
+
+    return result
+
+
 def get_historical_elo_stats() -> dict[str, Any]:
     """
     Get statistics about historical Elo data in the database.

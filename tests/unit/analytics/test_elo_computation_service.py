@@ -148,6 +148,30 @@ class TestEloComputationService:
         assert service.initial_rating == Decimal("1500")
         assert service.apply_season_regression is True
 
+    def test_service_has_sync_ratings_to_teams_method(self) -> None:
+        """Verify service has sync_ratings_to_teams method.
+
+        Educational Note:
+            The sync_ratings_to_teams method syncs computed Elo ratings
+            to the teams.current_elo_rating column for fast lookups.
+            This is intentional denormalization for O(1) query performance.
+        """
+        mock_conn = MagicMock()
+        service = EloComputationService(mock_conn)
+
+        assert hasattr(service, "sync_ratings_to_teams")
+        assert callable(service.sync_ratings_to_teams)
+
+    def test_sync_ratings_returns_zero_for_unknown_sport(self) -> None:
+        """Verify sync_ratings_to_teams returns 0 when no ratings cached."""
+        mock_conn = MagicMock()
+        service = EloComputationService(mock_conn)
+
+        # No ratings cached for this sport
+        result = service.sync_ratings_to_teams("unknown_sport")
+
+        assert result == 0
+
 
 class TestComputeEloRatingsHelper:
     """Tests for compute_elo_ratings helper function."""

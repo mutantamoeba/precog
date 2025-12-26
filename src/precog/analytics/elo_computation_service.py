@@ -359,6 +359,7 @@ class EloComputationService:
         seasons: list[int] | None = None,
         skip_computed: bool = True,
         commit_interval: int = 100,
+        sync_to_teams: bool = False,
     ) -> ComputationResult:
         """Compute Elo ratings for historical games.
 
@@ -367,11 +368,16 @@ class EloComputationService:
             Each game updates both teams' ratings based on the outcome.
             Results are stored in elo_calculation_log for audit trail.
 
+        Pipeline (when sync_to_teams=True):
+            historical_games -> elo_calculation_log (audit)
+                -> teams.current_elo_rating (LIVE)
+
         Args:
             sport: Sport code (nfl, nba, nhl, mlb)
             seasons: Optional list of seasons to process (default: all)
             skip_computed: If True, skip games already in elo_calculation_log
             commit_interval: Commit after this many games (for large datasets)
+            sync_to_teams: If True, update teams.current_elo_rating after computation
 
         Returns:
             ComputationResult with statistics
@@ -379,6 +385,10 @@ class EloComputationService:
         Example:
             >>> result = service.compute_ratings(sport="nfl", seasons=[2019, 2020])
             >>> print(f"Processed {result.games_processed} games")
+            >>>
+            >>> # With sync to teams table
+            >>> result = service.compute_ratings("nfl", sync_to_teams=True)
+            >>> print(f"Synced {result.teams_updated} teams")
         """
         import time
 
@@ -496,6 +506,15 @@ class EloComputationService:
         if sport in self._ratings:
             result.teams_updated = len(self._ratings[sport])
 
+        # Optionally sync to teams table
+        if sync_to_teams:
+            synced = self.sync_ratings_to_teams(sport)
+            logger.info(
+                "elo_synced_to_teams_table",
+                sport=sport,
+                teams_synced=synced,
+            )
+
         result.duration_seconds = time.time() - start_time
 
         logger.info(
@@ -574,6 +593,104 @@ class EloComputationService:
             self._ratings.pop(sport, None)
         else:
             self._ratings.clear()
+
+    def sync_ratings_to_teams(self, sport: str) -> int:
+        """Sync computed Elo ratings to the teams.current_elo_rating column.
+
+        This is the final step in the Elo computation pipeline, updating the
+        live snapshot of each team's current rating for fast lookups.
+
+        Pipeline:
+            historical_elo (bootstrap) -> elo_calculation_log (audit)
+                -> teams.current_elo_rating (LIVE)
+
+        Args:
+            sport: Sport code to sync ratings for
+
+        Returns:
+            Number of teams updated
+
+        Example:
+            >>> result = service.compute_ratings(sport="nfl", seasons=[2020])
+            >>> updated = service.sync_ratings_to_teams("nfl")
+            >>> print(f"Updated {updated} teams")
+
+        Educational Note:
+            The teams.current_elo_rating column is intentional denormalization.
+            While you could derive the current rating from elo_calculation_log,
+            storing it directly allows O(1) lookups for prediction queries:
+
+            SELECT * FROM teams WHERE team_code = 'KC'  -- Instant rating access
+
+            vs.
+
+            SELECT home_elo_after FROM elo_calculation_log
+            WHERE home_team_code = 'KC' OR away_team_code = 'KC'
+            ORDER BY game_date DESC LIMIT 1  -- O(n) scan + aggregation
+
+        Reference:
+            - ADR-109: Elo Rating Computation Engine Architecture
+            - crud_operations.py: update_team_elo_rating()
+        """
+        if sport not in self._ratings:
+            logger.warning("no_ratings_to_sync", sport=sport)
+            return 0
+
+        cursor = self.conn.cursor()
+        updated_count = 0
+
+        for team_code, state in self._ratings[sport].items():
+            # Look up team_id from team_code and sport
+            cursor.execute(
+                """
+                SELECT team_id FROM teams
+                WHERE team_code = %s AND sport = %s
+                """,
+                [team_code, sport],
+            )
+            row = cursor.fetchone()
+
+            if not row:
+                # Try without sport filter (some teams have different codes)
+                cursor.execute(
+                    """
+                    SELECT team_id FROM teams
+                    WHERE team_code = %s
+                    LIMIT 1
+                    """,
+                    [team_code],
+                )
+                row = cursor.fetchone()
+
+            if row:
+                team_id = row[0]
+                # Update the team's current Elo rating
+                cursor.execute(
+                    """
+                    UPDATE teams
+                    SET current_elo_rating = %s, updated_at = NOW()
+                    WHERE team_id = %s
+                    """,
+                    [state.rating, team_id],
+                )
+                if cursor.rowcount and cursor.rowcount > 0:
+                    updated_count += 1
+            else:
+                logger.warning(
+                    "team_not_found_for_elo_sync",
+                    team_code=team_code,
+                    sport=sport,
+                )
+
+        self.conn.commit()
+        logger.info(
+            "synced_elo_ratings_to_teams",
+            sport=sport,
+            teams_updated=updated_count,
+            teams_processed=len(self._ratings[sport]),
+        )
+
+        return updated_count
 
 
 # =============================================================================
