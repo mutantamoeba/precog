@@ -32,29 +32,57 @@ data/historical/
 
 ## Data Sources
 
-### 1. FiveThirtyEight Elo (CSV Files)
+### 1. Neil Paine Sports Elo Archives (CSV Files)
+
+**Source:** Neil Paine's GitHub (former FiveThirtyEight sports editor)
+**Note:** FiveThirtyEight's API was sunset June 2023. Neil Paine maintains archives.
+**License:** MIT License
 
 **Location:** `data/historical/*.csv`
-**Format:** CSV with Elo ratings, game scores, probabilities
+**Format:** CSV with Elo ratings, game scores, probabilities (dual-row format)
+
 **Coverage:**
-- NFL: 1920-2020 (~16,810 games)
-- NBA: Historic seasons
-- MLB: Historic + updated
-- NHL: Updated dataset
+
+| Sport | File | Records | Date Range | Source |
+|-------|------|---------|------------|--------|
+| NFL | `nfl_elo_neil.csv` | 35,899 | 1920-present | Neil-Paine-1/NFL-elo-ratings |
+| NBA | `nba_elo_neil.csv` | 151,411 | 1946-present | Neil-Paine-1/NBA-elo |
+| NHL | `nhl_elo.csv` | 137,679 | 1917-present | Neil-Paine-1/NHL-Player-And-Team-Ratings |
+| MLB | *blocked* | N/A | N/A | Issue #278 - need alternative source |
 
 **Download:**
 ```bash
-# NFL Elo
-curl -L "https://raw.githubusercontent.com/fivethirtyeight/nfl-elo-game/master/data/nfl_games.csv" -o data/historical/nfl_elo.csv
+# NFL Elo (Neil Paine archive)
+curl -L "https://raw.githubusercontent.com/Neil-Paine-1/NFL-elo-ratings/main/NFL-elo-ratings.csv" \
+  -o data/historical/nfl_elo_neil.csv
 
-# NBA Elo
-curl -L "https://raw.githubusercontent.com/fivethirtyeight/data/master/nba-raptor/historical_RAPTOR_by_team.csv" -o data/historical/nba_elo.csv
+# NBA Elo (Neil Paine archive)
+curl -L "https://raw.githubusercontent.com/Neil-Paine-1/NBA-elo/main/nba_elo.csv" \
+  -o data/historical/nba_elo_neil.csv
+
+# NHL Elo (Neil Paine archive)
+curl -L "https://raw.githubusercontent.com/Neil-Paine-1/NHL-Player-And-Team-Ratings/main/nhl_elo.csv" \
+  -o data/historical/nhl_elo.csv
+```
+
+**Dual-Row Format:**
+Each game appears twice (home and away perspective):
+```csv
+date,team1,team2,elo1_pre,elo2_pre,score1,score2,is_home
+2024-01-15,KC,BUF,1650,1580,27,24,1    # KC home perspective
+2024-01-15,BUF,KC,1580,1650,24,27,0    # BUF away perspective
 ```
 
 **Usage:**
 ```python
-from precog.database.seeding.historical_elo_loader import load_fivethirtyeight_elo
-result = load_fivethirtyeight_elo(Path("data/historical/nfl_elo.csv"), seasons=[2019, 2020])
+from precog.database.seeding.historical_elo_loader import (
+    NeilPaineNHLEloLoader,
+    NeilPaineNFLEloLoader,
+    NeilPaineNBAEloLoader,
+)
+# Load NHL Elo ratings
+loader = NeilPaineNHLEloLoader()
+result = loader.load_from_file(Path("data/historical/nhl_elo.csv"), seasons=[2023, 2024])
 ```
 
 ### 2. ESPN Historical API (JSON Cache)
