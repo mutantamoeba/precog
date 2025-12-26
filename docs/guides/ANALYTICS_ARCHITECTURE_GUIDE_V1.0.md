@@ -9,6 +9,8 @@
 **Related ADRs:** ADR-079 (Performance Tracking), ADR-080 (Metrics Collection), ADR-081 (Dashboard Architecture), ADR-082 (Model Evaluation), ADR-083 (Materialized Views), ADR-084 (A/B Testing), ADR-085 (JSONB Hybrid)
 **Related Requirements:** REQ-ANALYTICS-001-004, REQ-REPORTING-001
 **Related Docs:** PERFORMANCE_TRACKING_GUIDE_V1.0.md, DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md, MODEL_EVALUATION_GUIDE_V1.0.md, AB_TESTING_GUIDE_V1.0.md
+**Data Sources:** `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` - 8 sources for analytics
+**Elo Module:** `docs/guides/ELO_COMPUTATION_GUIDE_V1.0.md` 🔵 **PLANNED** - Elo-based probability models
 **Target Audience:** Architects, backend developers, data engineers
 **Changes in v1.0:**
 - Initial creation with end-to-end analytics pipeline architecture

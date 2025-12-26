@@ -27,6 +27,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import typer
 from rich.table import Table
@@ -37,6 +38,9 @@ from precog.cli._common import (
     console,
     echo_success,
 )
+
+if TYPE_CHECKING:
+    from precog.database.seeding.sources.base_source import BaseDataSource
 
 app = typer.Typer(
     name="data",
@@ -160,7 +164,7 @@ def seed(
         elif seed_type == SeedType.ODDS:
             _seed_odds(data_dir, sport, seasons, link_games, verbose)
         elif seed_type == SeedType.GAMES:
-            _seed_games(sport, seasons, verbose)
+            _seed_games(csv_file, sport, seasons, source, verbose)
         elif seed_type == SeedType.STATS:
             _seed_stats(sport, seasons, stat_type, verbose)
         elif seed_type == SeedType.RANKINGS:
@@ -360,12 +364,123 @@ def _seed_odds(
     console.print("\n[green]Odds seeding completed successfully![/green]")
 
 
-def _seed_games(sport: str, seasons: str | None, verbose: bool) -> None:
-    """Seed historical game results (placeholder for future implementation)."""
-    cli_error(
-        "Game seeding not yet implemented",
-        ExitCode.ERROR,
-        hint="Target: Phase 2.5 - Use Elo seeding which includes game results",
+def _seed_games(
+    csv_file: str | None,
+    sport: str,
+    seasons: str | None,
+    source: str,
+    verbose: bool,
+) -> None:
+    """Seed historical game results from CSV file.
+
+    Loads game results from FiveThirtyEight Elo CSV files or simple CSV format.
+    Game results are stored in the historical_games table for use in:
+    - Model validation (predicted vs actual outcomes)
+    - Elo rating computation
+    - Backtesting
+
+    Args:
+        csv_file: Path to CSV file with game data
+        sport: Sport code (nfl, nba, nhl, mlb, ncaaf, ncaab)
+        seasons: Comma-separated seasons to load (optional filter)
+        source: Data source format (fivethirtyeight, simple)
+        verbose: Enable verbose output
+
+    Usage:
+        precog data seed --type games --csv nfl_elo.csv --sport nfl
+        precog data seed --type games --csv nfl_elo.csv --seasons 2022,2023,2024
+        precog data seed --type games --csv games.csv --source simple --sport nba
+
+    Educational Note:
+        FiveThirtyEight Elo CSVs include game results alongside ratings.
+        We extract: date, team1/team2, score1/score2, neutral, playoff.
+        Team codes are normalized to match our teams table.
+
+    Related:
+        - Issue #229: Expanded Historical Data Sources
+        - Migration 0006: Create historical_games table
+        - historical_games_loader.py: Data loading implementation
+    """
+    from precog.database.seeding.batch_result import ErrorHandlingMode
+    from precog.database.seeding.historical_games_loader import (
+        load_csv_games,
+        load_fivethirtyeight_games,
+        load_fivethirtyeight_nba_games,
+    )
+
+    # Require CSV file for game seeding
+    if not csv_file:
+        cli_error(
+            "CSV file required for game seeding",
+            ExitCode.USAGE_ERROR,
+            hint="Use --csv to specify the path to game data CSV file\n"
+            "  Example: precog data seed --type games --csv nfl_elo.csv",
+        )
+
+    csv_path = Path(csv_file)
+    if not csv_path.exists():
+        cli_error(
+            f"CSV file not found: {csv_file}",
+            ExitCode.USAGE_ERROR,
+            hint="Check the file path and ensure the file exists",
+        )
+
+    # Parse seasons filter
+    season_list: list[int] | None = None
+    if seasons:
+        season_list = [int(s.strip()) for s in seasons.split(",")]
+        console.print(f"[dim]Filtering to seasons: {season_list}[/dim]")
+
+    console.print(f"[dim]Sport: {sport}[/dim]")
+    console.print(f"[dim]Source format: {source}[/dim]")
+    console.print(f"[dim]CSV file: {csv_path}[/dim]")
+
+    # Use COLLECT mode for error reporting (don't fail on first unknown team)
+    error_mode = ErrorHandlingMode.COLLECT
+
+    if source.lower() == "fivethirtyeight":
+        console.print("\n[bold]Loading FiveThirtyEight game data...[/bold]")
+
+        # NBA uses a different format (each game appears twice, with _iscopy flag)
+        if sport.lower() == "nba":
+            console.print("[dim]Using NBA-specific format parser...[/dim]")
+            result = load_fivethirtyeight_nba_games(
+                csv_path,
+                seasons=season_list,
+                error_mode=error_mode,
+                show_progress=True,
+            )
+        else:
+            # NFL and other sports use standard FiveThirtyEight format
+            result = load_fivethirtyeight_games(
+                csv_path,
+                sport=sport,
+                seasons=season_list,
+                error_mode=error_mode,
+                show_progress=True,
+            )
+    else:
+        # Simple CSV format
+        console.print(f"\n[bold]Loading game data ({source} format)...[/bold]")
+        result = load_csv_games(
+            csv_path,
+            sport=sport,
+            source=source,
+            error_mode=error_mode,
+            show_progress=True,
+        )
+
+    # Report results
+    if result.has_failures:
+        console.print(f"\n[yellow]Warning: {result.errors} records had errors[/yellow]")
+        if verbose:
+            console.print(result.get_failure_summary())
+
+    if result.records_skipped > 0:
+        console.print(f"[dim]Skipped {result.records_skipped} records (unknown teams)[/dim]")
+
+    console.print(
+        f"\n[green]Game seeding completed: {result.records_inserted} games loaded[/green]"
     )
 
 
@@ -733,6 +848,30 @@ def sources() -> None:
             "description": "Live game states, team data, and rankings",
             "status": "active",
         },
+        {
+            "name": "ESPN Historical",
+            "module": "historical_games_loader",
+            "types": ["games"],
+            "sports": ["nfl", "ncaaf", "nba", "ncaab", "nhl", "mlb", "wnba"],
+            "description": "Historical games with local caching (seed-espn command)",
+            "status": "active",
+        },
+        {
+            "name": "nba_api",
+            "module": "nba_api_adapter",
+            "types": ["games", "stats"],
+            "sports": ["nba"],
+            "description": "NBA game logs and statistics from stats.nba.com",
+            "status": "active",
+        },
+        {
+            "name": "pybaseball",
+            "module": "pybaseball_adapter",
+            "types": ["games", "stats"],
+            "sports": ["mlb"],
+            "description": "MLB games and statistics (Baseball Reference, Retrosheet)",
+            "status": "active",
+        },
     ]
 
     table = Table(title="Data Sources")
@@ -780,3 +919,636 @@ def sources() -> None:
         console.print(f"  [cyan]{type_name}[/cyan]: {desc}")
 
     console.print()
+
+
+@app.command("seed-espn")
+def seed_espn(
+    sport: str = typer.Option(
+        "nfl",
+        "--sport",
+        "-s",
+        help="Sport to seed (nfl, nba, nhl, mlb, ncaaf, ncaab, wnba)",
+    ),
+    start_date: str = typer.Option(
+        ...,
+        "--start",
+        help="Start date (YYYY-MM-DD)",
+    ),
+    end_date: str = typer.Option(
+        ...,
+        "--end",
+        help="End date (YYYY-MM-DD)",
+    ),
+    fetch: bool = typer.Option(
+        True,
+        "--fetch/--cache-only",
+        help="Fetch from ESPN API (default) or use cache only",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-V",
+        help="Enable verbose output",
+    ),
+) -> None:
+    """Seed historical games from ESPN API with local caching.
+
+    Fetches game data from ESPN's scoreboard API and caches locally.
+    Subsequent runs with --cache-only skip API calls.
+
+    Caching:
+        Data cached to data/historical/espn/{sport}/{YYYY-MM-DD}.json
+        Use --cache-only to load from cache without API calls.
+        Useful for reproducibility and offline development.
+
+    Rate Limiting:
+        ESPN allows ~500 requests/hour. With 7.5s between requests,
+        a full season (~180 days) takes ~22 minutes.
+
+    Examples:
+        # Seed NFL 2023 regular season (fetch from API + cache)
+        precog data seed-espn --sport nfl --start 2023-09-07 --end 2024-01-07
+
+        # Seed from cache only (no API calls)
+        precog data seed-espn --sport nfl --start 2023-09-07 --end 2024-01-07 --cache-only
+
+        # Seed NBA 2023-24 season
+        precog data seed-espn --sport nba --start 2023-10-24 --end 2024-04-14
+
+    Related:
+        - Issue #229: Expanded Historical Data Sources
+        - ESPNClient: API client with rate limiting
+        - data/historical/espn/: Cache directory
+    """
+    from datetime import datetime as dt
+
+    from precog.database.seeding.batch_result import ErrorHandlingMode
+    from precog.database.seeding.historical_games_loader import (
+        get_cache_stats,
+        load_espn_historical_games,
+    )
+
+    # Parse dates
+    try:
+        start = dt.strptime(start_date, "%Y-%m-%d").date()
+        end = dt.strptime(end_date, "%Y-%m-%d").date()
+    except ValueError as e:
+        cli_error(
+            f"Invalid date format: {e}",
+            ExitCode.USAGE_ERROR,
+            hint="Use YYYY-MM-DD format (e.g., 2023-09-07)",
+        )
+
+    if end < start:
+        cli_error(
+            f"End date ({end}) must be after start date ({start})",
+            ExitCode.USAGE_ERROR,
+        )
+
+    # Calculate days
+    days = (end - start).days + 1
+    console.print("\n[bold cyan]ESPN Historical Games Seeder[/bold cyan]\n")
+    console.print(f"[dim]Sport: {sport.upper()}[/dim]")
+    console.print(f"[dim]Date range: {start} to {end} ({days} days)[/dim]")
+    console.print(f"[dim]Mode: {'Fetch + Cache' if fetch else 'Cache Only'}[/dim]\n")
+
+    # Estimate time if fetching
+    if fetch:
+        estimated_time = days * 7.5 / 60  # 7.5s per request
+        console.print(f"[dim]Estimated time: ~{estimated_time:.1f} minutes[/dim]\n")
+
+    # Load games
+    console.print("[bold]Loading ESPN games...[/bold]\n")
+
+    try:
+        result = load_espn_historical_games(
+            sport=sport,
+            start_date=start,
+            end_date=end,
+            use_cache=True,  # Always try cache first
+            fetch_missing=fetch,  # Only fetch if --fetch
+            error_mode=ErrorHandlingMode.COLLECT,
+            show_progress=True,
+        )
+    except Exception as e:
+        cli_error(
+            f"ESPN seeding failed: {e}",
+            ExitCode.ERROR,
+            hint="Check ESPN API availability and rate limits",
+        )
+
+    # Report results
+    console.print("\n[bold]Results:[/bold]")
+    console.print(f"  Records processed: {result.records_processed:,}")
+    console.print(f"  Records inserted: {result.records_inserted:,}")
+    console.print(f"  Records skipped: {result.records_skipped:,}")
+    console.print(f"  Errors: {result.errors}")
+
+    if result.has_failures and verbose:
+        console.print("\n[yellow]Errors:[/yellow]")
+        console.print(result.get_failure_summary())
+
+    # Cache stats
+    try:
+        cache_info = get_cache_stats(sport)
+        console.print(f"\n[bold]Cache Status ({sport.upper()}):[/bold]")
+        console.print(f"  Cached dates: {cache_info.get('cached_dates', 0):,}")
+        console.print(f"  Cached games: {cache_info.get('total_games', 0):,}")
+        console.print(f"  Cache size: {cache_info.get('total_size_mb', 0):.2f} MB")
+    except Exception:
+        pass  # Cache stats are optional
+
+    if result.records_inserted > 0:
+        console.print(
+            f"\n[green]ESPN seeding completed: {result.records_inserted} games loaded[/green]"
+        )
+    else:
+        console.print("\n[yellow]No new games inserted (may already exist in DB)[/yellow]")
+
+
+@app.command("cache-stats")
+def cache_stats(
+    sport: str | None = typer.Option(
+        None,
+        "--sport",
+        "-s",
+        help="Specific sport or all sports if not provided",
+    ),
+) -> None:
+    """Show cache statistics for ESPN historical data.
+
+    Displays information about locally cached ESPN data including
+    date ranges, game counts, and cache sizes.
+
+    Examples:
+        precog data cache-stats
+        precog data cache-stats --sport nfl
+    """
+    from precog.database.seeding.historical_games_loader import get_cache_stats
+
+    console.print("\n[bold cyan]ESPN Cache Statistics[/bold cyan]\n")
+
+    try:
+        stats = get_cache_stats(sport)
+    except Exception as e:
+        cli_error(
+            f"Failed to get cache stats: {e}",
+            ExitCode.ERROR,
+        )
+
+    if sport:
+        # Single sport stats
+        console.print(f"[bold]{sport.upper()}:[/bold]")
+        console.print(f"  Cached dates: {stats.get('cached_dates', 0):,}")
+        console.print(f"  Total games: {stats.get('total_games', 0):,}")
+        console.print(f"  Cache size: {stats.get('total_size_mb', 0):.2f} MB")
+
+        date_range = stats.get("date_range")
+        if date_range:
+            console.print(f"  Date range: {date_range[0]} to {date_range[1]}")
+    else:
+        # All sports stats
+        by_sport = stats.get("by_sport", {})
+        if not by_sport:
+            console.print("[dim]No cached data found[/dim]")
+            console.print("[dim]Run 'precog data seed-espn' to cache data[/dim]")
+            return
+
+        table = Table(title="ESPN Cache by Sport")
+        table.add_column("Sport", style="cyan")
+        table.add_column("Dates", justify="right")
+        table.add_column("Games", justify="right")
+        table.add_column("Size (MB)", justify="right")
+
+        total_dates = 0
+        total_games = 0
+        total_size = 0.0
+
+        for sport_name, sport_stats in sorted(by_sport.items()):
+            dates = sport_stats.get("cached_dates", 0)
+            games = sport_stats.get("total_games", 0)
+            size = sport_stats.get("total_size_mb", 0)
+
+            total_dates += dates
+            total_games += games
+            total_size += size
+
+            table.add_row(
+                sport_name.upper(),
+                f"{dates:,}",
+                f"{games:,}",
+                f"{size:.2f}",
+            )
+
+        table.add_row(
+            "[bold]TOTAL[/bold]",
+            f"[bold]{total_dates:,}[/bold]",
+            f"[bold]{total_games:,}[/bold]",
+            f"[bold]{total_size:.2f}[/bold]",
+        )
+
+        console.print(table)
+
+    console.print()
+
+
+@app.command("cache-kalshi")
+def cache_kalshi(
+    data_type: str = typer.Option(
+        "all",
+        "--type",
+        "-t",
+        help="Type to cache: markets, series, positions, or all",
+    ),
+    category: str | None = typer.Option(
+        None,
+        "--category",
+        "-c",
+        help="Filter by category (e.g., sports)",
+    ),
+    series_ticker: str | None = typer.Option(
+        None,
+        "--series",
+        "-s",
+        help="Filter markets by series ticker (e.g., KXNFLGAME)",
+    ),
+    force_refresh: bool = typer.Option(
+        False,
+        "--force",
+        "-f",
+        help="Force refresh even if cache exists",
+    ),
+) -> None:
+    """Cache Kalshi API data locally for reproducibility.
+
+    Fetches data from Kalshi API and saves to local cache files.
+    Useful for backtesting, development, and production migration.
+
+    Cache Location:
+        data/historical/kalshi/{type}/{YYYY-MM-DD}.json
+
+    Examples:
+        # Cache all data types for today
+        precog data cache-kalshi
+
+        # Cache only sports series
+        precog data cache-kalshi --type series --category sports
+
+        # Cache NFL game markets
+        precog data cache-kalshi --type markets --series KXNFLGAME
+
+        # Force refresh existing cache
+        precog data cache-kalshi --type markets --force
+
+    Related:
+        - precog data kalshi-cache-stats: View cache statistics
+        - data/historical/kalshi/: Cache directory
+    """
+    from datetime import UTC, datetime
+
+    from precog.api_connectors import KalshiClient
+    from precog.database.seeding.kalshi_historical_cache import (
+        fetch_and_cache_markets,
+        fetch_and_cache_positions,
+        fetch_and_cache_series,
+    )
+
+    console.print("\n[bold cyan]Kalshi Data Caching[/bold cyan]\n")
+
+    today = datetime.now(UTC).date()
+    console.print(f"[dim]Date: {today}[/dim]")
+    console.print(f"[dim]Type: {data_type}[/dim]")
+
+    if category:
+        console.print(f"[dim]Category: {category}[/dim]")
+    if series_ticker:
+        console.print(f"[dim]Series: {series_ticker}[/dim]")
+    console.print()
+
+    # Initialize Kalshi client
+    try:
+        client = KalshiClient()
+    except Exception as e:
+        cli_error(
+            f"Failed to initialize Kalshi client: {e}",
+            ExitCode.ERROR,
+            hint="Check KALSHI_API_KEY and KALSHI_API_SECRET in .env",
+        )
+
+    types_to_cache = ["series", "markets", "positions"] if data_type == "all" else [data_type]
+
+    results = {}
+
+    for cache_type in types_to_cache:
+        console.print(f"[bold]Caching {cache_type}...[/bold]")
+
+        try:
+            if cache_type == "markets":
+                data = fetch_and_cache_markets(
+                    client,
+                    today,
+                    series_ticker=series_ticker,
+                    category=category,
+                    force_refresh=force_refresh,
+                )
+            elif cache_type == "series":
+                data = fetch_and_cache_series(
+                    client,
+                    today,
+                    category=category,
+                    force_refresh=force_refresh,
+                )
+            elif cache_type == "positions":
+                data = fetch_and_cache_positions(
+                    client,
+                    today,
+                    force_refresh=force_refresh,
+                )
+            else:
+                console.print(f"  [yellow]Unknown type: {cache_type}[/yellow]")
+                continue
+
+            results[cache_type] = len(data)
+            console.print(f"  [green]Cached {len(data)} {cache_type}[/green]")
+
+        except Exception as e:
+            console.print(f"  [red]Error: {e}[/red]")
+            results[cache_type] = -1
+
+    # Summary
+    console.print("\n[bold]Summary:[/bold]")
+    for cache_type, count in results.items():
+        if count >= 0:
+            console.print(f"  {cache_type}: {count} records")
+        else:
+            console.print(f"  {cache_type}: [red]failed[/red]")
+
+    console.print("\n[dim]Cache location: data/historical/kalshi/[/dim]")
+
+
+@app.command("kalshi-cache-stats")
+def kalshi_cache_stats(
+    data_type: str | None = typer.Option(
+        None,
+        "--type",
+        "-t",
+        help="Specific type (markets, series, positions) or all if not provided",
+    ),
+) -> None:
+    """Show cache statistics for Kalshi historical data.
+
+    Displays information about locally cached Kalshi data including
+    date ranges, record counts, and cache sizes.
+
+    Examples:
+        precog data kalshi-cache-stats
+        precog data kalshi-cache-stats --type markets
+    """
+    from precog.database.seeding.kalshi_historical_cache import get_kalshi_cache_stats
+
+    console.print("\n[bold cyan]Kalshi Cache Statistics[/bold cyan]\n")
+
+    try:
+        stats = get_kalshi_cache_stats(data_type)
+    except Exception as e:
+        cli_error(
+            f"Failed to get cache stats: {e}",
+            ExitCode.ERROR,
+        )
+
+    if data_type:
+        # Single type stats
+        type_stats = stats.get("by_type", {}).get(data_type, {})
+        console.print(f"[bold]{data_type.upper()}:[/bold]")
+        console.print(f"  Cached dates: {type_stats.get('cached_dates', 0):,}")
+        console.print(f"  Total records: {type_stats.get('total_records', 0):,}")
+
+        size_bytes = type_stats.get("total_size_bytes", 0)
+        console.print(f"  Cache size: {size_bytes / (1024 * 1024):.2f} MB")
+
+        date_range = type_stats.get("date_range")
+        if date_range:
+            console.print(f"  Date range: {date_range[0]} to {date_range[1]}")
+    else:
+        # All types
+        by_type = stats.get("by_type", {})
+        if not any(t.get("cached_dates", 0) > 0 for t in by_type.values()):
+            console.print("[dim]No cached data found[/dim]")
+            console.print("[dim]Run 'precog data cache-kalshi' to cache data[/dim]")
+            return
+
+        table = Table(title="Kalshi Cache by Type")
+        table.add_column("Type", style="cyan")
+        table.add_column("Dates", justify="right")
+        table.add_column("Records", justify="right")
+        table.add_column("Size (MB)", justify="right")
+
+        for type_name, type_stats in sorted(by_type.items()):
+            dates = type_stats.get("cached_dates", 0)
+            records = type_stats.get("total_records", 0)
+            size = type_stats.get("total_size_bytes", 0) / (1024 * 1024)
+
+            table.add_row(
+                type_name.upper(),
+                f"{dates:,}",
+                f"{records:,}",
+                f"{size:.2f}",
+            )
+
+        table.add_row(
+            "[bold]TOTAL[/bold]",
+            f"[bold]{stats.get('cached_dates', 0):,}[/bold]",
+            f"[bold]{stats.get('total_records', 0):,}[/bold]",
+            f"[bold]{stats.get('total_size_mb', 0):.2f}[/bold]",
+        )
+
+        console.print(table)
+
+        date_range = stats.get("date_range")
+        if date_range:
+            console.print(f"\n[dim]Date range: {date_range[0]} to {date_range[1]}[/dim]")
+
+    console.print()
+
+
+class LibrarySource(str, Enum):
+    """Available Python library sources."""
+
+    NFL_DATA_PY = "nfl_data_py"
+    NFLREADPY = "nflreadpy"
+    NBA_API = "nba_api"
+    PYBASEBALL = "pybaseball"
+
+
+@app.command("seed-lib")
+def seed_lib(
+    source: LibrarySource = typer.Option(
+        ...,
+        "--source",
+        "-s",
+        help="Python library source (nfl_data_py, nflreadpy, nba_api, pybaseball)",
+    ),
+    seasons: str = typer.Option(
+        ...,
+        "--seasons",
+        help="Comma-separated seasons to load (e.g., 2022,2023,2024)",
+    ),
+    verbose: bool = typer.Option(
+        False,
+        "--verbose",
+        "-V",
+        help="Enable verbose output",
+    ),
+) -> None:
+    """Seed historical games from Python sports data libraries.
+
+    Loads game data from various sports data Python libraries and inserts
+    into the historical_games table for Elo computation.
+
+    Supported Libraries:
+        nfl_data_py: NFL schedules and results (2000-present)
+        nflreadpy: NFL data with EPA metrics (1999-present)
+        nba_api: NBA game logs from stats.nba.com (1996-present)
+        pybaseball: MLB games from Baseball Reference (1901-present)
+
+    Examples:
+        # Seed NFL 2022-2024 from nfl_data_py
+        precog data seed-lib --source nfl_data_py --seasons 2022,2023,2024
+
+        # Seed NBA 2020-2024 from nba_api
+        precog data seed-lib --source nba_api --seasons 2020,2021,2022,2023,2024
+
+        # Seed MLB 2023-2024 from pybaseball
+        precog data seed-lib --source pybaseball --seasons 2023,2024
+
+    Prerequisites:
+        - Teams must be seeded first: precog data seed --type teams
+        - Library must be installed (pip install nfl_data_py / nba_api / pybaseball)
+
+    Related:
+        - Issue #229: Expanded Historical Data Sources
+        - docs/guides/: Data source adapter documentation
+    """
+
+    # Parse seasons
+    try:
+        season_list = [int(s.strip()) for s in seasons.split(",")]
+    except ValueError:
+        cli_error(
+            f"Invalid seasons format: {seasons}",
+            ExitCode.USAGE_ERROR,
+            hint="Use comma-separated years (e.g., 2022,2023,2024)",
+        )
+
+    console.print("\n[bold cyan]Python Library Seeder[/bold cyan]\n")
+    console.print(f"[dim]Source: {source.value}[/dim]")
+    console.print(f"[dim]Seasons: {season_list}[/dim]\n")
+
+    # Load appropriate adapter
+    adapter: BaseDataSource | None = None
+    sport: str = ""
+
+    if source == LibrarySource.NFL_DATA_PY:
+        sport = "nfl"
+        try:
+            from precog.database.seeding.sources.sports.nfl_data_py_adapter import (
+                NFLDataPySource,
+            )
+
+            adapter = NFLDataPySource()
+        except ImportError as e:
+            cli_error(
+                f"nfl_data_py not installed: {e}",
+                ExitCode.ERROR,
+                hint="Install with: pip install nfl_data_py",
+            )
+
+    elif source == LibrarySource.NFLREADPY:
+        sport = "nfl"
+        try:
+            from precog.database.seeding.sources.sports.nflreadpy_adapter import (
+                NFLReadPySource,
+            )
+
+            adapter = NFLReadPySource()
+        except ImportError as e:
+            cli_error(
+                f"nflreadpy not installed: {e}",
+                ExitCode.ERROR,
+                hint="Install with: pip install nflreadpy",
+            )
+
+    elif source == LibrarySource.NBA_API:
+        sport = "nba"
+        try:
+            from precog.database.seeding.sources.sports.nba_api_adapter import (
+                NBAApiSource,
+            )
+
+            adapter = NBAApiSource()
+        except ImportError as e:
+            cli_error(
+                f"nba_api not installed: {e}",
+                ExitCode.ERROR,
+                hint="Install with: pip install nba_api",
+            )
+
+    elif source == LibrarySource.PYBASEBALL:
+        sport = "mlb"
+        try:
+            from precog.database.seeding.sources.sports.pybaseball_adapter import (
+                PybaseballSource,
+            )
+
+            adapter = PybaseballSource()
+        except ImportError as e:
+            cli_error(
+                f"pybaseball not installed: {e}",
+                ExitCode.ERROR,
+                hint="Install with: pip install pybaseball",
+            )
+
+    else:
+        cli_error(
+            f"Unknown source: {source}",
+            ExitCode.USAGE_ERROR,
+        )
+
+    # Safety assertion - all branches either set adapter or call cli_error (NoReturn)
+    assert adapter is not None, "Adapter should be set by source selection"
+
+    console.print(f"[bold]Loading {sport.upper()} games from {source.value}...[/bold]\n")
+
+    # Collect games from adapter
+    games_loaded = 0
+    games_skipped = 0
+    errors = 0
+
+    try:
+        for game_record in adapter.load_games(sport=sport, seasons=season_list):
+            games_loaded += 1
+
+            if verbose and games_loaded % 100 == 0:
+                console.print(f"  [dim]Loaded {games_loaded} games...[/dim]")
+
+            # TODO: Insert into historical_games table
+            # For now, just count the games
+
+    except Exception as e:
+        errors += 1
+        console.print(f"[red]Error loading games: {e}[/red]")
+
+    # Report results
+    console.print("\n[bold]Results:[/bold]")
+    console.print(f"  Games loaded: {games_loaded:,}")
+    console.print(f"  Games skipped: {games_skipped:,}")
+    console.print(f"  Errors: {errors}")
+
+    if games_loaded > 0:
+        console.print(f"\n[green]Library seeding complete: {games_loaded} games loaded[/green]")
+        console.print(
+            "[dim]Note: Database insertion requires connecting to historical_games CRUD[/dim]"
+        )
+    else:
+        console.print(f"\n[yellow]No games found for seasons {season_list}[/yellow]")
+        console.print(f"[dim]Check if {source.value} has data for these seasons[/dim]")

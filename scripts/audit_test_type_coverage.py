@@ -92,6 +92,7 @@ MODULE_TIERS = {
     # Business Logic (85%+) - 6 types required
     # Analytics & Strategy
     "analytics/model_manager": "business",
+    "analytics/elo_engine": "experimental",  # Phase 2C: New, tests being expanded
     "trading/strategy_manager": "business",
     "trading/position_manager": "business",
     # Data Operations
@@ -113,6 +114,15 @@ MODULE_TIERS = {
     "database/seeding/sources/fivethirtyeight": "experimental",
     "database/seeding/sources/betting_csv": "experimental",
     "database/seeding/sources/sports/nfl_data_py_adapter": "experimental",
+    # Phase 2C: Python library adapters for historical data
+    "database/seeding/sources/sports/nba_api_adapter": "experimental",
+    "database/seeding/sources/sports/nflreadpy_adapter": "experimental",
+    "database/seeding/sources/sports/nhl_api_adapter": "experimental",
+    "database/seeding/sources/sports/pybaseball_adapter": "experimental",
+    # Phase 2C: Kalshi historical caching and EPA seeder
+    "database/seeding/cache_config": "experimental",
+    "database/seeding/epa_seeder": "experimental",
+    "database/seeding/kalshi_historical_cache": "experimental",
     # Issue #236: NFLDataPySource for stats loading
     "database/seeding/sources/nfl_data_py_source": "experimental",
     # TUI (Issue #268) - Terminal User Interface modules

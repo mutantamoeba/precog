@@ -2,17 +2,27 @@
 
 ---
 
-**Version:** 1.1
+**Version:** 1.2
 **Created:** 2025-11-24
-**Last Updated:** 2025-11-28
+**Last Updated:** 2025-12-25
 **Status:** 🔵 Planned (Phase 3+)
 **Target Audience:** Developers implementing automated data collection pipelines for model training
 **Prerequisites:** API_INTEGRATION_GUIDE_V2.0.md, MODEL_TRAINING_GUIDE_V1.0.md
 **Related Documents:**
 - `docs/guides/MODEL_MANAGER_USER_GUIDE_V1.1.md` (Future Enhancements - Data Collection Pipelines)
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` (ESPN, Kalshi, Balldontlie APIs)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (REQ-DATA-001 through REQ-DATA-006)
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.25.md` (ADR-002: Decimal Precision, ADR-053: Data Validation, ADR-076: Sports Data Source Tiering)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.24.md` (REQ-DATA-001 through REQ-DATA-008, REQ-ELO-*)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.32.md` (ADR-002: Decimal Precision, ADR-053: Data Validation, ADR-076: Sports Data Source Tiering, ADR-304: Elo Computation)
+- `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` ⭐ **NEW** (Comprehensive 8-source specification)
+- `docs/guides/ELO_COMPUTATION_GUIDE_V1.0.md` 🔵 **PLANNED** (Elo methodology and implementation)
+
+**Changes in V1.2:**
+- **⚠️ CRITICAL DEPRECATION NOTICE**: nfl_data_py archived September 2025, migrate to nflreadpy
+- **DATA SOURCES SPECIFICATION**: Added reference to comprehensive DATA_SOURCES_SPECIFICATION_V1.0.md (8 data sources, 21 nflreadpy functions)
+- **ELO COMPUTATION REFERENCE**: Added reference to planned ELO_COMPUTATION_GUIDE_V1.0.md (Issue #273)
+- **FIVETHIRTYEIGHT SHUTDOWN**: FiveThirtyEight shut down March 2025, historical Elo data stale
+- **NFLREADPY MIGRATION**: Updated Section 11 with migration path from nfl_data_py to nflreadpy
+- **MULTI-SPORT DATA SOURCES**: Documented equivalent libraries for NBA, NHL, MLB, college sports, MLS
 
 **Changes in V1.1:**
 - **SPORTS DATA SOURCE TIERING STRATEGY:** Added Section 11 documenting 3-tier data source architecture

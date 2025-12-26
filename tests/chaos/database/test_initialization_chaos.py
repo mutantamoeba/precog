@@ -80,17 +80,29 @@ class TestApplySchemaChaos:
 
         assert success is False
 
-    def test_malformed_url_formats(self, tmp_path: Path) -> None:
-        """Test various malformed URL formats."""
+    @patch("precog.database.initialization.subprocess.run")
+    def test_malformed_url_formats(self, mock_run: MagicMock, tmp_path: Path) -> None:
+        """Test various malformed URL formats.
+
+        Educational Note:
+            We mock subprocess.run to prevent actual connection attempts.
+            URLs like "postgres://localhost/test" are technically valid and would
+            try to connect, causing hangs in CI environments without PostgreSQL.
+
+            The test validates URL format checking, not actual psql connectivity.
+        """
         schema = tmp_path / "schema.sql"
         schema.write_text("CREATE TABLE test (id INT);")
 
+        # Mock successful psql execution for valid formats that pass URL validation
+        mock_run.return_value = MagicMock(returncode=0, stderr="")
+
         malformed_urls = [
-            "http://localhost/test",  # Wrong protocol
-            "postgresql",  # Missing ://
-            "postgresql:/",  # Incomplete
-            "POSTGRESQL://localhost/test",  # Uppercase (should still work)
-            "postgres://localhost/test",  # Alternative valid format
+            "http://localhost/test",  # Wrong protocol - should fail URL check
+            "postgresql",  # Missing :// - should fail URL check
+            "postgresql:/",  # Incomplete - should fail URL check
+            "POSTGRESQL://localhost/test",  # Uppercase - should fail (case-sensitive)
+            "postgres://localhost/test",  # Valid format - passes to (mocked) psql
         ]
 
         for url in malformed_urls:

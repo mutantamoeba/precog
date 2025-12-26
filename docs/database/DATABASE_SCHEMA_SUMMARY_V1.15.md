@@ -1,9 +1,40 @@
 # Database Schema Summary
 
 ---
-**Version:** 1.14
-**Last Updated:** 2025-12-20
-**Status:** ✅ Current - Execution Environment Architecture (Phase 2)
+**Version:** 1.15
+**Last Updated:** 2025-12-24
+**Status:** ✅ Current - Historical Data Seeding Infrastructure (Phase 2.7)
+**Changes in v1.15:**
+- **HISTORICAL DATA SEEDING INFRASTRUCTURE**: Added Migration 0013 for Phase 2.7 model training data
+- **Migration 0013: Historical Data Enhancements** (Planned - Phase 2.7)
+  - **NEW TABLE**: `historical_epa` for NFL EPA metrics:
+    - Fields: historical_epa_id (PK), team_id (FK), sport, season, week
+    - EPA metrics: off_epa_per_play, def_epa_per_play, pass_epa_per_play, rush_epa_per_play, etc.
+    - Derived: epa_differential, elo_adjustment (-50 to +50)
+    - Data provenance: source (default 'nflreadpy'), source_file, games_played
+    - Indexes: idx_historical_epa_team_season, idx_historical_epa_season_week
+    - **Use Case:** NFL EPA metrics for Elo adjustment and model training features
+  - **NEW TABLE**: `elo_calculation_log` for Elo computation audit trail:
+    - Fields: log_id (PK), game_state_id (FK to game_states), historical_game_id (FK), sport, game_date
+    - Teams: home_team_id (FK), away_team_id (FK), scores
+    - Calculation details: elo before/after, k_factor, home_advantage, expected/actual scores
+    - Metadata: calculation_source ('bootstrap', 'realtime', 'backfill')
+    - Indexes: game, historical game, sport_date, teams, source
+    - **Use Case:** Debug and verify Elo calculations, audit trail for regulatory compliance
+  - **SCHEMA ENHANCEMENT**: Add team_id FK to historical tables:
+    - `historical_odds`: Add `home_team_id`, `away_team_id` (FK to teams) - enables market/team joins
+    - `historical_stats`: Add `team_id` (FK to teams) - enables team performance joins
+    - `historical_rankings`: Add `team_id` (FK to teams) - enables ranking history joins
+    - Backfill from existing team_code using teams.abbreviation mapping
+    - **Rationale:** Historical tables used team_code (VARCHAR) for flexible seeding, but need team_id FK for production joins
+- **Architecture Decision:** Phase 2.6/2.7 Schema Clarification
+  - Use EXISTING `historical_elo` table with `source='calculated'` for computed Elo
+  - `historical_epa` separate from Elo (NFL-specific, different granularity)
+  - `elo_calculation_log` for audit/debugging (not historical data storage)
+- **Requirements:** REQ-DATA-009 (Team_id FK), REQ-DATA-010 (Historical Odds), REQ-DATA-011 (Historical EPA)
+- **Table Count:** 37 tables (was 35) - Added historical_epa, elo_calculation_log
+- **Migration Status:** ✅ Migration 0013 implemented and tested (2025-12-25)
+- **Next Steps:** Implement OddsSeeder and EPASeeder, backfill team_id from team_code
 **Changes in v1.14:**
 - **EXECUTION ENVIRONMENT ARCHITECTURE**: Added Migration 0008 for paper trading and backtesting support
 - **Migration 0008: Add Execution Environment** (Planned - Issue #242)

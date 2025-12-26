@@ -182,11 +182,15 @@ class TestListSeriesIntegration:
         """list_series should return a list including our test series.
 
         Educational Note:
-            Use a high limit (1000) to ensure we find the test series even if
-            there's leftover data from property tests. The test series starts
-            with "TEST-" which is alphabetically after "PROP-TEST-*" entries.
+            Use the TestTag filter to avoid pagination issues from leftover
+            property test data. This is more robust than relying on limit=1000
+            since database may contain thousands of PROP-TEST-* entries that
+            would appear before TEST-SERIES-* alphabetically.
+
+            The TestTag is unique to integration test fixtures, making this
+            filter reliable for isolation.
         """
-        result = list_series(limit=1000)
+        result = list_series(tags=["TestTag"])
 
         assert isinstance(result, list)
         assert len(result) >= 1

@@ -13,6 +13,8 @@
 - **REQ-MODEL-EVAL-002:** Holdout Validation Requirements
 - **MASTER_REQUIREMENTS_V2.13.md:** Model evaluation requirements (REQ-MODEL-EVAL-*)
 - **ARCHITECTURE_DECISIONS_V2.13.md:** Model evaluation architecture (ADR-082)
+- `docs/guides/ELO_COMPUTATION_GUIDE_V1.0.md` 🔵 **PLANNED** - Elo model evaluation metrics
+- `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` - Historical data for backtesting
 
 **Change History:**
 | Version | Date | Changes | Author |

@@ -149,6 +149,10 @@ TEAM_HISTORY: dict[str, dict[str, list[tuple[str, int, int | None]]]] = {
             ("CHA", 2004, 2014),  # Charlotte Bobcats
             ("CHA", 2014, None),  # Charlotte Hornets (reclaimed name)
         ],
+        # Phoenix Suns (stable franchise, PHO in FiveThirtyEight data -> PHX)
+        "PHX": [
+            ("PHO", 1968, None),  # FiveThirtyEight uses PHO for Phoenix Suns
+        ],
         # Sacramento Kings (formerly Kansas City, Cincinnati)
         "SAC": [
             ("CIN", 1957, 1972),  # Cincinnati Royals
@@ -592,8 +596,12 @@ TEAM_CODE_MAPPING: dict[str, str] = {
     "PHO": "ARI",  # Phoenix Cardinals
     # NBA mappings
     "SEA": "OKC",  # SuperSonics -> Thunder
-    "NJN": "BKN",  # Nets
+    "NJN": "BKN",  # Nets (New Jersey)
+    "BRK": "BKN",  # Nets (FiveThirtyEight Brooklyn code)
     "VAN": "MEM",  # Grizzlies
+    "CHO": "CHA",  # Charlotte Hornets (old FiveThirtyEight code)
+    "NOH": "NOP",  # New Orleans Hornets -> Pelicans
+    "NOK": "NOP",  # New Orleans/OK City Hornets (2005-07 Katrina)
     # MLB mappings
     "MON": "WAS",  # Expos -> Nationals (note: conflicts with NFL WAS context)
     "BRO": "LAD",  # Brooklyn Dodgers

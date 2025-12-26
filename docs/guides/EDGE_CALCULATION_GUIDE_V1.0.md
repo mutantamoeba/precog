@@ -10,6 +10,8 @@
 **Related Documents:**
 - `docs/guides/MODEL_MANAGER_USER_GUIDE_V1.1.md` (Future Enhancements - Edge Calculation Integration)
 - `docs/guides/STRATEGY_MANAGER_USER_GUIDE_V1.1.md` (min_edge threshold configuration)
+- `docs/guides/ELO_COMPUTATION_GUIDE_V1.0.md` 🔵 **PLANNED** - Elo model predictions used in edge calculation
+- `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` - Data sources for model training
 - `docs/foundation/MASTER_REQUIREMENTS_V2.18.md` (REQ-MODEL-001 through REQ-MODEL-006)
 - `docs/foundation/ARCHITECTURE_DECISIONS_V2.32.md` (ADR-002: Decimal Precision)
 

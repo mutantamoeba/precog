@@ -368,3 +368,171 @@ class PeriodPerformanceSummary(TypedDict):
     best_day_pnl: Decimal
     worst_day_date: str
     worst_day_pnl: Decimal
+
+
+# =============================================================================
+# Elo Rating Types
+# =============================================================================
+
+
+class EloRating(TypedDict):
+    """
+    Current Elo rating for a team.
+
+    Used by: EloEngine queries, CLI `elo show` command
+    Source: historical_elo table with source='calculated'
+
+    Example:
+        >>> rating = get_current_elo("nfl", "Kansas City Chiefs")
+        >>> print(f"Elo: {rating['elo_rating']}")
+        Elo: 1687.50
+    """
+
+    team_id: int
+    team_name: str
+    sport: Literal["nfl", "ncaaf", "nba", "ncaab", "wnba", "nhl", "mlb", "mls"]
+    elo_rating: Decimal
+    previous_rating: Decimal | None
+    elo_change: Decimal | None
+    effective_date: str  # ISO 8601 date
+    games_played: int
+    season: int
+
+
+class EloHistoryEntry(TypedDict):
+    """
+    Single entry in a team's Elo history.
+
+    Used by: CLI `elo history` command, TUI sparklines
+    Source: historical_elo table filtered by team
+
+    Example:
+        >>> history = get_elo_history("nfl", "Kansas City Chiefs", limit=10)
+        >>> for entry in history:
+        ...     print(f"{entry['date']}: {entry['elo_rating']} ({entry['elo_change']:+})")
+    """
+
+    date: str  # ISO 8601 date
+    elo_rating: Decimal
+    elo_change: Decimal
+    opponent_name: str | None  # Name of opponent in that game
+    won: bool | None  # True=win, False=loss, None=tie or no game
+    score_for: int | None
+    score_against: int | None
+
+
+class EloUpdateLog(TypedDict):
+    """
+    Audit log entry for an Elo calculation.
+
+    Used by: Debugging, provenance tracking
+    Source: elo_calculation_log table (Migration 0013)
+
+    Educational Note:
+        Every Elo update is logged with full calculation details.
+        This enables us to:
+        1. Audit calculations for correctness
+        2. Debug edge cases
+        3. Reproduce historical ratings exactly
+    """
+
+    log_id: int
+    game_state_id: int | None  # FK to game_states.id (nullable for bootstrap)
+    historical_game_id: int | None  # FK to historical_games
+    sport: str
+    game_date: str
+
+    home_team_id: int
+    away_team_id: int
+    home_team_name: str
+    away_team_name: str
+
+    home_score: int
+    away_score: int
+
+    # Ratings before game
+    home_elo_before: Decimal
+    away_elo_before: Decimal
+
+    # Calculation inputs
+    k_factor: int
+    home_advantage: Decimal
+    home_expected: Decimal
+    away_expected: Decimal
+
+    # Calculation outputs
+    home_actual: Decimal  # 1.0 win, 0.5 tie, 0.0 loss
+    away_actual: Decimal
+    home_elo_change: Decimal
+    away_elo_change: Decimal
+
+    # Ratings after game
+    home_elo_after: Decimal
+    away_elo_after: Decimal
+
+    # Metadata
+    calculation_source: Literal["bootstrap", "realtime", "backfill"]
+    created_at: str
+
+
+class WinProbabilityPrediction(TypedDict):
+    """
+    Win probability prediction between two teams.
+
+    Used by: CLI `elo predict` command, trading edge calculations
+    Source: Calculated from current Elo ratings
+
+    Example:
+        >>> pred = predict_outcome("nfl", "Kansas City Chiefs", "Philadelphia Eagles")
+        >>> print(f"KC win prob: {pred['home_win_probability']:.1%}")
+        KC win prob: 62.5%
+    """
+
+    sport: str
+    home_team_name: str
+    away_team_name: str
+    home_elo: Decimal
+    away_elo: Decimal
+    elo_difference: Decimal  # home_elo - away_elo (adjusted for home advantage)
+    home_win_probability: Decimal
+    away_win_probability: Decimal
+    home_advantage_applied: Decimal  # Elo points added to home team
+    neutral_site: bool
+    prediction_date: str
+
+
+class EpaMetrics(TypedDict):
+    """
+    EPA (Expected Points Added) metrics for an NFL team.
+
+    Used by: NFL Elo enhancement, model features
+    Source: historical_epa table (Migration 0013), nflreadpy data
+
+    Educational Note:
+        EPA measures how much each play improves a team's expected points.
+        It's the most predictive publicly available NFL metric.
+        We use it to enhance basic Elo with efficiency metrics.
+    """
+
+    team_id: int
+    team_name: str
+    season: int
+    week: int | None  # NULL for season aggregates
+
+    # Offensive metrics (higher = better)
+    off_epa_per_play: Decimal | None
+    pass_epa_per_play: Decimal | None
+    rush_epa_per_play: Decimal | None
+
+    # Defensive metrics (lower = better, this is opponent EPA allowed)
+    def_epa_per_play: Decimal | None
+    def_pass_epa_per_play: Decimal | None
+    def_rush_epa_per_play: Decimal | None
+
+    # Calculated fields
+    epa_differential: Decimal | None  # off_epa - def_epa
+    elo_adjustment: Decimal | None  # EPA-derived Elo adjustment (-50 to +50)
+
+    # Metadata
+    games_played: int
+    source: str

@@ -793,10 +793,12 @@ def test_create_position_with_execution_environment(
     Verifies Migration 0008 integration - positions can be tagged with
     'live', 'paper', or 'backtest' execution context.
     """
-    create_market(**sample_market_data)
+    market_id = create_market(**sample_market_data)
 
     # Create position with paper environment
-    pos_id = create_position(**sample_position_data, execution_environment="paper")
+    pos_id = create_position(
+        market_id=market_id, **sample_position_data, execution_environment="paper"
+    )
     assert pos_id is not None
 
     # Retrieve and verify execution_environment is set
@@ -810,10 +812,10 @@ def test_create_position_default_execution_environment(
     db_pool, clean_test_data, sample_market_data, sample_position_data
 ):
     """Test that positions default to 'live' execution_environment."""
-    create_market(**sample_market_data)
+    market_id = create_market(**sample_market_data)
 
     # Create position without specifying execution_environment
-    pos_id = create_position(**sample_position_data)
+    pos_id = create_position(market_id=market_id, **sample_position_data)
     assert pos_id is not None
 
     # Verify default is 'live' by filtering
@@ -826,12 +828,18 @@ def test_get_current_positions_with_environment_filter(
     db_pool, clean_test_data, sample_market_data, sample_position_data
 ):
     """Test filtering positions by execution_environment."""
-    create_market(**sample_market_data)
+    market_id = create_market(**sample_market_data)
 
     # Create positions in different environments
-    live_pos_id = create_position(**sample_position_data, execution_environment="live")
-    paper_pos_id = create_position(**sample_position_data, execution_environment="paper")
-    backtest_pos_id = create_position(**sample_position_data, execution_environment="backtest")
+    live_pos_id = create_position(
+        market_id=market_id, **sample_position_data, execution_environment="live"
+    )
+    paper_pos_id = create_position(
+        market_id=market_id, **sample_position_data, execution_environment="paper"
+    )
+    backtest_pos_id = create_position(
+        market_id=market_id, **sample_position_data, execution_environment="backtest"
+    )
 
     # Filter by paper environment
     paper_positions = get_current_positions(execution_environment="paper")
@@ -855,22 +863,29 @@ def test_get_current_positions_combined_filters(
     db_pool, clean_test_data, sample_market_data, sample_position_data
 ):
     """Test combining status and execution_environment filters."""
-    create_market(**sample_market_data)
+    market_id = create_market(**sample_market_data)
 
     # Create open position in paper environment
-    paper_pos_id = create_position(**sample_position_data, execution_environment="paper")
+    paper_pos_id = create_position(
+        market_id=market_id, **sample_position_data, execution_environment="paper"
+    )
 
     # Filter by status AND environment
     open_paper_positions = get_current_positions(status="open", execution_environment="paper")
     assert any(p["id"] == paper_pos_id for p in open_paper_positions)
 
-    # Close the position
-    close_position(paper_pos_id, exit_price=Decimal("0.6000"))
+    # Close the position - returns new SCD Type 2 row ID
+    closed_id = close_position(
+        position_id=paper_pos_id,
+        exit_price=Decimal("0.6000"),
+        exit_reason="target_hit",
+        realized_pnl=Decimal("8.00"),
+    )
 
-    # Now should not appear in open filter
+    # Original position ID should not appear in open filter
     open_paper_positions = get_current_positions(status="open", execution_environment="paper")
     assert not any(p["id"] == paper_pos_id for p in open_paper_positions)
 
-    # But should appear in closed filter
+    # Closed position should appear in closed filter (using returned ID)
     closed_paper_positions = get_current_positions(status="closed", execution_environment="paper")
-    assert any(p["id"] == paper_pos_id for p in closed_paper_positions)
+    assert any(p["id"] == closed_id for p in closed_paper_positions)

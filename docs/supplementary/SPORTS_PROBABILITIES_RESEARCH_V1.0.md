@@ -1,12 +1,24 @@
 # Sports Win Probabilities Research
 ## Comprehensive sports win probability data across three major betting markets
 
-**Version:** 1.0
+**Version:** 1.1
 **Date:** 2025-10-21
-**Last Updated:** 2025-10-28 (Phase 0.6b - Filename standardization)
+**Last Updated:** 2025-12-25 (Added data source references and Elo computation cross-references)
 **Status:** ✅ Complete - Reference Document
 **Purpose:** Historical win probability benchmarks for NFL, NBA, and tennis markets
 **Filename Updated:** Renamed from "Comprehensive sports win probabilities from three major betting markets.md" to SPORTS_PROBABILITIES_RESEARCH_V1.0.md
+**Related Documents:**
+- `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` - Comprehensive data source specification
+- `docs/guides/ELO_COMPUTATION_GUIDE_V1.0.md` 🔵 **PLANNED** - Elo methodology and implementation (Issue #273)
+- `docs/guides/MODEL_TRAINING_GUIDE_V1.0.md` - Model training with Elo models
+
+---
+
+## ⚠️ Data Source Updates (December 2025)
+
+**FiveThirtyEight Shutdown (March 2025):** The historical Elo ratings referenced in this document from FiveThirtyEight are now **stale** (last updated 2015-2021 depending on sport). Precog will compute Elo ratings from game results using nflreadpy and equivalent libraries per `DATA_SOURCES_SPECIFICATION_V1.0.md`.
+
+**nflfastR → nflreadpy Migration:** The document references `nflfastR` for EPA data. The Python equivalent `nfl_data_py` was **archived September 2025** and replaced by `nflreadpy` which provides the same data through the nflverse ecosystem.
 
 ---
 

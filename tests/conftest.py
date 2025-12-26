@@ -44,7 +44,19 @@ warnings.filterwarnings(
     category=UserWarning,
 )
 
+# =============================================================================
+# LOG LEVEL CONFIGURATION (Reduce test noise)
+# =============================================================================
+# Must be set BEFORE any precog imports to affect logger initialization.
+# The precog logger reads LOG_LEVEL on module import.
+# Set to WARNING to reduce INFO-level noise (client initializations, etc.)
+# Override for debugging: STRUCTLOG_LOG_LEVEL=DEBUG python -m pytest ...
+# =============================================================================
 import os  # noqa: E402
+
+if "LOG_LEVEL" not in os.environ and "STRUCTLOG_LOG_LEVEL" not in os.environ:
+    os.environ["LOG_LEVEL"] = "WARNING"
+
 import shutil  # noqa: E402
 import tempfile  # noqa: E402
 from decimal import Decimal  # noqa: E402

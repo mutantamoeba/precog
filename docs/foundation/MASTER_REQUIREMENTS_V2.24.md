@@ -1,9 +1,23 @@
 # Master Requirements Document
 
 ---
-**Version:** 2.23
-**Last Updated:** 2025-12-21
+**Version:** 2.24
+**Last Updated:** 2025-12-24
 **Status:** ✅ Current - Authoritative Requirements
+**Changes in v2.24:**
+- **ELO RATING COMPUTATION & ADVANCED METRICS:** Added Section 4.14 with REQ-ELO-001 through REQ-ELO-007
+- **REQ-ELO-001:** Multi-Sport Elo Computation Engine (NFL, NBA, NHL, MLB, NCAAF, NCAAB)
+- **REQ-ELO-002:** Sport-Specific K-Factor Configuration (NFL=20, NBA=20, NHL=6, MLB=4)
+- **REQ-ELO-003:** EPA (Expected Points Added) Integration from nflreadpy
+- **REQ-ELO-004:** Historical Elo Bootstrapping from Game Results
+- **REQ-ELO-005:** Real-Time Elo Updates from Live Game States
+- **REQ-ELO-006:** Elo Database Storage with Temporal Validity
+- **REQ-ELO-007:** Multi-Source Data Integration (nflreadpy, nba_api, nhl-api-py, pybaseball)
+- **DATA SOURCE UPDATES:** FiveThirtyEight shutdown (March 2025), nfl_data_py deprecation (Sep 2025)
+- **EPA AVAILABLE FREE:** Pre-computed in nflreadpy load_pbp() (372 columns)
+- **DVOA UNAVAILABLE:** Proprietary FTN metric, requires subscription
+- **CROSS-REFERENCES:** ADR-304 (Elo Computation Engine), Issue #273, DATA_SOURCES_SPECIFICATION_V1.0.md
+- Total requirements: 129 -> 136
 **Changes in v2.23:**
 - **EXECUTION ENVIRONMENT TRACKING:** Added REQ-DB-017 (Execution Environment Tracking)
 - **REQ-DB-017:** execution_environment ENUM column for single-database architecture
@@ -91,7 +105,7 @@
 - **SECTION 4.9 EXTENDED**: Added model validation requirements (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
   - REQ-MODEL-EVAL-001: Model Validation Framework (backtesting, cross-validation, holdout validation with activation criteria)
   - REQ-MODEL-EVAL-002: Calibration Testing (Brier score ≤0.20, ECE ≤0.10, log loss ≤0.50, reliability diagrams)
-- **CROSS-REFERENCES**: Added references to DATABASE_SCHEMA_SUMMARY_V1.14.md (7 new tables + 2 materialized views), ADR-078, ADR-080, ADR-081, ADR-082, DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md, MODEL_EVALUATION_GUIDE_V1.0.md
+- **CROSS-REFERENCES**: Added references to DATABASE_SCHEMA_SUMMARY_V1.15.md (7 new tables + 2 materialized views), ADR-078, ADR-080, ADR-081, ADR-082, DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md, MODEL_EVALUATION_GUIDE_V1.0.md
 - **DATABASE INTEGRATION**: References new performance_metrics, evaluation_runs, model_predictions, performance_metrics_archive tables and strategy_performance_summary, model_calibration_summary materialized views
 - **USER REQUIREMENTS**: Addresses user's concerns (1) detailed historical performance tracking with database tables, (2) JSONB config storage decision (ADR-078)
 **Changes in v2.12:**
@@ -307,11 +321,11 @@ precog/
 - **This Document**: Master requirements (overview, phases, objectives)
 - **Foundation Documents** (in `docs/foundation/`):
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
-  2. `MASTER_REQUIREMENTS_V2.23.md` - This document (requirements through Phase 10)
+  2. `MASTER_REQUIREMENTS_V2.24.md` - This document (requirements through Phase 10)
   3. `MASTER_INDEX_V2.52.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.31.md` - All 109 ADRs with design rationale (Phase 0-4.5)
-  5. `REQUIREMENT_INDEX_V1.15.md` - Systematic requirement catalog
-  6. `ADR_INDEX_V1.24.md` - Architecture decision index
+  4. `ARCHITECTURE_DECISIONS_V2.32.md` - All 109 ADRs with design rationale (Phase 0-4.5)
+  5. `REQUIREMENT_INDEX_V1.16.md` - Systematic requirement catalog
+  6. `ADR_INDEX_V1.25.md` - Architecture decision index
   7. `TESTING_STRATEGY_V3.8.md` - Test cases, coverage requirements, test isolation patterns
   8. `VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Code quality and documentation validation architecture
 
@@ -533,7 +547,7 @@ Replace CHECK constraint for `strategies.approach` with lookup table for extensi
 **Cross-references:**
 - ADR-093: Lookup Tables for Business Enums
 - Migration 023: Create Lookup Tables
-- DATABASE_SCHEMA_SUMMARY_V1.14.md: Lookup Tables section
+- DATABASE_SCHEMA_SUMMARY_V1.15.md: Lookup Tables section
 - LOOKUP_TABLES_DESIGN.md: Complete design specification
 
 **REQ-DB-016: Model Class Lookup Table**
@@ -578,7 +592,7 @@ Replace CHECK constraint for `probability_models.approach` with lookup table for
 **Cross-references:**
 - ADR-093: Lookup Tables for Business Enums
 - Migration 023: Create Lookup Tables
-- DATABASE_SCHEMA_SUMMARY_V1.14.md: Lookup Tables section
+- DATABASE_SCHEMA_SUMMARY_V1.15.md: Lookup Tables section
 - LOOKUP_TABLES_DESIGN.md: Complete design specification
 
 **REQ-DB-017: Execution Environment Tracking**
@@ -623,7 +637,7 @@ Add `execution_environment` ENUM column to trades and positions tables for singl
 - ADR-107: Single-Database Architecture with Execution Environments
 - Migration 0008: Add execution_environment column
 - Issue #242: Execution Environment Integration
-- DATABASE_SCHEMA_SUMMARY_V1.14.md: Trades and Positions tables
+- DATABASE_SCHEMA_SUMMARY_V1.15.md: Trades and Positions tables
 
 #### Operational Tables (29 tables)
 
@@ -667,7 +681,7 @@ Add `execution_environment` ENUM column to trades and positions tables for singl
 
 **Total Tables:** 25 operational (21 original + 2 lookup tables + 2 additional) + 4 ML placeholders = 29 tables
 
-**Detailed schema with indexes, constraints, and sample queries**: See `DATABASE_SCHEMA_SUMMARY_V1.14.md`
+**Detailed schema with indexes, constraints, and sample queries**: See `DATABASE_SCHEMA_SUMMARY_V1.15.md`
 
 ### 4.3 Critical Database Rules
 
@@ -813,7 +827,7 @@ Trading methods bundle complete trading approaches (strategy + model + position 
 - Status: 🔵 Planned
 - Description: Track paper_roi, live_roi, sharpe_ratio, win_rate, total_trades per method version
 
-**Implementation Note:** Methods table designed in Phase 0.5 (ADR-021) but implementation deferred to Phase 4-5 when strategy and model versioning systems are fully operational. See DATABASE_SCHEMA_SUMMARY_V1.14.md for complete schema.
+**Implementation Note:** Methods table designed in Phase 0.5 (ADR-021) but implementation deferred to Phase 4-5 when strategy and model versioning systems are fully operational. See DATABASE_SCHEMA_SUMMARY_V1.15.md for complete schema.
 
 ---
 
@@ -917,7 +931,7 @@ Centralized alert and notification system for critical events, errors, and syste
 - **MEDIUM**: gain_threshold, system_warning → console + file + database
 - **LOW**: informational → file + database
 
-**Implementation:** See DATABASE_SCHEMA_SUMMARY_V1.14.md for alerts table schema. Configuration in system.yaml (notifications section). Implementation in utils/notification_manager.py and utils/alert_manager.py.
+**Implementation:** See DATABASE_SCHEMA_SUMMARY_V1.15.md for alerts table schema. Configuration in system.yaml (notifications section). Implementation in utils/notification_manager.py and utils/alert_manager.py.
 
 ---
 
@@ -964,7 +978,7 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 - Phase: 1.5-2
 - Priority: Critical
 - Status: 🔵 Planned
-- Reference: DATABASE_SCHEMA_SUMMARY_V1.14.md (evaluation_runs, predictions tables), ADR-082 (Model Evaluation Framework)
+- Reference: DATABASE_SCHEMA_SUMMARY_V1.15.md (evaluation_runs, predictions tables), ADR-082 (Model Evaluation Framework)
 - Description: Comprehensive framework for validating probability model performance before deployment to live trading
 - Validation Types:
   - **Backtesting**: Test model on historical data (2019-2024 archives) with known outcomes
@@ -990,7 +1004,7 @@ ML infrastructure evolves across phases from simple lookup tables to advanced fe
 - Phase: 1.5-2
 - Priority: Critical
 - Status: 🔵 Planned
-- Reference: DATABASE_SCHEMA_SUMMARY_V1.14.md (predictions table), MODEL_EVALUATION_GUIDE_V1.0.md
+- Reference: DATABASE_SCHEMA_SUMMARY_V1.15.md (predictions table), MODEL_EVALUATION_GUIDE_V1.0.md
 - Description: Validate model probability calibration to ensure predicted probabilities match actual outcome frequencies
 - Calibration Metrics:
   - **Brier Score**: Mean squared error between predicted probabilities and actual outcomes (0 = perfect, 1 = worst)
@@ -1087,7 +1101,7 @@ Comprehensive performance tracking, model validation, and analytics infrastructu
 - Phase: 1.5-2
 - Priority: Critical
 - Status: 🔵 Planned
-- Reference: ADR-078 (Config Storage), DATABASE_SCHEMA_SUMMARY_V1.14.md (Section 8)
+- Reference: ADR-078 (Config Storage), DATABASE_SCHEMA_SUMMARY_V1.15.md (Section 8)
 - Description: Collect and store performance metrics for strategies, models, methods, edges, and ensembles across multiple time-series aggregation periods
 - Metrics Tracked:
   - **Trading Performance**: ROI, win_rate, sharpe_ratio, sortino_ratio, max_drawdown, avg_trade_size, total_pnl, unrealized_pnl
@@ -1103,7 +1117,7 @@ Comprehensive performance tracking, model validation, and analytics infrastructu
 - Phase: 1.5-2
 - Priority: Critical
 - Status: 🔵 Planned
-- Reference: DATABASE_SCHEMA_SUMMARY_V1.14.md (performance_metrics table)
+- Reference: DATABASE_SCHEMA_SUMMARY_V1.15.md (performance_metrics table)
 - Description: Store performance metrics at 8 aggregation levels with automated retention policies
 - Aggregation Periods:
   1. **trade**: Individual trade-level metrics (sample_size = 1)
@@ -1147,7 +1161,7 @@ Comprehensive performance tracking, model validation, and analytics infrastructu
 - Phase: 2+
 - Priority: High
 - Status: 🔵 Planned
-- Reference: DATABASE_SCHEMA_SUMMARY_V1.14.md (performance_metrics_archive table)
+- Reference: DATABASE_SCHEMA_SUMMARY_V1.15.md (performance_metrics_archive table)
 - Description: Implement automated archival and retrieval for historical performance data
 - Archival Triggers:
   - **Age-Based**: Metrics older than 18 months (hot → warm), 42 months (warm → cold)
@@ -1173,7 +1187,7 @@ Comprehensive performance tracking, model validation, and analytics infrastructu
 - Phase: 6-7
 - Priority: High
 - Status: 🔵 Planned
-- Reference: ADR-081 (Dashboard Architecture), DATABASE_SCHEMA_SUMMARY_V1.14.md (materialized views), DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md
+- Reference: ADR-081 (Dashboard Architecture), DATABASE_SCHEMA_SUMMARY_V1.15.md (materialized views), DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md
 - Description: Web-based performance dashboard for visualizing strategy/model performance, calibration, and system health
 - Technology Stack:
   - **Frontend**: React + Next.js (TypeScript)
@@ -1351,7 +1365,7 @@ Real-time game data collection, storage, and versioning for multi-sport predicti
 **Cross-References:**
 - ADR-029: ESPN Data Model with Normalized Schema
 - ESPN_DATA_MODEL_IMPLEMENTATION_PLAN_V1.0.md: Complete implementation plan
-- DATABASE_SCHEMA_SUMMARY_V1.14.md (planned): Schema documentation with new tables
+- DATABASE_SCHEMA_SUMMARY_V1.15.md (planned): Schema documentation with new tables
 - Migrations 026-029: Database migrations for new tables
 - src/precog/api_connectors/espn_client.py: TypedDict implementations
 
@@ -1501,7 +1515,7 @@ Complements live data polling (REQ-DATA-001-005) with batch import capabilities.
   - ✅ MASTER_INDEX V2.3 updated
 
 **Documentation**:
-- `DATABASE_SCHEMA_SUMMARY_V1.14.md`
+- `DATABASE_SCHEMA_SUMMARY_V1.15.md`
 - `VERSIONING_GUIDE_V1.0.md`
 - `TRAILING_STOP_GUIDE_V1.0.md`
 - `POSITION_MANAGEMENT_GUIDE_V1.0.md`
@@ -1649,7 +1663,7 @@ Complements live data polling (REQ-DATA-001-005) with batch import capabilities.
 - CLI commands: `main.py fetch-series`, `fetch-events`, `fetch-markets`
 - Unit tests for pagination, market data CRUD, and decimal precision
 
-**Documentation**: `API_INTEGRATION_GUIDE.md` (Kalshi pagination), `DATABASE_SCHEMA_SUMMARY_V1.14.md` (relationships)
+**Documentation**: `API_INTEGRATION_GUIDE.md` (Kalshi pagination), `DATABASE_SCHEMA_SUMMARY_V1.15.md` (relationships)
 
 ---
 
@@ -3872,6 +3886,222 @@ Implement a unified base class for all APScheduler-based polling services:
 
 ---
 
+### 4.14 Elo Rating Computation & Advanced Metrics (Phase 3)
+
+**REQ-ELO-001: Multi-Sport Elo Computation Engine**
+
+**Phase:** 3
+**Priority:** High
+**Status:** 🔵 Planned
+**Reference:** ADR-304, Issue #273, DATA_SOURCES_SPECIFICATION_V1.0.md
+
+Implement a unified Elo rating computation engine supporting multiple sports:
+
+- **Supported Sports**:
+  - NFL (National Football League)
+  - NBA (National Basketball Association)
+  - NHL (National Hockey League)
+  - MLB (Major League Baseball)
+  - NCAAF (NCAA Football)
+  - NCAAB (NCAA Basketball)
+
+- **Core Algorithm**:
+  - Standard Elo formula: R₁ = R₀ + K × (S - E)
+  - Expected score: E = 1 / (1 + 10^((R_opponent - R_self) / 400))
+  - Initial rating: 1500 for all teams
+  - Season carryover: R_new_season = (R_previous × 0.75) + (1505 × 0.25)
+
+- **Architecture**:
+  - `src/precog/analytics/elo_engine.py` - Core computation
+  - Sport-specific adapters for game result parsing
+  - Configurable K-factors per sport
+  - Batch processing for historical data
+  - Incremental updates for live games
+
+---
+
+**REQ-ELO-002: Sport-Specific K-Factor Configuration**
+
+**Phase:** 3
+**Priority:** High
+**Status:** 🔵 Planned
+**Reference:** ADR-304, ELO_COMPUTATION_GUIDE_V1.0.md (planned)
+
+Configure optimal K-factors for each sport based on season length and variance:
+
+| Sport | K-Factor | Season Games | Rationale |
+|-------|----------|--------------|-----------|
+| NFL | 20 | 17 | Short season, high variance |
+| NCAAF | 20 | 12-15 | Short season, high variance |
+| NBA | 20 | 82 | Long season, moderate variance |
+| NCAAB | 20 | 30-40 | Moderate season |
+| NHL | 6 | 82 | Long season, low scoring variance |
+| MLB | 4 | 162 | Very long season, low game variance |
+
+- **Configuration Format**: YAML in `config/elo_config.yaml`
+- **Extensibility**: Easy addition of new sports/leagues
+- **Home-Field Adjustment**: Sport-specific home advantage ratings
+
+---
+
+**REQ-ELO-003: EPA (Expected Points Added) Integration**
+
+**Phase:** 3
+**Priority:** Medium
+**Status:** 🔵 Planned
+**Reference:** DATA_SOURCES_SPECIFICATION_V1.0.md, nflreadpy documentation
+
+Integrate pre-computed EPA metrics from nflreadpy for NFL analysis:
+
+- **Data Source**: nflreadpy `load_pbp()` function
+- **Date Range**: 1999-present (updated weekly during season)
+
+- **Available EPA Columns** (372 total in play-by-play):
+  - `epa` - Expected Points Added per play
+  - `qb_epa` - QB-specific EPA
+  - `total_home_epa`, `total_away_epa` - Cumulative game EPA
+  - `air_epa`, `yac_epa` - Air yards vs YAC EPA
+  - `comp_air_epa`, `comp_yac_epa` - Completion-based EPA
+  - `total_home_rush_epa`, `total_away_rush_epa` - Rush EPA
+  - `total_home_pass_epa`, `total_away_pass_epa` - Pass EPA
+
+- **Integration Points**:
+  - Enhance Elo predictions with EPA-weighted adjustments
+  - Team offensive/defensive EPA ratings
+  - Situational EPA (red zone, third down, etc.)
+
+- **DVOA Note**: DVOA (Defense-adjusted Value Over Average) is **proprietary** and requires FTN subscription. Not available for free computation.
+
+---
+
+**REQ-ELO-004: Historical Elo Bootstrapping**
+
+**Phase:** 3
+**Priority:** High
+**Status:** 🔵 Planned
+**Reference:** ADR-304, DATA_SOURCES_SPECIFICATION_V1.0.md
+
+Bootstrap Elo ratings from historical game results:
+
+- **Data Sources by Sport**:
+  - NFL: nflreadpy `load_schedules()` (1999-present)
+  - NBA: nba_api `LeagueGameFinder` (1946-present)
+  - NHL: nhl-api-py schedule module (1917-present)
+  - MLB: pybaseball `schedule_and_record()` (1871-present)
+  - NCAAF: cfbd API (2000-present)
+  - NCAAB: sportsdataverse (2002-present)
+
+- **Processing**:
+  - Chronological game processing (oldest first)
+  - Automatic season detection and carryover
+  - Progress tracking for long historical runs
+  - Checkpointing for resumable processing
+
+- **FiveThirtyEight Migration**:
+  - FiveThirtyEight shut down March 2025
+  - Historical Elo data is now **stale**
+  - Must compute Elo from game results for all sports
+
+---
+
+**REQ-ELO-005: Real-Time Elo Updates**
+
+**Phase:** 3
+**Priority:** Medium
+**Status:** 🔵 Planned
+**Reference:** ADR-304, LIVE_DATA_INTEGRATION_GUIDE_V1.1.md
+
+Update Elo ratings in real-time as games complete:
+
+- **Integration with Live Data Pipeline**:
+  - Subscribe to game_states table updates
+  - Detect game completion (status = 'final')
+  - Compute new Elo ratings immediately
+
+- **Update Triggers**:
+  - Final score posted (ESPN game_states)
+  - Manual trigger for corrections
+  - Batch recalculation for data fixes
+
+- **Performance**:
+  - < 100ms per game Elo update
+  - Concurrent updates for multiple games
+  - Database write batching
+
+---
+
+**REQ-ELO-006: Elo Database Storage**
+
+**Phase:** 3
+**Priority:** High
+**Status:** 🔵 Planned
+**Reference:** ADR-304, DATABASE_SCHEMA_SUMMARY_V1.15.md
+
+Store Elo ratings with temporal validity for historical analysis:
+
+- **Table: team_elo_ratings**:
+  ```sql
+  CREATE TABLE team_elo_ratings (
+      id SERIAL PRIMARY KEY,
+      team_id INTEGER NOT NULL REFERENCES teams(id),
+      sport VARCHAR(10) NOT NULL,
+      elo_rating DECIMAL(8,2) NOT NULL,
+      effective_date DATE NOT NULL,
+      game_id INTEGER REFERENCES game_states(id),
+      previous_elo DECIMAL(8,2),
+      elo_change DECIMAL(6,2),
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(team_id, effective_date)
+  );
+  ```
+
+- **Indexes**:
+  - `idx_team_elo_team_date` on (team_id, effective_date DESC)
+  - `idx_team_elo_sport_date` on (sport, effective_date DESC)
+
+- **Query Patterns**:
+  - Get current Elo: Latest rating by team
+  - Get historical Elo: Rating at specific date
+  - Get Elo trajectory: All ratings for team over time
+
+---
+
+**REQ-ELO-007: Multi-Source Data Integration**
+
+**Phase:** 3
+**Priority:** High
+**Status:** 🔵 Planned
+**Reference:** DATA_SOURCES_SPECIFICATION_V1.0.md, Issue #273
+
+Integrate data from multiple sources for comprehensive Elo computation:
+
+| Source | Sport | Data Available | Python Library |
+|--------|-------|----------------|----------------|
+| nflreadpy | NFL | Schedules, PBP, EPA, rosters | `nflreadpy` |
+| nba_api | NBA/WNBA | Games, stats, players | `nba_api` |
+| nhl-api-py | NHL | Schedule, game center, EDGE stats | `nhl-api-py` |
+| pybaseball | MLB | Schedule, stats, Statcast | `pybaseball` |
+| cfbd | NCAAF | Games, stats, rankings | `cfbd` |
+| sportsdataverse | NCAAB | Games, stats | `sportsdataverse` |
+| ESPN | Fallback | Live scores, all sports | Custom client |
+
+- **Data Quality**:
+  - Validate game results before Elo computation
+  - Handle postponed/cancelled games
+  - Detect and flag data anomalies
+
+- **Rate Limiting**:
+  - Respect API rate limits per source
+  - Exponential backoff on failures
+  - Caching for repeated requests
+
+- **nfl_data_py Deprecation Notice**:
+  - `nfl_data_py` was **archived September 2025**
+  - All code must use `nflreadpy` instead
+  - Import change: `from nflreadpy import ...`
+
+---
+
 **REQ-SEC-009: Sensitive Data Masking in Logs**
 
 **Phase:** 1
@@ -4069,7 +4299,7 @@ Automatic masking of sensitive data in all log output for GDPR/PCI compliance:
 
 **Reference Documentation:**
 6. `API_INTEGRATION_GUIDE.md` - Detailed API specifications
-7. `DATABASE_SCHEMA_SUMMARY_V1.14.md` - Full schema with versioning tables
+7. `DATABASE_SCHEMA_SUMMARY_V1.15.md` - Full schema with versioning tables
 8. `EDGE_DETECTION_SPEC.md` - Mathematical formulas
 9. `CONFIGURATION_GUIDE.md` - YAML configuration reference (includes versioning configs)
 10. `ARCHITECTURE_DECISIONS.md` - Design rationale and trade-offs

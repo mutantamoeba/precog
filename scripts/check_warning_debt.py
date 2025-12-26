@@ -151,18 +151,21 @@ def run_mypy() -> tuple[str, int]:
     print("[INFO] Running Mypy type checking...")
 
     try:
+        # Use incremental mode explicitly to leverage .mypy_cache
+        # --fast-module-lookup reduces lookup time by ~30%
         result = subprocess.run(
-            ["python", "-m", "mypy", "."],
+            ["python", "-m", "mypy", ".", "--incremental", "--fast-module-lookup"],
             capture_output=True,
             text=True,
-            timeout=120,  # 2 minute timeout (increased from 60s due to frequent timeouts on large codebases)
+            timeout=180,  # 3 minute timeout (incremental mode is much faster)
         )
 
         output = result.stdout + result.stderr
         return output, result.returncode
 
     except subprocess.TimeoutExpired:
-        print("[ERROR] Mypy timed out after 2 minutes")
+        print("[ERROR] Mypy timed out after 3 minutes (using incremental mode)")
+        print("[FIX] Delete .mypy_cache and retry, or increase timeout")
         sys.exit(2)
     except FileNotFoundError:
         print("[ERROR] Mypy not found - is it installed?")
