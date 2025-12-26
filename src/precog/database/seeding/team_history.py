@@ -417,8 +417,23 @@ def resolve_team_code(
         )
         return current_code
 
-    # Check legacy TEAM_CODE_MAPPING for abbreviation variants
-    # (e.g., WSH -> WAS is not a relocation, just alternative abbreviation)
+    # Check SPORT-SPECIFIC code mappings first (fixes cross-sport contamination bug)
+    # e.g., NBA "SEA" -> "OKC" should NOT apply to NHL "SEA" (Seattle Kraken)
+    sport_mappings = SPORT_CODE_MAPPINGS.get(sport_lower, {})
+    if code_upper in sport_mappings:
+        mapped_code = sport_mappings[code_upper]
+        logger.debug(
+            "Resolved %s team code %s -> %s via sport-specific mapping (year=%s)",
+            sport_lower,
+            code_upper,
+            mapped_code,
+            year,
+        )
+        return mapped_code
+
+    # Fallback to legacy TEAM_CODE_MAPPING for abbreviation variants
+    # (e.g., WSH -> WAS is safe across most sports)
+    # WARNING: This fallback is deprecated - prefer SPORT_CODE_MAPPINGS
     if code_upper in TEAM_CODE_MAPPING:
         mapped_code = TEAM_CODE_MAPPING[code_upper]
         logger.debug(
@@ -583,30 +598,62 @@ def normalize_team_code(code: str, sport: str = "nfl") -> str:
     return resolve_team_code(sport, code)
 
 
-# Simple dict-style mapping for direct backward compatibility
-# This allows existing code using TEAM_CODE_MAPPING["WSH"] to continue working
+# =============================================================================
+# Sport-Specific Code Mappings (Abbreviation Variants)
+# =============================================================================
+# These are NOT relocations but alternative abbreviations or legacy codes
+# from different data sources. They must be sport-specific to avoid
+# cross-contamination (e.g., NBA "SEA" -> "OKC" should not apply to NHL).
+#
+# Bug fixed: Issue #257 - SEA (Seattle Kraken, NHL) was incorrectly resolved
+# to OKC (Oklahoma City Thunder, NBA) due to sport-agnostic mapping.
+
+SPORT_CODE_MAPPINGS: dict[str, dict[str, str]] = {
+    "nfl": {
+        "WSH": "WAS",  # Washington (common abbreviation variant)
+        "OAK": "LV",  # Oakland Raiders -> Las Vegas
+        "SD": "LAC",  # San Diego Chargers -> Los Angeles
+        "STL": "LAR",  # St. Louis Rams -> Los Angeles
+        "LA": "LAR",  # Old LA (Rams) -> LAR
+        "HOU": "TEN",  # Houston Oilers -> Tennessee Titans
+        "PHO": "ARI",  # Phoenix Cardinals
+    },
+    "nba": {
+        "SEA": "OKC",  # SuperSonics -> Thunder
+        "NJN": "BKN",  # Nets (New Jersey)
+        "BRK": "BKN",  # Nets (FiveThirtyEight Brooklyn code)
+        "VAN": "MEM",  # Grizzlies
+        "CHO": "CHA",  # Charlotte Hornets (old FiveThirtyEight code)
+        "NOH": "NOP",  # New Orleans Hornets -> Pelicans
+        "NOK": "NOP",  # New Orleans/OK City Hornets (2005-07 Katrina)
+        "PHO": "PHX",  # Phoenix Suns (FiveThirtyEight -> standard)
+    },
+    "mlb": {
+        "MON": "WAS",  # Montreal Expos -> Washington Nationals
+        "BRO": "LAD",  # Brooklyn Dodgers -> Los Angeles Dodgers
+        "FLA": "MIA",  # Florida Marlins -> Miami Marlins
+        "TBD": "TBR",  # Tampa Bay Devil Rays -> Rays
+        "ANA": "LAA",  # Anaheim Angels -> Los Angeles Angels
+    },
+    "nhl": {
+        "ATL": "WPG",  # Atlanta Thrashers -> Winnipeg Jets
+        "HFD": "CAR",  # Hartford Whalers -> Carolina Hurricanes
+        "QUE": "COL",  # Quebec Nordiques -> Colorado Avalanche
+        "PHX": "ARI",  # Phoenix Coyotes -> Arizona Coyotes (pre-2014)
+        "MNS": "DAL",  # Minnesota North Stars -> Dallas Stars
+        # Note: VEG in data is VGK in our teams table
+        "VEG": "VGK",  # Vegas Golden Knights (data source variant)
+        # Note: UTA (Utah Hockey Club) is a 2024 expansion - code may vary
+    },
+    "ncaaf": {
+        # College football abbreviations (minimal relocations)
+    },
+}
+
+# Legacy backward compatibility dict (deprecated, use SPORT_CODE_MAPPINGS)
+# This fallback is used ONLY when sport-specific mapping doesn't exist
+# WARNING: These mappings are ambiguous across sports!
 TEAM_CODE_MAPPING: dict[str, str] = {
-    # NFL mappings (most common use case)
-    "WSH": "WAS",
-    "OAK": "LV",
-    "SD": "LAC",
-    "STL": "LAR",
-    "LA": "LAR",  # Old LA (Rams) -> LAR
-    "HOU": "TEN",  # Houston Oilers -> Tennessee Titans
-    "PHO": "ARI",  # Phoenix Cardinals
-    # NBA mappings
-    "SEA": "OKC",  # SuperSonics -> Thunder
-    "NJN": "BKN",  # Nets (New Jersey)
-    "BRK": "BKN",  # Nets (FiveThirtyEight Brooklyn code)
-    "VAN": "MEM",  # Grizzlies
-    "CHO": "CHA",  # Charlotte Hornets (old FiveThirtyEight code)
-    "NOH": "NOP",  # New Orleans Hornets -> Pelicans
-    "NOK": "NOP",  # New Orleans/OK City Hornets (2005-07 Katrina)
-    # MLB mappings
-    "MON": "WAS",  # Expos -> Nationals (note: conflicts with NFL WAS context)
-    "BRO": "LAD",  # Brooklyn Dodgers
-    # NHL mappings
-    "ATL": "WPG",  # Thrashers -> Jets (different from NFL ATL)
-    "HFD": "CAR",  # Whalers -> Hurricanes
-    "QUE": "COL",  # Nordiques -> Avalanche
+    # Common abbreviation variants (relatively safe across sports)
+    "WSH": "WAS",  # Washington
 }

@@ -754,6 +754,210 @@ def load_fivethirtyeight_nba_games(
     return result
 
 
+# =============================================================================
+# Neil Paine NHL Games Loader
+# =============================================================================
+
+
+def parse_neil_paine_nhl_games_csv(
+    file_path: Path,
+    seasons: list[int] | None = None,
+) -> Iterator[HistoricalGameRecord]:
+    """
+    Parse Neil Paine NHL Elo CSV and yield historical game records.
+
+    Neil Paine NHL Format:
+        This format has dual rows per game (one for each team's perspective).
+        Filter by is_home=1 to get one row per game with correct home/away.
+
+    Columns Used:
+        - game_ID: External game identifier
+        - season: Season year (1918 = 1917-18 season)
+        - date: Game date (YYYY-MM-DD)
+        - team1: Home team (when is_home=1)
+        - team2: Away team (when is_home=1)
+        - score1, score2: Final scores
+        - playoff: 0=regular, 1=playoff
+        - neutral: 0=home, 1=neutral site
+        - ot: Overtime indicator (NA or OT)
+        - is_home: 1=home perspective, 0=away perspective
+
+    Args:
+        file_path: Path to Neil Paine NHL CSV file
+        seasons: Filter to specific seasons (default: all)
+
+    Yields:
+        HistoricalGameRecord for each game
+
+    Educational Note:
+    -----------------
+    The NHL season spans two calendar years (e.g., 2023-24).
+    The season value represents the ending year (2024 for 2023-24 season).
+    Games start in October and playoffs end in June.
+
+    Overtime handling:
+        - "NA" or empty: Regulation game
+        - "OT": Overtime game (any format - SO, 3v3, etc.)
+        The game_type field captures this: "regular", "playoff", "overtime"
+
+    Example:
+        >>> records = list(parse_neil_paine_nhl_games_csv(
+        ...     Path("nhl_elo.csv"),
+        ...     seasons=[2023, 2024]
+        ... ))
+        >>> len(records)  # ~82 games * 32 teams / 2 * 2 seasons ≈ 2624
+    """
+    source_file = file_path.name
+    from precog.database.seeding.team_history import resolve_team_code
+
+    with open(file_path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+
+        for row in reader:
+            # Filter to home perspective only (is_home=1) to avoid duplicates
+            is_home = row.get("is_home", "0")
+            if is_home != "1":
+                continue
+
+            # Parse season and check filter
+            try:
+                season = int(row.get("season", "0"))
+            except ValueError:
+                continue
+
+            if seasons and season not in seasons:
+                continue
+
+            # Parse date
+            try:
+                date_str = row.get("date", "")
+                game_date = datetime.strptime(date_str, "%Y-%m-%d").date()  # noqa: DTZ007
+            except ValueError:
+                logger.warning("Invalid date in NHL row: %s", row)
+                continue
+
+            # Extract team codes (team1 = home when is_home=1)
+            home_team_code = row.get("team1", "").strip().upper()
+            away_team_code = row.get("team2", "").strip().upper()
+
+            if not home_team_code or not away_team_code:
+                continue
+
+            # Normalize team codes using unified team history
+            home_team_code = resolve_team_code("nhl", home_team_code)
+            away_team_code = resolve_team_code("nhl", away_team_code)
+
+            # Parse scores
+            try:
+                score1 = row.get("score1", "")
+                score2 = row.get("score2", "")
+                home_score = int(score1) if score1 else None
+                away_score = int(score2) if score2 else None
+            except ValueError:
+                home_score = None
+                away_score = None
+
+            # Parse game context
+            neutral_str = row.get("neutral", "0")
+            playoff_str = row.get("playoff", "0")
+            is_neutral_site = neutral_str == "1"
+            is_playoff = playoff_str == "1"
+
+            # Determine game type
+            # Note: Overtime (ot column) is a game modifier, not a type
+            # The 'ot' column indicates if game went to overtime (OT, SO, etc.)
+            # but the game_type should still be 'regular' or 'playoff'
+            game_type = "playoff" if is_playoff else "regular"
+
+            # External game ID
+            external_id = row.get("game_ID", "") or None
+
+            yield HistoricalGameRecord(
+                sport="nhl",
+                season=season,
+                game_date=game_date,
+                home_team_code=home_team_code,
+                away_team_code=away_team_code,
+                home_score=home_score,
+                away_score=away_score,
+                is_neutral_site=is_neutral_site,
+                is_playoff=is_playoff,
+                game_type=game_type,
+                venue_name=None,
+                source="fivethirtyeight",  # Neil Paine created 538's Elo model
+                source_file=source_file,
+                external_game_id=external_id,
+            )
+
+
+def load_neil_paine_nhl_games(
+    file_path: Path,
+    seasons: list[int] | None = None,
+    error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
+    *,
+    show_progress: bool = True,
+) -> BatchInsertResult:
+    """
+    Load Neil Paine NHL game data into the historical_games table.
+
+    Loads NHL game results from the Neil Paine Elo dataset which spans
+    from 1917 (NHL founding) to present with 137,000+ games.
+
+    Args:
+        file_path: Path to Neil Paine NHL CSV file
+        seasons: Filter to specific seasons (default: all)
+        error_mode: How to handle errors (default: FAIL)
+        show_progress: Whether to show progress bar
+
+    Returns:
+        BatchInsertResult with statistics
+
+    Example:
+        >>> # Load recent seasons for Elo computation
+        >>> result = load_neil_paine_nhl_games(
+        ...     Path("data/historical/nhl_elo.csv"),
+        ...     seasons=[2020, 2021, 2022, 2023, 2024],
+        ... )
+        >>> print(f"Loaded {result.records_inserted} NHL games")
+        >>>
+        >>> # Load all historical data with error collection
+        >>> result = load_neil_paine_nhl_games(
+        ...     Path("data/historical/nhl_elo.csv"),
+        ...     error_mode=ErrorHandlingMode.COLLECT,
+        ... )
+
+    Related:
+        - ADR-109: Elo Rating Computation Engine Architecture
+        - Issue #273: Multi-sport Elo computation
+        - load_neil_paine_nhl_elo(): Loads Elo ratings from same file
+    """
+    logger.info("Loading Neil Paine NHL game data from %s", file_path)
+
+    records = parse_neil_paine_nhl_games_csv(file_path, seasons)
+    result = bulk_insert_historical_games(
+        records, error_mode=error_mode, show_progress=show_progress
+    )
+
+    logger.info(
+        "Neil Paine NHL games load complete: processed=%d, inserted=%d, skipped=%d",
+        result.records_processed,
+        result.records_inserted,
+        result.records_skipped,
+    )
+
+    # Print summary table
+    print_load_summary(
+        "Neil Paine NHL Games Load",
+        processed=result.records_processed,
+        inserted=result.records_inserted,
+        skipped=result.records_skipped,
+        errors=result.errors,
+        show_summary=show_progress,
+    )
+
+    return result
+
+
 def get_historical_games_stats() -> dict[str, Any]:
     """
     Get statistics about historical game data in the database.
