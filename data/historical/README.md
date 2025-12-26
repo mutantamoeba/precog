@@ -37,20 +37,29 @@ FiveThirtyEight shut down after Disney's acquisition and merged with ABC News.
 - GitHub repository (fivethirtyeight/data) removed all CSV files, only READMEs remain
 - Data is no longer available from official sources
 
-**Available Files (cached before shutdown):**
-- ✅ `nfl_elo.csv` - NFL Elo 1920-2020 (~16,810 games) - VALID
-- ✅ `nba_elo.csv` - NBA Elo historic seasons - VALID
-- ❌ MLB Elo - Not available (corrupted files removed, contained HTML redirect)
-- ❌ NHL Elo - Not available (corrupted files removed, contained HTML redirect)
+**Available Files:**
+- ✅ `nfl_elo.csv` - FiveThirtyEight NFL Elo 1920-2020 (~16,810 games) - VALID
+- ✅ `nba_elo.csv` - FiveThirtyEight NBA Elo historic seasons - VALID
+- ✅ `nhl_elo.csv` - Neil Paine NHL Elo 1917-2025 (~137,678 games) - VALID ⭐ NEW
+- ⚠️ MLB Elo - No pre-computed source available (compute from game results)
 
 **Format:** CSV with Elo ratings, game scores, probabilities
 
-**Alternative Sources for MLB/NHL:**
-Since official data is no longer available, consider:
-1. **Compute from game results:** Use historical_games table + EloEngine
-2. **Kaggle archives:** Search for "fivethirtyeight elo" datasets
-3. **data.world archives:** May have cached copies
-4. **Third-party implementations:** e.g., elo.harvitronix.com for NHL
+**NHL Elo Source (Added December 2025):**
+Downloaded from [Neil Paine's NHL-Player-And-Team-Ratings](https://github.com/Neil-Paine-1/NHL-Player-And-Team-Ratings)
+- 137,678 games from 1917-2025
+- Format: game_ID, season, date, team1/team2, elo1_pre/post, score1/score2, prob1/prob2, is_home
+
+**MLB Strategy:**
+Since no reliable pre-computed MLB Elo source exists, use:
+1. **Seed historical games** from ESPN API or pybaseball library
+2. **Compute Elo** using `EloEngine` with MLB-specific parameters
+3. **Store results** in `elo_calculation_log` for full audit trail
+
+This approach provides:
+- Full traceability (every calculation audited)
+- Customizable parameters (K-factor, home advantage)
+- Consistency with NFL/NBA/NHL computation pipeline
 
 **Legacy Download Commands (NO LONGER WORK):**
 ```bash
