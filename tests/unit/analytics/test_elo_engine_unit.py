@@ -16,6 +16,7 @@ Usage:
     pytest tests/unit/analytics/test_elo_engine_unit.py -v -m unit
 """
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -25,14 +26,18 @@ from precog.analytics.elo_engine import (
     DEFAULT_INITIAL_RATING,
     DEFAULT_REGRESSION_TARGET,
     ELO_DIVISOR,
+    ERA_REGISTRY,
     SPORT_CONFIGS,
+    SPORT_CONFIGS_POST_2020,
     EloEngine,
     EloState,
     EloUpdateResult,
     Sport,
     SportConfig,
     elo_to_win_probability,
+    get_config_for_date,
     get_elo_engine,
+    get_era_for_date,
     win_probability_to_elo_difference,
 )
 
@@ -515,6 +520,268 @@ class TestSportConfigs:
         """Test NHL has MOV disabled."""
         nhl_config = SPORT_CONFIGS[Sport.NHL]
         assert nhl_config.mov_enabled is False
+
+
+# =============================================================================
+# Unit Tests: Era Registry
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestEraRegistry:
+    """Unit tests for the Era Registry pattern.
+
+    Educational Note:
+        The Era Registry pattern enables date-based configuration selection,
+        making it trivial to add new eras without modifying the EloEngine class.
+        This is more scalable than boolean flags like use_post_2020.
+    """
+
+    def test_era_registry_has_entries(self) -> None:
+        """Test that ERA_REGISTRY has at least one era."""
+        assert len(ERA_REGISTRY) >= 1
+
+    def test_era_registry_covers_all_time(self) -> None:
+        """Test that era registry covers from None (beginning) to None (current)."""
+        # First era should have no start_date (beginning of time)
+        assert ERA_REGISTRY[0].start_date is None
+
+        # Last era should have no end_date (ongoing/current)
+        assert ERA_REGISTRY[-1].end_date is None
+
+    def test_eras_are_contiguous(self) -> None:
+        """Test that eras don't overlap and have no gaps."""
+        for i in range(len(ERA_REGISTRY) - 1):
+            current_era = ERA_REGISTRY[i]
+            next_era = ERA_REGISTRY[i + 1]
+
+            # Current era's end should be one day before next era's start
+            if current_era.end_date and next_era.start_date:
+                gap = (next_era.start_date - current_era.end_date).days
+                assert gap == 1, f"Gap of {gap} days between {current_era.name} and {next_era.name}"
+
+    def test_get_era_for_date_historical(self) -> None:
+        """Test getting era for a date before COVID."""
+        era = get_era_for_date(date(2019, 12, 1))
+        assert era.name == "historical"
+
+    def test_get_era_for_date_post_2020(self) -> None:
+        """Test getting era for a date after COVID."""
+        era = get_era_for_date(date(2023, 9, 15))
+        assert era.name == "post_2020"
+
+    def test_get_era_for_date_covid_boundary(self) -> None:
+        """Test era boundaries around COVID shutdown date."""
+        # Day before COVID shutdown
+        pre_covid = get_era_for_date(date(2020, 3, 11))
+        assert pre_covid.name == "historical"
+
+        # Day of COVID shutdown
+        post_covid = get_era_for_date(date(2020, 3, 12))
+        assert post_covid.name == "post_2020"
+
+    def test_get_era_for_date_none_returns_current(self) -> None:
+        """Test that None date returns the current/latest era."""
+        era = get_era_for_date(None)
+        # Should be the era with end_date=None (ongoing)
+        assert era.end_date is None
+
+    def test_get_config_for_date_returns_correct_config(self) -> None:
+        """Test that get_config_for_date returns correct sport config."""
+        # Pre-COVID: NFL home advantage = 48
+        config_2019 = get_config_for_date(Sport.NFL, date(2019, 9, 8))
+        assert config_2019.home_advantage == Decimal("48")
+
+        # Post-COVID: NFL home advantage = 30
+        config_2023 = get_config_for_date(Sport.NFL, date(2023, 9, 10))
+        assert config_2023.home_advantage == Decimal("30")
+
+    def test_all_eras_have_all_sports(self) -> None:
+        """Test that each era has configs for all sports."""
+        for era in ERA_REGISTRY:
+            for sport in Sport:
+                assert sport in era.sport_configs, f"Era '{era.name}' missing config for {sport}"
+
+    def test_era_dataclass_is_frozen(self) -> None:
+        """Test that Era is immutable (frozen dataclass)."""
+        era = ERA_REGISTRY[0]
+        with pytest.raises(AttributeError):
+            era.name = "modified"  # type: ignore[misc]
+
+
+@pytest.mark.unit
+class TestEloEngineDateBasedConfig:
+    """Unit tests for EloEngine date-based configuration.
+
+    Educational Note:
+        The game_date parameter enables automatic era selection based on when
+        the game was played. This is more maintainable than boolean flags.
+    """
+
+    def test_game_date_selects_historical_era(self) -> None:
+        """Test that pre-COVID game date selects historical config."""
+        engine = EloEngine("nfl", game_date=date(2019, 9, 8))
+
+        assert engine.home_advantage == Decimal("48")
+        assert engine.era is not None
+        assert engine.era.name == "historical"
+
+    def test_game_date_selects_post_2020_era(self) -> None:
+        """Test that post-COVID game date selects post-2020 config."""
+        engine = EloEngine("nfl", game_date=date(2023, 9, 10))
+
+        assert engine.home_advantage == Decimal("30")
+        assert engine.era is not None
+        assert engine.era.name == "post_2020"
+
+    def test_game_date_overrides_use_post_2020_flag(self) -> None:
+        """Test that game_date takes priority over use_post_2020 flag.
+
+        Even if use_post_2020=True, game_date should determine config.
+        """
+        # Date is 2019 but flag says post_2020=True
+        engine = EloEngine("nfl", use_post_2020=True, game_date=date(2019, 9, 8))
+
+        # game_date wins: should be historical config
+        assert engine.home_advantage == Decimal("48")
+        assert engine.era.name == "historical"
+
+    def test_explicit_config_overrides_game_date(self) -> None:
+        """Test that explicit config overrides game_date."""
+        custom_config = SportConfig(
+            k_factor=50,
+            home_advantage=Decimal("100"),
+            mov_enabled=False,
+        )
+        engine = EloEngine("nfl", config=custom_config, game_date=date(2019, 9, 8))
+
+        assert engine.home_advantage == Decimal("100")
+        assert engine.era is None  # No era when explicit config
+
+    def test_game_date_stored_on_engine(self) -> None:
+        """Test that game_date is accessible on the engine."""
+        game_day = date(2023, 10, 15)
+        engine = EloEngine("nfl", game_date=game_day)
+
+        assert engine.game_date == game_day
+
+
+# =============================================================================
+# Unit Tests: Post-2020 Era Configurations
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestPost2020Configs:
+    """Unit tests for post-2020 era configurations with reduced home advantage.
+
+    Educational Note:
+        Post-2020 configurations account for reduced home field advantage
+        observed after the COVID-19 pandemic. Empty stadiums during 2020
+        and changed fan behavior afterward reduced home advantage by 30-60%.
+        - NFL: 48 → 30 Elo points (37.5% reduction)
+        - NBA: 100 → 40 Elo points (60% reduction)
+        - NCAAF: 65 → 40 Elo points (38.5% reduction)
+
+    Reference: FiveThirtyEight analysis of post-pandemic home advantage
+    Related ADRs: ADR-ELO-001 (Era-based configuration)
+    """
+
+    def test_all_sports_have_post_2020_configs(self) -> None:
+        """Test all Sport enum values have post-2020 configurations."""
+        for sport in Sport:
+            assert sport in SPORT_CONFIGS_POST_2020, f"Missing post-2020 config for {sport}"
+
+    def test_default_uses_historical_config(self) -> None:
+        """Test that default (use_post_2020=False) uses historical values."""
+        engine = EloEngine("nfl")  # Default use_post_2020=False
+
+        assert engine.home_advantage == Decimal("48")
+        assert engine.config == SPORT_CONFIGS[Sport.NFL]
+
+    def test_post_2020_flag_uses_reduced_home_advantage(self) -> None:
+        """Test that use_post_2020=True uses reduced home advantage values."""
+        engine = EloEngine("nfl", use_post_2020=True)
+
+        assert engine.home_advantage == Decimal("30")
+        assert engine.config == SPORT_CONFIGS_POST_2020[Sport.NFL]
+
+    def test_nfl_post_2020_home_advantage(self) -> None:
+        """Test NFL post-2020 home advantage is 30 (reduced from 48)."""
+        config = SPORT_CONFIGS_POST_2020[Sport.NFL]
+        assert config.home_advantage == Decimal("30")
+
+    def test_nba_post_2020_home_advantage(self) -> None:
+        """Test NBA post-2020 home advantage is 40 (reduced from 100)."""
+        config = SPORT_CONFIGS_POST_2020[Sport.NBA]
+        assert config.home_advantage == Decimal("40")
+
+    def test_ncaaf_post_2020_home_advantage(self) -> None:
+        """Test NCAAF post-2020 home advantage is 40 (reduced from 65)."""
+        config = SPORT_CONFIGS_POST_2020[Sport.NCAAF]
+        assert config.home_advantage == Decimal("40")
+
+    def test_explicit_config_overrides_post_2020(self) -> None:
+        """Test explicit config parameter overrides use_post_2020 flag."""
+        custom_config = SportConfig(
+            k_factor=50,
+            home_advantage=Decimal("75"),
+            mov_enabled=False,
+        )
+        # Even with use_post_2020=True, explicit config wins
+        engine = EloEngine("nfl", config=custom_config, use_post_2020=True)
+
+        assert engine.home_advantage == Decimal("75")
+        assert engine.config == custom_config
+
+    def test_post_2020_k_factors_unchanged(self) -> None:
+        """Test K-factors are unchanged in post-2020 (only home advantage changed)."""
+        for sport in Sport:
+            historical = SPORT_CONFIGS[sport]
+            post_2020 = SPORT_CONFIGS_POST_2020[sport]
+            assert historical.k_factor == post_2020.k_factor, (
+                f"{sport}: K-factor should be unchanged post-2020"
+            )
+
+    def test_post_2020_mov_settings_unchanged(self) -> None:
+        """Test MOV settings are unchanged in post-2020."""
+        for sport in Sport:
+            historical = SPORT_CONFIGS[sport]
+            post_2020 = SPORT_CONFIGS_POST_2020[sport]
+            assert historical.mov_enabled == post_2020.mov_enabled, (
+                f"{sport}: MOV setting should be unchanged post-2020"
+            )
+
+    def test_post_2020_home_advantages_are_lower(self) -> None:
+        """Test all post-2020 home advantages are lower than historical."""
+        for sport in Sport:
+            historical = SPORT_CONFIGS[sport]
+            post_2020 = SPORT_CONFIGS_POST_2020[sport]
+            assert post_2020.home_advantage <= historical.home_advantage, (
+                f"{sport}: Post-2020 home advantage should be <= historical"
+            )
+
+    def test_win_probability_different_between_eras(self) -> None:
+        """Test win probability differs between era configurations.
+
+        Educational Note:
+            With equal Elo ratings, reduced home advantage means smaller
+            win probability gap for home team vs away team.
+        """
+        historical_engine = EloEngine("nfl", use_post_2020=False)
+        post_2020_engine = EloEngine("nfl", use_post_2020=True)
+
+        home_elo = Decimal("1500")
+        away_elo = Decimal("1500")
+
+        hist_home_prob, _ = historical_engine.win_probability(home_elo, away_elo)
+        post_home_prob, _ = post_2020_engine.win_probability(home_elo, away_elo)
+
+        # Post-2020 should have smaller home advantage
+        assert post_home_prob < hist_home_prob
+        # Both should still favor home team
+        assert post_home_prob > Decimal("0.5")
+        assert hist_home_prob > Decimal("0.5")
 
 
 # =============================================================================

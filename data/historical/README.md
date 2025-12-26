@@ -7,12 +7,9 @@ This directory contains cached historical data for reproducibility, backtesting,
 ```
 data/historical/
 ├── README.md                    # This file
-├── nfl_elo.csv                  # FiveThirtyEight NFL Elo (1920-2020)
-├── nba_elo.csv                  # FiveThirtyEight NBA Elo (historic)
-├── mlb_elo.csv                  # FiveThirtyEight MLB Elo (historic)
-├── mlb_elo_new.csv              # FiveThirtyEight MLB Elo (updated)
-├── nhl_elo_new.csv              # FiveThirtyEight NHL Elo (updated)
-├── nfl_betting.csv              # NFL betting data
+├── nfl_elo.csv                  # FiveThirtyEight NFL Elo (1920-2020) ✅ VALID
+├── nba_elo.csv                  # FiveThirtyEight NBA Elo (historic) ✅ VALID
+├── nfl_betting.csv              # NFL betting historical data
 ├── espn/                        # ESPN API cache
 │   ├── nfl/                     # NFL game data by date
 │   │   └── 2024-12-25.json
@@ -34,21 +31,33 @@ data/historical/
 
 ### 1. FiveThirtyEight Elo (CSV Files)
 
-**Location:** `data/historical/*.csv`
+**⚠️ DATA AVAILABILITY NOTICE (December 2025):**
+FiveThirtyEight shut down after Disney's acquisition and merged with ABC News.
+- All API endpoints (`projects.fivethirtyeight.com/*`) redirect to ABC News
+- GitHub repository (fivethirtyeight/data) removed all CSV files, only READMEs remain
+- Data is no longer available from official sources
+
+**Available Files (cached before shutdown):**
+- ✅ `nfl_elo.csv` - NFL Elo 1920-2020 (~16,810 games) - VALID
+- ✅ `nba_elo.csv` - NBA Elo historic seasons - VALID
+- ❌ MLB Elo - Not available (corrupted files removed, contained HTML redirect)
+- ❌ NHL Elo - Not available (corrupted files removed, contained HTML redirect)
+
 **Format:** CSV with Elo ratings, game scores, probabilities
-**Coverage:**
-- NFL: 1920-2020 (~16,810 games)
-- NBA: Historic seasons
-- MLB: Historic + updated
-- NHL: Updated dataset
 
-**Download:**
+**Alternative Sources for MLB/NHL:**
+Since official data is no longer available, consider:
+1. **Compute from game results:** Use historical_games table + EloEngine
+2. **Kaggle archives:** Search for "fivethirtyeight elo" datasets
+3. **data.world archives:** May have cached copies
+4. **Third-party implementations:** e.g., elo.harvitronix.com for NHL
+
+**Legacy Download Commands (NO LONGER WORK):**
 ```bash
-# NFL Elo
-curl -L "https://raw.githubusercontent.com/fivethirtyeight/nfl-elo-game/master/data/nfl_games.csv" -o data/historical/nfl_elo.csv
-
-# NBA Elo
-curl -L "https://raw.githubusercontent.com/fivethirtyeight/data/master/nba-raptor/historical_RAPTOR_by_team.csv" -o data/historical/nba_elo.csv
+# These URLs now redirect to ABC News - DO NOT USE
+# curl -L "https://projects.fivethirtyeight.com/nfl-api/nfl_elo.csv"
+# curl -L "https://projects.fivethirtyeight.com/mlb-api/mlb_elo.csv"
+# curl -L "https://projects.fivethirtyeight.com/nhl-api/nhl_elo.csv"
 ```
 
 **Usage:**
