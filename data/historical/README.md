@@ -7,12 +7,9 @@ This directory contains cached historical data for reproducibility, backtesting,
 ```
 data/historical/
 ├── README.md                    # This file
-├── nfl_elo.csv                  # FiveThirtyEight NFL Elo (1920-2020)
-├── nba_elo.csv                  # FiveThirtyEight NBA Elo (historic)
-├── mlb_elo.csv                  # FiveThirtyEight MLB Elo (historic)
-├── mlb_elo_new.csv              # FiveThirtyEight MLB Elo (updated)
-├── nhl_elo_new.csv              # FiveThirtyEight NHL Elo (updated)
-├── nfl_betting.csv              # NFL betting data
+├── nfl_elo.csv                  # FiveThirtyEight NFL Elo (1920-2020) ✅ VALID
+├── nba_elo.csv                  # FiveThirtyEight NBA Elo (historic) ✅ VALID
+├── nfl_betting.csv              # NFL betting historical data
 ├── espn/                        # ESPN API cache
 │   ├── nfl/                     # NFL game data by date
 │   │   └── 2024-12-25.json
@@ -32,57 +29,65 @@ data/historical/
 
 ## Data Sources
 
-### 1. Neil Paine Sports Elo Archives (CSV Files)
+### 1. FiveThirtyEight Elo (CSV Files)
 
-**Source:** Neil Paine's GitHub (former FiveThirtyEight sports editor)
-**Note:** FiveThirtyEight's API was sunset June 2023. Neil Paine maintains archives.
-**License:** MIT License
+**⚠️ DATA AVAILABILITY NOTICE (December 2025):**
+FiveThirtyEight shut down after Disney's acquisition and merged with ABC News.
+- All API endpoints (`projects.fivethirtyeight.com/*`) redirect to ABC News
+- GitHub repository (fivethirtyeight/data) removed all CSV files, only READMEs remain
+- Data is no longer available from official sources
 
-**Location:** `data/historical/*.csv`
-**Format:** CSV with Elo ratings, game scores, probabilities (dual-row format)
+**Available Files:**
+- ✅ `nfl_elo.csv` - FiveThirtyEight NFL Elo 1920-2020 (~16,810 games) - VALID
+- ✅ `nba_elo.csv` - FiveThirtyEight NBA Elo historic seasons - VALID
+- ✅ `nhl_elo.csv` - Neil Paine NHL Elo 1917-2025 (~137,678 games) - VALID ⭐ NEW
+- ⚠️ MLB Elo - No pre-computed source available (compute from game results)
 
-**Coverage:**
+**Format:** CSV with Elo ratings, game scores, probabilities
 
-| Sport | File | Records | Date Range | Source |
-|-------|------|---------|------------|--------|
-| NFL | `nfl_elo_neil.csv` | 35,899 | 1920-present | Neil-Paine-1/NFL-elo-ratings |
-| NBA | `nba_elo_neil.csv` | 151,411 | 1946-present | Neil-Paine-1/NBA-elo |
-| NHL | `nhl_elo.csv` | 137,679 | 1917-present | Neil-Paine-1/NHL-Player-And-Team-Ratings |
-| MLB | *blocked* | N/A | N/A | Issue #278 - need alternative source |
+**NHL Elo Source (Added December 2025):**
+Downloaded from [Neil Paine's NHL-Player-And-Team-Ratings](https://github.com/Neil-Paine-1/NHL-Player-And-Team-Ratings)
+- 137,678 games from 1917-2025
+- Format: game_ID, season, date, team1/team2, elo1_pre/post, score1/score2, prob1/prob2, is_home
 
-**Download:**
-```bash
-# NFL Elo (Neil Paine archive)
-curl -L "https://raw.githubusercontent.com/Neil-Paine-1/NFL-elo-ratings/main/NFL-elo-ratings.csv" \
-  -o data/historical/nfl_elo_neil.csv
+**MLB Strategy:**
+Since no reliable pre-computed MLB Elo source exists, use:
+1. **Seed historical games** from ESPN API or pybaseball library
+2. **Compute Elo** using `EloEngine` with MLB-specific parameters
+3. **Store results** in `elo_calculation_log` for full audit trail
 
-# NBA Elo (Neil Paine archive)
-curl -L "https://raw.githubusercontent.com/Neil-Paine-1/NBA-elo/main/nba_elo.csv" \
-  -o data/historical/nba_elo_neil.csv
+This approach provides:
+- Full traceability (every calculation audited)
+- Customizable parameters (K-factor, home advantage)
+- Consistency with NFL/NBA/NHL computation pipeline
 
-# NHL Elo (Neil Paine archive)
-curl -L "https://raw.githubusercontent.com/Neil-Paine-1/NHL-Player-And-Team-Ratings/main/nhl_elo.csv" \
-  -o data/historical/nhl_elo.csv
+**MLB Elo Pipeline (Added December 2025):**
+```python
+from precog.database.seeding.historical_games_loader import load_pybaseball_games
+
+# Step 1: Load MLB games into historical_games table
+result = load_pybaseball_games(seasons=[2023, 2024])
+print(f"Loaded {result.inserted} games, skipped {result.skipped}")
+
+# Step 2: Compute Elo ratings
+from precog.analytics import EloComputationService, compute_elo_ratings
+result = compute_elo_ratings(sport="mlb", seasons=[2023, 2024])
 ```
 
-**Dual-Row Format:**
-Each game appears twice (home and away perspective):
-```csv
-date,team1,team2,elo1_pre,elo2_pre,score1,score2,is_home
-2024-01-15,KC,BUF,1650,1580,27,24,1    # KC home perspective
-2024-01-15,BUF,KC,1580,1650,24,27,0    # BUF away perspective
+📚 **Complete Guide:** See `docs/guides/ELO_COMPUTATION_GUIDE_V1.2.md` for full documentation
+
+**Legacy Download Commands (NO LONGER WORK):**
+```bash
+# These URLs now redirect to ABC News - DO NOT USE
+# curl -L "https://projects.fivethirtyeight.com/nfl-api/nfl_elo.csv"
+# curl -L "https://projects.fivethirtyeight.com/mlb-api/mlb_elo.csv"
+# curl -L "https://projects.fivethirtyeight.com/nhl-api/nhl_elo.csv"
 ```
 
 **Usage:**
 ```python
-from precog.database.seeding.historical_elo_loader import (
-    NeilPaineNHLEloLoader,
-    NeilPaineNFLEloLoader,
-    NeilPaineNBAEloLoader,
-)
-# Load NHL Elo ratings
-loader = NeilPaineNHLEloLoader()
-result = loader.load_from_file(Path("data/historical/nhl_elo.csv"), seasons=[2023, 2024])
+from precog.database.seeding.historical_elo_loader import load_fivethirtyeight_elo
+result = load_fivethirtyeight_elo(Path("data/historical/nfl_elo.csv"), seasons=[2019, 2020])
 ```
 
 ### 2. ESPN Historical API (JSON Cache)
@@ -209,6 +214,32 @@ This cache structure supports migration to production TimescaleDB:
    markets = load_from_cache("markets", date(2024, 12, 25))
    insert_markets(production_session, markets)
    ```
+
+## Database Views for Historical Data
+
+The following database views derive analytics from historical data:
+
+### team_season_records (Migration 0014)
+Aggregates win/loss/draw records from `historical_games` table.
+
+```sql
+-- Query team season records
+SELECT sport, season, team_code, wins, losses, draws, win_pct, record_display
+FROM team_season_records
+WHERE sport = 'nfl' AND season = 2024
+ORDER BY win_pct DESC;
+
+-- Query current season standings with team info
+SELECT team_name, conference, division, wins, losses, win_pct, current_elo_rating
+FROM current_season_standings
+WHERE sport = 'nfl'
+ORDER BY win_pct DESC;
+```
+
+**Benefits:**
+- No data duplication (derived from historical_games)
+- Automatically updated when games are inserted
+- Supports historical AND current season records
 
 ## License
 

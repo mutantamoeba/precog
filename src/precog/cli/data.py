@@ -1607,6 +1607,11 @@ def compute_elo(
         "-v",
         help="Show detailed progress",
     ),
+    sync_to_teams: bool = typer.Option(
+        False,
+        "--sync",
+        help="Update teams.current_elo_rating after computation",
+    ),
 ) -> None:
     """Compute Elo ratings from historical games.
 
@@ -1614,10 +1619,15 @@ def compute_elo(
     using the FiveThirtyEight-style algorithm. Results are stored in
     elo_calculation_log for audit trail.
 
+    Pipeline (with --sync):
+        historical_games -> elo_calculation_log (audit)
+            -> teams.current_elo_rating (LIVE)
+
     Example:
         precog data compute-elo nfl
         precog data compute-elo nba --seasons 2019,2020 --show-ratings
         precog data compute-elo nfl --recompute  # Force recomputation
+        precog data compute-elo nfl --sync       # Also update teams table
     """
     from precog.analytics.elo_computation_service import (
         EloComputationService,
@@ -1640,6 +1650,7 @@ def compute_elo(
     console.print(f"\n[bold]Computing Elo Ratings for {sport.value.upper()}[/bold]")
     console.print(f"  Seasons: {season_list if season_list else 'all available'}")
     console.print(f"  Skip computed: {skip_computed}")
+    console.print(f"  Sync to teams: {sync_to_teams}")
     console.print()
 
     try:
@@ -1658,6 +1669,7 @@ def compute_elo(
                 sport=sport.value,
                 seasons=season_list,
                 skip_computed=skip_computed,
+                sync_to_teams=sync_to_teams,
             )
 
             console.print("Done!")
@@ -1675,6 +1687,10 @@ def compute_elo(
             results_table.add_row("Games Skipped", f"{result.games_skipped:,}")
             results_table.add_row("Teams Updated", str(result.teams_updated))
             results_table.add_row("Logs Inserted", f"{result.logs_inserted:,}")
+            if sync_to_teams:
+                results_table.add_row(
+                    "Teams Synced", f"{result.teams_updated} -> teams.current_elo_rating"
+                )
             results_table.add_row("Duration", f"{result.duration_seconds:.2f}s")
 
             console.print(results_table)

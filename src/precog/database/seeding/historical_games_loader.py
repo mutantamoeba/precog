@@ -1541,3 +1541,107 @@ def get_cache_stats(sport: str | None = None) -> dict[str, Any]:
 
     stats["total_size_mb"] = round(stats["total_size_mb"], 2)
     return stats
+
+
+# =============================================================================
+# Pybaseball Integration (MLB)
+# =============================================================================
+
+
+def load_pybaseball_games(
+    seasons: list[int] | None = None,
+    error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
+    *,
+    show_progress: bool = True,
+) -> BatchInsertResult:
+    """Load MLB games from pybaseball into historical_games table.
+
+    This function bridges PybaseballSource.load_games() to bulk_insert_historical_games(),
+    enabling the MLB Elo computation pipeline:
+
+        PybaseballSource.load_games() -> historical_games table
+                                              |
+                                              v
+                          EloComputationService.compute_ratings(sport="mlb")
+                                              |
+                                              v
+                                      elo_calculation_log table
+
+    Args:
+        seasons: List of seasons to load (e.g., [2022, 2023, 2024]).
+                 Default: last 2 seasons (determined by PybaseballSource)
+        error_mode: How to handle errors (default: FAIL)
+            - FAIL: Raise exception on first unknown team
+            - SKIP: Skip records with unknown teams, continue processing
+            - COLLECT: Collect all failures, continue processing
+        show_progress: Whether to show progress bar (auto-disabled in CI)
+
+    Returns:
+        BatchInsertResult with statistics
+
+    Example:
+        >>> # Load last 2 seasons of MLB games
+        >>> result = load_pybaseball_games()
+        >>> print(f"Loaded {result.successful} games")
+
+        >>> # Load specific seasons
+        >>> result = load_pybaseball_games(seasons=[2022, 2023, 2024])
+
+        >>> # Handle unknown teams gracefully
+        >>> result = load_pybaseball_games(
+        ...     seasons=[2023],
+        ...     error_mode=ErrorHandlingMode.COLLECT,
+        ... )
+        >>> if result.has_failures:
+        ...     print(result.get_failure_summary())
+
+    Educational Note:
+        GameRecord from base_source.py is compatible with HistoricalGameRecord
+        from this module - both have the same fields. This allows direct use
+        of PybaseballSource output with bulk_insert_historical_games().
+
+        The pybaseball library provides MLB game data from multiple sources:
+        - schedule_and_record(): Team schedules with game results
+        - retrosheet_game_logs(): Comprehensive game logs (1871-present)
+
+    Related:
+        - docs/guides/ELO_COMPUTATION_GUIDE_V1.2.md - MLB Elo Strategy section
+        - src/precog/analytics/elo_computation_service.py - Elo computation
+        - Migration 0006: Create historical_games table
+
+    Raises:
+        ImportError: If pybaseball is not installed
+        DataSourceError: If unable to fetch data from pybaseball
+    """
+    # Import here to avoid hard dependency on pybaseball
+    try:
+        from precog.database.seeding.sources.sports.pybaseball_adapter import (
+            PybaseballSource,
+        )
+    except ImportError as e:
+        logger.error("pybaseball not installed. Run: pip install pybaseball")
+        raise ImportError(
+            "pybaseball is required for MLB game loading. Install with: pip install pybaseball"
+        ) from e
+
+    logger.info("Loading MLB games from pybaseball...")
+
+    source = PybaseballSource()
+
+    # GameRecord and HistoricalGameRecord have compatible fields
+    # so we can pass the iterator directly to bulk_insert_historical_games
+    records = source.load_games(sport="mlb", seasons=seasons)
+
+    # Count total for progress bar (optional - requires consuming iterator)
+    # For now, we'll use indeterminate progress
+    result = bulk_insert_historical_games(
+        records,
+        error_mode=error_mode,
+        show_progress=show_progress,
+    )
+
+    logger.info(
+        f"Loaded {result.successful} MLB games ({result.skipped} skipped, {result.failed} failed)"
+    )
+
+    return result

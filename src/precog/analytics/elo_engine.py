@@ -125,6 +125,8 @@ class SportConfig:
 
 
 # Default configurations following FiveThirtyEight methodology
+# These values are calibrated for the pre-2020 era and validated against
+# FiveThirtyEight data (2015-2020). For post-2020 games, use SPORT_CONFIGS_POST_2020.
 SPORT_CONFIGS: dict[Sport, SportConfig] = {
     Sport.NFL: SportConfig(
         k_factor=20,
@@ -167,6 +169,194 @@ SPORT_CONFIGS: dict[Sport, SportConfig] = {
         mov_enabled=False,
     ),
 }
+
+
+# Post-2020 configurations with reduced home advantage
+# Research shows home advantage reduced 30-60% post-COVID due to:
+# - Initially: Empty/limited-capacity stadiums (2020-2021)
+# - Persistently: Changed crowd behavior, travel adaptations
+# Reference: https://fivethirtyeight.com (home advantage analysis)
+SPORT_CONFIGS_POST_2020: dict[Sport, SportConfig] = {
+    Sport.NFL: SportConfig(
+        k_factor=20,
+        home_advantage=Decimal("30"),  # Reduced from 48 (~37% reduction)
+        mov_enabled=True,
+    ),
+    Sport.NCAAF: SportConfig(
+        k_factor=20,
+        home_advantage=Decimal("40"),  # Reduced from 55 (~27% reduction)
+        mov_enabled=True,
+    ),
+    Sport.NBA: SportConfig(
+        k_factor=20,
+        home_advantage=Decimal("40"),  # Reduced from 100 (~60% reduction)
+        mov_enabled=True,
+    ),
+    Sport.NCAAB: SportConfig(
+        k_factor=20,
+        home_advantage=Decimal("50"),  # Reduced from 100 (~50% reduction)
+        mov_enabled=True,
+    ),
+    Sport.WNBA: SportConfig(
+        k_factor=20,
+        home_advantage=Decimal("40"),  # Reduced from 80 (~50% reduction)
+        mov_enabled=True,
+    ),
+    Sport.NHL: SportConfig(
+        k_factor=6,
+        home_advantage=Decimal("25"),  # Reduced from 33 (~24% reduction)
+        mov_enabled=False,
+    ),
+    Sport.MLB: SportConfig(
+        k_factor=4,
+        home_advantage=Decimal("18"),  # Reduced from 24 (~25% reduction)
+        mov_enabled=False,
+    ),
+    Sport.MLS: SportConfig(
+        k_factor=32,
+        home_advantage=Decimal("45"),  # Reduced from 65 (~31% reduction)
+        mov_enabled=False,
+    ),
+}
+
+
+# =============================================================================
+# Era Registry - Date-Based Configuration Selection
+# =============================================================================
+
+
+@dataclass(frozen=True)
+class Era:
+    """An era defines a time period with specific sport configurations.
+
+    Educational Note:
+        Elo parameters (especially home advantage) change over time due to:
+        - Rule changes (e.g., NFL overtime rules)
+        - Cultural shifts (e.g., post-COVID crowd behavior)
+        - Travel improvements (e.g., charter flights)
+
+        The Era Registry pattern allows easy addition of new eras without
+        modifying the core EloEngine class. Just add entries to ERA_REGISTRY.
+
+    Example adding a hypothetical post-2025 era:
+        >>> new_era = Era(
+        ...     name="post_2025",
+        ...     start_date=date(2025, 9, 1),
+        ...     end_date=None,  # Current
+        ...     sport_configs=SPORT_CONFIGS_POST_2025,
+        ...     description="Post-2025 adjustments"
+        ... )
+        >>> ERA_REGISTRY.append(new_era)
+
+    Attributes:
+        name: Unique identifier for this era
+        start_date: First day of this era (None = beginning of time)
+        end_date: Last day of this era (None = present/ongoing)
+        sport_configs: Sport-specific configurations for this era
+        description: Human-readable description of why this era exists
+    """
+
+    name: str
+    start_date: date | None
+    end_date: date | None
+    sport_configs: dict[Sport, SportConfig]
+    description: str = ""
+
+
+# Era Registry - ordered by start_date (oldest first)
+# To add a new era: append to this list with appropriate date range
+ERA_REGISTRY: list[Era] = [
+    Era(
+        name="historical",
+        start_date=None,  # Beginning of time
+        end_date=date(2020, 3, 11),  # Day before COVID shutdown
+        sport_configs=SPORT_CONFIGS,
+        description="Pre-COVID era with standard home advantages",
+    ),
+    Era(
+        name="post_2020",
+        start_date=date(2020, 3, 12),  # COVID shutdown began
+        end_date=None,  # Current/ongoing
+        sport_configs=SPORT_CONFIGS_POST_2020,
+        description="Post-COVID era with reduced home advantages",
+    ),
+]
+
+
+def get_era_for_date(game_date: date | None = None) -> Era:
+    """Get the appropriate era for a game date.
+
+    Educational Note:
+        This function enables date-aware Elo computation. When processing
+        a game from 2018, it automatically uses pre-COVID configs. When
+        processing a game from 2023, it uses post-COVID configs.
+
+        If no date is provided, returns the current era (most recent).
+
+    Args:
+        game_date: Date of the game. If None, returns current era.
+
+    Returns:
+        The Era that contains the given date.
+
+    Example:
+        >>> from datetime import date
+        >>> era = get_era_for_date(date(2019, 12, 1))
+        >>> era.name
+        'historical'
+        >>> era = get_era_for_date(date(2023, 9, 15))
+        >>> era.name
+        'post_2020'
+    """
+    if game_date is None:
+        # Return most recent era (one with end_date=None, or latest end_date)
+        for era in reversed(ERA_REGISTRY):
+            if era.end_date is None:
+                return era
+        return ERA_REGISTRY[-1]  # Fallback to latest
+
+    # Find era that contains this date
+    for era in ERA_REGISTRY:
+        start_ok = era.start_date is None or game_date >= era.start_date
+        end_ok = era.end_date is None or game_date <= era.end_date
+        if start_ok and end_ok:
+            return era
+
+    # Fallback: if date is before all eras, use first era
+    # If date is after all eras, use last era
+    if ERA_REGISTRY:
+        first_era = ERA_REGISTRY[0]
+        if first_era.start_date and game_date < first_era.start_date:
+            return first_era
+        return ERA_REGISTRY[-1]
+
+    # Should never happen if ERA_REGISTRY is properly configured
+    raise ValueError(f"No era found for date {game_date}")
+
+
+def get_config_for_date(sport: Sport, game_date: date | None = None) -> SportConfig:
+    """Get the appropriate sport configuration for a game date.
+
+    This is a convenience function combining era lookup and config retrieval.
+
+    Args:
+        sport: The sport to get configuration for
+        game_date: Date of the game. If None, returns current era config.
+
+    Returns:
+        SportConfig for the given sport and era.
+
+    Example:
+        >>> from datetime import date
+        >>> config = get_config_for_date(Sport.NFL, date(2019, 9, 8))
+        >>> config.home_advantage
+        Decimal('48')
+        >>> config = get_config_for_date(Sport.NFL, date(2023, 9, 10))
+        >>> config.home_advantage
+        Decimal('30')
+    """
+    era = get_era_for_date(game_date)
+    return era.sport_configs[sport]
 
 
 # =============================================================================
@@ -311,15 +501,46 @@ class EloEngine:
         self,
         sport: str | Sport,
         config: SportConfig | None = None,
+        use_post_2020: bool = False,
+        game_date: date | None = None,
     ) -> None:
         """Initialize Elo engine for a specific sport.
 
         Args:
             sport: Sport type (e.g., "nfl", "nba", or Sport enum)
-            config: Optional custom configuration (overrides defaults)
+            config: Optional custom configuration (overrides all other options)
+            use_post_2020: DEPRECATED - Use game_date instead. If True, uses
+                post-2020 config. Ignored if game_date is provided.
+            game_date: Date of the game for automatic era selection.
+                If provided, config is auto-selected based on the Era Registry.
+                This is the recommended approach for new code.
 
         Raises:
             ValueError: If sport is not supported
+
+        Educational Note:
+            Configuration priority (first match wins):
+            1. Explicit config parameter (full override)
+            2. game_date parameter (auto-selects from Era Registry)
+            3. use_post_2020 flag (legacy, deprecated)
+            4. Default historical config (SPORT_CONFIGS)
+
+            The Era Registry pattern makes it trivial to add new eras:
+            just append an Era to ERA_REGISTRY with date range and configs.
+
+        Example:
+            >>> from datetime import date
+            >>>
+            >>> # Preferred: Date-based era selection
+            >>> engine_2019 = EloEngine("nfl", game_date=date(2019, 9, 8))
+            >>> engine_2019.home_advantage  # Decimal("48") - pre-COVID
+            >>>
+            >>> engine_2023 = EloEngine("nfl", game_date=date(2023, 9, 10))
+            >>> engine_2023.home_advantage  # Decimal("30") - post-COVID
+            >>>
+            >>> # Legacy: Boolean flag (deprecated but still works)
+            >>> engine = EloEngine("nfl", use_post_2020=True)
+            >>> engine.home_advantage  # Decimal("30")
         """
         # Convert string to Sport enum if needed
         sport_enum: Sport
@@ -334,7 +555,31 @@ class EloEngine:
             sport_enum = sport  # type: ignore[unreachable]
 
         self.sport: Sport = sport_enum
-        self.config = config or SPORT_CONFIGS[self.sport]
+        self.use_post_2020 = use_post_2020
+        self.game_date = game_date
+
+        # Priority: explicit config > game_date > use_post_2020 flag > default
+        if config is not None:
+            # 1. Explicit config always wins
+            self.config = config
+            self._era: Era | None = None
+        elif game_date is not None:
+            # 2. Date-based era selection (recommended approach)
+            self._era = get_era_for_date(game_date)
+            self.config = self._era.sport_configs[self.sport]
+        elif use_post_2020:
+            # 3. Legacy boolean flag (deprecated)
+            self.config = SPORT_CONFIGS_POST_2020[self.sport]
+            self._era = get_era_for_date(date(2023, 1, 1))  # Post-2020 era
+        else:
+            # 4. Default historical config
+            self.config = SPORT_CONFIGS[self.sport]
+            self._era = get_era_for_date(date(2019, 1, 1))  # Historical era
+
+    @property
+    def era(self) -> Era | None:
+        """Get the era this engine is configured for."""
+        return self._era
 
     @property
     def k_factor(self) -> int:

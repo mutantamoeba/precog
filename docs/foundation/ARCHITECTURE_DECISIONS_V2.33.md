@@ -23,7 +23,7 @@
 - **DATA SOURCE UPDATES:** Documents FiveThirtyEight shutdown (March 2025) requiring Elo computation from game results
 - **EPA AVAILABLE FREE:** Pre-computed in nflreadpy load_pbp() (372 columns)
 - **DVOA UNAVAILABLE:** Proprietary FTN metric, requires subscription
-- Cross-references: REQ-ELO-001 through REQ-ELO-007, ELO_COMPUTATION_GUIDE_V1.1.md (planned)
+- Cross-references: REQ-ELO-001 through REQ-ELO-007, ELO_COMPUTATION_GUIDE_V1.2.md (planned)
 **Changes in v2.31:**
 - **HYBRID CLOUD ARCHITECTURE (PHASE 2.5):** Added ADR-107, ADR-108 for cloud deployment
 - ADR-107: Single-Database Architecture with Execution Environments - One database for all environments with execution_environment column ('live', 'paper', 'backtest')
@@ -15919,7 +15919,7 @@ CREATE INDEX idx_team_elo_sport_date ON team_elo_ratings(sport, effective_date D
 ### References
 
 - `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` - Data source details
-- `docs/guides/ELO_COMPUTATION_GUIDE_V1.1.md` (planned) - Implementation guide
+- `docs/guides/ELO_COMPUTATION_GUIDE_V1.2.md` (planned) - Implementation guide
 - Issue #273: Elo Module Planning
 - REQ-ELO-001 through REQ-ELO-008 in MASTER_REQUIREMENTS_V2.25.md
 
