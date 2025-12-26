@@ -1,10 +1,17 @@
 # Requirement Index
 
 ---
-**Version:** 1.16
-**Last Updated:** 2025-12-25
+**Version:** 1.17
+**Last Updated:** 2025-12-26
 **Status:** ✅ Current
 **Purpose:** Master index of all system requirements with systematic IDs
+**Changes in v1.17:**
+- **ELO VALIDATION**: Added REQ-ELO-008 for Elo validation against reference data
+- **REQ-ELO-008**: Elo Validation Against Reference Data (Neil Paine archives)
+- **DATA SOURCE MIGRATION**: Updated references from FiveThirtyEight to Neil Paine
+- **NHL VALIDATION COMPLETE**: 10,597 comparisons, 11.2 avg Elo point difference
+- Updated MASTER_REQUIREMENTS reference to V2.25
+- Updated requirement statistics (136 → 137 total requirements)
 **Changes in v1.16:**
 - **ELO RATING SYSTEM (PHASE 2C)**: Added REQ-ELO-001 through REQ-ELO-007 for Elo rating computation
 - **NEW CATEGORY**: ELO - Elo rating system for sports predictions
@@ -593,13 +600,14 @@ This document provides a systematic index of all Precog requirements using categ
 
 | ID | Title | Phase | Priority | Status | Document |
 |----|-------|-------|----------|--------|----------|
-| REQ-ELO-001 | Elo Engine Core | 2C | Critical | ✅ | MASTER_REQUIREMENTS_V2.24 |
-| REQ-ELO-002 | Sports-Specific Parameters | 2C | High | ✅ | MASTER_REQUIREMENTS_V2.24 |
-| REQ-ELO-003 | Historical Game Processing | 2C | High | ✅ | MASTER_REQUIREMENTS_V2.24 |
-| REQ-ELO-004 | Team Rating Storage | 2C | High | ✅ | MASTER_REQUIREMENTS_V2.24 |
-| REQ-ELO-005 | Rating Retrieval API | 2C | High | ✅ | MASTER_REQUIREMENTS_V2.24 |
-| REQ-ELO-006 | Win Probability Calculation | 2C | Critical | ✅ | MASTER_REQUIREMENTS_V2.24 |
-| REQ-ELO-007 | Rating Validation | 2C | Medium | ✅ | MASTER_REQUIREMENTS_V2.24 |
+| REQ-ELO-001 | Elo Engine Core | 2C | Critical | ✅ | MASTER_REQUIREMENTS_V2.25 |
+| REQ-ELO-002 | Sports-Specific Parameters | 2C | High | ✅ | MASTER_REQUIREMENTS_V2.25 |
+| REQ-ELO-003 | Historical Game Processing | 2C | High | ✅ | MASTER_REQUIREMENTS_V2.25 |
+| REQ-ELO-004 | Team Rating Storage | 2C | High | ✅ | MASTER_REQUIREMENTS_V2.25 |
+| REQ-ELO-005 | Rating Retrieval API | 2C | High | ✅ | MASTER_REQUIREMENTS_V2.25 |
+| REQ-ELO-006 | Win Probability Calculation | 2C | Critical | ✅ | MASTER_REQUIREMENTS_V2.25 |
+| REQ-ELO-007 | Rating Validation | 2C | Medium | ✅ | MASTER_REQUIREMENTS_V2.25 |
+| REQ-ELO-008 | Elo Validation Against Reference Data | 2C | High | ✅ | MASTER_REQUIREMENTS_V2.25 |
 
 **REQ-ELO-001: Elo Engine Core**
 - Core Elo calculation with configurable K-factor (default 20)
@@ -642,6 +650,14 @@ This document provides a systematic index of all Precog requirements using categ
 - K-factor validation: 5-50 range
 - HFA validation: 0-200 points
 - Related: src/precog/analytics/elo_engine.py
+
+**REQ-ELO-008: Elo Validation Against Reference Data**
+- Validate computed Elo against Neil Paine GitHub archives (authoritative source)
+- Validation threshold: ≤15 Elo point average difference
+- NHL validated: 10,597 comparisons, 11.2 avg diff ✅
+- NFL/NBA: Pending validation (data downloaded)
+- MLB: Blocked by pybaseball (Issue #278)
+- Related: ADR-110 (Neil Paine Data Sources), ADR-111 (Sport-Specific Mappings)
 
 ---
 

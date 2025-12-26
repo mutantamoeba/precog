@@ -1,9 +1,21 @@
 # Development Phases & Roadmap
 
 ---
-**Version:** 1.14
-**Last Updated:** 2025-12-24
+**Version:** 1.15
+**Last Updated:** 2025-12-26
 **Status:** ✅ Current
+**Changes in v1.15:**
+- **NEIL PAINE DATA SOURCE MIGRATION**: FiveThirtyEight references replaced with Neil Paine GitHub archives
+  - Neil Paine (former FiveThirtyEight sports editor) maintains authoritative Elo archives
+  - Coverage: NFL (35,899 records), NBA (151,411 records), NHL (137,679 records)
+  - MIT License for all data
+- **PHASE 2C VALIDATION PROGRESS**: NHL Elo validation complete (11.2 avg Elo point difference)
+  - 10,597 team-date comparisons between computed and reference Elo
+  - NFL/NBA validation pending (data downloaded)
+  - MLB blocked by pybaseball scraping issues (Issue #278)
+- **ADR ADDITIONS**: ADR-110 (Neil Paine Data Sources), ADR-111 (Sport-Specific Mappings), ADR-112 (team_season_records VIEW)
+- **BUG FIX**: Cross-sport team code contamination fixed (SEA→OKC was applying to NHL instead of NBA only)
+- **DATABASE VIEW**: team_season_records VIEW created reading from both historical_games and game_states tables
 **Changes in v1.14:**
 - **PHASE 2.7 HISTORICAL DATA SEEDING ADDED**: New phase for loading historical data BEFORE Phase 3 model training
   - Historical odds loading (spreads, totals, moneylines) for model training features
@@ -1332,9 +1344,13 @@ python scripts/validate_phase_start.py --phase 2
 ### Strategic Rationale
 
 **Why Compute Elo Ourselves?**
-- **FiveThirtyEight Shutdown**: March 2025 - historical Elo data source no longer maintained
-- **Stale GitHub Data**: NFL (Feb 2021), NBA (June 2015), MLB (corrupted)
-- **Solution**: Compute Elo using FiveThirtyEight's published methodology from game results
+- **FiveThirtyEight Shutdown**: June 2023 (API sunset) - original Elo data source no longer maintained
+- **Neil Paine Archives**: Former FiveThirtyEight sports editor maintains current Elo archives on GitHub
+  - NFL: 35,899 records (1920-present)
+  - NBA: 151,411 records (1946-present)
+  - NHL: 137,679 records (1917-present)
+  - MLB: Blocked by pybaseball (Issue #278)
+- **Solution**: Compute Elo using FiveThirtyEight's published methodology, validate against Neil Paine data
 
 **Why Phase 2.6 Now?**
 - **Dependency Chain**: Phase 2.5 (data collection) provides game results → Phase 2.6 computes Elo
@@ -1365,7 +1381,7 @@ python scripts/validate_phase_start.py --phase 2
 
 #### 1. Core Elo Engine (Week 1)
 - [ ] Create `src/precog/ratings/` module structure
-- [ ] Implement EloEngine class with FiveThirtyEight methodology:
+- [x] Implement EloEngine class with FiveThirtyEight methodology:
   - [ ] `calculate_expected_score(rating_a, rating_b)` - probability formula
   - [ ] `calculate_mov_multiplier(point_diff, elo_diff)` - margin of victory
   - [ ] `update_rating(old_elo, k, actual, expected, mov)` - rating update
@@ -1439,8 +1455,8 @@ python scripts/validate_phase_start.py --phase 2
   1. Initialize all teams at 1500
   2. Process games chronologically
   3. Apply season regression at year boundaries
-  4. Validate against FiveThirtyEight 2020-2021 data (NFL)
-- [ ] Validation threshold: +/-15 points vs FiveThirtyEight
+  4. Validate against Neil Paine reference data
+- [x] Validation threshold: +/-15 points vs Neil Paine (NHL: 11.2 avg diff ✅)
 - **REQ-ELO-006**: Historical bootstrapping (2020-present)
 
 #### 6. EloPoller & ServiceSupervisor Integration (Week 3)
@@ -1483,7 +1499,7 @@ python scripts/validate_phase_start.py --phase 2
 - [ ] Unit tests: EloEngine calculations, data adapters
 - [ ] Integration tests: Database CRUD, poller integration
 - [ ] Property tests: Rating invariants (ratings bounded, zero-sum changes)
-- [ ] Validation tests: Compare to FiveThirtyEight historical data
+- [x] Validation tests: Compare to Neil Paine historical data (NHL validated: 11.2 avg diff)
 - [ ] Coverage target: >= 85% for ratings module
 - [ ] All 8 test types per TESTING_STRATEGY V3.2
 
@@ -1500,7 +1516,8 @@ python scripts/validate_phase_start.py --phase 2
 
 ### Success Criteria
 - [ ] Elo ratings computed for all 8 supported sports (2020-present)
-- [ ] NFL computed Elo matches FiveThirtyEight within +/-15 points (2020-2021)
+- [x] NHL computed Elo matches Neil Paine within +/-15 points (11.2 avg diff ✅)
+- [ ] NFL computed Elo matches Neil Paine within +/-15 points (pending)
 - [ ] EPA metrics integrated for NFL from nflreadpy
 - [ ] Coverage >= 85% for ratings module
 - [ ] All CRUD operations functional with SCD Type 2
@@ -1514,7 +1531,7 @@ python scripts/validate_phase_start.py --phase 2
 - **REQ-ELO-001 through REQ-ELO-007**: Elo computation requirements
 - `docs/guides/ELO_COMPUTATION_GUIDE_V1.1.md`: Comprehensive methodology guide (updated with schema clarifications)
 - `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md`: All data sources
-- FiveThirtyEight methodology references (NFL, NBA, NHL)
+- Neil Paine GitHub archives (authoritative Elo reference data for NFL, NBA, NHL)
 
 ---
 
@@ -2609,7 +2626,7 @@ python scripts/validate_phase_start.py --phase 5b
 
 #### 1. Political Markets (Weeks 1-6)
 - RealClearPolling API integration
-- FiveThirtyEight data integration
+- Polling aggregator data (FiveThirtyEight sunset June 2023)
 - Election outcome probabilities
 - Polling-based odds models
 - Validate on 2026 midterms

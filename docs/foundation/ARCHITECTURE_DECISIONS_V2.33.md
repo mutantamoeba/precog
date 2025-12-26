@@ -1,9 +1,21 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.32
-**Last Updated:** December 24, 2025
+**Version:** 2.33
+**Last Updated:** December 26, 2025
 **Status:** ✅ Current
+**Changes in v2.33:**
+- **NEIL PAINE DATA SOURCE ARCHITECTURE:** Added ADR-110 for FiveThirtyEight replacement
+  - ADR-110: Neil Paine Sports Elo Archives - GitHub data source for NFL/NBA/NHL Elo (MIT license)
+  - 35,899 NFL + 151,411 NBA + 137,679 NHL game records with dual-row format
+- **SPORT-SPECIFIC TEAM CODE MAPPINGS:** Added ADR-111 for cross-sport bug fix
+  - ADR-111: Sport-Specific Team Code Mappings - Prevents SEA (NHL) → OKC (NBA) contamination
+  - SPORT_CODE_MAPPINGS nested dict architecture replaces flat TEAM_CODE_MAPPING
+- **TEAM_SEASON_RECORDS VIEW:** Added ADR-112 for dual-source W/L/D tracking
+  - ADR-112: team_season_records VIEW - Reads from BOTH historical_games AND game_states
+  - Migration 0014: Creates unified view with deduplication via NOT EXISTS
+- **NHL ELO VALIDATION:** Validates Elo computation engine (11.2 avg diff vs Neil Paine data)
+- Cross-references: Issue #278 (MLB blocked), Migration 0014, team_history.py
 **Changes in v2.32:**
 - **ELO RATING COMPUTATION ENGINE (PHASE 3):** Added ADR-109 for multi-sport Elo computation
 - ADR-109: Elo Rating Computation Engine Architecture - Multi-sport Elo computation with sport-specific K-factors, EPA integration, and real-time updates
@@ -6816,7 +6828,7 @@ CREATE TABLE brier_score_metrics (...);
 
 **References:**
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.15.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -7573,7 +7585,7 @@ Cons:
 ### References
 
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (Section 8: Performance Tracking & Analytics)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.15.md` (Phase 2 Task #5: Performance Metrics Infrastructure)
 - `docs/utility/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-026 implementation guidance)
 
 ---
@@ -8340,7 +8352,7 @@ WebSocket for Position Monitoring (real-time):
 
 ### References
 
-- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 7 Task #2: Frontend Development)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.15.md` (Phase 7 Task #2: Frontend Development)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (Section 8.9: Materialized Views)
 - Next.js Documentation: https://nextjs.org/docs
 - Recharts Documentation: https://recharts.org/
@@ -9260,9 +9272,9 @@ def run_holdout_validation(
 ### Related Documentation
 
 - `docs/guides/MODEL_EVALUATION_GUIDE_V1.0.md` (implementation guide - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.24.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` (REQ-MODEL-EVAL-001, REQ-MODEL-EVAL-002)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-027)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 2 Task #3, Phase 6 Task #1)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.15.md` (Phase 2 Task #3, Phase 6 Task #1)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (Section 8.7: Evaluation Runs Table)
 
 ---
@@ -9983,9 +9995,9 @@ ON position_risk_by_strategy(league, strategy_name);
 
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (comprehensive analytics implementation guide - to be created)
 - `docs/guides/DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md` (React dashboard + API integration - to be created)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.24.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` (REQ-ANALYTICS-003, REQ-REPORTING-001)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-028)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 6 Task #3, Phase 7 Task #2)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.15.md` (Phase 6 Task #3, Phase 7 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (Section 8.8: Materialized Views Reference)
 
 ---
@@ -10814,9 +10826,9 @@ print(f"Required sample size: {n} trades per group ({n*2} total)")
 
 - `docs/guides/AB_TESTING_GUIDE_V1.0.md` (comprehensive A/B testing guide - to be created)
 - `docs/guides/ANALYTICS_ARCHITECTURE_GUIDE_V1.0.md` (includes A/B testing architecture)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.24.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` (REQ-ANALYTICS-004, REQ-VALIDATION-003)
 - `docs/foundation/STRATEGIC_WORK_ROADMAP_V1.1.md` (STRAT-029, STRAT-030)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 7 Task #3, Phase 8 Task #2)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.15.md` (Phase 7 Task #3, Phase 8 Task #2)
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (Section 8.9: A/B Tests Table)
 
 ---
@@ -11252,7 +11264,7 @@ REFRESH MATERIALIZED VIEW CONCURRENTLY strategy_performance_summary;
 
 **References:**
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (materialized views already defined)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.24.md` (analytics requirements)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` (analytics requirements)
 
 ---
 
@@ -11732,7 +11744,7 @@ CREATE TABLE strategies (
 ### References
 
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (edges table schema)
-- `docs/foundation/DEVELOPMENT_PHASES_V1.14.md` (Phase 1.5 manager components)
+- `docs/foundation/DEVELOPMENT_PHASES_V1.15.md` (Phase 1.5 manager components)
 - `src/precog/trading/model_manager.py` (edge calculation logic - Phase 1.5 implementation)
 - `src/precog/trading/strategy_manager.py` (edge query logic - Phase 1.5 implementation)
 
@@ -12166,7 +12178,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 **Primary Documentation:**
 - TESTING_STRATEGY_V3.8.md (comprehensive 8 test type framework, 1,462 lines)
 - TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md (REQ-TEST-012 through REQ-TEST-019)
-- MASTER_REQUIREMENTS_V2.24.md (added 8 new test requirements)
+- MASTER_REQUIREMENTS_V2.25.md (added 8 new test requirements)
 - REQUIREMENT_INDEX.md (added REQ-TEST-012 through REQ-TEST-019)
 
 **Supporting Documentation:**
@@ -13215,7 +13227,7 @@ Result: Only enter when model confident AND market mispriced
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Comprehensive architectural analysis
 - `docs/guides/VERSIONING_GUIDE_V1.0.md` - Strategy/model versioning patterns
-- `MASTER_REQUIREMENTS_V2.24.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
+- `MASTER_REQUIREMENTS_V2.25.md` - REQ-STRATEGY-001 through REQ-STRATEGY-003
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -13635,7 +13647,7 @@ def validate_position_trade_attribution(position_id: str) -> bool:
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Attribution architecture analysis with tradeoffs
 - `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` - Current schema (pre-attribution)
-- `MASTER_REQUIREMENTS_V2.24.md` - REQ-DB-006 (Decimal precision for all financial fields)
+- `MASTER_REQUIREMENTS_V2.25.md` - REQ-DB-006 (Decimal precision for all financial fields)
 
 **Status:** ✅ Decision approved, implementation in progress (Migrations 019-020 planned)
 
@@ -14010,7 +14022,7 @@ def sync_trades_full():
 
 - `docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md` - Trade source tracking architectural analysis
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` - Kalshi API trade download patterns
-- `MASTER_REQUIREMENTS_V2.24.md` - REQ-API-001 (Kalshi API Integration)
+- `MASTER_REQUIREMENTS_V2.25.md` - REQ-API-001 (Kalshi API Integration)
 
 **Status:** ✅ Decision approved, implementation in progress (Migration 018 planned)
 
@@ -14390,7 +14402,7 @@ def test_invalid_strategy_type_raises_foreign_key_error():
 - `src/precog/database/lookup_helpers.py` - Helper functions implementation
 - `tests/test_lookup_tables.py` - Comprehensive test suite (23 tests, 100% coverage)
 - `src/precog/database/migrations/migration_023_create_lookup_tables.py` - Migration script
-- `MASTER_REQUIREMENTS_V2.24.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
+- `MASTER_REQUIREMENTS_V2.25.md` - REQ-DB-015 (Strategy Type Lookup Table), REQ-DB-016 (Model Class Lookup Table)
 
 **Status:** ✅ Decision approved, implementation complete (Migration 023 applied, helper module created, 23 tests passing)
 
@@ -15909,7 +15921,204 @@ CREATE INDEX idx_team_elo_sport_date ON team_elo_ratings(sport, effective_date D
 - `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` - Data source details
 - `docs/guides/ELO_COMPUTATION_GUIDE_V1.1.md` (planned) - Implementation guide
 - Issue #273: Elo Module Planning
-- REQ-ELO-001 through REQ-ELO-007 in MASTER_REQUIREMENTS_V2.24.md
+- REQ-ELO-001 through REQ-ELO-008 in MASTER_REQUIREMENTS_V2.25.md
+
+---
+
+## Decision #110/ADR-110: Neil Paine Sports Elo Archives (FiveThirtyEight Replacement)
+
+**Date:** December 26, 2025
+**Status:** Implemented
+**Phase:** 2C
+**Related Issues:** #278 (MLB blocked)
+
+### Context
+
+FiveThirtyEight's API was sunset in June 2023, and URLs now redirect to ABC News pages. The original Elo data sources documented in ADR-109 are no longer available.
+
+Neil Paine, former FiveThirtyEight sports editor, maintains personal archives of sports Elo data on GitHub under MIT license.
+
+### Decision
+
+Use Neil Paine's GitHub archives as the authoritative source for historical Elo data:
+
+| Sport | Repository | Records | Format |
+|-------|------------|---------|--------|
+| NFL | Neil-Paine-1/NFL-elo-ratings | 35,899 | CSV (dual-row) |
+| NBA | Neil-Paine-1/NBA-elo | 151,411 | CSV (dual-row) |
+| NHL | Neil-Paine-1/NHL-Player-And-Team-Ratings | 137,679 | CSV (dual-row) |
+| MLB | *blocked* | N/A | See Issue #278 |
+
+**Dual-Row Format:**
+Each game appears twice with `is_home` flag:
+```csv
+date,team1,team2,elo1_pre,elo2_pre,score1,score2,is_home
+2024-01-15,KC,BUF,1650,1580,27,24,1    # Home perspective
+2024-01-15,BUF,KC,1580,1650,24,27,0    # Away perspective
+```
+
+### Consequences
+
+**Positive:**
+- MIT license allows free use
+- Consistent format across sports (dual-row)
+- Historical data back to league founding (NFL 1920, NBA 1946, NHL 1917)
+- Regular updates from Neil Paine
+
+**Negative:**
+- MLB data unavailable (pybaseball blocked by Baseball Reference)
+- Depends on individual maintainer (Neil Paine)
+- No SLA or guarantee of updates
+
+### References
+
+- `data/historical/README.md` - Download instructions
+- Issue #278: MLB Elo loading blocked
+- ADR-109: Elo Rating Computation Engine (updated data sources)
+
+---
+
+## Decision #111/ADR-111: Sport-Specific Team Code Mappings
+
+**Date:** December 26, 2025
+**Status:** Implemented
+**Phase:** 2C
+**Related Files:** `src/precog/database/seeding/team_history.py`
+
+### Context
+
+A cross-sport contamination bug was discovered where SEA (Seattle Kraken, NHL) incorrectly resolved to OKC (Oklahoma City Thunder, NBA) because the original `TEAM_CODE_MAPPING` dictionary was sport-agnostic.
+
+This caused NHL games to be incorrectly associated with NBA teams, corrupting Elo computations.
+
+### Decision
+
+Replace sport-agnostic `TEAM_CODE_MAPPING` with sport-specific `SPORT_CODE_MAPPINGS`:
+
+```python
+SPORT_CODE_MAPPINGS: dict[str, dict[str, str]] = {
+    "nfl": {
+        "WSH": "WAS",  # Washington
+        "OAK": "LV",   # Raiders → Las Vegas
+        "SD": "LAC",   # Chargers → LA
+        "STL": "LAR",  # Rams → LA
+    },
+    "nba": {
+        "SEA": "OKC",  # SuperSonics → Thunder (1967-2008)
+        "NJN": "BKN",  # Nets → Brooklyn
+        "VAN": "MEM",  # Grizzlies → Memphis
+    },
+    "nhl": {
+        "ATL": "WPG",  # Thrashers → Jets (1999-2011)
+        "HFD": "CAR",  # Whalers → Hurricanes
+        "PHX": "ARI",  # Coyotes → Arizona
+    },
+    "mlb": {
+        "MON": "WAS",  # Expos → Nationals
+        "FLA": "MIA",  # Marlins
+    },
+    "ncaaf": {},
+}
+```
+
+**Resolution Order:**
+1. Check sport-specific mappings first (`SPORT_CODE_MAPPINGS[sport][code]`)
+2. Fall back to franchise history timelines
+3. Return original code if no mapping exists
+
+### Consequences
+
+**Positive:**
+- Prevents cross-sport contamination (SEA NHL ≠ SEA NBA → OKC)
+- Explicit mappings per sport
+- Maintains backward compatibility via fallback
+- 41 tests verify correct behavior including cross-sport isolation
+
+**Negative:**
+- More complex data structure (nested dict)
+- Must specify sport for all lookups
+
+### References
+
+- `tests/unit/database/seeding/test_team_history.py` - Cross-sport tests
+- `src/precog/database/seeding/team_history.py` - Implementation
+
+---
+
+## Decision #112/ADR-112: team_season_records VIEW (Dual-Source W/L/D Tracking)
+
+**Date:** December 26, 2025
+**Status:** Implemented
+**Phase:** 2C
+**Related Files:** `src/precog/database/alembic/versions/0014_create_team_season_records_view.py`
+
+### Context
+
+Team win/loss/draw records exist in two tables:
+1. `historical_games` - Pre-seeded data from FiveThirtyEight/Neil Paine archives
+2. `game_states` - Live game data from ESPN poller (current season)
+
+Querying both tables separately is error-prone and may cause double-counting.
+
+### Decision
+
+Create a PostgreSQL VIEW that reads from BOTH tables with automatic deduplication:
+
+```sql
+CREATE OR REPLACE VIEW team_season_records AS
+WITH all_games AS (
+    -- Source 1: historical_games (pre-seeded data)
+    SELECT sport, season, game_date, home_team_code, away_team_code,
+           home_score, away_score, 'historical_games' AS data_source
+    FROM historical_games
+    WHERE home_score IS NOT NULL AND away_score IS NOT NULL
+
+    UNION ALL
+
+    -- Source 2: game_states (live ESPN data)
+    SELECT gs.sport, EXTRACT(YEAR FROM gs.game_date)::INTEGER AS season,
+           gs.game_date, ht.team_code, at.team_code,
+           gs.home_score, gs.away_score, 'game_states' AS data_source
+    FROM game_states gs
+    JOIN teams ht ON gs.home_team_id = ht.team_id
+    JOIN teams at ON gs.away_team_id = at.team_id
+    WHERE gs.game_status = 'final'
+      AND gs.row_current_ind = TRUE
+      AND NOT EXISTS (
+          -- Avoid duplicates if game already in historical_games
+          SELECT 1 FROM historical_games hg
+          WHERE hg.sport = gs.sport
+            AND hg.game_date = gs.game_date
+            AND hg.home_team_code = ht.team_code
+      )
+)
+-- Aggregate W-L-D records per team/season
+SELECT sport, season, team_code,
+       SUM(wins) AS wins, SUM(losses) AS losses, SUM(draws) AS draws,
+       SUM(wins)::NUMERIC / NULLIF(SUM(wins + losses + draws), 0) AS win_pct
+FROM team_games
+GROUP BY sport, season, team_code;
+```
+
+**Also creates:** `current_season_standings` convenience view joining with teams table.
+
+### Consequences
+
+**Positive:**
+- Single source of truth for W/L/D records
+- Automatic deduplication via NOT EXISTS
+- Real-time updates from game_states
+- Historical data preserved from pre-seeded sources
+- Easy standings queries: `SELECT * FROM current_season_standings WHERE sport = 'nfl'`
+
+**Negative:**
+- VIEW performance depends on table sizes (consider materialized view for Phase 5+)
+- Requires correct team_code normalization in both source tables
+
+### References
+
+- Migration 0014: `src/precog/database/alembic/versions/0014_create_team_season_records_view.py`
+- ADR-111: Sport-Specific Team Code Mappings (ensures correct team resolution)
 
 ---
 
