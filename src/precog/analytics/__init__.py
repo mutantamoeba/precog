@@ -11,6 +11,13 @@ Reference: docs/foundation/DEVELOPMENT_PHASES_V1.5.md Phase 1.5
 Reference: docs/guides/ELO_COMPUTATION_GUIDE_V1.1.md (Elo engine)
 """
 
+from precog.analytics.elo_computation_service import (
+    ComputationResult,
+    EloComputationService,
+    TeamRatingState,
+    compute_elo_ratings,
+    get_elo_computation_stats,
+)
 from precog.analytics.elo_engine import (
     DEFAULT_CARRYOVER_WEIGHT,
     DEFAULT_INITIAL_RATING,
