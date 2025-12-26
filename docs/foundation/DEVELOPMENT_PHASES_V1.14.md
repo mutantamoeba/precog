@@ -1512,7 +1512,7 @@ python scripts/validate_phase_start.py --phase 2
 - GitHub Issue #273: Comprehensive Elo Rating Computation Module
 - **ADR-109**: Elo Rating Computation Engine Architecture
 - **REQ-ELO-001 through REQ-ELO-007**: Elo computation requirements
-- `docs/guides/ELO_COMPUTATION_GUIDE_V1.1.md`: Comprehensive methodology guide (updated with schema clarifications)
+- `docs/guides/ELO_COMPUTATION_GUIDE_V1.2.md`: Comprehensive methodology guide (updated with schema clarifications)
 - `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md`: All data sources
 - FiveThirtyEight methodology references (NFL, NBA, NHL)
 
@@ -1618,7 +1618,7 @@ python scripts/validate_phase_start.py --phase 2
 ### Reference
 - **Migration 0013**: Team_id FKs, historical_epa, elo_calculation_log
 - **REQ-DATA-009 through REQ-DATA-011**: Historical data requirements
-- `docs/guides/ELO_COMPUTATION_GUIDE_V1.1.md`: EPA table schema
+- `docs/guides/ELO_COMPUTATION_GUIDE_V1.2.md`: EPA table schema
 - `docs/guides/DATA_COLLECTION_GUIDE_V1.2.md`: Data source details
 
 ---

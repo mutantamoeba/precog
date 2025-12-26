@@ -61,6 +61,21 @@ This approach provides:
 - Customizable parameters (K-factor, home advantage)
 - Consistency with NFL/NBA/NHL computation pipeline
 
+**MLB Elo Pipeline (Added December 2025):**
+```python
+from precog.database.seeding.historical_games_loader import load_pybaseball_games
+
+# Step 1: Load MLB games into historical_games table
+result = load_pybaseball_games(seasons=[2023, 2024])
+print(f"Loaded {result.inserted} games, skipped {result.skipped}")
+
+# Step 2: Compute Elo ratings
+from precog.analytics import EloComputationService, compute_elo_ratings
+result = compute_elo_ratings(sport="mlb", seasons=[2023, 2024])
+```
+
+📚 **Complete Guide:** See `docs/guides/ELO_COMPUTATION_GUIDE_V1.2.md` for full documentation
+
 **Legacy Download Commands (NO LONGER WORK):**
 ```bash
 # These URLs now redirect to ABC News - DO NOT USE
@@ -199,6 +214,32 @@ This cache structure supports migration to production TimescaleDB:
    markets = load_from_cache("markets", date(2024, 12, 25))
    insert_markets(production_session, markets)
    ```
+
+## Database Views for Historical Data
+
+The following database views derive analytics from historical data:
+
+### team_season_records (Migration 0014)
+Aggregates win/loss/draw records from `historical_games` table.
+
+```sql
+-- Query team season records
+SELECT sport, season, team_code, wins, losses, draws, win_pct, record_display
+FROM team_season_records
+WHERE sport = 'nfl' AND season = 2024
+ORDER BY win_pct DESC;
+
+-- Query current season standings with team info
+SELECT team_name, conference, division, wins, losses, win_pct, current_elo_rating
+FROM current_season_standings
+WHERE sport = 'nfl'
+ORDER BY win_pct DESC;
+```
+
+**Benefits:**
+- No data duplication (derived from historical_games)
+- Automatically updated when games are inserted
+- Supports historical AND current season records
 
 ## License
 
