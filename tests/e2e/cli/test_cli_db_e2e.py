@@ -167,8 +167,15 @@ class TestDatabaseErrorRecovery:
         """Test status handles database disconnect.
 
         E2E: Tests graceful handling of connection loss.
+
+        Note: The status command calls both test_connection() AND get_connection(),
+        so both must be mocked to prevent real database access during tests.
         """
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = False
             mock_conn.side_effect = Exception("Connection lost")
 
             result = cli_runner.invoke(app, ["db", "status"])
