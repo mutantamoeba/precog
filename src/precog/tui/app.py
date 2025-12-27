@@ -54,6 +54,13 @@ class PrecogApp(App[None]):
         Binding("ctrl+t", "cycle_theme", "Theme", show=True),
         Binding("?", "show_help", "Help", show=True),
         Binding("escape", "go_back", "Back", show=False),
+        # Arrow key navigation (global)
+        Binding("up", "focus_previous", "Up", show=False),
+        Binding("down", "focus_next", "Down", show=False),
+        Binding("left", "focus_previous", "Left", show=False),
+        Binding("right", "focus_next", "Right", show=False),
+        Binding("tab", "focus_next", "Next", show=False),
+        Binding("shift+tab", "focus_previous", "Prev", show=False),
     ]
 
     # Available themes

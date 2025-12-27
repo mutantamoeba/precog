@@ -193,7 +193,7 @@ def version_callback(value: bool) -> None:
 
 
 @app.callback()
-def main(
+def _app_callback(
     version: bool = typer.Option(
         False,
         "--version",
@@ -212,4 +212,19 @@ def main(
     """
 
 
-__all__ = ["app", "register_commands"]
+def main() -> None:
+    """Entry point for the precog CLI.
+
+    This function is called when running 'precog' from the command line.
+    It registers all command groups and then invokes the Typer application.
+
+    Usage:
+        precog --help
+        precog kalshi balance
+        precog tui
+    """
+    register_commands()
+    app()
+
+
+__all__ = ["app", "main", "register_commands"]

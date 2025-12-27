@@ -426,8 +426,18 @@ def run_tests_in_phases(timeout: int = CHECK_TIMEOUT) -> CheckResult:
         junit_path = ARTIFACTS_DIR / junit_filename
 
         # Build pytest command for this phase with JUnit XML output
+        # Output optimization (prevents 200MB+ logs that freeze Claude Code):
+        #   --tb=short: Short traceback (enough for debugging, not overwhelming)
+        #   -q: Quiet mode (dots instead of verbose test names)
+        #   --no-header: Skip pytest header info
+        #   --capture=sys: Override pytest.ini's --capture=no
+        #   --log-cli-level=ERROR: Only show error-level logs (skip warnings)
+        # Reference: Issue #230 root cause - massive output caused session freezes
         dirs_arg = " ".join(existing_dirs)
-        command = f"python -m pytest {dirs_arg} --no-cov --tb=line -q --junitxml={junit_path}"
+        command = (
+            f"python -m pytest {dirs_arg} --no-cov --tb=short -q --no-header "
+            f"--capture=sys --log-cli-level=ERROR --junitxml={junit_path}"
+        )
 
         # Add marker filter if specified (e.g., "-m 'not database'" or "-m 'database'")
         if marker_filter:

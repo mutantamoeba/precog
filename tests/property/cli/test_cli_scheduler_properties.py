@@ -8,15 +8,26 @@ Reference: TESTING_STRATEGY V3.2 - Property Tests (2/8)
 
 from unittest.mock import MagicMock, patch
 
+import typer
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 from typer.testing import CliRunner
 
-from precog.cli import app, register_commands
 
-# Initialize CLI for testing
-register_commands()
-runner = CliRunner()
+def get_fresh_cli():
+    """Create a fresh CLI app instance for isolated testing.
+
+    This prevents race conditions during parallel pytest-xdist execution
+    by avoiding shared global state.
+    """
+    from precog.cli import db, scheduler, system
+
+    fresh_app = typer.Typer(name="precog", help="Precog CLI (test instance)")
+    fresh_app.add_typer(db.app, name="db")
+    fresh_app.add_typer(scheduler.app, name="scheduler")
+    fresh_app.add_typer(system.app, name="system")
+    runner = CliRunner()
+    return fresh_app, runner
 
 
 class TestSchedulerArgumentInvariants:
@@ -35,6 +46,7 @@ class TestSchedulerArgumentInvariants:
             mock_instance.get_scheduler_status.return_value = {}
             mock_supervisor.return_value = mock_instance
 
+            app, runner = get_fresh_cli()
             result = runner.invoke(app, ["scheduler", "status", "--name", name])
             # Command should complete without crashing
             assert result.exit_code in [0, 1, 2]
@@ -48,6 +60,7 @@ class TestSchedulerArgumentInvariants:
             mock_instance.poll_once.return_value = {"success": True}
             mock_supervisor.return_value = mock_instance
 
+            app, runner = get_fresh_cli()
             # Pass interval as string (CLI receives strings)
             result = runner.invoke(
                 app, ["scheduler", "poll-once", "--poll-interval", str(interval)]
@@ -64,6 +77,7 @@ class TestSchedulerArgumentInvariants:
             mock_instance.poll_once.return_value = {"success": True}
             mock_supervisor.return_value = mock_instance
 
+            app, runner = get_fresh_cli()
             result = runner.invoke(
                 app, ["scheduler", "poll-once", "--poll-interval", str(interval)]
             )
@@ -78,6 +92,7 @@ class TestSchedulerOutputInvariants:
     @settings(max_examples=10)
     def test_help_output_always_includes_commands(self, verbose: bool):
         """Help output should always list available subcommands."""
+        app, runner = get_fresh_cli()
         result = runner.invoke(app, ["scheduler", "--help"])
         assert result.exit_code == 0
         # Help should mention key commands
@@ -88,6 +103,7 @@ class TestSchedulerOutputInvariants:
     @settings(max_examples=4)
     def test_subcommand_help_available(self, subcommand: str):
         """Each subcommand should have help available."""
+        app, runner = get_fresh_cli()
         result = runner.invoke(app, ["scheduler", subcommand, "--help"])
         assert result.exit_code == 0
         assert len(result.output) > 0
@@ -106,6 +122,7 @@ class TestSchedulerStateTransitions:
             mock_instance.stop_scheduler.return_value = True
             mock_supervisor.return_value = mock_instance
 
+            app, runner = get_fresh_cli()
             for cmd in commands:
                 result = runner.invoke(app, ["scheduler", cmd, "--name", "test"])
                 # Each command should complete without crashing
@@ -123,5 +140,6 @@ class TestSchedulerStateTransitions:
             }
             mock_supervisor.return_value = mock_instance
 
+            app, runner = get_fresh_cli()
             result = runner.invoke(app, ["scheduler", "status"])
             assert result.exit_code in [0, 1, 2]

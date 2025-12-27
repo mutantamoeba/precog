@@ -81,8 +81,15 @@ class TestDbStatusIntegration:
         """Test status with healthy database.
 
         Integration: Tests connection health check.
+
+        Note: The status command calls both test_connection() AND get_connection(),
+        so both must be mocked to prevent real database access during tests.
         """
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
@@ -94,8 +101,15 @@ class TestDbStatusIntegration:
         """Test status with unhealthy database.
 
         Integration: Tests error reporting on connection failure.
+
+        Note: The status command calls both test_connection() AND get_connection(),
+        so both must be mocked to prevent real database access during tests.
         """
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = False
             mock_conn.side_effect = Exception("Connection failed")
 
             result = cli_runner.invoke(app, ["db", "status"])
@@ -107,8 +121,15 @@ class TestDbStatusIntegration:
         """Test status includes table information.
 
         Integration: Tests table enumeration.
+
+        Note: The status command calls both test_connection() AND get_connection(),
+        so both must be mocked to prevent real database access during tests.
         """
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
             mock_context = MagicMock()
             mock_conn.return_value.__enter__ = MagicMock(return_value=mock_context)
             mock_conn.return_value.__exit__ = MagicMock()
