@@ -25,8 +25,15 @@ class TestSystemHealthWorkflow:
         """Test complete health check workflow.
 
         E2E: Tests health check across all components.
+
+        Note: The health command may call test_connection() in some code paths,
+        so both must be mocked to prevent real database access during tests.
         """
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
@@ -42,8 +49,15 @@ class TestSystemHealthWorkflow:
         """Test health check with component targeting.
 
         E2E: Tests targeted component health checks.
+
+        Note: The health command may call test_connection() in some code paths,
+        so both must be mocked to prevent real database access during tests.
         """
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
@@ -109,8 +123,15 @@ class TestSystemDiagnosticsWorkflow:
         """Test complete diagnostics workflow.
 
         E2E: Tests gathering full diagnostics.
+
+        Note: The health command may call test_connection() in some code paths,
+        so both must be mocked to prevent real database access during tests.
         """
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
@@ -134,8 +155,15 @@ class TestSystemErrorRecovery:
         """Test health check recovers from component failure.
 
         E2E: Tests error recovery workflow.
+
+        Note: The health command may call test_connection() in some code paths,
+        so both must be mocked to prevent real database access during tests.
         """
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = False
             mock_conn.side_effect = Exception("Database unavailable")
 
             result = runner.invoke(app, ["system", "health"])
