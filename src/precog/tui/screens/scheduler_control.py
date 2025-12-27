@@ -240,7 +240,7 @@ class SchedulerControlScreen(Screen):
         table = self.query_one("#service-table", DataTable)
 
         if table.cursor_row is None:
-            self.app.notify("Select a service first", severity="warning")  # type: ignore[unreachable]
+            self.app.notify("Select a service first", severity="warning")  # type: ignore
             return
 
         row_data = table.get_row_at(table.cursor_row)
