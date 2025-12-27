@@ -238,12 +238,13 @@ class SchedulerControlScreen(Screen):
     def _control_selected(self, action: str) -> None:
         """Control the selected service."""
         table = self.query_one("#service-table", DataTable)
+        cursor_row: int | None = table.cursor_row
 
-        if table.cursor_row is None:
-            self.app.notify("Select a service first", severity="warning")  # type: ignore
+        if cursor_row is None:
+            self.app.notify("Select a service first", severity="warning")
             return
 
-        row_data = table.get_row_at(table.cursor_row)
+        row_data = table.get_row_at(cursor_row)
         if row_data:
             service_name = row_data[0]
             self.app.notify(f"{action.title()} '{service_name}' - Not implemented yet")
