@@ -77,22 +77,33 @@ class TestSystemInfoWorkflow:
         """Test complete system info workflow.
 
         E2E: Tests info gathering across all areas.
+
+        Note: Mock database functions to prevent test pollution when running
+        in parallel with other tests that use database connections.
         """
-        # Basic info
-        result = runner.invoke(app, ["system", "info"])
-        assert result.exit_code in [0, 1, 2]
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
+            mock_conn.return_value.__enter__ = MagicMock()
+            mock_conn.return_value.__exit__ = MagicMock()
 
-        # With environment
-        result = runner.invoke(app, ["system", "info", "--env"])
-        assert result.exit_code in [0, 1, 2]
+            # Basic info
+            result = runner.invoke(app, ["system", "info"])
+            assert result.exit_code in [0, 1, 2]
 
-        # With config
-        result = runner.invoke(app, ["system", "info", "--config"])
-        assert result.exit_code in [0, 1, 2]
+            # With environment
+            result = runner.invoke(app, ["system", "info", "--env"])
+            assert result.exit_code in [0, 1, 2]
 
-        # With paths
-        result = runner.invoke(app, ["system", "info", "--paths"])
-        assert result.exit_code in [0, 1, 2]
+            # With config
+            result = runner.invoke(app, ["system", "info", "--config"])
+            assert result.exit_code in [0, 1, 2]
+
+            # With paths
+            result = runner.invoke(app, ["system", "info", "--paths"])
+            assert result.exit_code in [0, 1, 2]
 
 
 class TestSystemVersionWorkflow:
@@ -102,18 +113,29 @@ class TestSystemVersionWorkflow:
         """Test complete version information workflow.
 
         E2E: Tests version info gathering.
+
+        Note: Mock database functions to prevent test pollution when running
+        in parallel with other tests that use database connections.
         """
-        # Basic version
-        result = runner.invoke(app, ["system", "version"])
-        assert result.exit_code in [0, 1, 2]
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
+            mock_conn.return_value.__enter__ = MagicMock()
+            mock_conn.return_value.__exit__ = MagicMock()
 
-        # With dependencies
-        result = runner.invoke(app, ["system", "version", "--deps"])
-        assert result.exit_code in [0, 1, 2]
+            # Basic version
+            result = runner.invoke(app, ["system", "version"])
+            assert result.exit_code in [0, 1, 2]
 
-        # JSON output
-        result = runner.invoke(app, ["system", "version", "--json"])
-        assert result.exit_code in [0, 1, 2]
+            # With dependencies
+            result = runner.invoke(app, ["system", "version", "--deps"])
+            assert result.exit_code in [0, 1, 2]
+
+            # JSON output
+            result = runner.invoke(app, ["system", "version", "--json"])
+            assert result.exit_code in [0, 1, 2]
 
 
 class TestSystemDiagnosticsWorkflow:
@@ -174,6 +196,17 @@ class TestSystemErrorRecovery:
         """Test info handles partial failures.
 
         E2E: Tests graceful degradation.
+
+        Note: Mock database functions to prevent test pollution when running
+        in parallel with other tests that use database connections.
         """
-        result = runner.invoke(app, ["system", "info", "--env", "--config", "--paths"])
-        assert result.exit_code in [0, 1, 2]
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
+            mock_conn.return_value.__enter__ = MagicMock()
+            mock_conn.return_value.__exit__ = MagicMock()
+
+            result = runner.invoke(app, ["system", "info", "--env", "--config", "--paths"])
+            assert result.exit_code in [0, 1, 2]
