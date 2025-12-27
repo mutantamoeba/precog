@@ -48,8 +48,16 @@ class TestSystemHealthInvariants:
     def test_health_with_various_service_states(
         self, db_healthy: bool, api_healthy: bool, config_valid: bool
     ):
-        """Health check should handle any combination of service states."""
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        """Health check should handle any combination of service states.
+
+        Note: The health command calls both test_connection() AND get_connection(),
+        so both must be mocked to prevent real database access and test pollution.
+        """
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = db_healthy
             if db_healthy:
                 mock_connection = MagicMock()
                 mock_conn.return_value.__enter__ = MagicMock(return_value=mock_connection)
