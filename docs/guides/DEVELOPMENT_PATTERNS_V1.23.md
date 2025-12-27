@@ -1,13 +1,21 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.22
+**Version:** 1.23
 **Created:** 2025-11-13
-**Last Updated:** 2025-12-25
+**Last Updated:** 2025-12-27
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.23:**
+- **Added Pattern 35: CLI Test Isolation for Parallel Execution (ALWAYS for Typer CLI Tests)**
+- Documents solution to "I/O operation on closed file" errors during pytest-xdist parallel execution
+- Root cause: Typer CLI global `app` object shared between parallel test workers
+- Solution: `isolated_app` fixture for pytest tests, `get_fresh_cli()` helper for Hypothesis property tests
+- Includes decision matrix, common mistakes, checklist for new CLI tests
+- Real-world trigger: PR #285 fixing CLI test race conditions affecting 9 test files
+- Total addition: ~170 lines documenting CLI test isolation pattern
 **Changes in V1.22:**
 - **Added Pattern 34: Two-Layer Schema Architecture for Historical Data Seeding (ALWAYS for External Data)**
 - Seeding Layer (team_code VARCHAR) for flexible external data loading from CSV, APIs, scraped data
@@ -8443,6 +8451,180 @@ op.create_table(
 - **Pattern 13:** Test Coverage Quality (test both seeding and production query paths)
 - **ADR-109:** Elo Computation Architecture (documents Elo-specific schema decisions)
 - **Migration 0013:** First comprehensive application across multiple tables
+
+
+---
+
+## Pattern 35: CLI Test Isolation for Parallel Execution (ALWAYS for Typer CLI Tests)
+
+**Status:** ✅ Production Pattern (PR #285)
+**ADR:** ADR-120 (Pending)
+**REQ:** REQ-TEST-020 (Pending)
+
+### The Problem
+
+When running CLI tests with pytest-xdist parallel execution, tests fail intermittently with:
+```
+ValueError: I/O operation on closed file
+```
+
+**Root Cause:** Typer CLI applications use a global `app` object. When tests run in parallel:
+1. Worker A registers commands on global `app`
+2. Worker B invokes CLI, writes to shared stdout
+3. Worker A's test completes, closing stdout
+4. Worker B tries to write → "I/O operation on closed file"
+
+This is particularly insidious because:
+- Tests pass when run sequentially (`pytest -n0`)
+- Tests fail randomly with `-n auto` (parallel)
+- Failure rate varies with CPU/scheduling timing
+
+### The Solution
+
+**Create fresh Typer app instances per test** using fixtures or helper functions.
+
+#### For Standard pytest Tests: Use Fixtures
+
+```python
+# tests/integration/cli/test_cli_scheduler_integration.py
+
+import pytest
+import typer
+from typer.testing import CliRunner
+
+
+@pytest.fixture
+def isolated_app():
+    """Create a completely isolated Typer app for integration testing.
+
+    This fixture creates a fresh app instance that doesn't share state with
+    other tests, preventing race conditions during parallel execution.
+    """
+    from precog.cli import db, scheduler, system
+
+    fresh_app = typer.Typer(name="precog", help="Precog CLI (test instance)")
+    fresh_app.add_typer(db.app, name="db")
+    fresh_app.add_typer(scheduler.app, name="scheduler")
+    fresh_app.add_typer(system.app, name="system")
+    return fresh_app
+
+
+class TestSchedulerStartIntegration:
+    """Integration tests for scheduler start command."""
+
+    def test_start_scheduler_with_valid_config(self, isolated_app) -> None:
+        """Test starting scheduler with valid configuration."""
+        runner = CliRunner(mix_stderr=False)
+
+        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock:
+            mock_instance = MagicMock()
+            mock_instance.start.return_value = True
+            mock.return_value = mock_instance
+
+            result = runner.invoke(isolated_app, ["scheduler", "start", "--poller", "espn"])
+            assert result.exit_code in [0, 1, 2]
+```
+
+#### For Hypothesis Property Tests: Use Helper Functions
+
+Hypothesis tests cannot use pytest fixtures directly. Use a helper function instead:
+
+```python
+# tests/property/cli/test_cli_scheduler_properties.py
+
+import typer
+from hypothesis import given, strategies as st
+from typer.testing import CliRunner
+
+
+def get_fresh_cli() -> typer.Typer:
+    """Create fresh CLI app for each property test execution.
+
+    Hypothesis generates many test cases per test function. Each must get
+    a fresh app to prevent state pollution between generated cases.
+    """
+    from precog.cli import db, scheduler, system
+
+    fresh_app = typer.Typer(name="precog", help="Precog CLI (test instance)")
+    fresh_app.add_typer(db.app, name="db")
+    fresh_app.add_typer(scheduler.app, name="scheduler")
+    fresh_app.add_typer(system.app, name="system")
+    return fresh_app
+
+
+class TestSchedulerProperties:
+    """Property-based tests for scheduler CLI."""
+
+    @given(interval=st.integers(min_value=1, max_value=3600))
+    def test_interval_always_positive(self, interval: int) -> None:
+        """Property: Scheduler accepts any positive interval."""
+        runner = CliRunner(mix_stderr=False)
+        app = get_fresh_cli()  # Fresh app per generated case
+
+        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock:
+            mock_instance = MagicMock()
+            mock.return_value = mock_instance
+
+            result = runner.invoke(app, ["scheduler", "start", "--interval", str(interval)])
+            assert result.exit_code in [0, 1, 2]
+```
+
+### Pattern Decision Matrix
+
+| Test Type | Isolation Method | Why |
+|-----------|------------------|-----|
+| Unit tests (CLI) | `isolated_app` fixture | pytest fixtures work, cleaner syntax |
+| Integration tests | `isolated_app` fixture | Same as unit tests |
+| E2E tests | `isolated_app` fixture | Same as unit tests |
+| Performance tests | `isolated_app` fixture (with `cli_runner` from conftest) | Reuse shared runner |
+| Stress tests | `isolated_app` fixture | Each stress iteration gets fresh app |
+| Property tests (Hypothesis) | `get_fresh_cli()` helper | Fixtures not supported by Hypothesis |
+
+### Common Mistakes
+
+| Mistake | Problem | Solution |
+|---------|---------|----------|
+| Using global `app` import | Shared state between parallel workers | Create fresh app per test |
+| Calling `register_commands()` at module level | Same as above | Move registration into fixture |
+| Reusing `CliRunner` across tests | May carry state from previous invocations | Create fresh runner per test |
+| Using fixture in Hypothesis test | Hypothesis can't inject fixtures | Use helper function instead |
+| Not using `mix_stderr=False` | stderr mixes with stdout, harder to debug | Always set `mix_stderr=False` |
+
+### Checklist for New CLI Tests
+
+- [ ] Use `isolated_app` fixture (not global `app`)
+- [ ] Create fresh `CliRunner(mix_stderr=False)` in each test
+- [ ] For Hypothesis: use `get_fresh_cli()` helper function
+- [ ] Verify tests pass with `pytest -n auto` (parallel)
+- [ ] Verify tests pass with `pytest -n0` (sequential)
+
+### Why This Pattern Matters
+
+**Before pattern (random failures):**
+```
+FAILED tests/stress/cli/test_cli_stress.py::test_repeated_status_checks
+  - ValueError: I/O operation on closed file
+PASSED tests/stress/cli/test_cli_stress.py::test_repeated_status_checks  # Same test, different run!
+```
+
+**After pattern (consistent):**
+```
+PASSED tests/stress/cli/test_cli_stress.py::test_repeated_status_checks  # Always passes
+```
+
+### Related Files
+
+- `tests/integration/cli/test_cli_scheduler_integration.py` - Integration test example
+- `tests/property/cli/test_cli_scheduler_properties.py` - Property test example
+- `tests/stress/cli/test_cli_stress.py` - Stress test example
+- `tests/conftest.py` - Shared `cli_runner` fixture definition
+
+### Cross-References
+
+- **PR #285:** CLI test isolation implementation
+- **Pattern 28:** CI-Safe Stress Testing (complementary - skip tests that hang in CI)
+- **Pattern 29:** Hybrid Test Isolation Strategy (related - database isolation)
+- **Pattern 30:** Stale Bytecode Cleanup (related - another parallel execution issue)
 
 
 ---

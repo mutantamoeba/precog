@@ -39,7 +39,7 @@
 - **skipif pattern:** Stress tests use `pytest.mark.skipif(_is_ci)` to skip in CI (prevents ThreadPoolExecutor/threading.Barrier hangs)
 - **Root causes documented:** ThreadPoolExecutor deadlocks, threading barrier timeouts, pytest-timeout SIGALRM limitations
 - **Local-only testing:** Stress tests run locally with adequate resources; CI runs functional tests only
-- **Reference:** Pattern 28 (DEVELOPMENT_PATTERNS_V1.22.md), Issue #168, ADR-057 (testcontainers)
+- **Reference:** Pattern 28 (DEVELOPMENT_PATTERNS_V1.23.md), Issue #168, ADR-057 (testcontainers)
 **Changes in V3.3:**
 - **Test Isolation Patterns Section (NEW)** - Added comprehensive test isolation requirements based on Phase 1.9 findings
 - **5 Isolation Patterns Documented** - Transaction-based isolation, FK dependency chain, cleanup ordering, parallel safety, SCD Type 2 isolation
@@ -906,7 +906,7 @@ pytestmark = [
 pytest tests/stress/ -v -m stress
 ```
 
-**Reference:** REQ-TEST-016 (Stress Test Requirements), Pattern 28 (DEVELOPMENT_PATTERNS_V1.22.md), Issue #168
+**Reference:** REQ-TEST-016 (Stress Test Requirements), Pattern 28 (DEVELOPMENT_PATTERNS_V1.23.md), Issue #168
 
 ---
 
@@ -3155,7 +3155,7 @@ pytest --cov=module tests/unit/test_new_feature.py
 - **Scripts:** `scripts/test_*.sh`, `scripts/validate_*.sh` - Execution scripts
 - **Requirements:** `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` - REQ-TEST-012 through REQ-TEST-019
 - **ADRs:** `docs/foundation/ARCHITECTURE_DECISIONS_V2.33.md` - ADR-074, ADR-076 (Test Type Categories)
-- **Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.22.md` - Pattern 13 (Test Coverage Quality), Pattern 26 (Resource Cleanup), Pattern 27 (Dependency Injection), Pattern 28 (CI-Safe Stress Testing)
+- **Patterns:** `docs/guides/DEVELOPMENT_PATTERNS_V1.23.md` - Pattern 13 (Test Coverage Quality), Pattern 26 (Resource Cleanup), Pattern 27 (Dependency Injection), Pattern 28 (CI-Safe Stress Testing)
 - **Root Cause Analysis:** `docs/utility/TDD_FAILURE_ROOT_CAUSE_ANALYSIS_V1.0.md` - Phase 1.5 TDD failure lessons learned
 - **Validation:** `docs/foundation/VALIDATION_LINTING_ARCHITECTURE_V1.0.md` - Overall quality infrastructure
 
