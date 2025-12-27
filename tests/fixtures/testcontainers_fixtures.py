@@ -213,20 +213,8 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_teams_espn_id ON teams(espn_team_id);
     CREATE INDEX IF NOT EXISTS idx_teams_elo_rating ON teams(current_elo_rating);
 
-    CREATE TABLE IF NOT EXISTS elo_rating_history (
-        rating_id SERIAL PRIMARY KEY,
-        team_id INTEGER REFERENCES teams(team_id) ON DELETE CASCADE,
-        rating DECIMAL(10,4) NOT NULL,
-        rating_date DATE NOT NULL,
-        season INTEGER,
-        week INTEGER,
-        opponent_id INTEGER REFERENCES teams(team_id),
-        game_result VARCHAR(10) CHECK (game_result IN ('win', 'loss', 'tie')),
-        rating_change DECIMAL(10,4),
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-    );
-    CREATE INDEX IF NOT EXISTS idx_elo_team ON elo_rating_history(team_id);
-    CREATE INDEX IF NOT EXISTS idx_elo_date ON elo_rating_history(rating_date);
+    -- Note: elo_rating_history table removed in migration 0015
+    -- Superseded by elo_calculation_log (28 columns, full audit trail)
 
     CREATE TABLE IF NOT EXISTS venues (
         venue_id SERIAL PRIMARY KEY,

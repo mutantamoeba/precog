@@ -18,6 +18,12 @@ from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Button, Label, Static
 
+# Import screens for navigation
+from precog.tui.screens.market_browser import MarketBrowserScreen
+from precog.tui.screens.monitoring_dashboard import MonitoringDashboardScreen
+from precog.tui.screens.position_viewer import PositionViewerScreen
+from precog.tui.screens.scheduler_control import SchedulerControlScreen
+from precog.tui.screens.settings import SettingsScreen
 from precog.tui.widgets.header import AsciiHeader
 
 
@@ -144,8 +150,20 @@ class MainMenuScreen(Screen):
 
     def _navigate_to(self, screen_id: str) -> None:
         """Navigate to the specified screen."""
-        # For now, show a notification since screens aren't implemented yet
-        self.app.notify(f"Screen '{screen_id}' coming soon!", severity="information")
+        # Map screen IDs to screen classes
+        screen_map = {
+            "markets": MarketBrowserScreen,
+            "positions": PositionViewerScreen,
+            "scheduler": SchedulerControlScreen,
+            "config": SettingsScreen,
+            "diagnostics": MonitoringDashboardScreen,
+        }
+
+        if screen_id in screen_map:
+            self.app.push_screen(screen_map[screen_id]())
+        else:
+            # Screens not yet implemented
+            self.app.notify(f"Screen '{screen_id}' coming soon!", severity="information")
 
     # Action methods for keyboard shortcuts
     def action_goto_markets(self) -> None:

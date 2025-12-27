@@ -32,7 +32,7 @@
   - `historical_epa` separate from Elo (NFL-specific, different granularity)
   - `elo_calculation_log` for audit/debugging (not historical data storage)
 - **Requirements:** REQ-DATA-009 (Team_id FK), REQ-DATA-010 (Historical Odds), REQ-DATA-011 (Historical EPA)
-- **Table Count:** 37 tables (was 35) - Added historical_epa, elo_calculation_log
+- **Table Count:** 36 tables (was 37) - Removed deprecated elo_rating_history (migration 0015)
 - **Migration Status:** ✅ Migration 0013 implemented and tested (2025-12-25)
 - **Next Steps:** Implement OddsSeeder and EPASeeder, backfill team_id from team_code
 **Changes in v1.14:**
@@ -239,7 +239,8 @@
 - Added external ID traceability columns across 5 tables for API audit trail (migration 008)
 - Added exit management columns to positions table (migration 004)
 - Added trade_metadata JSONB and order execution columns to trades table (migrations 005, 006)
-- **NEW**: Added teams and elo_rating_history tables for Elo model (migration 010 - Phase 4 preparation)
+- **NEW**: Added teams table for Elo model (migration 010 - Phase 4 preparation)
+- Note: elo_rating_history was deprecated and removed in migration 0015 (superseded by elo_calculation_log)
 - Updated table count: 27 tables (23 operational + 4 ML placeholders)
 - Fixed markets FK relationships - All child tables use market_uuid instead of market_id
 - Seeded 32 NFL teams with initial Elo ratings (1370-1660, avg 1503.1)
