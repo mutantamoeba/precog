@@ -44,7 +44,7 @@ class TestSystemHealthIntegration:
 
         Integration: Tests multi-component health check.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.database.connection.get_connection") as mock_conn:
             mock_conn.return_value.__enter__ = MagicMock()
@@ -59,7 +59,7 @@ class TestSystemHealthIntegration:
 
         Integration: Tests partial failure handling.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.database.connection.get_connection") as mock_conn:
             mock_conn.side_effect = Exception("Database unavailable")
@@ -74,7 +74,7 @@ class TestSystemHealthIntegration:
 
         Integration: Tests API health check.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with (
             patch("precog.database.connection.get_connection") as mock_conn,
@@ -95,7 +95,7 @@ class TestSystemHealthIntegration:
 
         Integration: Tests detailed health reporting.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.database.connection.get_connection") as mock_conn:
             mock_conn.return_value.__enter__ = MagicMock()
@@ -114,7 +114,7 @@ class TestSystemVersionIntegration:
 
         Integration: Tests package metadata access.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         result = runner.invoke(isolated_app, ["system", "version"])
 
@@ -127,7 +127,7 @@ class TestSystemVersionIntegration:
 
         Integration: Tests dependency enumeration.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         result = runner.invoke(isolated_app, ["system", "version", "--deps"])
 
@@ -138,7 +138,7 @@ class TestSystemVersionIntegration:
 
         Integration: Tests JSON formatting.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         result = runner.invoke(isolated_app, ["system", "version", "--json"])
 
@@ -153,7 +153,7 @@ class TestSystemInfoIntegration:
 
         Integration: Tests system information gathering.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         result = runner.invoke(isolated_app, ["system", "info"])
 
@@ -164,7 +164,7 @@ class TestSystemInfoIntegration:
 
         Integration: Tests environment variable reporting.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         result = runner.invoke(isolated_app, ["system", "info", "--env"])
 
@@ -175,7 +175,7 @@ class TestSystemInfoIntegration:
 
         Integration: Tests config file parsing.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         result = runner.invoke(isolated_app, ["system", "info", "--config"])
 
@@ -186,7 +186,7 @@ class TestSystemInfoIntegration:
 
         Integration: Tests path resolution.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         result = runner.invoke(isolated_app, ["system", "info", "--paths"])
 
@@ -201,7 +201,7 @@ class TestSystemDiagnosticsIntegration:
 
         Integration: Tests diagnostic data gathering.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.database.connection.get_connection") as mock_conn:
             mock_conn.return_value.__enter__ = MagicMock()
@@ -220,7 +220,7 @@ class TestSystemComponentCheckIntegration:
 
         Integration: Tests targeted component check.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.database.connection.get_connection") as mock_conn:
             mock_conn.return_value.__enter__ = MagicMock()
@@ -235,7 +235,7 @@ class TestSystemComponentCheckIntegration:
 
         Integration: Tests config validation.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         result = runner.invoke(isolated_app, ["system", "health", "--component", "config"])
 
@@ -250,7 +250,7 @@ class TestSystemConfigIntegration:
 
         Integration: Tests config loading.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.config.config_loader.ConfigLoader") as mock_config:
             mock_config_instance = MagicMock()
@@ -266,7 +266,7 @@ class TestSystemConfigIntegration:
 
         Integration: Tests environment integration.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch.dict("os.environ", {"PRECOG_ENV": "test"}):
             result = runner.invoke(isolated_app, ["system", "info", "--env"])

@@ -44,7 +44,7 @@ class TestSchedulerStartStopWorkflow:
 
         E2E: Tests full lifecycle from start to stop.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -71,7 +71,7 @@ class TestSchedulerStartStopWorkflow:
 
         E2E: Tests stop then start sequence.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -96,7 +96,7 @@ class TestSchedulerPollingWorkflow:
 
         E2E: Tests poll-once from CLI through database.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -111,7 +111,7 @@ class TestSchedulerPollingWorkflow:
 
         E2E: Tests multi-league poll-once execution.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -133,7 +133,7 @@ class TestSchedulerErrorRecovery:
 
         E2E: Tests error recovery workflow.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -153,7 +153,7 @@ class TestSchedulerErrorRecovery:
 
         E2E: Tests graceful shutdown during operation.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()

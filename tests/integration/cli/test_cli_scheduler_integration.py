@@ -45,7 +45,7 @@ class TestSchedulerStartIntegration:
 
         Integration: Tests scheduler initialization with real config loading.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -62,7 +62,7 @@ class TestSchedulerStartIntegration:
 
         Integration: Tests interval parameter propagation.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -78,7 +78,7 @@ class TestSchedulerStartIntegration:
 
         Integration: Tests multi-poller configuration.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -100,7 +100,7 @@ class TestSchedulerStopIntegration:
 
         Integration: Tests scheduler shutdown sequence.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -117,7 +117,7 @@ class TestSchedulerStopIntegration:
 
         Integration: Tests graceful handling of stop on idle scheduler.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -137,7 +137,7 @@ class TestSchedulerStatusIntegration:
 
         Integration: Tests status retrieval with active pollers.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -158,7 +158,7 @@ class TestSchedulerStatusIntegration:
 
         Integration: Tests format rendering.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -178,7 +178,7 @@ class TestSchedulerPollOnceIntegration:
 
         Integration: Tests one-shot poll execution.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -194,7 +194,7 @@ class TestSchedulerPollOnceIntegration:
 
         Integration: Tests database persistence flag.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -212,7 +212,7 @@ class TestSchedulerPollOnceIntegration:
 
         Integration: Tests multi-league poll execution.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -234,7 +234,7 @@ class TestSchedulerConfigIntegration:
 
         Integration: Tests config loader integration.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with (
             patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor,
@@ -256,7 +256,7 @@ class TestSchedulerConfigIntegration:
 
         Integration: Tests env var precedence.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with (
             patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor,

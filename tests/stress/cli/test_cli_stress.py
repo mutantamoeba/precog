@@ -44,7 +44,7 @@ class TestSchedulerStress:
 
         Stress: Tests 50 rapid status invocations.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -60,7 +60,7 @@ class TestSchedulerStress:
 
         Stress: Tests 20 start-stop cycles.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -79,7 +79,7 @@ class TestSchedulerStress:
 
         Stress: Tests 30 poll-once calls.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
             mock_instance = MagicMock()
@@ -102,7 +102,7 @@ class TestDbStress:
         Note: The status command calls both test_connection() AND get_connection(),
         so both must be mocked to prevent real database access during tests.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with (
             patch("precog.database.connection.test_connection") as mock_test,
@@ -121,7 +121,7 @@ class TestDbStress:
 
         Stress: Tests 30 table list calls.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.database.connection.get_connection") as mock_conn:
             mock_conn.return_value.__enter__ = MagicMock()
@@ -136,7 +136,7 @@ class TestDbStress:
 
         Stress: Tests 20 init calls.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with (
             patch("precog.database.connection.test_connection") as mock_test,
@@ -158,7 +158,7 @@ class TestSystemStress:
 
         Stress: Tests 50 rapid health invocations.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with patch("precog.database.connection.get_connection") as mock_conn:
             mock_conn.return_value.__enter__ = MagicMock()
@@ -173,7 +173,7 @@ class TestSystemStress:
 
         Stress: Tests 100 version calls.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         for i in range(100):
             result = runner.invoke(isolated_app, ["system", "version"])
@@ -184,7 +184,7 @@ class TestSystemStress:
 
         Stress: Tests 50 info calls.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         for i in range(50):
             result = runner.invoke(isolated_app, ["system", "info"])
@@ -202,7 +202,7 @@ class TestMixedCommandStress:
         Note: The status command calls both test_connection() AND get_connection(),
         so both must be mocked to prevent real database access during tests.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with (
             patch("precog.database.connection.test_connection") as mock_test,

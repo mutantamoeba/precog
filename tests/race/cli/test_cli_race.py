@@ -47,7 +47,7 @@ class TestSchedulerRace:
 
         Race: Tests 10 rapid status calls in sequence.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
         results = []
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
@@ -71,7 +71,7 @@ class TestSchedulerRace:
 
         Race: Tests alternating start/stop calls.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
         results = []
 
         with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
@@ -99,7 +99,7 @@ class TestDbRace:
 
         Race: Tests 10 rapid status calls in sequence.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
         results = []
 
         with patch("precog.database.connection.get_connection") as mock_conn:
@@ -122,7 +122,7 @@ class TestDbRace:
 
         Race: Tests rapid sequential table queries.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
         results = []
 
         with patch("precog.database.connection.get_connection") as mock_conn:
@@ -147,7 +147,7 @@ class TestSystemRace:
 
         Race: Tests 10 rapid health calls in sequence.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
         results = []
 
         with patch("precog.database.connection.get_connection") as mock_conn:
@@ -170,7 +170,7 @@ class TestSystemRace:
 
         Race: Tests alternating mixed commands.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
         results = []
 
         with patch("precog.database.connection.get_connection") as mock_conn:
@@ -196,7 +196,7 @@ class TestCrossModuleRace:
 
         Race: Tests rapid commands from scheduler, db, and system.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
         results = []
 
         with (
@@ -233,7 +233,7 @@ class TestCrossModuleRace:
 
         Race: Verifies isolation between different CLI modules.
         """
-        runner = CliRunner(mix_stderr=False)
+        runner = CliRunner()
 
         with (
             patch("precog.database.connection.get_connection") as mock_conn,
