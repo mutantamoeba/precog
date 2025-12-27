@@ -31,13 +31,19 @@ class TestDatabaseInitWorkflow:
         """Test complete database initialization workflow.
 
         E2E: Tests init from connection test through schema creation.
+
+        Note: The init command may call get_connection() in some code paths,
+        so all database functions must be mocked to prevent real database access.
         """
         with (
             patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
             patch("precog.database.initialization.apply_schema") as mock_schema,
         ):
             mock_test.return_value = True
             mock_schema.return_value = True
+            mock_conn.return_value.__enter__ = MagicMock()
+            mock_conn.return_value.__exit__ = MagicMock()
 
             result = cli_runner.invoke(app, ["db", "init"])
             assert result.exit_code in [0, 1, 2, 3, 4, 5]
@@ -73,8 +79,15 @@ class TestDatabaseMigrationWorkflow:
         """Test complete migration workflow.
 
         E2E: Tests dry-run then actual migration.
+
+        Note: The migrate command may call test_connection() in some code paths,
+        so all database functions must be mocked to prevent real database access.
         """
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
@@ -154,10 +167,18 @@ class TestDatabaseErrorRecovery:
         """Test init retry after connection failure.
 
         E2E: Tests error recovery workflow.
+
+        Note: The init command may call get_connection() in some code paths,
+        so all database functions must be mocked to prevent real database access.
         """
-        with patch("precog.database.connection.test_connection") as mock_test:
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
             # First call fails, second succeeds
             mock_test.side_effect = [Exception("Connection refused"), True]
+            mock_conn.return_value.__enter__ = MagicMock()
+            mock_conn.return_value.__exit__ = MagicMock()
 
             # First attempt fails
             result = cli_runner.invoke(app, ["db", "init"])
