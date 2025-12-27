@@ -5,24 +5,41 @@ Tests CLI module performance characteristics and benchmarks.
 References:
     - REQ-TEST-007: Performance testing
     - TESTING_STRATEGY V3.2: 8 test types required
+
+Parallel Execution Note:
+    These tests must create fresh app instances to avoid test pollution during
+    parallel pytest-xdist execution. The global app object is shared across
+    workers, causing race conditions when multiple tests register commands
+    or invoke CLI operations simultaneously.
 """
 
 import time
 from unittest.mock import MagicMock, patch
 
-from typer.testing import CliRunner
+import pytest
+import typer
 
-from precog.cli import app, register_commands
 
-# Register commands once for all tests
-register_commands()
-runner = CliRunner()
+@pytest.fixture
+def isolated_app():
+    """Create a completely isolated Typer app for performance testing.
+
+    This fixture creates a fresh app instance that doesn't share state with
+    other tests, preventing race conditions during parallel execution.
+    """
+    from precog.cli import db, scheduler, system
+
+    fresh_app = typer.Typer(name="precog", help="Precog CLI (test instance)")
+    fresh_app.add_typer(db.app, name="db")
+    fresh_app.add_typer(scheduler.app, name="scheduler")
+    fresh_app.add_typer(system.app, name="system")
+    return fresh_app
 
 
 class TestSchedulerPerformance:
     """Performance tests for scheduler CLI."""
 
-    def test_status_latency(self) -> None:
+    def test_status_latency(self, cli_runner, isolated_app) -> None:
         """Test scheduler status command latency.
 
         Performance: p95 should be < 100ms.
@@ -35,7 +52,7 @@ class TestSchedulerPerformance:
             latencies = []
             for _ in range(20):
                 start = time.perf_counter()
-                result = runner.invoke(app, ["scheduler", "status"])
+                result = cli_runner.invoke(isolated_app, ["scheduler", "status"])
                 elapsed = (time.perf_counter() - start) * 1000  # ms
                 latencies.append(elapsed)
                 assert result.exit_code in [0, 1, 2]
@@ -44,7 +61,7 @@ class TestSchedulerPerformance:
             # CLI operations should be fast
             assert p95 < 500, f"p95 latency {p95}ms exceeds threshold"
 
-    def test_poll_once_throughput(self) -> None:
+    def test_poll_once_throughput(self, cli_runner, isolated_app) -> None:
         """Test poll-once command throughput.
 
         Performance: Should handle 10 calls in < 5 seconds.
@@ -56,7 +73,9 @@ class TestSchedulerPerformance:
 
             start = time.perf_counter()
             for _ in range(10):
-                result = runner.invoke(app, ["scheduler", "poll-once", "--league", "nfl"])
+                result = cli_runner.invoke(
+                    isolated_app, ["scheduler", "poll-once", "--league", "nfl"]
+                )
                 assert result.exit_code in [0, 1, 2]
             elapsed = time.perf_counter() - start
 
@@ -66,7 +85,7 @@ class TestSchedulerPerformance:
 class TestDbPerformance:
     """Performance tests for db CLI."""
 
-    def test_status_latency(self) -> None:
+    def test_status_latency(self, cli_runner, isolated_app) -> None:
         """Test db status command latency.
 
         Performance: p95 should be < 100ms (relaxed to 600ms for CI/slow systems).
@@ -87,7 +106,7 @@ class TestDbPerformance:
             latencies = []
             for _ in range(20):
                 start = time.perf_counter()
-                result = runner.invoke(app, ["db", "status"])
+                result = cli_runner.invoke(isolated_app, ["db", "status"])
                 elapsed = (time.perf_counter() - start) * 1000  # ms
                 latencies.append(elapsed)
                 assert result.exit_code in [0, 1, 2]
@@ -95,7 +114,7 @@ class TestDbPerformance:
             p95 = sorted(latencies)[int(len(latencies) * 0.95)]
             assert p95 < 600, f"p95 latency {p95}ms exceeds threshold"
 
-    def test_tables_latency(self) -> None:
+    def test_tables_latency(self, cli_runner, isolated_app) -> None:
         """Test db tables command latency.
 
         Performance: p95 should be < 200ms (relaxed to 600ms for CI/slow systems).
@@ -115,7 +134,7 @@ class TestDbPerformance:
             latencies = []
             for _ in range(20):
                 start = time.perf_counter()
-                result = runner.invoke(app, ["db", "tables"])
+                result = cli_runner.invoke(isolated_app, ["db", "tables"])
                 elapsed = (time.perf_counter() - start) * 1000  # ms
                 latencies.append(elapsed)
                 assert result.exit_code in [0, 1, 2]
@@ -127,7 +146,7 @@ class TestDbPerformance:
 class TestSystemPerformance:
     """Performance tests for system CLI."""
 
-    def test_health_latency(self) -> None:
+    def test_health_latency(self, cli_runner, isolated_app) -> None:
         """Test system health command latency.
 
         Performance: p95 should be < 200ms (relaxed to 800ms for CI/slow systems).
@@ -147,7 +166,7 @@ class TestSystemPerformance:
             latencies = []
             for _ in range(20):
                 start = time.perf_counter()
-                result = runner.invoke(app, ["system", "health"])
+                result = cli_runner.invoke(isolated_app, ["system", "health"])
                 elapsed = (time.perf_counter() - start) * 1000  # ms
                 latencies.append(elapsed)
                 assert result.exit_code in [0, 1, 2]
@@ -155,7 +174,7 @@ class TestSystemPerformance:
             p95 = sorted(latencies)[int(len(latencies) * 0.95)]
             assert p95 < 800, f"p95 latency {p95}ms exceeds threshold"
 
-    def test_version_latency(self) -> None:
+    def test_version_latency(self, cli_runner, isolated_app) -> None:
         """Test system version command latency.
 
         Performance: p95 should be < 50ms (no external calls).
@@ -163,7 +182,7 @@ class TestSystemPerformance:
         latencies = []
         for _ in range(50):
             start = time.perf_counter()
-            result = runner.invoke(app, ["system", "version"])
+            result = cli_runner.invoke(isolated_app, ["system", "version"])
             elapsed = (time.perf_counter() - start) * 1000  # ms
             latencies.append(elapsed)
             assert result.exit_code in [0, 1, 2]
@@ -172,7 +191,7 @@ class TestSystemPerformance:
         # Relaxed threshold for CI/slow systems
         assert p95 < 500, f"p95 latency {p95}ms exceeds threshold"
 
-    def test_info_latency(self) -> None:
+    def test_info_latency(self, cli_runner, isolated_app) -> None:
         """Test system info command latency.
 
         Performance: p95 should be < 100ms.
@@ -180,7 +199,7 @@ class TestSystemPerformance:
         latencies = []
         for _ in range(20):
             start = time.perf_counter()
-            result = runner.invoke(app, ["system", "info"])
+            result = cli_runner.invoke(isolated_app, ["system", "info"])
             elapsed = (time.perf_counter() - start) * 1000  # ms
             latencies.append(elapsed)
             assert result.exit_code in [0, 1, 2]
@@ -192,7 +211,7 @@ class TestSystemPerformance:
 class TestCommandThroughput:
     """Throughput tests for CLI commands."""
 
-    def test_mixed_command_throughput(self) -> None:
+    def test_mixed_command_throughput(self, cli_runner, isolated_app) -> None:
         """Test throughput of mixed CLI commands.
 
         Performance: Should handle 50 mixed commands in < 10 seconds.
@@ -222,7 +241,7 @@ class TestCommandThroughput:
             start = time.perf_counter()
             for i in range(50):
                 cmd = commands[i % len(commands)]
-                result = runner.invoke(app, cmd)
+                result = cli_runner.invoke(isolated_app, cmd)
                 assert result.exit_code in [0, 1, 2]
             elapsed = time.perf_counter() - start
 

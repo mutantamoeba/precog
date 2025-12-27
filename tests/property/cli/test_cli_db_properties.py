@@ -8,15 +8,25 @@ Reference: TESTING_STRATEGY V3.2 - Property Tests (2/8)
 
 from unittest.mock import MagicMock, patch
 
+import typer
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 from typer.testing import CliRunner
 
-from precog.cli import app, register_commands
 
-# Initialize CLI for testing
-register_commands()
-runner = CliRunner()
+def get_fresh_cli():
+    """Create a fresh CLI app instance for isolated testing.
+
+    This prevents race conditions during parallel pytest-xdist execution
+    by avoiding shared global state.
+    """
+    from precog.cli import db, system
+
+    fresh_app = typer.Typer(name="precog", help="Precog CLI (test instance)")
+    fresh_app.add_typer(db.app, name="db")
+    fresh_app.add_typer(system.app, name="system")
+    runner = CliRunner()
+    return fresh_app, runner
 
 
 class TestDbArgumentInvariants:
@@ -49,6 +59,7 @@ class TestDbArgumentInvariants:
             mock_conn.return_value.__enter__ = MagicMock(return_value=mock_connection)
             mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
+            app, runner = get_fresh_cli()
             result = runner.invoke(app, ["db", "tables", "--name", table_name])
             # Command should complete without crashing (exit code 5 = DATABASE_ERROR is ok in parallel)
             assert result.exit_code in [0, 1, 2, 5]
@@ -71,6 +82,7 @@ class TestDbArgumentInvariants:
             mock_conn.return_value.__enter__ = MagicMock(return_value=mock_connection)
             mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
+            app, runner = get_fresh_cli()
             result = runner.invoke(app, ["db", "migrate", "--version", str(version)])
             # Command should complete (may fail if version doesn't exist)
             assert result.exit_code in [0, 1, 2, 3, 5]
@@ -83,6 +95,7 @@ class TestDbOutputInvariants:
     @settings(max_examples=4)
     def test_subcommand_help_available(self, subcommand: str):
         """Each subcommand should have help available."""
+        app, runner = get_fresh_cli()
         result = runner.invoke(app, ["db", subcommand, "--help"])
         assert result.exit_code == 0
         assert len(result.output) > 0
@@ -91,6 +104,7 @@ class TestDbOutputInvariants:
     @settings(max_examples=10)
     def test_help_output_always_includes_commands(self, verbose: bool):
         """Help output should always list available subcommands."""
+        app, runner = get_fresh_cli()
         result = runner.invoke(app, ["db", "--help"])
         assert result.exit_code == 0
         # Help should mention key commands
@@ -123,6 +137,7 @@ class TestDbTableListInvariants:
             mock_conn.return_value.__enter__ = MagicMock(return_value=mock_connection)
             mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
+            app, runner = get_fresh_cli()
             result = runner.invoke(app, ["db", "tables"])
             assert result.exit_code in [0, 1, 2, 5]
 
@@ -155,6 +170,7 @@ class TestDbTableListInvariants:
             mock_conn.return_value.__enter__ = MagicMock(return_value=mock_connection)
             mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
+            app, runner = get_fresh_cli()
             result = runner.invoke(app, ["db", "tables"])
             assert result.exit_code in [0, 1, 2, 5]
 
@@ -170,6 +186,7 @@ class TestDbMigrationInvariants:
         Note: Exit code 5 (DATABASE_ERROR) is acceptable when mocking doesn't
         fully prevent database access in parallel execution.
         """
+        app, runner = get_fresh_cli()
         result = runner.invoke(app, ["db", "migrate", "--version", str(version)])
         # Should fail gracefully, not crash
         assert result.exit_code in [0, 1, 2, 3, 5]
@@ -184,6 +201,7 @@ class TestDbMigrationInvariants:
         """
         assume(not version_str.strip().isdigit())  # Ensure not a valid number
 
+        app, runner = get_fresh_cli()
         result = runner.invoke(app, ["db", "migrate", "--version", version_str])
         # Typer should reject non-integer, exit code 2
         assert result.exit_code in [0, 1, 2, 5]

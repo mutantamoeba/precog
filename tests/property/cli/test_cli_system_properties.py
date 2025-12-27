@@ -8,15 +8,26 @@ Reference: TESTING_STRATEGY V3.2 - Property Tests (2/8)
 
 from unittest.mock import MagicMock, patch
 
+import typer
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 from typer.testing import CliRunner
 
-from precog.cli import app, register_commands
 
-# Initialize CLI for testing
-register_commands()
-runner = CliRunner()
+def get_fresh_cli():
+    """Create a fresh CLI app instance for isolated testing.
+
+    This prevents race conditions during parallel pytest-xdist execution
+    by avoiding shared global state.
+    """
+    from precog.cli import db, scheduler, system
+
+    fresh_app = typer.Typer(name="precog", help="Precog CLI (test instance)")
+    fresh_app.add_typer(db.app, name="db")
+    fresh_app.add_typer(scheduler.app, name="scheduler")
+    fresh_app.add_typer(system.app, name="system")
+    runner = CliRunner()
+    return fresh_app, runner
 
 
 class TestSystemOutputInvariants:
@@ -26,6 +37,7 @@ class TestSystemOutputInvariants:
     @settings(max_examples=3)
     def test_subcommand_help_available(self, subcommand: str):
         """Each subcommand should have help available."""
+        app, runner = get_fresh_cli()
         result = runner.invoke(app, ["system", subcommand, "--help"])
         assert result.exit_code == 0
         assert len(result.output) > 0
@@ -34,6 +46,7 @@ class TestSystemOutputInvariants:
     @settings(max_examples=10)
     def test_help_output_always_includes_commands(self, verbose: bool):
         """Help output should always list available subcommands."""
+        app, runner = get_fresh_cli()
         result = runner.invoke(app, ["system", "--help"])
         assert result.exit_code == 0
         output_lower = result.output.lower()
@@ -65,6 +78,7 @@ class TestSystemHealthInvariants:
             else:
                 mock_conn.side_effect = Exception("Connection failed")
 
+            app, runner = get_fresh_cli()
             result = runner.invoke(app, ["system", "health"])
             # Command should complete without crashing
             assert result.exit_code in [0, 1, 2]
@@ -78,6 +92,7 @@ class TestSystemHealthInvariants:
         with patch("precog.database.connection.get_connection") as mock_conn:
             mock_conn.side_effect = Exception(error_msg)
 
+            app, runner = get_fresh_cli()
             result = runner.invoke(app, ["system", "health"])
             # Should complete without crashing
             assert result.exit_code in [0, 1, 2]
@@ -90,6 +105,7 @@ class TestSystemVersionInvariants:
     @settings(max_examples=10)
     def test_version_always_outputs_something(self, verbose: bool):
         """Version command should always produce output."""
+        app, runner = get_fresh_cli()
         result = runner.invoke(app, ["system", "version"])
         assert result.exit_code in [0, 1, 2]
         # Version should output something
@@ -122,6 +138,7 @@ class TestSystemInfoInvariants:
         cross-platform compatibility.
         """
         with patch.dict("os.environ", env_vars, clear=False):
+            app, runner = get_fresh_cli()
             result = runner.invoke(app, ["system", "info"])
             assert result.exit_code in [0, 1, 2]
 
@@ -135,6 +152,7 @@ class TestSystemInfoInvariants:
             mock_conn.return_value.__enter__ = MagicMock(return_value=mock_connection)
             mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
+            app, runner = get_fresh_cli()
             result = runner.invoke(app, ["system", "info"])
             assert result.exit_code in [0, 1, 2]
 
@@ -151,6 +169,7 @@ class TestSystemCommandSequences:
             mock_conn.return_value.__enter__ = MagicMock(return_value=mock_connection)
             mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
+            app, runner = get_fresh_cli()
             for cmd in commands:
                 result = runner.invoke(app, ["system", cmd])
                 assert result.exit_code in [0, 1, 2]
