@@ -13,7 +13,7 @@ Design:
 from typing import ClassVar
 
 from textual.app import ComposeResult
-from textual.binding import BindingType
+from textual.binding import Binding, BindingType
 from textual.containers import Container, Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Button, Label, Static
@@ -62,6 +62,14 @@ class MainMenuScreen(Screen):
         ("6", "goto_models", "Models"),
         ("7", "goto_config", "Config"),
         ("8", "goto_diagnostics", "Diagnostics"),
+        # Arrow key navigation (hidden from footer with show=False)
+        Binding("up", "focus_previous", "Up", show=False),
+        Binding("down", "focus_next", "Down", show=False),
+        Binding("left", "focus_previous", "Left", show=False),
+        Binding("right", "focus_next", "Right", show=False),
+        Binding("k", "focus_previous", "Up", show=False),
+        Binding("j", "focus_next", "Down", show=False),
+        Binding("enter", "select_focused", "Select", show=False),
     ]
 
     def compose(self) -> ComposeResult:
@@ -197,3 +205,9 @@ class MainMenuScreen(Screen):
     def action_goto_diagnostics(self) -> None:
         """Navigate to Diagnostics."""
         self._navigate_to("diagnostics")
+
+    def action_select_focused(self) -> None:
+        """Activate the currently focused menu item."""
+        focused = self.app.focused
+        if isinstance(focused, MenuOption):
+            self._navigate_to(focused.screen_id)
