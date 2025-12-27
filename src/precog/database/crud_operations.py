@@ -4529,14 +4529,12 @@ def delete_scheduler_status(host_id: str, service_name: str) -> bool:
 #   - teams.current_elo_rating: Live/current rating (updated after each game)
 #   - historical_elo: Seeded from external sources (FiveThirtyEight, etc.)
 #   - elo_calculation_log: Audit trail of every Elo computation (PRIMARY)
-#   - elo_rating_history: DEPRECATED - Redundant with elo_calculation_log
 #
-# DEPRECATION NOTICE (elo_rating_history):
-#   The elo_rating_history table is DEPRECATED as of 2025-12-26.
-#   Use elo_calculation_log instead, which provides:
-#     1. All data from elo_rating_history plus calculation details
-#     2. Game-centric view (both teams per row) vs team-centric
-#     3. Full audit trail with parameters (K-factor, MOV, expected scores)
+# Note: elo_rating_history was REMOVED in migration 0015 (2025-12-26).
+#       It was superseded by elo_calculation_log which provides:
+#         1. Game-centric view (both teams per row) vs team-centric
+#         2. Full audit trail with parameters (K-factor, MOV, expected scores)
+#         3. Links to source game (game_states or historical_games)
 #
 #   To get team-centric view from elo_calculation_log:
 #     SELECT game_date, home_post_elo as rating FROM elo_calculation_log
@@ -4546,14 +4544,14 @@ def delete_scheduler_status(host_id: str, service_name: str) -> bool:
 #     WHERE away_team_id = :team_id
 #     ORDER BY game_date
 #
-#   elo_rating_history will be removed in a future migration.
-#
 # References:
-#   - Migration 0001: teams.current_elo_rating, elo_rating_history
+#   - Migration 0001: teams.current_elo_rating (elo_rating_history removed)
 #   - Migration 0005: historical_elo
 #   - Migration 0013: elo_calculation_log, historical_epa
+#   - Migration 0015: Dropped deprecated elo_rating_history table
 #   - ADR-109: Elo Rating Computation Engine Architecture
 #   - Issue #273: Comprehensive Elo Rating Computation Module
+#   - Issue #277: Remove deprecated elo_rating_history table
 # =============================================================================
 
 
@@ -4570,7 +4568,7 @@ def update_team_elo_rating(
         historical_elo (bootstrap) -> elo_calculation_log (audit)
             -> teams.current_elo_rating (LIVE)
 
-    Note: elo_rating_history is deprecated and no longer part of this flow.
+    Note: elo_rating_history was removed in migration 0015 (superseded by elo_calculation_log).
 
     Args:
         team_id: Primary key of the team in the teams table

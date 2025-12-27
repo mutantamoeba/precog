@@ -19,10 +19,13 @@ Key Distinction: Seeding vs Polling
 Data Categories:
     1. TEAMS: Static team reference data (teams table)
     2. VENUES: Stadium/arena information (venues table)
-    3. HISTORICAL_ELO: Pre-calculated Elo ratings (elo_rating_history)
+    3. HISTORICAL_ELO: Pre-calculated Elo ratings (historical_elo table)
     4. TEAM_RANKINGS: Season rankings (team_rankings table)
     5. ARCHIVED_GAMES: Completed games for backtesting (game_states where status=final)
     6. SCHEDULES: Upcoming game schedules (game_states where status=pre)
+
+Note: elo_rating_history was deprecated and removed in migration 0015.
+      Use elo_calculation_log for Elo computation audit trail.
 
 Educational Notes:
 ------------------

@@ -126,9 +126,14 @@ MODULE_TIERS = {
     "database/seeding/kalshi_historical_cache": "experimental",
     # Issue #236: NFLDataPySource for stats loading
     "database/seeding/sources/nfl_data_py_source": "experimental",
-    # TUI (Issue #268) - Terminal User Interface modules
+    # TUI (Issue #268, #283) - Terminal User Interface modules
     "tui/app": "experimental",
     "tui/screens/main_menu": "experimental",
+    "tui/screens/market_browser": "experimental",
+    "tui/screens/monitoring_dashboard": "experimental",
+    "tui/screens/position_viewer": "experimental",
+    "tui/screens/scheduler_control": "experimental",
+    "tui/screens/settings": "experimental",
     "tui/widgets/header": "experimental",
     # Schedulers
     "schedulers/espn_game_poller": "business",

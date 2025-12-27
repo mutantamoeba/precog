@@ -2,14 +2,14 @@
 
 ---
 **Created:** 2025-10-23
-**Last Updated:** 2025-11-27
+**Last Updated:** 2025-12-26
 **Database:** precog_dev
 **Schema:** public
-**Total Tables:** 32
+**Total Tables:** 31
 **Purpose:** Quick reference for developers - detailed data dictionary in DATABASE_SCHEMA_SUMMARY_V1.15.md
 ---
 
-## Quick Summary: All 32 Tables in precog_dev
+## Quick Summary: All 31 Tables in precog_dev
 
 ### Core Platform (4 tables)
 1. **platforms** - Multi-platform support (Kalshi, Polymarket)
@@ -23,41 +23,40 @@
 7. **team_rankings** - AP Poll, CFP, Coaches Poll with temporal validity (NEW v1.12)
 8. **game_states** - Live game state tracking with SCD Type 2 versioning (NEW v1.12)
 
-### Data & Analytics (4 tables)
+### Data & Analytics (3 tables)
 9. **probability_matrices** - Historical probabilities
 10. **probability_models** - Immutable model versions (no row_current_ind)
 11. **strategies** - Immutable strategy versions (no row_current_ind)
-12. **elo_rating_history** - Audit trail of Elo rating changes
 
 ### Trading & Risk (7 tables)
-13. **edges** - EV+ opportunities with strategy_id/model_id FKs
-14. **positions** - Open positions with trailing_stop_state JSONB + monitoring fields
-15. **trades** - Executed orders with strategy_id/model_id attribution
-16. **position_exits** - Exit events (Phase 5, append-only)
-17. **exit_attempts** - Order attempts for debugging (Phase 5, append-only)
-18. **settlements** - Final outcomes
-19. **account_balance** - Account balances with versioning
+12. **edges** - EV+ opportunities with strategy_id/model_id FKs
+13. **positions** - Open positions with trailing_stop_state JSONB + monitoring fields
+14. **trades** - Executed orders with strategy_id/model_id attribution
+15. **position_exits** - Exit events (Phase 5, append-only)
+16. **exit_attempts** - Order attempts for debugging (Phase 5, append-only)
+17. **settlements** - Final outcomes
+18. **account_balance** - Account balances with versioning
 
 ### System Utilities (4 tables)
-20. **config_overrides** - Database config overrides
-21. **circuit_breaker_events** - Risk management events
-22. **system_health** - System monitoring
-23. **alerts** - Centralized alert/notification logging
+19. **config_overrides** - Database config overrides
+20. **circuit_breaker_events** - Risk management events
+21. **system_health** - System monitoring
+22. **alerts** - Centralized alert/notification logging
 
 ### Lookup Tables (2 tables - Phase 1.5)
-24. **strategy_types** - Strategy approach enum values
-25. **model_classes** - Model approach enum values
+23. **strategy_types** - Strategy approach enum values
+24. **model_classes** - Model approach enum values
 
 ### Performance Tracking (5 tables - Phase 1.5-2)
-26. **performance_metrics** - Unified metrics for strategies/models
-27. **evaluation_runs** - Model validation/backtesting tracking
-28. **predictions** - Individual + ensemble predictions
-29. **ab_test_groups** - A/B testing configuration (Phase 9)
-30. **ab_test_results** - A/B test outcomes (Phase 9)
+25. **performance_metrics** - Unified metrics for strategies/models
+26. **evaluation_runs** - Model validation/backtesting tracking
+27. **predictions** - Individual + ensemble predictions
+28. **ab_test_groups** - A/B testing configuration (Phase 9)
+29. **ab_test_results** - A/B test outcomes (Phase 9)
 
 ### Cold Storage (2 tables - Phase 2+)
-31. **performance_metrics_archive** - Archival for 42+ month old data
-32. **model_calibration_summary** - Materialized view for calibration
+30. **performance_metrics_archive** - Archival for 42+ month old data
+31. **model_calibration_summary** - Materialized view for calibration
 
 ---
 
