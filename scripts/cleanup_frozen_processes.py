@@ -176,7 +176,7 @@ def main() -> int:
         print("  pkill -f run_parallel_checks")
         return 1
 
-    if args.check:
+    if args.check:  # type: ignore[unreachable,unused-ignore]
         print("Checking for orphaned processes...")
         counts = check_processes()
         total = sum(counts.values())
