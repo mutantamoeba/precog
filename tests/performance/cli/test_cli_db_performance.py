@@ -57,8 +57,16 @@ class TestDbPerformance:
         assert p99 < 500, f"p99={p99}ms exceeds 500ms"
 
     def test_status_response_time(self, runner):
-        """Test status command response time."""
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        """Test status command response time.
+
+        Note: The status command calls both test_connection() AND get_connection(),
+        so both must be mocked to prevent real database access during tests.
+        """
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -125,8 +133,16 @@ class TestDbThroughput:
         assert throughput > 5, f"Throughput {throughput:.1f}/s below 5/s"
 
     def test_status_throughput(self, runner):
-        """Test status command throughput."""
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        """Test status command throughput.
+
+        Note: The status command calls both test_connection() AND get_connection(),
+        so both must be mocked to prevent real database access during tests.
+        """
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 

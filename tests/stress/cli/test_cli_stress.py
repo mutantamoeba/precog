@@ -74,8 +74,15 @@ class TestDbStress:
         """Test repeated status checks under load.
 
         Stress: Tests 50 rapid status invocations.
+
+        Note: The status command calls both test_connection() AND get_connection(),
+        so both must be mocked to prevent real database access during tests.
         """
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
 
@@ -155,11 +162,16 @@ class TestMixedCommandStress:
         """Test mixed command sequence under load.
 
         Stress: Tests varied command patterns.
+
+        Note: The status command calls both test_connection() AND get_connection(),
+        so both must be mocked to prevent real database access during tests.
         """
         with (
+            patch("precog.database.connection.test_connection") as mock_test,
             patch("precog.database.connection.get_connection") as mock_conn,
             patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor,
         ):
+            mock_test.return_value = True
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
             mock_instance = MagicMock()

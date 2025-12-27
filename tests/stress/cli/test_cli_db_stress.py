@@ -36,8 +36,16 @@ class TestDbStress:
     """Stress tests for database CLI."""
 
     def test_repeated_status_calls(self, runner):
-        """Test repeated status command calls."""
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        """Test repeated status command calls.
+
+        Note: The status command calls both test_connection() AND get_connection(),
+        so both must be mocked to prevent real database access during tests.
+        """
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -104,8 +112,16 @@ class TestDbHighLoad:
     """High load tests for database CLI."""
 
     def test_alternating_commands(self, runner):
-        """Test alternating between different commands."""
-        with patch("precog.database.connection.get_connection") as mock_conn:
+        """Test alternating between different commands.
+
+        Note: The status command calls both test_connection() AND get_connection(),
+        so both must be mocked to prevent real database access during tests.
+        """
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_connection") as mock_conn,
+        ):
+            mock_test.return_value = True
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock(return_value=False)
 
