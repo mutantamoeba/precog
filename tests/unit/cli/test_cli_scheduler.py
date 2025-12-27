@@ -132,13 +132,21 @@ class TestSchedulerStatus:
 
 
 class TestSchedulerPollOnce:
-    """Test scheduler poll-once command."""
+    """Test scheduler poll-once command.
 
-    @patch("precog.schedulers.espn_game_poller.ESPNGamePoller")
-    @patch("precog.database.connection.get_connection")
-    def test_poll_once_espn_only(self, mock_conn, mock_poller_class, runner):
+    Note: The poll-once command imports pollers from precog.schedulers (the
+    __init__.py re-export), not from the individual module files. Patches must
+    target precog.schedulers.ESPNGamePoller, not precog.schedulers.espn_game_poller.
+
+    Educational Note:
+        When patching, always patch where the name is USED, not where it's DEFINED.
+        Since scheduler.py does `from precog.schedulers import ESPNGamePoller`,
+        we patch `precog.schedulers.ESPNGamePoller`.
+    """
+
+    @patch("precog.schedulers.ESPNGamePoller")
+    def test_poll_once_espn_only(self, mock_poller_class, runner):
         """Test poll-once with ESPN only."""
-        mock_conn.return_value = MagicMock()
         mock_poller = MagicMock()
         mock_poller.poll_once.return_value = {"games": 5, "updated": 3}
         mock_poller_class.return_value = mock_poller
@@ -148,10 +156,12 @@ class TestSchedulerPollOnce:
         # Should attempt poll (may fail on missing config)
         assert result.exit_code in [0, 1]
 
-    @patch("precog.database.connection.get_connection")
-    def test_poll_once_kalshi_only(self, mock_conn, runner):
+    @patch("precog.schedulers.KalshiMarketPoller")
+    def test_poll_once_kalshi_only(self, mock_poller_class, runner):
         """Test poll-once with Kalshi only."""
-        mock_conn.return_value = MagicMock()
+        mock_poller = MagicMock()
+        mock_poller.poll_once.return_value = {"markets": 10, "updated": 5}
+        mock_poller_class.return_value = mock_poller
 
         result = runner.invoke(app, ["poll-once", "--no-espn"])
 
