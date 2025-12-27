@@ -177,3 +177,4 @@ data/historical/*.csv
 # Keep README files to document data sources
 !data/historical/README.md
 docs/planning/
+soak_test_results/
