@@ -175,10 +175,11 @@ python -m pytest tests/ -v
 ./scripts/validate_quick.sh          # Fast validation (~3s)
 ./scripts/validate_all.sh            # Full validation (~60s)
 
-# Testing
-python -m pytest tests/ -v           # All tests
-python -m pytest tests/unit/ -v      # Unit tests only
-python -m pytest tests/ --cov=src/precog --cov-report=term-missing  # Coverage
+# Testing (3 levels)
+python -m pytest tests/unit/ -q --no-cov -n auto                       # Quick (~30s)
+python -m pytest tests/unit/ tests/integration/ tests/e2e/ -q --no-cov # Medium (~60-90s, = pre-push)
+python -m pytest tests/ -q --no-cov                                     # Full (~3-5 min, = CI)
+python -m pytest tests/ --cov=src/precog --cov-report=term-missing      # Full + coverage
 
 # Code quality
 python -m ruff format .              # Format code

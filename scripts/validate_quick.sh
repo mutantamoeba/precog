@@ -1,8 +1,12 @@
 #!/bin/bash
-# validate_quick.sh - Quick validation (code quality + docs, no tests)
-# Phase 0.6c - Validation Infrastructure
+# validate_quick.sh - Quick validation (code quality only, no tests)
 # Usage: ./scripts/validate_quick.sh
-# Time: ~3 seconds (fast feedback during development)
+# Time: ~3-10 seconds (fast feedback during development)
+#
+# Test levels (run manually as needed):
+#   Quick:  python -m pytest tests/unit/ -q --no-cov -n auto              (~30s)
+#   Medium: python -m pytest tests/unit/ tests/integration/ tests/e2e/ -q --no-cov  (~60-90s, same as pre-push)
+#   Full:   python -m pytest tests/ -q --no-cov                           (~3-5 min, same as CI)
 #
 # NOTE: Only checks tracked files (excludes untracked WIP files)
 # This allows skeleton tests to exist without blocking commits/pushes
@@ -10,7 +14,7 @@
 set -e  # Exit on first error
 
 echo "=========================================="
-echo "Quick Validation (Code Quality + Docs)"
+echo "Quick Validation (Code Quality)"
 echo "=========================================="
 echo ""
 
@@ -62,19 +66,6 @@ if python -m mypy . --incremental --cache-dir .mypy_cache --exclude 'tests/' --e
     echo "  [OK] Mypy: No type errors"
 else
     echo "  [FAIL] Mypy: Type errors found"
-    FAILED=1
-fi
-
-echo ""
-
-# 4. Documentation Validation
-echo "4. Documentation Validation"
-echo "---------------------------"
-if python scripts/validate_docs.py ; then
-    echo "  [OK] Documentation: All checks passed"
-else
-    echo "  [FAIL] Documentation: Issues found"
-    echo "     Run: python scripts/fix_docs.py (to auto-fix some issues)"
     FAILED=1
 fi
 

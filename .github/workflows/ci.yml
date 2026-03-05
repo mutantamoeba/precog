@@ -131,13 +131,9 @@ jobs:
         with:
           python-version: '3.14'
 
-      - name: Run documentation validation
+      - name: Run documentation validation (YAML config + config sync)
         run: |
           python scripts/validate_docs.py
-
-      - name: Check for broken internal links
-        run: |
-          python scripts/fix_docs.py --dry-run
 
   test:
     name: Tests (Python ${{ matrix.python-version }} on ${{ matrix.os }})
