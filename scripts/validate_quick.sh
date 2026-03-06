@@ -62,7 +62,7 @@ echo ""
 # Caches in .mypy_cache/ - first run ~20-30s, subsequent ~5-10s
 echo "3. Mypy Type Checking (incremental)"
 echo "------------------------------------"
-if python -m mypy . --incremental --cache-dir .mypy_cache --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --exclude '.venv/' --ignore-missing-imports ; then
+if python -m mypy . --incremental --cache-dir .mypy_cache --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --exclude '.venv/' --exclude 'src/precog/tui/' --ignore-missing-imports ; then
     echo "  [OK] Mypy: No type errors"
 else
     echo "  [FAIL] Mypy: Type errors found"

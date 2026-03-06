@@ -4,6 +4,11 @@ Tests for the Breadcrumb navigation widget.
 Validates the breadcrumb path display and navigation features.
 """
 
+import pytest
+
+# Skip all tests in this module if textual is not installed (optional dependency in CI)
+pytest.importorskip("textual")
+
 from precog.tui.widgets.breadcrumb import Breadcrumb, BreadcrumbSegment
 
 

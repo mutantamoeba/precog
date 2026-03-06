@@ -19,6 +19,10 @@ Reference:
 """
 
 import pytest
+
+# Skip all tests in this module if textual is not installed (optional dependency in CI)
+pytest.importorskip("textual")
+
 from textual.widgets import Button, DataTable, Static
 
 from precog.tui.app import PrecogApp
