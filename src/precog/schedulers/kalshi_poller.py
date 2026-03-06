@@ -305,6 +305,19 @@ class KalshiMarketPoller(BasePoller):
 
         except Exception as e:
             logger.error("Error fetching series from API: %s", e)
+            # Fallback: create minimal series records so FK constraints don't block
+            # market sync. This ensures pollers work even when the API is unreachable.
+            if series_tickers:
+                for ticker in series_tickers:
+                    try:
+                        self._sync_single_series(
+                            {"ticker": ticker, "title": ticker, "category": "Sports", "tags": []}
+                        )
+                        series_created += 1
+                    except Exception as fallback_err:
+                        logger.error(
+                            "Failed to create fallback series %s: %s", ticker, fallback_err
+                        )
 
         logger.info(
             "Series sync complete: fetched=%d, created=%d, updated=%d",
