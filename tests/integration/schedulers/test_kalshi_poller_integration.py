@@ -653,14 +653,20 @@ class TestSeriesSyncIntegration:
         poller_with_mock_client: KalshiMarketPoller,
         mock_kalshi_client: MagicMock,
     ) -> None:
-        """sync_series should handle empty response from API gracefully."""
+        """sync_series should create fallback records when API returns empty.
+
+        Educational Note:
+            When the Kalshi API returns an empty series list (valid HTTP 200
+            but no data), we create fallback records from self.series_tickers
+            to prevent FK constraint failures when markets are synced later.
+        """
         mock_kalshi_client.get_sports_series.return_value = []
 
         result = poller_with_mock_client.sync_series()
 
         assert result["series_fetched"] == 0
-        assert result["series_created"] == 0
-        assert result["series_updated"] == 0
+        # Fallback creates records from self.series_tickers (KXNFLGAME)
+        assert result["series_created"] + result["series_updated"] >= 1
 
     def test_sync_single_series_maps_category_correctly(
         self,

@@ -291,6 +291,23 @@ class KalshiMarketPoller(BasePoller):
             series_fetched = len(api_series_list)
             logger.debug("Fetched %d series from Kalshi API", series_fetched)
 
+            # If API returned empty results, create fallback records from configured
+            # series tickers to prevent FK constraint failures downstream
+            if not api_series_list and self.series_tickers:
+                logger.warning(
+                    "API returned 0 series; creating fallback records for %d configured tickers",
+                    len(self.series_tickers),
+                )
+                for ticker in self.series_tickers:
+                    api_series_list.append(
+                        {
+                            "ticker": ticker,
+                            "title": ticker,
+                            "category": "Sports",
+                            "tags": [],
+                        }
+                    )
+
             # Sync each series to database
             for series_item in api_series_list:
                 try:
@@ -307,8 +324,13 @@ class KalshiMarketPoller(BasePoller):
             logger.error("Error fetching series from API: %s", e)
             # Fallback: create minimal series records so FK constraints don't block
             # market sync. This ensures pollers work even when the API is unreachable.
-            if series_tickers:
-                for ticker in series_tickers:
+            fallback_tickers = series_tickers or self.series_tickers
+            if fallback_tickers:
+                logger.warning(
+                    "Creating fallback series records for %d tickers after API error",
+                    len(fallback_tickers),
+                )
+                for ticker in fallback_tickers:
                     try:
                         self._sync_single_series(
                             {"ticker": ticker, "title": ticker, "category": "Sports", "tags": []}
