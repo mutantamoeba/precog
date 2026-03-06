@@ -460,6 +460,17 @@ def get_env_prefix() -> str:
 
     Returns:
         Prefix string (e.g., "DEV", "PROD")
+
+    Example:
+        >>> os.environ["PRECOG_ENV"] = "staging"
+        >>> get_env_prefix()
+        'STAGING'
+
+    Educational Note:
+        This prefix maps to the naming convention in .env where each
+        environment has its own set of variables (DEV_DB_NAME, STAGING_DB_HOST,
+        PROD_KALSHI_API_KEY, etc.). Changing PRECOG_ENV switches all
+        credentials and configuration at once.
     """
     app_env = get_app_environment()
     prefix_map = {
@@ -500,6 +511,13 @@ def get_prefixed_env(var_name: str, default: str | None = None) -> str | None:
         >>> os.environ["DEV_DB_NAME"] = "precog_dev"
         >>> get_prefixed_env("DB_NAME")
         'precog_dev'
+
+    Educational Note:
+        The resolution order (prefixed -> flat -> default) ensures:
+        - Local dev: uses prefixed vars from .env (DEV_DB_NAME, etc.)
+        - CI: uses flat vars set by GitHub Actions (DB_NAME, etc.)
+        - Fallback: sensible defaults prevent crashes on missing vars
+        Uses ``is not None`` (not truthiness) so empty strings are respected.
     """
     prefix = get_env_prefix()
     prefixed = os.getenv(f"{prefix}_{var_name}")
