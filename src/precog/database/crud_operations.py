@@ -1284,6 +1284,161 @@ def get_market_history(ticker: str, limit: int = 100) -> list[dict[str, Any]]:
     return fetch_all(query, (ticker, limit))
 
 
+def get_markets_summary(
+    sport: str | None = None,
+    status: str | None = None,
+    search: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """
+    Get market summary data for TUI display.
+
+    Returns current markets with key fields for browsing and filtering.
+    This function is designed for the TUI market browser screen.
+
+    Args:
+        sport: Filter by sport (nfl, nba, etc.) - case insensitive
+        status: Filter by status (open, closed, settled)
+        search: Search term for ticker or title (case insensitive)
+        limit: Maximum number of markets to return (default: 100)
+        offset: Number of markets to skip for pagination
+
+    Returns:
+        List of market dictionaries with summary fields:
+        - ticker, title, sport, yes_price, no_price, status, volume
+
+    Example:
+        >>> markets = get_markets_summary(sport='nfl', status='open', limit=50)
+        >>> for m in markets:
+        ...     print(f"{m['ticker']}: ${m['yes_price']:.2f}")
+
+    Educational Note:
+        We filter by row_current_ind=TRUE to only get the latest version
+        of each market, following SCD Type 2 versioning pattern.
+
+    Reference:
+        - ADR-016: SCD Type 2 for market versioning
+        - TUI Market Browser Screen
+    """
+    query = """
+        SELECT
+            ticker,
+            title,
+            COALESCE(sport, 'unknown') as sport,
+            yes_price,
+            no_price,
+            status,
+            COALESCE(volume, 0) as volume
+        FROM markets
+        WHERE row_current_ind = TRUE
+    """
+    params: list[Any] = []
+
+    if sport is not None:
+        query += " AND LOWER(sport) = LOWER(%s)"
+        params.append(sport)
+
+    if status is not None:
+        query += " AND LOWER(status) = LOWER(%s)"
+        params.append(status)
+
+    if search is not None:
+        query += " AND (LOWER(ticker) LIKE %s OR LOWER(title) LIKE %s)"
+        search_pattern = f"%{search.lower()}%"
+        params.extend([search_pattern, search_pattern])
+
+    query += " ORDER BY updated_at DESC LIMIT %s OFFSET %s"
+    params.extend([limit, offset])
+
+    return fetch_all(query, tuple(params))
+
+
+def get_positions_with_pnl(
+    status: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> list[dict[str, Any]]:
+    """
+    Get current positions with calculated P&L values.
+
+    Returns positions with unrealized and realized P&L calculations
+    suitable for TUI display in the position viewer.
+
+    Args:
+        status: Filter by status ('open', 'closed', or None for all)
+        limit: Maximum number of positions to return
+        offset: Number of positions to skip for pagination
+
+    Returns:
+        List of position dictionaries with P&L fields:
+        - position_id, ticker, side, quantity, entry_price, current_price
+        - status, unrealized_pnl, realized_pnl, pnl_percent
+
+    Example:
+        >>> positions = get_positions_with_pnl(status='open')
+        >>> for p in positions:
+        ...     print(f"{p['ticker']}: {p['unrealized_pnl']:+.2f}")
+
+    Educational Note:
+        P&L calculation depends on position side:
+        - YES side: (current_price - entry_price) * quantity
+        - NO side: (entry_price - current_price) * quantity
+
+        Unrealized P&L uses current market price; realized P&L uses
+        actual exit price for closed positions.
+
+    Reference:
+        - ADR-018: Position tracking with SCD Type 2
+        - TUI Position Viewer Screen
+    """
+    query = """
+        SELECT
+            p.position_id,
+            m.ticker,
+            p.side,
+            p.quantity,
+            p.entry_price,
+            COALESCE(m.yes_price, p.entry_price) as current_price,
+            p.status,
+            p.exit_price,
+            p.realized_pnl,
+            -- Calculate unrealized P&L based on side
+            CASE
+                WHEN p.side = 'yes' THEN
+                    (COALESCE(m.yes_price, p.entry_price) - p.entry_price) * p.quantity
+                WHEN p.side = 'no' THEN
+                    (p.entry_price - COALESCE(m.no_price, p.entry_price)) * p.quantity
+                ELSE 0
+            END as unrealized_pnl,
+            -- Calculate P&L percentage
+            CASE
+                WHEN p.entry_price > 0 THEN
+                    CASE
+                        WHEN p.side = 'yes' THEN
+                            ((COALESCE(m.yes_price, p.entry_price) - p.entry_price) / p.entry_price) * 100
+                        WHEN p.side = 'no' THEN
+                            ((p.entry_price - COALESCE(m.no_price, p.entry_price)) / p.entry_price) * 100
+                        ELSE 0
+                    END
+                ELSE 0
+            END as pnl_percent
+        FROM positions p
+        LEFT JOIN markets m ON p.market_id = m.market_id AND m.row_current_ind = TRUE
+        WHERE p.row_current_ind = TRUE
+    """
+    params: list[Any] = []
+
+    if status is not None:
+        query += " AND LOWER(p.status) = LOWER(%s)"
+        params.append(status)
+
+    query += " ORDER BY p.entry_time DESC LIMIT %s OFFSET %s"
+    params.extend([limit, offset])
+
+    return fetch_all(query, tuple(params))
+
+
 # =============================================================================
 # POSITION OPERATIONS
 # =============================================================================

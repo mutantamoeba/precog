@@ -15,15 +15,16 @@ from typing import ClassVar
 from textual.app import ComposeResult
 from textual.binding import Binding, BindingType
 from textual.containers import Container, Horizontal, Vertical
-from textual.screen import Screen
 from textual.widgets import Button, Label, Static
 
 # Import screens for navigation
+from precog.tui.screens.base_screen import BaseScreen
 from precog.tui.screens.market_browser import MarketBrowserScreen
 from precog.tui.screens.monitoring_dashboard import MonitoringDashboardScreen
 from precog.tui.screens.position_viewer import PositionViewerScreen
 from precog.tui.screens.scheduler_control import SchedulerControlScreen
 from precog.tui.screens.settings import SettingsScreen
+from precog.tui.widgets.environment_bar import EnvironmentBar
 from precog.tui.widgets.header import AsciiHeader
 
 
@@ -45,15 +46,19 @@ class MenuOption(Button):
         self.description = description
 
 
-class MainMenuScreen(Screen):
+class MainMenuScreen(BaseScreen):
     """
     Main menu screen with navigation to all functional areas.
 
     This is the landing screen users see when launching the TUI.
     Provides clear navigation with keyboard shortcuts.
+
+    Educational Note:
+        Inherits from BaseScreen to get global keybindings (help, quit, theme)
+        visible in the footer. Screen-specific bindings (1-8) are added here.
     """
 
-    BINDINGS: ClassVar[list[BindingType]] = [
+    BINDINGS: ClassVar[list[BindingType]] = BaseScreen.BINDINGS + [
         ("1", "goto_markets", "Markets"),
         ("2", "goto_positions", "Positions"),
         ("3", "goto_trades", "Trades"),
@@ -75,6 +80,7 @@ class MainMenuScreen(Screen):
     def compose(self) -> ComposeResult:
         """Create the main menu layout."""
         yield AsciiHeader()
+        yield EnvironmentBar.from_app(self.app)
 
         with Container(id="menu-container"):
             with Horizontal(id="menu-columns"):
@@ -211,3 +217,12 @@ class MainMenuScreen(Screen):
         focused = self.app.focused
         if isinstance(focused, MenuOption):
             self._navigate_to(focused.screen_id)
+
+    def action_go_back(self) -> None:
+        """Override to prevent going back from main menu.
+
+        Educational Note:
+            Main menu is the root screen. Pressing escape here should
+            not pop the screen stack as there's nowhere to go back to.
+        """
+        # Do nothing on main menu

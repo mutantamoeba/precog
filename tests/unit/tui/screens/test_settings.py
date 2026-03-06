@@ -41,12 +41,12 @@ class TestSettingsScreen:
         assert callable(screen._load_connections)
 
     def test_settings_has_load_configuration_method(self) -> None:
-        """Verify screen has _load_configuration method."""
+        """Verify screen has _load_configuration_into_inputs method."""
         from precog.tui.screens.settings import SettingsScreen
 
         screen = SettingsScreen()
-        assert hasattr(screen, "_load_configuration")
-        assert callable(screen._load_configuration)
+        assert hasattr(screen, "_load_configuration_into_inputs")
+        assert callable(screen._load_configuration_into_inputs)
 
     def test_settings_has_test_database_method(self) -> None:
         """Verify screen has _test_database method for connection testing."""
@@ -56,10 +56,20 @@ class TestSettingsScreen:
         assert hasattr(screen, "_test_database")
         assert callable(screen._test_database)
 
-    def test_settings_has_demo_config_fallback(self) -> None:
-        """Verify screen has _load_demo_config method for graceful fallback."""
+    def test_settings_has_default_config_fallback(self) -> None:
+        """Verify screen has _load_default_config method for graceful fallback."""
         from precog.tui.screens.settings import SettingsScreen
 
         screen = SettingsScreen()
-        assert hasattr(screen, "_load_demo_config")
-        assert callable(screen._load_demo_config)
+        assert hasattr(screen, "_load_default_config")
+        assert callable(screen._load_default_config)
+
+    def test_settings_has_save_and_reset_actions(self) -> None:
+        """Verify screen has save and reset action methods."""
+        from precog.tui.screens.settings import SettingsScreen
+
+        screen = SettingsScreen()
+        assert hasattr(screen, "action_save_config")
+        assert callable(screen.action_save_config)
+        assert hasattr(screen, "action_reset_defaults")
+        assert callable(screen.action_reset_defaults)

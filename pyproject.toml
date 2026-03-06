@@ -69,6 +69,7 @@ historical = [
 tui = [
     "textual>=0.47.0",         # Modern TUI framework
     "textual-dev>=1.0.0",      # Development tools (console, devtools)
+    "textual-plotext>=1.0.0",  # Rich line charts and plots for TUI
 ]
 
 # All optional dependencies

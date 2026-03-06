@@ -21,11 +21,14 @@ from typing import ClassVar
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Horizontal
-from textual.screen import Screen
 from textual.widgets import Button, DataTable, Label, RichLog, Static
 
+from precog.tui.screens.base_screen import BaseScreen
+from precog.tui.widgets.breadcrumb import Breadcrumb
+from precog.tui.widgets.environment_bar import EnvironmentBar
 
-class SchedulerControlScreen(Screen):
+
+class SchedulerControlScreen(BaseScreen):
     """
     Scheduler control screen for managing background services.
 
@@ -37,18 +40,20 @@ class SchedulerControlScreen(Screen):
         periodically update their status in the database. A service
         is considered "stale" if its last heartbeat exceeds the
         configured threshold (typically 2x the poll interval).
+        Inherits from BaseScreen to get global keybindings in footer.
     """
 
-    BINDINGS: ClassVar[list[BindingType]] = [
+    BINDINGS: ClassVar[list[BindingType]] = BaseScreen.BINDINGS + [
         ("r", "refresh", "Refresh"),
         ("s", "start_all", "Start All"),
         ("x", "stop_all", "Stop All"),
         ("l", "toggle_logs", "Toggle Logs"),
-        ("escape", "go_back", "Back"),
     ]
 
     def compose(self) -> ComposeResult:
         """Create the scheduler control layout."""
+        yield Breadcrumb.for_screen("scheduler_control")
+        yield EnvironmentBar.from_app(self.app)
         yield Label("Scheduler Control", id="screen-title", classes="screen-title")
 
         # Summary bar
@@ -100,10 +105,37 @@ class SchedulerControlScreen(Screen):
         # Load initial data
         self._load_services()
 
+    def _get_data_source_mode(self) -> str:
+        """Get the current data source mode from the app.
+
+        Educational Note:
+            Accesses the app's data_source_mode property which controls whether
+            screens use real database data, demo data, or auto-fallback behavior.
+        """
+        from precog.tui.app import PrecogApp
+
+        if isinstance(self.app, PrecogApp):
+            return self.app.data_source_mode
+        return "auto"  # Default to auto mode
+
     def _load_services(self) -> None:
-        """Load scheduler services from the database."""
+        """Load scheduler services from the database.
+
+        Educational Note:
+            The data source mode determines behavior:
+            - "demo": Always use demo data, skip database query
+            - "real": Only use database, show error if unavailable
+            - "auto": Try database first, fall back to demo on error
+        """
         table = self.query_one("#service-table", DataTable)
         table.clear()
+
+        data_mode = self._get_data_source_mode()
+
+        # Demo mode: Skip database, use demo data directly
+        if data_mode == "demo":
+            self._load_demo_data(table)
+            return
 
         try:
             from precog.database.crud_operations import list_scheduler_services
@@ -156,20 +188,60 @@ class SchedulerControlScreen(Screen):
                 )
 
             self._update_summary(running, stopped)
-            self.query_one("#scheduler-status", Static).update(
-                f"[green]Loaded {len(services)} services[/]"
-            )
+
+            if len(services) == 0:
+                # Database connected but no services registered
+                self._load_demo_data(table, show_empty_message=True)
+            else:
+                # Count stale services to provide better feedback
+                stale_count = sum(1 for s in services if s.get("is_stale", False))
+                if stale_count > 0:
+                    self.query_one("#scheduler-status", Static).update(
+                        f"[bold yellow]⚠ {stale_count} service(s) are STALE[/] - "
+                        "[dim]Heartbeat not received in 120+ seconds. "
+                        "The scheduler process may have crashed or stopped.\n"
+                        "To restart:[/] [bold white]precog scheduler start --kalshi --foreground[/]"
+                    )
+                else:
+                    self.query_one("#scheduler-status", Static).update(
+                        f"[green]Loaded {len(services)} services - all healthy[/]"
+                    )
 
         except ImportError:
-            self._load_demo_data(table)
+            if data_mode == "real":
+                self.query_one("#scheduler-status", Static).update(
+                    "[red]Database module not available - real mode requires database[/]"
+                )
+            else:
+                self._load_demo_data(table, show_import_error=True)
         except Exception as e:
-            self.query_one("#scheduler-status", Static).update(
-                f"[red]Error loading services: {e}[/]"
-            )
-            self._load_demo_data(table)
+            if data_mode == "real":
+                self.query_one("#scheduler-status", Static).update(f"[red]Database error: {e}[/]")
+            else:
+                self.query_one("#scheduler-status", Static).update(
+                    f"[red]Error loading services: {e}[/]"
+                )
+                self._load_demo_data(table)
 
-    def _load_demo_data(self, table: DataTable) -> None:
-        """Load demonstration data when database is unavailable."""
+    def _load_demo_data(
+        self,
+        table: DataTable,
+        show_empty_message: bool = False,
+        show_import_error: bool = False,
+    ) -> None:
+        """Load demonstration data when database is unavailable or empty.
+
+        Args:
+            table: The DataTable to populate
+            show_empty_message: If True, database is connected but no services exist
+            show_import_error: If True, CRUD operations couldn't be imported
+
+        Educational Note:
+            This provides different status messages based on WHY demo data is shown:
+            - No services registered: Need to start scheduler processes
+            - Import error: CRUD operations not available (development mode)
+            - Other exceptions: Database connection issue
+        """
         demo_services = [
             ("ESPN Game Poller", "poller", "[green]Running[/]", "12s ago", "60s", "0"),
             ("ESPN Rankings Poller", "poller", "[green]Running[/]", "45s ago", "300s", "0"),
@@ -182,9 +254,28 @@ class SchedulerControlScreen(Screen):
             table.add_row(*svc)
 
         self._update_summary(3, 2)
-        self.query_one("#scheduler-status", Static).update(
-            "[yellow]Showing demo data (database unavailable)[/]"
-        )
+
+        # Provide context-appropriate status message with actionable instructions
+        if show_empty_message:
+            self.query_one("#scheduler-status", Static).update(
+                "[bold cyan on #003344]  NO SERVICES RUNNING  [/]\n"
+                "[dim]To start data collection, run in a terminal:[/]\n"
+                "[bold white]  precog scheduler start --kalshi --foreground[/]\n"
+                "[dim]Or for production with auto-restart:[/]\n"
+                "[bold white]  precog scheduler start --kalshi --supervised --foreground[/]"
+            )
+        elif show_import_error:
+            self.query_one("#scheduler-status", Static).update(
+                "[bold yellow on #3D2A00]  SAMPLE DATA  [/] "
+                "[dim]CRUD operations unavailable - running in UI-only mode. "
+                "Install database dependencies to enable real service monitoring.[/]"
+            )
+        else:
+            self.query_one("#scheduler-status", Static).update(
+                "[bold yellow on #3D2A00]  SAMPLE DATA  [/] "
+                "[dim]Database error - showing demonstration services. "
+                "Check database connection and try again.[/]"
+            )
 
         # Add demo log entries
         log = self.query_one("#service-logs", RichLog)
@@ -235,8 +326,27 @@ class SchedulerControlScreen(Screen):
         elif button_id == "btn-refresh":
             self.action_refresh()
 
+    def _get_api_environment(self) -> str:
+        """Get the current API environment from the app."""
+        from precog.tui.app import PrecogApp
+
+        if isinstance(self.app, PrecogApp):
+            return self.app.api_environment
+        return "demo"
+
     def _control_selected(self, action: str) -> None:
-        """Control the selected service."""
+        """Control the selected service.
+
+        Educational Note:
+            Textual DataTable's cursor_row returns the visual row index, but
+            get_row_at() can fail if the table is empty or not yet populated.
+            We must validate both that a row is selected AND that the table
+            has data before attempting to access the row.
+
+            For service control, we use poll_once() to run a single poll cycle
+            rather than starting a background thread, which is more appropriate
+            for a TUI interaction model.
+        """
         table = self.query_one("#service-table", DataTable)
         cursor_row: int | None = table.cursor_row
 
@@ -244,16 +354,135 @@ class SchedulerControlScreen(Screen):
             self.app.notify("Select a service first", severity="warning")
             return
 
-        row_data = table.get_row_at(cursor_row)
-        if row_data:
-            service_name = row_data[0]
-            self.app.notify(f"{action.title()} '{service_name}' - Not implemented yet")
+        # Validate table has data before accessing row
+        if table.row_count == 0:
+            self.app.notify("No services loaded yet", severity="warning")
+            return
 
-            # Log the action
-            log = self.query_one("#service-logs", RichLog)
-            log.write(
-                f"[dim]{datetime.now(UTC).strftime('%H:%M:%S')}[/] {action.title()} requested for {service_name}"
-            )
+        if not table.is_valid_row_index(cursor_row):
+            self.app.notify("Invalid row selected", severity="warning")
+            return
+
+        try:
+            row_data = table.get_row_at(cursor_row)
+            if row_data:
+                service_name = str(row_data[0])
+                log = self.query_one("#service-logs", RichLog)
+                now = datetime.now(UTC).strftime("%H:%M:%S")
+
+                if action == "start":
+                    self._run_poll_once(service_name, log)
+                elif action == "stop":
+                    log.write(f"[dim]{now}[/] [yellow]Stop not available for {service_name}[/]")
+                    log.write(
+                        f"[dim]{now}[/] [dim]Scheduler processes run independently. "
+                        "Use 'precog scheduler stop' in terminal.[/]"
+                    )
+                    self.app.notify(
+                        "Use 'precog scheduler stop' in terminal to stop services",
+                        severity="warning",
+                    )
+                elif action == "restart":
+                    log.write(
+                        f"[dim]{now}[/] [cyan]Restart = running poll-once for {service_name}[/]"
+                    )
+                    self._run_poll_once(service_name, log)
+
+        except Exception as e:
+            self.app.notify(f"Error accessing row: {e}", severity="error")
+
+    def _run_poll_once(self, service_name: str, log: RichLog) -> None:
+        """Run a single poll cycle for the specified service.
+
+        Args:
+            service_name: Name of the service to poll
+            log: RichLog widget to write status messages
+
+        Educational Note:
+            Instead of trying to control external scheduler processes,
+            we run poll_once() directly from the TUI. This:
+            1. Immediately populates the database with fresh data
+            2. Works regardless of whether background scheduler is running
+            3. Provides instant feedback to the user
+        """
+        now = datetime.now(UTC).strftime("%H:%M:%S")
+        api_env = self._get_api_environment()
+
+        log.write(f"[dim]{now}[/] [cyan]Starting poll for {service_name}...[/]")
+        self.app.notify(f"Polling {service_name}...")
+
+        try:
+            # Determine which poller to use based on service name
+            service_lower = service_name.lower()
+
+            if "kalshi" in service_lower:
+                from precog.schedulers.kalshi_poller import KalshiMarketPoller
+
+                poller = KalshiMarketPoller(
+                    series_tickers=["KXNFLGAME"],
+                    environment=api_env,
+                )
+                result = poller.poll_once()
+                poller.kalshi_client.close()
+
+                log.write(
+                    f"[dim]{now}[/] [green]Kalshi: {result['items_fetched']} markets fetched, "
+                    f"{result['items_updated']} updated, {result['items_created']} created[/]"
+                )
+                self.app.notify(
+                    f"Kalshi: {result['items_fetched']} markets, {result['items_updated']} updated",
+                    severity="information",
+                )
+
+            elif "espn" in service_lower:
+                from precog.schedulers.espn_game_poller import ESPNGamePoller
+
+                # Determine leagues based on service name
+                leagues = ["nfl", "ncaaf"]
+
+                poller = ESPNGamePoller(leagues=leagues)
+                result = poller.poll_once()
+
+                log.write(
+                    f"[dim]{now}[/] [green]ESPN: {result['items_fetched']} games fetched, "
+                    f"{result['items_updated']} updated[/]"
+                )
+                self.app.notify(
+                    f"ESPN: {result['items_fetched']} games, {result['items_updated']} updated",
+                    severity="information",
+                )
+
+            elif "position" in service_lower or "monitor" in service_lower:
+                log.write(
+                    f"[dim]{now}[/] [yellow]Position Monitor is read-only - no poll needed[/]"
+                )
+                self.app.notify("Position Monitor doesn't poll external APIs")
+
+            elif "alert" in service_lower:
+                log.write(f"[dim]{now}[/] [yellow]Alert Dispatcher is triggered by events[/]")
+                self.app.notify("Alert Dispatcher doesn't poll - it responds to events")
+
+            else:
+                log.write(f"[dim]{now}[/] [yellow]Unknown service type: {service_name}[/]")
+                self.app.notify(f"Unknown service: {service_name}", severity="warning")
+
+            # Refresh the service list to show updated status
+            self._load_services()
+
+        except ValueError as e:
+            error_msg = str(e)
+            log.write(f"[dim]{now}[/] [red]Error: {error_msg}[/]")
+            if "KALSHI_API_KEY" in error_msg or "KALSHI_PRIVATE_KEY" in error_msg:
+                self.app.notify("Kalshi API credentials not configured", severity="error")
+                log.write(
+                    f"[dim]{now}[/] [dim]Set KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH in .env[/]"
+                )
+            else:
+                self.app.notify(f"Configuration error: {error_msg[:50]}", severity="error")
+
+        except Exception as e:
+            log.write(f"[dim]{now}[/] [red]Poll failed: {e}[/]")
+            self.app.notify(f"Poll failed: {str(e)[:50]}", severity="error")
 
     def action_refresh(self) -> None:
         """Refresh service data."""
@@ -261,12 +490,47 @@ class SchedulerControlScreen(Screen):
         self.app.notify("Services refreshed")
 
     def action_start_all(self) -> None:
-        """Start all stopped services."""
-        self.app.notify("Starting all services - Not implemented yet")
+        """Start all services by running poll-once for each.
+
+        Educational Note:
+            Rather than starting background processes, we run a single poll
+            cycle for each service type. This immediately populates the database
+            with fresh data from all sources.
+        """
+        log = self.query_one("#service-logs", RichLog)
+        now = datetime.now(UTC).strftime("%H:%M:%S")
+
+        log.write(f"[dim]{now}[/] [bold cyan]=== Starting all services (poll-once) ===[/]")
+        self.app.notify("Starting poll for all services...")
+
+        # Poll Kalshi
+        self._run_poll_once("Kalshi Market Poller", log)
+
+        # Poll ESPN
+        self._run_poll_once("ESPN Game Poller", log)
+
+        log.write(f"[dim]{now}[/] [bold cyan]=== All services polled ===[/]")
 
     def action_stop_all(self) -> None:
-        """Stop all running services."""
-        self.app.notify("Stopping all services - Not implemented yet")
+        """Stop all running services.
+
+        Educational Note:
+            The scheduler runs as a separate process, not within the TUI.
+            To stop it, users need to run 'precog scheduler stop' in terminal
+            or press Ctrl+C in the terminal running the scheduler.
+        """
+        log = self.query_one("#service-logs", RichLog)
+        now = datetime.now(UTC).strftime("%H:%M:%S")
+
+        log.write(f"[dim]{now}[/] [yellow]Stop All requested[/]")
+        log.write(f"[dim]{now}[/] [dim]Scheduler processes run independently from TUI.[/]")
+        log.write(f"[dim]{now}[/] [dim]To stop: Run 'precog scheduler stop' in terminal,[/]")
+        log.write(f"[dim]{now}[/] [dim]or press Ctrl+C in the scheduler terminal.[/]")
+
+        self.app.notify(
+            "Use 'precog scheduler stop' in terminal",
+            severity="warning",
+        )
 
     def action_toggle_logs(self) -> None:
         """Toggle the log panel visibility."""
