@@ -203,28 +203,42 @@ class TestEnvironmentVariablePrecedence:
             env = get_app_environment()
             assert env == AppEnvironment.STAGING
 
-    def test_explicit_db_name_overrides_derived(self) -> None:
-        """Explicit DB_NAME should override PRECOG_ENV-derived database name."""
-        with patch.dict(os.environ, {"PRECOG_ENV": "staging", "DB_NAME": "custom_database"}):
+    def test_prefixed_db_name_overrides_flat(self) -> None:
+        """Prefixed {PREFIX}_DB_NAME should override flat DB_NAME."""
+        with patch.dict(
+            os.environ,
+            {"PRECOG_ENV": "staging", "STAGING_DB_NAME": "precog_staging", "DB_NAME": "wrong_db"},
+            clear=True,
+        ):
             from precog.config.environment import get_database_name
 
             db_name = get_database_name()
-            assert db_name == "custom_database"
+            assert db_name == "precog_staging"
+
+    def test_flat_db_name_fallback_for_ci(self) -> None:
+        """Flat DB_NAME used when no prefixed var exists (CI scenario)."""
+        with patch.dict(os.environ, {"PRECOG_ENV": "test", "DB_NAME": "precog_test"}, clear=True):
+            from precog.config.environment import get_database_name
+
+            db_name = get_database_name()
+            assert db_name == "precog_test"
 
     def test_fallback_chain(self) -> None:
-        """Test the full fallback chain: PRECOG_ENV -> DB_NAME -> default."""
+        """Test the full fallback chain: PRECOG_ENV -> ENVIRONMENT -> default."""
         # No env vars: should default to development
         with patch.dict(os.environ, {}, clear=True):
             env = get_app_environment()
             assert env == AppEnvironment.DEVELOPMENT
 
-        # Only DB_NAME: should infer from name
-        with patch.dict(os.environ, {"DB_NAME": "precog_prod"}, clear=True):
+        # Only ENVIRONMENT: should use as fallback
+        with patch.dict(os.environ, {"ENVIRONMENT": "production"}, clear=True):
             env = get_app_environment()
             assert env == AppEnvironment.PRODUCTION
 
         # Both set: PRECOG_ENV wins
-        with patch.dict(os.environ, {"PRECOG_ENV": "test", "DB_NAME": "precog_prod"}, clear=False):
+        with patch.dict(
+            os.environ, {"PRECOG_ENV": "test", "ENVIRONMENT": "production"}, clear=True
+        ):
             env = get_app_environment()
             assert env == AppEnvironment.TEST
 
