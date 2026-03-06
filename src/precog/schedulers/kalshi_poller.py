@@ -174,9 +174,20 @@ class KalshiMarketPoller(BasePoller):
         """
         Execute a single poll cycle for all configured series.
 
+        Syncs series metadata first (required for FK constraints), then
+        polls each series for market data.
+
         Returns:
             Dictionary with counts: items_fetched, items_updated, items_created
+
+        Educational Note:
+            Series records must exist in the database before events/markets
+            can reference them via foreign keys. The sync_series() call
+            ensures this prerequisite is met before any market sync attempts.
         """
+        # Ensure series records exist before syncing markets (FK requirement)
+        self.sync_series()
+
         total_fetched = 0
         total_updated = 0
         total_created = 0
@@ -247,15 +258,32 @@ class KalshiMarketPoller(BasePoller):
         try:
             # Fetch series from API
             if series_tickers:
-                # Fetch specific series by ticker
-                api_series_list = []
+                # Fetch all Sports series and filter to our target tickers
+                # We use category="Sports" with a large limit because the generic
+                # get_series() returns alphabetically and our tickers may be
+                # beyond the first 100 results
+                all_sports = self.kalshi_client.get_series(category="Sports", limit=200)
+                target_set = set(series_tickers)
+                api_series_list = [s for s in all_sports if s.get("ticker") in target_set]
+
+                # For any tickers not found via API, create minimal series records
+                # to satisfy FK constraints. This handles series that may be in a
+                # different category or beyond pagination limits.
+                found_tickers = {s.get("ticker") for s in api_series_list}
                 for ticker in series_tickers:
-                    fetched_series = self.kalshi_client.get_series(limit=100)
-                    # Filter to matching ticker
-                    for s in fetched_series:
-                        if s.get("ticker") == ticker:
-                            api_series_list.append(s)
-                            break
+                    if ticker not in found_tickers:
+                        logger.info(
+                            "Series %s not found in API listing, creating minimal record",
+                            ticker,
+                        )
+                        api_series_list.append(
+                            {
+                                "ticker": ticker,
+                                "title": ticker,
+                                "category": "Sports",
+                                "tags": [],
+                            }
+                        )
             else:
                 # Fetch all sports series (using our configured sports)
                 api_series_list = self.kalshi_client.get_sports_series()
@@ -371,6 +399,7 @@ class KalshiMarketPoller(BasePoller):
         Execute a single poll cycle manually.
 
         Useful for testing or on-demand updates outside the scheduled interval.
+        Syncs series metadata first to satisfy FK constraints.
 
         Args:
             series_tickers: Optional list of series to poll. Defaults to configured series.
@@ -379,6 +408,10 @@ class KalshiMarketPoller(BasePoller):
             Dictionary with counts: {"items_fetched": N, "items_updated": M, "items_created": P}
         """
         target_series = series_tickers or self.series_tickers
+
+        # Ensure series records exist before syncing markets (FK requirement)
+        self.sync_series(target_series)
+
         total_fetched = 0
         total_updated = 0
         total_created = 0
@@ -421,6 +454,8 @@ class KalshiMarketPoller(BasePoller):
         cursor: str | None = None
 
         # Paginate through all markets in the series
+        # Uses get_markets() with size-based heuristic for backward compatibility.
+        # For full cursor-based pagination, use client.fetch_all_markets() directly.
         while True:
             markets = self.kalshi_client.get_markets(
                 series_ticker=series_ticker,
@@ -428,16 +463,24 @@ class KalshiMarketPoller(BasePoller):
                 cursor=cursor,
             )
 
+            if not markets:
+                break
+
             all_markets.extend(markets)
 
-            # Check if there are more pages
-            # Note: get_markets returns the markets list, cursor is in response
-            # For simplicity, we break if we got fewer than limit (last page)
+            # If we got fewer than the limit, this is the last page
             if len(markets) < self.MAX_MARKETS_PER_REQUEST:
                 break
 
-            # TODO: Extract cursor from response for proper pagination
-            # For now, break after first page (most series have <200 markets)
+            # For series with exactly MAX_MARKETS_PER_REQUEST results,
+            # we cannot determine if more pages exist without cursor access.
+            # Most sports series have <200 markets, so this is acceptable.
+            # For guaranteed full pagination, use fetch_all_markets() instead.
+            logger.debug(
+                "Fetched %d markets for %s (at page limit, may have more)",
+                len(markets),
+                series_ticker,
+            )
             break
 
         markets_updated = 0

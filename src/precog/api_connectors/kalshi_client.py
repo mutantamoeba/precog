@@ -560,6 +560,69 @@ class KalshiClient:
                         extra={"field": field, "value": data[field], "error": str(e)},
                     )
 
+    def _get_markets_page(
+        self,
+        series_ticker: str | None = None,
+        event_ticker: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> tuple[list[ProcessedMarketData], str | None]:
+        """
+        Fetch a single page of markets, returning both items and pagination cursor.
+
+        This is the internal workhorse for market fetching. It returns the raw
+        pagination cursor so callers can implement multi-page fetching.
+
+        Args:
+            series_ticker: Filter by series (e.g., "KXNFLGAME")
+            event_ticker: Filter by event (e.g., "KXNFLGAME-25OCT05-NEBUF")
+            limit: Max markets to return (default 100, max 200)
+            cursor: Pagination cursor for next page
+
+        Returns:
+            Tuple of (markets_list, next_cursor). next_cursor is None if no more pages.
+
+        Educational Note:
+            Cursor-Based Pagination:
+            - Kalshi API returns max 200 markets per request
+            - Response includes 'cursor' string if more pages exist
+            - Pass cursor to next request to get the next page
+            - cursor is None or empty string when on the last page
+
+        Reference: REQ-API-001 (Kalshi API Integration)
+        Related: ADR-048 (Decimal-First Response Parsing)
+        """
+        params: dict[str, Any] = {"limit": limit}
+
+        if series_ticker:
+            params["series_ticker"] = series_ticker
+        if event_ticker:
+            params["event_ticker"] = event_ticker
+        if cursor:
+            params["cursor"] = cursor
+
+        response = self._make_request("GET", "/markets", params=params)
+
+        # Extract cursor BEFORE we discard the response envelope
+        next_cursor = response.get("cursor") or None
+
+        markets = response.get("markets", [])
+
+        # Convert all prices to Decimal (CRITICAL for precision!)
+        for market in markets:
+            self._convert_prices_to_decimal(market)
+
+        logger.info(
+            f"Fetched {len(markets)} markets",
+            extra={
+                "count": len(markets),
+                "series_ticker": series_ticker,
+                "has_more": next_cursor is not None,
+            },
+        )
+
+        return cast("list[ProcessedMarketData]", markets), next_cursor
+
     def get_markets(
         self,
         series_ticker: str | None = None,
@@ -600,33 +663,13 @@ class KalshiClient:
         Reference: REQ-API-001 (Kalshi API Integration)
         Related: ADR-048 (Decimal-First Response Parsing)
         """
-        params: dict[str, Any] = {"limit": limit}
-
-        if series_ticker:
-            params["series_ticker"] = series_ticker
-        if event_ticker:
-            params["event_ticker"] = event_ticker
-        if cursor:
-            params["cursor"] = cursor
-
-        response = self._make_request("GET", "/markets", params=params)
-
-        markets = response.get("markets", [])
-
-        # Convert all prices to Decimal (CRITICAL for precision!)
-        for market in markets:
-            self._convert_prices_to_decimal(market)
-
-        logger.info(
-            f"Fetched {len(markets)} markets",
-            extra={
-                "count": len(markets),
-                "series_ticker": series_ticker,
-                "has_more": "cursor" in response,
-            },
+        markets, _cursor = self._get_markets_page(
+            series_ticker=series_ticker,
+            event_ticker=event_ticker,
+            limit=limit,
+            cursor=cursor,
         )
-
-        return cast("list[ProcessedMarketData]", markets)
+        return markets
 
     def get_market(self, ticker: str) -> ProcessedMarketData:
         """
@@ -866,6 +909,55 @@ class KalshiClient:
 
         return cast("list[ProcessedPositionData]", positions)
 
+    def _get_fills_page(
+        self,
+        ticker: str | None = None,
+        min_ts: int | None = None,
+        max_ts: int | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> tuple[list[ProcessedFillData], str | None]:
+        """
+        Fetch a single page of fills, returning both items and pagination cursor.
+
+        Args:
+            ticker: Filter by market ticker
+            min_ts: Minimum timestamp (Unix milliseconds)
+            max_ts: Maximum timestamp (Unix milliseconds)
+            limit: Max fills to return (default 100)
+            cursor: Pagination cursor
+
+        Returns:
+            Tuple of (fills_list, next_cursor). next_cursor is None if no more pages.
+
+        Reference: REQ-CLI-004 (Fills Fetch Command)
+        """
+        params: dict[str, Any] = {"limit": limit}
+
+        if ticker:
+            params["ticker"] = ticker
+        if min_ts is not None:
+            params["min_ts"] = min_ts
+        if max_ts is not None:
+            params["max_ts"] = max_ts
+        if cursor:
+            params["cursor"] = cursor
+
+        response = self._make_request("GET", "/portfolio/fills", params=params)
+
+        # Extract cursor BEFORE discarding the response envelope
+        next_cursor = response.get("cursor") or None
+
+        fills = response.get("fills", [])
+
+        # Convert prices to Decimal
+        for fill in fills:
+            self._convert_prices_to_decimal(fill)
+
+        logger.info(f"Fetched {len(fills)} fills", extra={"count": len(fills)})
+
+        return cast("list[ProcessedFillData]", fills), next_cursor
+
     def get_fills(
         self,
         ticker: str | None = None,
@@ -895,27 +987,55 @@ class KalshiClient:
 
         Reference: REQ-CLI-004 (Fills Fetch Command)
         """
+        fills, _cursor = self._get_fills_page(
+            ticker=ticker,
+            min_ts=min_ts,
+            max_ts=max_ts,
+            limit=limit,
+            cursor=cursor,
+        )
+        return fills
+
+    def _get_settlements_page(
+        self,
+        ticker: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> tuple[list[ProcessedSettlementData], str | None]:
+        """
+        Fetch a single page of settlements, returning both items and pagination cursor.
+
+        Args:
+            ticker: Filter by market ticker
+            limit: Max settlements to return (default 100)
+            cursor: Pagination cursor
+
+        Returns:
+            Tuple of (settlements_list, next_cursor). next_cursor is None if no more pages.
+
+        Reference: REQ-CLI-005 (Settlements Fetch Command)
+        """
         params: dict[str, Any] = {"limit": limit}
 
         if ticker:
             params["ticker"] = ticker
-        if min_ts:
-            params["min_ts"] = min_ts
-        if max_ts:
-            params["max_ts"] = max_ts
         if cursor:
             params["cursor"] = cursor
 
-        response = self._make_request("GET", "/portfolio/fills", params=params)
-        fills = response.get("fills", [])
+        response = self._make_request("GET", "/portfolio/settlements", params=params)
 
-        # Convert prices to Decimal
-        for fill in fills:
-            self._convert_prices_to_decimal(fill)
+        # Extract cursor BEFORE discarding the response envelope
+        next_cursor = response.get("cursor") or None
 
-        logger.info(f"Fetched {len(fills)} fills", extra={"count": len(fills)})
+        settlements = response.get("settlements", [])
 
-        return cast("list[ProcessedFillData]", fills)
+        # Convert values to Decimal
+        for settlement in settlements:
+            self._convert_prices_to_decimal(settlement)
+
+        logger.info(f"Fetched {len(settlements)} settlements", extra={"count": len(settlements)})
+
+        return cast("list[ProcessedSettlementData]", settlements), next_cursor
 
     def get_settlements(
         self, ticker: str | None = None, limit: int = 100, cursor: str | None = None
@@ -939,23 +1059,12 @@ class KalshiClient:
 
         Reference: REQ-CLI-005 (Settlements Fetch Command)
         """
-        params: dict[str, Any] = {"limit": limit}
-
-        if ticker:
-            params["ticker"] = ticker
-        if cursor:
-            params["cursor"] = cursor
-
-        response = self._make_request("GET", "/portfolio/settlements", params=params)
-        settlements = response.get("settlements", [])
-
-        # Convert values to Decimal
-        for settlement in settlements:
-            self._convert_prices_to_decimal(settlement)
-
-        logger.info(f"Fetched {len(settlements)} settlements", extra={"count": len(settlements)})
-
-        return cast("list[ProcessedSettlementData]", settlements)
+        settlements, _cursor = self._get_settlements_page(
+            ticker=ticker,
+            limit=limit,
+            cursor=cursor,
+        )
+        return settlements
 
     # =========================================================================
     # Order Management Methods (Trading)
@@ -1169,6 +1278,74 @@ class KalshiClient:
     # Series Discovery Methods
     # =========================================================================
 
+    def _get_series_page(
+        self,
+        category: str | None = None,
+        status: str | None = None,
+        limit: int = 100,
+        cursor: str | None = None,
+    ) -> tuple[list[SeriesData], str | None]:
+        """
+        Fetch a single page of series, returning both items and pagination cursor.
+
+        Args:
+            category: Filter by category (e.g., "sports", "politics", "economics")
+            status: Filter by status ("active", "inactive", "closed")
+            limit: Max results per page (default 100)
+            cursor: Pagination cursor
+
+        Returns:
+            Tuple of (series_list, next_cursor). next_cursor is None if no more pages.
+
+        Educational Note:
+            Series Hierarchy on Kalshi:
+            - Category (sports, politics, economics, etc.)
+              - Series (KXNFLGAME, KXPRES2024, etc.)
+                - Events (individual games, elections, etc.)
+                  - Markets (specific outcome contracts)
+
+        Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
+        """
+        params: dict[str, Any] = {"limit": limit}
+
+        if category:
+            params["category"] = category
+        if status:
+            params["status"] = status
+        if cursor:
+            params["cursor"] = cursor
+
+        response = self._make_request("GET", "/series", params=params)
+
+        # Extract cursor BEFORE discarding the response envelope
+        next_cursor = response.get("cursor") or None
+
+        # Handle null response (API returns {"series": null} for some filters)
+        series_list = response.get("series") or []
+
+        # Client-side filtering: Kalshi demo API ignores category/limit params
+        # Apply filtering here to ensure consistent behavior across environments
+        if category:
+            # Case-insensitive category matching
+            series_list = [
+                s for s in series_list if s.get("category", "").lower() == category.lower()
+            ]
+
+        # Apply limit client-side (API may return more than requested)
+        if limit and len(series_list) > limit:
+            series_list = series_list[:limit]
+
+        logger.info(
+            f"Fetched {len(series_list)} series",
+            extra={
+                "count": len(series_list),
+                "category": category,
+                "has_more": next_cursor is not None,
+            },
+        )
+
+        return cast("list[SeriesData]", series_list), next_cursor
+
     def get_series(
         self,
         category: str | None = None,
@@ -1215,41 +1392,13 @@ class KalshiClient:
 
         Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
         """
-        params: dict[str, Any] = {"limit": limit}
-
-        if category:
-            params["category"] = category
-        if status:
-            params["status"] = status
-        if cursor:
-            params["cursor"] = cursor
-
-        response = self._make_request("GET", "/series", params=params)
-        # Handle null response (API returns {"series": null} for some filters)
-        series_list = response.get("series") or []
-
-        # Client-side filtering: Kalshi demo API ignores category/limit params
-        # Apply filtering here to ensure consistent behavior across environments
-        if category:
-            # Case-insensitive category matching
-            series_list = [
-                s for s in series_list if s.get("category", "").lower() == category.lower()
-            ]
-
-        # Apply limit client-side (API may return more than requested)
-        if limit and len(series_list) > limit:
-            series_list = series_list[:limit]
-
-        logger.info(
-            f"Fetched {len(series_list)} series",
-            extra={
-                "count": len(series_list),
-                "category": category,
-                "has_more": "cursor" in response,
-            },
+        series_list, _cursor = self._get_series_page(
+            category=category,
+            status=status,
+            limit=limit,
+            cursor=cursor,
         )
-
-        return cast("list[SeriesData]", series_list)
+        return series_list
 
     def fetch_all_markets(
         self,
@@ -1332,7 +1481,7 @@ class KalshiClient:
                 pages_fetched = 0
 
                 while pages_fetched < max_pages:
-                    markets = self.get_markets(
+                    markets, cursor = self._get_markets_page(
                         series_ticker=series_ticker,
                         limit=200,  # Max per request
                         cursor=cursor,
@@ -1344,33 +1493,24 @@ class KalshiClient:
                     all_markets.extend(markets)
                     pages_fetched += 1
 
-                    # Check for more pages
-                    # Note: get_markets doesn't return cursor directly, need raw response
-                    # For now, if we got less than 200, assume no more pages
-                    if len(markets) < 200:
+                    # No cursor means last page
+                    if not cursor:
                         break
 
-                    # For proper cursor-based pagination, we'd need to modify get_markets
-                    # to return the cursor. For now, this works for reasonable result sets.
-                    logger.info(
-                        f"Fetched page {pages_fetched} for {series_ticker}: {len(markets)} markets"
+                    logger.debug(
+                        f"Fetched page {pages_fetched} for {series_ticker}: "
+                        f"{len(markets)} markets, more pages available"
                     )
-
-                    # Safety: if we got exactly 200, there might be more, but without cursor
-                    # we can't paginate properly. Log a warning.
-                    if len(markets) == 200:
-                        logger.warning(
-                            f"Got exactly 200 markets for {series_ticker}. "
-                            "There may be more, but pagination requires cursor support."
-                        )
-                        break
         else:
             # Fetch all markets without filter
             cursor = None
             pages_fetched = 0
 
             while pages_fetched < max_pages:
-                markets = self.get_markets(limit=200, cursor=cursor)
+                markets, cursor = self._get_markets_page(
+                    limit=200,
+                    cursor=cursor,
+                )
 
                 if not markets:
                     break
@@ -1378,15 +1518,13 @@ class KalshiClient:
                 all_markets.extend(markets)
                 pages_fetched += 1
 
-                if len(markets) < 200:
+                # No cursor means last page
+                if not cursor:
                     break
 
-                if len(markets) == 200:
-                    logger.warning(
-                        "Got exactly 200 markets. "
-                        "There may be more, but pagination requires cursor support."
-                    )
-                    break
+                logger.debug(
+                    f"Fetched page {pages_fetched}: {len(markets)} markets, more pages available"
+                )
 
         logger.info(
             f"fetch_all_markets complete: {len(all_markets)} total markets",
