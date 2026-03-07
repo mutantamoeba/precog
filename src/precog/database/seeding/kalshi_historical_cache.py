@@ -299,9 +299,9 @@ def fetch_and_cache_markets(
         List of market records
 
     Educational Note:
-        We paginate through all results using Kalshi's cursor.
-        Each page returns up to 200 markets; we continue until
-        no cursor is returned (all pages fetched).
+        Uses fetch_all_markets() which handles cursor-chasing pagination
+        internally. Each API page returns up to 200 markets; the method
+        continues until no cursor is returned (all pages fetched).
     """
     if not force_refresh and is_cached("markets", cache_date):
         cached = load_from_cache("markets", cache_date)
@@ -309,26 +309,13 @@ def fetch_and_cache_markets(
             logger.info("Using cached markets from %s", cache_date)
             return cached
 
-    # Fetch all pages and convert TypedDict to plain dict for JSON serialization
-    all_markets: list[dict[str, Any]] = []
-    cursor = None
+    # Fetch all markets with automatic cursor-chasing pagination.
+    # fetch_all_markets() handles cursor-chasing internally, returning all pages.
+    series_tickers = [series_ticker] if series_ticker else None
+    raw_markets = client.fetch_all_markets(series_tickers=series_tickers)
 
-    while True:
-        markets = client.get_markets(
-            series_ticker=series_ticker,
-            limit=200,  # Max per page
-            cursor=cursor,
-        )
-
-        # Convert TypedDict to plain dict for caching
-        all_markets.extend(dict(m) for m in markets)
-
-        # Check if more pages exist
-        # Note: get_markets returns just the list, cursor is in raw response
-        # We'd need to modify get_markets to return cursor or use raw endpoint
-        # For now, break after first page (most use cases)
-        # TODO: Add pagination support when needed for full market snapshots
-        break
+    # Convert TypedDict to plain dict for JSON serialization
+    all_markets: list[dict[str, Any]] = [dict(m) for m in raw_markets]
 
     # Apply category filter if specified
     if category:
