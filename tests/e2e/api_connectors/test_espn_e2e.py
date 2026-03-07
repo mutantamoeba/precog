@@ -120,19 +120,17 @@ class TestESPNConnectivity:
         # Both should use same session (tracked via timestamps)
         assert len(espn_client.request_timestamps) >= 2
 
-    def test_both_leagues_accessible(self, espn_client):
-        """Verify both NFL and NCAAF endpoints are accessible.
+    @pytest.mark.parametrize("league", ["nfl", "ncaaf", "nba", "ncaab", "nhl", "wnba"])
+    def test_all_supported_leagues_accessible(self, espn_client, league):
+        """Verify all supported league endpoints are accessible.
 
         Educational Note:
             ESPN uses different API endpoints for different leagues.
-            We verify both work to ensure broad coverage.
+            We verify all 6 supported leagues work to ensure broad coverage.
+            Each league has its own URL path under site.api.espn.com.
         """
-        nfl_games = espn_client.get_nfl_scoreboard()
-        ncaaf_games = espn_client.get_ncaaf_scoreboard()
-
-        # Both should return lists
-        assert isinstance(nfl_games, list)
-        assert isinstance(ncaaf_games, list)
+        games = espn_client.get_scoreboard(league)
+        assert isinstance(games, list), f"{league} did not return a list"
 
 
 # =============================================================================
@@ -484,35 +482,39 @@ class TestESPNDataQuality:
         event_ids = [g["metadata"]["espn_event_id"] for g in games]
         assert len(event_ids) == len(set(event_ids)), "Duplicate event IDs found"
 
-    def test_clock_display_format_valid(self, espn_client):
-        """Verify clock display follows expected format.
+    @pytest.mark.parametrize("league", ["nfl", "ncaaf", "nba", "ncaab", "nhl", "wnba"])
+    def test_clock_display_format_valid(self, espn_client, league):
+        """Verify clock display follows expected format across sports.
 
         Educational Note:
             Clock display should be something like "12:34" or "0:00".
-            We validate the format is parseable.
+            Format is consistent across all sports in the ESPNGameFull
+            state.clock_display field.
         """
-        games = espn_client.get_nfl_scoreboard()
+        games = espn_client.get_scoreboard(league)
 
         for game in games:
-            clock = game.get("clock_display", "")
+            clock = game["state"].get("clock_display", "")
 
-            # Should contain colon for time display or be empty
-            if clock and game["game_status"] == "in_progress":
+            if clock and game["state"]["game_status"] == "in_progress":
                 assert ":" in clock or clock.isdigit(), f"Invalid clock format: {clock}"
 
-    def test_periods_in_valid_range(self, espn_client):
-        """Verify periods are in valid football range.
+    @pytest.mark.parametrize("league", ["nfl", "ncaaf", "nba", "ncaab", "nhl", "wnba"])
+    def test_periods_in_valid_range(self, espn_client, league):
+        """Verify periods are in valid range across sports.
 
         Educational Note:
-            Football has 4 quarters (periods 1-4) plus possible overtime.
-            Period 0 means pre-game.
+            - Football: 4 quarters + OT (periods 0-6)
+            - Basketball: 4 quarters + OT (periods 0-6)
+            - Hockey: 3 periods + OT + shootout (periods 0-5)
+            Period 0 means pre-game across all sports.
         """
-        games = espn_client.get_nfl_scoreboard()
+        games = espn_client.get_scoreboard(league)
 
         for game in games:
-            period = game.get("period", 0)
-            # Should be 0 (pre-game) to ~6 (multiple OT)
-            assert 0 <= period <= 10, f"Invalid period: {period}"
+            period = game["state"].get("period", 0)
+            # Should be 0 (pre-game) to ~10 (multiple OT)
+            assert 0 <= period <= 10, f"Invalid period for {league}: {period}"
 
 
 # =============================================================================
@@ -563,29 +565,42 @@ class TestESPNDataPipeline:
             # Rate limiting worked
             assert len(espn_client.request_timestamps) > 0
 
-    def test_full_pipeline_ncaaf(self, espn_client):
-        """Test complete NCAAF data collection pipeline.
+    @pytest.mark.parametrize("league", ["ncaaf", "nba", "ncaab", "nhl", "wnba"])
+    def test_full_pipeline_other_sports(self, espn_client, league):
+        """Test complete data collection pipeline for non-NFL sports.
 
         Educational Note:
-            NCAAF has more teams than NFL and different scheduling,
-            but the data structure should be identical (ESPNGameFull).
+            All leagues return the same ESPNGameFull structure with
+            metadata/state sections. This parametrized test validates
+            that our parser handles all sports consistently.
+
+            Some sports may have no games on a given day (e.g., WNBA
+            in winter), so we skip gracefully when no data is available.
         """
-        # Step 1: Fetch scoreboard
-        games = espn_client.get_ncaaf_scoreboard()
+        games = espn_client.get_scoreboard(league)
         assert isinstance(games, list)
 
-        # Step 2: If games exist, validate structure
-        if games:
-            game = games[0]
-            metadata = game["metadata"]
-            state = game["state"]
+        if not games:
+            pytest.skip(f"No {league.upper()} games available today")
 
-            # Same structure as NFL (in metadata and state)
-            assert metadata["espn_event_id"]
-            assert metadata["home_team"]
-            assert metadata["away_team"]
-            assert isinstance(state["home_score"], int)
-            assert isinstance(state["away_score"], int)
+        game = games[0]
+        metadata = game["metadata"]
+        state = game["state"]
+
+        # Same structure across all leagues
+        assert metadata["espn_event_id"]
+        assert metadata["home_team"]
+        assert metadata["away_team"]
+        assert isinstance(state["home_score"], int)
+        assert isinstance(state["away_score"], int)
+        assert state["game_status"] in {
+            "pre",
+            "scheduled",
+            "in_progress",
+            "halftime",
+            "final",
+            "unknown",
+        }
 
     def test_get_live_games_filters_correctly(self, espn_client):
         """Test that get_live_games only returns in-progress games.

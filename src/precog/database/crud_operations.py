@@ -579,7 +579,7 @@ def create_series(
                   'entertainment', 'economics', 'weather', 'other'
         title: Human-readable series title
         subcategory: Optional subcategory (e.g., 'nfl', 'nba')
-        frequency: Optional frequency - one of: 'daily', 'weekly', 'monthly', 'event', 'once'
+        frequency: Optional frequency from Kalshi API (e.g., 'daily', 'weekly', 'event', 'custom')
         tags: Optional list of tags for filtering (e.g., ['Football'])
         metadata: Optional additional metadata as JSONB
 
@@ -597,7 +597,7 @@ def create_series(
         ...     category="sports",
         ...     title="NFL Game Markets",
         ...     subcategory="nfl",
-        ...     frequency="recurring",
+        ...     frequency="daily",
         ...     tags=["Football"]
         ... )
         >>> print(f"Created series: {series_id}")
@@ -679,7 +679,7 @@ def update_series(
         >>> updated = update_series(
         ...     "KXNFLGAME",
         ...     title="NFL Regular Season Games",
-        ...     frequency="recurring"
+        ...     frequency="daily"
         ... )
 
     Educational Note:
