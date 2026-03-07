@@ -387,7 +387,7 @@ def fetch_and_cache_series(
             return cached
 
     # Fetch series and convert TypedDict to plain dict for JSON serialization
-    series_list = client.get_series(category=category, limit=200)
+    series_list = client.fetch_all_series(category=category)
     series_dicts: list[dict[str, Any]] = [dict(s) for s in series_list]
 
     # Save to cache

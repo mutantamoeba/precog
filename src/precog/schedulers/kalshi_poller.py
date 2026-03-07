@@ -258,11 +258,10 @@ class KalshiMarketPoller(BasePoller):
         try:
             # Fetch series from API
             if series_tickers:
-                # Fetch all Sports series and filter to our target tickers
-                # We use category="Sports" with a large limit because the generic
-                # get_series() returns alphabetically and our tickers may be
-                # beyond the first 100 results
-                all_sports = self.kalshi_client.get_series(category="Sports", limit=200)
+                # Fetch all Sports series and filter to our target tickers.
+                # Uses fetch_all_series() with cursor-chasing to ensure we get
+                # every series without client-side truncation.
+                all_sports = self.kalshi_client.fetch_all_series(category="Sports")
                 target_set = set(series_tickers)
                 api_series_list = [s for s in all_sports if s.get("ticker") in target_set]
 
