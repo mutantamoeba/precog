@@ -1282,7 +1282,7 @@ class KalshiClient:
         self,
         category: str | None = None,
         status: str | None = None,
-        limit: int = 100,
+        limit: int | None = None,
         cursor: str | None = None,
     ) -> tuple[list[SeriesData], str | None]:
         """
@@ -1291,7 +1291,8 @@ class KalshiClient:
         Args:
             category: Filter by category (e.g., "sports", "politics", "economics")
             status: Filter by status ("active", "inactive", "closed")
-            limit: Max results per page (default 100)
+            limit: Max results per page. None means no client-side truncation
+                   (return all results from the API response).
             cursor: Pagination cursor
 
         Returns:
@@ -1304,10 +1305,18 @@ class KalshiClient:
                 - Events (individual games, elections, etc.)
                   - Markets (specific outcome contracts)
 
+            Client-Side vs Server-Side Limiting:
+            - The Kalshi /series endpoint currently ignores the limit param
+              and returns all series in one response (~9,000+)
+            - Client-side truncation is only applied when limit is explicitly set
+            - Use limit=None (default) to get all results without truncation
+
         Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
         """
-        params: dict[str, Any] = {"limit": limit}
+        params: dict[str, Any] = {}
 
+        if limit is not None:
+            params["limit"] = limit
         if category:
             params["category"] = category
         if status:
@@ -1331,8 +1340,8 @@ class KalshiClient:
                 s for s in series_list if s.get("category", "").lower() == category.lower()
             ]
 
-        # Apply limit client-side (API may return more than requested)
-        if limit and len(series_list) > limit:
+        # Apply limit client-side only when explicitly requested
+        if limit is not None and len(series_list) > limit:
             series_list = series_list[:limit]
 
         logger.info(
@@ -1350,19 +1359,21 @@ class KalshiClient:
         self,
         category: str | None = None,
         status: str | None = None,
-        limit: int = 100,
+        limit: int | None = None,
         cursor: str | None = None,
     ) -> list[SeriesData]:
         """
-        Get available market series.
+        Get available market series (single page).
 
         A series groups related markets (e.g., KXNFLGAME contains all NFL game markets).
         Use this to discover what series are available for trading.
 
+        For fetching all series with automatic pagination, use fetch_all_series().
+
         Args:
             category: Filter by category (e.g., "sports", "politics", "economics")
             status: Filter by status ("active", "inactive", "closed")
-            limit: Max results per page (default 100)
+            limit: Max results to return. None (default) means no truncation.
             cursor: Pagination cursor
 
         Returns:
@@ -1399,6 +1410,88 @@ class KalshiClient:
             cursor=cursor,
         )
         return series_list
+
+    def fetch_all_series(
+        self,
+        category: str | None = None,
+        status: str | None = None,
+        max_pages: int = 50,
+    ) -> list[SeriesData]:
+        """
+        Fetch ALL series with automatic pagination.
+
+        This method handles Kalshi's pagination automatically, chasing cursors
+        until no more data is available. Currently the /series endpoint returns
+        all results in one response, but this method is future-proof against
+        server-side pagination being added.
+
+        Args:
+            category: Filter by category (e.g., "Sports", "politics", "economics")
+            status: Filter by status ("active", "inactive", "closed")
+            max_pages: Maximum pages to fetch (default 50, safety limit).
+
+        Returns:
+            List of all SeriesData matching the filter criteria.
+
+        Example:
+            >>> client = KalshiClient("demo")
+            >>> # Fetch all Sports series (no truncation)
+            >>> sports_series = client.fetch_all_series(category="Sports")
+            >>> print(f"Total sports series: {len(sports_series)}")
+            Total sports series: 1533
+
+        Educational Note:
+            Why cursor-chasing instead of a large limit?
+            - The Kalshi /series endpoint currently returns all results in one
+              response (cursor=None), so this typically completes in 1 request
+            - However, if Kalshi adds server-side pagination later, this method
+              will automatically handle it without code changes
+            - Follows the same pattern as fetch_all_markets() for consistency
+
+        Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
+        """
+        all_series: list[SeriesData] = []
+        cursor: str | None = None
+        pages_fetched = 0
+
+        while pages_fetched < max_pages:
+            series_page, cursor = self._get_series_page(
+                category=category,
+                status=status,
+                cursor=cursor,
+            )
+
+            if not series_page:
+                break
+
+            all_series.extend(series_page)
+            pages_fetched += 1
+
+            # No cursor means last page
+            if not cursor:
+                break
+
+            logger.debug(
+                f"Fetched page {pages_fetched} of series: "
+                f"{len(series_page)} series, more pages available"
+            )
+
+        if pages_fetched >= max_pages:
+            logger.warning(
+                f"Hit max_pages limit ({max_pages}) while fetching series. "
+                f"Some series may be missing. Total fetched: {len(all_series)}"
+            )
+
+        logger.info(
+            f"Fetched {len(all_series)} total series across {pages_fetched} page(s)",
+            extra={
+                "total_count": len(all_series),
+                "pages": pages_fetched,
+                "category": category,
+            },
+        )
+
+        return all_series
 
     def fetch_all_markets(
         self,
@@ -1580,8 +1673,8 @@ class KalshiClient:
         """
         target_sports = sports or self.DEFAULT_SPORTS
 
-        # First, get all Sports category series
-        all_series = self.get_series(category="Sports", limit=200)
+        # Fetch all Sports category series (no truncation)
+        all_series = self.fetch_all_series(category="Sports")
 
         # Filter by sport using both tags and ticker prefixes
         filtered_series: list[SeriesData] = []
