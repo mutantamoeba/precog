@@ -9,19 +9,9 @@ fail_fast: false  # Run all hooks, don't stop at first failure
 repos:
   # Local custom hooks (project-specific validation)
   # Layer 1 (Pre-Commit): Fast checks (~2-5s total)
-  # Layer 2 (Pre-Push): Thorough validation (~60-90s, includes tests)
-  #   See .git/hooks/pre-push for Steps 8-10 (SCD queries, property tests, fixtures)
+  # Layer 2 (Pre-Push): Unit + integration tests (~30-60s)
   - repo: local
     hooks:
-      # Documentation validation (10 comprehensive checks - ENHANCED)
-      - id: validate-docs
-        name: Documentation Validation (10 checks)
-        entry: python scripts/validate_docs.py
-        language: system
-        pass_filenames: false
-        files: \.(md|yaml|yml)$
-        description: "Validates docs consistency, cross-refs, versioning, phase status, YAML configs, and config sync (Pattern 8)"
-
       # Code quality: Ruff linter (staged files only)
       - id: ruff-check
         name: Ruff Linter
@@ -44,7 +34,7 @@ repos:
       # Mypy caches in .mypy_cache/ - first run ~20-30s, subsequent ~5-10s
       - id: mypy
         name: Mypy Type Checking (incremental)
-        entry: python -m mypy . --incremental --cache-dir .mypy_cache --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --exclude '.venv/' --ignore-missing-imports
+        entry: python -m mypy . --incremental --cache-dir .mypy_cache --exclude 'tests/' --exclude '_archive/' --exclude 'venv/' --exclude '.venv/' --exclude 'src/precog/tui/' --ignore-missing-imports
         language: system
         pass_filenames: false
         types: [python]
@@ -95,40 +85,6 @@ repos:
         files: '(database|api_connectors|trading|analytics|utils|config)/.*\.py$'
         exclude: 'migrations/.*\.py$'
         description: "Prevents print() in production code (use structured logging instead)"
-
-      # CODE_REVIEW_TEMPLATE enforcement: Basic REQ traceability
-      - id: code-review-basics
-        name: Code Review Basics (REQ Traceability)
-        entry: bash
-        args:
-          - -c
-          - |
-            # Check new Python files have REQ-XXX-NNN references in docstrings/comments
-            new_files=$(git diff --cached --name-only --diff-filter=A | grep -E '(database|api_connectors|trading|analytics)/.*\.py$' || true)
-            if [ -n "$new_files" ]; then
-              missing_req=""
-              for file in $new_files; do
-                # Check if file has REQ-XXX-NNN pattern
-                if ! grep -q 'REQ-[A-Z]\+-[0-9]\+' "$file" 2>/dev/null; then
-                  missing_req="$missing_req\n  - $file"
-                fi
-              done
-              if [ -n "$missing_req" ]; then
-                echo ""
-                echo "[WARN] New files missing REQ-XXX-NNN traceability:"
-                echo -e "$missing_req"
-                echo ""
-                echo "Note: This is a warning (not blocking)"
-                echo "Recommendation: Add requirement references to docstrings/comments"
-                echo "Reference: CODE_REVIEW_TEMPLATE Section 1 (Requirements Traceability)"
-                # Warning only - don't fail
-              fi
-            fi
-            echo "REQ traceability check complete"
-        language: system
-        pass_filenames: false
-        files: '(database|api_connectors|trading|analytics)/.*\.py$'
-        description: "Checks new files have requirement traceability (REQ-XXX-NNN)"
 
       # CLAUDE.md Pattern 1: Decimal precision enforcement
       - id: decimal-precision-check

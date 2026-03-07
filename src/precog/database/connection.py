@@ -41,7 +41,6 @@ Related Requirements: REQ-DB-002 (Connection Pooling)
 Related ADR: ADR-008 (PostgreSQL Connection Strategy)
 """
 
-import os
 from contextlib import contextmanager
 from typing import cast
 
@@ -53,6 +52,7 @@ from precog.config.environment import (
     AppEnvironment,
     get_app_environment,
     get_database_name,
+    get_prefixed_env,
 )
 from precog.utils.logger import get_logger
 
@@ -252,16 +252,17 @@ def initialize_pool(
         logger.warning("Connection pool already initialized")
         return _connection_pool
 
-    # Use environment variables if parameters not provided
+    # Use environment-aware prefixed resolution (e.g., DEV_DB_HOST when PRECOG_ENV=dev)
+    # Falls back to flat vars (DB_HOST) for CI/overrides
     # Pool size configurable via env for different environments
-    minconn = minconn if minconn is not None else int(os.getenv("DB_POOL_MIN_CONN", "2"))
-    maxconn = maxconn if maxconn is not None else int(os.getenv("DB_POOL_MAX_CONN", "25"))
-    host = host or os.getenv("DB_HOST", "localhost")
-    port = port or int(os.getenv("DB_PORT", "5432"))
+    minconn = minconn if minconn is not None else int(get_prefixed_env("DB_POOL_MIN_CONN", "2"))
+    maxconn = maxconn if maxconn is not None else int(get_prefixed_env("DB_POOL_MAX_CONN", "25"))
+    host = host or get_prefixed_env("DB_HOST", "localhost")
+    port = port or int(get_prefixed_env("DB_PORT", "5432"))
     # Use centralized database name resolution (respects PRECOG_ENV)
     database = database or get_database_name()
-    user = user or os.getenv("DB_USER", "postgres")
-    password = password or os.getenv("DB_PASSWORD")
+    user = user or get_prefixed_env("DB_USER", "postgres")
+    password = password or get_prefixed_env("DB_PASSWORD")
 
     if not password:
         msg = "Database password not found in environment variables"

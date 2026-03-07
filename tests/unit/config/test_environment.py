@@ -24,7 +24,9 @@ from precog.config.environment import (
     MarketMode,
     get_app_environment,
     get_database_name,
+    get_env_prefix,
     get_market_mode,
+    get_prefixed_env,
     load_environment_config,
     require_app_environment,
     require_market_mode,
@@ -252,25 +254,23 @@ class TestGetAppEnvironment:
             result = get_app_environment()
             assert result == AppEnvironment.STAGING
 
-    def test_inferred_from_db_name_test(self) -> None:
-        """Test inference from DB_NAME containing 'test'."""
-        with patch.dict(os.environ, {"DB_NAME": "precog_test"}, clear=False):
-            # Clear PRECOG_ENV if set
-            os.environ.pop("PRECOG_ENV", None)
+    def test_environment_variable_fallback(self) -> None:
+        """Test ENVIRONMENT variable used when PRECOG_ENV not set."""
+        with patch.dict(os.environ, {"ENVIRONMENT": "test"}, clear=True):
             result = get_app_environment()
             assert result == AppEnvironment.TEST
 
-    def test_inferred_from_db_name_staging(self) -> None:
-        """Test inference from DB_NAME containing 'staging'."""
-        with patch.dict(os.environ, {"DB_NAME": "precog_staging"}, clear=False):
-            os.environ.pop("PRECOG_ENV", None)
+    def test_environment_variable_staging(self) -> None:
+        """Test ENVIRONMENT=staging resolution."""
+        with patch.dict(os.environ, {"ENVIRONMENT": "staging"}, clear=True):
             result = get_app_environment()
             assert result == AppEnvironment.STAGING
 
-    def test_inferred_from_db_name_prod(self) -> None:
-        """Test inference from DB_NAME containing 'prod'."""
-        with patch.dict(os.environ, {"DB_NAME": "precog_prod"}, clear=False):
-            os.environ.pop("PRECOG_ENV", None)
+    def test_precog_env_takes_priority_over_environment(self) -> None:
+        """Test PRECOG_ENV takes priority over ENVIRONMENT."""
+        with patch.dict(
+            os.environ, {"PRECOG_ENV": "prod", "ENVIRONMENT": "development"}, clear=True
+        ):
             result = get_app_environment()
             assert result == AppEnvironment.PRODUCTION
 
@@ -280,11 +280,19 @@ class TestGetAppEnvironment:
             result = get_app_environment()
             assert result == AppEnvironment.DEVELOPMENT
 
-    def test_invalid_precog_env_falls_back(self) -> None:
-        """Test that invalid PRECOG_ENV value falls back to inference."""
-        with patch.dict(os.environ, {"PRECOG_ENV": "invalid", "DB_NAME": "precog_test"}):
+    def test_invalid_precog_env_falls_back_to_environment(self) -> None:
+        """Test that invalid PRECOG_ENV falls back to ENVIRONMENT."""
+        with patch.dict(os.environ, {"PRECOG_ENV": "invalid", "ENVIRONMENT": "test"}, clear=True):
             result = get_app_environment()
             assert result == AppEnvironment.TEST
+
+    def test_invalid_both_defaults_to_development(self) -> None:
+        """Test that invalid PRECOG_ENV and ENVIRONMENT defaults to development."""
+        with patch.dict(
+            os.environ, {"PRECOG_ENV": "invalid", "ENVIRONMENT": "invalid"}, clear=True
+        ):
+            result = get_app_environment()
+            assert result == AppEnvironment.DEVELOPMENT
 
 
 class TestGetMarketMode:
@@ -321,19 +329,94 @@ class TestGetMarketMode:
             assert result == MarketMode.LIVE
 
 
+class TestGetEnvPrefix:
+    """Tests for get_env_prefix() function."""
+
+    def test_dev_prefix(self) -> None:
+        with patch.dict(os.environ, {"PRECOG_ENV": "dev"}, clear=True):
+            assert get_env_prefix() == "DEV"
+
+    def test_test_prefix(self) -> None:
+        with patch.dict(os.environ, {"PRECOG_ENV": "test"}, clear=True):
+            assert get_env_prefix() == "TEST"
+
+    def test_staging_prefix(self) -> None:
+        with patch.dict(os.environ, {"PRECOG_ENV": "staging"}, clear=True):
+            assert get_env_prefix() == "STAGING"
+
+    def test_prod_prefix(self) -> None:
+        with patch.dict(os.environ, {"PRECOG_ENV": "prod"}, clear=True):
+            assert get_env_prefix() == "PROD"
+
+    def test_default_prefix_is_dev(self) -> None:
+        with patch.dict(os.environ, {}, clear=True):
+            assert get_env_prefix() == "DEV"
+
+
+class TestGetPrefixedEnv:
+    """Tests for get_prefixed_env() function."""
+
+    def test_prefixed_var_takes_priority(self) -> None:
+        """Prefixed var wins over flat var."""
+        with patch.dict(
+            os.environ,
+            {"PRECOG_ENV": "dev", "DEV_DB_HOST": "dev-host", "DB_HOST": "flat-host"},
+            clear=True,
+        ):
+            assert get_prefixed_env("DB_HOST") == "dev-host"
+
+    def test_flat_var_fallback(self) -> None:
+        """Flat var used when no prefixed var exists."""
+        with patch.dict(os.environ, {"PRECOG_ENV": "dev", "DB_HOST": "flat-host"}, clear=True):
+            assert get_prefixed_env("DB_HOST") == "flat-host"
+
+    def test_default_fallback(self) -> None:
+        """Default used when neither prefixed nor flat var exists."""
+        with patch.dict(os.environ, {"PRECOG_ENV": "dev"}, clear=True):
+            assert get_prefixed_env("DB_HOST", "localhost") == "localhost"
+
+    def test_none_when_no_default(self) -> None:
+        """Returns None when nothing found and no default."""
+        with patch.dict(os.environ, {"PRECOG_ENV": "dev"}, clear=True):
+            assert get_prefixed_env("DB_HOST") is None
+
+    def test_empty_string_prefixed_wins_over_flat(self) -> None:
+        """Empty string in prefixed var is returned (not skipped)."""
+        with patch.dict(
+            os.environ,
+            {"PRECOG_ENV": "dev", "DEV_DB_HOST": "", "DB_HOST": "flat-host"},
+            clear=True,
+        ):
+            assert get_prefixed_env("DB_HOST") == ""
+
+    def test_empty_string_flat_returned(self) -> None:
+        """Empty string in flat var is returned (not skipped to default)."""
+        with patch.dict(os.environ, {"PRECOG_ENV": "dev", "DB_HOST": ""}, clear=True):
+            assert get_prefixed_env("DB_HOST", "localhost") == ""
+
+
 class TestGetDatabaseName:
     """Tests for get_database_name() function."""
 
-    def test_explicit_db_name_override(self) -> None:
-        """Test that explicit DB_NAME takes priority."""
-        with patch.dict(os.environ, {"DB_NAME": "custom_db", "PRECOG_ENV": "staging"}):
+    def test_prefixed_db_name_takes_priority(self) -> None:
+        """Test that {PREFIX}_DB_NAME takes priority over flat DB_NAME."""
+        with patch.dict(
+            os.environ,
+            {"PRECOG_ENV": "staging", "STAGING_DB_NAME": "precog_staging", "DB_NAME": "wrong_db"},
+            clear=True,
+        ):
             result = get_database_name()
-            assert result == "custom_db"
+            assert result == "precog_staging"
+
+    def test_flat_db_name_fallback(self) -> None:
+        """Test flat DB_NAME used when no prefixed var exists (CI scenario)."""
+        with patch.dict(os.environ, {"PRECOG_ENV": "test", "DB_NAME": "precog_test"}, clear=True):
+            result = get_database_name()
+            assert result == "precog_test"
 
     def test_derived_from_precog_env(self) -> None:
-        """Test database name derived from PRECOG_ENV."""
-        with patch.dict(os.environ, {"PRECOG_ENV": "staging"}, clear=False):
-            os.environ.pop("DB_NAME", None)
+        """Test database name derived from AppEnvironment when no env vars."""
+        with patch.dict(os.environ, {"PRECOG_ENV": "staging"}, clear=True):
             result = get_database_name()
             assert result == "precog_staging"
 

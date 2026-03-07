@@ -43,7 +43,7 @@ import os
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import ClassVar
+from typing import ClassVar, overload
 
 from dotenv import load_dotenv
 
@@ -382,11 +382,11 @@ class EnvironmentConfig:
 
 def get_app_environment() -> AppEnvironment:
     """
-    Get current application environment from PRECOG_ENV.
+    Get current application environment.
 
     Resolution order:
     1. PRECOG_ENV environment variable (if set and valid)
-    2. Infer from DB_NAME (if contains test/staging/prod)
+    2. ENVIRONMENT environment variable (alias used in .env template)
     3. Default to DEVELOPMENT
 
     Returns:
@@ -396,11 +396,6 @@ def get_app_environment() -> AppEnvironment:
         >>> os.environ["PRECOG_ENV"] = "staging"
         >>> get_app_environment()
         AppEnvironment.STAGING
-
-    Educational Note:
-        This function centralizes environment detection logic.
-        Previously, different modules had their own logic, leading
-        to inconsistencies (e.g., ENVIRONMENT vs PRECOG_ENV).
     """
     # Check explicit PRECOG_ENV first
     precog_env = os.getenv("PRECOG_ENV")
@@ -408,18 +403,17 @@ def get_app_environment() -> AppEnvironment:
         try:
             return AppEnvironment.from_string(precog_env)
         except ValueError:
-            logger.warning(f"Invalid PRECOG_ENV value: '{precog_env}', falling back to inference")
+            logger.warning(f"Invalid PRECOG_ENV value: '{precog_env}', falling back")
 
-    # Fall back to DB_NAME inference
-    db_name = os.getenv("DB_NAME", "")
-    if "test" in db_name.lower():
-        return AppEnvironment.TEST
-    if "staging" in db_name.lower():
-        return AppEnvironment.STAGING
-    if "prod" in db_name.lower():
-        return AppEnvironment.PRODUCTION
+    # Check ENVIRONMENT (alias used in .env template)
+    environment = os.getenv("ENVIRONMENT")
+    if environment:
+        try:
+            return AppEnvironment.from_string(environment)
+        except ValueError:
+            logger.warning(f"Invalid ENVIRONMENT value: '{environment}', falling back")
 
-    # Default to development
+    # Default to development (safest)
     return AppEnvironment.DEVELOPMENT
 
 
@@ -454,27 +448,108 @@ def get_market_mode(market: str) -> MarketMode:
         return MarketMode.DEMO
 
 
+def get_env_prefix() -> str:
+    """
+    Get the environment variable prefix for the current app environment.
+
+    Maps AppEnvironment to the prefix used in .env for prefixed vars:
+    - DEVELOPMENT -> "DEV"
+    - TEST -> "TEST"
+    - STAGING -> "STAGING"
+    - PRODUCTION -> "PROD"
+
+    Returns:
+        Prefix string (e.g., "DEV", "PROD")
+
+    Example:
+        >>> os.environ["PRECOG_ENV"] = "staging"
+        >>> get_env_prefix()
+        'STAGING'
+
+    Educational Note:
+        This prefix maps to the naming convention in .env where each
+        environment has its own set of variables (DEV_DB_NAME, STAGING_DB_HOST,
+        PROD_KALSHI_API_KEY, etc.). Changing PRECOG_ENV switches all
+        credentials and configuration at once.
+    """
+    app_env = get_app_environment()
+    prefix_map = {
+        AppEnvironment.DEVELOPMENT: "DEV",
+        AppEnvironment.TEST: "TEST",
+        AppEnvironment.STAGING: "STAGING",
+        AppEnvironment.PRODUCTION: "PROD",
+    }
+    return prefix_map[app_env]
+
+
+@overload
+def get_prefixed_env(var_name: str, default: str) -> str: ...
+
+
+@overload
+def get_prefixed_env(var_name: str, default: None = None) -> str | None: ...
+
+
+def get_prefixed_env(var_name: str, default: str | None = None) -> str | None:
+    """
+    Get an environment variable using the environment-aware prefix pattern.
+
+    Resolution order:
+    1. {PREFIX}_{var_name} (e.g., DEV_DB_NAME when PRECOG_ENV=dev)
+    2. {var_name} (flat fallback for CI/overrides)
+    3. default
+
+    Args:
+        var_name: The unprefixed variable name (e.g., "DB_NAME", "DB_HOST")
+        default: Default value if neither prefixed nor flat var is found
+
+    Returns:
+        Resolved value or default
+
+    Example:
+        >>> os.environ["PRECOG_ENV"] = "dev"
+        >>> os.environ["DEV_DB_NAME"] = "precog_dev"
+        >>> get_prefixed_env("DB_NAME")
+        'precog_dev'
+
+    Educational Note:
+        The resolution order (prefixed -> flat -> default) ensures:
+        - Local dev: uses prefixed vars from .env (DEV_DB_NAME, etc.)
+        - CI: uses flat vars set by GitHub Actions (DB_NAME, etc.)
+        - Fallback: sensible defaults prevent crashes on missing vars
+        Uses ``is not None`` (not truthiness) so empty strings are respected.
+    """
+    prefix = get_env_prefix()
+    prefixed = os.getenv(f"{prefix}_{var_name}")
+    if prefixed is not None:
+        return prefixed
+    flat = os.getenv(var_name)
+    if flat is not None:
+        return flat
+    return default
+
+
 def get_database_name() -> str:
     """
     Get database name based on environment configuration.
 
     Resolution order:
-    1. DB_NAME environment variable (explicit override)
-    2. Derived from PRECOG_ENV (e.g., DEVELOPMENT -> precog_dev)
+    1. {PREFIX}_DB_NAME (e.g., DEV_DB_NAME when PRECOG_ENV=dev)
+    2. DB_NAME (flat fallback for CI/overrides)
+    3. Derived from AppEnvironment (e.g., DEVELOPMENT -> precog_dev)
 
     Returns:
         Database name string
 
     Example:
         >>> os.environ["PRECOG_ENV"] = "staging"
-        >>> del os.environ["DB_NAME"]  # Remove override
+        >>> os.environ["STAGING_DB_NAME"] = "precog_staging"
         >>> get_database_name()
         'precog_staging'
     """
-    # Check for explicit override first
-    explicit_db = os.getenv("DB_NAME")
-    if explicit_db:
-        return explicit_db
+    resolved = get_prefixed_env("DB_NAME")
+    if resolved:
+        return resolved
 
     # Derive from app environment
     app_env = get_app_environment()
@@ -521,9 +596,9 @@ def load_environment_config(
         app_env=app_env,
         kalshi_mode=kalshi_mode,
         database_name=database_name,
-        database_host=os.getenv("DB_HOST", "localhost"),
-        database_port=int(os.getenv("DB_PORT", "5432")),
-        database_user=os.getenv("DB_USER", "postgres"),
+        database_host=get_prefixed_env("DB_HOST", "localhost"),
+        database_port=int(get_prefixed_env("DB_PORT", "5432")),
+        database_user=get_prefixed_env("DB_USER", "postgres"),
     )
 
     if validate:

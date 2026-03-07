@@ -140,6 +140,7 @@ class SettlementsResponse(TypedDict):
     """Response from /portfolio/settlements endpoint."""
 
     settlements: list[SettlementData]
+    cursor: str | None  # Pagination cursor
 
 
 # =============================================================================

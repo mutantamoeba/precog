@@ -20,11 +20,14 @@ from typing import ClassVar
 from textual.app import ComposeResult
 from textual.binding import BindingType
 from textual.containers import Container, Horizontal
-from textual.screen import Screen
 from textual.widgets import DataTable, Label, Select, Static
 
+from precog.tui.screens.base_screen import BaseScreen
+from precog.tui.widgets.breadcrumb import Breadcrumb
+from precog.tui.widgets.environment_bar import EnvironmentBar
 
-class PositionViewerScreen(Screen):
+
+class PositionViewerScreen(BaseScreen):
     """
     Position viewer screen for monitoring trading positions.
 
@@ -35,17 +38,23 @@ class PositionViewerScreen(Screen):
         Positions use SCD Type 2 versioning (row_current_ind) which means
         the table contains the full history. We filter for current rows
         to show the latest state of each position.
+        Inherits from BaseScreen to get global keybindings in footer.
     """
 
-    BINDINGS: ClassVar[list[BindingType]] = [
+    BINDINGS: ClassVar[list[BindingType]] = BaseScreen.BINDINGS + [
         ("r", "refresh", "Refresh"),
         ("o", "show_open", "Open Only"),
         ("a", "show_all", "Show All"),
-        ("escape", "go_back", "Back"),
+        ("n", "next_page", "Next Page"),
+        ("p", "prev_page", "Prev Page"),
     ]
+
+    PAGE_SIZE = 50
 
     def compose(self) -> ComposeResult:
         """Create the position viewer layout."""
+        yield Breadcrumb.for_screen("position_viewer")
+        yield EnvironmentBar.from_app(self.app)
         yield Label("Position Viewer", id="screen-title", classes="screen-title")
 
         # Summary panel
@@ -107,8 +116,24 @@ class PositionViewerScreen(Screen):
         table.cursor_type = "row"
         table.zebra_stripes = True
 
+        # Pagination state
+        self._current_page = 0
+
         # Load initial data
         self._load_positions("open")
+
+    def _get_data_source_mode(self) -> str:
+        """Get the current data source mode from the app.
+
+        Educational Note:
+            Accesses the app's data_source_mode property which controls whether
+            screens use real database data, demo data, or auto-fallback behavior.
+        """
+        from precog.tui.app import PrecogApp
+
+        if isinstance(self.app, PrecogApp):
+            return self.app.data_source_mode
+        return "auto"  # Default to auto mode
 
     def _load_positions(self, status_filter: str = "open") -> None:
         """
@@ -116,18 +141,30 @@ class PositionViewerScreen(Screen):
 
         Args:
             status_filter: Filter by status (open, closed, all)
+
+        Educational Note:
+            The data source mode determines behavior:
+            - "demo": Always use demo data, skip database query
+            - "real": Only use database, show error if unavailable
+            - "auto": Try database first, fall back to demo on error
         """
         table = self.query_one("#position-table", DataTable)
         table.clear()
 
+        data_mode = self._get_data_source_mode()
+
+        # Demo mode: Skip database, use demo data directly
+        if data_mode == "demo":
+            self._load_demo_data(table, status_filter=status_filter)
+            return
+
         try:
-            from precog.database.crud_operations import (  # type: ignore[attr-defined]
-                get_positions_with_pnl,
-            )
+            from precog.database.crud_operations import get_positions_with_pnl
 
             positions = get_positions_with_pnl(
                 status=None if status_filter == "all" else status_filter,
-                limit=100,
+                limit=self.PAGE_SIZE,
+                offset=self._current_page * self.PAGE_SIZE,
             )
 
             total_unrealized = Decimal("0")
@@ -170,21 +207,46 @@ class PositionViewerScreen(Screen):
                     total_realized += pos.get("realized_pnl", Decimal("0"))
 
             self._update_summary(open_count, total_unrealized, total_realized)
+            page_info = f"Page {self._current_page + 1}"
+            has_more = len(positions) == self.PAGE_SIZE
+            if has_more:
+                page_info += " | [dim]n=Next[/]"
+            if self._current_page > 0:
+                page_info = "[dim]p=Prev[/] | " + page_info
             self.query_one("#position-status", Static).update(
-                f"[green]Loaded {len(positions)} positions[/]"
+                f"[green]Loaded {len(positions)} positions[/] | {page_info}"
             )
 
         except ImportError:
-            self._load_demo_data(table)
+            if data_mode == "real":
+                self.query_one("#position-status", Static).update(
+                    "[red]Database module not available - real mode requires database[/]"
+                )
+            else:
+                self._load_demo_data(table, status_filter=status_filter)
         except Exception as e:
-            self.query_one("#position-status", Static).update(
-                f"[red]Error loading positions: {e}[/]"
-            )
-            self._load_demo_data(table)
+            if data_mode == "real":
+                self.query_one("#position-status", Static).update(f"[red]Database error: {e}[/]")
+            else:
+                # Auto mode: fall back to demo data after showing error
+                self._load_demo_data(table, status_filter=status_filter)
 
-    def _load_demo_data(self, table: DataTable) -> None:
-        """Load demonstration data when database is unavailable."""
-        demo_positions = [
+    def _load_demo_data(self, table: DataTable, status_filter: str = "open") -> None:
+        """Load demonstration data when database is unavailable.
+
+        Args:
+            table: The DataTable to populate
+            status_filter: Filter by status (open, closed, all)
+
+        Educational Note:
+            Demo data includes both open and closed positions to allow
+            users to test the filtering functionality. P&L values are
+            pre-calculated for display, matching real position format.
+        """
+        # Full demo dataset with raw values for proper filtering and calculations
+        # Format: (id, ticker, side, qty, entry, current, pnl, pnl_pct, status, raw_pnl, raw_realized)
+        all_demo_positions = [
+            # Open positions (unrealized P&L)
             (
                 "1",
                 "KXNFL-KC-BUF",
@@ -192,8 +254,8 @@ class PositionViewerScreen(Screen):
                 "100",
                 "$0.55",
                 "$0.62",
-                "[green]+$7.00[/]",
-                "[green]+12.7%[/]",
+                Decimal("7.00"),
+                Decimal("12.7"),
                 "Open",
             ),
             (
@@ -203,8 +265,8 @@ class PositionViewerScreen(Screen):
                 "50",
                 "$0.60",
                 "$0.58",
-                "[red]-$1.00[/]",
-                "[red]-3.3%[/]",
+                Decimal("-1.00"),
+                Decimal("-3.3"),
                 "Open",
             ),
             (
@@ -214,10 +276,22 @@ class PositionViewerScreen(Screen):
                 "75",
                 "$0.52",
                 "$0.48",
-                "[green]+$3.00[/]",
-                "[green]+7.7%[/]",
+                Decimal("3.00"),
+                Decimal("7.7"),
                 "Open",
             ),
+            (
+                "5",
+                "KXNHL-TOR-MTL",
+                "YES",
+                "60",
+                "$0.45",
+                "$0.52",
+                Decimal("4.20"),
+                Decimal("15.6"),
+                "Open",
+            ),
+            # Closed positions (realized P&L)
             (
                 "4",
                 "KXNCAAF-OSU-MICH",
@@ -225,18 +299,95 @@ class PositionViewerScreen(Screen):
                 "200",
                 "$0.45",
                 "$0.51",
-                "[green]+$12.00[/]",
-                "[green]+13.3%[/]",
+                Decimal("12.00"),
+                Decimal("13.3"),
+                "Closed",
+            ),
+            (
+                "6",
+                "KXMLB-NYY-BOS",
+                "NO",
+                "150",
+                "$0.48",
+                "$0.35",
+                Decimal("19.50"),
+                Decimal("27.1"),
+                "Closed",
+            ),
+            (
+                "7",
+                "KXNCAAB-DUKE-UNC",
+                "YES",
+                "80",
+                "$0.55",
+                "$0.42",
+                Decimal("-10.40"),
+                Decimal("-23.6"),
                 "Closed",
             ),
         ]
 
-        for pos in demo_positions:
-            table.add_row(*pos)
+        # Apply status filter
+        filtered_positions = []
+        for pos in all_demo_positions:
+            pos_status = pos[8].lower()
+            if status_filter == "all" or pos_status == status_filter.lower():
+                filtered_positions.append(pos)
 
-        self._update_summary(3, Decimal("9.00"), Decimal("12.00"))
+        # Apply pagination
+        total_filtered = len(filtered_positions)
+        start = self._current_page * self.PAGE_SIZE
+        end = start + self.PAGE_SIZE
+        page_positions = filtered_positions[start:end]
+
+        # Calculate summary metrics from paginated data
+        open_count = 0
+        total_unrealized = Decimal("0")
+        total_realized = Decimal("0")
+
+        for pos in page_positions:
+            pos_id, ticker, side, qty, entry, current, pnl, pnl_pct, status = pos
+
+            # Format P&L with color
+            pnl_str = f"${pnl:+.2f}"
+            if pnl > 0:
+                pnl_str = f"[green]{pnl_str}[/]"
+            elif pnl < 0:
+                pnl_str = f"[red]{pnl_str}[/]"
+
+            pnl_pct_str = f"{pnl_pct:+.1f}%"
+            if pnl_pct > 0:
+                pnl_pct_str = f"[green]{pnl_pct_str}[/]"
+            elif pnl_pct < 0:
+                pnl_pct_str = f"[red]{pnl_pct_str}[/]"
+
+            table.add_row(pos_id, ticker, side, qty, entry, current, pnl_str, pnl_pct_str, status)
+
+            # Track metrics
+            if status.lower() == "open":
+                open_count += 1
+                total_unrealized += pnl
+            else:
+                total_realized += pnl
+
+        # Update summary with calculated values
+        self._update_summary(open_count, total_unrealized, total_realized)
+
+        # Status message with filter and pagination info
+        filter_info = ""
+        if status_filter != "all":
+            filter_info = f" | Filter: {status_filter.title()}"
+
+        page_info = f"Page {self._current_page + 1}"
+        has_more = end < total_filtered
+        if has_more:
+            page_info += " | [dim]n=Next[/]"
+        if self._current_page > 0:
+            page_info = "[dim]p=Prev[/] | " + page_info
+
         self.query_one("#position-status", Static).update(
-            "[yellow]Showing demo data (database unavailable)[/]"
+            f"[bold yellow on #3D2A00]  SAMPLE DATA  [/] "
+            f"[dim]Showing {len(page_positions)} of {total_filtered} demo positions{filter_info}[/] | {page_info}"
         )
 
     def _update_summary(self, open_count: int, unrealized: Decimal, realized: Decimal) -> None:
@@ -272,6 +423,7 @@ class PositionViewerScreen(Screen):
     def on_select_changed(self, event: Select.Changed) -> None:
         """Handle filter dropdown changes."""
         if event.select.id == "status-filter":
+            self._current_page = 0
             self._load_positions(str(event.value))
 
     def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
@@ -300,13 +452,32 @@ class PositionViewerScreen(Screen):
         self._load_positions(str(status) if status else "open")
         self.app.notify("Positions refreshed")
 
+    def action_next_page(self) -> None:
+        """Navigate to the next page of results."""
+        table = self.query_one("#position-table", DataTable)
+        if table.row_count < self.PAGE_SIZE:
+            self.app.notify("Already on last page")
+            return
+        self._current_page += 1
+        status = self.query_one("#status-filter", Select).value
+        self._load_positions(str(status) if status else "open")
+
+    def action_prev_page(self) -> None:
+        """Navigate to the previous page of results."""
+        if self._current_page > 0:
+            self._current_page -= 1
+            status = self.query_one("#status-filter", Select).value
+            self._load_positions(str(status) if status else "open")
+
     def action_show_open(self) -> None:
         """Filter to open positions only."""
+        self._current_page = 0
         self.query_one("#status-filter", Select).value = "open"
         self._load_positions("open")
 
     def action_show_all(self) -> None:
         """Show all positions."""
+        self._current_page = 0
         self.query_one("#status-filter", Select).value = "all"
         self._load_positions("all")
 

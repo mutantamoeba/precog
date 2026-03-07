@@ -32,10 +32,12 @@ class TestEnvironmentDetectionE2E:
 
         assert result == AppEnvironment.STAGING
 
-    def test_get_app_environment_infers_from_db_name(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test environment inference from DB_NAME works."""
+    def test_get_app_environment_from_environment_var(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Test ENVIRONMENT variable used as fallback when PRECOG_ENV not set."""
         monkeypatch.delenv("PRECOG_ENV", raising=False)
-        monkeypatch.setenv("DB_NAME", "precog_test")
+        monkeypatch.setenv("ENVIRONMENT", "test")
 
         result = get_app_environment()
 
@@ -49,14 +51,15 @@ class TestEnvironmentDetectionE2E:
 
         assert result == MarketMode.LIVE
 
-    def test_get_database_name_explicit_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        """Test DB_NAME takes precedence over derived name."""
-        monkeypatch.setenv("PRECOG_ENV", "development")
-        monkeypatch.setenv("DB_NAME", "custom_db")
+    def test_get_database_name_prefixed_override(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Test prefixed {PREFIX}_DB_NAME takes precedence over flat DB_NAME."""
+        monkeypatch.setenv("PRECOG_ENV", "dev")
+        monkeypatch.setenv("DEV_DB_NAME", "precog_dev")
+        monkeypatch.setenv("DB_NAME", "wrong_db")
 
         result = get_database_name()
 
-        assert result == "custom_db"
+        assert result == "precog_dev"
 
 
 @pytest.mark.e2e

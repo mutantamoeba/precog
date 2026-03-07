@@ -1,15 +1,17 @@
 """
 Alembic Environment Configuration for Precog Database Migrations.
 
-This module configures Alembic to connect to PostgreSQL using environment
-variables, following Pattern 4 (Security - No Credentials in Code).
+This module configures Alembic to connect to PostgreSQL using the
+environment-aware prefixed variable resolution (e.g., DEV_DB_NAME
+when PRECOG_ENV=dev). Falls back to flat DB_* vars for CI.
 
-Environment Variables Required:
-    DB_HOST: Database hostname (default: localhost)
-    DB_PORT: Database port (default: 5432)
-    DB_NAME: Database name (default: precog_dev)
-    DB_USER: Database username (default: postgres)
-    DB_PASSWORD: Database password (REQUIRED)
+Environment Variables:
+    PRECOG_ENV: Environment prefix selector (dev/test/staging/prod)
+    {PREFIX}_DB_HOST: Database hostname (default: localhost)
+    {PREFIX}_DB_PORT: Database port (default: 5432)
+    {PREFIX}_DB_NAME: Database name (derived from PRECOG_ENV if not set)
+    {PREFIX}_DB_USER: Database username (default: postgres)
+    {PREFIX}_DB_PASSWORD: Database password (REQUIRED)
 
 Usage:
     # Run migrations
@@ -25,10 +27,8 @@ Usage:
 References:
     - ADR-030: Alembic Migration Framework
     - Pattern 4: Security (No Credentials in Code)
-    - docs/utility/SCHEMA_MIGRATION_WORKFLOW_V1.1.md
 """
 
-import os
 from logging.config import fileConfig
 
 from alembic import context
@@ -38,6 +38,9 @@ from sqlalchemy import create_engine, pool
 # Load environment variables from .env file
 # This allows local development without setting system env vars
 load_dotenv()
+
+# Import environment-aware resolution after load_dotenv()
+from precog.config.environment import get_database_name, get_prefixed_env  # noqa: E402
 
 # Alembic Config object - provides access to .ini file values
 config = context.config
@@ -67,11 +70,11 @@ def get_database_url() -> str:
         Password is read from environment variable, never hardcoded.
         See Pattern 4 in DEVELOPMENT_PATTERNS_V1.5.md
     """
-    host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5432")
-    database = os.getenv("DB_NAME", "precog_dev")
-    user = os.getenv("DB_USER", "postgres")
-    password = os.getenv("DB_PASSWORD")
+    host = get_prefixed_env("DB_HOST", "localhost")
+    port = get_prefixed_env("DB_PORT", "5432")
+    database = get_database_name()
+    user = get_prefixed_env("DB_USER", "postgres")
+    password = get_prefixed_env("DB_PASSWORD")
 
     if not password:
         raise ValueError(

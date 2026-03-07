@@ -1166,14 +1166,9 @@ def main():
     # Run all validation checks
     print("Running validation checks...\n")
 
-    results.append(validate_adr_consistency())
-    results.append(validate_requirement_consistency())
-    results.append(validate_master_index())
-    results.append(validate_cross_references())
-    results.append(validate_version_headers())
-    results.append(validate_new_docs_in_master_index())  # Check #6 [ENFORCED]
-    results.append(validate_git_version_bumps())  # Check #7 [ENFORCED]
-    results.append(validate_phase_completion_status())  # Check #8 [ENFORCED]
+    # Checks #1-8 disabled: documentation ceremony, doesn't catch code bugs.
+    # CI handles these as non-blocking if re-enabled later.
+    # Kept: YAML config validation (#9) and config sync (#10) - catch real bugs.
     results.append(validate_yaml_configuration())  # Check #9 [ENFORCED]
     results.append(validate_config_synchronization())  # Check #10 [ENFORCED]
 
