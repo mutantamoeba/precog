@@ -94,7 +94,7 @@ class TestESPNGamePollerInitialization:
         """Test poller initializes with defaults."""
         poller = ESPNGamePoller(espn_client=mock_espn_client)
 
-        assert poller.leagues == ["nfl", "ncaaf"]
+        assert poller.leagues == ["nfl", "ncaaf", "nba"]
         assert poller.poll_interval == 15
         assert poller.idle_interval == 60
         assert poller.persist_jobs is False
@@ -434,7 +434,7 @@ class TestFactoryFunctions:
         """Test create_espn_poller with defaults."""
         poller = create_espn_poller()
 
-        assert poller.leagues == ["nfl", "ncaaf"]
+        assert poller.leagues == ["nfl", "ncaaf", "nba"]
         assert poller.poll_interval == 15
         assert poller.idle_interval == 60
 
@@ -562,7 +562,7 @@ class TestClassConstants:
 
     def test_default_leagues(self) -> None:
         """Test DEFAULT_LEAGUES constant."""
-        assert ESPNGamePoller.DEFAULT_LEAGUES == ["nfl", "ncaaf"]
+        assert ESPNGamePoller.DEFAULT_LEAGUES == ["nfl", "ncaaf", "nba"]
 
     def test_live_statuses(self) -> None:
         """Test LIVE_STATUSES constant."""
