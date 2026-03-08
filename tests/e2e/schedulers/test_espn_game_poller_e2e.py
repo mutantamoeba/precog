@@ -501,12 +501,14 @@ class TestRefreshScoreboardsWorkflow:
         mock_get_team.return_value = {"team_id": 1}
         mock_create_venue.return_value = 100
 
-        # NFL has active games
-        mock_get_live.side_effect = [
-            [{"game_id": 1}],  # NFL has active
-            [],  # NCAAF no active
-            [{"game_id": 1}],  # Count check
-        ]
+        # NFL has active games, NCAAF does not.
+        # Use function-based side_effect to handle keyword arg calls
+        # in any order (filter check + count check call get_live_games
+        # multiple times with league= kwarg).
+        def live_games_by_league(**kwargs: Any) -> list[dict[str, Any]]:
+            return [{"game_id": 1}] if kwargs.get("league") == "nfl" else []
+
+        mock_get_live.side_effect = live_games_by_league
 
         game = {
             "metadata": {

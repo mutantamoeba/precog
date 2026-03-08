@@ -135,6 +135,10 @@ MODULE_TIERS = {
     "tui/screens/scheduler_control": "experimental",
     "tui/screens/settings": "experimental",
     "tui/widgets/header": "experimental",
+    "tui/screens/base_screen": "experimental",
+    "tui/screens/help_screen": "experimental",
+    "tui/widgets/breadcrumb": "experimental",
+    "tui/widgets/environment_bar": "experimental",
     # Schedulers
     "schedulers/espn_game_poller": "business",
     # Validation

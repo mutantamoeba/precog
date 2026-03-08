@@ -4,8 +4,15 @@ Performance tests for kelly_criterion module.
 Validates latency and throughput requirements.
 
 Reference: TESTING_STRATEGY_V3.2.md Section "Performance Tests"
+
+Educational Note:
+    Throughput tests are skipped in CI because GitHub Actions runners have
+    variable CPU performance, causing false failures. Latency tests use
+    relative thresholds that are more CI-friendly. Per Pattern 28, timing-
+    sensitive tests should use skipif(_is_ci).
 """
 
+import os
 import time
 from decimal import Decimal
 
@@ -16,6 +23,8 @@ from precog.trading.kelly_criterion import (
     calculate_kelly_size,
     calculate_optimal_position,
 )
+
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
 
 pytestmark = [pytest.mark.performance]
 
@@ -40,6 +49,7 @@ class TestCalculateKellySizePerformance:
         # Should complete in <0.1ms on average
         assert avg_latency < 0.0001, f"Average latency {avg_latency * 1000:.3f}ms too high"
 
+    @pytest.mark.skipif(_is_ci, reason="Throughput tests unreliable on CI runners")
     def test_kelly_calculation_throughput(self) -> None:
         """Test Kelly calculation throughput."""
         start = time.perf_counter()
@@ -97,6 +107,7 @@ class TestCalculateEdgePerformance:
         # Should complete in <0.1ms on average
         assert avg_latency < 0.0001, f"Average latency {avg_latency * 1000:.3f}ms too high"
 
+    @pytest.mark.skipif(_is_ci, reason="Throughput tests unreliable on CI runners")
     def test_edge_calculation_throughput(self) -> None:
         """Test edge calculation throughput."""
         start = time.perf_counter()
@@ -137,6 +148,7 @@ class TestCalculateOptimalPositionPerformance:
         # Should complete in <0.2ms on average (includes both edge and kelly)
         assert avg_latency < 0.0002, f"Average latency {avg_latency * 1000:.3f}ms too high"
 
+    @pytest.mark.skipif(_is_ci, reason="Throughput tests unreliable on CI runners")
     def test_optimal_position_throughput(self) -> None:
         """Test optimal position calculation throughput."""
         start = time.perf_counter()
