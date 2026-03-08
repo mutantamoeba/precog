@@ -822,7 +822,7 @@ def create_services(
                 # Check for Kalshi credentials using two-axis naming convention
                 if _has_kalshi_credentials(config.environment):
                     kalshi_rest_service = create_kalshi_poller(
-                        series_tickers=["KXNFLGAME"],
+                        series_tickers=["KXNFLGAME", "KXNCAAFGAME", "KXNBAGAME"],
                         poll_interval=svc_config.poll_interval,
                     )
                     services[name] = (

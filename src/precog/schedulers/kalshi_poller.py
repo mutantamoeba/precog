@@ -101,7 +101,7 @@ class KalshiMarketPoller(BasePoller):
     # Class-level configuration
     MIN_POLL_INTERVAL: ClassVar[int] = 5  # seconds (rate limit: 100 req/min)
     DEFAULT_POLL_INTERVAL: ClassVar[int] = 15  # seconds (balanced for near real-time)
-    DEFAULT_SERIES_TICKERS: ClassVar[list[str]] = ["KXNFLGAME"]
+    DEFAULT_SERIES_TICKERS: ClassVar[list[str]] = ["KXNFLGAME", "KXNCAAFGAME", "KXNBAGAME"]
     # Note: pagination is handled internally by fetch_all_markets()
 
     # Rate limit guidance:

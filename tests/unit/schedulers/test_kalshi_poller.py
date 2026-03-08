@@ -105,7 +105,7 @@ class TestKalshiMarketPollerInit:
         """Test initialization with default parameters."""
         poller = KalshiMarketPoller(kalshi_client=mock_kalshi_client)
 
-        assert poller.series_tickers == ["KXNFLGAME"]
+        assert poller.series_tickers == ["KXNFLGAME", "KXNCAAFGAME", "KXNBAGAME"]
         assert poller.poll_interval == 15  # Default: 15 seconds for near real-time
         assert poller.environment == "demo"
         assert poller.enabled is False
@@ -419,7 +419,7 @@ class TestKalshiPollerFactoryFunctions:
 
             poller = create_kalshi_poller()
 
-            assert poller.series_tickers == ["KXNFLGAME"]
+            assert poller.series_tickers == ["KXNFLGAME", "KXNCAAFGAME", "KXNBAGAME"]
             assert poller.poll_interval == 15  # Default: 15 seconds
             assert poller.environment == "demo"
 

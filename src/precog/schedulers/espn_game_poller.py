@@ -120,7 +120,7 @@ class ESPNGamePoller(BasePoller):
     MIN_POLL_INTERVAL: ClassVar[int] = 5  # seconds
     DEFAULT_POLL_INTERVAL: ClassVar[int] = 15  # seconds (balanced for live games)
     DEFAULT_IDLE_INTERVAL: ClassVar[int] = 60  # seconds (when no games active)
-    DEFAULT_LEAGUES: ClassVar[list[str]] = ["nfl", "ncaaf"]
+    DEFAULT_LEAGUES: ClassVar[list[str]] = ["nfl", "ncaaf", "nba"]
 
     # Game status mappings
     LIVE_STATUSES: ClassVar[set[str]] = {"in", "in_progress", "halftime"}
