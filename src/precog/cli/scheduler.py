@@ -134,8 +134,12 @@ def _start_supervised_mode(
 
     try:
         # Create supervisor using factory function
+        # Note: supervisor environment (development/staging/production) is separate
+        # from Kalshi API environment (demo/prod). Map appropriately.
+        supervisor_env = "production" if kalshi_env == "prod" else "development"
         _supervisor = create_supervisor(
-            environment=kalshi_env,
+            environment=supervisor_env,
+            kalshi_env=kalshi_env,
             enabled_services=enabled_services,
             poll_interval=espn_interval,
             health_check_interval=health_interval,
