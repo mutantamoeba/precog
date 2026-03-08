@@ -110,6 +110,11 @@ class BasePoller(ABC):
     MIN_POLL_INTERVAL: ClassVar[int] = 5  # seconds
     DEFAULT_POLL_INTERVAL: ClassVar[int] = 15  # seconds
 
+    # Class-level registry of all active poller instances (Issue #292).
+    # Used by shutdown_all_pollers() to ensure test isolation.
+    _active_pollers: ClassVar[set["BasePoller"]] = set()
+    _registry_lock: ClassVar[threading.Lock] = threading.Lock()
+
     def __init__(
         self,
         poll_interval: int | None = None,
@@ -241,6 +246,10 @@ class BasePoller(ABC):
             self._scheduler.start()
             self._enabled = True
 
+        # Register in class-level registry for cleanup (Issue #292)
+        with BasePoller._registry_lock:
+            BasePoller._active_pollers.add(self)
+
         self.logger.info(
             "%s started - polling every %d seconds",
             self.__class__.__name__,
@@ -268,6 +277,11 @@ class BasePoller(ABC):
             uses a separate thread to enforce a timeout, falling back to
             forced shutdown if the timeout is exceeded.
 
+            After shutdown, we explicitly shut down the thread pool executor
+            to prevent orphaned threads from leaking into subsequent tests.
+            Without this, executor threads may continue running _poll_once()
+            and interfere with mock assertions in other test modules.
+
             This is critical for test cleanup and graceful service shutdowns
             where we can't wait indefinitely for stalled jobs.
         """
@@ -281,6 +295,18 @@ class BasePoller(ABC):
 
             scheduler = self._scheduler
             if scheduler:
+                # Capture executor references BEFORE shutdown clears them,
+                # so we can force-drain thread pools after shutdown completes.
+                # Note: _executors is a private APScheduler attribute (tested with apscheduler 3.x).
+                if hasattr(scheduler, "_executors"):
+                    executors = list(scheduler._executors.values())
+                else:
+                    self.logger.warning(
+                        "APScheduler scheduler has no _executors attribute; "
+                        "executor drain skipped (APScheduler API may have changed)"
+                    )
+                    executors = []
+
                 if wait and timeout > 0:
                     # Use threaded shutdown with timeout to prevent hangs
                     shutdown_complete = threading.Event()
@@ -312,11 +338,71 @@ class BasePoller(ABC):
                     # Immediate shutdown (no wait)
                     scheduler.shutdown(wait=False)
 
+                # Force-drain executor thread pools to prevent orphaned threads.
+                # APScheduler's shutdown(wait=False) marks the scheduler as stopped
+                # but doesn't wait for executor threads to finish. Those threads can
+                # leak across test modules and corrupt mock state (Issue #292).
+                for executor in executors:
+                    try:
+                        # _pool is a private attribute of APScheduler's ThreadPoolExecutor
+                        # (apscheduler 3.x). It holds the concurrent.futures.ThreadPoolExecutor.
+                        pool = getattr(executor, "_pool", None)
+                        if pool is not None:
+                            # Use cancel_futures=True (Python 3.9+) to drop pending work,
+                            # then wait for any in-flight task to finish.
+                            pool.shutdown(wait=True, cancel_futures=True)
+                    except TypeError:
+                        # Python <3.9 doesn't support cancel_futures
+                        try:
+                            if pool is not None:
+                                pool.shutdown(wait=True)
+                        except Exception:
+                            pass
+                    except Exception:
+                        pass  # Pool may already be shut down
+
                 self._scheduler = None
 
             self._enabled = False
 
+        # Unregister from class-level registry (Issue #292)
+        with BasePoller._registry_lock:
+            BasePoller._active_pollers.discard(self)
+
         self.logger.info("%s stopped", self.__class__.__name__)
+
+    @classmethod
+    def shutdown_all_pollers(cls, timeout: float = 5.0) -> int:
+        """
+        Stop all registered poller instances.
+
+        Used by test fixtures to ensure no orphaned poller threads leak
+        between test modules (Issue #292).
+
+        Args:
+            timeout: Maximum seconds to wait for each poller to stop.
+
+        Returns:
+            Number of pollers that were stopped.
+
+        Educational Note:
+            This class method iterates over the registry of active pollers
+            and calls stop() on each one. It's designed for test teardown,
+            not production use (production uses ServiceSupervisor).
+        """
+        stopped = 0
+        with cls._registry_lock:
+            pollers = list(cls._active_pollers)
+
+        for poller in pollers:
+            try:
+                if poller._enabled:
+                    poller.stop(wait=True, timeout=timeout)
+                    stopped += 1
+            except Exception:
+                pass  # Best-effort cleanup
+
+        return stopped
 
     # =========================================================================
     # Abstract Methods (Subclasses Must Implement)

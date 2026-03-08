@@ -271,6 +271,12 @@ class ESPNGamePoller(BasePoller):
             self._scheduler.start()
             self._enabled = True
 
+        # Register in class-level registry for cleanup (Issue #292).
+        # ESPNGamePoller overrides start() without calling super().start(),
+        # so we must register explicitly here.
+        with BasePoller._registry_lock:
+            BasePoller._active_pollers.add(self)
+
         logger.info(
             "%s started - polling every %d seconds",
             self.__class__.__name__,
