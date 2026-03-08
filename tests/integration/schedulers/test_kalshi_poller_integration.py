@@ -34,7 +34,7 @@ pytestmark = [pytest.mark.integration]
 def mock_kalshi_client() -> MagicMock:
     """Create a mock Kalshi client."""
     client = MagicMock()
-    client.get_markets.return_value = []
+    client.fetch_all_markets.return_value = []
     client.close = MagicMock()
     return client
 
@@ -100,7 +100,7 @@ class TestPollerClientIntegration:
         sample_market_data: list[dict[str, Any]],
     ) -> None:
         """Poller should use KalshiClient to fetch markets."""
-        mock_kalshi_client.get_markets.return_value = sample_market_data
+        mock_kalshi_client.fetch_all_markets.return_value = sample_market_data
 
         with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
             with patch("precog.schedulers.kalshi_poller.create_market"):
@@ -108,7 +108,7 @@ class TestPollerClientIntegration:
                     result = poller_with_mock_client.poll_once()
 
         # Verify client was called
-        mock_kalshi_client.get_markets.assert_called()
+        mock_kalshi_client.fetch_all_markets.assert_called()
         assert result["items_fetched"] == len(sample_market_data)
 
     def test_poller_calls_client_with_correct_series(
@@ -131,10 +131,8 @@ class TestPollerClientIntegration:
                         poller.poll_once()
 
         # Verify correct series was requested
-        mock_kalshi_client.get_markets.assert_called_with(
-            series_ticker="KXNCAAFGAME",
-            limit=KalshiMarketPoller.MAX_MARKETS_PER_REQUEST,
-            cursor=None,
+        mock_kalshi_client.fetch_all_markets.assert_called_with(
+            series_tickers=["KXNCAAFGAME"],
         )
 
     def test_poller_closes_client_on_stop(
@@ -171,7 +169,7 @@ class TestPollerDatabaseIntegration:
         """
         # Reset mock to ensure clean state
         mock_kalshi_client.reset_mock()
-        mock_kalshi_client.get_markets.return_value = [sample_market_data[0]]
+        mock_kalshi_client.fetch_all_markets.return_value = [sample_market_data[0]]
         expected_event_id = sample_market_data[0]["event_ticker"]
 
         with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
@@ -195,7 +193,7 @@ class TestPollerDatabaseIntegration:
     ) -> None:
         """Existing markets with price changes should be updated."""
         market = sample_market_data[0]
-        mock_kalshi_client.get_markets.return_value = [market]
+        mock_kalshi_client.fetch_all_markets.return_value = [market]
 
         # Existing market with different price
         existing = {
@@ -221,7 +219,7 @@ class TestPollerDatabaseIntegration:
     ) -> None:
         """Existing markets with no changes should be skipped."""
         market = sample_market_data[0]
-        mock_kalshi_client.get_markets.return_value = [market]
+        mock_kalshi_client.fetch_all_markets.return_value = [market]
 
         # Existing market with same price and status
         existing = {
@@ -249,7 +247,7 @@ class TestPollerDatabaseIntegration:
         """Status changes should trigger market update."""
         market = sample_market_data[0].copy()
         market["status"] = "closed"  # Changed status
-        mock_kalshi_client.get_markets.return_value = [market]
+        mock_kalshi_client.fetch_all_markets.return_value = [market]
 
         existing = {
             "yes_price": Decimal("0.5525"),  # Same price
@@ -297,10 +295,11 @@ class TestMultipleSeriesIntegration:
                         poller.poll_once()
 
         # Verify each series was polled
-        assert mock_kalshi_client.get_markets.call_count == len(series)
+        assert mock_kalshi_client.fetch_all_markets.call_count == len(series)
 
         called_series = [
-            call[1]["series_ticker"] for call in mock_kalshi_client.get_markets.call_args_list
+            call[1]["series_tickers"][0]
+            for call in mock_kalshi_client.fetch_all_markets.call_args_list
         ]
         assert set(called_series) == set(series)
 
@@ -312,7 +311,7 @@ class TestMultipleSeriesIntegration:
         series = ["KXNFLGAME", "KXNCAAFGAME"]
 
         # First call fails, second succeeds
-        mock_kalshi_client.get_markets.side_effect = [
+        mock_kalshi_client.fetch_all_markets.side_effect = [
             Exception("API Error"),
             [],  # Empty success
         ]
@@ -328,7 +327,7 @@ class TestMultipleSeriesIntegration:
                 # Should not raise, and should call both
                 poller._poll_once()
 
-        assert mock_kalshi_client.get_markets.call_count == 2
+        assert mock_kalshi_client.fetch_all_markets.call_count == 2
 
 
 # =============================================================================
@@ -360,7 +359,7 @@ class TestStatusMappingIntegration:
         """API status should be mapped correctly when creating markets."""
         market = sample_market_data[0].copy()
         market["status"] = api_status
-        mock_kalshi_client.get_markets.return_value = [market]
+        mock_kalshi_client.fetch_all_markets.return_value = [market]
 
         with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
             with patch("precog.schedulers.kalshi_poller.create_market") as mock_create:
@@ -437,7 +436,7 @@ class TestFallbackPriceIntegration:
             "event_ticker": "EVT-TEST",
             "series_ticker": "KXNFLGAME",
         }
-        mock_kalshi_client.get_markets.return_value = [market]
+        mock_kalshi_client.fetch_all_markets.return_value = [market]
 
         with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
             with patch("precog.schedulers.kalshi_poller.create_market") as mock_create:
@@ -465,7 +464,7 @@ class TestEventCreationIntegration:
         sample_market_data: list[dict[str, Any]],
     ) -> None:
         """Events should be created with correct category."""
-        mock_kalshi_client.get_markets.return_value = [sample_market_data[0]]
+        mock_kalshi_client.fetch_all_markets.return_value = [sample_market_data[0]]
 
         with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
             with patch("precog.schedulers.kalshi_poller.create_market"):
@@ -515,7 +514,7 @@ class TestEventCreationIntegration:
             # Note: series_ticker in market dict is for reference only;
             # real API doesn't include this field in responses
         }
-        mock_kalshi_client.get_markets.return_value = [market]
+        mock_kalshi_client.fetch_all_markets.return_value = [market]
 
         # Create poller configured for THIS specific series
         with patch("precog.schedulers.kalshi_poller.KalshiClient", return_value=mock_kalshi_client):

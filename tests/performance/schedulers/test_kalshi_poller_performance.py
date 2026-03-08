@@ -50,7 +50,7 @@ class TestKalshiMarketPollerPerformance:
         from precog.schedulers.kalshi_poller import KalshiMarketPoller
 
         mock_client = MagicMock()
-        mock_client.get_markets.return_value = []
+        mock_client.fetch_all_markets.return_value = []
         mock_client.close.return_value = None
 
         poller = KalshiMarketPoller(
@@ -88,7 +88,7 @@ class TestKalshiMarketPollerPerformance:
         from precog.schedulers.kalshi_poller import KalshiMarketPoller
 
         mock_client = MagicMock()
-        mock_client.get_markets.return_value = []
+        mock_client.fetch_all_markets.return_value = []
         mock_client.close.return_value = None
 
         poller = KalshiMarketPoller(
@@ -134,7 +134,7 @@ class TestKalshiMarketPollerPerformance:
         # IMPORTANT: event_ticker must include date (e.g., KXNFLGAME-25DEC15)
         # NOT just series ticker (KXNFLGAME) - the series is a different field
         mock_client = MagicMock()
-        mock_client.get_markets.return_value = [
+        mock_client.fetch_all_markets.return_value = [
             {
                 "ticker": f"KXNFLGAME-25DEC15-PERF-{i:04d}",
                 "event_ticker": "KXNFLGAME-25DEC15-PERF",  # CORRECT: includes date
@@ -185,7 +185,7 @@ class TestKalshiMarketPollerPerformance:
         from precog.schedulers.kalshi_poller import KalshiMarketPoller
 
         mock_client = MagicMock()
-        mock_client.get_markets.return_value = []
+        mock_client.fetch_all_markets.return_value = []
         mock_client.close.return_value = None
 
         poller = KalshiMarketPoller(

@@ -49,7 +49,7 @@ class TestKalshiMarketPollerStress:
 
         # Mock the KalshiClient to avoid real API calls (REQ-TEST-013 allows this)
         mock_client = MagicMock()
-        mock_client.get_markets.return_value = []
+        mock_client.fetch_all_markets.return_value = []
         mock_client.close.return_value = None
 
         poller = KalshiMarketPoller(
@@ -85,7 +85,7 @@ class TestKalshiMarketPollerStress:
         from precog.schedulers.kalshi_poller import KalshiMarketPoller
 
         mock_client = MagicMock()
-        mock_client.get_markets.return_value = []
+        mock_client.fetch_all_markets.return_value = []
         mock_client.close.return_value = None
 
         poller = KalshiMarketPoller(
@@ -127,7 +127,7 @@ class TestKalshiMarketPollerStress:
         from precog.schedulers.kalshi_poller import KalshiMarketPoller
 
         mock_client = MagicMock()
-        mock_client.get_markets.return_value = []
+        mock_client.fetch_all_markets.return_value = []
         mock_client.close.return_value = None
 
         poller = KalshiMarketPoller(
@@ -167,7 +167,7 @@ class TestKalshiMarketPollerStress:
         from precog.schedulers.kalshi_poller import KalshiMarketPoller
 
         mock_client = MagicMock()
-        mock_client.get_markets.return_value = []
+        mock_client.fetch_all_markets.return_value = []
         mock_client.close.return_value = None
 
         poller = KalshiMarketPoller(

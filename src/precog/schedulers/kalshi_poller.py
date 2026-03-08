@@ -23,7 +23,7 @@ Educational Notes:
 ------------------
 Polling Frequency Considerations:
     - Kalshi rate limit: 100 requests/minute
-    - get_markets() with pagination may use 2-3 requests per poll
+    - fetch_all_markets() handles pagination internally (2-3 requests per poll)
     - 30-60 second intervals allow ~2-3 polls per minute (safe margin)
     - Don't poll faster than 30s - wastes API quota without benefit
 
@@ -102,7 +102,7 @@ class KalshiMarketPoller(BasePoller):
     MIN_POLL_INTERVAL: ClassVar[int] = 5  # seconds (rate limit: 100 req/min)
     DEFAULT_POLL_INTERVAL: ClassVar[int] = 15  # seconds (balanced for near real-time)
     DEFAULT_SERIES_TICKERS: ClassVar[list[str]] = ["KXNFLGAME"]
-    MAX_MARKETS_PER_REQUEST: ClassVar[int] = 200  # Kalshi API limit
+    # Note: pagination is handled internally by fetch_all_markets()
 
     # Rate limit guidance:
     # - Kalshi allows 100 requests/minute
@@ -479,44 +479,19 @@ class KalshiMarketPoller(BasePoller):
             requests.HTTPError: If API request fails after retries.
 
         Educational Note:
-            Kalshi limits responses to 200 markets max. We use cursor-based
-            pagination to fetch all markets in a series. Most NFL series
-            have 50-100 markets, so pagination is rarely needed.
+            Kalshi limits responses to 200 markets per page. We use
+            fetch_all_markets() which handles cursor-based pagination
+            internally, ensuring ALL markets are fetched regardless of
+            how many pages exist.
         """
         logger.debug("Polling Kalshi series: %s", series_ticker)
 
-        all_markets: list[ProcessedMarketData] = []
-        cursor: str | None = None
-
-        # Paginate through all markets in the series
-        # Uses get_markets() with size-based heuristic for backward compatibility.
-        # For full cursor-based pagination, use client.fetch_all_markets() directly.
-        while True:
-            markets = self.kalshi_client.get_markets(
-                series_ticker=series_ticker,
-                limit=self.MAX_MARKETS_PER_REQUEST,
-                cursor=cursor,
-            )
-
-            if not markets:
-                break
-
-            all_markets.extend(markets)
-
-            # If we got fewer than the limit, this is the last page
-            if len(markets) < self.MAX_MARKETS_PER_REQUEST:
-                break
-
-            # For series with exactly MAX_MARKETS_PER_REQUEST results,
-            # we cannot determine if more pages exist without cursor access.
-            # Most sports series have <200 markets, so this is acceptable.
-            # For guaranteed full pagination, use fetch_all_markets() instead.
-            logger.debug(
-                "Fetched %d markets for %s (at page limit, may have more)",
-                len(markets),
-                series_ticker,
-            )
-            break
+        # Use fetch_all_markets() for guaranteed full pagination.
+        # This handles cursor-chasing internally, returning ALL markets
+        # regardless of how many pages exist.
+        all_markets = self.kalshi_client.fetch_all_markets(
+            series_tickers=[series_ticker],
+        )
 
         markets_updated = 0
         markets_created = 0

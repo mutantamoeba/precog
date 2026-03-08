@@ -357,13 +357,6 @@ class TestClassConstantProperties:
         """
         assert KalshiMarketPoller.DEFAULT_POLL_INTERVAL >= KalshiMarketPoller.MIN_POLL_INTERVAL
 
-    def test_max_markets_reasonable(self) -> None:
-        """MAX_MARKETS_PER_REQUEST should be reasonable.
-
-        Property: 1 <= MAX_MARKETS <= 1000.
-        """
-        assert 1 <= KalshiMarketPoller.MAX_MARKETS_PER_REQUEST <= 1000
-
     def test_platform_id_is_kalshi(self) -> None:
         """PLATFORM_ID should be 'kalshi'.
 
