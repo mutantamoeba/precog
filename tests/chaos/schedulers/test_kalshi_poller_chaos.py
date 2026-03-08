@@ -55,7 +55,7 @@ class TestKalshiMarketPollerChaos:
                 raise Exception("Random API failure")
             return []
 
-        mock_client.get_markets.side_effect = flaky_api
+        mock_client.fetch_all_markets.side_effect = flaky_api
 
         poller = KalshiMarketPoller(
             series_tickers=["KXNFLGAME"],
@@ -105,7 +105,7 @@ class TestKalshiMarketPollerChaos:
         ]
 
         for response in malformed_responses:
-            mock_client.get_markets.return_value = response
+            mock_client.fetch_all_markets.return_value = response
 
             poller = KalshiMarketPoller(
                 series_tickers=["KXNFLGAME"],
@@ -172,7 +172,7 @@ class TestKalshiMarketPollerChaos:
             for i in range(500)
         ]
 
-        mock_client.get_markets.return_value = large_response
+        mock_client.fetch_all_markets.return_value = large_response
 
         poller = KalshiMarketPoller(
             series_tickers=["KXNFLGAME"],
@@ -222,7 +222,7 @@ class TestKalshiMarketPollerChaos:
             successful_polls[0] += 1
             return []
 
-        mock_client.get_markets.side_effect = network_partition_api
+        mock_client.fetch_all_markets.side_effect = network_partition_api
 
         poller = KalshiMarketPoller(
             series_tickers=["KXNFLGAME"],
@@ -276,7 +276,7 @@ class TestKalshiMarketPollerChaos:
         from precog.schedulers.kalshi_poller import KalshiMarketPoller
 
         mock_client = MagicMock()
-        mock_client.get_markets.return_value = []
+        mock_client.fetch_all_markets.return_value = []
         mock_client.close.return_value = None
 
         for _ in range(5):

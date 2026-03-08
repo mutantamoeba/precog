@@ -34,7 +34,7 @@ from precog.schedulers.kalshi_poller import (
 def mock_kalshi_client():
     """Create a mock KalshiClient for testing."""
     mock_client = Mock()
-    mock_client.get_markets.return_value = []
+    mock_client.fetch_all_markets.return_value = []
     mock_client.close = Mock()
     return mock_client
 
@@ -219,7 +219,7 @@ class TestKalshiMarketPollerPolling:
     @pytest.mark.unit
     def test_poll_once_returns_counts(self, poller_with_mock_client, mock_market_data_list):
         """Test that poll_once returns correct counts."""
-        poller_with_mock_client.kalshi_client.get_markets.return_value = mock_market_data_list
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = mock_market_data_list
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
@@ -235,7 +235,7 @@ class TestKalshiMarketPollerPolling:
     @pytest.mark.unit
     def test_poll_once_updates_existing_markets(self, poller_with_mock_client, mock_market_data):
         """Test that poll_once updates existing markets."""
-        poller_with_mock_client.kalshi_client.get_markets.return_value = [mock_market_data]
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [mock_market_data]
 
         existing_market = {
             "ticker": mock_market_data["ticker"],
@@ -263,7 +263,7 @@ class TestKalshiMarketPollerPolling:
     @pytest.mark.unit
     def test_poll_once_skips_unchanged_markets(self, poller_with_mock_client, mock_market_data):
         """Test that poll_once skips markets with unchanged prices."""
-        poller_with_mock_client.kalshi_client.get_markets.return_value = [mock_market_data]
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [mock_market_data]
 
         # Same prices as mock_market_data
         existing_market = {
@@ -289,7 +289,7 @@ class TestKalshiMarketPollerPolling:
     @pytest.mark.unit
     def test_poll_updates_stats(self, poller_with_mock_client, mock_market_data_list):
         """Test that polling updates stats correctly."""
-        poller_with_mock_client.kalshi_client.get_markets.return_value = mock_market_data_list
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = mock_market_data_list
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
@@ -307,7 +307,7 @@ class TestKalshiMarketPollerPolling:
     @pytest.mark.unit
     def test_poll_handles_api_error(self, poller_with_mock_client):
         """Test that polling handles API errors gracefully."""
-        poller_with_mock_client.kalshi_client.get_markets.side_effect = Exception("API Error")
+        poller_with_mock_client.kalshi_client.fetch_all_markets.side_effect = Exception("API Error")
 
         # Should not raise, just log error
         poller_with_mock_client._poll_wrapper()
@@ -450,7 +450,7 @@ class TestKalshiPollerFactoryFunctions:
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
             patch("precog.schedulers.kalshi_poller.create_market", return_value="MKT-123"),
         ):
-            mock_kalshi_client.get_markets.return_value = [
+            mock_kalshi_client.fetch_all_markets.return_value = [
                 {"ticker": "TEST-MARKET", "event_ticker": "TEST", "title": "Test"}
             ]
 
