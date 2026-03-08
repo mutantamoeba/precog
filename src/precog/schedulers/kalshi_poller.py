@@ -47,6 +47,7 @@ from typing import ClassVar
 from precog.api_connectors.kalshi_client import KalshiClient
 from precog.api_connectors.types import ProcessedMarketData, SeriesData
 from precog.database.crud_operations import (
+    count_open_markets,
     create_market,
     get_current_market,
     get_or_create_event,
@@ -700,8 +701,11 @@ class KalshiMarketPoller(BasePoller):
             This is useful for monitoring - if count drops to 0, it might
             indicate an API issue or that all markets have settled.
         """
-        # TODO: Add CRUD operation to count open markets
-        return 0
+        try:
+            return count_open_markets()
+        except Exception as e:
+            logger.error("Failed to get active market count: %s", e)
+            return 0
 
 
 # =============================================================================
