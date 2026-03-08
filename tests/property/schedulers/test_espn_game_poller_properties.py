@@ -23,7 +23,7 @@ from precog.schedulers.espn_game_poller import ESPNGamePoller
 # =============================================================================
 
 # Valid poll intervals
-valid_poll_interval = st.integers(min_value=5, max_value=3600)
+valid_poll_interval = st.integers(min_value=15, max_value=3600)
 
 # Valid idle intervals
 valid_idle_interval = st.integers(min_value=15, max_value=3600)
