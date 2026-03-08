@@ -17,12 +17,13 @@ Why Token Bucket?
 - Simple and efficient: Just track token count and last refill time
 
 Example:
-    Kalshi allows 100 requests/minute.
-    - Bucket capacity: 100 tokens
-    - Refill rate: 100 tokens / 60 seconds = 1.67 tokens/second
+    Kalshi Basic tier allows 20 requests/second (1,200/minute).
+    - Bucket capacity: 1,200 tokens
+    - Refill rate: 1,200 tokens / 60 seconds = 20 tokens/second
     - Each request consumes 1 token
-    - If you make 10 requests quickly, 90 tokens remain
-    - Tokens refill continuously, so after 6 seconds you have 100 tokens again
+    - If you make 25 requests quickly (one poll cycle), 1,175 tokens remain
+    - Tokens refill continuously at 20/sec
+    - Reference: https://docs.kalshi.com/getting_started/rate_limits
 
 Reference: docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md
 Related Requirements: REQ-API-005 (API Rate Limit Management)
@@ -72,12 +73,12 @@ class TokenBucket:
         Initialize token bucket.
 
         Args:
-            capacity: Maximum tokens (e.g., 100 for Kalshi)
-            refill_rate: Tokens per second (e.g., 1.67 for 100/min)
+            capacity: Maximum tokens (e.g., 1200 for Kalshi Basic tier)
+            refill_rate: Tokens per second (e.g., 20 for 1200/min)
 
         Example:
-            >>> # Kalshi: 100 requests per minute
-            >>> limiter = TokenBucket(capacity=100, refill_rate=100/60)
+            >>> # Kalshi Basic tier: 1,200 requests per minute (20/sec)
+            >>> limiter = TokenBucket(capacity=1200, refill_rate=1200/60)
         """
         self.capacity = capacity
         self.refill_rate = refill_rate
@@ -239,7 +240,7 @@ class RateLimiter:
     and exponential backoff.
 
     Usage:
-        >>> limiter = RateLimiter(requests_per_minute=100)
+        >>> limiter = RateLimiter(requests_per_minute=1200)
         >>>
         >>> # Before each API request
         >>> limiter.wait_if_needed()
@@ -264,8 +265,8 @@ class RateLimiter:
             burst_size: Maximum burst size (defaults to requests_per_minute)
 
         Example:
-            >>> # Kalshi: 100 requests per minute
-            >>> limiter = RateLimiter(requests_per_minute=100)
+            >>> # Kalshi Basic tier: 1,200 requests per minute (20/sec)
+            >>> limiter = RateLimiter(requests_per_minute=1200)
         """
         self.requests_per_minute = requests_per_minute
         self.burst_size = burst_size or requests_per_minute
@@ -287,10 +288,10 @@ class RateLimiter:
         Call this before each API request. Blocks if necessary.
 
         Example:
-            >>> limiter = RateLimiter(requests_per_minute=100)
+            >>> limiter = RateLimiter(requests_per_minute=1200)
             >>>
             >>> for i in range(200):
-            ...     limiter.wait_if_needed()  # Will block after 100 requests
+            ...     limiter.wait_if_needed()  # Will block after 1,200 requests/min
             ...     response = make_api_request()
         """
         self.bucket.acquire(tokens=1, block=True)
@@ -303,7 +304,7 @@ class RateLimiter:
             retry_after: Seconds to wait (from Retry-After header), or None
 
         Example:
-            >>> limiter = RateLimiter(requests_per_minute=100)
+            >>> limiter = RateLimiter(requests_per_minute=1200)
             >>>
             >>> try:
             ...     response = make_api_request()
@@ -335,7 +336,7 @@ class RateLimiter:
             Utilization percentage (0.0 = unused, 1.0 = fully utilized)
 
         Example:
-            >>> limiter = RateLimiter(requests_per_minute=100)
+            >>> limiter = RateLimiter(requests_per_minute=1200)
             >>> util = limiter.get_utilization()
             >>> print(f"Rate limit {util*100:.1f}% utilized")
         """

@@ -114,8 +114,8 @@ class TestESPNGamePollerInit:
             poller = ESPNGamePoller()
 
         assert poller.leagues == ["nfl", "ncaaf", "nba"]
-        assert poller.poll_interval == 15
-        assert poller.idle_interval == 60
+        assert poller.poll_interval == 30
+        assert poller.idle_interval == 300
         assert not poller.persist_jobs
         assert poller.job_store_url is None
 
@@ -135,10 +135,10 @@ class TestESPNGamePollerInit:
         assert poller.idle_interval == 120
 
     def test_poll_interval_minimum(self) -> None:
-        """Test poll_interval must be at least 5 seconds."""
+        """Test poll_interval must be at least 15 seconds."""
         with patch("precog.schedulers.espn_game_poller.ESPNClient"):
-            with pytest.raises(ValueError, match="poll_interval must be at least 5"):
-                ESPNGamePoller(poll_interval=3)
+            with pytest.raises(ValueError, match="poll_interval must be at least 15"):
+                ESPNGamePoller(poll_interval=10)
 
     def test_idle_interval_minimum(self) -> None:
         """Test idle_interval must be at least 15 seconds."""
@@ -425,8 +425,8 @@ class TestCreateESPNPoller:
             poller = create_espn_poller()
 
         assert poller.leagues == ["nfl", "ncaaf", "nba"]
-        assert poller.poll_interval == 15
-        assert poller.idle_interval == 60
+        assert poller.poll_interval == 30
+        assert poller.idle_interval == 300
         assert not poller.persist_jobs
 
     def test_creates_with_custom_leagues(self) -> None:

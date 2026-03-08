@@ -394,7 +394,7 @@ class BasePoller(ABC):
                 self._stats["last_poll"] = start_time.isoformat()
 
             elapsed = (datetime.now(UTC) - start_time).total_seconds()
-            self.logger.debug(
+            self.logger.info(
                 "Poll completed: fetched=%d, updated=%d, created=%d in %.2fs",
                 result.get("items_fetched", 0),
                 result.get("items_updated", 0),

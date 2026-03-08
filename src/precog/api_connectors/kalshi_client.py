@@ -174,7 +174,7 @@ class KalshiClient:
             session: Optional requests.Session. If not provided, creates new one.
                      Useful for testing to inject mock sessions.
             rate_limiter: Optional RateLimiter. If not provided, creates one with
-                          100 req/min limit. Useful for testing to inject mocks.
+                          1,200 req/min limit. Useful for testing to inject mocks.
 
         Raises:
             ValueError: If environment invalid
@@ -269,9 +269,10 @@ class KalshiClient:
         # Session for connection pooling (more efficient)
         self.session = session if session is not None else requests.Session()
 
-        # Rate limiting (100 requests per minute for Kalshi)
+        # Rate limiting (Kalshi Basic tier: 20 req/sec = 1,200 req/min)
+        # Reference: https://docs.kalshi.com/getting_started/rate_limits
         self.rate_limiter = (
-            rate_limiter if rate_limiter is not None else RateLimiter(requests_per_minute=100)
+            rate_limiter if rate_limiter is not None else RateLimiter(requests_per_minute=1200)
         )
 
         logger.info(
@@ -612,7 +613,7 @@ class KalshiClient:
         for market in markets:
             self._convert_prices_to_decimal(market)
 
-        logger.info(
+        logger.debug(
             f"Fetched {len(markets)} markets",
             extra={
                 "count": len(markets),
@@ -1545,7 +1546,7 @@ class KalshiClient:
 
             Performance Consideration:
             - Each page = 1 API request (rate limited)
-            - For 20 pages, that's 20 requests at ~100/min limit
+            - For 20 pages, that's 20 requests at ~1,200/min limit
             - Large fetches take time; prefer filtering by series/sport
 
         Reference: REQ-API-001 (Kalshi API Integration)

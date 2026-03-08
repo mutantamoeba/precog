@@ -184,7 +184,7 @@ class RunnerConfig:
         """Initialize default services if none provided."""
         if not self.services:
             self.services = {
-                "espn": ServiceConfig(name="ESPN Game Poller", poll_interval=15),
+                "espn": ServiceConfig(name="ESPN Game Poller", poll_interval=30),
                 "kalshi_rest": ServiceConfig(name="Kalshi REST Poller", poll_interval=30),
                 "kalshi_ws": ServiceConfig(name="Kalshi WebSocket", enabled=False),
             }
@@ -462,6 +462,13 @@ class ServiceSupervisor:
         """
         self._start_time = datetime.now(UTC)
         self._shutdown_event.clear()
+
+        # Clean up old log files on startup
+        from precog.utils.logger import cleanup_old_logs
+
+        removed = cleanup_old_logs()
+        if removed:
+            self.logger.info("Cleaned up %d old log file(s)", removed)
 
         self.logger.info(
             "Starting Data Collection Service (env=%s)",
@@ -785,7 +792,7 @@ def create_services(
     kalshi_env: str = "demo",
     leagues: list[str] | None = None,
     series_tickers: list[str] | None = None,
-    espn_poll_interval: int = 15,
+    espn_poll_interval: int = 30,
     kalshi_poll_interval: int = 15,
 ) -> dict[str, tuple[EventLoopService, ServiceConfig]]:
     """
@@ -890,7 +897,7 @@ def create_supervisor(
     enabled_services: set[str] | None = None,
     leagues: list[str] | None = None,
     series_tickers: list[str] | None = None,
-    espn_poll_interval: int = 15,
+    espn_poll_interval: int = 30,
     kalshi_poll_interval: int = 15,
     health_check_interval: int = 60,
     metrics_interval: int = 300,

@@ -68,7 +68,7 @@ class TestESPNClientInitialization:
         client = ESPNClient()
 
         assert client is not None
-        assert client.rate_limit_per_hour == 500
+        assert client.rate_limit_per_hour == 250
         assert client.timeout_seconds == 10
         assert client.max_retries == 3
 

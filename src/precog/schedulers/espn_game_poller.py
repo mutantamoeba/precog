@@ -21,8 +21,8 @@ Naming Convention:
 Educational Notes:
 ------------------
 Polling Strategy:
-    - 15 seconds: Default for live games (captures most score changes)
-    - 60 seconds: Reduced rate when no games active (idle_interval)
+    - 30 seconds: Default for live games (captures most score changes)
+    - 300 seconds: Reduced rate when no games active (idle_interval)
     - Conditional polling saves significant API calls over a season
 
 SCD Type 2 for Game States:
@@ -75,8 +75,8 @@ class ESPNGamePoller(BasePoller):
 
     Attributes:
         leagues: List of leagues to poll (default: ["nfl", "ncaaf"])
-        poll_interval: Seconds between polls when games active (default: 15)
-        idle_interval: Seconds between checks when no games active (default: 60)
+        poll_interval: Seconds between polls when games active (default: 30)
+        idle_interval: Seconds between checks when no games active (default: 300)
         persist_jobs: Whether to persist scheduled jobs to database
         enabled: Whether polling is currently enabled
 
@@ -117,9 +117,9 @@ class ESPNGamePoller(BasePoller):
     """
 
     # Class-level configuration
-    MIN_POLL_INTERVAL: ClassVar[int] = 5  # seconds
-    DEFAULT_POLL_INTERVAL: ClassVar[int] = 15  # seconds (balanced for live games)
-    DEFAULT_IDLE_INTERVAL: ClassVar[int] = 60  # seconds (when no games active)
+    MIN_POLL_INTERVAL: ClassVar[int] = 15  # seconds (floor to protect ESPN budget)
+    DEFAULT_POLL_INTERVAL: ClassVar[int] = 30  # seconds (live games; ~2,160 req/day active)
+    DEFAULT_IDLE_INTERVAL: ClassVar[int] = 300  # seconds (no games; ~648 req/day idle)
     DEFAULT_LEAGUES: ClassVar[list[str]] = ["nfl", "ncaaf", "nba"]
 
     # Game status mappings
@@ -152,13 +152,13 @@ class ESPNGamePoller(BasePoller):
                 Default True. (Issue #234)
 
         Raises:
-            ValueError: If poll_interval < 5 or idle_interval < 15.
+            ValueError: If poll_interval < 15 or idle_interval < 15.
             ValueError: If persist_jobs=True but job_store_url not provided.
 
         Educational Note:
             Adaptive polling (Issue #234) significantly reduces API calls:
-            - Active games: poll_interval (default 15s) - captures score changes
-            - No active games: idle_interval (default 60s) - saves API quota
+            - Active games: poll_interval (default 30s) - captures score changes
+            - No active games: idle_interval (default 300s) - saves API quota
 
             Over a typical NFL Sunday (8 games, ~3 hours each):
             - Without adaptive: 24 hours * 60 min/hr * 4 polls/min = 5,760 polls/day
@@ -320,8 +320,8 @@ class ESPNGamePoller(BasePoller):
                 self._stats["last_poll"] = start_time.isoformat()
 
             elapsed = (datetime.now(UTC) - start_time).total_seconds()
-            self.logger.debug(
-                "Poll completed: fetched=%d, updated=%d, created=%d in %.2fs",
+            self.logger.info(
+                "ESPN poll completed: fetched=%d, updated=%d, created=%d in %.2fs",
                 result.get("items_fetched", 0),
                 result.get("items_updated", 0),
                 result.get("items_created", 0),
@@ -568,7 +568,7 @@ class ESPNGamePoller(BasePoller):
                 event_id = game.get("metadata", {}).get("espn_event_id", "unknown")
                 logger.error("Error syncing game %s: %s", event_id, e)
 
-        logger.debug(
+        logger.info(
             "%s: fetched %d games, updated %d",
             league.upper(),
             len(games),
@@ -791,8 +791,8 @@ class ESPNGamePoller(BasePoller):
 
 def create_espn_poller(
     leagues: list[str] | None = None,
-    poll_interval: int = 15,
-    idle_interval: int = 60,
+    poll_interval: int = 30,
+    idle_interval: int = 300,
     persist_jobs: bool = False,
     job_store_url: str | None = None,
 ) -> ESPNGamePoller:
@@ -801,8 +801,8 @@ def create_espn_poller(
 
     Args:
         leagues: Leagues to poll (default: ["nfl", "ncaaf"])
-        poll_interval: Seconds between polls when active (default: 15)
-        idle_interval: Seconds between polls when idle (default: 60)
+        poll_interval: Seconds between polls when active (default: 60)
+        idle_interval: Seconds between polls when idle (default: 300)
         persist_jobs: If True, persist scheduled jobs to database.
         job_store_url: SQLAlchemy URL for job store (required if persist_jobs=True).
 

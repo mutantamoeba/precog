@@ -33,7 +33,7 @@ DEFAULT_CONFIG = {
     "min_edge": "0.05",
     "max_position_size": "100",
     "daily_risk_limit": "500",
-    "espn_poll_interval": "60",
+    "espn_poll_interval": "30",
     "kalshi_poll_interval": "30",
 }
 

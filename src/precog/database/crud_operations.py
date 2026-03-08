@@ -4488,7 +4488,7 @@ def upsert_scheduler_status(
     if error_message is not None:
         all_params.append(error_message)
 
-    with get_cursor() as cur:
+    with get_cursor(commit=True) as cur:
         cur.execute(query, tuple(all_params))
         # Cast rowcount to int for type safety (psycopg2 types it as Any)
         return int(cur.rowcount or 0) > 0
@@ -4666,7 +4666,7 @@ def cleanup_stale_schedulers(
         WHERE {" AND ".join(conditions)}
     """  # noqa: S608
 
-    with get_cursor() as cur:
+    with get_cursor(commit=True) as cur:
         cur.execute(query, tuple(params))
         # Cast rowcount to int for type safety (psycopg2 types it as Any)
         return int(cur.rowcount or 0)
@@ -4697,7 +4697,7 @@ def delete_scheduler_status(host_id: str, service_name: str) -> bool:
         DELETE FROM scheduler_status
         WHERE host_id = %s AND service_name = %s
     """
-    with get_cursor() as cur:
+    with get_cursor(commit=True) as cur:
         cur.execute(query, (host_id, service_name))
         # Cast rowcount to int for type safety (psycopg2 types it as Any)
         return int(cur.rowcount or 0) > 0

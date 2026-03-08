@@ -8,7 +8,7 @@ scoreboard API is publicly accessible.
 Key Features:
 - NFL and NCAAF scoreboard fetching
 - Game state parsing (scores, period, clock, possession)
-- Rate limiting (500 requests/hour to be a good API citizen)
+- Rate limiting (150 requests/hour, ~2,500/day community limit)
 - Automatic retries with exponential backoff
 - Comprehensive error handling
 - TypedDict return types for type safety
@@ -26,11 +26,12 @@ ESPN API Design:
     - "status.type.state" = "pre", "in", or "post"
 
 Rate Limiting Strategy:
-    Unlike authenticated APIs, ESPN doesn't enforce strict rate limits.
-    However, we implement 500 req/hour as a courtesy to:
-    1. Avoid overwhelming their servers
-    2. Prevent IP-based blocking
-    3. Follow good API citizenship practices
+    ESPN's public API has no official rate limits, but community reports
+    suggest ~2,500 requests/day before IP blocking. We implement 250 req/hour
+    as a safety net, with adaptive polling keeping actual daily usage ~1,700:
+    1. Active games: 60s interval x 3 leagues = 180 req/hr (~6 hrs/day)
+    2. Idle: 300s interval x 3 leagues = 36 req/hr (~18 hrs/day)
+    3. Combined adaptive: ~1,728 req/day typical (under 2,500 ceiling)
 
 Reference: docs/testing/PHASE_2_TEST_PLAN_V1.0.md
 Related Requirements:
@@ -398,7 +399,7 @@ class ESPNClient:
 
     Manages:
     - API requests with connection pooling
-    - Rate limiting (500 req/hour)
+    - Rate limiting (250 req/hour)
     - Retry logic with exponential backoff
     - Response parsing
 
@@ -465,7 +466,7 @@ class ESPNClient:
 
     def __init__(
         self,
-        rate_limit_per_hour: int = 500,
+        rate_limit_per_hour: int = 250,
         timeout_seconds: float = 10,
         max_retries: int = 3,
     ):
@@ -473,13 +474,13 @@ class ESPNClient:
         Initialize ESPN client.
 
         Args:
-            rate_limit_per_hour: Maximum requests allowed per hour (default 500)
+            rate_limit_per_hour: Maximum requests allowed per hour (default 250, ~2,500/day budget)
             timeout_seconds: Request timeout in seconds (default 10, supports float for sub-second)
             max_retries: Maximum retry attempts for failed requests (default 3)
 
         Educational Note:
             Default values are chosen for production use:
-            - 500 req/hour = 8.3 req/min (plenty for 15-second polling)
+            - 250 req/hour (stays under ~2,500 req/day with adaptive polling)
             - 10s timeout = reasonable for API responses
             - 3 retries = handles transient failures without excessive delays
         """
@@ -835,7 +836,20 @@ class ESPNClient:
                 last_exception = e
                 status_code = e.response.status_code if e.response else 0
 
-                # Don't retry 4xx errors (client errors)
+                # Handle 429 (rate limited) — retry with Retry-After or backoff
+                if status_code == 429:
+                    retry_after = e.response.headers.get("Retry-After") if e.response else None
+                    wait_time = int(retry_after) if retry_after else 2**attempt
+                    logger.warning(
+                        "Rate limited (429), waiting %ds (attempt %d/%d)",
+                        wait_time,
+                        attempt + 1,
+                        self.max_retries + 1,
+                    )
+                    time.sleep(wait_time)
+                    continue  # Skip the general backoff below
+
+                # Don't retry other 4xx errors (client errors)
                 if 400 <= status_code < 500:
                     raise ESPNAPIError(f"HTTP {status_code}: {e}") from e
 
