@@ -657,7 +657,7 @@ class TestAdaptivePollingWorkflow:
 
         poller = ESPNGamePoller(
             leagues=["nfl"],
-            poll_interval=10,
+            poll_interval=15,
             idle_interval=60,
             adaptive_polling=True,
             espn_client=mock_espn_client,
@@ -684,7 +684,7 @@ class TestAdaptivePollingWorkflow:
         # Second poll with active games
         poller._poll_wrapper()
 
-        assert poller.get_current_interval() == 10  # Active
+        assert poller.get_current_interval() == 15  # Active
 
     @patch("precog.schedulers.espn_game_poller.get_live_games")
     @patch("precog.schedulers.espn_game_poller.ESPNClient")
@@ -766,7 +766,7 @@ class TestAdaptivePollingWorkflow:
 
         poller = ESPNGamePoller(
             leagues=["nfl", "ncaaf", "nba"],
-            poll_interval=10,
+            poll_interval=15,
             idle_interval=60,
             adaptive_polling=True,
             espn_client=mock_espn_client,
@@ -783,7 +783,7 @@ class TestAdaptivePollingWorkflow:
 
         mock_get_live.side_effect = get_live_by_league
         poller._adjust_poll_interval()
-        assert poller.get_current_interval() == 10
+        assert poller.get_current_interval() == 15
 
         # Game in NCAAF only (NFL empty)
         def get_live_by_league_ncaaf(league: str):
@@ -791,7 +791,7 @@ class TestAdaptivePollingWorkflow:
 
         mock_get_live.side_effect = get_live_by_league_ncaaf
         poller._adjust_poll_interval()
-        assert poller.get_current_interval() == 10  # Still active
+        assert poller.get_current_interval() == 15  # Still active
 
         # All leagues empty
         mock_get_live.side_effect = None
