@@ -1,4 +1,4 @@
--- Seed Data: NCAAF Teams with ESPN IDs (FBS Top 80)
+-- Seed Data: NCAAF Teams with ESPN IDs (FBS + FCS, 154 teams)
 -- Date: 2025-11-27
 -- Phase: 2 (Live Data Integration)
 -- Purpose: Seed top FBS college football teams with ESPN team IDs
@@ -100,7 +100,78 @@ INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_
 ('SJSU', 'San Jose State Spartans', 'San Jose State', 'ncaaf', 'ncaaf', '23', 1440, 'Mountain West', NULL),
 ('TLNE', 'Tulane Green Wave', 'Tulane', 'ncaaf', 'ncaaf', '2655', 1520, 'American', NULL),
 ('USF', 'South Florida Bulls', 'South Florida', 'ncaaf', 'ncaaf', '58', 1480, 'American', NULL),
-('NIU', 'Northern Illinois Huskies', 'Northern Illinois', 'ncaaf', 'ncaaf', '2459', 1480, 'MAC', NULL);
+('NIU', 'Northern Illinois Huskies', 'Northern Illinois', 'ncaaf', 'ncaaf', '2459', 1480, 'MAC', NULL),
+
+-- ADDITIONAL FBS + FCS TEAMS (2026-03-08)
+-- Teams discovered via ESPN scoreboard polling that were missing from seed data.
+-- Includes remaining FBS independents, FCS teams, and smaller programs.
+-- All default to 1500 Elo (unrated).
+('ACU', 'Abilene Christian Wildcats', 'Abilene Christian', 'ncaaf', 'ncaaf', '2000', 1500, 'WAC', NULL),
+('AKR', 'Akron Zips', 'Akron', 'ncaaf', 'ncaaf', '2006', 1500, 'MAC', NULL),
+('APSU', 'Austin Peay Governors', 'Austin Peay', 'ncaaf', 'ncaaf', '2046', 1500, 'ASUN', NULL),
+('ARST', 'Arkansas State Red Wolves', 'Arkansas State', 'ncaaf', 'ncaaf', '2032', 1500, 'Sun Belt', NULL),
+('BALL', 'Ball State Cardinals', 'Ball State', 'ncaaf', 'ncaaf', '2050', 1500, 'MAC', NULL),
+('BCU', 'Bethune-Cookman Wildcats', 'Bethune-Cookman', 'ncaaf', 'ncaaf', '2065', 1500, 'SWAC', NULL),
+('BRY', 'Bryant Bulldogs', 'Bryant', 'ncaaf', 'ncaaf', '2803', 1500, 'FCS Independent', NULL),
+('CCU', 'Coastal Carolina Chanticleers', 'Coastal Carolina', 'ncaaf', 'ncaaf', '324', 1500, 'Sun Belt', NULL),
+('CIT', 'The Citadel Bulldogs', 'The Citadel', 'ncaaf', 'ncaaf', '2643', 1500, 'Southern', NULL),
+('CLT', 'Charlotte 49ers', 'Charlotte', 'ncaaf', 'ncaaf', '2429', 1500, 'American', NULL),
+('CONN', 'UConn Huskies', 'UConn', 'ncaaf', 'ncaaf', '41', 1500, 'FBS Independent', NULL),
+('CSU', 'Colorado State Rams', 'Colorado State', 'ncaaf', 'ncaaf', '36', 1500, 'Mountain West', NULL),
+('ECU', 'East Carolina Pirates', 'East Carolina', 'ncaaf', 'ncaaf', '151', 1500, 'American', NULL),
+('EIU', 'Eastern Illinois Panthers', 'Eastern Illinois', 'ncaaf', 'ncaaf', '2197', 1500, 'OVC', NULL),
+('FAU', 'Florida Atlantic Owls', 'Florida Atlantic', 'ncaaf', 'ncaaf', '2226', 1500, 'American', NULL),
+('FIU', 'Florida International Panthers', 'Florida International', 'ncaaf', 'ncaaf', '2229', 1500, 'Conference USA', NULL),
+('FRES', 'Fresno State Bulldogs', 'Fresno State', 'ncaaf', 'ncaaf', '278', 1500, 'Mountain West', NULL),
+('FUR', 'Furman Paladins', 'Furman', 'ncaaf', 'ncaaf', '231', 1500, 'Southern', NULL),
+('HAW', 'Hawaii Rainbow Warriors', 'Hawaii', 'ncaaf', 'ncaaf', '62', 1500, 'Mountain West', NULL),
+('HCU', 'Houston Christian Huskies', 'Houston Christian', 'ncaaf', 'ncaaf', '2277', 1500, 'Southland', NULL),
+('HOW', 'Howard Bison', 'Howard', 'ncaaf', 'ncaaf', '47', 1500, 'MEAC', NULL),
+('IDHO', 'Idaho Vandals', 'Idaho', 'ncaaf', 'ncaaf', '70', 1500, 'Big Sky', NULL),
+('IDST', 'Idaho State Bengals', 'Idaho State', 'ncaaf', 'ncaaf', '304', 1500, 'Big Sky', NULL),
+('INST', 'Indiana State Sycamores', 'Indiana State', 'ncaaf', 'ncaaf', '282', 1500, 'MVC', NULL),
+('KENT', 'Kent State Golden Flashes', 'Kent State', 'ncaaf', 'ncaaf', '2309', 1500, 'MAC', NULL),
+('LAF', 'Lafayette Leopards', 'Lafayette', 'ncaaf', 'ncaaf', '322', 1500, 'Patriot', NULL),
+('LIU', 'Long Island University Sharks', 'LIU', 'ncaaf', 'ncaaf', '2341', 1500, 'NEC', NULL),
+('M-OH', 'Miami (OH) RedHawks', 'Miami OH', 'ncaaf', 'ncaaf', '193', 1500, 'MAC', NULL),
+('MASS', 'Massachusetts Minutemen', 'UMass', 'ncaaf', 'ncaaf', '113', 1500, 'FBS Independent', NULL),
+('MORG', 'Morgan State Bears', 'Morgan State', 'ncaaf', 'ncaaf', '2415', 1500, 'MEAC', NULL),
+('MOST', 'Missouri State Bears', 'Missouri State', 'ncaaf', 'ncaaf', '2623', 1500, 'MVC', NULL),
+('MRSH', 'Marshall Thundering Herd', 'Marshall', 'ncaaf', 'ncaaf', '276', 1500, 'Sun Belt', NULL),
+('NAU', 'Northern Arizona Lumberjacks', 'Northern Arizona', 'ncaaf', 'ncaaf', '2464', 1500, 'Big Sky', NULL),
+('ND', 'Notre Dame Fighting Irish', 'Notre Dame', 'ncaaf', 'ncaaf', '87', 1500, 'FBS Independent', NULL),
+('NICH', 'Nicholls Colonels', 'Nicholls', 'ncaaf', 'ncaaf', '2447', 1500, 'Southland', NULL),
+('NMSU', 'New Mexico State Aggies', 'New Mexico State', 'ncaaf', 'ncaaf', '166', 1500, 'Conference USA', NULL),
+('OHIO', 'Ohio Bobcats', 'Ohio', 'ncaaf', 'ncaaf', '195', 1500, 'MAC', NULL),
+('ORST', 'Oregon State Beavers', 'Oregon State', 'ncaaf', 'ncaaf', '204', 1500, 'FBS Independent', NULL),
+('PRST', 'Portland State Vikings', 'Portland State', 'ncaaf', 'ncaaf', '2502', 1500, 'Big Sky', NULL),
+('RGV', 'UT Rio Grande Valley Vaqueros', 'UTRGV', 'ncaaf', 'ncaaf', '292', 1500, 'WAC', NULL),
+('RICE', 'Rice Owls', 'Rice', 'ncaaf', 'ncaaf', '242', 1500, 'American', NULL),
+('SDST', 'South Dakota State Jackrabbits', 'South Dakota State', 'ncaaf', 'ncaaf', '2571', 1500, 'MVC', NULL),
+('SEMO', 'Southeast Missouri State Redhawks', 'SE Missouri', 'ncaaf', 'ncaaf', '2546', 1500, 'OVC', NULL),
+('TEM', 'Temple Owls', 'Temple', 'ncaaf', 'ncaaf', '218', 1500, 'American', NULL),
+('TLSA', 'Tulsa Golden Hurricane', 'Tulsa', 'ncaaf', 'ncaaf', '202', 1500, 'American', NULL),
+('TNST', 'Tennessee State Tigers', 'Tennessee State', 'ncaaf', 'ncaaf', '2634', 1500, 'OVC', NULL),
+('TOL', 'Toledo Rockets', 'Toledo', 'ncaaf', 'ncaaf', '2649', 1500, 'MAC', NULL),
+('TOW', 'Towson Tigers', 'Towson', 'ncaaf', 'ncaaf', '119', 1500, 'CAA', NULL),
+('TXST', 'Texas State Bobcats', 'Texas State', 'ncaaf', 'ncaaf', '326', 1500, 'Sun Belt', NULL),
+('UAB', 'UAB Blazers', 'UAB', 'ncaaf', 'ncaaf', '5', 1500, 'American', NULL),
+('UAPB', 'Arkansas-Pine Bluff Golden Lions', 'AR-Pine Bluff', 'ncaaf', 'ncaaf', '2029', 1500, 'SWAC', NULL),
+('ULM', 'UL Monroe Warhawks', 'UL Monroe', 'ncaaf', 'ncaaf', '2433', 1500, 'Sun Belt', NULL),
+('UNA', 'North Alabama Lions', 'North Alabama', 'ncaaf', 'ncaaf', '2453', 1500, 'Conference USA', NULL),
+('UNH', 'New Hampshire Wildcats', 'New Hampshire', 'ncaaf', 'ncaaf', '160', 1500, 'CAA', NULL),
+('UNLV', 'UNLV Rebels', 'UNLV', 'ncaaf', 'ncaaf', '2439', 1500, 'Mountain West', NULL),
+('UNT', 'North Texas Mean Green', 'North Texas', 'ncaaf', 'ncaaf', '249', 1500, 'American', NULL),
+('URI', 'Rhode Island Rams', 'Rhode Island', 'ncaaf', 'ncaaf', '227', 1500, 'CAA', NULL),
+('USU', 'Utah State Aggies', 'Utah State', 'ncaaf', 'ncaaf', '328', 1500, 'Mountain West', NULL),
+('UTEP', 'UTEP Miners', 'UTEP', 'ncaaf', 'ncaaf', '2638', 1500, 'Conference USA', NULL),
+('UTSA', 'UTSA Roadrunners', 'UTSA', 'ncaaf', 'ncaaf', '2636', 1500, 'American', NULL),
+('UTU', 'Utah Tech Trailblazers', 'Utah Tech', 'ncaaf', 'ncaaf', '3101', 1500, 'WAC', NULL),
+('VMI', 'VMI Keydets', 'VMI', 'ncaaf', 'ncaaf', '2678', 1500, 'Southern', NULL),
+('WMU', 'Western Michigan Broncos', 'Western Michigan', 'ncaaf', 'ncaaf', '2711', 1500, 'MAC', NULL),
+('WSU', 'Washington State Cougars', 'Washington State', 'ncaaf', 'ncaaf', '265', 1500, 'FBS Independent', NULL),
+('WYO', 'Wyoming Cowboys', 'Wyoming', 'ncaaf', 'ncaaf', '2751', 1500, 'Mountain West', NULL),
+('YSU', 'Youngstown State Penguins', 'Youngstown State', 'ncaaf', 'ncaaf', '2754', 1500, 'MVC', NULL);
 
 -- ============================================================================
 -- VERIFICATION

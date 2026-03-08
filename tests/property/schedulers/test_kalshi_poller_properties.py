@@ -54,7 +54,11 @@ def series_ticker_strategy(draw: st.DrawFn) -> str:
 @st.composite
 def kalshi_status_strategy(draw: st.DrawFn) -> str:
     """Generate valid Kalshi API status values."""
-    return draw(st.sampled_from(["active", "unopened", "open", "closed", "settled", "finalized"]))
+    return draw(
+        st.sampled_from(
+            ["active", "unopened", "open", "closed", "settled", "finalized", "determined"]
+        )
+    )
 
 
 @st.composite

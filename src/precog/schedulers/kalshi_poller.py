@@ -115,7 +115,7 @@ class KalshiMarketPoller(BasePoller):
     PLATFORM_ID: ClassVar[str] = "kalshi"
 
     # Status mapping from Kalshi API to database schema
-    # Kalshi API returns: 'active', 'unopened', 'closed', 'settled', 'finalized'
+    # Kalshi API returns: 'active', 'unopened', 'closed', 'settled', 'finalized', 'determined'
     # Database constraint allows: 'open', 'closed', 'settled', 'halted'
     # Reference: docs/api-integration/Kalshi API Technical Reference
     STATUS_MAPPING: ClassVar[dict[str, str]] = {
@@ -125,6 +125,7 @@ class KalshiMarketPoller(BasePoller):
         "closed": "closed",  # Direct mapping
         "settled": "settled",  # Direct mapping
         "finalized": "settled",  # Kalshi 'finalized' = settlement complete
+        "determined": "closed",  # Kalshi 'determined' = outcome decided, awaiting settlement
     }
 
     def __init__(
