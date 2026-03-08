@@ -783,6 +783,10 @@ def create_services(
     config: RunnerConfig,
     enabled_services: set[str] | None = None,
     kalshi_env: str = "demo",
+    leagues: list[str] | None = None,
+    series_tickers: list[str] | None = None,
+    espn_poll_interval: int = 15,
+    kalshi_poll_interval: int = 15,
 ) -> dict[str, tuple[EventLoopService, ServiceConfig]]:
     """
     Create service instances based on configuration.
@@ -793,15 +797,14 @@ def create_services(
     Args:
         config: Runner configuration
         enabled_services: Set of service names to enable (None = all)
+        kalshi_env: Kalshi API environment (demo/prod)
+        leagues: ESPN leagues to poll (None = use ESPNGamePoller defaults)
+        series_tickers: Kalshi series to poll (None = use KalshiMarketPoller defaults)
+        espn_poll_interval: ESPN poll interval in seconds
+        kalshi_poll_interval: Kalshi poll interval in seconds
 
     Returns:
         Dict mapping service name to (service, config) tuple
-
-    Educational Note:
-        This factory pattern centralizes service creation, making it easy to:
-        1. Add new services (just add a case)
-        2. Configure services differently per environment
-        3. Mock services for testing
     """
     services: dict[str, tuple[EventLoopService, ServiceConfig]] = {}
     logger = logging.getLogger("precog.factory")
@@ -814,18 +817,18 @@ def create_services(
         try:
             if name == "espn":
                 espn_service = create_espn_poller(
-                    leagues=["nfl", "ncaaf", "nba", "ncaab", "nhl", "wnba"],
-                    poll_interval=svc_config.poll_interval,
+                    leagues=leagues,
+                    poll_interval=espn_poll_interval,
                 )
                 services[name] = (cast("EventLoopService", espn_service), svc_config)
-                logger.info("Created ESPN Game Poller (interval=%ds)", svc_config.poll_interval)
+                logger.info("Created ESPN Game Poller (interval=%ds)", espn_poll_interval)
 
             elif name == "kalshi_rest":
                 # Check for Kalshi credentials using two-axis naming convention
                 if _has_kalshi_credentials(config.environment):
                     kalshi_rest_service = create_kalshi_poller(
-                        series_tickers=["KXNFLGAME", "KXNCAAFGAME", "KXNBAGAME"],
-                        poll_interval=svc_config.poll_interval,
+                        series_tickers=series_tickers,
+                        poll_interval=kalshi_poll_interval,
                         environment=kalshi_env,
                     )
                     services[name] = (
@@ -834,7 +837,7 @@ def create_services(
                     )
                     logger.info(
                         "Created Kalshi REST Poller (interval=%ds)",
-                        svc_config.poll_interval,
+                        kalshi_poll_interval,
                     )
                 else:
                     logger.warning("Kalshi API credentials not found, skipping REST poller")
@@ -885,7 +888,10 @@ def create_supervisor(
     environment: str = "development",
     kalshi_env: str = "demo",
     enabled_services: set[str] | None = None,
-    poll_interval: int = 15,
+    leagues: list[str] | None = None,
+    series_tickers: list[str] | None = None,
+    espn_poll_interval: int = 15,
+    kalshi_poll_interval: int = 15,
     health_check_interval: int = 60,
     metrics_interval: int = 300,
 ) -> ServiceSupervisor:
@@ -899,7 +905,10 @@ def create_supervisor(
         environment: Deployment environment (development/staging/production)
         kalshi_env: Kalshi API environment (demo/prod)
         enabled_services: Set of services to enable (None = all)
-        poll_interval: Default poll interval for services
+        leagues: ESPN leagues to poll (None = use ESPNGamePoller defaults)
+        series_tickers: Kalshi series to poll (None = use KalshiMarketPoller defaults)
+        espn_poll_interval: ESPN poll interval in seconds
+        kalshi_poll_interval: Kalshi poll interval in seconds
         health_check_interval: Seconds between health checks
         metrics_interval: Seconds between metrics output
 
@@ -910,7 +919,7 @@ def create_supervisor(
         >>> supervisor = create_supervisor(
         ...     environment="development",
         ...     enabled_services={"espn"},
-        ...     poll_interval=30
+        ...     espn_poll_interval=30,
         ... )
         >>> supervisor.start_all()
     """
@@ -921,12 +930,16 @@ def create_supervisor(
         metrics_interval=metrics_interval,
     )
 
-    # Update poll intervals
-    for svc_config in config.services.values():
-        svc_config.poll_interval = poll_interval
-
-    # Create services
-    services = create_services(config, enabled_services, kalshi_env=kalshi_env)
+    # Create services with user-specified parameters
+    services = create_services(
+        config,
+        enabled_services,
+        kalshi_env=kalshi_env,
+        leagues=leagues,
+        series_tickers=series_tickers,
+        espn_poll_interval=espn_poll_interval,
+        kalshi_poll_interval=kalshi_poll_interval,
+    )
 
     # Create supervisor
     supervisor = ServiceSupervisor(config)
