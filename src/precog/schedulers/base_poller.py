@@ -348,14 +348,15 @@ class BasePoller(ABC):
                         # (apscheduler 3.x). It holds the concurrent.futures.ThreadPoolExecutor.
                         pool = getattr(executor, "_pool", None)
                         if pool is not None:
-                            # Use cancel_futures=True (Python 3.9+) to drop pending work,
-                            # then wait for any in-flight task to finish.
-                            pool.shutdown(wait=True, cancel_futures=True)
+                            # Use cancel_futures=True (Python 3.9+) to drop pending work.
+                            # wait=False avoids blocking indefinitely if a job is stuck
+                            # (the scheduler itself already had its timeout chance).
+                            pool.shutdown(wait=False, cancel_futures=True)
                     except TypeError:
                         # Python <3.9 doesn't support cancel_futures
                         try:
                             if pool is not None:
-                                pool.shutdown(wait=True)
+                                pool.shutdown(wait=False)
                         except Exception:
                             pass
                     except Exception:
