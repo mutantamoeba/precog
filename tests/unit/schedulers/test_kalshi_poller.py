@@ -474,3 +474,38 @@ class TestKalshiPollerSignalHandlers:
         with patch("signal.signal"):
             # Should not raise
             poller_with_mock_client.setup_signal_handlers()
+
+
+# =============================================================================
+# Active Market Count Tests
+# =============================================================================
+
+
+class TestGetActiveMarketCount:
+    """Test get_active_market_count method."""
+
+    @pytest.mark.unit
+    @patch("precog.schedulers.kalshi_poller.count_open_markets")
+    def test_get_active_market_count_returns_db_count(self, mock_count, poller_with_mock_client):
+        """get_active_market_count delegates to count_open_markets CRUD function."""
+        mock_count.return_value = 42
+        assert poller_with_mock_client.get_active_market_count() == 42
+        mock_count.assert_called_once()
+
+    @pytest.mark.unit
+    @patch("precog.schedulers.kalshi_poller.count_open_markets")
+    def test_get_active_market_count_returns_zero_on_error(
+        self, mock_count, poller_with_mock_client
+    ):
+        """get_active_market_count returns 0 if DB query fails."""
+        mock_count.side_effect = Exception("DB connection failed")
+        assert poller_with_mock_client.get_active_market_count() == 0
+
+    @pytest.mark.unit
+    @patch("precog.schedulers.kalshi_poller.count_open_markets")
+    def test_get_active_market_count_returns_zero_when_no_markets(
+        self, mock_count, poller_with_mock_client
+    ):
+        """get_active_market_count returns 0 when no open markets exist."""
+        mock_count.return_value = 0
+        assert poller_with_mock_client.get_active_market_count() == 0

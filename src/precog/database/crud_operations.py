@@ -1155,6 +1155,34 @@ def get_current_market(ticker: str) -> dict[str, Any] | None:
     return fetch_one(query, (ticker,))
 
 
+def count_open_markets() -> int:
+    """
+    Count markets with status='open' and row_current_ind=TRUE.
+
+    Returns:
+        Number of currently open markets in the database.
+
+    Educational Note:
+        Uses SCD Type 2 filtering (row_current_ind = TRUE) to count only
+        the current version of each market. Without this filter, historical
+        rows would inflate the count.
+
+    Example:
+        >>> count = count_open_markets()
+        >>> print(f"Tracking {count} open markets")
+    """
+    query = """
+        SELECT COUNT(*) AS count
+        FROM markets
+        WHERE status = 'open'
+          AND row_current_ind = TRUE
+    """
+    result = fetch_one(query)
+    if result is None:
+        return 0
+    return int(result["count"])
+
+
 def update_market_with_versioning(
     ticker: str,
     yes_price: Decimal | None = None,
