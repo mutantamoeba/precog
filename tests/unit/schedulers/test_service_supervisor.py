@@ -801,7 +801,8 @@ class TestCreateSupervisor:
 
         supervisor = create_supervisor(
             environment="production",
-            poll_interval=30,
+            espn_poll_interval=30,
+            kalshi_poll_interval=30,
             health_check_interval=120,
             metrics_interval=600,
         )

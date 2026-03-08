@@ -63,6 +63,7 @@ def _start_supervised_mode(
     espn_interval: int,
     kalshi_interval: int,
     kalshi_env: str,
+    supervisor_env: str,
     leagues: str,
     series: str,
     max_restarts: int,
@@ -80,7 +81,8 @@ def _start_supervised_mode(
         kalshi: Enable Kalshi market price polling
         espn_interval: ESPN poll interval in seconds
         kalshi_interval: Kalshi poll interval in seconds
-        kalshi_env: Kalshi environment (demo or prod)
+        kalshi_env: Kalshi API environment (demo or prod)
+        supervisor_env: Deployment environment (development/staging/production)
         leagues: Comma-separated list of ESPN leagues
         series: Comma-separated list of Kalshi series
         max_restarts: Maximum service restarts before circuit breaker
@@ -134,14 +136,14 @@ def _start_supervised_mode(
 
     try:
         # Create supervisor using factory function
-        # Note: supervisor environment (development/staging/production) is separate
-        # from Kalshi API environment (demo/prod). Map appropriately.
-        supervisor_env = "production" if kalshi_env == "prod" else "development"
         _supervisor = create_supervisor(
             environment=supervisor_env,
             kalshi_env=kalshi_env,
             enabled_services=enabled_services,
-            poll_interval=espn_interval,
+            leagues=league_list,
+            series_tickers=series_list,
+            espn_poll_interval=espn_interval,
+            kalshi_poll_interval=kalshi_interval,
             health_check_interval=health_interval,
         )
 
@@ -349,6 +351,12 @@ def start(
         "-f",
         help="Run in foreground (blocks until Ctrl+C)",
     ),
+    supervisor_env: str = typer.Option(
+        "development",
+        "--environment",
+        "--env",
+        help="Supervisor deployment environment (development/staging/production)",
+    ),
     supervised: bool = typer.Option(
         False,
         "--supervised",
@@ -420,6 +428,7 @@ def start(
             espn_interval=espn_interval,
             kalshi_interval=kalshi_interval,
             kalshi_env=kalshi_env,
+            supervisor_env=supervisor_env,
             leagues=leagues,
             series=series,
             max_restarts=max_restarts,
