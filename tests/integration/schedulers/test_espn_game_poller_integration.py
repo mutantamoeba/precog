@@ -13,7 +13,7 @@ Usage:
     pytest tests/integration/schedulers/ -v -m "not slow"
 
 Note:
-    These tests use 5-second poll intervals (MIN_POLL_INTERVAL) with 15-25s timeouts
+    These tests use 15-second poll intervals (MIN_POLL_INTERVAL) with 30-45s timeouts
     to verify scheduler behavior. This makes them inherently slower than typical
     integration tests. Use the 'slow' marker to skip them in fast feedback loops.
 """
@@ -190,7 +190,7 @@ class TestPollExecution:
         """Test polls execute according to interval.
 
         Uses robust polling-based wait instead of fixed sleep to prevent flaky CI.
-        Note: MIN_POLL_INTERVAL is 5 seconds, so we use 5s and wait for 2+ polls.
+        Note: MIN_POLL_INTERVAL is 15 seconds, so we use 15s and wait for 2+ polls.
 
         Adaptive polling is disabled because mocked clients don't populate the database,
         so has_active_games() returns False and the poller would switch to idle_interval (60s).
@@ -568,7 +568,7 @@ class TestAdaptivePollingIntegration:
         )
 
         # Before adjustment, should use poll_interval
-        assert poller.get_current_interval() == 5
+        assert poller.get_current_interval() == 15
 
         # After adjustment with no games, should use idle_interval
         poller._adjust_poll_interval()
@@ -577,7 +577,7 @@ class TestAdaptivePollingIntegration:
         # Simulate games becoming active
         mock_get_live.return_value = [{"game_id": 1}]
         poller._adjust_poll_interval()
-        assert poller.get_current_interval() == 5
+        assert poller.get_current_interval() == 15
 
     @patch("precog.schedulers.espn_game_poller.get_live_games")
     def test_adaptive_polling_state_transitions(

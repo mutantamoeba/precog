@@ -111,7 +111,7 @@ class TestCompletePollingWorkflow:
         # Create and run poller
         poller = ESPNGamePoller(
             leagues=["nfl"],
-            poll_interval=5,
+            poll_interval=15,
             espn_client=mock_espn_client,
         )
 
@@ -150,14 +150,14 @@ class TestCompletePollingWorkflow:
 
         poller = ESPNGamePoller(
             leagues=["nfl"],
-            poll_interval=5,
+            poll_interval=15,
             espn_client=mock_espn_client,
         )
 
         poller.start()
         try:
-            # Wait for multiple polls
-            time.sleep(11)
+            # Wait for multiple polls (15s interval)
+            time.sleep(32)
 
             # Should have at least 3 polls (initial + 2 scheduled)
             stats = poller.stats
@@ -318,13 +318,13 @@ class TestErrorRecoveryWorkflow:
 
         poller = ESPNGamePoller(
             leagues=["nfl"],
-            poll_interval=5,
+            poll_interval=15,
             espn_client=mock_espn_client,
         )
 
         poller.start()
         try:
-            time.sleep(11)
+            time.sleep(32)
 
             # Should have recovered and continued
             assert poller.enabled is True
@@ -401,7 +401,7 @@ class TestLifecycleWorkflow:
 
         poller = ESPNGamePoller(
             leagues=["nfl"],
-            poll_interval=5,
+            poll_interval=15,
             espn_client=mock_espn_client,
         )
 
@@ -413,7 +413,7 @@ class TestLifecycleWorkflow:
         poller.start()
         assert poller.enabled is True
 
-        # Let it poll
+        # Let it poll (initial poll happens immediately)
         time.sleep(2)  # type: ignore[unreachable]
         assert poller.stats["polls_completed"] >= 1
 
@@ -431,7 +431,7 @@ class TestLifecycleWorkflow:
 
         poller = ESPNGamePoller(
             leagues=["nfl"],
-            poll_interval=5,
+            poll_interval=15,
             espn_client=mock_espn_client,
         )
 
@@ -571,7 +571,7 @@ class TestAdaptivePollingWorkflow:
 
         poller = ESPNGamePoller(
             leagues=["nfl"],
-            poll_interval=5,  # Fast for testing
+            poll_interval=15,  # Minimum allowed interval
             idle_interval=30,
             adaptive_polling=True,
             espn_client=mock_espn_client,
@@ -579,7 +579,7 @@ class TestAdaptivePollingWorkflow:
 
         # Verify initial configuration
         assert poller.adaptive_polling is True
-        assert poller.poll_interval == 5
+        assert poller.poll_interval == 15
         assert poller.idle_interval == 30
 
         # Start poller
@@ -596,7 +596,7 @@ class TestAdaptivePollingWorkflow:
             poller._adjust_poll_interval()
 
             # Should switch to poll interval
-            assert poller.get_current_interval() == 5
+            assert poller.get_current_interval() == 15
             assert poller._last_active_state is True
 
             # Simulate games ending
@@ -622,7 +622,7 @@ class TestAdaptivePollingWorkflow:
 
         poller = ESPNGamePoller(
             leagues=["nfl"],
-            poll_interval=5,  # Minimum allowed interval
+            poll_interval=15,  # Minimum allowed interval
             idle_interval=30,
             adaptive_polling=True,
             espn_client=mock_espn_client,
@@ -630,11 +630,11 @@ class TestAdaptivePollingWorkflow:
 
         poller.start()
         try:
-            # Let scheduler run a few cycles (longer wait for more polls)
-            time.sleep(7)
+            # Let scheduler run a few cycles (15s interval, wait for 2+ polls)
+            time.sleep(17)
 
             # Should stay at poll interval while games active
-            assert poller.get_current_interval() == 5
+            assert poller.get_current_interval() == 15
             # Should have at least 2 polls (initial + scheduled)
             assert poller.stats["polls_completed"] >= 2
 
