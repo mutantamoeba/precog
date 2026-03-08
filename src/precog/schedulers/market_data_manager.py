@@ -194,7 +194,7 @@ class MarketDataManager:
             raise ValueError("environment must be 'demo' or 'prod'")
 
         self.environment = environment
-        self.series_tickers = series_tickers or ["KXNFLGAME"]
+        self.series_tickers = series_tickers or ["KXNFLGAME", "KXNCAAFGAME", "KXNBAGAME"]
         self.market_tickers = market_tickers or []
         self.poll_interval = poll_interval
         self.enable_websocket = enable_websocket

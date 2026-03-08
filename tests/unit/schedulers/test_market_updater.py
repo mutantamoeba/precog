@@ -113,7 +113,7 @@ class TestESPNGamePollerInit:
         with patch("precog.schedulers.espn_game_poller.ESPNClient"):
             poller = ESPNGamePoller()
 
-        assert poller.leagues == ["nfl", "ncaaf"]
+        assert poller.leagues == ["nfl", "ncaaf", "nba"]
         assert poller.poll_interval == 15
         assert poller.idle_interval == 60
         assert not poller.persist_jobs
@@ -424,7 +424,7 @@ class TestCreateESPNPoller:
         with patch("precog.schedulers.espn_game_poller.ESPNClient"):
             poller = create_espn_poller()
 
-        assert poller.leagues == ["nfl", "ncaaf"]
+        assert poller.leagues == ["nfl", "ncaaf", "nba"]
         assert poller.poll_interval == 15
         assert poller.idle_interval == 60
         assert not poller.persist_jobs

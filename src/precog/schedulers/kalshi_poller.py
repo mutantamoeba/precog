@@ -101,7 +101,7 @@ class KalshiMarketPoller(BasePoller):
     # Class-level configuration
     MIN_POLL_INTERVAL: ClassVar[int] = 5  # seconds (rate limit: 100 req/min)
     DEFAULT_POLL_INTERVAL: ClassVar[int] = 15  # seconds (balanced for near real-time)
-    DEFAULT_SERIES_TICKERS: ClassVar[list[str]] = ["KXNFLGAME"]
+    DEFAULT_SERIES_TICKERS: ClassVar[list[str]] = ["KXNFLGAME", "KXNCAAFGAME", "KXNBAGAME"]
     # Note: pagination is handled internally by fetch_all_markets()
 
     # Rate limit guidance:
@@ -115,7 +115,7 @@ class KalshiMarketPoller(BasePoller):
     PLATFORM_ID: ClassVar[str] = "kalshi"
 
     # Status mapping from Kalshi API to database schema
-    # Kalshi API returns: 'active', 'unopened', 'closed', 'settled', 'finalized'
+    # Kalshi API returns: 'active', 'unopened', 'closed', 'settled', 'finalized', 'determined'
     # Database constraint allows: 'open', 'closed', 'settled', 'halted'
     # Reference: docs/api-integration/Kalshi API Technical Reference
     STATUS_MAPPING: ClassVar[dict[str, str]] = {
@@ -125,6 +125,7 @@ class KalshiMarketPoller(BasePoller):
         "closed": "closed",  # Direct mapping
         "settled": "settled",  # Direct mapping
         "finalized": "settled",  # Kalshi 'finalized' = settlement complete
+        "determined": "closed",  # Kalshi 'determined' = outcome decided, awaiting settlement
     }
 
     def __init__(

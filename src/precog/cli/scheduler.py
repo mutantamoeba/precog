@@ -330,12 +330,12 @@ def start(
         help="Kalshi environment (demo or prod)",
     ),
     leagues: str = typer.Option(
-        "nfl,ncaaf",
+        "nfl,ncaaf,nba",
         "--leagues",
         help="Comma-separated list of ESPN leagues to poll",
     ),
     series: str = typer.Option(
-        "KXNFLGAME",
+        "KXNFLGAME,KXNCAAFGAME,KXNBAGAME",
         "--series",
         help="Comma-separated list of Kalshi series to poll",
     ),
@@ -825,12 +825,12 @@ def poll_once(
         help="Kalshi environment (demo or prod)",
     ),
     leagues: str = typer.Option(
-        "nfl,ncaaf",
+        "nfl,ncaaf,nba",
         "--leagues",
         help="Comma-separated list of ESPN leagues to poll",
     ),
     series: str = typer.Option(
-        "KXNFLGAME",
+        "KXNFLGAME,KXNCAAFGAME,KXNBAGAME",
         "--series",
         help="Comma-separated list of Kalshi series to poll",
     ),
