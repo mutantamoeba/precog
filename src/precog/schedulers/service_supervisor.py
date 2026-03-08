@@ -780,7 +780,9 @@ class ServiceSupervisor:
 
 
 def create_services(
-    config: RunnerConfig, enabled_services: set[str] | None = None
+    config: RunnerConfig,
+    enabled_services: set[str] | None = None,
+    kalshi_env: str = "demo",
 ) -> dict[str, tuple[EventLoopService, ServiceConfig]]:
     """
     Create service instances based on configuration.
@@ -824,6 +826,7 @@ def create_services(
                     kalshi_rest_service = create_kalshi_poller(
                         series_tickers=["KXNFLGAME", "KXNCAAFGAME", "KXNBAGAME"],
                         poll_interval=svc_config.poll_interval,
+                        environment=kalshi_env,
                     )
                     services[name] = (
                         cast("EventLoopService", kalshi_rest_service),
@@ -880,6 +883,7 @@ def create_services(
 
 def create_supervisor(
     environment: str = "development",
+    kalshi_env: str = "demo",
     enabled_services: set[str] | None = None,
     poll_interval: int = 15,
     health_check_interval: int = 60,
@@ -893,6 +897,7 @@ def create_supervisor(
 
     Args:
         environment: Deployment environment (development/staging/production)
+        kalshi_env: Kalshi API environment (demo/prod)
         enabled_services: Set of services to enable (None = all)
         poll_interval: Default poll interval for services
         health_check_interval: Seconds between health checks
@@ -921,7 +926,7 @@ def create_supervisor(
         svc_config.poll_interval = poll_interval
 
     # Create services
-    services = create_services(config, enabled_services)
+    services = create_services(config, enabled_services, kalshi_env=kalshi_env)
 
     # Create supervisor
     supervisor = ServiceSupervisor(config)
