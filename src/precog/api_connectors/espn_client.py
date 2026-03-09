@@ -2,11 +2,11 @@
 ESPN API client for live game data.
 
 This module provides a high-level interface to ESPN's public API for fetching
-real-time NFL and NCAAF game data. No authentication required - ESPN's
-scoreboard API is publicly accessible.
+real-time NFL, NCAAF, NBA, and NHL game data. No authentication required -
+ESPN's scoreboard API is publicly accessible.
 
 Key Features:
-- NFL and NCAAF scoreboard fetching
+- Multi-league scoreboard fetching (NFL, NCAAF, NBA, NHL)
 - Game state parsing (scores, period, clock, possession)
 - Rate limiting (150 requests/hour, ~2,500/day community limit)
 - Automatic retries with exponential backoff
@@ -28,10 +28,10 @@ ESPN API Design:
 Rate Limiting Strategy:
     ESPN's public API has no official rate limits, but community reports
     suggest ~2,500 requests/day before IP blocking. We implement 250 req/hour
-    as a safety net, with adaptive polling keeping actual daily usage ~1,700:
-    1. Active games: 60s interval x 3 leagues = 180 req/hr (~6 hrs/day)
-    2. Idle: 300s interval x 3 leagues = 36 req/hr (~18 hrs/day)
-    3. Combined adaptive: ~1,728 req/day typical (under 2,500 ceiling)
+    as a safety net, with adaptive polling keeping actual daily usage ~2,300:
+    1. Active games: 60s interval x 4 leagues = 240 req/hr (~6 hrs/day)
+    2. Idle: 300s interval x 4 leagues = 48 req/hr (~18 hrs/day)
+    3. Combined adaptive: ~2,304 req/day typical (under 2,500 ceiling)
 
 Reference: docs/testing/PHASE_2_TEST_PLAN_V1.0.md
 Related Requirements:

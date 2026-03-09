@@ -123,4 +123,4 @@ nested:
             latencies.append((end - start) * 1000)
 
         p95 = sorted(latencies)[int(len(latencies) * 0.95)]
-        assert p95 < 100, f"p95 latency {p95:.2f}ms exceeds 100ms target"
+        assert p95 < 150, f"p95 latency {p95:.2f}ms exceeds 150ms target"

@@ -80,13 +80,26 @@ platforms:
             kelly_fraction: "0.20"      # More conservative (20%)
             min_edge: "0.06"            # Higher edge required (6%)
 
-          # NBA (Phase 6)
+          # NBA (enabled for soak test — active March markets)
           nba:
-            enabled: false
+            enabled: true
             series_tickers:
               - "KXNBAGAME"
             filter_method: "series_ticker"
             min_liquidity: 100
+            max_spread: "0.05"
+            include_futures: false
+            include_props: false
+            kelly_fraction: "0.22"
+            min_edge: "0.05"
+
+          # NHL (enabled for soak test — active March markets)
+          nhl:
+            enabled: true
+            series_tickers:
+              - "KXNHLGAME"
+            filter_method: "series_ticker"
+            min_liquidity: 75
             max_spread: "0.05"
             include_futures: false
             include_props: false
