@@ -374,51 +374,8 @@ jobs:
             .hypothesis/
           retention-days: 14
 
-  stress-chaos-tests:
-    name: Stress & Chaos Tests (collection only)
-    runs-on: ubuntu-latest
-    needs: detect-changes
-    # Only run if code changed; no DB needed (all mocked)
-    if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
-    timeout-minutes: 5
-
-    env:
-      PRECOG_ENV: test
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.14'
-          allow-prereleases: true
-
-      - name: Cache pip dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-pip-
-
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install -e .
-          pip install pytest pytest-timeout
-
-      - name: Verify stress/chaos test collection
-        run: |
-          # Stress/chaos tests hang on CI runners (threading + 2 vCPUs).
-          # Full execution runs in pre-push hook locally (~2 min, ~992 tests).
-          # CI only verifies all tests can be collected (no import errors, no syntax issues).
-          echo "=== Verifying stress/chaos test collection ==="
-          python -m pytest tests/stress/ --collect-only -q 2>&1 | tail -3
-          python -m pytest tests/chaos/ --collect-only -q 2>&1 | tail -3
-          echo "=== Collection verified ==="
+  # NOTE: Stress/chaos tests run in pre-push hook only (~992 tests, ~2 min locally).
+  # They hang on CI runners (threading + 2 vCPUs). No CI job needed.
 
   validate-quick:
     name: Quick Validation Suite
@@ -489,7 +446,7 @@ jobs:
   ci-summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [pre-commit-checks, security-scan, documentation-validation, test, integration-tests, stress-chaos-tests, validate-quick, test-type-coverage]
+    needs: [pre-commit-checks, security-scan, documentation-validation, test, integration-tests, validate-quick, test-type-coverage]
     if: always()
     steps:
       - name: Check all jobs status
@@ -502,7 +459,7 @@ jobs:
           echo "Documentation Validation: ${{ needs.documentation-validation.result }}"
           echo "Unit Tests:               ${{ needs.test.result }}"
           echo "Integration Tests:        ${{ needs.integration-tests.result }}"
-          echo "Stress & Chaos Tests:     ${{ needs.stress-chaos-tests.result }}"
+          echo "Stress & Chaos Tests:     pre-push only (threading hangs on CI runners)"
           echo "Quick Validation:         ${{ needs.validate-quick.result }}"
           echo "Test Type Coverage:       ${{ needs.test-type-coverage.result }}"
           echo "=========================================="
@@ -514,7 +471,6 @@ jobs:
              [[ "${{ needs.documentation-validation.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
              [[ "${{ needs.integration-tests.result }}" == "failure" ]] || \
-             [[ "${{ needs.stress-chaos-tests.result }}" == "failure" ]] || \
              [[ "${{ needs.validate-quick.result }}" == "failure" ]]; then
             echo ""
             echo "❌ CI FAILED: One or more checks failed"
@@ -528,7 +484,6 @@ jobs:
           [[ "${{ needs.security-scan.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.test.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.integration-tests.result }}" == "skipped" ]] && ((SKIPPED+=1))
-          [[ "${{ needs.stress-chaos-tests.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.validate-quick.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.test-type-coverage.result }}" == "skipped" ]] && ((SKIPPED+=1))
 
