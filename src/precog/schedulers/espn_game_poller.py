@@ -895,14 +895,3 @@ def refresh_all_scoreboards(
     """
     poller = ESPNGamePoller(leagues=leagues)
     return poller.refresh_scoreboards(active_only=active_only)
-
-
-# =============================================================================
-# Backward Compatibility Aliases
-# =============================================================================
-
-# Temporary aliases for backward compatibility during migration
-# TODO: Remove after all imports are updated (Phase 2.5 completion)
-MarketUpdater = ESPNGamePoller
-create_market_updater = create_espn_poller
-run_single_poll = run_single_espn_poll

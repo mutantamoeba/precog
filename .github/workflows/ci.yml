@@ -482,11 +482,13 @@ jobs:
           echo "=========================================="
 
           # Check if any job that actually ran failed (skipped jobs are OK)
-          # Note: integration-tests and test-type-coverage use continue-on-error, so they won't fail the pipeline
+          # integration-tests included: it runs stress, chaos, security, e2e, and performance tests
+          # test-type-coverage excluded: tech debt tracking, not a gate
           if [[ "${{ needs.pre-commit-checks.result }}" == "failure" ]] || \
              [[ "${{ needs.security-scan.result }}" == "failure" ]] || \
              [[ "${{ needs.documentation-validation.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
+             [[ "${{ needs.integration-tests.result }}" == "failure" ]] || \
              [[ "${{ needs.validate-quick.result }}" == "failure" ]]; then
             echo ""
             echo "❌ CI FAILED: One or more checks failed"

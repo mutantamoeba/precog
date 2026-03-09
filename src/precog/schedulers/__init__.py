@@ -127,24 +127,13 @@ from precog.schedulers.service_supervisor import (
     create_supervisor,
 )
 
-# =============================================================================
-# Backward Compatibility Aliases
-# =============================================================================
-# These aliases maintain compatibility during the transition period.
-# TODO: Remove after all external code is updated (Phase 2.5 completion)
-
-# Old ESPN class names -> new names
-MarketUpdater = ESPNGamePoller
-create_market_updater = create_espn_poller
-run_single_poll = run_single_espn_poll
-
 __all__ = [
     # Base infrastructure
     "BasePoller",
     # Connection and status enums
     "ConnectionState",
     "DataSourceStatus",
-    # ESPN services (new names)
+    # ESPN services
     "ESPNGamePoller",
     "Environment",
     # Service protocols and state
@@ -154,10 +143,6 @@ __all__ = [
     "KalshiWebSocketHandler",
     # Market data services
     "MarketDataManager",
-    # =============================================================================
-    # Backward Compatibility Aliases (deprecated - will be removed)
-    # =============================================================================
-    "MarketUpdater",  # Use ESPNGamePoller instead
     "PollerStats",
     # Configuration dataclasses
     "RunnerConfig",
@@ -169,7 +154,6 @@ __all__ = [
     # Factory functions
     "create_kalshi_poller",
     "create_market_data_manager",
-    "create_market_updater",  # Use create_espn_poller instead
     "create_services",
     "create_supervisor",
     "create_websocket_handler",
@@ -177,5 +161,4 @@ __all__ = [
     "refresh_all_scoreboards",
     "run_single_espn_poll",
     "run_single_kalshi_poll",
-    "run_single_poll",  # Use run_single_espn_poll instead
 ]

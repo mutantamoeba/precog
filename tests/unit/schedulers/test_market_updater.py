@@ -10,7 +10,6 @@ Tests cover:
 - Poll logic with mocked ESPN responses
 - Factory functions and convenience methods
 - Error handling and recovery
-- Backward compatibility aliases (MarketUpdater)
 
 All tests use mocked responses - NO actual API calls or database operations.
 
@@ -25,16 +24,11 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-# Import from new module (espn_game_poller)
-# Also import backward compatibility aliases to test them
 from precog.schedulers.espn_game_poller import (
     ESPNGamePoller,
-    MarketUpdater,
     create_espn_poller,
-    create_market_updater,
     refresh_all_scoreboards,
     run_single_espn_poll,
-    run_single_poll,
 )
 
 # =============================================================================
@@ -520,11 +514,7 @@ class TestRefreshAllScoreboards:
 
 
 class TestModuleExports:
-    """Tests for module-level exports from schedulers package.
-
-    Tests both the new primary exports (ESPNGamePoller, create_espn_poller, etc.)
-    and the backward compatibility aliases (MarketUpdater, create_market_updater, etc.).
-    """
+    """Tests for module-level exports from schedulers package."""
 
     def test_espn_game_poller_exported(self) -> None:
         """Test ESPNGamePoller is exported from schedulers package."""
@@ -549,42 +539,3 @@ class TestModuleExports:
         from precog.schedulers import run_single_espn_poll as imported_func
 
         assert imported_func is run_single_espn_poll
-
-
-class TestBackwardCompatibilityAliases:
-    """Tests for backward compatibility aliases.
-
-    These aliases allow existing code using the old names (MarketUpdater, etc.)
-    to continue working during the migration period.
-    """
-
-    def test_market_updater_is_alias_for_espn_game_poller(self) -> None:
-        """Test MarketUpdater is an alias for ESPNGamePoller."""
-        from precog.schedulers import MarketUpdater as ImportedClass
-
-        # MarketUpdater should be the same class as ESPNGamePoller
-        assert ImportedClass is ESPNGamePoller
-        assert ImportedClass is MarketUpdater
-
-    def test_create_market_updater_is_alias_for_create_espn_poller(self) -> None:
-        """Test create_market_updater is an alias for create_espn_poller."""
-        from precog.schedulers import create_market_updater as imported_func
-
-        assert imported_func is create_espn_poller
-        assert imported_func is create_market_updater
-
-    def test_run_single_poll_is_alias_for_run_single_espn_poll(self) -> None:
-        """Test run_single_poll is an alias for run_single_espn_poll."""
-        from precog.schedulers import run_single_poll as imported_func
-
-        assert imported_func is run_single_espn_poll
-        assert imported_func is run_single_poll
-
-    def test_backward_compat_creates_espn_game_poller(self) -> None:
-        """Test backward compatibility: MarketUpdater creates ESPNGamePoller instance."""
-        with patch("precog.schedulers.espn_game_poller.ESPNClient"):
-            instance = MarketUpdater()
-
-        assert isinstance(instance, ESPNGamePoller)
-        # Verify it's the same class, just aliased
-        assert type(instance).__name__ == "ESPNGamePoller"

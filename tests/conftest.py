@@ -57,6 +57,7 @@ import os  # noqa: E402
 if "LOG_LEVEL" not in os.environ and "STRUCTLOG_LOG_LEVEL" not in os.environ:
     os.environ["LOG_LEVEL"] = "WARNING"
 
+import logging  # noqa: E402
 import shutil  # noqa: E402
 import tempfile  # noqa: E402
 from decimal import Decimal  # noqa: E402
@@ -988,6 +989,13 @@ def pytest_configure(config):
             f"  PRECOG_ENV=test python -m pytest tests/\n"
             f"{'=' * 70}\n"
         )
+
+    # Suppress APScheduler log spam during tests.
+    # APScheduler's default logger emits INFO for every job execution/completion,
+    # which produces thousands of log lines during stress/chaos scheduler tests.
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
 
     # Register custom markers
     config.addinivalue_line("markers", "unit: Unit tests (isolated, fast)")

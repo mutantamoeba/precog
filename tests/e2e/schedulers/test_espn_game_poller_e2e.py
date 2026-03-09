@@ -3,6 +3,12 @@ End-to-End Tests for ESPN Game Poller.
 
 Tests complete ESPNGamePoller workflows from initialization to data persistence.
 
+Includes two categories:
+1. Mock-based workflow tests: Validate poller logic with mocked API and DB
+2. Real-API integration tests: Call the REAL ESPN API through the poller,
+   mocking only the database layer. These catch data structure mismatches
+   between what ESPN actually returns and what the poller expects.
+
 Reference: TESTING_STRATEGY V3.2 - E2E tests for full workflow validation
 Related Requirements: REQ-DATA-001 (Game State Data Collection)
 
@@ -10,7 +16,9 @@ Usage:
     pytest tests/e2e/schedulers/test_espn_game_poller_e2e.py -v -m e2e
 """
 
+import socket
 import time
+from decimal import Decimal
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -798,3 +806,381 @@ class TestAdaptivePollingWorkflow:
         mock_get_live.return_value = []
         poller._adjust_poll_interval()
         assert poller.get_current_interval() == 60
+
+
+# =============================================================================
+# Real-API E2E Tests: ESPN Poller with Live ESPN API
+# =============================================================================
+
+
+def _is_espn_reachable() -> bool:
+    """Check if ESPN API is reachable via socket connection.
+
+    Educational Note:
+        Uses a quick socket check rather than a full HTTP request
+        for faster failure detection. This allows graceful skipping
+        in CI environments without network access.
+    """
+    try:
+        socket.create_connection(("site.api.espn.com", 443), timeout=5)
+        return True
+    except OSError:
+        return False
+
+
+@pytest.mark.e2e
+@pytest.mark.skipif(
+    not _is_espn_reachable(),
+    reason="ESPN API unreachable - skipping real-API poller tests",
+)
+class TestRealAPIPollerIntegration:
+    """E2E tests that call the REAL ESPN API through ESPNGamePoller.
+
+    These tests fill a critical gap: the existing mock-based poller tests
+    validate poller logic but cannot catch data structure mismatches between
+    what ESPN actually returns and what the poller expects.
+
+    The Kalshi poller has real-API e2e tests (test_kalshi_poller_e2e.py)
+    that write to a real database. ESPN tests mock only the DB layer
+    because ESPN is a public API (no credentials needed) and we want
+    these tests to run in cross-platform CI without database access.
+
+    Educational Note:
+        Testing Layers for ESPN:
+        - Layer 1: ESPNClient e2e (test_espn_e2e.py) - API -> Python objects
+        - Layer 2: ESPNGamePoller mock (this file, above) - Poller logic with mocks
+        - Layer 3: ESPNGamePoller real-API (THIS CLASS) - Real API -> Poller processing
+          Catches: field name mismatches, type errors, missing keys, status mapping bugs
+    """
+
+    @pytest.fixture
+    def real_espn_client(self):
+        """Create a real ESPNClient for live API tests.
+
+        Educational Note:
+            We create a fresh client per test (function scope) to avoid
+            rate limit state leaking between tests. The rate limit is
+            generous (500/hour) so this is safe for a handful of tests.
+        """
+        from precog.api_connectors.espn_client import ESPNClient
+
+        return ESPNClient(rate_limit_per_hour=500)
+
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_real_api_poll_once_nfl(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        real_espn_client: Any,
+    ) -> None:
+        """Poll NFL scoreboard from real ESPN API and validate poller processing.
+
+        This is the primary real-API poller test. It verifies that:
+        1. Real ESPN API data flows through the poller without errors
+        2. The poller correctly extracts fields from ESPNGameFull format
+        3. Database upsert is called with correctly typed arguments
+
+        Educational Note:
+            We mock DB functions to return plausible values so the poller
+            completes its full processing pipeline. The key assertion is
+            that poll_once() succeeds without exceptions -- meaning the
+            real API response structure matches what the poller expects.
+        """
+        # DB mocks return plausible values
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            poll_interval=30,
+            espn_client=real_espn_client,
+        )
+
+        # This calls the real ESPN API -- should not raise
+        result = poller.poll_once()
+
+        # Basic result structure validation
+        assert isinstance(result, dict)
+        assert "items_fetched" in result
+        assert "items_updated" in result
+        assert "items_created" in result
+        assert result["items_fetched"] >= 0
+        assert result["items_updated"] >= 0
+
+        # If games were found, verify DB was called with correct argument types
+        if result["items_fetched"] > 0:
+            assert mock_upsert.call_count > 0
+
+            # Inspect the first upsert call's keyword arguments
+            first_call_kwargs = mock_upsert.call_args_list[0].kwargs
+
+            # espn_event_id should be a non-empty string
+            assert isinstance(first_call_kwargs["espn_event_id"], str)
+            assert len(first_call_kwargs["espn_event_id"]) > 0
+
+            # Scores should be integers
+            assert isinstance(first_call_kwargs["home_score"], int)
+            assert isinstance(first_call_kwargs["away_score"], int)
+            assert first_call_kwargs["home_score"] >= 0
+            assert first_call_kwargs["away_score"] >= 0
+
+            # Period should be an integer
+            assert isinstance(first_call_kwargs["period"], int)
+            assert first_call_kwargs["period"] >= 0
+
+            # Game status should be one of the normalized values
+            assert first_call_kwargs["game_status"] in {
+                "pre",
+                "in_progress",
+                "halftime",
+                "final",
+            }
+
+            # clock_seconds should be Decimal or None (Pattern 1: NEVER float)
+            clock_val = first_call_kwargs["clock_seconds"]
+            if clock_val is not None:
+                assert isinstance(clock_val, Decimal), (
+                    f"clock_seconds is {type(clock_val).__name__}, expected Decimal. "
+                    "Pattern 1 violation: NEVER USE FLOAT."
+                )
+
+            # league should be passed through
+            assert first_call_kwargs["league"] == "nfl"
+
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_real_api_multi_league_poll(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        real_espn_client: Any,
+    ) -> None:
+        """Poll multiple leagues from real ESPN API.
+
+        Validates that the poller handles all configured leagues without
+        errors when processing real API responses.
+
+        Educational Note:
+            Different leagues may have different data characteristics
+            (e.g., NBA has no "down/distance", NHL has 3 periods not 4).
+            This test ensures the poller handles all sports correctly.
+        """
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+
+        poller = ESPNGamePoller(
+            leagues=["nfl", "nba", "nhl"],
+            poll_interval=30,
+            espn_client=real_espn_client,
+        )
+
+        # Should not raise for any league
+        result = poller.poll_once()
+
+        assert isinstance(result, dict)
+        assert result["items_fetched"] >= 0
+
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_real_api_venue_extraction(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        real_espn_client: Any,
+    ) -> None:
+        """Verify venue data is correctly extracted from real API responses.
+
+        Educational Note:
+            Venue data comes from metadata.venue in the ESPNGameFull format.
+            The poller calls create_venue() with the extracted fields.
+            This test verifies the extraction works with real API data.
+        """
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            poll_interval=30,
+            espn_client=real_espn_client,
+        )
+
+        result = poller.poll_once()
+
+        if result["items_fetched"] > 0:
+            # create_venue should have been called
+            assert mock_create_venue.call_count > 0
+
+            # Verify venue args are strings (not None or wrong type)
+            first_venue_call = mock_create_venue.call_args_list[0]
+            venue_kwargs = first_venue_call.kwargs
+
+            # venue_name is required and should be a string
+            if "venue_name" in venue_kwargs and venue_kwargs["venue_name"] is not None:
+                assert isinstance(venue_kwargs["venue_name"], str)
+                assert len(venue_kwargs["venue_name"]) > 0
+
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_real_api_team_lookup_called_with_espn_ids(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        real_espn_client: Any,
+    ) -> None:
+        """Verify team lookups use real ESPN team IDs from the API.
+
+        Educational Note:
+            The poller extracts espn_team_id from each game's metadata
+            and calls get_team_by_espn_id() to find the database team_id.
+            This test validates that real ESPN IDs are passed correctly.
+        """
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            poll_interval=30,
+            espn_client=real_espn_client,
+        )
+
+        result = poller.poll_once()
+
+        if result["items_fetched"] > 0:
+            # get_team_by_espn_id should be called twice per game (home + away)
+            assert mock_get_team.call_count >= 2
+
+            # Each call should have a string ESPN team ID and league
+            for team_call in mock_get_team.call_args_list:
+                espn_id = (
+                    team_call.args[0] if team_call.args else team_call.kwargs.get("espn_team_id")
+                )
+                league = (
+                    team_call.args[1] if len(team_call.args) > 1 else team_call.kwargs.get("league")
+                )
+
+                # ESPN team IDs are numeric strings (e.g., "1", "34")
+                if espn_id is not None:
+                    assert isinstance(espn_id, str), (
+                        f"ESPN team ID should be string, got {type(espn_id).__name__}"
+                    )
+
+                assert league == "nfl"
+
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_real_api_all_upsert_calls_have_consistent_types(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        real_espn_client: Any,
+    ) -> None:
+        """Verify every upsert_game_state call has consistently typed arguments.
+
+        This is the most thorough real-API validation: iterate ALL upsert
+        calls from a real poll and verify every one has correct types.
+
+        Educational Note:
+            If one game out of 16 has unusual data (e.g., a postponed game
+            with null fields), the poller must handle it gracefully. This
+            test catches edge cases that a single-game test might miss.
+        """
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+
+        # Use NFL -- most likely to have games in the API
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            poll_interval=30,
+            espn_client=real_espn_client,
+        )
+
+        result = poller.poll_once()
+
+        if result["items_fetched"] == 0:
+            pytest.skip("No NFL games available in ESPN API today")
+
+        valid_statuses = {"pre", "in_progress", "halftime", "final"}
+
+        for i, upsert_call in enumerate(mock_upsert.call_args_list):
+            kwargs = upsert_call.kwargs
+            game_id = kwargs.get("espn_event_id", f"call_{i}")
+
+            # String fields
+            assert isinstance(kwargs["espn_event_id"], str), (
+                f"Game {game_id}: espn_event_id not a string"
+            )
+            assert kwargs["game_status"] in valid_statuses, (
+                f"Game {game_id}: invalid game_status '{kwargs['game_status']}'"
+            )
+
+            # Integer fields
+            assert isinstance(kwargs["home_score"], int), f"Game {game_id}: home_score not int"
+            assert isinstance(kwargs["away_score"], int), f"Game {game_id}: away_score not int"
+            assert isinstance(kwargs["period"], int), f"Game {game_id}: period not int"
+
+            # Decimal or None (Pattern 1: NEVER float)
+            clock = kwargs.get("clock_seconds")
+            if clock is not None:
+                assert isinstance(clock, Decimal), (
+                    f"Game {game_id}: clock_seconds is {type(clock).__name__}, "
+                    "expected Decimal (Pattern 1 violation)"
+                )
+
+            # League passed through
+            assert kwargs["league"] == "nfl", (
+                f"Game {game_id}: league is '{kwargs['league']}', expected 'nfl'"
+            )
+
+    @patch("precog.schedulers.espn_game_poller.get_live_games")
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_real_api_poll_wrapper_completes(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        mock_get_live: MagicMock,
+        real_espn_client: Any,
+    ) -> None:
+        """Verify _poll_wrapper() completes with real API data.
+
+        _poll_wrapper() is what the scheduler actually calls. It includes
+        error handling and adaptive polling adjustment. This test ensures
+        the full wrapper path works with real data.
+
+        Educational Note:
+            _poll_wrapper() differs from poll_once() in that it:
+            - Catches exceptions instead of propagating them
+            - Updates stats (polls_completed, items_fetched, etc.)
+            - Calls _adjust_poll_interval() for adaptive polling
+        """
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+        mock_get_live.return_value = []
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            poll_interval=30,
+            adaptive_polling=True,
+            espn_client=real_espn_client,
+        )
+
+        # Should not raise -- _poll_wrapper catches errors
+        poller._poll_wrapper()
+
+        # Stats should be updated
+        assert poller.stats["polls_completed"] == 1
+        assert poller.stats["errors"] == 0
+        assert poller.stats["items_fetched"] >= 0
