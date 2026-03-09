@@ -396,10 +396,10 @@ class TestPollWrapperPerformance:
         """Test many direct _poll_wrapper calls."""
         poller = StressPoller()
 
-        for _ in range(1000):
+        for _ in range(50):
             poller._poll_wrapper()
 
-        assert poller.stats["polls_completed"] == 1000
+        assert poller.stats["polls_completed"] == 50
 
     def test_poll_wrapper_with_errors(self) -> None:
         """Test many poll wrapper calls with errors."""

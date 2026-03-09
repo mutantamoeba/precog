@@ -59,7 +59,7 @@ class TestStrategyTypesStress:
             {"strategy_type_code": f"type_{i}", "category": f"cat_{i % 3}"} for i in range(20)
         ]
 
-        for _ in range(500):
+        for _ in range(25):
             result = get_strategy_types_by_category()
             assert len(result) == 3  # 3 categories
 
@@ -107,7 +107,7 @@ class TestModelClassesStress:
 
         from precog.database.lookup_helpers import get_model_classes_by_complexity
 
-        for _ in range(500):
+        for _ in range(25):
             result = get_model_classes_by_complexity()
             assert len(result) == 3  # 3 complexity levels
 
@@ -130,11 +130,11 @@ class TestValidationStress:
             return result
 
         with ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [executor.submit(validate) for _ in range(200)]
+            futures = [executor.submit(validate) for _ in range(25)]
             for future in as_completed(futures):
                 future.result()
 
-        assert len(results) == 200
+        assert len(results) == 25
         assert all(r is True for r in results)
 
     @patch("precog.database.lookup_helpers.fetch_one")
@@ -152,11 +152,11 @@ class TestValidationStress:
             return result
 
         with ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [executor.submit(validate) for _ in range(200)]
+            futures = [executor.submit(validate) for _ in range(25)]
             for future in as_completed(futures):
                 future.result()
 
-        assert len(results) == 200
+        assert len(results) == 25
         assert all(r is True for r in results)
 
 

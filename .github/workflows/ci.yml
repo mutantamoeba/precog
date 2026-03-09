@@ -143,8 +143,14 @@ jobs:
     if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest]
-        python-version: ['3.12', '3.13', '3.14']
+        # Trimmed matrix: 3.14 (production target) on both OS, 3.12 (backward compat) on Linux only
+        include:
+          - os: ubuntu-latest
+            python-version: '3.14'
+          - os: ubuntu-latest
+            python-version: '3.12'
+          - os: windows-latest
+            python-version: '3.14'
       fail-fast: false
 
     # Environment safety (Issue #161): Explicitly set test environment
@@ -231,8 +237,8 @@ jobs:
     needs: detect-changes
     # Only run if code changed (requires database)
     if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
-    # Job timeout to prevent hanging CI runs (Issue: 5hr+ hangs observed)
-    timeout-minutes: 30
+    # Job timeout (reduced: stress/chaos moved to parallel job)
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -338,33 +344,6 @@ jobs:
           python -m pytest tests/security/ -v --tb=short --timeout=60 -p no:cacheprovider --junitxml=security-test-results.xml
           echo "=== Security tests complete at $(date) ==="
 
-      - name: Run stress tests
-        timeout-minutes: 8
-        env:
-          PYTHONUNBUFFERED: "1"
-        run: |
-          # Stress tests now run in CI (selective skip via tests/stress/conftest.py).
-          # Only 2 files with real APScheduler BackgroundSchedulers are skipped;
-          # the other 45 files run with mocked dependencies.
-          # Use --timeout-method=thread because stress tests use threading/ThreadPoolExecutor
-          # SIGALRM (default on Linux) can't interrupt threads, thread method can
-          echo "=== Starting stress tests at $(date) ==="
-          python -m pytest tests/stress/ -v --tb=short --timeout=120 --timeout-method=thread -p no:cacheprovider --junitxml=stress-test-results.xml
-          echo "=== Stress tests complete at $(date) ==="
-
-      - name: Run chaos tests
-        timeout-minutes: 8
-        env:
-          PYTHONUNBUFFERED: "1"
-        run: |
-          # Chaos tests now run in CI (selective skip via tests/chaos/conftest.py).
-          # Only 2 files with real APScheduler BackgroundSchedulers are skipped;
-          # the other 25 files run with mocked dependencies.
-          # Use --timeout-method=thread for consistency with stress tests
-          echo "=== Starting chaos tests at $(date) ==="
-          python -m pytest tests/chaos/ -v --tb=short --timeout=120 --timeout-method=thread -p no:cacheprovider --junitxml=chaos-test-results.xml
-          echo "=== Chaos tests complete at $(date) ==="
-
       - name: Run E2E + performance tests
         timeout-minutes: 5
         run: |
@@ -393,6 +372,78 @@ jobs:
           path: |
             *-test-results.xml
             .hypothesis/
+          retention-days: 14
+
+  stress-chaos-tests:
+    name: Stress & Chaos Tests
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    # Only run if code changed; no DB needed (all mocked)
+    if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 10
+
+    env:
+      PRECOG_ENV: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          allow-prereleases: true
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-pip-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .
+          pip install pytest pytest-timeout
+
+      - name: Run stress tests
+        timeout-minutes: 5
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          # Use --timeout-method=thread because stress tests use threading/ThreadPoolExecutor
+          echo "=== Starting stress tests at $(date) ==="
+          python -m pytest tests/stress/ -v --tb=short --timeout=120 --timeout-method=thread -p no:cacheprovider --junitxml=stress-test-results.xml
+          echo "=== Stress tests complete at $(date) ==="
+
+      - name: Run chaos tests
+        timeout-minutes: 5
+        env:
+          PYTHONUNBUFFERED: "1"
+        run: |
+          echo "=== Starting chaos tests at $(date) ==="
+          python -m pytest tests/chaos/ -v --tb=short --timeout=120 --timeout-method=thread -p no:cacheprovider --junitxml=chaos-test-results.xml
+          echo "=== Chaos tests complete at $(date) ==="
+
+      - name: Publish Stress/Chaos Test Results
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: '*-test-results.xml'
+          check_name: 'Stress & Chaos Test Results'
+          fail_on_failure: false
+          include_passed: false
+
+      - name: Archive test results on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stress-chaos-test-results-failure
+          path: '*-test-results.xml'
           retention-days: 14
 
   validate-quick:
@@ -464,7 +515,7 @@ jobs:
   ci-summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [pre-commit-checks, security-scan, documentation-validation, test, integration-tests, validate-quick, test-type-coverage]
+    needs: [pre-commit-checks, security-scan, documentation-validation, test, integration-tests, stress-chaos-tests, validate-quick, test-type-coverage]
     if: always()
     steps:
       - name: Check all jobs status
@@ -477,18 +528,19 @@ jobs:
           echo "Documentation Validation: ${{ needs.documentation-validation.result }}"
           echo "Unit Tests:               ${{ needs.test.result }}"
           echo "Integration Tests:        ${{ needs.integration-tests.result }}"
+          echo "Stress & Chaos Tests:     ${{ needs.stress-chaos-tests.result }}"
           echo "Quick Validation:         ${{ needs.validate-quick.result }}"
           echo "Test Type Coverage:       ${{ needs.test-type-coverage.result }}"
           echo "=========================================="
 
           # Check if any job that actually ran failed (skipped jobs are OK)
-          # integration-tests included: it runs stress, chaos, security, e2e, and performance tests
           # test-type-coverage excluded: tech debt tracking, not a gate
           if [[ "${{ needs.pre-commit-checks.result }}" == "failure" ]] || \
              [[ "${{ needs.security-scan.result }}" == "failure" ]] || \
              [[ "${{ needs.documentation-validation.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
              [[ "${{ needs.integration-tests.result }}" == "failure" ]] || \
+             [[ "${{ needs.stress-chaos-tests.result }}" == "failure" ]] || \
              [[ "${{ needs.validate-quick.result }}" == "failure" ]]; then
             echo ""
             echo "❌ CI FAILED: One or more checks failed"
@@ -502,6 +554,7 @@ jobs:
           [[ "${{ needs.security-scan.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.test.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.integration-tests.result }}" == "skipped" ]] && ((SKIPPED+=1))
+          [[ "${{ needs.stress-chaos-tests.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.validate-quick.result }}" == "skipped" ]] && ((SKIPPED+=1))
           [[ "${{ needs.test-type-coverage.result }}" == "skipped" ]] && ((SKIPPED+=1))
 

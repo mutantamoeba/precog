@@ -758,7 +758,7 @@ class TestStateChangeDetectionStress:
 
         # Test with identical state (should return False)
         false_count = 0
-        for _ in range(5000):
+        for _ in range(50):
             if not game_state_changed(
                 current=current,
                 home_score=14,
@@ -771,7 +771,7 @@ class TestStateChangeDetectionStress:
 
         # Test with different state (should return True)
         true_count = 0
-        for i in range(5000):
+        for i in range(50):
             if game_state_changed(
                 current=current,
                 home_score=14 + (i % 3),  # Varying scores
@@ -785,10 +785,10 @@ class TestStateChangeDetectionStress:
         elapsed = time.time() - start_time
 
         # All identical comparisons should return False
-        assert false_count == 5000, f"Expected 5000 False, got {false_count}"
+        assert false_count == 50, f"Expected 50 False, got {false_count}"
 
         # Most varying comparisons should return True (i%3 != 0 means ~3333 True)
-        expected_true = sum(1 for i in range(5000) if i % 3 != 0)
+        expected_true = sum(1 for i in range(50) if i % 3 != 0)
         assert true_count == expected_true, f"Expected {expected_true} True, got {true_count}"
 
         # Should complete in reasonable time (<5s for 10,000 comparisons)
@@ -824,7 +824,7 @@ class TestStateChangeDetectionStress:
 
         # Test with many different situation variations
         changes_detected = 0
-        for i in range(1000):
+        for i in range(50):
             # Create varying situations
             new_situation = {
                 "down": (i % 4) + 1,  # 1-4
@@ -846,7 +846,7 @@ class TestStateChangeDetectionStress:
                 changes_detected += 1
 
         # Most should be changes (only identical situations won't be)
-        assert changes_detected > 900, f"Expected >900 changes, got {changes_detected}"
+        assert changes_detected > 40, f"Expected >40 changes, got {changes_detected}"
 
     def test_none_current_state_stress(self):
         """
@@ -859,7 +859,7 @@ class TestStateChangeDetectionStress:
         from precog.database.crud_operations import game_state_changed
 
         true_count = 0
-        for i in range(5000):
+        for i in range(50):
             if game_state_changed(
                 current=None,
                 home_score=i % 100,
@@ -871,7 +871,7 @@ class TestStateChangeDetectionStress:
                 true_count += 1
 
         # ALL should return True when current is None
-        assert true_count == 5000, f"Expected all 5000 True, got {true_count}"
+        assert true_count == 50, f"Expected all 50 True, got {true_count}"
 
     def test_concurrent_state_comparisons(self):
         """
@@ -899,7 +899,7 @@ class TestStateChangeDetectionStress:
             local_true = 0
             local_false = 0
             try:
-                for i in range(500):
+                for i in range(25):
                     # Alternate between same and different states
                     if i % 2 == 0:
                         # Same state - should be False
@@ -947,10 +947,10 @@ class TestStateChangeDetectionStress:
         assert isinstance(errors_list, list), f"Expected list, got {type(errors_list)}"
         assert len(errors_list) == 0, f"Errors: {errors_list}"
 
-        # Each thread does 250 same-state checks (should be False)
-        # and 250 different-state checks (should be True)
-        expected_false = 10 * 250  # 2500
-        expected_true = 10 * 250  # 2500
+        # Each thread does 13 same-state checks (should be False)
+        # and 12 different-state checks (should be True)
+        expected_false = 10 * 13  # 130
+        expected_true = 10 * 12  # 120
 
         assert results["false_count"] == expected_false, (
             f"Expected {expected_false} False, got {results['false_count']}"

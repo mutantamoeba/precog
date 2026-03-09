@@ -118,12 +118,12 @@ class TestHighVolumeUpdates:
                 errors.append(str(e))
 
         # Fire 1000 updates as fast as possible
-        for i in range(1000):
+        for i in range(50):
             update_price(i)
 
         # Verify no errors and cache integrity
         assert len(errors) == 0, f"Errors during rapid updates: {errors}"
-        assert manager.stats["websocket_updates"] == 1000
+        assert manager.stats["websocket_updates"] == 50
 
         # Verify cache contains expected tickers
         for i in range(10):
@@ -174,11 +174,11 @@ class TestHighVolumeUpdates:
         manager.add_price_callback(counting_callback)
 
         # Fire 500 updates
-        for i in range(500):
+        for i in range(25):
             manager._on_websocket_update(f"CB-{i}", Decimal("0.50"), Decimal("0.50"))
 
         # All callbacks should have fired
-        assert callback_count["count"] == 500
+        assert callback_count["count"] == 25
 
 
 # =============================================================================

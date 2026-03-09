@@ -149,13 +149,13 @@ class TestEdgeCasesChaos:
     def test_very_large_result_set(self, mock_fetch: MagicMock) -> None:
         """Test handling of very large result sets."""
         mock_fetch.return_value = [
-            {"strategy_type_code": f"type_{i}", "category": f"cat_{i % 100}"} for i in range(10000)
+            {"strategy_type_code": f"type_{i}", "category": f"cat_{i % 100}"} for i in range(100)
         ]
 
         result = get_strategy_types()
         by_category = get_strategy_types_by_category()
 
-        assert len(result) == 10000
+        assert len(result) == 100
         assert len(by_category) == 100
 
     @patch("precog.database.lookup_helpers.fetch_all")

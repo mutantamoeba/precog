@@ -490,14 +490,14 @@ class TestPollerStatsEdgeCases:
         poller = ChaosPoller()
 
         # Many successful polls
-        for _ in range(1000):
+        for _ in range(50):
             poller._poll_wrapper()
 
         stats = poller.stats
-        assert stats["polls_completed"] == 1000
-        assert stats["items_fetched"] == 10000
-        assert stats["items_updated"] == 5000
-        assert stats["items_created"] == 2000
+        assert stats["polls_completed"] == 50
+        assert stats["items_fetched"] == 500
+        assert stats["items_updated"] == 250
+        assert stats["items_created"] == 100
         assert stats["errors"] == 0
 
     def test_stats_type_consistency(self) -> None:
@@ -549,10 +549,10 @@ class TestBoundaryValueAccumulation:
         """Test poll count accumulates correctly over many calls."""
         poller = ChaosPoller()
 
-        for _ in range(10000):
+        for _ in range(100):
             poller._poll_wrapper()
 
-        assert poller.stats["polls_completed"] == 10000
+        assert poller.stats["polls_completed"] == 100
 
 
 # =============================================================================

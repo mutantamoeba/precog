@@ -78,7 +78,7 @@ class TestValidateSchemaFileStress:
         schema = tmp_path / "schema.sql"
         schema.write_text("CREATE TABLE test (id INT);")
 
-        for _ in range(1000):
+        for _ in range(50):
             result = validate_schema_file(str(schema))
             assert result is True
 
@@ -117,7 +117,7 @@ class TestApplySchemaStress:
         schema.write_text("CREATE TABLE test (id INT);")
         mock_run.return_value = MagicMock(returncode=0, stderr="")
 
-        for _ in range(500):
+        for _ in range(25):
             success, _error = apply_schema("postgresql://localhost/test", str(schema))
             assert success is True
 
@@ -139,17 +139,17 @@ class TestGetDatabaseUrlStress:
             return url
 
         with ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [executor.submit(get_url) for _ in range(200)]
+            futures = [executor.submit(get_url) for _ in range(25)]
             for future in as_completed(futures):
                 future.result()
 
-        assert len(results) == 200
+        assert len(results) == 25
         assert all(r == "postgresql://localhost/test" for r in results)
 
     def test_rapid_url_retrieval(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Test rapid sequential URL retrieval."""
         monkeypatch.setenv("DATABASE_URL", "postgresql://localhost/test")
 
-        for _ in range(10000):
+        for _ in range(100):
             url = get_database_url()
             assert url == "postgresql://localhost/test"

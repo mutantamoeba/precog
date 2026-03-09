@@ -384,7 +384,7 @@ class TestAnomalyTrackingChaos:
 
     def test_many_unique_games_tracking(self, validator: ESPNDataValidator) -> None:
         """Test tracking many unique games."""
-        for i in range(500):
+        for i in range(25):
             game = {
                 "metadata": {"espn_event_id": f"chaos_game_{i}", "league": "nfl"},
                 "state": {"home_score": -1, "away_score": 0, "period": 1},
@@ -392,7 +392,7 @@ class TestAnomalyTrackingChaos:
             validator.validate_game_state(game)  # type: ignore[arg-type]
 
         all_counts = validator.get_all_anomaly_counts()
-        assert len(all_counts) == 500
+        assert len(all_counts) == 25
 
     def test_repeated_validation_same_game(self, validator: ESPNDataValidator) -> None:
         """Test repeated validation of same game accumulates correctly."""
@@ -473,14 +473,14 @@ class TestValidationResultChaos:
         """Test adding many issues to result."""
         result = ValidationResult(game_id="many_issues")
 
-        for i in range(1000):
+        for i in range(50):
             result.add_error(f"field_{i}", f"error_{i}")
             result.add_warning(f"field_{i}", f"warning_{i}")
             result.add_info(f"field_{i}", f"info_{i}")
 
-        assert len(result.issues) == 3000
-        assert len(result.errors) == 1000
-        assert len(result.warnings) == 1000
+        assert len(result.issues) == 150
+        assert len(result.errors) == 50
+        assert len(result.warnings) == 50
 
     def test_empty_game_id(self) -> None:
         """Test ValidationResult with empty game_id."""

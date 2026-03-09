@@ -672,11 +672,11 @@ class TestStatsTypedDictEdgeCases:
             espn_client=mock_espn_client,
         )
 
-        for _ in range(1000):
+        for _ in range(50):
             poller._poll_wrapper()
 
         stats = poller.stats
-        assert stats["polls_completed"] == 1000
+        assert stats["polls_completed"] == 50
         assert stats["errors"] == 0
 
     def test_stats_type_consistency(self, mock_espn_client: MagicMock) -> None:

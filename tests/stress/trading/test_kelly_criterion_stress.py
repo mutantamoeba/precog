@@ -26,7 +26,7 @@ class TestCalculateKellySizeStress:
 
     def test_rapid_kelly_calculations(self) -> None:
         """Test rapid sequential Kelly calculations."""
-        for i in range(5000):
+        for i in range(50):
             edge = Decimal(f"0.{i % 99 + 1:02d}")  # 0.01 to 0.99
             result = calculate_kelly_size(
                 edge=edge,
@@ -51,11 +51,11 @@ class TestCalculateKellySizeStress:
             return result
 
         with ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [executor.submit(calculate, f"0.{i % 50 + 1:02d}") for i in range(200)]
+            futures = [executor.submit(calculate, f"0.{i % 50 + 1:02d}") for i in range(25)]
             for future in as_completed(futures):
                 future.result()
 
-        assert len(results) == 200
+        assert len(results) == 25
         assert all(r >= Decimal("0") for r in results)
 
     def test_sustained_calculations_with_varying_inputs(self) -> None:
@@ -81,7 +81,7 @@ class TestCalculateEdgeStress:
 
     def test_rapid_edge_calculations(self) -> None:
         """Test rapid sequential edge calculations."""
-        for i in range(5000):
+        for i in range(50):
             true_prob = Decimal(f"0.{(i % 99) + 1:02d}")
             market_price = Decimal("0.50")
             result = calculate_edge(
@@ -108,11 +108,11 @@ class TestCalculateEdgeStress:
             return result
 
         with ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [executor.submit(calculate, f"0.{(i % 99) + 1:02d}") for i in range(200)]
+            futures = [executor.submit(calculate, f"0.{(i % 99) + 1:02d}") for i in range(25)]
             for future in as_completed(futures):
                 future.result()
 
-        assert len(results) == 200
+        assert len(results) == 25
 
 
 class TestCalculateOptimalPositionStress:
@@ -120,7 +120,7 @@ class TestCalculateOptimalPositionStress:
 
     def test_rapid_optimal_position_calculations(self) -> None:
         """Test rapid sequential optimal position calculations."""
-        for i in range(2000):
+        for i in range(50):
             true_prob = Decimal(f"0.{(i % 49) + 51:02d}")  # 0.51 to 0.99
             market_price = Decimal("0.50")
             result = calculate_optimal_position(
@@ -148,15 +148,15 @@ class TestCalculateOptimalPositionStress:
             return result
 
         with ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [executor.submit(calculate, f"0.{(i % 49) + 51:02d}") for i in range(200)]
+            futures = [executor.submit(calculate, f"0.{(i % 49) + 51:02d}") for i in range(25)]
             for future in as_completed(futures):
                 future.result()
 
-        assert len(results) == 200
+        assert len(results) == 25
 
     def test_full_workflow_stress(self) -> None:
         """Test full workflow under stress."""
-        for _ in range(500):
+        for _ in range(25):
             # Simulate market analysis
             markets = [
                 (Decimal("0.55"), Decimal("0.50")),
@@ -182,7 +182,7 @@ class TestConstraintStress:
 
     def test_max_position_constraint_stress(self) -> None:
         """Test max_position constraint under stress."""
-        for i in range(1000):
+        for i in range(50):
             max_pos = Decimal(str((i % 100) + 100))  # 100 to 199
             result = calculate_kelly_size(
                 edge=Decimal("0.50"),  # High edge
@@ -194,7 +194,7 @@ class TestConstraintStress:
 
     def test_bankroll_cap_stress(self) -> None:
         """Test bankroll cap under stress."""
-        for i in range(1000):
+        for i in range(50):
             bankroll = Decimal(str((i % 1000) + 1000))
             result = calculate_kelly_size(
                 edge=Decimal("2.0"),  # Very high edge

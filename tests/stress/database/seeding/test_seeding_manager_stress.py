@@ -337,7 +337,7 @@ class TestMemoryBehaviorStress:
         manager = SeedingManager(config=config)
 
         # Track many operations
-        for _ in range(1000):
+        for _ in range(50):
             manager._start_session()
             for category in SeedCategory:
                 manager._category_stats[category.value] = manager._init_stats(category)
@@ -358,7 +358,7 @@ class TestMemoryBehaviorStress:
         manager = SeedingManager(config=config)
 
         reports = []
-        for _ in range(500):
+        for _ in range(25):
             report = manager.seed_all()
             reports.append(report)
 

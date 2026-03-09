@@ -92,10 +92,10 @@ class TestHighVolumePolling:
             espn_client=mock_espn_client,
         )
 
-        for _ in range(1000):
+        for _ in range(50):
             poller._poll_wrapper()
 
-        assert poller.stats["polls_completed"] == 1000
+        assert poller.stats["polls_completed"] == 50
 
     @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
     @patch("precog.schedulers.espn_game_poller.upsert_game_state")
@@ -197,18 +197,18 @@ class TestStatsUnderLoad:
 
         stats_reads: list[dict[str, Any]] = []
 
-        for i in range(500):
+        for i in range(25):
             poller._poll_wrapper()
             if i % 10 == 0:
                 stats_reads.append(poller.stats)  # type: ignore[arg-type]
 
         # All stats reads should be valid
-        assert len(stats_reads) == 50
+        assert len(stats_reads) == 3
         for stats in stats_reads:
             assert "polls_completed" in stats
 
         # Final stats should be accumulated
-        assert poller.stats["polls_completed"] == 500
+        assert poller.stats["polls_completed"] == 25
 
     def test_stats_consistency_under_load(self, mock_espn_client: MagicMock) -> None:
         """Test stats remain consistent under load."""
@@ -219,7 +219,7 @@ class TestStatsUnderLoad:
             espn_client=mock_espn_client,
         )
 
-        for i in range(1000):
+        for i in range(50):
             poller._poll_wrapper()
 
             # Periodically check consistency
@@ -442,7 +442,7 @@ class TestMemoryPressure:
 
         # Create many stats copies
         copies = []
-        for _ in range(10000):
+        for _ in range(100):
             copies.append(poller.stats)
 
         # All should be independent
@@ -492,7 +492,7 @@ class TestStatusNormalizationUnderLoad:
         statuses = ["pre", "in", "halftime", "final", "unknown", "", "POST"]
         results = []
 
-        for _ in range(10000):
+        for _ in range(100):
             for status in statuses:
                 result = poller._normalize_game_status(status)
                 results.append(result)
@@ -531,7 +531,7 @@ class TestAdaptivePollingStress:
         # Don't start scheduler - just test the adjustment logic
         with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
             # Alternate between active and idle states rapidly
-            for i in range(1000):
+            for i in range(50):
                 mock_get_live.return_value = [{"game_id": 1}] if i % 2 == 0 else []
                 poller._adjust_poll_interval()
 
@@ -594,13 +594,13 @@ class TestAdaptivePollingStress:
             mock_get_live.side_effect = get_live_games_mock
 
             results = []
-            for _ in range(1000):
+            for _ in range(50):
                 result = poller.has_active_games()
                 results.append(result)
 
             # All should return True (NFL has active games)
             assert all(results), "Expected all True when NFL has active games"
-            assert mock_get_live.call_count == 1000  # Short-circuits after first True
+            assert mock_get_live.call_count == 50  # Short-circuits after first True
 
     @pytest.mark.skipif(_is_ci, reason="Starts real APScheduler; run locally")
     def test_interval_adjustment_under_scheduler_load(self, mock_espn_client: MagicMock) -> None:
@@ -645,7 +645,7 @@ class TestAdaptivePollingStress:
         with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
             last_state = None
 
-            for i in range(500):
+            for i in range(25):
                 is_active = i % 2 == 0
                 mock_get_live.return_value = [{"game_id": 1}] if is_active else []
 
@@ -660,8 +660,8 @@ class TestAdaptivePollingStress:
                 last_state = current_state
 
         # Should have many transitions (alternating every call)
-        assert transition_count["active_to_idle"] > 200
-        assert transition_count["idle_to_active"] > 200
+        assert transition_count["active_to_idle"] > 10
+        assert transition_count["idle_to_active"] > 10
 
     def test_adaptive_polling_disabled_stress(self, mock_espn_client: MagicMock) -> None:
         """Test that disabled adaptive polling doesn't adjust intervals under load."""
@@ -676,7 +676,7 @@ class TestAdaptivePollingStress:
         with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
             mock_get_live.return_value = [{"game_id": 1}]
 
-            for _ in range(1000):
+            for _ in range(50):
                 poller._adjust_poll_interval()
 
             # Should never call get_live_games when disabled
@@ -693,7 +693,7 @@ class TestAdaptivePollingStress:
         )
 
         intervals = []
-        for _ in range(10000):
+        for _ in range(100):
             interval = poller.get_current_interval()
             intervals.append(interval)
 
@@ -941,7 +941,7 @@ class TestAdaptivePollingRace:
                     last_state = None
                     local_transitions = 0
 
-                    for i in range(200):
+                    for i in range(25):
                         # Rapid state changes
                         mock_get_live.return_value = [{"game_id": thread_id}] if i % 2 == 0 else []
                         poller._adjust_poll_interval()

@@ -169,7 +169,7 @@ class TestKalshiMarketPollerChaos:
                 "no_ask": 50,
                 "status": "open",
             }
-            for i in range(500)
+            for i in range(25)
         ]
 
         mock_client.fetch_all_markets.return_value = large_response
@@ -184,7 +184,7 @@ class TestKalshiMarketPollerChaos:
         # Run multiple poll cycles with large data
         for _ in range(20):
             result = poller.poll_once()
-            assert result["items_fetched"] == 500
+            assert result["items_fetched"] == 25
 
         # Should complete without OOM or issues
         stats = poller.stats

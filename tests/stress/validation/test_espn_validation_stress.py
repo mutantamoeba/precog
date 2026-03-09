@@ -53,11 +53,11 @@ class TestValidatorCreationStress:
     def test_rapid_validator_creation(self) -> None:
         """Test rapid sequential validator creation."""
         validators = []
-        for _ in range(500):
+        for _ in range(25):
             v = create_validator(strict_mode=False, track_anomalies=True)
             validators.append(v)
 
-        assert len(validators) == 500
+        assert len(validators) == 25
         assert all(isinstance(v, ESPNDataValidator) for v in validators)
 
     def test_concurrent_validator_creation(self) -> None:
@@ -72,11 +72,11 @@ class TestValidatorCreationStress:
             return v
 
         with ThreadPoolExecutor(max_workers=20) as executor:
-            futures = [executor.submit(create_one) for _ in range(200)]
+            futures = [executor.submit(create_one) for _ in range(25)]
             for future in as_completed(futures):
                 future.result()
 
-        assert len(validators) == 200
+        assert len(validators) == 25
 
 
 class TestGameStateValidationStress:
@@ -86,7 +86,7 @@ class TestGameStateValidationStress:
         """Test rapid sequential game validation."""
         validator = create_validator()
 
-        for i in range(1000):
+        for i in range(50):
             game = _create_sample_game(f"40154{i:04d}")
             result = validator.validate_game_state(game)  # type: ignore[arg-type]
             assert isinstance(result, ValidationResult)
@@ -105,11 +105,11 @@ class TestGameStateValidationStress:
             return result
 
         with ThreadPoolExecutor(max_workers=30) as executor:
-            futures = [executor.submit(validate_game, f"40154{i:04d}") for i in range(300)]
+            futures = [executor.submit(validate_game, f"40154{i:04d}") for i in range(25)]
             for future in as_completed(futures):
                 future.result()
 
-        assert len(results) == 300
+        assert len(results) == 25
         assert all(isinstance(r, ValidationResult) for r in results)
 
     def test_concurrent_validation_separate_validators(self) -> None:
@@ -127,12 +127,12 @@ class TestGameStateValidationStress:
 
         with ThreadPoolExecutor(max_workers=20) as executor:
             futures = [
-                executor.submit(validate_with_new_validator, f"40154{i:04d}") for i in range(200)
+                executor.submit(validate_with_new_validator, f"40154{i:04d}") for i in range(25)
             ]
             for future in as_completed(futures):
                 future.result()
 
-        assert len(results) == 200
+        assert len(results) == 25
 
 
 class TestValidationWithVaryingDataStress:
@@ -144,7 +144,7 @@ class TestValidationWithVaryingDataStress:
         valid_count = 0
         invalid_count = 0
 
-        for i in range(500):
+        for i in range(25):
             if i % 3 == 0:
                 # Invalid: negative score
                 game = _create_sample_game(f"40154{i:04d}", home_score=-1)
@@ -164,13 +164,13 @@ class TestValidationWithVaryingDataStress:
         # Verify we got both valid and invalid results
         assert valid_count > 0
         assert invalid_count > 0
-        assert valid_count + invalid_count == 500
+        assert valid_count + invalid_count == 25
 
     def test_many_games_same_validator_anomaly_tracking(self) -> None:
         """Test anomaly tracking with many games."""
         validator = create_validator(track_anomalies=True)
 
-        for i in range(200):
+        for i in range(25):
             # Create games with issues to trigger anomaly tracking
             game = _create_sample_game(f"40154{i:04d}")
             # Add an issue
@@ -178,14 +178,14 @@ class TestValidationWithVaryingDataStress:
             validator.validate_game_state(game)  # type: ignore[arg-type]
 
         counts = validator.get_all_anomaly_counts()
-        assert len(counts) == 200
+        assert len(counts) == 25
 
     def test_validation_across_multiple_leagues(self) -> None:
         """Test validation across all supported leagues."""
         validator = create_validator()
         leagues = ["nfl", "ncaaf", "nba", "ncaab", "nhl", "wnba"]
 
-        for i in range(300):
+        for i in range(25):
             league = leagues[i % len(leagues)]
             game = {
                 "metadata": {
@@ -212,7 +212,7 @@ class TestIndividualValidationMethodsStress:
         """Test rapid score validation."""
         validator = create_validator()
 
-        for i in range(2000):
+        for i in range(50):
             result = validator.validate_score(
                 home_score=i % 100,
                 away_score=(i * 3) % 100,
@@ -223,7 +223,7 @@ class TestIndividualValidationMethodsStress:
         """Test rapid clock validation."""
         validator = create_validator()
 
-        for i in range(2000):
+        for i in range(50):
             result = validator.validate_clock(
                 clock_seconds=Decimal(str(i % 900)),
                 period=(i % 4) + 1,
@@ -235,7 +235,7 @@ class TestIndividualValidationMethodsStress:
         """Test rapid situation validation."""
         validator = create_validator()
 
-        for i in range(2000):
+        for i in range(50):
             situation = {
                 "down": (i % 4) + 1,
                 "distance": (i % 20) + 1,

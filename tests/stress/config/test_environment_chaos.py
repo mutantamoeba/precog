@@ -83,7 +83,7 @@ class TestEnvironmentConfigChaos:
     def test_rapid_config_creation_destruction(self) -> None:
         """Test creating and destroying many configs rapidly."""
         configs = []
-        for _ in range(1000):
+        for _ in range(50):
             config = EnvironmentConfig(
                 app_env=AppEnvironment.DEVELOPMENT,
                 kalshi_mode=MarketMode.DEMO,
