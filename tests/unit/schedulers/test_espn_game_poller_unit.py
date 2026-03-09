@@ -95,8 +95,8 @@ class TestESPNGamePollerInitialization:
         poller = ESPNGamePoller(espn_client=mock_espn_client)
 
         assert poller.leagues == ["nfl", "ncaaf", "nba"]
-        assert poller.poll_interval == 15
-        assert poller.idle_interval == 60
+        assert poller.poll_interval == 30
+        assert poller.idle_interval == 300
         assert poller.persist_jobs is False
         assert poller.enabled is False
 
@@ -435,8 +435,8 @@ class TestFactoryFunctions:
         poller = create_espn_poller()
 
         assert poller.leagues == ["nfl", "ncaaf", "nba"]
-        assert poller.poll_interval == 15
-        assert poller.idle_interval == 60
+        assert poller.poll_interval == 30
+        assert poller.idle_interval == 300
 
     @patch("precog.schedulers.espn_game_poller.ESPNClient")
     def test_create_espn_poller_custom(self, mock_client_class: MagicMock) -> None:
@@ -550,15 +550,15 @@ class TestClassConstants:
 
     def test_min_poll_interval(self) -> None:
         """Test MIN_POLL_INTERVAL constant."""
-        assert ESPNGamePoller.MIN_POLL_INTERVAL == 5
+        assert ESPNGamePoller.MIN_POLL_INTERVAL == 15
 
     def test_default_poll_interval(self) -> None:
         """Test DEFAULT_POLL_INTERVAL constant."""
-        assert ESPNGamePoller.DEFAULT_POLL_INTERVAL == 15
+        assert ESPNGamePoller.DEFAULT_POLL_INTERVAL == 30
 
     def test_default_idle_interval(self) -> None:
         """Test DEFAULT_IDLE_INTERVAL constant."""
-        assert ESPNGamePoller.DEFAULT_IDLE_INTERVAL == 60
+        assert ESPNGamePoller.DEFAULT_IDLE_INTERVAL == 300
 
     def test_default_leagues(self) -> None:
         """Test DEFAULT_LEAGUES constant."""

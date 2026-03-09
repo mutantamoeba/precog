@@ -11,12 +11,15 @@ Usage:
 """
 
 import logging
+import os
 import threading
 import time
 
 import pytest
 
 from precog.schedulers.base_poller import BasePoller
+
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
 
 # =============================================================================
 # Concrete Test Implementation
@@ -282,6 +285,7 @@ class TestLifecycleEdgeCases:
         poller.stop()
         assert poller.enabled is False
 
+    @pytest.mark.skipif(_is_ci, reason="Starts real APScheduler; run locally")
     def test_multiple_stops(self) -> None:
         """Test calling stop multiple times."""
         poller = ChaosPoller(poll_interval=1)
@@ -294,6 +298,7 @@ class TestLifecycleEdgeCases:
 
         assert poller.enabled is False
 
+    @pytest.mark.skipif(_is_ci, reason="Starts real APScheduler; run locally")
     def test_start_after_polls(self) -> None:
         """Test starting scheduler after manual polls."""
         poller = ChaosPoller(poll_interval=1)
@@ -312,6 +317,7 @@ class TestLifecycleEdgeCases:
         finally:
             poller.stop()
 
+    @pytest.mark.skipif(_is_ci, reason="Starts real APScheduler; run locally")
     def test_poll_wrapper_after_stop(self) -> None:
         """Test poll_wrapper can be called after scheduler stops."""
         poller = ChaosPoller(poll_interval=1)
@@ -335,6 +341,7 @@ class TestLifecycleEdgeCases:
 class TestConcurrentChaos:
     """Chaos tests for concurrent chaotic operations."""
 
+    @pytest.mark.skipif(_is_ci, reason="Starts real APScheduler; run locally")
     def test_rapid_start_stop_with_polls(self) -> None:
         """Test rapid start/stop while polls are happening."""
         poller = ChaosPoller(poll_interval=1)

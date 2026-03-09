@@ -138,7 +138,7 @@ import logging
 import os
 import re
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -555,6 +555,44 @@ def get_logger(name: str | None = None) -> structlog.BoundLogger:
         >>> logger.info("module_started")
     """
     return structlog.get_logger(name)  # type: ignore[no-any-return]
+
+
+def cleanup_old_logs(log_dir: str = "logs", retention_days: int = 90) -> int:
+    """
+    Remove log files older than retention_days.
+
+    Cleans up daily log files (precog_YYYY-MM-DD.log*) that accumulate
+    because RotatingFileHandler only rotates within a single filename,
+    not across daily files.
+
+    Args:
+        log_dir: Directory containing log files (default: "logs")
+        retention_days: Keep logs from the last N days (default: 90)
+
+    Returns:
+        Number of files removed
+    """
+    log_path = Path(log_dir)
+    if not log_path.exists():
+        return 0
+
+    cutoff = datetime.now() - timedelta(days=retention_days)
+    removed = 0
+
+    for log_file in log_path.glob("precog_*.log*"):
+        try:
+            # Extract date from filename: precog_YYYY-MM-DD.log or precog_YYYY-MM-DD.log.1
+            name = log_file.name
+            # Remove "precog_" prefix and everything after first ".log"
+            date_str = name.replace("precog_", "").split(".log")[0]
+            file_date = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=None)  # noqa: DTZ007
+            if file_date < cutoff:
+                log_file.unlink()
+                removed += 1
+        except (ValueError, IndexError):
+            continue  # Skip files with unparseable names
+
+    return removed
 
 
 # Context manager for request tracking

@@ -13,7 +13,7 @@ Usage:
     pytest tests/integration/schedulers/ -v -m "not slow"
 
 Note:
-    These tests use 5-second poll intervals (MIN_POLL_INTERVAL) with 15-25s timeouts
+    These tests use 15-second poll intervals (MIN_POLL_INTERVAL) with 30-45s timeouts
     to verify scheduler behavior. This makes them inherently slower than typical
     integration tests. Use the 'slow' marker to skip them in fast feedback loops.
 """
@@ -106,7 +106,7 @@ class TestSchedulerLifecycle:
     def test_start_initializes_scheduler(self, mock_espn_client: MagicMock) -> None:
         """Test start() creates and starts the scheduler."""
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             espn_client=mock_espn_client,
         )
 
@@ -125,7 +125,7 @@ class TestSchedulerLifecycle:
     def test_stop_shuts_down_scheduler(self, mock_espn_client: MagicMock) -> None:
         """Test stop() properly shuts down scheduler."""
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             espn_client=mock_espn_client,
         )
         poller.start()
@@ -140,7 +140,7 @@ class TestSchedulerLifecycle:
     def test_multiple_start_stop_cycles(self, mock_espn_client: MagicMock) -> None:
         """Test poller handles multiple start/stop cycles."""
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             espn_client=mock_espn_client,
         )
 
@@ -153,7 +153,7 @@ class TestSchedulerLifecycle:
     def test_stop_on_unstarted_poller(self, mock_espn_client: MagicMock) -> None:
         """Test stop() on never-started poller is safe."""
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             espn_client=mock_espn_client,
         )
 
@@ -164,7 +164,7 @@ class TestSchedulerLifecycle:
     def test_double_start_raises_error(self, mock_espn_client: MagicMock) -> None:
         """Test calling start() twice raises RuntimeError."""
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             espn_client=mock_espn_client,
         )
 
@@ -190,25 +190,25 @@ class TestPollExecution:
         """Test polls execute according to interval.
 
         Uses robust polling-based wait instead of fixed sleep to prevent flaky CI.
-        Note: MIN_POLL_INTERVAL is 5 seconds, so we use 5s and wait for 2+ polls.
+        Note: MIN_POLL_INTERVAL is 15 seconds, so we use 15s and wait for 2+ polls.
 
         Adaptive polling is disabled because mocked clients don't populate the database,
         so has_active_games() returns False and the poller would switch to idle_interval (60s).
         """
         poller = ESPNGamePoller(
-            poll_interval=5,  # Minimum allowed interval (MIN_POLL_INTERVAL=5)
+            poll_interval=15,  # Minimum allowed interval (MIN_POLL_INTERVAL=15)
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            adaptive_polling=False,  # Prevents switch to idle_interval (60s)
+            adaptive_polling=False,  # Prevents switch to idle_interval (300s)
         )
         poller.start()
 
         try:
             # Wait for at least 2 polls using condition-based waiting
-            # With 5s interval, 2 polls takes ~10s, so use 15s timeout for safety
+            # With 15s interval, 2 polls takes ~30s, so use 45s timeout for safety
             success = wait_for_condition(
                 lambda: mock_espn_client.get_scoreboard.call_count >= 2,
-                timeout=15.0,
+                timeout=45.0,
                 description="at least 2 polls",
             )
             assert success, (
@@ -251,19 +251,19 @@ class TestPollExecution:
         mock_espn_client.get_scoreboard.return_value = [game_data]
 
         poller = ESPNGamePoller(
-            poll_interval=5,  # Minimum allowed interval (MIN_POLL_INTERVAL=5)
+            poll_interval=15,  # Minimum allowed interval (MIN_POLL_INTERVAL=15)
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            adaptive_polling=False,  # Prevents switch to idle_interval (60s)
+            adaptive_polling=False,  # Prevents switch to idle_interval (300s)
         )
         poller.start()
 
         try:
             # Wait for at least 2 polls using condition-based waiting
-            # With 5s interval, 2 polls takes ~10s, so use 15s timeout for safety
+            # With 15s interval, 2 polls takes ~30s, so use 45s timeout for safety
             success = wait_for_condition(
                 lambda: poller.stats["polls_completed"] >= 2,
-                timeout=15.0,
+                timeout=45.0,
                 description="at least 2 completed polls",
             )
             assert success, f"Expected at least 2 polls, got {poller.stats['polls_completed']}"
@@ -303,19 +303,19 @@ class TestErrorHandlingIntegration:
         mock_espn_client.get_scoreboard.side_effect = mock_scoreboard
 
         poller = ESPNGamePoller(
-            poll_interval=5,  # Minimum allowed interval (MIN_POLL_INTERVAL=5)
+            poll_interval=15,  # Minimum allowed interval (MIN_POLL_INTERVAL=15)
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            adaptive_polling=False,  # Prevents switch to idle_interval (60s)
+            adaptive_polling=False,  # Prevents switch to idle_interval (300s)
         )
         poller.start()
 
         try:
             # Wait for at least 4 polls (2 errors + 2 successes) using condition-based waiting
-            # With 5s interval, 4 polls takes ~20s, so use 25s timeout for safety
+            # With 15s interval, 4 polls takes ~60s, so use 75s timeout for safety
             success = wait_for_condition(
                 lambda: mock_espn_client.get_scoreboard.call_count >= 4,
-                timeout=25.0,
+                timeout=75.0,
                 description="at least 4 poll attempts",
             )
             assert success, (
@@ -334,7 +334,7 @@ class TestErrorHandlingIntegration:
         mock_espn_client.get_scoreboard.side_effect = ValueError("Integration test error")
 
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
@@ -362,7 +362,7 @@ class TestStatsThreadSafety:
     def test_concurrent_stats_access(self, mock_espn_client: MagicMock) -> None:
         """Test stats can be accessed safely while polling."""
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
@@ -404,7 +404,7 @@ class TestJobPersistence:
     def test_persistence_disabled_by_default(self, mock_espn_client: MagicMock) -> None:
         """Test job persistence is disabled by default."""
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             espn_client=mock_espn_client,
         )
 
@@ -414,7 +414,7 @@ class TestJobPersistence:
     def test_persistence_enabled_with_url(self, mock_espn_client: MagicMock) -> None:
         """Test job persistence can be enabled with URL."""
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             persist_jobs=True,
             job_store_url="sqlite:///test_jobs.db",
             espn_client=mock_espn_client,
@@ -561,14 +561,14 @@ class TestAdaptivePollingIntegration:
         mock_get_live.return_value = []
 
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             idle_interval=60,
             adaptive_polling=True,
             espn_client=mock_espn_client,
         )
 
         # Before adjustment, should use poll_interval
-        assert poller.get_current_interval() == 5
+        assert poller.get_current_interval() == 15
 
         # After adjustment with no games, should use idle_interval
         poller._adjust_poll_interval()
@@ -577,7 +577,7 @@ class TestAdaptivePollingIntegration:
         # Simulate games becoming active
         mock_get_live.return_value = [{"game_id": 1}]
         poller._adjust_poll_interval()
-        assert poller.get_current_interval() == 5
+        assert poller.get_current_interval() == 15
 
     @patch("precog.schedulers.espn_game_poller.get_live_games")
     def test_adaptive_polling_state_transitions(
@@ -589,7 +589,7 @@ class TestAdaptivePollingIntegration:
         mock_get_live.return_value = []
 
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             idle_interval=60,
             adaptive_polling=True,
             espn_client=mock_espn_client,
@@ -641,7 +641,7 @@ class TestAdaptivePollingIntegration:
         mock_get_live.return_value = []
 
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             idle_interval=60,
             adaptive_polling=True,
             espn_client=mock_espn_client,
@@ -668,7 +668,7 @@ class TestAdaptivePollingIntegration:
         mock_get_live.return_value = []
 
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             idle_interval=60,
             adaptive_polling=True,
             espn_client=mock_espn_client,

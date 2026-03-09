@@ -43,14 +43,14 @@ class TestSchedulerStress:
         """Test repeated status checks under load.
 
         Stress: Tests 50 rapid status invocations.
+
+        Note: The status command calls _show_db_backed_status() which queries the
+        database. Mocking it to return False makes it fall through to the in-process
+        check, which correctly shows "Not running" when no pollers are active.
         """
         runner = CliRunner()
 
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
-            mock_instance = MagicMock()
-            mock_instance.get_status.return_value = {"running": False, "pollers": []}
-            mock_supervisor.return_value = mock_instance
-
+        with patch("precog.cli.scheduler._show_db_backed_status", return_value=False):
             for i in range(50):
                 result = runner.invoke(isolated_app, ["scheduler", "status"])
                 assert result.exit_code in [0, 1, 2], f"Failed on iteration {i}"
@@ -59,14 +59,28 @@ class TestSchedulerStress:
         """Test rapid start-stop cycles.
 
         Stress: Tests 20 start-stop cycles.
+
+        Note: The start command imports ESPNGamePoller and KalshiMarketPoller from
+        precog.schedulers (not ServiceSupervisor) and instantiates them directly.
+        Both must be mocked to prevent real API client creation and network calls.
         """
         runner = CliRunner()
 
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
-            mock_instance = MagicMock()
-            mock_instance.start.return_value = True
-            mock_instance.stop.return_value = True
-            mock_supervisor.return_value = mock_instance
+        with (
+            patch("precog.schedulers.ESPNGamePoller") as mock_espn,
+            patch("precog.schedulers.KalshiMarketPoller") as mock_kalshi,
+        ):
+            mock_espn_instance = MagicMock()
+            mock_espn_instance.start.return_value = None
+            mock_espn_instance.stop.return_value = None
+            mock_espn_instance.enabled = True
+            mock_espn.return_value = mock_espn_instance
+
+            mock_kalshi_instance = MagicMock()
+            mock_kalshi_instance.start.return_value = None
+            mock_kalshi_instance.stop.return_value = None
+            mock_kalshi_instance.enabled = True
+            mock_kalshi.return_value = mock_kalshi_instance
 
             for i in range(20):
                 result = runner.invoke(isolated_app, ["scheduler", "start"])
@@ -78,13 +92,33 @@ class TestSchedulerStress:
         """Test many poll-once invocations.
 
         Stress: Tests 30 poll-once calls.
+
+        Note: The poll-once command imports ESPNGamePoller and KalshiMarketPoller
+        from precog.schedulers and calls poll_once() on them. Both must be mocked
+        to prevent real API calls. KalshiMarketPoller also needs kalshi_client
+        mocked because poll-once calls kalshi_client.close() after polling.
         """
         runner = CliRunner()
 
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
-            mock_instance = MagicMock()
-            mock_instance.poll_once.return_value = {"games": 5, "updated": 3}
-            mock_supervisor.return_value = mock_instance
+        with (
+            patch("precog.schedulers.ESPNGamePoller") as mock_espn,
+            patch("precog.schedulers.KalshiMarketPoller") as mock_kalshi,
+        ):
+            mock_espn_instance = MagicMock()
+            mock_espn_instance.poll_once.return_value = {
+                "items_fetched": 5,
+                "items_updated": 3,
+            }
+            mock_espn.return_value = mock_espn_instance
+
+            mock_kalshi_instance = MagicMock()
+            mock_kalshi_instance.poll_once.return_value = {
+                "items_fetched": 10,
+                "items_updated": 5,
+                "items_created": 2,
+            }
+            mock_kalshi_instance.kalshi_client = MagicMock()
+            mock_kalshi.return_value = mock_kalshi_instance
 
             for i in range(30):
                 result = runner.invoke(isolated_app, ["scheduler", "poll-once", "--league", "nfl"])
@@ -207,14 +241,11 @@ class TestMixedCommandStress:
         with (
             patch("precog.database.connection.test_connection") as mock_test,
             patch("precog.database.connection.get_connection") as mock_conn,
-            patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor,
+            patch("precog.cli.scheduler._show_db_backed_status", return_value=False),
         ):
             mock_test.return_value = True
             mock_conn.return_value.__enter__ = MagicMock()
             mock_conn.return_value.__exit__ = MagicMock()
-            mock_instance = MagicMock()
-            mock_instance.get_status.return_value = {"running": False, "pollers": []}
-            mock_supervisor.return_value = mock_instance
 
             commands = [
                 ["system", "health"],

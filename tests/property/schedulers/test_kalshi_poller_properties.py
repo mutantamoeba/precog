@@ -56,7 +56,16 @@ def kalshi_status_strategy(draw: st.DrawFn) -> str:
     """Generate valid Kalshi API status values."""
     return draw(
         st.sampled_from(
-            ["active", "unopened", "open", "closed", "settled", "finalized", "determined"]
+            [
+                "active",
+                "unopened",
+                "open",
+                "closed",
+                "settled",
+                "finalized",
+                "determined",
+                "initialized",
+            ]
         )
     )
 

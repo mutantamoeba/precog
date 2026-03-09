@@ -57,6 +57,7 @@ import os  # noqa: E402
 if "LOG_LEVEL" not in os.environ and "STRUCTLOG_LOG_LEVEL" not in os.environ:
     os.environ["LOG_LEVEL"] = "WARNING"
 
+import logging  # noqa: E402
 import shutil  # noqa: E402
 import tempfile  # noqa: E402
 from decimal import Decimal  # noqa: E402
@@ -900,6 +901,46 @@ def cli_app():
     return app
 
 
+# =============================================================================
+# POLLER THREAD CLEANUP (Issue #292)
+# =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_apscheduler_threads():
+    """
+    Stop orphaned poller threads between tests to prevent test pollution.
+
+    Educational Note:
+        When e2e tests call poller.start(), APScheduler creates a BackgroundScheduler
+        with a thread pool executor. If stop() times out or the test fails before
+        cleanup, executor threads survive and leak into subsequent tests.
+
+        These orphaned threads continue calling _poll_once() -> module-level functions.
+        When integration tests patch() those functions, the orphaned threads pick up
+        the mocks, causing assert_called_once to see extra calls (Issue #292).
+
+        This fixture uses BasePoller's class-level registry to find and stop all
+        active pollers after each test, ensuring clean state for the next test.
+
+    Scope: function (autouse) - runs after every test
+    Reference: Issue #292 (Parallel test DB contention)
+    """
+    yield  # Test runs here
+
+    # After each test, stop any pollers that are still running.
+    # BasePoller tracks all started instances in a class-level registry.
+    from precog.schedulers.base_poller import BasePoller
+
+    stopped = BasePoller.shutdown_all_pollers(timeout=3.0)
+    if stopped > 0:
+        import logging
+
+        logging.getLogger(__name__).warning(
+            "Test cleanup: stopped %d orphaned poller(s) (Issue #292)", stopped
+        )
+
+
 def pytest_configure(config):
     """
     Register custom markers and enforce test environment.
@@ -948,6 +989,13 @@ def pytest_configure(config):
             f"  PRECOG_ENV=test python -m pytest tests/\n"
             f"{'=' * 70}\n"
         )
+
+    # Suppress APScheduler log spam during tests.
+    # APScheduler's default logger emits INFO for every job execution/completion,
+    # which produces thousands of log lines during stress/chaos scheduler tests.
+    logging.getLogger("apscheduler").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler.executors.default").setLevel(logging.WARNING)
+    logging.getLogger("apscheduler.scheduler").setLevel(logging.WARNING)
 
     # Register custom markers
     config.addinivalue_line("markers", "unit: Unit tests (isolated, fast)")

@@ -10,6 +10,7 @@ Usage:
     pytest tests/chaos/schedulers/test_espn_game_poller_chaos.py -v -m chaos
 """
 
+import os
 import threading
 import time
 from unittest.mock import MagicMock, patch
@@ -17,6 +18,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from precog.schedulers.espn_game_poller import ESPNGamePoller
+
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
 
 # =============================================================================
 # Fixtures
@@ -43,10 +46,10 @@ class TestEdgeCaseIntervals:
     def test_minimum_poll_interval_boundary(self, mock_espn_client: MagicMock) -> None:
         """Test exactly at minimum poll interval boundary."""
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             espn_client=mock_espn_client,
         )
-        assert poller.poll_interval == 5
+        assert poller.poll_interval == 15
 
     def test_minimum_idle_interval_boundary(self, mock_espn_client: MagicMock) -> None:
         """Test exactly at minimum idle interval boundary."""
@@ -333,10 +336,11 @@ class TestLifecycleEdgeCases:
         poller.stop()
         assert poller.enabled is False
 
+    @pytest.mark.skipif(_is_ci, reason="Starts real APScheduler; run locally")
     def test_multiple_stops(self, mock_espn_client: MagicMock) -> None:
         """Test calling stop multiple times."""
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
@@ -348,12 +352,13 @@ class TestLifecycleEdgeCases:
 
         assert poller.enabled is False
 
+    @pytest.mark.skipif(_is_ci, reason="Starts real APScheduler; run locally")
     def test_start_after_manual_polls(self, mock_espn_client: MagicMock) -> None:
         """Test starting scheduler after manual polls."""
         mock_espn_client.get_scoreboard.return_value = []
 
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
@@ -371,12 +376,13 @@ class TestLifecycleEdgeCases:
         finally:
             poller.stop()
 
+    @pytest.mark.skipif(_is_ci, reason="Starts real APScheduler; run locally")
     def test_poll_wrapper_after_stop(self, mock_espn_client: MagicMock) -> None:
         """Test poll_wrapper can be called after scheduler stops."""
         mock_espn_client.get_scoreboard.return_value = []
 
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
@@ -400,12 +406,13 @@ class TestLifecycleEdgeCases:
 class TestConcurrentChaos:
     """Chaos tests for concurrent chaotic operations."""
 
+    @pytest.mark.skipif(_is_ci, reason="Starts real APScheduler; run locally")
     def test_rapid_start_stop_with_polls(self, mock_espn_client: MagicMock) -> None:
         """Test rapid start/stop while polls are happening."""
         mock_espn_client.get_scoreboard.return_value = []
 
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
@@ -791,7 +798,7 @@ class TestAdaptivePollingChaos:
             idle_interval based on initial state.
         """
         poller = ESPNGamePoller(
-            poll_interval=10,
+            poll_interval=15,
             idle_interval=120,
             espn_client=mock_espn_client,
             adaptive_polling=True,
@@ -801,7 +808,7 @@ class TestAdaptivePollingChaos:
         assert poller._last_active_state is None
 
         # Interval should be poll_interval initially
-        assert poller.get_current_interval() == 10
+        assert poller.get_current_interval() == 15
 
     @patch("precog.schedulers.espn_game_poller.get_live_games")
     def test_transition_from_active_to_inactive(
@@ -873,16 +880,16 @@ class TestAdaptivePollingChaos:
         """Boundary intervals should work with adaptive polling.
 
         Educational Note:
-            poll_interval at minimum (5) and idle_interval at large
+            poll_interval at minimum (15) and idle_interval at large
             values should both work correctly with adaptive polling.
         """
         poller = ESPNGamePoller(
-            poll_interval=5,  # Minimum
+            poll_interval=15,  # Minimum
             idle_interval=3600,  # 1 hour
             espn_client=mock_espn_client,
             adaptive_polling=True,
         )
 
-        assert poller.poll_interval == 5
+        assert poller.poll_interval == 15
         assert poller.idle_interval == 3600
-        assert poller.get_current_interval() == 5  # Starts at poll_interval
+        assert poller.get_current_interval() == 15  # Starts at poll_interval

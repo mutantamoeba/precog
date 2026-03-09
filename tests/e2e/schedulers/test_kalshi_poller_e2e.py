@@ -334,6 +334,7 @@ class TestKalshiPollerStatusMapping:
             "settled",  # Outcome determined
             "finalized",  # Settlement complete
             "determined",  # Outcome decided, awaiting settlement
+            "initialized",  # Market created, not yet open for trading
         }
 
         # All known statuses should be in the mapping

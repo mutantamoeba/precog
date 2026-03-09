@@ -10,7 +10,7 @@ Key Features:
 - Filters for specific series (e.g., KXNFLGAME for NFL markets)
 - Sub-penny Decimal price precision (NEVER float!)
 - SCD Type 2 versioning for price history
-- Rate limiting compliance (100 req/min)
+- Rate limiting compliance (Kalshi Basic tier: 20 req/sec)
 - Error recovery with logging
 - Clean shutdown handling
 
@@ -22,10 +22,11 @@ Naming Convention:
 Educational Notes:
 ------------------
 Polling Frequency Considerations:
-    - Kalshi rate limit: 100 requests/minute
-    - fetch_all_markets() handles pagination internally (2-3 requests per poll)
-    - 30-60 second intervals allow ~2-3 polls per minute (safe margin)
-    - Don't poll faster than 30s - wastes API quota without benefit
+    - Kalshi Basic tier: 20 requests/second (1,200 req/min)
+    - Reference: https://docs.kalshi.com/getting_started/rate_limits
+    - fetch_all_markets() handles pagination internally (~25 requests per poll)
+    - 15-second intervals with 3 series uses ~100 req/min (well under 1,200 limit)
+    - Rate limiter (token bucket) enforces compliance automatically
 
 SCD Type 2 for Market Prices:
     - Every price change creates a new row (full price history)
@@ -99,23 +100,23 @@ class KalshiMarketPoller(BasePoller):
     """
 
     # Class-level configuration
-    MIN_POLL_INTERVAL: ClassVar[int] = 5  # seconds (rate limit: 100 req/min)
+    MIN_POLL_INTERVAL: ClassVar[int] = 5  # seconds
     DEFAULT_POLL_INTERVAL: ClassVar[int] = 15  # seconds (balanced for near real-time)
     DEFAULT_SERIES_TICKERS: ClassVar[list[str]] = ["KXNFLGAME", "KXNCAAFGAME", "KXNBAGAME"]
     # Note: pagination is handled internally by fetch_all_markets()
 
-    # Rate limit guidance:
-    # - Kalshi allows 100 requests/minute
-    # - Each poll uses 1-3 requests (pagination for large series)
-    # - 5 second interval = 12-36 req/min (safe)
-    # - 3 second interval = 20-60 req/min (caution)
-    # - 1 second interval = 60-180 req/min (EXCEEDS LIMIT)
+    # Rate limit guidance (Kalshi Basic tier: 20 req/sec = 1,200 req/min):
+    # - Each poll uses ~25 requests (series sync + pagination across 3 series)
+    # - 15 second interval = ~100 req/min (8% of limit, very safe)
+    # - 5 second interval = ~300 req/min (25% of limit, safe)
+    # - Token bucket rate limiter enforces compliance automatically
+    # - Reference: https://docs.kalshi.com/getting_started/rate_limits
 
     # Platform ID for database records
     PLATFORM_ID: ClassVar[str] = "kalshi"
 
     # Status mapping from Kalshi API to database schema
-    # Kalshi API returns: 'active', 'unopened', 'closed', 'settled', 'finalized', 'determined'
+    # Kalshi API returns: 'active', 'unopened', 'closed', 'settled', 'finalized', 'determined', 'initialized'
     # Database constraint allows: 'open', 'closed', 'settled', 'halted'
     # Reference: docs/api-integration/Kalshi API Technical Reference
     STATUS_MAPPING: ClassVar[dict[str, str]] = {
@@ -126,6 +127,7 @@ class KalshiMarketPoller(BasePoller):
         "settled": "settled",  # Direct mapping
         "finalized": "settled",  # Kalshi 'finalized' = settlement complete
         "determined": "closed",  # Kalshi 'determined' = outcome decided, awaiting settlement
+        "initialized": "halted",  # Kalshi 'initialized' = market created, not yet open for trading
     }
 
     def __init__(
@@ -510,7 +512,7 @@ class KalshiMarketPoller(BasePoller):
                 ticker = market.get("ticker", "unknown")
                 logger.error("Error syncing market %s: %s", ticker, e)
 
-        logger.debug(
+        logger.info(
             "Series %s: fetched %d markets, updated %d, created %d",
             series_ticker,
             len(all_markets),

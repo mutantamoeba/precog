@@ -339,25 +339,30 @@ jobs:
           echo "=== Security tests complete at $(date) ==="
 
       - name: Run stress tests
-        timeout-minutes: 5
+        timeout-minutes: 8
         env:
           PYTHONUNBUFFERED: "1"
         run: |
-          # Issue #238: Added --junitxml for GitHub PR annotations
+          # Stress tests now run in CI (selective skip via tests/stress/conftest.py).
+          # Only 2 files with real APScheduler BackgroundSchedulers are skipped;
+          # the other 45 files run with mocked dependencies.
           # Use --timeout-method=thread because stress tests use threading/ThreadPoolExecutor
           # SIGALRM (default on Linux) can't interrupt threads, thread method can
           echo "=== Starting stress tests at $(date) ==="
-          python -m pytest tests/stress/ -v --tb=short --timeout=60 --timeout-method=thread -p no:cacheprovider --junitxml=stress-test-results.xml
+          python -m pytest tests/stress/ -v --tb=short --timeout=120 --timeout-method=thread -p no:cacheprovider --junitxml=stress-test-results.xml
           echo "=== Stress tests complete at $(date) ==="
 
       - name: Run chaos tests
-        timeout-minutes: 3
+        timeout-minutes: 8
         env:
           PYTHONUNBUFFERED: "1"
         run: |
-          # Issue #238: Added --junitxml for GitHub PR annotations
+          # Chaos tests now run in CI (selective skip via tests/chaos/conftest.py).
+          # Only 2 files with real APScheduler BackgroundSchedulers are skipped;
+          # the other 25 files run with mocked dependencies.
+          # Use --timeout-method=thread for consistency with stress tests
           echo "=== Starting chaos tests at $(date) ==="
-          python -m pytest tests/chaos/ -v --tb=short --timeout=60 -p no:cacheprovider --junitxml=chaos-test-results.xml
+          python -m pytest tests/chaos/ -v --tb=short --timeout=120 --timeout-method=thread -p no:cacheprovider --junitxml=chaos-test-results.xml
           echo "=== Chaos tests complete at $(date) ==="
 
       - name: Run E2E + performance tests
@@ -477,11 +482,13 @@ jobs:
           echo "=========================================="
 
           # Check if any job that actually ran failed (skipped jobs are OK)
-          # Note: integration-tests and test-type-coverage use continue-on-error, so they won't fail the pipeline
+          # integration-tests included: it runs stress, chaos, security, e2e, and performance tests
+          # test-type-coverage excluded: tech debt tracking, not a gate
           if [[ "${{ needs.pre-commit-checks.result }}" == "failure" ]] || \
              [[ "${{ needs.security-scan.result }}" == "failure" ]] || \
              [[ "${{ needs.documentation-validation.result }}" == "failure" ]] || \
              [[ "${{ needs.test.result }}" == "failure" ]] || \
+             [[ "${{ needs.integration-tests.result }}" == "failure" ]] || \
              [[ "${{ needs.validate-quick.result }}" == "failure" ]]; then
             echo ""
             echo "❌ CI FAILED: One or more checks failed"

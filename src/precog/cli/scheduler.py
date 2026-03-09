@@ -321,9 +321,9 @@ def start(
         help="Enable/disable Kalshi market price polling",
     ),
     espn_interval: int = typer.Option(
-        15,
+        30,
         "--espn-interval",
-        help="ESPN poll interval in seconds (default: 15)",
+        help="ESPN poll interval in seconds (default: 30, adaptive idle: 300)",
     ),
     kalshi_interval: int = typer.Option(
         15,

@@ -37,7 +37,6 @@ CI Strategy (Issue #168):
 """
 
 import gc
-import os
 import tempfile
 import threading
 import time
@@ -47,18 +46,10 @@ from pathlib import Path
 import pytest
 import yaml
 
-# CI environment detection - skip stress tests in CI
-_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
-_CI_SKIP_REASON = (
-    "Stress tests skip in CI - they can hang in resource-constrained environments. "
-    "Run locally: pytest tests/stress/test_config_loader_stress.py -v"
-)
-
 # Mark all tests as stress tests (slow) - they test actual implementation
 pytestmark = [
     pytest.mark.stress,
     pytest.mark.slow,
-    pytest.mark.skipif(_is_ci, reason=_CI_SKIP_REASON),
 ]
 
 

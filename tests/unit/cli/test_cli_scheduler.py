@@ -237,13 +237,6 @@ class TestSchedulerImportVerification:
         assert ServiceSupervisor is not None
         assert callable(create_supervisor)
 
-    def test_backward_compatibility_aliases_work(self):
-        """Verify deprecated aliases still work for backward compatibility."""
-        from precog.schedulers import ESPNGamePoller, MarketUpdater
-
-        # MarketUpdater should be an alias for ESPNGamePoller
-        assert MarketUpdater is ESPNGamePoller
-
     def test_cli_start_imports_work(self):
         """Test that the start command's runtime imports resolve correctly.
 

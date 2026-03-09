@@ -684,10 +684,10 @@ class TestKalshiClientRateLimiting:
         ):
             client = KalshiClient(environment="demo")
 
-            # Consume tokens to trigger warning (capacity=100, warn at <20 tokens)
-            # Make 85 requests to get below 20 tokens (100 - 85 = 15)
+            # Consume tokens to trigger warning (capacity=1200, warn at <240 tokens)
+            # Make 1020 requests to get below 240 tokens (1200 - 1020 = 180)
             with caplog.at_level(logging.WARNING):
-                for _ in range(85):
+                for _ in range(1020):
                     client.get_balance()
 
         # Check that warning was logged
@@ -729,28 +729,28 @@ class TestKalshiClientRateLimiting:
         ):
             client = KalshiClient(environment="demo")
 
-            # Check initial token count (should be full: 100)
+            # Check initial token count (should be full: 1200)
             initial_tokens = client.rate_limiter.bucket.get_available_tokens()
-            assert initial_tokens == 100.0, f"Expected 100 tokens initially, got {initial_tokens}"
+            assert initial_tokens == 1200.0, f"Expected 1200 tokens initially, got {initial_tokens}"
 
             # Consume 10 tokens
             for _ in range(10):
                 client.get_balance()
 
             tokens_after_burst = client.rate_limiter.bucket.get_available_tokens()
-            assert tokens_after_burst < 100.0, "Tokens should decrease after requests"
-            assert tokens_after_burst >= 90.0, (
-                f"Expected ~90 tokens after 10 requests, got {tokens_after_burst}"
+            assert tokens_after_burst < 1200.0, "Tokens should decrease after requests"
+            assert tokens_after_burst >= 1190.0, (
+                f"Expected ~1190 tokens after 10 requests, got {tokens_after_burst}"
             )
 
-            # Wait for refill (refill rate: 100/60 = 1.67 tokens/sec)
-            # Wait 6 seconds should refill ~10 tokens (6 * 1.67 = 10.02)
-            time.sleep(6.0)
+            # Wait for refill (refill rate: 1200/60 = 20 tokens/sec)
+            # Wait 1 second should refill ~20 tokens (well over the 10 consumed)
+            time.sleep(1.0)
 
             tokens_after_refill = client.rate_limiter.bucket.get_available_tokens()
-            # Should refill back to 100 (capped at capacity)
-            assert tokens_after_refill == 100.0, (
-                f"Expected 100 tokens after refill, got {tokens_after_refill}"
+            # Should refill back to 1200 (capped at capacity)
+            assert tokens_after_refill == 1200.0, (
+                f"Expected 1200 tokens after refill, got {tokens_after_refill}"
             )
 
     def test_client_handles_429_with_retry_after_header(self, monkeypatch):
@@ -827,15 +827,15 @@ class TestKalshiClientRateLimiting:
                 f"Expected 0% utilization initially, got {initial_util * 100}%"
             )
 
-            # Consume 50 tokens (50% utilization)
-            for _ in range(50):
+            # Consume 600 tokens (~50% utilization of 1200)
+            for _ in range(600):
                 client.get_balance()
 
             mid_util = client.rate_limiter.get_utilization()
             assert 0.45 <= mid_util <= 0.55, f"Expected ~50% utilization, got {mid_util * 100:.1f}%"
 
-            # Consume 40 more tokens (90% utilization)
-            for _ in range(40):
+            # Consume 480 more tokens (~90% utilization)
+            for _ in range(480):
                 client.get_balance()
 
             high_util = client.rate_limiter.get_utilization()

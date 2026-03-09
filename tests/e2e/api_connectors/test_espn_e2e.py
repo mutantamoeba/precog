@@ -497,7 +497,13 @@ class TestESPNDataQuality:
             clock = game["state"].get("clock_display", "")
 
             if clock and game["state"]["game_status"] == "in_progress":
-                assert ":" in clock or clock.isdigit(), f"Invalid clock format: {clock}"
+                # Formats: "12:34", "0:00", "47.9" (NBA sub-minute), "5", "END"
+                is_valid = (
+                    ":" in clock
+                    or clock.replace(".", "", 1).isdigit()
+                    or clock.upper() in ("END", "OT", "HALF")
+                )
+                assert is_valid, f"Invalid clock format: {clock}"
 
     @pytest.mark.parametrize("league", ["nfl", "ncaaf", "nba", "ncaab", "nhl", "wnba"])
     def test_periods_in_valid_range(self, espn_client, league):
