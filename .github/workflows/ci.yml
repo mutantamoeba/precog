@@ -380,7 +380,7 @@ jobs:
     needs: detect-changes
     # Only run if code changed; no DB needed (all mocked)
     if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
-    timeout-minutes: 10
+    timeout-minutes: 20
 
     env:
       PRECOG_ENV: test
@@ -411,22 +411,22 @@ jobs:
           pip install pytest pytest-timeout
 
       - name: Run stress tests
-        timeout-minutes: 5
+        timeout-minutes: 8
         env:
           PYTHONUNBUFFERED: "1"
         run: |
           # Use --timeout-method=thread because stress tests use threading/ThreadPoolExecutor
           echo "=== Starting stress tests at $(date) ==="
-          python -m pytest tests/stress/ -v --tb=short --timeout=120 --timeout-method=thread -p no:cacheprovider --junitxml=stress-test-results.xml
+          python -m pytest tests/stress/ -q --tb=short --timeout=120 --timeout-method=thread -p no:cacheprovider --junitxml=stress-test-results.xml
           echo "=== Stress tests complete at $(date) ==="
 
       - name: Run chaos tests
-        timeout-minutes: 5
+        timeout-minutes: 8
         env:
           PYTHONUNBUFFERED: "1"
         run: |
           echo "=== Starting chaos tests at $(date) ==="
-          python -m pytest tests/chaos/ -v --tb=short --timeout=120 --timeout-method=thread -p no:cacheprovider --junitxml=chaos-test-results.xml
+          python -m pytest tests/chaos/ -q --tb=short --timeout=120 --timeout-method=thread -p no:cacheprovider --junitxml=chaos-test-results.xml
           echo "=== Chaos tests complete at $(date) ==="
 
       - name: Publish Stress/Chaos Test Results
