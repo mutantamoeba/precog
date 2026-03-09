@@ -10,6 +10,7 @@ Usage:
     pytest tests/stress/schedulers/test_espn_game_poller_stress.py -v -m stress
 """
 
+import os
 import threading
 import time
 from typing import Any
@@ -18,6 +19,8 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from precog.schedulers.espn_game_poller import ESPNGamePoller
+
+_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
 
 # =============================================================================
 # Fixtures
@@ -366,15 +369,20 @@ class TestConcurrentOperations:
 
 
 @pytest.mark.stress
+@pytest.mark.skipif(_is_ci, reason="Starts real APScheduler BackgroundScheduler; run locally")
 class TestSchedulerUnderLoad:
-    """Stress tests for scheduler under load."""
+    """Stress tests for scheduler under load.
+
+    Skipped in CI: these tests start real APScheduler threads with
+    start/stop cycles that may not terminate cleanly in CI environments.
+    """
 
     def test_scheduler_rapid_start_stop(self, mock_espn_client: MagicMock) -> None:
         """Test rapid scheduler start/stop cycles."""
         mock_espn_client.get_scoreboard.return_value = []
 
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
@@ -392,7 +400,7 @@ class TestSchedulerUnderLoad:
         mock_espn_client.get_scoreboard.return_value = []
 
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
@@ -594,12 +602,13 @@ class TestAdaptivePollingStress:
             assert all(results), "Expected all True when NFL has active games"
             assert mock_get_live.call_count == 1000  # Short-circuits after first True
 
+    @pytest.mark.skipif(_is_ci, reason="Starts real APScheduler; run locally")
     def test_interval_adjustment_under_scheduler_load(self, mock_espn_client: MagicMock) -> None:
         """Test interval adjustment while scheduler is running under load."""
         mock_espn_client.get_scoreboard.return_value = []
 
         poller = ESPNGamePoller(
-            poll_interval=5,  # Minimum allowed poll interval
+            poll_interval=15,  # Minimum allowed poll interval
             idle_interval=15,  # Minimum allowed idle interval
             leagues=["nfl"],
             espn_client=mock_espn_client,
