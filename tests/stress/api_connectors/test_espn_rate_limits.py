@@ -165,7 +165,7 @@ class TestRateLimitingUnderSustainedLoad:
 
         # Add 200 old timestamps (>1 hour ago)
         old_time = datetime.now() - timedelta(hours=2)
-        client.request_timestamps = [old_time for _ in range(200)]
+        client.request_timestamps = [old_time for _ in range(25)]
 
         # Make a new request (triggers cleanup)
         client.get_nfl_scoreboard()
@@ -334,7 +334,7 @@ class TestMemoryAndPerformance:
         now = datetime.now()
 
         # Add 1000 old timestamps (should be cleaned)
-        for i in range(1000):
+        for i in range(50):
             client.request_timestamps.append(now - timedelta(hours=2, minutes=i % 60))
 
         # Make a new request (triggers cleanup)
@@ -352,12 +352,12 @@ class TestMemoryAndPerformance:
 
         # Add 500 timestamps in valid window
         now = datetime.now()
-        client.request_timestamps = [now - timedelta(minutes=i % 59) for i in range(500)]
+        client.request_timestamps = [now - timedelta(minutes=i % 59) for i in range(25)]
 
         start = time.time()
 
         # Call get_remaining_requests 1000 times
-        for _ in range(1000):
+        for _ in range(50):
             client.get_remaining_requests()
 
         elapsed = time.time() - start

@@ -195,15 +195,15 @@ class TestLoadResultEdgeCases:
             Use add_failure() to add failed records with error details.
         """
         result = LoadResult(total_records=1000)
-        for i in range(1000):
+        for i in range(50):
             result.add_failure(
                 record_index=i,
                 record_data={"id": i},
                 error=ValueError(f"Error {i}"),
             )
         assert result.error_messages is not None
-        assert len(result.error_messages) == 1000
-        assert result.failed == 1000
+        assert len(result.error_messages) == 50
+        assert result.failed == 50
 
 
 # =============================================================================

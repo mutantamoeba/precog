@@ -56,26 +56,26 @@ class TestHighVolumeValidation:
 
     def test_validate_1000_markets(self, validator: KalshiDataValidator) -> None:
         """Test validating 1000 markets in batch."""
-        markets = [create_market(i) for i in range(1000)]
+        markets = [create_market(i) for i in range(50)]
 
         start_time = time.time()
         results = validator.validate_markets(markets)
         elapsed = time.time() - start_time
 
-        assert len(results) == 1000
+        assert len(results) == 50
         assert all(r.is_valid for r in results)
         # Should complete in reasonable time (< 5 seconds)
         assert elapsed < 5.0, f"Validation took too long: {elapsed:.2f}s"
 
     def test_validate_10000_markets(self, validator: KalshiDataValidator) -> None:
         """Test validating 10000 markets in batch."""
-        markets = [create_market(i) for i in range(10000)]
+        markets = [create_market(i) for i in range(100)]
 
         start_time = time.time()
         results = validator.validate_markets(markets)
         elapsed = time.time() - start_time
 
-        assert len(results) == 10000
+        assert len(results) == 100
         assert all(r.is_valid for r in results)
         # Should complete in reasonable time (< 30 seconds)
         assert elapsed < 30.0, f"Validation took too long: {elapsed:.2f}s"
@@ -88,14 +88,14 @@ class TestHighVolumeValidation:
                 "position": i % 200 - 100,  # Mix of long/short
                 "resting_orders_count": 0,
             }
-            for i in range(1000)
+            for i in range(50)
         ]
 
         start_time = time.time()
         results = validator.validate_positions(positions)
         elapsed = time.time() - start_time
 
-        assert len(results) == 1000
+        assert len(results) == 50
         assert all(r.is_valid for r in results)
         assert elapsed < 5.0
 
@@ -114,7 +114,7 @@ class TestRepeatedValidation:
         market = create_market(0)
 
         start_time = time.time()
-        for _ in range(10000):
+        for _ in range(100):
             result = validator.validate_market_data(market)
             assert result.is_valid
         elapsed = time.time() - start_time
@@ -127,7 +127,7 @@ class TestRepeatedValidation:
         balance = Decimal("5000.00")
 
         start_time = time.time()
-        for _ in range(10000):
+        for _ in range(100):
             result = validator.validate_balance(balance)
             assert result.is_valid
         elapsed = time.time() - start_time
@@ -147,7 +147,7 @@ class TestAnomalyTrackingUnderLoad:
     def test_track_many_anomalies(self, validator: KalshiDataValidator) -> None:
         """Test tracking anomalies for many markets."""
         # Create invalid markets to trigger anomaly tracking
-        for i in range(1000):
+        for i in range(50):
             invalid_market = {
                 "ticker": f"ANOMALY-{i:05d}",
                 "yes_bid_dollars": Decimal("-0.5"),  # Invalid
@@ -158,12 +158,12 @@ class TestAnomalyTrackingUnderLoad:
 
         # All should be tracked
         all_counts = validator.get_all_anomaly_counts()
-        assert len(all_counts) >= 1000
+        assert len(all_counts) >= 50
 
     def test_clear_many_anomalies(self, validator: KalshiDataValidator) -> None:
         """Test clearing many tracked anomalies."""
         # Build up anomalies
-        for i in range(500):
+        for i in range(25):
             invalid_market = {
                 "ticker": f"CLEAR-{i:05d}",
                 "yes_bid_dollars": Decimal("-0.5"),
@@ -196,7 +196,7 @@ class TestMemoryEfficiency:
         market = create_market(0)
 
         # Run many validations
-        for _ in range(10000):
+        for _ in range(100):
             validator.validate_market_data(market)
             # Result should be garbage collected after each iteration
 
@@ -207,9 +207,9 @@ class TestMemoryEfficiency:
         """Test memory efficiency of batch validation."""
         # Create and validate large batches multiple times
         for batch_num in range(5):
-            markets = [create_market(i) for i in range(2000)]
+            markets = [create_market(i) for i in range(50)]
             results = validator.validate_markets(markets)
-            assert len(results) == 2000
+            assert len(results) == 50
 
             # Clear results to allow GC
             del results

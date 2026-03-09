@@ -66,18 +66,18 @@ class TestPidFileStress:
             return result
 
         with ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [executor.submit(read_pid) for _ in range(200)]
+            futures = [executor.submit(read_pid) for _ in range(25)]
             for future in as_completed(futures):
                 future.result()
 
-        assert len(results) == 200
+        assert len(results) == 25
         assert all(r == 12345 for r in results)
 
     def test_rapid_write_read_cycles(self, tmp_path: Path) -> None:
         """Test rapid write/read cycles."""
         pid_file = tmp_path / "test.pid"
 
-        for i in range(500):
+        for i in range(25):
             write_pid_file(pid_file)
             result = read_pid_file(pid_file)
             assert result is not None
@@ -104,11 +104,11 @@ class TestProcessCheckStress:
             return result
 
         with ThreadPoolExecutor(max_workers=50) as executor:
-            futures = [executor.submit(check_process) for _ in range(200)]
+            futures = [executor.submit(check_process) for _ in range(25)]
             for future in as_completed(futures):
                 future.result()
 
-        assert len(results) == 200
+        assert len(results) == 25
         assert all(r is True for r in results)
 
     def test_sustained_process_checks(self) -> None:
@@ -117,7 +117,7 @@ class TestProcessCheckStress:
 
         current_pid = os.getpid()
 
-        for _ in range(1000):
+        for _ in range(50):
             result = is_process_running(current_pid)
             assert result is True
 

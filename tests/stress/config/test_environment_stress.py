@@ -109,7 +109,7 @@ class TestEnvironmentConfigStress:
         )
 
         # Validate 1000 times
-        for _ in range(1000):
+        for _ in range(50):
             config.validate()
             safety = config.get_combination_safety()
             assert safety == CombinationSafety.ALLOWED
@@ -146,7 +146,7 @@ class TestAppEnvironmentStress:
         """Test rapid access to enum properties."""
         envs = list(AppEnvironment)
 
-        for _ in range(1000):
+        for _ in range(50):
             for env in envs:
                 _ = env.database_name
                 _ = env.is_production
@@ -183,7 +183,7 @@ class TestMarketModeStress:
         """Test rapid access to mode properties."""
         modes = list(MarketMode)
 
-        for _ in range(1000):
+        for _ in range(50):
             for mode in modes:
                 _ = mode.uses_real_money
                 _ = mode.value

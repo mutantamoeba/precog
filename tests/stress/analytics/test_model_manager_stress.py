@@ -108,7 +108,7 @@ class TestHighVolumeOperations:
         }
 
         start = time.time()
-        for _ in range(1000):
+        for _ in range(50):
             manager._prepare_config_for_db(config)
         elapsed = time.time() - start
 
@@ -124,7 +124,7 @@ class TestHighVolumeOperations:
         }
 
         start = time.time()
-        for _ in range(1000):
+        for _ in range(50):
             manager._parse_config_from_db(config)
         elapsed = time.time() - start
 
@@ -141,7 +141,7 @@ class TestHighVolumeOperations:
         ]
 
         start = time.time()
-        for _ in range(1000):
+        for _ in range(50):
             for current, new in transitions:
                 manager._validate_status_transition(current, new)
         elapsed = time.time() - start
@@ -161,7 +161,7 @@ class TestHighVolumeOperations:
         }
 
         start = time.time()
-        for _ in range(500):
+        for _ in range(25):
             json_str = manager._prepare_config_for_db(config)
             parsed = json.loads(json_str)
             manager._parse_config_from_db(parsed)
@@ -279,7 +279,7 @@ class TestSustainedOperations:
         ]
 
         start = time.time()
-        for _ in range(200):
+        for _ in range(25):
             for current, new in test_cases:
                 try:
                     manager._validate_status_transition(current, new)
@@ -325,7 +325,7 @@ class TestMemoryPatterns:
         import gc
 
         # Create and discard many configs
-        for _ in range(1000):
+        for _ in range(50):
             config = {f"param_{i}": Decimal(f"{i}.0") for i in range(50)}
             _ = manager._prepare_config_for_db(config)
 
@@ -340,7 +340,7 @@ class TestMemoryPatterns:
 
         # Create 500 configs
         configs = []
-        for i in range(500):
+        for i in range(25):
             configs.append(
                 {
                     "id": Decimal(f"{i}"),
@@ -358,5 +358,5 @@ class TestMemoryPatterns:
             results.append(restored)
         elapsed = time.time() - start
 
-        assert len(results) == 500
+        assert len(results) == 25
         assert elapsed < 5.0

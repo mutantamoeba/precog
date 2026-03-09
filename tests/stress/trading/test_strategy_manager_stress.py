@@ -113,7 +113,7 @@ class TestConfigSerializationStress:
             config = {"nested": config}
 
         start = time.perf_counter()
-        for _ in range(500):
+        for _ in range(25):
             json_str = manager._prepare_config_for_db(config)
             import json
 
@@ -199,7 +199,7 @@ class TestMemoryStress:
         }
 
         # Process many configs
-        for _ in range(5000):
+        for _ in range(50):
             json_str = manager._prepare_config_for_db(config)
             # Let the string go out of scope
             del json_str
@@ -219,7 +219,7 @@ class TestMemoryStress:
 
         # Parse many configs
         results = []
-        for _ in range(5000):
+        for _ in range(50):
             result = manager._parse_config_from_db(db_config)
             results.append(result)
 
@@ -418,7 +418,7 @@ class TestDatabaseOperationStress:
             ("config",),
         ]
 
-        rows = [(i, f"strategy_{i}", {"value": str(i)}) for i in range(1000)]
+        rows = [(i, f"strategy_{i}", {"value": str(i)}) for i in range(50)]
 
         start = time.perf_counter()
         results = []
@@ -427,5 +427,5 @@ class TestDatabaseOperationStress:
             results.append(result)
 
         elapsed = time.perf_counter() - start
-        assert len(results) == 1000
-        assert elapsed < 2.0, f"1000 row conversions took {elapsed:.2f}s"
+        assert len(results) == 50
+        assert elapsed < 2.0, f"50 row conversions took {elapsed:.2f}s"

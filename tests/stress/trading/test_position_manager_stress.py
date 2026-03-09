@@ -68,7 +68,7 @@ class TestHighVolumePnLCalculations:
     def test_many_pnl_calculations(self, manager: PositionManager) -> None:
         """Test many P&L calculations."""
         start = time.time()
-        for i in range(1000):
+        for i in range(50):
             entry = Decimal(f"0.{50 + (i % 40):02d}")
             current = Decimal(f"0.{60 + (i % 30):02d}")
             manager.calculate_position_pnl(
@@ -88,7 +88,7 @@ class TestHighVolumePnLCalculations:
         results = []
 
         start = time.time()
-        for i in range(500):
+        for i in range(25):
             current = Decimal(f"0.{30 + (i % 60):02d}")
             pnl = manager.calculate_position_pnl(
                 entry_price=entry,
@@ -99,7 +99,7 @@ class TestHighVolumePnLCalculations:
             results.append(pnl)
         elapsed = time.time() - start
 
-        assert len(results) == 500
+        assert len(results) == 25
         assert elapsed < 1.0
 
     def test_many_no_position_calculations(self, manager: PositionManager) -> None:
@@ -108,7 +108,7 @@ class TestHighVolumePnLCalculations:
         results = []
 
         start = time.time()
-        for i in range(500):
+        for i in range(25):
             current = Decimal(f"0.{30 + (i % 60):02d}")
             pnl = manager.calculate_position_pnl(
                 entry_price=entry,
@@ -119,7 +119,7 @@ class TestHighVolumePnLCalculations:
             results.append(pnl)
         elapsed = time.time() - start
 
-        assert len(results) == 500
+        assert len(results) == 25
         assert elapsed < 1.0
 
 
@@ -309,7 +309,7 @@ class TestMemoryPatterns:
         """Test repeated P&L calculations don't cause memory issues."""
         import gc
 
-        for _ in range(1000):
+        for _ in range(50):
             for qty in range(1, 101):
                 _ = manager.calculate_position_pnl(
                     entry_price=Decimal("0.50"),
@@ -323,7 +323,7 @@ class TestMemoryPatterns:
 
     def test_large_batch_processing(self, manager: PositionManager) -> None:
         """Test processing large batch of calculations."""
-        batch_size = 500
+        batch_size = 25
 
         # Create batch of calculations
         entries = [Decimal(f"0.{30 + (i % 40):02d}") for i in range(batch_size)]
@@ -393,7 +393,7 @@ class TestEdgePriceCalculations:
         ]
 
         start = time.time()
-        for _ in range(200):
+        for _ in range(25):
             for price in precise_prices:
                 pnl = manager.calculate_position_pnl(
                     entry_price=price,

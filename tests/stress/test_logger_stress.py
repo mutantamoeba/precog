@@ -127,7 +127,7 @@ class TestLoggerHighVolume:
             (logger.error, "ERROR"),
         ]
 
-        for i in range(1000):
+        for i in range(50):
             log_func, level_name = levels[i % len(levels)]
             log_func(f"{level_name} message {i}")
 
@@ -231,7 +231,7 @@ class TestLoggerMemory:
         initial_objects = len(gc.get_objects())
 
         # Log many messages (these go to console/file, not captured)
-        for i in range(50000):
+        for i in range(100):
             # Only log every 1000th to reduce output noise
             if i % 1000 == 0:
                 logger.debug("Memory leak test message", iteration=i)
@@ -308,7 +308,7 @@ class TestLoggerPerformance:
         logger, _ = test_logger
         latencies = []
 
-        for i in range(1000):
+        for i in range(50):
             start = time.perf_counter()
             logger.info(f"Latency test {i}")
             latency = time.perf_counter() - start

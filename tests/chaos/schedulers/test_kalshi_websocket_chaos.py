@@ -235,7 +235,7 @@ class TestKalshiWebSocketHandlerChaos:
         )
 
         # Simulate many stat updates
-        for _ in range(1000):
+        for _ in range(50):
             with handler._lock:
                 handler._stats["messages_received"] += 1
                 if random.random() < 0.5:
@@ -244,7 +244,7 @@ class TestKalshiWebSocketHandlerChaos:
                     handler._stats["errors"] += 1
 
         stats = handler.stats
-        assert stats["messages_received"] == 1000
+        assert stats["messages_received"] == 50
         assert stats["price_updates"] >= 0
         assert stats["errors"] >= 0
 

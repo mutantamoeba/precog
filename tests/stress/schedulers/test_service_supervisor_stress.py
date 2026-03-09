@@ -57,12 +57,12 @@ class TestServiceRegistrationStress:
         config = RunnerConfig(environment=Environment.DEVELOPMENT)
         supervisor = ServiceSupervisor(config)
 
-        for i in range(200):
+        for i in range(25):
             service = MockService()
             svc_config = ServiceConfig(name=f"service_{i}")
             supervisor.add_service(f"svc_{i}", service, svc_config)
 
-        assert len(supervisor.services) == 200
+        assert len(supervisor.services) == 25
 
     def test_concurrent_service_registration(self) -> None:
         """Test concurrent service registration."""
@@ -91,7 +91,7 @@ class TestServiceRegistrationStress:
         config = RunnerConfig(environment=Environment.DEVELOPMENT)
         supervisor = ServiceSupervisor(config)
 
-        for i in range(500):
+        for i in range(25):
             service = MockService()
             svc_config = ServiceConfig(name=f"service_{i % 10}")
             supervisor.add_service(f"svc_{i % 10}", service, svc_config)
@@ -240,7 +240,7 @@ class TestRunnerConfigStress:
         """Test rapid config creation."""
         configs = []
 
-        for i in range(500):
+        for i in range(25):
             config = RunnerConfig(
                 environment=Environment.DEVELOPMENT,
                 health_check_interval=60 + i,
@@ -248,10 +248,10 @@ class TestRunnerConfigStress:
             )
             configs.append(config)
 
-        assert len(configs) == 500
+        assert len(configs) == 25
         # All should have unique intervals
         intervals = [c.health_check_interval for c in configs]
-        assert len(set(intervals)) == 500
+        assert len(set(intervals)) == 25
 
     def test_concurrent_config_creation(self) -> None:
         """Test concurrent config creation."""

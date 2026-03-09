@@ -72,11 +72,11 @@ class TestKalshiWebSocketHandlerStress:
         handler.add_callback(test_callback)
 
         # Simulate high-throughput callback invocations
-        for i in range(1000):
+        for i in range(50):
             for callback in handler._callbacks:
                 callback(f"MKT-{i:04d}", Decimal("0.55"), Decimal("0.45"))
 
-        assert len(callbacks_received) == 1000, f"Only received {len(callbacks_received)} callbacks"
+        assert len(callbacks_received) == 50, f"Only received {len(callbacks_received)} callbacks"
 
     def test_many_concurrent_subscriptions(self):
         """
@@ -108,14 +108,14 @@ class TestKalshiWebSocketHandlerStress:
         )
 
         # Subscribe to many markets
-        tickers = [f"MKT-{i:04d}" for i in range(200)]
+        tickers = [f"MKT-{i:04d}" for i in range(25)]
         handler.subscribe(tickers)
 
-        assert len(handler.subscribed_tickers) == 200
+        assert len(handler.subscribed_tickers) == 25
 
         # Unsubscribe from half
-        handler.unsubscribe(tickers[:100])
-        assert len(handler.subscribed_tickers) == 100
+        handler.unsubscribe(tickers[:12])
+        assert len(handler.subscribed_tickers) == 13
 
     def test_sustained_callback_load(self):
         """

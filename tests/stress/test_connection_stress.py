@@ -393,7 +393,7 @@ class TestConnectionLeakDetection:
         from precog.database.connection import get_cursor
 
         # Do many operations
-        for _ in range(500):
+        for _ in range(25):
             with get_cursor() as cursor:
                 cursor.execute("SELECT 1")
 

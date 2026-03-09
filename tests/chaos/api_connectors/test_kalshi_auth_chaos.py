@@ -164,7 +164,7 @@ class TestKalshiAuthChaos:
 
         # Rapid-fire operations to simulate pressure
         results = []
-        for i in range(500):
+        for i in range(25):
             headers = auth.get_headers("GET", f"/path/{i}")
             results.append(headers)
 

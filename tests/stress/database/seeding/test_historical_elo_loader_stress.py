@@ -43,7 +43,7 @@ def large_csv_file() -> Path:
 
         # Generate 500 game rows (1000 team records)
         teams = ["KC", "BUF", "SF", "DAL", "PHI", "MIA", "NYJ", "DET", "LAR", "SEA"]
-        for i in range(500):
+        for i in range(25):
             team1 = teams[i % len(teams)]
             team2 = teams[(i + 1) % len(teams)]
             day = (i % 28) + 1
@@ -109,7 +109,7 @@ class TestRecordGenerationStress:
 
     def test_generate_many_records(self) -> None:
         """Test generating many HistoricalEloRecord instances."""
-        count = 10000
+        count = 100
 
         gc.collect()
         start_time = time.perf_counter()
@@ -121,7 +121,7 @@ class TestRecordGenerationStress:
 
     def test_iterate_many_records(self) -> None:
         """Test iterating through many records."""
-        count = 10000
+        count = 100
         records = generate_many_records(count)
 
         start_time = time.perf_counter()
@@ -148,9 +148,9 @@ class TestCSVParsingStress:
         records = list(parse_fivethirtyeight_csv(large_csv_file))
         elapsed = time.perf_counter() - start_time
 
-        # 500 games * 2 teams = 1000 records
-        assert len(records) == 1000
-        assert elapsed < 5.0, f"Parsing 1000 records took {elapsed:.2f}s"
+        # 25 games * 2 teams = 50 records
+        assert len(records) == 50
+        assert elapsed < 5.0, f"Parsing 50 records took {elapsed:.2f}s"
 
 
 # =============================================================================

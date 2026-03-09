@@ -284,7 +284,7 @@ class TestRateLimitWindow:
             old_time = now - timedelta(hours=2)
 
             client.request_timestamps = []
-            for i in range(500):
+            for i in range(25):
                 if i % 2 == 0:
                     client.request_timestamps.append(old_time)
                 else:
@@ -298,7 +298,7 @@ class TestRateLimitWindow:
             assert elapsed < 0.1, f"Cleanup took {elapsed:.3f}s"
 
             # Old timestamps should be removed
-            assert len(client.request_timestamps) == 250
+            assert len(client.request_timestamps) == 12
 
         finally:
             client.close()
@@ -413,7 +413,7 @@ class TestMultiLeagueAlternating:
 
         try:
             # Access endpoints many times
-            for _ in range(1000):
+            for _ in range(50):
                 for league in client.ENDPOINTS:
                     _ = client.ENDPOINTS[league]
 

@@ -17,7 +17,7 @@ A modular Python application that identifies and executes positive expected valu
 
 ### Tech Stack
 
-- **Language:** Python 3.12
+- **Language:** Python 3.14 (3.12 kept for backward compat in CI)
 - **Database:** PostgreSQL 15+ with `DECIMAL(10,4)` precision
 - **ORM:** SQLAlchemy + psycopg2
 - **Testing:** pytest (8 test types)
