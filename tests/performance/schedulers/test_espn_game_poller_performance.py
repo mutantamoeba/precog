@@ -97,7 +97,7 @@ class TestInitializationLatency:
                 start = time.perf_counter()
                 _ = ESPNGamePoller(
                     leagues=["nfl", "nba"],
-                    poll_interval=10 + i % 50,
+                    poll_interval=15 + i % 50,
                     idle_interval=30 + i % 60,
                 )
                 elapsed = time.perf_counter() - start
@@ -309,7 +309,7 @@ class TestStartStopLatency:
 
         for _ in range(20):
             poller = ESPNGamePoller(
-                poll_interval=5,
+                poll_interval=15,
                 leagues=["nfl"],
                 espn_client=mock_espn_client,
             )
@@ -331,7 +331,7 @@ class TestStartStopLatency:
 
         for _ in range(20):
             poller = ESPNGamePoller(
-                poll_interval=5,
+                poll_interval=15,
                 leagues=["nfl"],
                 espn_client=mock_espn_client,
             )
