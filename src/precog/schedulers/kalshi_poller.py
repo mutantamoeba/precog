@@ -25,7 +25,7 @@ Polling Frequency Considerations:
     - Kalshi Basic tier: 20 requests/second (1,200 req/min)
     - Reference: https://docs.kalshi.com/getting_started/rate_limits
     - fetch_all_markets() handles pagination internally (~25 requests per poll)
-    - 15-second intervals with 3 series uses ~100 req/min (well under 1,200 limit)
+    - 15-second intervals with 4 series uses ~120 req/min (well under 1,200 limit)
     - Rate limiter (token bucket) enforces compliance automatically
 
 SCD Type 2 for Market Prices:
@@ -102,12 +102,17 @@ class KalshiMarketPoller(BasePoller):
     # Class-level configuration
     MIN_POLL_INTERVAL: ClassVar[int] = 5  # seconds
     DEFAULT_POLL_INTERVAL: ClassVar[int] = 15  # seconds (balanced for near real-time)
-    DEFAULT_SERIES_TICKERS: ClassVar[list[str]] = ["KXNFLGAME", "KXNCAAFGAME", "KXNBAGAME"]
+    DEFAULT_SERIES_TICKERS: ClassVar[list[str]] = [
+        "KXNFLGAME",
+        "KXNCAAFGAME",
+        "KXNBAGAME",
+        "KXNHLGAME",
+    ]
     # Note: pagination is handled internally by fetch_all_markets()
 
     # Rate limit guidance (Kalshi Basic tier: 20 req/sec = 1,200 req/min):
-    # - Each poll uses ~25 requests (series sync + pagination across 3 series)
-    # - 15 second interval = ~100 req/min (8% of limit, very safe)
+    # - Each poll uses ~30 requests (series sync + pagination across 4 series)
+    # - 15 second interval = ~120 req/min (10% of limit, very safe)
     # - 5 second interval = ~300 req/min (25% of limit, safe)
     # - Token bucket rate limiter enforces compliance automatically
     # - Reference: https://docs.kalshi.com/getting_started/rate_limits

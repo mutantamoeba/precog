@@ -120,7 +120,7 @@ class ESPNGamePoller(BasePoller):
     MIN_POLL_INTERVAL: ClassVar[int] = 15  # seconds (floor to protect ESPN budget)
     DEFAULT_POLL_INTERVAL: ClassVar[int] = 30  # seconds (live games; ~2,160 req/day active)
     DEFAULT_IDLE_INTERVAL: ClassVar[int] = 300  # seconds (no games; ~648 req/day idle)
-    DEFAULT_LEAGUES: ClassVar[list[str]] = ["nfl", "ncaaf", "nba"]
+    DEFAULT_LEAGUES: ClassVar[list[str]] = ["nfl", "ncaaf", "nba", "nhl"]
 
     # Game status mappings
     LIVE_STATUSES: ClassVar[set[str]] = {"in", "in_progress", "halftime"}
@@ -141,7 +141,7 @@ class ESPNGamePoller(BasePoller):
         Initialize the ESPNGamePoller.
 
         Args:
-            leagues: List of leagues to poll. Defaults to NFL and NCAAF.
+            leagues: List of leagues to poll. Defaults to NFL, NCAAF, NBA, and NHL.
             poll_interval: Seconds between polls when games are active.
             idle_interval: Seconds between checks when no games active.
             espn_client: Optional ESPNClient instance (for testing/mocking).
