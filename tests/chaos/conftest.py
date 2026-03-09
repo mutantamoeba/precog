@@ -1,12 +1,13 @@
-"""Chaos test configuration — auto-skip in CI environments.
+"""Chaos test configuration — selective CI skip for poller tests only.
 
-Chaos tests inject failures, corrupt state, and stress error recovery paths
-using threading and concurrent operations that can hang or timeout in
-resource-constrained CI environments (Issue #292).
-This conftest auto-skips ALL chaos tests when CI=true or GITHUB_ACTIONS=true,
-so individual test files don't need their own skip guards.
+Most chaos tests (25 of 27 files) are CI-safe: they use mocked dependencies
+and complete quickly. Only 2 files start real APScheduler BackgroundSchedulers
+with chaos patterns (rapid start/stop, fault injection), which hang in CI.
 
-Run locally: PRECOG_ENV=test python -m pytest tests/chaos/ -v
+This conftest selectively skips those 2 files in CI while allowing the other
+25 files to run, giving us actual chaos test coverage in CI.
+
+Run all locally: PRECOG_ENV=test python -m pytest tests/chaos/ -v
 """
 
 import os
@@ -14,17 +15,26 @@ import os
 import pytest
 
 _is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
+
+# Files that start real APScheduler BackgroundSchedulers and cannot run in CI.
+# These use rapid start/stop cycles and real scheduler timing dependencies.
+_CI_UNSAFE_FILES = {
+    "test_base_poller_chaos.py",
+    "test_espn_game_poller_chaos.py",
+}
+
 _CI_SKIP_REASON = (
-    "Chaos tests skip in CI — they can hang in resource-constrained environments. "
-    "Run locally: pytest tests/chaos/ -v"
+    "Skipped in CI: starts real APScheduler BackgroundScheduler with chaos patterns. "
+    "Run locally: pytest tests/chaos/schedulers/ -v"
 )
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
-    """Auto-skip all chaos tests when running in CI."""
+    """Skip only CI-unsafe chaos tests (real scheduler tests) in CI."""
     if not _is_ci:
         return
 
     skip_marker = pytest.mark.skip(reason=_CI_SKIP_REASON)
     for item in items:
-        item.add_marker(skip_marker)
+        if item.fspath.basename in _CI_UNSAFE_FILES:
+            item.add_marker(skip_marker)

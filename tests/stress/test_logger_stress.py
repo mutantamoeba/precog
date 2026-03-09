@@ -35,7 +35,6 @@ CI Strategy (Issue #168):
 
 import gc
 import logging
-import os
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -43,17 +42,9 @@ from io import StringIO
 
 import pytest
 
-# CI environment detection - skip stress tests in CI
-_is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
-_CI_SKIP_REASON = (
-    "Stress tests skip in CI - they can hang in resource-constrained environments. "
-    "Run locally: pytest tests/stress/test_logger_stress.py -v"
-)
-
 pytestmark = [
     pytest.mark.stress,
     pytest.mark.slow,
-    pytest.mark.skipif(_is_ci, reason=_CI_SKIP_REASON),
 ]
 
 
