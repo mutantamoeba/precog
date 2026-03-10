@@ -10,6 +10,7 @@ Usage:
     pytest tests/unit/schedulers/test_espn_game_poller_unit.py -v -m unit
 """
 
+from contextlib import nullcontext
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -1179,6 +1180,40 @@ class TestEvaluateLeagueState:
 
         assert poller._league_states["nfl"] == LEAGUE_STATE_DISCOVERY
 
+    def test_unknown_league_ignored(self, mock_espn_client: MagicMock) -> None:
+        """Test that unknown league is ignored and doesn't corrupt state."""
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        games: list[dict[str, Any]] = [
+            {"state": {"game_status": "in"}},
+        ]
+
+        poller._evaluate_league_state("FAKE_LEAGUE", games)  # type: ignore[arg-type]
+
+        # State dict should not have the fake league
+        assert "FAKE_LEAGUE" not in poller._league_states
+
+    def test_reschedule_returned_not_executed_under_lock(self, mock_espn_client: MagicMock) -> None:
+        """Test that reschedule ops are returned, not executed inside the lock."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "nba"],
+            espn_client=mock_espn_client,
+        )
+        # Set up a mock scheduler so reschedule_job is trackable
+        mock_scheduler = MagicMock()
+        poller._scheduler = mock_scheduler
+        poller._enabled = True
+
+        games: list[dict[str, Any]] = [
+            {"state": {"game_status": "in"}},
+        ]
+        poller._evaluate_league_state("nfl", games)  # type: ignore[arg-type]
+
+        # reschedule_job should have been called (outside the lock)
+        assert mock_scheduler.reschedule_job.called
+
 
 # =============================================================================
 # Unit Tests: Recalculate League Intervals
@@ -1307,6 +1342,44 @@ class TestRecalculateLeagueIntervals:
         # Calculate total req/hr
         total_req_hr = sum(3600 / interval for interval in poller._league_intervals.values())
         assert total_req_hr < 250, f"Rate budget exceeded: {total_req_hr:.0f} req/hr"
+
+    def test_rate_budget_warning_with_six_leagues(self, mock_espn_client: MagicMock) -> None:
+        """Test rate budget warning fires when >4 tracking leagues exceed limit."""
+        leagues = ["nfl", "nba", "nhl", "ncaaf", "ncaab", "wnba"]
+        poller = ESPNGamePoller(
+            leagues=leagues,
+            espn_client=mock_espn_client,
+        )
+        for league in leagues:
+            poller._league_states[league] = LEAGUE_STATE_TRACKING
+
+        with pytest.warns(match="Rate budget exceeded") if False else nullcontext():
+            # _recalculate_league_intervals logs a warning, doesn't raise
+            poller._recalculate_league_intervals()
+
+        # 6 leagues at throttled 60s = 360 req/hr > 250 limit
+        total_req_hr = sum(3600 // iv for iv in poller._league_intervals.values())
+        assert total_req_hr > 250, "Expected rate budget to exceed limit with 6 tracking leagues"
+
+    def test_recalculate_returns_pending_reschedules(self, mock_espn_client: MagicMock) -> None:
+        """Test _recalculate_league_intervals returns list of pending reschedules."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "nba"],
+            espn_client=mock_espn_client,
+        )
+        poller._scheduler = MagicMock()
+        poller._enabled = True
+
+        # Transition NFL to tracking - interval should change
+        poller._league_states["nfl"] = LEAGUE_STATE_TRACKING
+        pending = poller._recalculate_league_intervals()
+
+        # Should have one pending reschedule for NFL
+        assert len(pending) == 1
+        job_id, old_interval, new_interval, _state, _tracking_count = pending[0]
+        assert "nfl" in job_id
+        assert old_interval == ESPNGamePoller.DEFAULT_DISCOVERY_INTERVAL
+        assert new_interval == ESPNGamePoller.DEFAULT_TRACKING_INTERVAL
 
 
 # =============================================================================

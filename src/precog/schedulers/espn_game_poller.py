@@ -51,7 +51,7 @@ Related ADR: ADR-100 (Service Supervisor Pattern)
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, ClassVar
 
@@ -322,13 +322,16 @@ class ESPNGamePoller(BasePoller):
 
             if self.per_league_polling:
                 # Per-league mode: create one job per league with staggered starts
+                now = datetime.now(UTC)
                 for idx, league in enumerate(self.leagues):
                     initial_interval = self.DEFAULT_DISCOVERY_INTERVAL
                     job_id = self._league_job_id(league)
+                    stagger_seconds = idx * self.LEAGUE_STAGGER_OFFSET
+                    start_time = now + timedelta(seconds=initial_interval + stagger_seconds)
 
                     self._scheduler.add_job(
                         self._poll_league_wrapper,
-                        IntervalTrigger(seconds=initial_interval),
+                        IntervalTrigger(seconds=initial_interval, start_date=start_time),
                         id=job_id,
                         name=f"ESPN {league.upper()} Poll",
                         replace_existing=True,
@@ -339,7 +342,7 @@ class ESPNGamePoller(BasePoller):
                         "Added per-league job: %s (interval=%ds, stagger=%ds)",
                         league.upper(),
                         initial_interval,
-                        idx * self.LEAGUE_STAGGER_OFFSET,
+                        stagger_seconds,
                     )
             else:
                 # Legacy single-job mode: one job polls all leagues
@@ -350,6 +353,14 @@ class ESPNGamePoller(BasePoller):
                     name=self._get_job_name(),
                     replace_existing=True,
                 )
+
+            # Run initial poll BEFORE starting the scheduler to avoid
+            # racing between manual polls and scheduled jobs.
+            if self.per_league_polling:
+                for league in self.leagues:
+                    self._poll_league_wrapper(league)
+            else:
+                self._poll_wrapper()
 
             self._scheduler.start()
             self._enabled = True
@@ -375,13 +386,6 @@ class ESPNGamePoller(BasePoller):
 
         # Hook for subclass initialization
         self._on_start()
-
-        # Run initial poll immediately for all leagues
-        if self.per_league_polling:
-            for league in self.leagues:
-                self._poll_league_wrapper(league)
-        else:
-            self._poll_wrapper()
 
     def _on_stop(self) -> None:
         """Clean up ESPN client on stop."""
@@ -430,11 +434,13 @@ class ESPNGamePoller(BasePoller):
             # Poll the league and get games for state evaluation
             games = self.espn_client.get_scoreboard(league)
             games_updated = 0
+            sync_errors = 0
             for game in games:
                 try:
                     if self._sync_game_to_db(game, league):
                         games_updated += 1
                 except Exception as e:
+                    sync_errors += 1
                     event_id = game.get("metadata", {}).get("espn_event_id", "unknown")
                     logger.error("Error syncing game %s: %s", event_id, e)
 
@@ -442,6 +448,7 @@ class ESPNGamePoller(BasePoller):
                 self._stats["polls_completed"] += 1
                 self._stats["items_fetched"] += len(games)
                 self._stats["items_updated"] += games_updated
+                self._stats["errors"] += sync_errors
                 self._stats["last_poll"] = start_time.isoformat()
 
             elapsed = (datetime.now(UTC) - start_time).total_seconds()
@@ -492,8 +499,14 @@ class ESPNGamePoller(BasePoller):
         """
         has_live = self._scoreboard_has_live_games(games)
 
+        pending_reschedules: list[tuple[str, int, int, str, int]] = []
+
         with self._lock:
-            old_state = self._league_states.get(league, LEAGUE_STATE_DISCOVERY)
+            if league not in self._league_states:
+                logger.warning("Unknown league '%s' in state evaluation, ignoring", league)
+                return
+
+            old_state = self._league_states[league]
 
             new_state = LEAGUE_STATE_TRACKING if has_live else LEAGUE_STATE_DISCOVERY
 
@@ -509,8 +522,28 @@ class ESPNGamePoller(BasePoller):
                 new_state,
             )
 
-            # Recalculate all league intervals (throttling may change)
-            self._recalculate_league_intervals()
+            # Recalculate intervals and collect reschedule ops (execute outside lock)
+            pending_reschedules = self._recalculate_league_intervals()
+
+        # Execute reschedules OUTSIDE the lock to avoid deadlock with APScheduler
+        for job_id, old_interval, new_interval, state, tracking_count in pending_reschedules:
+            try:
+                if self._scheduler is None:
+                    continue
+                self._scheduler.reschedule_job(
+                    job_id,
+                    trigger=IntervalTrigger(seconds=new_interval),
+                )
+                logger.info(
+                    "Rescheduled %s: %ds -> %ds (state=%s, tracking_leagues=%d)",
+                    job_id,
+                    old_interval,
+                    new_interval,
+                    state,
+                    tracking_count,
+                )
+            except Exception as e:
+                logger.warning("Failed to reschedule %s job: %s", job_id, e)
 
     def _scoreboard_has_live_games(self, games: list[ESPNGameFull]) -> bool:
         """
@@ -529,18 +562,21 @@ class ESPNGamePoller(BasePoller):
                 return True
         return False
 
-    def _recalculate_league_intervals(self) -> None:
+    def _recalculate_league_intervals(self) -> list[tuple[str, int, int, str, int]]:
         """
         Recalculate intervals for all leagues based on current states.
 
-        Must be called with self._lock held.
+        Must be called with self._lock held. Returns pending reschedule
+        operations to be executed OUTSIDE the lock (avoids deadlock with
+        APScheduler's internal lock).
 
         When 3+ leagues are in TRACKING state simultaneously, the tracking
         interval is increased to THROTTLED_TRACKING_INTERVAL (60s) to stay
         under ESPN's 250 req/hr rate limit.
 
-        After calculating new intervals, reschedules any league jobs whose
-        intervals have changed.
+        Returns:
+            List of (job_id, old_interval, new_interval, state, tracking_count)
+            tuples for jobs that need rescheduling.
 
         Educational Note:
             Rate budget math:
@@ -560,6 +596,8 @@ class ESPNGamePoller(BasePoller):
         else:
             tracking_interval = self.DEFAULT_TRACKING_INTERVAL
 
+        pending: list[tuple[str, int, int, str, int]] = []
+
         for league in self.leagues:
             state = self._league_states.get(league, LEAGUE_STATE_DISCOVERY)
             if state == LEAGUE_STATE_TRACKING:
@@ -570,24 +608,22 @@ class ESPNGamePoller(BasePoller):
             old_interval = self._league_intervals.get(league, self.DEFAULT_DISCOVERY_INTERVAL)
             self._league_intervals[league] = new_interval
 
-            # Reschedule if interval changed
+            # Collect reschedule ops (executed outside lock by caller)
             if old_interval != new_interval and self._scheduler and self._enabled:
                 job_id = self._league_job_id(league)
-                try:
-                    self._scheduler.reschedule_job(
-                        job_id,
-                        trigger=IntervalTrigger(seconds=new_interval),
-                    )
-                    logger.info(
-                        "Rescheduled %s: %ds -> %ds (state=%s, tracking_leagues=%d)",
-                        league.upper(),
-                        old_interval,
-                        new_interval,
-                        state,
-                        tracking_count,
-                    )
-                except Exception as e:
-                    logger.warning("Failed to reschedule %s job: %s", league.upper(), e)
+                pending.append((job_id, old_interval, new_interval, state, tracking_count))
+
+        # Validate rate budget
+        total_req_hr = sum(3600 // iv for iv in self._league_intervals.values())
+        if total_req_hr > self.ESPN_RATE_LIMIT:
+            logger.warning(
+                "Rate budget exceeded: %d req/hr > %d limit (tracking=%d leagues)",
+                total_req_hr,
+                self.ESPN_RATE_LIMIT,
+                tracking_count,
+            )
+
+        return pending
 
     def get_league_states(self) -> dict[str, str]:
         """
