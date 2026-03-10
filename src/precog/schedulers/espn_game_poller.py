@@ -354,14 +354,6 @@ class ESPNGamePoller(BasePoller):
                     replace_existing=True,
                 )
 
-            # Run initial poll BEFORE starting the scheduler to avoid
-            # racing between manual polls and scheduled jobs.
-            if self.per_league_polling:
-                for league in self.leagues:
-                    self._poll_league_wrapper(league)
-            else:
-                self._poll_wrapper()
-
             self._scheduler.start()
             self._enabled = True
 
@@ -386,6 +378,15 @@ class ESPNGamePoller(BasePoller):
 
         # Hook for subclass initialization
         self._on_start()
+
+        # Run initial poll AFTER releasing the lock and starting the scheduler.
+        # _poll_league_wrapper needs self._lock, so this MUST be outside the
+        # with self._lock block above (threading.Lock is non-reentrant).
+        if self.per_league_polling:
+            for league in self.leagues:
+                self._poll_league_wrapper(league)
+        else:
+            self._poll_wrapper()
 
     def _on_stop(self) -> None:
         """Clean up ESPN client on stop."""
