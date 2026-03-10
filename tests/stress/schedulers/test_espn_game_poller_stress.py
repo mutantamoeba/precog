@@ -74,6 +74,7 @@ class TestHighVolumePolling:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Rapid poll calls
@@ -90,6 +91,7 @@ class TestHighVolumePolling:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         for _ in range(50):
@@ -116,6 +118,7 @@ class TestHighVolumePolling:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         result = poller.poll_once()
@@ -168,6 +171,7 @@ class TestMultiLeagueHighVolume:
         poller = ESPNGamePoller(
             leagues=all_leagues,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         result = poller.poll_once()
@@ -193,6 +197,7 @@ class TestStatsUnderLoad:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         stats_reads: list[dict[str, Any]] = []
@@ -217,6 +222,7 @@ class TestStatsUnderLoad:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         for i in range(50):
@@ -254,6 +260,7 @@ class TestErrorRecoveryUnderLoad:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         for _ in range(100):
@@ -270,6 +277,7 @@ class TestErrorRecoveryUnderLoad:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         for _ in range(100):
@@ -296,6 +304,7 @@ class TestConcurrentOperations:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         stop_event = threading.Event()
@@ -340,6 +349,7 @@ class TestConcurrentOperations:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         errors: list[Exception] = []
@@ -385,6 +395,7 @@ class TestSchedulerUnderLoad:
             poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         for _ in range(20):
@@ -403,6 +414,7 @@ class TestSchedulerUnderLoad:
             poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         poller.start()
@@ -434,6 +446,7 @@ class TestMemoryPressure:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Do some polls
@@ -460,6 +473,7 @@ class TestMemoryPressure:
             p = ESPNGamePoller(
                 leagues=["nfl"],
                 espn_client=mock_espn_client,
+                per_league_polling=False,
             )
             pollers.append(p)
 
@@ -487,6 +501,7 @@ class TestStatusNormalizationUnderLoad:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         statuses = ["pre", "in", "halftime", "final", "unknown", "", "POST"]
@@ -526,6 +541,7 @@ class TestAdaptivePollingStress:
             leagues=["nfl"],
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         # Don't start scheduler - just test the adjustment logic
@@ -547,6 +563,7 @@ class TestAdaptivePollingStress:
             leagues=["nfl"],
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         errors: list[Exception] = []
@@ -582,6 +599,7 @@ class TestAdaptivePollingStress:
             leagues=["nfl", "ncaaf", "nba"],
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
@@ -613,6 +631,7 @@ class TestAdaptivePollingStress:
             leagues=["nfl"],
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
@@ -638,6 +657,7 @@ class TestAdaptivePollingStress:
             leagues=["nfl"],
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         transition_count = {"active_to_idle": 0, "idle_to_active": 0}
@@ -670,7 +690,8 @@ class TestAdaptivePollingStress:
             idle_interval=60,
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            adaptive_polling=False,  # Disabled
+            adaptive_polling=False,  # Disabled,
+            per_league_polling=False,
         )
 
         with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
@@ -690,6 +711,7 @@ class TestAdaptivePollingStress:
             leagues=["nfl"],
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         intervals = []
@@ -732,6 +754,7 @@ class TestAdaptivePollingRace:
             leagues=["nfl"],
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         errors: list[Exception] = []
@@ -775,6 +798,7 @@ class TestAdaptivePollingRace:
             leagues=["nfl", "ncaaf", "nba"],
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         results = {"true_count": 0, "false_count": 0, "errors": []}
@@ -827,6 +851,7 @@ class TestAdaptivePollingRace:
             leagues=["nfl"],
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         errors: list[Exception] = []
@@ -891,6 +916,7 @@ class TestAdaptivePollingRace:
             leagues=["nfl"],
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         errors: list[Exception] = []
@@ -928,6 +954,7 @@ class TestAdaptivePollingRace:
             leagues=["nfl"],
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         transitions = {"count": 0, "errors": []}

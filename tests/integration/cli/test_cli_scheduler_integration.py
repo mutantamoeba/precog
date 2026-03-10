@@ -233,6 +233,8 @@ class TestSchedulerConfigIntegration:
         """Test scheduler uses configuration file settings.
 
         Integration: Tests config loader integration.
+        Uses --supervised so the mocked ServiceSupervisor is actually used
+        (non-supervised mode creates real pollers that make API calls).
         """
         runner = CliRunner()
 
@@ -247,7 +249,9 @@ class TestSchedulerConfigIntegration:
             mock_instance = MagicMock()
             mock_supervisor.return_value = mock_instance
 
-            result = runner.invoke(isolated_app, ["scheduler", "start"])
+            result = runner.invoke(
+                isolated_app, ["scheduler", "start", "--supervised", "--no-foreground"]
+            )
 
             assert result.exit_code in [0, 1, 2]
 
@@ -265,6 +269,8 @@ class TestSchedulerConfigIntegration:
             mock_instance = MagicMock()
             mock_supervisor.return_value = mock_instance
 
-            result = runner.invoke(isolated_app, ["scheduler", "start"])
+            result = runner.invoke(
+                isolated_app, ["scheduler", "start", "--supervised", "--no-foreground"]
+            )
 
             assert result.exit_code in [0, 1, 2]

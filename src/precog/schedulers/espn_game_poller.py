@@ -7,7 +7,9 @@ intervals and syncs game states to the database using SCD Type 2 versioning.
 Key Features:
 - Extends BasePoller for consistent APScheduler-based polling
 - Multi-league support (NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
-- Conditional polling with idle interval (reduces API calls when no games active)
+- Per-league adaptive polling to stay under ESPN's 250 req/hr rate limit
+- Three polling states per league: DISCOVERY (900s) and TRACKING (30s)
+- Dynamic throttling when 3+ leagues are tracking simultaneously
 - Optional job persistence via SQLAlchemy
 - SCD Type 2 versioning for game state history
 - Error recovery with logging
@@ -20,10 +22,20 @@ Naming Convention:
 
 Educational Notes:
 ------------------
-Polling Strategy:
-    - 30 seconds: Default for live games (captures most score changes)
-    - 300 seconds: Reduced rate when no games active (idle_interval)
-    - Conditional polling saves significant API calls over a season
+Per-League Adaptive Polling:
+    Each league is polled independently with its own interval based on game activity:
+    - DISCOVERY (900s): Default. Slow check for upcoming/live games. 4 leagues = 16 req/hr.
+    - TRACKING (30s): Active when live games detected. 1 league = 120 req/hr.
+    - Dynamic throttle: If 3+ leagues TRACKING, increase to 60s each to stay under 250 req/hr.
+
+    State transitions (driven by ESPN scoreboard response):
+    - DISCOVERY -> TRACKING: Any game has status "in" (in_progress) or "halftime"
+    - TRACKING -> DISCOVERY: ALL games have status "final" or "pre" (none live)
+
+    Rate budget math:
+    - 1 league TRACKING: 120 + 12 (3 idle) = 132 req/hr
+    - 2 leagues TRACKING: 240 + 8 (2 idle) = 248 req/hr (under 250)
+    - 3+ leagues TRACKING: Throttle to 60s = 180 + 4 = 184 req/hr (safe margin)
 
 SCD Type 2 for Game States:
     - Every score change creates a new row (full game history)
@@ -39,7 +51,7 @@ Related ADR: ADR-100 (Service Supervisor Pattern)
 """
 
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, ClassVar
 
@@ -64,6 +76,14 @@ from precog.schedulers.base_poller import BasePoller
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Per-League Polling State Constants
+# =============================================================================
+
+# Polling states for per-league adaptive polling
+LEAGUE_STATE_DISCOVERY = "discovery"
+LEAGUE_STATE_TRACKING = "tracking"
 
 
 class ESPNGamePoller(BasePoller):
@@ -122,6 +142,16 @@ class ESPNGamePoller(BasePoller):
     DEFAULT_IDLE_INTERVAL: ClassVar[int] = 300  # seconds (no games; ~648 req/day idle)
     DEFAULT_LEAGUES: ClassVar[list[str]] = ["nfl", "ncaaf", "nba", "nhl"]
 
+    # Per-league adaptive polling constants
+    DEFAULT_TRACKING_INTERVAL: ClassVar[int] = 30  # seconds (per-league, live games)
+    DEFAULT_DISCOVERY_INTERVAL: ClassVar[int] = 900  # seconds (per-league, no live games)
+    MAX_CONCURRENT_TRACKING: ClassVar[int] = 2  # above this, throttle tracking interval
+    THROTTLED_TRACKING_INTERVAL: ClassVar[int] = 60  # seconds (when 3+ leagues tracking)
+    LEAGUE_STAGGER_OFFSET: ClassVar[int] = 15  # seconds between league job starts
+
+    # ESPN rate limit budget
+    ESPN_RATE_LIMIT: ClassVar[int] = 250  # requests per hour
+
     # Game status mappings
     LIVE_STATUSES: ClassVar[set[str]] = {"in", "in_progress", "halftime"}
     COMPLETED_STATUSES: ClassVar[set[str]] = {"post", "final", "final/ot"}
@@ -136,6 +166,7 @@ class ESPNGamePoller(BasePoller):
         persist_jobs: bool = False,
         job_store_url: str | None = None,
         adaptive_polling: bool = True,
+        per_league_polling: bool = True,
     ) -> None:
         """
         Initialize the ESPNGamePoller.
@@ -150,20 +181,25 @@ class ESPNGamePoller(BasePoller):
             adaptive_polling: If True, dynamically adjust poll interval based on
                 game activity (poll_interval when active, idle_interval when idle).
                 Default True. (Issue #234)
+            per_league_polling: If True, each league gets its own APScheduler job
+                with independent polling intervals based on game activity. This keeps
+                total requests under ESPN's 250 req/hr rate limit. Default True.
 
         Raises:
             ValueError: If poll_interval < 15 or idle_interval < 15.
             ValueError: If persist_jobs=True but job_store_url not provided.
 
         Educational Note:
-            Adaptive polling (Issue #234) significantly reduces API calls:
-            - Active games: poll_interval (default 30s) - captures score changes
-            - No active games: idle_interval (default 300s) - saves API quota
+            Per-league polling (vs single-interval polling):
+            - Old approach: Single job polls ALL leagues at one interval.
+              4 leagues * 30s = 480 req/hr (exceeds 250 limit!)
+            - New approach: Each league has its own job and interval.
+              DISCOVERY leagues poll at 900s, TRACKING leagues at 30s.
+              Budget math ensures we stay under 250 req/hr.
 
-            Over a typical NFL Sunday (8 games, ~3 hours each):
-            - Without adaptive: 24 hours * 60 min/hr * 4 polls/min = 5,760 polls/day
-            - With adaptive: 24 hrs active * 4/min + 720 hrs idle * 1/min = 1,296 polls/day
-            - Savings: ~78% fewer API calls
+            Adaptive polling (Issue #234) is now a subset of per-league polling:
+            - With per_league_polling=True: Each league transitions independently
+            - With per_league_polling=False: Falls back to old single-interval behavior
         """
         effective_idle = idle_interval or self.DEFAULT_IDLE_INTERVAL
         if effective_idle < 15:
@@ -180,22 +216,33 @@ class ESPNGamePoller(BasePoller):
         self.persist_jobs = persist_jobs
         self.job_store_url = job_store_url
         self.adaptive_polling = adaptive_polling
+        self.per_league_polling = per_league_polling
 
-        # Track current polling mode for adaptive polling
+        # Track current polling mode for adaptive polling (legacy single-interval)
         self._current_interval = self.poll_interval
         self._last_active_state: bool | None = None  # Track if we were last polling active/idle
+
+        # Per-league polling state (protected by self._lock from BasePoller)
+        # Maps league code -> LEAGUE_STATE_DISCOVERY or LEAGUE_STATE_TRACKING
+        self._league_states: dict[str, str] = dict.fromkeys(self.leagues, LEAGUE_STATE_DISCOVERY)
+        # Maps league code -> current interval in seconds for that league
+        self._league_intervals: dict[str, int] = dict.fromkeys(
+            self.leagues, self.DEFAULT_DISCOVERY_INTERVAL
+        )
 
         # Initialize ESPN client (or use provided mock)
         self.espn_client = espn_client or ESPNClient()
 
         logger.info(
             "ESPNGamePoller initialized: leagues=%s, poll_interval=%ds, "
-            "idle_interval=%ds, persist_jobs=%s, adaptive_polling=%s",
+            "idle_interval=%ds, persist_jobs=%s, adaptive_polling=%s, "
+            "per_league_polling=%s",
             self.leagues,
             self.poll_interval,
             self.idle_interval,
             self.persist_jobs,
             self.adaptive_polling,
+            self.per_league_polling,
         )
 
     def _get_job_name(self) -> str:
@@ -236,10 +283,23 @@ class ESPNGamePoller(BasePoller):
         Start the polling scheduler with optional job persistence.
 
         Overrides BasePoller.start() to add job persistence support
-        via SQLAlchemy job store.
+        via SQLAlchemy job store. When per_league_polling is enabled,
+        creates separate APScheduler jobs for each league with staggered
+        offsets to avoid request bursts.
 
         Raises:
             RuntimeError: If already started.
+
+        Educational Note:
+            Per-league polling creates one APScheduler job per league, each with
+            its own interval. Jobs are staggered by LEAGUE_STAGGER_OFFSET seconds
+            (default 15s) to distribute API calls evenly across time. This prevents
+            bursts where all leagues fire simultaneously.
+
+            Example with 4 leagues (NFL, NCAAF, NBA, NHL):
+            - NFL starts at t+0s, NCAAF at t+15s, NBA at t+30s, NHL at t+45s
+            - Each starts in DISCOVERY state (900s interval)
+            - When a league detects live games, it transitions to TRACKING (30s)
         """
         with self._lock:
             if self._enabled:
@@ -260,13 +320,39 @@ class ESPNGamePoller(BasePoller):
                 },
             )
 
-            self._scheduler.add_job(
-                self._poll_wrapper,
-                IntervalTrigger(seconds=self.poll_interval),
-                id=f"poll_{self.__class__.__name__.lower()}",
-                name=self._get_job_name(),
-                replace_existing=True,
-            )
+            if self.per_league_polling:
+                # Per-league mode: create one job per league with staggered starts
+                now = datetime.now(UTC)
+                for idx, league in enumerate(self.leagues):
+                    initial_interval = self.DEFAULT_DISCOVERY_INTERVAL
+                    job_id = self._league_job_id(league)
+                    stagger_seconds = idx * self.LEAGUE_STAGGER_OFFSET
+                    start_time = now + timedelta(seconds=initial_interval + stagger_seconds)
+
+                    self._scheduler.add_job(
+                        self._poll_league_wrapper,
+                        IntervalTrigger(seconds=initial_interval, start_date=start_time),
+                        id=job_id,
+                        name=f"ESPN {league.upper()} Poll",
+                        replace_existing=True,
+                        args=[league],
+                    )
+
+                    logger.info(
+                        "Added per-league job: %s (interval=%ds, stagger=%ds)",
+                        league.upper(),
+                        initial_interval,
+                        stagger_seconds,
+                    )
+            else:
+                # Legacy single-job mode: one job polls all leagues
+                self._scheduler.add_job(
+                    self._poll_wrapper,
+                    IntervalTrigger(seconds=self.poll_interval),
+                    id=f"poll_{self.__class__.__name__.lower()}",
+                    name=self._get_job_name(),
+                    replace_existing=True,
+                )
 
             self._scheduler.start()
             self._enabled = True
@@ -277,22 +363,293 @@ class ESPNGamePoller(BasePoller):
         with BasePoller._registry_lock:
             BasePoller._active_pollers.add(self)
 
-        logger.info(
-            "%s started - polling every %d seconds",
-            self.__class__.__name__,
-            self.poll_interval,
-        )
+        if self.per_league_polling:
+            logger.info(
+                "%s started - per-league polling for %d leagues",
+                self.__class__.__name__,
+                len(self.leagues),
+            )
+        else:
+            logger.info(
+                "%s started - polling every %d seconds",
+                self.__class__.__name__,
+                self.poll_interval,
+            )
 
         # Hook for subclass initialization
         self._on_start()
 
-        # Run initial poll immediately
-        self._poll_wrapper()
+        # Run initial poll AFTER releasing the lock and starting the scheduler.
+        # _poll_league_wrapper needs self._lock, so this MUST be outside the
+        # with self._lock block above (threading.Lock is non-reentrant).
+        if self.per_league_polling:
+            for league in self.leagues:
+                self._poll_league_wrapper(league)
+        else:
+            self._poll_wrapper()
 
     def _on_stop(self) -> None:
         """Clean up ESPN client on stop."""
         # ESPNClient uses requests Session, but doesn't need explicit cleanup
         # This hook is here for consistency with other pollers
+
+    # =========================================================================
+    # Per-League Polling Methods
+    # =========================================================================
+
+    def _league_job_id(self, league: str) -> str:
+        """
+        Generate unique APScheduler job ID for a league.
+
+        Args:
+            league: League code (nfl, ncaaf, etc.)
+
+        Returns:
+            Unique job ID string.
+        """
+        return f"poll_espn_{league}"
+
+    def _poll_league_wrapper(self, league: str) -> None:
+        """
+        Execute a single poll for one league and evaluate state transition.
+
+        This is the per-league equivalent of _poll_wrapper(). It polls one league,
+        updates stats, then evaluates whether the league should transition between
+        DISCOVERY and TRACKING states.
+
+        Args:
+            league: League code to poll.
+
+        Educational Note:
+            Each league job calls this method independently. After polling,
+            we check the scoreboard response for live games. If any game
+            has a live status, the league transitions to TRACKING (fast polling).
+            If all games are pre/final, it transitions back to DISCOVERY (slow).
+
+            The state evaluation uses the scoreboard API response directly
+            (not the database), making it the source of truth for transitions.
+        """
+        start_time = datetime.now(UTC)
+
+        try:
+            # Poll the league and get games for state evaluation
+            games = self.espn_client.get_scoreboard(league)
+            games_updated = 0
+            sync_errors = 0
+            for game in games:
+                try:
+                    if self._sync_game_to_db(game, league):
+                        games_updated += 1
+                except Exception as e:
+                    sync_errors += 1
+                    event_id = game.get("metadata", {}).get("espn_event_id", "unknown")
+                    logger.error("Error syncing game %s: %s", event_id, e)
+
+            with self._lock:
+                self._stats["polls_completed"] += 1
+                self._stats["items_fetched"] += len(games)
+                self._stats["items_updated"] += games_updated
+                self._stats["errors"] += sync_errors
+                self._stats["last_poll"] = start_time.isoformat()
+
+            elapsed = (datetime.now(UTC) - start_time).total_seconds()
+            logger.info(
+                "ESPN %s poll completed: fetched=%d, updated=%d in %.2fs",
+                league.upper(),
+                len(games),
+                games_updated,
+                elapsed,
+            )
+
+            # Evaluate league state from scoreboard response
+            self._evaluate_league_state(league, games)
+
+        except ESPNAPIError as e:
+            logger.warning("ESPN API error for %s: %s", league, e)
+            with self._lock:
+                self._stats["errors"] += 1
+                self._stats["last_error"] = str(e)
+        except Exception as e:
+            logger.exception("Error in %s poll cycle: %s", league.upper(), e)
+            with self._lock:
+                self._stats["errors"] += 1
+                self._stats["last_error"] = str(e)
+
+    def _evaluate_league_state(self, league: str, games: list[ESPNGameFull]) -> None:
+        """
+        Evaluate and transition a league's polling state based on scoreboard data.
+
+        Uses the raw ESPN scoreboard response (not DB) as the source of truth.
+        Transitions:
+        - DISCOVERY -> TRACKING: Any game has a live status
+        - TRACKING -> DISCOVERY: All games are pre/final (none live)
+
+        After transitioning, recalculates all league intervals to handle
+        throttling when 3+ leagues are simultaneously tracking.
+
+        Args:
+            league: League code that was just polled.
+            games: List of ESPNGameFull dicts from the scoreboard response.
+
+        Educational Note:
+            We check the raw game_status from the ESPN response (before
+            normalization) against LIVE_STATUSES. This is intentional:
+            the scoreboard response is the most current source of truth,
+            and we want to transition to TRACKING as soon as ESPN reports
+            a live game, not after we've written to the DB.
+        """
+        has_live = self._scoreboard_has_live_games(games)
+
+        pending_reschedules: list[tuple[str, int, int, str, int]] = []
+
+        with self._lock:
+            if league not in self._league_states:
+                logger.warning("Unknown league '%s' in state evaluation, ignoring", league)
+                return
+
+            old_state = self._league_states[league]
+
+            new_state = LEAGUE_STATE_TRACKING if has_live else LEAGUE_STATE_DISCOVERY
+
+            if old_state == new_state:
+                return  # No transition needed
+
+            # Transition the state
+            self._league_states[league] = new_state
+            logger.info(
+                "League %s state transition: %s -> %s",
+                league.upper(),
+                old_state,
+                new_state,
+            )
+
+            # Recalculate intervals and collect reschedule ops (execute outside lock)
+            pending_reschedules = self._recalculate_league_intervals()
+
+        # Execute reschedules OUTSIDE the lock to avoid deadlock with APScheduler
+        for job_id, old_interval, new_interval, state, tracking_count in pending_reschedules:
+            try:
+                if self._scheduler is None:
+                    continue
+                self._scheduler.reschedule_job(
+                    job_id,
+                    trigger=IntervalTrigger(seconds=new_interval),
+                )
+                logger.info(
+                    "Rescheduled %s: %ds -> %ds (state=%s, tracking_leagues=%d)",
+                    job_id,
+                    old_interval,
+                    new_interval,
+                    state,
+                    tracking_count,
+                )
+            except Exception as e:
+                logger.warning("Failed to reschedule %s job: %s", job_id, e)
+
+    def _scoreboard_has_live_games(self, games: list[ESPNGameFull]) -> bool:
+        """
+        Check if any game in a scoreboard response has a live status.
+
+        Args:
+            games: List of ESPNGameFull dicts from get_scoreboard().
+
+        Returns:
+            True if any game has a status in LIVE_STATUSES.
+        """
+        for game in games:
+            state = game.get("state", {})
+            game_status = state.get("game_status", "pre")
+            if isinstance(game_status, str) and game_status.lower() in self.LIVE_STATUSES:
+                return True
+        return False
+
+    def _recalculate_league_intervals(self) -> list[tuple[str, int, int, str, int]]:
+        """
+        Recalculate intervals for all leagues based on current states.
+
+        Must be called with self._lock held. Returns pending reschedule
+        operations to be executed OUTSIDE the lock (avoids deadlock with
+        APScheduler's internal lock).
+
+        When 3+ leagues are in TRACKING state simultaneously, the tracking
+        interval is increased to THROTTLED_TRACKING_INTERVAL (60s) to stay
+        under ESPN's 250 req/hr rate limit.
+
+        Returns:
+            List of (job_id, old_interval, new_interval, state, tracking_count)
+            tuples for jobs that need rescheduling.
+
+        Educational Note:
+            Rate budget math:
+            - DISCOVERY leagues: 3600/900 = 4 req/hr each
+            - TRACKING leagues (normal): 3600/30 = 120 req/hr each
+            - TRACKING leagues (throttled): 3600/60 = 60 req/hr each
+
+            With 3 tracking + 1 discovery: 3*60 + 4 = 184 req/hr (safe)
+            With 4 tracking (throttled): 4*60 = 240 req/hr (safe)
+            With 2 tracking + 2 discovery: 2*120 + 2*4 = 248 req/hr (safe)
+        """
+        tracking_count = sum(1 for s in self._league_states.values() if s == LEAGUE_STATE_TRACKING)
+
+        # Determine tracking interval based on concurrent tracking count
+        if tracking_count > self.MAX_CONCURRENT_TRACKING:
+            tracking_interval = self.THROTTLED_TRACKING_INTERVAL
+        else:
+            tracking_interval = self.DEFAULT_TRACKING_INTERVAL
+
+        pending: list[tuple[str, int, int, str, int]] = []
+
+        for league in self.leagues:
+            state = self._league_states.get(league, LEAGUE_STATE_DISCOVERY)
+            if state == LEAGUE_STATE_TRACKING:
+                new_interval = tracking_interval
+            else:
+                new_interval = self.DEFAULT_DISCOVERY_INTERVAL
+
+            old_interval = self._league_intervals.get(league, self.DEFAULT_DISCOVERY_INTERVAL)
+            self._league_intervals[league] = new_interval
+
+            # Collect reschedule ops (executed outside lock by caller)
+            if old_interval != new_interval and self._scheduler and self._enabled:
+                job_id = self._league_job_id(league)
+                pending.append((job_id, old_interval, new_interval, state, tracking_count))
+
+        # Validate rate budget
+        total_req_hr = sum(3600 // iv for iv in self._league_intervals.values())
+        if total_req_hr > self.ESPN_RATE_LIMIT:
+            logger.warning(
+                "Rate budget exceeded: %d req/hr > %d limit (tracking=%d leagues)",
+                total_req_hr,
+                self.ESPN_RATE_LIMIT,
+                tracking_count,
+            )
+
+        return pending
+
+    def get_league_states(self) -> dict[str, str]:
+        """
+        Get the current polling state for each league.
+
+        Returns:
+            Dictionary mapping league code to state string
+            (LEAGUE_STATE_DISCOVERY or LEAGUE_STATE_TRACKING).
+
+        Thread-safe: acquires self._lock.
+        """
+        with self._lock:
+            return dict(self._league_states)
+
+    def get_league_intervals(self) -> dict[str, int]:
+        """
+        Get the current polling interval for each league.
+
+        Returns:
+            Dictionary mapping league code to interval in seconds.
+
+        Thread-safe: acquires self._lock.
+        """
+        with self._lock:
+            return dict(self._league_intervals)
 
     def _poll_wrapper(self) -> None:
         """
@@ -396,11 +753,20 @@ class ESPNGamePoller(BasePoller):
         """
         Get the current polling interval.
 
+        When per_league_polling is enabled, returns the minimum interval across
+        all leagues (i.e., the fastest polling rate currently in effect).
+        When per_league_polling is disabled, returns the legacy single interval.
+
         Returns:
-            Current interval in seconds (poll_interval or idle_interval based on game activity)
+            Current interval in seconds.
 
         Useful for monitoring and debugging adaptive polling behavior.
         """
+        if self.per_league_polling:
+            with self._lock:
+                if self._league_intervals:
+                    return min(self._league_intervals.values())
+            return self.DEFAULT_DISCOVERY_INTERVAL
         return self._current_interval
 
     def poll_once(self, leagues: list[str] | None = None) -> dict[str, int]:

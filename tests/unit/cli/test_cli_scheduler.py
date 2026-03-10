@@ -96,11 +96,15 @@ class TestSchedulerStart:
         assert result.exit_code in [0, 1, 2]
 
     def test_start_invalid_interval(self, runner):
-        """Test start with invalid interval value."""
-        result = runner.invoke(app, ["start", "--espn-interval", "0"])
+        """Test start with invalid interval value.
 
-        # Should fail with invalid interval or proceed with minimum
-        assert result.exit_code in [0, 1, 2]
+        Note: --espn-interval accepts integers. Negative values and non-numeric
+        strings are rejected by Typer before reaching our validation.
+        """
+        result = runner.invoke(app, ["start", "--espn-interval", "abc"])
+
+        # Typer rejects non-integer values with exit code 2
+        assert result.exit_code == 2
 
 
 class TestSchedulerStop:

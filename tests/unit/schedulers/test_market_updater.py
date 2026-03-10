@@ -206,7 +206,10 @@ class TestESPNGamePollerLifecycle:
 
     def test_start_enables_poller(self, updater_with_mock_client) -> None:
         """Test start() enables the poller."""
-        with patch.object(updater_with_mock_client, "_poll_wrapper"):
+        with (
+            patch.object(updater_with_mock_client, "_poll_wrapper"),
+            patch.object(updater_with_mock_client, "_poll_league_wrapper"),
+        ):
             updater_with_mock_client.start()
 
         assert updater_with_mock_client.enabled
@@ -214,7 +217,10 @@ class TestESPNGamePollerLifecycle:
 
     def test_stop_disables_poller(self, updater_with_mock_client) -> None:
         """Test stop() disables the poller."""
-        with patch.object(updater_with_mock_client, "_poll_wrapper"):
+        with (
+            patch.object(updater_with_mock_client, "_poll_wrapper"),
+            patch.object(updater_with_mock_client, "_poll_league_wrapper"),
+        ):
             updater_with_mock_client.start()
             updater_with_mock_client.stop()
 
@@ -222,7 +228,10 @@ class TestESPNGamePollerLifecycle:
 
     def test_double_start_raises_error(self, updater_with_mock_client) -> None:
         """Test starting twice raises RuntimeError."""
-        with patch.object(updater_with_mock_client, "_poll_wrapper"):
+        with (
+            patch.object(updater_with_mock_client, "_poll_wrapper"),
+            patch.object(updater_with_mock_client, "_poll_league_wrapper"),
+        ):
             updater_with_mock_client.start()
 
             with pytest.raises(RuntimeError, match="already running"):

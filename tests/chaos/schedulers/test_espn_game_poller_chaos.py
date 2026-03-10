@@ -48,6 +48,7 @@ class TestEdgeCaseIntervals:
         poller = ESPNGamePoller(
             poll_interval=15,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
         assert poller.poll_interval == 15
 
@@ -56,6 +57,7 @@ class TestEdgeCaseIntervals:
         poller = ESPNGamePoller(
             idle_interval=15,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
         assert poller.idle_interval == 15
 
@@ -65,6 +67,7 @@ class TestEdgeCaseIntervals:
             poll_interval=86400,  # 24 hours
             idle_interval=86400,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
         assert poller.poll_interval == 86400
         assert poller.idle_interval == 86400
@@ -74,18 +77,19 @@ class TestEdgeCaseIntervals:
         poller = ESPNGamePoller(
             poll_interval=0,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
         assert poller.poll_interval == ESPNGamePoller.DEFAULT_POLL_INTERVAL
 
     def test_negative_poll_interval_rejected(self, mock_espn_client: MagicMock) -> None:
         """Test negative poll interval is rejected."""
         with pytest.raises(ValueError):
-            ESPNGamePoller(poll_interval=-1, espn_client=mock_espn_client)
+            ESPNGamePoller(poll_interval=-1, espn_client=mock_espn_client, per_league_polling=False)
 
     def test_negative_idle_interval_rejected(self, mock_espn_client: MagicMock) -> None:
         """Test negative idle interval is rejected."""
         with pytest.raises(ValueError):
-            ESPNGamePoller(idle_interval=-1, espn_client=mock_espn_client)
+            ESPNGamePoller(idle_interval=-1, espn_client=mock_espn_client, per_league_polling=False)
 
 
 # =============================================================================
@@ -120,6 +124,7 @@ class TestUnusualGameData:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Should not crash, but skip game with no event_id
@@ -159,6 +164,7 @@ class TestUnusualGameData:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         result = poller.poll_once()
@@ -196,6 +202,7 @@ class TestUnusualGameData:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Should not crash
@@ -219,6 +226,7 @@ class TestErrorConditions:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # KeyboardInterrupt should propagate through _poll_once
@@ -232,6 +240,7 @@ class TestErrorConditions:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         poller._poll_wrapper()
@@ -248,6 +257,7 @@ class TestErrorConditions:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         poller._poll_wrapper()
@@ -264,6 +274,7 @@ class TestErrorConditions:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         poller._poll_wrapper()
@@ -288,6 +299,7 @@ class TestStateCorruptionAttempts:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
         poller._poll_wrapper()
 
@@ -306,6 +318,7 @@ class TestStateCorruptionAttempts:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Get reference and modify
@@ -330,6 +343,7 @@ class TestLifecycleEdgeCases:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Should not raise
@@ -343,6 +357,7 @@ class TestLifecycleEdgeCases:
             poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
         poller.start()
 
@@ -361,6 +376,7 @@ class TestLifecycleEdgeCases:
             poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Manual polls first
@@ -385,6 +401,7 @@ class TestLifecycleEdgeCases:
             poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         poller.start()
@@ -415,6 +432,7 @@ class TestConcurrentChaos:
             poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         errors: list[Exception] = []
@@ -463,6 +481,7 @@ class TestConcurrentChaos:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         stop_event = threading.Event()
@@ -521,6 +540,7 @@ class TestUnusualLeagueConfigurations:
         poller = ESPNGamePoller(
             leagues=[],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Empty list is falsy, so defaults are used
@@ -538,6 +558,7 @@ class TestUnusualLeagueConfigurations:
         poller = ESPNGamePoller(
             leagues=["nfl", "nfl", "nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         poller.poll_once()
@@ -552,6 +573,7 @@ class TestUnusualLeagueConfigurations:
         poller = ESPNGamePoller(
             leagues=["unknown_league"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         poller.poll_once()
@@ -574,6 +596,7 @@ class TestStatusNormalizationEdgeCases:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Empty string should normalize to "pre"
@@ -584,6 +607,7 @@ class TestStatusNormalizationEdgeCases:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Whitespace should normalize to "pre" (unknown)
@@ -599,6 +623,7 @@ class TestStatusNormalizationEdgeCases:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         assert poller._normalize_game_status("FINAL") == "final"
@@ -623,6 +648,7 @@ class TestPersistenceEdgeCases:
             ESPNGamePoller(
                 persist_jobs=True,
                 espn_client=mock_espn_client,
+                per_league_polling=False,
             )
 
     def test_url_without_persist_ignored(self, mock_espn_client: MagicMock) -> None:
@@ -631,6 +657,7 @@ class TestPersistenceEdgeCases:
             persist_jobs=False,
             job_store_url="sqlite:///ignored.db",
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         assert poller.persist_jobs is False
@@ -651,6 +678,7 @@ class TestStatsTypedDictEdgeCases:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         stats = poller.stats
@@ -670,6 +698,7 @@ class TestStatsTypedDictEdgeCases:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         for _ in range(50):
@@ -684,6 +713,7 @@ class TestStatsTypedDictEdgeCases:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
         poller._poll_wrapper()
 
@@ -728,6 +758,7 @@ class TestAdaptivePollingChaos:
             leagues=["nfl"],
             espn_client=mock_espn_client,
             adaptive_polling=False,
+            per_league_polling=False,
         )
 
         initial_interval = poller.get_current_interval()
@@ -757,6 +788,7 @@ class TestAdaptivePollingChaos:
         poller = ESPNGamePoller(
             leagues=[],  # Falls back to defaults
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Should check default leagues, not crash
@@ -782,6 +814,7 @@ class TestAdaptivePollingChaos:
             poll_interval=15,
             idle_interval=60,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         intervals = [poller.get_current_interval() for _ in range(100)]
@@ -802,6 +835,7 @@ class TestAdaptivePollingChaos:
             idle_interval=120,
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         # Initial state should be None (not yet determined)
@@ -829,6 +863,7 @@ class TestAdaptivePollingChaos:
             idle_interval=60,
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         # Start with active games
@@ -861,6 +896,7 @@ class TestAdaptivePollingChaos:
             idle_interval=60,
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         # Rapidly toggle state
@@ -888,6 +924,7 @@ class TestAdaptivePollingChaos:
             idle_interval=3600,  # 1 hour
             espn_client=mock_espn_client,
             adaptive_polling=True,
+            per_league_polling=False,
         )
 
         assert poller.poll_interval == 15
