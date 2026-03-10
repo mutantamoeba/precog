@@ -205,6 +205,7 @@ class TestPollExecution:
             leagues=["nfl"],
             espn_client=mock_espn_client,
             adaptive_polling=False,  # Prevents switch to idle_interval (300s)
+            per_league_polling=False,
         )
         poller.start()
 
@@ -260,6 +261,7 @@ class TestPollExecution:
             leagues=["nfl"],
             espn_client=mock_espn_client,
             adaptive_polling=False,  # Prevents switch to idle_interval (300s)
+            per_league_polling=False,
         )
         poller.start()
 

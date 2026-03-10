@@ -121,6 +121,7 @@ class TestCompletePollingWorkflow:
             leagues=["nfl"],
             poll_interval=15,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Execute single poll
@@ -160,6 +161,7 @@ class TestCompletePollingWorkflow:
             leagues=["nfl"],
             poll_interval=15,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         poller.start()
@@ -293,6 +295,7 @@ class TestMultiLeagueWorkflow:
         poller = ESPNGamePoller(
             leagues=["nfl", "nba"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         result = poller.poll_once()
@@ -328,6 +331,7 @@ class TestErrorRecoveryWorkflow:
             leagues=["nfl"],
             poll_interval=15,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         poller.start()
@@ -380,6 +384,7 @@ class TestErrorRecoveryWorkflow:
         poller = ESPNGamePoller(
             leagues=["nfl", "ncaaf"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Use _poll_wrapper which catches per-league errors
@@ -411,6 +416,7 @@ class TestLifecycleWorkflow:
             leagues=["nfl"],
             poll_interval=15,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Initial state
@@ -441,6 +447,7 @@ class TestLifecycleWorkflow:
             leagues=["nfl"],
             poll_interval=15,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # First run
@@ -482,6 +489,7 @@ class TestRefreshScoreboardsWorkflow:
         poller = ESPNGamePoller(
             leagues=["nfl", "ncaaf"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         result = poller.refresh_scoreboards()
@@ -532,6 +540,7 @@ class TestRefreshScoreboardsWorkflow:
         poller = ESPNGamePoller(
             leagues=["nfl", "ncaaf"],
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         result = poller.refresh_scoreboards(active_only=True)
@@ -583,6 +592,7 @@ class TestAdaptivePollingWorkflow:
             idle_interval=30,
             adaptive_polling=True,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Verify initial configuration
@@ -634,6 +644,7 @@ class TestAdaptivePollingWorkflow:
             idle_interval=30,
             adaptive_polling=True,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         poller.start()
@@ -669,6 +680,7 @@ class TestAdaptivePollingWorkflow:
             idle_interval=60,
             adaptive_polling=True,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Initial poll with no active games (use _poll_wrapper which adjusts interval)
@@ -742,6 +754,7 @@ class TestAdaptivePollingWorkflow:
             idle_interval=60,
             adaptive_polling=False,  # Disabled
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         assert poller.adaptive_polling is False
@@ -778,6 +791,7 @@ class TestAdaptivePollingWorkflow:
             idle_interval=60,
             adaptive_polling=True,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # No games in any league
@@ -897,6 +911,7 @@ class TestRealAPIPollerIntegration:
             leagues=["nfl"],
             poll_interval=30,
             espn_client=real_espn_client,
+            per_league_polling=False,
         )
 
         # This calls the real ESPN API -- should not raise
@@ -977,6 +992,7 @@ class TestRealAPIPollerIntegration:
             leagues=["nfl", "nba", "nhl"],
             poll_interval=30,
             espn_client=real_espn_client,
+            per_league_polling=False,
         )
 
         # Should not raise for any league
@@ -1009,6 +1025,7 @@ class TestRealAPIPollerIntegration:
             leagues=["nfl"],
             poll_interval=30,
             espn_client=real_espn_client,
+            per_league_polling=False,
         )
 
         result = poller.poll_once()
@@ -1050,6 +1067,7 @@ class TestRealAPIPollerIntegration:
             leagues=["nfl"],
             poll_interval=30,
             espn_client=real_espn_client,
+            per_league_polling=False,
         )
 
         result = poller.poll_once()
@@ -1103,6 +1121,7 @@ class TestRealAPIPollerIntegration:
             leagues=["nfl"],
             poll_interval=30,
             espn_client=real_espn_client,
+            per_league_polling=False,
         )
 
         result = poller.poll_once()
@@ -1175,6 +1194,7 @@ class TestRealAPIPollerIntegration:
             poll_interval=30,
             adaptive_polling=True,
             espn_client=real_espn_client,
+            per_league_polling=False,
         )
 
         # Should not raise -- _poll_wrapper catches errors
