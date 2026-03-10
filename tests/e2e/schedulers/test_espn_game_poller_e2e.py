@@ -723,7 +723,7 @@ class TestAdaptivePollingWorkflow:
         mock_client_class.return_value = mock_client
         mock_get_live.return_value = []
 
-        # Create via factory (adaptive polling is enabled by default)
+        # Create via factory (adaptive + per-league polling enabled by default)
         poller = create_espn_poller(
             leagues=["nfl"],
             poll_interval=15,
@@ -734,12 +734,14 @@ class TestAdaptivePollingWorkflow:
         assert poller.poll_interval == 15
         assert poller.idle_interval == 60
 
-        # Adaptive polling is enabled by default in ESPNGamePoller
+        # Adaptive and per-league polling are enabled by default
         assert poller.adaptive_polling is True
+        assert poller.per_league_polling is True
 
-        # After poll wrapper (which adjusts interval), should be at idle
+        # With per-league polling and no live games, league stays in DISCOVERY
+        # state (900s interval) until games are found
         poller._poll_wrapper()
-        assert poller.get_current_interval() == 60
+        assert poller.get_current_interval() == poller.DEFAULT_DISCOVERY_INTERVAL
 
     def test_adaptive_polling_disabled_workflow(
         self,
