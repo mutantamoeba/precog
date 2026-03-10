@@ -108,6 +108,7 @@ class TestSchedulerLifecycle:
         poller = ESPNGamePoller(
             poll_interval=15,
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         assert poller._scheduler is None
@@ -127,6 +128,7 @@ class TestSchedulerLifecycle:
         poller = ESPNGamePoller(
             poll_interval=15,
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
         poller.start()
 
@@ -142,6 +144,7 @@ class TestSchedulerLifecycle:
         poller = ESPNGamePoller(
             poll_interval=15,
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         for _ in range(3):
@@ -155,6 +158,7 @@ class TestSchedulerLifecycle:
         poller = ESPNGamePoller(
             poll_interval=15,
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         # Should not raise
@@ -166,6 +170,7 @@ class TestSchedulerLifecycle:
         poller = ESPNGamePoller(
             poll_interval=15,
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         poller.start()
@@ -307,6 +312,7 @@ class TestErrorHandlingIntegration:
             leagues=["nfl"],
             espn_client=mock_espn_client,
             adaptive_polling=False,  # Prevents switch to idle_interval (300s)
+            per_league_polling=False,  # Use legacy single-job mode (predictable 15s interval)
         )
         poller.start()
 
@@ -337,6 +343,7 @@ class TestErrorHandlingIntegration:
             poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
         poller.start()
 
@@ -365,6 +372,7 @@ class TestStatsThreadSafety:
             poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
         poller.start()
 
@@ -406,6 +414,7 @@ class TestJobPersistence:
         poller = ESPNGamePoller(
             poll_interval=15,
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         assert poller.persist_jobs is False
@@ -418,6 +427,7 @@ class TestJobPersistence:
             persist_jobs=True,
             job_store_url="sqlite:///test_jobs.db",
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         assert poller.persist_jobs is True
@@ -446,6 +456,7 @@ class TestRefreshScoreboards:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         result = poller.refresh_scoreboards()
@@ -474,6 +485,7 @@ class TestRefreshScoreboards:
         poller = ESPNGamePoller(
             leagues=["nfl", "ncaaf"],
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         result = poller.refresh_scoreboards(active_only=True)
@@ -498,6 +510,7 @@ class TestMultiLeaguePolling:
         poller = ESPNGamePoller(
             leagues=["nfl", "nba", "nhl"],
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         poller.poll_once()
@@ -529,6 +542,7 @@ class TestMultiLeaguePolling:
         poller = ESPNGamePoller(
             leagues=["nfl", "nba"],
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         # Use _poll_wrapper which internally uses _poll_once (catches per-league errors)
@@ -565,6 +579,7 @@ class TestAdaptivePollingIntegration:
             idle_interval=60,
             adaptive_polling=True,
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         # Before adjustment, should use poll_interval
@@ -593,6 +608,7 @@ class TestAdaptivePollingIntegration:
             idle_interval=60,
             adaptive_polling=True,
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         # Initial state is None
@@ -622,6 +638,7 @@ class TestAdaptivePollingIntegration:
             idle_interval=60,
             adaptive_polling=False,
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         # Should always use poll_interval
@@ -645,6 +662,7 @@ class TestAdaptivePollingIntegration:
             idle_interval=60,
             adaptive_polling=True,
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         # Before poll
@@ -672,6 +690,7 @@ class TestAdaptivePollingIntegration:
             idle_interval=60,
             adaptive_polling=True,
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
         poller.start()
 
@@ -710,6 +729,7 @@ class TestHasActiveGamesIntegration:
         poller = ESPNGamePoller(
             leagues=["nfl", "ncaaf"],
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         # Should return True because NFL has games
@@ -730,6 +750,7 @@ class TestHasActiveGamesIntegration:
         poller = ESPNGamePoller(
             leagues=["nfl", "ncaaf"],
             espn_client=mock_espn_client,
+            per_league_polling=False,  # Legacy mode for integration tests
         )
 
         assert poller.has_active_games() is False
