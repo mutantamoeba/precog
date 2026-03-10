@@ -65,6 +65,7 @@ def kalshi_status_strategy(draw: st.DrawFn) -> str:
                 "finalized",
                 "determined",
                 "initialized",
+                "inactive",
             ]
         )
     )

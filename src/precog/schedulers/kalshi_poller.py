@@ -133,6 +133,7 @@ class KalshiMarketPoller(BasePoller):
         "finalized": "settled",  # Kalshi 'finalized' = settlement complete
         "determined": "closed",  # Kalshi 'determined' = outcome decided, awaiting settlement
         "initialized": "halted",  # Kalshi 'initialized' = market created, not yet open for trading
+        "inactive": "closed",  # Kalshi 'inactive' = market no longer active (delisted or post-event)
     }
 
     def __init__(
@@ -562,10 +563,10 @@ class KalshiMarketPoller(BasePoller):
         # Map Kalshi API status to database schema status
         # Kalshi returns 'active' but our DB constraint expects 'open'
         api_status = market.get("status", "open")
-        db_status = self.STATUS_MAPPING.get(api_status, "open")
+        db_status = self.STATUS_MAPPING.get(api_status, "halted")
         if api_status not in self.STATUS_MAPPING:
             logger.warning(
-                "Unknown Kalshi status '%s' for market %s, defaulting to 'open'",
+                "Unknown Kalshi status '%s' for market %s, defaulting to 'halted'",
                 api_status,
                 ticker,
             )
