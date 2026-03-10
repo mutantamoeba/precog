@@ -15,7 +15,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from precog.api_connectors.espn_client import ESPNAPIError
 from precog.schedulers.espn_game_poller import (
+    LEAGUE_STATE_DISCOVERY,
+    LEAGUE_STATE_TRACKING,
     ESPNGamePoller,
     create_espn_poller,
     refresh_all_scoreboards,
@@ -634,27 +637,58 @@ class TestAdaptivePollingInitialization:
 class TestGetCurrentInterval:
     """Unit tests for get_current_interval method."""
 
-    def test_get_current_interval_returns_current(self, mock_espn_client: MagicMock) -> None:
-        """Test get_current_interval returns the current interval."""
+    def test_get_current_interval_legacy_mode(self, mock_espn_client: MagicMock) -> None:
+        """Test get_current_interval returns _current_interval in legacy mode."""
         poller = ESPNGamePoller(
             poll_interval=20,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         assert poller.get_current_interval() == 20
 
-    def test_get_current_interval_after_adjustment(self, mock_espn_client: MagicMock) -> None:
-        """Test get_current_interval after manual adjustment."""
+    def test_get_current_interval_after_adjustment_legacy(
+        self, mock_espn_client: MagicMock
+    ) -> None:
+        """Test get_current_interval after manual adjustment in legacy mode."""
         poller = ESPNGamePoller(
             poll_interval=15,
             idle_interval=60,
             espn_client=mock_espn_client,
+            per_league_polling=False,
         )
 
         # Simulate interval adjustment
         poller._current_interval = 60
 
         assert poller.get_current_interval() == 60
+
+    def test_get_current_interval_per_league_default(self, mock_espn_client: MagicMock) -> None:
+        """Test get_current_interval returns min league interval in per-league mode."""
+        poller = ESPNGamePoller(
+            espn_client=mock_espn_client,
+            per_league_polling=True,
+        )
+
+        # All leagues start in DISCOVERY (900s)
+        assert poller.get_current_interval() == 900
+
+    def test_get_current_interval_per_league_with_tracking(
+        self, mock_espn_client: MagicMock
+    ) -> None:
+        """Test get_current_interval returns tracking interval when one league is tracking."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "nba"],
+            espn_client=mock_espn_client,
+            per_league_polling=True,
+        )
+
+        # Simulate NFL in tracking mode
+        poller._league_intervals["nfl"] = 30
+        poller._league_intervals["nba"] = 900
+
+        # Should return min = 30
+        assert poller.get_current_interval() == 30
 
 
 @pytest.mark.unit
@@ -822,3 +856,603 @@ class TestPollWrapperAdaptive:
 
         # Should not have called adjustment
         mock_adjust.assert_not_called()
+
+
+# =============================================================================
+# Unit Tests: Per-League Polling Initialization
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestPerLeaguePollingInitialization:
+    """Unit tests for per-league polling initialization.
+
+    Educational Note:
+        Per-league polling creates independent polling jobs for each league,
+        each with its own state (DISCOVERY or TRACKING) and interval. This
+        keeps total ESPN API requests under the 250 req/hr rate limit.
+    """
+
+    def test_per_league_polling_enabled_by_default(self, mock_espn_client: MagicMock) -> None:
+        """Test per_league_polling is enabled by default."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+
+        assert poller.per_league_polling is True
+
+    def test_per_league_polling_can_be_disabled(self, mock_espn_client: MagicMock) -> None:
+        """Test per_league_polling can be explicitly disabled."""
+        poller = ESPNGamePoller(
+            espn_client=mock_espn_client,
+            per_league_polling=False,
+        )
+
+        assert poller.per_league_polling is False
+
+    def test_league_states_initialized_to_discovery(self, mock_espn_client: MagicMock) -> None:
+        """Test all leagues start in DISCOVERY state."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "nba", "nhl"],
+            espn_client=mock_espn_client,
+        )
+
+        for league in ["nfl", "nba", "nhl"]:
+            assert poller._league_states[league] == LEAGUE_STATE_DISCOVERY
+
+    def test_league_intervals_initialized_to_discovery(self, mock_espn_client: MagicMock) -> None:
+        """Test all leagues start with DISCOVERY interval."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "ncaaf"],
+            espn_client=mock_espn_client,
+        )
+
+        for league in ["nfl", "ncaaf"]:
+            assert poller._league_intervals[league] == ESPNGamePoller.DEFAULT_DISCOVERY_INTERVAL
+
+    def test_league_states_match_configured_leagues(self, mock_espn_client: MagicMock) -> None:
+        """Test _league_states keys match configured leagues exactly."""
+        leagues = ["nfl", "ncaaf", "nba"]
+        poller = ESPNGamePoller(
+            leagues=leagues,
+            espn_client=mock_espn_client,
+        )
+
+        assert set(poller._league_states.keys()) == set(leagues)
+        assert set(poller._league_intervals.keys()) == set(leagues)
+
+
+# =============================================================================
+# Unit Tests: Per-League Polling Constants
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestPerLeaguePollingConstants:
+    """Unit tests for per-league polling class constants."""
+
+    def test_default_tracking_interval(self) -> None:
+        """Test DEFAULT_TRACKING_INTERVAL constant."""
+        assert ESPNGamePoller.DEFAULT_TRACKING_INTERVAL == 30
+
+    def test_default_discovery_interval(self) -> None:
+        """Test DEFAULT_DISCOVERY_INTERVAL constant."""
+        assert ESPNGamePoller.DEFAULT_DISCOVERY_INTERVAL == 900
+
+    def test_max_concurrent_tracking(self) -> None:
+        """Test MAX_CONCURRENT_TRACKING constant."""
+        assert ESPNGamePoller.MAX_CONCURRENT_TRACKING == 2
+
+    def test_throttled_tracking_interval(self) -> None:
+        """Test THROTTLED_TRACKING_INTERVAL constant."""
+        assert ESPNGamePoller.THROTTLED_TRACKING_INTERVAL == 60
+
+    def test_league_stagger_offset(self) -> None:
+        """Test LEAGUE_STAGGER_OFFSET constant."""
+        assert ESPNGamePoller.LEAGUE_STAGGER_OFFSET == 15
+
+    def test_espn_rate_limit(self) -> None:
+        """Test ESPN_RATE_LIMIT constant."""
+        assert ESPNGamePoller.ESPN_RATE_LIMIT == 250
+
+    def test_league_state_constants(self) -> None:
+        """Test module-level state constants."""
+        assert LEAGUE_STATE_DISCOVERY == "discovery"
+        assert LEAGUE_STATE_TRACKING == "tracking"
+
+
+# =============================================================================
+# Unit Tests: League Job ID
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestLeagueJobId:
+    """Unit tests for _league_job_id method."""
+
+    def test_league_job_id_format(self, mock_espn_client: MagicMock) -> None:
+        """Test job ID format for a league."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+
+        assert poller._league_job_id("nfl") == "poll_espn_nfl"
+        assert poller._league_job_id("ncaaf") == "poll_espn_ncaaf"
+        assert poller._league_job_id("nba") == "poll_espn_nba"
+
+    def test_league_job_ids_are_unique(self, mock_espn_client: MagicMock) -> None:
+        """Test each league gets a unique job ID."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "ncaaf", "nba", "nhl"],
+            espn_client=mock_espn_client,
+        )
+
+        job_ids = [poller._league_job_id(league) for league in poller.leagues]
+        assert len(job_ids) == len(set(job_ids))
+
+
+# =============================================================================
+# Unit Tests: Scoreboard Has Live Games
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestScoreboardHasLiveGames:
+    """Unit tests for _scoreboard_has_live_games method.
+
+    Educational Note:
+        This method checks the raw ESPN scoreboard response for live games
+        without querying the database. It is the source of truth for
+        state transitions.
+    """
+
+    def test_no_games_returns_false(self, mock_espn_client: MagicMock) -> None:
+        """Test empty game list returns False."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+
+        assert poller._scoreboard_has_live_games([]) is False
+
+    def test_all_pre_returns_false(self, mock_espn_client: MagicMock) -> None:
+        """Test all pre-game statuses returns False."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+        games: list[dict[str, Any]] = [
+            {"state": {"game_status": "pre"}},
+            {"state": {"game_status": "scheduled"}},
+        ]
+
+        assert poller._scoreboard_has_live_games(games) is False  # type: ignore[arg-type]
+
+    def test_all_final_returns_false(self, mock_espn_client: MagicMock) -> None:
+        """Test all final statuses returns False."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+        games: list[dict[str, Any]] = [
+            {"state": {"game_status": "final"}},
+            {"state": {"game_status": "post"}},
+        ]
+
+        assert poller._scoreboard_has_live_games(games) is False  # type: ignore[arg-type]
+
+    def test_in_progress_returns_true(self, mock_espn_client: MagicMock) -> None:
+        """Test in_progress game returns True."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+        games: list[dict[str, Any]] = [
+            {"state": {"game_status": "pre"}},
+            {"state": {"game_status": "in_progress"}},
+            {"state": {"game_status": "final"}},
+        ]
+
+        assert poller._scoreboard_has_live_games(games) is True  # type: ignore[arg-type]
+
+    def test_in_status_returns_true(self, mock_espn_client: MagicMock) -> None:
+        """Test 'in' status (raw ESPN) returns True."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+        games: list[dict[str, Any]] = [
+            {"state": {"game_status": "in"}},
+        ]
+
+        assert poller._scoreboard_has_live_games(games) is True  # type: ignore[arg-type]
+
+    def test_halftime_returns_true(self, mock_espn_client: MagicMock) -> None:
+        """Test halftime status returns True."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+        games: list[dict[str, Any]] = [
+            {"state": {"game_status": "halftime"}},
+        ]
+
+        assert poller._scoreboard_has_live_games(games) is True  # type: ignore[arg-type]
+
+    def test_case_insensitive(self, mock_espn_client: MagicMock) -> None:
+        """Test status check is case-insensitive."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+        games: list[dict[str, Any]] = [
+            {"state": {"game_status": "IN"}},
+        ]
+
+        assert poller._scoreboard_has_live_games(games) is True  # type: ignore[arg-type]
+
+    def test_missing_state_returns_false(self, mock_espn_client: MagicMock) -> None:
+        """Test game with missing state dict returns False."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+        games: list[dict[str, Any]] = [
+            {"metadata": {"espn_event_id": "123"}},
+        ]
+
+        assert poller._scoreboard_has_live_games(games) is False  # type: ignore[arg-type]
+
+    def test_missing_game_status_returns_false(self, mock_espn_client: MagicMock) -> None:
+        """Test game with missing game_status returns False."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+        games: list[dict[str, Any]] = [
+            {"state": {}},
+        ]
+
+        assert poller._scoreboard_has_live_games(games) is False  # type: ignore[arg-type]
+
+
+# =============================================================================
+# Unit Tests: Evaluate League State
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestEvaluateLeagueState:
+    """Unit tests for _evaluate_league_state method.
+
+    Educational Note:
+        This method transitions a league between DISCOVERY and TRACKING
+        states based on the scoreboard response. It also triggers
+        interval recalculation for all leagues (throttling logic).
+    """
+
+    def test_transition_discovery_to_tracking(self, mock_espn_client: MagicMock) -> None:
+        """Test DISCOVERY -> TRACKING when live games detected."""
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        assert poller._league_states["nfl"] == LEAGUE_STATE_DISCOVERY
+
+        games: list[dict[str, Any]] = [
+            {"state": {"game_status": "in_progress"}},
+        ]
+
+        poller._evaluate_league_state("nfl", games)  # type: ignore[arg-type]
+
+        assert poller._league_states["nfl"] == LEAGUE_STATE_TRACKING
+
+    def test_transition_tracking_to_discovery(self, mock_espn_client: MagicMock) -> None:
+        """Test TRACKING -> DISCOVERY when no live games."""
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        # Start in tracking
+        poller._league_states["nfl"] = LEAGUE_STATE_TRACKING
+
+        games: list[dict[str, Any]] = [
+            {"state": {"game_status": "final"}},
+            {"state": {"game_status": "pre"}},
+        ]
+
+        poller._evaluate_league_state("nfl", games)  # type: ignore[arg-type]
+
+        assert poller._league_states["nfl"] == LEAGUE_STATE_DISCOVERY
+
+    def test_no_transition_when_same_state(self, mock_espn_client: MagicMock) -> None:
+        """Test no transition when state doesn't change."""
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        # Already in discovery
+        games: list[dict[str, Any]] = [
+            {"state": {"game_status": "pre"}},
+        ]
+
+        poller._evaluate_league_state("nfl", games)  # type: ignore[arg-type]
+
+        # Should remain discovery (no change)
+        assert poller._league_states["nfl"] == LEAGUE_STATE_DISCOVERY
+
+    def test_transition_updates_intervals(self, mock_espn_client: MagicMock) -> None:
+        """Test state transition triggers interval recalculation."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "nba"],
+            espn_client=mock_espn_client,
+        )
+
+        games: list[dict[str, Any]] = [
+            {"state": {"game_status": "in_progress"}},
+        ]
+
+        poller._evaluate_league_state("nfl", games)  # type: ignore[arg-type]
+
+        # NFL should now have tracking interval, NBA still discovery
+        assert poller._league_intervals["nfl"] == ESPNGamePoller.DEFAULT_TRACKING_INTERVAL
+        assert poller._league_intervals["nba"] == ESPNGamePoller.DEFAULT_DISCOVERY_INTERVAL
+
+    def test_empty_games_goes_to_discovery(self, mock_espn_client: MagicMock) -> None:
+        """Test empty game list transitions to DISCOVERY."""
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        poller._league_states["nfl"] = LEAGUE_STATE_TRACKING
+
+        poller._evaluate_league_state("nfl", [])
+
+        assert poller._league_states["nfl"] == LEAGUE_STATE_DISCOVERY
+
+
+# =============================================================================
+# Unit Tests: Recalculate League Intervals
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestRecalculateLeagueIntervals:
+    """Unit tests for _recalculate_league_intervals method.
+
+    Educational Note:
+        This method enforces the rate budget by throttling tracking intervals
+        when too many leagues are simultaneously tracking. With MAX_CONCURRENT_TRACKING=2:
+        - 1-2 tracking: 30s each (120 req/hr each, max 248 total)
+        - 3+ tracking: 60s each (60 req/hr each, safely under 250)
+    """
+
+    def test_single_tracking_league_gets_normal_interval(self, mock_espn_client: MagicMock) -> None:
+        """Test 1 tracking league uses DEFAULT_TRACKING_INTERVAL."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "nba", "nhl"],
+            espn_client=mock_espn_client,
+        )
+        poller._league_states["nfl"] = LEAGUE_STATE_TRACKING
+
+        poller._recalculate_league_intervals()
+
+        assert poller._league_intervals["nfl"] == 30
+        assert poller._league_intervals["nba"] == 900
+        assert poller._league_intervals["nhl"] == 900
+
+    def test_two_tracking_leagues_get_normal_interval(self, mock_espn_client: MagicMock) -> None:
+        """Test 2 tracking leagues use DEFAULT_TRACKING_INTERVAL (under threshold)."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "nba", "nhl"],
+            espn_client=mock_espn_client,
+        )
+        poller._league_states["nfl"] = LEAGUE_STATE_TRACKING
+        poller._league_states["nba"] = LEAGUE_STATE_TRACKING
+
+        poller._recalculate_league_intervals()
+
+        assert poller._league_intervals["nfl"] == 30
+        assert poller._league_intervals["nba"] == 30
+        assert poller._league_intervals["nhl"] == 900
+
+    def test_three_tracking_leagues_get_throttled_interval(
+        self, mock_espn_client: MagicMock
+    ) -> None:
+        """Test 3 tracking leagues are throttled to THROTTLED_TRACKING_INTERVAL."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "nba", "nhl"],
+            espn_client=mock_espn_client,
+        )
+        poller._league_states["nfl"] = LEAGUE_STATE_TRACKING
+        poller._league_states["nba"] = LEAGUE_STATE_TRACKING
+        poller._league_states["nhl"] = LEAGUE_STATE_TRACKING
+
+        poller._recalculate_league_intervals()
+
+        assert poller._league_intervals["nfl"] == 60
+        assert poller._league_intervals["nba"] == 60
+        assert poller._league_intervals["nhl"] == 60
+
+    def test_four_tracking_leagues_get_throttled_interval(
+        self, mock_espn_client: MagicMock
+    ) -> None:
+        """Test 4 tracking leagues are throttled to THROTTLED_TRACKING_INTERVAL."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "ncaaf", "nba", "nhl"],
+            espn_client=mock_espn_client,
+        )
+        for league in poller.leagues:
+            poller._league_states[league] = LEAGUE_STATE_TRACKING
+
+        poller._recalculate_league_intervals()
+
+        for league in poller.leagues:
+            assert poller._league_intervals[league] == 60
+
+    def test_discovery_leagues_always_get_discovery_interval(
+        self, mock_espn_client: MagicMock
+    ) -> None:
+        """Test DISCOVERY leagues always get DEFAULT_DISCOVERY_INTERVAL regardless of tracking count."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "nba", "nhl", "ncaaf"],
+            espn_client=mock_espn_client,
+        )
+        # 3 tracking, 1 discovery
+        poller._league_states["nfl"] = LEAGUE_STATE_TRACKING
+        poller._league_states["nba"] = LEAGUE_STATE_TRACKING
+        poller._league_states["nhl"] = LEAGUE_STATE_TRACKING
+        poller._league_states["ncaaf"] = LEAGUE_STATE_DISCOVERY
+
+        poller._recalculate_league_intervals()
+
+        # Discovery league unaffected
+        assert poller._league_intervals["ncaaf"] == 900
+
+    def test_rate_budget_with_two_tracking(self, mock_espn_client: MagicMock) -> None:
+        """Test rate budget stays under 250 req/hr with 2 tracking + 2 discovery."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "ncaaf", "nba", "nhl"],
+            espn_client=mock_espn_client,
+        )
+        poller._league_states["nfl"] = LEAGUE_STATE_TRACKING
+        poller._league_states["nba"] = LEAGUE_STATE_TRACKING
+
+        poller._recalculate_league_intervals()
+
+        # Calculate total req/hr
+        total_req_hr = sum(3600 / interval for interval in poller._league_intervals.values())
+        assert total_req_hr < 250, f"Rate budget exceeded: {total_req_hr:.0f} req/hr"
+
+    def test_rate_budget_with_four_tracking(self, mock_espn_client: MagicMock) -> None:
+        """Test rate budget stays under 250 req/hr with 4 tracking (throttled)."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "ncaaf", "nba", "nhl"],
+            espn_client=mock_espn_client,
+        )
+        for league in poller.leagues:
+            poller._league_states[league] = LEAGUE_STATE_TRACKING
+
+        poller._recalculate_league_intervals()
+
+        # Calculate total req/hr
+        total_req_hr = sum(3600 / interval for interval in poller._league_intervals.values())
+        assert total_req_hr < 250, f"Rate budget exceeded: {total_req_hr:.0f} req/hr"
+
+
+# =============================================================================
+# Unit Tests: Get League States / Get League Intervals
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestGetLeagueStatesAndIntervals:
+    """Unit tests for get_league_states and get_league_intervals."""
+
+    def test_get_league_states_returns_copy(self, mock_espn_client: MagicMock) -> None:
+        """Test get_league_states returns independent copy."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "nba"],
+            espn_client=mock_espn_client,
+        )
+
+        states = poller.get_league_states()
+        states["nfl"] = "modified"
+
+        # Original should be unaffected
+        assert poller._league_states["nfl"] == LEAGUE_STATE_DISCOVERY
+
+    def test_get_league_intervals_returns_copy(self, mock_espn_client: MagicMock) -> None:
+        """Test get_league_intervals returns independent copy."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "nba"],
+            espn_client=mock_espn_client,
+        )
+
+        intervals = poller.get_league_intervals()
+        intervals["nfl"] = 1
+
+        # Original should be unaffected
+        assert poller._league_intervals["nfl"] == 900
+
+    def test_get_league_states_thread_safe(self, mock_espn_client: MagicMock) -> None:
+        """Test get_league_states acquires lock."""
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+
+        # Should not raise even with lock held (reentrant check)
+        states = poller.get_league_states()
+        assert "nfl" in states
+
+
+# =============================================================================
+# Unit Tests: Poll League Wrapper
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestPollLeagueWrapper:
+    """Unit tests for _poll_league_wrapper method.
+
+    Educational Note:
+        _poll_league_wrapper is the per-league equivalent of _poll_wrapper.
+        It polls one league, updates stats, and evaluates state transitions.
+    """
+
+    def test_poll_league_wrapper_updates_stats(self, mock_espn_client: MagicMock) -> None:
+        """Test _poll_league_wrapper updates poll statistics."""
+        mock_espn_client.get_scoreboard.return_value = []
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+
+        poller._poll_league_wrapper("nfl")
+
+        assert poller._stats["polls_completed"] == 1
+        assert poller._stats["items_fetched"] == 0
+
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_poll_league_wrapper_syncs_games(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        mock_espn_client: MagicMock,
+        sample_game_data: dict[str, Any],
+    ) -> None:
+        """Test _poll_league_wrapper syncs games to database."""
+        mock_espn_client.get_scoreboard.return_value = [sample_game_data]
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+
+        poller._poll_league_wrapper("nfl")
+
+        assert poller._stats["items_fetched"] == 1
+        assert poller._stats["items_updated"] == 1
+        mock_upsert.assert_called_once()
+
+    def test_poll_league_wrapper_handles_api_error(self, mock_espn_client: MagicMock) -> None:
+        """Test _poll_league_wrapper handles ESPN API errors gracefully."""
+        mock_espn_client.get_scoreboard.side_effect = ESPNAPIError("API down")
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+
+        # Should not raise
+        poller._poll_league_wrapper("nfl")
+
+        assert poller._stats["errors"] == 1
+
+    def test_poll_league_wrapper_transitions_to_tracking(
+        self,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test _poll_league_wrapper transitions league to TRACKING on live games."""
+        mock_espn_client.get_scoreboard.return_value = [
+            {"state": {"game_status": "in_progress"}, "metadata": {}},
+        ]
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+
+        poller._poll_league_wrapper("nfl")
+
+        assert poller._league_states["nfl"] == LEAGUE_STATE_TRACKING
+
+    def test_poll_league_wrapper_stays_in_discovery(
+        self,
+        mock_espn_client: MagicMock,
+    ) -> None:
+        """Test _poll_league_wrapper keeps DISCOVERY when no live games."""
+        mock_espn_client.get_scoreboard.return_value = [
+            {"state": {"game_status": "pre"}, "metadata": {}},
+        ]
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+
+        poller._poll_league_wrapper("nfl")
+
+        assert poller._league_states["nfl"] == LEAGUE_STATE_DISCOVERY
