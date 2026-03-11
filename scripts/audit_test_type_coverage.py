@@ -147,6 +147,7 @@ MODULE_TIERS = {
     # Infrastructure (80%+) - 4 types required
     # API Clients
     "api_connectors/espn_client": "infrastructure",
+    "api_connectors/espn_team_validator": "experimental",
     "api_connectors/rate_limiter": "infrastructure",
     # Configuration
     "config/config_loader": "infrastructure",
