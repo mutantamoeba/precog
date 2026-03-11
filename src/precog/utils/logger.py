@@ -433,7 +433,8 @@ def setup_logging(
 
     # Separate test logs from production logs to prevent test noise
     # (e.g., stress test "Storm" errors) from contaminating real data
-    if log_to_file and "PYTEST_CURRENT_TEST" in os.environ:
+    # Only redirect when using the default log directory, not custom paths
+    if log_to_file and "PYTEST_CURRENT_TEST" in os.environ and log_dir == "logs":
         log_dir = os.path.join(log_dir, "test")
 
     # Create logs directory if needed
