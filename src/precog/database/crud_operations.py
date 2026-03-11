@@ -256,11 +256,16 @@ Related Guide: docs/guides/VERSIONING_GUIDE_V1.0.md
 """
 
 import json
+import logging
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any, Literal, cast
 
+import psycopg2.errors
+
 from .connection import fetch_all, fetch_one, get_cursor
+
+logger = logging.getLogger(__name__)
 
 # Type alias for execution environment - matches database ENUM (Migration 0008)
 # - 'live': Production trading with Kalshi Production API (real money)
@@ -2924,6 +2929,142 @@ def get_team_by_espn_id(espn_team_id: str, league: str | None = None) -> dict[st
     return fetch_one(query, (espn_team_id,))
 
 
+def create_team(
+    team_code: str,
+    team_name: str,
+    display_name: str,
+    sport: str,
+    league: str,
+    espn_team_id: str | None = None,
+    current_elo_rating: Decimal | None = None,
+    conference: str | None = None,
+    division: str | None = None,
+) -> int:
+    """
+    Create a new team record in the teams table.
+
+    Uses INSERT with ON CONFLICT DO NOTHING on (team_code, sport) to avoid
+    duplicates. Returns the team_id of the created or existing row.
+
+    Args:
+        team_code: Abbreviation code (e.g., 'KC', 'BOS', 'TBL')
+        team_name: Full team name (e.g., 'Kansas City Chiefs')
+        display_name: Short display name (e.g., 'Chiefs')
+        sport: Sport/league code for the sport column (e.g., 'nfl', 'nba')
+        league: League code for the league column (e.g., 'nfl', 'nba')
+        espn_team_id: ESPN unique team identifier (e.g., '12')
+        current_elo_rating: Elo rating from calibrated computation. None if not
+            yet calculated. Do NOT pass a placeholder value (e.g., 1500) —
+            use the EloEngine to compute real ratings from game results.
+        conference: Conference name (e.g., 'AFC', 'Eastern')
+        division: Division name (e.g., 'West', 'Atlantic')
+
+    Returns:
+        team_id of the created or existing team
+
+    Educational Note:
+        The teams table has two unique constraints:
+        - UNIQUE(team_code, sport) - prevents duplicate team codes per sport
+        - Partial UNIQUE(espn_team_id, league) WHERE espn_team_id IS NOT NULL
+        Using ON CONFLICT DO NOTHING handles race conditions where another
+        process creates the same team concurrently. We then SELECT to get
+        the team_id whether it was just created or already existed.
+
+    Example:
+        >>> team_id = create_team(
+        ...     team_code="KC",
+        ...     team_name="Kansas City Chiefs",
+        ...     display_name="Chiefs",
+        ...     sport="nfl",
+        ...     league="nfl",
+        ...     espn_team_id="12",
+        ...     conference="AFC",
+        ...     division="West",
+        ... )
+
+    Related:
+        - get_team_by_espn_id() (lookup by ESPN ID)
+        - espn_team_validator._create_missing_team() (caller for auto-sync)
+    """
+    insert_query = """
+        INSERT INTO teams (
+            team_code, team_name, display_name, sport, league,
+            espn_team_id, current_elo_rating, conference, division
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (team_code, sport) DO NOTHING
+        RETURNING team_id
+    """
+    params = (
+        team_code,
+        team_name,
+        display_name,
+        sport,
+        league,
+        espn_team_id,
+        current_elo_rating,
+        conference,
+        division,
+    )
+
+    try:
+        with get_cursor(commit=True) as cur:
+            cur.execute(insert_query, params)
+            row = cur.fetchone()
+            if row:
+                team_id = int(row["team_id"] if isinstance(row, dict) else row[0])
+                logger.info(
+                    "Created team: %s %s (%s, espn_id=%s, team_id=%d)",
+                    league.upper(),
+                    team_code,
+                    team_name,
+                    espn_team_id,
+                    team_id,
+                )
+                return team_id
+
+            # ON CONFLICT DO NOTHING: team already exists, fetch its ID
+            cur.execute(
+                "SELECT team_id FROM teams WHERE team_code = %s AND sport = %s",
+                (team_code, sport),
+            )
+            existing = cur.fetchone()
+            if existing:
+                team_id = int(existing["team_id"] if isinstance(existing, dict) else existing[0])
+                logger.debug(
+                    "Team already exists: %s %s (team_id=%d)",
+                    league.upper(),
+                    team_code,
+                    team_id,
+                )
+                return team_id
+
+    except psycopg2.errors.UniqueViolation:
+        # The (espn_team_id, league) partial unique index was violated.
+        # This means another team already has this ESPN ID in this league.
+        # Log and return the conflicting team's ID instead.
+        logger.warning(
+            "ESPN ID conflict: espn_id=%s already exists in %s for a different "
+            "team_code (attempted %s). Skipping creation.",
+            espn_team_id,
+            league,
+            team_code,
+        )
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT team_id FROM teams WHERE espn_team_id = %s AND league = %s",
+                (espn_team_id, league),
+            )
+            conflicting = cur.fetchone()
+            if conflicting:
+                return int(
+                    conflicting["team_id"] if isinstance(conflicting, dict) else conflicting[0]
+                )
+
+    # Should not reach here, but defensive
+    raise ValueError(f"Failed to create or find team: {team_code} ({sport}/{league})")
+
+
 # =============================================================================
 # TEAM RANKING OPERATIONS (Phase 2 - Live Data Integration)
 # =============================================================================
@@ -3434,8 +3575,8 @@ def upsert_game_state(
     if skip_if_unchanged:
         current = get_current_game_state(espn_event_id)
         if not game_state_changed(current, home_score, away_score, period, game_status, situation):
-            # No meaningful change - return existing ID or None
-            return current.get("id") if current else None
+            # No meaningful change - return None to indicate skip
+            return None
 
     # Use a SINGLE transaction for all operations to maintain atomicity
     # This ensures that if INSERT fails, the UPDATE is also rolled back

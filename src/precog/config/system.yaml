@@ -159,12 +159,14 @@ logging:
     directory: "logs"
 
     # Rotation settings (prevents massive log files)
-    max_size_mb: 100  # Rotate when file hits 100 MB
-    max_files: 10  # Keep 10 old files (then delete oldest)
+    # These values are read by logger.py at startup via direct YAML parse.
+    max_size_mb: 10  # Rotate when file hits 10 MB (prevents 164MB+ files from test runs)
+    max_files: 10  # Keep 10 old files per day (then delete oldest)
 
     # Why these values?
-    # 100 MB * 10 files = 1 GB max logs (reasonable disk usage)
-    # At ~10K lines/MB, that's ~1 million lines of history
+    # 10 MB * 11 files = 110 MB max per day (headroom for 24/7 ~33 MB/day)
+    # At ~10K lines/MB, that's ~110K lines of history per day
+    # 90-day retention (cleanup_old_logs) caps total disk at ~3 GB worst case
 
     # File naming:
     # - precog.log (current)

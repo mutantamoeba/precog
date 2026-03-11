@@ -414,12 +414,12 @@ class ESPNGamePoller(BasePoller):
             logger.info("Running ESPN team ID validation at startup...")
             results = validate_espn_teams(
                 leagues=self.leagues,
-                auto_correct=False,
+                auto_correct=True,
             )
             if results["total_mismatches"] > 0:
                 logger.warning(
-                    "ESPN team ID validation found %d mismatches across %d leagues. "
-                    "Review warnings above and consider running the fix script.",
+                    "ESPN team ID validation found %d mismatches "
+                    "across %d leagues (auto-correct enabled). Review warnings above.",
                     results["total_mismatches"],
                     len(results["leagues"]),
                 )
@@ -497,7 +497,9 @@ class ESPNGamePoller(BasePoller):
                 self._stats["last_poll"] = start_time.isoformat()
 
             elapsed = (datetime.now(UTC) - start_time).total_seconds()
-            logger.info(
+            # Demote no-change polls to DEBUG to reduce steady-state noise
+            log_fn = logger.info if games_updated else logger.debug
+            log_fn(
                 "ESPN %s poll completed: fetched=%d, updated=%d in %.2fs",
                 league.upper(),
                 len(games),
@@ -727,11 +729,15 @@ class ESPNGamePoller(BasePoller):
                 self._stats["last_poll"] = start_time.isoformat()
 
             elapsed = (datetime.now(UTC) - start_time).total_seconds()
-            self.logger.info(
+            updated = result.get("items_updated", 0)
+            created = result.get("items_created", 0)
+            # Demote no-change polls to DEBUG to reduce steady-state noise
+            log_fn = self.logger.info if (updated or created) else self.logger.debug
+            log_fn(
                 "ESPN poll completed: fetched=%d, updated=%d, created=%d in %.2fs",
                 result.get("items_fetched", 0),
-                result.get("items_updated", 0),
-                result.get("items_created", 0),
+                updated,
+                created,
                 elapsed,
             )
 
@@ -933,7 +939,9 @@ class ESPNGamePoller(BasePoller):
             "elapsed_seconds": round(elapsed, 3),
         }
 
-        logger.info(
+        # Demote no-change refreshes to DEBUG to reduce steady-state noise
+        log_fn = logger.info if total_updated else logger.debug
+        log_fn(
             "Scoreboard refresh complete: %d leagues, %d games fetched, %d updated in %.2fs",
             len(target_leagues),
             total_fetched,
@@ -1066,7 +1074,8 @@ class ESPNGamePoller(BasePoller):
             clock_seconds = Decimal(str(clock_val))
 
         # Upsert game state (SCD Type 2 handles versioning)
-        upsert_game_state(
+        # Returns new row ID if state changed, or existing ID/None if unchanged
+        result_id = upsert_game_state(
             espn_event_id=espn_event_id,
             home_team_id=home_team_id,
             away_team_id=away_team_id,
@@ -1087,7 +1096,10 @@ class ESPNGamePoller(BasePoller):
             linescores=state.get("linescores"),
         )
 
-        return True
+        # upsert returns None when skip_if_unchanged=True and no meaningful
+        # state change was detected (score, period, status, situation unchanged).
+        # Only count as "updated" when a new SCD row was actually created.
+        return result_id is not None
 
     def _get_db_team_id(
         self, espn_team_id: str | None, league: str, team_code: str | None

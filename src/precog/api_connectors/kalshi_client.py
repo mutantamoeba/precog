@@ -1345,7 +1345,7 @@ class KalshiClient:
         if limit is not None and len(series_list) > limit:
             series_list = series_list[:limit]
 
-        logger.info(
+        logger.debug(
             f"Fetched {len(series_list)} series",
             extra={
                 "count": len(series_list),
@@ -1483,7 +1483,7 @@ class KalshiClient:
                 f"Some series may be missing. Total fetched: {len(all_series)}"
             )
 
-        logger.info(
+        logger.debug(
             f"Fetched {len(all_series)} total series across {pages_fetched} page(s)",
             extra={
                 "total_count": len(all_series),
@@ -1620,7 +1620,7 @@ class KalshiClient:
                     f"Fetched page {pages_fetched}: {len(markets)} markets, more pages available"
                 )
 
-        logger.info(
+        logger.debug(
             f"fetch_all_markets complete: {len(all_markets)} total markets",
             extra={
                 "total_markets": len(all_markets),
@@ -1715,7 +1715,7 @@ class KalshiClient:
             if ticker_match or tag_match:
                 filtered_series.append(series)
 
-        logger.info(
+        logger.debug(
             f"Filtered {len(filtered_series)} sports series from {len(all_series)} total",
             extra={"sports_filter": target_sports, "total_series": len(all_series)},
         )

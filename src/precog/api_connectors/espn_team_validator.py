@@ -42,6 +42,7 @@ from typing import Any
 import requests
 
 from precog.database.connection import fetch_one, get_cursor
+from precog.database.crud_operations import create_team
 
 logger = logging.getLogger(__name__)
 
@@ -271,6 +272,99 @@ def _get_team_by_code_and_league(
 
 
 # =============================================================================
+# Team Auto-Creation (Pro Leagues Only)
+# =============================================================================
+
+# All leagues configured in LEAGUE_CONFIGS are eligible for auto-creation.
+# If we poll a league, we should keep its teams synced.
+
+# Sport mapping for the teams table 'sport' column.
+# For pro leagues, sport == league. Kept explicit for clarity.
+LEAGUE_SPORT_MAP: dict[str, str] = {
+    "nfl": "nfl",
+    "nba": "nba",
+    "nhl": "nhl",
+    "ncaaf": "ncaaf",
+}
+
+
+def _create_missing_team(
+    espn_team: dict[str, Any],
+    db_code: str,
+    league: str,
+) -> int | None:
+    """Create a missing team record from ESPN API data.
+
+    Called when a team exists in ESPN's API but not in our database.
+    Creates the team with NULL Elo rating (real Elo must be computed
+    by the EloEngine from game results, never defaulted to 1500).
+
+    Args:
+        espn_team: Raw team dict from ESPN API response. Expected keys:
+            id, abbreviation, displayName, shortDisplayName.
+        db_code: Resolved database team code (after alias mapping).
+        league: League key (nfl, nba, nhl, ncaaf).
+
+    Returns:
+        team_id of the created team, or None if creation failed.
+
+    Educational Note:
+        Conference/division info is not reliably available in the ESPN
+        teams list response at the team level. The 'groups' field may
+        contain conference info but the structure varies by sport.
+        We create the team without conference/division and let future
+        updates fill that in if needed.
+
+    Related:
+        - validate_league_teams() (calls this when auto_correct=True)
+        - create_team() in crud_operations.py
+    """
+    espn_id = str(espn_team.get("id", ""))
+    team_name = espn_team.get("displayName", "")
+    display_name = espn_team.get("shortDisplayName", "") or team_name
+    sport = LEAGUE_SPORT_MAP.get(league, league)
+
+    if not espn_id or not team_name:
+        logger.warning(
+            "Cannot create team: missing ESPN ID or name for %s %s",
+            league.upper(),
+            db_code,
+        )
+        return None
+
+    try:
+        team_id = create_team(
+            team_code=db_code,
+            team_name=team_name,
+            display_name=display_name,
+            sport=sport,
+            league=league,
+            espn_team_id=espn_id,
+            current_elo_rating=None,  # Real Elo must come from EloEngine
+            conference=None,
+            division=None,
+        )
+        logger.info(
+            "Auto-created missing team: %s %s (%s, espn_id=%s, team_id=%d)",
+            league.upper(),
+            db_code,
+            team_name,
+            espn_id,
+            team_id,
+        )
+        return team_id
+    except Exception as e:
+        logger.error(
+            "Failed to auto-create team %s %s (%s): %s",
+            league.upper(),
+            db_code,
+            team_name,
+            e,
+        )
+        return None
+
+
+# =============================================================================
 # Core Validation Logic
 # =============================================================================
 
@@ -312,6 +406,7 @@ def validate_league_teams(
     result: dict[str, Any] = {
         "league": league,
         "teams_checked": 0,
+        "teams_created": 0,
         "mismatches": [],
         "errors": [],
     }
@@ -335,6 +430,7 @@ def validate_league_teams(
 
     # Step 2: Compare each ESPN team against the database
     teams_checked = 0
+    teams_created = 0
     mismatches: list[dict[str, str]] = []
 
     for espn_team_raw in espn_teams:
@@ -352,8 +448,28 @@ def validate_league_teams(
         db_team = _get_team_by_code_and_league(db_code, league)
 
         if db_team is None:
-            # Team not in our DB -- not a mismatch, just not seeded
-            # (common for college teams we don't track)
+            # Auto-create missing teams for any polled league when
+            # auto_correct is enabled. If we poll it, we sync it.
+            if auto_correct:
+                created_id = _create_missing_team(
+                    espn_team=espn_team_raw,
+                    db_code=db_code,
+                    league=league,
+                )
+                if created_id is not None:
+                    teams_created += 1
+                    teams_checked += 1
+                    # Team just created with correct ESPN ID, no mismatch
+                    continue
+            else:
+                logger.warning(
+                    "Team missing from DB: %s %s (%s, espn_id=%s). "
+                    "Run with auto_correct=True to create automatically.",
+                    league.upper(),
+                    espn_code,
+                    espn_name,
+                    espn_id,
+                )
             continue
 
         teams_checked += 1
@@ -394,13 +510,15 @@ def validate_league_teams(
                 )
 
     result["teams_checked"] = teams_checked
+    result["teams_created"] = teams_created
     result["mismatches"] = mismatches
 
     logger.info(
-        "Validated %d teams for %s, found %d mismatches",
+        "Validated %d teams for %s, found %d mismatches, created %d new teams",
         teams_checked,
         league.upper(),
         len(mismatches),
+        teams_created,
     )
 
     return result
@@ -510,6 +628,7 @@ def validate_espn_teams(
     overall: dict[str, Any] = {
         "total_checked": 0,
         "total_mismatches": 0,
+        "total_created": 0,
         "leagues": {},
     }
 
@@ -530,13 +649,15 @@ def validate_espn_teams(
         overall["leagues"][league] = league_result
         overall["total_checked"] += league_result["teams_checked"]
         overall["total_mismatches"] += len(league_result["mismatches"])
+        overall["total_created"] += league_result.get("teams_created", 0)
 
     logger.info(
         "ESPN team validation complete: checked %d teams across %d leagues, "
-        "found %d total mismatches",
+        "found %d total mismatches, created %d new teams",
         overall["total_checked"],
         len(overall["leagues"]),
         overall["total_mismatches"],
+        overall["total_created"],
     )
 
     return overall
