@@ -382,6 +382,81 @@ class DataCollectorService:
         if self.supervisor:
             self.supervisor.stop_all()
 
+    def _prevent_system_sleep(self) -> None:
+        """
+        Prevent the operating system from entering sleep mode.
+
+        On Windows, uses SetThreadExecutionState to tell the OS that this
+        thread requires the system to stay awake. On other platforms, this
+        is a no-op.
+
+        Educational Note:
+            Windows will automatically sleep after a period of inactivity
+            (no keyboard/mouse input), even if a Python process is actively
+            running. For long-running services like a 24-hour soak test,
+            we must explicitly tell Windows to stay awake using
+            SetThreadExecutionState with ES_SYSTEM_REQUIRED.
+
+            ES_CONTINUOUS means "keep this setting until I clear it."
+            Without ES_CONTINUOUS, the flag only resets the idle timer once.
+
+        Reference: https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-setthreadexecutionstate
+        """
+        if sys.platform == "win32":
+            import ctypes
+
+            # ES_CONTINUOUS | ES_SYSTEM_REQUIRED
+            # ES_CONTINUOUS (0x80000000): Keep setting until cleared
+            # ES_SYSTEM_REQUIRED (0x00000001): Prevent system sleep
+            es_continuous = 0x80000000
+            es_system_required = 0x00000001
+            flags = es_continuous | es_system_required
+
+            result = ctypes.windll.kernel32.SetThreadExecutionState(flags)
+            if result == 0:
+                if self.logger:
+                    self.logger.warning(
+                        "Failed to set system execution state -- system may sleep during long runs"
+                    )
+            else:
+                if self.logger:
+                    self.logger.info(
+                        "System sleep prevention enabled (ES_CONTINUOUS | ES_SYSTEM_REQUIRED)"
+                    )
+        else:
+            if self.logger:
+                self.logger.debug(
+                    "System sleep prevention: not applicable on %s",
+                    sys.platform,
+                )
+
+    def _restore_system_sleep(self) -> None:
+        """
+        Restore the operating system's default sleep behavior.
+
+        Clears the execution state flags set by _prevent_system_sleep().
+        Safe to call multiple times. On non-Windows platforms, this is a no-op.
+
+        Educational Note:
+            Calling SetThreadExecutionState with only ES_CONTINUOUS clears
+            all previously set flags, allowing the system to sleep normally
+            again. This is registered with atexit as a safety net.
+        """
+        if sys.platform == "win32":
+            import ctypes
+
+            # ES_CONTINUOUS alone clears all other flags
+            es_continuous = 0x80000000
+            ctypes.windll.kernel32.SetThreadExecutionState(es_continuous)
+            if self.logger:
+                self.logger.info("System sleep prevention cleared")
+        else:
+            if self.logger:
+                self.logger.debug(
+                    "System sleep restoration: not applicable on %s",
+                    sys.platform,
+                )
+
     def _validate_startup(self) -> bool:
         """
         Validate system is ready for data collection.
@@ -577,6 +652,10 @@ class DataCollectorService:
             self.logger.error("Startup validation failed. Exiting.")
             return 1
 
+        # Prevent system sleep during data collection
+        self._prevent_system_sleep()
+        atexit.register(self._restore_system_sleep)
+
         # Create and start supervisor
         try:
             self.supervisor = self._create_supervisor()
@@ -606,6 +685,9 @@ class DataCollectorService:
         self.logger.info("Shutting down services...")
         if self.supervisor:
             self.supervisor.stop_all()
+
+        # Restore default sleep behavior
+        self._restore_system_sleep()
 
         self.logger.info("Data collection service stopped.")
         return 0
