@@ -167,6 +167,7 @@ class ESPNGamePoller(BasePoller):
         job_store_url: str | None = None,
         adaptive_polling: bool = True,
         per_league_polling: bool = True,
+        validate_teams_on_start: bool = True,
     ) -> None:
         """
         Initialize the ESPNGamePoller.
@@ -184,6 +185,9 @@ class ESPNGamePoller(BasePoller):
             per_league_polling: If True, each league gets its own APScheduler job
                 with independent polling intervals based on game activity. This keeps
                 total requests under ESPN's 250 req/hr rate limit. Default True.
+            validate_teams_on_start: If True, validate ESPN team IDs against the
+                database at startup. Mismatches are logged as warnings but do not
+                prevent the poller from starting. Default True.
 
         Raises:
             ValueError: If poll_interval < 15 or idle_interval < 15.
@@ -217,6 +221,7 @@ class ESPNGamePoller(BasePoller):
         self.job_store_url = job_store_url
         self.adaptive_polling = adaptive_polling
         self.per_league_polling = per_league_polling
+        self.validate_teams_on_start = validate_teams_on_start
 
         # Track current polling mode for adaptive polling (legacy single-interval)
         self._current_interval = self.poll_interval
@@ -387,6 +392,45 @@ class ESPNGamePoller(BasePoller):
                 self._poll_league_wrapper(league)
         else:
             self._poll_wrapper()
+
+    def _on_start(self) -> None:
+        """Run startup validation of ESPN team IDs if configured.
+
+        Educational Note:
+            Team ID validation is wrapped in try/except to ensure that
+            network errors or database issues during validation never
+            prevent the poller from starting. Validation is informational
+            -- mismatches are logged as warnings for investigation.
+
+        Related:
+            - precog.api_connectors.espn_team_validator.validate_espn_teams
+        """
+        if not self.validate_teams_on_start:
+            return
+
+        try:
+            from precog.api_connectors.espn_team_validator import validate_espn_teams
+
+            logger.info("Running ESPN team ID validation at startup...")
+            results = validate_espn_teams(
+                leagues=self.leagues,
+                auto_correct=False,
+            )
+            if results["total_mismatches"] > 0:
+                logger.warning(
+                    "ESPN team ID validation found %d mismatches across %d leagues. "
+                    "Review warnings above and consider running the fix script.",
+                    results["total_mismatches"],
+                    len(results["leagues"]),
+                )
+            else:
+                logger.info(
+                    "ESPN team ID validation passed: %d teams checked, no mismatches",
+                    results["total_checked"],
+                )
+        except Exception as e:
+            # Never let validation failure prevent the poller from starting
+            logger.warning("ESPN team ID validation failed (non-fatal): %s", e)
 
     def _on_stop(self) -> None:
         """Clean up ESPN client on stop."""
