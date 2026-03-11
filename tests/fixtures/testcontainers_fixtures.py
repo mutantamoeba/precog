@@ -192,7 +192,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     -- 2. TEAMS & SPORTS DATA
     CREATE TABLE IF NOT EXISTS teams (
         team_id SERIAL PRIMARY KEY,
-        team_code VARCHAR(10) NOT NULL UNIQUE,
+        team_code VARCHAR(10) NOT NULL,
         team_name VARCHAR(100) NOT NULL,
         display_name VARCHAR(100),
         abbreviation VARCHAR(10),
@@ -212,6 +212,8 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_teams_league ON teams(league);
     CREATE INDEX IF NOT EXISTS idx_teams_espn_id ON teams(espn_team_id);
     CREATE INDEX IF NOT EXISTS idx_teams_elo_rating ON teams(current_elo_rating);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_espn_id_league_unique ON teams(espn_team_id, league) WHERE espn_team_id IS NOT NULL;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_code_sport_pro ON teams(team_code, sport) WHERE sport IN ('nfl', 'nba', 'nhl', 'wnba', 'mlb', 'soccer');
 
     -- Note: elo_rating_history table removed in migration 0015
     -- Superseded by elo_calculation_log (28 columns, full audit trail)

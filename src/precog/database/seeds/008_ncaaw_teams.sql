@@ -105,11 +105,10 @@ INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_
 ('DEPAUL-W', 'DePaul Blue Demons', 'DePaul', 'ncaaw', 'ncaaw', '305', 1480, 'Big East', NULL),
 ('XAVIER-W', 'Xavier Musketeers', 'Xavier', 'ncaaw', 'ncaaw', '2752', 1460, 'Big East', NULL)
 
-ON CONFLICT (team_code, sport) DO UPDATE SET
+ON CONFLICT (espn_team_id, league) WHERE espn_team_id IS NOT NULL DO UPDATE SET
+    team_code = EXCLUDED.team_code,
     team_name = EXCLUDED.team_name,
     display_name = EXCLUDED.display_name,
-    league = EXCLUDED.league,
-    espn_team_id = EXCLUDED.espn_team_id,
     current_elo_rating = EXCLUDED.current_elo_rating,
     conference = EXCLUDED.conference,
     division = EXCLUDED.division,

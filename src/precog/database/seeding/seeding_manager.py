@@ -501,7 +501,7 @@ class SeedingManager:
             - Partial failures don't leave database in inconsistent state
 
         ON CONFLICT Handling:
-            Our SQL files use ON CONFLICT (team_code, sport) DO UPDATE
+            Our SQL files use ON CONFLICT on unique indexes (e.g., ESPN ID + league)
             This enables idempotent seeding:
             - First run: INSERT creates new rows
             - Subsequent runs: UPDATE refreshes existing data

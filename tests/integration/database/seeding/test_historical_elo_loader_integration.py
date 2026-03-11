@@ -46,11 +46,11 @@ def setup_test_teams(db_pool, db_cursor):
         Without these teams, the loader will fail with "Team not found" errors.
 
     Note:
-        The teams table has a unique constraint on (team_code, sport).
+        The teams table has a partial unique index on (team_code, sport) for pro leagues.
         - In CI: No seed data exists, so teams are created fresh
         - In local dev: Seed data already has KC/BUF, so INSERT is skipped
 
-        We use ON CONFLICT (team_code, sport) DO NOTHING to handle both cases.
+        We use ON CONFLICT (team_id) DO NOTHING to handle both cases.
         The fixture tracks which team_ids to use (seed data or newly created).
     """
     from precog.database.connection import get_cursor
@@ -81,7 +81,7 @@ def setup_test_teams(db_pool, db_cursor):
                 VALUES
                     (98001, 'KC', 'Kansas City Chiefs', 'AFC', 'West', 'nfl', 1624),
                     (98002, 'BUF', 'Buffalo Bills', 'AFC', 'East', 'nfl', 1618)
-                ON CONFLICT (team_code, sport) DO NOTHING
+                ON CONFLICT (team_id) DO NOTHING
                 RETURNING team_id
             """
             )

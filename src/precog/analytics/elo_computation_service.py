@@ -65,6 +65,7 @@ class TeamRatingState:
         peak_rating: Highest rating achieved
         lowest_rating: Lowest rating achieved
         initial_rating: Rating at start of computation
+        team_id: Resolved database team_id (set once at rating creation time)
     """
 
     rating: Decimal
@@ -73,6 +74,7 @@ class TeamRatingState:
     peak_rating: Decimal = field(default_factory=lambda: Decimal("1500"))
     lowest_rating: Decimal = field(default_factory=lambda: Decimal("1500"))
     initial_rating: Decimal = field(default_factory=lambda: Decimal("1500"))
+    team_id: int | None = None
 
     def __post_init__(self) -> None:
         """Initialize peak/lowest from current rating."""
@@ -187,8 +189,44 @@ class EloComputationService:
         # Team ratings cache: sport -> team_code -> TeamRatingState
         self._ratings: dict[str, dict[str, TeamRatingState]] = {}
 
+    def _resolve_team_id(self, team_code: str, sport: str) -> int | None:
+        """Look up team_id from team_code and sport in the database.
+
+        Args:
+            team_code: Team abbreviation (e.g., "KC")
+            sport: Sport code (e.g., "nfl")
+
+        Returns:
+            team_id if found, None otherwise
+        """
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT team_id FROM teams
+            WHERE team_code = %s AND sport = %s
+            """,
+            [team_code, sport],
+        )
+        rows = cursor.fetchall()
+        if len(rows) > 1:
+            logger.warning(
+                "ambiguous_team_code",
+                team_code=team_code,
+                sport=sport,
+                match_count=len(rows),
+                msg="Multiple teams match (team_code, sport). Using first match.",
+            )
+        if rows:
+            return int(rows[0][0])
+        return None
+
     def get_or_create_rating(self, sport: str, team_code: str) -> TeamRatingState:
         """Get current rating for a team, creating if not exists.
+
+        Resolves team_id from the database at creation time so that
+        sync_ratings_to_teams() can update by team_id directly without
+        any team_code lookup. This is future-proof for college sports
+        where multiple teams may share the same team_code.
 
         Args:
             sport: Sport code (nfl, nba, etc.)
@@ -201,11 +239,21 @@ class EloComputationService:
             self._ratings[sport] = {}
 
         if team_code not in self._ratings[sport]:
+            team_id = self._resolve_team_id(team_code, sport)
+            if team_id is None:
+                logger.warning(
+                    "team_not_found_for_elo_rating",
+                    team_code=team_code,
+                    sport=sport,
+                    msg="Team will be tracked in memory but cannot sync to DB",
+                )
+
             self._ratings[sport][team_code] = TeamRatingState(
                 rating=self.initial_rating,
                 initial_rating=self.initial_rating,
                 peak_rating=self.initial_rating,
                 lowest_rating=self.initial_rating,
+                team_id=team_id,
             )
 
         return self._ratings[sport][team_code]
@@ -638,55 +686,40 @@ class EloComputationService:
 
         cursor = self.conn.cursor()
         updated_count = 0
+        skipped_count = 0
 
         for team_code, state in self._ratings[sport].items():
-            # Look up team_id from team_code and sport
-            cursor.execute(
-                """
-                SELECT team_id FROM teams
-                WHERE team_code = %s AND sport = %s
-                """,
-                [team_code, sport],
-            )
-            row = cursor.fetchone()
-
-            if not row:
-                # Try without sport filter (some teams have different codes)
-                cursor.execute(
-                    """
-                    SELECT team_id FROM teams
-                    WHERE team_code = %s
-                    LIMIT 1
-                    """,
-                    [team_code],
-                )
-                row = cursor.fetchone()
-
-            if row:
-                team_id = row[0]
-                # Update the team's current Elo rating
-                cursor.execute(
-                    """
-                    UPDATE teams
-                    SET current_elo_rating = %s, updated_at = NOW()
-                    WHERE team_id = %s
-                    """,
-                    [state.rating, team_id],
-                )
-                if cursor.rowcount and cursor.rowcount > 0:
-                    updated_count += 1
-            else:
+            if state.team_id is None:
+                # team_id was not resolved at rating creation time.
+                # Do NOT fall back to a cross-sport lookup — that would
+                # risk updating the wrong team (e.g., PHI Eagles vs 76ers).
                 logger.warning(
-                    "team_not_found_for_elo_sync",
+                    "skipping_elo_sync_no_team_id",
                     team_code=team_code,
                     sport=sport,
+                    msg="Team was not found by (team_code, sport) at rating creation time",
                 )
+                skipped_count += 1
+                continue
+
+            # Update the team's current Elo rating using pre-resolved team_id
+            cursor.execute(
+                """
+                UPDATE teams
+                SET current_elo_rating = %s, updated_at = NOW()
+                WHERE team_id = %s
+                """,
+                [state.rating, state.team_id],
+            )
+            if cursor.rowcount and cursor.rowcount > 0:
+                updated_count += 1
 
         self.conn.commit()
         logger.info(
             "synced_elo_ratings_to_teams",
             sport=sport,
             teams_updated=updated_count,
+            teams_skipped=skipped_count,
             teams_processed=len(self._ratings[sport]),
         )
 
