@@ -49,8 +49,8 @@ INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_
 ('STL', 'St. Louis CITY SC', 'St. Louis', 'soccer', 'mls', '21812', 1500, 'Western', NULL),
 ('VAN', 'Vancouver Whitecaps FC', 'Vancouver', 'soccer', 'mls', '9727', 1500, 'Western', NULL)
 
-ON CONFLICT (team_code, sport) DO UPDATE SET
-    espn_team_id = EXCLUDED.espn_team_id,
+ON CONFLICT (espn_team_id, league) WHERE espn_team_id IS NOT NULL DO UPDATE SET
+    team_code = EXCLUDED.team_code,
     team_name = EXCLUDED.team_name,
     display_name = EXCLUDED.display_name,
     conference = EXCLUDED.conference,

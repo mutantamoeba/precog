@@ -57,8 +57,8 @@ INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_
 ('SF', 'San Francisco Giants', 'Giants', 'mlb', 'mlb', '26', 1480, 'NL', 'NL West'),
 ('COL', 'Colorado Rockies', 'Rockies', 'mlb', 'mlb', '27', 1400, 'NL', 'NL West')
 
-ON CONFLICT (team_code, sport) DO UPDATE SET
-    espn_team_id = EXCLUDED.espn_team_id,
+ON CONFLICT (espn_team_id, league) WHERE espn_team_id IS NOT NULL DO UPDATE SET
+    team_code = EXCLUDED.team_code,
     team_name = EXCLUDED.team_name,
     display_name = EXCLUDED.display_name,
     current_elo_rating = EXCLUDED.current_elo_rating,

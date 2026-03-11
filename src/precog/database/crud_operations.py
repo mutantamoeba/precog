@@ -2943,8 +2943,13 @@ def create_team(
     """
     Create a new team record in the teams table.
 
-    Uses INSERT with ON CONFLICT DO NOTHING on (team_code, sport) to avoid
-    duplicates. Returns the team_id of the created or existing row.
+    Uses a lookup-first strategy to find existing teams, then INSERT with
+    try/except for UniqueViolation to handle race conditions. This approach
+    works regardless of which unique constraints exist on the table.
+
+    Lookup order:
+        1. By (espn_team_id, league) if espn_team_id is provided
+        2. By (team_code, sport, league) as fallback
 
     Args:
         team_code: Abbreviation code (e.g., 'KC', 'BOS', 'TBL')
@@ -2963,12 +2968,13 @@ def create_team(
         team_id of the created or existing team
 
     Educational Note:
-        The teams table has two unique constraints:
-        - UNIQUE(team_code, sport) - prevents duplicate team codes per sport
+        The teams table may have multiple unique constraints depending on
+        migration state:
+        - UNIQUE(team_code, sport) - legacy constraint (being phased out)
         - Partial UNIQUE(espn_team_id, league) WHERE espn_team_id IS NOT NULL
-        Using ON CONFLICT DO NOTHING handles race conditions where another
-        process creates the same team concurrently. We then SELECT to get
-        the team_id whether it was just created or already existed.
+        - Partial UNIQUE(team_code, sport) for pro leagues only (migration 0018)
+        This function avoids referencing any specific constraint in SQL,
+        using lookup-first + try/except instead of ON CONFLICT.
 
     Example:
         >>> team_id = create_team(
@@ -2986,13 +2992,45 @@ def create_team(
         - get_team_by_espn_id() (lookup by ESPN ID)
         - espn_team_validator._create_missing_team() (caller for auto-sync)
     """
+    # Step 1: Look up existing team by ESPN ID (most specific identifier)
+    if espn_team_id:
+        existing = fetch_one(
+            "SELECT team_id FROM teams WHERE espn_team_id = %s AND league = %s",
+            (espn_team_id, league),
+        )
+        if existing:
+            team_id = int(existing["team_id"] if isinstance(existing, dict) else existing[0])
+            logger.debug(
+                "Team found by ESPN ID: %s %s (espn_id=%s, team_id=%d)",
+                league.upper(),
+                team_code,
+                espn_team_id,
+                team_id,
+            )
+            return team_id
+
+    # Step 2: Fall back to lookup by (team_code, sport, league)
+    existing = fetch_one(
+        "SELECT team_id FROM teams WHERE team_code = %s AND sport = %s AND league = %s",
+        (team_code, sport, league),
+    )
+    if existing:
+        team_id = int(existing["team_id"] if isinstance(existing, dict) else existing[0])
+        logger.debug(
+            "Team found by code: %s %s (team_id=%d)",
+            league.upper(),
+            team_code,
+            team_id,
+        )
+        return team_id
+
+    # Step 3: Team doesn't exist — INSERT it
     insert_query = """
         INSERT INTO teams (
             team_code, team_name, display_name, sport, league,
             espn_team_id, current_elo_rating, conference, division
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (team_code, sport) DO NOTHING
         RETURNING team_id
     """
     params = (
@@ -3023,43 +3061,33 @@ def create_team(
                 )
                 return team_id
 
-            # ON CONFLICT DO NOTHING: team already exists, fetch its ID
-            cur.execute(
-                "SELECT team_id FROM teams WHERE team_code = %s AND sport = %s",
-                (team_code, sport),
-            )
-            existing = cur.fetchone()
-            if existing:
-                team_id = int(existing["team_id"] if isinstance(existing, dict) else existing[0])
-                logger.debug(
-                    "Team already exists: %s %s (team_id=%d)",
-                    league.upper(),
-                    team_code,
-                    team_id,
-                )
-                return team_id
-
     except psycopg2.errors.UniqueViolation:
-        # The (espn_team_id, league) partial unique index was violated.
-        # This means another team already has this ESPN ID in this league.
-        # Log and return the conflicting team's ID instead.
+        # Race condition: another process created this team between our
+        # SELECT and INSERT. Look it up again to get the team_id.
         logger.warning(
-            "ESPN ID conflict: espn_id=%s already exists in %s for a different "
-            "team_code (attempted %s). Skipping creation.",
+            "UniqueViolation on team insert: %s %s (espn_id=%s, league=%s). "
+            "Retrieving existing record.",
+            league.upper(),
+            team_code,
             espn_team_id,
             league,
-            team_code,
         )
-        with get_cursor() as cur:
-            cur.execute(
+        # Try ESPN ID first, then team_code
+        if espn_team_id:
+            conflicting = fetch_one(
                 "SELECT team_id FROM teams WHERE espn_team_id = %s AND league = %s",
                 (espn_team_id, league),
             )
-            conflicting = cur.fetchone()
             if conflicting:
                 return int(
                     conflicting["team_id"] if isinstance(conflicting, dict) else conflicting[0]
                 )
+        conflicting = fetch_one(
+            "SELECT team_id FROM teams WHERE team_code = %s AND sport = %s AND league = %s",
+            (team_code, sport, league),
+        )
+        if conflicting:
+            return int(conflicting["team_id"] if isinstance(conflicting, dict) else conflicting[0])
 
     # Should not reach here, but defensive
     raise ValueError(f"Failed to create or find team: {team_code} ({sport}/{league})")
@@ -4968,20 +4996,36 @@ def get_team_elo_by_code(
     Returns:
         Current Elo rating as Decimal, or None if team not found
 
+    Note:
+        If multiple teams share the same team_code (e.g., 'ATL' in both
+        NFL and MLS), a warning is logged and the first result is returned.
+        Callers should provide the sport parameter to avoid ambiguity.
+
     Example:
         >>> rating = get_team_elo_by_code("KC", sport="nfl")
         >>> print(f"Chiefs Elo: {rating}")
     """
     if sport:
-        result = fetch_one(
+        results = fetch_all(
             "SELECT current_elo_rating FROM teams WHERE team_code = %s AND sport = %s",
             (team_code, sport),
         )
     else:
-        result = fetch_one(
+        results = fetch_all(
             "SELECT current_elo_rating FROM teams WHERE team_code = %s",
             (team_code,),
         )
+    if not results:
+        return None
+    if len(results) > 1:
+        logger.warning(
+            "Ambiguous team_code lookup: '%s' (sport=%s) matched %d rows. "
+            "Returning first result. Pass sport parameter to disambiguate.",
+            team_code,
+            sport,
+            len(results),
+        )
+    result = results[0]
     if result and result.get("current_elo_rating"):
         return Decimal(str(result["current_elo_rating"]))
     return None

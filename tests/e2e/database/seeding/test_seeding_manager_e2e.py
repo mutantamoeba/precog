@@ -42,7 +42,7 @@ def temp_seeds_dir() -> Iterator[Path]:
             "('KC', 'Kansas City Chiefs', 'nfl', 'AFC', 'West'),\n"
             "('SF', 'San Francisco 49ers', 'nfl', 'NFC', 'West'),\n"
             "('BUF', 'Buffalo Bills', 'nfl', 'AFC', 'East')\n"
-            "ON CONFLICT (team_code, sport) DO NOTHING;\n"
+            "ON CONFLICT DO NOTHING;\n"
         )
 
         nba_teams = seeds_path / "002_nba_teams.sql"
@@ -51,7 +51,7 @@ def temp_seeds_dir() -> Iterator[Path]:
             "INSERT INTO teams (team_code, team_name, sport, conference, division) VALUES\n"
             "('LAL', 'Los Angeles Lakers', 'nba', 'Western', 'Pacific'),\n"
             "('BOS', 'Boston Celtics', 'nba', 'Eastern', 'Atlantic')\n"
-            "ON CONFLICT (team_code, sport) DO NOTHING;\n"
+            "ON CONFLICT DO NOTHING;\n"
         )
 
         nhl_teams = seeds_path / "003_nhl_teams.sql"
@@ -60,7 +60,7 @@ def temp_seeds_dir() -> Iterator[Path]:
             "INSERT INTO teams (team_code, team_name, sport, conference, division) VALUES\n"
             "('NYR', 'New York Rangers', 'nhl', 'Eastern', 'Metropolitan'),\n"
             "('EDM', 'Edmonton Oilers', 'nhl', 'Western', 'Pacific')\n"
-            "ON CONFLICT (team_code, sport) DO NOTHING;\n"
+            "ON CONFLICT DO NOTHING;\n"
         )
 
         yield seeds_path
