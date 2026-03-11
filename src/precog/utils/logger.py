@@ -145,6 +145,7 @@ from pathlib import Path
 from typing import Any
 
 import structlog
+import yaml
 
 # =============================================================================
 # CREDENTIAL MASKING (REQ-SEC-009)
@@ -416,10 +417,30 @@ def setup_logging(
         >>> logger = setup_logging(log_level="DEBUG")
         >>> logger.info("trade_executed", ticker="NFL-KC-YES", price=Decimal("0.5200"))
     """
+    # Read rotation config from system.yaml (avoids circular import with ConfigLoader)
+    max_size_mb = 10
+    backup_count = 10
+    try:
+        config_path = Path(__file__).parent.parent / "config" / "system.yaml"
+        if config_path.exists():
+            with open(config_path, encoding="utf-8") as f:
+                system_config = yaml.safe_load(f)
+            file_config = system_config.get("logging", {}).get("file", {})
+            max_size_mb = file_config.get("max_size_mb", 10)
+            backup_count = file_config.get("max_files", 10)
+    except Exception as e:
+        sys.stderr.write(f"[logger] Failed to read system.yaml for log rotation config: {e}\n")
+
+    # Separate test logs from production logs to prevent test noise
+    # (e.g., stress test "Storm" errors) from contaminating real data
+    # Only redirect when using the default log directory, not custom paths
+    if log_to_file and "PYTEST_CURRENT_TEST" in os.environ and log_dir == "logs":
+        log_dir = os.path.join(log_dir, "test")
+
     # Create logs directory if needed
     if log_to_file:
         log_path = Path(log_dir)
-        log_path.mkdir(exist_ok=True)
+        log_path.mkdir(parents=True, exist_ok=True)
 
         # Daily log file name: precog_2025-10-23.log
         today = datetime.now().strftime("%Y-%m-%d")
@@ -436,17 +457,14 @@ def setup_logging(
             handler.close()
             root_logger.removeHandler(handler)
 
-    # Create rotating file handler if log file is enabled
-    # - maxBytes: 10MB per file (prevents 164MB+ log files seen in test runs)
-    # - backupCount: 5 files (keeps precog_2025-12-25.log, .1, .2, .3, .4, .5)
-    # - Total max disk usage: 60MB (10MB x 6 files)
+    # Create rotating file handler with settings from system.yaml
     file_handler = None
     if log_file:
         file_handler = RotatingFileHandler(
             log_file,
             mode="a",
-            maxBytes=10 * 1024 * 1024,  # 10MB
-            backupCount=5,
+            maxBytes=max_size_mb * 1024 * 1024,
+            backupCount=backup_count,
             encoding="utf-8",
         )
 

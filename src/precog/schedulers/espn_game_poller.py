@@ -167,6 +167,7 @@ class ESPNGamePoller(BasePoller):
         job_store_url: str | None = None,
         adaptive_polling: bool = True,
         per_league_polling: bool = True,
+        validate_teams_on_start: bool = True,
     ) -> None:
         """
         Initialize the ESPNGamePoller.
@@ -184,6 +185,9 @@ class ESPNGamePoller(BasePoller):
             per_league_polling: If True, each league gets its own APScheduler job
                 with independent polling intervals based on game activity. This keeps
                 total requests under ESPN's 250 req/hr rate limit. Default True.
+            validate_teams_on_start: If True, validate ESPN team IDs against the
+                database at startup. Mismatches are logged as warnings but do not
+                prevent the poller from starting. Default True.
 
         Raises:
             ValueError: If poll_interval < 15 or idle_interval < 15.
@@ -217,6 +221,7 @@ class ESPNGamePoller(BasePoller):
         self.job_store_url = job_store_url
         self.adaptive_polling = adaptive_polling
         self.per_league_polling = per_league_polling
+        self.validate_teams_on_start = validate_teams_on_start
 
         # Track current polling mode for adaptive polling (legacy single-interval)
         self._current_interval = self.poll_interval
@@ -388,6 +393,45 @@ class ESPNGamePoller(BasePoller):
         else:
             self._poll_wrapper()
 
+    def _on_start(self) -> None:
+        """Run startup validation of ESPN team IDs if configured.
+
+        Educational Note:
+            Team ID validation is wrapped in try/except to ensure that
+            network errors or database issues during validation never
+            prevent the poller from starting. Validation is informational
+            -- mismatches are logged as warnings for investigation.
+
+        Related:
+            - precog.api_connectors.espn_team_validator.validate_espn_teams
+        """
+        if not self.validate_teams_on_start:
+            return
+
+        try:
+            from precog.api_connectors.espn_team_validator import validate_espn_teams
+
+            logger.info("Running ESPN team ID validation at startup...")
+            results = validate_espn_teams(
+                leagues=self.leagues,
+                auto_correct=True,
+            )
+            if results["total_mismatches"] > 0:
+                logger.warning(
+                    "ESPN team ID validation found %d mismatches "
+                    "across %d leagues (auto-correct enabled). Review warnings above.",
+                    results["total_mismatches"],
+                    len(results["leagues"]),
+                )
+            else:
+                logger.info(
+                    "ESPN team ID validation passed: %d teams checked, no mismatches",
+                    results["total_checked"],
+                )
+        except Exception as e:
+            # Never let validation failure prevent the poller from starting
+            logger.warning("ESPN team ID validation failed (non-fatal): %s", e)
+
     def _on_stop(self) -> None:
         """Clean up ESPN client on stop."""
         # ESPNClient uses requests Session, but doesn't need explicit cleanup
@@ -453,7 +497,9 @@ class ESPNGamePoller(BasePoller):
                 self._stats["last_poll"] = start_time.isoformat()
 
             elapsed = (datetime.now(UTC) - start_time).total_seconds()
-            logger.info(
+            # Demote no-change polls to DEBUG to reduce steady-state noise
+            log_fn = logger.info if games_updated else logger.debug
+            log_fn(
                 "ESPN %s poll completed: fetched=%d, updated=%d in %.2fs",
                 league.upper(),
                 len(games),
@@ -683,11 +729,15 @@ class ESPNGamePoller(BasePoller):
                 self._stats["last_poll"] = start_time.isoformat()
 
             elapsed = (datetime.now(UTC) - start_time).total_seconds()
-            self.logger.info(
+            updated = result.get("items_updated", 0)
+            created = result.get("items_created", 0)
+            # Demote no-change polls to DEBUG to reduce steady-state noise
+            log_fn = self.logger.info if (updated or created) else self.logger.debug
+            log_fn(
                 "ESPN poll completed: fetched=%d, updated=%d, created=%d in %.2fs",
                 result.get("items_fetched", 0),
-                result.get("items_updated", 0),
-                result.get("items_created", 0),
+                updated,
+                created,
                 elapsed,
             )
 
@@ -889,7 +939,9 @@ class ESPNGamePoller(BasePoller):
             "elapsed_seconds": round(elapsed, 3),
         }
 
-        logger.info(
+        # Demote no-change refreshes to DEBUG to reduce steady-state noise
+        log_fn = logger.info if total_updated else logger.debug
+        log_fn(
             "Scoreboard refresh complete: %d leagues, %d games fetched, %d updated in %.2fs",
             len(target_leagues),
             total_fetched,
@@ -1022,7 +1074,8 @@ class ESPNGamePoller(BasePoller):
             clock_seconds = Decimal(str(clock_val))
 
         # Upsert game state (SCD Type 2 handles versioning)
-        upsert_game_state(
+        # Returns new row ID if state changed, or existing ID/None if unchanged
+        result_id = upsert_game_state(
             espn_event_id=espn_event_id,
             home_team_id=home_team_id,
             away_team_id=away_team_id,
@@ -1043,7 +1096,10 @@ class ESPNGamePoller(BasePoller):
             linescores=state.get("linescores"),
         )
 
-        return True
+        # upsert returns None when skip_if_unchanged=True and no meaningful
+        # state change was detected (score, period, status, situation unchanged).
+        # Only count as "updated" when a new SCD row was actually created.
+        return result_id is not None
 
     def _get_db_team_id(
         self, espn_team_id: str | None, league: str, team_code: str | None

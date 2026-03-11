@@ -198,6 +198,12 @@ def _start_supervised_mode(
             console.print("[dim]Use 'precog scheduler status' to check progress.[/dim]")
             console.print("[dim]Use 'precog scheduler stop' to stop.[/dim]")
 
+    except typer.Exit:
+        # Re-raise clean exits (e.g., signal handler shutdown) without
+        # falling through to the generic Exception handler below.
+        # click.exceptions.Exit extends Exception (not BaseException),
+        # so without this clause, Ctrl+C shutdown gets caught as an error.
+        raise
     except ValueError as e:
         console.print(f"[red]Configuration error: {e}[/red]")
         console.print("[dim]Hint: Check KALSHI_API_KEY and KALSHI_PRIVATE_KEY_PATH[/dim]")

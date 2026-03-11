@@ -322,8 +322,8 @@ class TestStartStopLatency:
 
         avg_time = statistics.mean(timings)
 
-        # Start should be reasonably fast
-        assert avg_time < 0.1  # < 100ms average
+        # Start should be reasonably fast (startup includes team validation)
+        assert avg_time < 0.5  # < 500ms average
 
     def test_stop_latency(self, mock_espn_client: MagicMock) -> None:
         """Test scheduler stop latency."""

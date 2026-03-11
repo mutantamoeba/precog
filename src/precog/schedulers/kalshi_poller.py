@@ -350,7 +350,9 @@ class KalshiMarketPoller(BasePoller):
                             "Failed to create fallback series %s: %s", ticker, fallback_err
                         )
 
-        logger.info(
+        # Demote to DEBUG when no series were created (steady-state)
+        log_fn = logger.info if series_created else logger.debug
+        log_fn(
             "Series sync complete: fetched=%d, created=%d, updated=%d",
             series_fetched,
             series_created,
@@ -518,7 +520,9 @@ class KalshiMarketPoller(BasePoller):
                 ticker = market.get("ticker", "unknown")
                 logger.error("Error syncing market %s: %s", ticker, e)
 
-        logger.info(
+        # Demote to DEBUG when nothing changed (steady-state)
+        log_fn = logger.info if (markets_updated or markets_created) else logger.debug
+        log_fn(
             "Series %s: fetched %d markets, updated %d, created %d",
             series_ticker,
             len(all_markets),

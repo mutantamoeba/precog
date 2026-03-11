@@ -262,14 +262,15 @@ class BasePoller(ABC):
         # Run initial poll immediately
         self._poll_wrapper()
 
-    def stop(self, wait: bool = True, timeout: float = 5.0) -> None:
+    def stop(self, wait: bool = True, timeout: float = 20.0) -> None:
         """
         Stop the polling scheduler with timeout support.
 
         Args:
             wait: If True, wait for running jobs to complete before returning.
-            timeout: Maximum seconds to wait for shutdown (default 5.0).
+            timeout: Maximum seconds to wait for shutdown (default 20.0).
                      Only used when wait=True. Prevents indefinite hangs.
+                     Set to 20s to accommodate Kalshi polls that take 12-16s.
 
         Educational Note:
             APScheduler's shutdown(wait=True) can hang indefinitely if a job
@@ -481,11 +482,15 @@ class BasePoller(ABC):
                 self._stats["last_poll"] = start_time.isoformat()
 
             elapsed = (datetime.now(UTC) - start_time).total_seconds()
-            self.logger.info(
+            updated = result.get("items_updated", 0)
+            created = result.get("items_created", 0)
+            # Demote no-change polls to DEBUG to reduce steady-state noise
+            log_fn = self.logger.info if (updated or created) else self.logger.debug
+            log_fn(
                 "Poll completed: fetched=%d, updated=%d, created=%d in %.2fs",
                 result.get("items_fetched", 0),
-                result.get("items_updated", 0),
-                result.get("items_created", 0),
+                updated,
+                created,
                 elapsed,
             )
 
