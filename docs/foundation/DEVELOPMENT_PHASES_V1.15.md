@@ -1,9 +1,17 @@
-# Development Phases & Roadmap
+# Development Phases & Roadmap — Era 1: Foundation
 
 ---
 **Version:** 1.15
 **Last Updated:** 2025-12-26
-**Status:** ✅ Current
+**Status:** 🏛️ ARCHIVED — Era 1 Complete
+
+> **Era 1 (Foundation)** covers phases 0 through 2.7 — the exploratory, foundational, and scaffolding
+> work that established the codebase, database schema, API integrations, testing infrastructure, and
+> development workflow. This document is preserved as historical reference.
+>
+> **Era 2 (Product)** is the active roadmap. See `memory/phase_roadmap.md` for the canonical phase
+> definitions (Phases 1-7). Era 2 uses simplified phase numbering and milestone-based exit criteria
+> rather than granular sub-phases.
 **Changes in v1.15:**
 - **NEIL PAINE DATA SOURCE MIGRATION**: FiveThirtyEight references replaced with Neil Paine GitHub archives
   - Neil Paine (former FiveThirtyEight sports editor) maintains authoritative Elo archives

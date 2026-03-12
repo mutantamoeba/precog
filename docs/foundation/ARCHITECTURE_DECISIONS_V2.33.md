@@ -16122,6 +16122,195 @@ GROUP BY sport, season, team_code;
 
 ---
 
+## Decision #113/ADR-113: FastAPI as Web Backend for Manual Trade Placement MVP
+
+**Date:** March 12, 2026
+**Status:** Proposed
+**Phase:** 2 (Manual Trade Placement MVP)
+**Related Issues:** #322 (FastAPI ADR), Phase 2 Gate Review (B2)
+
+### Context
+
+Phase 2 requires a web interface that allows the user to manually submit trade orders to the Kalshi API through a browser-based form. The project currently has no web framework -- all user interaction flows through the Typer CLI (`src/precog/cli/`). The CLI is well-suited for operations and scripting but cannot serve a browser-based trade submission form or provide a market browser dashboard.
+
+The Phase 2 Gate Review (2026-03-11) identified this as blocker B2: "Need ADR for FastAPI introduction." Architect Vader proposed a 9-step build order for the web layer. This ADR formalizes the framework selection and integration plan.
+
+**Requirements driving this decision:**
+
+1. A web form that submits orders to the Kalshi API (Phase 2 MVP)
+2. Market browser and position viewer endpoints (Phase 2 MVP)
+3. Foundation for a full React/modern frontend dashboard (Phase 3)
+4. Deployable to Railway PaaS (Phase 7)
+5. Must integrate with the existing SQLAlchemy session management, YAML config system, and two-axis environment model (PRECOG_ENV + MARKET_MODE)
+
+### Decision
+
+Adopt **FastAPI** (with **uvicorn** as the ASGI server) as the web backend framework. Create a new `src/precog/web/` package and add a `precog web start` CLI command.
+
+**Dependency additions to `pyproject.toml`:**
+
+```toml
+[project.optional-dependencies]
+web = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+]
+```
+
+Add `"precog[web]"` to the `all` extras group. FastAPI is an optional dependency (like `tui` and `historical`) because not all environments need the web server -- CI runners, data collection scripts, and CLI-only usage should not require it.
+
+**Package structure:**
+
+```
+src/precog/web/
+├── __init__.py          # FastAPI app factory (create_app)
+├── app.py               # App creation, middleware, lifespan events
+├── dependencies.py      # Dependency injection (DB session, KalshiClient, config)
+├── routes/
+│   ├── __init__.py
+│   ├── health.py        # GET /health, GET /ready
+│   ├── trades.py        # POST /api/v1/trades (order submission)
+│   ├── markets.py       # GET /api/v1/markets (market browser)
+│   └── positions.py     # GET /api/v1/positions (position viewer)
+├── schemas/
+│   ├── __init__.py
+│   ├── trades.py        # Pydantic request/response models for trades
+│   ├── markets.py       # Pydantic models for market data
+│   └── positions.py     # Pydantic models for position data
+├── services/
+│   ├── __init__.py
+│   └── trade_safety.py  # Trade safety guard (max position, max order value, etc.)
+└── middleware/
+    ├── __init__.py
+    └── environment.py   # PRECOG_ENV + MARKET_MODE enforcement middleware
+```
+
+**CLI integration:**
+
+Add a `web` command group in `src/precog/cli/web.py` registered in `cli/__init__.py`, following the same pattern as the `scheduler` command group:
+
+```
+precog web start                     # Start web server (default: localhost:8000)
+precog web start --host 0.0.0.0     # Bind to all interfaces
+precog web start --port 9000        # Custom port
+precog web start --reload           # Auto-reload for development
+```
+
+**Environment model integration:**
+
+The FastAPI app must respect the two-axis environment model (ADR-105):
+
+- `PRECOG_ENV` determines the database (precog_dev, precog_test, etc.) and credential prefix
+- `MARKET_MODE` determines whether trades execute against demo or live Kalshi API
+- The `/health` endpoint must report both `precog_env` and `market_mode` in its response
+- Environment middleware injects validated environment context into all request handlers
+- Dangerous combinations (test+live, prod+demo) are blocked at startup, not per-request
+
+**Decimal serialization:**
+
+FastAPI uses Pydantic for serialization. All Pydantic models handling prices, probabilities, or monetary values MUST use `Decimal` fields with custom JSON serialization that preserves precision. Pydantic v2 supports `Decimal` natively, but response models must explicitly declare `model_config = ConfigDict(json_encoders={Decimal: str})` or use `PlainSerializer` to ensure prices are serialized as strings, never floats. This enforces the project's critical pattern (ADR-002): NEVER use float for prices.
+
+**Credential handling:**
+
+The web server obtains API credentials through the same `get_prefixed_env()` / `os.getenv()` pattern as the rest of the codebase. Credentials are never hardcoded, never logged, and never included in API responses. The KalshiClient is instantiated once at startup via FastAPI's dependency injection and shared across requests.
+
+### Alternatives Considered
+
+**Flask:**
+- Mature, well-documented, large ecosystem
+- Synchronous by default (requires Flask-Async or Quart for async)
+- No built-in data validation (requires Flask-Marshmallow or similar)
+- No automatic OpenAPI/Swagger documentation
+- **Rejected because:** Precog already uses Pydantic (v2) for data validation and httpx/aiohttp for async HTTP. FastAPI leverages both natively. Flask would require additional libraries to match FastAPI's built-in capabilities, adding dependency surface without benefit.
+
+**Django + Django REST Framework:**
+- Full-featured (ORM, admin, auth, migrations)
+- Overlaps with existing SQLAlchemy ORM and Alembic migrations
+- Heavier footprint, opinionated project structure conflicts with existing `src/precog/` layout
+- **Rejected because:** Django's ORM would conflict with the established SQLAlchemy stack (ADR-006). Running two ORMs is a maintenance burden with no benefit. Django's admin panel is unnecessary for a single-user trading application.
+
+**Litestar (formerly Starlite):**
+- Modern ASGI framework, similar philosophy to FastAPI
+- Smaller ecosystem, fewer tutorials and community resources
+- Less proven at scale
+- **Rejected because:** FastAPI has broader adoption, better documentation, and stronger community support. The risk of choosing a less-established framework is not justified when FastAPI meets all requirements.
+
+**No web framework (CLI only):**
+- Continue using only the Typer CLI for all interactions
+- **Rejected because:** The user explicitly stated preference for a web GUI over TUI. CLI-only cannot serve a browser-based trading form, and Phase 3 requires a web dashboard. Deferring the web layer would delay Phase 2 and Phase 3 goals.
+
+### Consequences
+
+**Positive:**
+
+- FastAPI's native Pydantic integration reuses existing Pydantic models and validation patterns already in the codebase
+- Automatic OpenAPI/Swagger documentation at `/docs` provides a built-in API explorer, valuable during Phase 2 development and manual testing
+- Async support (ASGI) allows non-blocking Kalshi API calls, important for responsive trade submission
+- Dependency injection pattern (`Depends()`) provides clean separation of concerns for DB sessions, API clients, and environment config
+- Uvicorn is Railway-compatible for Phase 7 cloud deployment
+- FastAPI's `TestClient` (backed by httpx) enables straightforward integration testing without starting a real server
+
+**Negative:**
+
+- Adds two new dependencies (fastapi, uvicorn) to the project
+- Team must learn FastAPI idioms (dependency injection, lifespan events, Pydantic response models)
+- Web server is an additional process to manage alongside the scheduler supervisor
+- Security surface increases: localhost-only initially, but must be hardened before any network exposure (Phase 7)
+
+**Neutral:**
+
+- FastAPI and the existing Typer CLI coexist cleanly -- they share the same `src/precog/` package but run as separate processes
+- The web server does not replace the CLI; both interfaces remain available for different use cases
+- Initial scope is localhost-only (127.0.0.1); network binding deferred to Phase 7 deployment planning
+
+### Implementation Notes
+
+**Vader's 9-Step Build Order (from Phase 2 Gate Review):**
+
+| Step | Deliverable | Description |
+|------|-------------|-------------|
+| 1 | FastAPI app skeleton + health endpoint | `create_app()` factory, `/health` and `/ready` endpoints, uvicorn integration |
+| 2 | Trade safety guard service | Max position size, max order value, market staleness check, MARKET_MODE enforcement |
+| 3 | KalshiClient dependency injection | `Depends()` provider for authenticated KalshiClient, respecting PRECOG_ENV credential prefix |
+| 4 | Trade submission endpoint | `POST /api/v1/trades` with Pydantic validation, safety guard checks, Kalshi API call |
+| 5 | Market browser endpoint | `GET /api/v1/markets` with filters (ticker, status, sport), Decimal-safe serialization |
+| 6 | Position viewer endpoint | `GET /api/v1/positions` reading from DB with `row_current_ind = TRUE` filter (SCD Type 2) |
+| 7 | `precog web start` CLI command | Typer command wrapping uvicorn, following scheduler CLI patterns |
+| 8 | Integration tests | FastAPI TestClient, TradeFactory, mock KalshiClient, safety guard tests |
+| 9 | Error handling + logging | Structured error responses, structlog integration, request correlation IDs |
+
+**Testing strategy:**
+
+- Use FastAPI's `TestClient` (synchronous wrapper around httpx) for all web endpoint tests
+- Mock the KalshiClient for trade submission tests (external API mock pattern per CLAUDE.md)
+- Test Decimal serialization explicitly: verify that no float values appear in JSON responses
+- Integration tests in `tests/integration/web/`, unit tests in `tests/unit/web/`
+- Add `TradeFactory` (pytest factory) for generating test trade data
+- Safety guard tests must cover: max position size exceeded, stale market rejection, wrong MARKET_MODE rejection
+
+### Revisit Triggers
+
+Re-evaluate this decision if:
+
+- FastAPI introduces breaking changes that conflict with Pydantic v2 or SQLAlchemy 2.x usage patterns
+- The project requires WebSocket push for real-time price updates at scale (may need additional infrastructure beyond FastAPI's built-in WebSocket support)
+- Performance profiling during Phase 7 (Railway deployment) reveals that uvicorn cannot handle the expected request load (unlikely for a single-user application, but monitor)
+- A competing framework (e.g., Litestar) achieves feature parity with significantly better performance characteristics
+- The user decides to consolidate on a different stack for the React frontend (e.g., Next.js API routes replacing the Python backend entirely)
+
+### References
+
+- Phase 2 Gate Review: `memory/phase2_gate_review.md` (Vader's 9-step build order)
+- ADR-002: Price Precision - DECIMAL(10,4) for All Prices
+- ADR-006: SQLAlchemy as ORM
+- ADR-100: Service Supervisor Pattern (CLI command pattern reference)
+- ADR-105: Two-Axis Environment Configuration
+- ADR-108: Hybrid Cloud Architecture (Railway deployment target)
+- REQ-REPORTING-001: Performance Dashboard (FastAPI backend requirement)
+- Issue #322: FastAPI ADR
+
+---
+
 ## Approval & Sign-off
 
 This document represents the architectural decisions as of October 22, 2025 (Phase 0.5 completion with standardization).
@@ -16132,9 +16321,11 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.32
-**Last Updated:** December 24, 2025
+**Document Version:** 2.34
+**Last Updated:** March 12, 2026
 **Critical Changes:**
+- v2.34: **FASTAPI WEB BACKEND** - Added Decision #113/ADR-113 (FastAPI as Web Backend for Manual Trade Placement MVP). FastAPI + uvicorn as ASGI server, `src/precog/web/` package, Pydantic Decimal serialization, two-axis environment integration, 9-step build order. Issue #322, Phase 2 Gate Review blocker B2.
+- v2.33: **ERA 1 DOCUMENTATION** - Neil Paine data source migration, NCAAF validation, sport-specific mappings, team_season_records VIEW.
 - v2.32: **ELO RATING COMPUTATION ENGINE** - Added Decision #109/ADR-109 (Elo Rating Computation Engine Architecture with multi-sport support, sport-specific K-factors, EPA integration, data source migration). Issue #273, REQ-ELO-001 through REQ-ELO-007. FiveThirtyEight shutdown noted, nfl_data_py deprecation documented.
 - v2.31: **CLOUD INFRASTRUCTURE ARCHITECTURE** - Added Decisions #107-108/ADR-107-108 (Single-Database Architecture with execution_environment, Hybrid Cloud Architecture for Railway deployment with TimescaleDB). Phase 3.5 Web Interface added. Issues #241, #247.
 - v2.30: **HISTORICAL DATA COLLECTION ARCHITECTURE** - Added Decision #106/ADR-106 for BaseDataSource pattern (mirrors BasePoller ADR-103) with source adapters for FiveThirtyEight, betting CSV, and sport-specific Python libraries. Hybrid architecture separates live polling (schedulers/) from batch seeding (database/seeding/). Issue #229.
@@ -16164,4 +16355,4 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 **For complete ADR catalog, see:** ADR_INDEX_V1.4.md
 
-**END OF ARCHITECTURE DECISIONS V2.31**
+**END OF ARCHITECTURE DECISIONS V2.34**
