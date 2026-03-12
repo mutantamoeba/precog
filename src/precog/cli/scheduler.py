@@ -122,29 +122,29 @@ def _prevent_system_sleep_for_supervised(logger: Any) -> None:
     Called on the main thread so the flag persists for the entire process.
     No-op on non-Windows platforms.
     """
-    if sys.platform != "win32":
-        return
+    if sys.platform == "win32":
+        import atexit
+        import ctypes
 
-    import atexit
-    import ctypes
+        es_continuous = 0x80000000
+        es_system_required = 0x00000001
+        flags = es_continuous | es_system_required
 
-    es_continuous = 0x80000000
-    es_system_required = 0x00000001
-    flags = es_continuous | es_system_required
+        result = ctypes.windll.kernel32.SetThreadExecutionState(flags)
+        if result == 0:
+            logger.warning(
+                "Failed to set system execution state -- system may sleep during long runs"
+            )
+            console.print("[yellow]Warning: Could not prevent system sleep[/yellow]")
+        else:
+            logger.info("System sleep prevention enabled (ES_CONTINUOUS | ES_SYSTEM_REQUIRED)")
+            console.print("[green]System sleep prevention enabled[/green]")
 
-    result = ctypes.windll.kernel32.SetThreadExecutionState(flags)
-    if result == 0:
-        logger.warning("Failed to set system execution state -- system may sleep during long runs")
-        console.print("[yellow]Warning: Could not prevent system sleep[/yellow]")
-    else:
-        logger.info("System sleep prevention enabled (ES_CONTINUOUS | ES_SYSTEM_REQUIRED)")
-        console.print("[green]System sleep prevention enabled[/green]")
+        def _restore_sleep() -> None:
+            ctypes.windll.kernel32.SetThreadExecutionState(es_continuous)
+            logger.info("System sleep prevention cleared")
 
-    def _restore_sleep() -> None:
-        ctypes.windll.kernel32.SetThreadExecutionState(es_continuous)
-        logger.info("System sleep prevention cleared")
-
-    atexit.register(_restore_sleep)
+        atexit.register(_restore_sleep)
 
 
 def _start_supervised_mode(
