@@ -28,6 +28,7 @@ Related:
 from __future__ import annotations
 
 import signal as sig
+import sys
 import time
 from typing import TYPE_CHECKING, Any
 
@@ -55,6 +56,95 @@ app = typer.Typer(
 _espn_updater: ESPNGamePoller | None = None
 _kalshi_poller: KalshiMarketPoller | None = None
 _supervisor: ServiceSupervisor | None = None
+
+
+def _validate_startup(
+    *,
+    espn: bool,
+    kalshi: bool,
+    kalshi_env: str,
+    logger: Any,
+) -> bool:
+    """Validate system readiness before starting data collection.
+
+    Checks environment config, database connectivity, and credentials.
+    Fail-fast: better to error immediately than start in a broken state.
+    """
+    # Check environment config
+    try:
+        from precog.config.environment import load_environment_config
+
+        env_config = load_environment_config()
+        logger.info(
+            "Environment: %s, Database: %s", env_config.app_env.value, env_config.database_name
+        )
+    except Exception as e:
+        console.print(f"[red]Failed to load environment config: {e}[/red]")
+        return False
+
+    # Check database connection
+    try:
+        from precog.database.connection import test_connection
+
+        if not test_connection():
+            console.print("[red]Database connection test failed[/red]")
+            return False
+        console.print("[green]Database connection: OK[/green]")
+    except Exception as e:
+        console.print(f"[red]Database connection failed: {e}[/red]")
+        return False
+
+    # Check Kalshi credentials in prod mode
+    if kalshi and kalshi_env == "prod":
+        import os
+        from pathlib import Path
+
+        key_id = os.getenv("PROD_KALSHI_API_KEY")
+        key_path = os.getenv("PROD_KALSHI_PRIVATE_KEY_PATH")
+        if not key_id or not key_path:
+            console.print(
+                "[red]Kalshi prod mode requires PROD_KALSHI_API_KEY and PROD_KALSHI_PRIVATE_KEY_PATH[/red]"
+            )
+            return False
+        if not Path(key_path).exists():
+            console.print(f"[red]Kalshi private key not found: {key_path}[/red]")
+            return False
+        console.print("[green]Kalshi prod credentials: OK[/green]")
+
+    console.print("[green]Startup validation: PASSED[/green]")
+    return True
+
+
+def _prevent_system_sleep_for_supervised(logger: Any) -> None:
+    """Prevent Windows from sleeping during supervised data collection.
+
+    Uses SetThreadExecutionState to tell Windows the system must stay awake.
+    Called on the main thread so the flag persists for the entire process.
+    No-op on non-Windows platforms.
+    """
+    if sys.platform == "win32":
+        import atexit
+        import ctypes
+
+        es_continuous = 0x80000000
+        es_system_required = 0x00000001
+        flags = es_continuous | es_system_required
+
+        result = ctypes.windll.kernel32.SetThreadExecutionState(flags)
+        if result == 0:
+            logger.warning(
+                "Failed to set system execution state -- system may sleep during long runs"
+            )
+            console.print("[yellow]Warning: Could not prevent system sleep[/yellow]")
+        else:
+            logger.info("System sleep prevention enabled (ES_CONTINUOUS | ES_SYSTEM_REQUIRED)")
+            console.print("[green]System sleep prevention enabled[/green]")
+
+        def _restore_sleep() -> None:
+            ctypes.windll.kernel32.SetThreadExecutionState(es_continuous)
+            logger.info("System sleep prevention cleared")
+
+        atexit.register(_restore_sleep)
 
 
 def _start_supervised_mode(
@@ -134,6 +224,10 @@ def _start_supervised_mode(
     console.print(f"  Max restarts: {max_restarts}")
     console.print()
 
+    # Validate system readiness before starting
+    if not _validate_startup(espn=espn, kalshi=kalshi, kalshi_env=kalshi_env, logger=logger):
+        raise typer.Exit(code=1)
+
     try:
         # Create supervisor using factory function
         _supervisor = create_supervisor(
@@ -154,6 +248,9 @@ def _start_supervised_mode(
                 console.print(f"  [dim]Context: {context}[/dim]")
 
         _supervisor.register_alert_callback(alert_handler)
+
+        # Prevent system sleep during long-running data collection
+        _prevent_system_sleep_for_supervised(logger)
 
         # Start all services
         console.print("[bold]Starting services...[/bold]")

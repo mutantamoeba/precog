@@ -117,6 +117,10 @@ class KalshiMarketPoller(BasePoller):
     # - Token bucket rate limiter enforces compliance automatically
     # - Reference: https://docs.kalshi.com/getting_started/rate_limits
 
+    # Heartbeat logging: every N quiet polls, emit INFO instead of DEBUG
+    # At 15s intervals, N=20 means a heartbeat every ~5 minutes
+    HEARTBEAT_EVERY_N: ClassVar[int] = 20
+
     # Platform ID for database records
     PLATFORM_ID: ClassVar[str] = "kalshi"
 
@@ -166,6 +170,9 @@ class KalshiMarketPoller(BasePoller):
         self.series_tickers = series_tickers or self.DEFAULT_SERIES_TICKERS.copy()
         self.environment = environment
 
+        # Consecutive polls with no changes (for heartbeat logging)
+        self._silent_poll_count: int = 0
+
         # Initialize Kalshi client (or use provided mock)
         self.kalshi_client = kalshi_client or KalshiClient(environment=environment)
 
@@ -214,6 +221,23 @@ class KalshiMarketPoller(BasePoller):
                 with self._lock:
                     self._stats["errors"] += 1
                     self._stats["last_error"] = str(e)
+
+        # Heartbeat logging for operator visibility during quiet periods.
+        # BasePoller._poll_wrapper() handles the standard INFO/DEBUG logging
+        # for change/no-change polls, so we only manage the counter and
+        # emit the heartbeat here to avoid double-logging.
+        if total_updated or total_created:
+            self._silent_poll_count = 0
+        else:
+            self._silent_poll_count += 1
+            if self._silent_poll_count >= self.HEARTBEAT_EVERY_N:
+                logger.info(
+                    "Kalshi heartbeat: %d quiet polls across %d series (%d markets tracked)",
+                    self._silent_poll_count,
+                    len(self.series_tickers),
+                    self.get_active_market_count(),
+                )
+                self._silent_poll_count = 0
 
         return {
             "items_fetched": total_fetched,

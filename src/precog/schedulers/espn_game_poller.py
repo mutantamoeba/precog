@@ -149,6 +149,7 @@ class ESPNGamePoller(BasePoller):
     MAX_CONCURRENT_TRACKING: ClassVar[int] = 2  # above this, throttle tracking interval
     THROTTLED_TRACKING_INTERVAL: ClassVar[int] = 60  # seconds (when 3+ leagues tracking)
     LEAGUE_STAGGER_OFFSET: ClassVar[int] = 15  # seconds between league job starts
+    HEARTBEAT_TRACKING_EVERY_N: ClassVar[int] = 20  # heartbeat every N quiet tracking polls
 
     # ESPN rate limit budget
     ESPN_RATE_LIMIT: ClassVar[int] = 250  # requests per hour
@@ -231,6 +232,8 @@ class ESPNGamePoller(BasePoller):
         # Per-league polling state (protected by self._lock from BasePoller)
         # Maps league code -> LEAGUE_STATE_DISCOVERY or LEAGUE_STATE_TRACKING
         self._league_states: dict[str, str] = dict.fromkeys(self.leagues, LEAGUE_STATE_DISCOVERY)
+        # Maps league code -> consecutive silent poll count (for heartbeat logging)
+        self._league_silent_counts: dict[str, int] = dict.fromkeys(self.leagues, 0)
         # Maps league code -> current interval in seconds for that league
         self._league_intervals: dict[str, int] = dict.fromkeys(
             self.leagues, self.DEFAULT_DISCOVERY_INTERVAL
@@ -573,15 +576,55 @@ class ESPNGamePoller(BasePoller):
                 self._stats["last_poll"] = start_time.isoformat()
 
             elapsed = (datetime.now(UTC) - start_time).total_seconds()
-            # Demote no-change polls to DEBUG to reduce steady-state noise
-            log_fn = logger.info if games_updated else logger.debug
-            log_fn(
-                "ESPN %s poll completed: fetched=%d, updated=%d in %.2fs",
-                league.upper(),
-                len(games),
-                games_updated,
-                elapsed,
-            )
+            if games_updated:
+                # Changes detected - log at INFO and reset silent counter
+                logger.info(
+                    "ESPN %s poll completed: fetched=%d, updated=%d in %.2fs",
+                    league.upper(),
+                    len(games),
+                    games_updated,
+                    elapsed,
+                )
+                with self._lock:
+                    self._league_silent_counts[league] = 0
+            else:
+                # No changes - behavior depends on polling state
+                with self._lock:
+                    league_state = self._league_states.get(league, LEAGUE_STATE_DISCOVERY)
+                if league_state == LEAGUE_STATE_DISCOVERY:
+                    # Discovery polls are rare (~4/league/hour) - always INFO
+                    logger.info(
+                        "ESPN %s discovery: %d games on scoreboard, none changed in %.2fs",
+                        league.upper(),
+                        len(games),
+                        elapsed,
+                    )
+                else:
+                    # Tracking mode - counter-based heartbeat
+                    # Atomic check-and-reset under single lock to avoid TOCTOU race
+                    with self._lock:
+                        self._league_silent_counts[league] = (
+                            self._league_silent_counts.get(league, 0) + 1
+                        )
+                        silent_count = self._league_silent_counts[league]
+                        should_heartbeat = silent_count >= self.HEARTBEAT_TRACKING_EVERY_N
+                        if should_heartbeat:
+                            self._league_silent_counts[league] = 0
+                    if should_heartbeat:
+                        logger.info(
+                            "ESPN %s heartbeat: %d quiet polls (tracking, %d games on scoreboard)",
+                            league.upper(),
+                            silent_count,
+                            len(games),
+                        )
+                    else:
+                        logger.debug(
+                            "ESPN %s poll completed: fetched=%d, updated=%d in %.2fs",
+                            league.upper(),
+                            len(games),
+                            games_updated,
+                            elapsed,
+                        )
 
             # Evaluate league state from scoreboard response
             self._evaluate_league_state(league, games)
