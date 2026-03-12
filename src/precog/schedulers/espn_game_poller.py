@@ -51,6 +51,7 @@ Related ADR: ADR-100 (Service Supervisor Pattern)
 """
 
 import logging
+import time
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any, ClassVar
@@ -235,6 +236,9 @@ class ESPNGamePoller(BasePoller):
             self.leagues, self.DEFAULT_DISCOVERY_INTERVAL
         )
 
+        # Track last validation time for dedup guard (Part F)
+        self._last_validation_time: float = 0.0
+
         # Initialize ESPN client (or use provided mock)
         self.espn_client = espn_client or ESPNClient()
 
@@ -359,6 +363,24 @@ class ESPNGamePoller(BasePoller):
                     replace_existing=True,
                 )
 
+            # Periodic team validation job (6hr interval).
+            # Re-validates ESPN team IDs during long soak tests to catch
+            # any data drift without requiring a restart.
+            if self.validate_teams_on_start:
+                validation_interval = 21600  # 6 hours in seconds
+                self._scheduler.add_job(
+                    self._periodic_team_validation,
+                    IntervalTrigger(seconds=validation_interval),
+                    id="espn_team_validation",
+                    name="ESPN Team ID Periodic Validation",
+                    replace_existing=True,
+                )
+                logger.info(
+                    "Added periodic team validation job (interval=%ds / %dh)",
+                    validation_interval,
+                    validation_interval // 3600,
+                )
+
             self._scheduler.start()
             self._enabled = True
 
@@ -416,6 +438,7 @@ class ESPNGamePoller(BasePoller):
                 leagues=self.leagues,
                 auto_correct=True,
             )
+            self._last_validation_time = time.monotonic()
             if results["total_mismatches"] > 0:
                 logger.warning(
                     "ESPN team ID validation found %d mismatches "
@@ -431,6 +454,59 @@ class ESPNGamePoller(BasePoller):
         except Exception as e:
             # Never let validation failure prevent the poller from starting
             logger.warning("ESPN team ID validation failed (non-fatal): %s", e)
+
+    def _periodic_team_validation(self) -> None:
+        """Run periodic ESPN team ID validation (called by APScheduler).
+
+        Skips execution if the last validation (startup or periodic) happened
+        less than 10 minutes ago, to avoid redundant work when the poller
+        was recently started or restarted.
+
+        Educational Note:
+            This method is registered as an APScheduler interval job with a
+            6-hour interval. It uses auto_correct=True so any ESPN ID drift
+            detected during long soak tests is fixed automatically without
+            requiring a restart. The 10-minute dedup guard prevents the first
+            periodic run from duplicating the startup validation.
+
+        Related:
+            - _on_start() (startup validation)
+            - validate_espn_teams() in espn_team_validator.py
+        """
+        # Dedup guard: skip if validated recently (within 10 minutes)
+        elapsed = time.monotonic() - self._last_validation_time
+        if elapsed < 600:  # 600 seconds = 10 minutes
+            logger.debug(
+                "Skipping periodic team validation: last run %.0fs ago (< 600s)",
+                elapsed,
+            )
+            return
+
+        try:
+            from precog.api_connectors.espn_team_validator import validate_espn_teams
+
+            logger.info("Running periodic ESPN team ID validation...")
+            results = validate_espn_teams(
+                leagues=self.leagues,
+                auto_correct=True,
+            )
+            self._last_validation_time = time.monotonic()
+
+            if results["total_mismatches"] > 0:
+                logger.warning(
+                    "Periodic validation found %d ESPN ID mismatches "
+                    "across %d leagues (auto-corrected). Review warnings above.",
+                    results["total_mismatches"],
+                    len(results["leagues"]),
+                )
+            else:
+                logger.info(
+                    "Periodic validation passed: %d teams checked, no mismatches",
+                    results["total_checked"],
+                )
+        except Exception as e:
+            # Never let validation failure crash the scheduler
+            logger.warning("Periodic ESPN team validation failed (non-fatal): %s", e)
 
     def _on_stop(self) -> None:
         """Clean up ESPN client on stop."""

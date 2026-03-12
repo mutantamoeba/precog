@@ -1529,3 +1529,129 @@ class TestPollLeagueWrapper:
         poller._poll_league_wrapper("nfl")
 
         assert poller._league_states["nfl"] == LEAGUE_STATE_DISCOVERY
+
+
+# =============================================================================
+# Periodic Team Validation Tests (Part F)
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestPeriodicTeamValidation:
+    """Tests for periodic ESPN team validation scheduling and dedup guard.
+
+    Educational Note:
+        Part F adds a 6-hour periodic validation job to catch ESPN ID drift
+        during long soak tests. The dedup guard prevents redundant validation
+        when the poller was recently started or restarted.
+    """
+
+    def test_periodic_validation_skips_when_recent(self, mock_espn_client):
+        """Should skip periodic validation if last run was < 10 minutes ago."""
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        with patch("precog.schedulers.espn_game_poller.time") as mock_time:
+            mock_time.monotonic.return_value = 1000.0
+            poller._last_validation_time = 500.0  # 500s ago (< 600s)
+
+            with patch(
+                "precog.api_connectors.espn_team_validator.validate_espn_teams"
+            ) as mock_validate:
+                poller._periodic_team_validation()
+                mock_validate.assert_not_called()
+
+    def test_periodic_validation_runs_when_stale(self, mock_espn_client):
+        """Should run periodic validation if last run was > 10 minutes ago."""
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        with patch("precog.schedulers.espn_game_poller.time") as mock_time:
+            mock_time.monotonic.return_value = 1200.0
+            poller._last_validation_time = 0.0
+
+            with patch(
+                "precog.api_connectors.espn_team_validator.validate_espn_teams"
+            ) as mock_validate:
+                mock_validate.return_value = {
+                    "total_checked": 32,
+                    "total_mismatches": 0,
+                    "leagues": {"nfl": {}},
+                }
+                poller._periodic_team_validation()
+                mock_validate.assert_called_once_with(leagues=["nfl"], auto_correct=True)
+
+    def test_periodic_validation_updates_timestamp(self, mock_espn_client):
+        """Should update _last_validation_time after successful run."""
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        with patch("precog.schedulers.espn_game_poller.time") as mock_time:
+            mock_time.monotonic.side_effect = [700.0, 700.0]  # check + update
+            poller._last_validation_time = 0.0
+
+            with patch(
+                "precog.api_connectors.espn_team_validator.validate_espn_teams"
+            ) as mock_validate:
+                mock_validate.return_value = {
+                    "total_checked": 32,
+                    "total_mismatches": 0,
+                    "leagues": {"nfl": {}},
+                }
+                poller._periodic_team_validation()
+                assert poller._last_validation_time == 700.0
+
+    def test_periodic_validation_handles_exception(self, mock_espn_client):
+        """Should catch exceptions without crashing the scheduler."""
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        with patch("precog.schedulers.espn_game_poller.time") as mock_time:
+            mock_time.monotonic.return_value = 1200.0
+            poller._last_validation_time = 0.0
+
+            with patch(
+                "precog.api_connectors.espn_team_validator.validate_espn_teams",
+                side_effect=RuntimeError("ESPN API down"),
+            ):
+                # Should not raise
+                poller._periodic_team_validation()
+                # Timestamp should NOT update on failure (so next run retries)
+                assert poller._last_validation_time == 0.0
+
+    def test_periodic_job_registered_in_start(self, mock_espn_client):
+        """Should register periodic validation job when validate_teams_on_start=True."""
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+            validate_teams_on_start=True,
+        )
+        with patch.object(poller, "_on_start"):
+            poller.start()
+
+        try:
+            job = poller._scheduler.get_job("espn_team_validation")
+            assert job is not None
+            assert job.name == "ESPN Team ID Periodic Validation"
+        finally:
+            poller.stop()
+
+    def test_periodic_job_not_registered_when_disabled(self, mock_espn_client):
+        """Should NOT register periodic validation job when validate_teams_on_start=False."""
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+            validate_teams_on_start=False,
+        )
+        with patch.object(poller, "_on_start"):
+            poller.start()
+
+        try:
+            job = poller._scheduler.get_job("espn_team_validation")
+            assert job is None
+        finally:
+            poller.stop()
