@@ -26,6 +26,7 @@ import requests
 from precog.api_connectors.espn_team_validator import (
     CODE_ALIASES,
     LEAGUE_CONFIGS,
+    _get_team_by_espn_id_or_code,
     _resolve_db_code,
     fetch_espn_teams,
     validate_espn_teams,
@@ -231,6 +232,94 @@ class TestFetchESPNTeams:
 
 
 # =============================================================================
+# Tests: ESPN-ID-First Team Lookup
+# =============================================================================
+
+
+class TestGetTeamByEspnIdOrCode:
+    """Tests for _get_team_by_espn_id_or_code function.
+
+    Educational Note:
+        This function has two lookup paths: ESPN ID (primary) and
+        team_code+league (fallback). Both must be tested directly
+        since integration tests mock this function away.
+    """
+
+    @patch("precog.api_connectors.espn_team_validator.fetch_one")
+    @patch("precog.api_connectors.espn_team_validator.get_team_by_espn_id")
+    def test_espn_id_found_returns_team(self, mock_get_by_espn, mock_fetch_one):
+        """Should return team when ESPN ID lookup succeeds."""
+        expected = {"team_id": 1, "team_code": "KC", "espn_team_id": "12"}
+        mock_get_by_espn.return_value = expected
+
+        result = _get_team_by_espn_id_or_code("12", "KC", "nfl")
+
+        assert result == expected
+        mock_get_by_espn.assert_called_once_with("12", league="nfl")
+        mock_fetch_one.assert_not_called()
+
+    @patch("precog.api_connectors.espn_team_validator.fetch_one")
+    @patch("precog.api_connectors.espn_team_validator.get_team_by_espn_id")
+    def test_espn_id_found_with_code_mismatch_logs_warning(
+        self, mock_get_by_espn, mock_fetch_one, caplog
+    ):
+        """Should log warning when ESPN ID matches but DB code differs."""
+        mock_get_by_espn.return_value = {
+            "team_id": 1,
+            "team_code": "WAS",
+            "espn_team_id": "28",
+        }
+
+        import logging
+
+        with caplog.at_level(logging.WARNING):
+            result = _get_team_by_espn_id_or_code("28", "WSH", "nfl")
+
+        assert result is not None
+        assert result["team_code"] == "WAS"
+        assert "differs" in caplog.text
+        mock_fetch_one.assert_not_called()
+
+    @patch("precog.api_connectors.espn_team_validator.fetch_one")
+    @patch("precog.api_connectors.espn_team_validator.get_team_by_espn_id")
+    def test_fallback_when_espn_id_not_found(self, mock_get_by_espn, mock_fetch_one):
+        """Should fall back to code+league when ESPN ID lookup returns None."""
+        mock_get_by_espn.return_value = None
+        expected = {"team_id": 5, "team_code": "TEST", "espn_team_id": None}
+        mock_fetch_one.return_value = expected
+
+        result = _get_team_by_espn_id_or_code("999", "TEST", "nfl")
+
+        assert result == expected
+        mock_get_by_espn.assert_called_once_with("999", league="nfl")
+        mock_fetch_one.assert_called_once()
+
+    @patch("precog.api_connectors.espn_team_validator.fetch_one")
+    @patch("precog.api_connectors.espn_team_validator.get_team_by_espn_id")
+    def test_fallback_when_espn_id_empty(self, mock_get_by_espn, mock_fetch_one):
+        """Should skip ESPN ID lookup and go straight to fallback when ID is empty."""
+        expected = {"team_id": 5, "team_code": "OLD", "espn_team_id": None}
+        mock_fetch_one.return_value = expected
+
+        result = _get_team_by_espn_id_or_code("", "OLD", "nfl")
+
+        assert result == expected
+        mock_get_by_espn.assert_not_called()
+        mock_fetch_one.assert_called_once()
+
+    @patch("precog.api_connectors.espn_team_validator.fetch_one")
+    @patch("precog.api_connectors.espn_team_validator.get_team_by_espn_id")
+    def test_both_paths_return_none(self, mock_get_by_espn, mock_fetch_one):
+        """Should return None when team not found by either method."""
+        mock_get_by_espn.return_value = None
+        mock_fetch_one.return_value = None
+
+        result = _get_team_by_espn_id_or_code("999", "UNKNOWN", "nfl")
+
+        assert result is None
+
+
+# =============================================================================
 # Tests: League Validation
 # =============================================================================
 
@@ -238,7 +327,7 @@ class TestFetchESPNTeams:
 class TestValidateLeagueTeams:
     """Tests for validate_league_teams function."""
 
-    @patch("precog.api_connectors.espn_team_validator._get_team_by_code_and_league")
+    @patch("precog.api_connectors.espn_team_validator._get_team_by_espn_id_or_code")
     @patch("precog.api_connectors.espn_team_validator.fetch_espn_teams")
     def test_detects_espn_id_mismatch(self, mock_fetch, mock_get_team):
         """Should detect when DB has different ESPN ID than API."""
@@ -259,7 +348,7 @@ class TestValidateLeagueTeams:
         assert result["mismatches"][0]["db_espn_id"] == "99"
         assert result["mismatches"][0]["api_espn_id"] == "12"
 
-    @patch("precog.api_connectors.espn_team_validator._get_team_by_code_and_league")
+    @patch("precog.api_connectors.espn_team_validator._get_team_by_espn_id_or_code")
     @patch("precog.api_connectors.espn_team_validator.fetch_espn_teams")
     def test_no_mismatch_when_ids_match(self, mock_fetch, mock_get_team):
         """Should report zero mismatches when IDs match."""
@@ -277,7 +366,7 @@ class TestValidateLeagueTeams:
         assert result["teams_checked"] == 1
         assert len(result["mismatches"]) == 0
 
-    @patch("precog.api_connectors.espn_team_validator._get_team_by_code_and_league")
+    @patch("precog.api_connectors.espn_team_validator._get_team_by_espn_id_or_code")
     @patch("precog.api_connectors.espn_team_validator.fetch_espn_teams")
     def test_resolves_code_alias_before_lookup(self, mock_fetch, mock_get_team):
         """Should apply code alias when looking up team in DB.
@@ -296,12 +385,12 @@ class TestValidateLeagueTeams:
 
         result = validate_league_teams("nfl")
 
-        # Should have looked up 'WAS' (resolved from 'WSH')
-        mock_get_team.assert_called_with("WAS", "nfl")
+        # Should have looked up with ESPN ID '28', resolved code 'WAS', league 'nfl'
+        mock_get_team.assert_called_with("28", "WAS", "nfl")
         assert result["teams_checked"] == 1
         assert len(result["mismatches"]) == 0
 
-    @patch("precog.api_connectors.espn_team_validator._get_team_by_code_and_league")
+    @patch("precog.api_connectors.espn_team_validator._get_team_by_espn_id_or_code")
     @patch("precog.api_connectors.espn_team_validator.fetch_espn_teams")
     def test_skips_teams_not_in_db(self, mock_fetch, mock_get_team):
         """Should skip teams that are not in our database (not seeded)."""
@@ -315,7 +404,7 @@ class TestValidateLeagueTeams:
         assert result["teams_checked"] == 0
         assert len(result["mismatches"]) == 0
 
-    @patch("precog.api_connectors.espn_team_validator._get_team_by_code_and_league")
+    @patch("precog.api_connectors.espn_team_validator._get_team_by_espn_id_or_code")
     @patch("precog.api_connectors.espn_team_validator.fetch_espn_teams")
     def test_skips_teams_without_espn_id_in_db(self, mock_fetch, mock_get_team):
         """Should skip comparison if DB team has no ESPN ID yet."""
@@ -352,7 +441,7 @@ class TestValidateLeagueTeams:
         assert "Unsupported league" in result["errors"][0]
 
     @patch("precog.api_connectors.espn_team_validator._correct_espn_id")
-    @patch("precog.api_connectors.espn_team_validator._get_team_by_code_and_league")
+    @patch("precog.api_connectors.espn_team_validator._get_team_by_espn_id_or_code")
     @patch("precog.api_connectors.espn_team_validator.fetch_espn_teams")
     def test_auto_correct_calls_correction(self, mock_fetch, mock_get_team, mock_correct):
         """Should call _correct_espn_id when auto_correct=True and mismatch found."""
@@ -376,7 +465,7 @@ class TestValidateLeagueTeams:
         )
 
     @patch("precog.api_connectors.espn_team_validator._correct_espn_id")
-    @patch("precog.api_connectors.espn_team_validator._get_team_by_code_and_league")
+    @patch("precog.api_connectors.espn_team_validator._get_team_by_espn_id_or_code")
     @patch("precog.api_connectors.espn_team_validator.fetch_espn_teams")
     def test_no_auto_correct_by_default(self, mock_fetch, mock_get_team, mock_correct):
         """Should NOT call _correct_espn_id when auto_correct=False (default)."""
@@ -393,7 +482,7 @@ class TestValidateLeagueTeams:
 
         mock_correct.assert_not_called()
 
-    @patch("precog.api_connectors.espn_team_validator._get_team_by_code_and_league")
+    @patch("precog.api_connectors.espn_team_validator._get_team_by_espn_id_or_code")
     @patch("precog.api_connectors.espn_team_validator.fetch_espn_teams")
     def test_multiple_teams_with_mixed_results(self, mock_fetch, mock_get_team):
         """Should correctly count matches and mismatches across multiple teams."""
@@ -403,7 +492,7 @@ class TestValidateLeagueTeams:
             {"id": "25", "abbreviation": "SF", "displayName": "San Francisco 49ers"},
         ]
 
-        def side_effect(code, league):
+        def side_effect(espn_id, code, league):
             db_teams = {
                 "KC": {"team_id": 1, "team_code": "KC", "espn_team_id": "12"},  # match
                 "BUF": {"team_id": 2, "team_code": "BUF", "espn_team_id": "99"},  # mismatch

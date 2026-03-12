@@ -42,7 +42,7 @@ from typing import Any
 import requests
 
 from precog.database.connection import fetch_one, get_cursor
-from precog.database.crud_operations import create_team
+from precog.database.crud_operations import create_team, get_team_by_espn_id
 
 logger = logging.getLogger(__name__)
 
@@ -242,31 +242,59 @@ def _resolve_db_code(espn_code: str, league: str) -> str:
     return aliases.get(espn_code, espn_code)
 
 
-def _get_team_by_code_and_league(
+def _get_team_by_espn_id_or_code(
+    espn_id: str,
     team_code: str,
     league: str,
 ) -> dict[str, Any] | None:
-    """Look up a team by team_code and league in the database.
+    """Look up a team by ESPN ID first, falling back to team_code + league.
+
+    ESPN-ID-first lookup is critical for NCAAF where multiple teams share
+    the same abbreviation code (e.g., 5 teams with code 'WES'). Looking up
+    by code alone causes ping-ponging between wrong team records on every
+    validator restart.
+
+    Lookup order:
+        1. Try ESPN ID + league (unique, authoritative match)
+        2. Fall back to team_code + league (backward compat for teams
+           that don't have an ESPN ID yet)
 
     Args:
+        espn_id: ESPN's unique team identifier (e.g., '12' for Chiefs)
         team_code: Our database team code (e.g., 'KC', 'WAS')
         league: League identifier (nfl, nba, nhl, ncaaf)
 
     Returns:
-        Dictionary with team data, or None if not found.
+        Dictionary with team data, or None if not found by either method.
 
     Educational Note:
-        The teams table uses (team_code, sport) as a composite unique
-        constraint. In our schema, the 'sport' column stores the league
-        code (e.g., 'nfl') for NFL teams. We also check the 'league'
-        column for cases where sport and league differ.
+        After migration 0018, the teams table uses espn_team_id + league
+        as the preferred lookup path. The code+league fallback handles
+        legacy teams that were created before ESPN IDs were populated.
 
     Related:
-        - src/precog/database/crud_operations.py (get_team_elo_by_code)
+        - src/precog/database/crud_operations.py (get_team_by_espn_id)
     """
+    # Primary lookup: ESPN ID + league (authoritative)
+    if espn_id:
+        db_team = get_team_by_espn_id(espn_id, league=league)
+        if db_team is not None:
+            # If found by ESPN ID but code differs, warn for visibility
+            db_code = db_team.get("team_code", "")
+            if db_code != team_code:
+                logger.warning(
+                    "Team found by ESPN ID %s in %s: DB code '%s' differs "
+                    "from resolved code '%s' (alias or code change)",
+                    espn_id,
+                    league.upper(),
+                    db_code,
+                    team_code,
+                )
+            return db_team
+
+    # Fallback: code + league (for teams without ESPN IDs)
     return fetch_one(
-        "SELECT team_id, team_code, espn_team_id FROM teams "
-        "WHERE team_code = %s AND (sport = %s OR league = %s)",
+        "SELECT * FROM teams WHERE team_code = %s AND (sport = %s OR league = %s)",
         (team_code, league, league),
     )
 
@@ -444,8 +472,8 @@ def validate_league_teams(
         # Resolve the ESPN code to our DB code (applying aliases)
         db_code = _resolve_db_code(espn_code, league)
 
-        # Look up the team in our database by code + league
-        db_team = _get_team_by_code_and_league(db_code, league)
+        # Look up the team: ESPN ID first, then fall back to code + league
+        db_team = _get_team_by_espn_id_or_code(espn_id, db_code, league)
 
         if db_team is None:
             # Auto-create missing teams for any polled league when
