@@ -15,7 +15,7 @@ Usage:
     pytest tests/stress/database/test_connection_race.py -v -m race
 
 Educational Note:
-    Database connection pools are inherently thread-safe (psycopg2.pool.SimpleConnectionPool),
+    Database connection pools are inherently thread-safe (psycopg2.pool.ThreadedConnectionPool),
     but these tests verify that our wrapper functions maintain that safety under
     concurrent access patterns.
 
@@ -403,8 +403,14 @@ class TestConnectionInitializationRace:
         if timeout_errors:
             pytest.skip(f"Barrier timeout in CI: {len(timeout_errors)} threads")
 
-        other_errors = [e for e in errors if "timeout" not in e[1].lower()]
-        # closeall() on None pool is handled gracefully
+        other_errors = [
+            e
+            for e in errors
+            if "timeout" not in e[1].lower() and "connection pool is closed" not in e[1].lower()
+        ]
+        # closeall() on None pool is handled gracefully.
+        # ThreadedConnectionPool raises "connection pool is closed" on concurrent
+        # close attempts — this is expected and safe (pool already closed by another thread).
         assert len(other_errors) == 0, f"Errors: {other_errors}"
 
         # Re-initialize for other tests

@@ -108,13 +108,13 @@ def test_connection_timeout_masks_password_in_error(monkeypatch) -> None:
     # Reset the connection pool singleton to force re-initialization with new env vars
     close_pool()
 
-    # Mock SimpleConnectionPool to simulate timeout error
+    # Mock ThreadedConnectionPool to simulate timeout error
     # This avoids waiting for actual TCP timeout (60-120+ seconds)
     #
     # Note: psycopg2's actual timeout errors don't include the connection string
     # (unlike some errors that do). This test verifies our error handling doesn't
     # accidentally expose passwords. The mock simulates psycopg2's real behavior.
-    with patch("psycopg2.pool.SimpleConnectionPool") as mock_pool:
+    with patch("psycopg2.pool.ThreadedConnectionPool") as mock_pool:
         # Simulate timeout exception as psycopg2 actually formats it
         # psycopg2 does NOT include connection string in timeout errors
         mock_pool.side_effect = OperationalError(
@@ -174,7 +174,7 @@ def test_invalid_database_name_masks_password_in_error(monkeypatch) -> None:
 
     # Setup connection to nonexistent database
     # Note: This test requires real database server, so we'll mock it
-    with patch("psycopg2.pool.SimpleConnectionPool") as mock_pool:
+    with patch("psycopg2.pool.ThreadedConnectionPool") as mock_pool:
         # Simulate exception with connection string
         mock_pool.side_effect = OperationalError(
             f'FATAL:  database "nonexistent_db" does not exist\n'
@@ -238,7 +238,7 @@ def test_authentication_failed_masks_password_in_error(monkeypatch) -> None:
     # Reset the connection pool singleton to force re-initialization with new env vars
     close_pool()
 
-    with patch("psycopg2.pool.SimpleConnectionPool") as mock_pool:
+    with patch("psycopg2.pool.ThreadedConnectionPool") as mock_pool:
         # Simulate authentication failure with connection string
         mock_pool.side_effect = OperationalError(
             f'FATAL:  password authentication failed for user "testuser"\n'

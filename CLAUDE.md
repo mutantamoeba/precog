@@ -47,7 +47,7 @@ This project uses an agent team approach:
 
 ## Current State
 
-**What works:** Kalshi API client, ESPN client, database CRUD, config system, market/game pollers, service supervisor/runner.
+**What works:** Kalshi API client, ESPN client, database CRUD, config system, market/game pollers, service supervisor.
 **What's shaky:** Manager integration, scheduler stability for long runs, database environment drift.
 **Not built yet:** Trade execution pipeline, model prediction pipeline, risk management enforcement, web GUI.
 
@@ -190,9 +190,9 @@ python -m mypy .                     # Type check
 python scripts/test_db_connection.py # Test connection
 
 # Services
-python main.py run-services --start  # Start pollers
-python main.py run-services --status # Check status
-python main.py run-services --stop   # Stop pollers
+python main.py scheduler start --supervised --foreground  # Start pollers
+python main.py scheduler status                           # Check status
+python main.py scheduler stop                             # Stop pollers
 ```
 
 ---
