@@ -118,15 +118,38 @@ LOG_LEVEL=INFO  # Options: DEBUG, INFO, WARNING, ERROR, CRITICAL
 
 ### API Credentials
 
+Credentials use the **environment-prefixed pattern**: `{PRECOG_ENV_PREFIX}_KALSHI_*`.
+The prefix is derived from `PRECOG_ENV` (dev -> `DEV`, staging -> `STAGING`, prod -> `PROD`).
+
+#### Credential Prefix Mapping
+
+| PRECOG_ENV | API Key Variable | Private Key Path Variable |
+|------------|-----------------|--------------------------|
+| `dev` | `DEV_KALSHI_API_KEY` | `DEV_KALSHI_PRIVATE_KEY_PATH` |
+| `staging` | `STAGING_KALSHI_API_KEY` | `STAGING_KALSHI_PRIVATE_KEY_PATH` |
+| `prod` | `PROD_KALSHI_API_KEY` | `PROD_KALSHI_PRIVATE_KEY_PATH` |
+
 ```bash
-# Demo environment (for testing)
-KALSHI_DEMO_API_KEY=<your_demo_api_key>
-KALSHI_DEMO_KEYFILE=<path_to_demo_private_key.pem>
+# Development environment (for testing)
+DEV_KALSHI_API_KEY=<your_dev_api_key>
+DEV_KALSHI_PRIVATE_KEY_PATH=<path_to_dev_private_key.pem>
+
+# Staging environment (pre-production)
+STAGING_KALSHI_API_KEY=<your_staging_api_key>
+STAGING_KALSHI_PRIVATE_KEY_PATH=<path_to_staging_private_key.pem>
 
 # Production environment (REAL MONEY)
-KALSHI_PROD_API_KEY=<your_prod_api_key>
-KALSHI_PROD_KEYFILE=<path_to_prod_private_key.pem>
+PROD_KALSHI_API_KEY=<your_prod_api_key>
+PROD_KALSHI_PRIVATE_KEY_PATH=<path_to_prod_private_key.pem>
 ```
+
+> **WARNING: Demo API Limitations (Issue #355)**
+>
+> The Kalshi **demo API returns synthetic markets only** -- no real sport data,
+> no meaningful prices, no volume, no structured tickers. It is **only useful
+> for testing order mechanics** (placing, cancelling, and filling orders).
+> Do NOT rely on the demo API for market data collection, price analysis,
+> or any pipeline that expects real sport-linked markets.
 
 ---
 

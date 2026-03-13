@@ -8,7 +8,7 @@ Key Features:
 - Extends BasePoller for consistent APScheduler-based polling
 - Multi-league support (NFL, NCAAF, NBA, NCAAB, NHL, WNBA)
 - Per-league adaptive polling to stay under ESPN's 250 req/hr rate limit
-- Three polling states per league: DISCOVERY (900s) and TRACKING (30s)
+- Two polling states per league: DISCOVERY (900s) and TRACKING (30s)
 - Dynamic throttling when 3+ leagues are tracking simultaneously
 - Optional job persistence via SQLAlchemy
 - SCD Type 2 versioning for game state history

@@ -348,11 +348,13 @@ DB_NAME=precog_db
 DB_USER=your_db_user
 DB_PASSWORD=your_db_password
 
-# Kalshi API (Demo for testing)
-KALSHI_API_KEY=your_kalshi_api_key_here
-KALSHI_API_SECRET=your_kalshi_api_secret_here
-KALSHI_BASE_URL=https://demo-api.kalshi.co  # Use demo for testing
-# KALSHI_BASE_URL=https://trading-api.kalshi.com  # Production URL
+# Kalshi API — prefixed by environment prefix (DEV/TEST/STAGING/PROD)
+# Pattern: {PREFIX}_KALSHI_API_KEY, {PREFIX}_KALSHI_PRIVATE_KEY_PATH
+# Prefix mapping: PRECOG_ENV=dev->DEV, test->TEST, staging->STAGING, prod->PROD
+DEV_KALSHI_API_KEY=your_demo_kalshi_api_key
+DEV_KALSHI_PRIVATE_KEY_PATH=_keys/kalshi_demo_private.pem
+DEV_KALSHI_BASE_URL=https://demo-api.kalshi.co  # Use demo for testing
+# PROD_KALSHI_BASE_URL=https://trading-api.kalshi.com  # Production URL
 
 # ESPN API (Public - no key required)
 ESPN_API_BASE=https://site.api.espn.com/apis/site/v2
@@ -1039,8 +1041,12 @@ platforms:
     platform_id: "kalshi"
 
     # API credentials reference .env
-    api_key_env: "KALSHI_PROD_API_KEY_ID"
-    api_secret_env: "KALSHI_PROD_API_KEYFILE"
+    # Credential env vars follow the {PRECOG_ENV}_ prefix pattern:
+    #   {PRECOG_ENV}_KALSHI_API_KEY
+    #   {PRECOG_ENV}_KALSHI_PRIVATE_KEY_PATH
+    # Example: DEV_KALSHI_API_KEY, PROD_KALSHI_API_KEY
+    api_key_env: "PROD_KALSHI_API_KEY"
+    api_secret_env: "PROD_KALSHI_PRIVATE_KEY_PATH"
 
     environments:
       demo:
@@ -1085,6 +1091,26 @@ platforms:
             max_spread: "0.06"
             kelly_fraction: "0.20"
             min_edge: "0.06"
+
+          # NBA (enabled for soak test — active March markets)
+          nba:
+            enabled: true
+            series_tickers:
+              - "KXNBAGAME"
+            min_liquidity: 100
+            max_spread: "0.05"
+            kelly_fraction: "0.22"
+            min_edge: "0.05"
+
+          # NHL (enabled for soak test — active March markets)
+          nhl:
+            enabled: true
+            series_tickers:
+              - "KXNHLGAME"
+            min_liquidity: 75
+            max_spread: "0.05"
+            kelly_fraction: "0.22"
+            min_edge: "0.05"
 ```
 
 ---
@@ -1105,8 +1131,12 @@ live_stats:
       nfl:
         scoreboard: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard"
         teams: "https://site.api.espn.com/apis/site/v2/sports/football/nfl/teams"
+      ncaaf:
+        scoreboard: "https://site.api.espn.com/apis/site/v2/sports/football/college-football/scoreboard"
+        teams: "https://site.api.espn.com/apis/site/v2/sports/football/college-football/teams"
       nba:
         scoreboard: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard"
+        teams: "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/teams"
 
     polling:
       interval_seconds: 30
@@ -1192,7 +1222,7 @@ logging:
     enabled: true
     level: "DEBUG"
     directory: "logs"
-    max_size_mb: 100
+    max_size_mb: 10
     max_files: 10
     files:
       main: "precog.log"
@@ -1266,11 +1296,16 @@ from dotenv import load_dotenv
 # Load .env file
 load_dotenv()
 
-# Access environment variables
-kalshi_api_key = os.getenv('KALSHI_API_KEY')
-kalshi_api_secret = os.getenv('KALSHI_API_SECRET')
-kalshi_base_url = os.getenv('KALSHI_BASE_URL', 'https://demo-api.kalshi.co')
-db_password = os.getenv('DB_PASSWORD')
+# Access environment variables using the credential prefix
+# Prefix mapping: dev->DEV, test->TEST, staging->STAGING, prod->PROD
+# Use get_env_prefix() from precog.config.environment for the canonical mapping
+from precog.config.environment import get_env_prefix
+
+prefix = get_env_prefix()  # e.g., "DEV", "STAGING", "PROD"
+kalshi_api_key = os.getenv(f'{prefix}_KALSHI_API_KEY')
+kalshi_private_key = os.getenv(f'{prefix}_KALSHI_PRIVATE_KEY_PATH')
+kalshi_base_url = os.getenv(f'{prefix}_KALSHI_BASE_URL', 'https://demo-api.kalshi.co')
+db_password = os.getenv(f'{prefix}_DB_PASSWORD')
 ```
 
 ---
@@ -1315,9 +1350,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+precog_env = os.getenv('PRECOG_ENV', 'dev').upper()
 required_vars = [
-    'DB_HOST', 'DB_PORT', 'DB_NAME', 'DB_USER', 'DB_PASSWORD',
-    'KALSHI_API_KEY', 'KALSHI_API_SECRET', 'KALSHI_BASE_URL'
+    f'{precog_env}_DB_HOST', f'{precog_env}_DB_PORT', f'{precog_env}_DB_NAME',
+    f'{precog_env}_DB_USER', f'{precog_env}_DB_PASSWORD',
+    f'{precog_env}_KALSHI_API_KEY', f'{precog_env}_KALSHI_PRIVATE_KEY_PATH',
+    f'{precog_env}_KALSHI_BASE_URL'
 ]
 
 missing = [var for var in required_vars if not os.getenv(var)]
@@ -1412,7 +1450,7 @@ When modifying configuration:
 
 **Required Configuration:**
 - `data_sources.yaml` - ESPN API configuration
-- `.env` - KALSHI_API_KEY, KALSHI_API_SECRET
+- `.env` - `{PRECOG_ENV}_KALSHI_API_KEY`, `{PRECOG_ENV}_KALSHI_PRIVATE_KEY_PATH`
 - `markets.yaml` - Kalshi platform configuration
 
 ### Phase 3: Probability Models
@@ -1631,7 +1669,7 @@ ls -la .env
 export $(cat .env | xargs)
 
 # Or use python-dotenv
-python -c "from dotenv import load_dotenv; load_dotenv(); import os; print(os.getenv('KALSHI_API_KEY'))"
+python -c "from dotenv import load_dotenv; load_dotenv(); import os; print(os.getenv('DEV_KALSHI_API_KEY'))"
 ```
 
 ### Issue: Decimal Precision Errors
@@ -1666,7 +1704,7 @@ max_spread = Decimal('0.0500')
 5. **Start with demo environment**
    - Ensure `trading.yaml` has `environment: demo`
    - Ensure `markets.yaml` has `active_environment: "demo"`
-   - Ensure `.env` has `KALSHI_BASE_URL=https://demo-api.kalshi.co`
+   - Ensure `.env` has `DEV_KALSHI_BASE_URL=https://demo-api.kalshi.co`
 
 ---
 

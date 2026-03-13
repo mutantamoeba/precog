@@ -25,14 +25,16 @@ This guide documents the ESPN data model for the Precog prediction market platfo
 
 ### Supported Sports
 
-| League | Endpoint | Season Structure |
-|--------|----------|------------------|
-| NFL | `/football/nfl/scoreboard` | 18 weeks + playoffs |
-| NCAAF | `/football/college-football/scoreboard` | 15 weeks + bowls |
-| NBA | `/basketball/nba/scoreboard` | 82 games + playoffs |
-| NCAAB | `/basketball/mens-college-basketball/scoreboard` | Nov-Apr + tournament |
-| NHL | `/hockey/nhl/scoreboard` | 82 games + playoffs |
-| WNBA | `/basketball/wnba/scoreboard` | May-Oct |
+| League | Endpoint | Season Structure | Default-Enabled |
+|--------|----------|------------------|-----------------|
+| NFL | `/football/nfl/scoreboard` | 18 weeks + playoffs | Yes |
+| NCAAF | `/football/college-football/scoreboard` | 15 weeks + bowls | Yes |
+| NBA | `/basketball/nba/scoreboard` | 82 games + playoffs | Yes |
+| NHL | `/hockey/nhl/scoreboard` | 82 games + playoffs | Yes |
+| NCAAB | `/basketball/mens-college-basketball/scoreboard` | Nov-Apr + tournament | No |
+| WNBA | `/basketball/wnba/scoreboard` | May-Oct | No |
+
+> **Note:** Default-enabled leagues (NFL, NCAAF, NBA, NHL) are included in the ESPN game poller's `DEFAULT_LEAGUES` configuration. NCAAB and WNBA are available in the ESPN client but not default-enabled in the poller -- they require explicit configuration via the `leagues` parameter when constructing `ESPNGamePoller`.
 
 ---
 
@@ -626,6 +628,16 @@ ORDER BY tr.rank;
 
 ## Data Pipeline Integration
 
+### Polling States
+
+The ESPN game poller (`src/precog/schedulers/espn_game_poller.py`) uses two polling states per league with dynamic throttling:
+
+- **DISCOVERY** (900s interval): Default state. Slow polling to detect upcoming or newly live games.
+- **TRACKING** (30s interval): Active when live games are detected for a league.
+- **Dynamic throttling:** When 3+ leagues are in TRACKING state simultaneously, the tracking interval increases to 60s (`THROTTLED_TRACKING_INTERVAL`) to stay under ESPN's 250 req/hr rate limit.
+
+State transitions are driven by the ESPN scoreboard response: DISCOVERY transitions to TRACKING when any game has a live status, and TRACKING transitions back to DISCOVERY when all games are pre or final.
+
 ### ESPN API Client Usage
 
 ```python
@@ -734,13 +746,11 @@ def sync_espn_games(league: str = "nfl"):
 ### Source Code
 - `src/precog/api_connectors/espn_client.py` - ESPN API client with TypedDicts
 - `src/precog/database/crud_operations.py` - CRUD operations (lines 1822-2429)
-- `src/precog/database/migrations/011_create_venues_table.sql`
-- `src/precog/database/migrations/012_create_team_rankings_table.sql`
-- `src/precog/database/migrations/013_enhance_teams_table.sql`
-- `src/precog/database/migrations/014_create_game_states_table.sql`
+- `src/precog/validation/espn_validation.py` - Data quality validation for ESPN data (`ValidationLevel` enum, `ValidationResult` dataclass)
+- `src/precog/database/alembic/versions/0001_initial_baseline_schema.py` - Initial schema (includes venues, game_states, teams tables)
 
 ### Database Documentation
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.12.md` - Section 10: Live Sports Data
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` - Section 10: Live Sports Data
 - `docs/database/DATABASE_TABLES_REFERENCE.md` - Quick table reference
 
 ---
