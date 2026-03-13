@@ -1,6 +1,6 @@
 # Desktop Migration Guide V1.0
 
-**Version:** 1.0
+**Version:** 1.1
 **Created:** 2026-03-13
 **Status:** Part 1 (Code Fixes) Complete, Part 2 (Migration) Pending
 **Issue:** #324
@@ -129,16 +129,22 @@ python main.py scheduler stop
 13. Configure `.env`:
     ```
     PRECOG_ENV=staging
-    KALSHI_MODE=demo
+    KALSHI_MODE=live
+    PRECOG_DANGEROUS_CONFIRMED=yes
     DB_HOST=localhost
     DB_PORT=5432
     DB_USER=postgres
     DB_PASSWORD=<new_desktop_password>
     DB_NAME=precog_staging
     STAGING_KALSHI_API_KEY=<your_api_key>
-    STAGING_KALSHI_PRIVATE_KEY_PATH=C:\Users\<user>\repos\precog-repo\_keys\kalshi_demo_private.pem
+    STAGING_KALSHI_PRIVATE_KEY_PATH=C:\Users\<user>\repos\precog-repo\_keys\kalshi_private.pem
     ```
     **Use absolute paths** for key file (relative paths break Task Scheduler).
+
+    **Why `KALSHI_MODE=live`?** The Kalshi demo API returns synthetic markets with no real
+    sport data — no prices, no volume, no structured tickers. Data collection requires the
+    live API. The `staging` environment prevents accidental trades at the application level.
+    `PRECOG_DANGEROUS_CONFIRMED=yes` acknowledges the staging+live combination. See Issue #355.
 14. Set NTFS ACLs:
     ```cmd
     icacls .env /inheritance:r /grant:r "%USERNAME%:F"
@@ -258,8 +264,125 @@ python main.py scheduler start --supervised --foreground
 
 ---
 
+## Remote Development Setup
+
+The desktop is where data, GPU, and production services live. The laptop is for writing
+code. Set up remote access so you can run training jobs and monitor services from the laptop.
+
+### SSH Server (Windows OpenSSH)
+
+1. Install OpenSSH Server:
+   ```powershell
+   # Run as Administrator
+   Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+   ```
+2. Start and enable the service:
+   ```powershell
+   Start-Service sshd
+   Set-Service -Name sshd -StartupType Automatic
+   ```
+3. Windows Firewall will auto-create a rule for port 22. Verify:
+   ```powershell
+   Get-NetFirewallRule -Name *ssh*
+   ```
+4. Test from laptop:
+   ```bash
+   ssh <user>@<desktop-ip>
+   ```
+5. Set up SSH key auth (optional but recommended):
+   ```bash
+   # On laptop:
+   ssh-copy-id <user>@<desktop-ip>
+   ```
+
+### VS Code Remote-SSH
+
+1. Install "Remote - SSH" extension in VS Code on the laptop
+2. Add SSH host: `Ctrl+Shift+P` → "Remote-SSH: Add New SSH Host"
+   ```
+   ssh <user>@<desktop-ip>
+   ```
+3. Connect: `Ctrl+Shift+P` → "Remote-SSH: Connect to Host"
+4. Open the precog-repo folder on the desktop — full IDE experience, execution on desktop
+
+### PostgreSQL Remote Access (Read-Only, for Laptop)
+
+If you need to query production data from the laptop for debugging:
+
+1. On desktop, create a read-only database user:
+   ```sql
+   CREATE USER precog_reader WITH PASSWORD '<reader_password>';
+   GRANT CONNECT ON DATABASE precog_staging TO precog_reader;
+   GRANT SELECT ON ALL TABLES IN SCHEMA public TO precog_reader;
+   ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO precog_reader;
+   ```
+2. Update `postgresql.conf`:
+   ```
+   listen_addresses = 'localhost, <desktop-ip>'
+   ```
+3. Add to `pg_hba.conf` (laptop IP only, scram-sha-256):
+   ```
+   host  precog_staging  precog_reader  <laptop-ip>/32  scram-sha-256
+   ```
+4. Restart PostgreSQL and verify from laptop:
+   ```bash
+   psql -h <desktop-ip> -U precog_reader -d precog_staging
+   ```
+
+**Security notes:**
+- Read-only user cannot modify production data even if compromised
+- Restrict `pg_hba.conf` to laptop's specific IP, not a subnet
+- Consider SSH tunnel instead of direct access for additional encryption:
+  ```bash
+  ssh -L 5433:localhost:5432 <user>@<desktop-ip>
+  psql -h localhost -p 5433 -U precog_reader -d precog_staging
+  ```
+
+---
+
+## GPU Setup for Model Training
+
+The desktop has an AMD Radeon RX 7900 XT — all model training and backtesting runs here,
+co-located with the production database (no data transfer needed).
+
+### ROCm + PyTorch Installation
+
+1. Install AMD ROCm drivers for Windows (or use WSL2 with Linux ROCm for better ML stability):
+   - Download from [AMD ROCm](https://rocm.docs.amd.com/)
+   - Verify: `rocminfo` should list the 7900 XT
+2. Install PyTorch with ROCm backend:
+   ```bash
+   pip install torch torchvision --index-url https://download.pytorch.org/whl/rocm6.2
+   ```
+3. Verify GPU access:
+   ```python
+   import torch
+   print(torch.cuda.is_available())       # True (ROCm uses CUDA compatibility layer)
+   print(torch.cuda.get_device_name(0))   # AMD Radeon RX 7900 XT
+   ```
+
+### Development Workflow
+
+| Activity | Machine | Method |
+|----------|---------|--------|
+| Write model/strategy code | Laptop | IDE, push to GitHub |
+| Run unit tests | Laptop | `pytest tests/unit/` |
+| Pull code + train model | Desktop | `git pull` then training script (GPU + data co-located) |
+| Run backtests | Desktop | Needs historical SCD data + GPU compute |
+| Evaluate model performance | Desktop | Reads from production database directly |
+| Monitor training jobs remotely | Laptop | SSH or VS Code Remote-SSH |
+
+### Training Data Access
+
+Models train directly against the production database — no data export or replication needed.
+The training code connects to `precog_staging` (or `precog_prod` after promotion) on localhost.
+This eliminates data staleness and transfer overhead.
+
+---
+
 ## Version History
 
 | Version | Date | Summary |
 |---------|------|---------|
+| 1.1 | 2026-03-13 | Added: GPU/ROCm setup, remote dev (SSH, VS Code), read-only DB access. Fixed: KALSHI_MODE=live (demo API unusable for data, #355). |
 | 1.0 | 2026-03-13 | Initial creation. Part 1 code fixes complete. |
