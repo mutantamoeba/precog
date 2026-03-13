@@ -128,7 +128,10 @@ def _prevent_system_sleep_for_supervised(logger: Any) -> None:
 
         es_continuous = 0x80000000
         es_system_required = 0x00000001
-        flags = es_continuous | es_system_required
+        es_display_required = 0x00000002
+        # ES_DISPLAY_REQUIRED prevents display sleep, which some laptops
+        # use as a trigger for system sleep/hibernate (especially on lid close).
+        flags = es_continuous | es_system_required | es_display_required
 
         result = ctypes.windll.kernel32.SetThreadExecutionState(flags)
         if result == 0:
@@ -137,8 +140,17 @@ def _prevent_system_sleep_for_supervised(logger: Any) -> None:
             )
             console.print("[yellow]Warning: Could not prevent system sleep[/yellow]")
         else:
-            logger.info("System sleep prevention enabled (ES_CONTINUOUS | ES_SYSTEM_REQUIRED)")
+            logger.info(
+                "System sleep prevention enabled"
+                " (ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED)"
+            )
             console.print("[green]System sleep prevention enabled[/green]")
+
+        # Warn about lid close action — this overrides SetThreadExecutionState
+        console.print(
+            "[dim]Note: Closing the laptop lid may still trigger sleep."
+            " Check Power Options > Lid Close Action.[/dim]"
+        )
 
         def _restore_sleep() -> None:
             ctypes.windll.kernel32.SetThreadExecutionState(es_continuous)
