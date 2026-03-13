@@ -406,21 +406,48 @@ class TestValidateLeagueTeams:
 
     @patch("precog.api_connectors.espn_team_validator._get_team_by_espn_id_or_code")
     @patch("precog.api_connectors.espn_team_validator.fetch_espn_teams")
-    def test_skips_teams_without_espn_id_in_db(self, mock_fetch, mock_get_team):
-        """Should skip comparison if DB team has no ESPN ID yet."""
+    def test_reports_teams_without_espn_id_as_needing_population(self, mock_fetch, mock_get_team):
+        """Teams with NULL ESPN ID should be reported as needing population."""
         mock_fetch.return_value = [
             {"id": "12", "abbreviation": "KC", "displayName": "Kansas City Chiefs"},
         ]
         mock_get_team.return_value = {
             "team_id": 1,
             "team_code": "KC",
-            "espn_team_id": None,  # No ESPN ID in DB yet
+            "espn_team_id": None,  # No ESPN ID in DB yet — should be populated
         }
 
         result = validate_league_teams("nfl")
 
-        assert result["teams_checked"] == 1  # Team found in DB, but ESPN ID is None
-        assert len(result["mismatches"]) == 0
+        assert result["teams_checked"] == 1
+        assert len(result["mismatches"]) == 1
+        assert result["mismatches"][0]["db_espn_id"] == "(NULL)"
+        assert result["mismatches"][0]["api_espn_id"] == "12"
+
+    @patch("precog.api_connectors.espn_team_validator._correct_espn_id")
+    @patch("precog.api_connectors.espn_team_validator._get_team_by_espn_id_or_code")
+    @patch("precog.api_connectors.espn_team_validator.fetch_espn_teams")
+    def test_auto_correct_populates_null_espn_id(self, mock_fetch, mock_get_team, mock_correct):
+        """Auto-correct should populate ESPN ID when DB has NULL."""
+        mock_fetch.return_value = [
+            {"id": "12", "abbreviation": "KC", "displayName": "Kansas City Chiefs"},
+        ]
+        mock_get_team.return_value = {
+            "team_id": 1,
+            "team_code": "KC",
+            "espn_team_id": None,
+        }
+
+        result = validate_league_teams("nfl", auto_correct=True)
+
+        assert len(result["mismatches"]) == 1
+        mock_correct.assert_called_once_with(
+            team_id=1,
+            team_code="KC",
+            league="nfl",
+            old_espn_id="",
+            new_espn_id="12",
+        )
 
     @patch("precog.api_connectors.espn_team_validator.fetch_espn_teams")
     def test_handles_api_network_error_gracefully(self, mock_fetch):

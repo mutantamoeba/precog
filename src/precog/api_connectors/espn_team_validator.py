@@ -292,10 +292,19 @@ def _get_team_by_espn_id_or_code(
                 )
             return db_team
 
-    # Fallback: code + league (for teams without ESPN IDs)
+    # Fallback: code + league (for teams without ESPN IDs yet).
+    # ORDER BY prefers unassigned teams (espn_team_id IS NULL) first,
+    # then by team_id for determinism.  This prevents NCAAF ping-pong
+    # where duplicate codes (e.g. 5 teams all coded 'WES') caused a
+    # random row to be matched and "corrected" each run.
+    # NOTE: Code-only matching may assign the wrong ESPN ID when codes
+    # collide (e.g. Wesleyan vs Western Michigan).  A deeper fix using
+    # name matching is tracked separately.
     return fetch_one(
-        "SELECT * FROM teams WHERE team_code = %s AND (sport = %s OR league = %s)",
-        (team_code, league, league),
+        "SELECT * FROM teams WHERE team_code = %s AND league = %s "
+        "ORDER BY CASE WHEN espn_team_id IS NULL THEN 0 ELSE 1 END, team_id "
+        "LIMIT 1",
+        (team_code, league),
     )
 
 
@@ -502,30 +511,36 @@ def validate_league_teams(
 
         teams_checked += 1
 
-        # Compare ESPN IDs
+        # Compare ESPN IDs — NULL means "not yet assigned", treat as mismatch
         raw_espn_id = db_team.get("espn_team_id")
-        if raw_espn_id is None:
-            continue
-
-        db_espn_id = str(raw_espn_id)
+        db_espn_id = str(raw_espn_id) if raw_espn_id is not None else ""
 
         if db_espn_id != espn_id:
             mismatch = {
                 "team_code": db_code,
                 "espn_code": espn_code,
                 "team_name": espn_name,
-                "db_espn_id": db_espn_id,
+                "db_espn_id": db_espn_id or "(NULL)",
                 "api_espn_id": espn_id,
             }
             mismatches.append(mismatch)
-            logger.warning(
-                "ESPN ID mismatch for %s %s (%s): DB has '%s', ESPN API has '%s'",
-                league.upper(),
-                db_code,
-                espn_name,
-                db_espn_id,
-                espn_id,
-            )
+            if not db_espn_id:
+                logger.info(
+                    "Populating ESPN ID for %s %s (%s): setting to '%s'",
+                    league.upper(),
+                    db_code,
+                    espn_name,
+                    espn_id,
+                )
+            else:
+                logger.warning(
+                    "ESPN ID mismatch for %s %s (%s): DB has '%s', ESPN API has '%s'",
+                    league.upper(),
+                    db_code,
+                    espn_name,
+                    db_espn_id,
+                    espn_id,
+                )
 
             # Auto-correct if configured
             if auto_correct:

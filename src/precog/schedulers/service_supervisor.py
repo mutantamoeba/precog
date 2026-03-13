@@ -727,16 +727,25 @@ class ServiceSupervisor:
             self._output_metrics()
 
     def _output_metrics(self) -> None:
-        """Collect and output aggregate metrics."""
+        """Collect and output aggregate metrics with per-service poll counts."""
         aggregate = self.get_aggregate_metrics()
 
+        # Build per-service summary for operator visibility
+        svc_parts = []
+        for name, svc_data in aggregate.get("per_service", {}).items():
+            stats = svc_data.get("stats", {})
+            polls = stats.get("polls_completed", "?")
+            errs = svc_data.get("error_count", 0)
+            svc_parts.append(f"{name}={polls}polls/{errs}err")
+
+        svc_summary = ", ".join(svc_parts) if svc_parts else "no services"
+
         self.logger.info(
-            "Metrics: healthy=%d/%d, errors=%d, restarts=%d, uptime=%.0fs",
+            "Metrics: healthy=%d/%d, uptime=%.0fs | %s",
             aggregate["services_healthy"],
             aggregate["services_total"],
-            aggregate["total_errors"],
-            aggregate["total_restarts"],
             aggregate["uptime_seconds"],
+            svc_summary,
             extra={
                 "event": "metrics",
                 "metrics": aggregate,
