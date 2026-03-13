@@ -15,7 +15,7 @@ Usage:
     pytest tests/stress/database/test_connection_race.py -v -m race
 
 Educational Note:
-    Database connection pools are inherently thread-safe (psycopg2.pool.SimpleConnectionPool),
+    Database connection pools are inherently thread-safe (psycopg2.pool.ThreadedConnectionPool),
     but these tests verify that our wrapper functions maintain that safety under
     concurrent access patterns.
 

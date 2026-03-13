@@ -86,7 +86,7 @@ MODULE_TIERS = {
     "schedulers/kalshi_poller": "critical",
     "schedulers/kalshi_websocket": "critical",
     "schedulers/service_supervisor": "critical",
-    "runners/service_runner": "critical",
+    # runners/service_runner: REMOVED (dead code, Issue #324)
     # Trading Logic
     "trading/kelly_criterion": "critical",
     # Business Logic (85%+) - 6 types required

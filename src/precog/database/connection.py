@@ -14,7 +14,7 @@ Why This Matters:
 - For 1000 queries: 50 seconds wasted vs 1 second (50x faster!)
 
 Thread Safety:
-- psycopg2.pool.SimpleConnectionPool is thread-safe
+- psycopg2.pool.ThreadedConnectionPool is thread-safe
 - Multiple threads can call get_connection() simultaneously
 - Pool ensures no two threads get the same connection object
 - Lock-based implementation prevents race conditions
@@ -62,7 +62,7 @@ logger = get_logger(__name__)
 load_dotenv()
 
 # Connection pool (global singleton)
-_connection_pool: pool.SimpleConnectionPool | None = None
+_connection_pool: pool.ThreadedConnectionPool | None = None
 
 # Valid environments (kept for backwards compatibility)
 VALID_ENVIRONMENTS = ("dev", "test", "staging", "prod")
@@ -269,8 +269,18 @@ def initialize_pool(
         raise ValueError(msg)
 
     try:
-        _connection_pool = pool.SimpleConnectionPool(
-            minconn, maxconn, host=host, port=port, database=database, user=user, password=password
+        _connection_pool = pool.ThreadedConnectionPool(
+            minconn,
+            maxconn,
+            host=host,
+            port=port,
+            database=database,
+            user=user,
+            password=password,
+            keepalives=1,
+            keepalives_idle=300,
+            keepalives_interval=30,
+            keepalives_count=5,
         )
         logger.info(f"Database connection pool initialized ({minconn}-{maxconn} connections)")
         logger.info(f"Connected to: {user}@{host}:{port}/{database}")
