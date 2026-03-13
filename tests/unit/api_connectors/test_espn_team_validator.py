@@ -245,9 +245,9 @@ class TestGetTeamByEspnIdOrCode:
         since integration tests mock this function away.
     """
 
-    @patch("precog.api_connectors.espn_team_validator.fetch_one")
+    @patch("precog.api_connectors.espn_team_validator.fetch_all")
     @patch("precog.api_connectors.espn_team_validator.get_team_by_espn_id")
-    def test_espn_id_found_returns_team(self, mock_get_by_espn, mock_fetch_one):
+    def test_espn_id_found_returns_team(self, mock_get_by_espn, mock_fetch_all):
         """Should return team when ESPN ID lookup succeeds."""
         expected = {"team_id": 1, "team_code": "KC", "espn_team_id": "12"}
         mock_get_by_espn.return_value = expected
@@ -256,12 +256,12 @@ class TestGetTeamByEspnIdOrCode:
 
         assert result == expected
         mock_get_by_espn.assert_called_once_with("12", league="nfl")
-        mock_fetch_one.assert_not_called()
+        mock_fetch_all.assert_not_called()
 
-    @patch("precog.api_connectors.espn_team_validator.fetch_one")
+    @patch("precog.api_connectors.espn_team_validator.fetch_all")
     @patch("precog.api_connectors.espn_team_validator.get_team_by_espn_id")
     def test_espn_id_found_with_code_mismatch_logs_warning(
-        self, mock_get_by_espn, mock_fetch_one, caplog
+        self, mock_get_by_espn, mock_fetch_all, caplog
     ):
         """Should log warning when ESPN ID matches but DB code differs."""
         mock_get_by_espn.return_value = {
@@ -278,45 +278,93 @@ class TestGetTeamByEspnIdOrCode:
         assert result is not None
         assert result["team_code"] == "WAS"
         assert "differs" in caplog.text
-        mock_fetch_one.assert_not_called()
+        mock_fetch_all.assert_not_called()
 
-    @patch("precog.api_connectors.espn_team_validator.fetch_one")
+    @patch("precog.api_connectors.espn_team_validator.fetch_all")
     @patch("precog.api_connectors.espn_team_validator.get_team_by_espn_id")
-    def test_fallback_when_espn_id_not_found(self, mock_get_by_espn, mock_fetch_one):
+    def test_fallback_when_espn_id_not_found(self, mock_get_by_espn, mock_fetch_all):
         """Should fall back to code+league when ESPN ID lookup returns None."""
         mock_get_by_espn.return_value = None
         expected = {"team_id": 5, "team_code": "TEST", "espn_team_id": None}
-        mock_fetch_one.return_value = expected
+        mock_fetch_all.return_value = [expected]
 
         result = _get_team_by_espn_id_or_code("999", "TEST", "nfl")
 
         assert result == expected
         mock_get_by_espn.assert_called_once_with("999", league="nfl")
-        mock_fetch_one.assert_called_once()
+        mock_fetch_all.assert_called_once()
 
-    @patch("precog.api_connectors.espn_team_validator.fetch_one")
+    @patch("precog.api_connectors.espn_team_validator.fetch_all")
     @patch("precog.api_connectors.espn_team_validator.get_team_by_espn_id")
-    def test_fallback_when_espn_id_empty(self, mock_get_by_espn, mock_fetch_one):
+    def test_fallback_when_espn_id_empty(self, mock_get_by_espn, mock_fetch_all):
         """Should skip ESPN ID lookup and go straight to fallback when ID is empty."""
         expected = {"team_id": 5, "team_code": "OLD", "espn_team_id": None}
-        mock_fetch_one.return_value = expected
+        mock_fetch_all.return_value = [expected]
 
         result = _get_team_by_espn_id_or_code("", "OLD", "nfl")
 
         assert result == expected
         mock_get_by_espn.assert_not_called()
-        mock_fetch_one.assert_called_once()
+        mock_fetch_all.assert_called_once()
 
-    @patch("precog.api_connectors.espn_team_validator.fetch_one")
+    @patch("precog.api_connectors.espn_team_validator.fetch_all")
     @patch("precog.api_connectors.espn_team_validator.get_team_by_espn_id")
-    def test_both_paths_return_none(self, mock_get_by_espn, mock_fetch_one):
+    def test_both_paths_return_none(self, mock_get_by_espn, mock_fetch_all):
         """Should return None when team not found by either method."""
         mock_get_by_espn.return_value = None
-        mock_fetch_one.return_value = None
+        mock_fetch_all.return_value = []
 
         result = _get_team_by_espn_id_or_code("999", "UNKNOWN", "nfl")
 
         assert result is None
+
+    @patch("precog.api_connectors.espn_team_validator.fetch_all")
+    @patch("precog.api_connectors.espn_team_validator.get_team_by_espn_id")
+    def test_name_disambiguation_picks_correct_team(self, mock_get_by_espn, mock_fetch_all):
+        """When multiple teams share a code, prefer the name match."""
+        mock_get_by_espn.return_value = None
+        mock_fetch_all.return_value = [
+            {
+                "team_id": 10,
+                "team_code": "HAM",
+                "team_name": "Hamilton Continentals",
+                "espn_team_id": None,
+            },
+            {
+                "team_id": 20,
+                "team_code": "HAM",
+                "team_name": "Hamline Pipers",
+                "espn_team_id": None,
+            },
+        ]
+
+        result = _get_team_by_espn_id_or_code(
+            "162", "HAM", "ncaaf", espn_display_name="Hamline Pipers"
+        )
+
+        assert result["team_id"] == 20
+        assert result["team_name"] == "Hamline Pipers"
+
+    @patch("precog.api_connectors.espn_team_validator.fetch_all")
+    @patch("precog.api_connectors.espn_team_validator.get_team_by_espn_id")
+    def test_exclusion_set_filters_matched_teams(self, mock_get_by_espn, mock_fetch_all):
+        """Already-matched team_ids should be excluded from fallback."""
+        mock_get_by_espn.return_value = None
+        mock_fetch_all.return_value = [
+            {
+                "team_id": 20,
+                "team_code": "HAM",
+                "team_name": "Hamline Pipers",
+                "espn_team_id": None,
+            },
+        ]
+
+        result = _get_team_by_espn_id_or_code("297", "HAM", "ncaaf", exclude_team_ids={10})
+
+        # Verify the exclusion was passed in the SQL query
+        call_args = mock_fetch_all.call_args
+        assert [10] in list(call_args[0][1])  # list(exclude_ids) in params
+        assert result["team_id"] == 20
 
 
 # =============================================================================
@@ -386,7 +434,13 @@ class TestValidateLeagueTeams:
         result = validate_league_teams("nfl")
 
         # Should have looked up with ESPN ID '28', resolved code 'WAS', league 'nfl'
-        mock_get_team.assert_called_with("28", "WAS", "nfl")
+        mock_get_team.assert_called_with(
+            "28",
+            "WAS",
+            "nfl",
+            exclude_team_ids=mock_get_team.call_args[1]["exclude_team_ids"],
+            espn_display_name="Washington Commanders",
+        )
         assert result["teams_checked"] == 1
         assert len(result["mismatches"]) == 0
 
@@ -519,7 +573,7 @@ class TestValidateLeagueTeams:
             {"id": "25", "abbreviation": "SF", "displayName": "San Francisco 49ers"},
         ]
 
-        def side_effect(espn_id, code, league):
+        def side_effect(espn_id, code, league, **kwargs):
             db_teams = {
                 "KC": {"team_id": 1, "team_code": "KC", "espn_team_id": "12"},  # match
                 "BUF": {"team_id": 2, "team_code": "BUF", "espn_team_id": "99"},  # mismatch
@@ -534,6 +588,75 @@ class TestValidateLeagueTeams:
         assert result["teams_checked"] == 3
         assert len(result["mismatches"]) == 1
         assert result["mismatches"][0]["team_code"] == "BUF"
+
+    @patch("precog.api_connectors.espn_team_validator._correct_espn_id")
+    @patch("precog.api_connectors.espn_team_validator._get_team_by_espn_id_or_code")
+    @patch("precog.api_connectors.espn_team_validator.fetch_espn_teams")
+    def test_cascade_prevention_same_code_teams(self, mock_fetch, mock_get_team, mock_correct):
+        """Three ESPN teams sharing code 'HAM' must each match a DIFFERENT DB row.
+
+        This is the cascade prevention test: without the exclusion set,
+        correcting team 1's ESPN ID in the DB makes it visible to team 2's
+        primary lookup, causing team 2 to steal team 1's row. The exclusion
+        set prevents any row from being matched twice in one run.
+        """
+        mock_fetch.return_value = [
+            {"id": "162", "abbreviation": "HAM", "displayName": "Hamline Pipers"},
+            {"id": "297", "abbreviation": "HAM", "displayName": "Hampden-Sydney Tigers"},
+            {"id": "348", "abbreviation": "HAM", "displayName": "Hamilton Continentals"},
+        ]
+
+        # Simulate 3 DB rows with code 'HAM', all with NULL ESPN IDs.
+        # The exclusion set should grow after each match, preventing re-use.
+        call_count = 0
+
+        def side_effect(espn_id, code, league, **kwargs):
+            nonlocal call_count
+            exclude = kwargs.get("exclude_team_ids", set())
+
+            # Each call should see a growing exclusion set
+            if call_count == 0:
+                assert len(exclude) == 0
+                call_count += 1
+                return {
+                    "team_id": 100,
+                    "team_code": "HAM",
+                    "team_name": "Hamline Pipers",
+                    "espn_team_id": None,
+                }
+            if call_count == 1:
+                assert 100 in exclude  # team_id 100 already matched
+                call_count += 1
+                return {
+                    "team_id": 200,
+                    "team_code": "HAM",
+                    "team_name": "Hampden-Sydney Tigers",
+                    "espn_team_id": None,
+                }
+            assert 100 in exclude  # both already matched
+            assert 200 in exclude
+            call_count += 1
+            return {
+                "team_id": 300,
+                "team_code": "HAM",
+                "team_name": "Hamilton Continentals",
+                "espn_team_id": None,
+            }
+
+        mock_get_team.side_effect = side_effect
+
+        result = validate_league_teams("ncaaf", auto_correct=True)
+
+        assert result["teams_checked"] == 3
+        assert len(result["mismatches"]) == 3
+
+        # Each correction must target a DIFFERENT team_id
+        corrected_ids = [call.kwargs["team_id"] for call in mock_correct.call_args_list]
+        assert corrected_ids == [100, 200, 300], f"Expected [100, 200, 300], got {corrected_ids}"
+
+        # Each correction must set the correct ESPN ID
+        corrected_espn = [call.kwargs["new_espn_id"] for call in mock_correct.call_args_list]
+        assert corrected_espn == ["162", "297", "348"]
 
 
 # =============================================================================

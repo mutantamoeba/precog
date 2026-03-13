@@ -41,7 +41,7 @@ from typing import Any
 
 import requests
 
-from precog.database.connection import fetch_one, get_cursor
+from precog.database.connection import fetch_all, get_cursor
 from precog.database.crud_operations import create_team, get_team_by_espn_id
 
 logger = logging.getLogger(__name__)
@@ -246,31 +246,33 @@ def _get_team_by_espn_id_or_code(
     espn_id: str,
     team_code: str,
     league: str,
+    exclude_team_ids: set[int] | None = None,
+    espn_display_name: str | None = None,
 ) -> dict[str, Any] | None:
     """Look up a team by ESPN ID first, falling back to team_code + league.
 
     ESPN-ID-first lookup is critical for NCAAF where multiple teams share
-    the same abbreviation code (e.g., 5 teams with code 'WES'). Looking up
-    by code alone causes ping-ponging between wrong team records on every
-    validator restart.
+    the same abbreviation code (e.g., 5 teams with code 'WES').
 
     Lookup order:
         1. Try ESPN ID + league (unique, authoritative match)
-        2. Fall back to team_code + league (backward compat for teams
-           that don't have an ESPN ID yet)
+        2. Fall back to team_code + league with disambiguation:
+           a. Exclude already-matched team_ids (prevents cascade)
+           b. Prefer name match when codes collide
+           c. Fall back to NULL-ESPN-ID-first ordering
 
     Args:
         espn_id: ESPN's unique team identifier (e.g., '12' for Chiefs)
         team_code: Our database team code (e.g., 'KC', 'WAS')
         league: League identifier (nfl, nba, nhl, ncaaf)
+        exclude_team_ids: Team IDs already matched in this validation run.
+            Prevents cascade where correcting team A's ESPN ID makes it
+            match team B's lookup in the same run.
+        espn_display_name: ESPN's displayName for the team. Used to
+            disambiguate when multiple teams share the same code.
 
     Returns:
         Dictionary with team data, or None if not found by either method.
-
-    Educational Note:
-        After migration 0018, the teams table uses espn_team_id + league
-        as the preferred lookup path. The code+league fallback handles
-        legacy teams that were created before ESPN IDs were populated.
 
     Related:
         - src/precog/database/crud_operations.py (get_team_by_espn_id)
@@ -292,20 +294,32 @@ def _get_team_by_espn_id_or_code(
                 )
             return db_team
 
-    # Fallback: code + league (for teams without ESPN IDs yet).
-    # ORDER BY prefers unassigned teams (espn_team_id IS NULL) first,
-    # then by team_id for determinism.  This prevents NCAAF ping-pong
-    # where duplicate codes (e.g. 5 teams all coded 'WES') caused a
-    # random row to be matched and "corrected" each run.
-    # NOTE: Code-only matching may assign the wrong ESPN ID when codes
-    # collide (e.g. Wesleyan vs Western Michigan).  A deeper fix using
-    # name matching is tracked separately.
-    return fetch_one(
-        "SELECT * FROM teams WHERE team_code = %s AND league = %s "
-        "ORDER BY CASE WHEN espn_team_id IS NULL THEN 0 ELSE 1 END, team_id "
-        "LIMIT 1",
-        (team_code, league),
-    )
+    # Fallback: code + league with cascade prevention.
+    # Fetch ALL candidates so we can disambiguate in Python.
+    query = "SELECT * FROM teams WHERE team_code = %s AND league = %s "
+    params: list[Any] = [team_code, league]
+
+    if exclude_team_ids:
+        query += "AND team_id != ALL(%s) "
+        params.append(list(exclude_team_ids))
+
+    query += "ORDER BY CASE WHEN espn_team_id IS NULL THEN 0 ELSE 1 END, team_id"
+
+    candidates = fetch_all(query, tuple(params))
+
+    if not candidates:
+        return None
+
+    # Name disambiguation: when multiple teams share a code, prefer
+    # the one whose team_name matches ESPN's displayName.
+    if espn_display_name and len(candidates) > 1:
+        name_lower = espn_display_name.lower()
+        name_matches = [c for c in candidates if c.get("team_name", "").lower() == name_lower]
+        if len(name_matches) == 1:
+            return name_matches[0]
+
+    # Default: first candidate (NULL ESPN ID first, then lowest team_id)
+    return candidates[0]
 
 
 # =============================================================================
@@ -465,10 +479,14 @@ def validate_league_teams(
         logger.info("No teams returned from ESPN API for %s", league.upper())
         return result
 
-    # Step 2: Compare each ESPN team against the database
+    # Step 2: Compare each ESPN team against the database.
+    # Track matched team_ids to prevent cascade: when multiple teams share
+    # a code (e.g., 5 NCAAF teams with 'HAM'), correcting one must not
+    # make it match a different ESPN team's fallback lookup in the same run.
     teams_checked = 0
     teams_created = 0
     mismatches: list[dict[str, str]] = []
+    matched_team_ids: set[int] = set()
 
     for espn_team_raw in espn_teams:
         espn_id = str(espn_team_raw.get("id", ""))
@@ -481,8 +499,16 @@ def validate_league_teams(
         # Resolve the ESPN code to our DB code (applying aliases)
         db_code = _resolve_db_code(espn_code, league)
 
-        # Look up the team: ESPN ID first, then fall back to code + league
-        db_team = _get_team_by_espn_id_or_code(espn_id, db_code, league)
+        # Look up the team: ESPN ID first, then fall back to code + league.
+        # Pass exclusion set and display name for cascade prevention and
+        # name-based disambiguation on code collisions.
+        db_team = _get_team_by_espn_id_or_code(
+            espn_id,
+            db_code,
+            league,
+            exclude_team_ids=matched_team_ids,
+            espn_display_name=espn_name,
+        )
 
         if db_team is None:
             # Auto-create missing teams for any polled league when
@@ -496,7 +522,7 @@ def validate_league_teams(
                 if created_id is not None:
                     teams_created += 1
                     teams_checked += 1
-                    # Team just created with correct ESPN ID, no mismatch
+                    matched_team_ids.add(created_id)
                     continue
             else:
                 logger.warning(
@@ -510,6 +536,7 @@ def validate_league_teams(
             continue
 
         teams_checked += 1
+        matched_team_ids.add(db_team["team_id"])
 
         # Compare ESPN IDs — NULL means "not yet assigned", treat as mismatch
         raw_espn_id = db_team.get("espn_team_id")
