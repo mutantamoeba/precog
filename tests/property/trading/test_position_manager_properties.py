@@ -320,12 +320,12 @@ class TestPriceValidationProperties:
     @given(price=price_strategy)
     @settings(max_examples=30)
     def test_valid_price_range(self, price: Decimal) -> None:
-        """Test valid prices are in range [0.01, 0.99]."""
+        """Test valid entry prices are in range [0.01, 0.99]."""
         assert Decimal("0.01") <= price <= Decimal("0.99")
 
     @given(
         price=st.decimals(
-            min_value=Decimal("1.00"),
+            min_value=Decimal("1.01"),
             max_value=Decimal("10.00"),
             places=4,
             allow_nan=False,
@@ -334,7 +334,7 @@ class TestPriceValidationProperties:
     )
     @settings(max_examples=30)
     def test_invalid_price_above_range(self, price: Decimal) -> None:
-        """Test prices >= 1.00 are invalid."""
+        """Test prices > 1.00 are invalid (current_price range is [0.00, 1.00])."""
         manager = create_manager()
 
         with pytest.raises(ValueError, match="outside valid range"):
@@ -343,7 +343,7 @@ class TestPriceValidationProperties:
     @given(
         price=st.decimals(
             min_value=Decimal("-1.00"),
-            max_value=Decimal("0.009"),
+            max_value=Decimal("-0.001"),
             places=4,
             allow_nan=False,
             allow_infinity=False,
@@ -351,7 +351,7 @@ class TestPriceValidationProperties:
     )
     @settings(max_examples=30)
     def test_invalid_price_below_range(self, price: Decimal) -> None:
-        """Test prices <= 0.00 are invalid."""
+        """Test prices < 0.00 are invalid (current_price range is [0.00, 1.00])."""
         manager = create_manager()
 
         with pytest.raises(ValueError, match="outside valid range"):
