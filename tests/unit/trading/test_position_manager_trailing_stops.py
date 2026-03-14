@@ -378,12 +378,12 @@ def test_update_trailing_stop_division_by_zero_protection(
 
 
 def test_update_trailing_stop_invalid_price_range(position_manager):
-    """Test update fails when current_price outside valid range [0.01, 0.99]."""
+    """Test update fails when current_price outside valid range [0.00, 1.00]."""
     with pytest.raises(ValueError, match="outside valid range"):
-        position_manager.update_trailing_stop(123, Decimal("1.05"))  # > 0.99
+        position_manager.update_trailing_stop(123, Decimal("1.05"))  # > 1.00
 
     with pytest.raises(ValueError, match="outside valid range"):
-        position_manager.update_trailing_stop(123, Decimal("0.005"))  # < 0.01
+        position_manager.update_trailing_stop(123, Decimal("-0.01"))  # < 0.00
 
 
 def test_update_trailing_stop_position_not_found(position_manager, mocker):

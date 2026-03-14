@@ -348,9 +348,15 @@ class PositionManager:
 
         Raises:
             ValueError: If position not found or already closed
-            ValueError: If current_price outside valid range [0.01, 0.99]
+            ValueError: If current_price outside valid range [0.00, 1.00]
 
         Educational Note:
+            **Price Range for current_price:**
+            The range [0.00, 1.00] is used because current_price reflects
+            the Kalshi ask price, which reaches 0.00 and 1.00 at settlement.
+            This is wider than entry_price [0.01, 0.99] because we should
+            not enter near-certain markets, but must handle settlement.
+
             **SCD Type 2 Versioning:**
             When you call this method:
             1. Old version: row_current_ind TRUE -> FALSE (archived)
@@ -372,8 +378,10 @@ class PositionManager:
             - Migrations 015-017: Dual-key structure implementation
         """
         # Validation: Price range
-        if not (Decimal("0.01") <= current_price <= Decimal("0.99")):
-            raise ValueError(f"Current price {current_price} outside valid range [0.01, 0.99]")
+        # current_price uses [0.00, 1.00] because Kalshi ask prices reach
+        # 0.00 and 1.00 at settlement (unlike entry_price which uses [0.01, 0.99])
+        if not (Decimal("0.00") <= current_price <= Decimal("1.00")):
+            raise ValueError(f"Current price {current_price} outside valid range [0.00, 1.00]")
 
         # Update position via CRUD (creates new SCD Type 2 version)
         try:
@@ -450,9 +458,15 @@ class PositionManager:
 
         Raises:
             ValueError: If position not found or already closed
-            ValueError: If exit_price outside valid range [0.01, 0.99]
+            ValueError: If exit_price outside valid range [0.00, 1.00]
 
         Educational Note:
+            **Price Range for exit_price:**
+            The range [0.00, 1.00] is used because exit_price reflects
+            the Kalshi ask price at exit, which reaches 0.00 and 1.00 at
+            settlement. A YES contract settling YES has exit_price=1.00;
+            a YES contract settling NO has exit_price=0.00.
+
             **Exit Reasons:**
             - 'profit_target': Hit target price
             - 'stop_loss': Hit stop loss price
@@ -472,8 +486,10 @@ class PositionManager:
             - REQ-RISK-003: Profit Target Management
         """
         # Validation: Price range
-        if not (Decimal("0.01") <= exit_price <= Decimal("0.99")):
-            raise ValueError(f"Exit price {exit_price} outside valid range [0.01, 0.99]")
+        # exit_price uses [0.00, 1.00] because settlement prices reach
+        # 0.00 (loss) and 1.00 (win) at market settlement
+        if not (Decimal("0.00") <= exit_price <= Decimal("1.00")):
+            raise ValueError(f"Exit price {exit_price} outside valid range [0.00, 1.00]")
 
         # Get current position data to calculate realized P&L
         conn = get_connection()
@@ -861,7 +877,7 @@ class PositionManager:
 
         Raises:
             ValueError: If position not found, closed, or has no trailing stop
-            ValueError: If current_price outside valid range [0.01, 0.99]
+            ValueError: If current_price outside valid range [0.00, 1.00]
 
         Educational Note:
             **Trailing Stop Lifecycle:**
@@ -911,8 +927,10 @@ class PositionManager:
             Decimal('0.70')
         """
         # Validation: Price range
-        if not (Decimal("0.01") <= current_price <= Decimal("0.99")):
-            raise ValueError(f"Current price {current_price} outside valid range [0.01, 0.99]")
+        # current_price uses [0.00, 1.00] because Kalshi ask prices reach
+        # 0.00 and 1.00 at settlement (unlike entry_price which uses [0.01, 0.99])
+        if not (Decimal("0.00") <= current_price <= Decimal("1.00")):
+            raise ValueError(f"Current price {current_price} outside valid range [0.00, 1.00]")
 
         # Get current position
         conn = get_connection()

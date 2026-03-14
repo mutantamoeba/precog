@@ -34,10 +34,13 @@ class MarketData(TypedDict):
     can_close_early: bool
     result: Literal["yes", "no"] | None
     # Price fields as strings (will be converted to Decimal)
-    yes_bid: str
-    yes_ask: str
-    no_bid: str
-    no_ask: str
+    # These are order book prices, NOT implied probabilities.
+    # yes_ask + no_ask > 1.0 is expected (the difference is the spread/vigorish).
+    # At settlement: ask prices reach 1.00 (winning side) and 1.00 (losing side too).
+    yes_bid: str  # Highest resting YES buy order (in cents as string)
+    yes_ask: str  # Lowest resting YES sell order (cost to buy YES contract)
+    no_bid: str  # Highest resting NO buy order (in cents as string)
+    no_ask: str  # Lowest resting NO sell order (cost to buy NO contract)
     last_price: str
     volume: int
     open_interest: int
@@ -195,20 +198,25 @@ class ProcessedMarketData(TypedDict, total=False):
     result: Literal["yes", "no"] | None
 
     # Legacy integer cent fields (kept as-is from API)
-    yes_bid: int
-    yes_ask: int
-    no_bid: int
-    no_ask: int
+    # These are order book prices in cents, NOT implied probabilities.
+    # yes_ask + no_ask > 100 is expected (spread).
+    yes_bid: int  # Highest YES buy order in cents (0-99)
+    yes_ask: int  # Lowest YES sell order in cents (cost to buy YES)
+    no_bid: int  # Highest NO buy order in cents (0-99)
+    no_ask: int  # Lowest NO sell order in cents (cost to buy NO)
     last_price: int
     volume: int
     open_interest: int
     liquidity: int
 
     # Sub-penny Decimal fields (*_dollars suffix - converted to Decimal)
-    yes_bid_dollars: Decimal
-    yes_ask_dollars: Decimal
-    no_bid_dollars: Decimal
-    no_ask_dollars: Decimal
+    # These are order book prices, NOT implied probabilities.
+    # yes_ask_dollars + no_ask_dollars > 1.0 is expected (spread).
+    # Range: [0.0000, 1.0000] inclusive (settlement reaches 0 and 1).
+    yes_bid_dollars: Decimal  # Highest YES buy order in dollars (e.g., 0.4275)
+    yes_ask_dollars: Decimal  # Lowest YES sell order / cost to buy YES (stored as yes_price)
+    no_bid_dollars: Decimal  # Highest NO buy order in dollars
+    no_ask_dollars: Decimal  # Lowest NO sell order / cost to buy NO (stored as no_price)
     last_price_dollars: Decimal
     liquidity_dollars: Decimal
 
@@ -343,8 +351,9 @@ class OrderCreateRequest(TypedDict, total=False):
 
     Educational Note:
         Kalshi Pricing Convention:
-        - yes_price + no_price always equals 100 cents ($1.00)
-        - If YES is $0.65, NO is automatically $0.35
+        - For limit orders, you specify ONE side's price; the platform derives the other
+        - yes_price and no_price are ask prices (cost to buy), NOT implied probabilities
+        - yes_ask + no_ask > $1.00 is normal (the spread is the market maker's edge)
         - Use *_dollars fields for sub-penny precision (0.6275)
 
         Order Types:
