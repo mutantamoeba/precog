@@ -1070,8 +1070,8 @@ def create_market(
         external_id: External market ID from platform
         ticker: Market ticker (e.g., "NFL-KC-BUF-YES")
         title: Market title/description
-        yes_price: YES price as DECIMAL(10,4)
-        no_price: NO price as DECIMAL(10,4)
+        yes_price: YES ask price as DECIMAL(10,4) (cost to buy YES contract)
+        no_price: NO ask price as DECIMAL(10,4) (cost to buy NO contract)
         market_type: Market type (default: 'binary')
         status: Market status (default: 'open')
         volume: Trading volume
@@ -1082,6 +1082,11 @@ def create_market(
     Returns:
         market_id of newly created record
 
+    Note:
+        yes_price and no_price store Kalshi ask prices, NOT implied probabilities.
+        yes_price + no_price > 1.0 is normal (ask prices include the spread).
+        At settlement, both can reach 1.0 or 0.0.
+
     Example:
         >>> market_id = create_market(
         ...     platform_id="kalshi",
@@ -1089,8 +1094,8 @@ def create_market(
         ...     external_id="KXNFLKCBUF",
         ...     ticker="NFL-KC-BUF-YES",
         ...     title="Chiefs to beat Bills",
-        ...     yes_price=Decimal("0.5200"),
-        ...     no_price=Decimal("0.4800")
+        ...     yes_price=Decimal("0.5200"),  # YES ask (cost to buy YES)
+        ...     no_price=Decimal("0.4900"),   # NO ask (cost to buy NO); sum > 1.0 is normal
         ... )
     """
     # Runtime type validation (enforces Decimal precision)

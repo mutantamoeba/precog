@@ -28,9 +28,10 @@ yes_bid = Decimal(market_data["yes_bid_dollars"])  # "0.4275"
 no_bid = Decimal(market_data["no_bid_dollars"])    # "0.5700"
 
 # ✅ CORRECT - Decimal database column
+# Range is [0, 1] inclusive: settlement prices reach 0.0000 and 1.0000
 CREATE TABLE markets (
     yes_bid DECIMAL(10,4) NOT NULL,
-    CHECK (yes_bid >= 0.0001 AND yes_bid <= 0.9999)
+    CHECK (yes_bid >= 0 AND yes_bid <= 1)
 );
 ```
 
@@ -86,13 +87,16 @@ order = {
 
 ```sql
 -- ✅ ALL price/fee columns should be DECIMAL(10,4)
+-- Note: yes_price/no_price store Kalshi ASK prices, NOT implied probabilities.
+-- yes_price + no_price > 1.0 is normal (ask prices include the spread).
+-- Range is [0, 1] inclusive: settlement prices reach 0.0000 and 1.0000.
 CREATE TABLE markets (
     ticker VARCHAR(100) PRIMARY KEY,
     yes_bid DECIMAL(10,4) NOT NULL,
     yes_ask DECIMAL(10,4) NOT NULL,
     no_bid DECIMAL(10,4) NOT NULL,
     no_ask DECIMAL(10,4) NOT NULL,
-    CHECK (yes_bid >= 0.0001 AND yes_bid <= 0.9999)
+    CHECK (yes_bid >= 0 AND yes_bid <= 1)
 );
 
 CREATE TABLE orders (
@@ -153,11 +157,16 @@ print(f"Edge: {edge}")  # 0.0770 (7.7%)
 ```python
 def calculate_spread(yes_bid: Decimal, no_bid: Decimal) -> Decimal:
     """
-    Calculate market spread.
+    Calculate market spread from bid prices.
 
-    Kalshi orderbooks show bids only.
+    Kalshi's legacy API derived asks from opposite-side bids:
     YES ask = 1.0 - NO bid
     NO ask = 1.0 - YES bid
+
+    With sub-penny pricing, the API provides explicit ask fields
+    (yes_ask_dollars, no_ask_dollars). The stored yes_price/no_price
+    are these ask prices directly. yes_price + no_price > 1.0 is
+    expected (the excess over 1.0 IS the spread).
     """
     yes_ask = Decimal("1.0000") - no_bid
     spread = yes_ask - yes_bid
@@ -205,7 +214,13 @@ from decimal import Decimal, InvalidOperation
 
 def validate_price(price: Decimal, field_name: str = "price") -> None:
     """
-    Validate that price is in valid range.
+    Validate that price is in valid range [0, 1] inclusive.
+
+    Prices are Kalshi ask prices (cost to buy a contract), NOT implied
+    probabilities. They reach 0.0000 and 1.0000 at settlement.
+
+    For entry_price validation, use the stricter [0.01, 0.99] range
+    (business guardrail: don't enter near-certain markets).
 
     Raises:
         ValueError: If price is out of bounds
@@ -213,23 +228,17 @@ def validate_price(price: Decimal, field_name: str = "price") -> None:
     if not isinstance(price, Decimal):
         raise TypeError(f"{field_name} must be Decimal, got {type(price)}")
 
-    if price < Decimal("0.0001"):
-        raise ValueError(f"{field_name} too low: {price} < 0.0001")
+    if price < Decimal("0.0000"):
+        raise ValueError(f"{field_name} too low: {price} < 0.0000")
 
-    if price > Decimal("0.9999"):
-        raise ValueError(f"{field_name} too high: {price} > 0.9999")
+    if price > Decimal("1.0000"):
+        raise ValueError(f"{field_name} too high: {price} > 1.0000")
 
-def validate_price_consistency(yes_bid: Decimal, no_bid: Decimal) -> None:
-    """
-    Validate that YES + NO bids approximately equal 1.0.
-    """
-    total = yes_bid + (Decimal("1.0000") - no_bid)  # YES bid + YES ask
-
-    # Allow for spread (95% to 105%)
-    if not (Decimal("0.95") <= total <= Decimal("1.05")):
-        raise ValueError(
-            f"Price consistency check failed: {yes_bid} + {no_bid} = {total}"
-        )
+# NOTE: validate_price_consistency is NOT appropriate for ask prices.
+# yes_ask + no_ask > 1.0 is expected behavior (the spread is the market
+# maker's profit). Only bid prices on opposite sides are complementary:
+# yes_bid + no_bid <= 1.0 (approximately).
+# At settlement, both yes_ask and no_ask can equal 1.0.
 ```
 
 ---
@@ -308,10 +317,10 @@ class TestDecimalPricing(unittest.TestCase):
     def test_price_validation(self):
         """Test that invalid prices are rejected."""
         with self.assertRaises(ValueError):
-            validate_price(Decimal("1.0500"))  # Too high
+            validate_price(Decimal("1.0500"))  # Too high (> 1.0000)
 
         with self.assertRaises(ValueError):
-            validate_price(Decimal("0.0000"))  # Too low
+            validate_price(Decimal("-0.0100"))  # Too low (< 0.0000)
 ```
 
 ---
@@ -324,7 +333,7 @@ When implementing Kalshi integration:
 - [ ] Parse `*_dollars` fields from ALL API responses
 - [ ] Use `DECIMAL(10,4)` for ALL price columns in database
 - [ ] Use decimal strings in ALL order placement requests
-- [ ] Validate prices are in 0.0001-0.9999 range
+- [ ] Validate prices are in [0, 1] range (entry_price uses stricter [0.01, 0.99])
 - [ ] Round calculated values to 4 decimal places
 - [ ] Test with sub-penny prices (e.g., 0.4275)
 - [ ] Never use integer cent fields (deprecated)

@@ -604,6 +604,11 @@ class KalshiMarketPoller(BasePoller):
 
         # Extract prices from sub-penny Decimal fields
         # Fall back to legacy cent fields divided by 100 if _dollars not available
+        #
+        # yes_price = Kalshi YES ask price (cost to buy YES contract, NOT implied probability)
+        # no_price = Kalshi NO ask price (cost to buy NO contract, NOT implied probability)
+        # Note: yes_price + no_price > 1.0 is normal (ask prices include the spread).
+        # At settlement, both yes_price and no_price can reach 1.0 (Pattern 37).
         yes_price = market.get("yes_ask_dollars")
         if yes_price is None:
             yes_ask_cents = market.get("yes_ask", 0)

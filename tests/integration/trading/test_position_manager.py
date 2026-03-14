@@ -345,9 +345,9 @@ def test_update_position_invalid_price(db_cursor, clean_test_data, position_para
 
     position = manager.open_position(**position_params)
 
-    # Try to update with price > 0.99
+    # Try to update with price > 1.00 (current_price range is [0.00, 1.00])
     with pytest.raises(ValueError, match="outside valid range"):
-        manager.update_position(position_id=position["id"], current_price=Decimal("1.0000"))
+        manager.update_position(position_id=position["id"], current_price=Decimal("1.0100"))
 
 
 # ============================================================================
@@ -419,11 +419,11 @@ def test_close_position_invalid_price(db_cursor, clean_test_data, position_param
 
     position = manager.open_position(**position_params)
 
-    # Try to close with price < 0.01
+    # Try to close with price < 0.00 (exit_price range is [0.00, 1.00])
     with pytest.raises(ValueError, match="outside valid range"):
         manager.close_position(
             position_id=position["id"],
-            exit_price=Decimal("0.0050"),
+            exit_price=Decimal("-0.0100"),
             exit_reason="manual",
         )
 

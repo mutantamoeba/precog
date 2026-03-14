@@ -378,12 +378,38 @@ def test_update_trailing_stop_division_by_zero_protection(
 
 
 def test_update_trailing_stop_invalid_price_range(position_manager):
-    """Test update fails when current_price outside valid range [0.01, 0.99]."""
+    """Test update fails when current_price outside valid range [0.00, 1.00]."""
     with pytest.raises(ValueError, match="outside valid range"):
-        position_manager.update_trailing_stop(123, Decimal("1.05"))  # > 0.99
+        position_manager.update_trailing_stop(123, Decimal("1.05"))  # > 1.00
 
     with pytest.raises(ValueError, match="outside valid range"):
-        position_manager.update_trailing_stop(123, Decimal("0.005"))  # < 0.01
+        position_manager.update_trailing_stop(123, Decimal("-0.01"))  # < 0.00
+
+
+def test_settlement_boundary_prices_accepted(position_manager, mocker):
+    """Test that settlement boundary values (0.00, 1.00) pass validation.
+
+    Kalshi ask prices reach 0.00 and 1.00 at settlement. These must NOT
+    be rejected by the price validation guard.
+    """
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+    mock_cursor.__exit__ = MagicMock(return_value=False)
+    mock_conn.cursor.return_value = mock_cursor
+    # Return None to trigger "Position not found" — proves we got PAST validation
+    mock_cursor.fetchone.return_value = None
+
+    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
+    mocker.patch("precog.trading.position_manager.release_connection")
+
+    # 1.00 = YES contract settled YES. Should NOT raise "outside valid range".
+    with pytest.raises(ValueError, match="not found"):
+        position_manager.update_trailing_stop(123, Decimal("1.0000"))
+
+    # 0.00 = YES contract settled NO. Should NOT raise "outside valid range".
+    with pytest.raises(ValueError, match="not found"):
+        position_manager.update_trailing_stop(123, Decimal("0.0000"))
 
 
 def test_update_trailing_stop_position_not_found(position_manager, mocker):
