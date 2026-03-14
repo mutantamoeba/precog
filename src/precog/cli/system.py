@@ -58,6 +58,10 @@ def health(
         - API credentials configuration
         - Service status
         - Configuration validity
+
+    Examples:
+        precog system health
+        precog system health --verbose
     """
     console.print("[bold]Precog Health Check[/bold]\n")
 
@@ -163,7 +167,11 @@ def health(
 
 @app.command()
 def version() -> None:
-    """Show version information."""
+    """Show version information.
+
+    Examples:
+        precog system version
+    """
     try:
         from precog import __version__
 
@@ -186,6 +194,9 @@ def info() -> None:
         - Key dependency versions
         - Configuration paths
         - Environment settings
+
+    Examples:
+        precog system info
     """
     console.print("[bold]Precog System Information[/bold]\n")
 
