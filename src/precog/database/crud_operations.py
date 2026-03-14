@@ -1141,6 +1141,11 @@ def get_current_market(ticker: str) -> dict[str, Any] | None:
     """
     Get current version of market by ticker.
 
+    Note: Settled markets show yes_price=1.0 AND no_price=1.0 (Kalshi
+    post-settlement behavior). For historical trading prices, query all
+    SCD versions ordered by row_start_ts instead of filtering by
+    row_current_ind=TRUE. See Issue #315.
+
     Args:
         ticker: Market ticker
 
