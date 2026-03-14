@@ -316,12 +316,18 @@ class TestMarketDataValidation:
         assert result.has_warnings
 
     def test_valid_statuses_accepted(self, validator: KalshiDataValidator) -> None:
-        """Valid statuses (open, closed, settled) are accepted."""
-        for status in ["open", "closed", "settled"]:
+        """All valid statuses (DB-mapped and raw Kalshi API) are accepted."""
+        # Database-mapped statuses
+        db_statuses = ["open", "closed", "settled", "halted"]
+        # Raw Kalshi API statuses (mapped by poller before DB insert)
+        api_statuses = ["active", "unopened", "determined", "finalized", "initialized", "inactive"]
+        for status in db_statuses + api_statuses:
             market = {"ticker": "TEST", "status": status}
             result = validator.validate_market_data(market)
             # Should not have status-related warnings
-            assert not any("status" in w.field for w in result.warnings)
+            assert not any("status" in w.field for w in result.warnings), (
+                f"Status '{status}' should be accepted but generated a warning"
+            )
 
     def test_negative_volume_error(self, validator: KalshiDataValidator) -> None:
         """Negative volume generates error."""
