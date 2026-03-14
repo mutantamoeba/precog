@@ -29,7 +29,7 @@ import logging
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import Enum
-from typing import Any
+from typing import Any, ClassVar
 
 from precog.utils.logger import get_logger
 
@@ -93,8 +93,13 @@ class ValidationIssue:
     expected: Any = None
 
     def __str__(self) -> str:
-        """Human-readable string representation."""
-        parts = [f"[{self.level.value.upper()}] {self.field}: {self.message}"]
+        """Human-readable string representation.
+
+        Note: Does NOT include level prefix — the caller (log_issues or Python
+        logger) already routes to the correct log level. Including [WARNING]
+        here would produce redundant output like "WARNING ... [WARNING] ...".
+        """
+        parts = [f"{self.field}: {self.message}"]
         if self.value is not None:
             parts.append(f" (got: {self.value})")
         if self.expected is not None:
@@ -260,12 +265,19 @@ class KalshiDataValidator:
     MIN_PRICE = Decimal("0")
     MAX_PRICE = Decimal("1")
 
-    # Spread thresholds for warnings
+    # Spread thresholds for warnings (only meaningful for active/open markets)
     WIDE_SPREAD_THRESHOLD = Decimal("0.10")  # 10 cents is wide
     VERY_WIDE_SPREAD_THRESHOLD = Decimal("0.20")  # 20 cents is very wide
 
-    # Volume thresholds for warnings
-    UNUSUALLY_HIGH_VOLUME = 100000  # 100k contracts in single update is unusual
+    # Statuses where spread/arbitrage checks are meaningful.
+    # Non-active markets (settled, determined, inactive, etc.) have no live
+    # orderbook — wide spreads and "arbitrage" are expected, not anomalous.
+    ACTIVE_STATUSES: ClassVar[set[str]] = {"active", "open"}
+
+    # Volume thresholds for warnings.
+    # Note: Kalshi volume is cumulative lifetime, not per-update delta.
+    # Popular markets easily exceed 100k over their lifetime.
+    UNUSUALLY_HIGH_VOLUME = 1_000_000  # 1M lifetime contracts is unusual
     UNUSUALLY_HIGH_OPEN_INTEREST = 500000  # 500k OI is unusual
 
     # Balance thresholds
@@ -477,41 +489,73 @@ class KalshiDataValidator:
                 expected=valid_statuses,
             )
 
-        # Validate YES prices
+        # Validate YES prices (range check applies to all statuses)
         yes_bid = market.get("yes_bid_dollars")
         yes_ask = market.get("yes_ask_dollars")
         self.validate_price(yes_bid, "yes_bid_dollars", result)
         self.validate_price(yes_ask, "yes_ask_dollars", result)
-        self.validate_spread(yes_bid, yes_ask, result)
 
-        # Validate NO prices
+        # Validate NO prices (range check applies to all statuses)
         no_bid = market.get("no_bid_dollars")
         no_ask = market.get("no_ask_dollars")
         self.validate_price(no_bid, "no_bid_dollars", result)
         self.validate_price(no_ask, "no_ask_dollars", result)
-        self.validate_spread(no_bid, no_ask, result)
 
-        # Arbitrage check: YES_ask + NO_ask should be ~$1
-        # (Can't buy both YES and NO for less than $1 combined)
-        if yes_ask is not None and no_ask is not None:
-            combined_ask = yes_ask + no_ask
-            # Should be close to $1, but can be slightly over due to spread
-            if combined_ask < Decimal("0.98"):
-                result.add_warning(
-                    "arbitrage",
-                    "Potential arbitrage: YES_ask + NO_ask < $0.98",
-                    value=combined_ask,
-                    expected=">= $0.98",
-                )
-            elif combined_ask > Decimal("1.02"):
-                # This is normal (spread exists), but very high combined is unusual
-                result.add_info(
-                    "arbitrage",
-                    "High combined ask price (wide spreads)",
-                    value=combined_ask,
-                )
+        is_active = status in self.ACTIVE_STATUSES
+        is_settled = status in {"settled", "finalized"}
 
-        # Validate volume
+        # Spread and arbitrage checks: only meaningful for active/open markets.
+        # Non-active markets have no live orderbook — bid=0/ask=1 (spread=1.0)
+        # is expected for settled markets, not an anomaly.
+        if is_active:
+            self.validate_spread(yes_bid, yes_ask, result)
+            self.validate_spread(no_bid, no_ask, result)
+
+            # Arbitrage check: YES_ask + NO_ask should be ~$1
+            # (Can't buy both YES and NO for less than $1 combined)
+            if yes_ask is not None and no_ask is not None:
+                combined_ask = yes_ask + no_ask
+                if combined_ask < Decimal("0.98"):
+                    result.add_warning(
+                        "arbitrage",
+                        "Potential arbitrage: YES_ask + NO_ask < $0.98",
+                        value=combined_ask,
+                        expected=">= $0.98",
+                    )
+
+            # Bid sum check: YES_bid + NO_bid should be <= $1.01
+            # (Unlike asks which include spread, bids summing over 1.0 is impossible)
+            if yes_bid is not None and no_bid is not None:
+                combined_bid = yes_bid + no_bid
+                if combined_bid > Decimal("1.01"):
+                    result.add_error(
+                        "bid_sum",
+                        "Impossible bid sum: YES_bid + NO_bid > $1.01",
+                        value=combined_bid,
+                        expected="<= $1.01",
+                    )
+
+        # Settlement consistency checks: settled markets should have prices
+        # at exactly 0.0000 or 1.0000 (binary outcome resolved).
+        # Note: "determined" (outcome decided, awaiting payout) is NOT included
+        # because it's a short-lived transitional state where prices may still
+        # be adjusting. The poller maps it to "closed" before DB insert.
+        if is_settled:
+            for field_name, price in [
+                ("yes_bid_dollars", yes_bid),
+                ("yes_ask_dollars", yes_ask),
+                ("no_bid_dollars", no_bid),
+                ("no_ask_dollars", no_ask),
+            ]:
+                if price is not None and price not in {Decimal("0"), Decimal("1")}:
+                    result.add_warning(
+                        field_name,
+                        "Settled market price not at 0 or 1",
+                        value=price,
+                        expected="{0, 1}",
+                    )
+
+        # Validate volume (cumulative lifetime — not per-update delta)
         volume = market.get("volume")
         if volume is not None:
             if volume < 0:
@@ -519,7 +563,7 @@ class KalshiDataValidator:
             elif volume > self.UNUSUALLY_HIGH_VOLUME:
                 result.add_warning(
                     "volume",
-                    "Unusually high volume",
+                    "Unusually high lifetime volume",
                     value=volume,
                     expected=f"<= {self.UNUSUALLY_HIGH_VOLUME}",
                 )

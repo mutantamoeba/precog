@@ -140,7 +140,12 @@ class TestValidationIssue:
     """Tests for ValidationIssue class."""
 
     def test_str_representation(self) -> None:
-        """Test string representation of issue."""
+        """Test string representation of issue.
+
+        Note: __str__ no longer includes level prefix (e.g. [ERROR]) because
+        the caller (log_issues / Python logger) already routes to the correct
+        log level. Including it would produce redundant output.
+        """
         issue = ValidationIssue(
             level=ValidationLevel.ERROR,
             field="price",
@@ -149,9 +154,10 @@ class TestValidationIssue:
             expected="0-1",
         )
         str_repr = str(issue)
-        assert "ERROR" in str_repr
         assert "price" in str_repr
         assert "Invalid price" in str_repr
+        assert "1.5" in str_repr
+        assert "0-1" in str_repr
 
     def test_str_without_value_expected(self) -> None:
         """Test string representation without value/expected."""
@@ -161,8 +167,11 @@ class TestValidationIssue:
             message="Wide spread",
         )
         str_repr = str(issue)
-        assert "WARNING" in str_repr
         assert "spread" in str_repr
+        assert "Wide spread" in str_repr
+        # No value/expected means no "(got: ...)" or "(expected: ...)"
+        assert "(got:" not in str_repr
+        assert "(expected:" not in str_repr
 
 
 # =============================================================================
@@ -337,11 +346,17 @@ class TestMarketDataValidation:
         assert any("volume" in e.field for e in result.errors)
 
     def test_high_volume_warning(self, validator: KalshiDataValidator) -> None:
-        """Unusually high volume generates warning."""
-        market = {"ticker": "TEST", "volume": 200000}
+        """Unusually high lifetime volume generates warning."""
+        market = {"ticker": "TEST", "volume": 2_000_000}  # Above 1M threshold
         result = validator.validate_market_data(market)
         assert result.has_warnings
         assert any("volume" in w.field for w in result.warnings)
+
+    def test_moderate_volume_no_warning(self, validator: KalshiDataValidator) -> None:
+        """Moderate lifetime volume (below 1M) does not generate warning."""
+        market = {"ticker": "TEST", "volume": 200_000}
+        result = validator.validate_market_data(market)
+        assert not any("volume" in w.field for w in result.warnings)
 
     def test_negative_open_interest_error(self, validator: KalshiDataValidator) -> None:
         """Negative open interest generates error."""
@@ -350,15 +365,109 @@ class TestMarketDataValidation:
         assert result.has_errors
 
     def test_arbitrage_warning_low_combined_ask(self, validator: KalshiDataValidator) -> None:
-        """Combined ask < $0.98 generates arbitrage warning."""
+        """Combined ask < $0.98 generates arbitrage warning (active markets only)."""
         market = {
             "ticker": "TEST",
+            "status": "active",
             "yes_ask_dollars": Decimal("0.45"),
             "no_ask_dollars": Decimal("0.50"),  # Combined = 0.95
         }
         result = validator.validate_market_data(market)
         assert result.has_warnings
         assert any("arbitrage" in w.field for w in result.warnings)
+
+    def test_arbitrage_skipped_for_settled_market(self, validator: KalshiDataValidator) -> None:
+        """Settled markets do not generate arbitrage warnings."""
+        market = {
+            "ticker": "TEST",
+            "status": "settled",
+            "yes_ask_dollars": Decimal("0.00"),
+            "no_ask_dollars": Decimal("0.00"),  # Combined = 0.00 — normal for settled
+        }
+        result = validator.validate_market_data(market)
+        assert not any("arbitrage" in w.field for w in result.warnings)
+
+    def test_spread_skipped_for_settled_market(self, validator: KalshiDataValidator) -> None:
+        """Settled markets do not generate spread warnings (bid=0/ask=1 is expected)."""
+        market = {
+            "ticker": "TEST",
+            "status": "settled",
+            "yes_bid_dollars": Decimal("0.00"),
+            "yes_ask_dollars": Decimal("1.00"),  # Spread = 1.0 — normal for settled
+            "no_bid_dollars": Decimal("0.00"),
+            "no_ask_dollars": Decimal("1.00"),
+        }
+        result = validator.validate_market_data(market)
+        assert not any("spread" in w.field for w in result.warnings)
+        assert not any("spread" in e.field for e in result.errors)
+
+    @pytest.mark.parametrize("status", ["active", "open"])
+    def test_spread_checked_for_active_market(
+        self, validator: KalshiDataValidator, status: str
+    ) -> None:
+        """Both ACTIVE_STATUSES members generate spread warnings for wide spreads."""
+        market = {
+            "ticker": "TEST",
+            "status": status,
+            "yes_bid_dollars": Decimal("0.30"),
+            "yes_ask_dollars": Decimal("0.55"),  # 25-cent spread
+        }
+        result = validator.validate_market_data(market)
+        assert any("spread" in w.field for w in result.warnings)
+
+    @pytest.mark.parametrize("status", ["settled", "finalized"])
+    def test_settlement_consistency_warning(
+        self, validator: KalshiDataValidator, status: str
+    ) -> None:
+        """Both settlement statuses flag non-{0,1} prices (both sides checked)."""
+        market = {
+            "ticker": "TEST",
+            "status": status,
+            "yes_bid_dollars": Decimal("0.45"),  # Should be 0 or 1
+            "yes_ask_dollars": Decimal("0.47"),  # Should be 0 or 1
+            "no_bid_dollars": Decimal("0.55"),  # Should be 0 or 1
+            "no_ask_dollars": Decimal("0.53"),  # Should be 0 or 1
+        }
+        result = validator.validate_market_data(market)
+        assert result.has_warnings
+        settlement_warnings = [w for w in result.warnings if "Settled market price" in w.message]
+        assert len(settlement_warnings) == 4  # All four prices flagged
+
+    def test_settlement_consistency_clean(self, validator: KalshiDataValidator) -> None:
+        """Settled market with prices at 0 or 1 has no settlement warnings."""
+        market = {
+            "ticker": "TEST",
+            "status": "settled",
+            "yes_bid_dollars": Decimal("1"),
+            "yes_ask_dollars": Decimal("1"),
+            "no_bid_dollars": Decimal("0"),
+            "no_ask_dollars": Decimal("0"),
+        }
+        result = validator.validate_market_data(market)
+        assert not any("Settled market price" in w.message for w in result.warnings)
+
+    def test_bid_sum_error_active_market(self, validator: KalshiDataValidator) -> None:
+        """YES_bid + NO_bid > $1.01 on active market generates error."""
+        market = {
+            "ticker": "TEST",
+            "status": "active",
+            "yes_bid_dollars": Decimal("0.60"),
+            "no_bid_dollars": Decimal("0.50"),  # Combined = 1.10
+        }
+        result = validator.validate_market_data(market)
+        assert result.has_errors
+        assert any("bid_sum" in e.field for e in result.errors)
+
+    def test_bid_sum_skipped_for_settled_market(self, validator: KalshiDataValidator) -> None:
+        """Settled markets do not check bid sum."""
+        market = {
+            "ticker": "TEST",
+            "status": "settled",
+            "yes_bid_dollars": Decimal("1.00"),
+            "no_bid_dollars": Decimal("1.00"),  # Would be impossible if active
+        }
+        result = validator.validate_market_data(market)
+        assert not any("bid_sum" in e.field for e in result.errors)
 
 
 # =============================================================================

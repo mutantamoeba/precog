@@ -121,12 +121,22 @@ class TestMultiMarketValidation:
     def test_settled_market_validation(
         self, validator: KalshiDataValidator, active_market_data: dict[str, Any]
     ) -> None:
-        """Test validation of settled market."""
+        """Test validation of settled market — valid but with settlement warnings.
+
+        active_market_data has mid-range prices (not 0 or 1), so changing
+        status to 'settled' should produce settlement consistency warnings
+        while remaining is_valid (warnings don't fail validation).
+        """
         market = active_market_data.copy()
         market["status"] = "settled"
 
         result = validator.validate_market_data(market)
         assert result.is_valid
+        # Settlement consistency check should fire for non-{0,1} prices
+        assert any("Settled market price" in w.message for w in result.warnings)
+        # Spread/arbitrage checks should NOT fire for settled markets
+        assert not any("spread" in w.field for w in result.warnings)
+        assert not any("arbitrage" in w.field for w in result.warnings)
 
 
 # =============================================================================

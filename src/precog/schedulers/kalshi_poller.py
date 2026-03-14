@@ -560,13 +560,18 @@ class KalshiMarketPoller(BasePoller):
             )
             valid_count = len(all_markets) - error_count
 
-            # Log individual issues at appropriate levels
+            # Log individual issues: errors at per-market ERROR, warnings at DEBUG.
+            # The per-series summary (below) carries aggregate counts at INFO,
+            # so per-market warning detail is only needed for investigation.
             for vr in validation_results:
-                if vr.has_errors or vr.has_warnings:
+                if vr.has_errors:
                     vr.log_issues(logger)
+                elif vr.has_warnings:
+                    for issue in vr.issues:
+                        logger.debug("[%s:%s] %s", vr.entity_type, vr.entity_id, issue)
 
-            # Summary log: INFO if errors exist, DEBUG otherwise
-            summary_log = logger.info if error_count else logger.debug
+            # Summary log: INFO if any issues exist, DEBUG if all clean
+            summary_log = logger.info if (error_count or warning_count) else logger.debug
             summary_log(
                 "Validation [%s]: %d markets checked, %d valid, %d errors, %d warnings",
                 series_ticker,

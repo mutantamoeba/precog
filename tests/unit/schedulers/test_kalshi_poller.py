@@ -75,7 +75,9 @@ def mock_market_data_list(mock_market_data):
     market2 = mock_market_data.copy()
     market2["ticker"] = "KXNFLGAME-25NOV29-NEBUF-B210"
     market2["title"] = "Bills win by 21+ points?"
+    market2["yes_bid_dollars"] = Decimal("0.3000")
     market2["yes_ask_dollars"] = Decimal("0.3200")
+    market2["no_bid_dollars"] = Decimal("0.6600")
     market2["no_ask_dollars"] = Decimal("0.6800")
 
     return [mock_market_data, market2]
