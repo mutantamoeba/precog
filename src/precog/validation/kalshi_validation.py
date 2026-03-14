@@ -283,14 +283,33 @@ class KalshiDataValidator:
     # Balance thresholds
     MAX_REASONABLE_BALANCE = Decimal("10000000")  # $10M seems like a reasonable upper bound
 
+    # Anomaly deduplication thresholds: log at 1st, 10th, 100th occurrence.
+    # Between thresholds, anomalies are counted but not individually logged,
+    # reducing noise from markets that repeatedly fail the same check.
+    ANOMALY_LOG_THRESHOLDS: ClassVar[tuple[int, ...]] = (1, 10, 100)
+
     def __init__(self) -> None:
         """Initialize the validator with anomaly tracking."""
         # Track anomaly counts per entity (ticker, position, etc.)
         self._anomaly_counts: dict[str, int] = {}
 
-    def _increment_anomaly_count(self, entity_id: str, count: int = 1) -> None:
-        """Increment anomaly count for an entity."""
-        self._anomaly_counts[entity_id] = self._anomaly_counts.get(entity_id, 0) + count
+    def _increment_anomaly_count(self, entity_id: str) -> None:
+        """Increment anomaly count for an entity by one occurrence."""
+        self._anomaly_counts[entity_id] = self._anomaly_counts.get(entity_id, 0) + 1
+
+    def should_log_anomaly(self, entity_id: str) -> bool:
+        """Check if this entity's anomaly count is at a logging threshold.
+
+        Returns True at the 1st, 10th, and 100th occurrence. After 100,
+        logs every 100th occurrence. This prevents log flooding from
+        markets that repeatedly fail the same check while still surfacing
+        new anomalies immediately.
+        """
+        count = self._anomaly_counts.get(entity_id, 0)
+        if count in self.ANOMALY_LOG_THRESHOLDS:
+            return True
+        # After 100, log every 100th
+        return count > 100 and count % 100 == 0
 
     def get_anomaly_count(self, entity_id: str) -> int:
         """Get anomaly count for an entity."""
@@ -585,7 +604,7 @@ class KalshiDataValidator:
 
         # Track anomalies
         if result.has_errors or result.has_warnings:
-            self._increment_anomaly_count(ticker, len(result.issues))
+            self._increment_anomaly_count(ticker)
 
         return result
 
@@ -673,7 +692,7 @@ class KalshiDataValidator:
 
         # Track anomalies
         if result.has_errors or result.has_warnings:
-            self._increment_anomaly_count(ticker, len(result.issues))
+            self._increment_anomaly_count(ticker)
 
         return result
 
@@ -766,7 +785,7 @@ class KalshiDataValidator:
 
         # Track anomalies
         if result.has_errors or result.has_warnings:
-            self._increment_anomaly_count(ticker, len(result.issues))
+            self._increment_anomaly_count(ticker)
 
         return result
 
@@ -843,7 +862,7 @@ class KalshiDataValidator:
 
         # Track anomalies
         if result.has_errors or result.has_warnings:
-            self._increment_anomaly_count(ticker, len(result.issues))
+            self._increment_anomaly_count(ticker)
 
         return result
 
@@ -901,7 +920,7 @@ class KalshiDataValidator:
 
         # Track anomalies
         if result.has_errors or result.has_warnings:
-            self._increment_anomaly_count("account_balance", len(result.issues))
+            self._increment_anomaly_count("account_balance")
 
         return result
 

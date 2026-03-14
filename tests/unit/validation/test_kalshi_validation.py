@@ -759,6 +759,42 @@ class TestAnomalyTracking:
         validator.clear_anomaly_counts()
         assert validator.get_anomaly_count("TEST") == 0
 
+    def test_should_log_anomaly_at_thresholds(self, validator: KalshiDataValidator) -> None:
+        """should_log_anomaly returns True at 1st, 10th, 100th occurrence."""
+        entity = "DEDUP-TEST"
+        # Manually set counts to check threshold behavior
+        validator._anomaly_counts[entity] = 1
+        assert validator.should_log_anomaly(entity)
+
+        validator._anomaly_counts[entity] = 10
+        assert validator.should_log_anomaly(entity)
+
+        validator._anomaly_counts[entity] = 100
+        assert validator.should_log_anomaly(entity)
+
+    def test_should_log_anomaly_between_thresholds(self, validator: KalshiDataValidator) -> None:
+        """should_log_anomaly returns False between thresholds."""
+        entity = "DEDUP-TEST"
+        for count in [2, 5, 9, 11, 50, 99, 101]:
+            validator._anomaly_counts[entity] = count
+            assert not validator.should_log_anomaly(entity), f"count={count} should be suppressed"
+
+    def test_should_log_anomaly_after_100(self, validator: KalshiDataValidator) -> None:
+        """After 100, should_log_anomaly fires every 100th occurrence."""
+        entity = "DEDUP-TEST"
+        validator._anomaly_counts[entity] = 200
+        assert validator.should_log_anomaly(entity)
+
+        validator._anomaly_counts[entity] = 201
+        assert not validator.should_log_anomaly(entity)
+
+        validator._anomaly_counts[entity] = 300
+        assert validator.should_log_anomaly(entity)
+
+    def test_should_log_anomaly_unknown_entity(self, validator: KalshiDataValidator) -> None:
+        """Unknown entity (count=0) should not log."""
+        assert not validator.should_log_anomaly("NEVER-SEEN")
+
 
 # =============================================================================
 # Validation Summary Tests
