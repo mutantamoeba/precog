@@ -38,7 +38,7 @@ This guide documents the live data integration architecture for the Precog predi
 ┌─────────────────────┐          ┌─────────────────────┐          ┌─────────────────────┐
 │   ESPNGamePoller     │         │  KalshiMarketPoller  │         │ KalshiWebSocket     │
 │   (BasePoller)       │         │   (BasePoller)       │         │  Handler            │
-│   15s poll interval  │         │   30s poll interval  │         │  <1s latency        │
+│   Adaptive polling   │         │   30s poll interval  │         │  <1s latency        │
 └──────────┬──────────┘          └──────────┬──────────┘          └──────────┬──────────┘
            │                                 │                                 │
            ▼                                 ▼                                 ▼
@@ -89,8 +89,8 @@ python main.py scheduler start --verbose
 |--------|---------|-------------|
 | `--espn/--no-espn` | True | Enable/disable ESPN game polling |
 | `--kalshi/--no-kalshi` | True | Enable/disable Kalshi market polling |
-| `--poll-interval` | 15 | Seconds between polls (min: 5) |
-| `--leagues` | nfl,ncaaf | Comma-separated list of leagues |
+| `--poll-interval` | Adaptive | Base seconds between polls; ESPN uses adaptive polling (DISCOVERY: 900s, TRACKING: 30s) |
+| `--leagues` | nfl,ncaaf,nba,nhl | Comma-separated list of leagues |
 | `--verbose/-v` | False | Enable debug logging |
 
 ### Stopping Data Collection
@@ -115,9 +115,9 @@ python main.py scheduler status --verbose
 
 **Example Output:**
 ```
-ESPN MarketUpdater: RUNNING
+ESPN GamePoller: RUNNING
   - Leagues: nfl, ncaaf, nba
-  - Poll interval: 15s
+  - Poll mode: Adaptive (DISCOVERY: 900s, TRACKING: 30s)
   - Polls completed: 142
   - Games updated: 28
   - Errors: 0
@@ -145,7 +145,10 @@ For production deployments, use the `ServiceSupervisor` which provides:
 
 ### Running the Data Collector Script
 
-The `scripts/run_data_collector.py` script provides production-grade background operation with:
+> **Note:** The primary production path is `python main.py scheduler start --supervised --foreground`
+> (see CLI Scheduler Commands above). The standalone script below is an alternative for simple deployments.
+
+The `scripts/run_data_collector.py` script provides standalone background operation with:
 - PID file management for process supervision
 - Configurable log rotation
 - Graceful shutdown on system signals (SIGTERM, SIGINT, SIGHUP)
@@ -184,9 +187,9 @@ python scripts/run_data_collector.py --stop
 |--------|---------|-------------|
 | `--no-espn` | False | Disable ESPN game polling |
 | `--no-kalshi` | False | Disable Kalshi market polling |
-| `--espn-interval` | 15 | ESPN poll interval in seconds |
+| `--espn-interval` | Adaptive | ESPN base poll interval; overridden by adaptive polling (DISCOVERY: 900s, TRACKING: 30s) |
 | `--kalshi-interval` | 30 | Kalshi poll interval in seconds |
-| `--leagues` | nfl,nba,nhl,ncaaf,ncaab | Comma-separated list of leagues |
+| `--leagues` | nfl,ncaaf,nba,nhl | Comma-separated list of leagues (NCAAB/WNBA require explicit config) |
 | `--health-interval` | 60 | Health check interval in seconds |
 | `--metrics-interval` | 300 | Metrics output interval in seconds |
 | `--debug` | False | Enable debug logging |
@@ -218,53 +221,53 @@ python scripts/run_data_collector.py --stop
 
 ```python
 from precog.schedulers import (
-    MarketUpdater,
+    ESPNGamePoller,
     KalshiMarketPoller,
-    create_market_updater,
+    create_espn_poller,
     create_kalshi_poller,
 )
 
 # ESPN Game Polling
-updater = create_market_updater(
+poller = create_espn_poller(
     leagues=["nfl", "ncaaf", "nba"],
-    poll_interval=15,
+    poll_interval=30,
     persist_jobs=True,  # Survive restarts
     job_store_url="sqlite:///jobs.db",
 )
-updater.start()
+poller.start()
 
 # One-time poll without scheduler
-result = updater.poll_once()
+result = poller.poll_once()
 print(f"Updated {result['games_updated']} games")
 
 # Refresh scoreboards on demand
-result = updater.refresh_scoreboards(active_only=True)
+result = poller.refresh_scoreboards(active_only=True)
 print(f"Active games: {result['active_games']}")
 
 # Kalshi Market Polling
-poller = create_kalshi_poller(
+kalshi_poller = create_kalshi_poller(
     series_tickers=["KXNFLGAME"],
     poll_interval=30,
 )
-poller.start()
+kalshi_poller.start()
 
 # Clean shutdown
-updater.stop()
 poller.stop()
+kalshi_poller.stop()
 ```
 
 ---
 
 ## Data Collection Services
 
-### ESPN MarketUpdater
+### ESPN Game Poller (ESPNGamePoller)
 
 Polls ESPN Scoreboard API for live game states with SCD Type 2 versioning.
 
 **Key Features:**
 - Multi-league support (NFL, NCAAF, NBA, NCAAB, NCAAW, NHL, WNBA)
-- Configurable poll intervals (15-60 seconds)
-- Conditional polling (only when games active)
+- Per-league adaptive polling with two states: DISCOVERY (900s) and TRACKING (30s)
+- Dynamic throttling: when 3+ leagues are in TRACKING simultaneously, interval increases to 60s to stay under ESPN's 250 req/hr rate limit
 - Error recovery with logging
 - Thread-safe operation
 
@@ -277,10 +280,10 @@ Polls ESPN Scoreboard API for live game states with SCD Type 2 versioning.
 
 **Example:**
 ```python
-from precog.schedulers import run_single_poll, refresh_all_scoreboards
+from precog.schedulers import run_single_espn_poll
 
 # Quick poll without scheduler
-result = run_single_poll(["nfl"])
+result = run_single_espn_poll(["nfl"])
 print(f"Fetched: {result['games_fetched']}, Updated: {result['games_updated']}")
 
 # Detailed scoreboard refresh
@@ -345,8 +348,9 @@ if handler.state == ConnectionState.CONNECTED:
 
 | Service | Default | Min | Max | Recommended |
 |---------|---------|-----|-----|-------------|
-| ESPN (active games) | 15s | 5s | 60s | 15s |
-| ESPN (no active games) | 60s | 15s | 300s | 60s |
+| ESPN TRACKING (live games) | 30s | 5s | 60s | 30s |
+| ESPN TRACKING (3+ leagues) | 60s | 30s | 120s | 60s |
+| ESPN DISCOVERY (no live games) | 900s | 60s | 900s | 900s |
 | Kalshi REST | 30s | 10s | 120s | 30s |
 | Kalshi WebSocket | Real-time | N/A | N/A | N/A |
 
@@ -375,7 +379,7 @@ python scripts/run_data_collector.py --env production
 Enable job persistence to survive scheduler restarts:
 
 ```python
-updater = create_market_updater(
+poller = create_espn_poller(
     leagues=["nfl"],
     persist_jobs=True,
     job_store_url="sqlite:///jobs.db",  # or PostgreSQL URL
@@ -408,8 +412,8 @@ The ServiceSupervisor provides these metrics:
 ### Accessing Metrics
 
 ```python
-# From MarketUpdater
-stats = updater.stats
+# From ESPNGamePoller
+stats = poller.stats
 print(f"Polls: {stats['polls_completed']}, Errors: {stats['errors']}")
 
 # From CLI
@@ -483,9 +487,9 @@ for g in games:
 If a service fails repeatedly:
 
 1. Check the logs: `cat logs/data_collector.log | tail -100`
-2. Verify API credentials: `echo $KALSHI_API_KEY_ID`
+2. Verify API credentials: `echo $DEV_KALSHI_API_KEY` (use your environment prefix: DEV/STAGING/PROD)
 3. Test database connection: `python scripts/test_db_connection.py`
-4. Restart with verbose logging: `python scripts/run_data_collector.py --log-level DEBUG`
+4. Restart with verbose logging: `python main.py scheduler start --supervised --foreground --verbose`
 
 ---
 
@@ -494,7 +498,7 @@ If a service fails repeatedly:
 - [ESPN Data Model Guide](ESPN_DATA_MODEL_V1.0.md) - Database schema and TypedDict definitions
 - [Kalshi Client User Guide](KALSHI_CLIENT_USER_GUIDE_V1.0.md) - REST and WebSocket API usage
 - [Configuration Guide](CONFIGURATION_GUIDE_V3.1.md) - YAML configuration reference
-- [Development Phases](../foundation/DEVELOPMENT_PHASES_V1.9.md) - Phase 2.5 details
+- [Development Phases](../foundation/DEVELOPMENT_PHASES_V1.15.md) - Phase 2.5 details
 
 ---
 

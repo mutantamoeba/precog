@@ -44,7 +44,7 @@ This guide explains the **architecture and design** of Precog's four core manage
 Manages **probability models** that predict win probabilities for markets. Each model is an **immutable version** (config can't change once created).
 
 ### **Implementation**
-- **File**: `src/precog/analytics/model_manager.py` (212 lines)
+- **File**: `src/precog/analytics/model_manager.py` (745 lines)
 - **Coverage**: 84.86% (Phase 1.5)
 - **Target Coverage**: 85% (Business Logic tier)
 - **Database**: `probability_models` table (19 fields)
@@ -56,7 +56,7 @@ Manages **probability models** that predict win probabilities for markets. Each 
 | `model_id` | SERIAL PRIMARY KEY | ✅ | Auto-increment | Unique identifier |
 | `model_name` | VARCHAR | ✅ | 'elo_nfl', 'regression_nba', 'ensemble_v1' | Descriptive name |
 | `model_version` | VARCHAR | ✅ | **'v1.0', 'v1.1', 'v2.0'** | Semantic versioning |
-| `approach` | VARCHAR | ✅ | **'elo', 'regression', 'ensemble', 'neural_net'** | **HOW** it works |
+| `model_class` | VARCHAR | ✅ | **'elo', 'regression', 'ensemble', 'neural_net'** | **HOW** it works |
 | `domain` | VARCHAR | ✅ | **'nfl', 'nba', 'elections', 'economics', NULL** | **WHICH** markets (NULL = multi-domain) |
 | `config` | JSONB | ✅ **IMMUTABLE** | `{"k_factor": 20, "base_elo": 1500}` | Model parameters (**NEVER** changes!) |
 | `status` | VARCHAR | ❌ **MUTABLE** | **'draft', 'training', 'validating', 'active', 'deprecated'** | Lifecycle state |
@@ -116,7 +116,7 @@ draft → training → validating → active → deprecated
 model_id = manager.create_model(
     model_name="elo_nfl",
     model_version="v1.0",
-    approach="elo",
+    model_class="elo",
     domain="nfl",
     config={"k_factor": 20, "base_elo": 1500},  # Can't change later!
     training_start_date="2024-01-01",
@@ -136,13 +136,13 @@ manager.update_validation_metrics(
 )
 
 # Get active models
-active_models = manager.get_models_by_status("active")
+active_models = manager.get_active_models()
 ```
 
 ### **Reference**
-- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (lines 277-374)
+- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (lines 277-374)
 - **Implementation**: `src/precog/analytics/model_manager.py`
-- **Tests**: `tests/unit/analytics/test_model_manager.py` (36 tests, 97.3% pass rate)
+- **Tests**: `tests/unit/analytics/test_model_manager_unit.py` (36 tests, 97.3% pass rate)
 - **Requirements**: REQ-MODEL-001 through REQ-MODEL-005
 - **ADRs**: ADR-019 (Model Versioning), ADR-002 (Decimal Precision)
 
@@ -154,7 +154,7 @@ active_models = manager.get_models_by_status("active")
 Manages **trading strategies** that decide WHEN to enter/exit trades. Each strategy is an **immutable version** (same pattern as models).
 
 ### **Implementation**
-- **File**: `src/precog/trading/strategy_manager.py` (274 lines)
+- **File**: `src/precog/trading/strategy_manager.py` (768 lines)
 - **Coverage**: 84.36% (Phase 1.5)
 - **Target Coverage**: 85% (Business Logic tier)
 - **Database**: `strategies` table (20 fields)
@@ -167,7 +167,7 @@ Manages **trading strategies** that decide WHEN to enter/exit trades. Each strat
 | `platform_id` | VARCHAR | ✅ | 'kalshi', 'polymarket' | Which platform |
 | `strategy_name` | VARCHAR | ✅ | 'halftime_entry', 'underdog_fade' | Descriptive name |
 | `strategy_version` | VARCHAR | ✅ | **'v1.0', 'v1.1', 'v2.0'** | Semantic versioning |
-| `approach` | VARCHAR | ✅ | **'value', 'arbitrage', 'momentum', 'mean_reversion'** | **HOW** it trades |
+| `strategy_type` | VARCHAR | ✅ | **'value', 'arbitrage', 'momentum', 'mean_reversion'** | **HOW** it trades |
 | `domain` | VARCHAR | ✅ | **'nfl', 'nba', 'elections', 'economics', NULL** | **WHICH** markets (NULL = multi-domain) |
 | `config` | JSONB | ✅ **IMMUTABLE** | `{"min_edge": "0.05", "max_exposure": "1000.00"}` | Strategy parameters (**NEVER** changes!) |
 | `status` | VARCHAR | ❌ **MUTABLE** | **'draft', 'testing', 'active', 'inactive', 'deprecated'** | Lifecycle state |
@@ -227,7 +227,7 @@ draft → testing → active → inactive → deprecated
 strategy_id = manager.create_strategy(
     strategy_name="halftime_entry",
     strategy_version="v1.0",
-    approach="value",
+    strategy_type="value",
     domain="nfl",
     config={
         "min_edge": "0.05",
@@ -249,13 +249,13 @@ manager.update_metrics(
 )
 
 # Get active strategies
-active_strategies = manager.get_strategies_by_status("active")
+active_strategies = manager.get_active_strategies()
 ```
 
 ### **Reference**
-- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (lines 376-476)
+- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (lines 376-476)
 - **Implementation**: `src/precog/trading/strategy_manager.py`
-- **Tests**: `tests/unit/trading/test_strategy_manager.py` (13 tests, 100% pass rate)
+- **Tests**: `tests/unit/trading/test_strategy_manager_unit.py` (13 tests, 100% pass rate)
 - **Requirements**: REQ-STRAT-001 through REQ-STRAT-005
 - **ADRs**: ADR-018 (Strategy Versioning), ADR-002 (Decimal Precision)
 
@@ -267,7 +267,7 @@ active_strategies = manager.get_strategies_by_status("active")
 Manages **active trading positions** with **SCD Type 2 versioning** (positions change frequently, unlike strategies/models).
 
 ### **Implementation**
-- **File**: `src/precog/trading/position_manager.py` (NOT YET IMPLEMENTED - Phase 1.5)
+- **File**: `src/precog/trading/position_manager.py` (1,169 lines)
 - **Target Coverage**: **90%** (Critical Path tier - handles real money!)
 - **Database**: `positions` table (21 fields)
 
@@ -401,7 +401,7 @@ When multiple exit conditions trigger simultaneously, **exit priority** determin
 # 3. Ignore profit_target (MEDIUM) ← Never executes
 ```
 
-### **Core Methods** (Phase 1.5 - To Be Implemented)
+### **Core Methods**
 
 ```python
 # Create new position (opens position)
@@ -441,9 +441,9 @@ open_positions = manager.get_positions_by_status("open")
 ```
 
 ### **Reference**
-- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md` (lines 507-545)
-- **Implementation**: **NOT YET IMPLEMENTED** (Phase 1.5 pending)
-- **Tests**: **NOT YET WRITTEN** (Phase 1.5 pending)
+- **Schema**: `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` (lines 507-545)
+- **Implementation**: `src/precog/trading/position_manager.py` (1,169 lines)
+- **Tests**: `tests/unit/trading/test_position_manager_trailing_stops.py`
 - **Requirements**: REQ-POS-001 through REQ-POS-008
 - **ADRs**: ADR-020 (Position Versioning), ADR-021 (Trailing Stops), ADR-002 (Decimal Precision)
 - **Guide**: `docs/guides/POSITION_MANAGEMENT_GUIDE_V1.0.md`
@@ -456,7 +456,7 @@ open_positions = manager.get_positions_by_status("open")
 Loads configuration from **YAML files** (version-controlled) and **environment variables** (.env for secrets). **Completely separate** from database-backed configs in strategies/models tables.
 
 ### **Implementation**
-- **File**: `src/precog/config/config_loader.py` (643 lines)
+- **File**: `src/precog/config/config_loader.py` (921 lines)
 - **Coverage**: 98.97% (Phase 1)
 - **Target Coverage**: 80% (Infrastructure tier)
 - **Storage**: 7 YAML files + .env file (no database table)
@@ -678,7 +678,7 @@ elif loader.is_development():
 
 ### **Reference**
 - **Implementation**: `src/precog/config/config_loader.py`
-- **Tests**: `tests/unit/config/test_config_loader.py` (21 tests, 100% pass rate)
+- **Tests**: `tests/unit/config/test_environment.py` (21 tests, 100% pass rate)
 - **Guide**: `docs/guides/CONFIGURATION_GUIDE_V3.1.md`
 - **Requirements**: REQ-CONFIG-001 through REQ-CONFIG-005
 - **ADRs**: ADR-012 (Configuration Management Strategy), ADR-002 (Decimal Precision)
@@ -891,7 +891,7 @@ kelly_fraction = config['kelly_fraction']
 ## 6. Documentation References
 
 ### **Database Schema**
-- **`docs/database/DATABASE_SCHEMA_SUMMARY_V1.14.md`** - Complete schema (25 tables)
+- **`docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md`** - Complete schema (25 tables)
   - Lines 277-374: `probability_models` table
   - Lines 376-476: `strategies` table
   - Lines 507-545: `positions` table
@@ -900,18 +900,18 @@ kelly_fraction = config['kelly_fraction']
 - **`src/precog/analytics/model_manager.py`** - Model Manager (212 lines, 84.86% coverage)
 - **`src/precog/trading/strategy_manager.py`** - Strategy Manager (274 lines, 84.36% coverage)
 - **`src/precog/config/config_loader.py`** - Config Manager (643 lines, 98.97% coverage)
-- **Position Manager**: NOT YET IMPLEMENTED (Phase 1.5 pending)
+- **`src/precog/trading/position_manager.py`** - Position Manager (1,169 lines)
 
 ### **Tests**
 - **`tests/unit/analytics/test_model_manager.py`** - 36 tests (97.3% pass rate)
 - **`tests/unit/trading/test_strategy_manager.py`** - 13 tests (100% pass rate)
-- **`tests/unit/config/test_config_loader.py`** - 21 tests (100% pass rate)
+- **`tests/unit/config/test_environment.py`** - 21 tests (100% pass rate)
 
 ### **Implementation Guides**
 - **`docs/guides/CONFIGURATION_GUIDE_V3.1.md`** - YAML configuration reference
 - **`docs/guides/VERSIONING_GUIDE_V1.0.md`** - Strategy/model versioning patterns
 - **`docs/guides/POSITION_MANAGEMENT_GUIDE_V1.0.md`** - Position lifecycle management
-- **`docs/guides/DEVELOPMENT_PATTERNS_V1.5.md`** - Critical development patterns
+- **`docs/guides/DEVELOPMENT_PATTERNS_V1.23.md`** - Critical development patterns
 
 ### **Requirements**
 - **Model Manager**: REQ-MODEL-001 through REQ-MODEL-005

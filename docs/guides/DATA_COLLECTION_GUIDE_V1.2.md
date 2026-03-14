@@ -11,8 +11,8 @@
 **Related Documents:**
 - `docs/guides/MODEL_MANAGER_USER_GUIDE_V1.1.md` (Future Enhancements - Data Collection Pipelines)
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md` (ESPN, Kalshi, Balldontlie APIs)
-- `docs/foundation/MASTER_REQUIREMENTS_V2.24.md` (REQ-DATA-001 through REQ-DATA-008, REQ-ELO-*)
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.32.md` (ADR-002: Decimal Precision, ADR-053: Data Validation, ADR-076: Sports Data Source Tiering, ADR-304: Elo Computation)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` (REQ-DATA-001 through REQ-DATA-008, REQ-ELO-*)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.33.md` (ADR-002: Decimal Precision, ADR-053: Data Validation, ADR-076: Sports Data Source Tiering, ADR-304: Elo Computation)
 - `docs/supplementary/DATA_SOURCES_SPECIFICATION_V1.0.md` ⭐ **NEW** (Comprehensive 8-source specification)
 - `docs/guides/ELO_COMPUTATION_GUIDE_V1.0.md` 🔵 **PLANNED** (Elo methodology and implementation)
 
@@ -43,16 +43,30 @@
 ## Table of Contents
 
 1. [Overview](#overview)
+1A. [Current Architecture](#1a-current-architecture)
 2. [Data Sources](#data-sources)
-3. [DataCollector Implementation](#datacollector-implementation)
-4. [Multi-Source Collection](#multi-source-collection)
-5. [Incremental Updates](#incremental-updates)
-6. [Data Validation](#data-validation)
-7. [Data Storage](#data-storage)
-8. [Scheduling & Automation](#scheduling--automation)
-9. [Error Handling & Retry Logic](#error-handling--retry-logic)
-10. [Testing & Validation](#testing--validation)
+3. [DataCollector Implementation](#3-datacollector-implementation----planned-architecture-phase-3) *(Phase 3+)*
+4. [Multi-Source Collection](#4-multi-source-collection----planned-architecture-phase-3) *(Phase 3+)*
+5. [Incremental Updates](#5-incremental-updates----planned-architecture-phase-3) *(Phase 3+)*
+6. [Data Validation](#6-data-validation----planned-architecture-phase-3) *(Phase 3+)*
+7. [Data Storage](#7-data-storage----planned-architecture-phase-3) *(Phase 3+)*
+8. [Scheduling & Automation](#8-scheduling--automation----planned-architecture-phase-3) *(Phase 3+)*
+9. [Error Handling & Retry Logic](#9-error-handling--retry-logic----planned-architecture-phase-3) *(Phase 3+)*
+10. [Testing & Validation](#10-testing--validation----planned-architecture-phase-3) *(Phase 3+)*
 11. [Data Source Tiering Strategy](#data-source-tiering-strategy) **NEW**
+
+---
+
+> **IMPORTANT: Current vs. Planned Architecture**
+>
+> The `DataCollector` class described in Sections 3-10 is **planned Phase 3+ architecture** and does **NOT** reflect the current implementation. The system currently collects data using:
+>
+> - **`KalshiMarketPoller`** (`src/precog/schedulers/kalshi_poller.py`) -- polls Kalshi API for market prices
+> - **`ESPNGamePoller`** (`src/precog/schedulers/espn_game_poller.py`) -- polls ESPN API for game states
+> - **`ServiceSupervisor`** (`src/precog/schedulers/service_supervisor.py`) -- manages health monitoring and auto-restart
+> - **CLI:** `python main.py scheduler start --supervised --foreground`
+>
+> See **Section 1A: Current Architecture** below for how data collection works today.
 
 ---
 
@@ -84,6 +98,42 @@
 - Data validation (schema validation, outlier detection, missing values)
 - Data storage (PostgreSQL tables: `games`, `team_stats`, `player_stats`, `market_prices`)
 - Scheduling (daily/hourly automated collection via event loop)
+
+---
+
+## 1A. Current Architecture
+
+The production data collection pipeline uses two pollers managed by a supervisor. This is what runs today.
+
+### KalshiMarketPoller
+
+- Polls the Kalshi API for market prices at a **15-second default interval**
+- Creates SCD Type 2 rows in the database only when prices actually change (change detection)
+- Source: `src/precog/schedulers/kalshi_poller.py`
+
+### ESPNGamePoller
+
+- Polls the ESPN API for game state data using **adaptive intervals**:
+  - **DISCOVERY mode:** 900s (15 min) -- scanning for upcoming games
+  - **TRACKING mode:** 30s -- monitoring live games
+- Creates SCD Type 2 rows only when game state data actually changes (change detection)
+- Source: `src/precog/schedulers/espn_game_poller.py`
+
+### ServiceSupervisor
+
+- Manages both pollers with health monitoring and automatic restart on failure
+- Provides heartbeat logging and metrics collection
+- Source: `src/precog/schedulers/service_supervisor.py`
+
+### Sports Configured
+
+NFL, NCAAF, NBA, NHL
+
+### Running Data Collection
+
+```bash
+python main.py scheduler start --supervised --foreground
+```
 
 ---
 
@@ -209,7 +259,7 @@ async def fetch_espn_scoreboard(date: str) -> dict:
 
 ---
 
-## 3. DataCollector Implementation
+## 3. DataCollector Implementation -- Planned Architecture (Phase 3+)
 
 ### Class Overview
 
@@ -303,7 +353,7 @@ class DataCollector:
 
 ---
 
-## 4. Multi-Source Collection
+## 4. Multi-Source Collection -- Planned Architecture (Phase 3+)
 
 ### collect_nfl_games() Method
 
@@ -472,7 +522,7 @@ def collect_nfl_games(
 
 ---
 
-## 5. Incremental Updates
+## 5. Incremental Updates -- Planned Architecture (Phase 3+)
 
 ### Why Incremental Updates?
 
@@ -562,7 +612,7 @@ def _update_collection_timestamp(
 
 ---
 
-## 6. Data Validation
+## 6. Data Validation -- Planned Architecture (Phase 3+)
 
 ### Schema Validation
 
@@ -673,7 +723,7 @@ def _detect_outliers(self, game: dict[str, Any], sport: str) -> list[str]:
 
 ---
 
-## 7. Data Storage
+## 7. Data Storage -- Planned Architecture (Phase 3+)
 
 ### Database Schema
 
@@ -785,7 +835,7 @@ def _store_games(self, games: list[dict[str, Any]]) -> dict[str, int]:
 
 ---
 
-## 8. Scheduling & Automation
+## 8. Scheduling & Automation -- Planned Architecture (Phase 3+)
 
 ### Collection Schedule
 
@@ -863,7 +913,7 @@ async def hourly_kalshi_collection(collector: DataCollector):
 
 ---
 
-## 9. Error Handling & Retry Logic
+## 9. Error Handling & Retry Logic -- Planned Architecture (Phase 3+)
 
 ### Exponential Backoff
 
@@ -932,7 +982,7 @@ def retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0):
 
 ---
 
-## 10. Testing & Validation
+## 10. Testing & Validation -- Planned Architecture (Phase 3+)
 
 ### Unit Tests
 
