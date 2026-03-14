@@ -1941,7 +1941,7 @@ def clean_test_data(db_pool):
 @pytest.fixture
 def db_pool():
     """Provides real connection pool. Use for pool-related tests."""
-    # Real SimpleConnectionPool with minconn=2, maxconn=5
+    # Real ThreadedConnectionPool with minconn=2, maxconn=5
     # Tests pool exhaustion scenarios
     # Automatically cleans up connections
 
@@ -8629,11 +8629,95 @@ PASSED tests/stress/cli/test_cli_stress.py::test_repeated_status_checks  # Alway
 
 ---
 
+## Pattern 36: External ID Stability — Never Trust Short Codes (ALWAYS for Multi-Source Data)
+
+**WHY:** External providers may use non-unique short codes across different contexts. ESPN uses 3-letter team codes (e.g., "OSU") that map to different teams in different leagues (Ohio State in NCAAF, Oregon State in other contexts). When polling multiple leagues, shared codes cause "ID thrashing" — the validator cycles between team records as different leagues report conflicting data for the same code.
+
+**Discovered:** Soak test 2026-03-11, ESPN validator logged 97 NCAAF cycles due to shared team codes.
+
+### The Problem
+
+```python
+# BAD: Short codes are not globally unique
+team = get_team_by_code("OSU")  # Which OSU? Ohio State? Oregon State? Oklahoma State?
+
+# GOOD: Always scope external IDs by provider + league
+team = get_team_by_espn_id(espn_team_id="194", league="ncaaf")  # Unambiguous
+```
+
+### Rules
+
+1. **Always use provider-specific full IDs** (ESPN numeric ID, not abbreviation) for lookups
+2. **Always scope by league** when querying teams — `(espn_team_id, league)` is the correct composite key
+3. **Never assume short codes are unique** across leagues or even within a league over time
+4. **Validate at ingestion** — the ESPN validator (`espn_team_validator.py`) handles disambiguation internally, but downstream code must use the resolved `team_id`, not the raw abbreviation
+
+### Database Constraint
+
+Migration 0017 enforces this at the schema level:
+```sql
+-- Partial unique index: (espn_team_id, league) WHERE espn_team_id IS NOT NULL
+CREATE UNIQUE INDEX ix_teams_espn_team_id_league
+    ON teams (espn_team_id, league)
+    WHERE espn_team_id IS NOT NULL;
+```
+
+### Generalization
+
+This pattern applies to ANY external data source, not just ESPN:
+- Kalshi ticker formats may change or be reused across seasons
+- Balldontlie player IDs may not be stable across API versions
+- Any provider's "short name" or "abbreviation" field is suspect
+
+**Rule of thumb:** If you didn't generate the ID, don't trust its uniqueness without scoping.
+
+### Related
+
+- `src/precog/api_connectors/espn_team_validator.py` — ESPN ID disambiguation logic
+- `src/precog/database/crud_operations.py:get_team_by_espn_id()` — Correct lookup pattern (scoped by league)
+- Migration 0017 — `(espn_team_id, league)` partial unique constraint
+- Issue #342 — Documentation trigger for this pattern
+
+---
+
+## Pattern 37: Settled Market Price Semantics (ALWAYS for Backtesting)
+
+**WHY:** Kalshi markets show `yes_price=1.0` AND `no_price=1.0` after settlement. This is not a data error — it's Kalshi's post-settlement marker. If backtesting code queries `WHERE row_current_ind = TRUE` on settled markets, it gets settlement markers instead of the last trading prices.
+
+**Discovered:** Data quality analysis 2026-03-11 found 69% of settled markets have both prices at 1.0.
+
+### The Problem
+
+```python
+# BAD: Gets settlement marker (1.0/1.0), not last trading price
+market = get_current_market("KXNFLGAME-KC-BUF-YES")
+last_price = market['yes_price']  # Decimal('1.0000') — settlement marker, NOT last trade
+
+# GOOD: Query SCD history for actual price movement
+history = get_market_history("KXNFLGAME-KC-BUF-YES")  # All SCD versions
+last_trading_price = history[-2]['yes_price']  # Second-to-last row = last pre-settlement price
+```
+
+### Rules
+
+1. **For current state queries** (is market open? what's the current price?): Use `row_current_ind = TRUE` — works correctly for active markets
+2. **For backtesting / model training**: Query ALL SCD versions and filter out the final settlement row (`yes_price = 1.0 AND no_price = 1.0 AND status = 'settled'`)
+3. **For price change analysis**: Use historical SCD rows ordered by `row_start_ts`
+4. **Settlement detection**: A market is settled when `status = 'settled'` — the 1.0/1.0 prices are a secondary indicator
+
+### Related
+
+- `src/precog/database/crud_operations.py:get_current_market()` — Documented with settlement warning
+- Issue #315 — Original discovery
+- Phase 4 (Model Training) — Must handle this correctly in training data pipelines
+
+---
+
 ## Related Documentation
 
 ### Foundation Documents
-- `docs/foundation/MASTER_REQUIREMENTS_V2.17.md` - All requirements
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.10.md` - All ADRs (includes ADR-002, ADR-018-020, ADR-048, ADR-053-054, ADR-074)
+- `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` - All requirements
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.33.md` - All ADRs (includes ADR-002, ADR-018-020, ADR-048, ADR-053-054, ADR-074)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.8.md` - Phase planning
 
 ### Implementation Guides
