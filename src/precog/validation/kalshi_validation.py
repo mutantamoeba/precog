@@ -450,8 +450,25 @@ class KalshiDataValidator:
             result.add_error("ticker", "Missing or empty ticker")
 
         # Validate status
+        # Includes both database-mapped statuses (open, closed, settled, halted)
+        # and raw Kalshi API statuses (active, unopened, determined, finalized,
+        # initialized, inactive). The poller maps API statuses to DB statuses
+        # via STATUS_MAPPING, but validation runs on raw API data before mapping.
         status = market.get("status")
-        valid_statuses = {"open", "closed", "settled"}
+        valid_statuses = {
+            # Database-mapped statuses
+            "open",
+            "closed",
+            "settled",
+            "halted",
+            # Raw Kalshi API statuses (mapped to DB statuses by the poller)
+            "active",
+            "unopened",
+            "determined",
+            "finalized",
+            "initialized",
+            "inactive",
+        }
         if status and status not in valid_statuses:
             result.add_warning(
                 "status",

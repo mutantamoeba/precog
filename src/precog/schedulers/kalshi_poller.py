@@ -43,7 +43,7 @@ Related ADR: ADR-100 (Service Supervisor Pattern)
 
 import logging
 from decimal import Decimal
-from typing import ClassVar
+from typing import Any, ClassVar, cast
 
 from precog.api_connectors.kalshi_client import KalshiClient
 from precog.api_connectors.types import ProcessedMarketData, SeriesData
@@ -56,6 +56,7 @@ from precog.database.crud_operations import (
     update_market_with_versioning,
 )
 from precog.schedulers.base_poller import BasePoller
+from precog.validation.kalshi_validation import KalshiDataValidator
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -176,12 +177,30 @@ class KalshiMarketPoller(BasePoller):
         # Initialize Kalshi client (or use provided mock)
         self.kalshi_client = kalshi_client or KalshiClient(environment=environment)
 
+        # Initialize data validator (instance-level, NOT module-level singleton,
+        # because _anomaly_counts is stateful per-poller)
+        self._validator = KalshiDataValidator()
+
+        # Validation stats tracked separately from PollerStats TypedDict
+        # to avoid type contract violations. Merged in get_stats().
+        self._validation_stats: dict[str, int] = {
+            "validation_errors": 0,
+            "validation_warnings": 0,
+        }
+
         logger.info(
             "KalshiMarketPoller initialized: series=%s, poll_interval=%ds, env=%s",
             self.series_tickers,
             self.poll_interval,
             self.environment,
         )
+
+    def get_stats(self) -> dict[str, Any]:
+        """Get stats including validation counters."""
+        with self._lock:
+            stats = dict(self._stats)
+            stats.update(self._validation_stats)
+            return stats
 
     def _get_job_name(self) -> str:
         """Return human-readable name for the polling job."""
@@ -527,6 +546,46 @@ class KalshiMarketPoller(BasePoller):
         all_markets = self.kalshi_client.fetch_all_markets(
             series_tickers=[series_ticker],
         )
+
+        # Validate fetched market data (soft validation — log issues, never block ingestion).
+        # Runs on raw API data before any DB mapping or filtering.
+        # Wrapped in try/except: a validator bug must NEVER prevent market syncing.
+        try:
+            validation_results = self._validator.validate_markets(
+                cast("list[dict[str, Any]]", all_markets)
+            )
+            error_count = sum(1 for r in validation_results if r.has_errors)
+            warning_count = sum(
+                1 for r in validation_results if r.has_warnings and not r.has_errors
+            )
+            valid_count = len(all_markets) - error_count
+
+            # Log individual issues at appropriate levels
+            for vr in validation_results:
+                if vr.has_errors or vr.has_warnings:
+                    vr.log_issues(logger)
+
+            # Summary log: INFO if errors exist, DEBUG otherwise
+            summary_log = logger.info if error_count else logger.debug
+            summary_log(
+                "Validation [%s]: %d markets checked, %d valid, %d errors, %d warnings",
+                series_ticker,
+                len(all_markets),
+                valid_count,
+                error_count,
+                warning_count,
+            )
+
+            # Track validation stats (separate dict, merged in get_stats)
+            with self._lock:
+                self._validation_stats["validation_errors"] += error_count
+                self._validation_stats["validation_warnings"] += warning_count
+        except Exception as e:
+            logger.error(
+                "Validation failed for series %s (ingestion continues): %s",
+                series_ticker,
+                e,
+            )
 
         markets_updated = 0
         markets_created = 0

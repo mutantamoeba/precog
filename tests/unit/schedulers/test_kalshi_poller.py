@@ -509,3 +509,186 @@ class TestGetActiveMarketCount:
         """get_active_market_count returns 0 when no open markets exist."""
         mock_count.return_value = 0
         assert poller_with_mock_client.get_active_market_count() == 0
+
+
+# =============================================================================
+# Validation Integration Tests
+# =============================================================================
+
+
+class TestKalshiPollerValidation:
+    """Test validation integration in the polling pipeline."""
+
+    @pytest.mark.unit
+    def test_poller_has_validator_instance(self, poller_with_mock_client):
+        """Poller creates a KalshiDataValidator in __init__."""
+        from precog.validation.kalshi_validation import KalshiDataValidator
+
+        assert hasattr(poller_with_mock_client, "_validator")
+        assert isinstance(poller_with_mock_client._validator, KalshiDataValidator)
+
+    @pytest.mark.unit
+    def test_poll_series_calls_validator(self, poller_with_mock_client, mock_market_data_list):
+        """_poll_series calls validate_markets on fetched data."""
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = mock_market_data_list
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.create_market"),
+            patch.object(
+                poller_with_mock_client._validator,
+                "validate_markets",
+                wraps=poller_with_mock_client._validator.validate_markets,
+            ) as mock_validate,
+        ):
+            poller_with_mock_client._poll_series("KXNFLGAME")
+
+            mock_validate.assert_called_once_with(mock_market_data_list)
+
+    @pytest.mark.unit
+    def test_validation_does_not_block_ingestion(self, poller_with_mock_client):
+        """Markets with validation errors are still synced to DB."""
+        # Market with invalid data (negative volume -> ERROR)
+        bad_market = {
+            "ticker": "KXNFLGAME-BAD",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Bad Market",
+            "status": "active",
+            "yes_ask_dollars": Decimal("0.50"),
+            "no_ask_dollars": Decimal("0.50"),
+            "volume": -100,  # Invalid: negative volume triggers ERROR
+            "open_interest": 0,
+        }
+
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [bad_market]
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch(
+                "precog.schedulers.kalshi_poller.create_market", return_value="MKT-1"
+            ) as mock_create,
+        ):
+            fetched, _updated, created = poller_with_mock_client._poll_series("KXNFLGAME")
+
+            # Market must still be persisted despite validation error
+            assert fetched == 1
+            assert created == 1
+            mock_create.assert_called_once()
+
+    @pytest.mark.unit
+    def test_validation_summary_logged_debug_when_clean(
+        self, poller_with_mock_client, mock_market_data_list, caplog
+    ):
+        """Validation summary uses DEBUG when no errors found."""
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = mock_market_data_list
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.create_market"),
+        ):
+            import logging
+
+            with caplog.at_level(logging.DEBUG, logger="precog.schedulers.kalshi_poller"):
+                poller_with_mock_client._poll_series("KXNFLGAME")
+
+            assert "Validation [KXNFLGAME]" in caplog.text
+            assert "2 markets checked" in caplog.text
+
+    @pytest.mark.unit
+    def test_validation_summary_logged_info_when_errors(self, poller_with_mock_client, caplog):
+        """Validation summary uses INFO when errors found."""
+        bad_market = {
+            "ticker": "KXNFLGAME-BAD",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Bad Market",
+            "status": "active",
+            "yes_ask_dollars": Decimal("0.50"),
+            "no_ask_dollars": Decimal("0.50"),
+            "volume": -100,  # Triggers validation ERROR
+            "open_interest": 0,
+        }
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [bad_market]
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.create_market"),
+        ):
+            import logging
+
+            with caplog.at_level(logging.DEBUG, logger="precog.schedulers.kalshi_poller"):
+                poller_with_mock_client._poll_series("KXNFLGAME")
+
+            assert "Validation [KXNFLGAME]" in caplog.text
+            assert "1 errors" in caplog.text
+
+    @pytest.mark.unit
+    def test_validation_stats_tracked(self, poller_with_mock_client):
+        """Validation errors and warnings are tracked in poller stats."""
+        bad_market = {
+            "ticker": "KXNFLGAME-BAD",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Bad Market",
+            "status": "active",
+            "yes_ask_dollars": Decimal("0.50"),
+            "no_ask_dollars": Decimal("0.50"),
+            "volume": -100,  # Triggers validation ERROR
+            "open_interest": 0,
+        }
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [bad_market]
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.create_market"),
+        ):
+            poller_with_mock_client._poll_series("KXNFLGAME")
+
+        stats = poller_with_mock_client.get_stats()
+        assert stats["validation_errors"] == 1
+        assert stats["validation_warnings"] == 0
+
+    @pytest.mark.unit
+    def test_validation_exception_does_not_block_ingestion(self, poller_with_mock_client):
+        """If the validator itself throws, markets are still synced to DB."""
+        market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Test Market",
+            "status": "active",
+            "yes_ask_dollars": Decimal("0.50"),
+            "no_ask_dollars": Decimal("0.50"),
+            "volume": 100,
+            "open_interest": 50,
+        }
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [market]
+
+        # Force the validator to throw
+        with (
+            patch.object(
+                poller_with_mock_client._validator,
+                "validate_markets",
+                side_effect=RuntimeError("validator exploded"),
+            ),
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch(
+                "precog.schedulers.kalshi_poller.create_market", return_value="MKT-1"
+            ) as mock_create,
+        ):
+            fetched, _updated, created = poller_with_mock_client._poll_series("KXNFLGAME")
+
+            # Market MUST still be persisted despite validator crash
+            assert fetched == 1
+            assert created == 1
+            mock_create.assert_called_once()
+
+    @pytest.mark.unit
+    def test_validation_stats_initialized_before_first_poll(self, poller_with_mock_client):
+        """Validation stats keys exist immediately, before any poll runs."""
+        stats = poller_with_mock_client.get_stats()
+        assert stats["validation_errors"] == 0
+        assert stats["validation_warnings"] == 0
