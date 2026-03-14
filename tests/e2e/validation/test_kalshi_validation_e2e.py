@@ -108,20 +108,25 @@ class TestCompleteMarketValidationFlow:
         """Test validating market through its lifecycle states."""
         market = complete_market_snapshot.copy()
 
-        # Open state
+        # Open state — spread/arbitrage checks active
         market["status"] = "open"
         result1 = validator.validate_market_data(market)
         assert result1.is_valid
+        assert not any("Settled market price" in w.message for w in result1.warnings)
 
-        # Closed state
+        # Closed state — no spread, no settlement checks
         market["status"] = "closed"
         result2 = validator.validate_market_data(market)
         assert result2.is_valid
+        assert not any("spread" in w.field for w in result2.warnings)
+        assert not any("Settled market price" in w.message for w in result2.warnings)
 
-        # Settled state
+        # Settled state — settlement consistency warnings expected (mid-range prices)
         market["status"] = "settled"
         result3 = validator.validate_market_data(market)
         assert result3.is_valid
+        assert any("Settled market price" in w.message for w in result3.warnings)
+        assert not any("spread" in w.field for w in result3.warnings)
 
 
 # =============================================================================

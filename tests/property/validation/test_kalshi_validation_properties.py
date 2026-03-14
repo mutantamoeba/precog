@@ -64,8 +64,22 @@ ticker_strategy = st.text(
     max_size=20,
 )
 
-# Market status strategy (valid Kalshi statuses)
-status_strategy = st.sampled_from(["open", "closed", "settled"])
+# Market status strategy — covers both DB-mapped and raw Kalshi API statuses.
+# Must match valid_statuses in KalshiDataValidator.validate_market_data().
+status_strategy = st.sampled_from(
+    [
+        "open",
+        "closed",
+        "settled",
+        "halted",  # DB-mapped
+        "active",
+        "unopened",
+        "determined",
+        "finalized",  # Raw Kalshi API
+        "initialized",
+        "inactive",  # Raw Kalshi API
+    ]
+)
 
 
 # =============================================================================
@@ -247,6 +261,52 @@ class TestMarketDataValidationProperties:
         result = validator.validate_market_data(market)
         # Should be valid (no errors) - may have warnings for wide spreads
         assert result.is_valid
+
+    @given(status=status_strategy)
+    @settings(max_examples=30, suppress_health_check=[HealthCheck.too_slow])
+    def test_status_gating_invariant(self, status: str) -> None:
+        """Spread/arbitrage checks only fire for active/open; settlement only for settled/finalized.
+
+        This is the core invariant from Issue #385 — status-blind validation
+        was the root cause of 85-95% false-positive warnings.
+        """
+        validator = create_validator()
+        # Market with wide spread and non-{0,1} prices — triggers both check families
+        market = {
+            "ticker": "PROP-STATUS-TEST",
+            "status": status,
+            "yes_bid_dollars": Decimal("0.30"),
+            "yes_ask_dollars": Decimal("0.55"),
+            "no_bid_dollars": Decimal("0.40"),
+            "no_ask_dollars": Decimal("0.65"),
+        }
+        result = validator.validate_market_data(market)
+
+        active_statuses = {"active", "open"}
+        settlement_statuses = {"settled", "finalized"}
+
+        spread_warnings = [w for w in result.warnings if "spread" in w.field]
+        arb_warnings = [w for w in result.warnings if "arbitrage" in w.field]
+        bid_sum_errors = [e for e in result.errors if "bid_sum" in e.field]
+        settlement_warnings = [w for w in result.warnings if "Settled market price" in w.message]
+
+        if status in active_statuses:
+            # Active markets SHOULD get spread/arbitrage checks
+            assert len(spread_warnings) > 0, f"Status {status} should trigger spread checks"
+        else:
+            # Non-active markets should NOT get spread/arbitrage/bid-sum checks
+            assert len(spread_warnings) == 0, f"Status {status} should not trigger spread checks"
+            assert len(arb_warnings) == 0, f"Status {status} should not trigger arb checks"
+            assert len(bid_sum_errors) == 0, f"Status {status} should not trigger bid_sum checks"
+
+        if status in settlement_statuses:
+            # Settled markets SHOULD get settlement consistency checks
+            assert len(settlement_warnings) > 0, f"Status {status} should trigger settlement checks"
+        else:
+            # Non-settled markets should NOT get settlement checks
+            assert len(settlement_warnings) == 0, (
+                f"Status {status} should not trigger settlement checks"
+            )
 
     @given(ticker=st.just(""))
     @settings(max_examples=5)

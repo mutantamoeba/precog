@@ -223,6 +223,56 @@ class TestBoundaryConditions:
             result = validator.validate_market_data(market)
             assert isinstance(result, ValidationResult)
 
+    @pytest.mark.parametrize(
+        "status",
+        [
+            "initialized",
+            "unopened",
+            "halted",
+            "inactive",
+            "determined",
+            "finalized",
+            "closed",
+        ],
+    )
+    def test_non_active_status_no_spread_warnings(
+        self, validator: KalshiDataValidator, status: str
+    ) -> None:
+        """Non-active statuses must not trigger spread/arbitrage checks.
+
+        These boundary statuses have no live orderbook — bid=0/ask=1
+        (spread=1.0) is expected and not an anomaly.
+        """
+        market = {
+            "ticker": f"CHAOS-{status.upper()}",
+            "status": status,
+            "yes_bid_dollars": Decimal("0.00"),
+            "yes_ask_dollars": Decimal("1.00"),  # Spread = 1.0
+            "no_bid_dollars": Decimal("0.00"),
+            "no_ask_dollars": Decimal("1.00"),
+        }
+        result = validator.validate_market_data(market)
+        assert not any("spread" in w.field for w in result.warnings)
+        assert not any("spread" in e.field for e in result.errors)
+        assert not any("arbitrage" in w.field for w in result.warnings)
+
+    @pytest.mark.parametrize("status", ["settled", "finalized"])
+    def test_settlement_status_flags_mid_range_prices(
+        self, validator: KalshiDataValidator, status: str
+    ) -> None:
+        """Settled/finalized statuses should flag non-{0,1} prices."""
+        market = {
+            "ticker": f"CHAOS-{status.upper()}",
+            "status": status,
+            "yes_bid_dollars": Decimal("0.45"),
+            "yes_ask_dollars": Decimal("0.55"),
+            "no_bid_dollars": Decimal("0.45"),
+            "no_ask_dollars": Decimal("0.55"),
+        }
+        result = validator.validate_market_data(market)
+        settlement_warnings = [w for w in result.warnings if "Settled market price" in w.message]
+        assert len(settlement_warnings) == 4  # All four prices flagged
+
     def test_zero_spread(self, validator: KalshiDataValidator) -> None:
         """Test validation with zero spread (bid = ask)."""
         market = {
