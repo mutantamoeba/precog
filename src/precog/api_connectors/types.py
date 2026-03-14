@@ -36,7 +36,7 @@ class MarketData(TypedDict):
     # Price fields as strings (will be converted to Decimal)
     # These are order book prices, NOT implied probabilities.
     # yes_ask + no_ask > 1.0 is expected (the difference is the spread/vigorish).
-    # At settlement: ask prices reach 1.00 (winning side) and 1.00 (losing side too).
+    # At settlement: winning side's last price approaches 1.00; losing side approaches 0.00.
     yes_bid: str  # Highest resting YES buy order (in cents as string)
     yes_ask: str  # Lowest resting YES sell order (cost to buy YES contract)
     no_bid: str  # Highest resting NO buy order (in cents as string)
