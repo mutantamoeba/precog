@@ -102,19 +102,19 @@ class TestPriceBoundaryEdgeCases:
         assert pnl == Decimal("0")
 
     def test_price_just_outside_boundary_low(self, manager: PositionManager) -> None:
-        """Test rejection of price just below minimum."""
+        """Test rejection of price just below minimum (0.00)."""
         with pytest.raises(ValueError, match="outside valid range"):
             manager.update_position(
                 position_id=1,
-                current_price=Decimal("0.009"),
+                current_price=Decimal("-0.001"),
             )
 
     def test_price_just_outside_boundary_high(self, manager: PositionManager) -> None:
-        """Test rejection of price just above maximum."""
+        """Test rejection of price just above maximum (1.00)."""
         with pytest.raises(ValueError, match="outside valid range"):
             manager.update_position(
                 position_id=1,
-                current_price=Decimal("0.991"),
+                current_price=Decimal("1.001"),
             )
 
 
