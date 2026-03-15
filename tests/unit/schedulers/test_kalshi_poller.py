@@ -694,3 +694,235 @@ class TestKalshiPollerValidation:
         stats = poller_with_mock_client.get_stats()
         assert stats["validation_errors"] == 0
         assert stats["validation_warnings"] == 0
+        assert stats["validation_errors_last_cycle"] == 0
+        assert stats["validation_warnings_last_cycle"] == 0
+        assert stats["markets_checked_last_cycle"] == 0
+        assert stats["error_rate_pct_last_cycle"] == 0.0
+
+    @pytest.mark.unit
+    def test_per_cycle_stats_tracked(self, poller_with_mock_client):
+        """Per-cycle stats are overwritten each cycle (not cumulative)."""
+        bad_market = {
+            "ticker": "KXNFLGAME-BAD",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Bad Market",
+            "status": "active",
+            "volume": -100,  # Triggers validation ERROR
+        }
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [bad_market]
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.create_market"),
+            patch("precog.schedulers.kalshi_poller.create_alert"),
+        ):
+            poller_with_mock_client._poll_series("KXNFLGAME")
+
+        stats = poller_with_mock_client.get_stats()
+        assert stats["validation_errors_last_cycle"] == 1
+        assert stats["markets_checked_last_cycle"] == 1
+        assert stats["error_rate_pct_last_cycle"] == 100.0
+
+        # Second cycle with all-good data proves overwrite (not accumulation)
+        good_market = {
+            "ticker": "KXNFLGAME-OK1",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Good Market",
+            "status": "active",
+            "yes_bid_dollars": Decimal("0.45"),
+            "yes_ask_dollars": Decimal("0.48"),
+            "no_bid_dollars": Decimal("0.52"),
+            "no_ask_dollars": Decimal("0.55"),
+            "volume": 100,
+            "open_interest": 50,
+        }
+        good_market2 = good_market.copy()
+        good_market2["ticker"] = "KXNFLGAME-OK2"
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [
+            good_market,
+            good_market2,
+        ]
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.create_market"),
+            patch("precog.schedulers.kalshi_poller.create_alert"),
+        ):
+            poller_with_mock_client._poll_series("KXNFLGAME")
+
+        stats = poller_with_mock_client.get_stats()
+        assert stats["validation_errors_last_cycle"] == 0
+        assert stats["markets_checked_last_cycle"] == 2
+        assert stats["error_rate_pct_last_cycle"] == 0.0
+
+    @pytest.mark.unit
+    def test_per_cycle_stats_zero_markets(self, poller_with_mock_client):
+        """Zero markets fetched does not cause division by zero."""
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = []
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.create_market"),
+            patch("precog.schedulers.kalshi_poller.create_alert"),
+        ):
+            poller_with_mock_client._poll_series("KXNFLGAME")
+
+        stats = poller_with_mock_client.get_stats()
+        assert stats["validation_errors_last_cycle"] == 0
+        assert stats["markets_checked_last_cycle"] == 0
+        assert stats["error_rate_pct_last_cycle"] == 0.0
+
+    @pytest.mark.unit
+    def test_error_rate_escalation_to_error(self, poller_with_mock_client, caplog):
+        """Error rate >25% escalates to ERROR log level."""
+        bad_market = {
+            "ticker": "KXNFLGAME-BAD",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Bad Market",
+            "status": "active",
+            "volume": -100,  # ERROR
+        }
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [bad_market]
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.create_market"),
+            patch("precog.schedulers.kalshi_poller.create_alert") as mock_alert,
+        ):
+            import logging
+
+            with caplog.at_level(logging.DEBUG, logger="precog.schedulers.kalshi_poller"):
+                poller_with_mock_client._poll_series("KXNFLGAME")
+
+            assert "ERROR RATE" in caplog.text
+            assert "ACTION: investigate data source" in caplog.text
+            mock_alert.assert_called_once()
+            call_kwargs = mock_alert.call_args.kwargs
+            assert call_kwargs["alert_type"] == "validation_error_rate"
+            assert call_kwargs["severity"] == "error"
+
+    @pytest.mark.unit
+    def test_error_rate_escalation_to_warning(self, poller_with_mock_client, caplog):
+        """Error rate 10-25% escalates to WARNING log level."""
+        # Need ~15% error rate: 2 bad out of 13 total
+        bad_market = {
+            "ticker": "KXNFLGAME-BAD",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Bad",
+            "status": "active",
+            "volume": -100,  # ERROR
+        }
+        good_market = {
+            "ticker": "KXNFLGAME-GOOD",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Good",
+            "status": "active",
+            "yes_bid_dollars": Decimal("0.45"),
+            "yes_ask_dollars": Decimal("0.48"),
+            "no_bid_dollars": Decimal("0.52"),
+            "no_ask_dollars": Decimal("0.55"),
+            "volume": 100,
+            "open_interest": 50,
+        }
+        # 2 bad + 11 good = 2/13 = 15.4% error rate (> 10% threshold)
+        markets = [bad_market, bad_market.copy()] + [good_market.copy() for _ in range(11)]
+        # Give each a unique ticker
+        for i, m in enumerate(markets):
+            m["ticker"] = f"KXNFLGAME-{i:03d}"
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = markets
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.create_market"),
+            patch("precog.schedulers.kalshi_poller.create_alert") as mock_alert,
+        ):
+            import logging
+
+            with caplog.at_level(logging.DEBUG, logger="precog.schedulers.kalshi_poller"):
+                poller_with_mock_client._poll_series("KXNFLGAME")
+
+            assert "error rate" in caplog.text
+            # Should NOT contain ERROR RATE (that's the >25% message)
+            assert "ERROR RATE" not in caplog.text
+            # create_alert should NOT be called at WARNING level
+            mock_alert.assert_not_called()
+
+    @pytest.mark.unit
+    def test_error_rate_escalation_to_info(self, poller_with_mock_client, caplog):
+        """Error rate <10% with issues escalates to INFO log level."""
+        # Need <10% error rate: 1 bad out of 11 total = 9.1%
+        bad_market = {
+            "ticker": "KXNFLGAME-BAD",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Bad",
+            "status": "active",
+            "volume": -100,  # ERROR
+        }
+        good_market = {
+            "ticker": "KXNFLGAME-GOOD",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Good",
+            "status": "active",
+            "yes_bid_dollars": Decimal("0.45"),
+            "yes_ask_dollars": Decimal("0.48"),
+            "no_bid_dollars": Decimal("0.52"),
+            "no_ask_dollars": Decimal("0.55"),
+            "volume": 100,
+            "open_interest": 50,
+        }
+        # 1 bad + 10 good = 1/11 = 9.1% error rate (< 10% threshold)
+        markets = [bad_market] + [good_market.copy() for _ in range(10)]
+        for i, m in enumerate(markets):
+            m["ticker"] = f"KXNFLGAME-{i:03d}"
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = markets
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.create_market"),
+            patch("precog.schedulers.kalshi_poller.create_alert") as mock_alert,
+        ):
+            import logging
+
+            with caplog.at_level(logging.DEBUG, logger="precog.schedulers.kalshi_poller"):
+                poller_with_mock_client._poll_series("KXNFLGAME")
+
+            # Should log at INFO level with counts (not "error rate" or "ERROR RATE")
+            assert "markets checked" in caplog.text
+            assert "1 errors" in caplog.text
+            assert "ERROR RATE" not in caplog.text
+            assert "error rate" not in caplog.text
+            # create_alert should NOT be called below 25%
+            mock_alert.assert_not_called()
+
+    @pytest.mark.unit
+    def test_create_alert_failure_does_not_block_ingestion(self, poller_with_mock_client):
+        """DB failure in create_alert does not crash polling or prevent market sync."""
+        bad_market = {
+            "ticker": "KXNFLGAME-BAD",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Bad Market",
+            "status": "active",
+            "volume": -100,  # ERROR - triggers >25% rate with 1 market
+        }
+        poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [bad_market]
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.create_market") as mock_create,
+            patch(
+                "precog.schedulers.kalshi_poller.create_alert",
+                side_effect=Exception("DB write failed"),
+            ),
+        ):
+            # Should not raise despite create_alert failure
+            poller_with_mock_client._poll_series("KXNFLGAME")
+
+        # Market was still created despite alert failure
+        mock_create.assert_called_once()
