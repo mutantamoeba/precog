@@ -139,6 +139,27 @@ class RealisticMockService:
 # =============================================================================
 
 
+@pytest.fixture(autouse=True)
+def _clean_scheduler_status():
+    """Clean stale scheduler_status entries before each integration test.
+
+    Integration tests create real supervisors that write to scheduler_status.
+    The startup guard (Issue #363) detects these as active instances and blocks
+    subsequent tests. Force-clean before each test to prevent false positives.
+    """
+    from precog.database.crud_operations import cleanup_stale_schedulers
+
+    try:
+        cleanup_stale_schedulers(stale_threshold_seconds=0)
+    except Exception:
+        pass  # Table may not exist in test environments
+    yield
+    try:
+        cleanup_stale_schedulers(stale_threshold_seconds=0)
+    except Exception:
+        pass
+
+
 @pytest.fixture
 def integration_config() -> RunnerConfig:
     """Create configuration optimized for integration testing.
