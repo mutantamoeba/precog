@@ -445,6 +445,399 @@ class TestGameStateParsing:
 
 
 # =============================================================================
+# Sport-Conditional Situation Parsing Tests (#398)
+# =============================================================================
+
+
+def _make_espn_scoreboard(situation: dict, team_ids: tuple[str, str] = ("1", "2")) -> dict:
+    """Build a minimal ESPN scoreboard response with given situation data."""
+    home_id, away_id = team_ids
+    return {
+        "events": [
+            {
+                "id": "401999001",
+                "date": "2026-03-14T20:00Z",
+                "competitions": [
+                    {
+                        "id": "401999001",
+                        "competitors": [
+                            {
+                                "id": home_id,
+                                "homeAway": "home",
+                                "team": {
+                                    "id": home_id,
+                                    "abbreviation": "HME",
+                                    "displayName": "Home Team",
+                                    "name": "HomeName",
+                                    "location": "HomeCity",
+                                },
+                                "score": "50",
+                            },
+                            {
+                                "id": away_id,
+                                "homeAway": "away",
+                                "team": {
+                                    "id": away_id,
+                                    "abbreviation": "AWY",
+                                    "displayName": "Away Team",
+                                    "name": "AwayName",
+                                    "location": "AwayCity",
+                                },
+                                "score": "45",
+                            },
+                        ],
+                        "venue": {
+                            "id": "1000",
+                            "fullName": "Test Arena",
+                            "address": {"city": "TestCity", "state": "TS"},
+                        },
+                        "status": {
+                            "clock": 300.0,
+                            "displayClock": "5:00",
+                            "period": 3,
+                            "type": {
+                                "id": "2",
+                                "state": "in",
+                                "completed": False,
+                                "description": "In Progress",
+                            },
+                        },
+                        "situation": situation,
+                        "broadcasts": [],
+                    }
+                ],
+            }
+        ]
+    }
+
+
+class TestSportConditionalSituationParsing:
+    """Tests for sport-conditional situation data extraction (#398)."""
+
+    @pytest.mark.unit
+    @patch("requests.Session.get")
+    def test_nfl_situation_includes_football_fields(self, mock_get: MagicMock):
+        """NFL parsing extracts down, distance, yard_line, turnovers."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        situation_raw = {
+            "possession": "1",
+            "homeTimeouts": 2,
+            "awayTimeouts": 1,
+            "down": 3,
+            "distance": 7,
+            "yardLine": 42,
+            "isRedZone": False,
+            "homeTurnovers": 1,
+            "awayTurnovers": 0,
+            "lastPlay": {
+                "text": "Pass complete for 12 yards",
+                "scoreValue": 0,
+                "drive": {"plays": 6, "yards": 43},
+            },
+        }
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _make_espn_scoreboard(situation_raw)
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nfl_scoreboard()
+        sit = games[0]["state"]["situation"]
+
+        assert sit["down"] == 3
+        assert sit["distance"] == 7
+        assert sit["yard_line"] == 42
+        assert sit["is_red_zone"] is False
+        assert sit["home_timeouts"] == 2
+        assert sit["away_timeouts"] == 1
+        assert sit["home_turnovers"] == 1
+        assert sit["away_turnovers"] == 0
+        assert sit["last_play"] == "Pass complete for 12 yards"
+        assert sit["drive_plays"] == 6
+        assert sit["drive_yards"] == 43
+
+    @pytest.mark.unit
+    @patch("requests.Session.get")
+    def test_nba_situation_excludes_football_fields(self, mock_get: MagicMock):
+        """NBA parsing does NOT include down/distance/yard_line."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        situation_raw = {
+            "lastPlay": {
+                "text": "makes 23-foot three point jumper",
+                "scoreValue": 3,
+            },
+        }
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _make_espn_scoreboard(situation_raw)
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nba_scoreboard()
+        sit = games[0]["state"]["situation"]
+
+        # Should NOT have football fields
+        assert "down" not in sit
+        assert "distance" not in sit
+        assert "yard_line" not in sit
+        assert "is_red_zone" not in sit
+        # Should have lastPlay text
+        assert sit["last_play"] == "makes 23-foot three point jumper"
+
+    @pytest.mark.unit
+    @patch("requests.Session.get")
+    def test_nba_situation_extracts_fouls_when_present(self, mock_get: MagicMock):
+        """NBA parsing extracts fouls/bonus when ESPN provides them."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        situation_raw = {
+            "homeTimeouts": 4,
+            "awayTimeouts": 3,
+            "homeFouls": 3,
+            "awayFouls": 5,
+            "bonus": "away",
+            "lastPlay": {"text": "free throw made"},
+        }
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _make_espn_scoreboard(situation_raw)
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nba_scoreboard()
+        sit = games[0]["state"]["situation"]
+
+        assert sit["home_fouls"] == 3
+        assert sit["away_fouls"] == 5
+        assert sit["bonus"] == "away"
+        assert sit["home_timeouts"] == 4
+        assert sit["away_timeouts"] == 3
+
+    @pytest.mark.unit
+    @patch("requests.Session.get")
+    def test_nhl_situation_extracts_powerplay(self, mock_get: MagicMock):
+        """NHL parsing extracts powerplay and shots when present."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        situation_raw = {
+            "homePowerPlay": True,
+            "awayPowerPlay": False,
+            "powerPlayTime": "1:32",
+            "homeShots": 28,
+            "awayShots": 22,
+            "lastPlay": {"text": "Shot on goal saved"},
+        }
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _make_espn_scoreboard(situation_raw)
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nhl_scoreboard()
+        sit = games[0]["state"]["situation"]
+
+        assert sit["home_powerplay"] is True
+        assert sit["away_powerplay"] is False
+        assert sit["powerplay_time"] == "1:32"
+        assert sit["home_shots"] == 28
+        assert sit["away_shots"] == 22
+        assert "down" not in sit
+        assert "home_fouls" not in sit
+
+    @pytest.mark.unit
+    @patch("requests.Session.get")
+    def test_nba_minimal_situation_only_has_lastplay(self, mock_get: MagicMock):
+        """NBA with minimal ESPN data (just lastPlay) produces clean situation."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        situation_raw = {
+            "lastPlay": {"text": "layup made", "scoreValue": 2},
+        }
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _make_espn_scoreboard(situation_raw)
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nba_scoreboard()
+        sit = games[0]["state"]["situation"]
+
+        assert sit == {"last_play": "layup made"}
+
+    @pytest.mark.unit
+    @patch("requests.Session.get")
+    def test_empty_situation_produces_empty_dict(self, mock_get: MagicMock):
+        """Empty ESPN situation produces empty dict regardless of sport."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _make_espn_scoreboard({})
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nba_scoreboard()
+        sit = games[0]["state"]["situation"]
+
+        assert sit == {}
+
+    @pytest.mark.unit
+    @patch("requests.Session.get")
+    def test_ncaaf_routes_to_football_parsing(self, mock_get: MagicMock):
+        """NCAAF uses same football situation fields as NFL."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        situation_raw = {
+            "down": 1,
+            "distance": 10,
+            "yardLine": 25,
+            "isRedZone": True,
+            "homeTimeouts": 3,
+            "awayTimeouts": 3,
+            "homeTurnovers": 0,
+            "awayTurnovers": 2,
+        }
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _make_espn_scoreboard(situation_raw)
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_ncaaf_scoreboard()
+        sit = games[0]["state"]["situation"]
+
+        assert sit["down"] == 1
+        assert sit["distance"] == 10
+        assert sit["yard_line"] == 25
+        assert sit["is_red_zone"] is True
+        assert sit["away_turnovers"] == 2
+        # Should NOT have basketball/hockey fields
+        assert "home_fouls" not in sit
+        assert "home_powerplay" not in sit
+
+    @pytest.mark.unit
+    @patch("requests.Session.get")
+    def test_ncaab_routes_to_basketball_parsing(self, mock_get: MagicMock):
+        """NCAAB uses same basketball situation fields as NBA."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        situation_raw = {
+            "homeTimeouts": 5,
+            "awayTimeouts": 4,
+            "homeFouls": 7,
+            "awayFouls": 4,
+            "possessionArrow": "home",
+        }
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _make_espn_scoreboard(situation_raw)
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_ncaab_scoreboard()
+        sit = games[0]["state"]["situation"]
+
+        assert sit["home_fouls"] == 7
+        assert sit["away_fouls"] == 4
+        assert sit["possession_arrow"] == "home"
+        assert sit["home_timeouts"] == 5
+        # Should NOT have football/hockey fields
+        assert "down" not in sit
+        assert "home_powerplay" not in sit
+
+    @pytest.mark.unit
+    @patch("requests.Session.get")
+    def test_wnba_routes_to_basketball_parsing(self, mock_get: MagicMock):
+        """WNBA uses same basketball situation fields as NBA."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        situation_raw = {
+            "homeFouls": 2,
+            "bonus": "home",
+            "lastPlay": {"text": "three-pointer made"},
+        }
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _make_espn_scoreboard(situation_raw)
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_wnba_scoreboard()
+        sit = games[0]["state"]["situation"]
+
+        assert sit["home_fouls"] == 2
+        assert sit["bonus"] == "home"
+        assert sit["last_play"] == "three-pointer made"
+        assert "down" not in sit
+
+    @pytest.mark.unit
+    @patch("requests.Session.get")
+    def test_nfl_without_lastplay_still_extracts_turnovers(self, mock_get: MagicMock):
+        """Turnovers are top-level situation fields, not gated by lastPlay."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        situation_raw = {
+            "down": 2,
+            "distance": 5,
+            "yardLine": 30,
+            "isRedZone": False,
+            "homeTimeouts": 3,
+            "awayTimeouts": 2,
+            "homeTurnovers": 2,
+            "awayTurnovers": 1,
+            # No lastPlay key at all
+        }
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _make_espn_scoreboard(situation_raw)
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nfl_scoreboard()
+        sit = games[0]["state"]["situation"]
+
+        # Turnovers extracted even without lastPlay
+        assert sit["home_turnovers"] == 2
+        assert sit["away_turnovers"] == 1
+        # Drive data absent (no lastPlay)
+        assert "drive_plays" not in sit
+        assert "drive_yards" not in sit
+        assert "last_play" not in sit
+
+    @pytest.mark.unit
+    @patch("requests.Session.get")
+    def test_unknown_sport_fallback(self, mock_get: MagicMock):
+        """Unknown sports store basic timeout data as fallback."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        situation_raw = {
+            "homeTimeouts": 2,
+            "awayTimeouts": 3,
+            "lastPlay": {"text": "goal scored"},
+        }
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _make_espn_scoreboard(situation_raw)
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        # Call _parse_event directly with an unknown league
+        events = mock_response.json.return_value["events"]
+        result = client._parse_event(events[0], league="soccer")
+
+        sit = result["state"]["situation"]
+        assert sit["home_timeouts"] == 2
+        assert sit["away_timeouts"] == 3
+        assert sit["last_play"] == "goal scored"
+        # Should NOT have sport-specific fields
+        assert "down" not in sit
+        assert "home_fouls" not in sit
+        assert "home_powerplay" not in sit
+
+
+# =============================================================================
 # Rate Limiting Tests
 # =============================================================================
 

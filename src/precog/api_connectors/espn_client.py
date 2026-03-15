@@ -770,7 +770,7 @@ class ESPNClient:
         games: list[ESPNGameFull] = []
         for event in events:
             try:
-                game_full = self._parse_event(event)
+                game_full = self._parse_event(event, league)
                 if game_full:
                     games.append(game_full)
             except Exception as e:
@@ -881,7 +881,7 @@ class ESPNClient:
             f"Request failed after {self.max_retries + 1} attempts"
         ) from last_exception
 
-    def _parse_event(self, event: dict[str, Any]) -> ESPNGameFull | None:
+    def _parse_event(self, event: dict[str, Any], league: str = "nfl") -> ESPNGameFull | None:
         """
         Parse ESPN event into normalized ESPNGameFull structure.
 
@@ -1048,16 +1048,81 @@ class ESPNClient:
                 elif possession_id == away_team.get("id"):
                     possession = away_team_typed["team_code"]
 
-            # Build situation TypedDict
-            situation: ESPNSituationData = {
-                "possession": possession,
-                "home_timeouts": situation_raw.get("homeTimeouts", 3),
-                "away_timeouts": situation_raw.get("awayTimeouts", 3),
-                "down": situation_raw.get("down"),
-                "distance": situation_raw.get("distance"),
-                "yard_line": situation_raw.get("yardLine"),
-                "is_red_zone": situation_raw.get("isRedZone", False),
-            }
+            # Build situation dict -- sport-conditional fields only.
+            # Only include fields that ESPN actually provides for each sport
+            # to avoid storing NULL football fields in basketball/hockey games.
+            situation: ESPNSituationData = {}
+
+            # Common fields (all sports)
+            if possession is not None:
+                situation["possession"] = possession
+
+            # Extract lastPlay text for all sports (ESPN provides this universally)
+            last_play_raw = situation_raw.get("lastPlay", {})
+            if last_play_raw:
+                last_play_text = last_play_raw.get("text")
+                if last_play_text:
+                    situation["last_play"] = last_play_text
+
+            if league in self.FOOTBALL_SPORTS:
+                # Football: full situation data
+                situation["home_timeouts"] = situation_raw.get("homeTimeouts", 3)
+                situation["away_timeouts"] = situation_raw.get("awayTimeouts", 3)
+                situation["down"] = situation_raw.get("down")
+                situation["distance"] = situation_raw.get("distance")
+                situation["yard_line"] = situation_raw.get("yardLine")
+                situation["is_red_zone"] = situation_raw.get("isRedZone", False)
+                # Turnovers are top-level situation fields, not nested under lastPlay
+                home_turnovers = situation_raw.get("homeTurnovers")
+                away_turnovers = situation_raw.get("awayTurnovers")
+                if home_turnovers is not None:
+                    situation["home_turnovers"] = home_turnovers
+                if away_turnovers is not None:
+                    situation["away_turnovers"] = away_turnovers
+                # Drive data from lastPlay (play count + yards)
+                if last_play_raw:
+                    drive = last_play_raw.get("drive", {})
+                    if drive:
+                        drive_plays = drive.get("plays")
+                        if drive_plays is not None:
+                            situation["drive_plays"] = drive_plays
+                        drive_yards = drive.get("yards")
+                        if drive_yards is not None:
+                            situation["drive_yards"] = drive_yards
+
+            elif league in self.BASKETBALL_SPORTS:
+                # Basketball: ESPN provides timeouts + foul/bonus data
+                if "homeTimeouts" in situation_raw:
+                    situation["home_timeouts"] = situation_raw["homeTimeouts"]
+                if "awayTimeouts" in situation_raw:
+                    situation["away_timeouts"] = situation_raw["awayTimeouts"]
+                # Foul and bonus data (may not be in all API responses)
+                if "homeFouls" in situation_raw:
+                    situation["home_fouls"] = situation_raw["homeFouls"]
+                if "awayFouls" in situation_raw:
+                    situation["away_fouls"] = situation_raw["awayFouls"]
+                if "bonus" in situation_raw:
+                    situation["bonus"] = situation_raw["bonus"]
+                if "possessionArrow" in situation_raw:
+                    situation["possession_arrow"] = situation_raw["possessionArrow"]
+
+            elif league in self.HOCKEY_SPORTS:
+                # Hockey: powerplay and shots data
+                if "homePowerPlay" in situation_raw:
+                    situation["home_powerplay"] = situation_raw["homePowerPlay"]
+                if "awayPowerPlay" in situation_raw:
+                    situation["away_powerplay"] = situation_raw["awayPowerPlay"]
+                if "powerPlayTime" in situation_raw:
+                    situation["powerplay_time"] = situation_raw["powerPlayTime"]
+                if "homeShots" in situation_raw:
+                    situation["home_shots"] = situation_raw["homeShots"]
+                if "awayShots" in situation_raw:
+                    situation["away_shots"] = situation_raw["awayShots"]
+
+            else:
+                # Unknown sport -- store whatever ESPN provides
+                situation["home_timeouts"] = situation_raw.get("homeTimeouts", 3)
+                situation["away_timeouts"] = situation_raw.get("awayTimeouts", 3)
 
             # Build state
             game_state: ESPNGameState = {
