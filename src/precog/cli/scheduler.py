@@ -171,6 +171,7 @@ def _start_supervised_mode(
     max_restarts: int,
     health_interval: int,
     foreground: bool,
+    force: bool,
     verbose: bool,
 ) -> None:
     """Start services using ServiceSupervisor for production-grade management.
@@ -190,6 +191,7 @@ def _start_supervised_mode(
         max_restarts: Maximum service restarts before circuit breaker
         health_interval: Health check interval in seconds
         foreground: Run in foreground (blocks until Ctrl+C)
+        force: Override startup guard if another scheduler is detected
         verbose: Enable verbose output
 
     Educational Note:
@@ -264,9 +266,9 @@ def _start_supervised_mode(
         # Prevent system sleep during long-running data collection
         _prevent_system_sleep_for_supervised(logger)
 
-        # Start all services
+        # Start all services (startup guard checks for concurrent instances)
         console.print("[bold]Starting services...[/bold]")
-        _supervisor.start_all()
+        _supervisor.start_all(force=force)
 
         console.print(
             f"[bold green][OK] Supervisor started with {len(enabled_services)} service(s)[/bold green]"
@@ -488,6 +490,11 @@ def start(
         "--health-interval",
         help="Health check interval in seconds (supervised mode)",
     ),
+    force: bool = typer.Option(
+        False,
+        "--force",
+        help="Override startup guard if another scheduler is detected on the same database",
+    ),
     verbose: bool = typer.Option(
         False,
         "--verbose",
@@ -549,6 +556,7 @@ def start(
             max_restarts=max_restarts,
             health_interval=health_interval,
             foreground=foreground,
+            force=force,
             verbose=verbose,
         )
         return

@@ -4851,6 +4851,45 @@ def cleanup_stale_schedulers(
         return int(cur.rowcount or 0)
 
 
+def check_active_schedulers(
+    stale_threshold_seconds: int = 120,
+) -> list[dict[str, Any]]:
+    """
+    Check for actively running scheduler services with recent heartbeats.
+
+    Used by the startup guard to detect concurrent scheduler instances before
+    allowing a new supervisor to start. Returns services that appear to be
+    genuinely alive (status is 'running'/'starting' AND heartbeat is fresh).
+
+    Args:
+        stale_threshold_seconds: How recent heartbeat must be to consider active.
+            Default is 120s (2 minutes). Typically set to 2x the health check
+            interval to allow for one missed heartbeat.
+
+    Returns:
+        List of active service dictionaries with host_id, service_name, pid,
+        status, started_at, and last_heartbeat fields.
+
+    Example:
+        >>> active = check_active_schedulers(stale_threshold_seconds=120)
+        >>> if active:
+        ...     for svc in active:
+        ...         print(f"Active: {svc['host_id']}/{svc['service_name']} PID {svc['pid']}")
+
+    References:
+        - Issue #363: Concurrent scheduler startup guard
+        - Migration 0012: scheduler_status table schema
+    """
+    query = """
+        SELECT host_id, service_name, pid, status, started_at, last_heartbeat
+        FROM scheduler_status
+        WHERE status IN ('running', 'starting')
+        AND last_heartbeat >= NOW() - INTERVAL '%s seconds'
+        ORDER BY host_id, service_name
+    """
+    return fetch_all(query, (stale_threshold_seconds,))
+
+
 def delete_scheduler_status(host_id: str, service_name: str) -> bool:
     """
     Delete a scheduler status record.

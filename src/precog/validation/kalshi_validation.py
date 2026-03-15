@@ -846,7 +846,7 @@ class KalshiDataValidator:
             - Position quantity is an integer (can be negative for short)
             - Average price is in valid range [0, 1]
             - Realized P&L is a valid Decimal
-            - Total traded and fees are non-negative
+            - Total cost and fees_paid are non-negative
 
         Example:
             >>> validator = KalshiDataValidator()
@@ -855,6 +855,8 @@ class KalshiDataValidator:
             ...     "position": 100,
             ...     "user_average_price": Decimal("0.45"),
             ...     "realized_pnl": Decimal("25.50"),
+            ...     "total_cost": Decimal("45.00"),
+            ...     "fees_paid": Decimal("1.50"),
             ... }
             >>> result = validator.validate_position_data(position)
         """
@@ -890,24 +892,24 @@ class KalshiDataValidator:
                 expected="Decimal",
             )
 
-        # Validate total traded (should be non-negative)
-        total_traded = position.get("total_traded")
-        if total_traded is not None:
-            if not isinstance(total_traded, (int, Decimal)):
+        # Validate total cost (should be non-negative)
+        total_cost = position.get("total_cost")
+        if total_cost is not None:
+            if not isinstance(total_cost, (int, Decimal)):
                 result.add_warning(
-                    "total_traded",
-                    "Total traded should be numeric",
-                    value=type(total_traded).__name__,
+                    "total_cost",
+                    "Total cost should be numeric",
+                    value=type(total_cost).__name__,
                 )
-            elif total_traded < 0:
+            elif total_cost < 0:
                 result.add_error(
-                    "total_traded", "Negative total traded", value=total_traded, expected=">= 0"
+                    "total_cost", "Negative total cost", value=total_cost, expected=">= 0"
                 )
 
-        # Validate fees (should be non-negative)
-        fees = position.get("fees")
-        if fees is not None and isinstance(fees, Decimal) and fees < Decimal("0"):
-            result.add_error("fees", "Negative fees", value=fees, expected=">= 0")
+        # Validate fees_paid (should be non-negative)
+        fees_paid = position.get("fees_paid")
+        if fees_paid is not None and isinstance(fees_paid, Decimal) and fees_paid < Decimal("0"):
+            result.add_error("fees_paid", "Negative fees", value=fees_paid, expected=">= 0")
 
         # Track anomalies
         if result.has_errors or result.has_warnings:
@@ -1024,16 +1026,20 @@ class KalshiDataValidator:
 
         Validates:
             - Ticker exists
+            - Market result is "yes" or "no"
             - Settlement value is either 0 or 1 (binary outcome)
             - Revenue is a valid Decimal
+            - Total fees is non-negative Decimal
             - Settled time exists
 
         Example:
             >>> validator = KalshiDataValidator()
             >>> settlement = {
             ...     "ticker": "KXNFLGAME-25DEC25-CHI-GB",
+            ...     "market_result": "yes",
             ...     "settlement_value": Decimal("1"),
             ...     "revenue": Decimal("50.00"),
+            ...     "total_fees": Decimal("2.50"),
             ...     "settled_time": "2025-01-01T12:00:00Z",
             ... }
             >>> result = validator.validate_settlement_data(settlement)
@@ -1044,6 +1050,16 @@ class KalshiDataValidator:
         # Validate ticker
         if not ticker or ticker == "unknown":
             result.add_error("ticker", "Missing or empty ticker")
+
+        # Validate market result (must be "yes" or "no")
+        market_result = settlement.get("market_result")
+        if market_result is not None and market_result not in {"yes", "no"}:
+            result.add_warning(
+                "market_result",
+                "Unknown market result value",
+                value=market_result,
+                expected={"yes", "no"},
+            )
 
         # Validate settlement value (must be 0 or 1 for binary markets)
         settlement_value = settlement.get("settlement_value")
@@ -1073,6 +1089,21 @@ class KalshiDataValidator:
                 value=type(revenue).__name__,
                 expected="Decimal",
             )
+
+        # Validate total fees (should be non-negative)
+        total_fees = settlement.get("total_fees")
+        if total_fees is not None:
+            if not isinstance(total_fees, Decimal):
+                result.add_warning(
+                    "total_fees",
+                    "Total fees should be Decimal",
+                    value=type(total_fees).__name__,
+                    expected="Decimal",
+                )
+            elif total_fees < Decimal("0"):
+                result.add_error(
+                    "total_fees", "Negative total fees", value=total_fees, expected=">= 0"
+                )
 
         # Validate settled time
         settled_time = settlement.get("settled_time")
