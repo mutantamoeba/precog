@@ -9,11 +9,15 @@ Tests comprehensive validation of Kalshi API response data including:
 - Fill data validation (trade ID, prices, side/action)
 - Settlement data validation (settlement value 0/1)
 - Balance validation (non-negative, Decimal type)
+- Timestamp validation (ISO 8601, logical ordering, status-temporal consistency)
+- Price staleness detection (unchanged prices across consecutive polls)
+- Cross-field consistency (volume/OI anomalies)
 
-Reference: Issue #222 (Kalshi Validation Module)
+Reference: Issue #222 (Kalshi Validation Module), #387 (Staleness + Timestamps)
 Related: src/precog/validation/kalshi_validation.py
 """
 
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -39,6 +43,7 @@ def validator() -> KalshiDataValidator:
 @pytest.fixture
 def valid_market_data() -> dict:
     """Create valid Kalshi market data for testing."""
+    now = datetime.now(UTC)
     return {
         "ticker": "KXNFLGAME-25DEC25-CHI-GB",
         "status": "open",
@@ -48,6 +53,9 @@ def valid_market_data() -> dict:
         "no_ask_dollars": Decimal("0.55"),
         "volume": 1000,
         "open_interest": 500,
+        "open_time": (now - timedelta(hours=2)).isoformat(),
+        "close_time": (now + timedelta(hours=24)).isoformat(),
+        "expiration_time": (now + timedelta(hours=48)).isoformat(),
     }
 
 
@@ -850,3 +858,489 @@ class TestLogIssues:
         result.add_info("field", "info message")
         # Should not raise
         result.log_issues()
+
+
+# =============================================================================
+# Timestamp Validation Tests (#387)
+# =============================================================================
+
+
+class TestTimestampValidation:
+    """Tests for timestamp parsing, ordering, and status-temporal consistency."""
+
+    def test_valid_timestamps_no_issues(
+        self, validator: KalshiDataValidator, valid_market_data: dict
+    ) -> None:
+        """Market with valid, correctly ordered timestamps should pass."""
+        result = validator.validate_market_data(valid_market_data)
+        timestamp_issues = [
+            i
+            for i in result.issues
+            if i.field in {"open_time", "close_time", "expiration_time", "settlement_lag"}
+        ]
+        assert len(timestamp_issues) == 0
+
+    def test_malformed_open_time(self, validator: KalshiDataValidator) -> None:
+        """Malformed open_time should produce a warning."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "open",
+            "open_time": "not-a-timestamp",
+            "close_time": (now + timedelta(hours=24)).isoformat(),
+            "expiration_time": (now + timedelta(hours=48)).isoformat(),
+        }
+        result = validator.validate_market_data(market)
+        warnings = [i for i in result.warnings if i.field == "open_time"]
+        assert len(warnings) == 1
+        assert "Malformed" in warnings[0].message
+
+    def test_malformed_close_time(self, validator: KalshiDataValidator) -> None:
+        """Malformed close_time should produce a warning."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "settled",
+            "close_time": "garbage",
+            "open_time": (now - timedelta(hours=48)).isoformat(),
+        }
+        result = validator.validate_market_data(market)
+        warnings = [i for i in result.warnings if i.field == "close_time"]
+        assert len(warnings) == 1
+
+    def test_open_time_after_close_time_error(self, validator: KalshiDataValidator) -> None:
+        """open_time > close_time is a logical impossibility — should be ERROR."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "settled",
+            "open_time": (now + timedelta(hours=10)).isoformat(),
+            "close_time": (now - timedelta(hours=10)).isoformat(),
+            "expiration_time": (now + timedelta(hours=48)).isoformat(),
+        }
+        result = validator.validate_market_data(market)
+        errors = [i for i in result.errors if i.field == "open_time"]
+        assert len(errors) == 1
+        assert "after close_time" in errors[0].message
+
+    def test_close_time_after_expiration_time_error(self, validator: KalshiDataValidator) -> None:
+        """close_time > expiration_time is a logical impossibility."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "settled",
+            "open_time": (now - timedelta(hours=48)).isoformat(),
+            "close_time": (now + timedelta(hours=100)).isoformat(),
+            "expiration_time": (now + timedelta(hours=50)).isoformat(),
+        }
+        result = validator.validate_market_data(market)
+        errors = [i for i in result.errors if i.field == "close_time"]
+        assert len(errors) == 1
+        assert "after expiration_time" in errors[0].message
+
+    def test_active_market_close_time_in_past_warning(self, validator: KalshiDataValidator) -> None:
+        """Active market with close_time in the past = missed closure."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "active",
+            "open_time": (now - timedelta(hours=48)).isoformat(),
+            "close_time": (now - timedelta(hours=1)).isoformat(),
+            "expiration_time": (now + timedelta(hours=24)).isoformat(),
+        }
+        result = validator.validate_market_data(market)
+        warnings = [i for i in result.warnings if i.field == "close_time"]
+        assert any("missed closure" in w.message for w in warnings)
+
+    def test_active_market_open_time_in_future_warning(
+        self, validator: KalshiDataValidator
+    ) -> None:
+        """Active market with open_time in the future = premature activation."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "active",
+            "open_time": (now + timedelta(hours=24)).isoformat(),
+            "close_time": (now + timedelta(hours=48)).isoformat(),
+            "expiration_time": (now + timedelta(hours=72)).isoformat(),
+        }
+        result = validator.validate_market_data(market)
+        warnings = [i for i in result.warnings if i.field == "open_time"]
+        assert any("premature activation" in w.message for w in warnings)
+
+    def test_settled_market_skips_active_temporal_checks(
+        self, validator: KalshiDataValidator
+    ) -> None:
+        """Settled market with close_time in the past is normal, not a warning."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "settled",
+            "open_time": (now - timedelta(hours=96)).isoformat(),
+            "close_time": (now - timedelta(hours=48)).isoformat(),
+            "expiration_time": (now - timedelta(hours=24)).isoformat(),
+        }
+        result = validator.validate_market_data(market)
+        # Should NOT have "missed closure" warning (that's only for active markets)
+        close_warnings = [
+            i for i in result.warnings if i.field == "close_time" and "missed" in i.message
+        ]
+        assert len(close_warnings) == 0
+
+    def test_settlement_lag_over_72h_info(self, validator: KalshiDataValidator) -> None:
+        """Settled market with >72h settlement lag gets an info note."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "settled",
+            "open_time": (now - timedelta(days=10)).isoformat(),
+            "close_time": (now - timedelta(days=7)).isoformat(),
+            "expiration_time": (now - timedelta(days=2)).isoformat(),
+            "settlement_time": (now - timedelta(days=2)).isoformat(),
+        }
+        result = validator.validate_market_data(market)
+        infos = [i for i in result.issues if i.field == "settlement_lag"]
+        assert len(infos) == 1
+        assert ">72h" in infos[0].message
+
+    def test_settlement_lag_without_settlement_time_no_alert(
+        self, validator: KalshiDataValidator
+    ) -> None:
+        """Without explicit settlement_time, no lag check is performed."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "settled",
+            "open_time": (now - timedelta(days=10)).isoformat(),
+            "close_time": (now - timedelta(days=7)).isoformat(),
+            "expiration_time": (now - timedelta(days=2)).isoformat(),
+        }
+        result = validator.validate_market_data(market)
+        lag_infos = [i for i in result.issues if i.field == "settlement_lag"]
+        assert len(lag_infos) == 0
+
+    def test_missing_timestamps_no_crash(self, validator: KalshiDataValidator) -> None:
+        """Market with no timestamp fields should not crash."""
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "open",
+            "volume": 100,
+            "open_interest": 50,
+        }
+        result = validator.validate_market_data(market)
+        # Should complete without raising — no timestamp issues expected
+        assert result is not None
+
+
+# =============================================================================
+# Cross-Field Consistency Tests (#387)
+# =============================================================================
+
+
+class TestCrossFieldConsistency:
+    """Tests for cross-field validation rules."""
+
+    def test_oi_on_never_active_market(self, validator: KalshiDataValidator) -> None:
+        """OI > 0 on an unopened market is suspicious."""
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "unopened",
+            "open_interest": 100,
+            "volume": 0,
+        }
+        result = validator.validate_market_data(market)
+        warnings = [i for i in result.warnings if i.field == "open_interest"]
+        assert any("never-active" in w.message for w in warnings)
+
+    def test_oi_on_initialized_market(self, validator: KalshiDataValidator) -> None:
+        """OI > 0 on an initialized market is also suspicious."""
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "initialized",
+            "open_interest": 50,
+            "volume": 0,
+        }
+        result = validator.validate_market_data(market)
+        warnings = [i for i in result.warnings if i.field == "open_interest"]
+        assert any("never-active" in w.message for w in warnings)
+
+    def test_volume_24h_exceeds_lifetime(self, validator: KalshiDataValidator) -> None:
+        """24h volume > lifetime volume is an API data error."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "active",
+            "volume": 100,
+            "volume_24h": 500,
+            "open_interest": 50,
+            "open_time": (now - timedelta(hours=48)).isoformat(),
+            "close_time": (now + timedelta(hours=24)).isoformat(),
+            "expiration_time": (now + timedelta(hours=48)).isoformat(),
+        }
+        result = validator.validate_market_data(market)
+        warnings = [i for i in result.warnings if i.field == "volume_24h"]
+        assert len(warnings) == 1
+        assert "exceeds lifetime" in warnings[0].message
+
+    def test_volume_24h_equal_to_lifetime_ok(self, validator: KalshiDataValidator) -> None:
+        """24h volume == lifetime volume is fine (new market)."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "active",
+            "volume": 100,
+            "volume_24h": 100,
+            "open_interest": 50,
+            "open_time": (now - timedelta(hours=12)).isoformat(),
+            "close_time": (now + timedelta(hours=24)).isoformat(),
+            "expiration_time": (now + timedelta(hours=48)).isoformat(),
+        }
+        result = validator.validate_market_data(market)
+        vol_warnings = [i for i in result.warnings if i.field == "volume_24h"]
+        assert len(vol_warnings) == 0
+
+    def test_ghost_market_info(self, validator: KalshiDataValidator) -> None:
+        """Active market with zero volume and zero OI is a ghost market."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-GHOST",
+            "status": "active",
+            "volume": 0,
+            "open_interest": 0,
+            "open_time": (now - timedelta(hours=48)).isoformat(),
+            "close_time": (now + timedelta(hours=24)).isoformat(),
+            "expiration_time": (now + timedelta(hours=48)).isoformat(),
+        }
+        result = validator.validate_market_data(market)
+        ghost_infos = [i for i in result.issues if i.field == "ghost_market"]
+        assert len(ghost_infos) == 1
+
+    def test_active_market_with_volume_not_ghost(self, validator: KalshiDataValidator) -> None:
+        """Active market with volume > 0 is not a ghost."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-TICKER",
+            "status": "active",
+            "volume": 100,
+            "open_interest": 0,
+            "open_time": (now - timedelta(hours=48)).isoformat(),
+            "close_time": (now + timedelta(hours=24)).isoformat(),
+            "expiration_time": (now + timedelta(hours=48)).isoformat(),
+        }
+        result = validator.validate_market_data(market)
+        ghost_infos = [i for i in result.issues if i.field == "ghost_market"]
+        assert len(ghost_infos) == 0
+
+
+# =============================================================================
+# Price Staleness Detection Tests (#387)
+# =============================================================================
+
+
+class TestPriceStaleness:
+    """Tests for price staleness detection across consecutive polls."""
+
+    def test_no_staleness_below_threshold(self, validator: KalshiDataValidator) -> None:
+        """No warning if fewer than threshold consecutive polls."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-STALE",
+            "status": "active",
+            "yes_bid_dollars": Decimal("0.50"),
+            "open_time": (now - timedelta(hours=2)).isoformat(),
+            "close_time": (now + timedelta(hours=24)).isoformat(),
+            "expiration_time": (now + timedelta(hours=48)).isoformat(),
+        }
+        # Poll 5 times (below threshold of 10)
+        for _ in range(5):
+            result = validator.validate_market_data(market)
+        stale = [i for i in result.issues if i.field == "price_staleness"]
+        assert len(stale) == 0
+
+    def test_staleness_at_threshold(self, validator: KalshiDataValidator) -> None:
+        """Warning when price unchanged for exactly threshold polls."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-STALE",
+            "status": "active",
+            "yes_bid_dollars": Decimal("0.50"),
+            "open_time": (now - timedelta(hours=2)).isoformat(),
+            "close_time": (now + timedelta(hours=24)).isoformat(),
+            "expiration_time": (now + timedelta(hours=48)).isoformat(),
+        }
+        for _ in range(validator.STALE_PRICE_POLL_THRESHOLD):
+            result = validator.validate_market_data(market)
+        stale = [i for i in result.issues if i.field == "price_staleness"]
+        assert len(stale) == 1
+        assert "unchanged" in stale[0].message
+
+    def test_price_change_resets_staleness(self, validator: KalshiDataValidator) -> None:
+        """Price change should prevent staleness warning."""
+        now = datetime.now(UTC)
+        threshold = validator.STALE_PRICE_POLL_THRESHOLD
+        base = {
+            "ticker": "TEST-STALE",
+            "status": "active",
+            "open_time": (now - timedelta(hours=2)).isoformat(),
+            "close_time": (now + timedelta(hours=24)).isoformat(),
+            "expiration_time": (now + timedelta(hours=48)).isoformat(),
+        }
+        # Poll at same price just under threshold
+        for _ in range(threshold - 2):
+            validator.validate_market_data({**base, "yes_bid_dollars": Decimal("0.50")})
+        # Change price — resets the consecutive run
+        validator.validate_market_data({**base, "yes_bid_dollars": Decimal("0.51")})
+        # Poll at new price, again just under threshold
+        for _ in range(threshold - 2):
+            result = validator.validate_market_data({**base, "yes_bid_dollars": Decimal("0.51")})
+        stale = [i for i in result.issues if i.field == "price_staleness"]
+        assert len(stale) == 0
+
+    def test_staleness_not_checked_for_settled(self, validator: KalshiDataValidator) -> None:
+        """Settled markets should not trigger staleness checks."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-SETTLED",
+            "status": "settled",
+            "yes_bid_dollars": Decimal("1.00"),
+            "open_time": (now - timedelta(hours=96)).isoformat(),
+            "close_time": (now - timedelta(hours=48)).isoformat(),
+            "expiration_time": (now - timedelta(hours=24)).isoformat(),
+        }
+        for _ in range(15):
+            result = validator.validate_market_data(market)
+        stale = [i for i in result.issues if i.field == "price_staleness"]
+        assert len(stale) == 0
+
+    def test_staleness_per_ticker_isolation(self, validator: KalshiDataValidator) -> None:
+        """Staleness tracking is per-ticker, not global."""
+        now = datetime.now(UTC)
+        base = {
+            "status": "active",
+            "yes_bid_dollars": Decimal("0.50"),
+            "open_time": (now - timedelta(hours=2)).isoformat(),
+            "close_time": (now + timedelta(hours=24)).isoformat(),
+            "expiration_time": (now + timedelta(hours=48)).isoformat(),
+        }
+        # Poll ticker A 10 times
+        for _ in range(10):
+            validator.validate_market_data({**base, "ticker": "TICKER-A"})
+        # Poll ticker B only 3 times
+        for _ in range(3):
+            result_b = validator.validate_market_data({**base, "ticker": "TICKER-B"})
+        stale_b = [i for i in result_b.issues if i.field == "price_staleness"]
+        assert len(stale_b) == 0  # B should not be flagged
+
+    def test_none_price_not_stale(self, validator: KalshiDataValidator) -> None:
+        """None prices should not trigger staleness (no meaningful comparison)."""
+        now = datetime.now(UTC)
+        market = {
+            "ticker": "TEST-NONE",
+            "status": "active",
+            "yes_bid_dollars": None,
+            "open_time": (now - timedelta(hours=2)).isoformat(),
+            "close_time": (now + timedelta(hours=24)).isoformat(),
+            "expiration_time": (now + timedelta(hours=48)).isoformat(),
+        }
+        for _ in range(15):
+            result = validator.validate_market_data(market)
+        stale = [i for i in result.issues if i.field == "price_staleness"]
+        assert len(stale) == 0
+
+    def test_staleness_recurs_after_threshold(self, validator: KalshiDataValidator) -> None:
+        """Staleness warning should fire on every poll after the threshold, not just once."""
+        now = datetime.now(UTC)
+        threshold = validator.STALE_PRICE_POLL_THRESHOLD
+        market = {
+            "ticker": "TEST-RECUR",
+            "status": "active",
+            "yes_bid_dollars": Decimal("0.50"),
+            "open_time": (now - timedelta(hours=2)).isoformat(),
+            "close_time": (now + timedelta(hours=24)).isoformat(),
+            "expiration_time": (now + timedelta(hours=48)).isoformat(),
+        }
+        # Poll past threshold + 2 more
+        for _ in range(threshold + 2):
+            result = validator.validate_market_data(market)
+        # The last poll should still have the staleness warning
+        stale = [i for i in result.issues if i.field == "price_staleness"]
+        assert len(stale) == 1
+
+    def test_clear_price_history(self, validator: KalshiDataValidator) -> None:
+        """clear_price_history() should reset all staleness tracking."""
+        now = datetime.now(UTC)
+        threshold = validator.STALE_PRICE_POLL_THRESHOLD
+        market = {
+            "ticker": "TEST-CLEAR",
+            "status": "active",
+            "yes_bid_dollars": Decimal("0.50"),
+            "open_time": (now - timedelta(hours=2)).isoformat(),
+            "close_time": (now + timedelta(hours=24)).isoformat(),
+            "expiration_time": (now + timedelta(hours=48)).isoformat(),
+        }
+        # Build up history to just under threshold
+        for _ in range(threshold - 1):
+            validator.validate_market_data(market)
+        # Clear history
+        validator.clear_price_history()
+        # One more poll should not trigger (history was reset)
+        result = validator.validate_market_data(market)
+        stale = [i for i in result.issues if i.field == "price_staleness"]
+        assert len(stale) == 0
+
+
+# =============================================================================
+# Timestamp Parsing Edge Cases (#387 — S3/CG-1)
+# =============================================================================
+
+
+class TestTimestampParsing:
+    """Direct tests for _parse_iso8601 and edge cases."""
+
+    def test_parse_z_suffix(self) -> None:
+        """Kalshi API sends timestamps with Z suffix."""
+        result = KalshiDataValidator._parse_iso8601("2025-12-14T12:00:00Z")
+        assert result is not None
+        assert result.tzinfo is not None
+
+    def test_parse_offset_suffix(self) -> None:
+        """Some APIs send +00:00 instead of Z."""
+        result = KalshiDataValidator._parse_iso8601("2025-12-14T12:00:00+00:00")
+        assert result is not None
+        assert result.tzinfo is not None
+
+    def test_naive_datetime_returns_none(self) -> None:
+        """Timezone-naive strings should return None to prevent TypeError."""
+        result = KalshiDataValidator._parse_iso8601("2025-12-14T12:00:00")
+        assert result is None
+
+    def test_naive_datetime_triggers_malformed_warning(
+        self, validator: KalshiDataValidator
+    ) -> None:
+        """Naive timestamp in market data should produce a malformed warning."""
+        market = {
+            "ticker": "TEST-NAIVE",
+            "status": "settled",
+            "open_time": "2025-12-14T12:00:00",  # No timezone
+        }
+        result = validator.validate_market_data(market)
+        warnings = [i for i in result.warnings if i.field == "open_time"]
+        assert any("Malformed" in w.message for w in warnings)
+
+    def test_garbage_string_returns_none(self) -> None:
+        """Completely invalid string returns None."""
+        assert KalshiDataValidator._parse_iso8601("not-a-date") is None
+
+    def test_empty_string_returns_none(self) -> None:
+        """Empty string returns None."""
+        assert KalshiDataValidator._parse_iso8601("") is None
+
+    def test_none_input_returns_none(self) -> None:
+        """None input returns None (TypeError caught)."""
+        assert KalshiDataValidator._parse_iso8601(None) is None  # type: ignore[arg-type]
+
+    def test_fractional_seconds(self) -> None:
+        """Fractional seconds should parse correctly."""
+        result = KalshiDataValidator._parse_iso8601("2025-12-14T12:00:00.123456Z")
+        assert result is not None
+        assert result.microsecond == 123456
