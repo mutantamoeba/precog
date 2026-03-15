@@ -208,14 +208,14 @@ class TestScoreCorrectionWorkflow:
         # Initial state
         initial = {
             "metadata": metadata,
-            "state": {"home_score": 14, "away_score": 7, "period": 2},
+            "state": {"home_score": 14, "away_score": 7, "period": 2, "game_status": "in_progress"},
         }
         validator.validate_game_state(initial)  # type: ignore[arg-type]
 
         # Corrected state (home score decreased - official correction)
         corrected = {
             "metadata": metadata,
-            "state": {"home_score": 13, "away_score": 7, "period": 2},
+            "state": {"home_score": 13, "away_score": 7, "period": 2, "game_status": "in_progress"},
         }
         previous = {"home_score": 14, "away_score": 7}
 
@@ -246,7 +246,10 @@ class TestScoreCorrectionWorkflow:
         ]
 
         for state, prev in states:
-            game = {"metadata": metadata, "state": {**state, "period": 2}}
+            game = {
+                "metadata": metadata,
+                "state": {**state, "period": 2, "game_status": "in_progress"},
+            }
             validator.validate_game_state(game, prev)  # type: ignore[arg-type]
 
         # Should track multiple anomalies
