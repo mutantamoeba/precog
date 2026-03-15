@@ -1,6 +1,6 @@
 # Desktop Migration Guide V1.0
 
-**Version:** 1.1
+**Version:** 1.2
 **Created:** 2026-03-13
 **Status:** Part 1 (Code Fixes) Complete, Part 2 (Migration) Pending
 **Issue:** #324
@@ -215,6 +215,8 @@ python main.py scheduler stop
 
 ## Deploying New Code to Desktop
 
+### Standard Code Update (No Schema Changes)
+
 ```bash
 # On desktop:
 cd C:\Users\<user>\repos\precog-repo
@@ -224,23 +226,219 @@ pip install -e .  # if deps changed
 python main.py scheduler start --supervised --foreground
 ```
 
+### Code Update WITH Schema Changes
+
+When `git pull` includes new Alembic migrations (files in `src/precog/database/alembic/versions/`):
+
+```bash
+# 1. Stop services
+python main.py scheduler stop
+
+# 2. Pull code
+git pull origin main
+pip install -e .
+
+# 3. Check what migrations are pending
+cd src/precog/database
+alembic current           # Shows current DB version
+alembic heads             # Shows latest migration in code
+alembic history --verbose # Full migration history
+
+# 4. Preview migration SQL (dry-run)
+alembic upgrade head --sql   # Shows SQL without applying
+
+# 5. Backup BEFORE applying
+pg_dump -U postgres -Fc -f "$HOME/.precog/backups/pre_migration_$(date +%Y%m%d_%H%M%S).dump" precog_staging
+
+# 6. Apply migrations
+alembic upgrade head
+
+# 7. Verify
+alembic current            # Should match alembic heads
+cd ../../..
+python main.py db status   # Critical tables check
+python main.py db tables --verbose  # Row counts + sizes
+
+# 8. Restart services
+python main.py scheduler start --supervised --foreground
+```
+
+### How to Detect Schema Changes in a Pull
+
+```bash
+# After git pull, check if migrations changed:
+git diff HEAD~1 --name-only -- src/precog/database/alembic/versions/
+# If any files listed -> schema change, follow "WITH Schema Changes" workflow
+```
+
+### Keeping Dev and Production in Sync
+
+Both machines should always be on the same Alembic head. To verify:
+
+```bash
+# On either machine:
+cd src/precog/database
+alembic current   # Shows: <revision_id> (head)
+```
+
+If desktop is behind:
+```bash
+# On desktop: pull code, then upgrade
+git pull origin main
+cd src/precog/database
+alembic upgrade head
+```
+
+If you need to check without a database connection:
+```bash
+# Compare latest migration file in repo vs what's applied
+ls -t src/precog/database/alembic/versions/*.py | head -1  # Latest in code
+```
+
+### Rollback a Migration
+
+```bash
+# Downgrade by one step:
+cd src/precog/database
+alembic downgrade -1
+
+# Downgrade to specific revision:
+alembic downgrade <revision_id>
+
+# CAUTION: Downgrades may fail if data depends on new schema.
+# Always backup before upgrading, and test downgrades in dev first.
+```
+
 ---
 
 ## Backup & Rollback
 
-- **Daily:** `pg_dump -Fc` at 3 AM, 7-day retention
+### Automated Daily Backups
+
+- **Schedule:** `pg_dump -Fc` at 3 AM via Task Scheduler, 7-day retention
 - **Pre-migration:** Manual backup before any `alembic upgrade`
-- **Rollback:** Restore from `~/.precog/backups/` or restart laptop services (data gap = downtime)
+- **Rollback options:**
+  1. Restore from `~/.precog/backups/` (full data recovery)
+  2. `alembic downgrade -1` (schema-only rollback, may lose data in dropped columns)
+  3. Restart laptop services as fallback (data gap = downtime duration)
 - **Storage estimate:** ~600MB month 1, ~6GB year 1
+
+### Manual Backup
+
+```bash
+# Full backup with timestamp
+pg_dump -U postgres -Fc --verbose -f "$HOME/.precog/backups/precog_staging_$(date +%Y%m%d_%H%M%S).dump" precog_staging
+
+# Verify backup integrity
+pg_restore --list "$HOME/.precog/backups/precog_staging_<timestamp>.dump" | head -20
+
+# Restore from backup (DESTRUCTIVE - drops existing data)
+dropdb -U postgres precog_staging
+createdb -U postgres precog_staging
+pg_restore -U postgres -d precog_staging --no-owner --no-privileges "$HOME/.precog/backups/precog_staging_<timestamp>.dump"
+```
 
 ---
 
-## Daily Operator Check-In
+## Monitoring & Maintenance
+
+### Daily Operator Check-In
 
 1. `python main.py scheduler status --verbose` -- per-service health + heartbeat freshness
-2. Check log file for `ERROR`: `~/.precog/logs/`
-3. Spot-check data freshness via DB query
-4. Check disk space
+2. Check log file for `ERROR`: `Get-Content ~/.precog/logs/precog.log -Tail 50 | Select-String "ERROR"`
+3. Spot-check data freshness:
+   ```sql
+   -- Most recent data per table
+   SELECT 'markets' as tbl, MAX(row_start_ts) as latest FROM markets
+   UNION ALL SELECT 'game_states', MAX(row_start_ts) FROM game_states;
+
+   -- SCD integrity (should return 0)
+   SELECT COUNT(*) as duplicate_current_rows
+   FROM markets WHERE row_current_ind = TRUE
+   GROUP BY ticker_name HAVING COUNT(*) > 1;
+   ```
+4. Check disk space: `Get-PSDrive C | Select-Object Used, Free`
+
+### Weekly Maintenance
+
+1. **Database health:**
+   ```sql
+   -- Table sizes (watch for runaway growth)
+   SELECT relname as table, pg_size_pretty(pg_total_relation_size(relid))
+   FROM pg_catalog.pg_statio_user_tables ORDER BY pg_total_relation_size(relid) DESC;
+
+   -- Dead tuple ratio (should be <10% for SCD tables)
+   SELECT relname, n_live_tup, n_dead_tup,
+          ROUND(100.0 * n_dead_tup / NULLIF(n_live_tup + n_dead_tup, 0), 1) as dead_pct
+   FROM pg_stat_user_tables
+   WHERE n_live_tup > 0
+   ORDER BY n_dead_tup DESC;
+
+   -- Check autovacuum is running
+   SELECT relname, last_vacuum, last_autovacuum, last_analyze
+   FROM pg_stat_user_tables WHERE schemaname = 'public'
+   ORDER BY last_autovacuum DESC NULLS LAST;
+   ```
+
+2. **Log rotation:** Ensure log files aren't growing unbounded
+3. **Backup verification:** Restore a recent backup to test DB to verify integrity
+4. **Git status:** Verify desktop is on `main` and up to date: `git log --oneline -3`
+
+### Error Rate Monitoring
+
+Once validation alerting is wired (#386):
+```sql
+-- Recent alerts (if alerts table is populated)
+SELECT alert_type, severity, message, created_at
+FROM alerts
+WHERE created_at > NOW() - INTERVAL '24 hours'
+ORDER BY created_at DESC;
+```
+
+### Performance Monitoring
+
+```sql
+-- Slow queries (if pg_stat_statements enabled)
+-- In postgresql.conf: shared_preload_libraries = 'pg_stat_statements'
+SELECT query, calls, mean_exec_time, total_exec_time
+FROM pg_stat_statements
+WHERE dbid = (SELECT oid FROM pg_database WHERE datname = 'precog_staging')
+ORDER BY total_exec_time DESC LIMIT 10;
+
+-- Connection pool usage
+SELECT count(*) as active_connections, state
+FROM pg_stat_activity
+WHERE datname = 'precog_staging'
+GROUP BY state;
+
+-- Index usage (unused indexes waste space)
+SELECT relname as table, indexrelname as index, idx_scan
+FROM pg_stat_user_indexes
+WHERE idx_scan = 0 AND schemaname = 'public'
+ORDER BY pg_relation_size(indexrelid) DESC;
+```
+
+### PostgreSQL Configuration Tuning
+
+For a desktop with 32GB+ RAM running Precog as primary workload:
+
+```ini
+# postgresql.conf recommended settings
+shared_buffers = 4GB              # 25% of RAM
+effective_cache_size = 12GB       # 75% of RAM
+maintenance_work_mem = 1GB        # For VACUUM, CREATE INDEX
+work_mem = 256MB                  # Per-query sort/hash
+wal_buffers = 64MB
+max_connections = 30              # Precog uses ~5-10
+checkpoint_completion_target = 0.9
+random_page_cost = 1.1            # SSD (default 4.0 is for HDD)
+effective_io_concurrency = 200    # SSD
+```
+
+After changing `postgresql.conf`, restart PostgreSQL:
+```powershell
+Restart-Service postgresql-x64-18
+```
 
 ---
 
@@ -384,5 +582,6 @@ This eliminates data staleness and transfer overhead.
 
 | Version | Date | Summary |
 |---------|------|---------|
+| 1.2 | 2026-03-15 | Added: schema migration sync workflow, migration detection, rollback procedures, comprehensive monitoring (daily/weekly/performance), PostgreSQL tuning for desktop. |
 | 1.1 | 2026-03-13 | Added: GPU/ROCm setup, remote dev (SSH, VS Code), read-only DB access. Fixed: KALSHI_MODE=live (demo API unusable for data, #355). |
 | 1.0 | 2026-03-13 | Initial creation. Part 1 code fixes complete. |
