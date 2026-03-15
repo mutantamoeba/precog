@@ -546,3 +546,182 @@ class TestSportSpecificPeriods:
     ) -> None:
         """Each sport should have correct period length."""
         assert validator.PERIOD_LENGTHS[league] == expected_length
+
+
+# =============================================================================
+# Status-Aware Validation Tests (Issue #391)
+# =============================================================================
+
+
+class TestStatusAwareScoreValidation:
+    """Score validation gated on game_status."""
+
+    def test_score_decrease_detected_in_progress(self, validator: ESPNDataValidator) -> None:
+        """Score decrease warning fires during in_progress."""
+        result = validator.validate_score(
+            14, 7, previous_home=21, previous_away=7, game_status="in_progress"
+        )
+        assert result.has_warnings
+
+    def test_score_decrease_suppressed_pre_game(self, validator: ESPNDataValidator) -> None:
+        """Score decrease warning suppressed for pre-game."""
+        result = validator.validate_score(0, 0, previous_home=7, previous_away=3, game_status="pre")
+        assert not result.has_warnings
+
+    def test_score_decrease_suppressed_final(self, validator: ESPNDataValidator) -> None:
+        """Score decrease warning suppressed for final games."""
+        result = validator.validate_score(
+            14, 7, previous_home=21, previous_away=7, game_status="final"
+        )
+        assert not result.has_warnings
+
+    def test_negative_score_error_regardless_of_status(self, validator: ESPNDataValidator) -> None:
+        """Negative score error fires regardless of game_status."""
+        for status in ("pre", "in_progress", "halftime", "final", "unknown"):
+            result = validator.validate_score(-1, 7, game_status=status)
+            assert result.has_errors, f"Expected error for status={status}"
+
+
+class TestStatusAwareClockValidation:
+    """Clock validation gated on game_status."""
+
+    def test_clock_skipped_pre_game(self, validator: ESPNDataValidator) -> None:
+        """All clock validation skipped for pre-game."""
+        result = validator.validate_clock(
+            Decimal("9999"), period=0, league="nfl", game_status="pre"
+        )
+        assert result.is_valid
+        assert not result.has_warnings
+
+    def test_clock_exceeds_period_in_progress(self, validator: ESPNDataValidator) -> None:
+        """Clock exceeding period length warns during in_progress."""
+        result = validator.validate_clock(
+            Decimal("1000"), period=1, league="nfl", game_status="in_progress"
+        )
+        assert result.has_warnings
+
+    def test_clock_exceeds_period_not_in_ot(self, validator: ESPNDataValidator) -> None:
+        """Clock exceeding period length does NOT warn in OT (period > max)."""
+        result = validator.validate_clock(
+            Decimal("1000"), period=5, league="nfl", game_status="in_progress"
+        )
+        assert not result.has_warnings
+
+    def test_negative_clock_error_in_progress(self, validator: ESPNDataValidator) -> None:
+        """Negative clock errors during in_progress."""
+        result = validator.validate_clock(
+            Decimal("-10"), period=2, league="nfl", game_status="in_progress"
+        )
+        assert result.has_errors
+
+    def test_negative_clock_error_final(self, validator: ESPNDataValidator) -> None:
+        """Negative clock errors during final (still valid check)."""
+        result = validator.validate_clock(
+            Decimal("-10"), period=4, league="nfl", game_status="final"
+        )
+        assert result.has_errors
+
+
+class TestStatusAwareSituationValidation:
+    """Situation validation gated on game_status."""
+
+    def test_situation_validated_in_progress(self, validator: ESPNDataValidator) -> None:
+        """Situation checks fire during in_progress."""
+        result = validator.validate_situation(
+            {"down": 5, "distance": 10}, league="nfl", game_status="in_progress"
+        )
+        assert result.has_warnings
+
+    def test_situation_skipped_pre_game(self, validator: ESPNDataValidator) -> None:
+        """Situation validation skipped for pre-game."""
+        result = validator.validate_situation(
+            {"down": 5, "distance": 10}, league="nfl", game_status="pre"
+        )
+        assert result.is_valid
+        assert not result.has_warnings
+
+    def test_situation_skipped_final(self, validator: ESPNDataValidator) -> None:
+        """Situation validation skipped for final games (stale data)."""
+        result = validator.validate_situation(
+            {"down": 5, "distance": 10}, league="nfl", game_status="final"
+        )
+        assert result.is_valid
+        assert not result.has_warnings
+
+    def test_situation_validated_halftime(self, validator: ESPNDataValidator) -> None:
+        """Situation validation active during halftime (part of ACTIVE_STATUSES)."""
+        result = validator.validate_situation(
+            {"down": 5, "distance": 10}, league="nfl", game_status="halftime"
+        )
+        assert result.has_warnings
+
+    def test_down_minus_one_no_info_logged(self, validator: ESPNDataValidator) -> None:
+        """Down -1 no longer generates INFO noise."""
+        result = validator.validate_situation(
+            {"down": -1, "distance": -1}, league="nfl", game_status="in_progress"
+        )
+        assert result.is_valid
+        assert len(result.issues) == 0
+
+
+class TestStatusAwareTeamValidation:
+    """Team validation gated on game_status."""
+
+    def test_missing_team_warns_in_progress(
+        self, validator: ESPNDataValidator, valid_game_state: dict
+    ) -> None:
+        """Missing team warns during in_progress."""
+        del valid_game_state["metadata"]["home_team"]
+        result = validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
+        assert result.has_warnings
+        assert any("home_team" in w.field for w in result.warnings)
+
+    def test_missing_team_warns_halftime(
+        self, validator: ESPNDataValidator, valid_game_state: dict
+    ) -> None:
+        """Missing team warns during halftime."""
+        valid_game_state["state"]["game_status"] = "halftime"
+        del valid_game_state["metadata"]["home_team"]
+        result = validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
+        assert any("home_team" in w.field for w in result.warnings)
+
+    def test_missing_team_silent_pre_game(
+        self, validator: ESPNDataValidator, valid_game_state: dict
+    ) -> None:
+        """Missing team does NOT warn during pre-game."""
+        valid_game_state["state"]["game_status"] = "pre"
+        del valid_game_state["metadata"]["home_team"]
+        result = validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
+        assert not any("home_team" in w.field for w in result.warnings)
+
+
+class TestFullGameStateStatusAware:
+    """Full game state validation with different statuses."""
+
+    def test_pre_game_clean_validation(
+        self, validator: ESPNDataValidator, valid_game_state: dict
+    ) -> None:
+        """Pre-game state with minimal data should pass cleanly."""
+        valid_game_state["state"]["game_status"] = "pre"
+        valid_game_state["state"]["home_score"] = 0
+        valid_game_state["state"]["away_score"] = 0
+        valid_game_state["state"]["period"] = 0
+        valid_game_state["state"]["clock_seconds"] = Decimal("0")
+        valid_game_state["state"]["situation"] = {}
+        result = validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
+        assert result.is_valid
+        assert len(result.issues) == 0
+
+    def test_final_game_clean_validation(
+        self, validator: ESPNDataValidator, valid_game_state: dict
+    ) -> None:
+        """Final game state should not produce false positives."""
+        valid_game_state["state"]["game_status"] = "final"
+        valid_game_state["state"]["home_score"] = 24
+        valid_game_state["state"]["away_score"] = 17
+        valid_game_state["state"]["period"] = 4
+        valid_game_state["state"]["clock_seconds"] = Decimal("0")
+        valid_game_state["state"]["situation"] = {"down": 4, "distance": 2, "possession": "KC"}
+        result = validator.validate_game_state(valid_game_state)  # type: ignore[arg-type]
+        assert result.is_valid
+        assert len(result.issues) == 0

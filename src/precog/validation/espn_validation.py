@@ -312,15 +312,16 @@ class ESPNDataValidator:
         espn_event_id = str(metadata.get("espn_event_id", "unknown"))
         league_raw = metadata.get("league", "")
         league = str(league_raw).lower() if league_raw else ""
+        game_status = str(state.get("game_status", "unknown")).lower()
 
         result = ValidationResult(game_id=espn_event_id)
 
-        # Run all validation checks
-        self._validate_scores(state, previous_state, result)
-        self._validate_clock(state, league, result)
-        self._validate_situation(state, league, result)
+        # Run all validation checks (status-aware to prevent false positives)
+        self._validate_scores(state, previous_state, result, game_status)
+        self._validate_clock(state, league, result, game_status)
+        self._validate_situation(state, league, result, game_status)
         self._validate_metadata(metadata, result)
-        self._validate_teams(metadata, result)
+        self._validate_teams(metadata, result, game_status)
         self._validate_venue(metadata, result)
 
         # Track anomalies if enabled
@@ -341,6 +342,7 @@ class ESPNDataValidator:
         away_score: int,
         previous_home: int | None = None,
         previous_away: int | None = None,
+        game_status: str = "in_progress",
     ) -> ValidationResult:
         """
         Validate score values.
@@ -350,6 +352,7 @@ class ESPNDataValidator:
             away_score: Current away team score
             previous_home: Previous home score (for monotonic check)
             previous_away: Previous away score (for monotonic check)
+            game_status: Game status for context-aware checks
 
         Returns:
             ValidationResult with any score issues
@@ -359,7 +362,7 @@ class ESPNDataValidator:
         previous = None
         if previous_home is not None and previous_away is not None:
             previous = {"home_score": previous_home, "away_score": previous_away}
-        self._validate_scores(state, previous, result)
+        self._validate_scores(state, previous, result, game_status)
         return result
 
     def validate_clock(
@@ -367,6 +370,7 @@ class ESPNDataValidator:
         clock_seconds: Decimal | int | float | None,
         period: int,
         league: str,
+        game_status: str = "in_progress",
     ) -> ValidationResult:
         """
         Validate clock values.
@@ -375,19 +379,21 @@ class ESPNDataValidator:
             clock_seconds: Game clock in seconds
             period: Current period number
             league: League code for period length lookup
+            game_status: Game status for context-aware checks
 
         Returns:
             ValidationResult with any clock issues
         """
         result = ValidationResult()
         state = {"clock_seconds": clock_seconds, "period": period}
-        self._validate_clock(state, league.lower(), result)
+        self._validate_clock(state, league.lower(), result, game_status)
         return result
 
     def validate_situation(
         self,
         situation: ESPNSituationData | dict[str, Any],
         league: str,
+        game_status: str = "in_progress",
     ) -> ValidationResult:
         """
         Validate game situation data.
@@ -395,26 +401,31 @@ class ESPNDataValidator:
         Args:
             situation: Situation data (down, distance, possession, etc.)
             league: League code for sport-specific rules
+            game_status: Game status for context-aware checks
 
         Returns:
             ValidationResult with any situation issues
         """
         result = ValidationResult()
         state = {"situation": situation}
-        self._validate_situation(state, league.lower(), result)
+        self._validate_situation(state, league.lower(), result, game_status)
         return result
+
+    # Game statuses where temporal checks (score/clock changes) are meaningful
+    ACTIVE_STATUSES: ClassVar[set[str]] = {"in_progress", "halftime"}
 
     def _validate_scores(
         self,
         state: dict[str, Any],
         previous: dict[str, Any] | None,
         result: ValidationResult,
+        game_status: str = "unknown",
     ) -> None:
-        """Validate score values."""
+        """Validate score values (status-aware)."""
         home_score = state.get("home_score")
         away_score = state.get("away_score")
 
-        # Check for non-negative scores
+        # Check for non-negative scores (always valid regardless of status)
         if home_score is not None and home_score < 0:
             result.add_error(
                 "home_score",
@@ -431,8 +442,10 @@ class ESPNDataValidator:
                 expected=">=0",
             )
 
-        # Check for score decrease (possible data corruption)
-        if previous:
+        # Check for score decrease (only meaningful during active play)
+        # Pre-game: scores are 0-0 by definition
+        # Final: scores are frozen — decrease indicates API correction, not corruption
+        if previous and game_status in self.ACTIVE_STATUSES:
             prev_home = previous.get("home_score")
             prev_away = previous.get("away_score")
 
@@ -457,12 +470,17 @@ class ESPNDataValidator:
         state: dict[str, Any],
         league: str,
         result: ValidationResult,
+        game_status: str = "unknown",
     ) -> None:
-        """Validate clock and period values."""
+        """Validate clock and period values (status-aware)."""
         clock_seconds = state.get("clock_seconds")
         period = state.get("period")
 
-        # Validate clock is non-negative
+        # Skip clock validation for pre-game (clock is meaningless before kickoff)
+        if game_status == "pre":
+            return
+
+        # Validate clock is non-negative (always valid during/after play)
         if clock_seconds is not None:
             # Convert to Decimal for comparison (Pattern 1)
             if not isinstance(clock_seconds, Decimal):
@@ -476,15 +494,23 @@ class ESPNDataValidator:
                     expected=">=0",
                 )
 
-            # Check clock doesn't exceed period length
-            period_length = self.PERIOD_LENGTHS.get(league)
-            if period_length and clock_seconds > period_length:
-                result.add_warning(
-                    "clock_seconds",
-                    f"Clock exceeds period length for {league}",
-                    value=clock_seconds,
-                    expected=f"<={period_length}",
-                )
+            # Check clock doesn't exceed period length (only during active play,
+            # not OT where period rules differ)
+            if game_status in self.ACTIVE_STATUSES:
+                max_period = self.PERIOD_COUNTS.get(league, 4)
+                period_length = self.PERIOD_LENGTHS.get(league)
+                if (
+                    period_length
+                    and clock_seconds > period_length
+                    and period is not None
+                    and period <= max_period
+                ):
+                    result.add_warning(
+                        "clock_seconds",
+                        f"Clock exceeds period length for {league}",
+                        value=clock_seconds,
+                        expected=f"<={period_length}",
+                    )
 
         # Validate period number
         if period is not None:
@@ -495,13 +521,7 @@ class ESPNDataValidator:
                     value=period,
                     expected=">=0",
                 )
-            elif period == 0:
-                result.add_info(
-                    "period",
-                    "Period is 0 (pre-game)",
-                    value=period,
-                )
-            else:
+            elif period > 0:
                 max_period = self.PERIOD_COUNTS.get(league, 4)
                 # Allow overtime (period > max is valid)
                 if period > max_period + 5:  # Allow up to 5 OT periods
@@ -517,10 +537,25 @@ class ESPNDataValidator:
         state: dict[str, Any],
         league: str,
         result: ValidationResult,
+        game_status: str = "unknown",
     ) -> None:
-        """Validate game situation (down, distance, etc.)."""
+        """Validate game situation (status-aware).
+
+        Situation data (down, distance, possession) is only meaningful
+        during active play. Pre-game has no situation; final games have
+        stale last-play data that should not trigger warnings. Halftime
+        is included in ACTIVE_STATUSES because corrections can occur
+        during breaks.
+        """
         situation = state.get("situation", {})
         if not situation:
+            return
+
+        # Skip situation validation for non-active states
+        # Pre-game: no situation exists; stale data from cache is noise
+        # Final: last play's situation is frozen and irrelevant
+        # Note: halftime IS active — corrections can occur at breaks
+        if game_status not in self.ACTIVE_STATUSES:
             return
 
         # Football-specific validation
@@ -529,36 +564,24 @@ class ESPNDataValidator:
             distance = situation.get("distance")
 
             # Validate down (1-4 or -1 for non-play situations)
-            if down is not None:
-                if down == -1:
-                    result.add_info(
-                        "situation.down",
-                        "Down is -1 (non-play situation)",
-                        value=down,
-                    )
-                elif down < 1 or down > 4:
-                    result.add_warning(
-                        "situation.down",
-                        "Down must be 1-4 or -1",
-                        value=down,
-                        expected="1-4 or -1",
-                    )
+            # Note: down=-1 is expected for kickoffs, turnovers, etc. — not logged
+            if down is not None and down != -1 and (down < 1 or down > 4):
+                result.add_warning(
+                    "situation.down",
+                    "Down must be 1-4 or -1",
+                    value=down,
+                    expected="1-4 or -1",
+                )
 
             # Validate distance (positive or -1 for non-play)
-            if distance is not None:
-                if distance == -1:
-                    result.add_info(
-                        "situation.distance",
-                        "Distance is -1 (non-play situation)",
-                        value=distance,
-                    )
-                elif distance < 0:
-                    result.add_error(
-                        "situation.distance",
-                        "Distance must be positive or -1",
-                        value=distance,
-                        expected=">0 or -1",
-                    )
+            # Note: distance=-1 is expected for non-play situations — not logged
+            if distance is not None and distance != -1 and distance < 0:
+                result.add_error(
+                    "situation.distance",
+                    "Distance must be positive or -1",
+                    value=distance,
+                    expected=">0 or -1",
+                )
 
             # Validate possession
             possession = situation.get("possession")
@@ -613,31 +636,31 @@ class ESPNDataValidator:
         self,
         metadata: dict[str, Any],
         result: ValidationResult,
+        game_status: str = "unknown",
     ) -> None:
-        """Validate team information."""
+        """Validate team information (status-aware).
+
+        Missing team data is expected for pre-game polls (ESPN may not
+        have populated teams yet). Only warn for in-progress/final games
+        where team data should always be present.
+        """
         for team_key in ("home_team", "away_team"):
             team = metadata.get(team_key, {})
             if not team:
-                result.add_warning(
-                    team_key,
-                    f"Missing {team_key} information",
-                )
+                # Missing teams are expected pre-game, suspicious during/after
+                if game_status in ("in_progress", "halftime", "final"):
+                    result.add_warning(
+                        team_key,
+                        f"Missing {team_key} information",
+                    )
                 continue
 
-            # Check ESPN team ID
+            # Check ESPN team ID (always worth flagging — it's the key identifier)
             espn_team_id = team.get("espn_team_id")
             if not espn_team_id:
                 result.add_warning(
                     f"{team_key}.espn_team_id",
                     "Missing ESPN team ID",
-                )
-
-            # Check team name
-            team_name = team.get("team_name") or team.get("name")
-            if not team_name:
-                result.add_info(
-                    f"{team_key}.team_name",
-                    "Missing team name",
                 )
 
     def _validate_venue(
