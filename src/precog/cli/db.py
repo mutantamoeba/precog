@@ -205,7 +205,7 @@ def status(
     console.print("\n[bold cyan]Database Status[/bold cyan]\n")
 
     try:
-        from precog.database.connection import get_connection, test_connection
+        from precog.database.connection import get_cursor, test_connection
 
         # Test connection
         console.print("[bold]Connection:[/bold]")
@@ -215,61 +215,68 @@ def status(
             echo_error("Connection failed")
             raise typer.Exit(code=1)
 
-        # Get connection info
-        conn = get_connection()
+        # Get connection info using cursor context manager
+        with get_cursor() as cur:
+            # Get PostgreSQL version
+            cur.execute("SELECT version()")
+            result = cur.fetchone()
+            if result:
+                version = result["version"].split(",")[0]
+                console.print(f"  Database: {version}")
 
-        # Get PostgreSQL version
-        result = conn.execute("SELECT version()").fetchone()
-        if result:
-            version = result[0].split(",")[0] if result else "Unknown"
-            console.print(f"  Database: {version}")
+            # Get current database name
+            cur.execute("SELECT current_database()")
+            result = cur.fetchone()
+            if result:
+                console.print(f"  Database name: {result['current_database']}")
 
-        # Get current database name
-        result = conn.execute("SELECT current_database()").fetchone()
-        if result:
-            console.print(f"  Database name: {result[0]}")
+            # Count tables
+            cur.execute("""
+                SELECT COUNT(*) AS table_count FROM information_schema.tables
+                WHERE table_schema = 'public'
+            """)
+            result = cur.fetchone()
+            table_count = result["table_count"] if result else 0
+            console.print(f"  Tables: {table_count}")
 
-        # Count tables
-        result = conn.execute("""
-            SELECT COUNT(*) FROM information_schema.tables
-            WHERE table_schema = 'public'
-        """).fetchone()
-        table_count = result[0] if result else 0
-        console.print(f"  Tables: {table_count}")
+            console.print()
 
-        console.print()
+            # Check critical tables
+            console.print("[bold]Critical Tables:[/bold]")
 
-        # Check critical tables
-        console.print("[bold]Critical Tables:[/bold]")
+            table = Table(show_header=True, header_style="bold")
+            table.add_column("Table", style="cyan")
+            table.add_column("Status", justify="center")
+            table.add_column("Rows", justify="right")
 
-        table = Table(show_header=True, header_style="bold")
-        table.add_column("Table", style="cyan")
-        table.add_column("Status", justify="center")
-        table.add_column("Rows", justify="right")
-
-        all_ok = True
-        for table_name in CRITICAL_TABLES:
-            try:
-                # table_name from hardcoded CRITICAL_TABLES constant, not user input
-                result = conn.execute(f"""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.tables
-                        WHERE table_schema = 'public' AND table_name = '{table_name}'
+            all_ok = True
+            for table_name in CRITICAL_TABLES:
+                try:
+                    # table_name from hardcoded CRITICAL_TABLES constant
+                    cur.execute(
+                        """
+                        SELECT EXISTS (
+                            SELECT FROM information_schema.tables
+                            WHERE table_schema = 'public' AND table_name = %s
+                        )
+                    """,
+                        (table_name,),
                     )
-                """).fetchone()
-                exists = result[0] if result else False
+                    result = cur.fetchone()
+                    exists = result["exists"] if result else False
 
-                if exists:
-                    # Get row count
-                    count_result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
-                    row_count = count_result[0] if count_result else 0
-                    table.add_row(table_name, "[green]OK[/green]", str(row_count))
-                else:
-                    table.add_row(table_name, "[red]MISSING[/red]", "-")
+                    if exists:
+                        # Get row count
+                        cur.execute(f"SELECT COUNT(*) AS row_count FROM {table_name}")
+                        count_result = cur.fetchone()
+                        row_count = count_result["row_count"] if count_result else 0
+                        table.add_row(table_name, "[green]OK[/green]", str(row_count))
+                    else:
+                        table.add_row(table_name, "[red]MISSING[/red]", "-")
+                        all_ok = False
+                except Exception:
+                    table.add_row(table_name, "[red]ERROR[/red]", "-")
                     all_ok = False
-            except Exception:
-                table.add_row(table_name, "[red]ERROR[/red]", "-")
-                all_ok = False
 
         console.print(table)
 
@@ -378,60 +385,67 @@ def tables(
     console.print("\n[bold cyan]Database Tables[/bold cyan]\n")
 
     try:
-        from precog.database.connection import get_connection
+        from precog.database.connection import get_cursor
 
-        conn = get_connection()
+        with get_cursor() as cur:
+            # Get all tables
+            cur.execute("""
+                SELECT table_name
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                ORDER BY table_name
+            """)
+            result = cur.fetchall()
 
-        # Get all tables
-        result = conn.execute("""
-            SELECT table_name
-            FROM information_schema.tables
-            WHERE table_schema = 'public'
-            ORDER BY table_name
-        """).fetchall()
+            if not result:
+                console.print("[yellow]No tables found[/yellow]")
+                return
 
-        if not result:
-            console.print("[yellow]No tables found[/yellow]")
-            return
-
-        table = Table(title=f"Tables ({len(result)} total)")
-        table.add_column("Table", style="cyan")
-        table.add_column("Rows", justify="right")
-
-        if verbose:
-            table.add_column("Columns", justify="right")
-            table.add_column("Size", justify="right")
-
-        for row in result:
-            table_name = row[0]
-
-            # Get row count (table_name from trusted information_schema)
-            try:
-                count_result = conn.execute(f"SELECT COUNT(*) FROM {table_name}").fetchone()
-                row_count = count_result[0] if count_result else 0
-            except Exception:
-                row_count = "?"
+            table = Table(title=f"Tables ({len(result)} total)")
+            table.add_column("Table", style="cyan")
+            table.add_column("Rows", justify="right")
 
             if verbose:
-                # Get column count (table_name from trusted information_schema)
-                col_result = conn.execute(f"""
-                    SELECT COUNT(*) FROM information_schema.columns
-                    WHERE table_schema = 'public' AND table_name = '{table_name}'
-                """).fetchone()
-                col_count = col_result[0] if col_result else "?"
+                table.add_column("Columns", justify="right")
+                table.add_column("Size", justify="right")
 
-                # Get table size
+            for row in result:
+                table_name = row["table_name"]
+
+                # Get row count (table_name from trusted information_schema)
                 try:
-                    size_result = conn.execute(f"""
-                        SELECT pg_size_pretty(pg_total_relation_size('{table_name}'))
-                    """).fetchone()
-                    size = size_result[0] if size_result else "?"
+                    cur.execute(f"SELECT COUNT(*) AS row_count FROM {table_name}")
+                    count_result = cur.fetchone()
+                    row_count = count_result["row_count"] if count_result else 0
                 except Exception:
-                    size = "?"
+                    row_count = "?"
 
-                table.add_row(table_name, str(row_count), str(col_count), size)
-            else:
-                table.add_row(table_name, str(row_count))
+                if verbose:
+                    # Get column count (table_name from trusted information_schema)
+                    cur.execute(
+                        """
+                        SELECT COUNT(*) AS col_count FROM information_schema.columns
+                        WHERE table_schema = 'public' AND table_name = %s
+                    """,
+                        (table_name,),
+                    )
+                    col_result = cur.fetchone()
+                    col_count = col_result["col_count"] if col_result else "?"
+
+                    # Get table size
+                    try:
+                        cur.execute(f"""
+                            SELECT pg_size_pretty(pg_total_relation_size('{table_name}'))
+                                AS table_size
+                        """)
+                        size_result = cur.fetchone()
+                        size = size_result["table_size"] if size_result else "?"
+                    except Exception:
+                        size = "?"
+
+                    table.add_row(table_name, str(row_count), str(col_count), size)
+                else:
+                    table.add_row(table_name, str(row_count))
 
         console.print(table)
         console.print()

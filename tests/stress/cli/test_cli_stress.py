@@ -133,18 +133,27 @@ class TestDbStress:
 
         Stress: Tests 50 rapid status invocations.
 
-        Note: The status command calls both test_connection() AND get_connection(),
+        Note: The status command calls both test_connection() AND get_cursor(),
         so both must be mocked to prevent real database access during tests.
         """
         runner = CliRunner()
 
         with (
             patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
+            patch("precog.database.connection.get_cursor") as mock_cursor_ctx,
         ):
             mock_test.return_value = True
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {
+                "version": "PostgreSQL 15.0",
+                "current_database": "precog_test",
+                "table_count": 0,
+                "exists": False,
+                "test": 1,
+            }
+            mock_cur.fetchall.return_value = []
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             for i in range(50):
                 result = runner.invoke(isolated_app, ["db", "status"])
@@ -157,9 +166,12 @@ class TestDbStress:
         """
         runner = CliRunner()
 
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
+        with patch("precog.database.connection.get_cursor") as mock_cursor_ctx:
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {"row_count": 0}
+            mock_cur.fetchall.return_value = []
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             for i in range(30):
                 result = runner.invoke(isolated_app, ["db", "tables"])
@@ -233,19 +245,29 @@ class TestMixedCommandStress:
 
         Stress: Tests varied command patterns.
 
-        Note: The status command calls both test_connection() AND get_connection(),
+        Note: The status command calls both test_connection() AND get_cursor(),
         so both must be mocked to prevent real database access during tests.
         """
         runner = CliRunner()
 
         with (
             patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
+            patch("precog.database.connection.get_cursor") as mock_cursor_ctx,
             patch("precog.cli.scheduler._show_db_backed_status", return_value=False),
         ):
             mock_test.return_value = True
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {
+                "version": "PostgreSQL 15.0",
+                "current_database": "precog_test",
+                "table_count": 0,
+                "exists": False,
+                "row_count": 0,
+                "test": 1,
+            }
+            mock_cur.fetchall.return_value = []
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             commands = [
                 ["system", "health"],

@@ -39,6 +39,24 @@ def isolated_app():
     return fresh_app
 
 
+def _mock_cursor_ctx():
+    """Create a properly configured get_cursor mock for DB/system CLI tests."""
+    mock_cursor_ctx = MagicMock()
+    mock_cur = MagicMock()
+    mock_cur.fetchone.return_value = {
+        "version": "PostgreSQL 15.0",
+        "current_database": "precog_test",
+        "table_count": 0,
+        "exists": False,
+        "row_count": 0,
+        "test": 1,
+    }
+    mock_cur.fetchall.return_value = []
+    mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+    mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
+    return mock_cursor_ctx
+
+
 class TestSchedulerRace:
     """Race condition tests for scheduler CLI."""
 
@@ -98,14 +116,29 @@ class TestDbRace:
         """Test rapid sequential database status checks.
 
         Race: Tests 10 rapid status calls in sequence.
+
+        Note: The status command calls both test_connection() AND get_cursor(),
+        so both must be mocked to prevent real database access during tests.
         """
         runner = CliRunner()
         results = []
 
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_session = MagicMock()
-            mock_conn.return_value.__enter__ = MagicMock(return_value=mock_session)
-            mock_conn.return_value.__exit__ = MagicMock(return_value=False)
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_cursor") as mock_ctx,
+        ):
+            mock_test.return_value = True
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {
+                "version": "PostgreSQL 15.0",
+                "current_database": "precog_test",
+                "table_count": 0,
+                "exists": False,
+                "test": 1,
+            }
+            mock_cur.fetchall.return_value = []
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             start = time.perf_counter()
             for _ in range(10):
@@ -125,11 +158,12 @@ class TestDbRace:
         runner = CliRunner()
         results = []
 
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_session = MagicMock()
-            mock_conn.return_value.__enter__ = MagicMock(return_value=mock_session)
-            mock_conn.return_value.__exit__ = MagicMock(return_value=False)
-            mock_session.execute.return_value.fetchall.return_value = []
+        with patch("precog.database.connection.get_cursor") as mock_ctx:
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {"row_count": 0}
+            mock_cur.fetchall.return_value = []
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             for _ in range(10):
                 result = runner.invoke(isolated_app, ["db", "tables"])
@@ -150,10 +184,11 @@ class TestSystemRace:
         runner = CliRunner()
         results = []
 
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_session = MagicMock()
-            mock_conn.return_value.__enter__ = MagicMock(return_value=mock_session)
-            mock_conn.return_value.__exit__ = MagicMock(return_value=False)
+        with patch("precog.database.connection.get_cursor") as mock_ctx:
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {"test": 1}
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             start = time.perf_counter()
             for _ in range(10):
@@ -173,10 +208,11 @@ class TestSystemRace:
         runner = CliRunner()
         results = []
 
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_session = MagicMock()
-            mock_conn.return_value.__enter__ = MagicMock(return_value=mock_session)
-            mock_conn.return_value.__exit__ = MagicMock(return_value=False)
+        with patch("precog.database.connection.get_cursor") as mock_ctx:
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {"test": 1}
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             for i in range(5):
                 result = runner.invoke(isolated_app, ["system", "version"])
@@ -200,13 +236,23 @@ class TestCrossModuleRace:
         results = []
 
         with (
-            patch("precog.database.connection.get_connection") as mock_conn,
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_cursor") as mock_ctx,
             patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor,
         ):
-            mock_session = MagicMock()
-            mock_conn.return_value.__enter__ = MagicMock(return_value=mock_session)
-            mock_conn.return_value.__exit__ = MagicMock(return_value=False)
-            mock_session.execute.return_value.fetchall.return_value = []
+            mock_test.return_value = True
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {
+                "version": "PostgreSQL 15.0",
+                "current_database": "precog_test",
+                "table_count": 0,
+                "exists": False,
+                "row_count": 0,
+                "test": 1,
+            }
+            mock_cur.fetchall.return_value = []
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
             mock_instance = MagicMock()
             mock_instance.get_status.return_value = {"running": False, "pollers": []}
             mock_supervisor.return_value = mock_instance
@@ -236,12 +282,23 @@ class TestCrossModuleRace:
         runner = CliRunner()
 
         with (
-            patch("precog.database.connection.get_connection") as mock_conn,
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_cursor") as mock_ctx,
             patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor,
         ):
-            mock_session = MagicMock()
-            mock_conn.return_value.__enter__ = MagicMock(return_value=mock_session)
-            mock_conn.return_value.__exit__ = MagicMock(return_value=False)
+            mock_test.return_value = True
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {
+                "version": "PostgreSQL 15.0",
+                "current_database": "precog_test",
+                "table_count": 0,
+                "exists": False,
+                "row_count": 0,
+                "test": 1,
+            }
+            mock_cur.fetchall.return_value = []
+            mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
             mock_instance = MagicMock()
             mock_instance.get_status.return_value = {"running": False, "pollers": []}
             mock_supervisor.return_value = mock_instance
