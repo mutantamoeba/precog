@@ -649,7 +649,7 @@ class TestStatusAwareSituationValidation:
         assert not result.has_warnings
 
     def test_situation_validated_halftime(self, validator: ESPNDataValidator) -> None:
-        """Situation validation active during halftime (part of ACTIVE_STATUSES)."""
+        """Situation validation active during halftime (not in PREGAME/COMPLETED)."""
         result = validator.validate_situation(
             {"down": 5, "distance": 10}, league="nfl", game_status="halftime"
         )

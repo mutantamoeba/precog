@@ -411,8 +411,10 @@ class ESPNDataValidator:
         self._validate_situation(state, league.lower(), result, game_status)
         return result
 
-    # Game statuses where temporal checks (score/clock changes) are meaningful
-    ACTIVE_STATUSES: ClassVar[set[str]] = {"in_progress", "halftime"}
+    # Game statuses where temporal checks should be SUPPRESSED.
+    # Using a denylist (not allowlist) so unknown/missing status gets full validation.
+    PREGAME_STATUSES: ClassVar[set[str]] = {"pre"}
+    COMPLETED_STATUSES: ClassVar[set[str]] = {"final"}
 
     def _validate_scores(
         self,
@@ -442,10 +444,10 @@ class ESPNDataValidator:
                 expected=">=0",
             )
 
-        # Check for score decrease (only meaningful during active play)
+        # Check for score decrease (suppress for pre-game and final)
         # Pre-game: scores are 0-0 by definition
         # Final: scores are frozen — decrease indicates API correction, not corruption
-        if previous and game_status in self.ACTIVE_STATUSES:
+        if previous and game_status not in (self.PREGAME_STATUSES | self.COMPLETED_STATUSES):
             prev_home = previous.get("home_score")
             prev_away = previous.get("away_score")
 
@@ -477,7 +479,7 @@ class ESPNDataValidator:
         period = state.get("period")
 
         # Skip clock validation for pre-game (clock is meaningless before kickoff)
-        if game_status == "pre":
+        if game_status in self.PREGAME_STATUSES:
             return
 
         # Validate clock is non-negative (always valid during/after play)
@@ -494,9 +496,9 @@ class ESPNDataValidator:
                     expected=">=0",
                 )
 
-            # Check clock doesn't exceed period length (only during active play,
-            # not OT where period rules differ)
-            if game_status in self.ACTIVE_STATUSES:
+            # Check clock doesn't exceed period length (suppress for completed games
+            # and OT where period rules differ)
+            if game_status not in self.COMPLETED_STATUSES:
                 max_period = self.PERIOD_COUNTS.get(league, 4)
                 period_length = self.PERIOD_LENGTHS.get(league)
                 if (
@@ -551,11 +553,11 @@ class ESPNDataValidator:
         if not situation:
             return
 
-        # Skip situation validation for non-active states
+        # Skip situation validation for pre-game and final
         # Pre-game: no situation exists; stale data from cache is noise
         # Final: last play's situation is frozen and irrelevant
-        # Note: halftime IS active — corrections can occur at breaks
-        if game_status not in self.ACTIVE_STATUSES:
+        # Note: halftime and unknown get full validation (safe default)
+        if game_status in (self.PREGAME_STATUSES | self.COMPLETED_STATUSES):
             return
 
         # Football-specific validation
@@ -648,7 +650,7 @@ class ESPNDataValidator:
             team = metadata.get(team_key, {})
             if not team:
                 # Missing teams are expected pre-game, suspicious during/after
-                if game_status in ("in_progress", "halftime", "final"):
+                if game_status not in self.PREGAME_STATUSES:
                     result.add_warning(
                         team_key,
                         f"Missing {team_key} information",
