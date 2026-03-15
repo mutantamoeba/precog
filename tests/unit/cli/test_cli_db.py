@@ -11,6 +11,7 @@ Related:
     - Issue #204: CLI Refactor
     - Issue #234: 8 Test Type Coverage
     - Issue #258: Create shared CLI test fixtures
+    - Issue #406: Fix broken DB CLI commands
     - src/precog/cli/db.py
     - REQ-CLI-001: CLI Framework (Typer)
 
@@ -21,10 +22,45 @@ Note:
     and helpers from tests/helpers/cli_helpers.py (strip_ansi).
 """
 
+from contextlib import contextmanager
 from unittest.mock import MagicMock, patch
 
 from precog.cli.db import CRITICAL_TABLES, app
 from tests.helpers.cli_helpers import strip_ansi
+
+# ============================================================================
+# Test Helpers
+# ============================================================================
+
+
+def _make_mock_cursor(fetchone_side_effect=None, fetchall_return=None):
+    """Create a mock cursor with configurable return values.
+
+    Args:
+        fetchone_side_effect: List of dicts to return from successive fetchone() calls,
+            or a single dict for all calls.
+        fetchall_return: List of dicts to return from fetchall().
+
+    Returns:
+        A context manager that yields a mock cursor, suitable for patching get_cursor.
+    """
+    mock_cursor = MagicMock()
+
+    if fetchone_side_effect is not None:
+        if isinstance(fetchone_side_effect, list):
+            mock_cursor.fetchone.side_effect = fetchone_side_effect
+        else:
+            mock_cursor.fetchone.return_value = fetchone_side_effect
+
+    if fetchall_return is not None:
+        mock_cursor.fetchall.return_value = fetchall_return
+
+    @contextmanager
+    def mock_get_cursor(commit=False):
+        yield mock_cursor
+
+    return mock_get_cursor, mock_cursor
+
 
 # ============================================================================
 # Test Classes
@@ -111,52 +147,41 @@ class TestDbInit:
 class TestDbStatus:
     """Test db status command.
 
-    Note: The status command calls both test_connection() AND get_connection(),
-    so both must be mocked to prevent real database access during unit tests.
-    This is a common pattern in CLI testing when commands use multiple
-    database functions.
+    Note: The status command calls test_connection() and then uses get_cursor()
+    for database queries. Both must be mocked to prevent real database access.
+    get_cursor() yields a RealDictCursor, so mock results are dicts.
     """
 
     @patch("precog.database.connection.test_connection")
-    @patch("precog.database.connection.get_connection")
-    def test_status_connected(self, mock_get_conn, mock_test_conn, cli_runner):
+    @patch("precog.database.connection.get_cursor")
+    def test_status_connected(self, mock_get_cursor, mock_test_conn, cli_runner):
         """Test status when database is connected."""
         mock_test_conn.return_value = True
 
-        # Create a mock that returns appropriate values for different queries
-        mock_conn = MagicMock()
-        call_count = [0]
+        # RealDictCursor returns dicts; queries use aliased column names
+        fetchone_results = [
+            # SELECT version()
+            {"version": "PostgreSQL 15.4, compiled by Visual C++"},
+            # SELECT current_database()
+            {"current_database": "precog_test"},
+            # SELECT COUNT(*) AS table_count
+            {"table_count": 25},
+        ]
+        # For each critical table: EXISTS check + COUNT if exists
+        for _table_name in CRITICAL_TABLES:
+            fetchone_results.append({"exists": True})
+            fetchone_results.append({"row_count": 10})
 
-        def mock_fetchone():
-            """Return different values based on which query is being executed."""
-            call_count[0] += 1
-            # First call: SELECT version()
-            if call_count[0] == 1:
-                return ("PostgreSQL 15.4, compiled by Visual C++",)
-            # Second call: SELECT current_database()
-            if call_count[0] == 2:
-                return ("precog_test",)
-            # Third call: SELECT COUNT(*) FROM information_schema.tables
-            if call_count[0] == 3:
-                return (25,)
-            # Subsequent calls: table existence and row counts
-            return (True,)
-
-        mock_result = MagicMock()
-        mock_result.fetchone = mock_fetchone
-        mock_conn.execute.return_value = mock_result
-        mock_get_conn.return_value = mock_conn
+        mock_ctx, _mock_cur = _make_mock_cursor(fetchone_side_effect=fetchone_results)
+        mock_get_cursor.side_effect = mock_ctx
 
         result = cli_runner.invoke(app, ["status"])
 
-        # Exit codes: 0=success, 1=missing tables (normal when mocked), 5=db error
-        assert result.exit_code in [0, 1, 5]
-        # Verify the command attempted to check status
+        assert result.exit_code in [0, 1]
         assert "Connection" in result.stdout or "Status" in result.stdout
 
     @patch("precog.database.connection.test_connection")
-    @patch("precog.database.connection.get_connection")
-    def test_status_disconnected(self, mock_get_conn, mock_test_conn, cli_runner):
+    def test_status_disconnected(self, mock_test_conn, cli_runner):
         """Test status when database connection fails."""
         mock_test_conn.return_value = False
 
@@ -166,45 +191,34 @@ class TestDbStatus:
         assert result.exit_code in [0, 1]
 
     @patch("precog.database.connection.test_connection")
-    @patch("precog.database.connection.get_connection")
-    def test_status_verbose(self, mock_get_conn, mock_test_conn, cli_runner):
+    @patch("precog.database.connection.get_cursor")
+    def test_status_verbose(self, mock_get_cursor, mock_test_conn, cli_runner):
         """Test status with verbose flag."""
         mock_test_conn.return_value = True
 
-        # Create a mock that returns appropriate values for different queries
-        mock_conn = MagicMock()
-        call_count = [0]
+        fetchone_results = [
+            {"version": "PostgreSQL 15.4, compiled by Visual C++"},
+            {"current_database": "precog_test"},
+            {"table_count": 25},
+        ]
+        for _table_name in CRITICAL_TABLES:
+            fetchone_results.append({"exists": True})
+            fetchone_results.append({"row_count": 10})
 
-        def mock_fetchone():
-            """Return different values based on which query is being executed."""
-            call_count[0] += 1
-            if call_count[0] == 1:
-                return ("PostgreSQL 15.4, compiled by Visual C++",)
-            if call_count[0] == 2:
-                return ("precog_test",)
-            if call_count[0] == 3:
-                return (25,)
-            return (True,)
-
-        mock_result = MagicMock()
-        mock_result.fetchone = mock_fetchone
-        mock_conn.execute.return_value = mock_result
-        mock_get_conn.return_value = mock_conn
+        mock_ctx, _mock_cur = _make_mock_cursor(fetchone_side_effect=fetchone_results)
+        mock_get_cursor.side_effect = mock_ctx
 
         result = cli_runner.invoke(app, ["status", "--verbose"])
 
-        # Exit codes: 0=success, 1=missing tables (normal when mocked), 5=db error
-        assert result.exit_code in [0, 1, 5]
+        assert result.exit_code in [0, 1]
 
 
 class TestDbMigrate:
     """Test db migrate command."""
 
-    @patch("precog.database.connection.get_connection")
     @patch("precog.database.initialization.apply_migrations")
-    def test_migrate_success(self, mock_apply, mock_get_conn, cli_runner):
+    def test_migrate_success(self, mock_apply, cli_runner):
         """Test successful migration."""
-        mock_get_conn.return_value = MagicMock()
         mock_apply.return_value = {"applied": 2, "skipped": 8}
 
         result = cli_runner.invoke(app, ["migrate"])
@@ -212,11 +226,9 @@ class TestDbMigrate:
         # May have various exit codes depending on migration state
         assert result.exit_code in [0, 1, 2, 3]
 
-    @patch("precog.database.connection.get_connection")
     @patch("precog.database.initialization.apply_migrations")
-    def test_migrate_no_pending(self, mock_apply, mock_get_conn, cli_runner):
+    def test_migrate_no_pending(self, mock_apply, cli_runner):
         """Test migrate when no migrations pending."""
-        mock_get_conn.return_value = MagicMock()
         mock_apply.return_value = {"applied": 0, "skipped": 10}
 
         result = cli_runner.invoke(app, ["migrate"])
@@ -226,29 +238,42 @@ class TestDbMigrate:
 
 
 class TestDbTables:
-    """Test db tables command."""
+    """Test db tables command.
 
-    @patch("precog.database.connection.get_connection")
-    def test_tables_lists_tables(self, mock_get_conn, cli_runner):
+    Note: The tables command uses get_cursor() which yields a RealDictCursor.
+    Mock results must be dicts with column name keys.
+    """
+
+    @patch("precog.database.connection.get_cursor")
+    def test_tables_lists_tables(self, mock_get_cursor, cli_runner):
         """Test tables command lists tables."""
-        mock_conn = MagicMock()
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = [("games",), ("markets",), ("positions",)]
-        mock_conn.execute.return_value = mock_result
-        mock_get_conn.return_value = mock_conn
+        fetchall_data = [
+            {"table_name": "games"},
+            {"table_name": "markets"},
+            {"table_name": "positions"},
+        ]
+        # fetchone calls: one COUNT per table
+        fetchone_results = [
+            {"row_count": 10},
+            {"row_count": 20},
+            {"row_count": 5},
+        ]
+
+        mock_ctx, _mock_cur = _make_mock_cursor(
+            fetchone_side_effect=fetchone_results,
+            fetchall_return=fetchall_data,
+        )
+        mock_get_cursor.side_effect = mock_ctx
 
         result = cli_runner.invoke(app, ["tables"])
 
         assert result.exit_code in [0, 1]
 
-    @patch("precog.database.connection.get_connection")
-    def test_tables_empty_database(self, mock_get_conn, cli_runner):
+    @patch("precog.database.connection.get_cursor")
+    def test_tables_empty_database(self, mock_get_cursor, cli_runner):
         """Test tables when database is empty."""
-        mock_conn = MagicMock()
-        mock_result = MagicMock()
-        mock_result.fetchall.return_value = []
-        mock_conn.execute.return_value = mock_result
-        mock_get_conn.return_value = mock_conn
+        mock_ctx, _mock_cur = _make_mock_cursor(fetchall_return=[])
+        mock_get_cursor.side_effect = mock_ctx
 
         result = cli_runner.invoke(app, ["tables"])
 
@@ -280,8 +305,7 @@ class TestDbEdgeCases:
         assert result.exit_code != 0
 
     @patch("precog.database.connection.test_connection")
-    @patch("precog.database.connection.get_connection")
-    def test_connection_timeout(self, mock_get_conn, mock_test_conn, cli_runner):
+    def test_connection_timeout(self, mock_test_conn, cli_runner):
         """Test handling of connection timeout."""
         mock_test_conn.side_effect = TimeoutError("Connection timed out")
 
