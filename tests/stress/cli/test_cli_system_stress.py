@@ -61,9 +61,11 @@ class TestSystemStress:
 
     def test_repeated_health_calls(self, runner):
         """Test repeated health command calls."""
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock(return_value=False)
+        with patch("precog.database.connection.get_cursor") as mock_cursor_ctx:
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {"test": 1}
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             iterations = 50
             successes = 0

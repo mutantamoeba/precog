@@ -240,11 +240,22 @@ class TestResourceExhaustion:
 
         Chaos: Simulated slow operations.
         """
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock = MagicMock()
-            mock.__enter__ = MagicMock()
-            mock.__exit__ = MagicMock()
-            mock_conn.return_value = mock
+        with (
+            patch("precog.database.connection.test_connection") as mock_test,
+            patch("precog.database.connection.get_cursor") as mock_cursor_ctx,
+        ):
+            mock_test.return_value = True
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {
+                "version": "PostgreSQL 15.0",
+                "current_database": "precog_test",
+                "table_count": 0,
+                "exists": False,
+                "test": 1,
+            }
+            mock_cur.fetchall.return_value = []
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             results = []
             for _ in range(10):

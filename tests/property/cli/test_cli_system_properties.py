@@ -63,20 +63,21 @@ class TestSystemHealthInvariants:
     ):
         """Health check should handle any combination of service states.
 
-        Note: The health command calls both test_connection() AND get_connection(),
+        Note: The health command calls both test_connection() AND get_cursor(),
         so both must be mocked to prevent real database access and test pollution.
         """
         with (
             patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
+            patch("precog.database.connection.get_cursor") as mock_cursor_ctx,
         ):
             mock_test.return_value = db_healthy
             if db_healthy:
-                mock_connection = MagicMock()
-                mock_conn.return_value.__enter__ = MagicMock(return_value=mock_connection)
-                mock_conn.return_value.__exit__ = MagicMock(return_value=False)
+                mock_cur = MagicMock()
+                mock_cur.fetchone.return_value = {"test": 1}
+                mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+                mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
             else:
-                mock_conn.side_effect = Exception("Connection failed")
+                mock_cursor_ctx.side_effect = Exception("Connection failed")
 
             app, runner = get_fresh_cli()
             result = runner.invoke(app, ["system", "health"])
@@ -89,8 +90,8 @@ class TestSystemHealthInvariants:
         """Health check should handle any error message from database."""
         assume(all(ord(c) >= 32 or c in "\n\t" for c in error_msg))
 
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_conn.side_effect = Exception(error_msg)
+        with patch("precog.database.connection.get_cursor") as mock_cursor_ctx:
+            mock_cursor_ctx.side_effect = Exception(error_msg)
 
             app, runner = get_fresh_cli()
             result = runner.invoke(app, ["system", "health"])
@@ -164,10 +165,11 @@ class TestSystemCommandSequences:
     @settings(max_examples=20, deadline=None)  # CLI invocations can exceed 200ms deadline
     def test_command_sequence_stability(self, commands: list):
         """Any sequence of system commands should not crash."""
-        with patch("precog.database.connection.get_connection") as mock_conn:
-            mock_connection = MagicMock()
-            mock_conn.return_value.__enter__ = MagicMock(return_value=mock_connection)
-            mock_conn.return_value.__exit__ = MagicMock(return_value=False)
+        with patch("precog.database.connection.get_cursor") as mock_cursor_ctx:
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {"test": 1}
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             app, runner = get_fresh_cli()
             for cmd in commands:

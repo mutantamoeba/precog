@@ -90,18 +90,27 @@ class TestDbPerformance:
 
         Performance: p95 should be < 100ms (relaxed to 600ms for CI/slow systems).
 
-        Note: The status command calls both test_connection() AND get_connection(),
+        Note: The status command calls both test_connection() AND get_cursor(),
         so both must be mocked to prevent real database access during tests.
         Threshold relaxed from 500ms to 600ms due to observed p95 variance
         during pre-push hooks under load.
         """
         with (
             patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
+            patch("precog.database.connection.get_cursor") as mock_cursor_ctx,
         ):
             mock_test.return_value = True
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {
+                "version": "PostgreSQL 15.0",
+                "current_database": "precog_test",
+                "table_count": 0,
+                "exists": False,
+                "test": 1,
+            }
+            mock_cur.fetchall.return_value = []
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             latencies = []
             for _ in range(20):
@@ -119,17 +128,16 @@ class TestDbPerformance:
 
         Performance: p95 should be < 200ms (relaxed to 600ms for CI/slow systems).
 
-        Note: The tables command may call test_connection() in some code paths,
-        so both must be mocked. Threshold relaxed from 500ms to 600ms due to
+        Note: The tables command calls get_cursor(),
+        so it must be mocked. Threshold relaxed from 500ms to 600ms due to
         observed p95 variance during pre-push hooks under load.
         """
-        with (
-            patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
-        ):
-            mock_test.return_value = True
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
+        with patch("precog.database.connection.get_cursor") as mock_cursor_ctx:
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {"row_count": 0}
+            mock_cur.fetchall.return_value = []
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             latencies = []
             for _ in range(20):
@@ -151,17 +159,15 @@ class TestSystemPerformance:
 
         Performance: p95 should be < 200ms (relaxed to 800ms for CI/slow systems).
 
-        Note: The health command may call test_connection() in some code paths,
-        so both must be mocked. Threshold relaxed from 500ms to 800ms due to
+        Note: The health command calls get_cursor(),
+        so it must be mocked. Threshold relaxed from 500ms to 800ms due to
         observed p95 variance during pre-push hooks under load.
         """
-        with (
-            patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
-        ):
-            mock_test.return_value = True
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
+        with patch("precog.database.connection.get_cursor") as mock_cursor_ctx:
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {"test": 1}
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             latencies = []
             for _ in range(20):
@@ -216,17 +222,27 @@ class TestCommandThroughput:
 
         Performance: Should handle 50 mixed commands in < 10 seconds.
 
-        Note: The status command calls both test_connection() AND get_connection(),
+        Note: The status command calls both test_connection() AND get_cursor(),
         so both must be mocked to prevent real database access during tests.
         """
         with (
             patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
+            patch("precog.database.connection.get_cursor") as mock_cursor_ctx,
             patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor,
         ):
             mock_test.return_value = True
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {
+                "version": "PostgreSQL 15.0",
+                "current_database": "precog_test",
+                "table_count": 0,
+                "exists": False,
+                "row_count": 0,
+                "test": 1,
+            }
+            mock_cur.fetchall.return_value = []
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
             mock_instance = MagicMock()
             mock_instance.get_status.return_value = {"running": False, "pollers": []}
             mock_supervisor.return_value = mock_instance
