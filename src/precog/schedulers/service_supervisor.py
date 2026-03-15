@@ -48,6 +48,8 @@ from typing import Any, Protocol, cast
 from precog.database.crud_operations import (
     check_active_schedulers,
     cleanup_stale_schedulers,
+    create_circuit_breaker_event,
+    get_active_breakers,
     upsert_scheduler_status,
     upsert_system_health,
 )
@@ -66,6 +68,16 @@ SERVICE_TO_COMPONENT: dict[str, str] = {
     "espn": "espn_api",
     "kalshi_rest": "kalshi_api",
     "kalshi_ws": "websocket",
+}
+
+# Maps system_health component names to circuit_breaker_events breaker_type.
+# Used for auto-tripping breakers when a component transitions to "down".
+# Must match the CHECK constraint: ('daily_loss_limit', 'api_failures',
+# 'data_stale', 'position_limit', 'manual').
+COMPONENT_TO_BREAKER_TYPE: dict[str, str] = {
+    "espn_api": "data_stale",
+    "kalshi_api": "api_failures",
+    "websocket": "api_failures",
 }
 
 
@@ -875,6 +887,12 @@ class ServiceSupervisor:
         SERVICE_TO_COMPONENT. Services without a mapping are skipped
         (safe default for unknown/future services).
 
+        When a component transitions to "down", automatically trips the
+        appropriate circuit breaker (data_stale for ESPN, api_failures
+        for Kalshi/websocket). Only trips if no active breaker of that
+        type already exists, preventing duplicate trips on repeated
+        health checks that report "down".
+
         Args:
             service_name: Internal service identifier (e.g., 'espn')
             status: Health status ('healthy', 'degraded', 'down')
@@ -883,7 +901,10 @@ class ServiceSupervisor:
         Educational Note:
             This is the bridge between the supervisor's internal health
             monitoring and the persistent system_health table. The table
-            makes health visible to the CLI and other processes.
+            makes health visible to the CLI and other processes. The
+            circuit breaker auto-trip provides a safety net: if a component
+            goes down, future trade execution (Phase 2) can check for active
+            breakers before placing orders.
         """
         component = SERVICE_TO_COMPONENT.get(service_name)
         if component is None:
@@ -904,6 +925,66 @@ class ServiceSupervisor:
             # Don't let DB errors crash the health check loop
             self.logger.warning(
                 "Failed to update system_health for %s: %s",
+                component,
+                e,
+            )
+
+        # Auto-trip circuit breaker on transition to "down"
+        if status == "down":
+            self._auto_trip_circuit_breaker(component, details)
+
+    def _auto_trip_circuit_breaker(
+        self,
+        component: str,
+        details: dict[str, Any],
+    ) -> None:
+        """
+        Automatically trip a circuit breaker when a component goes down.
+
+        Only trips if no active breaker of the same type already exists.
+        This prevents duplicate breaker events on repeated health checks
+        that continue to report "down".
+
+        Args:
+            component: system_health component name (e.g., 'espn_api')
+            details: Health check details to include as trigger_value
+
+        Educational Note:
+            Circuit breakers are checked BEFORE trade execution (Phase 2).
+            Auto-tripping on "down" ensures we never trade with stale data
+            or broken API connections. Manual resolution via CLI is required
+            to clear the breaker and resume trading.
+        """
+        breaker_type = COMPONENT_TO_BREAKER_TYPE.get(component)
+        if breaker_type is None:
+            return
+
+        try:
+            # Only trip if no active breaker of this type exists
+            active = get_active_breakers(breaker_type=breaker_type)
+            if active:
+                self.logger.debug(
+                    "Active %s breaker already exists (event_id=%s), skipping auto-trip",
+                    breaker_type,
+                    active[0].get("event_id"),
+                )
+                return
+
+            event_id = create_circuit_breaker_event(
+                breaker_type=breaker_type,
+                trigger_value={"component": component, **details},
+                notes=f"Auto-tripped: {component} health status is down",
+            )
+            self.logger.warning(
+                "Circuit breaker auto-tripped: type=%s, component=%s, event_id=%s",
+                breaker_type,
+                component,
+                event_id,
+            )
+        except Exception as e:
+            # Don't let circuit breaker DB errors crash the health check loop
+            self.logger.warning(
+                "Failed to auto-trip circuit breaker for %s: %s",
                 component,
                 e,
             )

@@ -5505,3 +5505,147 @@ def get_system_health_summary() -> dict[str, str]:
     """
     records = get_system_health()
     return {r["component"]: r["status"] for r in records}
+
+
+# =============================================================================
+# Circuit Breaker CRUD Operations
+# =============================================================================
+
+
+def create_circuit_breaker_event(
+    breaker_type: str,
+    trigger_value: dict[str, Any] | None = None,
+    notes: str | None = None,
+) -> int | None:
+    """
+    Create a circuit breaker event (trip a breaker).
+
+    Circuit breakers are safety guards that halt trading or data collection
+    when anomalies are detected. A tripped breaker stays active until
+    explicitly resolved via resolve_circuit_breaker().
+
+    Args:
+        breaker_type: Type of breaker to trip. Must match CHECK constraint:
+            'daily_loss_limit', 'api_failures', 'data_stale',
+            'position_limit', 'manual'.
+        trigger_value: Optional JSONB payload with context about what
+            triggered the breaker (e.g., error counts, component name).
+        notes: Optional human-readable reason for tripping the breaker.
+
+    Returns:
+        event_id of the newly created record, or None if insert failed.
+
+    Raises:
+        psycopg2.IntegrityError: If breaker_type not in allowed values.
+
+    Example:
+        >>> event_id = create_circuit_breaker_event(
+        ...     breaker_type="data_stale",
+        ...     trigger_value={"component": "espn_api", "reason": "not_running"},
+        ...     notes="ESPN poller went down during health check",
+        ... )
+
+    References:
+        - Migration 0001: circuit_breaker_events table schema
+        - Issue #390: Wire circuit_breaker_events table
+    """
+    query = """
+        INSERT INTO circuit_breaker_events (breaker_type, triggered_at, trigger_value, notes)
+        VALUES (%s, NOW(), %s, %s)
+        RETURNING event_id
+    """
+    trigger_json = (
+        json.dumps(trigger_value, cls=DecimalEncoder) if trigger_value is not None else None
+    )
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, (breaker_type, trigger_json, notes))
+        result = cur.fetchone()
+        return result["event_id"] if result else None
+
+
+def resolve_circuit_breaker(
+    event_id: int,
+    resolution_action: str | None = None,
+) -> bool:
+    """
+    Resolve an active circuit breaker event.
+
+    Sets resolved_at to NOW() and optionally records what action was taken.
+    Only resolves breakers that are currently active (resolved_at IS NULL).
+
+    Args:
+        event_id: The event_id of the breaker to resolve.
+        resolution_action: Optional description of resolution action taken
+            (e.g., "manual reset", "service restarted"). VARCHAR(100).
+
+    Returns:
+        True if the breaker was resolved, False if not found or already resolved.
+
+    Example:
+        >>> resolved = resolve_circuit_breaker(
+        ...     event_id=42,
+        ...     resolution_action="ESPN poller restarted successfully",
+        ... )
+        >>> print(resolved)  # True
+
+    References:
+        - Migration 0001: circuit_breaker_events table schema
+        - Issue #390: Wire circuit_breaker_events table
+    """
+    query = """
+        UPDATE circuit_breaker_events
+        SET resolved_at = NOW(), resolution_action = %s
+        WHERE event_id = %s AND resolved_at IS NULL
+    """
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, (resolution_action, event_id))
+        return int(cur.rowcount or 0) > 0
+
+
+def get_active_breakers(breaker_type: str | None = None) -> list[dict[str, Any]]:
+    """
+    Fetch all active (unresolved) circuit breaker events.
+
+    Active breakers have resolved_at IS NULL, meaning they are currently
+    tripped and have not been manually or automatically resolved.
+
+    Args:
+        breaker_type: If provided, filter to only this breaker type.
+            If None, return all active breakers regardless of type.
+
+    Returns:
+        List of active breaker records as dictionaries. Each dict contains:
+            event_id, breaker_type, triggered_at, trigger_value, notes.
+        Empty list if no active breakers.
+
+    Example:
+        >>> # Check if any breakers are active
+        >>> breakers = get_active_breakers()
+        >>> if breakers:
+        ...     print(f"{len(breakers)} active breaker(s)!")
+
+        >>> # Check for specific type
+        >>> stale = get_active_breakers(breaker_type="data_stale")
+
+    References:
+        - Migration 0001: circuit_breaker_events table schema
+        - Issue #390: Wire circuit_breaker_events table
+    """
+    if breaker_type:
+        query = """
+            SELECT event_id, breaker_type, triggered_at, trigger_value, notes
+            FROM circuit_breaker_events
+            WHERE resolved_at IS NULL AND breaker_type = %s
+            ORDER BY triggered_at DESC
+        """
+        return fetch_all(query, (breaker_type,))
+
+    query = """
+        SELECT event_id, breaker_type, triggered_at, trigger_value, notes
+        FROM circuit_breaker_events
+        WHERE resolved_at IS NULL
+        ORDER BY triggered_at DESC
+    """
+    return fetch_all(query)

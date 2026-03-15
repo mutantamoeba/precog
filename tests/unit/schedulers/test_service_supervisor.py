@@ -1477,3 +1477,176 @@ class TestUpdateSystemHealth:
 
         # Should not raise
         supervisor._update_system_health("espn", "healthy", {})
+
+
+# =============================================================================
+# Circuit Breaker Auto-Trip Tests
+# =============================================================================
+
+
+class TestAutoTripCircuitBreaker:
+    """Tests for automatic circuit breaker tripping on component 'down' status.
+
+    When _update_system_health detects a 'down' status, it should auto-trip
+    the appropriate circuit breaker type (data_stale for ESPN, api_failures
+    for Kalshi/websocket). Only trips if no active breaker of that type exists.
+
+    Educational Note:
+        Auto-trip prevents trading with stale data or broken API connections.
+        The de-duplication check (get_active_breakers) avoids spamming the
+        circuit_breaker_events table on repeated health checks.
+    """
+
+    @patch("precog.schedulers.service_supervisor.create_circuit_breaker_event")
+    @patch("precog.schedulers.service_supervisor.get_active_breakers")
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_auto_trip_on_espn_down(
+        self,
+        mock_upsert: MagicMock,
+        mock_get_active: MagicMock,
+        mock_create: MagicMock,
+        runner_config: RunnerConfig,
+    ) -> None:
+        """ESPN going 'down' auto-trips a data_stale breaker."""
+        mock_get_active.return_value = []  # No existing breakers
+        mock_create.return_value = 1
+        supervisor = ServiceSupervisor(runner_config)
+
+        supervisor._update_system_health("espn", "down", {"reason": "not_running"})
+
+        mock_create.assert_called_once()
+        call_kwargs = mock_create.call_args.kwargs
+        assert call_kwargs["breaker_type"] == "data_stale"
+        assert "espn_api" in call_kwargs["trigger_value"]["component"]
+
+    @patch("precog.schedulers.service_supervisor.create_circuit_breaker_event")
+    @patch("precog.schedulers.service_supervisor.get_active_breakers")
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_auto_trip_on_kalshi_down(
+        self,
+        mock_upsert: MagicMock,
+        mock_get_active: MagicMock,
+        mock_create: MagicMock,
+        runner_config: RunnerConfig,
+    ) -> None:
+        """Kalshi REST going 'down' auto-trips an api_failures breaker."""
+        mock_get_active.return_value = []
+        mock_create.return_value = 2
+        supervisor = ServiceSupervisor(runner_config)
+
+        supervisor._update_system_health("kalshi_rest", "down", {"reason": "timeout"})
+
+        mock_create.assert_called_once()
+        assert mock_create.call_args.kwargs["breaker_type"] == "api_failures"
+
+    @patch("precog.schedulers.service_supervisor.create_circuit_breaker_event")
+    @patch("precog.schedulers.service_supervisor.get_active_breakers")
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_auto_trip_on_websocket_down(
+        self,
+        mock_upsert: MagicMock,
+        mock_get_active: MagicMock,
+        mock_create: MagicMock,
+        runner_config: RunnerConfig,
+    ) -> None:
+        """Websocket going 'down' auto-trips an api_failures breaker."""
+        mock_get_active.return_value = []
+        mock_create.return_value = 3
+        supervisor = ServiceSupervisor(runner_config)
+
+        supervisor._update_system_health("kalshi_ws", "down", {"reason": "disconnect"})
+
+        mock_create.assert_called_once()
+        assert mock_create.call_args.kwargs["breaker_type"] == "api_failures"
+
+    @patch("precog.schedulers.service_supervisor.create_circuit_breaker_event")
+    @patch("precog.schedulers.service_supervisor.get_active_breakers")
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_no_trip_when_status_healthy(
+        self,
+        mock_upsert: MagicMock,
+        mock_get_active: MagicMock,
+        mock_create: MagicMock,
+        runner_config: RunnerConfig,
+    ) -> None:
+        """Healthy status should NOT trigger a circuit breaker trip."""
+        supervisor = ServiceSupervisor(runner_config)
+
+        supervisor._update_system_health("espn", "healthy", {})
+
+        mock_create.assert_not_called()
+        mock_get_active.assert_not_called()
+
+    @patch("precog.schedulers.service_supervisor.create_circuit_breaker_event")
+    @patch("precog.schedulers.service_supervisor.get_active_breakers")
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_no_trip_when_status_degraded(
+        self,
+        mock_upsert: MagicMock,
+        mock_get_active: MagicMock,
+        mock_create: MagicMock,
+        runner_config: RunnerConfig,
+    ) -> None:
+        """Degraded status should NOT trigger a circuit breaker trip."""
+        supervisor = ServiceSupervisor(runner_config)
+
+        supervisor._update_system_health("kalshi_rest", "degraded", {"error_rate": "0.08"})
+
+        mock_create.assert_not_called()
+        mock_get_active.assert_not_called()
+
+    @patch("precog.schedulers.service_supervisor.create_circuit_breaker_event")
+    @patch("precog.schedulers.service_supervisor.get_active_breakers")
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_no_duplicate_trip_when_breaker_already_active(
+        self,
+        mock_upsert: MagicMock,
+        mock_get_active: MagicMock,
+        mock_create: MagicMock,
+        runner_config: RunnerConfig,
+    ) -> None:
+        """Should NOT trip if an active breaker of the same type already exists."""
+        mock_get_active.return_value = [{"event_id": 99, "breaker_type": "data_stale"}]
+        supervisor = ServiceSupervisor(runner_config)
+
+        supervisor._update_system_health("espn", "down", {"reason": "not_running"})
+
+        # get_active_breakers called to check, but create NOT called
+        mock_get_active.assert_called_once_with(breaker_type="data_stale")
+        mock_create.assert_not_called()
+
+    @patch("precog.schedulers.service_supervisor.create_circuit_breaker_event")
+    @patch("precog.schedulers.service_supervisor.get_active_breakers")
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_auto_trip_db_error_does_not_raise(
+        self,
+        mock_upsert: MagicMock,
+        mock_get_active: MagicMock,
+        mock_create: MagicMock,
+        runner_config: RunnerConfig,
+    ) -> None:
+        """DB errors in auto-trip should be caught, not raised."""
+        mock_get_active.side_effect = Exception("DB gone")
+        supervisor = ServiceSupervisor(runner_config)
+
+        # Should not raise
+        supervisor._update_system_health("espn", "down", {"reason": "crash"})
+
+    @patch("precog.schedulers.service_supervisor.create_circuit_breaker_event")
+    @patch("precog.schedulers.service_supervisor.get_active_breakers")
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_no_trip_for_unmapped_service(
+        self,
+        mock_upsert: MagicMock,
+        mock_get_active: MagicMock,
+        mock_create: MagicMock,
+        runner_config: RunnerConfig,
+    ) -> None:
+        """Service without component mapping should not trip any breaker."""
+        supervisor = ServiceSupervisor(runner_config)
+
+        supervisor._update_system_health("unknown_service", "down", {})
+
+        # _update_system_health returns early for unmapped services
+        mock_create.assert_not_called()
+        mock_get_active.assert_not_called()
