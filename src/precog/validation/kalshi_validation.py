@@ -26,7 +26,9 @@ Related Pattern: ESPN validation (src/precog/validation/espn_validation.py)
 """
 
 import logging
+from collections import deque
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Any, ClassVar
@@ -274,6 +276,10 @@ class KalshiDataValidator:
     # orderbook — wide spreads and "arbitrage" are expected, not anomalous.
     ACTIVE_STATUSES: ClassVar[set[str]] = {"active", "open"}
 
+    # Statuses for markets that have never been tradeable.
+    # OI or volume on these markets indicates a database inconsistency.
+    NEVER_ACTIVE_STATUSES: ClassVar[set[str]] = {"unopened", "initialized"}
+
     # Volume thresholds for warnings.
     # Note: Kalshi volume is cumulative lifetime, not per-update delta.
     # Popular markets easily exceed 100k over their lifetime.
@@ -288,10 +294,23 @@ class KalshiDataValidator:
     # reducing noise from markets that repeatedly fail the same check.
     ANOMALY_LOG_THRESHOLDS: ClassVar[tuple[int, ...]] = (1, 10, 100)
 
+    # Staleness detection: if a market's yes_bid price hasn't changed
+    # in this many consecutive polls, flag it. At 15s poll intervals,
+    # 10 polls = ~2.5 minutes of unchanged price.
+    STALE_PRICE_POLL_THRESHOLD = 10
+    # Max history to keep per ticker (bounded memory)
+    STALE_PRICE_HISTORY_SIZE = 20
+
+    # Settlement lag: flag if settlement happens >72h after close_time
+    SETTLEMENT_LAG_THRESHOLD_HOURS = 72
+
     def __init__(self) -> None:
-        """Initialize the validator with anomaly tracking."""
+        """Initialize the validator with anomaly tracking and staleness state."""
         # Track anomaly counts per entity (ticker, position, etc.)
         self._anomaly_counts: dict[str, int] = {}
+        # Track recent yes_bid prices per ticker for staleness detection.
+        # Uses deque with maxlen to bound memory automatically.
+        self._price_history: dict[str, deque[Decimal | None]] = {}
 
     def _increment_anomaly_count(self, entity_id: str) -> None:
         """Increment anomaly count for an entity by one occurrence."""
@@ -322,6 +341,10 @@ class KalshiDataValidator:
     def clear_anomaly_counts(self) -> None:
         """Clear all anomaly counts."""
         self._anomaly_counts.clear()
+
+    def clear_price_history(self) -> None:
+        """Clear all price staleness tracking history."""
+        self._price_history.clear()
 
     # -------------------------------------------------------------------------
     # Price Validation
@@ -433,6 +456,192 @@ class KalshiDataValidator:
                 "Wide bid/ask spread",
                 value=spread,
                 expected=f"<= {self.WIDE_SPREAD_THRESHOLD}",
+            )
+
+    # -------------------------------------------------------------------------
+    # Timestamp Validation
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_iso8601(timestamp_str: str) -> datetime | None:
+        """Parse an ISO 8601 timestamp string to a timezone-aware datetime.
+
+        Returns None if the string is malformed or timezone-naive (to avoid
+        TypeError when comparing with timezone-aware ``datetime.now(UTC)``).
+        Handles both 'Z' suffix and '+00:00' offset formats from the Kalshi API.
+        """
+        try:
+            dt = datetime.fromisoformat(timestamp_str)
+        except (ValueError, TypeError):
+            return None
+        # Reject naive datetimes — comparing with now(UTC) would raise TypeError
+        if dt.tzinfo is None:
+            return None
+        return dt
+
+    def validate_timestamps(
+        self,
+        market: dict[str, Any],
+        result: ValidationResult,
+    ) -> None:
+        """Validate timestamp fields for logical consistency.
+
+        Checks:
+            - Timestamps are valid ISO 8601
+            - open_time < close_time < expiration_time (logical ordering)
+            - Active market with close_time in the past (missed closure)
+            - Active market with open_time in the future (premature activation)
+            - Settled market with settlement lag > 72h (unusually long)
+        """
+        now = datetime.now(UTC)
+
+        open_time_str = market.get("open_time")
+        close_time_str = market.get("close_time")
+        expiration_time_str = market.get("expiration_time")
+        status = market.get("status")
+        is_active = status in self.ACTIVE_STATUSES
+
+        # Parse timestamps (None if missing or malformed)
+        open_time = self._parse_iso8601(open_time_str) if open_time_str else None
+        close_time = self._parse_iso8601(close_time_str) if close_time_str else None
+        expiration_time = self._parse_iso8601(expiration_time_str) if expiration_time_str else None
+
+        # Flag malformed timestamps (string present but unparseable)
+        if open_time_str and open_time is None:
+            result.add_warning("open_time", "Malformed ISO 8601 timestamp", value=open_time_str)
+        if close_time_str and close_time is None:
+            result.add_warning("close_time", "Malformed ISO 8601 timestamp", value=close_time_str)
+        if expiration_time_str and expiration_time is None:
+            result.add_warning(
+                "expiration_time",
+                "Malformed ISO 8601 timestamp",
+                value=expiration_time_str,
+            )
+
+        # Logical ordering checks
+        if open_time and close_time and open_time > close_time:
+            result.add_error(
+                "open_time",
+                "open_time is after close_time",
+                value=open_time_str,
+                expected=f"before {close_time_str}",
+            )
+        if close_time and expiration_time and close_time > expiration_time:
+            result.add_error(
+                "close_time",
+                "close_time is after expiration_time",
+                value=close_time_str,
+                expected=f"before {expiration_time_str}",
+            )
+
+        # Status-temporal consistency (only for active/open markets)
+        if is_active:
+            if close_time and close_time < now:
+                result.add_warning(
+                    "close_time",
+                    "Active market with close_time in the past (missed closure)",
+                    value=close_time_str,
+                    expected="future",
+                )
+            if open_time and open_time > now:
+                result.add_warning(
+                    "open_time",
+                    "Active market with open_time in the future (premature activation)",
+                    value=open_time_str,
+                    expected="past",
+                )
+
+        # Settled market settlement lag check — only when explicit settlement_time
+        # is present. Using expiration_time as a fallback would be misleading
+        # (close-to-expiration gap != actual settlement delay).
+        is_settled = status in {"settled", "finalized"}
+        if is_settled and close_time:
+            settled_time_str = market.get("settlement_time")
+            settled_time = self._parse_iso8601(settled_time_str) if settled_time_str else None
+            if settled_time:
+                lag = settled_time - close_time
+                threshold_seconds = self.SETTLEMENT_LAG_THRESHOLD_HOURS * 3600
+                if lag.total_seconds() > threshold_seconds:
+                    result.add_info(
+                        "settlement_lag",
+                        f"Unusually long settlement (>{self.SETTLEMENT_LAG_THRESHOLD_HOURS}h after close)",
+                        value=f"{lag.total_seconds() / 3600:.1f}h",
+                        expected=f"<= {self.SETTLEMENT_LAG_THRESHOLD_HOURS}h",
+                    )
+
+    def validate_cross_field_consistency(
+        self,
+        market: dict[str, Any],
+        result: ValidationResult,
+    ) -> None:
+        """Validate cross-field consistency rules.
+
+        Checks:
+            - OI > 0 on a market that was never active (database inconsistency)
+            - volume_24h > volume (API data error)
+            - Active market with volume=0 AND OI=0 for extended period (ghost market)
+        """
+        status = market.get("status")
+        volume = market.get("volume")
+        open_interest = market.get("open_interest")
+        volume_24h = market.get("volume_24h")
+
+        # OI on never-active market
+        if status in self.NEVER_ACTIVE_STATUSES and open_interest and open_interest > 0:
+            result.add_warning(
+                "open_interest",
+                "Open interest > 0 on a never-active market",
+                value=open_interest,
+                expected="0",
+            )
+
+        # 24h volume exceeds lifetime volume
+        if volume_24h is not None and volume is not None and volume_24h > volume:
+            result.add_warning(
+                "volume_24h",
+                "24h volume exceeds lifetime volume (API data error)",
+                value=volume_24h,
+                expected=f"<= {volume}",
+            )
+
+        # Ghost market: active with zero volume AND zero OI.
+        # Note: None == 0 is False in Python, so missing fields won't false-positive.
+        is_active = status in self.ACTIVE_STATUSES
+        if is_active and volume == 0 and open_interest == 0:
+            result.add_info(
+                "ghost_market",
+                "Active market with zero volume and zero open interest",
+            )
+
+    def check_price_staleness(
+        self,
+        ticker: str,
+        yes_bid: Decimal | None,
+        result: ValidationResult,
+    ) -> None:
+        """Check if a market's price has been unchanged across consecutive polls.
+
+        Tracks the last N yes_bid prices per ticker. If the price is identical
+        for STALE_PRICE_POLL_THRESHOLD consecutive polls, emits a warning.
+        """
+        if ticker not in self._price_history:
+            self._price_history[ticker] = deque(maxlen=self.STALE_PRICE_HISTORY_SIZE)
+
+        history = self._price_history[ticker]
+        history.append(yes_bid)
+
+        # Need at least threshold entries to judge staleness
+        if len(history) < self.STALE_PRICE_POLL_THRESHOLD:
+            return
+
+        # Check if the last N prices are all identical
+        recent = list(history)[-self.STALE_PRICE_POLL_THRESHOLD :]
+        if all(p == recent[0] for p in recent) and recent[0] is not None:
+            result.add_warning(
+                "price_staleness",
+                f"Price unchanged for {self.STALE_PRICE_POLL_THRESHOLD} consecutive polls",
+                value=recent[0],
+                expected="price movement",
             )
 
     # -------------------------------------------------------------------------
@@ -601,6 +810,16 @@ class KalshiDataValidator:
                     value=open_interest,
                     expected=f"<= {self.UNUSUALLY_HIGH_OPEN_INTEREST}",
                 )
+
+        # Timestamp validation (logical ordering + status-temporal consistency)
+        self.validate_timestamps(market, result)
+
+        # Cross-field consistency checks
+        self.validate_cross_field_consistency(market, result)
+
+        # Price staleness detection (stateful — tracks across polls)
+        if is_active:
+            self.check_price_staleness(ticker, yes_bid, result)
 
         # Track anomalies
         if result.has_errors or result.has_warnings:
