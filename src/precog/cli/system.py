@@ -73,10 +73,11 @@ def health(
     checks_total += 1
     console.print("Checking database connectivity...", end=" ")
     try:
-        from precog.database.connection import get_connection
+        from precog.database.connection import get_cursor
 
-        conn = get_connection()
-        conn.execute("SELECT 1")
+        with get_cursor() as cur:
+            cur.execute("SELECT 1 AS test")
+            cur.fetchone()
         echo_success("OK")
         checks_passed += 1
         if verbose:
