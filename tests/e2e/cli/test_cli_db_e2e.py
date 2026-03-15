@@ -80,13 +80,22 @@ class TestDatabaseInitWorkflow:
         """
         with (
             patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
+            patch("precog.database.connection.get_cursor") as mock_cursor_ctx,
             patch("precog.database.initialization.apply_schema") as mock_schema,
         ):
             mock_test.return_value = True
             mock_schema.return_value = True
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {
+                "version": "PostgreSQL 15.0",
+                "current_database": "precog_test",
+                "table_count": 0,
+                "exists": False,
+                "test": 1,
+            }
+            mock_cur.fetchall.return_value = []
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             # Initialize
             result = cli_runner.invoke(isolated_app, ["db", "init"])
@@ -129,16 +138,26 @@ class TestDatabaseMigrationWorkflow:
 
         E2E: Tests migration then status verification.
 
-        Note: The status command calls both test_connection() AND get_connection(),
+        Note: The status command calls both test_connection() AND get_cursor(),
         so both must be mocked to prevent real database access during tests.
         """
         with (
             patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
+            patch("precog.database.connection.get_cursor") as mock_cursor_ctx,
         ):
             mock_test.return_value = True
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {
+                "version": "PostgreSQL 15.0",
+                "current_database": "precog_test",
+                "table_count": 0,
+                "exists": False,
+                "row_count": 0,
+                "test": 1,
+            }
+            mock_cur.fetchall.return_value = []
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             # Migrate
             result = cli_runner.invoke(isolated_app, ["db", "migrate"])
@@ -161,16 +180,26 @@ class TestDatabaseInspectionWorkflow:
 
         E2E: Tests status, tables, and detailed inspection.
 
-        Note: The status command calls both test_connection() AND get_connection(),
+        Note: The status command calls both test_connection() AND get_cursor(),
         so both must be mocked to prevent real database access during tests.
         """
         with (
             patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
+            patch("precog.database.connection.get_cursor") as mock_cursor_ctx,
         ):
             mock_test.return_value = True
-            mock_conn.return_value.__enter__ = MagicMock()
-            mock_conn.return_value.__exit__ = MagicMock()
+            mock_cur = MagicMock()
+            mock_cur.fetchone.return_value = {
+                "version": "PostgreSQL 15.0",
+                "current_database": "precog_test",
+                "table_count": 0,
+                "exists": False,
+                "row_count": 0,
+                "test": 1,
+            }
+            mock_cur.fetchall.return_value = []
+            mock_cursor_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
+            mock_cursor_ctx.return_value.__exit__ = MagicMock(return_value=False)
 
             # Status
             result = cli_runner.invoke(isolated_app, ["db", "status"])
@@ -214,15 +243,15 @@ class TestDatabaseErrorRecovery:
 
         E2E: Tests graceful handling of connection loss.
 
-        Note: The status command calls both test_connection() AND get_connection(),
+        Note: The status command calls both test_connection() AND get_cursor(),
         so both must be mocked to prevent real database access during tests.
         """
         with (
             patch("precog.database.connection.test_connection") as mock_test,
-            patch("precog.database.connection.get_connection") as mock_conn,
+            patch("precog.database.connection.get_cursor") as mock_cursor_ctx,
         ):
             mock_test.return_value = False
-            mock_conn.side_effect = Exception("Connection lost")
+            mock_cursor_ctx.side_effect = Exception("Connection lost")
 
             result = cli_runner.invoke(isolated_app, ["db", "status"])
             # Should handle error gracefully
