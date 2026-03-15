@@ -5260,3 +5260,57 @@ def get_elo_calculation_logs(
     """  # noqa: S608
 
     return fetch_all(query, tuple(params))
+
+
+# =============================================================================
+# ALERT CRUD OPERATIONS
+# =============================================================================
+
+
+def create_alert(
+    alert_type: str,
+    severity: str,
+    message: str,
+    source: str | None = None,
+) -> int | None:
+    """
+    Create an alert record in the alerts table.
+
+    Alerts are append-only operational signals for anomalies, threshold
+    breaches, and system events. This is the first writer for the alerts
+    table (created in migration 0001 but previously unused).
+
+    Args:
+        alert_type: Category of alert (e.g., "validation_error_rate",
+            "data_staleness", "circuit_breaker"). VARCHAR(50).
+        severity: One of "info", "warning", "error", "critical".
+            Enforced by CHECK constraint in the DB.
+        message: Human-readable description of the alert.
+        source: Optional source component (e.g., "kalshi_poller",
+            "espn_poller"). VARCHAR(100).
+
+    Returns:
+        alert_id of the newly created record, or None if insert failed.
+
+    Raises:
+        psycopg2.IntegrityError: If severity not in allowed values.
+
+    Example:
+        >>> alert_id = create_alert(
+        ...     alert_type="validation_error_rate",
+        ...     severity="warning",
+        ...     message="Error rate 15.0% exceeds 10% threshold (3/20 markets)",
+        ...     source="kalshi_poller:KXNFLGAME",
+        ... )
+    """
+    query = """
+        INSERT INTO alerts (alert_type, severity, message, source, created_at)
+        VALUES (%s, %s, %s, %s, NOW())
+        RETURNING alert_id
+    """
+    params = (alert_type, severity, message, source)
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, params)
+        result = cur.fetchone()
+        return result["alert_id"] if result else None
