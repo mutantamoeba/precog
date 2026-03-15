@@ -556,6 +556,9 @@ class TestSportConditionalSituationParsing:
         assert sit["last_play"] == "Pass complete for 12 yards"
         assert sit["drive_plays"] == 6
         assert sit["drive_yards"] == 43
+        # Should NOT have basketball/hockey fields
+        assert "home_fouls" not in sit
+        assert "home_powerplay" not in sit
 
     @pytest.mark.unit
     @patch("requests.Session.get")
@@ -668,8 +671,8 @@ class TestSportConditionalSituationParsing:
 
     @pytest.mark.unit
     @patch("requests.Session.get")
-    def test_empty_situation_produces_empty_dict(self, mock_get: MagicMock):
-        """Empty ESPN situation produces empty dict regardless of sport."""
+    def test_empty_situation_nba_produces_empty_dict(self, mock_get: MagicMock):
+        """Empty ESPN situation for NBA produces empty dict."""
         from precog.api_connectors.espn_client import ESPNClient
 
         mock_response = Mock()
@@ -682,6 +685,49 @@ class TestSportConditionalSituationParsing:
         sit = games[0]["state"]["situation"]
 
         assert sit == {}
+
+    @pytest.mark.unit
+    @patch("requests.Session.get")
+    def test_empty_situation_nfl_still_sets_defaults(self, mock_get: MagicMock):
+        """Empty ESPN situation for NFL still sets timeout/redzone defaults."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _make_espn_scoreboard({})
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nfl_scoreboard()
+        sit = games[0]["state"]["situation"]
+
+        # Football defaults are always set even with empty input
+        assert sit["home_timeouts"] == 3
+        assert sit["away_timeouts"] == 3
+        assert sit["is_red_zone"] is False
+        assert sit["down"] is None
+        assert sit["distance"] is None
+        # Should NOT have basketball/hockey fields
+        assert "home_fouls" not in sit
+        assert "home_powerplay" not in sit
+
+    @pytest.mark.unit
+    @patch("requests.Session.get")
+    def test_empty_situation_nhl_produces_empty_dict(self, mock_get: MagicMock):
+        """Empty ESPN situation for NHL produces empty dict."""
+        from precog.api_connectors.espn_client import ESPNClient
+
+        mock_response = Mock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = _make_espn_scoreboard({})
+        mock_get.return_value = mock_response
+
+        client = ESPNClient()
+        games = client.get_nhl_scoreboard()
+        sit = games[0]["state"]["situation"]
+
+        assert "home_powerplay" not in sit
+        assert "down" not in sit
 
     @pytest.mark.unit
     @patch("requests.Session.get")

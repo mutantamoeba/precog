@@ -192,23 +192,25 @@ class ESPNSituationData(TypedDict, total=False):
 
         Using JSONB allows sport-specific fields without schema changes.
 
-    Common Fields:
+    Common Fields (all sports):
         possession: Which team has the ball ("home" or "away")
-        home_timeouts: Home team timeouts remaining
-        away_timeouts: Away team timeouts remaining
+        last_play: Description of last play (ESPN provides for all sports)
 
     Football-specific (NFL/NCAAF):
+        home_timeouts: Home team timeouts remaining (defaulted to 3)
+        away_timeouts: Away team timeouts remaining (defaulted to 3)
         down: Current down (1-4)
         distance: Yards to first down
         yard_line: Current yard line (0-100)
         is_red_zone: Inside opponent's 20-yard line
         home_turnovers: Home team turnover count
         away_turnovers: Away team turnover count
-        last_play: Description of last play
         drive_plays: Plays in current drive
         drive_yards: Yards in current drive
 
-    Basketball-specific (NBA/NCAAB):
+    Basketball-specific (NBA/NCAAB/WNBA):
+        home_timeouts: Home team timeouts remaining (only if present)
+        away_timeouts: Away team timeouts remaining (only if present)
         home_fouls: Home team foul count
         away_fouls: Away team foul count
         bonus: Team in bonus ("home", "away", or None)
@@ -224,19 +226,19 @@ class ESPNSituationData(TypedDict, total=False):
     Reference: Phase 2 ESPN Data Model Plan
     """
 
-    # Common
+    # Common (all sports)
     possession: str | None
-    home_timeouts: int
-    away_timeouts: int
+    last_play: str
 
     # Football (NFL/NCAAF)
+    home_timeouts: int
+    away_timeouts: int
     down: int | None
     distance: int | None
     yard_line: int | None
     is_red_zone: bool
     home_turnovers: int
     away_turnovers: int
-    last_play: str
     drive_plays: int
     drive_yards: int
 
