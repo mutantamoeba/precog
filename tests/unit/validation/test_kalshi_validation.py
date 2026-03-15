@@ -67,8 +67,8 @@ def valid_position_data() -> dict:
         "position": 100,
         "user_average_price": Decimal("0.45"),
         "realized_pnl": Decimal("25.50"),
-        "total_traded": 200,
-        "fees": Decimal("2.00"),
+        "total_cost": Decimal("200.00"),
+        "fees_paid": Decimal("2.00"),
     }
 
 
@@ -91,7 +91,9 @@ def valid_settlement_data() -> dict:
     return {
         "ticker": "KXNFLGAME-25DEC25-CHI-GB",
         "settlement_value": Decimal("1"),
+        "market_result": "yes",
         "revenue": Decimal("50.00"),
+        "total_fees": Decimal("2.50"),
         "settled_time": "2025-01-01T12:00:00Z",
     }
 
@@ -519,15 +521,15 @@ class TestPositionDataValidation:
         result = validator.validate_position_data(position)
         assert result.has_errors
 
-    def test_negative_total_traded_error(self, validator: KalshiDataValidator) -> None:
-        """Negative total traded generates error."""
-        position = {"ticker": "TEST", "total_traded": -100}
+    def test_negative_total_cost_error(self, validator: KalshiDataValidator) -> None:
+        """Negative total cost generates error."""
+        position = {"ticker": "TEST", "total_cost": -100}
         result = validator.validate_position_data(position)
         assert result.has_errors
 
-    def test_negative_fees_error(self, validator: KalshiDataValidator) -> None:
-        """Negative fees generates error."""
-        position = {"ticker": "TEST", "fees": Decimal("-5.00")}
+    def test_negative_fees_paid_error(self, validator: KalshiDataValidator) -> None:
+        """Negative fees_paid generates error."""
+        position = {"ticker": "TEST", "fees_paid": Decimal("-5.00")}
         result = validator.validate_position_data(position)
         assert result.has_errors
 
@@ -643,6 +645,54 @@ class TestSettlementDataValidation:
         settlement = {"ticker": "TEST", "settlement_value": Decimal("1")}
         result = validator.validate_settlement_data(settlement)
         assert result.has_warnings
+
+    def test_valid_market_result_yes(self, validator: KalshiDataValidator) -> None:
+        """Market result 'yes' is accepted."""
+        settlement = {"ticker": "TEST", "settlement_value": Decimal("1"), "market_result": "yes"}
+        result = validator.validate_settlement_data(settlement)
+        assert not any("market_result" in w.field for w in result.warnings)
+
+    def test_valid_market_result_no(self, validator: KalshiDataValidator) -> None:
+        """Market result 'no' is accepted."""
+        settlement = {"ticker": "TEST", "settlement_value": Decimal("0"), "market_result": "no"}
+        result = validator.validate_settlement_data(settlement)
+        assert not any("market_result" in w.field for w in result.warnings)
+
+    def test_invalid_market_result_warning(self, validator: KalshiDataValidator) -> None:
+        """Invalid market result generates warning."""
+        settlement = {"ticker": "TEST", "settlement_value": Decimal("1"), "market_result": "maybe"}
+        result = validator.validate_settlement_data(settlement)
+        assert result.has_warnings
+        assert any("market_result" in w.field for w in result.warnings)
+
+    def test_negative_total_fees_error(self, validator: KalshiDataValidator) -> None:
+        """Negative total_fees generates error."""
+        settlement = {
+            "ticker": "TEST",
+            "settlement_value": Decimal("1"),
+            "total_fees": Decimal("-1.00"),
+        }
+        result = validator.validate_settlement_data(settlement)
+        assert result.has_errors
+        assert any("total_fees" in e.field for e in result.errors)
+
+    def test_non_decimal_total_fees_warning(self, validator: KalshiDataValidator) -> None:
+        """Non-Decimal total_fees generates warning."""
+        settlement = {"ticker": "TEST", "settlement_value": Decimal("1"), "total_fees": 2.50}
+        result = validator.validate_settlement_data(settlement)
+        assert result.has_warnings
+        assert any("total_fees" in w.field for w in result.warnings)
+
+    def test_valid_total_fees(self, validator: KalshiDataValidator) -> None:
+        """Valid Decimal total_fees is accepted."""
+        settlement = {
+            "ticker": "TEST",
+            "settlement_value": Decimal("1"),
+            "total_fees": Decimal("2.50"),
+        }
+        result = validator.validate_settlement_data(settlement)
+        assert not any("total_fees" in e.field for e in result.errors)
+        assert not any("total_fees" in w.field for w in result.warnings)
 
 
 # =============================================================================
