@@ -172,6 +172,104 @@ class TestSystemInfo:
         assert "python" in output_lower or "3." in output_lower
 
 
+class TestSystemHealthCheck5:
+    """Test Check 5: Persistent Component Health from system_health table.
+
+    Tests the new section that reads from the system_health table and
+    displays component-level health status in the CLI.
+    """
+
+    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.connection.get_cursor")
+    def test_all_components_healthy(self, mock_cursor, mock_get_health, cli_runner):
+        """When all components are healthy, Check 5 shows OK."""
+        mock_cursor.side_effect = _make_mock_cursor()
+        mock_get_health.return_value = [
+            {"component": "kalshi_api", "status": "healthy", "last_check": None, "details": {}},
+            {"component": "espn_api", "status": "healthy", "last_check": None, "details": {}},
+        ]
+
+        result = cli_runner.invoke(app, ["health"])
+
+        output = strip_ansi(result.stdout).lower()
+        assert "2 components" in output
+
+    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.connection.get_cursor")
+    def test_some_components_down(self, mock_cursor, mock_get_health, cli_runner):
+        """When a component is down, Check 5 shows UNHEALTHY."""
+        mock_cursor.side_effect = _make_mock_cursor()
+        mock_get_health.return_value = [
+            {"component": "kalshi_api", "status": "down", "last_check": None, "details": {}},
+            {"component": "espn_api", "status": "healthy", "last_check": None, "details": {}},
+        ]
+
+        result = cli_runner.invoke(app, ["health"])
+
+        output = strip_ansi(result.stdout).lower()
+        assert "unhealthy" in output
+        assert "1 down" in output
+
+    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.connection.get_cursor")
+    def test_degraded_only(self, mock_cursor, mock_get_health, cli_runner):
+        """When components are degraded (but none down), shows DEGRADED."""
+        mock_cursor.side_effect = _make_mock_cursor()
+        mock_get_health.return_value = [
+            {"component": "kalshi_api", "status": "degraded", "last_check": None, "details": {}},
+        ]
+
+        result = cli_runner.invoke(app, ["health"])
+
+        output = strip_ansi(result.stdout).lower()
+        assert "degraded" in output
+
+    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.connection.get_cursor")
+    def test_no_health_records(self, mock_cursor, mock_get_health, cli_runner):
+        """When system_health table is empty, shows OK with explanation."""
+        mock_cursor.side_effect = _make_mock_cursor()
+        mock_get_health.return_value = []
+
+        result = cli_runner.invoke(app, ["health"])
+
+        output = strip_ansi(result.stdout).lower()
+        assert "no health data yet" in output
+
+    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.connection.get_cursor")
+    def test_db_exception_handled(self, mock_cursor, mock_get_health, cli_runner):
+        """When get_system_health raises, Check 5 reports FAILED gracefully."""
+        mock_cursor.side_effect = _make_mock_cursor()
+        mock_get_health.side_effect = Exception("DB connection lost")
+
+        result = cli_runner.invoke(app, ["health"])
+
+        output = strip_ansi(result.stdout).lower()
+        assert "failed" in output
+
+    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.connection.get_cursor")
+    def test_verbose_shows_detail_table(self, mock_cursor, mock_get_health, cli_runner):
+        """Verbose mode shows per-component detail table."""
+        mock_cursor.side_effect = _make_mock_cursor()
+        mock_get_health.return_value = [
+            {
+                "component": "kalshi_api",
+                "status": "degraded",
+                "last_check": None,
+                "details": {"error_rate": "0.1200", "reason": "elevated_error_rate"},
+                "alert_sent": True,
+            },
+        ]
+
+        result = cli_runner.invoke(app, ["health", "--verbose"])
+
+        output = strip_ansi(result.stdout).lower()
+        assert "kalshi_api" in output
+        assert "0.1200" in output
+
+
 class TestSystemEdgeCases:
     """Test edge cases and error handling."""
 

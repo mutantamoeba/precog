@@ -5353,3 +5353,155 @@ def create_alert(
         cur.execute(query, params)
         result = cur.fetchone()
         return result["alert_id"] if result else None
+
+
+# =============================================================================
+# System Health CRUD Operations
+# =============================================================================
+
+
+def upsert_system_health(
+    component: str,
+    status: str,
+    details: dict[str, Any] | None = None,
+    alert_sent: bool = False,
+) -> bool:
+    """
+    Insert or update component health in the system_health table.
+
+    Uses DELETE + INSERT within a single committed transaction to maintain
+    one row per component. The system_health table is not SCD Type 2.
+
+    Why DELETE + INSERT?
+    --------------------
+    The system_health table has a non-unique index on component (not a
+    UNIQUE constraint), so ON CONFLICT UPSERT is not available. DELETE +
+    INSERT within get_cursor(commit=True) achieves the same result: exactly
+    one current health row per component. A future migration can add a
+    UNIQUE constraint to enable proper ON CONFLICT.
+
+    Args:
+        component: Component identifier. Must match the CHECK constraint:
+            'kalshi_api', 'polymarket_api', 'espn_api', 'database',
+            'edge_detector', 'trading_engine', 'websocket'.
+        status: Health status. Must match the CHECK constraint:
+            'healthy', 'degraded', 'down'.
+        details: Optional JSONB payload with component-specific metrics
+            (e.g., error_rate, polls_completed, last_successful_poll).
+        alert_sent: Whether an alert has been sent for this health state.
+
+    Returns:
+        True if operation succeeded, False otherwise.
+
+    Raises:
+        psycopg2.IntegrityError: If component or status violates CHECK constraints.
+
+    Example:
+        >>> upsert_system_health(
+        ...     component="kalshi_api",
+        ...     status="healthy",
+        ...     details={"error_rate": "0.02", "polls": 142, "errors": 3},
+        ... )
+
+        >>> upsert_system_health(
+        ...     component="espn_api",
+        ...     status="degraded",
+        ...     details={"error_rate": "0.12", "last_poll_age_seconds": 180},
+        ...     alert_sent=True,
+        ... )
+
+    Educational Note:
+        The system_health table currently has a non-unique index on component.
+        DELETE + INSERT keeps one row per component. A future migration should
+        add a UNIQUE constraint to enable proper ON CONFLICT UPSERT.
+
+    References:
+        - Migration 0001: system_health table schema
+        - Issue #389: Wire system_health table
+        - REQ-OBSERV-001: Observability Requirements
+    """
+    # The system_health table has a non-unique index on component, so we use
+    # DELETE + INSERT within a single transaction to simulate upsert behavior.
+    # This keeps exactly one row per component (latest health snapshot).
+    delete_query = "DELETE FROM system_health WHERE component = %s"
+    insert_query = """
+        INSERT INTO system_health (component, status, last_check, details, alert_sent)
+        VALUES (%s, %s, NOW(), %s, %s)
+    """
+    details_json = json.dumps(details, cls=DecimalEncoder) if details else None
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(delete_query, (component,))
+        cur.execute(insert_query, (component, status, details_json, alert_sent))
+        return int(cur.rowcount or 0) > 0
+
+
+def get_system_health(component: str | None = None) -> list[dict[str, Any]]:
+    """
+    Fetch system health records, optionally filtered by component.
+
+    Args:
+        component: If provided, fetch health for this component only.
+            If None, fetch all components.
+
+    Returns:
+        List of health records as dictionaries. Each dict contains:
+            health_id, component, status, last_check, details, alert_sent.
+        Empty list if no records found.
+
+    Example:
+        >>> # Get all component health
+        >>> records = get_system_health()
+        >>> for r in records:
+        ...     print(r["component"], r["status"])
+        kalshi_api healthy
+        espn_api degraded
+
+        >>> # Get specific component
+        >>> records = get_system_health(component="kalshi_api")
+        >>> print(records[0]["status"])  # 'healthy'
+
+    References:
+        - Migration 0001: system_health table schema
+        - Issue #389: Wire system_health table
+    """
+    if component:
+        query = """
+            SELECT health_id, component, status, last_check, details, alert_sent
+            FROM system_health
+            WHERE component = %s
+            ORDER BY component
+        """
+        return fetch_all(query, (component,))
+
+    query = """
+        SELECT health_id, component, status, last_check, details, alert_sent
+        FROM system_health
+        ORDER BY component
+    """
+    return fetch_all(query)
+
+
+def get_system_health_summary() -> dict[str, str]:
+    """
+    Get a compact component -> status mapping for all tracked components.
+
+    This is a convenience function for CLI display and quick health checks.
+    Returns only the latest status per component without full details.
+
+    Returns:
+        Dictionary mapping component name to status string.
+        Example: {"kalshi_api": "healthy", "espn_api": "degraded"}
+        Empty dict if no health records exist.
+
+    Example:
+        >>> summary = get_system_health_summary()
+        >>> if summary.get("kalshi_api") != "healthy":
+        ...     print("Kalshi API is not healthy!")
+
+    References:
+        - Migration 0001: system_health table schema
+        - Issue #389: Wire system_health table
+    """
+    records = get_system_health()
+    return {r["component"]: r["status"] for r in records}

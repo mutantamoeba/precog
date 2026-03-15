@@ -154,6 +154,73 @@ def health(
         echo_error(f"FAILED: {e}")
         checks_failed += 1
 
+    # Check 5: Persistent Component Health (from system_health table)
+    checks_total += 1
+    console.print("Checking persistent component health...", end=" ")
+    try:
+        from precog.database.crud_operations import get_system_health
+
+        health_records = get_system_health()
+        if health_records:
+            # Count statuses
+            status_counts: dict[str, int] = {}
+            for record in health_records:
+                s = record.get("status", "unknown")
+                status_counts[s] = status_counts.get(s, 0) + 1
+
+            all_healthy = all(r.get("status") == "healthy" for r in health_records)
+            any_down = any(r.get("status") == "down" for r in health_records)
+
+            if all_healthy:
+                echo_success(f"OK ({len(health_records)} components)")
+                checks_passed += 1
+            elif any_down:
+                echo_error(
+                    f"UNHEALTHY ({status_counts.get('down', 0)} down, "
+                    f"{status_counts.get('degraded', 0)} degraded, "
+                    f"{status_counts.get('healthy', 0)} healthy)"
+                )
+                checks_failed += 1
+            else:
+                echo_error(
+                    f"DEGRADED ({status_counts.get('degraded', 0)} degraded, "
+                    f"{status_counts.get('healthy', 0)} healthy)"
+                )
+                checks_failed += 1
+
+            if verbose:
+                # Show per-component detail table
+                health_rows = []
+                for record in health_records:
+                    component = record.get("component", "unknown")
+                    status_val = record.get("status", "unknown")
+                    last_check = record.get("last_check")
+                    last_check_str = (
+                        last_check.strftime("%Y-%m-%d %H:%M:%S UTC") if last_check else "never"
+                    )
+
+                    # Extract key details from JSONB
+                    details = record.get("details") or {}
+                    error_rate = details.get("error_rate", "-")
+                    reason = details.get("reason", "-")
+
+                    health_rows.append(
+                        [component, status_val, last_check_str, str(error_rate), reason]
+                    )
+
+                table = format_table(
+                    "",
+                    ["Component", "Status", "Last Check", "Error Rate", "Reason"],
+                    health_rows,
+                )
+                console.print(table)
+        else:
+            echo_success("OK (no health data yet - services may not have run)")
+            checks_passed += 1
+    except Exception as e:
+        echo_error(f"FAILED: {e}")
+        checks_failed += 1
+
     # Summary
     console.print()
     if checks_failed == 0:

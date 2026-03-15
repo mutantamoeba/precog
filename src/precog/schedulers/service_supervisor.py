@@ -49,6 +49,7 @@ from precog.database.crud_operations import (
     check_active_schedulers,
     cleanup_stale_schedulers,
     upsert_scheduler_status,
+    upsert_system_health,
 )
 from precog.schedulers.espn_game_poller import create_espn_poller
 from precog.schedulers.kalshi_poller import create_kalshi_poller
@@ -56,6 +57,16 @@ from precog.schedulers.kalshi_websocket import create_websocket_handler
 
 # Set up logging early for helper functions
 logger = logging.getLogger(__name__)
+
+# Maps service names (used internally by ServiceSupervisor) to component names
+# matching the system_health table CHECK constraint:
+# ('kalshi_api', 'polymarket_api', 'espn_api', 'database',
+#  'edge_detector', 'trading_engine', 'websocket')
+SERVICE_TO_COMPONENT: dict[str, str] = {
+    "espn": "espn_api",
+    "kalshi_rest": "kalshi_api",
+    "kalshi_ws": "websocket",
+}
 
 
 def _has_kalshi_credentials(environment: "Environment") -> bool:
@@ -692,14 +703,20 @@ class ServiceSupervisor:
         """
         Check health of a single service and update database heartbeat.
 
-        This method serves dual purposes:
+        This method serves three purposes:
         1. Internal health monitoring (restart decisions, alerting)
         2. External status visibility (heartbeat updates for cross-process IPC)
+        3. Persistent component health (system_health table for CLI visibility)
 
         The heartbeat update ensures that `scheduler status` can:
         - See current service state
         - Detect stale/crashed services (heartbeat older than threshold)
         - Display service-specific stats (polls, errors, etc.)
+
+        Health Determination Thresholds:
+        - healthy: running + error rate <5%
+        - degraded: running + error rate 5-25%, OR last poll > 2x interval
+        - down: not running, OR error rate >25%, OR no poll for >5x interval
         """
         state.last_health_check = datetime.now(UTC)
 
@@ -721,6 +738,13 @@ class ServiceSupervisor:
                 name,
                 "failed",
                 error_message=f"Service not running (consecutive_failures={state.consecutive_failures})",
+            )
+
+            # Persist 'down' to system_health table
+            self._update_system_health(
+                name,
+                "down",
+                {"reason": "not_running", "consecutive_failures": state.consecutive_failures},
             )
 
             # Attempt restart if under retry limit
@@ -754,6 +778,135 @@ class ServiceSupervisor:
         # Update heartbeat in database with current stats
         # This is the "lease renewal" that keeps the service marked as running
         self._update_db_status(name, "running", stats=stats)
+
+        # Determine and persist component health to system_health table
+        health_status, health_details = self._determine_health(name, state, stats)
+        self._update_system_health(name, health_status, health_details)
+
+    def _determine_health(
+        self,
+        name: str,
+        state: ServiceState,
+        stats: dict[str, Any],
+    ) -> tuple[str, dict[str, Any]]:
+        """
+        Determine component health status from service stats.
+
+        Applies threshold-based rules to classify a running service as
+        healthy, degraded, or down.
+
+        Thresholds:
+            - healthy: error rate <5%
+            - degraded: error rate 5-25%, OR last successful poll > 2x interval
+            - down: error rate >25%, OR no poll for >5x interval
+
+        Args:
+            name: Service identifier (e.g., 'espn', 'kalshi_rest')
+            state: Current runtime state for the service
+            stats: Latest stats dict from service.get_stats()
+
+        Returns:
+            Tuple of (status_string, details_dict) where status is one of
+            'healthy', 'degraded', 'down'.
+
+        Educational Note:
+            Error rate is calculated as errors / total_polls. If total_polls
+            is zero (service just started), we default to 'healthy' since
+            there's no evidence of problems yet.
+        """
+        total_polls = stats.get("polls_completed", 0) or stats.get("polls", 0)
+        total_errors = stats.get("errors", 0)
+        last_successful_poll = stats.get("last_successful_poll")
+
+        # Calculate error rate (avoid division by zero; default 0.0 = healthy)
+        error_rate = total_errors / total_polls if total_polls > 0 else 0.0
+
+        details: dict[str, Any] = {
+            "service_name": name,
+            "error_rate": f"{error_rate:.4f}",
+            "total_polls": total_polls,
+            "total_errors": total_errors,
+        }
+
+        # Check staleness: time since last successful poll vs poll interval
+        poll_interval = state.config.poll_interval if state.config else 30
+        poll_age_seconds: float | None = None
+
+        if last_successful_poll is not None:
+            try:
+                if isinstance(last_successful_poll, str):
+                    last_poll_dt = datetime.fromisoformat(last_successful_poll)
+                else:
+                    last_poll_dt = last_successful_poll
+                poll_age_seconds = (datetime.now(UTC) - last_poll_dt).total_seconds()
+                details["last_poll_age_seconds"] = int(poll_age_seconds)
+            except (ValueError, TypeError):
+                # Can't parse timestamp -- ignore staleness check
+                pass
+
+        # Apply thresholds: down > degraded > healthy
+        # Down: error rate >25% OR no poll for >5x interval
+        if error_rate > 0.25:
+            return "down", {**details, "reason": "high_error_rate"}
+
+        if poll_age_seconds is not None and poll_age_seconds > poll_interval * 5:
+            return "down", {**details, "reason": "stale_no_poll_5x_interval"}
+
+        # Degraded: error rate 5-25% OR last poll > 2x interval
+        if error_rate >= 0.05:
+            return "degraded", {**details, "reason": "elevated_error_rate"}
+
+        if poll_age_seconds is not None and poll_age_seconds > poll_interval * 2:
+            return "degraded", {**details, "reason": "stale_poll_2x_interval"}
+
+        # Healthy: running with acceptable error rate
+        return "healthy", details
+
+    def _update_system_health(
+        self,
+        service_name: str,
+        status: str,
+        details: dict[str, Any],
+    ) -> None:
+        """
+        Persist component health to the system_health table.
+
+        Maps service names to system_health component names using
+        SERVICE_TO_COMPONENT. Services without a mapping are skipped
+        (safe default for unknown/future services).
+
+        Args:
+            service_name: Internal service identifier (e.g., 'espn')
+            status: Health status ('healthy', 'degraded', 'down')
+            details: Component-specific health details as JSONB
+
+        Educational Note:
+            This is the bridge between the supervisor's internal health
+            monitoring and the persistent system_health table. The table
+            makes health visible to the CLI and other processes.
+        """
+        component = SERVICE_TO_COMPONENT.get(service_name)
+        if component is None:
+            self.logger.debug(
+                "No system_health component mapping for service '%s', skipping",
+                service_name,
+            )
+            return
+
+        try:
+            upsert_system_health(
+                component=component,
+                status=status,
+                details=details,
+                alert_sent=(status != "healthy"),
+            )
+        except Exception as e:
+            # Don't let DB errors crash the health check loop
+            self.logger.warning(
+                "Failed to update system_health for %s: %s",
+                component,
+                e,
+            )
 
     def _attempt_restart(self, name: str, state: ServiceState) -> None:
         """

@@ -27,6 +27,7 @@ Requirements: REQ-DATA-001, REQ-OBSERV-001, REQ-TEST-001
 
 import threading
 import time
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from unittest.mock import MagicMock, patch
@@ -34,6 +35,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from precog.schedulers.service_supervisor import (
+    SERVICE_TO_COMPONENT,
     Environment,
     RunnerConfig,
     ServiceConfig,
@@ -1125,3 +1127,353 @@ class TestStartupGuard:
         # Service should never have been started
         assert not mock_service.is_running()
         assert mock_service._start_count == 0
+
+
+# =============================================================================
+# Service-to-Component Mapping Tests
+# =============================================================================
+
+
+class TestServiceToComponentMapping:
+    """Tests for SERVICE_TO_COMPONENT constant.
+
+    Verifies that internal service names map correctly to the
+    system_health table's CHECK constraint values.
+    """
+
+    def test_espn_maps_to_espn_api(self) -> None:
+        """ESPN poller maps to espn_api component."""
+        assert SERVICE_TO_COMPONENT["espn"] == "espn_api"
+
+    def test_kalshi_rest_maps_to_kalshi_api(self) -> None:
+        """Kalshi REST poller maps to kalshi_api component."""
+        assert SERVICE_TO_COMPONENT["kalshi_rest"] == "kalshi_api"
+
+    def test_kalshi_ws_maps_to_websocket(self) -> None:
+        """Kalshi WebSocket maps to websocket component."""
+        assert SERVICE_TO_COMPONENT["kalshi_ws"] == "websocket"
+
+    def test_unknown_service_not_in_map(self) -> None:
+        """Unknown service names return None from get()."""
+        assert SERVICE_TO_COMPONENT.get("unknown_service") is None
+
+
+# =============================================================================
+# Health Determination Tests
+# =============================================================================
+
+
+class TestHealthDetermination:
+    """Tests for _determine_health() method.
+
+    Verifies threshold-based health classification:
+    - healthy: error rate <5%
+    - degraded: error rate 5-25%, OR stale poll > 2x interval
+    - down: error rate >25%, OR stale poll > 5x interval
+
+    Educational Note:
+        Health determination converts raw metrics (error counts, poll
+        timestamps) into categorical status values. The thresholds are
+        chosen to balance sensitivity with noise resistance.
+    """
+
+    @pytest.fixture
+    def supervisor_with_service(
+        self, runner_config: RunnerConfig, service_config: ServiceConfig
+    ) -> tuple[ServiceSupervisor, ServiceState]:
+        """Create a supervisor with a registered service for health tests."""
+        supervisor = ServiceSupervisor(runner_config)
+        service = MockService()
+        service.start()
+        supervisor.add_service("espn", service, service_config)
+        state = supervisor.services["espn"]
+        return supervisor, state
+
+    def test_healthy_low_error_rate(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """Service with <5% error rate is healthy."""
+        supervisor, state = supervisor_with_service
+        stats = {"polls_completed": 100, "errors": 2}
+
+        status, details = supervisor._determine_health("espn", state, stats)
+
+        assert status == "healthy"
+        assert details["error_rate"] == "0.0200"
+        assert details["total_polls"] == 100
+        assert details["total_errors"] == 2
+
+    def test_healthy_zero_polls(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """Service with zero polls defaults to healthy (no evidence of problems)."""
+        supervisor, state = supervisor_with_service
+        stats = {"polls_completed": 0, "errors": 0}
+
+        status, details = supervisor._determine_health("espn", state, stats)
+
+        assert status == "healthy"
+        assert details["error_rate"] == "0.0000"
+
+    def test_degraded_elevated_error_rate(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """Service with 5-25% error rate is degraded."""
+        supervisor, state = supervisor_with_service
+        stats = {"polls_completed": 100, "errors": 10}
+
+        status, details = supervisor._determine_health("espn", state, stats)
+
+        assert status == "degraded"
+        assert details["reason"] == "elevated_error_rate"
+
+    def test_degraded_at_5_percent_boundary(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """Service at exactly 5% error rate is degraded (boundary test)."""
+        supervisor, state = supervisor_with_service
+        stats = {"polls_completed": 100, "errors": 5}
+
+        status, _details = supervisor._determine_health("espn", state, stats)
+
+        assert status == "degraded"
+
+    def test_down_high_error_rate(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """Service with >25% error rate is down."""
+        supervisor, state = supervisor_with_service
+        stats = {"polls_completed": 100, "errors": 30}
+
+        status, details = supervisor._determine_health("espn", state, stats)
+
+        assert status == "down"
+        assert details["reason"] == "high_error_rate"
+
+    def test_degraded_at_25_percent_boundary(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """Service at exactly 25% error rate is degraded (boundary: > not >=)."""
+        supervisor, state = supervisor_with_service
+        stats = {"polls_completed": 100, "errors": 25}
+
+        status, details = supervisor._determine_health("espn", state, stats)
+
+        assert status == "degraded"
+        assert details["reason"] == "elevated_error_rate"
+
+    def test_down_at_26_percent(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """Service at 26% error rate is down (just above 25% threshold)."""
+        supervisor, state = supervisor_with_service
+        stats = {"polls_completed": 100, "errors": 26}
+
+        status, _details = supervisor._determine_health("espn", state, stats)
+
+        assert status == "down"
+
+    def test_healthy_at_4_percent(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """Service at 4% error rate is still healthy (just below 5%)."""
+        supervisor, state = supervisor_with_service
+        stats = {"polls_completed": 100, "errors": 4}
+
+        status, _details = supervisor._determine_health("espn", state, stats)
+
+        assert status == "healthy"
+
+    def test_uses_polls_key_fallback(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """Falls back to 'polls' key if 'polls_completed' is missing."""
+        supervisor, state = supervisor_with_service
+        stats = {"polls": 50, "errors": 1}
+
+        status, details = supervisor._determine_health("espn", state, stats)
+
+        assert status == "healthy"
+        assert details["total_polls"] == 50
+
+    def test_degraded_stale_poll_2x_interval(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """Service with last poll > 2x interval is degraded."""
+        supervisor, state = supervisor_with_service
+        # poll_interval is 15s (from service_config fixture), so 2x = 30s
+        from datetime import timedelta
+
+        stale_time = datetime.now(UTC) - timedelta(seconds=45)
+        stats = {
+            "polls_completed": 100,
+            "errors": 0,
+            "last_successful_poll": stale_time,
+        }
+
+        status, details = supervisor._determine_health("espn", state, stats)
+
+        assert status == "degraded"
+        assert details["reason"] == "stale_poll_2x_interval"
+
+    def test_down_stale_poll_5x_interval(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """Service with last poll > 5x interval is down."""
+        supervisor, state = supervisor_with_service
+        # poll_interval is 15s, so 5x = 75s
+        from datetime import timedelta
+
+        very_stale_time = datetime.now(UTC) - timedelta(seconds=100)
+        stats = {
+            "polls_completed": 100,
+            "errors": 0,
+            "last_successful_poll": very_stale_time,
+        }
+
+        status, details = supervisor._determine_health("espn", state, stats)
+
+        assert status == "down"
+        assert details["reason"] == "stale_no_poll_5x_interval"
+
+    def test_error_rate_takes_priority_over_staleness(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """High error rate (>25%) classifies as down even if poll is recent."""
+        supervisor, state = supervisor_with_service
+        recent_time = datetime.now(UTC)
+        stats = {
+            "polls_completed": 100,
+            "errors": 30,
+            "last_successful_poll": recent_time,
+        }
+
+        status, details = supervisor._determine_health("espn", state, stats)
+
+        assert status == "down"
+        assert details["reason"] == "high_error_rate"
+
+    def test_staleness_with_iso_string_timestamp(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """ISO format string timestamps are parsed correctly for staleness."""
+        supervisor, state = supervisor_with_service
+        from datetime import timedelta
+
+        stale_time = (datetime.now(UTC) - timedelta(seconds=45)).isoformat()
+        stats = {
+            "polls_completed": 100,
+            "errors": 0,
+            "last_successful_poll": stale_time,
+        }
+
+        status, details = supervisor._determine_health("espn", state, stats)
+
+        assert status == "degraded"
+        assert details["reason"] == "stale_poll_2x_interval"
+        assert "last_poll_age_seconds" in details
+
+    def test_unparseable_timestamp_falls_through(
+        self, supervisor_with_service: tuple[ServiceSupervisor, ServiceState]
+    ) -> None:
+        """Unparseable timestamps are ignored; classification uses error rate only."""
+        supervisor, state = supervisor_with_service
+        stats = {
+            "polls_completed": 100,
+            "errors": 2,
+            "last_successful_poll": "not-a-timestamp",
+        }
+
+        status, _details = supervisor._determine_health("espn", state, stats)
+
+        # With 2% error rate and no staleness check, should be healthy
+        assert status == "healthy"
+
+
+# =============================================================================
+# System Health Update Tests
+# =============================================================================
+
+
+class TestUpdateSystemHealth:
+    """Tests for _update_system_health() method.
+
+    Verifies that system health is persisted to the DB via the
+    upsert_system_health CRUD function, with proper service-to-component
+    mapping and error handling.
+    """
+
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_updates_mapped_component(
+        self, mock_upsert: MagicMock, runner_config: RunnerConfig
+    ) -> None:
+        """Known service names are mapped to component names and persisted."""
+        supervisor = ServiceSupervisor(runner_config)
+        details = {"error_rate": "0.01", "total_polls": 50}
+
+        supervisor._update_system_health("espn", "healthy", details)
+
+        mock_upsert.assert_called_once_with(
+            component="espn_api",
+            status="healthy",
+            details=details,
+            alert_sent=False,
+        )
+
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_skips_unmapped_service(
+        self, mock_upsert: MagicMock, runner_config: RunnerConfig
+    ) -> None:
+        """Unknown service names are skipped without error."""
+        supervisor = ServiceSupervisor(runner_config)
+
+        supervisor._update_system_health("unknown_svc", "healthy", {})
+
+        mock_upsert.assert_not_called()
+
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_alert_sent_true_for_non_healthy(
+        self, mock_upsert: MagicMock, runner_config: RunnerConfig
+    ) -> None:
+        """alert_sent is True when status is not 'healthy'."""
+        supervisor = ServiceSupervisor(runner_config)
+
+        supervisor._update_system_health("kalshi_rest", "degraded", {"reason": "test"})
+
+        mock_upsert.assert_called_once()
+        assert mock_upsert.call_args.kwargs["alert_sent"] is True
+
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_alert_sent_true_for_down(
+        self, mock_upsert: MagicMock, runner_config: RunnerConfig
+    ) -> None:
+        """alert_sent is True when status is 'down'."""
+        supervisor = ServiceSupervisor(runner_config)
+
+        supervisor._update_system_health("espn", "down", {"reason": "not_running"})
+
+        mock_upsert.assert_called_once()
+        assert mock_upsert.call_args.kwargs["alert_sent"] is True
+
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_alert_sent_false_for_healthy(
+        self, mock_upsert: MagicMock, runner_config: RunnerConfig
+    ) -> None:
+        """alert_sent is False when status is 'healthy'."""
+        supervisor = ServiceSupervisor(runner_config)
+
+        supervisor._update_system_health("kalshi_rest", "healthy", {})
+
+        mock_upsert.assert_called_once()
+        assert mock_upsert.call_args.kwargs["alert_sent"] is False
+
+    @patch("precog.schedulers.service_supervisor.upsert_system_health")
+    def test_db_error_does_not_raise(
+        self, mock_upsert: MagicMock, runner_config: RunnerConfig
+    ) -> None:
+        """Database errors are caught and logged, not raised."""
+        mock_upsert.side_effect = Exception("DB connection lost")
+        supervisor = ServiceSupervisor(runner_config)
+
+        # Should not raise
+        supervisor._update_system_health("espn", "healthy", {})
