@@ -45,7 +45,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Protocol, cast
 
-from precog.database.crud_operations import upsert_scheduler_status
+from precog.database.crud_operations import (
+    check_active_schedulers,
+    cleanup_stale_schedulers,
+    upsert_scheduler_status,
+)
 from precog.schedulers.espn_game_poller import create_espn_poller
 from precog.schedulers.kalshi_poller import create_kalshi_poller
 from precog.schedulers.kalshi_websocket import create_websocket_handler
@@ -453,13 +457,96 @@ class ServiceSupervisor:
             return True
         return False
 
-    def start_all(self) -> None:
+    def _check_startup_guard(self, force: bool = False) -> None:
+        """
+        Check for concurrent scheduler instances before starting.
+
+        Prevents two supervisors from running against the same database,
+        which would corrupt SCD Type 2 versioning (both read row_current_ind=TRUE,
+        both archive, one silently wins).
+
+        Steps:
+            1. Clean stale entries (heartbeat expired = probably crashed)
+            2. Check for truly active instances (heartbeat fresh)
+            3. If active found and no --force: raise RuntimeError
+            4. If active found and --force: warn and proceed
+
+        Args:
+            force: If True, override the guard and start anyway.
+
+        Raises:
+            RuntimeError: If active schedulers detected and force is False.
+
+        Reference: Issue #363
+        """
+        stale_threshold = self.config.health_check_interval * 2
+
+        # Step 1: Clean stale entries (crashed services that never said goodbye)
+        try:
+            stale_cleaned = cleanup_stale_schedulers(
+                stale_threshold_seconds=stale_threshold,
+            )
+            if stale_cleaned:
+                self.logger.warning(
+                    "Startup guard: cleaned %d stale scheduler entries (assumed crashed)",
+                    stale_cleaned,
+                )
+        except Exception as e:
+            self.logger.warning("Startup guard: could not clean stale entries: %s", e)
+
+        # Step 2: Check for active instances with fresh heartbeats
+        try:
+            active = check_active_schedulers(
+                stale_threshold_seconds=stale_threshold,
+            )
+        except Exception as e:
+            # If we can't check, log and allow startup (DB might be empty/new)
+            self.logger.warning(
+                "Startup guard: could not query active schedulers: %s. Proceeding.",
+                e,
+            )
+            return
+
+        if not active:
+            self.logger.info("Startup guard: no active schedulers detected, proceeding")
+            return
+
+        # Active instances found — report details
+        for svc in active:
+            self.logger.warning(
+                "Startup guard: active scheduler detected — "
+                "host=%s service=%s pid=%s last_heartbeat=%s",
+                svc.get("host_id"),
+                svc.get("service_name"),
+                svc.get("pid"),
+                svc.get("last_heartbeat"),
+            )
+
+        if force:
+            self.logger.warning(
+                "Startup guard overridden (--force): %d active service(s) will be superseded",
+                len(active),
+            )
+            return
+
+        raise RuntimeError(
+            f"Startup blocked: {len(active)} active scheduler(s) detected on database. "
+            "Another instance may be running. Use --force to override."
+        )
+
+    def start_all(self, *, force: bool = False) -> None:
         """
         Start all registered services.
 
         Starts each service in order, with error isolation.
         Failed services are marked unhealthy but don't block others.
+
+        Args:
+            force: If True, override the concurrent startup guard.
         """
+        # Check for concurrent instances before starting
+        self._check_startup_guard(force=force)
+
         self._start_time = datetime.now(UTC)
         self._shutdown_event.clear()
 
