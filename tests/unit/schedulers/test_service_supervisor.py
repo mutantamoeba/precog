@@ -153,6 +153,27 @@ def supervisor(runner_config: RunnerConfig) -> ServiceSupervisor:
     return ServiceSupervisor(runner_config)
 
 
+@pytest.fixture(autouse=True)
+def _mock_startup_guard_crud():
+    """Mock startup guard CRUD operations for unit tests.
+
+    Prevents unit tests from hitting the real database when start_all()
+    calls the startup guard. TestStartupGuard uses explicit patches that
+    override these defaults.
+    """
+    with (
+        patch(
+            "precog.schedulers.service_supervisor.check_active_schedulers",
+            return_value=[],
+        ),
+        patch(
+            "precog.schedulers.service_supervisor.cleanup_stale_schedulers",
+            return_value=0,
+        ),
+    ):
+        yield
+
+
 # =============================================================================
 # Configuration Tests
 # =============================================================================
@@ -877,3 +898,230 @@ class TestThreadSafety:
         shutdown_thread.join()
 
         supervisor.stop_all()
+
+
+# =============================================================================
+# Startup Guard Tests (Issue #363)
+# =============================================================================
+
+
+class TestStartupGuard:
+    """Tests for concurrent scheduler startup guard.
+
+    Verifies that ServiceSupervisor prevents two instances from running
+    against the same database, which would corrupt SCD Type 2 versioning.
+
+    Reference: Issue #363
+    """
+
+    def test_guard_allows_start_when_no_active_schedulers(
+        self,
+        supervisor: ServiceSupervisor,
+    ) -> None:
+        """Guard passes when no active schedulers are detected."""
+        with (
+            patch(
+                "precog.schedulers.service_supervisor.cleanup_stale_schedulers",
+                return_value=0,
+            ),
+            patch(
+                "precog.schedulers.service_supervisor.check_active_schedulers",
+                return_value=[],
+            ),
+        ):
+            # Should not raise
+            supervisor._check_startup_guard(force=False)
+
+    def test_guard_blocks_when_active_scheduler_detected(
+        self,
+        supervisor: ServiceSupervisor,
+    ) -> None:
+        """Guard raises RuntimeError when active scheduler is found."""
+        active_services = [
+            {
+                "host_id": "OTHER-HOST",
+                "service_name": "espn",
+                "pid": 12345,
+                "status": "running",
+                "started_at": "2026-03-15T10:00:00Z",
+                "last_heartbeat": "2026-03-15T10:05:00Z",
+            },
+        ]
+        with (
+            patch(
+                "precog.schedulers.service_supervisor.cleanup_stale_schedulers",
+                return_value=0,
+            ),
+            patch(
+                "precog.schedulers.service_supervisor.check_active_schedulers",
+                return_value=active_services,
+            ),
+        ):
+            with pytest.raises(RuntimeError, match="Startup blocked"):
+                supervisor._check_startup_guard(force=False)
+
+    def test_guard_allows_start_with_force_override(
+        self,
+        supervisor: ServiceSupervisor,
+    ) -> None:
+        """Guard allows start when --force is used despite active schedulers."""
+        active_services = [
+            {
+                "host_id": "OTHER-HOST",
+                "service_name": "espn",
+                "pid": 12345,
+                "status": "running",
+                "started_at": "2026-03-15T10:00:00Z",
+                "last_heartbeat": "2026-03-15T10:05:00Z",
+            },
+        ]
+        with (
+            patch(
+                "precog.schedulers.service_supervisor.cleanup_stale_schedulers",
+                return_value=0,
+            ),
+            patch(
+                "precog.schedulers.service_supervisor.check_active_schedulers",
+                return_value=active_services,
+            ),
+        ):
+            # Should not raise with force=True
+            supervisor._check_startup_guard(force=True)
+
+    def test_guard_cleans_stale_entries_before_checking(
+        self,
+        supervisor: ServiceSupervisor,
+    ) -> None:
+        """Guard cleans stale entries first, then checks for truly active ones."""
+        mock_cleanup = MagicMock(return_value=2)
+        mock_check = MagicMock(return_value=[])
+
+        with (
+            patch(
+                "precog.schedulers.service_supervisor.cleanup_stale_schedulers",
+                mock_cleanup,
+            ),
+            patch(
+                "precog.schedulers.service_supervisor.check_active_schedulers",
+                mock_check,
+            ),
+        ):
+            supervisor._check_startup_guard(force=False)
+
+            # Verify cleanup was called before check
+            mock_cleanup.assert_called_once()
+            mock_check.assert_called_once()
+
+            # Verify stale threshold is 2x health_check_interval
+            expected_threshold = supervisor.config.health_check_interval * 2
+            mock_cleanup.assert_called_with(
+                stale_threshold_seconds=expected_threshold,
+            )
+            mock_check.assert_called_with(
+                stale_threshold_seconds=expected_threshold,
+            )
+
+    def test_guard_blocks_with_multiple_active_services(
+        self,
+        supervisor: ServiceSupervisor,
+    ) -> None:
+        """Guard reports all active services in the error message."""
+        active_services = [
+            {
+                "host_id": "HOST-A",
+                "service_name": "espn",
+                "pid": 111,
+                "status": "running",
+                "started_at": "2026-03-15T10:00:00Z",
+                "last_heartbeat": "2026-03-15T10:05:00Z",
+            },
+            {
+                "host_id": "HOST-A",
+                "service_name": "kalshi_rest",
+                "pid": 111,
+                "status": "running",
+                "started_at": "2026-03-15T10:00:00Z",
+                "last_heartbeat": "2026-03-15T10:05:00Z",
+            },
+            {
+                "host_id": "HOST-B",
+                "service_name": "espn",
+                "pid": 222,
+                "status": "starting",
+                "started_at": "2026-03-15T10:04:00Z",
+                "last_heartbeat": "2026-03-15T10:04:30Z",
+            },
+        ]
+        with (
+            patch(
+                "precog.schedulers.service_supervisor.cleanup_stale_schedulers",
+                return_value=0,
+            ),
+            patch(
+                "precog.schedulers.service_supervisor.check_active_schedulers",
+                return_value=active_services,
+            ),
+        ):
+            with pytest.raises(RuntimeError, match="3 active scheduler"):
+                supervisor._check_startup_guard(force=False)
+
+    def test_guard_proceeds_on_db_query_failure(
+        self,
+        supervisor: ServiceSupervisor,
+    ) -> None:
+        """Guard allows startup if DB query fails (new/empty DB scenario)."""
+        with (
+            patch(
+                "precog.schedulers.service_supervisor.cleanup_stale_schedulers",
+                side_effect=Exception("relation does not exist"),
+            ),
+            patch(
+                "precog.schedulers.service_supervisor.check_active_schedulers",
+                side_effect=Exception("relation does not exist"),
+            ),
+        ):
+            # Should not raise — gracefully handles DB errors
+            supervisor._check_startup_guard(force=False)
+
+    def test_start_all_calls_guard(
+        self,
+        supervisor: ServiceSupervisor,
+        mock_service: MockService,
+        service_config: ServiceConfig,
+    ) -> None:
+        """Verify start_all() calls the startup guard before starting services."""
+        supervisor.add_service("test", mock_service, service_config)
+
+        with (
+            patch.object(supervisor, "_check_startup_guard") as mock_guard,
+            patch(
+                "precog.schedulers.service_supervisor.upsert_scheduler_status",
+                return_value=True,
+            ),
+        ):
+            supervisor.start_all(force=True)
+
+            mock_guard.assert_called_once_with(force=True)
+
+        supervisor.stop_all()
+
+    def test_start_all_blocked_does_not_start_services(
+        self,
+        supervisor: ServiceSupervisor,
+        mock_service: MockService,
+        service_config: ServiceConfig,
+    ) -> None:
+        """When guard blocks startup, no services should be started."""
+        supervisor.add_service("test", mock_service, service_config)
+
+        with patch.object(
+            supervisor,
+            "_check_startup_guard",
+            side_effect=RuntimeError("Startup blocked"),
+        ):
+            with pytest.raises(RuntimeError, match="Startup blocked"):
+                supervisor.start_all()
+
+        # Service should never have been started
+        assert not mock_service.is_running()
+        assert mock_service._start_count == 0
