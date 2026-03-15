@@ -480,11 +480,12 @@ class TestRealWorldDataPatterns:
             "state": {
                 "home_score": 0,
                 "away_score": 0,
+                "game_status": "in_progress",
             },
         }
 
         result = validator.validate_game_state(minimal_game)  # type: ignore[arg-type]
-        # Should have warnings for missing optional data
+        # Should have warnings for missing optional data (teams missing during in_progress)
         assert result.has_warnings
 
     def test_game_with_empty_situation(
