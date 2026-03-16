@@ -202,7 +202,7 @@ class TestStartStopRaces:
         we expect only one thread to succeed and the rest to get errors.
         """
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
@@ -234,7 +234,7 @@ class TestStartStopRaces:
     def test_concurrent_stop_calls(self, mock_espn_client: MagicMock) -> None:
         """Test multiple threads trying to stop the poller."""
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
@@ -264,7 +264,7 @@ class TestStartStopRaces:
         when start() is called on an already-running poller.
         """
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
@@ -474,7 +474,7 @@ class TestMultipleInstanceIsolation:
 
         pollers = [
             ESPNGamePoller(
-                poll_interval=5,
+                poll_interval=15,
                 leagues=["nfl"],
                 espn_client=mock_espn_client,
             )
@@ -545,7 +545,7 @@ class TestLockVerification:
         mock_espn_client.get_scoreboard.return_value = []
 
         poller = ESPNGamePoller(
-            poll_interval=5,
+            poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
         )
