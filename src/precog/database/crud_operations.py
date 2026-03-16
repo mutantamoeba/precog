@@ -5353,3 +5353,299 @@ def create_alert(
         cur.execute(query, params)
         result = cur.fetchone()
         return result["alert_id"] if result else None
+
+
+# =============================================================================
+# System Health CRUD Operations
+# =============================================================================
+
+
+def upsert_system_health(
+    component: str,
+    status: str,
+    details: dict[str, Any] | None = None,
+    alert_sent: bool = False,
+) -> bool:
+    """
+    Insert or update component health in the system_health table.
+
+    Uses DELETE + INSERT within a single committed transaction to maintain
+    one row per component. The system_health table is not SCD Type 2.
+
+    Why DELETE + INSERT?
+    --------------------
+    The system_health table has a non-unique index on component (not a
+    UNIQUE constraint), so ON CONFLICT UPSERT is not available. DELETE +
+    INSERT within get_cursor(commit=True) achieves the same result: exactly
+    one current health row per component. A future migration can add a
+    UNIQUE constraint to enable proper ON CONFLICT.
+
+    Args:
+        component: Component identifier. Must match the CHECK constraint:
+            'kalshi_api', 'polymarket_api', 'espn_api', 'database',
+            'edge_detector', 'trading_engine', 'websocket'.
+        status: Health status. Must match the CHECK constraint:
+            'healthy', 'degraded', 'down'.
+        details: Optional JSONB payload with component-specific metrics
+            (e.g., error_rate, polls_completed, last_successful_poll).
+        alert_sent: Whether an alert has been sent for this health state.
+
+    Returns:
+        True if operation succeeded, False otherwise.
+
+    Raises:
+        psycopg2.IntegrityError: If component or status violates CHECK constraints.
+
+    Example:
+        >>> upsert_system_health(
+        ...     component="kalshi_api",
+        ...     status="healthy",
+        ...     details={"error_rate": "0.02", "polls": 142, "errors": 3},
+        ... )
+
+        >>> upsert_system_health(
+        ...     component="espn_api",
+        ...     status="degraded",
+        ...     details={"error_rate": "0.12", "last_poll_age_seconds": 180},
+        ...     alert_sent=True,
+        ... )
+
+    Educational Note:
+        The system_health table currently has a non-unique index on component.
+        DELETE + INSERT keeps one row per component. A future migration should
+        add a UNIQUE constraint to enable proper ON CONFLICT UPSERT.
+
+    References:
+        - Migration 0001: system_health table schema
+        - Issue #389: Wire system_health table
+        - REQ-OBSERV-001: Observability Requirements
+    """
+    # The system_health table has a non-unique index on component, so we use
+    # DELETE + INSERT within a single transaction to simulate upsert behavior.
+    # This keeps exactly one row per component (latest health snapshot).
+    delete_query = "DELETE FROM system_health WHERE component = %s"
+    insert_query = """
+        INSERT INTO system_health (component, status, last_check, details, alert_sent)
+        VALUES (%s, %s, NOW(), %s, %s)
+    """
+    details_json = json.dumps(details, cls=DecimalEncoder) if details else None
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(delete_query, (component,))
+        cur.execute(insert_query, (component, status, details_json, alert_sent))
+        return int(cur.rowcount or 0) > 0
+
+
+def get_system_health(component: str | None = None) -> list[dict[str, Any]]:
+    """
+    Fetch system health records, optionally filtered by component.
+
+    Args:
+        component: If provided, fetch health for this component only.
+            If None, fetch all components.
+
+    Returns:
+        List of health records as dictionaries. Each dict contains:
+            health_id, component, status, last_check, details, alert_sent.
+        Empty list if no records found.
+
+    Example:
+        >>> # Get all component health
+        >>> records = get_system_health()
+        >>> for r in records:
+        ...     print(r["component"], r["status"])
+        kalshi_api healthy
+        espn_api degraded
+
+        >>> # Get specific component
+        >>> records = get_system_health(component="kalshi_api")
+        >>> print(records[0]["status"])  # 'healthy'
+
+    References:
+        - Migration 0001: system_health table schema
+        - Issue #389: Wire system_health table
+    """
+    if component:
+        query = """
+            SELECT health_id, component, status, last_check, details, alert_sent
+            FROM system_health
+            WHERE component = %s
+            ORDER BY component
+        """
+        return fetch_all(query, (component,))
+
+    query = """
+        SELECT health_id, component, status, last_check, details, alert_sent
+        FROM system_health
+        ORDER BY component
+    """
+    return fetch_all(query)
+
+
+def get_system_health_summary() -> dict[str, str]:
+    """
+    Get a compact component -> status mapping for all tracked components.
+
+    This is a convenience function for CLI display and quick health checks.
+    Returns only the latest status per component without full details.
+
+    Returns:
+        Dictionary mapping component name to status string.
+        Example: {"kalshi_api": "healthy", "espn_api": "degraded"}
+        Empty dict if no health records exist.
+
+    Example:
+        >>> summary = get_system_health_summary()
+        >>> if summary.get("kalshi_api") != "healthy":
+        ...     print("Kalshi API is not healthy!")
+
+    References:
+        - Migration 0001: system_health table schema
+        - Issue #389: Wire system_health table
+    """
+    records = get_system_health()
+    return {r["component"]: r["status"] for r in records}
+
+
+# =============================================================================
+# Circuit Breaker CRUD Operations
+# =============================================================================
+
+
+def create_circuit_breaker_event(
+    breaker_type: str,
+    trigger_value: dict[str, Any] | None = None,
+    notes: str | None = None,
+) -> int | None:
+    """
+    Create a circuit breaker event (trip a breaker).
+
+    Circuit breakers are safety guards that halt trading or data collection
+    when anomalies are detected. A tripped breaker stays active until
+    explicitly resolved via resolve_circuit_breaker().
+
+    Args:
+        breaker_type: Type of breaker to trip. Must match CHECK constraint:
+            'daily_loss_limit', 'api_failures', 'data_stale',
+            'position_limit', 'manual'.
+        trigger_value: Optional JSONB payload with context about what
+            triggered the breaker (e.g., error counts, component name).
+        notes: Optional human-readable reason for tripping the breaker.
+
+    Returns:
+        event_id of the newly created record, or None if insert failed.
+
+    Raises:
+        psycopg2.IntegrityError: If breaker_type not in allowed values.
+
+    Example:
+        >>> event_id = create_circuit_breaker_event(
+        ...     breaker_type="data_stale",
+        ...     trigger_value={"component": "espn_api", "reason": "not_running"},
+        ...     notes="ESPN poller went down during health check",
+        ... )
+
+    References:
+        - Migration 0001: circuit_breaker_events table schema
+        - Issue #390: Wire circuit_breaker_events table
+    """
+    query = """
+        INSERT INTO circuit_breaker_events (breaker_type, triggered_at, trigger_value, notes)
+        VALUES (%s, NOW(), %s, %s)
+        RETURNING event_id
+    """
+    trigger_json = (
+        json.dumps(trigger_value, cls=DecimalEncoder) if trigger_value is not None else None
+    )
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, (breaker_type, trigger_json, notes))
+        result = cur.fetchone()
+        return result["event_id"] if result else None
+
+
+def resolve_circuit_breaker(
+    event_id: int,
+    resolution_action: str | None = None,
+) -> bool:
+    """
+    Resolve an active circuit breaker event.
+
+    Sets resolved_at to NOW() and optionally records what action was taken.
+    Only resolves breakers that are currently active (resolved_at IS NULL).
+
+    Args:
+        event_id: The event_id of the breaker to resolve.
+        resolution_action: Optional description of resolution action taken
+            (e.g., "manual reset", "service restarted"). VARCHAR(100).
+
+    Returns:
+        True if the breaker was resolved, False if not found or already resolved.
+
+    Example:
+        >>> resolved = resolve_circuit_breaker(
+        ...     event_id=42,
+        ...     resolution_action="ESPN poller restarted successfully",
+        ... )
+        >>> print(resolved)  # True
+
+    References:
+        - Migration 0001: circuit_breaker_events table schema
+        - Issue #390: Wire circuit_breaker_events table
+    """
+    query = """
+        UPDATE circuit_breaker_events
+        SET resolved_at = NOW(), resolution_action = %s
+        WHERE event_id = %s AND resolved_at IS NULL
+    """
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, (resolution_action, event_id))
+        return int(cur.rowcount or 0) > 0
+
+
+def get_active_breakers(breaker_type: str | None = None) -> list[dict[str, Any]]:
+    """
+    Fetch all active (unresolved) circuit breaker events.
+
+    Active breakers have resolved_at IS NULL, meaning they are currently
+    tripped and have not been manually or automatically resolved.
+
+    Args:
+        breaker_type: If provided, filter to only this breaker type.
+            If None, return all active breakers regardless of type.
+
+    Returns:
+        List of active breaker records as dictionaries. Each dict contains:
+            event_id, breaker_type, triggered_at, trigger_value, notes.
+        Empty list if no active breakers.
+
+    Example:
+        >>> # Check if any breakers are active
+        >>> breakers = get_active_breakers()
+        >>> if breakers:
+        ...     print(f"{len(breakers)} active breaker(s)!")
+
+        >>> # Check for specific type
+        >>> stale = get_active_breakers(breaker_type="data_stale")
+
+    References:
+        - Migration 0001: circuit_breaker_events table schema
+        - Issue #390: Wire circuit_breaker_events table
+    """
+    if breaker_type:
+        query = """
+            SELECT event_id, breaker_type, triggered_at, trigger_value, notes
+            FROM circuit_breaker_events
+            WHERE resolved_at IS NULL AND breaker_type = %s
+            ORDER BY triggered_at DESC
+        """
+        return fetch_all(query, (breaker_type,))
+
+    query = """
+        SELECT event_id, breaker_type, triggered_at, trigger_value, notes
+        FROM circuit_breaker_events
+        WHERE resolved_at IS NULL
+        ORDER BY triggered_at DESC
+    """
+    return fetch_all(query)

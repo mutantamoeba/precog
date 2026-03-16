@@ -5,13 +5,14 @@ Provides a modular command-line interface for the Precog trading system.
 Commands are organized into logical groups for discoverability and maintainability.
 
 Command Groups:
-    kalshi      - Kalshi market operations (balance, markets, positions, fills)
-    espn        - ESPN data operations (scores, schedule, games, teams)
-    data        - Data management (seed, verify, sources)
-    db          - Database operations (init, upgrade, downgrade, status)
-    scheduler   - Service management (start, stop, status, poll-once)
-    config      - Configuration management (show, validate, env)
-    system      - System utilities (health, version, info)
+    kalshi          - Kalshi market operations (balance, markets, positions, fills)
+    espn            - ESPN data operations (scores, schedule, games, teams)
+    data            - Data management (seed, verify, sources)
+    db              - Database operations (init, upgrade, downgrade, status)
+    scheduler       - Service management (start, stop, status, poll-once)
+    config          - Configuration management (show, validate, env)
+    system          - System utilities (health, version, info)
+    circuit-breaker - Circuit breaker management (list, trip, resolve)
 
 Future Commands (Phase 4-5):
     strategy    - Strategy management (list, show, create, activate)
@@ -134,6 +135,7 @@ def register_commands() -> None:
     5. Future stubs (strategy, model, position, trade)
     """
     # Import command modules (deferred for performance)
+    from precog.cli import circuit_breaker as circuit_breaker_cmd
     from precog.cli import config as config_cmd
     from precog.cli import data as data_cmd
     from precog.cli import db as db_cmd
@@ -150,6 +152,11 @@ def register_commands() -> None:
     app.add_typer(scheduler_cmd.app, name="scheduler", help="Service management")
     app.add_typer(config_cmd.app, name="config", help="Configuration management")
     app.add_typer(system_cmd.app, name="system", help="System utilities")
+    app.add_typer(
+        circuit_breaker_cmd.app,
+        name="circuit-breaker",
+        help="Circuit breaker management",
+    )
 
     # Register TUI command (Issue #268)
     _register_tui_command()
