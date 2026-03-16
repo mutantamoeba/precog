@@ -168,7 +168,6 @@ class ESPNGamePoller(BasePoller):
         persist_jobs: bool = False,
         job_store_url: str | None = None,
         adaptive_polling: bool = True,
-        per_league_polling: bool = True,
         validate_teams_on_start: bool = True,
     ) -> None:
         """
@@ -184,9 +183,6 @@ class ESPNGamePoller(BasePoller):
             adaptive_polling: If True, dynamically adjust poll interval based on
                 game activity (poll_interval when active, idle_interval when idle).
                 Default True. (Issue #234)
-            per_league_polling: If True, each league gets its own APScheduler job
-                with independent polling intervals based on game activity. This keeps
-                total requests under ESPN's 250 req/hr rate limit. Default True.
             validate_teams_on_start: If True, validate ESPN team IDs against the
                 database at startup. Mismatches are logged as warnings but do not
                 prevent the poller from starting. Default True.
@@ -203,9 +199,8 @@ class ESPNGamePoller(BasePoller):
               DISCOVERY leagues poll at 900s, TRACKING leagues at 30s.
               Budget math ensures we stay under 250 req/hr.
 
-            Adaptive polling (Issue #234) is now a subset of per-league polling:
-            - With per_league_polling=True: Each league transitions independently
-            - With per_league_polling=False: Falls back to old single-interval behavior
+            Adaptive polling (Issue #234) is a subset of per-league polling:
+            each league transitions independently between DISCOVERY and TRACKING.
         """
         effective_idle = idle_interval or self.DEFAULT_IDLE_INTERVAL
         if effective_idle < 15:
@@ -222,12 +217,7 @@ class ESPNGamePoller(BasePoller):
         self.persist_jobs = persist_jobs
         self.job_store_url = job_store_url
         self.adaptive_polling = adaptive_polling
-        self.per_league_polling = per_league_polling
         self.validate_teams_on_start = validate_teams_on_start
-
-        # Track current polling mode for adaptive polling (legacy single-interval)
-        self._current_interval = self.poll_interval
-        self._last_active_state: bool | None = None  # Track if we were last polling active/idle
 
         # Per-league polling state (protected by self._lock from BasePoller)
         # Maps league code -> LEAGUE_STATE_DISCOVERY or LEAGUE_STATE_TRACKING
@@ -247,14 +237,12 @@ class ESPNGamePoller(BasePoller):
 
         logger.info(
             "ESPNGamePoller initialized: leagues=%s, poll_interval=%ds, "
-            "idle_interval=%ds, persist_jobs=%s, adaptive_polling=%s, "
-            "per_league_polling=%s",
+            "idle_interval=%ds, persist_jobs=%s, adaptive_polling=%s",
             self.leagues,
             self.poll_interval,
             self.idle_interval,
             self.persist_jobs,
             self.adaptive_polling,
-            self.per_league_polling,
         )
 
     def _get_job_name(self) -> str:
@@ -295,9 +283,8 @@ class ESPNGamePoller(BasePoller):
         Start the polling scheduler with optional job persistence.
 
         Overrides BasePoller.start() to add job persistence support
-        via SQLAlchemy job store. When per_league_polling is enabled,
-        creates separate APScheduler jobs for each league with staggered
-        offsets to avoid request bursts.
+        via SQLAlchemy job store. Creates separate APScheduler jobs for
+        each league with staggered offsets to avoid request bursts.
 
         Raises:
             RuntimeError: If already started.
@@ -332,38 +319,28 @@ class ESPNGamePoller(BasePoller):
                 },
             )
 
-            if self.per_league_polling:
-                # Per-league mode: create one job per league with staggered starts
-                now = datetime.now(UTC)
-                for idx, league in enumerate(self.leagues):
-                    initial_interval = self.DEFAULT_DISCOVERY_INTERVAL
-                    job_id = self._league_job_id(league)
-                    stagger_seconds = idx * self.LEAGUE_STAGGER_OFFSET
-                    start_time = now + timedelta(seconds=initial_interval + stagger_seconds)
+            # Per-league mode: create one job per league with staggered starts
+            now = datetime.now(UTC)
+            for idx, league in enumerate(self.leagues):
+                initial_interval = self.DEFAULT_DISCOVERY_INTERVAL
+                job_id = self._league_job_id(league)
+                stagger_seconds = idx * self.LEAGUE_STAGGER_OFFSET
+                start_time = now + timedelta(seconds=initial_interval + stagger_seconds)
 
-                    self._scheduler.add_job(
-                        self._poll_league_wrapper,
-                        IntervalTrigger(seconds=initial_interval, start_date=start_time),
-                        id=job_id,
-                        name=f"ESPN {league.upper()} Poll",
-                        replace_existing=True,
-                        args=[league],
-                    )
-
-                    logger.info(
-                        "Added per-league job: %s (interval=%ds, stagger=%ds)",
-                        league.upper(),
-                        initial_interval,
-                        stagger_seconds,
-                    )
-            else:
-                # Legacy single-job mode: one job polls all leagues
                 self._scheduler.add_job(
-                    self._poll_wrapper,
-                    IntervalTrigger(seconds=self.poll_interval),
-                    id=f"poll_{self.__class__.__name__.lower()}",
-                    name=self._get_job_name(),
+                    self._poll_league_wrapper,
+                    IntervalTrigger(seconds=initial_interval, start_date=start_time),
+                    id=job_id,
+                    name=f"ESPN {league.upper()} Poll",
                     replace_existing=True,
+                    args=[league],
+                )
+
+                logger.info(
+                    "Added per-league job: %s (interval=%ds, stagger=%ds)",
+                    league.upper(),
+                    initial_interval,
+                    stagger_seconds,
                 )
 
             # Periodic team validation job (6hr interval).
@@ -393,18 +370,11 @@ class ESPNGamePoller(BasePoller):
         with BasePoller._registry_lock:
             BasePoller._active_pollers.add(self)
 
-        if self.per_league_polling:
-            logger.info(
-                "%s started - per-league polling for %d leagues",
-                self.__class__.__name__,
-                len(self.leagues),
-            )
-        else:
-            logger.info(
-                "%s started - polling every %d seconds",
-                self.__class__.__name__,
-                self.poll_interval,
-            )
+        logger.info(
+            "%s started - per-league polling for %d leagues",
+            self.__class__.__name__,
+            len(self.leagues),
+        )
 
         # Hook for subclass initialization
         self._on_start()
@@ -412,11 +382,8 @@ class ESPNGamePoller(BasePoller):
         # Run initial poll AFTER releasing the lock and starting the scheduler.
         # _poll_league_wrapper needs self._lock, so this MUST be outside the
         # with self._lock block above (threading.Lock is non-reentrant).
-        if self.per_league_polling:
-            for league in self.leagues:
-                self._poll_league_wrapper(league)
-        else:
-            self._poll_wrapper()
+        for league in self.leagues:
+            self._poll_league_wrapper(league)
 
     def _on_start(self) -> None:
         """Run startup validation of ESPN team IDs if configured.
@@ -536,7 +503,7 @@ class ESPNGamePoller(BasePoller):
         """
         Execute a single poll for one league and evaluate state transition.
 
-        This is the per-league equivalent of _poll_wrapper(). It polls one league,
+        Polls one league,
         updates stats, then evaluates whether the league should transition between
         DISCOVERY and TRACKING states.
 
@@ -816,127 +783,22 @@ class ESPNGamePoller(BasePoller):
         with self._lock:
             return dict(self._league_intervals)
 
-    def _poll_wrapper(self) -> None:
-        """
-        Override base _poll_wrapper to add adaptive polling interval adjustment.
-
-        After each poll cycle:
-        1. Execute the standard poll (via parent class logic)
-        2. Check for active games
-        3. Adjust polling interval if needed (Issue #234)
-
-        Educational Note:
-            Adaptive polling dynamically adjusts the interval based on game activity:
-            - Active games: Use poll_interval (fast, captures score changes)
-            - No active games: Use idle_interval (slow, saves API quota)
-
-            We only reschedule when the state changes (active -> idle or vice versa)
-            to avoid unnecessary scheduler operations.
-        """
-        from datetime import UTC, datetime
-
-        start_time = datetime.now(UTC)
-
-        try:
-            result = self._poll_once()
-
-            with self._lock:
-                self._stats["polls_completed"] += 1
-                self._stats["items_fetched"] += result.get("items_fetched", 0)
-                self._stats["items_updated"] += result.get("items_updated", 0)
-                self._stats["items_created"] += result.get("items_created", 0)
-                self._stats["last_poll"] = start_time.isoformat()
-
-            elapsed = (datetime.now(UTC) - start_time).total_seconds()
-            updated = result.get("items_updated", 0)
-            created = result.get("items_created", 0)
-            # Demote no-change polls to DEBUG to reduce steady-state noise
-            log_fn = self.logger.info if (updated or created) else self.logger.debug
-            log_fn(
-                "ESPN poll completed: fetched=%d, updated=%d, created=%d in %.2fs",
-                result.get("items_fetched", 0),
-                updated,
-                created,
-                elapsed,
-            )
-
-            # Adaptive polling: adjust interval based on game activity (Issue #234)
-            if self.adaptive_polling:
-                self._adjust_poll_interval()
-
-        except Exception as e:
-            self.logger.exception("Error in poll cycle: %s", e)
-            with self._lock:
-                self._stats["errors"] += 1
-                self._stats["last_error"] = str(e)
-
-    def _adjust_poll_interval(self) -> None:
-        """
-        Adjust polling interval based on active game status.
-
-        Called after each poll when adaptive_polling=True.
-        Reschedules the APScheduler job with new interval if state changed.
-
-        Educational Note:
-            We track _last_active_state to avoid unnecessary rescheduling.
-            Rescheduling on every poll would be wasteful; we only reschedule
-            when transitioning between active and idle states.
-
-        Reference: Issue #234 (Adaptive Polling Frequency)
-        """
-        # Guard: skip if adaptive polling is disabled
-        if not self.adaptive_polling:
-            return
-
-        has_active = self.has_active_games()
-
-        # Determine desired interval
-        desired_interval = self.poll_interval if has_active else self.idle_interval
-
-        # Only reschedule if state changed
-        if self._last_active_state is not None and self._last_active_state == has_active:
-            return  # No state change, no need to reschedule
-
-        # State changed - update interval
-        self._last_active_state = has_active
-        self._current_interval = desired_interval
-
-        # Reschedule the job with new interval
-        if self._scheduler and self._enabled:
-            job_id = f"poll_{self.__class__.__name__.lower()}"
-            try:
-                self._scheduler.reschedule_job(
-                    job_id,
-                    trigger=IntervalTrigger(seconds=desired_interval),
-                )
-                logger.info(
-                    "Adaptive polling: %s -> %ds interval (%s)",
-                    "active" if has_active else "idle",
-                    desired_interval,
-                    "games in progress" if has_active else "no active games",
-                )
-            except Exception as e:
-                logger.warning("Failed to reschedule job: %s", e)
-
     def get_current_interval(self) -> int:
         """
         Get the current polling interval.
 
-        When per_league_polling is enabled, returns the minimum interval across
-        all leagues (i.e., the fastest polling rate currently in effect).
-        When per_league_polling is disabled, returns the legacy single interval.
+        Returns the minimum interval across all leagues (i.e., the fastest
+        polling rate currently in effect).
 
         Returns:
             Current interval in seconds.
 
         Useful for monitoring and debugging adaptive polling behavior.
         """
-        if self.per_league_polling:
-            with self._lock:
-                if self._league_intervals:
-                    return min(self._league_intervals.values())
-            return self.DEFAULT_DISCOVERY_INTERVAL
-        return self._current_interval
+        with self._lock:
+            if self._league_intervals:
+                return min(self._league_intervals.values())
+        return self.DEFAULT_DISCOVERY_INTERVAL
 
     def poll_once(self, leagues: list[str] | None = None) -> dict[str, int]:
         """

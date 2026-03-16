@@ -148,9 +148,9 @@ class TestConcurrentLoadResultUpdates:
 
         def create_result(idx: int) -> None:
             result = LoadResult(
-                records_processed=idx,
-                records_inserted=idx // 2,
-                records_skipped=idx // 4,
+                total_records=idx,
+                successful=idx // 2,
+                skipped=idx // 4,
             )
             with lock:
                 results.append(result)

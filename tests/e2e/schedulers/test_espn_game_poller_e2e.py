@@ -121,7 +121,6 @@ class TestCompletePollingWorkflow:
             leagues=["nfl"],
             poll_interval=15,
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         # Execute single poll
@@ -161,11 +160,19 @@ class TestCompletePollingWorkflow:
             leagues=["nfl"],
             poll_interval=15,
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         poller.start()
         try:
+            # Force league interval to poll_interval for fast test execution.
+            # Per-league mode starts at DISCOVERY (900s); override for testing.
+            from apscheduler.triggers.interval import IntervalTrigger
+
+            poller._scheduler.reschedule_job(
+                poller._league_job_id("nfl"),
+                trigger=IntervalTrigger(seconds=15),
+            )
+
             # Wait for multiple polls (15s interval)
             time.sleep(32)
 
@@ -295,7 +302,6 @@ class TestMultiLeagueWorkflow:
         poller = ESPNGamePoller(
             leagues=["nfl", "nba"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         result = poller.poll_once()
@@ -331,11 +337,18 @@ class TestErrorRecoveryWorkflow:
             leagues=["nfl"],
             poll_interval=15,
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         poller.start()
         try:
+            # Force league interval for fast test execution
+            from apscheduler.triggers.interval import IntervalTrigger
+
+            poller._scheduler.reschedule_job(
+                poller._league_job_id("nfl"),
+                trigger=IntervalTrigger(seconds=15),
+            )
+
             time.sleep(32)
 
             # Should have recovered and continued
@@ -384,7 +397,6 @@ class TestErrorRecoveryWorkflow:
         poller = ESPNGamePoller(
             leagues=["nfl", "ncaaf"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         # Use _poll_wrapper which catches per-league errors
@@ -416,7 +428,6 @@ class TestLifecycleWorkflow:
             leagues=["nfl"],
             poll_interval=15,
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         # Initial state
@@ -447,7 +458,6 @@ class TestLifecycleWorkflow:
             leagues=["nfl"],
             poll_interval=15,
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         # First run
@@ -489,7 +499,6 @@ class TestRefreshScoreboardsWorkflow:
         poller = ESPNGamePoller(
             leagues=["nfl", "ncaaf"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         result = poller.refresh_scoreboards()
@@ -540,7 +549,6 @@ class TestRefreshScoreboardsWorkflow:
         poller = ESPNGamePoller(
             leagues=["nfl", "ncaaf"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         result = poller.refresh_scoreboards(active_only=True)
@@ -550,293 +558,8 @@ class TestRefreshScoreboardsWorkflow:
         assert result["active_games"] >= 1
 
 
-# =============================================================================
-# E2E Tests: Adaptive Polling Workflow (Issue #234)
-# =============================================================================
-
-
-@pytest.mark.e2e
-class TestAdaptivePollingWorkflow:
-    """E2E tests for adaptive polling workflow.
-
-    Related: Issue #234 - Adaptive polling to reduce API load during idle periods
-    Reference: TESTING_STRATEGY V3.2 - E2E tests for complete workflow validation
-
-    Adaptive polling adjusts the polling interval based on game activity:
-    - Active games: poll_interval (default 15s) for real-time updates
-    - No active games: idle_interval (default 60s) to reduce API load
-    """
-
-    @patch("precog.schedulers.espn_game_poller.get_live_games")
-    def test_adaptive_polling_complete_lifecycle(
-        self,
-        mock_get_live: MagicMock,
-        mock_espn_client: MagicMock,
-    ) -> None:
-        """E2E: Test complete adaptive polling lifecycle.
-
-        Workflow:
-        1. Initialize poller with adaptive polling enabled
-        2. Start with no active games -> idle interval
-        3. Active games appear -> poll interval
-        4. Games end -> idle interval
-        5. Verify scheduler reschedules job correctly
-        """
-        # Initially no active games
-        mock_get_live.return_value = []
-        mock_espn_client.get_scoreboard.return_value = []
-
-        poller = ESPNGamePoller(
-            leagues=["nfl"],
-            poll_interval=15,  # Minimum allowed interval
-            idle_interval=30,
-            adaptive_polling=True,
-            espn_client=mock_espn_client,
-            per_league_polling=False,
-        )
-
-        # Verify initial configuration
-        assert poller.adaptive_polling is True
-        assert poller.poll_interval == 15
-        assert poller.idle_interval == 30
-
-        # Start poller
-        poller.start()
-        try:
-            time.sleep(0.5)
-
-            # Should be at idle interval (no games)
-            assert poller.get_current_interval() == 30
-            assert poller._last_active_state is False
-
-            # Simulate games becoming active
-            mock_get_live.return_value = [{"game_id": 1, "status": "in_progress"}]
-            poller._adjust_poll_interval()
-
-            # Should switch to poll interval
-            assert poller.get_current_interval() == 15
-            assert poller._last_active_state is True
-
-            # Simulate games ending
-            mock_get_live.return_value = []  # type: ignore[unreachable]
-            poller._adjust_poll_interval()
-
-            # Should return to idle interval
-            assert poller.get_current_interval() == 30
-            assert poller._last_active_state is False
-
-        finally:
-            poller.stop()
-
-    @patch("precog.schedulers.espn_game_poller.get_live_games")
-    def test_adaptive_polling_preserves_state_across_polls(
-        self,
-        mock_get_live: MagicMock,
-        mock_espn_client: MagicMock,
-    ) -> None:
-        """E2E: Verify adaptive state preserved across multiple poll cycles."""
-        mock_get_live.return_value = [{"game_id": 1}]  # Active
-        mock_espn_client.get_scoreboard.return_value = []
-
-        poller = ESPNGamePoller(
-            leagues=["nfl"],
-            poll_interval=15,  # Minimum allowed interval
-            idle_interval=30,
-            adaptive_polling=True,
-            espn_client=mock_espn_client,
-            per_league_polling=False,
-        )
-
-        poller.start()
-        try:
-            # Let scheduler run a few cycles (15s interval, wait for 2+ polls)
-            time.sleep(17)
-
-            # Should stay at poll interval while games active
-            assert poller.get_current_interval() == 15
-            # Should have at least 2 polls (initial + scheduled)
-            assert poller.stats["polls_completed"] >= 2
-
-        finally:
-            poller.stop()
-
-    @patch("precog.schedulers.espn_game_poller.get_live_games")
-    def test_adaptive_polling_with_poll_wrapper(
-        self,
-        mock_get_live: MagicMock,
-        mock_espn_client: MagicMock,
-    ) -> None:
-        """E2E: Test _poll_wrapper updates adaptive state after each poll.
-
-        Note: poll_once() is the raw poll method that doesn't adjust intervals.
-        _poll_wrapper() is used by the scheduler and calls _adjust_poll_interval().
-        """
-        mock_get_live.return_value = []
-        mock_espn_client.get_scoreboard.return_value = []
-
-        poller = ESPNGamePoller(
-            leagues=["nfl"],
-            poll_interval=15,
-            idle_interval=60,
-            adaptive_polling=True,
-            espn_client=mock_espn_client,
-            per_league_polling=False,
-        )
-
-        # Initial poll with no active games (use _poll_wrapper which adjusts interval)
-        poller._poll_wrapper()
-
-        assert poller.get_current_interval() == 60  # Idle
-
-        # Simulate game starting
-        game = {
-            "metadata": {
-                "espn_event_id": "game_1",
-                "home_team": {"espn_team_id": "1"},
-                "away_team": {"espn_team_id": "2"},
-                "venue": {"venue_name": "Stadium"},
-            },
-            "state": {"home_score": 7, "away_score": 3, "game_status": "in_progress"},
-        }
-        mock_get_live.return_value = [{"game_id": 1}]
-        mock_espn_client.get_scoreboard.return_value = [game]
-
-        # Second poll with active games
-        poller._poll_wrapper()
-
-        assert poller.get_current_interval() == 15  # Active
-
-    @patch("precog.schedulers.espn_game_poller.get_live_games")
-    @patch("precog.schedulers.espn_game_poller.ESPNClient")
-    def test_create_poller_factory_with_adaptive_polling(
-        self,
-        mock_client_class: MagicMock,
-        mock_get_live: MagicMock,
-    ) -> None:
-        """E2E: Test factory function creates poller with adaptive polling enabled.
-
-        Note: create_espn_poller() always creates pollers with adaptive_polling=True
-        by default in the ESPNGamePoller constructor.
-        """
-        mock_client = MagicMock()
-        mock_client.get_scoreboard.return_value = []
-        mock_client_class.return_value = mock_client
-        mock_get_live.return_value = []
-
-        # Create via factory (adaptive + per-league polling enabled by default)
-        poller = create_espn_poller(
-            leagues=["nfl"],
-            poll_interval=15,
-            idle_interval=60,
-        )
-
-        # Verify factory respects poll/idle intervals
-        assert poller.poll_interval == 15
-        assert poller.idle_interval == 60
-
-        # Adaptive and per-league polling are enabled by default
-        assert poller.adaptive_polling is True
-        assert poller.per_league_polling is True
-
-        # With per-league polling and no live games, league stays in DISCOVERY
-        # state (900s interval) until games are found
-        poller._poll_wrapper()
-        assert poller.get_current_interval() == poller.DEFAULT_DISCOVERY_INTERVAL
-
-    def test_adaptive_polling_disabled_workflow(
-        self,
-        mock_espn_client: MagicMock,
-    ) -> None:
-        """E2E: Verify behavior when adaptive polling is disabled."""
-        mock_espn_client.get_scoreboard.return_value = []
-
-        poller = ESPNGamePoller(
-            leagues=["nfl"],
-            poll_interval=15,
-            idle_interval=60,
-            adaptive_polling=False,  # Disabled
-            espn_client=mock_espn_client,
-            per_league_polling=False,
-        )
-
-        assert poller.adaptive_polling is False
-
-        # Should always use poll_interval
-        assert poller.get_current_interval() == 15
-
-        poller.start()
-        try:
-            time.sleep(1)
-
-            # Still at poll_interval regardless of game activity
-            assert poller.get_current_interval() == 15
-
-        finally:
-            poller.stop()
-
-    @patch("precog.schedulers.espn_game_poller.get_live_games")
-    def test_adaptive_polling_multi_league_workflow(
-        self,
-        mock_get_live: MagicMock,
-        mock_espn_client: MagicMock,
-    ) -> None:
-        """E2E: Test adaptive polling with multiple leagues.
-
-        If ANY league has active games, use poll_interval.
-        Only use idle_interval when ALL leagues have no active games.
-        """
-        mock_espn_client.get_scoreboard.return_value = []
-
-        poller = ESPNGamePoller(
-            leagues=["nfl", "ncaaf", "nba"],
-            poll_interval=15,
-            idle_interval=60,
-            adaptive_polling=True,
-            espn_client=mock_espn_client,
-            per_league_polling=False,
-        )
-
-        # No games in any league
-        mock_get_live.return_value = []
-        poller._adjust_poll_interval()
-        assert poller.get_current_interval() == 60
-
-        # Game in NFL only
-        def get_live_by_league(league: str):
-            return [{"game_id": 1}] if league == "nfl" else []
-
-        mock_get_live.side_effect = get_live_by_league
-        poller._adjust_poll_interval()
-        assert poller.get_current_interval() == 15
-
-        # Game in NCAAF only (NFL empty)
-        def get_live_by_league_ncaaf(league: str):
-            return [{"game_id": 2}] if league == "ncaaf" else []
-
-        mock_get_live.side_effect = get_live_by_league_ncaaf
-        poller._adjust_poll_interval()
-        assert poller.get_current_interval() == 15  # Still active
-
-        # All leagues empty
-        mock_get_live.side_effect = None
-        mock_get_live.return_value = []
-        poller._adjust_poll_interval()
-        assert poller.get_current_interval() == 60
-
-
-# =============================================================================
-# Real-API E2E Tests: ESPN Poller with Live ESPN API
-# =============================================================================
-
-
 def _is_espn_reachable() -> bool:
-    """Check if ESPN API is reachable via socket connection.
-
-    Educational Note:
-        Uses a quick socket check rather than a full HTTP request
-        for faster failure detection. This allows graceful skipping
-        in CI environments without network access.
-    """
+    """Check if ESPN API is reachable via socket connection."""
     try:
         socket.create_connection(("site.api.espn.com", 443), timeout=5)
         return True
@@ -913,7 +636,6 @@ class TestRealAPIPollerIntegration:
             leagues=["nfl"],
             poll_interval=30,
             espn_client=real_espn_client,
-            per_league_polling=False,
         )
 
         # This calls the real ESPN API -- should not raise
@@ -994,7 +716,6 @@ class TestRealAPIPollerIntegration:
             leagues=["nfl", "nba", "nhl"],
             poll_interval=30,
             espn_client=real_espn_client,
-            per_league_polling=False,
         )
 
         # Should not raise for any league
@@ -1027,7 +748,6 @@ class TestRealAPIPollerIntegration:
             leagues=["nfl"],
             poll_interval=30,
             espn_client=real_espn_client,
-            per_league_polling=False,
         )
 
         result = poller.poll_once()
@@ -1069,7 +789,6 @@ class TestRealAPIPollerIntegration:
             leagues=["nfl"],
             poll_interval=30,
             espn_client=real_espn_client,
-            per_league_polling=False,
         )
 
         result = poller.poll_once()
@@ -1123,7 +842,6 @@ class TestRealAPIPollerIntegration:
             leagues=["nfl"],
             poll_interval=30,
             espn_client=real_espn_client,
-            per_league_polling=False,
         )
 
         result = poller.poll_once()
@@ -1185,7 +903,6 @@ class TestRealAPIPollerIntegration:
             _poll_wrapper() differs from poll_once() in that it:
             - Catches exceptions instead of propagating them
             - Updates stats (polls_completed, items_fetched, etc.)
-            - Calls _adjust_poll_interval() for adaptive polling
         """
         mock_get_team.return_value = {"team_id": 1}
         mock_create_venue.return_value = 100
@@ -1196,7 +913,6 @@ class TestRealAPIPollerIntegration:
             poll_interval=30,
             adaptive_polling=True,
             espn_client=real_espn_client,
-            per_league_polling=False,
         )
 
         # Should not raise -- _poll_wrapper catches errors

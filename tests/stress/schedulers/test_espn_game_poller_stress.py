@@ -74,7 +74,6 @@ class TestHighVolumePolling:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         # Rapid poll calls
@@ -91,7 +90,6 @@ class TestHighVolumePolling:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         for _ in range(50):
@@ -118,7 +116,6 @@ class TestHighVolumePolling:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         result = poller.poll_once()
@@ -171,7 +168,6 @@ class TestMultiLeagueHighVolume:
         poller = ESPNGamePoller(
             leagues=all_leagues,
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         result = poller.poll_once()
@@ -197,7 +193,6 @@ class TestStatsUnderLoad:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         stats_reads: list[dict[str, Any]] = []
@@ -222,7 +217,6 @@ class TestStatsUnderLoad:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         for i in range(50):
@@ -260,7 +254,6 @@ class TestErrorRecoveryUnderLoad:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         for _ in range(100):
@@ -277,7 +270,6 @@ class TestErrorRecoveryUnderLoad:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         for _ in range(100):
@@ -304,7 +296,6 @@ class TestConcurrentOperations:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         stop_event = threading.Event()
@@ -349,7 +340,6 @@ class TestConcurrentOperations:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         errors: list[Exception] = []
@@ -395,7 +385,6 @@ class TestSchedulerUnderLoad:
             poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         for _ in range(20):
@@ -414,7 +403,6 @@ class TestSchedulerUnderLoad:
             poll_interval=15,
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         poller.start()
@@ -446,7 +434,6 @@ class TestMemoryPressure:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         # Do some polls
@@ -473,7 +460,6 @@ class TestMemoryPressure:
             p = ESPNGamePoller(
                 leagues=["nfl"],
                 espn_client=mock_espn_client,
-                per_league_polling=False,
             )
             pollers.append(p)
 
@@ -501,7 +487,6 @@ class TestStatusNormalizationUnderLoad:
         poller = ESPNGamePoller(
             leagues=["nfl"],
             espn_client=mock_espn_client,
-            per_league_polling=False,
         )
 
         statuses = ["pre", "in", "halftime", "final", "unknown", "", "POST"]
@@ -521,479 +506,3 @@ class TestStatusNormalizationUnderLoad:
 # =============================================================================
 # Stress Tests: Adaptive Polling Under Load (Issue #234)
 # =============================================================================
-
-
-@pytest.mark.stress
-class TestAdaptivePollingStress:
-    """Stress tests for adaptive polling interval adjustment under load.
-
-    Tests the _adjust_poll_interval() and has_active_games() methods
-    under various stress scenarios.
-
-    Related: Issue #234 (ESPNGamePoller adaptive polling)
-    """
-
-    def test_rapid_interval_adjustments(self, mock_espn_client: MagicMock) -> None:
-        """Test rapid interval adjustment calls."""
-        poller = ESPNGamePoller(
-            poll_interval=15,
-            idle_interval=60,
-            leagues=["nfl"],
-            espn_client=mock_espn_client,
-            adaptive_polling=True,
-            per_league_polling=False,
-        )
-
-        # Don't start scheduler - just test the adjustment logic
-        with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
-            # Alternate between active and idle states rapidly
-            for i in range(50):
-                mock_get_live.return_value = [{"game_id": 1}] if i % 2 == 0 else []
-                poller._adjust_poll_interval()
-
-        # Should complete without errors
-        # Final state depends on last iteration (i=999, i%2=1, so idle)
-        assert poller._last_active_state is False
-
-    def test_concurrent_interval_adjustments(self, mock_espn_client: MagicMock) -> None:
-        """Test concurrent interval adjustment from multiple threads."""
-        poller = ESPNGamePoller(
-            poll_interval=15,
-            idle_interval=60,
-            leagues=["nfl"],
-            espn_client=mock_espn_client,
-            adaptive_polling=True,
-            per_league_polling=False,
-        )
-
-        errors: list[Exception] = []
-        call_count = {"total": 0}
-        lock = threading.Lock()
-
-        def adjust_intervals(thread_id: int) -> None:
-            try:
-                with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
-                    for i in range(100):
-                        # Simulate varying active game states
-                        mock_get_live.return_value = (
-                            [{"game_id": thread_id}] if (i + thread_id) % 3 == 0 else []
-                        )
-                        poller._adjust_poll_interval()
-                        with lock:
-                            call_count["total"] += 1
-            except Exception as e:
-                errors.append(e)
-
-        threads = [threading.Thread(target=adjust_intervals, args=(i,)) for i in range(10)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=30)
-
-        assert len(errors) == 0, f"Errors during concurrent adjustment: {errors}"
-        assert call_count["total"] == 1000  # 10 threads * 100 calls
-
-    def test_has_active_games_high_volume(self, mock_espn_client: MagicMock) -> None:
-        """Test has_active_games() under high volume calls."""
-        poller = ESPNGamePoller(
-            leagues=["nfl", "ncaaf", "nba"],
-            espn_client=mock_espn_client,
-            adaptive_polling=True,
-            per_league_polling=False,
-        )
-
-        with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
-            # Simulate different responses for different leagues
-            def get_live_games_mock(league: str) -> list:
-                if league == "nfl":
-                    return [{"game_id": 1}]
-                return []
-
-            mock_get_live.side_effect = get_live_games_mock
-
-            results = []
-            for _ in range(50):
-                result = poller.has_active_games()
-                results.append(result)
-
-            # All should return True (NFL has active games)
-            assert all(results), "Expected all True when NFL has active games"
-            assert mock_get_live.call_count == 50  # Short-circuits after first True
-
-    @pytest.mark.skipif(_is_ci, reason="Starts real APScheduler; run locally")
-    def test_interval_adjustment_under_scheduler_load(self, mock_espn_client: MagicMock) -> None:
-        """Test interval adjustment while scheduler is running under load."""
-        mock_espn_client.get_scoreboard.return_value = []
-
-        poller = ESPNGamePoller(
-            poll_interval=15,  # Minimum allowed poll interval
-            idle_interval=15,  # Minimum allowed idle interval
-            leagues=["nfl"],
-            espn_client=mock_espn_client,
-            adaptive_polling=True,
-            per_league_polling=False,
-        )
-
-        with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
-            mock_get_live.return_value = []
-
-            poller.start()
-            try:
-                # Let it run for a bit while alternating states
-                for i in range(20):
-                    mock_get_live.return_value = [{"game_id": 1}] if i % 2 == 0 else []
-                    time.sleep(0.1)
-
-                # Should have completed some polls
-                assert poller.stats["polls_completed"] > 0
-            finally:
-                poller.stop()
-
-    def test_adaptive_polling_state_transitions_stress(self, mock_espn_client: MagicMock) -> None:
-        """Test rapid state transitions between active and idle."""
-        poller = ESPNGamePoller(
-            poll_interval=15,
-            idle_interval=60,
-            leagues=["nfl"],
-            espn_client=mock_espn_client,
-            adaptive_polling=True,
-            per_league_polling=False,
-        )
-
-        transition_count = {"active_to_idle": 0, "idle_to_active": 0}
-
-        with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
-            last_state = None
-
-            for i in range(25):
-                is_active = i % 2 == 0
-                mock_get_live.return_value = [{"game_id": 1}] if is_active else []
-
-                poller._adjust_poll_interval()
-
-                current_state = poller._last_active_state
-                if last_state is not None and last_state != current_state:  # type: ignore[unreachable]
-                    if last_state and not current_state:  # type: ignore[unreachable]
-                        transition_count["active_to_idle"] += 1
-                    elif not last_state and current_state:
-                        transition_count["idle_to_active"] += 1
-                last_state = current_state
-
-        # Should have many transitions (alternating every call)
-        assert transition_count["active_to_idle"] > 10
-        assert transition_count["idle_to_active"] > 10
-
-    def test_adaptive_polling_disabled_stress(self, mock_espn_client: MagicMock) -> None:
-        """Test that disabled adaptive polling doesn't adjust intervals under load."""
-        poller = ESPNGamePoller(
-            poll_interval=15,
-            idle_interval=60,
-            leagues=["nfl"],
-            espn_client=mock_espn_client,
-            adaptive_polling=False,  # Disabled,
-            per_league_polling=False,
-        )
-
-        with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
-            mock_get_live.return_value = [{"game_id": 1}]
-
-            for _ in range(50):
-                poller._adjust_poll_interval()
-
-            # Should never call get_live_games when disabled
-            mock_get_live.assert_not_called()
-
-    def test_get_current_interval_stress(self, mock_espn_client: MagicMock) -> None:
-        """Test get_current_interval() under high volume calls."""
-        poller = ESPNGamePoller(
-            poll_interval=15,
-            idle_interval=60,
-            leagues=["nfl"],
-            espn_client=mock_espn_client,
-            adaptive_polling=True,
-            per_league_polling=False,
-        )
-
-        intervals = []
-        for _ in range(100):
-            interval = poller.get_current_interval()
-            intervals.append(interval)
-
-        # All should be valid intervals (15 or 60)
-        valid_intervals = {15, 60}
-        for interval in intervals:
-            assert interval in valid_intervals, f"Invalid interval: {interval}"
-
-
-# =============================================================================
-# Race Tests: Adaptive Polling Race Conditions (Issue #234)
-# =============================================================================
-
-
-@pytest.mark.race
-class TestAdaptivePollingRace:
-    """Race condition tests for adaptive polling interval adjustment.
-
-    Tests thread safety of _adjust_poll_interval() and has_active_games().
-
-    Related: Issue #234 (ESPNGamePoller adaptive polling)
-    """
-
-    def test_race_concurrent_interval_adjustment(self, mock_espn_client: MagicMock) -> None:
-        """
-        RACE: Multiple threads adjusting interval simultaneously.
-
-        Validates:
-        - Interval adjustment is thread-safe
-        - _last_active_state updates correctly
-        - No corrupted interval values
-        """
-        poller = ESPNGamePoller(
-            poll_interval=15,
-            idle_interval=60,
-            leagues=["nfl"],
-            espn_client=mock_espn_client,
-            adaptive_polling=True,
-            per_league_polling=False,
-        )
-
-        errors: list[Exception] = []
-        results = {"adjustments": 0}
-        lock = threading.Lock()
-        barrier = threading.Barrier(10, timeout=10.0)
-
-        def adjust_interval(thread_id: int) -> None:
-            try:
-                with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
-                    barrier.wait()
-                    for i in range(100):
-                        # Alternate between active and idle
-                        mock_get_live.return_value = [{"game_id": thread_id}] if i % 2 == 0 else []
-                        poller._adjust_poll_interval()
-                        with lock:
-                            results["adjustments"] += 1
-            except Exception as e:
-                errors.append(e)
-
-        threads = [threading.Thread(target=adjust_interval, args=(i,)) for i in range(10)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=30)
-
-        assert len(errors) == 0, f"Errors: {errors}"
-        assert results["adjustments"] == 1000  # 10 threads * 100 calls
-        # Final state should be valid
-        assert poller._last_active_state in (True, False)
-
-    def test_race_has_active_games_concurrent(self, mock_espn_client: MagicMock) -> None:
-        """
-        RACE: Concurrent calls to has_active_games().
-
-        Validates:
-        - Method returns consistent results under concurrent access
-        - No race condition between league checks
-        """
-        poller = ESPNGamePoller(
-            leagues=["nfl", "ncaaf", "nba"],
-            espn_client=mock_espn_client,
-            adaptive_polling=True,
-            per_league_polling=False,
-        )
-
-        results = {"true_count": 0, "false_count": 0, "errors": []}
-        lock = threading.Lock()
-        barrier = threading.Barrier(10, timeout=10.0)
-
-        def check_active_games(thread_id: int) -> None:
-            try:
-                with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
-                    # Even threads: no active games, Odd threads: active games
-                    mock_get_live.return_value = [{"game_id": 1}] if thread_id % 2 == 1 else []
-                    barrier.wait()
-
-                    for _ in range(100):
-                        result = poller.has_active_games()
-                        with lock:
-                            if result:
-                                results["true_count"] += 1  # type: ignore[operator]
-                            else:
-                                results["false_count"] += 1  # type: ignore[operator]
-            except Exception as e:
-                with lock:
-                    errors_list = results["errors"]
-                    assert isinstance(errors_list, list)
-                    errors_list.append(str(e))
-
-        threads = [threading.Thread(target=check_active_games, args=(i,)) for i in range(10)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=30)
-
-        errors_list = results["errors"]
-        assert isinstance(errors_list, list), f"Expected list, got {type(errors_list)}"
-        assert len(errors_list) == 0, f"Errors: {errors_list}"
-        # Total calls should be 1000
-        assert results["true_count"] + results["false_count"] == 1000  # type: ignore[operator]
-
-    def test_race_get_current_interval_during_adjustment(self, mock_espn_client: MagicMock) -> None:
-        """
-        RACE: Read interval while another thread is adjusting.
-
-        Validates:
-        - Interval reads are atomic
-        - No partially updated values
-        """
-        poller = ESPNGamePoller(
-            poll_interval=15,
-            idle_interval=60,
-            leagues=["nfl"],
-            espn_client=mock_espn_client,
-            adaptive_polling=True,
-            per_league_polling=False,
-        )
-
-        errors: list[Exception] = []
-        intervals_read: list[int] = []
-        lock = threading.Lock()
-        stop_event = threading.Event()
-
-        def adjust_continuously() -> None:
-            try:
-                with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
-                    while not stop_event.is_set():
-                        # Flip between active and idle rapidly
-                        mock_get_live.return_value = [{"game_id": 1}]
-                        poller._adjust_poll_interval()
-                        mock_get_live.return_value = []
-                        poller._adjust_poll_interval()
-            except Exception as e:
-                errors.append(e)
-
-        def read_continuously() -> None:
-            try:
-                while not stop_event.is_set():
-                    interval = poller.get_current_interval()
-                    with lock:
-                        intervals_read.append(interval)
-            except Exception as e:
-                errors.append(e)
-
-        adjuster = threading.Thread(target=adjust_continuously)
-        readers = [threading.Thread(target=read_continuously) for _ in range(5)]
-
-        adjuster.start()
-        for r in readers:
-            r.start()
-
-        time.sleep(1)  # Let threads run
-        stop_event.set()
-
-        adjuster.join(timeout=5)
-        for r in readers:
-            r.join(timeout=5)
-
-        assert len(errors) == 0, f"Errors: {errors}"
-        # All intervals should be valid (15 or 60)
-        valid_intervals = {15, 60}
-        for interval in intervals_read:
-            assert interval in valid_intervals, f"Invalid interval read: {interval}"
-
-    def test_race_poll_wrapper_concurrent_calls(self, mock_espn_client: MagicMock) -> None:
-        """
-        RACE: Concurrent _poll_wrapper calls with adaptive polling.
-
-        Validates:
-        - Stats are updated atomically
-        - Interval adjustments don't corrupt state
-        """
-        mock_espn_client.get_scoreboard.return_value = []
-
-        poller = ESPNGamePoller(
-            poll_interval=15,
-            idle_interval=60,
-            leagues=["nfl"],
-            espn_client=mock_espn_client,
-            adaptive_polling=True,
-            per_league_polling=False,
-        )
-
-        errors: list[Exception] = []
-
-        def poll_wrapper_calls() -> None:
-            try:
-                with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
-                    mock_get_live.return_value = []
-                    for _ in range(100):
-                        poller._poll_wrapper()
-            except Exception as e:
-                errors.append(e)
-
-        threads = [threading.Thread(target=poll_wrapper_calls) for _ in range(10)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=30)
-
-        assert len(errors) == 0, f"Errors: {errors}"
-        # Should have exactly 1000 polls (10 threads * 100 calls)
-        assert poller.stats["polls_completed"] == 1000
-
-    def test_race_adaptive_state_toggle_stress(self, mock_espn_client: MagicMock) -> None:
-        """
-        RACE: Rapid toggling between active/idle with multiple threads.
-
-        Validates:
-        - State transitions are consistent
-        - No stuck/invalid states
-        """
-        poller = ESPNGamePoller(
-            poll_interval=15,
-            idle_interval=60,
-            leagues=["nfl"],
-            espn_client=mock_espn_client,
-            adaptive_polling=True,
-            per_league_polling=False,
-        )
-
-        transitions = {"count": 0, "errors": []}
-        lock = threading.Lock()
-        barrier = threading.Barrier(5, timeout=10.0)
-
-        def toggle_state(thread_id: int) -> None:
-            try:
-                with patch("precog.schedulers.espn_game_poller.get_live_games") as mock_get_live:
-                    barrier.wait()
-                    last_state = None
-                    local_transitions = 0
-
-                    for i in range(25):
-                        # Rapid state changes
-                        mock_get_live.return_value = [{"game_id": thread_id}] if i % 2 == 0 else []
-                        poller._adjust_poll_interval()
-
-                        current = poller._last_active_state
-                        if last_state is not None and last_state != current:  # type: ignore[unreachable]
-                            local_transitions += 1  # type: ignore[unreachable]
-                        last_state = current
-
-                    with lock:
-                        transitions["count"] += local_transitions  # type: ignore[operator]
-            except Exception as e:
-                with lock:
-                    errors_list = transitions["errors"]
-                    assert isinstance(errors_list, list)
-                    errors_list.append(str(e))
-
-        threads = [threading.Thread(target=toggle_state, args=(i,)) for i in range(5)]
-        for t in threads:
-            t.start()
-        for t in threads:
-            t.join(timeout=30)
-
-        errors_list = transitions["errors"]
-        assert isinstance(errors_list, list), f"Expected list, got {type(errors_list)}"
-        assert len(errors_list) == 0, f"Errors: {errors_list}"
-        # Should have many transitions (threads rapidly toggling)
-        assert transitions["count"] > 0  # type: ignore[operator]
