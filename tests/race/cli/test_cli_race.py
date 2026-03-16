@@ -88,16 +88,23 @@ class TestSchedulerRace:
         """Test rapid alternating start and stop requests.
 
         Race: Tests alternating start/stop calls.
+
+        Note: Must mock create_supervisor (the factory the CLI actually calls),
+        not ServiceSupervisor directly. The CLI calls create_supervisor() which
+        internally creates real pollers — mocking only the class leaves real
+        ESPN/Kalshi clients alive, causing APScheduler thread leaks and timeouts.
         """
         runner = CliRunner()
         results = []
 
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
-            mock_instance = MagicMock()
-            mock_instance.start.return_value = True
-            mock_instance.stop.return_value = True
-            mock_supervisor.return_value = mock_instance
+        mock_poller = MagicMock()
+        mock_poller.start.return_value = None
+        mock_poller.stop.return_value = None
 
+        with (
+            patch("precog.schedulers.ESPNGamePoller", return_value=mock_poller),
+            patch("precog.schedulers.KalshiMarketPoller", return_value=mock_poller),
+        ):
             for i in range(5):
                 result = runner.invoke(isolated_app, ["scheduler", "start"])
                 results.append(("start", result.exit_code))
