@@ -700,6 +700,25 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     )
     ON CONFLICT (platform_id) DO NOTHING;
 
+    -- historical_elo table (migration 0005, will be dropped in migration 0032)
+    -- Kept temporarily for seeding integration tests that test bulk_insert_historical_elo
+    CREATE TABLE IF NOT EXISTS historical_elo (
+        historical_elo_id SERIAL PRIMARY KEY,
+        team_id INTEGER NOT NULL REFERENCES teams(team_id) ON DELETE CASCADE,
+        sport VARCHAR(20) NOT NULL CHECK (sport IN ('nfl', 'ncaaf', 'nba', 'ncaab', 'nhl', 'wnba', 'mlb', 'soccer')),
+        season INTEGER NOT NULL CHECK (season >= 1900 AND season <= 2100),
+        rating_date DATE NOT NULL,
+        elo_rating DECIMAL(10,2) NOT NULL CHECK (elo_rating BETWEEN 0 AND 3000),
+        qb_adjusted_elo DECIMAL(10,2) CHECK (qb_adjusted_elo IS NULL OR qb_adjusted_elo BETWEEN 0 AND 3000),
+        source VARCHAR(50) NOT NULL DEFAULT 'imported' CHECK (source IN ('imported', 'calculated', 'manual_override', 'calibration')),
+        metadata JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_historical_elo_team ON historical_elo(team_id);
+    CREATE INDEX IF NOT EXISTS idx_historical_elo_sport ON historical_elo(sport);
+    CREATE INDEX IF NOT EXISTS idx_historical_elo_season ON historical_elo(season);
+
     -- Track migration version
     INSERT INTO alembic_version (version_num) VALUES ('0021')
     ON CONFLICT (version_num) DO NOTHING;

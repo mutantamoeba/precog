@@ -118,7 +118,7 @@ def position_params(db_cursor, clean_test_data):
                         "open",
                     ),
                 )
-                market_pk = cur.fetchone()["id"]
+                market_pk = cur.fetchone()[0]  # raw cursor returns tuples
                 cur.execute(
                     """
                     INSERT INTO market_snapshots (
