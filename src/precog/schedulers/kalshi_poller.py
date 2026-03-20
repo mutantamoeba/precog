@@ -841,14 +841,15 @@ class KalshiMarketPoller(BasePoller):
                     # Cache the integer PK for subsequent markets in the same event
                     self._event_id_map[event_ticker] = event_pk
 
+            # Migration 0021: create_market returns (int_pk, market_id_str)
             create_market(
                 platform_id=self.PLATFORM_ID,
                 event_internal_id=event_pk,  # Integer FK to events(id)
                 external_id=ticker,  # Use ticker as external_id
                 ticker=ticker,
                 title=market.get("title", ticker),
-                yes_price=yes_price,
-                no_price=no_price,
+                yes_ask_price=yes_price,
+                no_ask_price=no_price,
                 market_type="binary",
                 status=db_status,
                 volume=market.get("volume"),
@@ -866,14 +867,17 @@ class KalshiMarketPoller(BasePoller):
             return True
 
         # Market exists - check if price changed (avoid unnecessary versioning)
-        price_changed = existing["yes_price"] != yes_price or existing["no_price"] != no_price
+        # Migration 0021: column renamed from yes_price → yes_ask_price
+        price_changed = (
+            existing["yes_ask_price"] != yes_price or existing["no_ask_price"] != no_price
+        )
         status_changed = existing["status"] != db_status
 
         if price_changed or status_changed:
             update_market_with_versioning(
                 ticker=ticker,
-                yes_price=yes_price,
-                no_price=no_price,
+                yes_ask_price=yes_price,
+                no_ask_price=no_price,
                 status=db_status,
                 volume=market.get("volume"),
                 open_interest=market.get("open_interest"),
@@ -881,7 +885,7 @@ class KalshiMarketPoller(BasePoller):
             logger.debug(
                 "Updated market: %s (yes: %s -> %s)",
                 ticker,
-                existing["yes_price"],
+                existing["yes_ask_price"],
                 yes_price,
             )
             return False  # Updated, not created

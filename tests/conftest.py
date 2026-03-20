@@ -193,6 +193,9 @@ def db_pool(request):
             f"\n[TESTCONTAINERS] Using ephemeral PostgreSQL container at "
             f"{container_params['host']}:{container_params['port']}"
         )
+        # Close any pre-existing pool so initialize_pool() connects to the
+        # container instead of returning a stale pool pointing elsewhere.
+        close_pool()
 
     # Initialize pool (uses DB_* env vars set by testcontainers or from environment)
     pool = initialize_pool(minconn=2, maxconn=5)

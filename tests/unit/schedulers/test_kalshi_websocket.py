@@ -390,10 +390,11 @@ class TestDatabaseSync:
                 "precog.schedulers.kalshi_websocket.update_market_with_versioning"
             ) as mock_update:
                 # Existing market with different price
+                # Migration 0021: column renamed yes_price → yes_ask_price
                 mock_get.return_value = {
                     "ticker": "TEST-TICKER",
-                    "yes_price": Decimal("0.60"),
-                    "no_price": Decimal("0.40"),
+                    "yes_ask_price": Decimal("0.60"),
+                    "no_ask_price": Decimal("0.40"),
                 }
 
                 handler_with_db._sync_price_to_db(
@@ -405,8 +406,8 @@ class TestDatabaseSync:
 
                 mock_update.assert_called_once_with(
                     ticker="TEST-TICKER",
-                    yes_price=Decimal("0.65"),
-                    no_price=Decimal("0.35"),
+                    yes_ask_price=Decimal("0.65"),
+                    no_ask_price=Decimal("0.35"),
                     volume=1000,
                     open_interest=None,
                 )
@@ -418,10 +419,11 @@ class TestDatabaseSync:
                 "precog.schedulers.kalshi_websocket.update_market_with_versioning"
             ) as mock_update:
                 # Same price as existing
+                # Migration 0021: column renamed yes_price → yes_ask_price
                 mock_get.return_value = {
                     "ticker": "TEST-TICKER",
-                    "yes_price": Decimal("0.65"),
-                    "no_price": Decimal("0.35"),
+                    "yes_ask_price": Decimal("0.65"),
+                    "no_ask_price": Decimal("0.35"),
                 }
 
                 handler_with_db._sync_price_to_db(

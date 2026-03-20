@@ -1078,6 +1078,17 @@ def get_or_create_event(
 # =============================================================================
 # MARKET OPERATIONS
 # =============================================================================
+#
+# Migration 0021: Markets table split into dimension + fact.
+#   - markets (dimension): stable identity + lifecycle state. One row per market.
+#   - market_snapshots (fact): volatile pricing. SCD Type 2 versioned.
+#
+# Column renames: yes_price → yes_ask_price, no_price → no_ask_price
+# New columns: yes_bid_price, no_bid_price, last_price, liquidity
+#
+# Transitional: markets.market_id VARCHAR is kept for downstream JOIN compat
+# (edges/positions/trades/settlements). Migration 0022 adds integer FKs.
+# =============================================================================
 
 
 def create_market(
@@ -1086,17 +1097,20 @@ def create_market(
     external_id: str,
     ticker: str,
     title: str,
-    yes_price: Decimal,
-    no_price: Decimal,
+    yes_ask_price: Decimal,
+    no_ask_price: Decimal,
     market_type: str = "binary",
     status: str = "open",
     volume: int | None = None,
     open_interest: int | None = None,
     spread: Decimal | None = None,
     metadata: dict | None = None,
-) -> str:
+) -> tuple[int, str]:
     """
-    Create new market record with row_current_ind = TRUE.
+    Create new market (dimension) + initial snapshot (fact).
+
+    Inserts a row into the markets dimension table and a corresponding
+    initial snapshot row into market_snapshots with row_current_ind = TRUE.
 
     Args:
         platform_id: Foreign key to platforms table (VARCHAR)
@@ -1106,8 +1120,8 @@ def create_market(
         external_id: External market ID from platform
         ticker: Market ticker (e.g., "NFL-KC-BUF-YES")
         title: Market title/description
-        yes_price: YES ask price as DECIMAL(10,4) (cost to buy YES contract)
-        no_price: NO ask price as DECIMAL(10,4) (cost to buy NO contract)
+        yes_ask_price: YES ask price as DECIMAL(10,4) (cost to buy YES contract)
+        no_ask_price: NO ask price as DECIMAL(10,4) (cost to buy NO contract)
         market_type: Market type (default: 'binary')
         status: Market status (default: 'open')
         volume: Trading volume
@@ -1116,110 +1130,159 @@ def create_market(
         metadata: Additional metadata as JSONB
 
     Returns:
-        market_id of newly created record
+        Tuple of (market_pk, market_id) where market_pk is the integer
+        surrogate PK and market_id is the transitional VARCHAR business key.
 
     Note:
-        yes_price and no_price store Kalshi ask prices, NOT implied probabilities.
-        yes_price + no_price > 1.0 is normal (ask prices include the spread).
-        At settlement, both can reach 1.0 or 0.0.
+        yes_ask_price and no_ask_price store Kalshi ask prices, NOT implied
+        probabilities. yes_ask_price + no_ask_price > 1.0 is normal (ask prices
+        include the spread). At settlement, both can reach 1.0 or 0.0.
 
     Example:
-        >>> market_id = create_market(
+        >>> market_pk, market_id = create_market(
         ...     platform_id="kalshi",
-        ...     event_internal_id=7,  # Integer PK from events table
+        ...     event_internal_id=7,
         ...     external_id="KXNFLKCBUF",
         ...     ticker="NFL-KC-BUF-YES",
         ...     title="Chiefs to beat Bills",
-        ...     yes_price=Decimal("0.5200"),  # YES ask (cost to buy YES)
-        ...     no_price=Decimal("0.4900"),   # NO ask (cost to buy NO); sum > 1.0 is normal
+        ...     yes_ask_price=Decimal("0.5200"),
+        ...     no_ask_price=Decimal("0.4900"),
         ... )
 
     Reference:
-        - Migration 0020: markets.event_internal_id INTEGER FK replaces VARCHAR event_id
+        - Migration 0021: markets split into dimension + market_snapshots fact
     """
     # Runtime type validation (enforces Decimal precision)
-    yes_price = validate_decimal(yes_price, "yes_price")
-    no_price = validate_decimal(no_price, "no_price")
+    yes_ask_price = validate_decimal(yes_ask_price, "yes_ask_price")
+    no_ask_price = validate_decimal(no_ask_price, "no_ask_price")
     if spread is not None:
         spread = validate_decimal(spread, "spread")
 
-    # Generate market_id if needed (using ticker as base)
+    # Generate transitional market_id (kept for downstream JOIN compat until 0022)
     market_id = f"MKT-{ticker}"
 
-    query = """
-        INSERT INTO markets (
-            market_id, platform_id, event_internal_id, external_id,
-            ticker, title, market_type,
-            yes_price, no_price, status,
-            volume, open_interest, spread,
-            metadata, row_current_ind, updated_at
-        )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
-        RETURNING market_id
-    """
-
-    params = (
-        market_id,
-        platform_id,
-        event_internal_id,
-        external_id,
-        ticker,
-        title,
-        market_type,
-        yes_price,
-        no_price,
-        status,
-        volume,
-        open_interest,
-        spread,
-        json.dumps(metadata) if metadata else None,
-    )
-
     with get_cursor(commit=True) as cur:
-        cur.execute(query, params)
-        result = cur.fetchone()
-        return cast("str", result["market_id"])
+        # Step 1: Insert dimension row
+        cur.execute(
+            """
+            INSERT INTO markets (
+                market_id, platform_id, event_internal_id, external_id,
+                ticker, title, market_type, status,
+                metadata, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            RETURNING id, market_id
+            """,
+            (
+                market_id,
+                platform_id,
+                event_internal_id,
+                external_id,
+                ticker,
+                title,
+                market_type,
+                status,
+                json.dumps(metadata) if metadata else None,
+            ),
+        )
+        dim_row = cur.fetchone()
+        market_pk = cast("int", dim_row["id"])
+        market_id_val = cast("str", dim_row["market_id"])
+
+        # Step 2: Insert initial snapshot (fact row)
+        cur.execute(
+            """
+            INSERT INTO market_snapshots (
+                market_id, yes_ask_price, no_ask_price,
+                spread, volume, open_interest,
+                row_current_ind, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, TRUE, NOW())
+            """,
+            (
+                market_pk,
+                yes_ask_price,
+                no_ask_price,
+                spread,
+                volume,
+                open_interest,
+            ),
+        )
+
+        return market_pk, market_id_val
 
 
 def get_current_market(ticker: str) -> dict[str, Any] | None:
     """
-    Get current version of market by ticker.
+    Get current market dimension + latest snapshot by ticker.
 
-    Note: Settled markets show yes_price=1.0 AND no_price=1.0 (Kalshi
-    post-settlement behavior). For historical trading prices, query all
-    SCD versions ordered by row_start_ts instead of filtering by
-    row_current_ind=TRUE. See Issue #315.
+    Returns a single dict with dimension columns (ticker, title, status, etc.)
+    and current snapshot columns (yes_ask_price, no_ask_price, volume, etc.).
+
+    Note: Settled markets show yes_ask_price=1.0 AND no_ask_price=1.0 (Kalshi
+    post-settlement behavior). For historical trading prices, use
+    get_market_history() instead. See Issue #315.
 
     Args:
         ticker: Market ticker
 
     Returns:
-        Dictionary with market data, or None if not found
+        Dictionary with market + snapshot data, or None if not found
 
     Example:
         >>> market = get_current_market("NFL-KC-BUF-YES")
-        >>> print(market['yes_price'])  # Decimal('0.5200')
+        >>> print(market['yes_ask_price'])  # Decimal('0.5200')
+
+    Reference:
+        - Migration 0021: markets dimension + market_snapshots fact
     """
     query = """
-        SELECT *
-        FROM markets
-        WHERE ticker = %s
-          AND row_current_ind = TRUE
+        SELECT
+            m.id,
+            m.market_id,
+            m.platform_id,
+            m.event_internal_id,
+            m.external_id,
+            m.ticker,
+            m.title,
+            m.market_type,
+            m.status,
+            m.settlement_value,
+            m.metadata,
+            m.created_at,
+            m.updated_at,
+            ms.yes_ask_price,
+            ms.no_ask_price,
+            ms.yes_bid_price,
+            ms.no_bid_price,
+            ms.last_price,
+            ms.spread,
+            ms.volume,
+            ms.open_interest,
+            ms.liquidity,
+            ms.row_start_ts,
+            ms.row_end_ts,
+            ms.row_current_ind
+        FROM markets m
+        LEFT JOIN market_snapshots ms
+            ON ms.market_id = m.id
+            AND ms.row_current_ind = TRUE
+        WHERE m.ticker = %s
     """
     return fetch_one(query, (ticker,))
 
 
 def count_open_markets() -> int:
     """
-    Count markets with status='open' and row_current_ind=TRUE.
+    Count markets with status='open'.
 
     Returns:
         Number of currently open markets in the database.
 
     Educational Note:
-        Uses SCD Type 2 filtering (row_current_ind = TRUE) to count only
-        the current version of each market. Without this filter, historical
-        rows would inflate the count.
+        After migration 0021, the markets table is a dimension table with
+        one row per market (no SCD versioning). Status is mutable on the
+        dimension row directly, so no row_current_ind filter is needed.
 
     Example:
         >>> count = count_open_markets()
@@ -1229,7 +1292,6 @@ def count_open_markets() -> int:
         SELECT COUNT(*) AS count
         FROM markets
         WHERE status = 'open'
-          AND row_current_ind = TRUE
     """
     result = fetch_one(query)
     if result is None:
@@ -1239,150 +1301,171 @@ def count_open_markets() -> int:
 
 def update_market_with_versioning(
     ticker: str,
-    yes_price: Decimal | None = None,
-    no_price: Decimal | None = None,
+    yes_ask_price: Decimal | None = None,
+    no_ask_price: Decimal | None = None,
     status: str | None = None,
     volume: int | None = None,
     open_interest: int | None = None,
     market_metadata: dict | None = None,
 ) -> int:
     """
-    Update market using SCD Type 2 versioning.
+    Update market: SCD Type 2 on snapshots, direct UPDATE on dimension.
+
+    After migration 0021, pricing updates create new snapshot rows
+    (SCD Type 2), while status/metadata updates go to the dimension
+    table directly.
 
     Steps:
-    1. Mark current row as row_current_ind = FALSE, set row_end_ts
-    2. Insert new row with updated values, row_current_ind = TRUE
+    1. If status changed: UPDATE markets dimension row
+    2. If price changed: mark current snapshot as historical, insert new snapshot
 
     Args:
         ticker: Market ticker to update
-        yes_price: New YES price (optional)
-        no_price: New NO price (optional)
+        yes_ask_price: New YES ask price (optional)
+        no_ask_price: New NO ask price (optional)
         status: New status (optional)
         volume: New volume (optional)
         open_interest: New open interest (optional)
         market_metadata: New metadata (optional)
 
     Returns:
-        market_id of newly created version
+        Integer surrogate PK of the market (markets.id)
 
     Example:
-        >>> new_id = update_market_with_versioning(
+        >>> market_pk = update_market_with_versioning(
         ...     ticker="NFL-KC-BUF-YES",
-        ...     yes_price=Decimal("0.5500"),
-        ...     no_price=Decimal("0.4500")
+        ...     yes_ask_price=Decimal("0.5500"),
+        ...     no_ask_price=Decimal("0.4500")
         ... )
+
+    Reference:
+        - Migration 0021: markets dimension + market_snapshots fact
     """
     # Runtime type validation (enforces Decimal precision)
-    if yes_price is not None:
-        yes_price = validate_decimal(yes_price, "yes_price")
-    if no_price is not None:
-        no_price = validate_decimal(no_price, "no_price")
+    if yes_ask_price is not None:
+        yes_ask_price = validate_decimal(yes_ask_price, "yes_ask_price")
+    if no_ask_price is not None:
+        no_ask_price = validate_decimal(no_ask_price, "no_ask_price")
 
-    # Get current version
+    # Get current market + snapshot
     current = get_current_market(ticker)
     if not current:
         msg = f"Market not found: {ticker}"
         raise ValueError(msg)
 
-    # Use new values or fall back to current
-    new_yes_price = yes_price if yes_price is not None else current["yes_price"]
-    new_no_price = no_price if no_price is not None else current["no_price"]
+    market_pk = current["id"]
+
+    # Determine what changed
+    new_yes = yes_ask_price if yes_ask_price is not None else current["yes_ask_price"]
+    new_no = no_ask_price if no_ask_price is not None else current["no_ask_price"]
     new_status = status if status is not None else current["status"]
     new_volume = volume if volume is not None else current["volume"]
     new_open_interest = open_interest if open_interest is not None else current["open_interest"]
     new_metadata = market_metadata if market_metadata is not None else current["metadata"]
 
     with get_cursor(commit=True) as cur:
-        # Step 1: Mark current row as historical
+        # Step 1: Update dimension row — always bump updated_at, plus
+        # status/metadata if they changed.
         cur.execute(
             """
             UPDATE markets
-            SET row_current_ind = FALSE,
-                row_end_ts = NOW()
-            WHERE ticker = %s
-              AND row_current_ind = TRUE
-        """,
-            (ticker,),
-        )
-
-        # Step 2: Insert new version
-        # NOTE: Uses event_internal_id (integer FK to events.id) per migration 0020.
-        # SCD versioning copies ALL columns from the current row, including the FK.
-        cur.execute(
-            """
-            INSERT INTO markets (
-                market_id, platform_id, event_internal_id, external_id,
-                ticker, title, market_type,
-                yes_price, no_price, status,
-                volume, open_interest, spread,
-                metadata, row_current_ind, updated_at
-            )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
-            RETURNING market_id
-        """,
+            SET status = %s,
+                metadata = %s,
+                updated_at = NOW()
+            WHERE id = %s
+            """,
             (
-                current["market_id"],
-                current["platform_id"],
-                current["event_internal_id"],
-                current["external_id"],
-                ticker,
-                current["title"],
-                current["market_type"],
-                new_yes_price,
-                new_no_price,
                 new_status,
-                new_volume,
-                new_open_interest,
-                current["spread"],
                 json.dumps(new_metadata) if new_metadata else None,
+                market_pk,
             ),
         )
 
-        result = cur.fetchone()
-        return cast("int", result["market_id"])
+        # Step 2: Create new snapshot (SCD Type 2 on market_snapshots)
+        # Mark current snapshot as historical
+        cur.execute(
+            """
+            UPDATE market_snapshots
+            SET row_current_ind = FALSE,
+                row_end_ts = NOW()
+            WHERE market_id = %s
+              AND row_current_ind = TRUE
+            """,
+            (market_pk,),
+        )
+
+        # Insert new snapshot
+        cur.execute(
+            """
+            INSERT INTO market_snapshots (
+                market_id, yes_ask_price, no_ask_price,
+                spread, volume, open_interest,
+                row_current_ind, updated_at
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, TRUE, NOW())
+            """,
+            (
+                market_pk,
+                new_yes,
+                new_no,
+                current["spread"],
+                new_volume,
+                new_open_interest,
+            ),
+        )
+
+        return cast("int", market_pk)
 
 
 def get_market_history(ticker: str, limit: int = 100) -> list[dict[str, Any]]:
     """
-    Get price history for a market (all versions).
+    Get price snapshot history for a market (all versions).
+
+    After migration 0021, history comes from market_snapshots (the fact table).
+    Each row represents a point-in-time price observation.
 
     Args:
         ticker: Market ticker
-        limit: Maximum number of versions to return (default: 100)
+        limit: Maximum number of snapshots to return (default: 100)
 
     Returns:
-        List of market versions, newest first
+        List of snapshot records, newest first
 
     Example:
         >>> history = get_market_history("NFL-KC-BUF-YES", limit=10)
         >>> for version in history:
-        ...     print(version['yes_price'], version['row_start_ts'])
+        ...     print(version['yes_ask_price'], version['row_start_ts'])
+
+    Reference:
+        - Migration 0021: price history now in market_snapshots
     """
     query = """
-        SELECT *
-        FROM markets
-        WHERE ticker = %s
-        ORDER BY created_at DESC
+        SELECT ms.*
+        FROM market_snapshots ms
+        JOIN markets m ON ms.market_id = m.id
+        WHERE m.ticker = %s
+        ORDER BY ms.created_at DESC
         LIMIT %s
     """
     return fetch_all(query, (ticker, limit))
 
 
 def get_markets_summary(
-    sport: str | None = None,
+    subcategory: str | None = None,
     status: str | None = None,
     search: str | None = None,
     limit: int = 100,
     offset: int = 0,
 ) -> list[dict[str, Any]]:
     """
-    Get market summary data for TUI display.
+    Get market summary data for display.
 
     Returns current markets with key fields for browsing and filtering.
-    This function is designed for the TUI market browser screen.
+    JOINs dimension (markets) + current snapshot (market_snapshots) +
+    event (for subcategory/sport info).
 
     Args:
-        sport: Filter by sport (nfl, nba, etc.) - case insensitive
+        subcategory: Filter by sport/subcategory (nfl, nba, etc.) via events
         status: Filter by status (open, closed, settled)
         search: Search term for ticker or title (case insensitive)
         limit: Maximum number of markets to return (default: 100)
@@ -1390,49 +1473,48 @@ def get_markets_summary(
 
     Returns:
         List of market dictionaries with summary fields:
-        - ticker, title, sport, yes_price, no_price, status, volume
+        - ticker, title, subcategory, yes_ask_price, no_ask_price, status, volume
 
     Example:
-        >>> markets = get_markets_summary(sport='nfl', status='open', limit=50)
+        >>> markets = get_markets_summary(subcategory='nfl', status='open', limit=50)
         >>> for m in markets:
-        ...     print(f"{m['ticker']}: ${m['yes_price']:.2f}")
-
-    Educational Note:
-        We filter by row_current_ind=TRUE to only get the latest version
-        of each market, following SCD Type 2 versioning pattern.
+        ...     print(f"{m['ticker']}: ${m['yes_ask_price']:.2f}")
 
     Reference:
-        - ADR-016: SCD Type 2 for market versioning
-        - TUI Market Browser Screen
+        - Migration 0021: markets dimension + market_snapshots fact
     """
     query = """
         SELECT
-            ticker,
-            title,
-            COALESCE(sport, 'unknown') as sport,
-            yes_price,
-            no_price,
-            status,
-            COALESCE(volume, 0) as volume
-        FROM markets
-        WHERE row_current_ind = TRUE
+            m.ticker,
+            m.title,
+            COALESCE(e.subcategory, 'unknown') as subcategory,
+            ms.yes_ask_price,
+            ms.no_ask_price,
+            m.status,
+            COALESCE(ms.volume, 0) as volume
+        FROM markets m
+        LEFT JOIN market_snapshots ms
+            ON ms.market_id = m.id AND ms.row_current_ind = TRUE
+        LEFT JOIN events e
+            ON e.id = m.event_internal_id
+        WHERE 1=1
     """
     params: list[Any] = []
 
-    if sport is not None:
-        query += " AND LOWER(sport) = LOWER(%s)"
-        params.append(sport)
+    if subcategory is not None:
+        query += " AND LOWER(e.subcategory) = LOWER(%s)"
+        params.append(subcategory)
 
     if status is not None:
-        query += " AND LOWER(status) = LOWER(%s)"
+        query += " AND LOWER(m.status) = LOWER(%s)"
         params.append(status)
 
     if search is not None:
-        query += " AND (LOWER(ticker) LIKE %s OR LOWER(title) LIKE %s)"
+        query += " AND (LOWER(m.ticker) LIKE %s OR LOWER(m.title) LIKE %s)"
         search_pattern = f"%{search.lower()}%"
         params.extend([search_pattern, search_pattern])
 
-    query += " ORDER BY updated_at DESC LIMIT %s OFFSET %s"
+    query += " ORDER BY m.updated_at DESC LIMIT %s OFFSET %s"
     params.extend([limit, offset])
 
     return fetch_all(query, tuple(params))
@@ -1476,6 +1558,9 @@ def get_positions_with_pnl(
         - ADR-018: Position tracking with SCD Type 2
         - TUI Position Viewer Screen
     """
+    # Migration 0021: markets is now a dimension table (no SCD).
+    # Pricing comes from market_snapshots (SCD Type 2 fact table).
+    # JOINs: positions → markets (via market_id VARCHAR) → market_snapshots (via id)
     query = """
         SELECT
             p.position_id,
@@ -1483,16 +1568,16 @@ def get_positions_with_pnl(
             p.side,
             p.quantity,
             p.entry_price,
-            COALESCE(m.yes_price, p.entry_price) as current_price,
+            COALESCE(ms.yes_ask_price, p.entry_price) as current_price,
             p.status,
             p.exit_price,
             p.realized_pnl,
             -- Calculate unrealized P&L based on side
             CASE
                 WHEN p.side = 'yes' THEN
-                    (COALESCE(m.yes_price, p.entry_price) - p.entry_price) * p.quantity
+                    (COALESCE(ms.yes_ask_price, p.entry_price) - p.entry_price) * p.quantity
                 WHEN p.side = 'no' THEN
-                    (p.entry_price - COALESCE(m.no_price, p.entry_price)) * p.quantity
+                    (p.entry_price - COALESCE(ms.no_ask_price, p.entry_price)) * p.quantity
                 ELSE 0
             END as unrealized_pnl,
             -- Calculate P&L percentage
@@ -1500,15 +1585,16 @@ def get_positions_with_pnl(
                 WHEN p.entry_price > 0 THEN
                     CASE
                         WHEN p.side = 'yes' THEN
-                            ((COALESCE(m.yes_price, p.entry_price) - p.entry_price) / p.entry_price) * 100
+                            ((COALESCE(ms.yes_ask_price, p.entry_price) - p.entry_price) / p.entry_price) * 100
                         WHEN p.side = 'no' THEN
-                            ((p.entry_price - COALESCE(m.no_price, p.entry_price)) / p.entry_price) * 100
+                            ((p.entry_price - COALESCE(ms.no_ask_price, p.entry_price)) / p.entry_price) * 100
                         ELSE 0
                     END
                 ELSE 0
             END as pnl_percent
         FROM positions p
-        LEFT JOIN markets m ON p.market_id = m.market_id AND m.row_current_ind = TRUE
+        LEFT JOIN markets m ON p.market_id = m.market_id
+        LEFT JOIN market_snapshots ms ON ms.market_id = m.id AND ms.row_current_ind = TRUE
         WHERE p.row_current_ind = TRUE
     """
     params: list[Any] = []
@@ -1693,12 +1779,13 @@ def get_current_positions(
         >>> # Pagination: get page 2 (positions 100-199)
         >>> page2 = get_current_positions(limit=100, offset=100)
     """
+    # Migration 0021: markets is dimension (no SCD), pricing from market_snapshots.
     query = """
-        SELECT p.*, m.ticker, m.yes_price as current_market_price
+        SELECT p.*, m.ticker, ms.yes_ask_price as current_market_price
         FROM positions p
         JOIN markets m ON p.market_id = m.market_id
+        LEFT JOIN market_snapshots ms ON ms.market_id = m.id AND ms.row_current_ind = TRUE
         WHERE p.row_current_ind = TRUE
-          AND m.row_current_ind = TRUE
     """
     params: list[Any] = []
 
@@ -2047,12 +2134,12 @@ def get_trades_by_market(
         >>> # Only paper trades (demo API testing)
         >>> paper_trades = get_trades_by_market(market_id=42, execution_environment='paper')
     """
+    # Migration 0021: markets is dimension (no SCD, no row_current_ind filter needed).
     query = """
         SELECT t.*, m.ticker
         FROM trades t
         JOIN markets m ON t.market_id = m.market_id
         WHERE t.market_id = %s
-          AND m.row_current_ind = TRUE
     """
     params: list[str | int] = [market_id]
 
@@ -2091,13 +2178,14 @@ def get_recent_trades(
         >>> # Pagination: get page 2 (trades 100-199)
         >>> page2 = get_recent_trades(limit=100, offset=100)
     """
+    # Migration 0021: markets is dimension (no SCD, no row_current_ind filter needed).
     query = """
         SELECT t.*, m.ticker, s.strategy_name, pm.model_name
         FROM trades t
         JOIN markets m ON t.market_id = m.market_id
         JOIN strategies s ON t.strategy_id = s.strategy_id
         JOIN probability_models pm ON t.model_id = pm.model_id
-        WHERE m.row_current_ind = TRUE
+        WHERE 1=1
     """
     params: list[int | str] = []
 

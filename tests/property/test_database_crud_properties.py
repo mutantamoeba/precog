@@ -197,33 +197,36 @@ def test_decimal_precision_preserved_on_db_roundtrip(
     """
     # Create market with Decimal prices
     # Use both prices in ticker to ensure uniqueness across all examples
+    # Migration 0021: yes_price → yes_ask_price, returns (int, str) tuple
     ticker = f"TEST-PROP-{yes_price}-{no_price}"
-    market_id = create_market(
+    market_pk, _market_id = create_market(
         platform_id="kalshi",
         event_internal_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
         ticker=ticker,
         title="Test Market",
-        yes_price=yes_price,
-        no_price=no_price,
+        yes_ask_price=yes_price,
+        no_ask_price=no_price,
         market_type="binary",
         status="open",
     )
 
-    assert market_id is not None
+    assert market_pk is not None
 
     # Retrieve and verify exact Decimal preservation
     retrieved = get_current_market(ticker)
 
     assert retrieved is not None
-    assert isinstance(retrieved["yes_price"], Decimal), "yes_price must be Decimal type"
-    assert isinstance(retrieved["no_price"], Decimal), "no_price must be Decimal type"
+    assert isinstance(retrieved["yes_ask_price"], Decimal), "yes_ask_price must be Decimal type"
+    assert isinstance(retrieved["no_ask_price"], Decimal), "no_ask_price must be Decimal type"
 
     # CRITICAL: Exact Decimal equality (no float tolerance)
-    assert retrieved["yes_price"] == yes_price, (
-        f"Expected {yes_price}, got {retrieved['yes_price']}"
+    assert retrieved["yes_ask_price"] == yes_price, (
+        f"Expected {yes_price}, got {retrieved['yes_ask_price']}"
     )
-    assert retrieved["no_price"] == no_price, f"Expected {no_price}, got {retrieved['no_price']}"
+    assert retrieved["no_ask_price"] == no_price, (
+        f"Expected {no_price}, got {retrieved['no_ask_price']}"
+    )
 
 
 @pytest.mark.property
@@ -260,6 +263,7 @@ def test_decimal_columns_reject_float(
     # Attempt to create market with float (should raise TypeError)
     # Use unique ticker for each example to avoid UniqueViolation errors
     ticker = f"FLOAT-TEST-{invalid_price:.6f}".replace(".", "-")
+    # Migration 0021: yes_price → yes_ask_price
     with pytest.raises((TypeError, ValueError), match=r"must be Decimal|expected Decimal"):
         create_market(
             platform_id="kalshi",
@@ -267,8 +271,8 @@ def test_decimal_columns_reject_float(
             external_id=f"EXTERNAL-{ticker}",
             ticker=ticker,
             title="Float Test Market",
-            yes_price=invalid_price,  # ❌ Float, not Decimal
-            no_price=Decimal("0.3750"),
+            yes_ask_price=invalid_price,  # ❌ Float, not Decimal
+            no_ask_price=Decimal("0.3750"),
             market_type="binary",
             status="open",
         )
@@ -318,59 +322,61 @@ def test_scd_type2_at_most_one_current_row(db_pool, clean_test_data, setup_kalsh
         >>> assert len(current_rows) == 1  # Exactly ONE current row
     """
     # Create initial market
-    market_id = create_market(
+    # Migration 0021: yes_price → yes_ask_price, returns (int, str) tuple
+    market_pk, _market_id = create_market(
         platform_id="kalshi",
         event_internal_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
         ticker=ticker,
         title="Test Market",
-        yes_price=Decimal("0.6200"),
-        no_price=Decimal("0.3800"),
+        yes_ask_price=Decimal("0.6200"),
+        no_ask_price=Decimal("0.3800"),
         market_type="binary",
         status="open",
     )
 
-    assert market_id is not None
+    assert market_pk is not None
 
-    # Verify exactly ONE current row initially
+    # Migration 0021: SCD Type 2 is now on market_snapshots, not markets.
+    # Verify exactly ONE current snapshot row initially.
     from precog.database.connection import get_cursor
 
     with get_cursor() as cur:
         cur.execute(
             """
             SELECT COUNT(*)
-            FROM markets
-            WHERE ticker = %s AND row_current_ind = TRUE
+            FROM market_snapshots
+            WHERE market_id = %s AND row_current_ind = TRUE
         """,
-            (ticker,),
+            (market_pk,),
         )
         result = cur.fetchone()
         initial_count = result["count"] if result else 0
 
-    assert initial_count == 1, f"Expected 1 current row, found {initial_count}"
+    assert initial_count == 1, f"Expected 1 current snapshot, found {initial_count}"
 
-    # Update market (creates new SCD row)
+    # Update market (creates new SCD snapshot row)
     update_market_with_versioning(
         ticker=ticker,
-        yes_price=Decimal("0.6500"),
-        no_price=Decimal("0.3500"),
+        yes_ask_price=Decimal("0.6500"),
+        no_ask_price=Decimal("0.3500"),
     )
 
-    # Verify STILL exactly ONE current row after update
+    # Verify STILL exactly ONE current snapshot after update
     with get_cursor() as cur:
         cur.execute(
             """
             SELECT COUNT(*)
-            FROM markets
-            WHERE ticker = %s AND row_current_ind = TRUE
+            FROM market_snapshots
+            WHERE market_id = %s AND row_current_ind = TRUE
         """,
-            (ticker,),
+            (market_pk,),
         )
         result = cur.fetchone()
         after_update_count = result["count"] if result else 0
 
     assert after_update_count == 1, (
-        f"Expected 1 current row after update, found {after_update_count}"
+        f"Expected 1 current snapshot after update, found {after_update_count}"
     )
 
 
@@ -435,34 +441,38 @@ def test_scd_type2_update_creates_new_row(
     # Create initial market
     # Use UUID to ensure uniqueness across Hypothesis examples (prevents collisions from
     # Hypothesis database replaying examples with leftover test data)
+    # Migration 0021: yes_price → yes_ask_price, returns (int, str) tuple
     unique_id = uuid.uuid4().hex[:8]
     ticker = f"SCD-{unique_id}"
-    market_id = create_market(
+    market_pk, _market_id = create_market(
         platform_id="kalshi",
         event_internal_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
         ticker=ticker,
         title="Test Market",
-        yes_price=original_price,
-        no_price=Decimal("1.0000") - original_price,
+        yes_ask_price=original_price,
+        no_ask_price=Decimal("1.0000") - original_price,
         market_type="binary",
         status="open",
     )
 
-    assert market_id is not None
+    assert market_pk is not None
 
     # Get original row details BEFORE update
     original_market = get_current_market(ticker)
     assert original_market is not None
     original_market_id = original_market["market_id"]
-    assert original_market["yes_price"] == original_price
+    assert original_market["yes_ask_price"] == original_price
+    # Migration 0021: row_current_ind is on snapshots, not dimension.
+    # The dimension row doesn't have row_current_ind.
+    # Check snapshot instead:
     assert original_market["row_current_ind"] is True
 
-    # Update market (should create new row)
+    # Update market (should create new snapshot row)
     update_market_with_versioning(
         ticker=ticker,
-        yes_price=updated_price,
-        no_price=Decimal("1.0000") - updated_price,
+        yes_ask_price=updated_price,
+        no_ask_price=Decimal("1.0000") - updated_price,
     )
 
     # Get current row details AFTER update
@@ -470,35 +480,36 @@ def test_scd_type2_update_creates_new_row(
     assert updated_market is not None
     updated_market_id = updated_market["market_id"]
 
-    # Verify new row created (different market_id)
+    # Verify dimension row unchanged (same market_id)
     assert updated_market_id == original_market_id, (
-        "SCD Type-2 updates should reuse same market_id with new version"
+        "Dimension row should keep same market_id across updates"
     )
 
-    # Verify current row has new price
-    assert updated_market["yes_price"] == updated_price
+    # Verify current snapshot has new price
+    assert updated_market["yes_ask_price"] == updated_price
     assert updated_market["row_current_ind"] is True
 
-    # Verify old row marked FALSE and price preserved
+    # Verify old snapshot marked FALSE and price preserved
+    # Migration 0021: SCD history is now in market_snapshots
     from precog.database.connection import get_cursor
 
     with get_cursor() as cur:
         cur.execute(
             """
-            SELECT yes_price, row_current_ind
-            FROM markets
-            WHERE ticker = %s AND row_current_ind = FALSE
+            SELECT yes_ask_price, row_current_ind
+            FROM market_snapshots
+            WHERE market_id = %s AND row_current_ind = FALSE
             ORDER BY created_at DESC
             LIMIT 1
         """,
-            (ticker,),
+            (market_pk,),
         )
         old_row = cur.fetchone()
 
-    assert old_row is not None, "Historical row should exist"
-    assert old_row["row_current_ind"] is False, "Historical row should be FALSE"
-    assert old_row["yes_price"] == original_price, (
-        f"Historical price should be {original_price}, got {old_row['yes_price']}"
+    assert old_row is not None, "Historical snapshot should exist"
+    assert old_row["row_current_ind"] is False, "Historical snapshot should be FALSE"
+    assert old_row["yes_ask_price"] == original_price, (
+        f"Historical price should be {original_price}, got {old_row['yes_ask_price']}"
     )
 
 
@@ -540,14 +551,14 @@ def test_unique_constraint_prevents_duplicate_current_rows(
         IntegrityError: duplicate key value violates unique constraint
     """
     # Create first market
-    market_id = create_market(
+    _market_pk, market_id = create_market(
         platform_id="kalshi",
         event_internal_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
         ticker=ticker,
         title="Test Market",
-        yes_price=Decimal("0.6200"),
-        no_price=Decimal("0.3800"),
+        yes_ask_price=Decimal("0.6200"),
+        no_ask_price=Decimal("0.3800"),
         market_type="binary",
         status="open",
     )
@@ -562,8 +573,8 @@ def test_unique_constraint_prevents_duplicate_current_rows(
             external_id=f"EXTERNAL-DUP-{ticker}",
             ticker=ticker,  # Same ticker!
             title="Duplicate Market",
-            yes_price=Decimal("0.6500"),
-            no_price=Decimal("0.3500"),
+            yes_ask_price=Decimal("0.6500"),
+            no_ask_price=Decimal("0.3500"),
             market_type="binary",
             status="open",
         )
@@ -615,8 +626,8 @@ def test_foreign_key_prevents_orphan_markets(
             external_id=f"EXTERNAL-{ticker}",
             ticker=ticker,
             title="Test Market",
-            yes_price=Decimal("0.6200"),
-            no_price=Decimal("0.3800"),
+            yes_ask_price=Decimal("0.6200"),
+            no_ask_price=Decimal("0.3800"),
             market_type="binary",
             status="open",
         )
@@ -647,8 +658,8 @@ def test_foreign_key_prevents_invalid_event_reference(
             external_id=f"EXTERNAL-{ticker}",
             ticker=ticker,
             title="Test Market",
-            yes_price=Decimal("0.6200"),
-            no_price=Decimal("0.3800"),
+            yes_ask_price=Decimal("0.6200"),
+            no_ask_price=Decimal("0.3800"),
             market_type="binary",
             status="open",
         )
@@ -707,8 +718,8 @@ def test_not_null_constraint_on_required_fields(
             external_id=f"EXTERNAL-{ticker}",
             ticker=ticker,  # Use valid ticker
             title=None,  # type: ignore[arg-type]  # ❌ NOT NULL violation (intentional test)
-            yes_price=Decimal("0.6200"),
-            no_price=Decimal("0.3800"),
+            yes_ask_price=Decimal("0.6200"),
+            no_ask_price=Decimal("0.3800"),
             market_type="binary",
             status="open",
         )
@@ -766,14 +777,14 @@ def test_timestamp_monotonicity_on_updates(
     # Use UUID to ensure uniqueness across Hypothesis examples
     unique_id = uuid.uuid4().hex[:8]
     ticker = f"TIME-{unique_id}"
-    create_market(
+    _pk, _id = create_market(
         platform_id="kalshi",
         event_internal_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
         ticker=ticker,
         title="Test Market",
-        yes_price=price1,
-        no_price=Decimal("1.0000") - price1,
+        yes_ask_price=price1,
+        no_ask_price=Decimal("1.0000") - price1,
         market_type="binary",
         status="open",
     )
@@ -789,8 +800,8 @@ def test_timestamp_monotonicity_on_updates(
     time.sleep(0.01)  # Small delay to ensure timestamps differ
     update_market_with_versioning(
         ticker=ticker,
-        yes_price=price2,
-        no_price=Decimal("1.0000") - price2,
+        yes_ask_price=price2,
+        no_ask_price=Decimal("1.0000") - price2,
     )
 
     # Get updated timestamp
@@ -857,14 +868,14 @@ def test_transaction_rollback_on_constraint_violation(
     from precog.database.connection import get_cursor
 
     # Create initial market (should succeed)
-    market_id = create_market(
+    _market_pk, market_id = create_market(
         platform_id="kalshi",
         event_internal_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
         ticker=ticker,
         title="Test Market",
-        yes_price=Decimal("0.6200"),
-        no_price=Decimal("0.3800"),
+        yes_ask_price=Decimal("0.6200"),
+        no_ask_price=Decimal("0.3800"),
         market_type="binary",
         status="open",
     )
@@ -885,8 +896,8 @@ def test_transaction_rollback_on_constraint_violation(
             external_id=f"EXTERNAL-DUP-{ticker}",
             ticker=ticker,  # Same ticker - violates unique constraint
             title="Duplicate Market",
-            yes_price=Decimal("0.6500"),
-            no_price=Decimal("0.3500"),
+            yes_ask_price=Decimal("0.6500"),
+            no_ask_price=Decimal("0.3500"),
             market_type="binary",
             status="open",
         )
@@ -904,7 +915,7 @@ def test_transaction_rollback_on_constraint_violation(
     # Verify original market still intact
     market = get_current_market(ticker)
     assert market is not None, "Original market should still exist after failed duplicate"
-    assert market["yes_price"] == Decimal("0.6200"), "Original market price should be unchanged"
+    assert market["yes_ask_price"] == Decimal("0.6200"), "Original market price should be unchanged"
 
 
 # =============================================================================
@@ -975,8 +986,8 @@ def test_check_constraints_enforced(db_pool, clean_test_data, setup_kalshi_platf
             external_id=f"EXTERNAL-{ticker}",
             ticker=ticker,
             title="Bounds Test Market",
-            yes_price=invalid_price,  # ❌ Out of bounds [0, 1]
-            no_price=Decimal("0.5000"),
+            yes_ask_price=invalid_price,  # ❌ Out of bounds [0, 1]
+            no_ask_price=Decimal("0.5000"),
             market_type="binary",
             status="open",
         )
@@ -1085,14 +1096,14 @@ def test_cascade_delete_integrity(db_pool, clean_test_data, ticker):
         event_pk = cur.fetchone()["id"]
 
     # Create market for this test platform
-    market_id = create_market(
+    _market_pk, market_id = create_market(
         platform_id=test_platform_id,
         event_internal_id=event_pk,
         external_id=f"EXTERNAL-{unique_id}",
         ticker=test_ticker,
         title="Test Market",
-        yes_price=Decimal("0.6200"),
-        no_price=Decimal("0.3800"),
+        yes_ask_price=Decimal("0.6200"),
+        no_ask_price=Decimal("0.3800"),
         market_type="binary",
         status="open",
     )
