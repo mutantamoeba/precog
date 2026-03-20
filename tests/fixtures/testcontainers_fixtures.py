@@ -134,7 +134,8 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_series_category ON series(category, subcategory);
 
     CREATE TABLE IF NOT EXISTS events (
-        event_id VARCHAR(100) PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
+        event_id VARCHAR(100) NOT NULL UNIQUE,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         series_internal_id INTEGER REFERENCES series(id) ON DELETE SET NULL,
         external_id VARCHAR(100) NOT NULL,
@@ -149,7 +150,8 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         metadata JSONB,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        CONSTRAINT event_time_order CHECK (end_time IS NULL OR start_time IS NULL OR end_time >= start_time)
+        CONSTRAINT event_time_order CHECK (end_time IS NULL OR start_time IS NULL OR end_time >= start_time),
+        UNIQUE(platform_id, external_id)
     );
     CREATE INDEX IF NOT EXISTS idx_events_platform ON events(platform_id);
     CREATE INDEX IF NOT EXISTS idx_events_series_internal ON events(series_internal_id);
@@ -162,7 +164,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         market_id VARCHAR(100) NOT NULL,
         market_uuid UUID DEFAULT gen_random_uuid() UNIQUE,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
-        event_id VARCHAR(100) REFERENCES events(event_id) ON DELETE CASCADE,
+        event_internal_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
         external_id VARCHAR(100) NOT NULL,
         ticker VARCHAR(50),
         title VARCHAR(255) NOT NULL,
@@ -182,7 +184,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         row_current_ind BOOLEAN DEFAULT TRUE,
         PRIMARY KEY (id)
     );
-    CREATE INDEX IF NOT EXISTS idx_markets_event ON markets(event_id);
+    CREATE INDEX IF NOT EXISTS idx_markets_event_internal ON markets(event_internal_id);
     CREATE INDEX IF NOT EXISTS idx_markets_platform ON markets(platform_id);
     CREATE INDEX IF NOT EXISTS idx_markets_current ON markets(row_current_ind) WHERE row_current_ind = TRUE;
     CREATE INDEX IF NOT EXISTS idx_markets_status ON markets(status);

@@ -858,18 +858,24 @@ def get_or_create_series(
 
 def get_event(event_id: str) -> dict[str, Any] | None:
     """
-    Get an event by event_id.
+    Get an event by its business key (event_id VARCHAR).
 
     Args:
-        event_id: The event identifier (primary key)
+        event_id: The event business key (UNIQUE, from Kalshi API).
+            Note: this is NOT the integer surrogate PK. The surrogate PK
+            is available in the returned dict as result["id"].
 
     Returns:
-        Dictionary with event data, or None if not found
+        Dictionary with event data (including 'id' surrogate PK), or None if not found
 
     Example:
         >>> event = get_event("KXNFL-24DEC22-KC-SEA")
         >>> if event:
-        ...     print(event['title'])
+        ...     print(event['id'])     # Integer surrogate PK
+        ...     print(event['title'])  # Event title
+
+    Reference:
+        - Migration 0020: event_id demoted to UNIQUE business key, id is SERIAL PK
     """
     query = """
         SELECT *
@@ -892,15 +898,15 @@ def create_event(
     end_time: str | None = None,
     status: str | None = None,
     metadata: dict | None = None,
-) -> str:
+) -> int:
     """
     Create a new event record.
 
     Events are the parent entities for markets. Each market belongs to an event,
-    enforced via foreign key constraint (markets.event_id -> events.event_id).
+    enforced via foreign key constraint (markets.event_internal_id -> events.id).
 
     Args:
-        event_id: Unique event identifier (primary key)
+        event_id: Unique event business key (VARCHAR, from Kalshi API)
         platform_id: Foreign key to platforms table (e.g., 'kalshi')
         external_id: External ID from the platform API
         category: Event category ('sports', 'politics', 'entertainment',
@@ -917,13 +923,14 @@ def create_event(
         metadata: Optional additional metadata as JSONB
 
     Returns:
-        event_id of the created event
+        Integer surrogate PK (id) of the created event. Callers use this
+        to set markets.event_internal_id FK.
 
     Raises:
         psycopg2.IntegrityError: If event_id already exists or platform_id invalid
 
     Example:
-        >>> event_id = create_event(
+        >>> event_pk = create_event(
         ...     event_id="KXNFL-24DEC22-KC-SEA",
         ...     platform_id="kalshi",
         ...     external_id="KXNFL-24DEC22-KC-SEA",
@@ -932,6 +939,7 @@ def create_event(
         ...     series_internal_id=42,
         ...     subcategory="nfl"
         ... )
+        >>> # event_pk is an integer, e.g. 7
 
     Educational Note:
         Events represent real-world occurrences (games, elections, etc.) that
@@ -945,6 +953,7 @@ def create_event(
     Reference:
         - docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
         - Migration 0019: events.series_internal_id replaces events.series_id
+        - Migration 0020: events.id SERIAL PK, markets.event_internal_id INTEGER FK
     """
     query = """
         INSERT INTO events (
@@ -954,7 +963,7 @@ def create_event(
             created_at, updated_at
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-        RETURNING event_id
+        RETURNING id
     """
 
     params = (
@@ -975,7 +984,7 @@ def create_event(
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return cast("str", result["event_id"])
+        return cast("int", result["id"])
 
 
 def get_or_create_event(
@@ -991,7 +1000,7 @@ def get_or_create_event(
     end_time: str | None = None,
     status: str | None = None,
     metadata: dict | None = None,
-) -> tuple[str, bool]:
+) -> tuple[int, bool]:
     """
     Get an existing event or create it if it doesn't exist.
 
@@ -999,7 +1008,7 @@ def get_or_create_event(
     to handle the common pattern of "upsert" behavior for events.
 
     Args:
-        event_id: Unique event identifier (primary key)
+        event_id: Unique event business key (VARCHAR, from Kalshi API)
         platform_id: Foreign key to platforms table
         external_id: External ID from the platform API
         category: Event category
@@ -1013,11 +1022,12 @@ def get_or_create_event(
         metadata: Optional metadata
 
     Returns:
-        Tuple of (event_id, created) where created is True if event was
-        newly created, False if it already existed.
+        Tuple of (id, created) where id is the integer surrogate PK and
+        created is True if event was newly created, False if it already existed.
+        Callers use the returned id to set markets.event_internal_id FK.
 
     Example:
-        >>> event_id, created = get_or_create_event(
+        >>> event_pk, created = get_or_create_event(
         ...     event_id="KXNFL-24DEC22-KC-SEA",
         ...     platform_id="kalshi",
         ...     external_id="KXNFL-24DEC22-KC-SEA",
@@ -1026,27 +1036,29 @@ def get_or_create_event(
         ...     series_internal_id=42
         ... )
         >>> if created:
-        ...     print(f"Created new event: {event_id}")
+        ...     print(f"Created new event with PK: {event_pk}")
         ... else:
-        ...     print(f"Event already exists: {event_id}")
+        ...     print(f"Event already exists with PK: {event_pk}")
 
     Educational Note:
         This pattern is essential for polling services like KalshiMarketPoller.
         When polling API data, the same events appear repeatedly. This function
         ensures we don't attempt duplicate inserts (which would fail due to
-        primary key constraint) while still creating new events when they appear.
+        UNIQUE constraint on event_id) while still creating new events when
+        they appear.
 
     Reference:
         - src/precog/schedulers/kalshi_poller.py
         - Migration 0019: events.series_internal_id replaces events.series_id
+        - Migration 0020: events.id SERIAL PK, returns integer instead of VARCHAR
     """
-    # Check if event already exists
+    # Check if event already exists — return its surrogate PK
     existing = get_event(event_id)
     if existing is not None:
-        return event_id, False
+        return cast("int", existing["id"]), False
 
-    # Create new event
-    create_event(
+    # Create new event — create_event() now returns the integer PK
+    event_pk = create_event(
         event_id=event_id,
         platform_id=platform_id,
         external_id=external_id,
@@ -1060,7 +1072,7 @@ def get_or_create_event(
         status=status,
         metadata=metadata,
     )
-    return event_id, True
+    return event_pk, True
 
 
 # =============================================================================
@@ -1070,7 +1082,7 @@ def get_or_create_event(
 
 def create_market(
     platform_id: str,
-    event_id: str,
+    event_internal_id: int | None,
     external_id: str,
     ticker: str,
     title: str,
@@ -1088,7 +1100,9 @@ def create_market(
 
     Args:
         platform_id: Foreign key to platforms table (VARCHAR)
-        event_id: Foreign key to events table (VARCHAR)
+        event_internal_id: Integer FK to events(id) surrogate PK. This is the
+            integer returned by get_or_create_event(), NOT the VARCHAR event_id.
+            None if the market has no associated event.
         external_id: External market ID from platform
         ticker: Market ticker (e.g., "NFL-KC-BUF-YES")
         title: Market title/description
@@ -1112,13 +1126,16 @@ def create_market(
     Example:
         >>> market_id = create_market(
         ...     platform_id="kalshi",
-        ...     event_id="EVT-NFL-KC-BUF",
+        ...     event_internal_id=7,  # Integer PK from events table
         ...     external_id="KXNFLKCBUF",
         ...     ticker="NFL-KC-BUF-YES",
         ...     title="Chiefs to beat Bills",
         ...     yes_price=Decimal("0.5200"),  # YES ask (cost to buy YES)
         ...     no_price=Decimal("0.4900"),   # NO ask (cost to buy NO); sum > 1.0 is normal
         ... )
+
+    Reference:
+        - Migration 0020: markets.event_internal_id INTEGER FK replaces VARCHAR event_id
     """
     # Runtime type validation (enforces Decimal precision)
     yes_price = validate_decimal(yes_price, "yes_price")
@@ -1131,7 +1148,7 @@ def create_market(
 
     query = """
         INSERT INTO markets (
-            market_id, platform_id, event_id, external_id,
+            market_id, platform_id, event_internal_id, external_id,
             ticker, title, market_type,
             yes_price, no_price, status,
             volume, open_interest, spread,
@@ -1144,7 +1161,7 @@ def create_market(
     params = (
         market_id,
         platform_id,
-        event_id,
+        event_internal_id,
         external_id,
         ticker,
         title,
@@ -1289,10 +1306,12 @@ def update_market_with_versioning(
         )
 
         # Step 2: Insert new version
+        # NOTE: Uses event_internal_id (integer FK to events.id) per migration 0020.
+        # SCD versioning copies ALL columns from the current row, including the FK.
         cur.execute(
             """
             INSERT INTO markets (
-                market_id, platform_id, event_id, external_id,
+                market_id, platform_id, event_internal_id, external_id,
                 ticker, title, market_type,
                 yes_price, no_price, status,
                 volume, open_interest, spread,
@@ -1304,7 +1323,7 @@ def update_market_with_versioning(
             (
                 current["market_id"],
                 current["platform_id"],
-                current["event_id"],
+                current["event_internal_id"],
                 current["external_id"],
                 ticker,
                 current["title"],
