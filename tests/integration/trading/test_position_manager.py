@@ -82,9 +82,10 @@ def position_params(db_cursor, clean_test_data):
             model_id = cur.fetchone()[0]
 
             # Look up event surrogate PK (migration 0020: markets use integer FK)
+            # Note: get_connection() returns raw psycopg2 (tuple rows), not dict cursor
             cur.execute("SELECT id FROM events WHERE event_id = 'TEST-EVT-NFL-KC-BUF'")
             _evt = cur.fetchone()
-            event_pk = _evt["id"] if _evt else None
+            event_pk = _evt[0] if _evt else None
 
             # Create test markets (required for get_current_positions() JOIN)
             # Multiple markets needed for filtering tests
