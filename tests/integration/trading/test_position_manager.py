@@ -96,14 +96,16 @@ def position_params(db_cursor, clean_test_data):
                 ("MKT-NFL-003", "MKT-003", "Test Market 3"),
             ]
 
+            # Migration 0021: markets is dimension, pricing in market_snapshots
             for market_id, external_id, title in markets_to_create:
                 cur.execute(
                     """
                     INSERT INTO markets (
                         market_id, platform_id, event_internal_id, external_id, ticker, title,
-                        yes_price, no_price, market_type, status, volume, open_interest, row_current_ind
+                        market_type, status
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
                     """,
                     (
                         market_id,
@@ -112,14 +114,20 @@ def position_params(db_cursor, clean_test_data):
                         external_id,
                         market_id,
                         title,
-                        Decimal("0.5200"),
-                        Decimal("0.4800"),
                         "binary",
                         "open",
-                        1000,
-                        500,
-                        True,
                     ),
+                )
+                market_pk = cur.fetchone()["id"]
+                cur.execute(
+                    """
+                    INSERT INTO market_snapshots (
+                        market_id, yes_ask_price, no_ask_price,
+                        volume, open_interest, row_current_ind
+                    )
+                    VALUES (%s, %s, %s, %s, %s, TRUE)
+                    """,
+                    (market_pk, Decimal("0.5200"), Decimal("0.4800"), 1000, 500),
                 )
             conn.commit()
     finally:

@@ -228,8 +228,8 @@ class TestDatabaseSyncIntegration:
         # Setup mock - market exists with different price
         mock_get.return_value = {
             "ticker": "TEST-TICKER",
-            "yes_price": Decimal("0.40"),
-            "no_price": Decimal("0.60"),
+            "yes_ask_price": Decimal("0.40"),
+            "no_ask_price": Decimal("0.60"),
         }
 
         # Call _sync_price_to_db directly
@@ -240,12 +240,12 @@ class TestDatabaseSyncIntegration:
             msg={"volume": 1000},
         )
 
-        # Verify update was called
+        # Verify update was called with renamed DB column kwargs
         mock_update.assert_called_once()
         call_kwargs = mock_update.call_args[1]
         assert call_kwargs["ticker"] == "TEST-TICKER"
-        assert call_kwargs["yes_price"] == Decimal("0.55")
-        assert call_kwargs["no_price"] == Decimal("0.45")
+        assert call_kwargs["yes_ask_price"] == Decimal("0.55")
+        assert call_kwargs["no_ask_price"] == Decimal("0.45")
 
     @patch("precog.schedulers.kalshi_websocket.get_current_market")
     @patch("precog.schedulers.kalshi_websocket.update_market_with_versioning")
@@ -259,8 +259,8 @@ class TestDatabaseSyncIntegration:
         # Setup mock - market exists with same price
         mock_get.return_value = {
             "ticker": "TEST-TICKER",
-            "yes_price": Decimal("0.55"),
-            "no_price": Decimal("0.45"),
+            "yes_ask_price": Decimal("0.55"),
+            "no_ask_price": Decimal("0.45"),
         }
 
         # Call _sync_price_to_db

@@ -245,33 +245,33 @@ class TestKalshiPollerDatabaseIntegration:
 
             if result["items_created"] > 0:
                 with get_cursor() as cur:
+                    # Migration 0021: pricing in market_snapshots, use view
                     cur.execute("""
-                        SELECT yes_price, no_price
-                        FROM markets
+                        SELECT yes_ask_price, no_ask_price
+                        FROM current_markets
                         WHERE platform_id = 'kalshi'
-                          AND row_current_ind = TRUE
                         LIMIT 10
                     """)
                     markets = cur.fetchall()
 
                     for market in markets:
-                        yes_price = market["yes_price"]
-                        no_price = market["no_price"]
+                        yes_price = market["yes_ask_price"]
+                        no_price = market["no_ask_price"]
 
                         # Prices should be Decimal (psycopg2 returns Decimal for NUMERIC)
                         assert isinstance(yes_price, Decimal), (
-                            f"yes_price is {type(yes_price).__name__}, expected Decimal"
+                            f"yes_ask_price is {type(yes_price).__name__}, expected Decimal"
                         )
                         assert isinstance(no_price, Decimal), (
-                            f"no_price is {type(no_price).__name__}, expected Decimal"
+                            f"no_ask_price is {type(no_price).__name__}, expected Decimal"
                         )
 
                         # Prices should be in valid range [0, 1]
                         assert Decimal("0") <= yes_price <= Decimal("1"), (
-                            f"yes_price {yes_price} out of range [0, 1]"
+                            f"yes_ask_price {yes_price} out of range [0, 1]"
                         )
                         assert Decimal("0") <= no_price <= Decimal("1"), (
-                            f"no_price {no_price} out of range [0, 1]"
+                            f"no_ask_price {no_price} out of range [0, 1]"
                         )
         finally:
             poller.kalshi_client.close()
@@ -291,12 +291,12 @@ class TestKalshiPollerDatabaseIntegration:
 
             if result["items_created"] > 0:
                 with get_cursor() as cur:
+                    # Migration 0021: pricing in market_snapshots, use view
                     cur.execute("""
                         SELECT ticker, title, market_type, status,
-                               yes_price, no_price, platform_id, event_internal_id
-                        FROM markets
+                               yes_ask_price, no_ask_price, platform_id, event_internal_id
+                        FROM current_markets
                         WHERE platform_id = 'kalshi'
-                          AND row_current_ind = TRUE
                         LIMIT 5
                     """)
                     markets = cur.fetchall()
@@ -421,24 +421,23 @@ class TestKalshiPollerIdempotency:
             # First poll (return value unused - we're testing DB side effects)
             poller.poll_once()
 
-            # Get market count after first poll
+            # Migration 0021: markets is dimension (1 row per market, no SCD)
             with get_cursor() as cur:
                 cur.execute("""
                     SELECT COUNT(*) as cnt
                     FROM markets
-                    WHERE platform_id = 'kalshi' AND row_current_ind = TRUE
+                    WHERE platform_id = 'kalshi'
                 """)
                 count_after_first = cur.fetchone()["cnt"]
 
             # Second poll (should update, not duplicate)
             poller.poll_once()
 
-            # Get market count after second poll
             with get_cursor() as cur:
                 cur.execute("""
                     SELECT COUNT(*) as cnt
                     FROM markets
-                    WHERE platform_id = 'kalshi' AND row_current_ind = TRUE
+                    WHERE platform_id = 'kalshi'
                 """)
                 count_after_second = cur.fetchone()["cnt"]
 
@@ -478,21 +477,22 @@ class TestKalshiPollerIdempotency:
             # Second poll (might create new versions if prices changed)
             poller.poll_once()
 
-            # Check that row_current_ind is being used correctly
+            # Migration 0021: SCD Type 2 is on market_snapshots, not markets.
+            # Check that each market has exactly one current snapshot.
             with get_cursor() as cur:
-                # Should have exactly one current row per ticker
                 cur.execute("""
-                    SELECT ticker, COUNT(*) as current_count
-                    FROM markets
-                    WHERE platform_id = 'kalshi' AND row_current_ind = TRUE
-                    GROUP BY ticker
+                    SELECT m.ticker, COUNT(*) as current_count
+                    FROM market_snapshots ms
+                    JOIN markets m ON ms.market_id = m.id
+                    WHERE m.platform_id = 'kalshi' AND ms.row_current_ind = TRUE
+                    GROUP BY m.ticker
                     HAVING COUNT(*) > 1
                 """)
                 duplicates = cur.fetchall()
 
                 assert len(duplicates) == 0, (
-                    f"Found tickers with multiple current rows: {duplicates}. "
-                    "SCD Type 2 should have exactly one row_current_ind=TRUE per ticker."
+                    f"Found tickers with multiple current snapshots: {duplicates}. "
+                    "SCD Type 2 should have exactly one row_current_ind=TRUE per market."
                 )
         finally:
             poller.kalshi_client.close()
