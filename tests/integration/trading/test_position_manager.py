@@ -81,6 +81,11 @@ def position_params(db_cursor, clean_test_data):
             )
             model_id = cur.fetchone()[0]
 
+            # Look up event surrogate PK (migration 0020: markets use integer FK)
+            cur.execute("SELECT id FROM events WHERE event_id = 'TEST-EVT-NFL-KC-BUF'")
+            _evt = cur.fetchone()
+            event_pk = _evt["id"] if _evt else None
+
             # Create test markets (required for get_current_positions() JOIN)
             # Multiple markets needed for filtering tests
             markets_to_create = [
@@ -94,7 +99,7 @@ def position_params(db_cursor, clean_test_data):
                 cur.execute(
                     """
                     INSERT INTO markets (
-                        market_id, platform_id, event_id, external_id, ticker, title,
+                        market_id, platform_id, event_internal_id, external_id, ticker, title,
                         yes_price, no_price, market_type, status, volume, open_interest, row_current_ind
                     )
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
@@ -102,7 +107,7 @@ def position_params(db_cursor, clean_test_data):
                     (
                         market_id,
                         "test_platform",
-                        "TEST-EVT-NFL-KC-BUF",
+                        event_pk,
                         external_id,
                         market_id,
                         title,
