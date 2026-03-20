@@ -181,19 +181,30 @@ def db_transaction_with_setup(
         ON CONFLICT (series_id) DO NOTHING
     """)
 
-    # Create test event
-    cursor.execute("""
-        INSERT INTO events (event_id, platform_id, series_id, external_id, category, title, status)
-        VALUES ('TEST-EVT-NFL-KC-BUF', 'test_platform', 'TEST-SERIES-NFL', 'TEST-EXT-EVT', 'sports', 'Test Event: KC vs BUF', 'scheduled')
+    # Get series surrogate PK for event FK (migration 0019: series_internal_id)
+    cursor.execute("SELECT id FROM series WHERE series_id = 'TEST-SERIES-NFL'")
+    _sr = cursor.fetchone()
+    _series_pk = _sr["id"] if _sr else None
+
+    # Create test event (uses series_internal_id integer FK)
+    cursor.execute(
+        """
+        INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, title, status)
+        VALUES ('TEST-EVT-NFL-KC-BUF', 'test_platform', %s, 'TEST-EXT-EVT', 'sports', 'Test Event: KC vs BUF', 'scheduled')
         ON CONFLICT (event_id) DO NOTHING
-    """)
+    """,
+        (_series_pk,),
+    )
 
     # Create additional test event for compatibility
-    cursor.execute("""
-        INSERT INTO events (event_id, platform_id, series_id, external_id, category, title, status)
-        VALUES ('TEST-EVT', 'test_platform', 'TEST-SERIES-NFL', 'TEST-EVT-2', 'sports', 'Test Event 2', 'scheduled')
+    cursor.execute(
+        """
+        INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, title, status)
+        VALUES ('TEST-EVT', 'test_platform', %s, 'TEST-EVT-2', 'sports', 'Test Event 2', 'scheduled')
         ON CONFLICT (event_id) DO NOTHING
-    """)
+    """,
+        (_series_pk,),
+    )
 
     # Create test strategy (high ID to avoid SERIAL collision)
     cursor.execute("""

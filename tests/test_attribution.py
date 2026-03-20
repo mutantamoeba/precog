@@ -130,15 +130,19 @@ def sample_series(db_pool, clean_test_data, sample_platform) -> str:
 @pytest.fixture
 def sample_event(db_pool, clean_test_data, sample_platform, sample_series) -> str:
     """Create sample event for testing."""
-    from precog.database.connection import execute_query
+    from precog.database.connection import execute_query, fetch_one
+
+    # Look up series surrogate PK (migration 0019: events use integer FK)
+    series_row = fetch_one("SELECT id FROM series WHERE series_id = 'NFL-2025'")
+    series_pk = series_row["id"] if series_row else None
 
     query = """
-        INSERT INTO events (event_id, platform_id, series_id, external_id, category, subcategory, title, status)
-        VALUES ('HIGHTEST', 'kalshi', 'NFL-2025', 'HIGHTEST-ext', 'sports', 'nfl', 'Super Bowl LIX', 'scheduled')
+        INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, subcategory, title, status)
+        VALUES ('HIGHTEST', 'kalshi', %s, 'HIGHTEST-ext', 'sports', 'nfl', 'Super Bowl LIX', 'scheduled')
         ON CONFLICT (event_id) DO NOTHING
         RETURNING event_id
     """
-    execute_query(query)
+    execute_query(query, (series_pk,))
     return "HIGHTEST"
 
 

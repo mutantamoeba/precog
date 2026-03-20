@@ -116,16 +116,19 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     );
 
     CREATE TABLE IF NOT EXISTS series (
-        series_id VARCHAR(100) PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
+        series_id VARCHAR(100) NOT NULL UNIQUE,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         external_id VARCHAR(100) NOT NULL,
         category VARCHAR(50) NOT NULL CHECK (category IN ('sports', 'politics', 'entertainment', 'economics', 'weather', 'other')),
         subcategory VARCHAR(50),
         title VARCHAR(255) NOT NULL,
-        frequency VARCHAR(20) CHECK (frequency IN ('single', 'recurring', 'continuous')),
+        frequency VARCHAR(20),
+        tags TEXT[],
         metadata JSONB,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        UNIQUE(platform_id, external_id)
     );
     CREATE INDEX IF NOT EXISTS idx_series_platform ON series(platform_id);
     CREATE INDEX IF NOT EXISTS idx_series_category ON series(category, subcategory);
@@ -133,7 +136,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE TABLE IF NOT EXISTS events (
         event_id VARCHAR(100) PRIMARY KEY,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
-        series_id VARCHAR(100) REFERENCES series(series_id) ON DELETE SET NULL,
+        series_internal_id INTEGER REFERENCES series(id) ON DELETE SET NULL,
         external_id VARCHAR(100) NOT NULL,
         category VARCHAR(50) NOT NULL CHECK (category IN ('sports', 'politics', 'entertainment', 'economics', 'weather', 'other')),
         subcategory VARCHAR(50),
@@ -149,7 +152,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         CONSTRAINT event_time_order CHECK (end_time IS NULL OR start_time IS NULL OR end_time >= start_time)
     );
     CREATE INDEX IF NOT EXISTS idx_events_platform ON events(platform_id);
-    CREATE INDEX IF NOT EXISTS idx_events_series ON events(series_id);
+    CREATE INDEX IF NOT EXISTS idx_events_series_internal ON events(series_internal_id);
     CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
     CREATE INDEX IF NOT EXISTS idx_events_start_time ON events(start_time);
 

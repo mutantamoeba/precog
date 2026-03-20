@@ -418,34 +418,39 @@ def validate_decimal(value: Any, param_name: str) -> Decimal:
 
 def get_series(series_id: str) -> dict[str, Any] | None:
     """
-    Get a series by series_id.
+    Get a series by series_id (business key).
 
     Series represent recurring market groups (e.g., "NFL Game Markets" contains
     all individual game betting markets). This is the first level in the
-    Kalshi hierarchy: Series → Events → Markets.
+    Kalshi hierarchy: Series -> Events -> Markets.
 
     Args:
-        series_id: The series identifier (primary key, e.g., "KXNFLGAME")
+        series_id: The series business key (e.g., "KXNFLGAME"). This is the
+            human-readable identifier from the Kalshi API, NOT the surrogate
+            integer PK.
 
     Returns:
         Dict containing series data if found, None otherwise.
-        Keys: series_id, platform_id, external_id, category, subcategory,
+        Keys: id, series_id, platform_id, external_id, category, subcategory,
               title, frequency, tags, metadata, created_at, updated_at
 
     Example:
         >>> series = get_series("KXNFLGAME")
         >>> if series:
-        ...     print(f"Found: {series['title']}")
+        ...     print(f"Found: {series['title']} (internal id: {series['id']})")
         ...     print(f"Tags: {series['tags']}")  # ['Football']
         ... else:
         ...     print("Series not found")
 
     Educational Note:
-        The series table stores metadata about market groups from Kalshi's API.
+        The series table uses a surrogate integer PK (id) for internal identity
+        and foreign key references. The series_id VARCHAR column is kept as a
+        UNIQUE business key for human readability and API compatibility.
+
         The `tags` column (TEXT[]) is particularly useful for sport filtering:
-        - ["Football"] → NFL, NCAAF
-        - ["Basketball"] → NBA, NCAAB, NCAAW
-        - ["Hockey"] → NHL
+        - ["Football"] -> NFL, NCAAF
+        - ["Basketball"] -> NBA, NCAAB, NCAAW
+        - ["Hockey"] -> NHL
 
         Using PostgreSQL arrays with GIN index enables efficient queries:
         SELECT * FROM series WHERE 'Football' = ANY(tags)
@@ -453,9 +458,10 @@ def get_series(series_id: str) -> dict[str, Any] | None:
     Reference:
         - docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
         - src/precog/api_connectors/kalshi_client.py (get_series, get_sports_series)
+        - Migration 0019: Added surrogate PK, demoted series_id to business key
     """
     query = """
-        SELECT series_id, platform_id, external_id, category, subcategory,
+        SELECT id, series_id, platform_id, external_id, category, subcategory,
                title, frequency, tags, metadata, created_at, updated_at
         FROM series
         WHERE series_id = %s
@@ -543,11 +549,11 @@ def list_series(
 
     # S608 false positive: conditions are hardcoded strings, not user input
     query = f"""
-        SELECT series_id, platform_id, external_id, category, subcategory,
+        SELECT id, series_id, platform_id, external_id, category, subcategory,
                title, frequency, tags, metadata, created_at, updated_at
         FROM series
         {where_clause}
-        ORDER BY series_id
+        ORDER BY id
         LIMIT %s OFFSET %s
     """  # noqa: S608
     params.extend([limit, offset])
@@ -568,16 +574,18 @@ def create_series(
     frequency: str | None = None,
     tags: list[str] | None = None,
     metadata: dict | None = None,
-) -> str:
+) -> int:
     """
     Create a new series record.
 
     Series are the top-level grouping in Kalshi's market hierarchy:
-    Series → Events → Markets. Each series represents a category of
+    Series -> Events -> Markets. Each series represents a category of
     related markets (e.g., "NFL Game Markets" or "Presidential Election").
 
     Args:
-        series_id: Unique series identifier (primary key, e.g., "KXNFLGAME")
+        series_id: Unique business key (e.g., "KXNFLGAME"). Stored as
+            VARCHAR(100) UNIQUE, but the surrogate integer PK (id) is
+            used for all internal references and FK relationships.
         platform_id: Foreign key to platforms table (e.g., 'kalshi')
         external_id: External ID from the platform API
         category: Series category - one of: 'sports', 'politics',
@@ -589,13 +597,14 @@ def create_series(
         metadata: Optional additional metadata as JSONB
 
     Returns:
-        series_id of the created series
+        Integer surrogate PK (id) of the created series
 
     Raises:
-        psycopg2.IntegrityError: If series_id already exists or platform_id invalid
+        psycopg2.IntegrityError: If series_id already exists, platform_id
+            invalid, or (platform_id, external_id) pair already exists
 
     Example:
-        >>> series_id = create_series(
+        >>> series_pk = create_series(
         ...     series_id="KXNFLGAME",
         ...     platform_id="kalshi",
         ...     external_id="KXNFLGAME",
@@ -605,7 +614,7 @@ def create_series(
         ...     frequency="daily",
         ...     tags=["Football"]
         ... )
-        >>> print(f"Created series: {series_id}")
+        >>> print(f"Created series with internal id: {series_pk}")
 
     Educational Note:
         The category CHECK constraint ensures data integrity at the database
@@ -619,6 +628,7 @@ def create_series(
     Reference:
         - docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
         - Migration 0010: Added tags column with GIN index
+        - Migration 0019: Added surrogate PK (id SERIAL)
     """
     query = """
         INSERT INTO series (
@@ -626,7 +636,7 @@ def create_series(
             title, frequency, tags, metadata, created_at, updated_at
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
-        RETURNING series_id
+        RETURNING id
     """
 
     params = (
@@ -644,7 +654,7 @@ def create_series(
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return cast("str", result["series_id"])
+        return cast("int", result["id"])
 
 
 def update_series(
@@ -751,7 +761,7 @@ def get_or_create_series(
     tags: list[str] | None = None,
     metadata: dict | None = None,
     update_if_exists: bool = True,
-) -> tuple[str, bool]:
+) -> tuple[int, bool]:
     """
     Get an existing series or create it if it doesn't exist.
 
@@ -760,7 +770,7 @@ def get_or_create_series(
     API responses, this function ensures we don't fail on duplicate inserts.
 
     Args:
-        series_id: Unique series identifier
+        series_id: Business key (e.g., "KXNFLGAME") used for lookup
         platform_id: Platform foreign key
         external_id: External API identifier
         category: Series category
@@ -772,11 +782,11 @@ def get_or_create_series(
         update_if_exists: If True, update existing series with new data (default: True)
 
     Returns:
-        Tuple of (series_id, created) where created is True if series was
-        newly created, False if it already existed.
+        Tuple of (id, created) where id is the integer surrogate PK and
+        created is True if series was newly created, False if it already existed.
 
     Example:
-        >>> series_id, created = get_or_create_series(
+        >>> series_pk, created = get_or_create_series(
         ...     series_id="KXNFLGAME",
         ...     platform_id="kalshi",
         ...     external_id="KXNFLGAME",
@@ -785,9 +795,9 @@ def get_or_create_series(
         ...     tags=["Football"]
         ... )
         >>> if created:
-        ...     print(f"Created new series: {series_id}")
+        ...     print(f"Created new series (id={series_pk})")
         ... else:
-        ...     print(f"Series already exists: {series_id}")
+        ...     print(f"Series already exists (id={series_pk})")
 
     Educational Note:
         This pattern is critical for the KalshiPoller service. When syncing
@@ -797,6 +807,9 @@ def get_or_create_series(
         2. Existing series are optionally updated with fresh data
         3. No duplicate insert errors occur
 
+        The returned integer PK is used by downstream callers (e.g., the
+        poller) to set events.series_internal_id when creating events.
+
         The update_if_exists flag allows the caller to control whether
         existing records should be refreshed with API data. Set to False
         if you only want to create missing records without modifying existing.
@@ -804,6 +817,7 @@ def get_or_create_series(
     Reference:
         - src/precog/schedulers/kalshi_poller.py
         - Pattern similar to get_or_create_event()
+        - Migration 0019: series now uses surrogate integer PK
     """
     # Check if series already exists
     existing = get_series(series_id)
@@ -820,10 +834,10 @@ def get_or_create_series(
                 tags=tags,
                 metadata=metadata,
             )
-        return series_id, False
+        return cast("int", existing["id"]), False
 
-    # Create new series
-    create_series(
+    # Create new series - returns integer surrogate PK
+    new_id = create_series(
         series_id=series_id,
         platform_id=platform_id,
         external_id=external_id,
@@ -834,7 +848,7 @@ def get_or_create_series(
         tags=tags,
         metadata=metadata,
     )
-    return series_id, True
+    return new_id, True
 
 
 # =============================================================================
@@ -871,7 +885,7 @@ def create_event(
     external_id: str,
     category: str,
     title: str,
-    series_id: str | None = None,
+    series_internal_id: int | None = None,
     subcategory: str | None = None,
     description: str | None = None,
     start_time: str | None = None,
@@ -892,7 +906,9 @@ def create_event(
         category: Event category ('sports', 'politics', 'entertainment',
                   'economics', 'weather', 'other')
         title: Event title/description
-        series_id: Optional foreign key to series table
+        series_internal_id: Optional integer FK to series(id). This is the
+            surrogate PK from the series table (migration 0019), NOT the
+            VARCHAR business key.
         subcategory: Optional subcategory (e.g., 'nfl', 'nba')
         description: Optional detailed description
         start_time: Optional event start time (ISO format)
@@ -913,6 +929,7 @@ def create_event(
         ...     external_id="KXNFL-24DEC22-KC-SEA",
         ...     category="sports",
         ...     title="Chiefs vs Seahawks - Dec 22, 2024",
+        ...     series_internal_id=42,
         ...     subcategory="nfl"
         ... )
 
@@ -925,11 +942,13 @@ def create_event(
         The foreign key constraint ensures data integrity - you can't create
         a market for a non-existent event.
 
-    Reference: docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+    Reference:
+        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+        - Migration 0019: events.series_internal_id replaces events.series_id
     """
     query = """
         INSERT INTO events (
-            event_id, platform_id, series_id, external_id,
+            event_id, platform_id, series_internal_id, external_id,
             category, subcategory, title, description,
             start_time, end_time, status, metadata,
             created_at, updated_at
@@ -941,7 +960,7 @@ def create_event(
     params = (
         event_id,
         platform_id,
-        series_id,
+        series_internal_id,
         external_id,
         category,
         subcategory,
@@ -965,7 +984,7 @@ def get_or_create_event(
     external_id: str,
     category: str,
     title: str,
-    series_id: str | None = None,
+    series_internal_id: int | None = None,
     subcategory: str | None = None,
     description: str | None = None,
     start_time: str | None = None,
@@ -985,7 +1004,7 @@ def get_or_create_event(
         external_id: External ID from the platform API
         category: Event category
         title: Event title
-        series_id: Optional series foreign key
+        series_internal_id: Optional integer FK to series(id) surrogate PK
         subcategory: Optional subcategory
         description: Optional description
         start_time: Optional start time
@@ -1003,7 +1022,8 @@ def get_or_create_event(
         ...     platform_id="kalshi",
         ...     external_id="KXNFL-24DEC22-KC-SEA",
         ...     category="sports",
-        ...     title="Chiefs vs Seahawks - Dec 22, 2024"
+        ...     title="Chiefs vs Seahawks - Dec 22, 2024",
+        ...     series_internal_id=42
         ... )
         >>> if created:
         ...     print(f"Created new event: {event_id}")
@@ -1016,7 +1036,9 @@ def get_or_create_event(
         ensures we don't attempt duplicate inserts (which would fail due to
         primary key constraint) while still creating new events when they appear.
 
-    Reference: src/precog/schedulers/kalshi_poller.py
+    Reference:
+        - src/precog/schedulers/kalshi_poller.py
+        - Migration 0019: events.series_internal_id replaces events.series_id
     """
     # Check if event already exists
     existing = get_event(event_id)
@@ -1030,7 +1052,7 @@ def get_or_create_event(
         external_id=external_id,
         category=category,
         title=title,
-        series_id=series_id,
+        series_internal_id=series_internal_id,
         subcategory=subcategory,
         description=description,
         start_time=start_time,

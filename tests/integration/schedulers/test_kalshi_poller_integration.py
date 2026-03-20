@@ -607,7 +607,7 @@ class TestSeriesSyncIntegration:
         mock_kalshi_client.get_sports_series.return_value = sample_series_data
 
         with patch("precog.schedulers.kalshi_poller.get_or_create_series") as mock_crud:
-            mock_crud.return_value = ("series-1", True)
+            mock_crud.return_value = (1, True)
             result = poller_with_mock_client.sync_series()
 
         mock_kalshi_client.get_sports_series.assert_called_once()
@@ -623,7 +623,7 @@ class TestSeriesSyncIntegration:
         mock_kalshi_client.get_sports_series.return_value = sample_series_data
 
         with patch("precog.schedulers.kalshi_poller.get_or_create_series") as mock_crud:
-            mock_crud.return_value = ("series-1", True)
+            mock_crud.return_value = (1, True)
             result = poller_with_mock_client.sync_series()
 
         # Should call get_or_create_series for each series
@@ -641,7 +641,7 @@ class TestSeriesSyncIntegration:
 
         with patch("precog.schedulers.kalshi_poller.get_or_create_series") as mock_crud:
             # Return False for created (i.e., series already existed)
-            mock_crud.return_value = ("series-1", False)
+            mock_crud.return_value = (1, False)
             result = poller_with_mock_client.sync_series()
 
         assert result["series_created"] == 0
@@ -681,7 +681,7 @@ class TestSeriesSyncIntegration:
         }
 
         with patch("precog.schedulers.kalshi_poller.get_or_create_series") as mock_crud:
-            mock_crud.return_value = ("series-1", True)
+            mock_crud.return_value = (1, True)
             poller_with_mock_client._sync_single_series(series_data)
 
         # Verify the category was lowercased
