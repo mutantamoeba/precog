@@ -285,19 +285,30 @@ def clean_test_data(db_cursor):
         ON CONFLICT (series_id) DO NOTHING
     """)
 
-    # Create test event
-    db_cursor.execute("""
-        INSERT INTO events (event_id, platform_id, series_id, external_id, category, title, status)
-        VALUES ('TEST-EVT-NFL-KC-BUF', 'test_platform', 'TEST-SERIES-NFL', 'TEST-EXT-EVT', 'sports', 'Test Event: KC vs BUF', 'scheduled')
+    # Get series surrogate PK for event FK (migration 0019: series_internal_id)
+    db_cursor.execute("SELECT id FROM series WHERE series_id = 'TEST-SERIES-NFL'")
+    _series_row = db_cursor.fetchone()
+    _test_series_pk = _series_row["id"] if _series_row else None
+
+    # Create test event (uses series_internal_id integer FK)
+    db_cursor.execute(
+        """
+        INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, title, status)
+        VALUES ('TEST-EVT-NFL-KC-BUF', 'test_platform', %s, 'TEST-EXT-EVT', 'sports', 'Test Event: KC vs BUF', 'scheduled')
         ON CONFLICT (event_id) DO NOTHING
-    """)
+    """,
+        (_test_series_pk,),
+    )
 
     # Create additional test event for test_execute_query
-    db_cursor.execute("""
-        INSERT INTO events (event_id, platform_id, series_id, external_id, category, title, status)
-        VALUES ('TEST-EVT', 'test_platform', 'TEST-SERIES-NFL', 'TEST-EVT-2', 'sports', 'Test Event 2', 'scheduled')
+    db_cursor.execute(
+        """
+        INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, title, status)
+        VALUES ('TEST-EVT', 'test_platform', %s, 'TEST-EVT-2', 'sports', 'Test Event 2', 'scheduled')
         ON CONFLICT (event_id) DO NOTHING
-    """)
+    """,
+        (_test_series_pk,),
+    )
 
     # Create test strategy and probability model (required parent records for positions/trades)
     # Use HIGH IDs (99901) to avoid SERIAL sequence collision with property tests
@@ -701,15 +712,19 @@ def sample_series(db_pool, clean_test_data, sample_platform) -> str:
 @pytest.fixture
 def sample_event(db_pool, clean_test_data, sample_platform, sample_series) -> str:
     """Create sample event for testing."""
-    from precog.database.connection import execute_query
+    from precog.database.connection import execute_query, fetch_one
+
+    # Look up series surrogate PK (migration 0019: events use integer FK)
+    series_row = fetch_one("SELECT id FROM series WHERE series_id = 'NFL-2025'")
+    series_pk = series_row["id"] if series_row else None
 
     query = """
-        INSERT INTO events (event_id, platform_id, series_id, external_id, category, subcategory, title, status)
-        VALUES ('HIGHTEST', 'kalshi', 'NFL-2025', 'HIGHTEST-ext', 'sports', 'nfl', 'Super Bowl LIX', 'scheduled')
+        INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, subcategory, title, status)
+        VALUES ('HIGHTEST', 'kalshi', %s, 'HIGHTEST-ext', 'sports', 'nfl', 'Super Bowl LIX', 'scheduled')
         ON CONFLICT (event_id) DO NOTHING
         RETURNING event_id
     """
-    execute_query(query)
+    execute_query(query, (series_pk,))
     return "HIGHTEST"
 
 

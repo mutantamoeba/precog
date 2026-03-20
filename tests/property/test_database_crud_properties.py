@@ -116,16 +116,22 @@ def setup_kalshi_platform(db_pool, clean_test_data):
             ON CONFLICT (series_id) DO NOTHING
         """
         )
+        # Get the series surrogate PK for event FK
+        cur.execute("SELECT id FROM series WHERE series_id = 'KXNFLGAME'")
+        series_row = cur.fetchone()
+        series_pk = series_row["id"] if series_row else None
 
         # Create events for test markets (idempotent)
+        # Uses series_internal_id (integer FK) instead of old series_id VARCHAR
         cur.execute(
             """
-            INSERT INTO events (event_id, platform_id, series_id, external_id, category, title, status)
+            INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, title, status)
             VALUES
-                ('KXNFLGAME-25DEC15', 'kalshi', 'KXNFLGAME', 'KXNFLGAME-25DEC15-EXT', 'sports', 'NFL Games Dec 15', 'scheduled'),
-                ('KXNFLGAME-25DEC08', 'kalshi', 'KXNFLGAME', 'KXNFLGAME-25DEC08-EXT', 'sports', 'NFL Games Dec 08', 'scheduled')
+                ('KXNFLGAME-25DEC15', 'kalshi', %s, 'KXNFLGAME-25DEC15-EXT', 'sports', 'NFL Games Dec 15', 'scheduled'),
+                ('KXNFLGAME-25DEC08', 'kalshi', %s, 'KXNFLGAME-25DEC08-EXT', 'sports', 'NFL Games Dec 08', 'scheduled')
             ON CONFLICT (event_id) DO NOTHING
-        """
+        """,
+            (series_pk, series_pk),
         )
 
     # NO TEARDOWN - Setup cleanup handles it, Issue #171 DB reset for final cleanup
@@ -1041,20 +1047,22 @@ def test_cascade_delete_integrity(db_pool, clean_test_data, ticker):
             """
             INSERT INTO series (series_id, platform_id, external_id, title, category)
             VALUES (%s, %s, %s, 'Test Series', 'sports')
+            RETURNING id
         """,
             (test_series_id, test_platform_id, f"EXT-{unique_id}"),
         )
+        series_pk = cur.fetchone()["id"]
 
-        # Create test event
+        # Create test event (uses series_internal_id integer FK)
         cur.execute(
             """
-            INSERT INTO events (event_id, platform_id, series_id, external_id, category, title, status)
+            INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, title, status)
             VALUES (%s, %s, %s, %s, 'sports', 'Test Event', 'scheduled')
         """,
             (
                 test_event_id,
                 test_platform_id,
-                test_series_id,
+                series_pk,
                 f"EXTEVT-{unique_id}",
             ),
         )

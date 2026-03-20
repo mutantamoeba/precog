@@ -190,6 +190,12 @@ class KalshiMarketPoller(BasePoller):
         # because _anomaly_counts is stateful per-poller)
         self._validator = KalshiDataValidator()
 
+        # Mapping of series ticker -> integer surrogate PK from series table.
+        # Populated by sync_series(), consumed by _sync_market_to_db() when
+        # creating events (events.series_internal_id FK).
+        # See migration 0019: series now uses SERIAL PK instead of VARCHAR PK.
+        self._series_id_map: dict[str, int] = {}
+
         # Validation stats tracked separately from PollerStats TypedDict
         # to avoid type contract violations. Merged in get_stats().
         # Includes both cumulative totals and per-cycle snapshots.
@@ -304,8 +310,8 @@ class KalshiMarketPoller(BasePoller):
             - Markets: Tradeable outcomes (e.g., "Chiefs to win")
 
             We sync series first because:
-            1. Events reference series (events.series_id → series.series_id)
-            2. Markets reference events (markets.event_id → events.event_id)
+            1. Events reference series (events.series_internal_id -> series.id)
+            2. Markets reference events (markets.event_id -> events.event_id)
             3. Without series records, FK constraints would fail
 
             The tags field is particularly valuable for sport filtering:
@@ -435,6 +441,10 @@ class KalshiMarketPoller(BasePoller):
             False if series was updated
             None if series was skipped (no changes)
 
+        Side Effects:
+            Updates self._series_id_map with ticker -> integer surrogate PK
+            mapping for downstream use by _sync_market_to_db().
+
         Educational Note:
             The category mapping is important because Kalshi's API uses
             descriptive categories like "Sports" but our DB constraint
@@ -475,8 +485,10 @@ class KalshiMarketPoller(BasePoller):
             elif "Hockey" in tags:
                 subcategory = "nhl"
 
-        # Use get_or_create_series with update_if_exists=True to keep data fresh
-        _, created = get_or_create_series(
+        # Use get_or_create_series with update_if_exists=True to keep data fresh.
+        # Returns (integer_pk, created) — the integer PK is stored in
+        # _series_id_map for downstream event creation (events.series_internal_id).
+        series_pk, created = get_or_create_series(
             series_id=ticker,
             platform_id=self.PLATFORM_ID,
             external_id=ticker,
@@ -492,10 +504,13 @@ class KalshiMarketPoller(BasePoller):
             update_if_exists=True,
         )
 
+        # Cache the ticker -> integer PK mapping for _sync_market_to_db
+        self._series_id_map[ticker] = series_pk
+
         if created:
-            logger.debug("Created series: %s", ticker)
+            logger.debug("Created series: %s (id=%d)", ticker, series_pk)
             return True
-        logger.debug("Updated series: %s", ticker)
+        logger.debug("Updated series: %s (id=%d)", ticker, series_pk)
         return False
 
     def poll_once(self, series_tickers: list[str] | None = None) -> dict[str, int]:
@@ -788,13 +803,24 @@ class KalshiMarketPoller(BasePoller):
             # Get or create the event before creating the market
             # This satisfies the foreign key constraint (markets.event_id -> events.event_id)
             if event_ticker:
+                # Look up integer surrogate PK for the series. The mapping is
+                # populated by sync_series() which runs before market polling.
+                series_pk = self._series_id_map.get(effective_series)
+                if effective_series and series_pk is None:
+                    logger.warning(
+                        "Series '%s' not in _series_id_map for event %s — "
+                        "event will have NULL series_internal_id",
+                        effective_series,
+                        event_ticker,
+                    )
+
                 get_or_create_event(
                     event_id=event_ticker,
                     platform_id=self.PLATFORM_ID,
                     external_id=event_ticker,
                     category=category,
                     title=market.get("title", event_ticker),
-                    series_id=effective_series,  # Link event to its series (e.g., KXNFLGAME)
+                    series_internal_id=series_pk,  # Integer FK to series(id)
                     subcategory=subcategory,
                     metadata={
                         "series_ticker": effective_series,

@@ -96,7 +96,7 @@ def created_series(db_pool, db_cursor, clean_test_data, unique_series_id: str) -
         This was a Phase 1.5 lesson learned - mocking connection pools caused Strategy
         Manager tests to pass despite critical bugs.
     """
-    series_id = create_series(
+    series_pk = create_series(
         series_id=unique_series_id,
         platform_id="kalshi",
         external_id=f"EXT-{unique_series_id}",
@@ -108,7 +108,8 @@ def created_series(db_pool, db_cursor, clean_test_data, unique_series_id: str) -
     )
 
     yield {
-        "series_id": series_id,
+        "id": series_pk,
+        "series_id": unique_series_id,
         "platform_id": "kalshi",
         "external_id": f"EXT-{unique_series_id}",
         "category": "sports",
@@ -117,11 +118,11 @@ def created_series(db_pool, db_cursor, clean_test_data, unique_series_id: str) -
         "tags": ["Football", "TestTag"],
     }
 
-    # Cleanup: Delete the test series
+    # Cleanup: Delete the test series (use business key, not surrogate PK)
     from precog.database.connection import get_cursor
 
     with get_cursor() as cur:
-        cur.execute("DELETE FROM series WHERE series_id = %s", (series_id,))
+        cur.execute("DELETE FROM series WHERE series_id = %s", (unique_series_id,))
 
 
 # =============================================================================
@@ -149,11 +150,12 @@ class TestGetSeriesIntegration:
         assert result is None
 
     def test_get_series_returns_all_fields(self, created_series: dict[str, Any]) -> None:
-        """get_series should return all series fields."""
+        """get_series should return all series fields including surrogate PK."""
         result = get_series(created_series["series_id"])
 
         assert result is not None
         expected_fields = [
+            "id",
             "series_id",
             "platform_id",
             "external_id",
@@ -168,6 +170,9 @@ class TestGetSeriesIntegration:
         ]
         for field in expected_fields:
             assert field in result, f"Missing field: {field}"
+        # Surrogate PK should be a positive integer
+        assert isinstance(result["id"], int)
+        assert result["id"] > 0
 
 
 # =============================================================================
@@ -273,8 +278,8 @@ class TestListSeriesIntegration:
 class TestCreateSeriesIntegration:
     """Integration tests for create_series function."""
 
-    def test_create_series_returns_series_id(self, unique_series_id: str) -> None:
-        """create_series should return the created series_id."""
+    def test_create_series_returns_surrogate_pk(self, unique_series_id: str) -> None:
+        """create_series should return the integer surrogate PK."""
         result = create_series(
             series_id=unique_series_id,
             platform_id="kalshi",
@@ -283,7 +288,13 @@ class TestCreateSeriesIntegration:
             title="New Test Series",
         )
 
-        assert result == unique_series_id
+        assert isinstance(result, int)
+        assert result > 0
+
+        # Verify the series is retrievable by business key
+        series = get_series(unique_series_id)
+        assert series is not None
+        assert series["id"] == result
 
         # Cleanup
         from precog.database.connection import get_cursor
@@ -361,8 +372,8 @@ class TestGetOrCreateSeriesIntegration:
     """Integration tests for get_or_create_series function."""
 
     def test_get_or_create_creates_new_series(self, unique_series_id: str) -> None:
-        """get_or_create_series should create new series when not found."""
-        series_id, created = get_or_create_series(
+        """get_or_create_series should create new series and return integer PK."""
+        series_pk, created = get_or_create_series(
             series_id=unique_series_id,
             platform_id="kalshi",
             external_id=f"EXT-{unique_series_id}",
@@ -370,12 +381,14 @@ class TestGetOrCreateSeriesIntegration:
             title="New Series via Upsert",
         )
 
-        assert series_id == unique_series_id
+        assert isinstance(series_pk, int)
+        assert series_pk > 0
         assert created is True
 
-        # Verify it exists
+        # Verify it exists and PK matches
         result = get_series(unique_series_id)
         assert result is not None
+        assert result["id"] == series_pk
 
         # Cleanup
         from precog.database.connection import get_cursor
@@ -384,8 +397,8 @@ class TestGetOrCreateSeriesIntegration:
             cur.execute("DELETE FROM series WHERE series_id = %s", (unique_series_id,))
 
     def test_get_or_create_returns_existing_series(self, created_series: dict[str, Any]) -> None:
-        """get_or_create_series should return existing series without creating."""
-        series_id, created = get_or_create_series(
+        """get_or_create_series should return existing series PK without creating."""
+        series_pk, created = get_or_create_series(
             series_id=created_series["series_id"],
             platform_id="kalshi",
             external_id=created_series["external_id"],
@@ -394,7 +407,7 @@ class TestGetOrCreateSeriesIntegration:
             update_if_exists=False,
         )
 
-        assert series_id == created_series["series_id"]
+        assert series_pk == created_series["id"]
         assert created is False
 
         # Verify title was not changed
@@ -403,7 +416,7 @@ class TestGetOrCreateSeriesIntegration:
 
     def test_get_or_create_updates_when_flag_set(self, created_series: dict[str, Any]) -> None:
         """get_or_create_series should update existing when update_if_exists=True."""
-        series_id, created = get_or_create_series(
+        series_pk, created = get_or_create_series(
             series_id=created_series["series_id"],
             platform_id="kalshi",
             external_id=created_series["external_id"],
@@ -412,7 +425,7 @@ class TestGetOrCreateSeriesIntegration:
             update_if_exists=True,
         )
 
-        assert series_id == created_series["series_id"]
+        assert series_pk == created_series["id"]
         assert created is False
 
         # Verify title was updated

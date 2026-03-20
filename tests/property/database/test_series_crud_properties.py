@@ -108,7 +108,7 @@ class TestSeriesCreateReadRoundtrip:
         series_id = f"PROP-TEST-{uuid.uuid4().hex[:8].upper()}"
         external_id = f"EXT-{series_id}"
 
-        created_id = create_series(
+        created_pk = create_series(
             series_id=series_id,
             platform_id=platform,
             external_id=external_id,
@@ -117,7 +117,8 @@ class TestSeriesCreateReadRoundtrip:
             frequency=frequency,
         )
 
-        assert created_id == series_id
+        assert isinstance(created_pk, int)
+        assert created_pk > 0
 
         result = get_series(series_id)
         assert result is not None
@@ -200,13 +201,15 @@ class TestSeriesGetOrCreateIdempotence:
             update_if_exists=False,
         )
 
-        assert id1 == id2 == series_id
+        assert isinstance(id1, int)
+        assert id1 == id2  # Same surrogate PK returned both times
         assert created1 is True
         assert created2 is False
 
         # Verify original data preserved
         result = get_series(series_id)
         assert result["title"] == "Idempotence Test"
+        assert result["id"] == id1
 
     @given(
         original_title=title_strategy,
@@ -409,8 +412,8 @@ class TestSeriesReturnTypes:
 
     @given(category=category_strategy)
     @settings(max_examples=5)
-    def test_create_series_returns_string(self, category: str) -> None:
-        """create_series should return the series_id string."""
+    def test_create_series_returns_integer_pk(self, category: str) -> None:
+        """create_series should return the integer surrogate PK."""
         series_id = f"PROP-TEST-{uuid.uuid4().hex[:8].upper()}"
 
         result = create_series(
@@ -421,5 +424,5 @@ class TestSeriesReturnTypes:
             title="Return Type Test",
         )
 
-        assert isinstance(result, str)
-        assert result == series_id
+        assert isinstance(result, int)
+        assert result > 0
