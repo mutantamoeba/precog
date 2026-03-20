@@ -8737,6 +8737,126 @@ last_trading_price = history[-2]['yes_price']  # Second-to-last row = last pre-s
 - `docs/utility/WARNING_DEBT_TRACKER.md` - Pattern 9 tracking
 - `scripts/warning_baseline.json` - Pattern 9 baseline
 
+## Pattern 38: Surrogate PK Migration Dependency Ordering (ALWAYS for PK Changes)
+
+**When:** Writing any Alembic migration that changes a PRIMARY KEY, drops a column, or renames a column.
+
+**Pattern:** Before modifying a table's PK or columns, enumerate and handle three classes of hidden dependencies:
+
+### Class 1: Foreign Key Constraints
+
+PostgreSQL won't let you drop a PK that has FKs referencing it — even on an empty table.
+
+```sql
+-- WRONG: Drop PK first (fails if any FK references it)
+ALTER TABLE series DROP CONSTRAINT series_pkey;  -- ❌ DependentObjectsStillExist
+
+-- CORRECT: Drop dependent FKs first, then PK
+ALTER TABLE events DROP CONSTRAINT IF EXISTS events_series_id_fkey;  -- Step 1
+ALTER TABLE series DROP CONSTRAINT series_pkey;  -- Step 2 (safe now)
+```
+
+**Discovery query:**
+```sql
+SELECT conname, conrelid::regclass AS referencing_table
+FROM pg_constraint
+WHERE confrelid = 'your_table'::regclass AND contype = 'f';
+```
+
+### Class 2: Views (SELECT * Binding)
+
+Views created with `SELECT *` bind to specific columns at creation time. Dropping a column that a view references fails with `DependentObjectsStillExist`.
+
+```sql
+-- WRONG: Drop column directly (fails if view uses it)
+ALTER TABLE markets DROP COLUMN event_id;  -- ❌ view current_markets depends on it
+
+-- CORRECT: Drop view, drop column, recreate view
+DROP VIEW IF EXISTS current_markets CASCADE;
+ALTER TABLE markets DROP COLUMN event_id;
+CREATE OR REPLACE VIEW current_markets AS SELECT * FROM markets WHERE row_current_ind = TRUE;
+```
+
+**Discovery query:**
+```sql
+SELECT viewname FROM pg_views WHERE definition LIKE '%your_table%';
+```
+
+### Class 3: Test Mock Contracts
+
+When a function's return type changes (e.g., `str` → `int`, or `str` → `tuple[int, bool]`), mocks without explicit `return_value` return `MagicMock`. This silently passes tuple unpacking (`a, b = mock()` creates child mocks) but produces wrong types downstream.
+
+```python
+# WRONG: MagicMock auto-creates children on unpack — silently wrong types
+patch("module.get_or_create_event")  # Returns MagicMock, not (int, bool)
+
+# CORRECT: Always match the real return type
+patch("module.get_or_create_event", return_value=(1, True))
+```
+
+**Discovery command:** After changing any function's return type, search all test files:
+```bash
+grep -rn "get_or_create_event" tests/ | grep -v "return_value"
+```
+
+### Backfill Step (Data Preservation)
+
+Even on "clean" databases, always include a backfill step when migrating FK columns. The test database isn't clean — it has data from previous test runs.
+
+```sql
+-- Step 7: Add new integer FK column
+ALTER TABLE events ADD COLUMN series_internal_id INTEGER;
+
+-- Step 8: Backfill from old VARCHAR column (costs nothing on empty table)
+UPDATE events e SET series_internal_id = s.id FROM series s WHERE e.series_id = s.series_id;
+
+-- Step 9: Add FK constraint on new column
+ALTER TABLE events ADD CONSTRAINT fk_events_series_internal
+FOREIGN KEY (series_internal_id) REFERENCES series(id) ON DELETE SET NULL;
+
+-- Step 10: Drop old column (safe now — data preserved in new column)
+ALTER TABLE events DROP COLUMN series_id;
+```
+
+### Migration Step Template (11 Steps)
+
+For any surrogate PK migration with downstream FK changes:
+
+1. **Drop dependent FKs** (from child tables referencing our PK)
+2. **Add SERIAL id column** (auto-assigns IDs to existing rows)
+3. **Drop old PK constraint**
+4. **Add new PK on id**
+5. **Add UNIQUE on old PK column** (becomes business key)
+6. **Add UNIQUE(platform_id, external_id)** (multi-platform support)
+7. **Add new integer FK column** on child table
+8. **Backfill** new FK from old VARCHAR via JOIN
+9. **Add FK constraint** on new integer column
+10. **Drop views, drop old column** on child table, recreate views
+11. **Add index** on new FK column
+
+### Checklist (Before Writing Migration)
+
+- [ ] Run discovery queries for FK constraints and views
+- [ ] Verify step ordering: FKs dropped before PK, views dropped before columns
+- [ ] Include backfill step (even for "clean" DBs)
+- [ ] Include view drop/recreate around column drops
+- [ ] Write full downgrade with reverse backfill
+- [ ] After migration: grep all test files for changed function signatures and mock contracts
+
+### Real-World Triggers
+
+- **Migration 0019 (series_surrogate_pk):** FK constraint blocked PK drop. Fixed by reordering.
+- **Migration 0020 (events_surrogate_pk):** `current_markets` view blocked column drop. Fixed by drop/recreate.
+- **Both migrations:** 15+ test mocks needed `return_value` updates for changed return types.
+
+**References:**
+- PostgreSQL docs: [ALTER TABLE](https://www.postgresql.org/docs/current/sql-altertable.html)
+- Migration 0019: `src/precog/database/alembic/versions/0019_series_surrogate_pk.py`
+- Migration 0020: `src/precog/database/alembic/versions/0020_events_surrogate_pk.py`
+- Feedback memory: `memory/feedback_migration_dependencies.md`
+
+---
+
 ### Code Examples
 - `api_connectors/types.py` - Pattern 6 (17 TypedDict examples)
 - `api_connectors/kalshi_auth.py` (lines 41-162) - Pattern 7 (excellent docstring examples)

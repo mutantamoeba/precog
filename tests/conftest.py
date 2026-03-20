@@ -371,11 +371,17 @@ def clean_test_data(db_cursor):
 
 
 @pytest.fixture
-def sample_market_data():
+def sample_market_data(db_pool, clean_test_data):
     """Sample market data for testing."""
+    from precog.database.crud_operations import get_event
+
+    # Look up event surrogate PK (migration 0020: create_market uses integer FK)
+    evt = get_event("TEST-EVT-NFL-KC-BUF")
+    event_pk = evt["id"] if evt else None
+
     return {
         "platform_id": "test_platform",  # Must match clean_test_data fixture
-        "event_id": "TEST-EVT-NFL-KC-BUF",  # Must match clean_test_data fixture
+        "event_internal_id": event_pk,  # Integer FK to events(id) per migration 0020
         "external_id": "TEST-EXT-123",
         "ticker": "TEST-NFL-KC-BUF-YES",
         "title": "TEST: Chiefs to beat Bills",

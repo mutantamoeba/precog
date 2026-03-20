@@ -293,7 +293,7 @@ class TestKalshiPollerDatabaseIntegration:
                 with get_cursor() as cur:
                     cur.execute("""
                         SELECT ticker, title, market_type, status,
-                               yes_price, no_price, platform_id, event_id
+                               yes_price, no_price, platform_id, event_internal_id
                         FROM markets
                         WHERE platform_id = 'kalshi'
                           AND row_current_ind = TRUE
@@ -308,7 +308,7 @@ class TestKalshiPollerDatabaseIntegration:
                         assert market["market_type"] == "binary", "market_type should be 'binary'"
                         assert market["status"] in {"open", "closed", "settled", "halted"}
                         assert market["platform_id"] == "kalshi"
-                        assert market["event_id"], "event_id should not be empty"
+                        assert market["event_internal_id"], "event_internal_id should not be empty"
         finally:
             poller.kalshi_client.close()
 

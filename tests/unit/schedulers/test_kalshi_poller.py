@@ -225,7 +225,7 @@ class TestKalshiMarketPollerPolling:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value="EVT-123"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch("precog.schedulers.kalshi_poller.create_market", return_value="MKT-123"),
         ):
             result = poller_with_mock_client.poll_once()
@@ -295,7 +295,7 @@ class TestKalshiMarketPollerPolling:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value="EVT-123"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch("precog.schedulers.kalshi_poller.create_market", return_value="MKT-123"),
         ):
             poller_with_mock_client._poll_wrapper()
@@ -332,7 +332,7 @@ class TestKalshiMarketPollerSync:
         """Test that _sync_market_to_db creates new market."""
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value="EVT-123"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch(
                 "precog.schedulers.kalshi_poller.create_market", return_value="MKT-123"
             ) as mock_create,
@@ -393,7 +393,7 @@ class TestKalshiMarketPollerSync:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value="EVT-123"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch(
                 "precog.schedulers.kalshi_poller.create_market", return_value="MKT-123"
             ) as mock_create,
@@ -536,7 +536,7 @@ class TestKalshiPollerValidation:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch("precog.schedulers.kalshi_poller.create_market"),
             patch.object(
                 poller_with_mock_client._validator,
@@ -567,7 +567,7 @@ class TestKalshiPollerValidation:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch(
                 "precog.schedulers.kalshi_poller.create_market", return_value="MKT-1"
             ) as mock_create,
@@ -588,7 +588,7 @@ class TestKalshiPollerValidation:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch("precog.schedulers.kalshi_poller.create_market"),
         ):
             import logging
@@ -616,7 +616,7 @@ class TestKalshiPollerValidation:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch("precog.schedulers.kalshi_poller.create_market"),
         ):
             import logging
@@ -644,7 +644,7 @@ class TestKalshiPollerValidation:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch("precog.schedulers.kalshi_poller.create_market"),
         ):
             poller_with_mock_client._poll_series("KXNFLGAME")
@@ -676,7 +676,7 @@ class TestKalshiPollerValidation:
                 side_effect=RuntimeError("validator exploded"),
             ),
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch(
                 "precog.schedulers.kalshi_poller.create_market", return_value="MKT-1"
             ) as mock_create,
@@ -713,7 +713,7 @@ class TestKalshiPollerValidation:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch("precog.schedulers.kalshi_poller.create_market"),
             patch("precog.schedulers.kalshi_poller.create_alert"),
         ):
@@ -746,7 +746,7 @@ class TestKalshiPollerValidation:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch("precog.schedulers.kalshi_poller.create_market"),
             patch("precog.schedulers.kalshi_poller.create_alert"),
         ):
@@ -764,7 +764,7 @@ class TestKalshiPollerValidation:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch("precog.schedulers.kalshi_poller.create_market"),
             patch("precog.schedulers.kalshi_poller.create_alert"),
         ):
@@ -789,7 +789,7 @@ class TestKalshiPollerValidation:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch("precog.schedulers.kalshi_poller.create_market"),
             patch("precog.schedulers.kalshi_poller.create_alert") as mock_alert,
         ):
@@ -837,7 +837,7 @@ class TestKalshiPollerValidation:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch("precog.schedulers.kalshi_poller.create_market"),
             patch("precog.schedulers.kalshi_poller.create_alert") as mock_alert,
         ):
@@ -883,7 +883,7 @@ class TestKalshiPollerValidation:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch("precog.schedulers.kalshi_poller.create_market"),
             patch("precog.schedulers.kalshi_poller.create_alert") as mock_alert,
         ):
@@ -914,7 +914,7 @@ class TestKalshiPollerValidation:
 
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.get_or_create_event"),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
             patch("precog.schedulers.kalshi_poller.create_market") as mock_create,
             patch(
                 "precog.schedulers.kalshi_poller.create_alert",

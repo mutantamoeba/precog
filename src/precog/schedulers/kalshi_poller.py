@@ -196,6 +196,12 @@ class KalshiMarketPoller(BasePoller):
         # See migration 0019: series now uses SERIAL PK instead of VARCHAR PK.
         self._series_id_map: dict[str, int] = {}
 
+        # Mapping of event ticker -> integer surrogate PK from events table.
+        # Populated by _sync_market_to_db() via get_or_create_event(), consumed
+        # when creating markets (markets.event_internal_id FK).
+        # See migration 0020: events now uses SERIAL PK instead of VARCHAR PK.
+        self._event_id_map: dict[str, int] = {}
+
         # Validation stats tracked separately from PollerStats TypedDict
         # to avoid type contract violations. Merged in get_stats().
         # Includes both cumulative totals and per-cycle snapshots.
@@ -311,7 +317,7 @@ class KalshiMarketPoller(BasePoller):
 
             We sync series first because:
             1. Events reference series (events.series_internal_id -> series.id)
-            2. Markets reference events (markets.event_id -> events.event_id)
+            2. Markets reference events (markets.event_internal_id -> events.id)
             3. Without series records, FK constraints would fail
 
             The tags field is particularly valuable for sport filtering:
@@ -800,36 +806,44 @@ class KalshiMarketPoller(BasePoller):
             elif "MLB" in effective_series.upper():
                 subcategory = "mlb"
 
-            # Get or create the event before creating the market
-            # This satisfies the foreign key constraint (markets.event_id -> events.event_id)
+            # Get or create the event before creating the market.
+            # This satisfies the FK constraint (markets.event_internal_id -> events.id).
+            # get_or_create_event() returns (int_pk, created) per migration 0020.
+            event_pk: int | None = None
             if event_ticker:
-                # Look up integer surrogate PK for the series. The mapping is
-                # populated by sync_series() which runs before market polling.
-                series_pk = self._series_id_map.get(effective_series)
-                if effective_series and series_pk is None:
-                    logger.warning(
-                        "Series '%s' not in _series_id_map for event %s — "
-                        "event will have NULL series_internal_id",
-                        effective_series,
-                        event_ticker,
-                    )
+                # Check cache first to avoid redundant DB lookups
+                if event_ticker in self._event_id_map:
+                    event_pk = self._event_id_map[event_ticker]
+                else:
+                    # Look up integer surrogate PK for the series. The mapping is
+                    # populated by sync_series() which runs before market polling.
+                    series_pk = self._series_id_map.get(effective_series)
+                    if effective_series and series_pk is None:
+                        logger.warning(
+                            "Series '%s' not in _series_id_map for event %s -- "
+                            "event will have NULL series_internal_id",
+                            effective_series,
+                            event_ticker,
+                        )
 
-                get_or_create_event(
-                    event_id=event_ticker,
-                    platform_id=self.PLATFORM_ID,
-                    external_id=event_ticker,
-                    category=category,
-                    title=market.get("title", event_ticker),
-                    series_internal_id=series_pk,  # Integer FK to series(id)
-                    subcategory=subcategory,
-                    metadata={
-                        "series_ticker": effective_series,
-                    },
-                )
+                    event_pk, _created = get_or_create_event(
+                        event_id=event_ticker,
+                        platform_id=self.PLATFORM_ID,
+                        external_id=event_ticker,
+                        category=category,
+                        title=market.get("title", event_ticker),
+                        series_internal_id=series_pk,  # Integer FK to series(id)
+                        subcategory=subcategory,
+                        metadata={
+                            "series_ticker": effective_series,
+                        },
+                    )
+                    # Cache the integer PK for subsequent markets in the same event
+                    self._event_id_map[event_ticker] = event_pk
 
             create_market(
                 platform_id=self.PLATFORM_ID,
-                event_id=event_ticker,  # Use event_ticker as event_id
+                event_internal_id=event_pk,  # Integer FK to events(id)
                 external_id=ticker,  # Use ticker as external_id
                 ticker=ticker,
                 title=market.get("title", ticker),

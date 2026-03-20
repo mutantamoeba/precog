@@ -104,7 +104,9 @@ class TestPollerClientIntegration:
 
         with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
             with patch("precog.schedulers.kalshi_poller.create_market"):
-                with patch("precog.schedulers.kalshi_poller.get_or_create_event"):
+                with patch(
+                    "precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)
+                ):
                     result = poller_with_mock_client.poll_once()
 
         # Verify client was called
@@ -127,7 +129,10 @@ class TestPollerClientIntegration:
 
             with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
                 with patch("precog.schedulers.kalshi_poller.create_market"):
-                    with patch("precog.schedulers.kalshi_poller.get_or_create_event"):
+                    with patch(
+                        "precog.schedulers.kalshi_poller.get_or_create_event",
+                        return_value=(1, True),
+                    ):
                         poller.poll_once()
 
         # Verify correct series was requested
@@ -174,7 +179,9 @@ class TestPollerDatabaseIntegration:
 
         with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
             with patch("precog.schedulers.kalshi_poller.create_market") as mock_create:
-                with patch("precog.schedulers.kalshi_poller.get_or_create_event") as mock_event:
+                with patch(
+                    "precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)
+                ) as mock_event:
                     result = poller_with_mock_client.poll_once()
 
         # Verify the expected event was among those created (resilient to background pollers)
@@ -291,7 +298,10 @@ class TestMultipleSeriesIntegration:
 
             with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
                 with patch("precog.schedulers.kalshi_poller.create_market"):
-                    with patch("precog.schedulers.kalshi_poller.get_or_create_event"):
+                    with patch(
+                        "precog.schedulers.kalshi_poller.get_or_create_event",
+                        return_value=(1, True),
+                    ):
                         poller.poll_once()
 
         # Verify each series was polled
@@ -363,7 +373,9 @@ class TestStatusMappingIntegration:
 
         with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
             with patch("precog.schedulers.kalshi_poller.create_market") as mock_create:
-                with patch("precog.schedulers.kalshi_poller.get_or_create_event"):
+                with patch(
+                    "precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)
+                ):
                     poller_with_mock_client.poll_once()
 
         # Verify correct status was passed
@@ -401,7 +413,10 @@ class TestFactoryFunctionIntegration:
         with patch("precog.schedulers.kalshi_poller.KalshiClient", return_value=mock_kalshi_client):
             with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
                 with patch("precog.schedulers.kalshi_poller.create_market"):
-                    with patch("precog.schedulers.kalshi_poller.get_or_create_event"):
+                    with patch(
+                        "precog.schedulers.kalshi_poller.get_or_create_event",
+                        return_value=(1, True),
+                    ):
                         result = run_single_kalshi_poll(
                             series_tickers=["KXNFLGAME"],
                             environment="demo",
@@ -440,7 +455,9 @@ class TestFallbackPriceIntegration:
 
         with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
             with patch("precog.schedulers.kalshi_poller.create_market") as mock_create:
-                with patch("precog.schedulers.kalshi_poller.get_or_create_event"):
+                with patch(
+                    "precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)
+                ):
                     poller_with_mock_client.poll_once()
 
         call_kwargs = mock_create.call_args[1]
@@ -468,7 +485,9 @@ class TestEventCreationIntegration:
 
         with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
             with patch("precog.schedulers.kalshi_poller.create_market"):
-                with patch("precog.schedulers.kalshi_poller.get_or_create_event") as mock_event:
+                with patch(
+                    "precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)
+                ) as mock_event:
                     poller_with_mock_client.poll_once()
 
         call_kwargs = mock_event.call_args[1]
@@ -527,7 +546,10 @@ class TestEventCreationIntegration:
 
             with patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None):
                 with patch("precog.schedulers.kalshi_poller.create_market"):
-                    with patch("precog.schedulers.kalshi_poller.get_or_create_event") as mock_event:
+                    with patch(
+                        "precog.schedulers.kalshi_poller.get_or_create_event",
+                        return_value=(1, True),
+                    ) as mock_event:
                         poller.poll_once()
 
         call_kwargs = mock_event.call_args[1]
