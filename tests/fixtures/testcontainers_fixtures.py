@@ -507,6 +507,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         calculated_probability DECIMAL(10,4) CHECK (calculated_probability IS NULL OR (calculated_probability >= 0.0000 AND calculated_probability <= 1.0000)),
         edge_at_entry DECIMAL(10,4),
         market_price_at_entry DECIMAL(10,4) CHECK (market_price_at_entry IS NULL OR (market_price_at_entry >= 0.0000 AND market_price_at_entry <= 1.0000)),
+        execution_environment VARCHAR(20) NOT NULL DEFAULT 'live' CHECK (execution_environment IN ('live', 'paper', 'backtest')),
         last_update TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -556,6 +557,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         trade_metadata JSONB,
         fill_time_ms INTEGER,
         slippage DECIMAL(10,4),
+        execution_environment VARCHAR(20) NOT NULL DEFAULT 'live' CHECK (execution_environment IN ('live', 'paper', 'backtest')),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_trades_market ON trades(market_id);
@@ -705,15 +707,17 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE TABLE IF NOT EXISTS historical_elo (
         historical_elo_id SERIAL PRIMARY KEY,
         team_id INTEGER NOT NULL REFERENCES teams(team_id) ON DELETE CASCADE,
-        sport VARCHAR(20) NOT NULL CHECK (sport IN ('nfl', 'ncaaf', 'nba', 'ncaab', 'nhl', 'wnba', 'mlb', 'soccer')),
-        season INTEGER NOT NULL CHECK (season >= 1900 AND season <= 2100),
+        sport VARCHAR(20) NOT NULL,
+        season INTEGER NOT NULL,
         rating_date DATE NOT NULL,
-        elo_rating DECIMAL(10,2) NOT NULL CHECK (elo_rating BETWEEN 0 AND 3000),
-        qb_adjusted_elo DECIMAL(10,2) CHECK (qb_adjusted_elo IS NULL OR qb_adjusted_elo BETWEEN 0 AND 3000),
-        source VARCHAR(50) NOT NULL DEFAULT 'imported' CHECK (source IN ('imported', 'calculated', 'manual_override', 'calibration')),
-        metadata JSONB,
-        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+        elo_rating DECIMAL(10,2) NOT NULL,
+        qb_adjusted_elo DECIMAL(10,2),
+        qb_name VARCHAR(100),
+        qb_value DECIMAL(10,2),
+        source VARCHAR(50) NOT NULL DEFAULT 'calculated',
+        source_file VARCHAR(255),
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE (team_id, rating_date)
     );
     CREATE INDEX IF NOT EXISTS idx_historical_elo_team ON historical_elo(team_id);
     CREATE INDEX IF NOT EXISTS idx_historical_elo_sport ON historical_elo(sport);
