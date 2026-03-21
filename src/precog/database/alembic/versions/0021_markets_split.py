@@ -86,6 +86,9 @@ def upgrade() -> None:
 
     # Also rename indexes and constraints to avoid naming collisions.
     # PostgreSQL doesn't auto-rename these when the table is renamed.
+    # Include the PK — without this, the new markets table's PK gets auto-named
+    # markets_pkey1 because markets_pkey is still taken by markets_old.
+    op.execute("ALTER INDEX IF EXISTS markets_pkey RENAME TO markets_old_pkey")
     op.execute("ALTER INDEX IF EXISTS idx_markets_platform RENAME TO idx_markets_old_platform")
     op.execute("ALTER INDEX IF EXISTS idx_markets_current RENAME TO idx_markets_old_current")
     op.execute("ALTER INDEX IF EXISTS idx_markets_status RENAME TO idx_markets_old_status")

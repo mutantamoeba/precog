@@ -211,8 +211,8 @@ class TestMigrationUtilsIntegration:
             index_exists,
         )
 
-        # Primary key index should exist
-        assert index_exists("markets_pkey") is True
+        # Primary key index should exist (use platforms — stable lookup table)
+        assert index_exists("platforms_pkey") is True
         # Non-existent index
         assert index_exists("nonexistent_index_xyz") is False
 
