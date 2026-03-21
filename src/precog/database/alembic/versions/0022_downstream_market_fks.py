@@ -83,19 +83,73 @@ def upgrade() -> None:
             f"CREATE INDEX IF NOT EXISTS idx_{table}_market_internal ON {table}(market_internal_id)"
         )
 
-        # Step 5: Drop old market_id VARCHAR column + index
+        # Step 5: Drop ALL dependent views before column drop
+        # (Pattern 38 / feedback_migration_dependencies: SELECT * views bind to columns
+        # at creation time — dropping a referenced column fails with DependentObjectsStillExist)
+        dependent_views: dict[str, list[str]] = {
+            "edges": ["current_edges"],
+            "positions": [
+                "open_positions",
+                "live_positions",
+                "paper_positions",
+                "backtest_positions",
+            ],
+            "trades": [
+                "live_trades",
+                "paper_trades",
+                "backtest_trades",
+                "training_data_trades",
+            ],
+        }
+        for view in dependent_views.get(table, []):
+            op.execute(f"DROP VIEW IF EXISTS {view}")
+
+        # Step 6: Drop old market_id VARCHAR column + index
         op.execute(f"DROP INDEX IF EXISTS idx_{table}_market")
         op.execute(f"ALTER TABLE {table} DROP COLUMN IF EXISTS market_id")
 
-    # Step 6: Drop transitional market_id from markets dimension
+        # Step 7: Recreate views with new column names
+        for view in dependent_views.get(table, []):
+            if view == "current_edges":
+                op.execute(
+                    "CREATE OR REPLACE VIEW current_edges AS "
+                    "SELECT * FROM edges WHERE row_current_ind = TRUE"
+                )
+            elif view == "open_positions":
+                op.execute(
+                    "CREATE OR REPLACE VIEW open_positions AS "
+                    "SELECT * FROM positions WHERE row_current_ind = TRUE AND status = 'open'"
+                )
+            elif view.endswith("_positions"):
+                # live_positions, paper_positions, backtest_positions
+                env = view.replace("_positions", "")
+                op.execute(
+                    f"CREATE OR REPLACE VIEW {view} AS "  # noqa: S608
+                    f"SELECT * FROM positions WHERE execution_environment = '{env}'"
+                )
+            elif view == "training_data_trades":
+                op.execute(
+                    "CREATE OR REPLACE VIEW training_data_trades AS "
+                    "SELECT * FROM trades WHERE execution_environment IN ('live', 'paper')"
+                )
+            elif view.endswith("_trades"):
+                # live_trades, paper_trades, backtest_trades
+                env = view.replace("_trades", "")
+                op.execute(
+                    f"CREATE OR REPLACE VIEW {view} AS "  # noqa: S608
+                    f"SELECT * FROM trades WHERE execution_environment = '{env}'"
+                )
+
+    # Step 8: Drop current_markets view BEFORE dropping markets.market_id
+    # (Pattern 38: views bind to columns at creation time)
+    op.execute("DROP VIEW IF EXISTS current_markets")
+
+    # Step 9: Drop transitional market_id from markets dimension
     op.execute("DROP INDEX IF EXISTS idx_markets_market_id")
     op.execute("""
         ALTER TABLE markets
         DROP COLUMN IF EXISTS market_id
     """)
-
-    # Step 7: Update current_markets view (no longer includes market_id)
-    op.execute("DROP VIEW IF EXISTS current_markets")
     op.execute("""
         CREATE OR REPLACE VIEW current_markets AS
         SELECT
