@@ -171,6 +171,15 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         market_type VARCHAR(20) NOT NULL DEFAULT 'binary' CHECK (market_type IN ('binary', 'categorical', 'scalar')),
         status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed', 'settled', 'halted')),
         settlement_value DECIMAL(10,4) CHECK (settlement_value IS NULL OR (settlement_value >= 0.0000 AND settlement_value <= 1.0000)),
+        -- Migration 0033: enrichment columns (promoted from metadata JSONB + new)
+        subtitle VARCHAR(255),
+        open_time TIMESTAMP WITH TIME ZONE,
+        close_time TIMESTAMP WITH TIME ZONE,
+        expiration_time TIMESTAMP WITH TIME ZONE,
+        outcome_label VARCHAR(100),
+        league VARCHAR(20),
+        bracket_count INTEGER CHECK (bracket_count >= 0),
+        source_url VARCHAR(500),
         metadata JSONB,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -179,6 +188,9 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_markets_event_internal ON markets(event_internal_id);
     CREATE INDEX IF NOT EXISTS idx_markets_platform ON markets(platform_id);
     CREATE INDEX IF NOT EXISTS idx_markets_status ON markets(status);
+    CREATE INDEX IF NOT EXISTS idx_markets_close_time ON markets(close_time);
+    CREATE INDEX IF NOT EXISTS idx_markets_expiration_time ON markets(expiration_time);
+    CREATE INDEX IF NOT EXISTS idx_markets_league ON markets(league);
 
     -- market_snapshots table (fact — migration 0021: SCD Type 2 versioned pricing)
     CREATE TABLE IF NOT EXISTS market_snapshots (
@@ -714,11 +726,13 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_alerts_acknowledged ON alerts(acknowledged);
 
     -- 9. VIEWS
-    -- current_markets view (migration 0021: JOIN dimension + current snapshot)
+    -- current_markets view (migration 0021 + 0033: JOIN dimension + current snapshot)
     CREATE OR REPLACE VIEW current_markets AS
     SELECT
         m.id, m.platform_id, m.event_internal_id, m.external_id,
-        m.ticker, m.title, m.market_type, m.status, m.settlement_value,
+        m.ticker, m.title, m.subtitle, m.market_type, m.status, m.settlement_value,
+        m.open_time, m.close_time, m.expiration_time,
+        m.outcome_label, m.league, m.bracket_count, m.source_url,
         m.metadata, m.created_at, m.updated_at,
         ms.yes_ask_price, ms.no_ask_price, ms.yes_bid_price, ms.no_bid_price,
         ms.last_price, ms.spread, ms.volume, ms.open_interest, ms.liquidity,
@@ -790,7 +804,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_historical_elo_season ON historical_elo(season);
 
     -- Track migration version
-    INSERT INTO alembic_version (version_num) VALUES ('0025')
+    INSERT INTO alembic_version (version_num) VALUES ('0033')
     ON CONFLICT (version_num) DO NOTHING;
     """
 

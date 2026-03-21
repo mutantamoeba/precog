@@ -17,6 +17,7 @@ from precog.database import (
     close_position,
     create_account_balance,
     create_market,
+    create_order,
     create_position,
     create_settlement,
     create_strategy,
@@ -24,6 +25,7 @@ from precog.database import (
     get_current_market,
     get_current_positions,
     get_market_history,
+    get_markets_summary,
     get_recent_trades,
     get_strategy_by_name_and_version,
     get_trades_by_market,
@@ -86,6 +88,105 @@ def test_create_market_sub_penny_precision(db_pool, clean_test_data, sample_mark
     # Verify exact sub-penny precision
     assert str(market["yes_ask_price"]) == "0.4275"
     assert str(market["no_ask_price"]) == "0.5725"
+
+
+@pytest.mark.integration
+def test_create_market_with_enrichment_columns(db_pool, clean_test_data, sample_market_data):
+    """Test creating market with enrichment columns from migration 0033."""
+    sample_market_data["ticker"] = "TEST-ENRICHED"
+    sample_market_data["external_id"] = "TEST-ENRICHED-EXT"
+    sample_market_data["subtitle"] = "Week 14"
+    sample_market_data["open_time"] = "2026-01-10T12:00:00Z"
+    sample_market_data["close_time"] = "2026-01-15T18:00:00Z"
+    sample_market_data["expiration_time"] = "2026-01-15T23:59:59Z"
+    sample_market_data["outcome_label"] = "YES"
+    sample_market_data["league"] = "NFL"
+    sample_market_data["bracket_count"] = 4
+    sample_market_data["source_url"] = "https://kalshi.com/markets/test-enriched"
+
+    market_id = create_market(**sample_market_data)
+    assert market_id is not None
+
+    market = get_current_market("TEST-ENRICHED")
+    assert market is not None
+    assert market["subtitle"] == "Week 14"
+    assert market["outcome_label"] == "YES"
+    assert market["league"] == "NFL"
+    assert market["bracket_count"] == 4
+    assert market["source_url"] == "https://kalshi.com/markets/test-enriched"
+    # Timestamps are stored as TIMESTAMPTZ — verify actual values round-trip
+    assert market["open_time"].year == 2026
+    assert market["open_time"].month == 1
+    assert market["open_time"].day == 10
+    assert market["close_time"].year == 2026
+    assert market["close_time"].day == 15
+    assert market["expiration_time"].hour == 23
+
+
+@pytest.mark.integration
+def test_create_market_enrichment_columns_optional(db_pool, clean_test_data, sample_market_data):
+    """Test that enrichment columns default to NULL when not provided."""
+    market_id = create_market(**sample_market_data)
+    assert market_id is not None
+
+    market = get_current_market(sample_market_data["ticker"])
+    assert market is not None
+    assert market["subtitle"] is None
+    assert market["open_time"] is None
+    assert market["close_time"] is None
+    assert market["expiration_time"] is None
+    assert market["outcome_label"] is None
+    assert market["league"] is None
+    assert market["bracket_count"] is None
+    assert market["source_url"] is None
+
+
+@pytest.mark.integration
+def test_update_market_with_enrichment_columns(db_pool, clean_test_data, sample_market_data):
+    """Test updating all 8 enrichment columns on dimension row via update_market_with_versioning."""
+    create_market(**sample_market_data)
+
+    # Update all 8 enrichment columns (dimension-level, no snapshot versioning needed)
+    update_market_with_versioning(
+        ticker=sample_market_data["ticker"],
+        subtitle="Week 15",
+        open_time="2026-01-25T12:00:00Z",
+        close_time="2026-02-01T18:00:00Z",
+        expiration_time="2026-02-01T23:59:59Z",
+        outcome_label="Seahawks",
+        league="NFL",
+        bracket_count=6,
+        source_url="https://kalshi.com/markets/updated",
+    )
+
+    market = get_current_market(sample_market_data["ticker"])
+    assert market is not None
+    assert market["subtitle"] == "Week 15"
+    assert market["open_time"].year == 2026
+    assert market["close_time"].day == 1
+    assert market["expiration_time"].hour == 23
+    assert market["outcome_label"] == "Seahawks"
+    assert market["league"] == "NFL"
+    assert market["bracket_count"] == 6
+    assert market["source_url"] == "https://kalshi.com/markets/updated"
+
+
+@pytest.mark.integration
+def test_get_markets_summary_includes_enrichment(db_pool, clean_test_data, sample_market_data):
+    """Test that get_markets_summary returns enrichment columns from migration 0033."""
+    sample_market_data["subtitle"] = "Week 14"
+    sample_market_data["league"] = "NFL"
+    sample_market_data["close_time"] = "2026-01-15T18:00:00Z"
+    create_market(**sample_market_data)
+
+    results = get_markets_summary(status="open")
+    assert len(results) >= 1
+
+    match = [r for r in results if r["ticker"] == sample_market_data["ticker"]]
+    assert len(match) == 1
+    assert match[0]["subtitle"] == "Week 14"
+    assert match[0]["league"] == "NFL"
+    assert match[0]["close_time"] is not None
 
 
 @pytest.mark.integration
@@ -334,17 +435,51 @@ def test_get_recent_trades(db_pool, clean_test_data, sample_market_data, sample_
 def test_trade_strategy_model_attribution(
     db_pool, clean_test_data, sample_market_data, sample_trade_data
 ):
-    """CRITICAL: Test that trades record strategy_id and model_id."""
-    market_id = create_market(**sample_market_data)
-    create_trade(market_internal_id=market_id, **sample_trade_data)
+    """CRITICAL: Test that trades link to orders with strategy/model attribution.
 
-    # Retrieve trade
-    trades = get_trades_by_market(market_id, limit=1)
+    Migration 0025 redesign: attribution (strategy_id, model_id) lives on
+    orders, not trades. Trades are pure fill records linked via order_id FK.
+    Query attribution via JOIN: trades -> orders -> strategies/models.
+    """
+    import uuid
+
+    market_id = create_market(**sample_market_data)
+
+    # Create strategy for attribution
+    strategy_id = create_strategy(
+        strategy_name=f"test_attrib_{uuid.uuid4().hex[:8]}",
+        strategy_version="v1.0",
+        strategy_type="value",
+        subcategory="nfl",
+        config={},
+    )
+
+    # Create order with attribution (migration 0025: attribution on orders)
+    order_id = create_order(
+        platform_id="test_platform",
+        external_order_id=f"ORDER-{uuid.uuid4().hex[:8]}",
+        market_internal_id=market_id,
+        side="yes",
+        action="buy",
+        requested_price=sample_trade_data["price"],
+        requested_quantity=sample_trade_data["quantity"],
+        strategy_id=strategy_id,
+    )
+
+    # Create trade linked to order
+    create_trade(
+        market_internal_id=market_id,
+        order_id=order_id,
+        **sample_trade_data,
+    )
+
+    # Retrieve trade via get_recent_trades (JOINs to orders for attribution)
+    trades = get_recent_trades(strategy_id=strategy_id, limit=1)
+    assert len(trades) == 1
     trade = trades[0]
 
-    # Must have strategy and model attribution for A/B testing
-    assert trade["strategy_id"] == sample_trade_data["strategy_id"]
-    assert trade["model_id"] == sample_trade_data["model_id"]
+    # Attribution comes through the order JOIN
+    assert trade["strategy_id"] == strategy_id
 
 
 # =============================================================================
@@ -617,15 +752,46 @@ def test_get_recent_trades_with_strategy_filter(
         config={},
     )
 
-    # Create trades for both strategies
-    sample_trade_data["market_internal_id"] = market_id
-    sample_trade_data["strategy_id"] = strategy_id1
-    trade1 = create_trade(**sample_trade_data)
+    # Migration 0025: attribution lives on orders, not trades.
+    # Create orders with different strategies, then link trades to them.
+    order_id1 = create_order(
+        platform_id="test_platform",
+        external_order_id=f"ORDER-{uuid.uuid4().hex[:8]}",
+        market_internal_id=market_id,
+        side="yes",
+        action="buy",
+        requested_price=sample_trade_data["price"],
+        requested_quantity=sample_trade_data["quantity"],
+        strategy_id=strategy_id1,
+    )
+    order_id2 = create_order(
+        platform_id="test_platform",
+        external_order_id=f"ORDER-{uuid.uuid4().hex[:8]}",
+        market_internal_id=market_id,
+        side="yes",
+        action="buy",
+        requested_price=sample_trade_data["price"],
+        requested_quantity=sample_trade_data["quantity"],
+        strategy_id=strategy_id2,
+    )
 
-    sample_trade_data["strategy_id"] = strategy_id2
-    _trade2 = create_trade(**sample_trade_data)  # Intentionally unused - testing filter
+    # Create trades linked to their respective orders
+    trade1 = create_trade(
+        market_internal_id=market_id,
+        order_id=order_id1,
+        side=sample_trade_data["side"],
+        quantity=sample_trade_data["quantity"],
+        price=sample_trade_data["price"],
+    )
+    _trade2 = create_trade(  # Intentionally unused - testing filter
+        market_internal_id=market_id,
+        order_id=order_id2,
+        side=sample_trade_data["side"],
+        quantity=sample_trade_data["quantity"],
+        price=sample_trade_data["price"],
+    )
 
-    # Test: Get trades filtered by strategy_id1
+    # Test: Get trades filtered by strategy_id1 (JOINs through orders)
     trades = get_recent_trades(strategy_id=strategy_id1, limit=10)
 
     # Should only return trade1
