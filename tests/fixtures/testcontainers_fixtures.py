@@ -160,10 +160,9 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
 
     -- markets table (dimension — migration 0021: split from monolith)
     -- One row per market. NOT versioned. Status is mutable via UPDATE.
-    -- market_id VARCHAR is TRANSITIONAL (for downstream JOIN compat until migration 0022).
+    -- Migration 0022: market_id VARCHAR removed. Downstream tables use market_internal_id INTEGER FK.
     CREATE TABLE IF NOT EXISTS markets (
         id SERIAL PRIMARY KEY,
-        market_id VARCHAR(100) NOT NULL UNIQUE,
         platform_id VARCHAR(50) NOT NULL REFERENCES platforms(platform_id) ON DELETE CASCADE,
         event_internal_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
         external_id VARCHAR(100) NOT NULL,
@@ -180,7 +179,6 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_markets_event_internal ON markets(event_internal_id);
     CREATE INDEX IF NOT EXISTS idx_markets_platform ON markets(platform_id);
     CREATE INDEX IF NOT EXISTS idx_markets_status ON markets(status);
-    CREATE INDEX IF NOT EXISTS idx_markets_market_id ON markets(market_id);
 
     -- market_snapshots table (fact — migration 0021: SCD Type 2 versioned pricing)
     CREATE TABLE IF NOT EXISTS market_snapshots (
@@ -453,7 +451,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE TABLE IF NOT EXISTS edges (
         id SERIAL PRIMARY KEY,
         edge_id VARCHAR NOT NULL,
-        market_id VARCHAR(100),
+        market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
         probability_matrix_id INTEGER REFERENCES probability_matrices(probability_id) ON DELETE SET NULL,
         model_id INTEGER REFERENCES probability_models(model_id) ON DELETE SET NULL,
         expected_value DECIMAL(10,4) NOT NULL,
@@ -468,7 +466,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         row_end_ts TIMESTAMP WITH TIME ZONE,
         row_current_ind BOOLEAN DEFAULT TRUE
     );
-    CREATE INDEX IF NOT EXISTS idx_edges_market ON edges(market_id);
+    CREATE INDEX IF NOT EXISTS idx_edges_market_internal ON edges(market_internal_id);
     CREATE INDEX IF NOT EXISTS idx_edges_ev ON edges(expected_value) WHERE row_current_ind = TRUE;
     CREATE INDEX IF NOT EXISTS idx_edges_current ON edges(row_current_ind) WHERE row_current_ind = TRUE;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_unique_current ON edges(edge_id) WHERE row_current_ind = TRUE;
@@ -481,7 +479,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE TABLE IF NOT EXISTS positions (
         id SERIAL PRIMARY KEY,
         position_id VARCHAR NOT NULL,
-        market_id VARCHAR(100),
+        market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         strategy_id INTEGER REFERENCES strategies(strategy_id),
         model_id INTEGER REFERENCES probability_models(model_id),
@@ -515,7 +513,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         row_end_ts TIMESTAMP WITH TIME ZONE,
         row_current_ind BOOLEAN DEFAULT TRUE
     );
-    CREATE INDEX IF NOT EXISTS idx_positions_market ON positions(market_id);
+    CREATE INDEX IF NOT EXISTS idx_positions_market_internal ON positions(market_internal_id);
     CREATE INDEX IF NOT EXISTS idx_positions_platform ON positions(platform_id);
     CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
     CREATE INDEX IF NOT EXISTS idx_positions_current ON positions(row_current_ind) WHERE row_current_ind = TRUE;
@@ -534,7 +532,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     -- trades table (per migration 015/017: References surrogate IDs, not business keys)
     CREATE TABLE IF NOT EXISTS trades (
         trade_id SERIAL PRIMARY KEY,
-        market_id VARCHAR(100),
+        market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         position_internal_id INTEGER REFERENCES positions(id) ON DELETE SET NULL,
         edge_internal_id INTEGER REFERENCES edges(id) ON DELETE SET NULL,
@@ -560,7 +558,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         execution_environment VARCHAR(20) NOT NULL DEFAULT 'live' CHECK (execution_environment IN ('live', 'paper', 'backtest')),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_trades_market ON trades(market_id);
+    CREATE INDEX IF NOT EXISTS idx_trades_market_internal ON trades(market_internal_id);
     CREATE INDEX IF NOT EXISTS idx_trades_platform ON trades(platform_id);
     CREATE INDEX IF NOT EXISTS idx_trades_position ON trades(position_internal_id);
     CREATE INDEX IF NOT EXISTS idx_trades_created ON trades(created_at);
@@ -568,13 +566,13 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
 
     CREATE TABLE IF NOT EXISTS settlements (
         settlement_id SERIAL PRIMARY KEY,
-        market_id VARCHAR(100),
+        market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         outcome VARCHAR(50) NOT NULL,
         payout DECIMAL(10,4) CHECK (payout IS NULL OR payout >= 0.0000),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_settlements_market ON settlements(market_id);
+    CREATE INDEX IF NOT EXISTS idx_settlements_market_internal ON settlements(market_internal_id);
 
     -- position_exits table (per migration 015: References surrogate ID, not business key)
     CREATE TABLE IF NOT EXISTS position_exits (
@@ -673,7 +671,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     -- current_markets view (migration 0021: JOIN dimension + current snapshot)
     CREATE OR REPLACE VIEW current_markets AS
     SELECT
-        m.id, m.market_id, m.platform_id, m.event_internal_id, m.external_id,
+        m.id, m.platform_id, m.event_internal_id, m.external_id,
         m.ticker, m.title, m.market_type, m.status, m.settlement_value,
         m.metadata, m.created_at, m.updated_at,
         ms.yes_ask_price, ms.no_ask_price, ms.yes_bid_price, ms.no_bid_price,
@@ -724,7 +722,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_historical_elo_season ON historical_elo(season);
 
     -- Track migration version
-    INSERT INTO alembic_version (version_num) VALUES ('0021')
+    INSERT INTO alembic_version (version_num) VALUES ('0022')
     ON CONFLICT (version_num) DO NOTHING;
     """
 

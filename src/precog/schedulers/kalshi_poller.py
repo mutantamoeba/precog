@@ -841,7 +841,7 @@ class KalshiMarketPoller(BasePoller):
                     # Cache the integer PK for subsequent markets in the same event
                     self._event_id_map[event_ticker] = event_pk
 
-            # Migration 0021: create_market returns (int_pk, market_id_str)
+            # Migration 0022: create_market returns int PK
             create_market(
                 platform_id=self.PLATFORM_ID,
                 event_internal_id=event_pk,  # Integer FK to events(id)

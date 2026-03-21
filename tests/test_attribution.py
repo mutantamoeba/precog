@@ -147,50 +147,44 @@ def sample_event(db_pool, clean_test_data, sample_platform, sample_series) -> st
 
 
 @pytest.fixture
-def sample_market(db_pool, clean_test_data, sample_platform, sample_event) -> str:
-    """Create sample market for testing."""
-    from precog.database.connection import fetch_one
+def sample_market(db_pool, clean_test_data, sample_platform, sample_event) -> int:
+    """Create sample market for testing.
 
-    # Check if market already exists
+    Returns:
+        Integer surrogate PK from markets(id) -- post-migration 0021/0022.
+    """
+    from precog.database.connection import fetch_one
+    from precog.database.crud_operations import create_market
+
+    # Look up event surrogate PK (migration 0020: events use integer FK)
+    event_row = fetch_one("SELECT id FROM events WHERE event_id = 'HIGHTEST'")
+    event_pk = event_row["id"] if event_row else None
+
+    # Check if market already exists (by ticker, since market_id VARCHAR is dropped)
     existing = fetch_one(
-        "SELECT market_id FROM markets WHERE market_id = %s AND row_current_ind = TRUE",
-        ("MKT-HIGHTEST-25FEB05",),
+        "SELECT id FROM markets WHERE ticker = %s",
+        ("HIGHTEST-25FEB05",),
     )
     if existing:
-        return "MKT-HIGHTEST-25FEB05"
+        return existing["id"]
 
-    # Create new market
-    query = """
-        INSERT INTO markets (
-            market_id, platform_id, event_id, external_id, ticker, title,
-            market_type, yes_price, no_price, status, metadata, row_current_ind, updated_at
-        )
-        VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW()
-        )
-        RETURNING market_id
-    """
-    from precog.database.connection import get_cursor
-
-    with get_cursor(commit=True) as cur:
-        cur.execute(
-            query,
-            (
-                "MKT-HIGHTEST-25FEB05",
-                "kalshi",
-                "HIGHTEST",
-                "HIGHTEST-25FEB05-ext",
-                "HIGHTEST-25FEB05",
-                "Will HIGHTEST win Super Bowl?",
-                "binary",
-                0.5200,
-                0.4800,
-                "open",
-                '{"market_category": "sports", "event_category": "nfl", "expected_expiry": "2025-02-05 18:00:00"}',
-            ),
-        )
-        result = cur.fetchone()
-        return result["market_id"] if result else "MKT-HIGHTEST-25FEB05"
+    # Create via CRUD function (returns integer PK)
+    return create_market(
+        platform_id="kalshi",
+        event_internal_id=event_pk,
+        external_id="HIGHTEST-25FEB05-ext",
+        ticker="HIGHTEST-25FEB05",
+        title="Will HIGHTEST win Super Bowl?",
+        yes_ask_price=Decimal("0.5200"),
+        no_ask_price=Decimal("0.4800"),
+        market_type="binary",
+        status="open",
+        metadata={
+            "market_category": "sports",
+            "event_category": "nfl",
+            "expected_expiry": "2025-02-05 18:00:00",
+        },
+    )
 
 
 # =============================================================================
@@ -209,7 +203,7 @@ def test_create_trade_with_automated_source_default(
     - ENUM validation works correctly
     """
     trade_id = create_trade(
-        market_id=sample_market,
+        market_internal_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -236,7 +230,7 @@ def test_create_trade_with_manual_source(
     - Enables reconciliation workflow (separate manual from automated)
     """
     trade_id = create_trade(
-        market_id=sample_market,
+        market_internal_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -264,7 +258,7 @@ def test_create_trade_with_attribution_fields(
     - Enables performance analytics: "Which models have highest ROI?"
     """
     trade_id = create_trade(
-        market_id=sample_market,
+        market_internal_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -296,7 +290,7 @@ def test_create_trade_with_negative_edge(
     - Useful for analytics: "How often did we trade negative edges?"
     """
     trade_id = create_trade(
-        market_id=sample_market,
+        market_internal_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -327,7 +321,7 @@ def test_create_trade_without_attribution_fields(
     - Ensures backward compatibility with existing code
     """
     trade_id = create_trade(
-        market_id=sample_market,
+        market_internal_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -359,7 +353,7 @@ def test_create_trade_probability_out_of_range(
     # Test probability > 1.0
     with pytest.raises(psycopg2.errors.CheckViolation):
         create_trade(
-            market_id=sample_market,
+            market_internal_id=sample_market,
             strategy_id=sample_strategy,
             model_id=sample_model,
             side="buy",
@@ -372,7 +366,7 @@ def test_create_trade_probability_out_of_range(
     # Test probability < 0.0
     with pytest.raises(psycopg2.errors.CheckViolation):
         create_trade(
-            market_id=sample_market,
+            market_internal_id=sample_market,
             strategy_id=sample_strategy,
             model_id=sample_model,
             side="buy",
@@ -401,7 +395,7 @@ def test_create_position_with_attribution_fields(
     - Enables strategy A/B testing
     """
     position_id = create_position(
-        market_id=sample_market,
+        market_internal_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="yes",
@@ -435,7 +429,7 @@ def test_create_position_immutable_attribution(
     - Enables comparing entry predictions to actual outcomes
     """
     position_id = create_position(
-        market_id=sample_market,
+        market_internal_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="yes",
@@ -470,7 +464,7 @@ def test_create_position_without_attribution_fields(
     - Ensures backward compatibility
     """
     position_id = create_position(
-        market_id=sample_market,
+        market_internal_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="yes",
@@ -498,7 +492,7 @@ def test_create_position_with_negative_edge(
     - Useful for analytics: "Did we open positions with insufficient edge?"
     """
     position_id = create_position(
-        market_id=sample_market,
+        market_internal_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="yes",
@@ -527,7 +521,7 @@ def test_create_position_probability_out_of_range(
     # Test probability > 1.0
     with pytest.raises(psycopg2.errors.CheckViolation):
         create_position(
-            market_id=sample_market,
+            market_internal_id=sample_market,
             strategy_id=sample_strategy,
             model_id=sample_model,
             side="yes",
@@ -668,7 +662,7 @@ def test_analytics_query_roi_by_model(
     """
     # Create trades with different models
     trade_id_1 = create_trade(
-        market_id=sample_market,
+        market_internal_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,  # Model A (from sample_model fixture)
         side="buy",
@@ -679,7 +673,7 @@ def test_analytics_query_roi_by_model(
     )
 
     trade_id_2 = create_trade(
-        market_id=sample_market,
+        market_internal_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model + 1,  # Model B (99902 from sample_model fixture)
         side="buy",
@@ -719,7 +713,7 @@ def test_analytics_query_edge_vs_outcome(
     """
     # High edge trade
     trade_id_high_edge = create_trade(
-        market_id=sample_market,
+        market_internal_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",
@@ -731,7 +725,7 @@ def test_analytics_query_edge_vs_outcome(
 
     # Low edge trade
     trade_id_low_edge = create_trade(
-        market_id=sample_market,
+        market_internal_id=sample_market,
         strategy_id=sample_strategy,
         model_id=sample_model,
         side="buy",

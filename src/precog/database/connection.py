@@ -349,16 +349,16 @@ def get_cursor(commit: bool = False):
 
     Example (Read-only query):
         >>> with get_cursor() as cur:
-        >>>     cur.execute("SELECT * FROM markets WHERE ticker = %s", ("NFL-KC-YES",))
+        >>>     cur.execute("SELECT * FROM current_markets WHERE ticker = %s", ("NFL-KC-YES",))
         >>>     market = cur.fetchone()
-        >>>     print(market['yes_price'])  # Dict access!
+        >>>     print(market['yes_ask_price'])  # Dict access!
         # Connection automatically returned to pool
 
     Example (Write query with commit):
         >>> with get_cursor(commit=True) as cur:
         >>>     cur.execute(
-        >>>         "INSERT INTO markets (ticker, yes_price) VALUES (%s, %s)",
-        >>>         ("NFL-KC-YES", Decimal("0.5200"))
+        >>>         "INSERT INTO markets (ticker, title) VALUES (%s, %s)",
+        >>>         ("NFL-KC-YES", "Kansas City Chiefs")
         >>>     )
         # Transaction committed, connection returned to pool
 
@@ -417,8 +417,8 @@ def execute_query(query: str, params: tuple | None = None, commit: bool = True) 
 
     Example:
         >>> execute_query(
-        ...     "INSERT INTO markets (ticker, yes_price) VALUES (%s, %s)",
-        ...     ("NFL-KC-YES", Decimal("0.5200")),
+        ...     "INSERT INTO markets (ticker, title) VALUES (%s, %s)",
+        ...     ("NFL-KC-YES", "Kansas City Chiefs"),
         ...     commit=True
         ... )
         1
@@ -441,10 +441,10 @@ def fetch_one(query: str, params: tuple | None = None) -> dict | None:
 
     Example:
         >>> market = fetch_one(
-        ...     "SELECT * FROM markets WHERE ticker = %s AND row_current_ind = TRUE",
+        ...     "SELECT * FROM current_markets WHERE ticker = %s",
         ...     ("NFL-KC-YES",)
         ... )
-        >>> print(market['yes_price'])  # Decimal('0.5200')
+        >>> print(market['yes_ask_price'])  # Decimal('0.5200')
     """
     with get_cursor() as cur:
         cur.execute(query, params)
@@ -464,11 +464,11 @@ def fetch_all(query: str, params: tuple | None = None) -> list[dict]:
 
     Example:
         >>> markets = fetch_all(
-        ...     "SELECT * FROM markets WHERE status = %s AND row_current_ind = TRUE",
+        ...     "SELECT * FROM current_markets WHERE status = %s",
         ...     ("open",)
         ... )
         >>> for market in markets:
-        ...     print(market['ticker'], market['yes_price'])
+        ...     print(market['ticker'], market['yes_ask_price'])
     """
     with get_cursor() as cur:
         cur.execute(query, params)

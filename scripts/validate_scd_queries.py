@@ -130,7 +130,7 @@ def discover_scd_tables(verbose: bool = False) -> set[str]:
         # Fallback to known SCD Type 2 tables
         # NOTE: strategies and models use IMMUTABLE versioning (not SCD Type 2)
         return {
-            "markets",  # Market prices change frequently -> SCD Type 2
+            "market_snapshots",  # Market price snapshots -> SCD Type 2 (markets is dimension table)
             "positions",  # Position prices/PnL change frequently -> SCD Type 2
             # "strategies",  # ❌ Uses IMMUTABLE versioning (v1.0 -> v1.1)
             # "models",  # ❌ Uses IMMUTABLE versioning (v1.0 -> v1.1)
@@ -145,7 +145,7 @@ def discover_scd_tables(verbose: bool = False) -> set[str]:
             print("[DEBUG] DATABASE_URL not set - using hardcoded SCD table list")
         # NOTE: strategies and models use IMMUTABLE versioning (not SCD Type 2)
         return {
-            "markets",  # Market prices change frequently -> SCD Type 2
+            "market_snapshots",  # Market price snapshots -> SCD Type 2 (markets is dimension table)
             "positions",  # Position prices/PnL change frequently -> SCD Type 2
             # "strategies",  # ❌ Uses IMMUTABLE versioning (v1.0 -> v1.1)
             # "models",  # ❌ Uses IMMUTABLE versioning (v1.0 -> v1.1)
@@ -187,7 +187,7 @@ def discover_scd_tables(verbose: bool = False) -> set[str]:
         # Fallback to known SCD Type 2 tables
         # NOTE: strategies and models use IMMUTABLE versioning (not SCD Type 2)
         return {
-            "markets",  # Market prices change frequently -> SCD Type 2
+            "market_snapshots",  # Market price snapshots -> SCD Type 2 (markets is dimension table)
             "positions",  # Position prices/PnL change frequently -> SCD Type 2
             # "strategies",  # ❌ Uses IMMUTABLE versioning (v1.0 -> v1.1)
             # "models",  # ❌ Uses IMMUTABLE versioning (v1.0 -> v1.1)

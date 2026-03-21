@@ -199,7 +199,7 @@ def test_decimal_precision_preserved_on_db_roundtrip(
     # Use both prices in ticker to ensure uniqueness across all examples
     # Migration 0021: yes_price → yes_ask_price, returns (int, str) tuple
     ticker = f"TEST-PROP-{yes_price}-{no_price}"
-    market_pk, _market_id = create_market(
+    market_pk = create_market(
         platform_id="kalshi",
         event_internal_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
@@ -323,7 +323,7 @@ def test_scd_type2_at_most_one_current_row(db_pool, clean_test_data, setup_kalsh
     """
     # Create initial market
     # Migration 0021: yes_price → yes_ask_price, returns (int, str) tuple
-    market_pk, _market_id = create_market(
+    market_pk = create_market(
         platform_id="kalshi",
         event_internal_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
@@ -444,7 +444,7 @@ def test_scd_type2_update_creates_new_row(
     # Migration 0021: yes_price → yes_ask_price, returns (int, str) tuple
     unique_id = uuid.uuid4().hex[:8]
     ticker = f"SCD-{unique_id}"
-    market_pk, _market_id = create_market(
+    market_pk = create_market(
         platform_id="kalshi",
         event_internal_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
@@ -461,11 +461,8 @@ def test_scd_type2_update_creates_new_row(
     # Get original row details BEFORE update
     original_market = get_current_market(ticker)
     assert original_market is not None
-    original_market_id = original_market["market_id"]
+    original_pk = original_market["id"]
     assert original_market["yes_ask_price"] == original_price
-    # Migration 0021: row_current_ind is on snapshots, not dimension.
-    # The dimension row doesn't have row_current_ind.
-    # Check snapshot instead:
     assert original_market["row_current_ind"] is True
 
     # Update market (should create new snapshot row)
@@ -478,12 +475,10 @@ def test_scd_type2_update_creates_new_row(
     # Get current row details AFTER update
     updated_market = get_current_market(ticker)
     assert updated_market is not None
-    updated_market_id = updated_market["market_id"]
+    updated_pk = updated_market["id"]
 
-    # Verify dimension row unchanged (same market_id)
-    assert updated_market_id == original_market_id, (
-        "Dimension row should keep same market_id across updates"
-    )
+    # Verify dimension row unchanged (same PK across updates)
+    assert updated_pk == original_pk, "Dimension row should keep same id across updates"
 
     # Verify current snapshot has new price
     assert updated_market["yes_ask_price"] == updated_price
@@ -551,7 +546,7 @@ def test_unique_constraint_prevents_duplicate_current_rows(
         IntegrityError: duplicate key value violates unique constraint
     """
     # Create first market
-    _market_pk, market_id = create_market(
+    market_pk = create_market(
         platform_id="kalshi",
         event_internal_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
@@ -563,7 +558,7 @@ def test_unique_constraint_prevents_duplicate_current_rows(
         status="open",
     )
 
-    assert market_id is not None
+    assert market_pk is not None
 
     # Attempt to create duplicate (should raise IntegrityError)
     with pytest.raises(IntegrityError, match=r"duplicate key|unique constraint|violates"):
@@ -777,7 +772,7 @@ def test_timestamp_monotonicity_on_updates(
     # Use UUID to ensure uniqueness across Hypothesis examples
     unique_id = uuid.uuid4().hex[:8]
     ticker = f"TIME-{unique_id}"
-    _pk, _id = create_market(
+    _pk = create_market(
         platform_id="kalshi",
         event_internal_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
@@ -868,7 +863,7 @@ def test_transaction_rollback_on_constraint_violation(
     from precog.database.connection import get_cursor
 
     # Create initial market (should succeed)
-    _market_pk, market_id = create_market(
+    market_pk = create_market(
         platform_id="kalshi",
         event_internal_id=_get_test_event_pk(),
         external_id=f"EXTERNAL-{ticker}",
@@ -880,7 +875,7 @@ def test_transaction_rollback_on_constraint_violation(
         status="open",
     )
 
-    assert market_id is not None
+    assert market_pk is not None
 
     # Count markets before failed operation
     with get_cursor() as cur:
@@ -1096,7 +1091,7 @@ def test_cascade_delete_integrity(db_pool, clean_test_data, ticker):
         event_pk = cur.fetchone()["id"]
 
     # Create market for this test platform
-    _market_pk, market_id = create_market(
+    market_pk = create_market(
         platform_id=test_platform_id,
         event_internal_id=event_pk,
         external_id=f"EXTERNAL-{unique_id}",
@@ -1108,7 +1103,7 @@ def test_cascade_delete_integrity(db_pool, clean_test_data, ticker):
         status="open",
     )
 
-    assert market_id is not None
+    assert market_pk is not None
 
     # Verify market exists
     with get_cursor() as cur:

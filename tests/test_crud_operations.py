@@ -49,10 +49,10 @@ def test_create_market_with_decimal_precision(db_pool, clean_test_data, sample_m
     # Retrieve and verify
     market = get_current_market(sample_market_data["ticker"])
     assert market is not None
-    assert isinstance(market["yes_price"], Decimal)
-    assert isinstance(market["no_price"], Decimal)
-    assert market["yes_price"] == Decimal("0.5200")
-    assert market["no_price"] == Decimal("0.4800")
+    assert isinstance(market["yes_ask_price"], Decimal)
+    assert isinstance(market["no_ask_price"], Decimal)
+    assert market["yes_ask_price"] == Decimal("0.5200")
+    assert market["no_ask_price"] == Decimal("0.4800")
 
 
 @pytest.mark.integration
@@ -64,26 +64,28 @@ def test_decimal_precision_not_float(db_pool, clean_test_data, sample_market_dat
     assert market is not None
 
     # This is THE critical test for trading
-    assert type(market["yes_price"]) == Decimal, (
-        f"Expected Decimal, got {type(market['yes_price'])}"
+    assert type(market["yes_ask_price"]) == Decimal, (
+        f"Expected Decimal, got {type(market['yes_ask_price'])}"
     )
-    assert type(market["no_price"]) == Decimal, f"Expected Decimal, got {type(market['no_price'])}"
+    assert type(market["no_ask_price"]) == Decimal, (
+        f"Expected Decimal, got {type(market['no_ask_price'])}"
+    )
 
 
 @pytest.mark.integration
 def test_create_market_sub_penny_precision(db_pool, clean_test_data, sample_market_data):
     """Test sub-penny pricing (0.4275 = $0.4275)."""
     sample_market_data["ticker"] = "TEST-SUBPENNY"
-    sample_market_data["yes_price"] = Decimal("0.4275")
-    sample_market_data["no_price"] = Decimal("0.5725")
+    sample_market_data["yes_ask_price"] = Decimal("0.4275")
+    sample_market_data["no_ask_price"] = Decimal("0.5725")
 
     create_market(**sample_market_data)
     market = get_current_market("TEST-SUBPENNY")
     assert market is not None
 
     # Verify exact sub-penny precision
-    assert str(market["yes_price"]) == "0.4275"
-    assert str(market["no_price"]) == "0.5725"
+    assert str(market["yes_ask_price"]) == "0.4275"
+    assert str(market["no_ask_price"]) == "0.5725"
 
 
 @pytest.mark.integration
@@ -96,14 +98,16 @@ def test_get_current_market_filters_by_row_current_ind(
     create_market(**sample_market_data)
 
     # Update it (creates new version)
-    update_market_with_versioning(ticker=sample_market_data["ticker"], yes_price=Decimal("0.5500"))
+    update_market_with_versioning(
+        ticker=sample_market_data["ticker"], yes_ask_price=Decimal("0.5500")
+    )
 
     # Get current version
     market = get_current_market(sample_market_data["ticker"])
     assert market is not None
 
     # Should return ONLY the updated version
-    assert market["yes_price"] == Decimal("0.5500")
+    assert market["yes_ask_price"] == Decimal("0.5500")
 
 
 @pytest.mark.integration
@@ -115,7 +119,9 @@ def test_scd_type2_versioning(db_pool, clean_test_data, sample_market_data):
 
     # Update price (should create new version)
     update_market_with_versioning(
-        ticker=sample_market_data["ticker"], yes_price=Decimal("0.5500"), no_price=Decimal("0.4500")
+        ticker=sample_market_data["ticker"],
+        yes_ask_price=Decimal("0.5500"),
+        no_ask_price=Decimal("0.4500"),
     )
 
     # Get history
@@ -125,11 +131,11 @@ def test_scd_type2_versioning(db_pool, clean_test_data, sample_market_data):
     assert len(history) >= 2
 
     # Newest version should be current
-    assert history[0]["yes_price"] == Decimal("0.5500")
+    assert history[0]["yes_ask_price"] == Decimal("0.5500")
     assert history[0]["row_current_ind"] is True
 
     # Oldest version should be historical
-    assert history[-1]["yes_price"] == Decimal("0.5200")
+    assert history[-1]["yes_ask_price"] == Decimal("0.5200")
     assert history[-1]["row_current_ind"] is False
     assert history[-1]["row_end_ts"] is not None
 
@@ -139,20 +145,20 @@ def test_update_market_partial_fields(db_pool, clean_test_data, sample_market_da
     """Test updating only specific fields (others preserved)."""
     create_market(**sample_market_data)
 
-    # Update only yes_price
+    # Update only yes_ask_price
     update_market_with_versioning(
         ticker=sample_market_data["ticker"],
-        yes_price=Decimal("0.5500"),
-        # no_price not provided - should preserve old value
+        yes_ask_price=Decimal("0.5500"),
+        # no_ask_price not provided - should preserve old value
     )
 
     market = get_current_market(sample_market_data["ticker"])
     assert market is not None
 
-    # yes_price updated
-    assert market["yes_price"] == Decimal("0.5500")
-    # no_price preserved
-    assert market["no_price"] == Decimal("0.4800")
+    # yes_ask_price updated
+    assert market["yes_ask_price"] == Decimal("0.5500")
+    # no_ask_price preserved
+    assert market["no_ask_price"] == Decimal("0.4800")
 
 
 @pytest.mark.integration
@@ -163,7 +169,7 @@ def test_get_market_history_limit(db_pool, clean_test_data, sample_market_data):
     # Create 5 versions
     for i in range(1, 6):
         update_market_with_versioning(
-            ticker=sample_market_data["ticker"], yes_price=Decimal(f"0.5{i}00")
+            ticker=sample_market_data["ticker"], yes_ask_price=Decimal(f"0.5{i}00")
         )
 
     # Request only 3
@@ -185,7 +191,7 @@ def test_create_position(db_pool, clean_test_data, sample_market_data, sample_po
     market_id = create_market(**sample_market_data)
 
     # Create position
-    position_id = create_position(market_id=market_id, **sample_position_data)
+    position_id = create_position(market_internal_id=market_id, **sample_position_data)
 
     assert position_id is not None
 
@@ -196,7 +202,7 @@ def test_get_current_positions_filters_open(
 ):
     """Test filtering positions by status."""
     market_id = create_market(**sample_market_data)
-    position_id = create_position(market_id=market_id, **sample_position_data)
+    position_id = create_position(market_internal_id=market_id, **sample_position_data)
 
     # Get open positions
     positions = get_current_positions(status="open")
@@ -213,7 +219,7 @@ def test_update_position_price_versioning(
 ):
     """Test position price updates use SCD Type 2."""
     market_id = create_market(**sample_market_data)
-    position_id = create_position(market_id=market_id, **sample_position_data)
+    position_id = create_position(market_internal_id=market_id, **sample_position_data)
 
     # Update price
     new_position_id = update_position_price(
@@ -229,7 +235,7 @@ def test_update_position_price_versioning(
 def test_close_position(db_pool, clean_test_data, sample_market_data, sample_position_data):
     """Test closing position."""
     market_id = create_market(**sample_market_data)
-    position_id = create_position(market_id=market_id, **sample_position_data)
+    position_id = create_position(market_internal_id=market_id, **sample_position_data)
 
     # Close position
     closed_id = close_position(
@@ -255,7 +261,7 @@ def test_position_unrealized_pnl_calculation(
 ):
     """Test unrealized P&L calculation."""
     market_id = create_market(**sample_market_data)
-    position_id = create_position(market_id=market_id, **sample_position_data)
+    position_id = create_position(market_internal_id=market_id, **sample_position_data)
 
     # Update price to profitable level
     update_position_price(
@@ -265,7 +271,7 @@ def test_position_unrealized_pnl_calculation(
 
     # Get position with joined market data
     positions = get_current_positions()
-    pos = next((p for p in positions if p["market_id"] == market_id), None)
+    pos = next((p for p in positions if p["market_internal_id"] == market_id), None)
 
     # Unrealized P&L should be calculated
     # (0.5800 - 0.5200) * 100 contracts = $6.00
@@ -287,7 +293,7 @@ def test_create_trade_with_attribution(
     market_id = create_market(**sample_market_data)
 
     # Create trade
-    trade_id = create_trade(market_id=market_id, **sample_trade_data)
+    trade_id = create_trade(market_internal_id=market_id, **sample_trade_data)
 
     assert trade_id is not None
 
@@ -298,8 +304,8 @@ def test_get_trades_by_market(db_pool, clean_test_data, sample_market_data, samp
     market_id = create_market(**sample_market_data)
 
     # Create multiple trades
-    trade_id1 = create_trade(market_id=market_id, **sample_trade_data)
-    trade_id2 = create_trade(market_id=market_id, **sample_trade_data)
+    trade_id1 = create_trade(market_internal_id=market_id, **sample_trade_data)
+    trade_id2 = create_trade(market_internal_id=market_id, **sample_trade_data)
 
     # Retrieve trades
     trades = get_trades_by_market(market_id, limit=10)
@@ -313,7 +319,7 @@ def test_get_trades_by_market(db_pool, clean_test_data, sample_market_data, samp
 def test_get_recent_trades(db_pool, clean_test_data, sample_market_data, sample_trade_data):
     """Test retrieving recent trades across all markets."""
     market_id = create_market(**sample_market_data)
-    trade_id = create_trade(market_id=market_id, **sample_trade_data)
+    trade_id = create_trade(market_internal_id=market_id, **sample_trade_data)
 
     # Get recent trades
     trades = get_recent_trades(limit=10)
@@ -330,7 +336,7 @@ def test_trade_strategy_model_attribution(
 ):
     """CRITICAL: Test that trades record strategy_id and model_id."""
     market_id = create_market(**sample_market_data)
-    create_trade(market_id=market_id, **sample_trade_data)
+    create_trade(market_internal_id=market_id, **sample_trade_data)
 
     # Retrieve trade
     trades = get_trades_by_market(market_id, limit=1)
@@ -350,30 +356,30 @@ def test_trade_strategy_model_attribution(
 def test_extreme_prices(db_pool, clean_test_data, sample_market_data, decimal_prices):
     """Test extreme price values (0.0001 and 0.9999)."""
     sample_market_data["ticker"] = "TEST-EXTREME"
-    sample_market_data["yes_price"] = decimal_prices["min"]  # 0.0001
-    sample_market_data["no_price"] = decimal_prices["max"]  # 0.9999
+    sample_market_data["yes_ask_price"] = decimal_prices["min"]  # 0.0001
+    sample_market_data["no_ask_price"] = decimal_prices["max"]  # 0.9999
 
     create_market(**sample_market_data)
     market = get_current_market("TEST-EXTREME")
     assert market is not None
 
-    assert market["yes_price"] == Decimal("0.0001")
-    assert market["no_price"] == Decimal("0.9999")
+    assert market["yes_ask_price"] == Decimal("0.0001")
+    assert market["no_ask_price"] == Decimal("0.9999")
 
 
 @pytest.mark.integration
 def test_tight_spread(db_pool, clean_test_data, sample_market_data, decimal_prices):
     """Test very tight spread (0.0001 = 0.01¢)."""
     sample_market_data["ticker"] = "TEST-TIGHT"
-    sample_market_data["yes_price"] = decimal_prices["tight_spread_bid"]
-    sample_market_data["no_price"] = decimal_prices["tight_spread_ask"]
+    sample_market_data["yes_ask_price"] = decimal_prices["tight_spread_bid"]
+    sample_market_data["no_ask_price"] = decimal_prices["tight_spread_ask"]
 
     create_market(**sample_market_data)
     market = get_current_market("TEST-TIGHT")
     assert market is not None
 
     # Spread should be exactly 0.0001
-    spread = market["no_price"] - market["yes_price"]
+    spread = market["no_ask_price"] - market["yes_ask_price"]
     assert spread == Decimal("0.0001")
 
 
@@ -381,7 +387,7 @@ def test_tight_spread(db_pool, clean_test_data, sample_market_data, decimal_pric
 def test_update_nonexistent_market_raises_error(db_pool, clean_test_data):
     """Test updating non-existent market raises ValueError."""
     with pytest.raises(ValueError, match="Market not found"):
-        update_market_with_versioning(ticker="NONEXISTENT-MARKET", yes_price=Decimal("0.5000"))
+        update_market_with_versioning(ticker="NONEXISTENT-MARKET", yes_ask_price=Decimal("0.5000"))
 
 
 @pytest.mark.integration
@@ -556,17 +562,18 @@ def test_get_current_positions_with_market_id_filter(
     # Setup: Create market and positions
     market_id1 = create_market(**sample_market_data)
     sample_market_data["ticker"] = "TEST-MARKET2"
+    sample_market_data["external_id"] = "EXTERNAL-TEST-MARKET2"
     market_id2 = create_market(**sample_market_data)
 
     # Create positions for both markets
-    sample_position_data["market_id"] = market_id1
+    sample_position_data["market_internal_id"] = market_id1
     position1 = create_position(**sample_position_data)
 
-    sample_position_data["market_id"] = market_id2
+    sample_position_data["market_internal_id"] = market_id2
     _position2 = create_position(**sample_position_data)  # Intentionally unused - testing filter
 
     # Test: Get positions filtered by market_id1
-    positions = get_current_positions(market_id=market_id1)
+    positions = get_current_positions(market_internal_id=market_id1)
 
     # Should only return position1 (compare using surrogate id)
     assert len(positions) == 1
@@ -611,7 +618,7 @@ def test_get_recent_trades_with_strategy_filter(
     )
 
     # Create trades for both strategies
-    sample_trade_data["market_id"] = market_id
+    sample_trade_data["market_internal_id"] = market_id
     sample_trade_data["strategy_id"] = strategy_id1
     trade1 = create_trade(**sample_trade_data)
 
@@ -643,7 +650,7 @@ def test_create_settlement_rejects_float(db_pool, clean_test_data, sample_market
     # Test: Create settlement with float (should raise ValueError)
     with pytest.raises(ValueError, match="Payout must be Decimal"):
         create_settlement(
-            market_id=market_id,
+            market_internal_id=market_id,
             platform_id="kalshi",
             outcome="YES",
             payout=123.45,  # type: ignore[arg-type]  # Float not Decimal
@@ -713,7 +720,9 @@ def test_create_trade_with_execution_environment(
     market_id = create_market(**sample_market_data)
 
     # Create trade with paper environment (demo API testing)
-    trade_id = create_trade(market_id=market_id, **sample_trade_data, execution_environment="paper")
+    trade_id = create_trade(
+        market_internal_id=market_id, **sample_trade_data, execution_environment="paper"
+    )
     assert trade_id is not None
 
     # Retrieve and verify execution_environment is set
@@ -730,7 +739,7 @@ def test_create_trade_default_execution_environment(
     market_id = create_market(**sample_market_data)
 
     # Create trade without specifying execution_environment
-    trade_id = create_trade(market_id=market_id, **sample_trade_data)
+    trade_id = create_trade(market_internal_id=market_id, **sample_trade_data)
     assert trade_id is not None
 
     # Verify default is 'live'
@@ -747,10 +756,12 @@ def test_get_trades_by_market_with_environment_filter(
     market_id = create_market(**sample_market_data)
 
     # Create trades in different environments
-    create_trade(market_id=market_id, **sample_trade_data, execution_environment="live")
-    create_trade(market_id=market_id, **sample_trade_data, execution_environment="paper")
-    create_trade(market_id=market_id, **sample_trade_data, execution_environment="paper")
-    create_trade(market_id=market_id, **sample_trade_data, execution_environment="backtest")
+    create_trade(market_internal_id=market_id, **sample_trade_data, execution_environment="live")
+    create_trade(market_internal_id=market_id, **sample_trade_data, execution_environment="paper")
+    create_trade(market_internal_id=market_id, **sample_trade_data, execution_environment="paper")
+    create_trade(
+        market_internal_id=market_id, **sample_trade_data, execution_environment="backtest"
+    )
 
     # Filter by paper environment
     paper_trades = get_trades_by_market(market_id, limit=10, execution_environment="paper")
@@ -775,8 +786,8 @@ def test_get_recent_trades_with_environment_filter(
     market_id = create_market(**sample_market_data)
 
     # Create trades in different environments
-    create_trade(market_id=market_id, **sample_trade_data, execution_environment="live")
-    create_trade(market_id=market_id, **sample_trade_data, execution_environment="paper")
+    create_trade(market_internal_id=market_id, **sample_trade_data, execution_environment="live")
+    create_trade(market_internal_id=market_id, **sample_trade_data, execution_environment="paper")
 
     # Filter by paper environment
     paper_trades = get_recent_trades(limit=10, execution_environment="paper")
@@ -797,7 +808,7 @@ def test_create_position_with_execution_environment(
 
     # Create position with paper environment
     pos_id = create_position(
-        market_id=market_id, **sample_position_data, execution_environment="paper"
+        market_internal_id=market_id, **sample_position_data, execution_environment="paper"
     )
     assert pos_id is not None
 
@@ -815,7 +826,7 @@ def test_create_position_default_execution_environment(
     market_id = create_market(**sample_market_data)
 
     # Create position without specifying execution_environment
-    pos_id = create_position(market_id=market_id, **sample_position_data)
+    pos_id = create_position(market_internal_id=market_id, **sample_position_data)
     assert pos_id is not None
 
     # Verify default is 'live' by filtering
@@ -832,13 +843,13 @@ def test_get_current_positions_with_environment_filter(
 
     # Create positions in different environments
     live_pos_id = create_position(
-        market_id=market_id, **sample_position_data, execution_environment="live"
+        market_internal_id=market_id, **sample_position_data, execution_environment="live"
     )
     paper_pos_id = create_position(
-        market_id=market_id, **sample_position_data, execution_environment="paper"
+        market_internal_id=market_id, **sample_position_data, execution_environment="paper"
     )
     backtest_pos_id = create_position(
-        market_id=market_id, **sample_position_data, execution_environment="backtest"
+        market_internal_id=market_id, **sample_position_data, execution_environment="backtest"
     )
 
     # Filter by paper environment
@@ -867,7 +878,7 @@ def test_get_current_positions_combined_filters(
 
     # Create open position in paper environment
     paper_pos_id = create_position(
-        market_id=market_id, **sample_position_data, execution_environment="paper"
+        market_internal_id=market_id, **sample_position_data, execution_environment="paper"
     )
 
     # Filter by status AND environment

@@ -226,7 +226,7 @@ class TestKalshiMarketPollerPolling:
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
             patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
-            patch("precog.schedulers.kalshi_poller.create_market", return_value=(1, "MKT-123")),
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
         ):
             result = poller_with_mock_client.poll_once()
 
@@ -296,7 +296,7 @@ class TestKalshiMarketPollerPolling:
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
             patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
-            patch("precog.schedulers.kalshi_poller.create_market", return_value=(1, "MKT-123")),
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
         ):
             poller_with_mock_client._poll_wrapper()
 
@@ -333,9 +333,7 @@ class TestKalshiMarketPollerSync:
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
             patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
-            patch(
-                "precog.schedulers.kalshi_poller.create_market", return_value=(1, "MKT-123")
-            ) as mock_create,
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1) as mock_create,
         ):
             was_created = poller_with_mock_client._sync_market_to_db(mock_market_data)
 
@@ -394,9 +392,7 @@ class TestKalshiMarketPollerSync:
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
             patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
-            patch(
-                "precog.schedulers.kalshi_poller.create_market", return_value=(1, "MKT-123")
-            ) as mock_create,
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1) as mock_create,
         ):
             poller_with_mock_client._sync_market_to_db(market_legacy)
 
@@ -450,7 +446,7 @@ class TestKalshiPollerFactoryFunctions:
                 return_value=mock_kalshi_client,
             ),
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.create_market", return_value=(1, "MKT-123")),
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
         ):
             mock_kalshi_client.fetch_all_markets.return_value = [
                 {"ticker": "TEST-MARKET", "event_ticker": "TEST", "title": "Test"}

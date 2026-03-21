@@ -238,14 +238,10 @@ def clean_test_data(db_cursor):
 
     # Cleanup before test (in reverse FK order)
     # Delete child records first - trades/positions reference strategies/models/markets
-    db_cursor.execute("DELETE FROM trades WHERE market_id LIKE 'MKT-TEST-%'")
-    # Delete settlements (child of markets) - clean ALL settlements for test isolation
-    # Settlements table is append-only in production, but must be cleaned between tests
+    # Migration 0022: downstream tables use market_internal_id INTEGER FK with ON DELETE CASCADE.
+    # Deleting from markets will CASCADE to trades/positions/edges/settlements.
+    # Still clean up by strategy/model references for non-market-linked test data.
     db_cursor.execute("DELETE FROM settlements")
-    # Delete positions by test market pattern
-    db_cursor.execute(
-        "DELETE FROM positions WHERE market_id LIKE 'MKT-TEST-%' OR market_id LIKE 'KALSHI-%'"
-    )
     # Try to delete positions/trades referencing test strategies/models (may fail in CI)
     # In CI, strategy_id/model_id columns may not exist if migrations 001/003 failed
     # Delete fixture data (99901+) AND any SERIAL-generated data (1-99900)
@@ -258,8 +254,9 @@ def clean_test_data(db_cursor):
         )
     except Exception:
         db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
-    # Then delete parent records
-    db_cursor.execute("DELETE FROM markets WHERE market_id LIKE 'MKT-TEST-%'")
+    # Delete markets by ticker pattern — CASCADE handles downstream tables
+    # (edges, positions, trades, settlements via market_internal_id FK)
+    db_cursor.execute("DELETE FROM markets WHERE ticker LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
     # Clean up ALL test models and strategies (fixture data + SERIAL-generated)
@@ -337,13 +334,9 @@ def clean_test_data(db_cursor):
     yield  # Test runs here
 
     # Cleanup after test (in reverse FK order)
-    # Delete child records first - trades/positions reference strategies/models/markets
-    db_cursor.execute("DELETE FROM trades WHERE market_id LIKE 'MKT-TEST-%'")
-    db_cursor.execute(
-        "DELETE FROM positions WHERE market_id LIKE 'MKT-TEST-%' OR market_id LIKE 'KALSHI-%'"
-    )
-    # Try to delete positions/trades referencing test strategies/models (may fail in CI)
-    # Delete ALL positions/trades with strategy_id/model_id (fixture data + SERIAL-generated)
+    # Migration 0022: downstream tables use market_internal_id INTEGER FK with ON DELETE CASCADE.
+    # Deleting from markets will CASCADE to trades/positions/edges/settlements.
+    # Still clean up by strategy/model references for non-market-linked test data.
     try:
         db_cursor.execute(
             "DELETE FROM trades WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
@@ -353,8 +346,8 @@ def clean_test_data(db_cursor):
         )
     except Exception:
         db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
-    # Then delete parent records
-    db_cursor.execute("DELETE FROM markets WHERE market_id LIKE 'MKT-TEST-%'")
+    # Delete markets by ticker pattern — CASCADE handles downstream tables
+    db_cursor.execute("DELETE FROM markets WHERE ticker LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
     # Clean up ALL test models and strategies (fixture data + SERIAL-generated)
@@ -388,8 +381,8 @@ def sample_market_data(db_pool, clean_test_data):
         "external_id": "TEST-EXT-123",
         "ticker": "TEST-NFL-KC-BUF-YES",
         "title": "TEST: Chiefs to beat Bills",
-        "yes_price": Decimal("0.5200"),
-        "no_price": Decimal("0.4800"),
+        "yes_ask_price": Decimal("0.5200"),
+        "no_ask_price": Decimal("0.4800"),
         "market_type": "binary",
         "status": "open",
         "volume": 1000,
@@ -738,50 +731,44 @@ def sample_event(db_pool, clean_test_data, sample_platform, sample_series) -> st
 
 
 @pytest.fixture
-def sample_market(db_pool, clean_test_data, sample_platform, sample_event) -> str:
-    """Create sample market for testing."""
-    from precog.database.connection import fetch_one
+def sample_market(db_pool, clean_test_data, sample_platform, sample_event) -> int:
+    """Create sample market for testing.
 
-    # Check if market already exists
+    Returns:
+        Integer surrogate PK from markets(id) — post-migration 0021/0022.
+    """
+    from precog.database.connection import fetch_one
+    from precog.database.crud_operations import create_market
+
+    # Look up event surrogate PK (migration 0020: events use integer FK)
+    event_row = fetch_one("SELECT id FROM events WHERE event_id = 'HIGHTEST'")
+    event_pk = event_row["id"] if event_row else None
+
+    # Check if market already exists (by ticker, since market_id VARCHAR is dropped)
     existing = fetch_one(
-        "SELECT market_id FROM markets WHERE market_id = %s AND row_current_ind = TRUE",
-        ("MKT-HIGHTEST-25FEB05",),
+        "SELECT id FROM markets WHERE ticker = %s",
+        ("HIGHTEST-25FEB05",),
     )
     if existing:
-        return "MKT-HIGHTEST-25FEB05"
+        return existing["id"]
 
-    # Create new market
-    query = """
-        INSERT INTO markets (
-            market_id, platform_id, event_id, external_id, ticker, title,
-            market_type, yes_price, no_price, status, metadata, row_current_ind, updated_at
-        )
-        VALUES (
-            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW()
-        )
-        RETURNING market_id
-    """
-    from precog.database.connection import get_cursor
-
-    with get_cursor(commit=True) as cur:
-        cur.execute(
-            query,
-            (
-                "MKT-HIGHTEST-25FEB05",
-                "kalshi",
-                "HIGHTEST",
-                "HIGHTEST-25FEB05-ext",
-                "HIGHTEST-25FEB05",
-                "Will HIGHTEST win Super Bowl?",
-                "binary",
-                0.5200,
-                0.4800,
-                "open",
-                '{"market_category": "sports", "event_category": "nfl", "expected_expiry": "2025-02-05 18:00:00"}',
-            ),
-        )
-        result = cur.fetchone()
-        return result["market_id"] if result else "MKT-HIGHTEST-25FEB05"
+    # Create via CRUD function (returns integer PK)
+    return create_market(
+        platform_id="kalshi",
+        event_internal_id=event_pk,
+        external_id="HIGHTEST-25FEB05-ext",
+        ticker="HIGHTEST-25FEB05",
+        title="Will HIGHTEST win Super Bowl?",
+        yes_ask_price=Decimal("0.5200"),
+        no_ask_price=Decimal("0.4800"),
+        market_type="binary",
+        status="open",
+        metadata={
+            "market_category": "sports",
+            "event_category": "nfl",
+            "expected_expiry": "2025-02-05 18:00:00",
+        },
+    )
 
 
 @pytest.fixture
