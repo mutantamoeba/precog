@@ -96,22 +96,18 @@ def test_execute_query(db_pool, clean_test_data):
     # Note: We can't easily test with temp tables since execute_query uses its own connection
     # Instead, test with a real table (markets) using TEST- prefix for cleanup
 
-    # Create test market using execute_query
+    # Create test market using execute_query (markets is a dimension table post-0021)
     rowcount = execute_query(
         """INSERT INTO markets (
-            market_id, platform_id, event_id, external_id,
-            ticker, title, yes_price, no_price,
-            status, row_current_ind, updated_at
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())""",
+            platform_id, external_id,
+            ticker, title, market_type, status
+        ) VALUES (%s, %s, %s, %s, %s, %s)""",
         (
-            "MKT-TEST-EXECUTE-QUERY",
             "test_platform",
-            "TEST-EVT",
             "TEST-EXT",
             "TEST-EXECUTE-QUERY",
             "Test Market",
-            0.5000,
-            0.5000,
+            "binary",
             "open",
         ),
         commit=True,

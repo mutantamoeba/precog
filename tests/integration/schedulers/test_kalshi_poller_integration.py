@@ -204,8 +204,8 @@ class TestPollerDatabaseIntegration:
 
         # Existing market with different price
         existing = {
-            "yes_price": Decimal("0.5000"),  # Different from 0.5525
-            "no_price": Decimal("0.5000"),
+            "yes_ask_price": Decimal("0.5000"),  # Different from 0.5525
+            "no_ask_price": Decimal("0.5000"),
             "status": "open",
         }
 
@@ -230,8 +230,8 @@ class TestPollerDatabaseIntegration:
 
         # Existing market with same price and status
         existing = {
-            "yes_price": Decimal("0.5525"),
-            "no_price": Decimal("0.4575"),
+            "yes_ask_price": Decimal("0.5525"),
+            "no_ask_price": Decimal("0.4575"),
             "status": "open",  # "active" maps to "open"
         }
 
@@ -257,8 +257,8 @@ class TestPollerDatabaseIntegration:
         mock_kalshi_client.fetch_all_markets.return_value = [market]
 
         existing = {
-            "yes_price": Decimal("0.5525"),  # Same price
-            "no_price": Decimal("0.4575"),
+            "yes_ask_price": Decimal("0.5525"),  # Same price
+            "no_ask_price": Decimal("0.4575"),
             "status": "open",  # Different status
         }
 
@@ -462,8 +462,8 @@ class TestFallbackPriceIntegration:
 
         call_kwargs = mock_create.call_args[1]
         # Should be converted: 55 cents = 0.55
-        assert call_kwargs["yes_price"] == Decimal("0.55")
-        assert call_kwargs["no_price"] == Decimal("0.45")
+        assert call_kwargs["yes_ask_price"] == Decimal("0.55")
+        assert call_kwargs["no_ask_price"] == Decimal("0.45")
 
 
 # =============================================================================

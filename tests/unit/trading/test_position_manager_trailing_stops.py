@@ -42,7 +42,7 @@ def mock_position_with_trailing_stop():
     return {
         "id": 123,
         "position_id": "POS-2025-001",
-        "market_id": "MARKET-001",
+        "market_internal_id": 1,
         "strategy_id": 1,
         "model_id": 1,
         "side": "YES",

@@ -105,7 +105,7 @@ class PositionManager:
 
         # Open position
         position = manager.open_position(
-            market_id="KALSHI-NFL-001",
+            market_internal_id=1,
             strategy_id=42,
             model_id=7,
             side="YES",
@@ -161,7 +161,7 @@ class PositionManager:
 
     def open_position(
         self,
-        market_id: str,
+        market_internal_id: int,
         strategy_id: int,
         model_id: int,
         side: str,
@@ -176,7 +176,7 @@ class PositionManager:
         """Open new position with risk validation.
 
         Args:
-            market_id: Market identifier (e.g., 'KALSHI-NFL-001')
+            market_internal_id: Integer FK to markets(id) surrogate PK
             strategy_id: Strategy that generated this signal (trade attribution)
             model_id: Model that calculated probability (trade attribution)
             side: Position side ('YES' or 'NO')
@@ -192,7 +192,7 @@ class PositionManager:
             Dictionary containing created position with all fields including:
                 - id: Surrogate primary key (int)
                 - position_id: Business key (str, format: 'POS-{id}')
-                - market_id, strategy_id, model_id (trade attribution)
+                - market_internal_id, strategy_id, model_id (trade attribution)
                 - side, quantity, entry_price
                 - status: 'open'
                 - row_current_ind: TRUE (current version)
@@ -200,7 +200,7 @@ class PositionManager:
         Raises:
             InsufficientMarginError: If available_margin < required_margin
             ValueError: If entry_price not in valid range [0.01, 0.99]
-            psycopg2.IntegrityError: If market_id/strategy_id/model_id invalid FK
+            psycopg2.IntegrityError: If market_internal_id/strategy_id/model_id invalid FK
 
         Educational Note:
             **Kalshi Margin Calculation:**
@@ -245,7 +245,7 @@ class PositionManager:
                 extra={
                     "required_margin": str(required_margin),
                     "available_margin": str(available_margin),
-                    "market_id": market_id,
+                    "market_internal_id": market_internal_id,
                     "side": side,
                     "quantity": quantity,
                     "entry_price": str(entry_price),
@@ -268,7 +268,7 @@ class PositionManager:
         # Create position via CRUD
         try:
             position_id = crud_create_position(
-                market_id=market_id,
+                market_internal_id=market_internal_id,
                 strategy_id=strategy_id,
                 model_id=model_id,
                 side=side,
@@ -298,7 +298,7 @@ class PositionManager:
                     f"Opened position {position['position_id']}",
                     extra={
                         "position_id": position_id,
-                        "market_id": market_id,
+                        "market_internal_id": market_internal_id,
                         "side": side,
                         "quantity": quantity,
                         "entry_price": str(entry_price),
@@ -315,7 +315,7 @@ class PositionManager:
             logger.error(
                 "Failed to create position - foreign key violation",
                 extra={
-                    "market_id": market_id,
+                    "market_internal_id": market_internal_id,
                     "strategy_id": strategy_id,
                     "model_id": model_id,
                     "error": str(e),
@@ -575,13 +575,13 @@ class PositionManager:
 
     def get_open_positions(
         self,
-        market_id: str | None = None,
+        market_internal_id: int | None = None,
         strategy_id: int | None = None,
     ) -> list[dict[str, Any]]:
         """Retrieve all open positions with optional filtering.
 
         Args:
-            market_id: Optional market filter (business key string like 'MKT-123')
+            market_internal_id: Optional market filter (integer FK to markets.id)
             strategy_id: Optional strategy filter (surrogate key int)
 
         Returns:
@@ -602,7 +602,7 @@ class PositionManager:
 
             **Note on filtering:**
             CRUD function get_current_positions() only supports filtering by
-            status and market_id (int). For strategy_id filtering, we get all
+            status and market_internal_id (int). For strategy_id filtering, we get all
             open positions and filter in Python (acceptable for now since we
             won't have thousands of positions).
 
@@ -611,15 +611,11 @@ class PositionManager:
             - Pattern 2 (CLAUDE.md): Dual Versioning System
         """
         # Get all open positions (status='open', row_current_ind=TRUE)
-        # Note: CRUD function accepts market_id as int, but we receive str
-        # For now, pass None for market_id filtering (we'll filter in Python)
-        positions = get_current_positions(status="open", market_id=None)
+        # Migration 0022: market_internal_id is now INTEGER, pass directly to CRUD
+        positions = get_current_positions(status="open", market_internal_id=market_internal_id)
 
-        # Apply filters manually
+        # Apply remaining filters manually
         filtered = positions
-
-        if market_id is not None:
-            filtered = [p for p in filtered if p.get("market_id") == market_id]
 
         if strategy_id is not None:
             filtered = [p for p in filtered if p.get("strategy_id") == strategy_id]
@@ -807,13 +803,13 @@ class PositionManager:
                 cur.execute(
                     """
                     INSERT INTO positions (
-                        position_id, market_id, strategy_id, model_id, side, quantity,
+                        position_id, market_internal_id, strategy_id, model_id, side, quantity,
                         entry_price, current_price, target_price, stop_loss_price,
                         unrealized_pnl, realized_pnl, status, exit_price, exit_reason,
                         trailing_stop_state, position_metadata, row_current_ind
                     )
                     SELECT
-                        position_id, market_id, strategy_id, model_id, side, quantity,
+                        position_id, market_internal_id, strategy_id, model_id, side, quantity,
                         entry_price, current_price, target_price, stop_loss_price,
                         unrealized_pnl, realized_pnl, status, exit_price, exit_reason,
                         %s::jsonb, position_metadata, TRUE
@@ -1041,13 +1037,13 @@ class PositionManager:
                 cur.execute(
                     """
                     INSERT INTO positions (
-                        position_id, market_id, strategy_id, model_id, side, quantity,
+                        position_id, market_internal_id, strategy_id, model_id, side, quantity,
                         entry_price, current_price, target_price, stop_loss_price,
                         unrealized_pnl, realized_pnl, status, exit_price, exit_reason,
                         trailing_stop_state, position_metadata, row_current_ind
                     )
                     SELECT
-                        position_id, market_id, strategy_id, model_id, side, quantity,
+                        position_id, market_internal_id, strategy_id, model_id, side, quantity,
                         entry_price, %s, target_price, stop_loss_price,
                         %s, realized_pnl, status, exit_price, exit_reason,
                         %s::jsonb, position_metadata, TRUE

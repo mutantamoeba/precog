@@ -36,7 +36,7 @@ def mock_position() -> dict[str, Any]:
     return {
         "id": 123,
         "position_id": "POS-2025-001",
-        "market_id": "MARKET-001",
+        "market_internal_id": 1,
         "strategy_id": 1,
         "model_id": 1,
         "side": "YES",
@@ -210,7 +210,7 @@ class TestSustainedOperations:
 
         start = time.time()
         for i in range(50):
-            manager.get_open_positions(market_id=f"MARKET-{i:03d}")
+            manager.get_open_positions(market_internal_id=i + 1)
             manager.get_open_positions(strategy_id=i)
         elapsed = time.time() - start
 

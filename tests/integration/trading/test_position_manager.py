@@ -27,7 +27,74 @@ from precog.trading.position_manager import (
 
 
 @pytest.fixture
-def position_params(db_cursor, clean_test_data):
+def test_market_pks(db_cursor, clean_test_data):
+    """Fixture that creates test markets and returns ticker -> integer PK mapping.
+
+    Returns:
+        Dictionary mapping ticker strings to integer surrogate PKs.
+        e.g. {"NFL-TEST-001": 42, "NFL-001": 43, "NFL-002": 44, "NFL-003": 45}
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            # Look up event surrogate PK (migration 0020: markets use integer FK)
+            # Note: get_connection() returns raw psycopg2 (tuple rows), not dict cursor
+            cur.execute("SELECT id FROM events WHERE event_id = 'TEST-EVT-NFL-KC-BUF'")
+            _evt = cur.fetchone()
+            event_pk = _evt[0] if _evt else None
+
+            # Create test markets (required for get_current_positions() JOIN)
+            # Multiple markets needed for filtering tests
+            # Migration 0022: market_id VARCHAR dropped, use ticker as identifier
+            markets_to_create = [
+                ("MKT-TEST-001", "Test Market: KC to beat BUF", "NFL-TEST-001"),
+                ("MKT-001", "Test Market 1", "NFL-001"),
+                ("MKT-002", "Test Market 2", "NFL-002"),
+                ("MKT-003", "Test Market 3", "NFL-003"),
+            ]
+
+            market_pks = {}  # ticker -> integer PK mapping
+            for external_id, title, ticker in markets_to_create:
+                cur.execute(
+                    """
+                    INSERT INTO markets (
+                        platform_id, event_internal_id, external_id, ticker, title,
+                        market_type, status
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (
+                        "test_platform",
+                        event_pk,
+                        external_id,
+                        ticker,
+                        title,
+                        "binary",
+                        "open",
+                    ),
+                )
+                market_pk = cur.fetchone()[0]  # raw cursor returns tuples
+                market_pks[ticker] = market_pk
+                cur.execute(
+                    """
+                    INSERT INTO market_snapshots (
+                        market_id, yes_ask_price, no_ask_price,
+                        volume, open_interest, row_current_ind
+                    )
+                    VALUES (%s, %s, %s, %s, %s, TRUE)
+                    """,
+                    (market_pk, Decimal("0.5200"), Decimal("0.4800"), 1000, 500),
+                )
+            conn.commit()
+    finally:
+        release_connection(conn)
+
+    return market_pks
+
+
+@pytest.fixture
+def position_params(db_cursor, clean_test_data, test_market_pks):
     """Fixture providing valid position parameters with required FKs.
 
     Creates strategy and model records that positions can reference.
@@ -39,6 +106,7 @@ def position_params(db_cursor, clean_test_data):
         - Creates real FK dependencies (strategy_id, model_id) in database
         - All prices/probabilities use Decimal (Pattern 1)
         - Follows Kalshi pricing cheat sheet ([0.01, 0.99] range)
+        - Migration 0022: uses market_internal_id (integer FK) instead of market_id (VARCHAR)
 
     Example:
         >>> params = position_params
@@ -80,53 +148,12 @@ def position_params(db_cursor, clean_test_data):
                 ),
             )
             model_id = cur.fetchone()[0]
-
-            # Look up event surrogate PK (migration 0020: markets use integer FK)
-            # Note: get_connection() returns raw psycopg2 (tuple rows), not dict cursor
-            cur.execute("SELECT id FROM events WHERE event_id = 'TEST-EVT-NFL-KC-BUF'")
-            _evt = cur.fetchone()
-            event_pk = _evt[0] if _evt else None
-
-            # Create test markets (required for get_current_positions() JOIN)
-            # Multiple markets needed for filtering tests
-            markets_to_create = [
-                ("MKT-NFL-TEST-001", "MKT-TEST-001", "Test Market: KC to beat BUF"),
-                ("MKT-NFL-001", "MKT-001", "Test Market 1"),
-                ("MKT-NFL-002", "MKT-002", "Test Market 2"),
-                ("MKT-NFL-003", "MKT-003", "Test Market 3"),
-            ]
-
-            for market_id, external_id, title in markets_to_create:
-                cur.execute(
-                    """
-                    INSERT INTO markets (
-                        market_id, platform_id, event_internal_id, external_id, ticker, title,
-                        yes_price, no_price, market_type, status, volume, open_interest, row_current_ind
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        market_id,
-                        "test_platform",
-                        event_pk,
-                        external_id,
-                        market_id,
-                        title,
-                        Decimal("0.5200"),
-                        Decimal("0.4800"),
-                        "binary",
-                        "open",
-                        1000,
-                        500,
-                        True,
-                    ),
-                )
             conn.commit()
     finally:
         release_connection(conn)
 
     return {
-        "market_id": "MKT-NFL-TEST-001",
+        "market_internal_id": test_market_pks["NFL-TEST-001"],
         "strategy_id": strategy_id,
         "model_id": model_id,
         "side": "YES",
@@ -144,8 +171,8 @@ def position_params(db_cursor, clean_test_data):
 # - clean_test_data: Cleans test data before/after each test
 #
 # Educational Note (ADR-088):
-#   - ❌ FORBIDDEN: Mocking get_connection(), database, config, logging
-#   - ✅ REQUIRED: Use REAL infrastructure fixtures
+#   - FORBIDDEN: Mocking get_connection(), database, config, logging
+#   - REQUIRED: Use REAL infrastructure fixtures
 #   - Position Manager wraps CRUD operations, must test with real DB
 
 
@@ -164,7 +191,7 @@ def test_open_position_success(db_pool, db_cursor, clean_test_data, position_par
     Educational Note:
         - Required margin for YES @ 0.4975, qty 10:
           margin = 10 * (1.00 - 0.4975) = 10 * 0.5025 = $5.0250
-        - Available margin ($1000) >> required ($5.0250) ✅
+        - Available margin ($1000) >> required ($5.0250)
         - Returns dict with surrogate id (int) and business key (str 'POS-{id}')
     """
     manager = PositionManager()
@@ -179,7 +206,7 @@ def test_open_position_success(db_pool, db_cursor, clean_test_data, position_par
     assert position["position_id"].startswith("POS-")  # Format: POS-{id}
 
     # Verify position data
-    assert position["market_id"] == position_params["market_id"]
+    assert position["market_internal_id"] == position_params["market_internal_id"]
     assert position["strategy_id"] == position_params["strategy_id"]
     assert position["model_id"] == position_params["model_id"]
     assert position["side"] == position_params["side"]
@@ -439,7 +466,7 @@ def test_close_position_invalid_price(db_cursor, clean_test_data, position_param
 # ============================================================================
 
 
-def test_get_open_positions_all(db_cursor, clean_test_data, position_params):
+def test_get_open_positions_all(db_cursor, clean_test_data, position_params, test_market_pks):
     """Test retrieving all open positions returns only current versions.
 
     Educational Note:
@@ -449,10 +476,10 @@ def test_get_open_positions_all(db_cursor, clean_test_data, position_params):
     """
     manager = PositionManager()
 
-    # Open 3 positions
+    # Open 3 positions in different markets
     manager.open_position(**position_params)
-    manager.open_position(**{**position_params, "market_id": "MKT-NFL-002"})
-    manager.open_position(**{**position_params, "market_id": "MKT-NFL-003"})
+    manager.open_position(**{**position_params, "market_internal_id": test_market_pks["NFL-002"]})
+    manager.open_position(**{**position_params, "market_internal_id": test_market_pks["NFL-003"]})
 
     # Get all open positions
     positions = manager.get_open_positions()
@@ -462,20 +489,25 @@ def test_get_open_positions_all(db_cursor, clean_test_data, position_params):
     assert all(p["row_current_ind"] is True for p in positions)
 
 
-def test_get_open_positions_filter_by_market(db_cursor, clean_test_data, position_params):
-    """Test filtering open positions by market_id."""
+def test_get_open_positions_filter_by_market(
+    db_cursor, clean_test_data, position_params, test_market_pks
+):
+    """Test filtering open positions by market_internal_id."""
     manager = PositionManager()
 
+    nfl_001_pk = test_market_pks["NFL-001"]
+    nfl_002_pk = test_market_pks["NFL-002"]
+
     # Open positions in different markets
-    manager.open_position(**{**position_params, "market_id": "MKT-NFL-001"})
-    manager.open_position(**{**position_params, "market_id": "MKT-NFL-002"})
-    manager.open_position(**{**position_params, "market_id": "MKT-NFL-001"})
+    manager.open_position(**{**position_params, "market_internal_id": nfl_001_pk})
+    manager.open_position(**{**position_params, "market_internal_id": nfl_002_pk})
+    manager.open_position(**{**position_params, "market_internal_id": nfl_001_pk})
 
     # Filter by market
-    positions = manager.get_open_positions(market_id="MKT-NFL-001")
+    positions = manager.get_open_positions(market_internal_id=nfl_001_pk)
 
     assert len(positions) == 2
-    assert all(p["market_id"] == "MKT-NFL-001" for p in positions)
+    assert all(p["market_internal_id"] == nfl_001_pk for p in positions)
 
 
 def test_get_open_positions_filter_by_strategy(db_cursor, clean_test_data, position_params):
@@ -503,7 +535,9 @@ def test_get_open_positions_filter_by_strategy(db_cursor, clean_test_data, posit
     assert all(p["strategy_id"] == position_params["strategy_id"] for p in positions)
 
 
-def test_get_open_positions_excludes_closed(db_cursor, clean_test_data, position_params):
+def test_get_open_positions_excludes_closed(
+    db_cursor, clean_test_data, position_params, test_market_pks
+):
     """Test get_open_positions excludes closed positions.
 
     Educational Note:
@@ -512,10 +546,14 @@ def test_get_open_positions_excludes_closed(db_cursor, clean_test_data, position
     """
     manager = PositionManager()
 
-    # Open 3 positions
+    # Open 3 positions in different markets
     p1 = manager.open_position(**position_params)
-    p2 = manager.open_position(**{**position_params, "market_id": "MKT-NFL-002"})
-    p3 = manager.open_position(**{**position_params, "market_id": "MKT-NFL-003"})
+    p2 = manager.open_position(
+        **{**position_params, "market_internal_id": test_market_pks["NFL-002"]}
+    )
+    p3 = manager.open_position(
+        **{**position_params, "market_internal_id": test_market_pks["NFL-003"]}
+    )
 
     # Close one position
     manager.close_position(
@@ -670,7 +708,7 @@ def test_complete_position_lifecycle(db_cursor, clean_test_data, position_params
     assert len(positions) == 0  # No open positions (final version is closed)
 
 
-def test_margin_calculation_yes_vs_no(db_cursor, clean_test_data, position_params):
+def test_margin_calculation_yes_vs_no(db_cursor, clean_test_data, position_params, test_market_pks):
     """Test margin requirements differ for YES vs NO positions.
 
     Educational Note:
@@ -694,7 +732,7 @@ def test_margin_calculation_yes_vs_no(db_cursor, clean_test_data, position_param
     # Test NO position at 0.75 with same margin should FAIL
     no_params = {
         **position_params,
-        "market_id": "MKT-NFL-002",  # Different market
+        "market_internal_id": test_market_pks["NFL-002"],  # Different market
         "side": "NO",
         "entry_price": Decimal("0.7500"),
         "available_margin": Decimal("3.00"),  # Need $7.50 -> should FAIL

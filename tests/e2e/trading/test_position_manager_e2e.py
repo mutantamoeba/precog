@@ -121,7 +121,7 @@ class TestPositionLifecycle:
             position_data_after_create = {
                 "id": 1,  # Surrogate key
                 "position_id": "POS-1",  # Business key
-                "market_id": "MKT-NFL-001",
+                "market_internal_id": 1,
                 "strategy_id": 42,
                 "model_id": 7,
                 "side": "YES",
@@ -143,7 +143,7 @@ class TestPositionLifecycle:
 
             # Open position
             position = manager.open_position(
-                market_id="MKT-NFL-001",
+                market_internal_id=1,
                 strategy_id=42,
                 model_id=7,
                 side="YES",
@@ -177,7 +177,7 @@ class TestPositionLifecycle:
             position_data_after_update = {
                 "id": 2,  # NEW surrogate key (SCD Type 2!)
                 "position_id": "POS-1",  # SAME business key
-                "market_id": "MKT-NFL-001",
+                "market_internal_id": 1,
                 "strategy_id": 42,
                 "model_id": 7,
                 "side": "YES",
@@ -219,7 +219,7 @@ class TestPositionLifecycle:
             position_data_before_close = {
                 "id": 2,
                 "position_id": "POS-1",
-                "market_id": "MKT-NFL-001",
+                "market_internal_id": 1,
                 "strategy_id": 42,
                 "model_id": 7,
                 "side": "YES",
@@ -242,7 +242,7 @@ class TestPositionLifecycle:
             position_data_after_close = {
                 "id": 3,  # FINAL surrogate key
                 "position_id": "POS-1",  # SAME business key
-                "market_id": "MKT-NFL-001",
+                "market_internal_id": 1,
                 "strategy_id": 42,
                 "model_id": 7,
                 "side": "YES",
@@ -338,7 +338,7 @@ class TestPositionLifecycle:
             position_data = {
                 "id": 1,
                 "position_id": "POS-1",
-                "market_id": "MKT-NFL-001",
+                "market_internal_id": 1,
                 "strategy_id": 42,
                 "model_id": 7,
                 "side": "YES",
@@ -365,7 +365,7 @@ class TestPositionLifecycle:
 
             # Open position with all parameters
             position = manager.open_position(
-                market_id="MKT-NFL-001",
+                market_internal_id=1,
                 strategy_id=42,
                 model_id=7,
                 side="YES",
@@ -1275,7 +1275,7 @@ class TestPositionPrecisionRequirements:
             position_data = {
                 "id": 1,
                 "position_id": "POS-1",
-                "market_id": "MKT-001",
+                "market_internal_id": 1,
                 "strategy_id": 1,
                 "model_id": 1,
                 "side": "YES",
@@ -1297,7 +1297,7 @@ class TestPositionPrecisionRequirements:
 
             # Open position (all inputs Decimal)
             position = manager.open_position(
-                market_id="MKT-001",
+                market_internal_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="YES",
@@ -1462,7 +1462,7 @@ class TestPositionPrecisionRequirements:
 
             # Open position (all Decimal)
             pos = manager.open_position(
-                market_id="MKT-001",
+                market_internal_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="YES",
@@ -1530,7 +1530,7 @@ class TestMarginValidationAndErrors:
 
         with pytest.raises(InsufficientMarginError, match="Required margin"):
             manager.open_position(
-                market_id="MKT-001",
+                market_internal_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="YES",
@@ -1555,7 +1555,7 @@ class TestMarginValidationAndErrors:
 
         with pytest.raises(InsufficientMarginError, match="Required margin"):
             manager.open_position(
-                market_id="MKT-001",
+                market_internal_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="NO",
@@ -1586,7 +1586,7 @@ class TestMarginValidationAndErrors:
         # Test price too low ($0.00)
         with pytest.raises(ValueError, match="outside valid range"):
             manager.open_position(
-                market_id="MKT-001",
+                market_internal_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="YES",
@@ -1598,7 +1598,7 @@ class TestMarginValidationAndErrors:
         # Test price too high ($1.00)
         with pytest.raises(ValueError, match="outside valid range"):
             manager.open_position(
-                market_id="MKT-001",
+                market_internal_id=1,
                 strategy_id=1,
                 model_id=1,
                 side="YES",

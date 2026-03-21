@@ -158,41 +158,51 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
     CREATE INDEX IF NOT EXISTS idx_events_start_time ON events(start_time);
 
-    -- markets table (SCD Type 2 with row_current_ind)
+    -- markets table (dimension — migration 0021: split from monolith)
+    -- One row per market. NOT versioned. Status is mutable via UPDATE.
+    -- Migration 0022: market_id VARCHAR removed. Downstream tables use market_internal_id INTEGER FK.
     CREATE TABLE IF NOT EXISTS markets (
-        id SERIAL,
-        market_id VARCHAR(100) NOT NULL,
-        market_uuid UUID DEFAULT gen_random_uuid() UNIQUE,
-        platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
+        id SERIAL PRIMARY KEY,
+        platform_id VARCHAR(50) NOT NULL REFERENCES platforms(platform_id) ON DELETE CASCADE,
         event_internal_id INTEGER REFERENCES events(id) ON DELETE CASCADE,
         external_id VARCHAR(100) NOT NULL,
-        ticker VARCHAR(50),
+        ticker VARCHAR(50) NOT NULL UNIQUE,
         title VARCHAR(255) NOT NULL,
-        market_type VARCHAR(20) CHECK (market_type IN ('binary', 'categorical', 'scalar')),
-        yes_price DECIMAL(10,4) CHECK (yes_price IS NULL OR (yes_price >= 0.0000 AND yes_price <= 1.0000)),
-        no_price DECIMAL(10,4) CHECK (no_price IS NULL OR (no_price >= 0.0000 AND no_price <= 1.0000)),
-        volume INTEGER CHECK (volume IS NULL OR volume >= 0),
-        open_interest INTEGER CHECK (open_interest IS NULL OR open_interest >= 0),
-        spread DECIMAL(10,4) CHECK (spread IS NULL OR (spread >= 0.0000 AND spread <= 1.0000)),
-        status VARCHAR(20) CHECK (status IN ('open', 'closed', 'settled', 'halted')),
+        market_type VARCHAR(20) NOT NULL DEFAULT 'binary' CHECK (market_type IN ('binary', 'categorical', 'scalar')),
+        status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed', 'settled', 'halted')),
         settlement_value DECIMAL(10,4) CHECK (settlement_value IS NULL OR (settlement_value >= 0.0000 AND settlement_value <= 1.0000)),
         metadata JSONB,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        row_start_ts TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-        row_end_ts TIMESTAMP WITH TIME ZONE,
-        row_current_ind BOOLEAN DEFAULT TRUE,
-        PRIMARY KEY (id)
+        UNIQUE(platform_id, external_id)
     );
     CREATE INDEX IF NOT EXISTS idx_markets_event_internal ON markets(event_internal_id);
     CREATE INDEX IF NOT EXISTS idx_markets_platform ON markets(platform_id);
-    CREATE INDEX IF NOT EXISTS idx_markets_current ON markets(row_current_ind) WHERE row_current_ind = TRUE;
     CREATE INDEX IF NOT EXISTS idx_markets_status ON markets(status);
-    CREATE INDEX IF NOT EXISTS idx_markets_market_id ON markets(market_id);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_markets_unique_current ON markets(market_id) WHERE row_current_ind = TRUE;
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_markets_unique_ticker_current ON markets(ticker) WHERE row_current_ind = TRUE;
-    -- Historical query index (migration 024)
-    CREATE INDEX IF NOT EXISTS idx_markets_history ON markets(row_current_ind, created_at DESC);
+
+    -- market_snapshots table (fact — migration 0021: SCD Type 2 versioned pricing)
+    CREATE TABLE IF NOT EXISTS market_snapshots (
+        id SERIAL PRIMARY KEY,
+        market_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
+        yes_ask_price DECIMAL(10,4) CHECK (yes_ask_price IS NULL OR (yes_ask_price >= 0.0000 AND yes_ask_price <= 1.0000)),
+        no_ask_price DECIMAL(10,4) CHECK (no_ask_price IS NULL OR (no_ask_price >= 0.0000 AND no_ask_price <= 1.0000)),
+        yes_bid_price DECIMAL(10,4) CHECK (yes_bid_price IS NULL OR (yes_bid_price >= 0.0000 AND yes_bid_price <= 1.0000)),
+        no_bid_price DECIMAL(10,4) CHECK (no_bid_price IS NULL OR (no_bid_price >= 0.0000 AND no_bid_price <= 1.0000)),
+        last_price DECIMAL(10,4) CHECK (last_price IS NULL OR (last_price >= 0.0000 AND last_price <= 1.0000)),
+        spread DECIMAL(10,4) CHECK (spread IS NULL OR (spread >= 0.0000 AND spread <= 1.0000)),
+        volume INTEGER CHECK (volume IS NULL OR volume >= 0),
+        open_interest INTEGER CHECK (open_interest IS NULL OR open_interest >= 0),
+        liquidity DECIMAL(10,4),
+        row_start_ts TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        row_end_ts TIMESTAMP WITH TIME ZONE,
+        row_current_ind BOOLEAN NOT NULL DEFAULT TRUE,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+    CREATE INDEX IF NOT EXISTS idx_market_snapshots_market ON market_snapshots(market_id);
+    CREATE INDEX IF NOT EXISTS idx_market_snapshots_current ON market_snapshots(row_current_ind) WHERE row_current_ind = TRUE;
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_market_snapshots_unique_current ON market_snapshots(market_id) WHERE row_current_ind = TRUE;
+    CREATE INDEX IF NOT EXISTS idx_market_snapshots_history ON market_snapshots(market_id, created_at DESC);
 
     -- 2. TEAMS & SPORTS DATA
     CREATE TABLE IF NOT EXISTS teams (
@@ -441,7 +451,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE TABLE IF NOT EXISTS edges (
         id SERIAL PRIMARY KEY,
         edge_id VARCHAR NOT NULL,
-        market_id VARCHAR(100),
+        market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
         probability_matrix_id INTEGER REFERENCES probability_matrices(probability_id) ON DELETE SET NULL,
         model_id INTEGER REFERENCES probability_models(model_id) ON DELETE SET NULL,
         expected_value DECIMAL(10,4) NOT NULL,
@@ -456,7 +466,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         row_end_ts TIMESTAMP WITH TIME ZONE,
         row_current_ind BOOLEAN DEFAULT TRUE
     );
-    CREATE INDEX IF NOT EXISTS idx_edges_market ON edges(market_id);
+    CREATE INDEX IF NOT EXISTS idx_edges_market_internal ON edges(market_internal_id);
     CREATE INDEX IF NOT EXISTS idx_edges_ev ON edges(expected_value) WHERE row_current_ind = TRUE;
     CREATE INDEX IF NOT EXISTS idx_edges_current ON edges(row_current_ind) WHERE row_current_ind = TRUE;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_unique_current ON edges(edge_id) WHERE row_current_ind = TRUE;
@@ -469,7 +479,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE TABLE IF NOT EXISTS positions (
         id SERIAL PRIMARY KEY,
         position_id VARCHAR NOT NULL,
-        market_id VARCHAR(100),
+        market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         strategy_id INTEGER REFERENCES strategies(strategy_id),
         model_id INTEGER REFERENCES probability_models(model_id),
@@ -495,6 +505,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         calculated_probability DECIMAL(10,4) CHECK (calculated_probability IS NULL OR (calculated_probability >= 0.0000 AND calculated_probability <= 1.0000)),
         edge_at_entry DECIMAL(10,4),
         market_price_at_entry DECIMAL(10,4) CHECK (market_price_at_entry IS NULL OR (market_price_at_entry >= 0.0000 AND market_price_at_entry <= 1.0000)),
+        execution_environment VARCHAR(20) NOT NULL DEFAULT 'live' CHECK (execution_environment IN ('live', 'paper', 'backtest')),
         last_update TIMESTAMP WITH TIME ZONE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -502,7 +513,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         row_end_ts TIMESTAMP WITH TIME ZONE,
         row_current_ind BOOLEAN DEFAULT TRUE
     );
-    CREATE INDEX IF NOT EXISTS idx_positions_market ON positions(market_id);
+    CREATE INDEX IF NOT EXISTS idx_positions_market_internal ON positions(market_internal_id);
     CREATE INDEX IF NOT EXISTS idx_positions_platform ON positions(platform_id);
     CREATE INDEX IF NOT EXISTS idx_positions_status ON positions(status);
     CREATE INDEX IF NOT EXISTS idx_positions_current ON positions(row_current_ind) WHERE row_current_ind = TRUE;
@@ -521,7 +532,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     -- trades table (per migration 015/017: References surrogate IDs, not business keys)
     CREATE TABLE IF NOT EXISTS trades (
         trade_id SERIAL PRIMARY KEY,
-        market_id VARCHAR(100),
+        market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         position_internal_id INTEGER REFERENCES positions(id) ON DELETE SET NULL,
         edge_internal_id INTEGER REFERENCES edges(id) ON DELETE SET NULL,
@@ -544,9 +555,10 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         trade_metadata JSONB,
         fill_time_ms INTEGER,
         slippage DECIMAL(10,4),
+        execution_environment VARCHAR(20) NOT NULL DEFAULT 'live' CHECK (execution_environment IN ('live', 'paper', 'backtest')),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_trades_market ON trades(market_id);
+    CREATE INDEX IF NOT EXISTS idx_trades_market_internal ON trades(market_internal_id);
     CREATE INDEX IF NOT EXISTS idx_trades_platform ON trades(platform_id);
     CREATE INDEX IF NOT EXISTS idx_trades_position ON trades(position_internal_id);
     CREATE INDEX IF NOT EXISTS idx_trades_created ON trades(created_at);
@@ -554,13 +566,13 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
 
     CREATE TABLE IF NOT EXISTS settlements (
         settlement_id SERIAL PRIMARY KEY,
-        market_id VARCHAR(100),
+        market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         outcome VARCHAR(50) NOT NULL,
         payout DECIMAL(10,4) CHECK (payout IS NULL OR payout >= 0.0000),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
     );
-    CREATE INDEX IF NOT EXISTS idx_settlements_market ON settlements(market_id);
+    CREATE INDEX IF NOT EXISTS idx_settlements_market_internal ON settlements(market_internal_id);
 
     -- position_exits table (per migration 015: References surrogate ID, not business key)
     CREATE TABLE IF NOT EXISTS position_exits (
@@ -656,7 +668,17 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_alerts_acknowledged ON alerts(acknowledged);
 
     -- 9. VIEWS
-    CREATE OR REPLACE VIEW current_markets AS SELECT * FROM markets WHERE row_current_ind = TRUE;
+    -- current_markets view (migration 0021: JOIN dimension + current snapshot)
+    CREATE OR REPLACE VIEW current_markets AS
+    SELECT
+        m.id, m.platform_id, m.event_internal_id, m.external_id,
+        m.ticker, m.title, m.market_type, m.status, m.settlement_value,
+        m.metadata, m.created_at, m.updated_at,
+        ms.yes_ask_price, ms.no_ask_price, ms.yes_bid_price, ms.no_bid_price,
+        ms.last_price, ms.spread, ms.volume, ms.open_interest, ms.liquidity,
+        ms.row_start_ts, ms.row_end_ts, ms.row_current_ind
+    FROM markets m
+    LEFT JOIN market_snapshots ms ON ms.market_id = m.id AND ms.row_current_ind = TRUE;
     CREATE OR REPLACE VIEW current_game_states AS SELECT * FROM game_states WHERE row_current_ind = TRUE;
     CREATE OR REPLACE VIEW current_edges AS SELECT * FROM edges WHERE row_current_ind = TRUE;
     CREATE OR REPLACE VIEW open_positions AS SELECT * FROM positions WHERE row_current_ind = TRUE AND status = 'open';
@@ -678,8 +700,29 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     )
     ON CONFLICT (platform_id) DO NOTHING;
 
+    -- historical_elo table (migration 0005, will be dropped in migration 0032)
+    -- Kept temporarily for seeding integration tests that test bulk_insert_historical_elo
+    CREATE TABLE IF NOT EXISTS historical_elo (
+        historical_elo_id SERIAL PRIMARY KEY,
+        team_id INTEGER NOT NULL REFERENCES teams(team_id) ON DELETE CASCADE,
+        sport VARCHAR(20) NOT NULL,
+        season INTEGER NOT NULL,
+        rating_date DATE NOT NULL,
+        elo_rating DECIMAL(10,2) NOT NULL,
+        qb_adjusted_elo DECIMAL(10,2),
+        qb_name VARCHAR(100),
+        qb_value DECIMAL(10,2),
+        source VARCHAR(50) NOT NULL DEFAULT 'calculated',
+        source_file VARCHAR(255),
+        created_at TIMESTAMP DEFAULT NOW(),
+        UNIQUE (team_id, rating_date)
+    );
+    CREATE INDEX IF NOT EXISTS idx_historical_elo_team ON historical_elo(team_id);
+    CREATE INDEX IF NOT EXISTS idx_historical_elo_sport ON historical_elo(sport);
+    CREATE INDEX IF NOT EXISTS idx_historical_elo_season ON historical_elo(season);
+
     -- Track migration version
-    INSERT INTO alembic_version (version_num) VALUES ('0001')
+    INSERT INTO alembic_version (version_num) VALUES ('0022')
     ON CONFLICT (version_num) DO NOTHING;
     """
 
@@ -773,13 +816,22 @@ def postgres_container() -> Generator[dict[str, str], None, None]:
         _apply_migration_sql(conn)
         conn.close()
 
-        # Set environment variables for precog.database.connection
+        # Set environment variables for precog.database.connection.
+        # Must set BOTH flat vars (DB_HOST) AND prefixed vars (TEST_DB_HOST)
+        # because get_prefixed_env() checks TEST_DB_HOST first when PRECOG_ENV=test.
+        # Without the prefixed vars, .env values win and the pool connects to
+        # the local PostgreSQL instead of the container.
         original_env = {
             "DB_HOST": os.environ.get("DB_HOST"),
             "DB_PORT": os.environ.get("DB_PORT"),
             "DB_NAME": os.environ.get("DB_NAME"),
             "DB_USER": os.environ.get("DB_USER"),
             "DB_PASSWORD": os.environ.get("DB_PASSWORD"),
+            "TEST_DB_HOST": os.environ.get("TEST_DB_HOST"),
+            "TEST_DB_PORT": os.environ.get("TEST_DB_PORT"),
+            "TEST_DB_NAME": os.environ.get("TEST_DB_NAME"),
+            "TEST_DB_USER": os.environ.get("TEST_DB_USER"),
+            "TEST_DB_PASSWORD": os.environ.get("TEST_DB_PASSWORD"),
         }
 
         os.environ["DB_HOST"] = host
@@ -787,6 +839,12 @@ def postgres_container() -> Generator[dict[str, str], None, None]:
         os.environ["DB_NAME"] = "precog_test"
         os.environ["DB_USER"] = "test_user"
         os.environ["DB_PASSWORD"] = "test_password"
+        # Override prefixed vars so get_prefixed_env() uses the container
+        os.environ["TEST_DB_HOST"] = host
+        os.environ["TEST_DB_PORT"] = str(port)
+        os.environ["TEST_DB_NAME"] = "precog_test"
+        os.environ["TEST_DB_USER"] = "test_user"
+        os.environ["TEST_DB_PASSWORD"] = "test_password"
 
         yield connection_params
 

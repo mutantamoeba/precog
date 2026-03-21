@@ -226,7 +226,7 @@ class TestKalshiMarketPollerPolling:
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
             patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
-            patch("precog.schedulers.kalshi_poller.create_market", return_value="MKT-123"),
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
         ):
             result = poller_with_mock_client.poll_once()
 
@@ -241,8 +241,8 @@ class TestKalshiMarketPollerPolling:
 
         existing_market = {
             "ticker": mock_market_data["ticker"],
-            "yes_price": Decimal("0.4000"),  # Different price
-            "no_price": Decimal("0.6000"),
+            "yes_ask_price": Decimal("0.4000"),  # Different price
+            "no_ask_price": Decimal("0.6000"),
             "status": "open",
         }
 
@@ -270,8 +270,8 @@ class TestKalshiMarketPollerPolling:
         # Same prices as mock_market_data
         existing_market = {
             "ticker": mock_market_data["ticker"],
-            "yes_price": Decimal("0.4800"),  # Same as yes_ask_dollars
-            "no_price": Decimal("0.5500"),  # Same as no_ask_dollars
+            "yes_ask_price": Decimal("0.4800"),  # Same as yes_ask_dollars
+            "no_ask_price": Decimal("0.5500"),  # Same as no_ask_dollars
             "status": "open",
         }
 
@@ -296,7 +296,7 @@ class TestKalshiMarketPollerPolling:
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
             patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
-            patch("precog.schedulers.kalshi_poller.create_market", return_value="MKT-123"),
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
         ):
             poller_with_mock_client._poll_wrapper()
 
@@ -333,9 +333,7 @@ class TestKalshiMarketPollerSync:
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
             patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
-            patch(
-                "precog.schedulers.kalshi_poller.create_market", return_value="MKT-123"
-            ) as mock_create,
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1) as mock_create,
         ):
             was_created = poller_with_mock_client._sync_market_to_db(mock_market_data)
 
@@ -344,16 +342,16 @@ class TestKalshiMarketPollerSync:
 
             # Verify create_market was called with correct Decimal prices
             call_kwargs = mock_create.call_args.kwargs
-            assert call_kwargs["yes_price"] == Decimal("0.4800")
-            assert call_kwargs["no_price"] == Decimal("0.5500")
+            assert call_kwargs["yes_ask_price"] == Decimal("0.4800")
+            assert call_kwargs["no_ask_price"] == Decimal("0.5500")
 
     @pytest.mark.unit
     def test_sync_updates_existing_market(self, poller_with_mock_client, mock_market_data):
         """Test that _sync_market_to_db updates existing market."""
         existing = {
             "ticker": mock_market_data["ticker"],
-            "yes_price": Decimal("0.4000"),
-            "no_price": Decimal("0.6000"),
+            "yes_ask_price": Decimal("0.4000"),
+            "no_ask_price": Decimal("0.6000"),
             "status": "open",
         }
 
@@ -394,15 +392,13 @@ class TestKalshiMarketPollerSync:
         with (
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
             patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
-            patch(
-                "precog.schedulers.kalshi_poller.create_market", return_value="MKT-123"
-            ) as mock_create,
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1) as mock_create,
         ):
             poller_with_mock_client._sync_market_to_db(market_legacy)
 
             call_kwargs = mock_create.call_args.kwargs
-            assert call_kwargs["yes_price"] == Decimal("0.65")
-            assert call_kwargs["no_price"] == Decimal("0.35")
+            assert call_kwargs["yes_ask_price"] == Decimal("0.65")
+            assert call_kwargs["no_ask_price"] == Decimal("0.35")
 
 
 # =============================================================================
@@ -450,7 +446,7 @@ class TestKalshiPollerFactoryFunctions:
                 return_value=mock_kalshi_client,
             ),
             patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
-            patch("precog.schedulers.kalshi_poller.create_market", return_value="MKT-123"),
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
         ):
             mock_kalshi_client.fetch_all_markets.return_value = [
                 {"ticker": "TEST-MARKET", "event_ticker": "TEST", "title": "Test"}

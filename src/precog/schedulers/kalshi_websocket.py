@@ -747,20 +747,23 @@ class KalshiWebSocketHandler:
                 logger.debug("Market %s not in database, skipping WS update", ticker)
                 return
 
-            price_changed = existing["yes_price"] != yes_price or existing["no_price"] != no_price
+            # Migration 0021: column renamed yes_price → yes_ask_price
+            price_changed = (
+                existing["yes_ask_price"] != yes_price or existing["no_ask_price"] != no_price
+            )
 
             if price_changed:
                 update_market_with_versioning(
                     ticker=ticker,
-                    yes_price=yes_price,
-                    no_price=no_price,
+                    yes_ask_price=yes_price,
+                    no_ask_price=no_price,
                     volume=msg.get("volume"),
                     open_interest=msg.get("open_interest"),
                 )
                 logger.debug(
                     "Updated market via WS: %s (yes: %s -> %s)",
                     ticker,
-                    existing["yes_price"],
+                    existing["yes_ask_price"],
                     yes_price,
                 )
         except Exception as e:

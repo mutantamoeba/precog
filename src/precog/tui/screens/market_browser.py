@@ -199,9 +199,9 @@ class MarketBrowserScreen(BaseScreen):
                 table.add_row(
                     market.get("ticker", ""),
                     market.get("title", "")[:50],  # Truncate long titles
-                    market.get("sport", "").upper(),
-                    f"${market.get('yes_price', Decimal('0')):.2f}",
-                    f"${market.get('no_price', Decimal('0')):.2f}",
+                    market.get("subcategory", "").upper(),
+                    f"${market.get('yes_ask_price', Decimal('0')):.2f}",
+                    f"${market.get('no_ask_price', Decimal('0')):.2f}",
                     market.get("status", "").title(),
                     f"{market.get('volume', 0):,}",
                 )

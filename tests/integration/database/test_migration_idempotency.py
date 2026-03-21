@@ -211,8 +211,8 @@ class TestMigrationUtilsIntegration:
             index_exists,
         )
 
-        # Primary key index should exist
-        assert index_exists("markets_pkey") is True
+        # Primary key index should exist (use platforms — stable lookup table)
+        assert index_exists("platforms_pkey") is True
         # Non-existent index
         assert index_exists("nonexistent_index_xyz") is False
 
@@ -274,6 +274,7 @@ class TestSchemaValidation:
         """Verify all core tables from migrations exist."""
         core_tables = [
             "markets",
+            "market_snapshots",
             "positions",
             "trades",
             "strategies",
@@ -302,7 +303,8 @@ class TestSchemaValidation:
         Note: The actual schema uses row_current_ind and row_end_ts.
         row_start_ts and row_version are not implemented in current schema.
         """
-        versioned_tables = ["markets", "positions", "game_states", "edges"]
+        # Migration 0021: SCD Type 2 moved from markets to market_snapshots
+        versioned_tables = ["market_snapshots", "positions", "game_states", "edges"]
         # Only check columns that exist in the actual schema
         scd_columns = ["row_current_ind", "row_end_ts"]
 
@@ -327,11 +329,12 @@ class TestSchemaValidation:
     def test_price_columns_are_decimal(self, db_pool, db_cursor, clean_test_data):
         """Verify price columns use DECIMAL (numeric) type.
 
-        Note: The actual schema uses yes_price/no_price (not yes_bid/yes_ask).
+        Migration 0021: prices moved from markets to market_snapshots,
+        renamed yes_price → yes_ask_price, no_price → no_ask_price.
         """
         price_columns = [
-            ("markets", "yes_price"),
-            ("markets", "no_price"),
+            ("market_snapshots", "yes_ask_price"),
+            ("market_snapshots", "no_ask_price"),
             ("positions", "entry_price"),
         ]
 

@@ -154,7 +154,7 @@ class TestKalshiMarketPollerChaos:
         mock_get_current.return_value = None  # Market doesn't exist (will create new)
         mock_get_event.return_value = (1, True)  # (int PK, created) per migration 0020
         mock_update_market.return_value = None  # No update needed for new markets
-        mock_create_market.return_value = {"market_id": 1}
+        mock_create_market.return_value = 1
 
         # Generate large response (500 markets) with CORRECT event_ticker format
         # IMPORTANT: event_ticker must include date (e.g., KXNFLGAME-25DEC15)
