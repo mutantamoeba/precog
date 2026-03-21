@@ -5775,3 +5775,413 @@ def get_active_breakers(breaker_type: str | None = None) -> list[dict[str, Any]]
         ORDER BY triggered_at DESC
     """
     return fetch_all(query)
+
+
+# =============================================================================
+# EDGE OPERATIONS
+# =============================================================================
+#
+# Migration 0023: edges table enriched with analytics-ready columns.
+#   - probability_matrix_id dropped (dead FK)
+#   - New columns: actual_outcome, settlement_value, resolved_at, strategy_id,
+#     edge_status, yes_ask_price, no_ask_price, spread, volume, open_interest,
+#     last_price, liquidity, category, subcategory, execution_environment
+#   - New views: current_edges (recreated), edge_lifecycle (computed P&L)
+#
+# SCD Type 2: edges use row_current_ind versioning.
+#   - create_edge: sets row_current_ind = TRUE
+#   - update_edge_outcome / update_edge_status: direct updates (lifecycle
+#     events, not version changes)
+# =============================================================================
+
+
+def create_edge(
+    market_internal_id: int,
+    model_id: int,
+    expected_value: Decimal,
+    true_win_probability: Decimal,
+    market_implied_probability: Decimal,
+    market_price: Decimal,
+    yes_ask_price: Decimal | None = None,
+    no_ask_price: Decimal | None = None,
+    spread: Decimal | None = None,
+    volume: int | None = None,
+    open_interest: int | None = None,
+    last_price: Decimal | None = None,
+    liquidity: Decimal | None = None,
+    strategy_id: int | None = None,
+    confidence_level: str | None = None,
+    confidence_metrics: dict | None = None,
+    recommended_action: str | None = None,
+    category: str | None = None,
+    subcategory: str | None = None,
+    execution_environment: ExecutionEnvironment = "live",
+) -> int:
+    """
+    Create a new edge record with SCD Type 2 row_current_ind = TRUE.
+
+    An edge represents a detected positive expected value opportunity: the
+    difference between the model's predicted probability and the market's
+    implied probability. This function captures the full market microstructure
+    snapshot at the moment of edge detection.
+
+    Args:
+        market_internal_id: Integer FK to markets(id) surrogate PK
+        model_id: FK to probability_models(model_id) that detected this edge
+        expected_value: Expected value of the edge as DECIMAL(10,4)
+        true_win_probability: Model's predicted probability [0, 1]
+        market_implied_probability: Market-implied probability [0, 1]
+        market_price: Market price at detection [0, 1]
+        yes_ask_price: Kalshi YES ask price snapshot at detection
+        no_ask_price: Kalshi NO ask price snapshot at detection
+        spread: Bid-ask spread as DECIMAL(10,4)
+        volume: Trading volume at detection
+        open_interest: Open interest at detection
+        last_price: Last traded price at detection
+        liquidity: Market liquidity metric
+        strategy_id: FK to strategies(strategy_id) for attribution
+        confidence_level: 'high', 'medium', or 'low'
+        confidence_metrics: Additional confidence data as JSONB
+        recommended_action: 'auto_execute', 'alert', or 'ignore'
+        category: Market category (e.g., 'sports', 'politics')
+        subcategory: Market subcategory (e.g., 'nfl', 'ncaaf')
+        execution_environment: 'live', 'paper', or 'backtest' (default 'live')
+
+    Returns:
+        Integer surrogate PK (edges.id) of the newly created edge.
+
+    Educational Note:
+        Dual-Key Structure (Migration 017):
+        - id SERIAL (surrogate key) - returned by this function
+        - edge_id VARCHAR (business key) - auto-generated as EDGE-{id}
+        - Enables SCD Type 2 versioning (multiple versions of same edge)
+
+        Edge Lifecycle (Migration 0023):
+        - Edges start as 'detected' and progress through:
+          detected -> recommended -> acted_on -> settled/expired/void
+        - Outcome tracking via actual_outcome + settlement_value
+        - P&L computed in edge_lifecycle view
+
+    Example:
+        >>> edge_pk = create_edge(
+        ...     market_internal_id=42,
+        ...     model_id=2,
+        ...     expected_value=Decimal("0.0500"),
+        ...     true_win_probability=Decimal("0.5700"),
+        ...     market_implied_probability=Decimal("0.5200"),
+        ...     market_price=Decimal("0.5200"),
+        ...     yes_ask_price=Decimal("0.5300"),
+        ...     no_ask_price=Decimal("0.4800"),
+        ...     strategy_id=1,
+        ...     confidence_level='high',
+        ...     execution_environment='paper',
+        ... )
+        >>> # Returns surrogate id (e.g., 1), edge_id auto-set to 'EDGE-1'
+
+    References:
+        - Migration 0023: edges enrichment and cleanup
+        - ADR-002: Decimal Precision for All Financial Data
+    """
+    # Runtime type validation (enforces Decimal precision)
+    expected_value = validate_decimal(expected_value, "expected_value")
+    true_win_probability = validate_decimal(true_win_probability, "true_win_probability")
+    market_implied_probability = validate_decimal(
+        market_implied_probability, "market_implied_probability"
+    )
+    market_price = validate_decimal(market_price, "market_price")
+
+    if yes_ask_price is not None:
+        yes_ask_price = validate_decimal(yes_ask_price, "yes_ask_price")
+    if no_ask_price is not None:
+        no_ask_price = validate_decimal(no_ask_price, "no_ask_price")
+    if spread is not None:
+        spread = validate_decimal(spread, "spread")
+    if last_price is not None:
+        last_price = validate_decimal(last_price, "last_price")
+    if liquidity is not None:
+        liquidity = validate_decimal(liquidity, "liquidity")
+
+    insert_query = """
+        INSERT INTO edges (
+            edge_id, market_internal_id, model_id,
+            expected_value, true_win_probability,
+            market_implied_probability, market_price,
+            yes_ask_price, no_ask_price, spread,
+            volume, open_interest, last_price, liquidity,
+            strategy_id, confidence_level, confidence_metrics,
+            recommended_action, category, subcategory,
+            execution_environment, edge_status,
+            row_current_ind, row_start_ts
+        )
+        VALUES (
+            'TEMP', %s, %s,
+            %s, %s, %s, %s,
+            %s, %s, %s,
+            %s, %s, %s, %s,
+            %s, %s, %s,
+            %s, %s, %s,
+            %s, 'detected',
+            TRUE, NOW()
+        )
+        RETURNING id
+    """
+
+    params = (
+        market_internal_id,
+        model_id,
+        expected_value,
+        true_win_probability,
+        market_implied_probability,
+        market_price,
+        yes_ask_price,
+        no_ask_price,
+        spread,
+        volume,
+        open_interest,
+        last_price,
+        liquidity,
+        strategy_id,
+        confidence_level,
+        json.dumps(confidence_metrics) if confidence_metrics is not None else None,
+        recommended_action,
+        category,
+        subcategory,
+        execution_environment,
+    )
+
+    with get_cursor(commit=True) as cur:
+        # Get surrogate id
+        cur.execute(insert_query, params)
+        result = cur.fetchone()
+        surrogate_id = cast("int", result["id"])
+
+        # Update to set correct edge_id (EDGE-{id} format)
+        cur.execute(
+            "UPDATE edges SET edge_id = %s WHERE id = %s",
+            (f"EDGE-{surrogate_id}", surrogate_id),
+        )
+
+        return surrogate_id
+
+
+def update_edge_outcome(
+    edge_pk: int,
+    actual_outcome: str,
+    settlement_value: Decimal,
+    resolved_at: datetime | None = None,
+) -> bool:
+    """
+    Record settlement outcome for an edge.
+
+    This is a lifecycle event (not an SCD version change), so we update
+    the current row directly rather than creating a new SCD version.
+    Also sets edge_status to 'settled'.
+
+    Args:
+        edge_pk: Surrogate PK (edges.id), NOT the edge_id business key
+        actual_outcome: Settlement result - 'yes', 'no', 'void', or 'unresolved'
+        settlement_value: Actual settlement price as DECIMAL(10,4)
+            (0.0000 or 1.0000 for binary markets)
+        resolved_at: Resolution timestamp (defaults to NOW())
+
+    Returns:
+        True if the edge was found and updated, False otherwise.
+
+    Educational Note:
+        Why direct update instead of SCD version?
+        Outcome resolution is a lifecycle event on an existing edge -- it
+        doesn't change the edge's identity or detection parameters. The
+        edge_lifecycle view computes realized_pnl from settlement_value
+        minus market_price, so we need these on the same row.
+
+    Example:
+        >>> success = update_edge_outcome(
+        ...     edge_pk=42,
+        ...     actual_outcome='yes',
+        ...     settlement_value=Decimal("1.0000"),
+        ... )
+        >>> # Edge 42 now has edge_status='settled', actual_outcome='yes'
+
+    References:
+        - Migration 0023: edges enrichment
+        - edge_lifecycle view: computes realized_pnl from outcome
+    """
+    settlement_value = validate_decimal(settlement_value, "settlement_value")
+
+    valid_outcomes = ("yes", "no", "void", "unresolved")
+    if actual_outcome not in valid_outcomes:
+        raise ValueError(f"actual_outcome must be one of {valid_outcomes}, got '{actual_outcome}'")
+
+    query = """
+        UPDATE edges
+        SET actual_outcome = %s,
+            settlement_value = %s,
+            resolved_at = COALESCE(%s, NOW()),
+            edge_status = 'settled'
+        WHERE id = %s AND row_current_ind = TRUE
+    """
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, (actual_outcome, settlement_value, resolved_at, edge_pk))
+        return int(cur.rowcount or 0) > 0
+
+
+def update_edge_status(
+    edge_pk: int,
+    new_status: str,
+) -> bool:
+    """
+    Transition an edge's lifecycle status.
+
+    This is a direct update (not an SCD version change) because status
+    transitions track lifecycle progression, not identity changes.
+
+    Args:
+        edge_pk: Surrogate PK (edges.id), NOT the edge_id business key
+        new_status: New lifecycle status. Valid values:
+            'detected', 'recommended', 'acted_on', 'expired', 'settled', 'void'
+
+    Returns:
+        True if the edge was found and updated, False otherwise.
+
+    Example:
+        >>> success = update_edge_status(edge_pk=42, new_status='recommended')
+        >>> # Edge 42 status changed from 'detected' to 'recommended'
+
+    References:
+        - Migration 0023: edge_status column with CHECK constraint
+    """
+    valid_statuses = (
+        "detected",
+        "recommended",
+        "acted_on",
+        "expired",
+        "settled",
+        "void",
+    )
+    if new_status not in valid_statuses:
+        raise ValueError(f"new_status must be one of {valid_statuses}, got '{new_status}'")
+
+    query = """
+        UPDATE edges
+        SET edge_status = %s
+        WHERE id = %s AND row_current_ind = TRUE
+    """
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, (new_status, edge_pk))
+        return int(cur.rowcount or 0) > 0
+
+
+def get_edges_by_strategy(
+    strategy_id: int,
+    edge_status: str | None = None,
+    execution_environment: str | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """
+    Query current edges for a specific strategy.
+
+    Only returns rows with row_current_ind = TRUE (SCD Type 2 pattern).
+
+    Args:
+        strategy_id: FK to strategies(strategy_id)
+        edge_status: Optional filter by lifecycle status
+            ('detected', 'recommended', 'acted_on', 'expired', 'settled', 'void')
+        execution_environment: Optional filter ('live', 'paper', 'backtest')
+        limit: Maximum rows to return (default 100)
+
+    Returns:
+        List of edge dictionaries, ordered by created_at DESC.
+
+    Example:
+        >>> edges = get_edges_by_strategy(strategy_id=1, edge_status='detected')
+        >>> for edge in edges:
+        ...     print(f"Edge {edge['edge_id']}: EV={edge['expected_value']}")
+
+    References:
+        - Migration 0023: strategy_id column + idx_edges_strategy index
+    """
+    query = """
+        SELECT id, edge_id, market_internal_id, model_id, strategy_id,
+               expected_value, true_win_probability, market_implied_probability,
+               market_price, yes_ask_price, no_ask_price, spread,
+               volume, open_interest, last_price, liquidity,
+               edge_status, actual_outcome, settlement_value,
+               confidence_level, recommended_action,
+               category, subcategory, execution_environment,
+               created_at, resolved_at
+        FROM edges
+        WHERE row_current_ind = TRUE AND strategy_id = %s
+    """
+    params: list = [strategy_id]
+
+    if edge_status is not None:
+        query += " AND edge_status = %s"
+        params.append(edge_status)
+
+    if execution_environment is not None:
+        query += " AND execution_environment = %s"
+        params.append(execution_environment)
+
+    query += " ORDER BY created_at DESC LIMIT %s"
+    params.append(limit)
+
+    return fetch_all(query, tuple(params))
+
+
+def get_edge_lifecycle(
+    market_internal_id: int | None = None,
+    strategy_id: int | None = None,
+    limit: int = 100,
+) -> list[dict]:
+    """
+    Query the edge_lifecycle view for analytics.
+
+    The view includes computed fields:
+    - realized_pnl: settlement_value - market_price (for 'yes' outcomes)
+      or market_price - settlement_value (for 'no' outcomes)
+    - hours_to_resolution: time from edge creation to resolution in hours
+
+    Args:
+        market_internal_id: Optional filter by market
+        strategy_id: Optional filter by strategy
+        limit: Maximum rows to return (default 100)
+
+    Returns:
+        List of edge lifecycle dictionaries with computed fields.
+
+    Example:
+        >>> lifecycle = get_edge_lifecycle(strategy_id=1)
+        >>> for edge in lifecycle:
+        ...     if edge['realized_pnl'] is not None:
+        ...         print(f"Edge {edge['edge_id']}: P&L={edge['realized_pnl']}")
+
+    References:
+        - Migration 0023: edge_lifecycle view definition
+    """
+    query = """
+        SELECT id, edge_id, market_internal_id, model_id, strategy_id,
+               expected_value, true_win_probability, market_implied_probability,
+               market_price, yes_ask_price, no_ask_price,
+               edge_status, actual_outcome, settlement_value,
+               confidence_level, execution_environment,
+               created_at, resolved_at,
+               realized_pnl, hours_to_resolution
+        FROM edge_lifecycle
+        WHERE 1=1
+    """
+    params: list = []
+
+    if market_internal_id is not None:
+        query += " AND market_internal_id = %s"
+        params.append(market_internal_id)
+
+    if strategy_id is not None:
+        query += " AND strategy_id = %s"
+        params.append(strategy_id)
+
+    query += " ORDER BY created_at DESC LIMIT %s"
+    params.append(limit)
+
+    return fetch_all(query, tuple(params))

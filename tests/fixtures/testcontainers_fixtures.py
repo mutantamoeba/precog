@@ -448,11 +448,11 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     -- edges table (SCD Type 2 with dual-key structure per migration 017)
     -- id: Surrogate primary key (unique across all versions)
     -- edge_id: Business key (can repeat for SCD Type 2 versions)
+    -- Migration 0023: probability_matrix_id dropped, 15 analytics columns added
     CREATE TABLE IF NOT EXISTS edges (
         id SERIAL PRIMARY KEY,
         edge_id VARCHAR NOT NULL,
         market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
-        probability_matrix_id INTEGER REFERENCES probability_matrices(probability_id) ON DELETE SET NULL,
         model_id INTEGER REFERENCES probability_models(model_id) ON DELETE SET NULL,
         expected_value DECIMAL(10,4) NOT NULL,
         true_win_probability DECIMAL(10,4) NOT NULL CHECK (true_win_probability >= 0.0000 AND true_win_probability <= 1.0000),
@@ -461,6 +461,21 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         confidence_level VARCHAR(20) CHECK (confidence_level IN ('high', 'medium', 'low')),
         confidence_metrics JSONB,
         recommended_action VARCHAR(50) CHECK (recommended_action IN ('auto_execute', 'alert', 'ignore')),
+        actual_outcome VARCHAR(20) CHECK (actual_outcome IN ('yes', 'no', 'void', 'unresolved')),
+        settlement_value DECIMAL(10,4),
+        resolved_at TIMESTAMP WITH TIME ZONE,
+        strategy_id INTEGER REFERENCES strategies(strategy_id) ON DELETE SET NULL,
+        edge_status VARCHAR(30) DEFAULT 'detected' CHECK (edge_status IN ('detected', 'recommended', 'acted_on', 'expired', 'settled', 'void')),
+        yes_ask_price DECIMAL(10,4),
+        no_ask_price DECIMAL(10,4),
+        spread DECIMAL(10,4),
+        volume INTEGER,
+        open_interest INTEGER,
+        last_price DECIMAL(10,4),
+        liquidity DECIMAL(10,4),
+        category VARCHAR(100),
+        subcategory VARCHAR(100),
+        execution_environment VARCHAR(20) DEFAULT 'live' CHECK (execution_environment IN ('live', 'paper', 'backtest')),
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         row_start_ts TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         row_end_ts TIMESTAMP WITH TIME ZONE,
@@ -471,6 +486,11 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_edges_current ON edges(row_current_ind) WHERE row_current_ind = TRUE;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_edges_unique_current ON edges(edge_id) WHERE row_current_ind = TRUE;
     CREATE INDEX IF NOT EXISTS idx_edges_business_key ON edges(edge_id);
+    CREATE INDEX IF NOT EXISTS idx_edges_strategy ON edges(strategy_id) WHERE row_current_ind = TRUE;
+    CREATE INDEX IF NOT EXISTS idx_edges_status ON edges(edge_status) WHERE row_current_ind = TRUE;
+    CREATE INDEX IF NOT EXISTS idx_edges_category ON edges(category) WHERE row_current_ind = TRUE;
+    CREATE INDEX IF NOT EXISTS idx_edges_resolved ON edges(resolved_at) WHERE resolved_at IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_edges_exec_env ON edges(execution_environment) WHERE row_current_ind = TRUE;
 
     -- 7. TRADING & POSITIONS
     -- positions table (SCD Type 2 with dual-key structure per migration 015)
@@ -681,6 +701,28 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     LEFT JOIN market_snapshots ms ON ms.market_id = m.id AND ms.row_current_ind = TRUE;
     CREATE OR REPLACE VIEW current_game_states AS SELECT * FROM game_states WHERE row_current_ind = TRUE;
     CREATE OR REPLACE VIEW current_edges AS SELECT * FROM edges WHERE row_current_ind = TRUE;
+    -- edge_lifecycle view (migration 0023: computed P&L and resolution time)
+    CREATE OR REPLACE VIEW edge_lifecycle AS
+    SELECT
+        e.id, e.edge_id, e.market_internal_id, e.model_id, e.strategy_id,
+        e.expected_value, e.true_win_probability, e.market_implied_probability,
+        e.market_price, e.yes_ask_price, e.no_ask_price,
+        e.edge_status, e.actual_outcome, e.settlement_value,
+        e.confidence_level, e.execution_environment,
+        e.created_at, e.resolved_at,
+        -- P&L assumes YES-side position (edge detection = buy YES)
+        CASE
+            WHEN e.actual_outcome = 'yes' THEN e.settlement_value - e.market_price
+            WHEN e.actual_outcome = 'no' THEN e.market_price - e.settlement_value
+            ELSE NULL
+        END AS realized_pnl,
+        CASE
+            WHEN e.resolved_at IS NOT NULL AND e.created_at IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (e.resolved_at - e.created_at)) / 3600.0
+            ELSE NULL
+        END AS hours_to_resolution
+    FROM edges e
+    WHERE e.row_current_ind = TRUE;
     CREATE OR REPLACE VIEW open_positions AS SELECT * FROM positions WHERE row_current_ind = TRUE AND status = 'open';
     CREATE OR REPLACE VIEW current_balances AS SELECT * FROM account_balance WHERE row_current_ind = TRUE;
     CREATE OR REPLACE VIEW active_strategies AS SELECT * FROM strategies WHERE status = 'active';
