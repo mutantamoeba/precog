@@ -414,12 +414,10 @@ def sample_trade_data():
     Uses high IDs (99901) to match fixture data and avoid SERIAL collision.
     """
     return {
-        "strategy_id": 99901,
-        "model_id": 99901,
         "side": "buy",  # trades use 'buy'/'sell', not 'yes'/'no'
         "quantity": 100,
         "price": Decimal("0.5200"),
-        "order_type": "market",
+        # Attribution (strategy_id, model_id) lives on orders, not trades (migration 0025)
     }
 
 

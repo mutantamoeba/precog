@@ -542,24 +542,57 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     -- Historical query index (migration 024)
     CREATE INDEX IF NOT EXISTS idx_positions_history ON positions(row_current_ind, created_at DESC);
 
-    -- trades table (per migration 015/017: References surrogate IDs, not business keys)
-    -- trade_source converted from ENUM to VARCHAR + CHECK in migration 0024
+    -- orders table (migration 0025: attribution lives here, not on trades)
+    -- Orders capture the trading DECISION; trades capture EXECUTION EVENTS.
+    CREATE TABLE IF NOT EXISTS orders (
+        id SERIAL PRIMARY KEY,
+        platform_id VARCHAR(50) NOT NULL REFERENCES platforms(platform_id) ON DELETE CASCADE,
+        external_order_id VARCHAR(100) NOT NULL,
+        client_order_id VARCHAR(100),
+        market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
+        strategy_id INTEGER REFERENCES strategies(strategy_id) ON DELETE SET NULL,
+        model_id INTEGER REFERENCES probability_models(model_id) ON DELETE SET NULL,
+        edge_id INTEGER REFERENCES edges(id) ON DELETE SET NULL,
+        position_id INTEGER REFERENCES positions(id) ON DELETE SET NULL,
+        side VARCHAR(10) NOT NULL CHECK (side IN ('yes', 'no')),
+        action VARCHAR(10) NOT NULL CHECK (action IN ('buy', 'sell')),
+        order_type VARCHAR(20) NOT NULL DEFAULT 'market' CHECK (order_type IN ('market', 'limit')),
+        time_in_force VARCHAR(30) DEFAULT 'good_till_canceled' CHECK (time_in_force IN ('fill_or_kill', 'good_till_canceled', 'immediate_or_cancel')),
+        requested_price DECIMAL(10,4) NOT NULL CHECK (requested_price >= 0.0000 AND requested_price <= 1.0000),
+        requested_quantity INTEGER NOT NULL CHECK (requested_quantity > 0),
+        filled_quantity INTEGER NOT NULL DEFAULT 0 CHECK (filled_quantity >= 0),
+        remaining_quantity INTEGER NOT NULL CHECK (remaining_quantity >= 0),
+        average_fill_price DECIMAL(10,4),
+        total_fees DECIMAL(10,4) DEFAULT 0.0000,
+        status VARCHAR(20) NOT NULL DEFAULT 'submitted' CHECK (status IN ('submitted', 'resting', 'pending', 'partial_fill', 'filled', 'cancelled', 'expired')),
+        execution_environment VARCHAR(20) NOT NULL DEFAULT 'live' CHECK (execution_environment IN ('live', 'paper', 'backtest')),
+        trade_source VARCHAR(20) NOT NULL DEFAULT 'automated' CHECK (trade_source IN ('automated', 'manual')),
+        order_metadata JSONB,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        submitted_at TIMESTAMP WITH TIME ZONE,
+        filled_at TIMESTAMP WITH TIME ZONE,
+        cancelled_at TIMESTAMP WITH TIME ZONE,
+        CONSTRAINT uq_orders_platform_external UNIQUE (platform_id, external_order_id)
+    );
+    CREATE INDEX IF NOT EXISTS idx_orders_market ON orders(market_internal_id);
+    CREATE INDEX IF NOT EXISTS idx_orders_strategy ON orders(strategy_id);
+    CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status) WHERE status IN ('submitted', 'resting', 'pending', 'partial_fill');
+    CREATE INDEX IF NOT EXISTS idx_orders_exec_env ON orders(execution_environment);
+    CREATE INDEX IF NOT EXISTS idx_orders_created ON orders(created_at);
+
+    -- trades table (migration 0025: attribution columns removed, order_id FK added)
+    -- Trades are pure fill/execution records. Attribution lives on orders.
     CREATE TABLE IF NOT EXISTS trades (
         trade_id SERIAL PRIMARY KEY,
         market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
-        position_internal_id INTEGER REFERENCES positions(id) ON DELETE SET NULL,
-        edge_internal_id INTEGER REFERENCES edges(id) ON DELETE SET NULL,
-        strategy_id INTEGER REFERENCES strategies(strategy_id),
-        model_id INTEGER REFERENCES probability_models(model_id),
-        order_id VARCHAR(100),
-        external_order_id VARCHAR(100),
+        order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
         side VARCHAR(10) NOT NULL CHECK (side IN ('buy', 'sell')),
         price DECIMAL(10,4) NOT NULL CHECK (price >= 0.0000 AND price <= 1.0000),
         quantity INTEGER NOT NULL CHECK (quantity > 0),
         fees DECIMAL(10,4) CHECK (fees IS NULL OR fees >= 0.0000),
-        trade_source VARCHAR(20) DEFAULT 'automated' CHECK (trade_source IN ('automated', 'manual')),
-        order_type VARCHAR(20) DEFAULT 'market' CHECK (order_type IN ('market', 'limit', 'stop', 'stop_limit')),
+        is_taker BOOLEAN,
         execution_time TIMESTAMP WITH TIME ZONE,
         calculated_probability DECIMAL(10,4) CHECK (calculated_probability IS NULL OR (calculated_probability >= 0.0000 AND calculated_probability <= 1.0000)),
         market_price DECIMAL(10,4) CHECK (market_price IS NULL OR (market_price >= 0.0000 AND market_price <= 1.0000)),
@@ -574,9 +607,8 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     );
     CREATE INDEX IF NOT EXISTS idx_trades_market_internal ON trades(market_internal_id);
     CREATE INDEX IF NOT EXISTS idx_trades_platform ON trades(platform_id);
-    CREATE INDEX IF NOT EXISTS idx_trades_position ON trades(position_internal_id);
+    CREATE INDEX IF NOT EXISTS idx_trades_order ON trades(order_id);
     CREATE INDEX IF NOT EXISTS idx_trades_created ON trades(created_at);
-    CREATE INDEX IF NOT EXISTS idx_trades_source ON trades(trade_source);
 
     CREATE TABLE IF NOT EXISTS settlements (
         settlement_id SERIAL PRIMARY KEY,
@@ -758,7 +790,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_historical_elo_season ON historical_elo(season);
 
     -- Track migration version
-    INSERT INTO alembic_version (version_num) VALUES ('0022')
+    INSERT INTO alembic_version (version_num) VALUES ('0025')
     ON CONFLICT (version_num) DO NOTHING;
     """
 
