@@ -542,14 +542,8 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     -- Historical query index (migration 024)
     CREATE INDEX IF NOT EXISTS idx_positions_history ON positions(row_current_ind, created_at DESC);
 
-    -- Create ENUM type for trade source
-    DO $$ BEGIN
-        CREATE TYPE trade_source_type AS ENUM ('automated', 'manual');
-    EXCEPTION
-        WHEN duplicate_object THEN null;
-    END $$;
-
     -- trades table (per migration 015/017: References surrogate IDs, not business keys)
+    -- trade_source converted from ENUM to VARCHAR + CHECK in migration 0024
     CREATE TABLE IF NOT EXISTS trades (
         trade_id SERIAL PRIMARY KEY,
         market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
@@ -564,7 +558,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         price DECIMAL(10,4) NOT NULL CHECK (price >= 0.0000 AND price <= 1.0000),
         quantity INTEGER NOT NULL CHECK (quantity > 0),
         fees DECIMAL(10,4) CHECK (fees IS NULL OR fees >= 0.0000),
-        trade_source trade_source_type DEFAULT 'automated',
+        trade_source VARCHAR(20) DEFAULT 'automated' CHECK (trade_source IN ('automated', 'manual')),
         order_type VARCHAR(20) DEFAULT 'market' CHECK (order_type IN ('market', 'limit', 'stop', 'stop_limit')),
         execution_time TIMESTAMP WITH TIME ZONE,
         calculated_probability DECIMAL(10,4) CHECK (calculated_probability IS NULL OR (calculated_probability >= 0.0000 AND calculated_probability <= 1.0000)),
