@@ -8253,3 +8253,159 @@ def get_performance_metrics(
     query += " ORDER BY calculated_at DESC, id DESC"
 
     return fetch_all(query, tuple(params))
+
+
+# =============================================================================
+# ORDERBOOK SNAPSHOT OPERATIONS (Migration 0034)
+# =============================================================================
+
+
+def insert_orderbook_snapshot(
+    market_internal_id: int,
+    best_bid: Decimal | None = None,
+    best_ask: Decimal | None = None,
+    spread: Decimal | None = None,
+    bid_depth_total: int | None = None,
+    ask_depth_total: int | None = None,
+    depth_imbalance: Decimal | None = None,
+    weighted_mid: Decimal | None = None,
+    bid_prices: list[Decimal] | None = None,
+    bid_quantities: list[int] | None = None,
+    ask_prices: list[Decimal] | None = None,
+    ask_quantities: list[int] | None = None,
+    levels: int | None = None,
+) -> int:
+    """
+    Insert an order book depth snapshot.
+
+    Stores a point-in-time snapshot of the full order book for a market.
+    This is append-only time-series data (not SCD Type 2).
+
+    Args:
+        market_internal_id: Integer FK to markets(id)
+        best_bid: Best bid price as DECIMAL(10,4)
+        best_ask: Best ask price as DECIMAL(10,4)
+        spread: Bid-ask spread as DECIMAL(10,4), must be >= 0
+        bid_depth_total: Total bid depth (sum of all bid quantities)
+        ask_depth_total: Total ask depth (sum of all ask quantities)
+        depth_imbalance: Imbalance ratio in [-1, 1] (negative = ask-heavy)
+        weighted_mid: Volume-weighted midpoint price as DECIMAL(10,4)
+        bid_prices: Array of bid prices at each level, DECIMAL(10,4)[]
+        bid_quantities: Array of bid quantities at each level, INTEGER[]
+        ask_prices: Array of ask prices at each level, DECIMAL(10,4)[]
+        ask_quantities: Array of ask quantities at each level, INTEGER[]
+        levels: Number of depth levels captured
+
+    Returns:
+        id of the inserted snapshot row
+
+    Example:
+        >>> snapshot_id = insert_orderbook_snapshot(
+        ...     market_internal_id=42,
+        ...     best_bid=Decimal("0.5000"),
+        ...     best_ask=Decimal("0.5200"),
+        ...     spread=Decimal("0.0200"),
+        ...     bid_depth_total=500,
+        ...     ask_depth_total=300,
+        ...     depth_imbalance=Decimal("0.2500"),
+        ...     weighted_mid=Decimal("0.5075"),
+        ...     bid_prices=[Decimal("0.5000"), Decimal("0.4900")],
+        ...     bid_quantities=[200, 300],
+        ...     ask_prices=[Decimal("0.5200"), Decimal("0.5300")],
+        ...     ask_quantities=[150, 150],
+        ...     levels=2,
+        ... )
+
+    References:
+        - Migration 0034: orderbook_snapshots table
+        - Issue #443: Orderbook depth storage
+    """
+    query = """
+        INSERT INTO orderbook_snapshots (
+            market_internal_id, best_bid, best_ask, spread,
+            bid_depth_total, ask_depth_total, depth_imbalance, weighted_mid,
+            bid_prices, bid_quantities, ask_prices, ask_quantities, levels,
+            snapshot_time
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        RETURNING id
+    """
+
+    params = (
+        market_internal_id,
+        best_bid,
+        best_ask,
+        spread,
+        bid_depth_total,
+        ask_depth_total,
+        depth_imbalance,
+        weighted_mid,
+        bid_prices,
+        bid_quantities,
+        ask_prices,
+        ask_quantities,
+        levels,
+    )
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, params)
+        result = cur.fetchone()
+        return cast("int", result["id"])
+
+
+def get_latest_orderbook(market_internal_id: int) -> dict[str, Any] | None:
+    """
+    Get the most recent order book snapshot for a market.
+
+    Args:
+        market_internal_id: Integer FK to markets(id)
+
+    Returns:
+        Dictionary of snapshot columns, or None if no snapshots exist
+
+    Example:
+        >>> snapshot = get_latest_orderbook(market_internal_id=42)
+        >>> if snapshot:
+        ...     print(snapshot['spread'], snapshot['depth_imbalance'])
+
+    References:
+        - Migration 0034: orderbook_snapshots table
+    """
+    query = """
+        SELECT * FROM orderbook_snapshots
+        WHERE market_internal_id = %s
+        ORDER BY snapshot_time DESC
+        LIMIT 1
+    """
+    return fetch_one(query, (market_internal_id,))
+
+
+def get_orderbook_history(
+    market_internal_id: int,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """
+    Get order book snapshot history for a market, newest first.
+
+    Args:
+        market_internal_id: Integer FK to markets(id)
+        limit: Maximum number of snapshots to return (default: 100)
+
+    Returns:
+        List of snapshot dictionaries, ordered by snapshot_time DESC
+
+    Example:
+        >>> history = get_orderbook_history(market_internal_id=42, limit=50)
+        >>> for snap in history:
+        ...     print(snap['snapshot_time'], snap['spread'], snap['levels'])
+
+    References:
+        - Migration 0034: orderbook_snapshots table
+    """
+    query = """
+        SELECT * FROM orderbook_snapshots
+        WHERE market_internal_id = %s
+        ORDER BY snapshot_time DESC
+        LIMIT %s
+    """
+    return fetch_all(query, (market_internal_id, limit))

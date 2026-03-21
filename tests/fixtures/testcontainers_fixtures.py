@@ -782,6 +782,30 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     )
     ON CONFLICT (platform_id) DO NOTHING;
 
+    -- orderbook_snapshots table (migration 0034: append-only time-series, NOT SCD)
+    -- Stores full order book depth for liquidity analysis and slippage estimation
+    CREATE TABLE IF NOT EXISTS orderbook_snapshots (
+        id SERIAL PRIMARY KEY,
+        market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
+        snapshot_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        best_bid DECIMAL(10,4),
+        best_ask DECIMAL(10,4),
+        spread DECIMAL(10,4) CHECK (spread IS NULL OR spread >= 0),
+        bid_depth_total INTEGER CHECK (bid_depth_total IS NULL OR bid_depth_total >= 0),
+        ask_depth_total INTEGER CHECK (ask_depth_total IS NULL OR ask_depth_total >= 0),
+        depth_imbalance DECIMAL(10,4) CHECK (depth_imbalance IS NULL OR (depth_imbalance >= -1 AND depth_imbalance <= 1)),
+        weighted_mid DECIMAL(10,4),
+        bid_prices DECIMAL(10,4)[],
+        bid_quantities INTEGER[],
+        ask_prices DECIMAL(10,4)[],
+        ask_quantities INTEGER[],
+        levels INTEGER CHECK (levels IS NULL OR levels >= 0)
+    );
+    CREATE INDEX IF NOT EXISTS idx_orderbook_market ON orderbook_snapshots(market_internal_id);
+    CREATE INDEX IF NOT EXISTS idx_orderbook_time ON orderbook_snapshots(snapshot_time);
+    CREATE INDEX IF NOT EXISTS idx_orderbook_spread ON orderbook_snapshots(spread);
+    CREATE INDEX IF NOT EXISTS idx_orderbook_imbalance ON orderbook_snapshots(depth_imbalance);
+
     -- historical_elo table (migration 0005, will be dropped in migration 0032)
     -- Kept temporarily for seeding integration tests that test bulk_insert_historical_elo
     CREATE TABLE IF NOT EXISTS historical_elo (
@@ -804,7 +828,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_historical_elo_season ON historical_elo(season);
 
     -- Track migration version
-    INSERT INTO alembic_version (version_num) VALUES ('0033')
+    INSERT INTO alembic_version (version_num) VALUES ('0034')
     ON CONFLICT (version_num) DO NOTHING;
     """
 
