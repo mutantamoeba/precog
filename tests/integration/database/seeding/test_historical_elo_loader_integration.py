@@ -30,6 +30,9 @@ from precog.database.seeding.historical_elo_loader import (
     bulk_insert_historical_elo,
 )
 
+# Migration 0032 dropped historical_elo table — skip entire module until archival
+pytestmark = pytest.mark.skip(reason="historical_elo table dropped in migration 0032")
+
 # =============================================================================
 # FIXTURES
 # =============================================================================

@@ -1,6 +1,11 @@
 """
 Integration Tests for Batch Insert Error Handling with Real Database.
 
+DEPRECATED: Migration 0032 dropped the historical_elo table. These tests
+reference bulk_insert_historical_elo which targets the dropped table.
+Full archival tracked in migration plan (archive historical_elo_loader.py
++ test files). Skipped until archival is complete.
+
 These tests use REAL database operations with no mocking.
 Requires running PostgreSQL database with test schema.
 
@@ -32,6 +37,9 @@ from precog.database.seeding.historical_elo_loader import (
     HistoricalEloRecord,
     bulk_insert_historical_elo,
 )
+
+# Migration 0032 dropped historical_elo table — skip entire module until archival
+pytestmark = pytest.mark.skip(reason="historical_elo table dropped in migration 0032")
 
 # =============================================================================
 # FIXTURES
