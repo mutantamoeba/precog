@@ -166,7 +166,7 @@ def test_fetch_balance_saves_to_database(
     with get_cursor() as cur:
         cur.execute(
             """
-            SELECT balance_id, balance, currency, row_current_ind
+            SELECT id, balance, currency, row_current_ind
             FROM account_balance
             WHERE platform_id = 'kalshi' AND row_current_ind = TRUE
         """
@@ -222,10 +222,10 @@ def test_fetch_balance_updates_with_scd_type2(
     with get_cursor() as cur:
         cur.execute(
             """
-            SELECT balance_id, balance, row_current_ind
+            SELECT id, balance, row_current_ind
             FROM account_balance
             WHERE platform_id = 'kalshi'
-            ORDER BY balance_id
+            ORDER BY id
         """
         )
         records = cur.fetchall()
@@ -236,7 +236,7 @@ def test_fetch_balance_updates_with_scd_type2(
         assert records[0]["row_current_ind"] is True
 
         # Save balance_id for later verification
-        first_balance_id = records[0]["balance_id"]
+        first_balance_id = records[0]["id"]
 
     # SECOND FETCH: balance = $1500.00 (150000 cents -> $1500.00 after conversion)
     with my_vcr.use_cassette("cli/balance_1500.yaml"):
@@ -252,10 +252,10 @@ def test_fetch_balance_updates_with_scd_type2(
     with get_cursor() as cur:
         cur.execute(
             """
-            SELECT balance_id, balance, row_current_ind
+            SELECT id, balance, row_current_ind
             FROM account_balance
             WHERE platform_id = 'kalshi'
-            ORDER BY balance_id
+            ORDER BY id
         """
         )
         records = cur.fetchall()
@@ -263,7 +263,7 @@ def test_fetch_balance_updates_with_scd_type2(
         assert len(records) == 2, f"Expected 2 balance records (SCD Type 2), got {len(records)}"
 
         # First record should be marked as NOT current
-        assert records[0]["balance_id"] == first_balance_id
+        assert records[0]["id"] == first_balance_id
         # Client converts cents to dollars: 100000 cents = $1000
         assert records[0]["balance"] == Decimal("1000")
         assert records[0]["row_current_ind"] is False, (
