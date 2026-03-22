@@ -24,6 +24,8 @@ import pytest
 
 # Import functions to test
 from precog.database.crud_operations import (
+    LEAGUE_SPORT_CATEGORY,
+    TRACKED_SITUATION_KEYS,
     create_game_state,
     create_team_ranking,
     create_venue,
@@ -1149,6 +1151,358 @@ class TestGameStateChangedUnit:
             # clock_seconds is not a parameter of game_state_changed
         )
 
+        assert result is False
+
+
+@pytest.mark.unit
+class TestGameStateChangedSportAwareUnit:
+    """Unit tests for sport-aware situation filtering in game_state_changed.
+
+    Educational Note:
+        Different sports have different high-frequency situation fields that
+        should NOT trigger SCD row creation. For example:
+        - Basketball: foul counts change every few minutes
+        - Hockey: shot counts change constantly
+        Only sport-relevant keys (defined in TRACKED_SITUATION_KEYS) trigger
+        new rows. Unknown leagues fall back to comparing ALL keys (safe default).
+
+    Reference:
+        - Issue #397: Game states SCD noise tuning
+        - ESPNSituationData in api_connectors/espn_client.py
+    """
+
+    # --- Constants validation ---
+
+    def test_tracked_situation_keys_has_all_sport_categories(self):
+        """Verify TRACKED_SITUATION_KEYS covers football, basketball, hockey."""
+        assert "football" in TRACKED_SITUATION_KEYS
+        assert "basketball" in TRACKED_SITUATION_KEYS
+        assert "hockey" in TRACKED_SITUATION_KEYS
+
+    def test_league_sport_category_maps_all_leagues(self):
+        """Verify LEAGUE_SPORT_CATEGORY maps all expected leagues."""
+        expected = {"nfl", "ncaaf", "nba", "ncaab", "wnba", "nhl"}
+        assert set(LEAGUE_SPORT_CATEGORY.keys()) == expected
+
+    # --- Football (existing behavior preserved with league param) ---
+
+    def test_football_down_change_triggers_with_league(self):
+        """Football down change triggers new row when league='nfl'."""
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"possession": "KC", "down": 1, "distance": 10},
+        }
+        result = game_state_changed(
+            current=current,
+            home_score=14,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+            situation={"possession": "KC", "down": 2, "distance": 7},
+            league="nfl",
+        )
+        assert result is True
+
+    def test_football_timeout_change_does_not_trigger(self):
+        """Football timeout change does NOT trigger new row (not tracked)."""
+        current = {
+            "home_score": 14,
+            "away_score": 7,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"possession": "KC", "down": 1, "distance": 10, "home_timeouts": 3},
+        }
+        result = game_state_changed(
+            current=current,
+            home_score=14,
+            away_score=7,
+            period=2,
+            game_status="in_progress",
+            situation={"possession": "KC", "down": 1, "distance": 10, "home_timeouts": 2},
+            league="ncaaf",
+        )
+        assert result is False
+
+    # --- Basketball ---
+
+    def test_basketball_foul_change_does_not_trigger(self):
+        """Basketball foul count change does NOT trigger new row."""
+        current = {
+            "home_score": 55,
+            "away_score": 52,
+            "period": 3,
+            "game_status": "in_progress",
+            "situation": {"possession": "home", "home_fouls": 3, "away_fouls": 2, "bonus": None},
+        }
+        result = game_state_changed(
+            current=current,
+            home_score=55,
+            away_score=52,
+            period=3,
+            game_status="in_progress",
+            situation={"possession": "home", "home_fouls": 4, "away_fouls": 2, "bonus": None},
+            league="nba",
+        )
+        assert result is False
+
+    def test_basketball_bonus_change_triggers(self):
+        """Basketball bonus status change DOES trigger new row."""
+        current = {
+            "home_score": 55,
+            "away_score": 52,
+            "period": 3,
+            "game_status": "in_progress",
+            "situation": {"possession": "home", "bonus": None, "home_fouls": 4},
+        }
+        result = game_state_changed(
+            current=current,
+            home_score=55,
+            away_score=52,
+            period=3,
+            game_status="in_progress",
+            situation={"possession": "home", "bonus": "home", "home_fouls": 5},
+            league="nba",
+        )
+        assert result is True
+
+    def test_basketball_possession_arrow_change_triggers(self):
+        """Basketball possession arrow change DOES trigger new row."""
+        current = {
+            "home_score": 40,
+            "away_score": 38,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"possession": "home", "possession_arrow": "home"},
+        }
+        result = game_state_changed(
+            current=current,
+            home_score=40,
+            away_score=38,
+            period=2,
+            game_status="in_progress",
+            situation={"possession": "home", "possession_arrow": "away"},
+            league="ncaab",
+        )
+        assert result is True
+
+    def test_basketball_possession_change_triggers(self):
+        """Basketball possession change DOES trigger new row."""
+        current = {
+            "home_score": 55,
+            "away_score": 52,
+            "period": 3,
+            "game_status": "in_progress",
+            "situation": {"possession": "home", "home_fouls": 3},
+        }
+        result = game_state_changed(
+            current=current,
+            home_score=55,
+            away_score=52,
+            period=3,
+            game_status="in_progress",
+            situation={"possession": "away", "home_fouls": 3},
+            league="nba",
+        )
+        assert result is True
+
+    def test_basketball_wnba_uses_basketball_keys(self):
+        """WNBA uses basketball sport category keys."""
+        current = {
+            "home_score": 30,
+            "away_score": 28,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"possession": "home", "home_fouls": 2},
+        }
+        # Only fouls changed - should NOT trigger
+        result = game_state_changed(
+            current=current,
+            home_score=30,
+            away_score=28,
+            period=2,
+            game_status="in_progress",
+            situation={"possession": "home", "home_fouls": 3},
+            league="wnba",
+        )
+        assert result is False
+
+    # --- Hockey ---
+
+    def test_hockey_shot_change_does_not_trigger(self):
+        """Hockey shot count change does NOT trigger new row."""
+        current = {
+            "home_score": 2,
+            "away_score": 1,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {
+                "home_shots": 15,
+                "away_shots": 12,
+                "home_powerplay": False,
+                "away_powerplay": False,
+            },
+        }
+        result = game_state_changed(
+            current=current,
+            home_score=2,
+            away_score=1,
+            period=2,
+            game_status="in_progress",
+            situation={
+                "home_shots": 18,
+                "away_shots": 14,
+                "home_powerplay": False,
+                "away_powerplay": False,
+            },
+            league="nhl",
+        )
+        assert result is False
+
+    def test_hockey_powerplay_change_triggers(self):
+        """Hockey power play change DOES trigger new row."""
+        current = {
+            "home_score": 2,
+            "away_score": 1,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"home_powerplay": False, "away_powerplay": False, "home_shots": 15},
+        }
+        result = game_state_changed(
+            current=current,
+            home_score=2,
+            away_score=1,
+            period=2,
+            game_status="in_progress",
+            situation={"home_powerplay": True, "away_powerplay": False, "home_shots": 16},
+            league="nhl",
+        )
+        assert result is True
+
+    def test_hockey_away_powerplay_change_triggers(self):
+        """Hockey away power play change DOES trigger new row."""
+        current = {
+            "home_score": 2,
+            "away_score": 1,
+            "period": 2,
+            "game_status": "in_progress",
+            "situation": {"home_powerplay": False, "away_powerplay": False},
+        }
+        result = game_state_changed(
+            current=current,
+            home_score=2,
+            away_score=1,
+            period=2,
+            game_status="in_progress",
+            situation={"home_powerplay": False, "away_powerplay": True},
+            league="nhl",
+        )
+        assert result is True
+
+    # --- Fallback behavior ---
+
+    def test_unknown_league_falls_back_to_full_comparison(self):
+        """Unknown league compares ALL situation keys (safe fallback)."""
+        current = {
+            "home_score": 10,
+            "away_score": 8,
+            "period": 1,
+            "game_status": "in_progress",
+            "situation": {"some_field": "a", "other_field": "b"},
+        }
+        # Changing any field should trigger with unknown league
+        result = game_state_changed(
+            current=current,
+            home_score=10,
+            away_score=8,
+            period=1,
+            game_status="in_progress",
+            situation={"some_field": "a", "other_field": "c"},
+            league="cricket",
+        )
+        assert result is True
+
+    def test_unknown_league_same_situation_returns_false(self):
+        """Unknown league with same situation returns False."""
+        current = {
+            "home_score": 10,
+            "away_score": 8,
+            "period": 1,
+            "game_status": "in_progress",
+            "situation": {"some_field": "a"},
+        }
+        result = game_state_changed(
+            current=current,
+            home_score=10,
+            away_score=8,
+            period=1,
+            game_status="in_progress",
+            situation={"some_field": "a"},
+            league="cricket",
+        )
+        assert result is False
+
+    def test_none_league_falls_back_to_full_comparison(self):
+        """league=None compares ALL situation keys (safe fallback)."""
+        current = {
+            "home_score": 10,
+            "away_score": 8,
+            "period": 1,
+            "game_status": "in_progress",
+            "situation": {"arbitrary_key": "value1"},
+        }
+        result = game_state_changed(
+            current=current,
+            home_score=10,
+            away_score=8,
+            period=1,
+            game_status="in_progress",
+            situation={"arbitrary_key": "value2"},
+            league=None,
+        )
+        assert result is True
+
+    def test_none_league_detects_new_keys_in_situation(self):
+        """league=None detects keys present in new but not current situation."""
+        current = {
+            "home_score": 10,
+            "away_score": 8,
+            "period": 1,
+            "game_status": "in_progress",
+            "situation": {},
+        }
+        result = game_state_changed(
+            current=current,
+            home_score=10,
+            away_score=8,
+            period=1,
+            game_status="in_progress",
+            situation={"new_key": "value"},
+            league=None,
+        )
+        assert result is True
+
+    def test_league_case_insensitive(self):
+        """League lookup is case-insensitive."""
+        current = {
+            "home_score": 55,
+            "away_score": 52,
+            "period": 3,
+            "game_status": "in_progress",
+            "situation": {"possession": "home", "home_fouls": 3},
+        }
+        # Only fouls changed with uppercase league - should NOT trigger
+        result = game_state_changed(
+            current=current,
+            home_score=55,
+            away_score=52,
+            period=3,
+            game_status="in_progress",
+            situation={"possession": "home", "home_fouls": 5},
+            league="NBA",
+        )
         assert result is False
 
 

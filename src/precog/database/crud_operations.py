@@ -3672,6 +3672,26 @@ def get_current_game_state(espn_event_id: str) -> dict[str, Any] | None:
     return fetch_one(query, (espn_event_id,))
 
 
+# Situation fields that trigger SCD versioning per sport category.
+# Fields NOT listed here are stored but don't trigger new rows.
+# Reference: ESPNSituationData in api_connectors/espn_client.py
+TRACKED_SITUATION_KEYS: dict[str, list[str]] = {
+    "football": ["possession", "down", "distance", "yard_line", "is_red_zone"],
+    "basketball": ["possession", "bonus", "possession_arrow"],
+    "hockey": ["home_powerplay", "away_powerplay"],
+}
+
+# Maps league codes to sport categories
+LEAGUE_SPORT_CATEGORY: dict[str, str] = {
+    "nfl": "football",
+    "ncaaf": "football",
+    "nba": "basketball",
+    "ncaab": "basketball",
+    "wnba": "basketball",
+    "nhl": "hockey",
+}
+
+
 def game_state_changed(
     current: dict[str, Any] | None,
     home_score: int,
@@ -3679,6 +3699,7 @@ def game_state_changed(
     period: int,
     game_status: str,
     situation: dict | None = None,
+    league: str | None = None,
 ) -> bool:
     """
     Check if game state has meaningfully changed from current database state.
@@ -3687,6 +3708,14 @@ def game_state_changed(
     when game state hasn't changed. This reduces database bloat during
     high-frequency polling (e.g., every 15-30 seconds during live games).
 
+    Sport-aware situation comparison:
+        When league is provided, only sport-relevant situation keys are
+        compared. This prevents high-frequency fields (e.g., foul counts
+        in basketball, shot counts in hockey) from creating noisy SCD rows.
+
+        If league is None or unrecognized, ALL situation keys are compared
+        as a safe fallback (more rows is better than missing changes).
+
     Args:
         current: Current game state from database (None if no existing state)
         home_score: New home team score
@@ -3694,6 +3723,8 @@ def game_state_changed(
         period: New period number
         game_status: New game status
         situation: New situation data (downs, possession, etc.)
+        league: League code (e.g., "nfl", "nba", "nhl") for sport-aware
+            situation filtering. None falls back to full comparison.
 
     Returns:
         True if state has changed and a new row should be created,
@@ -3709,15 +3740,16 @@ def game_state_changed(
         - home_score, away_score: Core game state
         - period: Quarter/half transitions
         - game_status: Pre/in_progress/halftime/final transitions
-        - situation: Possession, down/distance changes (significant for NFL)
+        - situation: Sport-specific keys only (see TRACKED_SITUATION_KEYS)
 
     Example:
         >>> current = get_current_game_state("401547417")
-        >>> if game_state_changed(current, 14, 7, 2, "in_progress", {"possession": "KC"}):
+        >>> if game_state_changed(current, 14, 7, 2, "in_progress", {"possession": "KC"}, league="nfl"):
         ...     upsert_game_state("401547417", home_score=14, ...)
 
     References:
         - Issue #234: State Change Detection requirement
+        - Issue #397: Game states SCD noise tuning
         - REQ-DATA-001: Game State Data Collection
     """
     # No current state = always insert (new game)
@@ -3738,11 +3770,22 @@ def game_state_changed(
     # Only compare if new situation is provided - ignore if None
     if situation is not None:
         current_situation = current.get("situation") or {}
-        # Compare key situation fields for football
-        situation_keys = ["possession", "down", "distance", "yard_line", "is_red_zone"]
-        for key in situation_keys:
-            if situation.get(key) != current_situation.get(key):
-                return True
+
+        # Determine which situation keys to compare based on sport
+        sport_category = LEAGUE_SPORT_CATEGORY.get(league.lower()) if league else None
+        tracked_keys = TRACKED_SITUATION_KEYS.get(sport_category) if sport_category else None
+
+        if tracked_keys is not None:
+            # Sport-aware: only compare tracked keys for this sport
+            for key in tracked_keys:
+                if situation.get(key) != current_situation.get(key):
+                    return True
+        else:
+            # Unknown league or None: compare ALL situation keys (safe fallback)
+            all_keys = set(situation.keys()) | set(current_situation.keys())
+            for key in all_keys:
+                if situation.get(key) != current_situation.get(key):
+                    return True
 
     return False
 
@@ -3826,7 +3869,9 @@ def upsert_game_state(
     # Check if meaningful state has changed before creating a new SCD row
     if skip_if_unchanged:
         current = get_current_game_state(espn_event_id)
-        if not game_state_changed(current, home_score, away_score, period, game_status, situation):
+        if not game_state_changed(
+            current, home_score, away_score, period, game_status, situation, league=league
+        ):
             # No meaningful change - return None to indicate skip
             return None
 
