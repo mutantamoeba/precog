@@ -167,7 +167,7 @@ class TestGameRecord:
         """Verify GameRecord has all required fields.
 
         Educational Note:
-            GameRecord maps to the historical_games table (migration 0006).
+            GameRecord maps to the games table (migration 0035, formerly historical_games).
             All fields must match the database schema.
         """
         record: GameRecord = {

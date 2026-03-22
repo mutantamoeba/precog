@@ -3,7 +3,7 @@ Historical Games Data Loader for Precog.
 
 This module provides utilities for loading historical game results from
 external data sources (FiveThirtyEight, ESPN API, Kaggle, CSV files) into the
-historical_games table.
+games dimension table (migration 0035, formerly historical_games).
 
 Data Sources:
     - FiveThirtyEight NFL/NBA/MLB: CSV with game-by-game results
@@ -22,7 +22,7 @@ FiveThirtyEight Data Format:
     - neutral: 1 if neutral site, 0 otherwise
     - playoff: 1 if playoff game, 0 otherwise
 
-    We extract game results to populate historical_games table.
+    We extract game results to populate the games dimension table.
 
 Team Code Mapping:
     FiveThirtyEight uses different team codes than our database.
@@ -31,7 +31,7 @@ Team Code Mapping:
 Reference:
     - Issue #229: Expanded Historical Data Sources
     - Issue #254: Add progress bars for large seeding operations
-    - Migration 0006: Create historical_games table
+    - Migration 0035: Games dimension table (replaces 0006 historical_games)
     - ADR-029: ESPN Data Model
 """
 
@@ -67,7 +67,13 @@ logger = logging.getLogger(__name__)
 
 
 class HistoricalGameRecord(TypedDict):
-    """A single historical game record."""
+    """A single historical game record for the games dimension table.
+
+    Maps to the games table (migration 0035). Field names follow the
+    games table column conventions. The 'source' field maps to
+    data_source in the games table, and neutral_site/is_playoff
+    map directly to their games table counterparts.
+    """
 
     sport: str
     season: int
@@ -513,6 +519,9 @@ def bulk_insert_historical_games(
                     progress.advance(task)
                 continue
 
+            # Determine game_status: 'final' if scores present, else 'scheduled'
+            game_status = "final" if record["home_score"] is not None else "scheduled"
+
             batch.append(
                 (
                     record["sport"],
@@ -528,9 +537,11 @@ def bulk_insert_historical_games(
                     record["is_playoff"],
                     record["game_type"],
                     record["venue_name"],
-                    record["source"],
+                    record["source"],  # maps to data_source column
                     record["source_file"],
                     record["external_game_id"],
+                    record["sport"],  # league = sport for historical imports
+                    game_status,
                 )
             )
 
@@ -569,24 +580,26 @@ def _flush_games_batch(batch: list[tuple[Any, ...]]) -> int:
         from psycopg2.extras import execute_values
 
         query = """
-            INSERT INTO historical_games (
+            INSERT INTO games (
                 sport, season, game_date, home_team_code, away_team_code,
                 home_team_id, away_team_id, home_score, away_score,
-                is_neutral_site, is_playoff, game_type, venue_name,
-                source, source_file, external_game_id
+                neutral_site, is_playoff, game_type, venue_name,
+                data_source, source_file, external_game_id,
+                league, game_status
             ) VALUES %s
             ON CONFLICT (sport, game_date, home_team_code, away_team_code) DO UPDATE SET
-                home_team_id = EXCLUDED.home_team_id,
-                away_team_id = EXCLUDED.away_team_id,
-                home_score = EXCLUDED.home_score,
-                away_score = EXCLUDED.away_score,
-                is_neutral_site = EXCLUDED.is_neutral_site,
+                home_team_id = COALESCE(EXCLUDED.home_team_id, games.home_team_id),
+                away_team_id = COALESCE(EXCLUDED.away_team_id, games.away_team_id),
+                home_score = COALESCE(EXCLUDED.home_score, games.home_score),
+                away_score = COALESCE(EXCLUDED.away_score, games.away_score),
+                neutral_site = EXCLUDED.neutral_site,
                 is_playoff = EXCLUDED.is_playoff,
-                game_type = EXCLUDED.game_type,
-                venue_name = EXCLUDED.venue_name,
-                source = EXCLUDED.source,
-                source_file = EXCLUDED.source_file,
-                external_game_id = EXCLUDED.external_game_id
+                game_type = COALESCE(EXCLUDED.game_type, games.game_type),
+                venue_name = COALESCE(EXCLUDED.venue_name, games.venue_name),
+                data_source = EXCLUDED.data_source,
+                source_file = COALESCE(EXCLUDED.source_file, games.source_file),
+                external_game_id = COALESCE(EXCLUDED.external_game_id, games.external_game_id),
+                updated_at = NOW()
         """
         execute_values(cursor, query, batch)
         return len(batch)
@@ -983,7 +996,7 @@ def get_historical_games_stats() -> dict[str, Any]:
         # Count by sport
         cursor.execute("""
             SELECT sport, COUNT(*) as count
-            FROM historical_games
+            FROM games
             GROUP BY sport
             ORDER BY sport
         """)
@@ -992,7 +1005,7 @@ def get_historical_games_stats() -> dict[str, Any]:
         # Count by season (last 10)
         cursor.execute("""
             SELECT season, COUNT(*) as count
-            FROM historical_games
+            FROM games
             GROUP BY season
             ORDER BY season DESC
             LIMIT 10
@@ -1001,15 +1014,15 @@ def get_historical_games_stats() -> dict[str, Any]:
 
         # Count by source
         cursor.execute("""
-            SELECT source, COUNT(*) as count
-            FROM historical_games
-            GROUP BY source
+            SELECT data_source, COUNT(*) as count
+            FROM games
+            GROUP BY data_source
             ORDER BY count DESC
         """)
-        by_source = {row["source"]: row["count"] for row in cursor.fetchall()}
+        by_source = {row["data_source"]: row["count"] for row in cursor.fetchall()}
 
         # Total count
-        cursor.execute("SELECT COUNT(*) as total FROM historical_games")
+        cursor.execute("SELECT COUNT(*) as total FROM games")
         total = cursor.fetchone()["total"]
 
     return {

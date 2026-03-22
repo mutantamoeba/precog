@@ -15,7 +15,7 @@ Usage:
     pytest tests/integration/database/test_phase2c_crud_integration.py -v -m integration
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 
 import pytest
@@ -31,11 +31,14 @@ from precog.database.crud_operations import (
     get_game_state_history,
     get_games_by_date,
     get_live_games,
+    get_or_create_game,
     get_team_rankings,
     get_venue_by_espn_id,
     get_venue_by_id,
+    update_game_result,
     upsert_game_state,
 )
+from precog.database.seeding.historical_odds_loader import lookup_game_id
 
 # =============================================================================
 # FIXTURES
@@ -821,3 +824,286 @@ class TestGameStateChangedIntegration:
         # Cleanup
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-CHANGE-004'")
+
+
+# =============================================================================
+# GAMES DIMENSION INTEGRATION TESTS (Migration 0035)
+# =============================================================================
+
+
+@pytest.mark.integration
+class TestGamesDimensionIntegration:
+    """Integration tests for games dimension CRUD with real database.
+
+    Tests get_or_create_game (upsert), update_game_result (derived fields),
+    and game_id FK linkage to game_states.
+
+    Related:
+        - Issue #439: Games dimension table
+        - Migration 0035: CREATE TABLE games
+    """
+
+    def test_get_or_create_game_inserts_new(self, db_pool, db_cursor, clean_test_data):
+        """Test get_or_create_game creates a new games row."""
+        game_id = get_or_create_game(
+            sport="nfl",
+            game_date=date(2024, 9, 8),
+            home_team_code="KC",
+            away_team_code="BAL",
+            season=2024,
+            league="nfl",
+            espn_event_id="INT-GAME-DIM-001",
+            game_status="pre",
+            data_source="espn_poller",
+        )
+
+        assert game_id is not None
+        assert isinstance(game_id, int)
+
+        # Verify row exists
+        with get_cursor() as cur:
+            cur.execute("SELECT * FROM games WHERE id = %s", (game_id,))
+            row = cur.fetchone()
+            assert row is not None
+            assert row["sport"] == "nfl"
+            assert row["home_team_code"] == "KC"
+            assert row["away_team_code"] == "BAL"
+            assert row["espn_event_id"] == "INT-GAME-DIM-001"
+            assert row["game_status"] == "pre"
+
+        # Cleanup
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM games WHERE id = %s", (game_id,))
+
+    def test_get_or_create_game_upsert_updates_on_conflict(
+        self, db_pool, db_cursor, clean_test_data
+    ):
+        """Test get_or_create_game updates existing row on natural key conflict."""
+        # Insert first
+        game_id_1 = get_or_create_game(
+            sport="nfl",
+            game_date=date(2024, 9, 8),
+            home_team_code="KC",
+            away_team_code="BAL",
+            season=2024,
+            league="nfl",
+            game_status="scheduled",
+            data_source="historical_import",
+        )
+
+        # Upsert with same natural key but new data
+        game_id_2 = get_or_create_game(
+            sport="nfl",
+            game_date=date(2024, 9, 8),
+            home_team_code="KC",
+            away_team_code="BAL",
+            season=2024,
+            league="nfl",
+            espn_event_id="401547417",
+            game_status="pre",
+            data_source="espn_poller",
+        )
+
+        # Same row — same id returned
+        assert game_id_1 == game_id_2
+
+        # espn_event_id should be populated now
+        with get_cursor() as cur:
+            cur.execute("SELECT * FROM games WHERE id = %s", (game_id_1,))
+            row = cur.fetchone()
+            assert row["espn_event_id"] == "401547417"
+            assert row["data_source"] == "espn_poller"
+
+        # Cleanup
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM games WHERE id = %s", (game_id_1,))
+
+    def test_get_or_create_game_preserves_final_status(self, db_pool, db_cursor, clean_test_data):
+        """Test ON CONFLICT CASE guard prevents regressing final status.
+
+        This is the critical safety test: once a game is 'final', a subsequent
+        upsert with 'scheduled' or 'pre' must NOT overwrite the status.
+        """
+        # Create with final status
+        game_id = get_or_create_game(
+            sport="nfl",
+            game_date=date(2024, 9, 8),
+            home_team_code="KC",
+            away_team_code="BAL",
+            season=2024,
+            league="nfl",
+            game_status="final",
+            data_source="espn_poller",
+        )
+
+        # Attempt to regress status to 'scheduled'
+        game_id_2 = get_or_create_game(
+            sport="nfl",
+            game_date=date(2024, 9, 8),
+            home_team_code="KC",
+            away_team_code="BAL",
+            season=2024,
+            league="nfl",
+            game_status="scheduled",
+            data_source="historical_import",
+        )
+
+        assert game_id == game_id_2
+
+        # Status must still be 'final' — not regressed
+        with get_cursor() as cur:
+            cur.execute("SELECT game_status FROM games WHERE id = %s", (game_id,))
+            row = cur.fetchone()
+            assert row["game_status"] == "final"
+
+        # Cleanup
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM games WHERE id = %s", (game_id,))
+
+    def test_update_game_result_sets_derived_fields(self, db_pool, db_cursor, clean_test_data):
+        """Test update_game_result computes margin and result correctly."""
+        game_id = get_or_create_game(
+            sport="nfl",
+            game_date=date(2024, 9, 8),
+            home_team_code="KC",
+            away_team_code="BAL",
+            season=2024,
+            league="nfl",
+            game_status="in_progress",
+        )
+
+        update_game_result(game_id=game_id, home_score=27, away_score=20)
+
+        with get_cursor() as cur:
+            cur.execute(
+                "SELECT home_score, away_score, actual_margin, result FROM games WHERE id = %s",
+                (game_id,),
+            )
+            row = cur.fetchone()
+            assert row["home_score"] == 27
+            assert row["away_score"] == 20
+            assert row["actual_margin"] == 7
+            assert row["result"] == "home_win"
+
+        # Cleanup
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM games WHERE id = %s", (game_id,))
+
+    def test_create_game_state_with_game_id_fk(
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
+    ):
+        """Test game_states.game_id FK is populated when provided."""
+        teams = setup_test_teams
+        venue_id = setup_test_venue
+
+        # Create games dimension row first
+        game_id = get_or_create_game(
+            sport="nfl",
+            game_date=date(2024, 9, 8),
+            home_team_code="KC",
+            away_team_code="BAL",
+            season=2024,
+            league="nfl",
+        )
+
+        # Create game_state with game_id FK
+        state_id = create_game_state(
+            espn_event_id="INT-GAME-DIM-FK-001",
+            home_team_id=teams["home_team_id"],
+            away_team_id=teams["away_team_id"],
+            venue_id=venue_id,
+            game_status="pre",
+            league="nfl",
+            game_id=game_id,
+        )
+
+        assert state_id is not None
+
+        # Verify game_id FK is set on game_states row
+        with get_cursor() as cur:
+            cur.execute("SELECT game_id FROM game_states WHERE id = %s", (state_id,))
+            row = cur.fetchone()
+            assert row["game_id"] == game_id
+
+        # Cleanup
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-GAME-DIM-FK-001'")
+            cur.execute("DELETE FROM games WHERE id = %s", (game_id,))
+
+    def test_lookup_game_id_finds_game(self, db_pool, db_cursor, clean_test_data):
+        """Test odds loader lookup_game_id finds games by natural key."""
+        game_id = get_or_create_game(
+            sport="nfl",
+            game_date=date(2024, 9, 8),
+            home_team_code="KC",
+            away_team_code="BAL",
+            season=2024,
+            league="nfl",
+        )
+
+        # lookup_game_id should find it by natural key
+        found_id = lookup_game_id("nfl", date(2024, 9, 8), "KC", "BAL")
+        assert found_id == game_id
+
+        # Non-existent game should return None
+        not_found = lookup_game_id("nfl", date(2024, 9, 8), "KC", "BUF")
+        assert not_found is None
+
+        # Cleanup
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM games WHERE id = %s", (game_id,))
+
+    def test_elo_fetch_games_query_path(self, db_pool, db_cursor, clean_test_data):
+        """Test that querying games table returns correct columns for Elo service.
+
+        Verifies the column aliases match what EloComputationService expects,
+        especially 'neutral_site AS is_neutral_site' which changed in migration 0035.
+        """
+        # Insert a completed game
+        game_id = get_or_create_game(
+            sport="nfl",
+            game_date=date(2024, 9, 8),
+            home_team_code="KC",
+            away_team_code="BAL",
+            season=2024,
+            league="nfl",
+            neutral_site=False,
+            game_status="final",
+        )
+        update_game_result(game_id=game_id, home_score=27, away_score=20)
+
+        # Run the same query the Elo service uses
+        with get_cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    id,
+                    game_date,
+                    season,
+                    home_team_code,
+                    away_team_code,
+                    home_score,
+                    away_score,
+                    game_type,
+                    neutral_site AS is_neutral_site
+                FROM games
+                WHERE sport = %s
+                  AND home_score IS NOT NULL
+                ORDER BY game_date ASC, id ASC
+            """,
+                ("nfl",),
+            )
+            rows = [dict(row) for row in cur.fetchall()]
+
+        assert len(rows) >= 1
+        game_row = next(r for r in rows if r["id"] == game_id)
+        assert game_row["home_team_code"] == "KC"
+        assert game_row["away_team_code"] == "BAL"
+        assert game_row["home_score"] == 27
+        assert game_row["away_score"] == 20
+        assert game_row["is_neutral_site"] is False  # alias works
+        assert game_row["season"] == 2024
+
+        # Cleanup
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM games WHERE id = %s", (game_id,))

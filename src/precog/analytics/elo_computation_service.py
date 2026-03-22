@@ -276,7 +276,7 @@ class EloComputationService:
 
         query = """
             SELECT
-                historical_game_id,
+                id,
                 game_date,
                 season,
                 home_team_code,
@@ -284,9 +284,10 @@ class EloComputationService:
                 home_score,
                 away_score,
                 game_type,
-                is_neutral_site
-            FROM historical_games
+                neutral_site AS is_neutral_site
+            FROM games
             WHERE sport = %s
+              AND home_score IS NOT NULL
         """
         params: list[Any] = [sport]
 
@@ -294,7 +295,7 @@ class EloComputationService:
             query += " AND season = ANY(%s)"
             params.append(seasons)
 
-        query += " ORDER BY game_date ASC, historical_game_id ASC"
+        query += " ORDER BY game_date ASC, id ASC"
 
         cursor.execute(query, params)
         columns = [desc[0] for desc in cursor.description]
@@ -310,20 +311,20 @@ class EloComputationService:
         return games
 
     def _get_already_computed_games(self, sport: str) -> set[int]:
-        """Get set of historical_game_ids already computed.
+        """Get set of game ids already computed.
 
         Args:
             sport: Sport code
 
         Returns:
-            Set of historical_game_id values already in elo_calculation_log
+            Set of game_id values already in elo_calculation_log
         """
         cursor = self.conn.cursor()
 
         query = """
-            SELECT historical_game_id
+            SELECT game_id
             FROM elo_calculation_log
-            WHERE sport = %s AND historical_game_id IS NOT NULL
+            WHERE sport = %s AND game_id IS NOT NULL
         """
         cursor.execute(query, [sport])
 
@@ -337,14 +338,14 @@ class EloComputationService:
         """Insert an entry into elo_calculation_log.
 
         Args:
-            game: Game dictionary from historical_games
+            game: Game dictionary from games table
             result: EloUpdateResult from the calculation
         """
         cursor = self.conn.cursor()
 
         query = """
             INSERT INTO elo_calculation_log (
-                historical_game_id,
+                game_id,
                 sport,
                 game_date,
                 home_team_code,
@@ -375,7 +376,7 @@ class EloComputationService:
         sport = game.get("sport") or self._current_sport
 
         params = [
-            game["historical_game_id"],
+            game["id"],
             sport,
             game["game_date"],
             game["home_team_code"],
@@ -417,7 +418,7 @@ class EloComputationService:
             Results are stored in elo_calculation_log for audit trail.
 
         Pipeline (when sync_to_teams=True):
-            historical_games -> elo_calculation_log (audit)
+            games -> elo_calculation_log (audit)
                 -> teams.current_elo_rating (LIVE)
 
         Args:
@@ -484,7 +485,7 @@ class EloComputationService:
 
         # Process games chronologically
         for i, game in enumerate(games):
-            game_id = game["historical_game_id"]
+            game_id = game["id"]
 
             # Skip if already computed
             if skip_computed and game_id in computed_ids:

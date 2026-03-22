@@ -110,14 +110,14 @@ def normalize_source_name(source: str) -> str:
 # =============================================================================
 
 
-def lookup_historical_game_id(
+def lookup_game_id(
     sport: str,
     game_date: Any,  # date object
     home_team_code: str,
     away_team_code: str,
 ) -> int | None:
     """
-    Look up historical_game_id for matching game.
+    Look up game_id for matching game.
 
     Args:
         sport: Sport code (e.g., "nfl")
@@ -126,12 +126,12 @@ def lookup_historical_game_id(
         away_team_code: Away team code (e.g., "BUF")
 
     Returns:
-        historical_game_id if found, None otherwise
+        game_id if found, None otherwise
     """
     with get_cursor() as cursor:
         cursor.execute(
             """
-            SELECT historical_game_id FROM historical_games
+            SELECT id FROM games
             WHERE sport = %s
               AND game_date = %s
               AND home_team_code = %s
@@ -141,7 +141,7 @@ def lookup_historical_game_id(
         )
         row = cursor.fetchone()
         if row:
-            return int(row["historical_game_id"])
+            return int(row["id"])
     return None
 
 
@@ -158,7 +158,7 @@ def insert_historical_odds(record: OddsRecord) -> bool:
         True if successful, False otherwise
     """
     # Try to find matching historical game
-    historical_game_id = lookup_historical_game_id(
+    game_id = lookup_game_id(
         record["sport"],
         record["game_date"],
         record["home_team_code"],
@@ -172,7 +172,7 @@ def insert_historical_odds(record: OddsRecord) -> bool:
         cursor.execute(
             """
             INSERT INTO historical_odds (
-                historical_game_id, sport, game_date,
+                game_id, sport, game_date,
                 home_team_code, away_team_code, sportsbook,
                 spread_home_open, spread_home_close,
                 spread_home_odds_open, spread_home_odds_close,
@@ -191,7 +191,7 @@ def insert_historical_odds(record: OddsRecord) -> bool:
             )
             ON CONFLICT (sport, game_date, home_team_code, away_team_code, sportsbook)
             DO UPDATE SET
-                historical_game_id = EXCLUDED.historical_game_id,
+                game_id = EXCLUDED.game_id,
                 spread_home_open = COALESCE(EXCLUDED.spread_home_open, historical_odds.spread_home_open),
                 spread_home_close = COALESCE(EXCLUDED.spread_home_close, historical_odds.spread_home_close),
                 spread_home_odds_open = COALESCE(EXCLUDED.spread_home_odds_open, historical_odds.spread_home_odds_open),
@@ -210,7 +210,7 @@ def insert_historical_odds(record: OddsRecord) -> bool:
                 source_file = EXCLUDED.source_file
             """,
             (
-                historical_game_id,
+                game_id,
                 record["sport"],
                 record["game_date"],
                 record["home_team_code"],
@@ -252,7 +252,7 @@ def bulk_insert_historical_odds(
     Args:
         records: Iterator of OddsRecord
         batch_size: Number of records per batch (default: 1000)
-        link_games: Whether to look up historical_game_id (default: True)
+        link_games: Whether to look up game_id (default: True)
         error_mode: How to handle errors (default: FAIL - stop on first error)
             - FAIL: Raise exception on first error
             - SKIP: Skip failed records, continue processing
@@ -285,8 +285,8 @@ def bulk_insert_historical_odds(
         for record in records:
             result.total_records += 1
 
-            # Look up historical_game_id (with caching)
-            historical_game_id: int | None = None
+            # Look up game_id (with caching)
+            game_id: int | None = None
             if link_games:
                 cache_key = (
                     record["sport"],
@@ -295,20 +295,20 @@ def bulk_insert_historical_odds(
                     record["away_team_code"],
                 )
                 if cache_key not in game_id_cache:
-                    game_id_cache[cache_key] = lookup_historical_game_id(
+                    game_id_cache[cache_key] = lookup_game_id(
                         record["sport"],
                         record["game_date"],
                         record["home_team_code"],
                         record["away_team_code"],
                     )
-                historical_game_id = game_id_cache[cache_key]
+                game_id = game_id_cache[cache_key]
 
             source = normalize_source_name(record["source"])
             sportsbook = record.get("sportsbook") or "consensus"
 
             batch.append(
                 (
-                    historical_game_id,
+                    game_id,
                     record["sport"],
                     record["game_date"],
                     record["home_team_code"],
@@ -369,7 +369,7 @@ def _flush_odds_batch(batch: list[tuple[Any, ...]]) -> int:
 
         query = """
             INSERT INTO historical_odds (
-                historical_game_id, sport, game_date,
+                game_id, sport, game_date,
                 home_team_code, away_team_code, sportsbook,
                 spread_home_open, spread_home_close,
                 spread_home_odds_open, spread_home_odds_close,
@@ -382,7 +382,7 @@ def _flush_odds_batch(batch: list[tuple[Any, ...]]) -> int:
             ) VALUES %s
             ON CONFLICT (sport, game_date, home_team_code, away_team_code, sportsbook)
             DO UPDATE SET
-                historical_game_id = EXCLUDED.historical_game_id,
+                game_id = EXCLUDED.game_id,
                 spread_home_close = COALESCE(EXCLUDED.spread_home_close, historical_odds.spread_home_close),
                 total_close = COALESCE(EXCLUDED.total_close, historical_odds.total_close),
                 home_covered = COALESCE(EXCLUDED.home_covered, historical_odds.home_covered),
@@ -415,7 +415,7 @@ def load_odds_from_source(
         source_adapter: A source adapter with load_odds() method
         sport: Sport code (default: "nfl")
         seasons: Filter to specific seasons (default: all)
-        link_games: Whether to look up historical_game_id (default: True)
+        link_games: Whether to look up game_id (default: True)
         error_mode: How to handle errors (default: FAIL - stop on first error)
             - FAIL: Raise exception on first error
             - SKIP: Skip failed records, continue processing
@@ -519,8 +519,8 @@ def get_historical_odds_stats() -> dict[str, Any]:
         # Count linked vs unlinked
         cursor.execute("""
             SELECT
-                COUNT(*) FILTER (WHERE historical_game_id IS NOT NULL) as linked,
-                COUNT(*) FILTER (WHERE historical_game_id IS NULL) as unlinked
+                COUNT(*) FILTER (WHERE game_id IS NOT NULL) as linked,
+                COUNT(*) FILTER (WHERE game_id IS NULL) as unlinked
             FROM historical_odds
         """)
         linkage = cursor.fetchone()
@@ -542,7 +542,7 @@ def get_historical_odds_stats() -> dict[str, Any]:
 
 def link_orphan_odds_to_games() -> int:
     """
-    Link historical_odds records without historical_game_id to matching games.
+    Link historical_odds records without game_id to matching games.
 
     This is useful after loading odds before games, or if new games are added.
 
@@ -552,9 +552,9 @@ def link_orphan_odds_to_games() -> int:
     with get_cursor(commit=True) as cursor:
         cursor.execute("""
             UPDATE historical_odds o
-            SET historical_game_id = g.historical_game_id
-            FROM historical_games g
-            WHERE o.historical_game_id IS NULL
+            SET game_id = g.id
+            FROM games g
+            WHERE o.game_id IS NULL
               AND o.sport = g.sport
               AND o.game_date = g.game_date
               AND o.home_team_code = g.home_team_code
