@@ -171,6 +171,15 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         market_type VARCHAR(20) NOT NULL DEFAULT 'binary' CHECK (market_type IN ('binary', 'categorical', 'scalar')),
         status VARCHAR(20) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed', 'settled', 'halted')),
         settlement_value DECIMAL(10,4) CHECK (settlement_value IS NULL OR (settlement_value >= 0.0000 AND settlement_value <= 1.0000)),
+        -- Migration 0033: enrichment columns (promoted from metadata JSONB + new)
+        subtitle VARCHAR(255),
+        open_time TIMESTAMP WITH TIME ZONE,
+        close_time TIMESTAMP WITH TIME ZONE,
+        expiration_time TIMESTAMP WITH TIME ZONE,
+        outcome_label VARCHAR(100),
+        league VARCHAR(20),
+        bracket_count INTEGER CHECK (bracket_count >= 0),
+        source_url VARCHAR(500),
         metadata JSONB,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -179,6 +188,9 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_markets_event_internal ON markets(event_internal_id);
     CREATE INDEX IF NOT EXISTS idx_markets_platform ON markets(platform_id);
     CREATE INDEX IF NOT EXISTS idx_markets_status ON markets(status);
+    CREATE INDEX IF NOT EXISTS idx_markets_close_time ON markets(close_time);
+    CREATE INDEX IF NOT EXISTS idx_markets_expiration_time ON markets(expiration_time);
+    CREATE INDEX IF NOT EXISTS idx_markets_league ON markets(league);
 
     -- market_snapshots table (fact — migration 0021: SCD Type 2 versioned pricing)
     CREATE TABLE IF NOT EXISTS market_snapshots (
@@ -714,11 +726,13 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_alerts_acknowledged ON alerts(acknowledged);
 
     -- 9. VIEWS
-    -- current_markets view (migration 0021: JOIN dimension + current snapshot)
+    -- current_markets view (migration 0021 + 0033: JOIN dimension + current snapshot)
     CREATE OR REPLACE VIEW current_markets AS
     SELECT
         m.id, m.platform_id, m.event_internal_id, m.external_id,
-        m.ticker, m.title, m.market_type, m.status, m.settlement_value,
+        m.ticker, m.title, m.subtitle, m.market_type, m.status, m.settlement_value,
+        m.open_time, m.close_time, m.expiration_time,
+        m.outcome_label, m.league, m.bracket_count, m.source_url,
         m.metadata, m.created_at, m.updated_at,
         ms.yes_ask_price, ms.no_ask_price, ms.yes_bid_price, ms.no_bid_price,
         ms.last_price, ms.spread, ms.volume, ms.open_interest, ms.liquidity,
@@ -768,6 +782,30 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     )
     ON CONFLICT (platform_id) DO NOTHING;
 
+    -- orderbook_snapshots table (migration 0034: append-only time-series, NOT SCD)
+    -- Stores full order book depth for liquidity analysis and slippage estimation
+    CREATE TABLE IF NOT EXISTS orderbook_snapshots (
+        id SERIAL PRIMARY KEY,
+        market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
+        snapshot_time TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        best_bid DECIMAL(10,4),
+        best_ask DECIMAL(10,4),
+        spread DECIMAL(10,4) CHECK (spread IS NULL OR spread >= 0),
+        bid_depth_total INTEGER CHECK (bid_depth_total IS NULL OR bid_depth_total >= 0),
+        ask_depth_total INTEGER CHECK (ask_depth_total IS NULL OR ask_depth_total >= 0),
+        depth_imbalance DECIMAL(10,4) CHECK (depth_imbalance IS NULL OR (depth_imbalance >= -1 AND depth_imbalance <= 1)),
+        weighted_mid DECIMAL(10,4),
+        bid_prices DECIMAL(10,4)[],
+        bid_quantities INTEGER[],
+        ask_prices DECIMAL(10,4)[],
+        ask_quantities INTEGER[],
+        levels INTEGER CHECK (levels IS NULL OR levels >= 0)
+    );
+    CREATE INDEX IF NOT EXISTS idx_orderbook_market ON orderbook_snapshots(market_internal_id);
+    CREATE INDEX IF NOT EXISTS idx_orderbook_time ON orderbook_snapshots(snapshot_time);
+    CREATE INDEX IF NOT EXISTS idx_orderbook_spread ON orderbook_snapshots(spread);
+    CREATE INDEX IF NOT EXISTS idx_orderbook_imbalance ON orderbook_snapshots(depth_imbalance);
+
     -- historical_elo table (migration 0005, will be dropped in migration 0032)
     -- Kept temporarily for seeding integration tests that test bulk_insert_historical_elo
     CREATE TABLE IF NOT EXISTS historical_elo (
@@ -790,7 +828,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_historical_elo_season ON historical_elo(season);
 
     -- Track migration version
-    INSERT INTO alembic_version (version_num) VALUES ('0025')
+    INSERT INTO alembic_version (version_num) VALUES ('0034')
     ON CONFLICT (version_num) DO NOTHING;
     """
 

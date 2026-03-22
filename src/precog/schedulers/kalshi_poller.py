@@ -842,6 +842,9 @@ class KalshiMarketPoller(BasePoller):
                     self._event_id_map[event_ticker] = event_pk
 
             # Migration 0022: create_market returns int PK
+            # Migration 0033: subtitle, open_time, close_time, expiration_time
+            # promoted from metadata JSONB to proper dimension columns.
+            # can_close_early and series_ticker remain in metadata.
             create_market(
                 platform_id=self.PLATFORM_ID,
                 event_internal_id=event_pk,  # Integer FK to events(id)
@@ -854,13 +857,17 @@ class KalshiMarketPoller(BasePoller):
                 status=db_status,
                 volume=market.get("volume"),
                 open_interest=market.get("open_interest"),
+                subtitle=market.get("subtitle"),
+                open_time=market.get("open_time"),
+                close_time=market.get("close_time"),
+                expiration_time=market.get("expiration_time"),
                 metadata={
-                    "series_ticker": effective_series,
-                    "subtitle": market.get("subtitle"),
-                    "open_time": market.get("open_time"),
-                    "close_time": market.get("close_time"),
-                    "expiration_time": market.get("expiration_time"),
-                    "can_close_early": market.get("can_close_early"),
+                    k: v
+                    for k, v in {
+                        "series_ticker": effective_series,
+                        "can_close_early": market.get("can_close_early"),
+                    }.items()
+                    if v is not None
                 },
             )
             logger.debug("Created market: %s", ticker)
@@ -874,6 +881,8 @@ class KalshiMarketPoller(BasePoller):
         status_changed = existing["status"] != db_status
 
         if price_changed or status_changed:
+            # Migration 0033: pass enrichment columns on update path too,
+            # so lifecycle timestamps are refreshed when prices change.
             update_market_with_versioning(
                 ticker=ticker,
                 yes_ask_price=yes_price,
@@ -881,6 +890,10 @@ class KalshiMarketPoller(BasePoller):
                 status=db_status,
                 volume=market.get("volume"),
                 open_interest=market.get("open_interest"),
+                subtitle=market.get("subtitle"),
+                open_time=market.get("open_time"),
+                close_time=market.get("close_time"),
+                expiration_time=market.get("expiration_time"),
             )
             logger.debug(
                 "Updated market: %s (yes: %s -> %s)",
