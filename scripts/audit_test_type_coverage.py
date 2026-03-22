@@ -171,6 +171,8 @@ MODULE_TIERS = {
     # Infrastructure - utility and config
     "cli/config": "infrastructure",
     "cli/system": "infrastructure",
+    # Infrastructure - circuit breaker management
+    "cli/circuit_breaker": "infrastructure",
     # Experimental - future features not yet implemented
     "cli/_future/model": "experimental",
     "cli/_future/position": "experimental",
