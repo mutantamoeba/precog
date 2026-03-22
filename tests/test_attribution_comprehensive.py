@@ -549,7 +549,7 @@ def test_chaos_trade_with_null_attribution_fields(
 
     # Verify: Trade created successfully
     assert trade is not None
-    assert trade["trade_id"] == trade_id
+    assert trade["id"] == trade_id
 
     # Verify: Attribution fields are NULL (except model_id which is required)
     assert trade["calculated_probability"] is None

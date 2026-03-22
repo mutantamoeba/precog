@@ -2121,7 +2121,7 @@ def create_trade(
         execution_environment: 'live', 'paper', or 'backtest' (default 'live')
 
     Returns:
-        trade_id of newly created trade
+        id of newly created trade
 
     Educational Note:
         Migration 0025 Redesign:
@@ -2163,7 +2163,7 @@ def create_trade(
             execution_environment
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s, %s, %s, %s)
-        RETURNING trade_id
+        RETURNING id
     """
 
     params = (
@@ -2184,7 +2184,7 @@ def create_trade(
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return cast("int", result["trade_id"])
+        return cast("int", result["id"])
 
 
 def get_trades_by_market(
@@ -2304,7 +2304,7 @@ def create_account_balance(
         currency: Currency code (default: "USD")
 
     Returns:
-        balance_id of newly created record
+        id of newly created record
 
     Raises:
         ValueError: If balance is float (not Decimal)
@@ -2351,7 +2351,7 @@ def create_account_balance(
             platform_id, balance, currency, row_current_ind, created_at
         )
         VALUES (%s, %s, %s, TRUE, NOW())
-        RETURNING balance_id
+        RETURNING id
     """
 
     params = (platform_id, balance, currency)
@@ -2359,7 +2359,7 @@ def create_account_balance(
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return result["balance_id"] if result else None
+        return result["id"] if result else None
 
 
 def update_account_balance_with_versioning(
@@ -2381,7 +2381,7 @@ def update_account_balance_with_versioning(
         currency: Currency code (default: "USD")
 
     Returns:
-        balance_id of newly created record
+        id of newly created record
 
     Raises:
         ValueError: If new_balance is float (not Decimal)
@@ -2444,7 +2444,7 @@ def update_account_balance_with_versioning(
             platform_id, balance, currency, row_current_ind, created_at
         )
         VALUES (%s, %s, %s, TRUE, NOW())
-        RETURNING balance_id
+        RETURNING id
     """
 
     with get_cursor(commit=True) as cur:
@@ -2454,7 +2454,7 @@ def update_account_balance_with_versioning(
         # Insert new balance
         cur.execute(insert_query, (platform_id, new_balance, currency))
         result = cur.fetchone()
-        return result["balance_id"] if result else None
+        return result["id"] if result else None
 
 
 # =============================================================================
@@ -2481,7 +2481,7 @@ def create_settlement(
         payout: Payout amount as DECIMAL(10,4)
 
     Returns:
-        settlement_id of newly created record
+        id of newly created record
 
     Raises:
         ValueError: If payout is float (not Decimal)
@@ -2528,7 +2528,7 @@ def create_settlement(
             market_internal_id, platform_id, outcome, payout, created_at
         )
         VALUES (%s, %s, %s, %s, NOW())
-        RETURNING settlement_id
+        RETURNING id
     """
 
     params = (market_internal_id, platform_id, outcome, payout)
@@ -2536,7 +2536,7 @@ def create_settlement(
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         result = cur.fetchone()
-        return result["settlement_id"] if result else None
+        return result["id"] if result else None
 
 
 # =============================================================================
@@ -2976,7 +2976,7 @@ def get_trade_by_id(trade_id: int) -> dict[str, Any] | None:
         LEFT JOIN orders o ON t.order_id = o.id
         LEFT JOIN strategies s ON o.strategy_id = s.strategy_id
         LEFT JOIN probability_models pm ON o.model_id = pm.model_id
-        WHERE t.trade_id = %s
+        WHERE t.id = %s
     """
     return fetch_one(query, (trade_id,))
 

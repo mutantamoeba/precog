@@ -415,8 +415,8 @@ def test_get_trades_by_market(db_pool, clean_test_data, sample_market_data, samp
     trades = get_trades_by_market(market_id, limit=10)
 
     assert len(trades) >= 2
-    assert any(t["trade_id"] == trade_id1 for t in trades)
-    assert any(t["trade_id"] == trade_id2 for t in trades)
+    assert any(t["id"] == trade_id1 for t in trades)
+    assert any(t["id"] == trade_id2 for t in trades)
 
 
 @pytest.mark.integration
@@ -430,7 +430,7 @@ def test_get_recent_trades(db_pool, clean_test_data, sample_market_data, sample_
 
     # Should include our test trade
     assert len(trades) > 0
-    assert any(t["trade_id"] == trade_id for t in trades)
+    assert any(t["id"] == trade_id for t in trades)
 
 
 @pytest.mark.integration
@@ -574,7 +574,7 @@ def test_create_account_balance_with_decimal(db_pool, clean_test_data):
     # Verify: Check balance was created correctly
     with get_cursor() as cur:
         cur.execute(
-            "SELECT * FROM account_balance WHERE balance_id = %s AND row_current_ind = TRUE",
+            "SELECT * FROM account_balance WHERE id = %s AND row_current_ind = TRUE",
             (balance_id,),
         )
         result = cur.fetchone()
@@ -799,7 +799,7 @@ def test_get_recent_trades_with_strategy_filter(
 
     # Should only return trade1
     assert len(trades) == 1
-    assert trades[0]["trade_id"] == trade1
+    assert trades[0]["id"] == trade1
 
 
 # =============================================================================

@@ -596,7 +596,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     -- trades table (migration 0025: attribution columns removed, order_id FK added)
     -- Trades are pure fill/execution records. Attribution lives on orders.
     CREATE TABLE IF NOT EXISTS trades (
-        trade_id SERIAL PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         order_id INTEGER REFERENCES orders(id) ON DELETE SET NULL,
@@ -623,7 +623,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_trades_created ON trades(created_at);
 
     CREATE TABLE IF NOT EXISTS settlements (
-        settlement_id SERIAL PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         market_internal_id INTEGER NOT NULL REFERENCES markets(id) ON DELETE CASCADE,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         outcome VARCHAR(50) NOT NULL,
@@ -660,7 +660,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_exit_attempts_position ON exit_attempts(position_internal_id);
 
     CREATE TABLE IF NOT EXISTS account_balance (
-        balance_id SERIAL PRIMARY KEY,
+        id SERIAL PRIMARY KEY,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         balance DECIMAL(10,4) NOT NULL CHECK (balance >= 0.0000),
         currency VARCHAR(10) DEFAULT 'USD',
