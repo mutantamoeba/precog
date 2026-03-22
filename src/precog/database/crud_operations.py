@@ -3677,7 +3677,7 @@ def get_current_game_state(espn_event_id: str) -> dict[str, Any] | None:
 # Reference: ESPNSituationData in api_connectors/espn_client.py
 TRACKED_SITUATION_KEYS: dict[str, list[str]] = {
     "football": ["possession", "down", "distance", "yard_line", "is_red_zone"],
-    "basketball": ["possession", "bonus", "possession_arrow"],
+    "basketball": ["possession", "bonus", "possession_arrow", "home_fouls", "away_fouls"],
     "hockey": ["home_powerplay", "away_powerplay"],
 }
 

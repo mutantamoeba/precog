@@ -1228,8 +1228,8 @@ class TestGameStateChangedSportAwareUnit:
 
     # --- Basketball ---
 
-    def test_basketball_foul_change_does_not_trigger(self):
-        """Basketball foul count change does NOT trigger new row."""
+    def test_basketball_foul_change_triggers(self):
+        """Basketball foul count change triggers new row (useful for model training)."""
         current = {
             "home_score": 55,
             "away_score": 52,
@@ -1246,7 +1246,7 @@ class TestGameStateChangedSportAwareUnit:
             situation={"possession": "home", "home_fouls": 4, "away_fouls": 2, "bonus": None},
             league="nba",
         )
-        assert result is False
+        assert result is True
 
     def test_basketball_bonus_change_triggers(self):
         """Basketball bonus status change DOES trigger new row."""
@@ -1315,16 +1315,16 @@ class TestGameStateChangedSportAwareUnit:
             "away_score": 28,
             "period": 2,
             "game_status": "in_progress",
-            "situation": {"possession": "home", "home_fouls": 2},
+            "situation": {"possession": "home", "home_timeouts": 3},
         }
-        # Only fouls changed - should NOT trigger
+        # Only timeouts changed - should NOT trigger (timeouts are noise)
         result = game_state_changed(
             current=current,
             home_score=30,
             away_score=28,
             period=2,
             game_status="in_progress",
-            situation={"possession": "home", "home_fouls": 3},
+            situation={"possession": "home", "home_timeouts": 2},
             league="wnba",
         )
         assert result is False
@@ -1491,16 +1491,16 @@ class TestGameStateChangedSportAwareUnit:
             "away_score": 52,
             "period": 3,
             "game_status": "in_progress",
-            "situation": {"possession": "home", "home_fouls": 3},
+            "situation": {"possession": "home", "home_timeouts": 4},
         }
-        # Only fouls changed with uppercase league - should NOT trigger
+        # Only timeouts changed with uppercase league - should NOT trigger
         result = game_state_changed(
             current=current,
             home_score=55,
             away_score=52,
             period=3,
             game_status="in_progress",
-            situation={"possession": "home", "home_fouls": 5},
+            situation={"possession": "home", "home_timeouts": 3},
             league="NBA",
         )
         assert result is False
