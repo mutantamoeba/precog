@@ -846,12 +846,13 @@ class TestGameStateChangedChaos:
         assert result is False
 
     def test_situation_with_extra_fields_ignored(self):
-        """Extra fields in situation dict should not affect comparison.
+        """Extra fields in situation dict should not affect comparison when league is known.
 
         Educational Note:
-            game_state_changed() compares specific situation fields. Fields
-            not in the comparison list should be ignored. This ensures
-            backward compatibility when ESPN adds new fields.
+            game_state_changed() compares sport-specific situation fields when
+            league is provided. Fields not in the tracked list should be ignored.
+            This ensures backward compatibility when ESPN adds new fields.
+            When league is None/unknown, ALL fields are compared (safe fallback).
         """
         from precog.database.crud_operations import game_state_changed
 
@@ -863,7 +864,7 @@ class TestGameStateChangedChaos:
             "situation": {"down": 2, "distance": 5, "possession": "home"},
         }
 
-        # Same core fields but with extra fields
+        # Same core fields but with extra fields — league provided so only tracked keys matter
         result = game_state_changed(
             current=current,
             home_score=14,
@@ -877,6 +878,7 @@ class TestGameStateChangedChaos:
                 "extra_field": "should_be_ignored",
                 "another_extra": 12345,
             },
+            league="nfl",
         )
 
         # Same core values, extra fields ignored - no change
