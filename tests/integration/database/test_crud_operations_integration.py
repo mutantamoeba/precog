@@ -786,6 +786,171 @@ class TestGameStateChangedIntegration:
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-CHANGE-003'")
 
+    def test_sport_aware_change_detection_basketball(
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
+    ):
+        """Test sport-aware change detection for basketball (NBA).
+
+        Verifies that foul changes trigger new SCD rows (tracked field)
+        while timeout changes do not (noise field).
+        """
+        teams = setup_test_teams
+        venue_id = setup_test_venue
+
+        basketball_situation = {
+            "possession": "home",
+            "bonus": None,
+            "possession_arrow": "away",
+            "home_fouls": 3,
+            "away_fouls": 2,
+            "home_timeouts": 4,
+        }
+
+        # Create initial basketball game state
+        create_game_state(
+            espn_event_id="INT-CHANGE-NBA-001",
+            home_team_id=teams["home_team_id"],
+            away_team_id=teams["away_team_id"],
+            venue_id=venue_id,
+            home_score=55,
+            away_score=52,
+            period=3,
+            game_status="in_progress",
+            situation=basketball_situation,
+            league="nba",
+        )
+
+        current = get_current_game_state("INT-CHANGE-NBA-001")
+
+        # Foul change SHOULD trigger (tracked field for basketball)
+        foul_situation = basketball_situation.copy()
+        foul_situation["home_fouls"] = 4
+        result = game_state_changed(
+            current,
+            home_score=55,
+            away_score=52,
+            period=3,
+            game_status="in_progress",
+            situation=foul_situation,
+            league="nba",
+        )
+        assert result is True
+
+        # Timeout change should NOT trigger (noise field for basketball)
+        timeout_situation = basketball_situation.copy()
+        timeout_situation["home_timeouts"] = 3
+        result = game_state_changed(
+            current,
+            home_score=55,
+            away_score=52,
+            period=3,
+            game_status="in_progress",
+            situation=timeout_situation,
+            league="nba",
+        )
+        assert result is False
+
+        # Bonus change SHOULD trigger (tracked field)
+        bonus_situation = basketball_situation.copy()
+        bonus_situation["bonus"] = "home"
+        result = game_state_changed(
+            current,
+            home_score=55,
+            away_score=52,
+            period=3,
+            game_status="in_progress",
+            situation=bonus_situation,
+            league="nba",
+        )
+        assert result is True
+
+        # Verify upsert respects sport-aware detection (timeout-only change skipped)
+        result_id = upsert_game_state(
+            espn_event_id="INT-CHANGE-NBA-001",
+            home_score=55,
+            away_score=52,
+            period=3,
+            game_status="in_progress",
+            situation=timeout_situation,
+            league="nba",
+            skip_if_unchanged=True,
+        )
+        # Should return None (skipped — only timeouts changed)
+        assert result_id is None
+
+        # Verify only 1 row exists (no new SCD row created)
+        history = get_game_state_history("INT-CHANGE-NBA-001")
+        assert len(history) == 1
+
+        # Cleanup
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-CHANGE-NBA-001'")
+
+    def test_sport_aware_change_detection_hockey(
+        self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
+    ):
+        """Test sport-aware change detection for hockey (NHL).
+
+        Verifies that powerplay changes trigger new SCD rows (tracked field)
+        while shot count changes do not (noise field).
+        """
+        teams = setup_test_teams
+        venue_id = setup_test_venue
+
+        hockey_situation = {
+            "home_powerplay": False,
+            "away_powerplay": False,
+            "home_shots": 12,
+            "away_shots": 8,
+        }
+
+        create_game_state(
+            espn_event_id="INT-CHANGE-NHL-001",
+            home_team_id=teams["home_team_id"],
+            away_team_id=teams["away_team_id"],
+            venue_id=venue_id,
+            home_score=1,
+            away_score=0,
+            period=2,
+            game_status="in_progress",
+            situation=hockey_situation,
+            league="nhl",
+        )
+
+        current = get_current_game_state("INT-CHANGE-NHL-001")
+
+        # Shot count change should NOT trigger (noise field)
+        shots_situation = hockey_situation.copy()
+        shots_situation["home_shots"] = 15
+        result = game_state_changed(
+            current,
+            home_score=1,
+            away_score=0,
+            period=2,
+            game_status="in_progress",
+            situation=shots_situation,
+            league="nhl",
+        )
+        assert result is False
+
+        # Powerplay change SHOULD trigger (tracked field)
+        pp_situation = hockey_situation.copy()
+        pp_situation["home_powerplay"] = True
+        result = game_state_changed(
+            current,
+            home_score=1,
+            away_score=0,
+            period=2,
+            game_status="in_progress",
+            situation=pp_situation,
+            league="nhl",
+        )
+        assert result is True
+
+        # Cleanup
+        with get_cursor(commit=True) as cur:
+            cur.execute("DELETE FROM game_states WHERE espn_event_id = 'INT-CHANGE-NHL-001'")
+
     def test_clock_changes_ignored_in_state_comparison(
         self, db_pool, db_cursor, clean_test_data, setup_test_teams, setup_test_venue
     ):

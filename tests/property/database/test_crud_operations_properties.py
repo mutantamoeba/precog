@@ -13,7 +13,11 @@ import pytest
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from precog.database.crud_operations import game_state_changed
+from precog.database.crud_operations import (
+    LEAGUE_SPORT_CATEGORY,
+    TRACKED_SITUATION_KEYS,
+    game_state_changed,
+)
 
 pytestmark = [pytest.mark.property]
 
@@ -531,3 +535,246 @@ class TestGameStateChangedReturnType:
         )
 
         assert isinstance(result, bool)
+
+
+# =============================================================================
+# Property Tests: Sport-Aware Situation Filtering
+# =============================================================================
+
+# League strategy (all supported leagues)
+league_strategy = st.sampled_from(list(LEAGUE_SPORT_CATEGORY.keys()))
+
+# Basketball-specific strategies
+foul_strategy = st.integers(min_value=0, max_value=30)
+bonus_strategy = st.sampled_from(["home", "away", None])
+possession_arrow_strategy = st.sampled_from(["home", "away", None])
+
+# Hockey-specific strategies
+powerplay_strategy = st.booleans()
+shots_strategy = st.integers(min_value=0, max_value=60)
+
+
+@st.composite
+def basketball_situation_strategy(draw: st.DrawFn) -> dict:
+    """Generate a realistic basketball situation dict."""
+    return {
+        "possession": draw(nfl_teams),  # reuse team strategy for possession
+        "bonus": draw(bonus_strategy),
+        "possession_arrow": draw(possession_arrow_strategy),
+        "home_fouls": draw(foul_strategy),
+        "away_fouls": draw(foul_strategy),
+        "home_timeouts": draw(st.integers(min_value=0, max_value=7)),
+        "away_timeouts": draw(st.integers(min_value=0, max_value=7)),
+    }
+
+
+@st.composite
+def hockey_situation_strategy(draw: st.DrawFn) -> dict:
+    """Generate a realistic hockey situation dict."""
+    return {
+        "home_powerplay": draw(powerplay_strategy),
+        "away_powerplay": draw(powerplay_strategy),
+        "home_shots": draw(shots_strategy),
+        "away_shots": draw(shots_strategy),
+        "powerplay_time": draw(st.text(min_size=0, max_size=5)),
+    }
+
+
+class TestGameStateChangedSportAwareProperties:
+    """Property tests for sport-aware situation filtering."""
+
+    @given(
+        home_score=score_strategy,
+        away_score=score_strategy,
+        period=period_strategy,
+        game_status=game_status_strategy,
+        situation=basketball_situation_strategy(),
+        league=st.sampled_from(["nba", "ncaab", "wnba"]),
+    )
+    @settings(max_examples=100)
+    def test_basketball_same_situation_reflexive(
+        self,
+        home_score: int,
+        away_score: int,
+        period: int,
+        game_status: str,
+        situation: dict,
+        league: str,
+    ) -> None:
+        """Same basketball situation with league should always return False."""
+        current = {
+            "home_score": home_score,
+            "away_score": away_score,
+            "period": period,
+            "game_status": game_status,
+            "situation": situation,
+        }
+
+        result = game_state_changed(
+            current, home_score, away_score, period, game_status, situation, league=league
+        )
+
+        assert result is False
+
+    @given(
+        home_score=score_strategy,
+        away_score=score_strategy,
+        period=period_strategy,
+        game_status=game_status_strategy,
+        situation=basketball_situation_strategy(),
+        new_timeouts=st.integers(min_value=0, max_value=7),
+        league=st.sampled_from(["nba", "ncaab", "wnba"]),
+    )
+    @settings(max_examples=100)
+    def test_basketball_timeout_change_ignored(
+        self,
+        home_score: int,
+        away_score: int,
+        period: int,
+        game_status: str,
+        situation: dict,
+        new_timeouts: int,
+        league: str,
+    ) -> None:
+        """Basketball timeout changes should NOT trigger state change."""
+        current = {
+            "home_score": home_score,
+            "away_score": away_score,
+            "period": period,
+            "game_status": game_status,
+            "situation": situation,
+        }
+
+        # Only change timeouts (untracked field)
+        new_situation = situation.copy()
+        new_situation["home_timeouts"] = new_timeouts
+        new_situation["away_timeouts"] = new_timeouts
+
+        # Keep tracked fields identical
+        for key in TRACKED_SITUATION_KEYS["basketball"]:
+            new_situation[key] = situation[key]
+
+        result = game_state_changed(
+            current, home_score, away_score, period, game_status, new_situation, league=league
+        )
+
+        assert result is False
+
+    @given(
+        home_score=score_strategy,
+        away_score=score_strategy,
+        period=period_strategy,
+        game_status=game_status_strategy,
+        situation=hockey_situation_strategy(),
+    )
+    @settings(max_examples=100)
+    def test_hockey_same_situation_reflexive(
+        self,
+        home_score: int,
+        away_score: int,
+        period: int,
+        game_status: str,
+        situation: dict,
+    ) -> None:
+        """Same hockey situation with league should always return False."""
+        current = {
+            "home_score": home_score,
+            "away_score": away_score,
+            "period": period,
+            "game_status": game_status,
+            "situation": situation,
+        }
+
+        result = game_state_changed(
+            current, home_score, away_score, period, game_status, situation, league="nhl"
+        )
+
+        assert result is False
+
+    @given(
+        home_score=score_strategy,
+        away_score=score_strategy,
+        period=period_strategy,
+        game_status=game_status_strategy,
+        situation=hockey_situation_strategy(),
+        new_shots=shots_strategy,
+    )
+    @settings(max_examples=100)
+    def test_hockey_shots_change_ignored(
+        self,
+        home_score: int,
+        away_score: int,
+        period: int,
+        game_status: str,
+        situation: dict,
+        new_shots: int,
+    ) -> None:
+        """Hockey shot count changes should NOT trigger state change."""
+        current = {
+            "home_score": home_score,
+            "away_score": away_score,
+            "period": period,
+            "game_status": game_status,
+            "situation": situation,
+        }
+
+        # Only change shots (untracked field)
+        new_situation = situation.copy()
+        new_situation["home_shots"] = new_shots
+        new_situation["away_shots"] = new_shots
+
+        # Keep tracked fields identical
+        for key in TRACKED_SITUATION_KEYS["hockey"]:
+            new_situation[key] = situation[key]
+
+        result = game_state_changed(
+            current, home_score, away_score, period, game_status, new_situation, league="nhl"
+        )
+
+        assert result is False
+
+    @given(
+        home_score=score_strategy,
+        away_score=score_strategy,
+        period=period_strategy,
+        game_status=game_status_strategy,
+        league=league_strategy,
+    )
+    @settings(max_examples=50)
+    def test_sport_aware_deterministic(
+        self,
+        home_score: int,
+        away_score: int,
+        period: int,
+        game_status: str,
+        league: str,
+    ) -> None:
+        """Sport-aware comparison should be deterministic across all leagues."""
+        current = {
+            "home_score": home_score,
+            "away_score": away_score,
+            "period": period,
+            "game_status": game_status,
+            "situation": {"possession": "home"},
+        }
+
+        result1 = game_state_changed(
+            current,
+            home_score,
+            away_score,
+            period,
+            game_status,
+            situation={"possession": "home"},
+            league=league,
+        )
+        result2 = game_state_changed(
+            current,
+            home_score,
+            away_score,
+            period,
+            game_status,
+            situation={"possession": "home"},
+            league=league,
+        )
+
+        assert result1 == result2
