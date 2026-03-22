@@ -3520,6 +3520,7 @@ def create_game_state(
     situation: dict | None = None,
     linescores: list | None = None,
     data_source: str = "espn",
+    game_id: int | None = None,
 ) -> int:
     """
     Create initial game state record (row_current_ind = TRUE).
@@ -3589,11 +3590,11 @@ def create_game_state(
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
-            data_source, row_current_ind, row_start_ts
+            data_source, game_id, row_current_ind, row_start_ts
         )
         VALUES (
             'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, TRUE, NOW()
+            %s, %s, TRUE, NOW()
         )
         RETURNING id
     """
@@ -3620,6 +3621,7 @@ def create_game_state(
                 json.dumps(situation) if situation else None,
                 json.dumps(linescores) if linescores else None,
                 data_source,
+                game_id,
             ),
         )
         result = cur.fetchone()
@@ -3766,6 +3768,7 @@ def upsert_game_state(
     linescores: list | None = None,
     data_source: str = "espn",
     skip_if_unchanged: bool = True,
+    game_id: int | None = None,
 ) -> int | None:
     """
     Insert or update game state with SCD Type 2 versioning.
@@ -3851,11 +3854,11 @@ def upsert_game_state(
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
-            data_source, row_current_ind, row_start_ts
+            data_source, game_id, row_current_ind, row_start_ts
         )
         VALUES (
             'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, TRUE, NOW()
+            %s, %s, TRUE, NOW()
         )
         RETURNING id
     """
@@ -3893,6 +3896,7 @@ def upsert_game_state(
                 json.dumps(situation) if situation else None,
                 json.dumps(linescores) if linescores else None,
                 data_source,
+                game_id,
             ),
         )
         result = cur.fetchone()
@@ -5146,7 +5150,7 @@ def delete_scheduler_status(host_id: str, service_name: str) -> bool:
 #       It was superseded by elo_calculation_log which provides:
 #         1. Game-centric view (both teams per row) vs team-centric
 #         2. Full audit trail with parameters (K-factor, MOV, expected scores)
-#         3. Links to source game (game_states or historical_games)
+#         3. Links to source game (game_states or games)
 #
 #   To get team-centric view from elo_calculation_log:
 #     SELECT game_date, home_post_elo as rating FROM elo_calculation_log
@@ -5315,7 +5319,7 @@ def insert_elo_calculation_log(
     home_team_id: int | None = None,
     away_team_id: int | None = None,
     game_state_id: int | None = None,
-    historical_game_id: int | None = None,
+    game_id: int | None = None,
     mov_multiplier: Decimal | None = None,
     home_epa_adjustment: Decimal | None = None,
     away_epa_adjustment: Decimal | None = None,
@@ -5351,7 +5355,7 @@ def insert_elo_calculation_log(
         home_team_id: FK to teams.team_id (optional, for live games)
         away_team_id: FK to teams.team_id (optional, for live games)
         game_state_id: FK to game_states.game_state_id (optional)
-        historical_game_id: FK to historical_games.game_id (optional)
+        game_id: FK to games.id (optional)
         mov_multiplier: Margin of victory multiplier (optional)
         home_epa_adjustment: EPA-based adjustment for home team (NFL only)
         away_epa_adjustment: EPA-based adjustment for away team (NFL only)
@@ -5400,7 +5404,7 @@ def insert_elo_calculation_log(
     query = """
         INSERT INTO elo_calculation_log (
             sport, game_date, home_team_id, away_team_id,
-            game_state_id, historical_game_id,
+            game_state_id, game_id,
             home_team_code, away_team_code,
             home_score, away_score,
             home_elo_before, away_elo_before,
@@ -5425,7 +5429,7 @@ def insert_elo_calculation_log(
         home_team_id,
         away_team_id,
         game_state_id,
-        historical_game_id,
+        game_id,
         home_team_code,
         away_team_code,
         home_score,
@@ -8409,3 +8413,212 @@ def get_orderbook_history(
         LIMIT %s
     """
     return fetch_all(query, (market_internal_id, limit))
+
+
+# =============================================================================
+# Games Dimension CRUD (Migration 0035)
+# =============================================================================
+
+
+def get_or_create_game(
+    sport: str,
+    game_date: date,
+    home_team_code: str,
+    away_team_code: str,
+    *,
+    season: int | None = None,
+    league: str | None = None,
+    season_type: str | None = None,
+    week_number: int | None = None,
+    home_team_id: int | None = None,
+    away_team_id: int | None = None,
+    venue_id: int | None = None,
+    venue_name: str | None = None,
+    neutral_site: bool = False,
+    is_playoff: bool = False,
+    game_type: str | None = None,
+    game_time: datetime | None = None,
+    espn_event_id: str | None = None,
+    external_game_id: str | None = None,
+    game_status: str = "scheduled",
+    data_source: str = "espn",
+    home_score: int | None = None,
+    away_score: int | None = None,
+    source_file: str | None = None,
+    attendance: int | None = None,
+) -> int:
+    """
+    Insert or update a game in the games dimension table (idempotent).
+
+    Uses ON CONFLICT on the natural key (sport, game_date, home_team_code,
+    away_team_code) to upsert. On conflict, updates non-null fields via
+    COALESCE to avoid overwriting good data with NULLs.
+
+    Args:
+        sport: Sport code ('nfl', 'nba', etc.)
+        game_date: Date of the game
+        home_team_code: Home team abbreviation (e.g., 'KC')
+        away_team_code: Away team abbreviation (e.g., 'BAL')
+        season: Season year (derived from game_date if not provided)
+        league: League code (defaults to sport if not provided)
+        season_type: Season phase ('regular', 'playoff', etc.)
+        week_number: Week number within season
+        home_team_id: FK to teams.team_id for home team
+        away_team_id: FK to teams.team_id for away team
+        venue_id: FK to venues.venue_id
+        venue_name: Denormalized venue name
+        neutral_site: True if neutral venue
+        is_playoff: True if playoff game
+        game_type: Game classification ('regular', 'playoff', etc.)
+        game_time: Precise game start timestamp
+        espn_event_id: ESPN event identifier for cross-source linking
+        external_game_id: External game identifier
+        game_status: Current status ('scheduled', 'final', etc.)
+        data_source: Data provenance ('espn', 'fivethirtyeight', etc.)
+        home_score: Home team final score
+        away_score: Away team final score
+        source_file: Source filename for file-based imports
+        attendance: Game attendance
+
+    Returns:
+        id of the games row (created or existing)
+
+    Example:
+        >>> game_id = get_or_create_game(
+        ...     sport="nfl",
+        ...     game_date=date(2024, 9, 8),
+        ...     home_team_code="KC",
+        ...     away_team_code="BAL",
+        ...     season=2024,
+        ...     league="nfl",
+        ...     espn_event_id="401547417",
+        ...     game_status="final",
+        ... )
+
+    References:
+        - Migration 0035: games dimension table
+        - Issue #439: Games dimension unification
+    """
+    # Derive season from game_date year if not provided
+    if season is None:
+        season = game_date.year
+
+    # Default league to sport
+    if league is None:
+        league = sport
+
+    query = """
+        INSERT INTO games (
+            sport, game_date, home_team_code, away_team_code,
+            season, league, season_type, week_number,
+            home_team_id, away_team_id, venue_id, venue_name,
+            neutral_site, is_playoff, game_type,
+            game_time, espn_event_id, external_game_id,
+            game_status, data_source,
+            home_score, away_score, source_file, attendance
+        )
+        VALUES (
+            %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s
+        )
+        ON CONFLICT (sport, game_date, home_team_code, away_team_code) DO UPDATE SET
+            updated_at = NOW(),
+            espn_event_id = COALESCE(EXCLUDED.espn_event_id, games.espn_event_id),
+            game_status = CASE
+                WHEN games.game_status IN ('final', 'final_ot') THEN games.game_status
+                ELSE EXCLUDED.game_status
+            END,
+            home_team_id = COALESCE(EXCLUDED.home_team_id, games.home_team_id),
+            away_team_id = COALESCE(EXCLUDED.away_team_id, games.away_team_id),
+            venue_id = COALESCE(EXCLUDED.venue_id, games.venue_id),
+            venue_name = COALESCE(EXCLUDED.venue_name, games.venue_name),
+            season_type = COALESCE(EXCLUDED.season_type, games.season_type),
+            week_number = COALESCE(EXCLUDED.week_number, games.week_number),
+            game_time = COALESCE(EXCLUDED.game_time, games.game_time),
+            neutral_site = EXCLUDED.neutral_site,
+            is_playoff = EXCLUDED.is_playoff,
+            game_type = COALESCE(EXCLUDED.game_type, games.game_type),
+            home_score = COALESCE(EXCLUDED.home_score, games.home_score),
+            away_score = COALESCE(EXCLUDED.away_score, games.away_score),
+            data_source = EXCLUDED.data_source,
+            source_file = COALESCE(EXCLUDED.source_file, games.source_file),
+            attendance = COALESCE(EXCLUDED.attendance, games.attendance)
+        RETURNING id
+    """
+    params = (
+        sport,
+        game_date,
+        home_team_code,
+        away_team_code,
+        season,
+        league,
+        season_type,
+        week_number,
+        home_team_id,
+        away_team_id,
+        venue_id,
+        venue_name,
+        neutral_site,
+        is_playoff,
+        game_type,
+        game_time,
+        espn_event_id,
+        external_game_id,
+        game_status,
+        data_source,
+        home_score,
+        away_score,
+        source_file,
+        attendance,
+    )
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, params)
+        result = cur.fetchone()
+        return cast("int", result["id"])
+
+
+def update_game_result(
+    game_id: int,
+    home_score: int,
+    away_score: int,
+) -> None:
+    """
+    Update final scores, margin, and result for a completed game.
+
+    Called by the ESPN poller when game_status transitions to 'final' or
+    'final_ot'. Computes actual_margin (home - away) and result
+    ('home_win', 'away_win', 'draw') automatically.
+
+    Args:
+        game_id: Primary key of the games row
+        home_score: Home team final score
+        away_score: Away team final score
+
+    Example:
+        >>> update_game_result(game_id=42, home_score=27, away_score=20)
+        # Sets actual_margin=7, result='home_win'
+
+    References:
+        - Migration 0035: games dimension table
+    """
+    # Compute derived fields
+    actual_margin = home_score - away_score
+    if home_score > away_score:
+        result = "home_win"
+    elif away_score > home_score:
+        result = "away_win"
+    else:
+        result = "draw"
+
+    query = """
+        UPDATE games
+        SET home_score = %s,
+            away_score = %s,
+            actual_margin = %s,
+            result = %s,
+            updated_at = NOW()
+        WHERE id = %s
+    """
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, (home_score, away_score, actual_margin, result, game_id))

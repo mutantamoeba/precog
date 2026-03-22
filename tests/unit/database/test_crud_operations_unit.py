@@ -16,7 +16,7 @@ Usage:
     pytest tests/unit/database/test_phase2c_crud.py -v -m unit
 """
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -33,10 +33,12 @@ from precog.database.crud_operations import (
     get_game_state_history,
     get_games_by_date,
     get_live_games,
+    get_or_create_game,
     get_team_by_espn_id,
     get_team_rankings,
     get_venue_by_espn_id,
     get_venue_by_id,
+    update_game_result,
     upsert_game_state,
 )
 
@@ -393,6 +395,29 @@ class TestCreateGameStateUnit:
         # Verify Decimal is passed (not float)
         assert any(isinstance(p, Decimal) for p in params)
 
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_create_game_state_passes_game_id(self, mock_get_cursor):
+        """Test create_game_state passes game_id FK to INSERT."""
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"id": 1}
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        create_game_state(
+            espn_event_id="401547417",
+            game_status="pre",
+            league="nfl",
+            game_id=42,
+        )
+
+        insert_call = mock_cursor.execute.call_args_list[0]
+        sql = insert_call[0][0]
+        params = insert_call[0][1]
+        # Verify game_id column is in the SQL
+        assert "game_id" in sql
+        # Verify game_id=42 is in the params (last before row_current_ind)
+        assert 42 in params
+
 
 @pytest.mark.unit
 class TestGetGameStateUnit:
@@ -547,6 +572,189 @@ class TestGetGamesByDateUnit:
         call_args = mock_fetch_all.call_args
         params = call_args[0][1]
         assert "nba" in params
+
+
+# =============================================================================
+# GAMES DIMENSION UNIT TESTS (Migration 0035)
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestGetOrCreateGameUnit:
+    """Unit tests for get_or_create_game — games dimension upsert."""
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_get_or_create_game_returns_id(self, mock_get_cursor):
+        """Test get_or_create_game returns the game id."""
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"id": 42}
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = get_or_create_game(
+            sport="nfl",
+            game_date=date(2024, 9, 8),
+            home_team_code="KC",
+            away_team_code="BAL",
+            season=2024,
+            league="nfl",
+        )
+
+        assert result == 42
+        assert mock_cursor.execute.call_count == 1
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_get_or_create_game_derives_season_from_date(self, mock_get_cursor):
+        """Test season is derived from game_date.year when not provided."""
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"id": 1}
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        get_or_create_game(
+            sport="nfl",
+            game_date=date(2025, 11, 15),
+            home_team_code="KC",
+            away_team_code="BAL",
+        )
+
+        # Check season param (5th positional param after sport, date, home, away)
+        insert_call = mock_cursor.execute.call_args_list[0]
+        params = insert_call[0][1]
+        assert params[4] == 2025  # season derived from game_date.year
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_get_or_create_game_defaults_league_to_sport(self, mock_get_cursor):
+        """Test league defaults to sport when not provided."""
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"id": 1}
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        get_or_create_game(
+            sport="ncaaf",
+            game_date=date(2024, 10, 5),
+            home_team_code="OSU",
+            away_team_code="MICH",
+        )
+
+        insert_call = mock_cursor.execute.call_args_list[0]
+        params = insert_call[0][1]
+        assert params[5] == "ncaaf"  # league defaults to sport
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_get_or_create_game_on_conflict_sql_has_case_guard(self, mock_get_cursor):
+        """Test the ON CONFLICT clause has CASE guard for game_status.
+
+        The CASE expression prevents regressing game_status from 'final'/'final_ot'
+        back to an earlier status when the same game is upserted again.
+        """
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"id": 1}
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        get_or_create_game(
+            sport="nfl",
+            game_date=date(2024, 9, 8),
+            home_team_code="KC",
+            away_team_code="BAL",
+            game_status="scheduled",
+        )
+
+        # Verify the SQL contains the CASE guard
+        insert_call = mock_cursor.execute.call_args_list[0]
+        sql = insert_call[0][0]
+        assert "CASE" in sql
+        assert "final" in sql
+        assert "final_ot" in sql
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_get_or_create_game_passes_all_fields(self, mock_get_cursor):
+        """Test all optional fields are passed through to SQL."""
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"id": 99}
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = get_or_create_game(
+            sport="nfl",
+            game_date=date(2024, 9, 8),
+            home_team_code="KC",
+            away_team_code="BAL",
+            season=2024,
+            league="nfl",
+            season_type="regular",
+            week_number=1,
+            home_team_id=10,
+            away_team_id=20,
+            venue_id=5,
+            venue_name="Arrowhead Stadium",
+            neutral_site=False,
+            espn_event_id="401547417",
+            game_status="pre",
+            data_source="espn_poller",
+        )
+
+        assert result == 99
+        insert_call = mock_cursor.execute.call_args_list[0]
+        params = insert_call[0][1]
+        # Verify key fields are in params
+        assert "nfl" in params  # sport
+        assert "KC" in params  # home_team_code
+        assert "BAL" in params  # away_team_code
+        assert "401547417" in params  # espn_event_id
+        assert "espn_poller" in params  # data_source
+
+
+@pytest.mark.unit
+class TestUpdateGameResultUnit:
+    """Unit tests for update_game_result — final score + derived fields."""
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_update_game_result_home_win(self, mock_get_cursor):
+        """Test home win sets correct margin and result."""
+        mock_cursor = MagicMock()
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        update_game_result(game_id=42, home_score=27, away_score=20)
+
+        call_args = mock_cursor.execute.call_args_list[0]
+        params = call_args[0][1]
+        assert params[0] == 27  # home_score
+        assert params[1] == 20  # away_score
+        assert params[2] == 7  # actual_margin (27-20)
+        assert params[3] == "home_win"  # result
+        assert params[4] == 42  # game_id
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_update_game_result_away_win(self, mock_get_cursor):
+        """Test away win sets correct margin and result."""
+        mock_cursor = MagicMock()
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        update_game_result(game_id=99, home_score=10, away_score=24)
+
+        call_args = mock_cursor.execute.call_args_list[0]
+        params = call_args[0][1]
+        assert params[2] == -14  # actual_margin (10-24)
+        assert params[3] == "away_win"
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_update_game_result_draw(self, mock_get_cursor):
+        """Test draw sets correct margin and result."""
+        mock_cursor = MagicMock()
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        update_game_result(game_id=1, home_score=17, away_score=17)
+
+        call_args = mock_cursor.execute.call_args_list[0]
+        params = call_args[0][1]
+        assert params[2] == 0  # actual_margin
+        assert params[3] == "draw"
 
 
 # =============================================================================

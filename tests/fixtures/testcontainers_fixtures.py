@@ -827,8 +827,67 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_historical_elo_sport ON historical_elo(sport);
     CREATE INDEX IF NOT EXISTS idx_historical_elo_season ON historical_elo(season);
 
+    -- games dimension table (migration 0035: canonical game identity)
+    CREATE TABLE IF NOT EXISTS games (
+        id SERIAL PRIMARY KEY,
+        sport VARCHAR(20) NOT NULL,
+        game_date DATE NOT NULL,
+        home_team_code VARCHAR(10) NOT NULL,
+        away_team_code VARCHAR(10) NOT NULL,
+        season INTEGER NOT NULL,
+        season_type VARCHAR(20),
+        week_number INTEGER,
+        league VARCHAR(20) NOT NULL,
+        home_team_id INTEGER REFERENCES teams(team_id) ON DELETE SET NULL,
+        away_team_id INTEGER REFERENCES teams(team_id) ON DELETE SET NULL,
+        venue_id INTEGER REFERENCES venues(venue_id) ON DELETE SET NULL,
+        venue_name VARCHAR(100),
+        neutral_site BOOLEAN DEFAULT FALSE NOT NULL,
+        is_playoff BOOLEAN DEFAULT FALSE NOT NULL,
+        game_type VARCHAR(30),
+        game_time TIMESTAMP WITH TIME ZONE,
+        home_score INTEGER,
+        away_score INTEGER,
+        actual_margin INTEGER,
+        result VARCHAR(10),
+        game_status VARCHAR(50) NOT NULL DEFAULT 'scheduled',
+        espn_event_id VARCHAR(50),
+        external_game_id VARCHAR(100),
+        home_pre_elo DECIMAL(10,2),
+        away_pre_elo DECIMAL(10,2),
+        attendance INTEGER,
+        source_file VARCHAR(255),
+        features JSONB,
+        data_source VARCHAR(50) NOT NULL DEFAULT 'espn',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        CONSTRAINT uq_games_matchup UNIQUE (sport, game_date, home_team_code, away_team_code),
+        CONSTRAINT ck_games_sport CHECK (sport IN (
+            'nfl', 'nba', 'mlb', 'nhl', 'ncaaf', 'ncaab', 'ncaaw', 'wnba', 'soccer'
+        )),
+        CONSTRAINT ck_games_season CHECK (season BETWEEN 1900 AND 2100),
+        CONSTRAINT ck_games_status CHECK (game_status IN (
+            'scheduled', 'pre', 'in_progress', 'halftime', 'end_of_period',
+            'final', 'final_ot', 'delayed', 'postponed', 'cancelled', 'suspended'
+        )),
+        CONSTRAINT ck_games_scores CHECK (
+            (home_score IS NULL AND away_score IS NULL) OR (home_score >= 0 AND away_score >= 0)
+        ),
+        CONSTRAINT ck_games_result CHECK (result IS NULL OR result IN ('home_win', 'away_win', 'draw')),
+        CONSTRAINT ck_games_source CHECK (data_source IN (
+            'espn', 'espn_poller', 'historical_import', 'imported', 'kaggle',
+            'sports_reference', 'fivethirtyeight', 'pybaseball', 'manual', 'reconciled'
+        ))
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_games_espn_event ON games(espn_event_id) WHERE espn_event_id IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_games_sport_season ON games(sport, season, game_date);
+    CREATE INDEX IF NOT EXISTS idx_games_date ON games(game_date);
+
+    -- Migration 0035: add game_id FK to game_states
+    ALTER TABLE game_states ADD COLUMN IF NOT EXISTS game_id INTEGER REFERENCES games(id) ON DELETE SET NULL;
+
     -- Track migration version
-    INSERT INTO alembic_version (version_num) VALUES ('0034')
+    INSERT INTO alembic_version (version_num) VALUES ('0035')
     ON CONFLICT (version_num) DO NOTHING;
     """
 

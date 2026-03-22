@@ -249,6 +249,8 @@ class TestPollOnce:
         assert result["items_updated"] == 0
         assert result["items_created"] == 0
 
+    @patch("precog.schedulers.espn_game_poller.update_game_result")
+    @patch("precog.schedulers.espn_game_poller.get_or_create_game")
     @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
     @patch("precog.schedulers.espn_game_poller.upsert_game_state")
     @patch("precog.schedulers.espn_game_poller.create_venue")
@@ -257,6 +259,8 @@ class TestPollOnce:
         mock_create_venue: MagicMock,
         mock_upsert: MagicMock,
         mock_get_team: MagicMock,
+        mock_get_or_create_game: MagicMock,
+        mock_update_result: MagicMock,
         mock_espn_client: MagicMock,
         sample_game_data: dict[str, Any],
     ) -> None:
@@ -264,6 +268,7 @@ class TestPollOnce:
         mock_espn_client.get_scoreboard.return_value = [sample_game_data]
         mock_get_team.return_value = {"team_id": 1}
         mock_create_venue.return_value = 100
+        mock_get_or_create_game.return_value = 42
 
         poller = ESPNGamePoller(
             leagues=["nfl"],
@@ -275,6 +280,12 @@ class TestPollOnce:
         assert result["items_fetched"] == 1
         assert result["items_updated"] == 1
         mock_upsert.assert_called_once()
+        mock_get_or_create_game.assert_called_once()
+        # Verify game_id is passed to upsert_game_state
+        upsert_kwargs = mock_upsert.call_args
+        assert upsert_kwargs.kwargs.get("game_id") == 42 or (
+            upsert_kwargs[1].get("game_id") == 42 if len(upsert_kwargs) > 1 else False
+        )
 
     def test_poll_once_custom_leagues(self, mock_espn_client: MagicMock) -> None:
         """Test poll_once with custom leagues parameter."""
@@ -1231,6 +1242,8 @@ class TestPollLeagueWrapper:
         assert poller._stats["polls_completed"] == 1
         assert poller._stats["items_fetched"] == 0
 
+    @patch("precog.schedulers.espn_game_poller.update_game_result")
+    @patch("precog.schedulers.espn_game_poller.get_or_create_game")
     @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
     @patch("precog.schedulers.espn_game_poller.upsert_game_state")
     @patch("precog.schedulers.espn_game_poller.create_venue")
@@ -1239,6 +1252,8 @@ class TestPollLeagueWrapper:
         mock_create_venue: MagicMock,
         mock_upsert: MagicMock,
         mock_get_team: MagicMock,
+        mock_get_or_create_game: MagicMock,
+        mock_update_result: MagicMock,
         mock_espn_client: MagicMock,
         sample_game_data: dict[str, Any],
     ) -> None:
@@ -1246,6 +1261,7 @@ class TestPollLeagueWrapper:
         mock_espn_client.get_scoreboard.return_value = [sample_game_data]
         mock_get_team.return_value = {"team_id": 1}
         mock_create_venue.return_value = 100
+        mock_get_or_create_game.return_value = 55
 
         poller = ESPNGamePoller(
             leagues=["nfl"],
@@ -1257,6 +1273,7 @@ class TestPollLeagueWrapper:
         assert poller._stats["items_fetched"] == 1
         assert poller._stats["items_updated"] == 1
         mock_upsert.assert_called_once()
+        mock_get_or_create_game.assert_called_once()
 
     def test_poll_league_wrapper_handles_api_error(self, mock_espn_client: MagicMock) -> None:
         """Test _poll_league_wrapper handles ESPN API errors gracefully."""

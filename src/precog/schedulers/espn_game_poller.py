@@ -70,7 +70,9 @@ from precog.api_connectors.espn_client import (
 from precog.database.crud_operations import (
     create_venue,
     get_live_games,
+    get_or_create_game,
     get_team_by_espn_id,
+    update_game_result,
     upsert_game_state,
 )
 from precog.schedulers.base_poller import BasePoller
@@ -1054,6 +1056,42 @@ class ESPNGamePoller(BasePoller):
         if clock_val is not None:
             clock_seconds = Decimal(str(clock_val))
 
+        # Derive season from game_date (calendar year)
+        game_season = game_date.year if game_date else None
+        game_season_type = str(metadata.get("season_type")) if metadata.get("season_type") else None
+        game_week_number = metadata.get("week_number")
+        normalized_status = self._normalize_game_status(state.get("game_status", "pre"))
+
+        # Create or update the games dimension row (idempotent)
+        game_id = None
+        if game_date and home_team_info.get("team_code") and away_team_info.get("team_code"):
+            try:
+                game_id = get_or_create_game(
+                    sport=league,
+                    game_date=game_date.date() if hasattr(game_date, "date") else game_date,
+                    home_team_code=home_team_info.get("team_code", ""),
+                    away_team_code=away_team_info.get("team_code", ""),
+                    season=game_season,
+                    league=league,
+                    season_type=game_season_type,
+                    week_number=game_week_number,
+                    home_team_id=home_team_id,
+                    away_team_id=away_team_id,
+                    venue_id=venue_id,
+                    venue_name=venue_info.get("venue_name"),
+                    neutral_site=metadata.get("neutral_site", False),
+                    espn_event_id=espn_event_id,
+                    game_status=normalized_status,
+                    game_time=game_date,
+                    data_source="espn_poller",
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to upsert games dimension row for %s",
+                    espn_event_id,
+                    exc_info=True,
+                )
+
         # Upsert game state (SCD Type 2 handles versioning)
         # Returns new row ID if state changed, or existing ID/None if unchanged
         result_id = upsert_game_state(
@@ -1066,16 +1104,32 @@ class ESPNGamePoller(BasePoller):
             period=state.get("period", 0),
             clock_seconds=clock_seconds,
             clock_display=state.get("clock_display"),
-            game_status=self._normalize_game_status(state.get("game_status", "pre")),
+            game_status=normalized_status,
             game_date=game_date,
             broadcast=metadata.get("broadcast"),
             neutral_site=metadata.get("neutral_site", False),
-            season_type=str(metadata.get("season_type")) if metadata.get("season_type") else None,
-            week_number=metadata.get("week_number"),
+            season_type=game_season_type,
+            week_number=game_week_number,
             league=league,
             situation=situation,
             linescores=state.get("linescores"),
+            game_id=game_id,
         )
+
+        # Update final result in games dimension if game is complete
+        if game_id and normalized_status in ("final", "final_ot"):
+            try:
+                update_game_result(
+                    game_id=game_id,
+                    home_score=state.get("home_score", 0),
+                    away_score=state.get("away_score", 0),
+                )
+            except Exception:
+                logger.warning(
+                    "Failed to update game result for game_id=%s",
+                    game_id,
+                    exc_info=True,
+                )
 
         # upsert returns None when skip_if_unchanged=True and no meaningful
         # state change was detected (score, period, status, situation unchanged).
