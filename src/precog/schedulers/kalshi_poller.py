@@ -782,29 +782,48 @@ class KalshiMarketPoller(BasePoller):
             no_ask_cents = market.get("no_ask", 0)
             no_price = Decimal(no_ask_cents) / Decimal(100)
 
+        # Compute series/subcategory and enrichment columns for both
+        # create and update paths (migration 0033).
+        # Use the passed series_ticker parameter, fall back to market dict if available
+        effective_series = series_ticker or market.get("series_ticker", "")
+
+        # Determine subcategory from series ticker (e.g., KXNFLGAME -> "nfl")
+        subcategory = None
+        if "NFL" in effective_series.upper():
+            subcategory = "nfl"
+        elif "NCAAF" in effective_series.upper():
+            subcategory = "ncaaf"
+        elif "NBA" in effective_series.upper():
+            subcategory = "nba"
+        elif "NHL" in effective_series.upper():
+            subcategory = "nhl"
+        elif "MLB" in effective_series.upper():
+            subcategory = "mlb"
+
+        # Enrichment columns (migration 0033)
+        # Use lowercase to match game_states.league, teams.sport convention
+        league = subcategory  # already lowercase (e.g., "nfl", "nba")
+        source_url = (
+            f"https://kalshi.com/markets/{effective_series.lower()}/{ticker}"
+            if effective_series
+            else None
+        )
+        # Parse outcome_label from ticker: last segment after "-"
+        # e.g. "KXNFLGAME-26-KC" -> "KC", but skip if all-digit
+        ticker_parts = ticker.split("-")
+        outcome_label = (
+            ticker_parts[-1] if len(ticker_parts) > 1 and not ticker_parts[-1].isdigit() else None
+        )
+
         # Check if market already exists
         existing = get_current_market(ticker)
 
         if existing is None:
             # Create new market - first ensure the event exists
             event_ticker = market.get("event_ticker", "")
-            # Use the passed series_ticker parameter, fall back to market dict if available
-            effective_series = series_ticker or market.get("series_ticker", "")
 
-            # Determine category from series ticker (e.g., KXNFLGAME -> sports/nfl)
             # Default to 'sports' for game-related series, 'other' for unknown
             category = "sports"  # Most Kalshi markets we poll are sports
-            subcategory = None
-            if "NFL" in effective_series.upper():
-                subcategory = "nfl"
-            elif "NCAAF" in effective_series.upper():
-                subcategory = "ncaaf"
-            elif "NBA" in effective_series.upper():
-                subcategory = "nba"
-            elif "NHL" in effective_series.upper():
-                subcategory = "nhl"
-            elif "MLB" in effective_series.upper():
-                subcategory = "mlb"
 
             # Get or create the event before creating the market.
             # This satisfies the FK constraint (markets.event_internal_id -> events.id).
@@ -861,6 +880,9 @@ class KalshiMarketPoller(BasePoller):
                 open_time=market.get("open_time"),
                 close_time=market.get("close_time"),
                 expiration_time=market.get("expiration_time"),
+                league=league,
+                source_url=source_url,
+                outcome_label=outcome_label,
                 metadata={
                     k: v
                     for k, v in {
@@ -894,6 +916,8 @@ class KalshiMarketPoller(BasePoller):
                 open_time=market.get("open_time"),
                 close_time=market.get("close_time"),
                 expiration_time=market.get("expiration_time"),
+                league=league,
+                source_url=source_url,
             )
             logger.debug(
                 "Updated market: %s (yes: %s -> %s)",
