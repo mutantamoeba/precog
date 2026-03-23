@@ -33,6 +33,7 @@ from precog.database import (
     get_trades_by_market,
     insert_orderbook_snapshot,
     update_account_balance_with_versioning,
+    update_bracket_counts,
     update_market_with_versioning,
     update_position_price,
 )
@@ -1247,3 +1248,87 @@ def test_orderbook_snapshot_empty_arrays(db_pool, clean_test_data, sample_market
     assert snapshot["bid_prices"] is None
     assert snapshot["ask_prices"] is None
     assert snapshot["levels"] == 0
+
+
+# =============================================================================
+# BRACKET COUNT TESTS
+# =============================================================================
+
+
+@pytest.mark.integration
+def test_update_bracket_counts_single_event(db_pool, clean_test_data, sample_market_data):
+    """Test bracket_count is computed correctly for markets sharing an event."""
+    # Create 3 markets under the same event
+    for i, ticker in enumerate(["TEST-BRACKET-A", "TEST-BRACKET-B", "TEST-BRACKET-C"]):
+        data = dict(sample_market_data)
+        data["ticker"] = ticker
+        data["external_id"] = f"TEST-BRACKET-EXT-{i}"
+        create_market(**data)
+
+    updated = update_bracket_counts()
+    assert updated >= 3  # At least the 3 we just created
+
+    for ticker in ["TEST-BRACKET-A", "TEST-BRACKET-B", "TEST-BRACKET-C"]:
+        market = get_current_market(ticker)
+        assert market is not None
+        assert market["bracket_count"] == 3, (
+            f"{ticker} bracket_count should be 3, got {market['bracket_count']}"
+        )
+
+
+@pytest.mark.integration
+def test_update_bracket_counts_no_event(db_pool, clean_test_data, sample_market_data):
+    """Markets without event_internal_id get bracket_count = NULL."""
+    data = dict(sample_market_data)
+    data["ticker"] = "TEST-BRACKET-ORPHAN"
+    data["external_id"] = "TEST-BRACKET-ORPHAN-EXT"
+    data["event_internal_id"] = None
+    create_market(**data)
+
+    update_bracket_counts()
+
+    market = get_current_market("TEST-BRACKET-ORPHAN")
+    assert market is not None
+    assert market["bracket_count"] is None
+
+
+@pytest.mark.integration
+def test_update_bracket_counts_idempotent(db_pool, clean_test_data, sample_market_data):
+    """Running update_bracket_counts twice should return 0 on second call."""
+    data = dict(sample_market_data)
+    data["ticker"] = "TEST-BRACKET-IDEM"
+    data["external_id"] = "TEST-BRACKET-IDEM-EXT"
+    create_market(**data)
+
+    first_run = update_bracket_counts()
+    assert first_run >= 1
+
+    second_run = update_bracket_counts()
+    assert second_run == 0, "Second run should update 0 rows (already correct)"
+
+
+@pytest.mark.integration
+def test_update_bracket_counts_nulls_orphan_with_stale_value(
+    db_pool, clean_test_data, sample_market_data
+):
+    """If a market without an event has a stale bracket_count, it gets NULLed."""
+    data = dict(sample_market_data)
+    data["ticker"] = "TEST-BRACKET-STALE"
+    data["external_id"] = "TEST-BRACKET-STALE-EXT"
+    data["event_internal_id"] = None
+    data["bracket_count"] = 5  # Stale value
+    create_market(**data)
+
+    updated = update_bracket_counts()
+    assert updated >= 1
+
+    market = get_current_market("TEST-BRACKET-STALE")
+    assert market is not None
+    assert market["bracket_count"] is None
+
+
+@pytest.mark.integration
+def test_update_bracket_counts_empty_table(db_pool, clean_test_data):
+    """update_bracket_counts on empty markets table returns 0."""
+    updated = update_bracket_counts()
+    assert updated == 0
