@@ -1066,6 +1066,8 @@ def get_or_create_event(
         - Migration 0038: events.game_id FK to games(id)
     """
     # Check if event already exists — return its surrogate PK
+    # TODO(#462): If game_id provided and event already exists, update
+    # events.game_id (requires update_event() CRUD function).
     existing = get_event(event_id)
     if existing is not None:
         return cast("int", existing["id"]), False
@@ -7267,6 +7269,7 @@ def insert_temporal_alignment_batch(alignments: list[dict]) -> int:
             - away_score (int | None)
             - period (str | None)
             - clock (str | None)
+            - game_id (int | None) — FK to games(id), denormalized from events
 
     Returns:
         Count of rows inserted.
@@ -7299,6 +7302,7 @@ def insert_temporal_alignment_batch(alignments: list[dict]) -> int:
 
     References:
         - Migration 0027: temporal_alignment
+        - Migration 0035: game_id FK added to temporal_alignment
         - migration_batch_plan_v1.md: Migration 0027 spec
     """
     if not alignments:
@@ -7348,6 +7352,7 @@ def insert_temporal_alignment_batch(alignments: list[dict]) -> int:
                 row.get("away_score"),
                 row.get("period"),
                 row.get("clock"),
+                row.get("game_id"),
             )
         )
 
@@ -7357,9 +7362,10 @@ def insert_temporal_alignment_batch(alignments: list[dict]) -> int:
             snapshot_time, game_state_time, time_delta_seconds,
             alignment_quality,
             yes_ask_price, no_ask_price, spread, volume,
-            game_status, home_score, away_score, period, clock
+            game_status, home_score, away_score, period, clock,
+            game_id
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
 
     with get_cursor(commit=True) as cur:

@@ -888,8 +888,11 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     -- Migration 0035: add game_id FK to game_states
     ALTER TABLE game_states ADD COLUMN IF NOT EXISTS game_id INTEGER REFERENCES games(id) ON DELETE SET NULL;
 
+    -- Migration 0038: add game_id FK to events (structural market-to-game link)
+    ALTER TABLE events ADD CONSTRAINT fk_events_game_id FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE SET NULL;
+
     -- Track migration version
-    INSERT INTO alembic_version (version_num) VALUES ('0035')
+    INSERT INTO alembic_version (version_num) VALUES ('0038')
     ON CONFLICT (version_num) DO NOTHING;
     """
 
