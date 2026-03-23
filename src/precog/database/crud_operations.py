@@ -8698,3 +8698,53 @@ def update_game_result(
     """
     with get_cursor(commit=True) as cur:
         cur.execute(query, (home_score, away_score, actual_margin, result, game_id))
+
+
+def update_bracket_counts() -> int:
+    """
+    Batch-update bracket_count for all markets based on their parent event.
+
+    bracket_count = number of markets sharing the same event_internal_id.
+    Markets without an event_internal_id get bracket_count = NULL (not 0),
+    since they have no parent event to count within.
+
+    Only rows where the current bracket_count differs from the computed
+    value (or is NULL when it shouldn't be) are updated, avoiding
+    unnecessary writes.
+
+    Returns:
+        Number of market rows actually updated.
+
+    Example:
+        >>> from precog.database.crud_operations import update_bracket_counts
+        >>> updated = update_bracket_counts()
+        >>> print(f"Updated {updated} market bracket counts")
+    """
+    query = """
+        WITH counts AS (
+            SELECT event_internal_id, COUNT(*) AS cnt
+            FROM markets
+            WHERE event_internal_id IS NOT NULL
+            GROUP BY event_internal_id
+        )
+        UPDATE markets m
+        SET bracket_count = c.cnt,
+            updated_at = NOW()
+        FROM counts c
+        WHERE m.event_internal_id = c.event_internal_id
+          AND (m.bracket_count IS DISTINCT FROM c.cnt)
+    """
+    # Also null out bracket_count for markets with no event (shouldn't be 0)
+    null_query = """
+        UPDATE markets
+        SET bracket_count = NULL,
+            updated_at = NOW()
+        WHERE event_internal_id IS NULL
+          AND bracket_count IS NOT NULL
+    """
+    with get_cursor(commit=True) as cur:
+        cur.execute(query)
+        updated_with_event: int = cur.rowcount
+        cur.execute(null_query)
+        updated_without_event: int = cur.rowcount
+    return updated_with_event + updated_without_event

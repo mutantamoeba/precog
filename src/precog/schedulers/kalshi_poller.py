@@ -54,6 +54,7 @@ from precog.database.crud_operations import (
     get_current_market,
     get_or_create_event,
     get_or_create_series,
+    update_bracket_counts,
     update_market_with_versioning,
 )
 from precog.schedulers.base_poller import BasePoller
@@ -267,6 +268,16 @@ class KalshiMarketPoller(BasePoller):
                 with self._lock:
                     self._stats["errors"] += 1
                     self._stats["last_error"] = str(e)
+
+        # Post-poll batch: recompute bracket_count for all markets.
+        # bracket_count = number of markets sharing the same parent event.
+        # Only rows where the value actually changed are written.
+        try:
+            bracket_updated = update_bracket_counts()
+            if bracket_updated:
+                logger.debug("Updated bracket_count for %d markets", bracket_updated)
+        except Exception as e:
+            logger.warning("Failed to update bracket counts: %s", e)
 
         # Heartbeat logging for operator visibility during quiet periods.
         # BasePoller._poll_wrapper() handles the standard INFO/DEBUG logging
@@ -546,6 +557,14 @@ class KalshiMarketPoller(BasePoller):
             total_fetched += fetched
             total_updated += updated
             total_created += created
+
+        # Post-poll batch: recompute bracket_count for all markets.
+        try:
+            bracket_updated = update_bracket_counts()
+            if bracket_updated:
+                logger.debug("Updated bracket_count for %d markets", bracket_updated)
+        except Exception as e:
+            logger.warning("Failed to update bracket counts: %s", e)
 
         return {
             "items_fetched": total_fetched,
