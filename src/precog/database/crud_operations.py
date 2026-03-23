@@ -1111,7 +1111,7 @@ def create_market(
     close_time: str | None = None,
     expiration_time: str | None = None,
     outcome_label: str | None = None,
-    league: str | None = None,
+    subcategory: str | None = None,
     bracket_count: int | None = None,
     source_url: str | None = None,
 ) -> int:
@@ -1142,7 +1142,7 @@ def create_market(
         close_time: When the market closes for trading (ISO 8601 string)
         expiration_time: When the market expires/settles (ISO 8601 string)
         outcome_label: Parsed outcome from ticker (e.g., "YES", "Over 42.5")
-        league: Sport league (e.g., "NFL", "NCAAF")
+        subcategory: Sport subcategory (e.g., "nfl", "nba") — matches events.subcategory
         bracket_count: Number of markets in the parent event bracket
         source_url: URL to the market on the platform
 
@@ -1171,6 +1171,7 @@ def create_market(
         - Migration 0021: markets split into dimension + market_snapshots fact
         - Migration 0022: market_id VARCHAR dropped, downstream uses integer FK
         - Migration 0033: enrichment columns added to dimension table
+        - Migration 0037: league renamed to subcategory
     """
     # Runtime type validation (enforces Decimal precision)
     yes_ask_price = validate_decimal(yes_ask_price, "yes_ask_price")
@@ -1182,13 +1183,14 @@ def create_market(
         # Step 1: Insert dimension row
         # Migration 0022: market_id VARCHAR dropped — no longer inserted.
         # Migration 0033: enrichment columns added (subtitle, timestamps, etc.)
+        # Migration 0037: league renamed to subcategory
         cur.execute(
             """
             INSERT INTO markets (
                 platform_id, event_internal_id, external_id,
                 ticker, title, market_type, status,
                 subtitle, open_time, close_time, expiration_time,
-                outcome_label, league, bracket_count, source_url,
+                outcome_label, subcategory, bracket_count, source_url,
                 metadata, updated_at
             )
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
@@ -1207,7 +1209,7 @@ def create_market(
                 close_time,
                 expiration_time,
                 outcome_label,
-                league,
+                subcategory,
                 bracket_count,
                 source_url,
                 json.dumps(metadata) if metadata else None,
@@ -1281,7 +1283,7 @@ def get_current_market(ticker: str) -> dict[str, Any] | None:
             m.close_time,
             m.expiration_time,
             m.outcome_label,
-            m.league,
+            m.subcategory,
             m.bracket_count,
             m.source_url,
             m.metadata,
@@ -1348,7 +1350,7 @@ def update_market_with_versioning(
     close_time: str | None = None,
     expiration_time: str | None = None,
     outcome_label: str | None = None,
-    league: str | None = None,
+    subcategory: str | None = None,
     bracket_count: int | None = None,
     source_url: str | None = None,
 ) -> int:
@@ -1376,7 +1378,7 @@ def update_market_with_versioning(
         close_time: When market closes for trading (optional, ISO 8601)
         expiration_time: When market expires/settles (optional, ISO 8601)
         outcome_label: Parsed outcome from ticker (optional)
-        league: Sport league (optional)
+        subcategory: Sport subcategory (optional) — matches events.subcategory
         bracket_count: Number of markets in parent event bracket (optional)
         source_url: URL to the market on the platform (optional)
 
@@ -1393,6 +1395,7 @@ def update_market_with_versioning(
     Reference:
         - Migration 0021: markets dimension + market_snapshots fact
         - Migration 0033: enrichment columns on dimension table
+        - Migration 0037: league renamed to subcategory
     """
     # Runtime type validation (enforces Decimal precision)
     if yes_ask_price is not None:
@@ -1424,7 +1427,7 @@ def update_market_with_versioning(
         expiration_time if expiration_time is not None else current["expiration_time"]
     )
     new_outcome_label = outcome_label if outcome_label is not None else current["outcome_label"]
-    new_league = league if league is not None else current["league"]
+    new_subcategory = subcategory if subcategory is not None else current["subcategory"]
     new_bracket_count = bracket_count if bracket_count is not None else current["bracket_count"]
     new_source_url = source_url if source_url is not None else current["source_url"]
 
@@ -1442,7 +1445,7 @@ def update_market_with_versioning(
                 close_time = %s,
                 expiration_time = %s,
                 outcome_label = %s,
-                league = %s,
+                subcategory = %s,
                 bracket_count = %s,
                 source_url = %s,
                 updated_at = NOW()
@@ -1456,7 +1459,7 @@ def update_market_with_versioning(
                 new_close_time,
                 new_expiration_time,
                 new_outcome_label,
-                new_league,
+                new_subcategory,
                 new_bracket_count,
                 new_source_url,
                 market_pk,
@@ -1565,14 +1568,15 @@ def get_markets_summary(
     Reference:
         - Migration 0021: markets dimension + market_snapshots fact
     """
-    # Migration 0033: enrichment columns (subtitle, league, close_time) added for GUI.
+    # Migration 0033: enrichment columns (subtitle, subcategory, close_time) added for GUI.
+    # Migration 0037: league renamed to subcategory. Prefer market's denormalized copy,
+    # fall back to event's subcategory for markets without the enrichment column populated.
     query = """
         SELECT
             m.ticker,
             m.title,
             m.subtitle,
-            COALESCE(e.subcategory, 'unknown') as subcategory,
-            m.league,
+            COALESCE(m.subcategory, e.subcategory, 'unknown') as subcategory,
             ms.yes_ask_price,
             ms.no_ask_price,
             m.status,
@@ -1588,7 +1592,7 @@ def get_markets_summary(
     params: list[Any] = []
 
     if subcategory is not None:
-        query += " AND LOWER(e.subcategory) = LOWER(%s)"
+        query += " AND LOWER(COALESCE(m.subcategory, e.subcategory)) = LOWER(%s)"
         params.append(subcategory)
 
     if status is not None:

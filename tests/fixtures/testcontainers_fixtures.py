@@ -177,7 +177,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         close_time TIMESTAMP WITH TIME ZONE,
         expiration_time TIMESTAMP WITH TIME ZONE,
         outcome_label VARCHAR(100),
-        league VARCHAR(20),
+        subcategory VARCHAR(20),
         bracket_count INTEGER CHECK (bracket_count >= 0),
         source_url VARCHAR(500),
         metadata JSONB,
@@ -190,7 +190,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_markets_status ON markets(status);
     CREATE INDEX IF NOT EXISTS idx_markets_close_time ON markets(close_time);
     CREATE INDEX IF NOT EXISTS idx_markets_expiration_time ON markets(expiration_time);
-    CREATE INDEX IF NOT EXISTS idx_markets_league ON markets(league);
+    CREATE INDEX IF NOT EXISTS idx_markets_subcategory ON markets(subcategory);
 
     -- market_snapshots table (fact — migration 0021: SCD Type 2 versioned pricing)
     CREATE TABLE IF NOT EXISTS market_snapshots (
@@ -732,7 +732,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         m.id, m.platform_id, m.event_internal_id, m.external_id,
         m.ticker, m.title, m.subtitle, m.market_type, m.status, m.settlement_value,
         m.open_time, m.close_time, m.expiration_time,
-        m.outcome_label, m.league, m.bracket_count, m.source_url,
+        m.outcome_label, m.subcategory, m.bracket_count, m.source_url,
         m.metadata, m.created_at, m.updated_at,
         ms.yes_ask_price, ms.no_ask_price, ms.yes_bid_price, ms.no_bid_price,
         ms.last_price, ms.spread, ms.volume, ms.open_interest, ms.liquidity,
