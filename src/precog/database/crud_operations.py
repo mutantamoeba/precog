@@ -899,6 +899,7 @@ def create_event(
     end_time: str | None = None,
     status: str | None = None,
     metadata: dict | None = None,
+    game_id: int | None = None,
 ) -> int:
     """
     Create a new event record.
@@ -922,6 +923,9 @@ def create_event(
         end_time: Optional event end time (ISO format)
         status: Optional status ('scheduled', 'live', 'final', 'cancelled', 'postponed')
         metadata: Optional additional metadata as JSONB
+        game_id: Optional integer FK to games(id). Links this Kalshi event
+            to the corresponding ESPN game. NULL for non-sports events or
+            when the matching game hasn't been identified yet.
 
     Returns:
         Integer surrogate PK (id) of the created event. Callers use this
@@ -938,7 +942,8 @@ def create_event(
         ...     category="sports",
         ...     title="Chiefs vs Seahawks - Dec 22, 2024",
         ...     series_internal_id=42,
-        ...     subcategory="nfl"
+        ...     subcategory="nfl",
+        ...     game_id=15,
         ... )
         >>> # event_pk is an integer, e.g. 7
 
@@ -955,15 +960,17 @@ def create_event(
         - docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
         - Migration 0019: events.series_internal_id replaces events.series_id
         - Migration 0020: events.id SERIAL PK, markets.event_internal_id INTEGER FK
+        - Migration 0038: events.game_id FK to games(id)
     """
     query = """
         INSERT INTO events (
             event_id, platform_id, series_internal_id, external_id,
             category, subcategory, title, description,
             start_time, end_time, status, metadata,
+            game_id,
             created_at, updated_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
         RETURNING id
     """
 
@@ -980,6 +987,7 @@ def create_event(
         end_time,
         status,
         json.dumps(metadata) if metadata else None,
+        game_id,
     )
 
     with get_cursor(commit=True) as cur:
@@ -1001,6 +1009,7 @@ def get_or_create_event(
     end_time: str | None = None,
     status: str | None = None,
     metadata: dict | None = None,
+    game_id: int | None = None,
 ) -> tuple[int, bool]:
     """
     Get an existing event or create it if it doesn't exist.
@@ -1021,6 +1030,7 @@ def get_or_create_event(
         end_time: Optional end time
         status: Optional status
         metadata: Optional metadata
+        game_id: Optional integer FK to games(id). Links event to ESPN game.
 
     Returns:
         Tuple of (id, created) where id is the integer surrogate PK and
@@ -1034,7 +1044,8 @@ def get_or_create_event(
         ...     external_id="KXNFL-24DEC22-KC-SEA",
         ...     category="sports",
         ...     title="Chiefs vs Seahawks - Dec 22, 2024",
-        ...     series_internal_id=42
+        ...     series_internal_id=42,
+        ...     game_id=15,
         ... )
         >>> if created:
         ...     print(f"Created new event with PK: {event_pk}")
@@ -1052,6 +1063,7 @@ def get_or_create_event(
         - src/precog/schedulers/kalshi_poller.py
         - Migration 0019: events.series_internal_id replaces events.series_id
         - Migration 0020: events.id SERIAL PK, returns integer instead of VARCHAR
+        - Migration 0038: events.game_id FK to games(id)
     """
     # Check if event already exists — return its surrogate PK
     existing = get_event(event_id)
@@ -1072,6 +1084,7 @@ def get_or_create_event(
         end_time=end_time,
         status=status,
         metadata=metadata,
+        game_id=game_id,
     )
     return event_pk, True
 
@@ -7115,6 +7128,7 @@ def insert_temporal_alignment(
     away_score: int | None = None,
     period: str | None = None,
     clock: str | None = None,
+    game_id: int | None = None,
 ) -> int:
     """
     Insert a temporal alignment linking a market snapshot to a game state.
@@ -7142,6 +7156,8 @@ def insert_temporal_alignment(
         away_score: Denormalized away team score
         period: Denormalized game period (e.g., '1st', '2nd', 'OT')
         clock: Denormalized game clock (e.g., '12:00', '05:32')
+        game_id: Optional FK to games(id). Denormalized from events.game_id
+            for direct game-level queries without joining through events.
 
     Returns:
         Integer surrogate PK (temporal_alignment.id) of the newly created row.
@@ -7161,12 +7177,15 @@ def insert_temporal_alignment(
         ...     alignment_quality='good',
         ...     yes_ask_price=Decimal("0.5500"),
         ...     no_ask_price=Decimal("0.4500"),
+        ...     game_id=15,
         ... )
 
     References:
         - Migration 0027: temporal_alignment
+        - Migration 0035: game_id FK added to temporal_alignment
+        - Migration 0038: events.game_id FK (structural source for this value)
         - Issue #375: Temporal alignment table
-        - migration_batch_plan_v1.md: Migration 0027 spec
+        - Issue #462: Structural market-to-game linking
     """
     # Runtime type validation (enforces Decimal precision)
     time_delta_seconds = validate_decimal(time_delta_seconds, "time_delta_seconds")
@@ -7190,9 +7209,10 @@ def insert_temporal_alignment(
             snapshot_time, game_state_time, time_delta_seconds,
             alignment_quality,
             yes_ask_price, no_ask_price, spread, volume,
-            game_status, home_score, away_score, period, clock
+            game_status, home_score, away_score, period, clock,
+            game_id
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         RETURNING id
     """
 
@@ -7213,6 +7233,7 @@ def insert_temporal_alignment(
         away_score,
         period,
         clock,
+        game_id,
     )
 
     with get_cursor(commit=True) as cur:

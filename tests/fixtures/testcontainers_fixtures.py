@@ -150,6 +150,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         metadata JSONB,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        game_id INTEGER,
         CONSTRAINT event_time_order CHECK (end_time IS NULL OR start_time IS NULL OR end_time >= start_time),
         UNIQUE(platform_id, external_id)
     );
@@ -157,6 +158,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_events_series_internal ON events(series_internal_id);
     CREATE INDEX IF NOT EXISTS idx_events_status ON events(status);
     CREATE INDEX IF NOT EXISTS idx_events_start_time ON events(start_time);
+    CREATE INDEX IF NOT EXISTS idx_events_game_id ON events(game_id);
 
     -- markets table (dimension — migration 0021: split from monolith)
     -- One row per market. NOT versioned. Status is mutable via UPDATE.
