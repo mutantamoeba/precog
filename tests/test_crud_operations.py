@@ -103,7 +103,7 @@ def test_create_market_with_enrichment_columns(db_pool, clean_test_data, sample_
     sample_market_data["close_time"] = "2026-01-15T18:00:00Z"
     sample_market_data["expiration_time"] = "2026-01-15T23:59:59Z"
     sample_market_data["outcome_label"] = "YES"
-    sample_market_data["league"] = "NFL"
+    sample_market_data["subcategory"] = "nfl"
     sample_market_data["bracket_count"] = 4
     sample_market_data["source_url"] = "https://kalshi.com/markets/test-enriched"
 
@@ -114,7 +114,7 @@ def test_create_market_with_enrichment_columns(db_pool, clean_test_data, sample_
     assert market is not None
     assert market["subtitle"] == "Week 14"
     assert market["outcome_label"] == "YES"
-    assert market["league"] == "NFL"
+    assert market["subcategory"] == "nfl"
     assert market["bracket_count"] == 4
     assert market["source_url"] == "https://kalshi.com/markets/test-enriched"
     # Timestamps are stored as TIMESTAMPTZ — verify actual values round-trip
@@ -139,7 +139,7 @@ def test_create_market_enrichment_columns_optional(db_pool, clean_test_data, sam
     assert market["close_time"] is None
     assert market["expiration_time"] is None
     assert market["outcome_label"] is None
-    assert market["league"] is None
+    assert market["subcategory"] is None
     assert market["bracket_count"] is None
     assert market["source_url"] is None
 
@@ -157,7 +157,7 @@ def test_update_market_with_enrichment_columns(db_pool, clean_test_data, sample_
         close_time="2026-02-01T18:00:00Z",
         expiration_time="2026-02-01T23:59:59Z",
         outcome_label="Seahawks",
-        league="NFL",
+        subcategory="nfl",
         bracket_count=6,
         source_url="https://kalshi.com/markets/updated",
     )
@@ -169,7 +169,7 @@ def test_update_market_with_enrichment_columns(db_pool, clean_test_data, sample_
     assert market["close_time"].day == 1
     assert market["expiration_time"].hour == 23
     assert market["outcome_label"] == "Seahawks"
-    assert market["league"] == "NFL"
+    assert market["subcategory"] == "nfl"
     assert market["bracket_count"] == 6
     assert market["source_url"] == "https://kalshi.com/markets/updated"
 
@@ -178,7 +178,7 @@ def test_update_market_with_enrichment_columns(db_pool, clean_test_data, sample_
 def test_get_markets_summary_includes_enrichment(db_pool, clean_test_data, sample_market_data):
     """Test that get_markets_summary returns enrichment columns from migration 0033."""
     sample_market_data["subtitle"] = "Week 14"
-    sample_market_data["league"] = "NFL"
+    sample_market_data["subcategory"] = "nfl"
     sample_market_data["close_time"] = "2026-01-15T18:00:00Z"
     create_market(**sample_market_data)
 
@@ -188,7 +188,7 @@ def test_get_markets_summary_includes_enrichment(db_pool, clean_test_data, sampl
     match = [r for r in results if r["ticker"] == sample_market_data["ticker"]]
     assert len(match) == 1
     assert match[0]["subtitle"] == "Week 14"
-    assert match[0]["league"] == "NFL"
+    assert match[0]["subcategory"] == "nfl"
     assert match[0]["close_time"] is not None
 
 

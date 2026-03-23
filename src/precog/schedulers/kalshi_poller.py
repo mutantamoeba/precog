@@ -800,9 +800,9 @@ class KalshiMarketPoller(BasePoller):
         elif "MLB" in effective_series.upper():
             subcategory = "mlb"
 
-        # Enrichment columns (migration 0033)
-        # Use lowercase to match game_states.league, teams.sport convention
-        league = subcategory  # already lowercase (e.g., "nfl", "nba")
+        # Enrichment columns (migration 0033, renamed in 0037)
+        # subcategory is already lowercase (e.g., "nfl", "nba") — passed directly
+        # to create_market/update_market_with_versioning as subcategory parameter.
         source_url = (
             f"https://kalshi.com/markets/{effective_series.lower()}/{ticker}"
             if effective_series
@@ -880,7 +880,7 @@ class KalshiMarketPoller(BasePoller):
                 open_time=market.get("open_time"),
                 close_time=market.get("close_time"),
                 expiration_time=market.get("expiration_time"),
-                league=league,
+                subcategory=subcategory,
                 source_url=source_url,
                 outcome_label=outcome_label,
                 metadata={
@@ -916,7 +916,7 @@ class KalshiMarketPoller(BasePoller):
                 open_time=market.get("open_time"),
                 close_time=market.get("close_time"),
                 expiration_time=market.get("expiration_time"),
-                league=league,
+                subcategory=subcategory,
                 source_url=source_url,
             )
             logger.debug(
