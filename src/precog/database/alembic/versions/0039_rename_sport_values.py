@@ -17,12 +17,11 @@ Value mapping:
     mls    -> soccer  (games table only)
 
 Steps:
+    0. UPDATE existing data — convert league codes to sport names
     1. DROP + RECREATE CHECK constraint on teams.sport with sport names
     2. DROP + RECREATE CHECK constraint on games.sport with sport names
     3. DROP + RECREATE partial unique index — now filters by league column
        (sport can no longer distinguish pro from college: both are 'football')
-
-Note: Clean DB — no data rows to UPDATE. Only constraints and indexes need changing.
 
 Revision ID: 0039
 Revises: 0038
@@ -42,14 +41,29 @@ down_revision: str = "0038"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
+# League code -> sport name mapping for UPDATE statements
+_SPORT_UPDATES = [
+    ("'football'", "'nfl', 'ncaaf'"),
+    ("'basketball'", "'nba', 'ncaab', 'wnba', 'ncaaw'"),
+    ("'hockey'", "'nhl'"),
+    ("'baseball'", "'mlb'"),
+    ("'soccer'", "'mls'"),
+]
+
 
 def upgrade() -> None:
     """Rename sport column CHECK constraints to accept sport names."""
     # =========================================================================
+    # Step 0: Update existing data — convert league codes to sport names
+    # =========================================================================
+    # Must run BEFORE new CHECK constraints are applied.
+    for target, sources in _SPORT_UPDATES:
+        op.execute(f"UPDATE teams SET sport = {target} WHERE sport IN ({sources})")  # noqa: S608
+        op.execute(f"UPDATE games SET sport = {target} WHERE sport IN ({sources})")  # noqa: S608
+
+    # =========================================================================
     # Step 1: teams.sport — drop old constraint, add new with sport names
     # =========================================================================
-    # Constraint name from migration 0004 (most recent definition):
-    # teams_sport_check
     op.execute("ALTER TABLE teams DROP CONSTRAINT IF EXISTS teams_sport_check;")
     op.execute("""
         ALTER TABLE teams ADD CONSTRAINT teams_sport_check
@@ -59,8 +73,6 @@ def upgrade() -> None:
     # =========================================================================
     # Step 2: games.sport — drop old constraint, add new with sport names
     # =========================================================================
-    # Constraint name from migration 0035:
-    # ck_games_sport
     op.execute("ALTER TABLE games DROP CONSTRAINT IF EXISTS ck_games_sport;")
     op.execute("""
         ALTER TABLE games ADD CONSTRAINT ck_games_sport
@@ -90,6 +102,19 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Restore original CHECK constraints with league codes."""
+    # =========================================================================
+    # Step 0: Revert data — convert sport names back to league codes
+    # =========================================================================
+    # Use the league column to determine the correct league code to restore.
+    op.execute(
+        "UPDATE teams SET sport = league"
+        " WHERE sport IN ('football', 'basketball', 'hockey', 'baseball', 'soccer')"
+    )
+    op.execute(
+        "UPDATE games SET sport = league"
+        " WHERE sport IN ('football', 'basketball', 'hockey', 'baseball', 'soccer')"
+    )
+
     # =========================================================================
     # Step 1: teams.sport — restore league-code constraint
     # =========================================================================
