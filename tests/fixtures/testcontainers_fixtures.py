@@ -230,8 +230,8 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         conference VARCHAR(50),
         division VARCHAR(50),
         espn_team_id VARCHAR(50),
+        kalshi_team_code VARCHAR(10),
         current_elo_rating DECIMAL(10,2) CHECK (current_elo_rating IS NULL OR current_elo_rating BETWEEN 0 AND 3000),
-        external_ids JSONB,
         metadata JSONB,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -240,6 +240,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_teams_sport ON teams(sport);
     CREATE INDEX IF NOT EXISTS idx_teams_league ON teams(league);
     CREATE INDEX IF NOT EXISTS idx_teams_espn_id ON teams(espn_team_id);
+    CREATE INDEX IF NOT EXISTS idx_teams_kalshi_code ON teams(kalshi_team_code, league) WHERE kalshi_team_code IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_teams_elo_rating ON teams(current_elo_rating);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_espn_id_league_unique ON teams(espn_team_id, league) WHERE espn_team_id IS NOT NULL;
     CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_code_league_pro ON teams(team_code, league) WHERE league IN ('nfl', 'nba', 'nhl', 'wnba', 'mlb', 'mls');

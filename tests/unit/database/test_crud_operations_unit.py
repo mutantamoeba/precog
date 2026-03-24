@@ -29,6 +29,7 @@ from precog.database.crud_operations import (
     create_game_state,
     create_team_ranking,
     create_venue,
+    find_game_by_matchup,
     game_state_changed,
     get_current_game_state,
     get_current_rankings,
@@ -38,8 +39,10 @@ from precog.database.crud_operations import (
     get_or_create_game,
     get_team_by_espn_id,
     get_team_rankings,
+    get_teams_with_kalshi_codes,
     get_venue_by_espn_id,
     get_venue_by_id,
+    update_event_game_id,
     update_game_result,
     upsert_game_state,
 )
@@ -1817,5 +1820,220 @@ class TestDeleteSchedulerStatusUnit:
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
         result = delete_scheduler_status("NONEXISTENT-HOST", "unknown_service")
+
+        assert result is False
+
+
+# =============================================================================
+# FIND GAME BY MATCHUP UNIT TESTS (Issue #462)
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestFindGameByMatchupUnit:
+    """Unit tests for find_game_by_matchup — league-to-sport mapping + game lookup."""
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_nfl_maps_to_football(self, mock_fetch_one):
+        """NFL league maps to 'football' sport in query."""
+        mock_fetch_one.return_value = {"id": 42}
+
+        result = find_game_by_matchup(
+            league="nfl",
+            game_date=date(2026, 1, 18),
+            home_team_code="NE",
+            away_team_code="HOU",
+        )
+
+        assert result == 42
+        # Verify the sport param passed to query is "football"
+        call_args = mock_fetch_one.call_args[0]
+        params = call_args[1]
+        assert params[0] == "football"
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_nba_maps_to_basketball(self, mock_fetch_one):
+        """NBA league maps to 'basketball' sport in query."""
+        mock_fetch_one.return_value = {"id": 99}
+
+        result = find_game_by_matchup(
+            league="nba",
+            game_date=date(2026, 3, 25),
+            home_team_code="BOS",
+            away_team_code="OKC",
+        )
+
+        assert result == 99
+        call_args = mock_fetch_one.call_args[0]
+        params = call_args[1]
+        assert params[0] == "basketball"
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_ncaaf_maps_to_football(self, mock_fetch_one):
+        """NCAAF league maps to 'football' sport."""
+        mock_fetch_one.return_value = {"id": 7}
+
+        result = find_game_by_matchup(
+            league="ncaaf",
+            game_date=date(2026, 1, 2),
+            home_team_code="MSST",
+            away_team_code="WAKE",
+        )
+
+        assert result == 7
+        call_args = mock_fetch_one.call_args[0]
+        params = call_args[1]
+        assert params[0] == "football"
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_nhl_maps_to_hockey(self, mock_fetch_one):
+        """NHL league maps to 'hockey' sport."""
+        mock_fetch_one.return_value = {"id": 55}
+
+        result = find_game_by_matchup(
+            league="nhl",
+            game_date=date(2026, 1, 15),
+            home_team_code="TOR",
+            away_team_code="BOS",
+        )
+
+        assert result == 55
+        call_args = mock_fetch_one.call_args[0]
+        params = call_args[1]
+        assert params[0] == "hockey"
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_returns_none_when_no_match(self, mock_fetch_one):
+        """Returns None when no game found in database."""
+        mock_fetch_one.return_value = None
+
+        result = find_game_by_matchup(
+            league="nfl",
+            game_date=date(2026, 1, 18),
+            home_team_code="NE",
+            away_team_code="HOU",
+        )
+
+        assert result is None
+        mock_fetch_one.assert_called_once()
+
+    def test_returns_none_for_unknown_league(self):
+        """Returns None for league not in LEAGUE_SPORT_CATEGORY (no DB call)."""
+        result = find_game_by_matchup(
+            league="xyz_unknown",
+            game_date=date(2026, 1, 18),
+            home_team_code="NE",
+            away_team_code="HOU",
+        )
+
+        assert result is None
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_passes_all_params_to_query(self, mock_fetch_one):
+        """Verify game_date, home_team_code, away_team_code all passed."""
+        mock_fetch_one.return_value = {"id": 1}
+        target_date = date(2026, 2, 14)
+
+        find_game_by_matchup(
+            league="nba",
+            game_date=target_date,
+            home_team_code="LAL",
+            away_team_code="GSW",
+        )
+
+        call_args = mock_fetch_one.call_args[0]
+        params = call_args[1]
+        assert params == ("basketball", target_date, "LAL", "GSW")
+
+
+# =============================================================================
+# GET TEAMS WITH KALSHI CODES UNIT TESTS (Issue #462)
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestGetTeamsWithKalshiCodesUnit:
+    """Unit tests for get_teams_with_kalshi_codes — team registry data source."""
+
+    @patch("precog.database.crud_operations.fetch_all")
+    def test_returns_list_of_team_dicts(self, mock_fetch_all):
+        """Returns list of team dicts with expected keys."""
+        mock_fetch_all.return_value = [
+            {"team_id": 1, "team_code": "HOU", "league": "nfl", "kalshi_team_code": None},
+            {"team_id": 2, "team_code": "JAX", "league": "nfl", "kalshi_team_code": "JAC"},
+        ]
+
+        result = get_teams_with_kalshi_codes(league="nfl")
+
+        assert len(result) == 2
+        assert result[0]["team_code"] == "HOU"
+        assert result[1]["kalshi_team_code"] == "JAC"
+
+    @patch("precog.database.crud_operations.fetch_all")
+    def test_filters_by_league(self, mock_fetch_all):
+        """When league is provided, passes it as query param."""
+        mock_fetch_all.return_value = []
+
+        get_teams_with_kalshi_codes(league="nba")
+
+        call_args = mock_fetch_all.call_args[0]
+        # Query should contain WHERE league = %s
+        sql = call_args[0]
+        assert "WHERE league" in sql
+        params = call_args[1]
+        assert params == ("nba",)
+
+    @patch("precog.database.crud_operations.fetch_all")
+    def test_returns_all_when_league_none(self, mock_fetch_all):
+        """When league is None, returns all teams (no WHERE clause on league)."""
+        mock_fetch_all.return_value = [
+            {"team_id": 1, "team_code": "HOU", "league": "nfl", "kalshi_team_code": None},
+            {"team_id": 3, "team_code": "BOS", "league": "nba", "kalshi_team_code": None},
+        ]
+
+        result = get_teams_with_kalshi_codes(league=None)
+
+        assert len(result) == 2
+        call_args = mock_fetch_all.call_args[0]
+        sql = call_args[0]
+        assert "WHERE league" not in sql
+
+
+# =============================================================================
+# UPDATE EVENT GAME ID UNIT TESTS (Issue #462)
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestUpdateEventGameIdUnit:
+    """Unit tests for update_event_game_id — linking events to games."""
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_returns_true_when_updated(self, mock_get_cursor):
+        """Returns True when event was found and updated."""
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = update_event_game_id(event_internal_id=42, game_id=15)
+
+        assert result is True
+        mock_cursor.execute.assert_called_once()
+        # Verify params include game_id and event_internal_id
+        call_args = mock_cursor.execute.call_args[0]
+        params = call_args[1]
+        assert 15 in params  # game_id
+        assert 42 in params  # event_internal_id
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_returns_false_when_no_event_found(self, mock_get_cursor):
+        """Returns False when no event matched (rowcount=0)."""
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 0
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = update_event_game_id(event_internal_id=999, game_id=15)
 
         assert result is False

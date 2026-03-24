@@ -922,3 +922,34 @@ class TestKalshiPollerValidation:
 
         # Market was still created despite alert failure
         mock_create.assert_called_once()
+
+
+# =============================================================================
+# Event-to-Game Matching Tests (Issue #462)
+# =============================================================================
+
+
+class TestEventGameMatching:
+    """Test that game_id flows from _match_event_to_game through to get_or_create_event."""
+
+    @pytest.mark.unit
+    def test_game_id_flows_to_get_or_create_event(self, poller_with_mock_client, mock_market_data):
+        """When _match_event_to_game returns a game_id, get_or_create_event receives it."""
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ) as mock_create_event,
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
+            patch.object(
+                poller_with_mock_client,
+                "_match_event_to_game",
+                return_value=42,
+            ),
+        ):
+            poller_with_mock_client._sync_market_to_db(mock_market_data)
+
+            mock_create_event.assert_called_once()
+            call_kwargs = mock_create_event.call_args.kwargs
+            assert call_kwargs["game_id"] == 42
