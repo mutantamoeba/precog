@@ -8751,3 +8751,228 @@ def update_bracket_counts() -> int:
         cur.execute(null_query)
         updated_without_event: int = cur.rowcount
     return updated_with_event + updated_without_event
+
+
+# =============================================================================
+# TEAM KALSHI CODE OPERATIONS (Issue #462 - Event-to-Game Matching)
+# =============================================================================
+# These functions support matching Kalshi events to games by looking up
+# teams via Kalshi-specific team codes (which may differ from ESPN codes).
+
+
+def get_team_by_kalshi_code(kalshi_code: str, league: str) -> dict[str, Any] | None:
+    """Look up a team by its Kalshi platform team code and league.
+
+    Kalshi uses slightly different team codes than ESPN for some teams
+    (e.g., JAC vs JAX for Jacksonville). This function finds the team
+    regardless of which code system is used.
+
+    Search order:
+        1. Check kalshi_team_code column (explicit mismatches)
+        2. Check team_code column (most teams where codes match)
+
+    Args:
+        kalshi_code: Team code as used by Kalshi (e.g., "JAC", "HOU")
+        league: League code (e.g., "nfl", "nba")
+
+    Returns:
+        Dictionary with team data, or None if not found.
+
+    Example:
+        >>> team = get_team_by_kalshi_code("JAC", "nfl")
+        >>> if team:
+        ...     print(f"{team['team_name']} ({team['team_code']})")
+        ...     # Jacksonville Jaguars (JAX)
+
+    Related:
+        - Migration 0041: teams.kalshi_team_code column
+        - Issue #462: Event-to-game matching
+    """
+    # First check explicit kalshi_team_code (mismatches like JAC -> JAX)
+    query_kalshi = """
+        SELECT * FROM teams
+        WHERE kalshi_team_code = %s AND league = %s
+    """
+    result = fetch_one(query_kalshi, (kalshi_code, league))
+    if result:
+        return result
+
+    # Fall back to team_code (most teams use same code on both platforms)
+    query_code = """
+        SELECT * FROM teams
+        WHERE team_code = %s AND league = %s
+    """
+    return fetch_one(query_code, (kalshi_code, league))
+
+
+def get_teams_with_kalshi_codes(league: str | None = None) -> list[dict[str, Any]]:
+    """Get all teams for building the Kalshi team code registry.
+
+    Returns all teams (or teams for a specific league) with their
+    team_code, league, and kalshi_team_code. Used by TeamCodeRegistry
+    to build its in-memory lookup cache.
+
+    Args:
+        league: Optional league filter. If None, returns all teams.
+
+    Returns:
+        List of team dicts with keys: team_id, team_code, league,
+        kalshi_team_code (may be None).
+
+    Example:
+        >>> teams = get_teams_with_kalshi_codes("nfl")
+        >>> for t in teams:
+        ...     kalshi = t['kalshi_team_code'] or t['team_code']
+        ...     print(f"{kalshi} -> {t['team_code']}")
+
+    Related:
+        - TeamCodeRegistry.load(): Primary consumer
+        - Issue #462: Event-to-game matching
+    """
+    if league:
+        query = """
+            SELECT team_id, team_code, league, kalshi_team_code
+            FROM teams
+            WHERE league = %s
+            ORDER BY team_code
+        """
+        return fetch_all(query, (league,))
+
+    query = """
+        SELECT team_id, team_code, league, kalshi_team_code
+        FROM teams
+        ORDER BY league, team_code
+    """
+    return fetch_all(query)
+
+
+def update_event_game_id(event_internal_id: int, game_id: int) -> bool:
+    """Set game_id on an existing event. Returns True if updated.
+
+    Links a Kalshi event to an ESPN game by setting the FK. This is
+    called when the matching module finds a game for an event that was
+    previously unlinked (game_id IS NULL).
+
+    Args:
+        event_internal_id: The events.id (integer surrogate PK)
+        game_id: The games.id to link to
+
+    Returns:
+        True if the event was updated, False if event not found or
+        already linked to this game.
+
+    Example:
+        >>> updated = update_event_game_id(event_pk=42, game_id=15)
+        >>> if updated:
+        ...     print("Event linked to game")
+
+    Related:
+        - Migration 0038: events.game_id FK to games(id)
+        - Issue #462: Event-to-game matching
+    """
+    query = """
+        UPDATE events
+        SET game_id = %s, updated_at = NOW()
+        WHERE id = %s AND (game_id IS NULL OR game_id != %s)
+    """
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, (game_id, event_internal_id, game_id))
+        return bool(cur.rowcount > 0)
+
+
+def find_unlinked_sports_events(league: str | None = None) -> list[dict[str, Any]]:
+    """Find events where game_id IS NULL and category='sports'.
+
+    Used by EventGameMatcher.backfill_unlinked_events() to find events
+    that need matching.
+
+    Args:
+        league: Optional subcategory/league filter (e.g., "nfl", "nba").
+
+    Returns:
+        List of event dicts with keys: id, event_id, title, subcategory.
+
+    Example:
+        >>> unlinked = find_unlinked_sports_events("nfl")
+        >>> print(f"{len(unlinked)} NFL events need matching")
+
+    Related:
+        - EventGameMatcher.backfill_unlinked_events(): Primary consumer
+        - Issue #462: Event-to-game matching
+    """
+    if league:
+        query = """
+            SELECT id, event_id, title, subcategory
+            FROM events
+            WHERE game_id IS NULL
+              AND category = 'sports'
+              AND subcategory = %s
+            ORDER BY id
+        """
+        return fetch_all(query, (league,))
+
+    query = """
+        SELECT id, event_id, title, subcategory
+        FROM events
+        WHERE game_id IS NULL
+          AND category = 'sports'
+        ORDER BY id
+    """
+    return fetch_all(query)
+
+
+def find_game_by_matchup(
+    league: str,
+    game_date: date,
+    home_team_code: str,
+    away_team_code: str,
+) -> int | None:
+    """Look up a game by league + date + team codes. Returns games.id or None.
+
+    The games table natural key is (sport, game_date, home_team_code,
+    away_team_code). This function maps from league to sport using the
+    LEAGUE_SPORT_CATEGORY dict and queries by the natural key.
+
+    Args:
+        league: League code (e.g., "nfl", "nba", "ncaaf")
+        game_date: Date of the game
+        home_team_code: ESPN/canonical home team code (e.g., "KC")
+        away_team_code: ESPN/canonical away team code (e.g., "BAL")
+
+    Returns:
+        games.id (integer) if found, None otherwise.
+
+    Example:
+        >>> from datetime import date
+        >>> game_id = find_game_by_matchup(
+        ...     league="nfl",
+        ...     game_date=date(2026, 1, 18),
+        ...     home_team_code="NE",
+        ...     away_team_code="HOU",
+        ... )
+
+    Related:
+        - Migration 0035: games dimension table with natural key
+        - EventGameMatcher._find_game(): Primary consumer
+        - Issue #462: Event-to-game matching
+    """
+    # Map league to sport for the natural key query
+    sport = LEAGUE_SPORT_CATEGORY.get(league)
+    if sport is None:
+        logger.warning(
+            "Unknown league '%s' — cannot map to sport for game lookup",
+            league,
+        )
+        return None
+
+    query = """
+        SELECT id FROM games
+        WHERE sport = %s
+          AND game_date = %s
+          AND home_team_code = %s
+          AND away_team_code = %s
+    """
+    result = fetch_one(query, (sport, game_date, home_team_code, away_team_code))
+    if result:
+        return cast("int", result["id"])
+    return None

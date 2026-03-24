@@ -55,8 +55,10 @@ from precog.database.crud_operations import (
     get_or_create_event,
     get_or_create_series,
     update_bracket_counts,
+    update_event_game_id,
     update_market_with_versioning,
 )
+from precog.matching.event_game_matcher import EventGameMatcher
 from precog.schedulers.base_poller import BasePoller
 from precog.validation.kalshi_validation import KalshiDataValidator
 
@@ -202,6 +204,12 @@ class KalshiMarketPoller(BasePoller):
         # when creating markets (markets.event_internal_id FK).
         # See migration 0020: events now uses SERIAL PK instead of VARCHAR PK.
         self._event_id_map: dict[str, int] = {}
+
+        # Event-to-game matcher (Issue #462). Matches Kalshi events to ESPN
+        # games by parsing team codes from event tickers. The registry is
+        # loaded lazily on first poll cycle to avoid startup DB dependency.
+        self._event_game_matcher: EventGameMatcher | None = None
+        self._matcher_loaded: bool = False
 
         # Validation stats tracked separately from PollerStats TypedDict
         # to avoid type contract violations. Merged in get_stats().
@@ -738,6 +746,60 @@ class KalshiMarketPoller(BasePoller):
 
         return len(all_markets), markets_updated, markets_created
 
+    # =========================================================================
+    # Event-to-Game Matching (Issue #462)
+    # =========================================================================
+
+    def _ensure_matcher_loaded(self) -> None:
+        """Initialize and load the event-game matcher on first use.
+
+        Lazy initialization avoids DB queries during __init__ (which may
+        run before the DB is ready). The registry is loaded once and
+        cached for the lifetime of the poller.
+        """
+        if self._matcher_loaded:
+            return
+
+        try:
+            self._event_game_matcher = EventGameMatcher()
+            self._event_game_matcher.registry.load()
+            self._matcher_loaded = True
+            logger.info("Event-game matcher loaded successfully")
+        except Exception:
+            logger.warning(
+                "Failed to load event-game matcher — events will not be linked to games this cycle",
+                exc_info=True,
+            )
+            self._event_game_matcher = None
+            # Don't set _matcher_loaded so we retry next cycle
+
+    def _match_event_to_game(self, event_ticker: str, title: str | None = None) -> int | None:
+        """Try to match a Kalshi event to an ESPN game.
+
+        Lazily initializes the matcher on first call. Returns None if
+        matching fails or the matcher is unavailable (non-blocking).
+
+        Args:
+            event_ticker: Kalshi event ticker (e.g., "KXNFLGAME-26JAN18HOUNE")
+            title: Optional event title for fallback matching.
+
+        Returns:
+            games.id if matched, None otherwise.
+        """
+        self._ensure_matcher_loaded()
+        if self._event_game_matcher is None:
+            return None
+
+        try:
+            return self._event_game_matcher.match_event(event_ticker, title=title)
+        except Exception:
+            logger.debug(
+                "Event matching failed for %s (non-blocking)",
+                event_ticker,
+                exc_info=True,
+            )
+            return None
+
     def _sync_market_to_db(
         self, market: ProcessedMarketData, series_ticker: str = ""
     ) -> bool | None:
@@ -864,6 +926,11 @@ class KalshiMarketPoller(BasePoller):
                             event_ticker,
                         )
 
+                    # Attempt event-to-game matching (Issue #462)
+                    # Try to match this event to an ESPN game BEFORE creation
+                    # so game_id can be passed to create_event().
+                    game_id = self._match_event_to_game(event_ticker, market.get("title"))
+
                     event_pk, _created = get_or_create_event(
                         event_id=event_ticker,
                         platform_id=self.PLATFORM_ID,
@@ -872,12 +939,18 @@ class KalshiMarketPoller(BasePoller):
                         title=market.get("title", event_ticker),
                         series_internal_id=series_pk,  # Integer FK to series(id)
                         subcategory=subcategory,
+                        game_id=game_id,  # Link to games table (may be None)
                         metadata={
                             "series_ticker": effective_series,
                         },
                     )
                     # Cache the integer PK for subsequent markets in the same event
                     self._event_id_map[event_ticker] = event_pk
+
+                    # If event already existed with game_id=NULL and we found a
+                    # match, update it now (handles the TODO in get_or_create_event)
+                    if not _created and game_id is not None:
+                        update_event_game_id(event_pk, game_id)
 
             # Migration 0022: create_market returns int PK
             # Migration 0033: subtitle, open_time, close_time, expiration_time
