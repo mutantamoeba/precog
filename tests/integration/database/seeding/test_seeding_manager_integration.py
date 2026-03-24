@@ -247,22 +247,22 @@ class TestDataIntegrityIntegration:
 
     def test_team_codes_are_unique_per_sport(self, db_pool, db_cursor):
         """
-        Test team_code is unique within each sport.
+        Test team_code is unique within each league.
 
         Educational Note:
-            Team codes like 'LA' might exist in multiple sports (Lakers, Rams),
-            but should be unique within a sport. The unique constraint is
-            (team_code, sport).
+            Team codes like 'MIA' might exist in multiple leagues (Heat, Dolphins),
+            but should be unique within a league. The unique constraint is
+            (team_code, league) for pro leagues via idx_teams_code_league_pro.
         """
         db_cursor.execute("""
-            SELECT team_code, sport, COUNT(*) as count
+            SELECT team_code, league, COUNT(*) as count
             FROM teams
-            GROUP BY team_code, sport
+            GROUP BY team_code, league
             HAVING COUNT(*) > 1
         """)
         duplicates = db_cursor.fetchall()
 
-        assert len(duplicates) == 0, f"Found duplicate team codes: {duplicates}"
+        assert len(duplicates) == 0, f"Found duplicate team codes per league: {duplicates}"
 
 
 # =============================================================================
