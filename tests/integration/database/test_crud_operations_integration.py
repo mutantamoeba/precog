@@ -65,9 +65,9 @@ def setup_test_teams(db_pool, clean_test_data):
                 espn_team_id, conference, division, sport, current_elo_rating
             )
             VALUES
-                (9001, 'TEST-KC', 'Test Chiefs', 'TEST-12', 'AFC', 'West', 'nfl', 1650),
-                (9002, 'TEST-SF', 'Test 49ers', 'TEST-25', 'NFC', 'West', 'nfl', 1620),
-                (9003, 'TEST-OSU', 'Test Buckeyes', 'TEST-194', 'Big Ten', 'East', 'ncaaf', 1600)
+                (9001, 'TEST-KC', 'Test Chiefs', 'TEST-12', 'AFC', 'West', 'football', 1650),
+                (9002, 'TEST-SF', 'Test 49ers', 'TEST-25', 'NFC', 'West', 'football', 1620),
+                (9003, 'TEST-OSU', 'Test Buckeyes', 'TEST-194', 'Big Ten', 'East', 'football', 1600)
             ON CONFLICT (team_id) DO NOTHING
         """
         )
@@ -1011,7 +1011,7 @@ class TestGamesDimensionIntegration:
     def test_get_or_create_game_inserts_new(self, db_pool, db_cursor, clean_test_data):
         """Test get_or_create_game creates a new games row."""
         game_id = get_or_create_game(
-            sport="nfl",
+            sport="football",
             game_date=date(2024, 9, 8),
             home_team_code="KC",
             away_team_code="BAL",
@@ -1030,7 +1030,7 @@ class TestGamesDimensionIntegration:
             cur.execute("SELECT * FROM games WHERE id = %s", (game_id,))
             row = cur.fetchone()
             assert row is not None
-            assert row["sport"] == "nfl"
+            assert row["sport"] == "football"
             assert row["home_team_code"] == "KC"
             assert row["away_team_code"] == "BAL"
             assert row["espn_event_id"] == "INT-GAME-DIM-001"
@@ -1046,7 +1046,7 @@ class TestGamesDimensionIntegration:
         """Test get_or_create_game updates existing row on natural key conflict."""
         # Insert first
         game_id_1 = get_or_create_game(
-            sport="nfl",
+            sport="football",
             game_date=date(2024, 9, 8),
             home_team_code="KC",
             away_team_code="BAL",
@@ -1058,7 +1058,7 @@ class TestGamesDimensionIntegration:
 
         # Upsert with same natural key but new data
         game_id_2 = get_or_create_game(
-            sport="nfl",
+            sport="football",
             game_date=date(2024, 9, 8),
             home_team_code="KC",
             away_team_code="BAL",
@@ -1091,7 +1091,7 @@ class TestGamesDimensionIntegration:
         """
         # Create with final status
         game_id = get_or_create_game(
-            sport="nfl",
+            sport="football",
             game_date=date(2024, 9, 8),
             home_team_code="KC",
             away_team_code="BAL",
@@ -1103,7 +1103,7 @@ class TestGamesDimensionIntegration:
 
         # Attempt to regress status to 'scheduled'
         game_id_2 = get_or_create_game(
-            sport="nfl",
+            sport="football",
             game_date=date(2024, 9, 8),
             home_team_code="KC",
             away_team_code="BAL",
@@ -1128,7 +1128,7 @@ class TestGamesDimensionIntegration:
     def test_update_game_result_sets_derived_fields(self, db_pool, db_cursor, clean_test_data):
         """Test update_game_result computes margin and result correctly."""
         game_id = get_or_create_game(
-            sport="nfl",
+            sport="football",
             game_date=date(2024, 9, 8),
             home_team_code="KC",
             away_team_code="BAL",
@@ -1163,7 +1163,7 @@ class TestGamesDimensionIntegration:
 
         # Create games dimension row first
         game_id = get_or_create_game(
-            sport="nfl",
+            sport="football",
             game_date=date(2024, 9, 8),
             home_team_code="KC",
             away_team_code="BAL",
@@ -1198,7 +1198,7 @@ class TestGamesDimensionIntegration:
     def test_lookup_game_id_finds_game(self, db_pool, db_cursor, clean_test_data):
         """Test odds loader lookup_game_id finds games by natural key."""
         game_id = get_or_create_game(
-            sport="nfl",
+            sport="football",
             game_date=date(2024, 9, 8),
             home_team_code="KC",
             away_team_code="BAL",
@@ -1226,7 +1226,7 @@ class TestGamesDimensionIntegration:
         """
         # Insert a completed game
         game_id = get_or_create_game(
-            sport="nfl",
+            sport="football",
             game_date=date(2024, 9, 8),
             home_team_code="KC",
             away_team_code="BAL",
@@ -1256,7 +1256,7 @@ class TestGamesDimensionIntegration:
                   AND home_score IS NOT NULL
                 ORDER BY game_date ASC, id ASC
             """,
-                ("nfl",),
+                ("football",),
             )
             rows = [dict(row) for row in cur.fetchall()]
 

@@ -280,7 +280,7 @@ class TestSpecificTeamsIntegration:
 
         This is a conditional test - it only validates if NFL teams are present.
         """
-        db_cursor.execute("SELECT COUNT(*) as count FROM teams WHERE sport = 'nfl'")
+        db_cursor.execute("SELECT COUNT(*) as count FROM teams WHERE league = 'nfl'")
         nfl_count = db_cursor.fetchone()["count"]
 
         if nfl_count > 0:
@@ -296,7 +296,7 @@ class TestSpecificTeamsIntegration:
         db_cursor.execute("""
             SELECT team_code, team_name, conference, division
             FROM teams
-            WHERE team_code = 'KC' AND sport = 'nfl'
+            WHERE team_code = 'KC' AND league = 'nfl'
         """)
         chiefs = db_cursor.fetchone()
 
@@ -307,7 +307,7 @@ class TestSpecificTeamsIntegration:
 
     def test_nba_teams_exist_if_seeded(self, db_pool, db_cursor):
         """Test NBA teams exist if database has been seeded."""
-        db_cursor.execute("SELECT COUNT(*) as count FROM teams WHERE sport = 'nba'")
+        db_cursor.execute("SELECT COUNT(*) as count FROM teams WHERE league = 'nba'")
         nba_count = db_cursor.fetchone()["count"]
 
         if nba_count > 0:

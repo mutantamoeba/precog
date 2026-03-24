@@ -36,7 +36,7 @@ def temp_seeds_dir() -> Iterator[Path]:
 
         sql_file = seeds_path / "001_nfl_teams.sql"
         sql_file.write_text(
-            "-- NFL Teams\nINSERT INTO teams (team_code, sport) VALUES ('KC', 'nfl');"
+            "-- NFL Teams\nINSERT INTO teams (team_code, sport) VALUES ('KC', 'football');"
         )
 
         yield seeds_path

@@ -7,70 +7,70 @@
 BEGIN;
 
 -- Anaheim Ducks: 24 -> 25
-UPDATE teams SET espn_team_id = '25' WHERE team_code = 'ANA' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '25' WHERE team_code = 'ANA' AND league = 'nhl';
 
 -- Calgary Flames: 20 -> 3
-UPDATE teams SET espn_team_id = '3' WHERE team_code = 'CGY' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '3' WHERE team_code = 'CGY' AND league = 'nhl';
 
 -- Chicago Blackhawks: 16 -> 4
-UPDATE teams SET espn_team_id = '4' WHERE team_code = 'CHI' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '4' WHERE team_code = 'CHI' AND league = 'nhl';
 
 -- Dallas Stars: 25 -> 9
-UPDATE teams SET espn_team_id = '9' WHERE team_code = 'DAL' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '9' WHERE team_code = 'DAL' AND league = 'nhl';
 
 -- Edmonton Oilers: 22 -> 6
-UPDATE teams SET espn_team_id = '6' WHERE team_code = 'EDM' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '6' WHERE team_code = 'EDM' AND league = 'nhl';
 
 -- Los Angeles Kings: 26 -> 8
-UPDATE teams SET espn_team_id = '8' WHERE team_code = 'LAK' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '8' WHERE team_code = 'LAK' AND league = 'nhl';
 
 -- Montreal Canadiens: 8 -> 10
-UPDATE teams SET espn_team_id = '10' WHERE team_code = 'MTL' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '10' WHERE team_code = 'MTL' AND league = 'nhl';
 
 -- New Jersey Devils: 1 -> 11
-UPDATE teams SET espn_team_id = '11' WHERE team_code = 'NJD' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '11' WHERE team_code = 'NJD' AND league = 'nhl';
 
 -- Nashville Predators: 18 -> 27
-UPDATE teams SET espn_team_id = '27' WHERE team_code = 'NSH' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '27' WHERE team_code = 'NSH' AND league = 'nhl';
 
 -- New York Islanders: 2 -> 12
-UPDATE teams SET espn_team_id = '12' WHERE team_code = 'NYI' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '12' WHERE team_code = 'NYI' AND league = 'nhl';
 
 -- New York Rangers: 3 -> 13
-UPDATE teams SET espn_team_id = '13' WHERE team_code = 'NYR' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '13' WHERE team_code = 'NYR' AND league = 'nhl';
 
 -- Ottawa Senators: 9 -> 14
-UPDATE teams SET espn_team_id = '14' WHERE team_code = 'OTT' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '14' WHERE team_code = 'OTT' AND league = 'nhl';
 
 -- Philadelphia Flyers: 4 -> 15
-UPDATE teams SET espn_team_id = '15' WHERE team_code = 'PHI' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '15' WHERE team_code = 'PHI' AND league = 'nhl';
 
 -- Pittsburgh Penguins: 5 -> 16
-UPDATE teams SET espn_team_id = '16' WHERE team_code = 'PIT' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '16' WHERE team_code = 'PIT' AND league = 'nhl';
 
 -- San Jose Sharks: 28 -> 18
-UPDATE teams SET espn_team_id = '18' WHERE team_code = 'SJS' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '18' WHERE team_code = 'SJS' AND league = 'nhl';
 
 -- Tampa Bay Lightning: 14 -> 20
-UPDATE teams SET espn_team_id = '20' WHERE team_code = 'TBL' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '20' WHERE team_code = 'TBL' AND league = 'nhl';
 
 -- Toronto Maple Leafs: 10 -> 21
-UPDATE teams SET espn_team_id = '21' WHERE team_code = 'TOR' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '21' WHERE team_code = 'TOR' AND league = 'nhl';
 
 -- Vancouver Canucks: 23 -> 22
-UPDATE teams SET espn_team_id = '22' WHERE team_code = 'VAN' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '22' WHERE team_code = 'VAN' AND league = 'nhl';
 
 -- Vegas Golden Knights: 54 -> 37
-UPDATE teams SET espn_team_id = '37' WHERE team_code = 'VGK' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '37' WHERE team_code = 'VGK' AND league = 'nhl';
 
 -- Winnipeg Jets: 52 -> 28
-UPDATE teams SET espn_team_id = '28' WHERE team_code = 'WPG' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '28' WHERE team_code = 'WPG' AND league = 'nhl';
 
 -- Washington Capitals: 15 -> 23
-UPDATE teams SET espn_team_id = '23' WHERE team_code = 'WSH' AND sport = 'nhl';
+UPDATE teams SET espn_team_id = '23' WHERE team_code = 'WSH' AND league = 'nhl';
 
 -- Verify updates
-SELECT team_code, team_name, espn_team_id FROM teams WHERE sport = 'nhl' ORDER BY team_code;
+SELECT team_code, team_name, espn_team_id FROM teams WHERE league = 'nhl' ORDER BY team_code;
 
 COMMIT;
 
@@ -92,12 +92,12 @@ COMMIT;
 BEGIN;
 
 -- College of Charleston Cougars: 232 -> 156
-UPDATE teams SET espn_team_id = '156' WHERE team_code = 'CREI' AND sport = 'ncaab';
+UPDATE teams SET espn_team_id = '156' WHERE team_code = 'CREI' AND league = 'ncaab';
 
 -- Seton Hall Pirates: 2550 -> 2529
-UPDATE teams SET espn_team_id = '2529' WHERE team_code = 'SHU' AND sport = 'ncaab';
+UPDATE teams SET espn_team_id = '2529' WHERE team_code = 'SHU' AND league = 'ncaab';
 
 -- Verify updates
-SELECT team_code, team_name, espn_team_id FROM teams WHERE sport = 'ncaab' ORDER BY team_code;
+SELECT team_code, team_name, espn_team_id FROM teams WHERE league = 'ncaab' ORDER BY team_code;
 
 COMMIT;

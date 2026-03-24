@@ -439,7 +439,7 @@ class EloUpdateLog(TypedDict):
     log_id: int
     game_state_id: int | None  # FK to game_states.id (nullable for bootstrap)
     game_id: int | None  # FK to games
-    sport: str
+    league: str  # Renamed from sport in #460 Phase B -- stores league codes
     game_date: str
 
     home_team_id: int

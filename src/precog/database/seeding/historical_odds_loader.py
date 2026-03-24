@@ -132,7 +132,7 @@ def lookup_game_id(
         cursor.execute(
             """
             SELECT id FROM games
-            WHERE sport = %s
+            WHERE league = %s
               AND game_date = %s
               AND home_team_code = %s
               AND away_team_code = %s

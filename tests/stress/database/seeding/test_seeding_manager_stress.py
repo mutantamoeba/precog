@@ -37,13 +37,23 @@ def temp_seeds_dir_large() -> Iterator[Path]:
         seeds_path = Path(tmpdir)
 
         # Create many seed files for stress testing
-        sports = ["nfl", "nba", "nhl", "ncaaf", "ncaab", "wnba", "ncaaw"]
-        for i, sport in enumerate(sports):
-            sql_file = seeds_path / f"{i:03d}_{sport}_teams.sql"
+        _league_to_sport = {
+            "nfl": "football",
+            "ncaaf": "football",
+            "nba": "basketball",
+            "ncaab": "basketball",
+            "wnba": "basketball",
+            "ncaaw": "basketball",
+            "nhl": "hockey",
+        }
+        leagues = ["nfl", "nba", "nhl", "ncaaf", "ncaab", "wnba", "ncaaw"]
+        for i, league in enumerate(leagues):
+            sql_file = seeds_path / f"{i:03d}_{league}_teams.sql"
+            sport_name = _league_to_sport[league]
             sql_file.write_text(
-                f"-- {sport.upper()} Teams\n"
+                f"-- {league.upper()} Teams\n"
                 f"INSERT INTO teams (team_code, team_name, sport) "
-                f"VALUES ('TEST', 'Test Team', '{sport}') ON CONFLICT DO NOTHING;"
+                f"VALUES ('TEST', 'Test Team', '{sport_name}') ON CONFLICT DO NOTHING;"
             )
 
         yield seeds_path

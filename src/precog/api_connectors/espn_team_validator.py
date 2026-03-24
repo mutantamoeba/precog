@@ -330,12 +330,17 @@ def _get_team_by_espn_id_or_code(
 # If we poll a league, we should keep its teams synced.
 
 # Sport mapping for the teams table 'sport' column.
-# For pro leagues, sport == league. Kept explicit for clarity.
+# Maps league codes to sport names (Phase B of #460).
 LEAGUE_SPORT_MAP: dict[str, str] = {
-    "nfl": "nfl",
-    "nba": "nba",
-    "nhl": "nhl",
-    "ncaaf": "ncaaf",
+    "nfl": "football",
+    "nba": "basketball",
+    "nhl": "hockey",
+    "ncaaf": "football",
+    "ncaab": "basketball",
+    "wnba": "basketball",
+    "ncaaw": "basketball",
+    "mlb": "baseball",
+    "mls": "soccer",
 }
 
 

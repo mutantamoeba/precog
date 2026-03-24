@@ -64,9 +64,9 @@ class TestComputationResult:
 
     def test_result_initialization(self) -> None:
         """Verify result initializes with correct defaults."""
-        result = ComputationResult(sport="nfl", seasons=[2020, 2021])
+        result = ComputationResult(league="nfl", seasons=[2020, 2021])
 
-        assert result.sport == "nfl"
+        assert result.league == "nfl"
         assert result.seasons == [2020, 2021]
         assert result.games_processed == 0
         assert result.games_skipped == 0
@@ -77,7 +77,7 @@ class TestComputationResult:
 
     def test_result_tracks_games_processed(self) -> None:
         """Verify games_processed can be incremented."""
-        result = ComputationResult(sport="nba", seasons=[2019])
+        result = ComputationResult(league="nba", seasons=[2019])
         result.games_processed = 100
 
         assert result.games_processed == 100

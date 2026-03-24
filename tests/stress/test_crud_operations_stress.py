@@ -108,7 +108,7 @@ def setup_stress_teams(stress_postgres_container):
                     team_id, team_code, team_name,
                     espn_team_id, conference, division, sport, current_elo_rating
                 )
-                VALUES (%s, %s, %s, %s, 'Test', 'Division', 'nfl', 1500)
+                VALUES (%s, %s, %s, %s, 'Test', 'Division', 'football', 1500)
                 ON CONFLICT (team_id) DO NOTHING
             """,
                 (

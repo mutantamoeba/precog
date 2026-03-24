@@ -261,7 +261,7 @@ class EPASeeder:
             text(
                 """
                 SELECT id FROM teams
-                WHERE abbreviation = :team_code AND sport = 'nfl'
+                WHERE abbreviation = :team_code AND league = 'nfl'
                 LIMIT 1
                 """
             ),

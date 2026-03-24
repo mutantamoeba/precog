@@ -299,37 +299,37 @@ def parse_simple_csv(
 # =============================================================================
 
 
-def get_team_id_by_code(team_code: str, sport: str) -> int | None:
+def get_team_id_by_code(team_code: str, league: str) -> int | None:
     """
-    Look up team_id from team_code and sport.
+    Look up team_id from team_code and league.
 
     Uses fetchall() to detect ambiguity: if more than one row matches
-    (team_code, sport), raises ValueError instead of silently picking one.
+    (team_code, league), raises ValueError instead of silently picking one.
 
     Args:
         team_code: Team abbreviation (e.g., "KC")
-        sport: Sport code (e.g., "nfl")
+        league: League code (e.g., "nfl")
 
     Returns:
         team_id if found, None otherwise
 
     Raises:
-        ValueError: If multiple teams match (team_code, sport) — indicates
+        ValueError: If multiple teams match (team_code, league) — indicates
             data integrity issue that must be resolved before proceeding.
     """
     with get_cursor() as cursor:
         cursor.execute(
             """
             SELECT team_id FROM teams
-            WHERE team_code = %s AND sport = %s
+            WHERE team_code = %s AND league = %s
             """,
-            (team_code, sport),
+            (team_code, league),
         )
         rows = cursor.fetchall()
         if len(rows) > 1:
             team_ids = [int(r["team_id"]) for r in rows]
             raise ValueError(
-                f"Ambiguous team lookup: team_code={team_code!r}, sport={sport!r} "
+                f"Ambiguous team lookup: team_code={team_code!r}, league={league!r} "
                 f"matched {len(rows)} rows (team_ids={team_ids}). "
                 f"Expected at most 1. Fix duplicate teams before proceeding."
             )
