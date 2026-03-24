@@ -60,6 +60,21 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Maps league codes to sport names for the games.sport column (Phase B of #460).
+# The league code goes into games.league; the sport name goes into games.sport.
+_LEAGUE_TO_SPORT: dict[str, str] = {
+    "nfl": "football",
+    "ncaaf": "football",
+    "nba": "basketball",
+    "ncaab": "basketball",
+    "wnba": "basketball",
+    "ncaaw": "basketball",
+    "nhl": "hockey",
+    "mlb": "baseball",
+    "mls": "soccer",
+    "soccer": "soccer",
+}
+
 
 # =============================================================================
 # Type Definitions
@@ -394,37 +409,37 @@ def parse_simple_games_csv(
 # =============================================================================
 
 
-def get_team_id_by_code(team_code: str, sport: str) -> int | None:
+def get_team_id_by_code(team_code: str, league: str) -> int | None:
     """
-    Look up team_id from team_code and sport.
+    Look up team_id from team_code and league.
 
     Uses fetchall() to detect ambiguity: if more than one row matches
-    (team_code, sport), raises ValueError instead of silently picking one.
+    (team_code, league), raises ValueError instead of silently picking one.
 
     Args:
         team_code: Team abbreviation (e.g., "KC")
-        sport: Sport code (e.g., "nfl")
+        league: League code (e.g., "nfl")
 
     Returns:
         team_id if found, None otherwise
 
     Raises:
-        ValueError: If multiple teams match (team_code, sport) — indicates
+        ValueError: If multiple teams match (team_code, league) — indicates
             data integrity issue that must be resolved before proceeding.
     """
     with get_cursor() as cursor:
         cursor.execute(
             """
             SELECT team_id FROM teams
-            WHERE team_code = %s AND sport = %s
+            WHERE team_code = %s AND league = %s
             """,
-            (team_code, sport),
+            (team_code, league),
         )
         rows = cursor.fetchall()
         if len(rows) > 1:
             team_ids = [int(r["team_id"]) for r in rows]
             raise ValueError(
-                f"Ambiguous team lookup: team_code={team_code!r}, sport={sport!r} "
+                f"Ambiguous team lookup: team_code={team_code!r}, league={league!r} "
                 f"matched {len(rows)} rows (team_ids={team_ids}). "
                 f"Expected at most 1. Fix duplicate teams before proceeding."
             )
@@ -522,9 +537,11 @@ def bulk_insert_historical_games(
             # Determine game_status: 'final' if scores present, else 'scheduled'
             game_status = "final" if record["home_score"] is not None else "scheduled"
 
+            league_code = record["sport"]
+            sport_name = _LEAGUE_TO_SPORT.get(league_code, league_code)
             batch.append(
                 (
-                    record["sport"],
+                    sport_name,
                     record["season"],
                     record["game_date"],
                     record["home_team_code"],
@@ -540,7 +557,7 @@ def bulk_insert_historical_games(
                     record["source"],  # maps to data_source column
                     record["source_file"],
                     record["external_game_id"],
-                    record["sport"],  # league = sport for historical imports
+                    league_code,  # league = league code for historical imports
                     game_status,
                 )
             )

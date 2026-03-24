@@ -37,11 +37,13 @@ def temp_seeds_dir() -> Iterator[Path]:
         seeds_path = Path(tmpdir)
 
         # Create seed files for different sports
-        for i, sport in enumerate(["nfl", "nba", "nhl"]):
-            sql_file = seeds_path / f"{i:03d}_{sport}_teams.sql"
+        _league_to_sport = {"nfl": "football", "nba": "basketball", "nhl": "hockey"}
+        for i, league in enumerate(["nfl", "nba", "nhl"]):
+            sql_file = seeds_path / f"{i:03d}_{league}_teams.sql"
+            sport_name = _league_to_sport[league]
             sql_file.write_text(
-                f"-- {sport.upper()} Teams\n"
-                f"INSERT INTO teams (team_code, sport) VALUES ('TEST', '{sport}');"
+                f"-- {league.upper()} Teams\n"
+                f"INSERT INTO teams (team_code, sport) VALUES ('TEST', '{sport_name}');"
             )
 
         yield seeds_path

@@ -23,11 +23,11 @@ from precog.analytics.elo_engine import (
     DEFAULT_INITIAL_RATING,
     DEFAULT_REGRESSION_TARGET,
     ELO_DIVISOR,
-    SPORT_CONFIGS,
+    LEAGUE_CONFIGS,
     EloEngine,
     EloState,
     EloUpdateResult,
-    Sport,
+    League,
     SportConfig,
     elo_to_win_probability,
     get_elo_engine,
@@ -55,32 +55,28 @@ from precog.analytics.types import (
 )
 
 __all__ = [
-    # Elo Engine
     "DEFAULT_CARRYOVER_WEIGHT",
     "DEFAULT_INITIAL_RATING",
     "DEFAULT_REGRESSION_TARGET",
     "ELO_DIVISOR",
-    "SPORT_CONFIGS",
-    # Types - Performance
+    "LEAGUE_CONFIGS",
     "DailyPnLSummary",
     "EloEngine",
-    # Types - Elo
     "EloHistoryEntry",
     "EloRating",
     "EloState",
     "EloUpdateLog",
     "EloUpdateResult",
     "EpaMetrics",
-    # Model Manager
     "ImmutabilityError",
     "InvalidStatusTransitionError",
+    "League",
     "ModelCalibrationBucket",
     "ModelManager",
     "ModelPerformanceMetrics",
     "PeriodPerformanceSummary",
     "PortfolioSnapshot",
     "PositionSummary",
-    "Sport",
     "SportConfig",
     "StrategyComparisonResult",
     "StrategyPerformanceMetrics",

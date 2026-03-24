@@ -6,23 +6,23 @@ This is the core algorithm for computing team strength ratings based on game out
 
 Key Features:
     - Expected score calculation using the standard Elo formula
-    - Sport-specific K-factors for optimal convergence
-    - Home-field advantage adjustments per sport
+    - League-specific K-factors for optimal convergence
+    - Home-field advantage adjustments per league
     - Margin-of-victory adjustments (optional enhancement)
     - Season carryover with mean regression
-    - Support for all major sports (NFL, NBA, NHL, MLB, NCAAF, NCAAB)
+    - Support for all major leagues (NFL, NBA, NHL, MLB, NCAAF, NCAAB)
 
 Design Decisions:
     - All calculations use Decimal for precision (ADR-002)
     - Immutable configuration via dataclass
     - Pure functions for core calculations (testable, no side effects)
-    - Sport-specific parameters loaded from configuration
+    - League-specific parameters loaded from configuration
 
 Example Usage:
     >>> from decimal import Decimal
     >>> from precog.analytics.elo_engine import EloEngine
     >>>
-    >>> engine = EloEngine(sport="nfl")
+    >>> engine = EloEngine(league="nfl")
     >>>
     >>> # Calculate expected score
     >>> expected = engine.expected_score(
@@ -69,11 +69,13 @@ DEFAULT_CARRYOVER_WEIGHT = Decimal("0.75")
 DEFAULT_REGRESSION_TARGET = Decimal("1505")  # Slightly above neutral
 
 
-class Sport(str, Enum):
-    """Supported sports for Elo computation.
+class League(str, Enum):
+    """Supported leagues for Elo computation.
+
+    Renamed from Sport to League in #460 Phase B -- enum values are league codes.
 
     Educational Note:
-        Each sport has different characteristics that affect Elo calibration:
+        Each league has different characteristics that affect Elo calibration:
         - NFL: Short season (17 games), high single-game variance
         - NBA: Long season (82 games), lower variance per game
         - NHL: Long season, low-scoring games reduce variance
@@ -126,44 +128,44 @@ class SportConfig:
 
 # Default configurations following FiveThirtyEight methodology
 # These values are calibrated for the pre-2020 era and validated against
-# FiveThirtyEight data (2015-2020). For post-2020 games, use SPORT_CONFIGS_POST_2020.
-SPORT_CONFIGS: dict[Sport, SportConfig] = {
-    Sport.NFL: SportConfig(
+# FiveThirtyEight data (2015-2020). For post-2020 games, use LEAGUE_CONFIGS_POST_2020.
+LEAGUE_CONFIGS: dict[League, SportConfig] = {
+    League.NFL: SportConfig(
         k_factor=20,
         home_advantage=Decimal("48"),
         mov_enabled=True,  # NFL uses margin of victory
     ),
-    Sport.NCAAF: SportConfig(
+    League.NCAAF: SportConfig(
         k_factor=20,
         home_advantage=Decimal("55"),  # College home advantage is stronger
         mov_enabled=True,
     ),
-    Sport.NBA: SportConfig(
+    League.NBA: SportConfig(
         k_factor=20,
         home_advantage=Decimal("100"),  # Strong home court in NBA
         mov_enabled=True,
     ),
-    Sport.NCAAB: SportConfig(
+    League.NCAAB: SportConfig(
         k_factor=20,
         home_advantage=Decimal("100"),
         mov_enabled=True,
     ),
-    Sport.WNBA: SportConfig(
+    League.WNBA: SportConfig(
         k_factor=20,
         home_advantage=Decimal("80"),  # Slightly less than NBA
         mov_enabled=True,
     ),
-    Sport.NHL: SportConfig(
+    League.NHL: SportConfig(
         k_factor=6,  # Lower K for 82-game season
         home_advantage=Decimal("33"),
         mov_enabled=False,  # Low-scoring, MOV less predictive
     ),
-    Sport.MLB: SportConfig(
+    League.MLB: SportConfig(
         k_factor=4,  # Very low K for 162-game season
         home_advantage=Decimal("24"),
         mov_enabled=False,  # Run differential handled differently in baseball
     ),
-    Sport.MLS: SportConfig(
+    League.MLS: SportConfig(
         k_factor=32,  # Soccer typically uses higher K
         home_advantage=Decimal("65"),
         mov_enabled=False,
@@ -176,43 +178,43 @@ SPORT_CONFIGS: dict[Sport, SportConfig] = {
 # - Initially: Empty/limited-capacity stadiums (2020-2021)
 # - Persistently: Changed crowd behavior, travel adaptations
 # Reference: https://fivethirtyeight.com (home advantage analysis)
-SPORT_CONFIGS_POST_2020: dict[Sport, SportConfig] = {
-    Sport.NFL: SportConfig(
+LEAGUE_CONFIGS_POST_2020: dict[League, SportConfig] = {
+    League.NFL: SportConfig(
         k_factor=20,
         home_advantage=Decimal("30"),  # Reduced from 48 (~37% reduction)
         mov_enabled=True,
     ),
-    Sport.NCAAF: SportConfig(
+    League.NCAAF: SportConfig(
         k_factor=20,
         home_advantage=Decimal("40"),  # Reduced from 55 (~27% reduction)
         mov_enabled=True,
     ),
-    Sport.NBA: SportConfig(
+    League.NBA: SportConfig(
         k_factor=20,
         home_advantage=Decimal("40"),  # Reduced from 100 (~60% reduction)
         mov_enabled=True,
     ),
-    Sport.NCAAB: SportConfig(
+    League.NCAAB: SportConfig(
         k_factor=20,
         home_advantage=Decimal("50"),  # Reduced from 100 (~50% reduction)
         mov_enabled=True,
     ),
-    Sport.WNBA: SportConfig(
+    League.WNBA: SportConfig(
         k_factor=20,
         home_advantage=Decimal("40"),  # Reduced from 80 (~50% reduction)
         mov_enabled=True,
     ),
-    Sport.NHL: SportConfig(
+    League.NHL: SportConfig(
         k_factor=6,
         home_advantage=Decimal("25"),  # Reduced from 33 (~24% reduction)
         mov_enabled=False,
     ),
-    Sport.MLB: SportConfig(
+    League.MLB: SportConfig(
         k_factor=4,
         home_advantage=Decimal("18"),  # Reduced from 24 (~25% reduction)
         mov_enabled=False,
     ),
-    Sport.MLS: SportConfig(
+    League.MLS: SportConfig(
         k_factor=32,
         home_advantage=Decimal("45"),  # Reduced from 65 (~31% reduction)
         mov_enabled=False,
@@ -243,7 +245,7 @@ class Era:
         ...     name="post_2025",
         ...     start_date=date(2025, 9, 1),
         ...     end_date=None,  # Current
-        ...     sport_configs=SPORT_CONFIGS_POST_2025,
+        ...     league_configs=LEAGUE_CONFIGS_POST_2025,
         ...     description="Post-2025 adjustments"
         ... )
         >>> ERA_REGISTRY.append(new_era)
@@ -252,14 +254,14 @@ class Era:
         name: Unique identifier for this era
         start_date: First day of this era (None = beginning of time)
         end_date: Last day of this era (None = present/ongoing)
-        sport_configs: Sport-specific configurations for this era
+        league_configs: League-specific configurations for this era
         description: Human-readable description of why this era exists
     """
 
     name: str
     start_date: date | None
     end_date: date | None
-    sport_configs: dict[Sport, SportConfig]
+    league_configs: dict[League, SportConfig]
     description: str = ""
 
 
@@ -270,14 +272,14 @@ ERA_REGISTRY: list[Era] = [
         name="historical",
         start_date=None,  # Beginning of time
         end_date=date(2020, 3, 11),  # Day before COVID shutdown
-        sport_configs=SPORT_CONFIGS,
+        league_configs=LEAGUE_CONFIGS,
         description="Pre-COVID era with standard home advantages",
     ),
     Era(
         name="post_2020",
         start_date=date(2020, 3, 12),  # COVID shutdown began
         end_date=None,  # Current/ongoing
-        sport_configs=SPORT_CONFIGS_POST_2020,
+        league_configs=LEAGUE_CONFIGS_POST_2020,
         description="Post-COVID era with reduced home advantages",
     ),
 ]
@@ -334,29 +336,29 @@ def get_era_for_date(game_date: date | None = None) -> Era:
     raise ValueError(f"No era found for date {game_date}")
 
 
-def get_config_for_date(sport: Sport, game_date: date | None = None) -> SportConfig:
-    """Get the appropriate sport configuration for a game date.
+def get_config_for_date(league: League, game_date: date | None = None) -> SportConfig:
+    """Get the appropriate league configuration for a game date.
 
     This is a convenience function combining era lookup and config retrieval.
 
     Args:
-        sport: The sport to get configuration for
+        league: The league to get configuration for
         game_date: Date of the game. If None, returns current era config.
 
     Returns:
-        SportConfig for the given sport and era.
+        SportConfig for the given league and era.
 
     Example:
         >>> from datetime import date
-        >>> config = get_config_for_date(Sport.NFL, date(2019, 9, 8))
+        >>> config = get_config_for_date(League.NFL, date(2019, 9, 8))
         >>> config.home_advantage
         Decimal('48')
-        >>> config = get_config_for_date(Sport.NFL, date(2023, 9, 10))
+        >>> config = get_config_for_date(League.NFL, date(2023, 9, 10))
         >>> config.home_advantage
         Decimal('30')
     """
     era = get_era_for_date(game_date)
-    return era.sport_configs[sport]
+    return era.league_configs[league]
 
 
 # =============================================================================
@@ -474,7 +476,7 @@ class EloEngine:
         4. Season regression to mean
 
     Example:
-        >>> engine = EloEngine(sport="nfl")
+        >>> engine = EloEngine(league="nfl")
         >>>
         >>> # Team A (1600) vs Team B (1400) at Team A's home
         >>> result = engine.update_ratings(
@@ -489,8 +491,8 @@ class EloEngine:
         >>> print(f"Home change: {result.home_elo_change:+.1f}")
 
     Attributes:
-        sport: The sport this engine is configured for
-        config: Sport-specific configuration (K-factor, home advantage, etc.)
+        league: The league this engine is configured for
+        config: League-specific configuration (K-factor, home advantage, etc.)
     """
 
     # Class-level precision settings
@@ -499,15 +501,15 @@ class EloEngine:
 
     def __init__(
         self,
-        sport: str | Sport,
+        league: str | League,
         config: SportConfig | None = None,
         use_post_2020: bool = False,
         game_date: date | None = None,
     ) -> None:
-        """Initialize Elo engine for a specific sport.
+        """Initialize Elo engine for a specific league.
 
         Args:
-            sport: Sport type (e.g., "nfl", "nba", or Sport enum)
+            league: League code (e.g., "nfl", "nba", or League enum)
             config: Optional custom configuration (overrides all other options)
             use_post_2020: DEPRECATED - Use game_date instead. If True, uses
                 post-2020 config. Ignored if game_date is provided.
@@ -516,14 +518,14 @@ class EloEngine:
                 This is the recommended approach for new code.
 
         Raises:
-            ValueError: If sport is not supported
+            ValueError: If league is not supported
 
         Educational Note:
             Configuration priority (first match wins):
             1. Explicit config parameter (full override)
             2. game_date parameter (auto-selects from Era Registry)
             3. use_post_2020 flag (legacy, deprecated)
-            4. Default historical config (SPORT_CONFIGS)
+            4. Default historical config (LEAGUE_CONFIGS)
 
             The Era Registry pattern makes it trivial to add new eras:
             just append an Era to ERA_REGISTRY with date range and configs.
@@ -542,19 +544,19 @@ class EloEngine:
             >>> engine = EloEngine("nfl", use_post_2020=True)
             >>> engine.home_advantage  # Decimal("30")
         """
-        # Convert string to Sport enum if needed
-        sport_enum: Sport
-        if isinstance(sport, str):
+        # Convert string to League enum if needed
+        league_enum: League
+        if isinstance(league, str):
             try:
-                sport_enum = Sport(sport.lower())
+                league_enum = League(league.lower())
             except ValueError as e:
-                valid_sports = ", ".join(s.value for s in Sport)
-                msg = f"Unknown sport '{sport}'. Valid options: {valid_sports}"
+                valid_leagues = ", ".join(lg.value for lg in League)
+                msg = f"Unknown league '{league}'. Valid options: {valid_leagues}"
                 raise ValueError(msg) from e
         else:
-            sport_enum = sport  # type: ignore[unreachable]
+            league_enum = league  # type: ignore[unreachable]
 
-        self.sport: Sport = sport_enum
+        self.league: League = league_enum
         self.use_post_2020 = use_post_2020
         self.game_date = game_date
 
@@ -566,14 +568,14 @@ class EloEngine:
         elif game_date is not None:
             # 2. Date-based era selection (recommended approach)
             self._era = get_era_for_date(game_date)
-            self.config = self._era.sport_configs[self.sport]
+            self.config = self._era.league_configs[self.league]
         elif use_post_2020:
             # 3. Legacy boolean flag (deprecated)
-            self.config = SPORT_CONFIGS_POST_2020[self.sport]
+            self.config = LEAGUE_CONFIGS_POST_2020[self.league]
             self._era = get_era_for_date(date(2023, 1, 1))  # Post-2020 era
         else:
             # 4. Default historical config
-            self.config = SPORT_CONFIGS[self.sport]
+            self.config = LEAGUE_CONFIGS[self.league]
             self._era = get_era_for_date(date(2019, 1, 1))  # Historical era
 
     @property
@@ -583,7 +585,7 @@ class EloEngine:
 
     @property
     def k_factor(self) -> int:
-        """Get the K-factor for this sport."""
+        """Get the K-factor for this league."""
         return self.config.k_factor
 
     @property
@@ -879,22 +881,22 @@ class EloEngine:
 # =============================================================================
 
 
-def get_elo_engine(sport: str) -> EloEngine:
-    """Get an Elo engine for the specified sport.
+def get_elo_engine(league: str) -> EloEngine:
+    """Get an Elo engine for the specified league.
 
     This is the recommended way to get an EloEngine instance.
 
     Args:
-        sport: Sport code (e.g., "nfl", "nba")
+        league: League code (e.g., "nfl", "nba")
 
     Returns:
-        Configured EloEngine for the sport
+        Configured EloEngine for the league
 
     Example:
         >>> engine = get_elo_engine("nfl")
         >>> prob = engine.expected_score(Decimal("1600"), Decimal("1400"))
     """
-    return EloEngine(sport)
+    return EloEngine(league)
 
 
 def elo_to_win_probability(

@@ -23,7 +23,7 @@ Example Usage:
     >>>
     >>> with get_connection() as conn:
     ...     service = EloComputationService(conn)
-    ...     result = service.compute_ratings(sport="nfl", season=2020)
+    ...     result = service.compute_ratings(league="nfl", season=2020)
     ...     print(f"Processed {result.games_processed} games")
 
 Reference: docs/guides/ELO_COMPUTATION_GUIDE_V1.1.md
@@ -107,7 +107,7 @@ class ComputationResult:
     """Result of an Elo computation run.
 
     Attributes:
-        sport: Sport processed
+        league: League processed
         seasons: Seasons processed
         games_processed: Number of games processed
         games_skipped: Number of games already computed (skipped)
@@ -117,7 +117,7 @@ class ComputationResult:
         errors: List of error messages (if any)
     """
 
-    sport: str
+    league: str
     seasons: list[int]
     games_processed: int = 0
     games_skipped: int = 0
@@ -129,7 +129,7 @@ class ComputationResult:
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization."""
         return {
-            "sport": self.sport,
+            "league": self.league,
             "seasons": self.seasons,
             "games_processed": self.games_processed,
             "games_skipped": self.games_skipped,
@@ -159,7 +159,7 @@ class EloComputationService:
         >>> from precog.database.connection import get_connection
         >>> with get_connection() as conn:
         ...     service = EloComputationService(conn)
-        ...     result = service.compute_ratings(sport="nfl")
+        ...     result = service.compute_ratings(league="nfl")
         ...     print(f"Computed {result.games_processed} games")
     """
 
@@ -186,15 +186,15 @@ class EloComputationService:
         self.calculation_source = calculation_source
         self.calculation_version = calculation_version
 
-        # Team ratings cache: sport -> team_code -> TeamRatingState
+        # Team ratings cache: league -> team_code -> TeamRatingState
         self._ratings: dict[str, dict[str, TeamRatingState]] = {}
 
-    def _resolve_team_id(self, team_code: str, sport: str) -> int | None:
-        """Look up team_id from team_code and sport in the database.
+    def _resolve_team_id(self, team_code: str, league: str) -> int | None:
+        """Look up team_id from team_code and league in the database.
 
         Args:
             team_code: Team abbreviation (e.g., "KC")
-            sport: Sport code (e.g., "nfl")
+            league: League code (e.g., "nfl")
 
         Returns:
             team_id if found, None otherwise
@@ -203,24 +203,24 @@ class EloComputationService:
         cursor.execute(
             """
             SELECT team_id FROM teams
-            WHERE team_code = %s AND sport = %s
+            WHERE team_code = %s AND league = %s
             """,
-            [team_code, sport],
+            [team_code, league],
         )
         rows = cursor.fetchall()
         if len(rows) > 1:
             logger.warning(
                 "ambiguous_team_code",
                 team_code=team_code,
-                sport=sport,
+                league=league,
                 match_count=len(rows),
-                msg="Multiple teams match (team_code, sport). Using first match.",
+                msg="Multiple teams match (team_code, league). Using first match.",
             )
         if rows:
             return int(rows[0][0])
         return None
 
-    def get_or_create_rating(self, sport: str, team_code: str) -> TeamRatingState:
+    def get_or_create_rating(self, league: str, team_code: str) -> TeamRatingState:
         """Get current rating for a team, creating if not exists.
 
         Resolves team_id from the database at creation time so that
@@ -229,26 +229,26 @@ class EloComputationService:
         where multiple teams may share the same team_code.
 
         Args:
-            sport: Sport code (nfl, nba, etc.)
+            league: League code (nfl, nba, etc.)
             team_code: Team abbreviation
 
         Returns:
             TeamRatingState for the team
         """
-        if sport not in self._ratings:
-            self._ratings[sport] = {}
+        if league not in self._ratings:
+            self._ratings[league] = {}
 
-        if team_code not in self._ratings[sport]:
-            team_id = self._resolve_team_id(team_code, sport)
+        if team_code not in self._ratings[league]:
+            team_id = self._resolve_team_id(team_code, league)
             if team_id is None:
                 logger.warning(
                     "team_not_found_for_elo_rating",
                     team_code=team_code,
-                    sport=sport,
+                    league=league,
                     msg="Team will be tracked in memory but cannot sync to DB",
                 )
 
-            self._ratings[sport][team_code] = TeamRatingState(
+            self._ratings[league][team_code] = TeamRatingState(
                 rating=self.initial_rating,
                 initial_rating=self.initial_rating,
                 peak_rating=self.initial_rating,
@@ -256,17 +256,17 @@ class EloComputationService:
                 team_id=team_id,
             )
 
-        return self._ratings[sport][team_code]
+        return self._ratings[league][team_code]
 
     def _fetch_historical_games(
         self,
-        sport: str,
+        league: str,
         seasons: list[int] | None = None,
     ) -> list[dict[str, Any]]:
         """Fetch historical games sorted chronologically.
 
         Args:
-            sport: Sport code
+            league: League code
             seasons: Optional list of seasons to filter
 
         Returns:
@@ -286,10 +286,10 @@ class EloComputationService:
                 game_type,
                 neutral_site AS is_neutral_site
             FROM games
-            WHERE sport = %s
+            WHERE league = %s
               AND home_score IS NOT NULL
         """
-        params: list[Any] = [sport]
+        params: list[Any] = [league]
 
         if seasons:
             query += " AND season = ANY(%s)"
@@ -303,18 +303,18 @@ class EloComputationService:
 
         logger.info(
             "fetched_games_for_elo",
-            sport=sport,
+            league=league,
             seasons=seasons,
             game_count=len(games),
         )
 
         return games
 
-    def _get_already_computed_games(self, sport: str) -> set[int]:
+    def _get_already_computed_games(self, league: str) -> set[int]:
         """Get set of game ids already computed.
 
         Args:
-            sport: Sport code
+            league: League code
 
         Returns:
             Set of game_id values already in elo_calculation_log
@@ -324,9 +324,9 @@ class EloComputationService:
         query = """
             SELECT game_id
             FROM elo_calculation_log
-            WHERE sport = %s AND game_id IS NOT NULL
+            WHERE league = %s AND game_id IS NOT NULL
         """
-        cursor.execute(query, [sport])
+        cursor.execute(query, [league])
 
         return {row[0] for row in cursor.fetchall()}
 
@@ -346,7 +346,7 @@ class EloComputationService:
         query = """
             INSERT INTO elo_calculation_log (
                 game_id,
-                sport,
+                league,
                 game_date,
                 home_team_code,
                 away_team_code,
@@ -372,12 +372,12 @@ class EloComputationService:
             )
         """
 
-        # Determine sport from game data
-        sport = game.get("sport") or self._current_sport
+        # Determine league from game data
+        league = game.get("league") or self._current_league
 
         params = [
             game["id"],
-            sport,
+            league,
             game["game_date"],
             game["home_team_code"],
             game["away_team_code"],
@@ -404,7 +404,7 @@ class EloComputationService:
 
     def compute_ratings(
         self,
-        sport: str,
+        league: str,
         seasons: list[int] | None = None,
         skip_computed: bool = True,
         commit_interval: int = 100,
@@ -422,7 +422,7 @@ class EloComputationService:
                 -> teams.current_elo_rating (LIVE)
 
         Args:
-            sport: Sport code (nfl, nba, nhl, mlb)
+            league: League code (nfl, nba, nhl, mlb)
             seasons: Optional list of seasons to process (default: all)
             skip_computed: If True, skip games already in elo_calculation_log
             commit_interval: Commit after this many games (for large datasets)
@@ -432,7 +432,7 @@ class EloComputationService:
             ComputationResult with statistics
 
         Example:
-            >>> result = service.compute_ratings(sport="nfl", seasons=[2019, 2020])
+            >>> result = service.compute_ratings(league="nfl", seasons=[2019, 2020])
             >>> print(f"Processed {result.games_processed} games")
             >>>
             >>> # With sync to teams table
@@ -443,26 +443,26 @@ class EloComputationService:
 
         start_time = time.time()
 
-        # Store current sport for log insertion
-        self._current_sport = sport
+        # Store current league for log insertion
+        self._current_league = league
 
         # Initialize result
         result = ComputationResult(
-            sport=sport,
+            league=league,
             seasons=seasons or [],
         )
 
-        # Create Elo engine for this sport
+        # Create Elo engine for this league
         try:
-            engine = EloEngine(sport)
+            engine = EloEngine(league)
         except ValueError as e:
             result.errors.append(str(e))
             return result
 
         # Fetch games
-        games = self._fetch_historical_games(sport, seasons)
+        games = self._fetch_historical_games(league, seasons)
         if not games:
-            logger.warning("no_games_found", sport=sport, seasons=seasons)
+            logger.warning("no_games_found", league=league, seasons=seasons)
             result.duration_seconds = time.time() - start_time
             return result
 
@@ -473,10 +473,10 @@ class EloComputationService:
         # Get already computed games
         computed_ids: set[int] = set()
         if skip_computed:
-            computed_ids = self._get_already_computed_games(sport)
+            computed_ids = self._get_already_computed_games(league)
             logger.info(
                 "found_computed_games",
-                sport=sport,
+                league=league,
                 count=len(computed_ids),
             )
 
@@ -499,10 +499,10 @@ class EloComputationService:
                 and game_season != current_season
                 and self.apply_season_regression
             ):
-                self._apply_season_regression(sport, engine)
+                self._apply_season_regression(league, engine)
                 logger.info(
                     "applied_season_regression",
-                    sport=sport,
+                    league=league,
                     from_season=current_season,
                     to_season=game_season,
                 )
@@ -512,8 +512,8 @@ class EloComputationService:
             home_code = game["home_team_code"]
             away_code = game["away_team_code"]
 
-            home_state = self.get_or_create_rating(sport, home_code)
-            away_state = self.get_or_create_rating(sport, away_code)
+            home_state = self.get_or_create_rating(league, home_code)
+            away_state = self.get_or_create_rating(league, away_code)
 
             # Compute Elo update
             is_playoff = game.get("game_type", "regular") != "regular"
@@ -542,7 +542,7 @@ class EloComputationService:
                 self.conn.commit()
                 logger.info(
                     "elo_computation_progress",
-                    sport=sport,
+                    league=league,
                     processed=result.games_processed,
                     total=len(games),
                     pct=round(100 * result.games_processed / len(games), 1),
@@ -552,15 +552,15 @@ class EloComputationService:
         self.conn.commit()
 
         # Count unique teams
-        if sport in self._ratings:
-            result.teams_updated = len(self._ratings[sport])
+        if league in self._ratings:
+            result.teams_updated = len(self._ratings[league])
 
         # Optionally sync to teams table
         if sync_to_teams:
-            synced = self.sync_ratings_to_teams(sport)
+            synced = self.sync_ratings_to_teams(league)
             logger.info(
                 "elo_synced_to_teams_table",
-                sport=sport,
+                league=league,
                 teams_synced=synced,
             )
 
@@ -568,7 +568,7 @@ class EloComputationService:
 
         logger.info(
             "elo_computation_complete",
-            sport=sport,
+            league=league,
             games_processed=result.games_processed,
             games_skipped=result.games_skipped,
             teams=result.teams_updated,
@@ -577,45 +577,45 @@ class EloComputationService:
 
         return result
 
-    def _apply_season_regression(self, sport: str, engine: EloEngine) -> None:
-        """Apply season-to-season regression for all teams in a sport.
+    def _apply_season_regression(self, league: str, engine: EloEngine) -> None:
+        """Apply season-to-season regression for all teams in a league.
 
         Args:
-            sport: Sport code
-            engine: EloEngine instance for this sport
+            league: League code
+            engine: EloEngine instance for this league
         """
-        if sport not in self._ratings:
+        if league not in self._ratings:
             return
 
-        for team_code, state in self._ratings[sport].items():
+        for team_code, state in self._ratings[league].items():
             old_rating = state.rating
             new_rating = engine.apply_season_regression(old_rating)
             state.rating = new_rating
 
-    def get_team_ratings(self, sport: str) -> dict[str, Decimal]:
-        """Get current ratings for all teams in a sport.
+    def get_team_ratings(self, league: str) -> dict[str, Decimal]:
+        """Get current ratings for all teams in a league.
 
         Args:
-            sport: Sport code
+            league: League code
 
         Returns:
             Dictionary mapping team_code to current Elo rating
         """
-        if sport not in self._ratings:
+        if league not in self._ratings:
             return {}
 
-        return {team_code: state.rating for team_code, state in self._ratings[sport].items()}
+        return {team_code: state.rating for team_code, state in self._ratings[league].items()}
 
-    def get_team_rating_details(self, sport: str) -> dict[str, dict[str, Any]]:
-        """Get detailed rating info for all teams in a sport.
+    def get_team_rating_details(self, league: str) -> dict[str, dict[str, Any]]:
+        """Get detailed rating info for all teams in a league.
 
         Args:
-            sport: Sport code
+            league: League code
 
         Returns:
             Dictionary with team details (rating, games, peak, etc.)
         """
-        if sport not in self._ratings:
+        if league not in self._ratings:
             return {}
 
         return {
@@ -629,21 +629,21 @@ class EloComputationService:
                     Decimal("0.01"), rounding=ROUND_HALF_UP
                 ),
             }
-            for team_code, state in self._ratings[sport].items()
+            for team_code, state in self._ratings[league].items()
         }
 
-    def clear_ratings_cache(self, sport: str | None = None) -> None:
+    def clear_ratings_cache(self, league: str | None = None) -> None:
         """Clear the in-memory ratings cache.
 
         Args:
-            sport: If specified, only clear this sport. Otherwise clear all.
+            league: If specified, only clear this league. Otherwise clear all.
         """
-        if sport:
-            self._ratings.pop(sport, None)
+        if league:
+            self._ratings.pop(league, None)
         else:
             self._ratings.clear()
 
-    def sync_ratings_to_teams(self, sport: str) -> int:
+    def sync_ratings_to_teams(self, league: str) -> int:
         """Sync computed Elo ratings to the teams.current_elo_rating column.
 
         This is the final step in the Elo computation pipeline, updating the
@@ -654,13 +654,13 @@ class EloComputationService:
                 -> teams.current_elo_rating (LIVE)
 
         Args:
-            sport: Sport code to sync ratings for
+            league: League code to sync ratings for
 
         Returns:
             Number of teams updated
 
         Example:
-            >>> result = service.compute_ratings(sport="nfl", seasons=[2020])
+            >>> result = service.compute_ratings(league="nfl", seasons=[2020])
             >>> updated = service.sync_ratings_to_teams("nfl")
             >>> print(f"Updated {updated} teams")
 
@@ -681,24 +681,24 @@ class EloComputationService:
             - ADR-109: Elo Rating Computation Engine Architecture
             - crud_operations.py: update_team_elo_rating()
         """
-        if sport not in self._ratings:
-            logger.warning("no_ratings_to_sync", sport=sport)
+        if league not in self._ratings:
+            logger.warning("no_ratings_to_sync", league=league)
             return 0
 
         cursor = self.conn.cursor()
         updated_count = 0
         skipped_count = 0
 
-        for team_code, state in self._ratings[sport].items():
+        for team_code, state in self._ratings[league].items():
             if state.team_id is None:
                 # team_id was not resolved at rating creation time.
-                # Do NOT fall back to a cross-sport lookup — that would
+                # Do NOT fall back to a cross-league lookup — that would
                 # risk updating the wrong team (e.g., PHI Eagles vs 76ers).
                 logger.warning(
                     "skipping_elo_sync_no_team_id",
                     team_code=team_code,
-                    sport=sport,
-                    msg="Team was not found by (team_code, sport) at rating creation time",
+                    league=league,
+                    msg="Team was not found by (team_code, league) at rating creation time",
                 )
                 skipped_count += 1
                 continue
@@ -718,10 +718,10 @@ class EloComputationService:
         self.conn.commit()
         logger.info(
             "synced_elo_ratings_to_teams",
-            sport=sport,
+            league=league,
             teams_updated=updated_count,
             teams_skipped=skipped_count,
-            teams_processed=len(self._ratings[sport]),
+            teams_processed=len(self._ratings[league]),
         )
 
         return updated_count
@@ -734,7 +734,7 @@ class EloComputationService:
 
 def compute_elo_ratings(
     conn: Any,
-    sport: str,
+    league: str,
     seasons: list[int] | None = None,
     skip_computed: bool = True,
 ) -> ComputationResult:
@@ -742,7 +742,7 @@ def compute_elo_ratings(
 
     Args:
         conn: Database connection
-        sport: Sport code
+        league: League code
         seasons: Optional list of seasons
         skip_computed: Skip already-computed games
 
@@ -750,7 +750,7 @@ def compute_elo_ratings(
         ComputationResult with statistics
     """
     service = EloComputationService(conn)
-    return service.compute_ratings(sport, seasons, skip_computed)
+    return service.compute_ratings(league, seasons, skip_computed)
 
 
 def get_elo_computation_stats(conn: Any) -> dict[str, Any]:
@@ -764,17 +764,17 @@ def get_elo_computation_stats(conn: Any) -> dict[str, Any]:
     """
     cursor = conn.cursor()
 
-    # Count by sport
+    # Count by league
     cursor.execute("""
-        SELECT sport, COUNT(*) as count, MIN(game_date) as first_date, MAX(game_date) as last_date
+        SELECT league, COUNT(*) as count, MIN(game_date) as first_date, MAX(game_date) as last_date
         FROM elo_calculation_log
-        GROUP BY sport
-        ORDER BY sport
+        GROUP BY league
+        ORDER BY league
     """)
 
-    by_sport = {}
+    by_league = {}
     for row in cursor.fetchall():
-        by_sport[row[0]] = {
+        by_league[row[0]] = {
             "count": row[1],
             "first_date": str(row[2]) if row[2] else None,
             "last_date": str(row[3]) if row[3] else None,
@@ -786,5 +786,5 @@ def get_elo_computation_stats(conn: Any) -> dict[str, Any]:
 
     return {
         "total_calculations": total,
-        "by_sport": by_sport,
+        "by_league": by_league,
     }

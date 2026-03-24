@@ -225,7 +225,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         team_name VARCHAR(100) NOT NULL,
         display_name VARCHAR(100),
         abbreviation VARCHAR(10),
-        sport VARCHAR(20) NOT NULL CHECK (sport IN ('nfl', 'ncaaf', 'nba', 'ncaab', 'nhl', 'wnba', 'mlb', 'soccer')),
+        sport VARCHAR(20) NOT NULL CHECK (sport IN ('football', 'basketball', 'hockey', 'baseball', 'soccer')),
         league VARCHAR(20) CHECK (league IN ('nfl', 'ncaaf', 'nba', 'ncaab', 'nhl', 'wnba', 'mlb', 'soccer')),
         conference VARCHAR(50),
         division VARCHAR(50),
@@ -242,7 +242,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_teams_espn_id ON teams(espn_team_id);
     CREATE INDEX IF NOT EXISTS idx_teams_elo_rating ON teams(current_elo_rating);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_espn_id_league_unique ON teams(espn_team_id, league) WHERE espn_team_id IS NOT NULL;
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_code_sport_pro ON teams(team_code, sport) WHERE sport IN ('nfl', 'nba', 'nhl', 'wnba', 'mlb', 'soccer');
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_teams_code_league_pro ON teams(team_code, league) WHERE league IN ('nfl', 'nba', 'nhl', 'wnba', 'mlb', 'mls');
 
     -- Note: elo_rating_history table removed in migration 0015
     -- Superseded by elo_calculation_log (28 columns, full audit trail)
@@ -865,7 +865,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         CONSTRAINT uq_games_matchup UNIQUE (sport, game_date, home_team_code, away_team_code),
         CONSTRAINT ck_games_sport CHECK (sport IN (
-            'nfl', 'nba', 'mlb', 'nhl', 'ncaaf', 'ncaab', 'ncaaw', 'wnba', 'soccer'
+            'football', 'basketball', 'hockey', 'baseball', 'soccer'
         )),
         CONSTRAINT ck_games_season CHECK (season BETWEEN 1900 AND 2100),
         CONSTRAINT ck_games_status CHECK (game_status IN (

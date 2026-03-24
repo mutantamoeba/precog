@@ -3195,7 +3195,7 @@ def create_team(
         team_code: Abbreviation code (e.g., 'KC', 'BOS', 'TBL')
         team_name: Full team name (e.g., 'Kansas City Chiefs')
         display_name: Short display name (e.g., 'Chiefs')
-        sport: Sport/league code for the sport column (e.g., 'nfl', 'nba')
+        sport: Sport name for the sport column (e.g., 'football', 'basketball')
         league: League code for the league column (e.g., 'nfl', 'nba')
         espn_team_id: ESPN unique team identifier (e.g., '12')
         current_elo_rating: Elo rating from calibrated computation. None if not
@@ -3221,7 +3221,7 @@ def create_team(
         ...     team_code="KC",
         ...     team_name="Kansas City Chiefs",
         ...     display_name="Chiefs",
-        ...     sport="nfl",
+        ...     sport="football",
         ...     league="nfl",
         ...     espn_team_id="12",
         ...     conference="AFC",
@@ -3707,7 +3707,10 @@ LEAGUE_SPORT_CATEGORY: dict[str, str] = {
     "nba": "basketball",
     "ncaab": "basketball",
     "wnba": "basketball",
+    "ncaaw": "basketball",
     "nhl": "hockey",
+    "mlb": "baseball",
+    "mls": "soccer",
 }
 
 
@@ -5312,14 +5315,14 @@ def get_team_elo_rating(team_id: int) -> Decimal | None:
 
 def get_team_elo_by_code(
     team_code: str,
-    sport: str | None = None,
+    league: str | None = None,
 ) -> Decimal | None:
     """
     Get a team's current Elo rating by team code.
 
     Args:
         team_code: Team abbreviation (e.g., 'KC', 'LAL', 'BOS')
-        sport: Optional sport filter (e.g., 'nfl', 'nba')
+        league: Optional league filter (e.g., 'nfl', 'nba'). Queries teams.league.
 
     Returns:
         Current Elo rating as Decimal, or None if team not found
@@ -5327,16 +5330,16 @@ def get_team_elo_by_code(
     Note:
         If multiple teams share the same team_code (e.g., 'ATL' in both
         NFL and MLS), a warning is logged and the first result is returned.
-        Callers should provide the sport parameter to avoid ambiguity.
+        Callers should provide the league parameter to avoid ambiguity.
 
     Example:
-        >>> rating = get_team_elo_by_code("KC", sport="nfl")
+        >>> rating = get_team_elo_by_code("KC", league="nfl")
         >>> print(f"Chiefs Elo: {rating}")
     """
-    if sport:
+    if league:
         results = fetch_all(
-            "SELECT current_elo_rating FROM teams WHERE team_code = %s AND sport = %s",
-            (team_code, sport),
+            "SELECT current_elo_rating FROM teams WHERE team_code = %s AND league = %s",
+            (team_code, league),
         )
     else:
         results = fetch_all(
@@ -5347,10 +5350,10 @@ def get_team_elo_by_code(
         return None
     if len(results) > 1:
         logger.warning(
-            "Ambiguous team_code lookup: '%s' (sport=%s) matched %d rows. "
-            "Returning first result. Pass sport parameter to disambiguate.",
+            "Ambiguous team_code lookup: '%s' (league=%s) matched %d rows. "
+            "Returning first result. Pass league parameter to disambiguate.",
             team_code,
-            sport,
+            league,
             len(results),
         )
     result = results[0]
@@ -5360,7 +5363,7 @@ def get_team_elo_by_code(
 
 
 def insert_elo_calculation_log(
-    sport: str,
+    league: str,
     game_date: date,
     home_team_code: str,
     away_team_code: str,
@@ -5430,7 +5433,7 @@ def insert_elo_calculation_log(
 
     Example:
         >>> log_id = insert_elo_calculation_log(
-        ...     sport="nfl",
+        ...     league="nfl",
         ...     game_date=date(2024, 9, 8),
         ...     home_team_code="KC",
         ...     away_team_code="BAL",
@@ -5467,7 +5470,7 @@ def insert_elo_calculation_log(
     """
     query = """
         INSERT INTO elo_calculation_log (
-            sport, game_date, home_team_id, away_team_id,
+            league, game_date, home_team_id, away_team_id,
             game_state_id, game_id,
             home_team_code, away_team_code,
             home_score, away_score,
@@ -5488,7 +5491,7 @@ def insert_elo_calculation_log(
         RETURNING elo_log_id
     """
     params = (
-        sport,
+        league,
         game_date,
         home_team_id,
         away_team_id,
@@ -5523,7 +5526,7 @@ def insert_elo_calculation_log(
 
 
 def get_elo_calculation_logs(
-    sport: str,
+    league: str,
     start_date: date | None = None,
     end_date: date | None = None,
     team_code: str | None = None,
@@ -5533,7 +5536,7 @@ def get_elo_calculation_logs(
     Retrieve Elo calculation logs with optional filters.
 
     Args:
-        sport: Sport code to filter by
+        league: League code to filter by (e.g., 'nfl', 'nba')
         start_date: Start of date range (optional)
         end_date: End of date range (optional)
         team_code: Filter by team (matches home or away)
@@ -5544,15 +5547,15 @@ def get_elo_calculation_logs(
 
     Example:
         >>> logs = get_elo_calculation_logs(
-        ...     sport="nfl",
+        ...     league="nfl",
         ...     start_date=date(2024, 9, 1),
         ...     team_code="KC",
         ... )
         >>> for log in logs:
         ...     print(f"{log['game_date']}: {log['home_team_code']} vs {log['away_team_code']}")
     """
-    conditions = ["sport = %s"]
-    params: list[Any] = [sport]
+    conditions = ["league = %s"]
+    params: list[Any] = [league]
 
     if start_date:
         conditions.append("game_date >= %s")
@@ -8561,7 +8564,7 @@ def get_or_create_game(
 
     Example:
         >>> game_id = get_or_create_game(
-        ...     sport="nfl",
+        ...     sport="football",
         ...     game_date=date(2024, 9, 8),
         ...     home_team_code="KC",
         ...     away_team_code="BAL",

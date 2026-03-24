@@ -860,12 +860,12 @@ class SeedingManager:
                 # Get counts per sport
                 cur.execute("""
                     SELECT
-                        sport,
+                        league AS sport,
                         COUNT(*) as team_count,
                         COUNT(espn_team_id) as with_espn_id
                     FROM teams
-                    GROUP BY sport
-                    ORDER BY sport
+                    GROUP BY league
+                    ORDER BY league
                 """)
                 rows = cur.fetchall()
 

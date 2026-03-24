@@ -68,6 +68,7 @@ from precog.api_connectors.espn_client import (
     ESPNVenueInfo,
 )
 from precog.database.crud_operations import (
+    LEAGUE_SPORT_CATEGORY,
     create_venue,
     get_live_games,
     get_or_create_game,
@@ -1067,7 +1068,7 @@ class ESPNGamePoller(BasePoller):
         if game_date and home_team_info.get("team_code") and away_team_info.get("team_code"):
             try:
                 game_id = get_or_create_game(
-                    sport=league,
+                    sport=LEAGUE_SPORT_CATEGORY.get(league, league),
                     game_date=game_date.date() if hasattr(game_date, "date") else game_date,
                     home_team_code=home_team_info.get("team_code", ""),
                     away_team_code=away_team_info.get("team_code", ""),

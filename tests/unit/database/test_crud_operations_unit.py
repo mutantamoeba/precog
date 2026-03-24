@@ -594,7 +594,7 @@ class TestGetOrCreateGameUnit:
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
         result = get_or_create_game(
-            sport="nfl",
+            sport="football",
             game_date=date(2024, 9, 8),
             home_team_code="KC",
             away_team_code="BAL",
@@ -614,7 +614,7 @@ class TestGetOrCreateGameUnit:
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
         get_or_create_game(
-            sport="nfl",
+            sport="football",
             game_date=date(2025, 11, 15),
             home_team_code="KC",
             away_team_code="BAL",
@@ -634,7 +634,7 @@ class TestGetOrCreateGameUnit:
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
         get_or_create_game(
-            sport="ncaaf",
+            sport="football",
             game_date=date(2024, 10, 5),
             home_team_code="OSU",
             away_team_code="MICH",
@@ -642,7 +642,7 @@ class TestGetOrCreateGameUnit:
 
         insert_call = mock_cursor.execute.call_args_list[0]
         params = insert_call[0][1]
-        assert params[5] == "ncaaf"  # league defaults to sport
+        assert params[5] == "football"  # league defaults to sport
 
     @patch("precog.database.crud_operations.get_cursor")
     def test_get_or_create_game_on_conflict_sql_has_case_guard(self, mock_get_cursor):
@@ -657,7 +657,7 @@ class TestGetOrCreateGameUnit:
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
         get_or_create_game(
-            sport="nfl",
+            sport="football",
             game_date=date(2024, 9, 8),
             home_team_code="KC",
             away_team_code="BAL",
@@ -680,7 +680,7 @@ class TestGetOrCreateGameUnit:
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
         result = get_or_create_game(
-            sport="nfl",
+            sport="football",
             game_date=date(2024, 9, 8),
             home_team_code="KC",
             away_team_code="BAL",
@@ -1181,7 +1181,7 @@ class TestGameStateChangedSportAwareUnit:
 
     def test_league_sport_category_maps_all_leagues(self):
         """Verify LEAGUE_SPORT_CATEGORY maps all expected leagues."""
-        expected = {"nfl", "ncaaf", "nba", "ncaab", "wnba", "nhl"}
+        expected = {"nfl", "ncaaf", "nba", "ncaab", "wnba", "ncaaw", "nhl", "mlb", "mls"}
         assert set(LEAGUE_SPORT_CATEGORY.keys()) == expected
 
     # --- Football (existing behavior preserved with league param) ---

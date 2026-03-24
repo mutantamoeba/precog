@@ -39,9 +39,9 @@ def temp_seeds_dir() -> Iterator[Path]:
         nfl_teams.write_text(
             "-- NFL Teams Seed Data\n"
             "INSERT INTO teams (team_code, team_name, sport, conference, division) VALUES\n"
-            "('KC', 'Kansas City Chiefs', 'nfl', 'AFC', 'West'),\n"
-            "('SF', 'San Francisco 49ers', 'nfl', 'NFC', 'West'),\n"
-            "('BUF', 'Buffalo Bills', 'nfl', 'AFC', 'East')\n"
+            "('KC', 'Kansas City Chiefs', 'football', 'AFC', 'West'),\n"
+            "('SF', 'San Francisco 49ers', 'football', 'NFC', 'West'),\n"
+            "('BUF', 'Buffalo Bills', 'football', 'AFC', 'East')\n"
             "ON CONFLICT DO NOTHING;\n"
         )
 
@@ -49,8 +49,8 @@ def temp_seeds_dir() -> Iterator[Path]:
         nba_teams.write_text(
             "-- NBA Teams Seed Data\n"
             "INSERT INTO teams (team_code, team_name, sport, conference, division) VALUES\n"
-            "('LAL', 'Los Angeles Lakers', 'nba', 'Western', 'Pacific'),\n"
-            "('BOS', 'Boston Celtics', 'nba', 'Eastern', 'Atlantic')\n"
+            "('LAL', 'Los Angeles Lakers', 'basketball', 'Western', 'Pacific'),\n"
+            "('BOS', 'Boston Celtics', 'basketball', 'Eastern', 'Atlantic')\n"
             "ON CONFLICT DO NOTHING;\n"
         )
 
@@ -58,8 +58,8 @@ def temp_seeds_dir() -> Iterator[Path]:
         nhl_teams.write_text(
             "-- NHL Teams Seed Data\n"
             "INSERT INTO teams (team_code, team_name, sport, conference, division) VALUES\n"
-            "('NYR', 'New York Rangers', 'nhl', 'Eastern', 'Metropolitan'),\n"
-            "('EDM', 'Edmonton Oilers', 'nhl', 'Western', 'Pacific')\n"
+            "('NYR', 'New York Rangers', 'hockey', 'Eastern', 'Metropolitan'),\n"
+            "('EDM', 'Edmonton Oilers', 'hockey', 'Western', 'Pacific')\n"
             "ON CONFLICT DO NOTHING;\n"
         )
 

@@ -60,9 +60,9 @@ def setup_test_teams(db_pool, db_cursor):
 
     # First check if teams already exist (from seed data)
     with get_cursor(commit=False) as cur:
-        cur.execute("SELECT team_id FROM teams WHERE team_code = 'KC' AND sport = 'nfl'")
+        cur.execute("SELECT team_id FROM teams WHERE team_code = 'KC' AND league = 'nfl'")
         kc_row = cur.fetchone()
-        cur.execute("SELECT team_id FROM teams WHERE team_code = 'BUF' AND sport = 'nfl'")
+        cur.execute("SELECT team_id FROM teams WHERE team_code = 'BUF' AND league = 'nfl'")
         buf_row = cur.fetchone()
 
     # Track whether we created new teams (for cleanup)
@@ -82,8 +82,8 @@ def setup_test_teams(db_pool, db_cursor):
                     conference, division, sport, current_elo_rating
                 )
                 VALUES
-                    (98001, 'KC', 'Kansas City Chiefs', 'AFC', 'West', 'nfl', 1624),
-                    (98002, 'BUF', 'Buffalo Bills', 'AFC', 'East', 'nfl', 1618)
+                    (98001, 'KC', 'Kansas City Chiefs', 'AFC', 'West', 'football', 1624),
+                    (98002, 'BUF', 'Buffalo Bills', 'AFC', 'East', 'football', 1618)
                 ON CONFLICT (team_id) DO NOTHING
                 RETURNING team_id
             """

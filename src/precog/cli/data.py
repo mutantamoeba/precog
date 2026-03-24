@@ -1559,8 +1559,11 @@ def seed_lib(
 # =============================================================================
 
 
-class EloSport(str, Enum):
-    """Sports supported for Elo computation."""
+class EloLeague(str, Enum):
+    """Leagues supported for Elo computation.
+
+    Renamed from EloSport to EloLeague in #460 Phase B -- values are league codes.
+    """
 
     NFL = "nfl"
     NBA = "nba"
@@ -1574,9 +1577,9 @@ class EloSport(str, Enum):
 
 @app.command("compute-elo")
 def compute_elo(
-    sport: EloSport = typer.Argument(
+    league: EloLeague = typer.Argument(
         ...,
-        help="Sport to compute Elo ratings for",
+        help="League to compute Elo ratings for",
     ),
     seasons: str = typer.Option(
         "",
@@ -1647,7 +1650,7 @@ def compute_elo(
                 hint="Use comma-separated years: --seasons 2019,2020",
             )
 
-    console.print(f"\n[bold]Computing Elo Ratings for {sport.value.upper()}[/bold]")
+    console.print(f"\n[bold]Computing Elo Ratings for {league.value.upper()}[/bold]")
     console.print(f"  Seasons: {season_list if season_list else 'all available'}")
     console.print(f"  Skip computed: {skip_computed}")
     console.print(f"  Sync to teams: {sync_to_teams}")
@@ -1663,10 +1666,10 @@ def compute_elo(
             )
 
             # Compute ratings (use simple print for Windows cp1252 compatibility)
-            console.print(f"Processing {sport.value.upper()} games...")
+            console.print(f"Processing {league.value.upper()} games...")
 
             result = service.compute_ratings(
-                sport=sport.value,
+                league=league.value,
                 seasons=season_list,
                 skip_computed=skip_computed,
                 sync_to_teams=sync_to_teams,
@@ -1681,7 +1684,7 @@ def compute_elo(
             results_table.add_column("Metric", style="dim")
             results_table.add_column("Value", style="bold")
 
-            results_table.add_row("Sport", result.sport.upper())
+            results_table.add_row("League", result.league.upper())
             results_table.add_row("Seasons", str(result.seasons))
             results_table.add_row("Games Processed", f"{result.games_processed:,}")
             results_table.add_row("Games Skipped", f"{result.games_skipped:,}")
@@ -1702,7 +1705,7 @@ def compute_elo(
 
             # Show ratings if requested
             if show_ratings and result.games_processed > 0:
-                ratings = service.get_team_rating_details(sport.value)
+                ratings = service.get_team_rating_details(league.value)
 
                 if ratings:
                     # Sort by rating descending
@@ -1743,15 +1746,15 @@ def compute_elo(
                 stats = get_elo_computation_stats(conn)
                 console.print("\n[bold]Overall Elo Computation Stats:[/bold]")
                 console.print(f"  Total calculations: {stats['total_calculations']:,}")
-                for sport_name, sport_stats in stats["by_sport"].items():
+                for league_name, league_stats in stats["by_league"].items():
                     console.print(
-                        f"  {sport_name.upper()}: {sport_stats['count']:,} "
-                        f"({sport_stats['first_date']} to {sport_stats['last_date']})"
+                        f"  {league_name.upper()}: {league_stats['count']:,} "
+                        f"({league_stats['first_date']} to {league_stats['last_date']})"
                     )
 
             if result.games_processed > 0:
                 echo_success(
-                    f"Computed {result.games_processed:,} Elo ratings for {sport.value.upper()}"
+                    f"Computed {result.games_processed:,} Elo ratings for {league.value.upper()}"
                 )
             elif result.games_skipped > 0:
                 console.print(
@@ -1760,7 +1763,7 @@ def compute_elo(
                 )
             else:
                 console.print(
-                    f"\n[yellow]No games found for {sport.value.upper()} "
+                    f"\n[yellow]No games found for {league.value.upper()} "
                     f"seasons {season_list}[/yellow]"
                 )
 
@@ -1774,15 +1777,15 @@ def compute_elo(
 
 @app.command("elo-stats")
 def elo_stats(
-    sport: EloSport | None = typer.Argument(
+    league: EloLeague | None = typer.Argument(
         None,
-        help="Sport to show stats for (optional)",
+        help="League to show stats for (optional)",
     ),
 ) -> None:
     """Show Elo computation statistics from elo_calculation_log.
 
     Example:
-        precog data elo-stats        # Show all sports
+        precog data elo-stats        # Show all leagues
         precog data elo-stats nfl    # Show NFL only
     """
     from precog.analytics.elo_computation_service import get_elo_computation_stats
@@ -1797,33 +1800,33 @@ def elo_stats(
             if stats["total_calculations"] == 0:
                 console.print("[yellow]No Elo computations found in database.[/yellow]")
                 console.print(
-                    "[dim]Run 'precog data compute-elo <sport>' to compute ratings.[/dim]"
+                    "[dim]Run 'precog data compute-elo <league>' to compute ratings.[/dim]"
                 )
                 return
 
-            # Filter by sport if specified
-            if sport:
-                if sport.value in stats["by_sport"]:
-                    stats["by_sport"] = {sport.value: stats["by_sport"][sport.value]}
+            # Filter by league if specified
+            if league:
+                if league.value in stats["by_league"]:
+                    stats["by_league"] = {league.value: stats["by_league"][league.value]}
                 else:
                     console.print(
-                        f"[yellow]No computations found for {sport.value.upper()}[/yellow]"
+                        f"[yellow]No computations found for {league.value.upper()}[/yellow]"
                     )
                     return
 
             # Create table
-            table = Table(title="Elo Calculations by Sport")
-            table.add_column("Sport", style="bold")
+            table = Table(title="Elo Calculations by League")
+            table.add_column("League", style="bold")
             table.add_column("Games", justify="right")
             table.add_column("First Date")
             table.add_column("Last Date")
 
-            for sport_name, sport_stats in sorted(stats["by_sport"].items()):
+            for league_name, league_stats in sorted(stats["by_league"].items()):
                 table.add_row(
-                    sport_name.upper(),
-                    f"{sport_stats['count']:,}",
-                    sport_stats["first_date"] or "-",
-                    sport_stats["last_date"] or "-",
+                    league_name.upper(),
+                    f"{league_stats['count']:,}",
+                    league_stats["first_date"] or "-",
+                    league_stats["last_date"] or "-",
                 )
 
             console.print(table)

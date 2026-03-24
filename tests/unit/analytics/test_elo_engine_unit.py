@@ -27,12 +27,12 @@ from precog.analytics.elo_engine import (
     DEFAULT_REGRESSION_TARGET,
     ELO_DIVISOR,
     ERA_REGISTRY,
-    SPORT_CONFIGS,
-    SPORT_CONFIGS_POST_2020,
+    LEAGUE_CONFIGS,
+    LEAGUE_CONFIGS_POST_2020,
     EloEngine,
     EloState,
     EloUpdateResult,
-    Sport,
+    League,
     SportConfig,
     elo_to_win_probability,
     get_config_for_date,
@@ -76,23 +76,23 @@ class TestEloEngineInit:
     def test_init_with_string_sport(self) -> None:
         """Test initialization with lowercase sport string."""
         engine = EloEngine("nfl")
-        assert engine.sport == Sport.NFL
+        assert engine.league == League.NFL
         assert engine.k_factor == 20
         assert engine.home_advantage == Decimal("48")
 
     def test_init_with_uppercase_sport(self) -> None:
         """Test initialization with uppercase sport string is normalized."""
         engine = EloEngine("NFL")
-        assert engine.sport == Sport.NFL
+        assert engine.league == League.NFL
 
     def test_init_with_sport_enum(self) -> None:
         """Test initialization with Sport enum directly."""
-        engine = EloEngine(Sport.NBA)
-        assert engine.sport == Sport.NBA
+        engine = EloEngine(League.NBA)
+        assert engine.league == League.NBA
 
-    def test_init_with_invalid_sport_raises_error(self) -> None:
-        """Test initialization with invalid sport raises ValueError."""
-        with pytest.raises(ValueError, match="Unknown sport 'invalid'"):
+    def test_init_with_invalid_league_raises_error(self) -> None:
+        """Test initialization with invalid league raises ValueError."""
+        with pytest.raises(ValueError, match="Unknown league 'invalid'"):
             EloEngine("invalid")
 
     def test_init_with_custom_config(self) -> None:
@@ -106,11 +106,11 @@ class TestEloEngineInit:
         assert engine.k_factor == 50
         assert engine.home_advantage == Decimal("100")
 
-    def test_all_sports_have_configs(self) -> None:
-        """Test all Sport enum values have configurations."""
-        for sport in Sport:
-            assert sport in SPORT_CONFIGS
-            engine = EloEngine(sport)
+    def test_all_leagues_have_configs(self) -> None:
+        """Test all League enum values have configurations."""
+        for league in League:
+            assert league in LEAGUE_CONFIGS
+            engine = EloEngine(league)
             assert engine.config is not None
 
 
@@ -495,30 +495,30 @@ class TestSportConfigs:
 
     def test_nfl_config(self) -> None:
         """Test NFL configuration matches FiveThirtyEight methodology."""
-        config = SPORT_CONFIGS[Sport.NFL]
+        config = LEAGUE_CONFIGS[League.NFL]
         assert config.k_factor == 20
         assert config.home_advantage == Decimal("48")
         assert config.mov_enabled is True
 
     def test_nba_has_high_home_advantage(self) -> None:
         """Test NBA has higher home court advantage than NFL."""
-        nba_config = SPORT_CONFIGS[Sport.NBA]
-        nfl_config = SPORT_CONFIGS[Sport.NFL]
+        nba_config = LEAGUE_CONFIGS[League.NBA]
+        nfl_config = LEAGUE_CONFIGS[League.NFL]
 
         assert nba_config.home_advantage > nfl_config.home_advantage
         assert nba_config.home_advantage == Decimal("100")
 
     def test_mlb_has_low_k_factor(self) -> None:
         """Test MLB has lower K-factor due to long season."""
-        mlb_config = SPORT_CONFIGS[Sport.MLB]
-        nfl_config = SPORT_CONFIGS[Sport.NFL]
+        mlb_config = LEAGUE_CONFIGS[League.MLB]
+        nfl_config = LEAGUE_CONFIGS[League.NFL]
 
         assert mlb_config.k_factor < nfl_config.k_factor
         assert mlb_config.k_factor == 4
 
     def test_nhl_mov_disabled(self) -> None:
         """Test NHL has MOV disabled."""
-        nhl_config = SPORT_CONFIGS[Sport.NHL]
+        nhl_config = LEAGUE_CONFIGS[League.NHL]
         assert nhl_config.mov_enabled is False
 
 
@@ -589,18 +589,18 @@ class TestEraRegistry:
     def test_get_config_for_date_returns_correct_config(self) -> None:
         """Test that get_config_for_date returns correct sport config."""
         # Pre-COVID: NFL home advantage = 48
-        config_2019 = get_config_for_date(Sport.NFL, date(2019, 9, 8))
+        config_2019 = get_config_for_date(League.NFL, date(2019, 9, 8))
         assert config_2019.home_advantage == Decimal("48")
 
         # Post-COVID: NFL home advantage = 30
-        config_2023 = get_config_for_date(Sport.NFL, date(2023, 9, 10))
+        config_2023 = get_config_for_date(League.NFL, date(2023, 9, 10))
         assert config_2023.home_advantage == Decimal("30")
 
-    def test_all_eras_have_all_sports(self) -> None:
-        """Test that each era has configs for all sports."""
+    def test_all_eras_have_all_leagues(self) -> None:
+        """Test that each era has configs for all leagues."""
         for era in ERA_REGISTRY:
-            for sport in Sport:
-                assert sport in era.sport_configs, f"Era '{era.name}' missing config for {sport}"
+            for league in League:
+                assert league in era.league_configs, f"Era '{era.name}' missing config for {league}"
 
     def test_era_dataclass_is_frozen(self) -> None:
         """Test that Era is immutable (frozen dataclass)."""
@@ -687,38 +687,38 @@ class TestPost2020Configs:
     Related ADRs: ADR-ELO-001 (Era-based configuration)
     """
 
-    def test_all_sports_have_post_2020_configs(self) -> None:
-        """Test all Sport enum values have post-2020 configurations."""
-        for sport in Sport:
-            assert sport in SPORT_CONFIGS_POST_2020, f"Missing post-2020 config for {sport}"
+    def test_all_leagues_have_post_2020_configs(self) -> None:
+        """Test all League enum values have post-2020 configurations."""
+        for league in League:
+            assert league in LEAGUE_CONFIGS_POST_2020, f"Missing post-2020 config for {league}"
 
     def test_default_uses_historical_config(self) -> None:
         """Test that default (use_post_2020=False) uses historical values."""
         engine = EloEngine("nfl")  # Default use_post_2020=False
 
         assert engine.home_advantage == Decimal("48")
-        assert engine.config == SPORT_CONFIGS[Sport.NFL]
+        assert engine.config == LEAGUE_CONFIGS[League.NFL]
 
     def test_post_2020_flag_uses_reduced_home_advantage(self) -> None:
         """Test that use_post_2020=True uses reduced home advantage values."""
         engine = EloEngine("nfl", use_post_2020=True)
 
         assert engine.home_advantage == Decimal("30")
-        assert engine.config == SPORT_CONFIGS_POST_2020[Sport.NFL]
+        assert engine.config == LEAGUE_CONFIGS_POST_2020[League.NFL]
 
     def test_nfl_post_2020_home_advantage(self) -> None:
         """Test NFL post-2020 home advantage is 30 (reduced from 48)."""
-        config = SPORT_CONFIGS_POST_2020[Sport.NFL]
+        config = LEAGUE_CONFIGS_POST_2020[League.NFL]
         assert config.home_advantage == Decimal("30")
 
     def test_nba_post_2020_home_advantage(self) -> None:
         """Test NBA post-2020 home advantage is 40 (reduced from 100)."""
-        config = SPORT_CONFIGS_POST_2020[Sport.NBA]
+        config = LEAGUE_CONFIGS_POST_2020[League.NBA]
         assert config.home_advantage == Decimal("40")
 
     def test_ncaaf_post_2020_home_advantage(self) -> None:
         """Test NCAAF post-2020 home advantage is 40 (reduced from 65)."""
-        config = SPORT_CONFIGS_POST_2020[Sport.NCAAF]
+        config = LEAGUE_CONFIGS_POST_2020[League.NCAAF]
         assert config.home_advantage == Decimal("40")
 
     def test_explicit_config_overrides_post_2020(self) -> None:
@@ -736,29 +736,29 @@ class TestPost2020Configs:
 
     def test_post_2020_k_factors_unchanged(self) -> None:
         """Test K-factors are unchanged in post-2020 (only home advantage changed)."""
-        for sport in Sport:
-            historical = SPORT_CONFIGS[sport]
-            post_2020 = SPORT_CONFIGS_POST_2020[sport]
+        for league in League:
+            historical = LEAGUE_CONFIGS[league]
+            post_2020 = LEAGUE_CONFIGS_POST_2020[league]
             assert historical.k_factor == post_2020.k_factor, (
-                f"{sport}: K-factor should be unchanged post-2020"
+                f"{league}: K-factor should be unchanged post-2020"
             )
 
     def test_post_2020_mov_settings_unchanged(self) -> None:
         """Test MOV settings are unchanged in post-2020."""
-        for sport in Sport:
-            historical = SPORT_CONFIGS[sport]
-            post_2020 = SPORT_CONFIGS_POST_2020[sport]
+        for league in League:
+            historical = LEAGUE_CONFIGS[league]
+            post_2020 = LEAGUE_CONFIGS_POST_2020[league]
             assert historical.mov_enabled == post_2020.mov_enabled, (
-                f"{sport}: MOV setting should be unchanged post-2020"
+                f"{league}: MOV setting should be unchanged post-2020"
             )
 
     def test_post_2020_home_advantages_are_lower(self) -> None:
         """Test all post-2020 home advantages are lower than historical."""
-        for sport in Sport:
-            historical = SPORT_CONFIGS[sport]
-            post_2020 = SPORT_CONFIGS_POST_2020[sport]
+        for league in League:
+            historical = LEAGUE_CONFIGS[league]
+            post_2020 = LEAGUE_CONFIGS_POST_2020[league]
             assert post_2020.home_advantage <= historical.home_advantage, (
-                f"{sport}: Post-2020 home advantage should be <= historical"
+                f"{league}: Post-2020 home advantage should be <= historical"
             )
 
     def test_win_probability_different_between_eras(self) -> None:
@@ -797,7 +797,7 @@ class TestConvenienceFunctions:
         """Test get_elo_engine factory function."""
         engine = get_elo_engine("nfl")
         assert isinstance(engine, EloEngine)
-        assert engine.sport == Sport.NFL
+        assert engine.league == League.NFL
 
     def test_elo_to_win_probability(self) -> None:
         """Test direct Elo to probability conversion."""
