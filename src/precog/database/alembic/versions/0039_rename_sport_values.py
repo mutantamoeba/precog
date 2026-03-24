@@ -54,26 +54,27 @@ _SPORT_UPDATES = [
 def upgrade() -> None:
     """Rename sport column CHECK constraints to accept sport names."""
     # =========================================================================
-    # Step 0: Update existing data — convert league codes to sport names
+    # Step 1: Drop old CHECK constraints (must happen BEFORE data update)
     # =========================================================================
-    # Must run BEFORE new CHECK constraints are applied.
+    # Old constraints only allow league codes ('nfl', 'nba', etc.).
+    # Must drop them before updating data to sport names ('football', etc.).
+    op.execute("ALTER TABLE teams DROP CONSTRAINT IF EXISTS teams_sport_check;")
+    op.execute("ALTER TABLE games DROP CONSTRAINT IF EXISTS ck_games_sport;")
+
+    # =========================================================================
+    # Step 2: Update existing data — convert league codes to sport names
+    # =========================================================================
     for target, sources in _SPORT_UPDATES:
         op.execute(f"UPDATE teams SET sport = {target} WHERE sport IN ({sources})")  # noqa: S608
         op.execute(f"UPDATE games SET sport = {target} WHERE sport IN ({sources})")  # noqa: S608
 
     # =========================================================================
-    # Step 1: teams.sport — drop old constraint, add new with sport names
+    # Step 3: Add new CHECK constraints with sport names
     # =========================================================================
-    op.execute("ALTER TABLE teams DROP CONSTRAINT IF EXISTS teams_sport_check;")
     op.execute("""
         ALTER TABLE teams ADD CONSTRAINT teams_sport_check
         CHECK (sport IN ('football', 'basketball', 'hockey', 'baseball', 'soccer'))
     """)
-
-    # =========================================================================
-    # Step 2: games.sport — drop old constraint, add new with sport names
-    # =========================================================================
-    op.execute("ALTER TABLE games DROP CONSTRAINT IF EXISTS ck_games_sport;")
     op.execute("""
         ALTER TABLE games ADD CONSTRAINT ck_games_sport
         CHECK (sport IN ('football', 'basketball', 'hockey', 'baseball', 'soccer'))
