@@ -8582,9 +8582,14 @@ def get_or_create_game(
     if season is None:
         season = game_date.year
 
-    # Default league to sport
+    # League is required — sport values ("football") don't match league CHECK
+    # constraint ("nfl"/"ncaaf"). All callers must pass league explicitly.
     if league is None:
-        league = sport
+        raise ValueError(
+            f"league is required for get_or_create_game(). "
+            f"sport='{sport}' cannot be used as league default after "
+            f"Phase B rename. Pass league explicitly."
+        )
 
     query = """
         INSERT INTO games (

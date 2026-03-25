@@ -618,6 +618,7 @@ class TestGetOrCreateGameUnit:
             game_date=date(2025, 11, 15),
             home_team_code="KC",
             away_team_code="BAL",
+            league="nfl",
         )
 
         # Check season param (5th positional param after sport, date, home, away)
@@ -625,24 +626,15 @@ class TestGetOrCreateGameUnit:
         params = insert_call[0][1]
         assert params[4] == 2025  # season derived from game_date.year
 
-    @patch("precog.database.crud_operations.get_cursor")
-    def test_get_or_create_game_defaults_league_to_sport(self, mock_get_cursor):
-        """Test league defaults to sport when not provided."""
-        mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
-        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
-        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
-
-        get_or_create_game(
-            sport="football",
-            game_date=date(2024, 10, 5),
-            home_team_code="OSU",
-            away_team_code="MICH",
-        )
-
-        insert_call = mock_cursor.execute.call_args_list[0]
-        params = insert_call[0][1]
-        assert params[5] == "football"  # league defaults to sport
+    def test_get_or_create_game_raises_if_league_missing(self):
+        """Test ValueError raised when league is not provided (latent trap after Phase B)."""
+        with pytest.raises(ValueError, match="league is required"):
+            get_or_create_game(
+                sport="football",
+                game_date=date(2024, 10, 5),
+                home_team_code="OSU",
+                away_team_code="MICH",
+            )
 
     @patch("precog.database.crud_operations.get_cursor")
     def test_get_or_create_game_on_conflict_sql_has_case_guard(self, mock_get_cursor):
@@ -661,6 +653,7 @@ class TestGetOrCreateGameUnit:
             game_date=date(2024, 9, 8),
             home_team_code="KC",
             away_team_code="BAL",
+            league="nfl",
             game_status="scheduled",
         )
 
