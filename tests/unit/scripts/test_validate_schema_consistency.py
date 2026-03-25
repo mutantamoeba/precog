@@ -394,14 +394,20 @@ class TestValidateTypePrecision:
     @patch("builtins.print")
     def test_float_column_detected(self, mock_print, mock_columns):
         """Verify error when price column uses FLOAT instead of DECIMAL."""
-        mock_columns.return_value = [
-            {
-                "column_name": "yes_bid",
-                "data_type": "double precision",  # FLOAT type
-                "numeric_precision": None,
-                "numeric_scale": None,
-            }
-        ]
+
+        def column_lookup(table_name):
+            if table_name == "markets":
+                return [
+                    {
+                        "column_name": "settlement_value",
+                        "data_type": "double precision",  # FLOAT type
+                        "numeric_precision": None,
+                        "numeric_scale": None,
+                    }
+                ]
+            return []
+
+        mock_columns.side_effect = column_lookup
 
         passed, errors = validate_type_precision()
 
@@ -413,14 +419,20 @@ class TestValidateTypePrecision:
     @patch("builtins.print")
     def test_wrong_decimal_precision(self, mock_print, mock_columns):
         """Verify error when DECIMAL has wrong precision."""
-        mock_columns.return_value = [
-            {
-                "column_name": "yes_bid",
-                "data_type": "numeric",
-                "numeric_precision": 8,  # Wrong precision
-                "numeric_scale": 2,  # Wrong scale
-            }
-        ]
+
+        def column_lookup(table_name):
+            if table_name == "markets":
+                return [
+                    {
+                        "column_name": "settlement_value",
+                        "data_type": "numeric",
+                        "numeric_precision": 8,  # Wrong precision
+                        "numeric_scale": 2,  # Wrong scale
+                    }
+                ]
+            return []
+
+        mock_columns.side_effect = column_lookup
 
         passed, errors = validate_type_precision()
 
@@ -457,7 +469,6 @@ class TestValidateScdType2Compliance:
             {"column_name": "row_current_ind"},
             {"column_name": "row_start_ts"},
             {"column_name": "row_end_ts"},
-            {"column_name": "row_version"},
         ]
 
         passed, errors = validate_scd_type2_compliance()
@@ -718,17 +729,13 @@ class TestIntegration:
                 if table == "markets":
                     return [
                         {
-                            "column_name": "yes_bid",
+                            "column_name": "settlement_value",
                             "data_type": "numeric",
                             "numeric_precision": 10,
                             "numeric_scale": 4,
                             "is_nullable": "YES",
                             "column_default": None,
                         },
-                        {"column_name": "row_current_ind", "data_type": "boolean"},
-                        {"column_name": "row_start_ts", "data_type": "timestamp"},
-                        {"column_name": "row_end_ts", "data_type": "timestamp"},
-                        {"column_name": "row_version", "data_type": "integer"},
                     ]
                 if table in ["strategies", "probability_models"]:
                     return [
@@ -757,10 +764,11 @@ class TestIntegration:
         call_args = [call[0][0] for call in mock_columns.call_args_list]
         expected_tables = [
             "markets",
+            "market_snapshots",
             "positions",
             "trades",
             "edges",
-            "exit_evals",
+            "orders",
             "account_balance",
             "position_exits",
         ]
@@ -777,6 +785,6 @@ class TestIntegration:
 
         # Verify all expected versioned tables were checked
         call_args = [call[0][0] for call in mock_columns.call_args_list]
-        expected_tables = ["markets", "positions", "game_states", "edges", "account_balance"]
+        expected_tables = ["market_snapshots", "positions", "game_states", "edges"]
         for table in expected_tables:
             assert table in call_args, f"Table '{table}' not checked for SCD Type 2"
