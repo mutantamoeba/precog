@@ -301,13 +301,35 @@ def validate_type_precision() -> tuple[bool, list[str]]:
     # Format: 'table_name': ['col1', 'col2', ...],
     # ========================================================================
     price_columns = {
-        "markets": ["yes_bid", "yes_ask", "no_bid", "no_ask", "settlement_price"],
+        # markets dimension (migration 0021: prices moved to market_snapshots)
+        "markets": ["settlement_value"],
+        # market_snapshots fact (migration 0021: SCD Type 2 versioned pricing)
+        "market_snapshots": [
+            "yes_ask_price",
+            "no_ask_price",
+            "yes_bid_price",
+            "no_bid_price",
+            "last_price",
+            "spread",
+            "liquidity",
+        ],
         "positions": ["entry_price", "exit_price", "current_price"],
-        "trades": ["price", "fill_price"],
-        "edges": ["edge_probability"],
-        "exit_evals": ["current_price", "exit_threshold"],
-        "account_balance": ["cash_balance", "total_equity"],
-        "position_exits": ["exit_price"],
+        "trades": ["price"],
+        "edges": [
+            "expected_value",
+            "true_win_probability",
+            "market_implied_probability",
+            "market_price",
+            "settlement_value",
+            "yes_ask_price",
+            "no_ask_price",
+            "spread",
+            "last_price",
+            "liquidity",
+        ],
+        "orders": ["requested_price", "average_fill_price", "total_fees"],
+        "account_balance": ["balance"],
+        "position_exits": ["exit_price", "realized_pnl"],
         # Future tables: Add here when implementing new price-related tables
         # Example:
         # 'odds_history': ['historical_odds', 'snapshot_price'],  # Phase 3
@@ -376,7 +398,6 @@ def validate_scd_type2_compliance() -> tuple[bool, list[str]]:
     - row_current_ind BOOLEAN NOT NULL DEFAULT TRUE
     - row_start_ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
     - row_end_ts TIMESTAMP (nullable)
-    - row_version INTEGER NOT NULL DEFAULT 1
 
     What tables use SCD Type 2:
     - Frequently-changing data (markets, positions, game_states)
@@ -407,11 +428,12 @@ def validate_scd_type2_compliance() -> tuple[bool, list[str]]:
     # UPDATE THIS when adding tables using SCD Type 2 versioning pattern
     # ========================================================================
     versioned_tables = [
-        "markets",
+        "market_snapshots",  # Migration 0021: SCD Type 2 pricing (replaces markets)
         "positions",
         "game_states",
         "edges",
-        "account_balance",
+        # Note: account_balance has row_current_ind but NOT row_start_ts/row_end_ts
+        # (partial SCD pattern), so it is excluded from this full-SCD check.
         # Future tables: Add here when implementing new versioned tables
         # Example:
         # 'portfolio_snapshots',  # Phase 5
@@ -419,7 +441,8 @@ def validate_scd_type2_compliance() -> tuple[bool, list[str]]:
     ]
 
     # Required columns for SCD Type 2
-    required_columns = ["row_current_ind", "row_start_ts", "row_end_ts", "row_version"]
+    # Note: row_version was removed — no SCD table uses it in the current schema
+    required_columns = ["row_current_ind", "row_start_ts", "row_end_ts"]
 
     for table_name in versioned_tables:
         columns = get_table_columns(table_name)

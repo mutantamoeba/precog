@@ -1636,7 +1636,7 @@ def compute_elo(
         EloComputationService,
         get_elo_computation_stats,
     )
-    from precog.database.connection import get_connection
+    from precog.database.connection import get_connection, release_connection
 
     # Parse seasons
     season_list: list[int] | None = None
@@ -1656,116 +1656,117 @@ def compute_elo(
     console.print(f"  Sync to teams: {sync_to_teams}")
     console.print()
 
+    conn = None
     try:
-        with get_connection() as conn:
-            # Create service (use 'backfill' since we're computing historical data)
-            service = EloComputationService(
-                conn,
-                calculation_source="backfill",
-                calculation_version="1.0",
+        conn = get_connection()
+        # Create service (use 'backfill' since we're computing historical data)
+        service = EloComputationService(
+            conn,
+            calculation_source="backfill",
+            calculation_version="1.0",
+        )
+
+        # Compute ratings (use simple print for Windows cp1252 compatibility)
+        console.print(f"Processing {league.value.upper()} games...")
+
+        result = service.compute_ratings(
+            league=league.value,
+            seasons=season_list,
+            skip_computed=skip_computed,
+            sync_to_teams=sync_to_teams,
+        )
+
+        console.print("Done!")
+
+        # Display results
+        console.print("\n[bold]Computation Results:[/bold]")
+
+        results_table = Table(show_header=False, box=None, padding=(0, 2))
+        results_table.add_column("Metric", style="dim")
+        results_table.add_column("Value", style="bold")
+
+        results_table.add_row("League", result.league.upper())
+        results_table.add_row("Seasons", str(result.seasons))
+        results_table.add_row("Games Processed", f"{result.games_processed:,}")
+        results_table.add_row("Games Skipped", f"{result.games_skipped:,}")
+        results_table.add_row("Teams Updated", str(result.teams_updated))
+        results_table.add_row("Logs Inserted", f"{result.logs_inserted:,}")
+        if sync_to_teams:
+            results_table.add_row(
+                "Teams Synced", f"{result.teams_updated} -> teams.current_elo_rating"
             )
+        results_table.add_row("Duration", f"{result.duration_seconds:.2f}s")
 
-            # Compute ratings (use simple print for Windows cp1252 compatibility)
-            console.print(f"Processing {league.value.upper()} games...")
+        console.print(results_table)
 
-            result = service.compute_ratings(
-                league=league.value,
-                seasons=season_list,
-                skip_computed=skip_computed,
-                sync_to_teams=sync_to_teams,
-            )
+        if result.errors:
+            console.print("\n[red]Errors:[/red]")
+            for error in result.errors:
+                console.print(f"  - {error}")
 
-            console.print("Done!")
+        # Show ratings if requested
+        if show_ratings and result.games_processed > 0:
+            ratings = service.get_team_rating_details(league.value)
 
-            # Display results
-            console.print("\n[bold]Computation Results:[/bold]")
+            if ratings:
+                # Sort by rating descending
+                sorted_teams = sorted(
+                    ratings.items(),
+                    key=lambda x: x[1]["rating"],
+                    reverse=True,
+                )[:top_n]
 
-            results_table = Table(show_header=False, box=None, padding=(0, 2))
-            results_table.add_column("Metric", style="dim")
-            results_table.add_column("Value", style="bold")
+                console.print(f"\n[bold]Top {top_n} Teams by Elo Rating:[/bold]")
 
-            results_table.add_row("League", result.league.upper())
-            results_table.add_row("Seasons", str(result.seasons))
-            results_table.add_row("Games Processed", f"{result.games_processed:,}")
-            results_table.add_row("Games Skipped", f"{result.games_skipped:,}")
-            results_table.add_row("Teams Updated", str(result.teams_updated))
-            results_table.add_row("Logs Inserted", f"{result.logs_inserted:,}")
-            if sync_to_teams:
-                results_table.add_row(
-                    "Teams Synced", f"{result.teams_updated} -> teams.current_elo_rating"
-                )
-            results_table.add_row("Duration", f"{result.duration_seconds:.2f}s")
+                ratings_table = Table(box=None)
+                ratings_table.add_column("Rank", style="dim", width=4)
+                ratings_table.add_column("Team", style="bold", width=8)
+                ratings_table.add_column("Rating", justify="right", width=8)
+                ratings_table.add_column("Games", justify="right", width=6)
+                ratings_table.add_column("Change", justify="right", width=8)
+                ratings_table.add_column("Peak", justify="right", width=8)
 
-            console.print(results_table)
+                for i, (team, data) in enumerate(sorted_teams, 1):
+                    change = data["rating_change"]
+                    change_str = f"{change:+.1f}"
+                    change_style = "green" if change > 0 else "red" if change < 0 else "dim"
 
-            if result.errors:
-                console.print("\n[red]Errors:[/red]")
-                for error in result.errors:
-                    console.print(f"  - {error}")
-
-            # Show ratings if requested
-            if show_ratings and result.games_processed > 0:
-                ratings = service.get_team_rating_details(league.value)
-
-                if ratings:
-                    # Sort by rating descending
-                    sorted_teams = sorted(
-                        ratings.items(),
-                        key=lambda x: x[1]["rating"],
-                        reverse=True,
-                    )[:top_n]
-
-                    console.print(f"\n[bold]Top {top_n} Teams by Elo Rating:[/bold]")
-
-                    ratings_table = Table(box=None)
-                    ratings_table.add_column("Rank", style="dim", width=4)
-                    ratings_table.add_column("Team", style="bold", width=8)
-                    ratings_table.add_column("Rating", justify="right", width=8)
-                    ratings_table.add_column("Games", justify="right", width=6)
-                    ratings_table.add_column("Change", justify="right", width=8)
-                    ratings_table.add_column("Peak", justify="right", width=8)
-
-                    for i, (team, data) in enumerate(sorted_teams, 1):
-                        change = data["rating_change"]
-                        change_str = f"{change:+.1f}"
-                        change_style = "green" if change > 0 else "red" if change < 0 else "dim"
-
-                        ratings_table.add_row(
-                            str(i),
-                            team,
-                            f"{data['rating']:.0f}",
-                            str(data["games_played"]),
-                            f"[{change_style}]{change_str}[/{change_style}]",
-                            f"{data['peak_rating']:.0f}",
-                        )
-
-                    console.print(ratings_table)
-
-            # Show overall stats
-            if verbose:
-                stats = get_elo_computation_stats(conn)
-                console.print("\n[bold]Overall Elo Computation Stats:[/bold]")
-                console.print(f"  Total calculations: {stats['total_calculations']:,}")
-                for league_name, league_stats in stats["by_league"].items():
-                    console.print(
-                        f"  {league_name.upper()}: {league_stats['count']:,} "
-                        f"({league_stats['first_date']} to {league_stats['last_date']})"
+                    ratings_table.add_row(
+                        str(i),
+                        team,
+                        f"{data['rating']:.0f}",
+                        str(data["games_played"]),
+                        f"[{change_style}]{change_str}[/{change_style}]",
+                        f"{data['peak_rating']:.0f}",
                     )
 
-            if result.games_processed > 0:
-                echo_success(
-                    f"Computed {result.games_processed:,} Elo ratings for {league.value.upper()}"
-                )
-            elif result.games_skipped > 0:
+                console.print(ratings_table)
+
+        # Show overall stats
+        if verbose:
+            stats = get_elo_computation_stats(conn)
+            console.print("\n[bold]Overall Elo Computation Stats:[/bold]")
+            console.print(f"  Total calculations: {stats['total_calculations']:,}")
+            for league_name, league_stats in stats["by_league"].items():
                 console.print(
-                    f"\n[yellow]All {result.games_skipped:,} games already computed. "
-                    f"Use --recompute to recalculate.[/yellow]"
+                    f"  {league_name.upper()}: {league_stats['count']:,} "
+                    f"({league_stats['first_date']} to {league_stats['last_date']})"
                 )
-            else:
-                console.print(
-                    f"\n[yellow]No games found for {league.value.upper()} "
-                    f"seasons {season_list}[/yellow]"
-                )
+
+        if result.games_processed > 0:
+            echo_success(
+                f"Computed {result.games_processed:,} Elo ratings for {league.value.upper()}"
+            )
+        elif result.games_skipped > 0:
+            console.print(
+                f"\n[yellow]All {result.games_skipped:,} games already computed. "
+                f"Use --recompute to recalculate.[/yellow]"
+            )
+        else:
+            console.print(
+                f"\n[yellow]No games found for {league.value.upper()} "
+                f"seasons {season_list}[/yellow]"
+            )
 
     except Exception as e:
         cli_error(
@@ -1773,6 +1774,9 @@ def compute_elo(
             ExitCode.ERROR,
             hint="Check database connection and historical_games data",
         )
+    finally:
+        if conn is not None:
+            release_connection(conn)
 
 
 @app.command("elo-stats")
@@ -1789,51 +1793,51 @@ def elo_stats(
         precog data elo-stats nfl    # Show NFL only
     """
     from precog.analytics.elo_computation_service import get_elo_computation_stats
-    from precog.database.connection import get_connection
+    from precog.database.connection import get_connection, release_connection
 
     console.print("\n[bold]Elo Computation Statistics[/bold]\n")
 
+    conn = None
     try:
-        with get_connection() as conn:
-            stats = get_elo_computation_stats(conn)
+        conn = get_connection()
+        stats = get_elo_computation_stats(conn)
 
-            if stats["total_calculations"] == 0:
-                console.print("[yellow]No Elo computations found in database.[/yellow]")
-                console.print(
-                    "[dim]Run 'precog data compute-elo <league>' to compute ratings.[/dim]"
-                )
+        if stats["total_calculations"] == 0:
+            console.print("[yellow]No Elo computations found in database.[/yellow]")
+            console.print("[dim]Run 'precog data compute-elo <league>' to compute ratings.[/dim]")
+            return
+
+        # Filter by league if specified
+        if league:
+            if league.value in stats["by_league"]:
+                stats["by_league"] = {league.value: stats["by_league"][league.value]}
+            else:
+                console.print(f"[yellow]No computations found for {league.value.upper()}[/yellow]")
                 return
 
-            # Filter by league if specified
-            if league:
-                if league.value in stats["by_league"]:
-                    stats["by_league"] = {league.value: stats["by_league"][league.value]}
-                else:
-                    console.print(
-                        f"[yellow]No computations found for {league.value.upper()}[/yellow]"
-                    )
-                    return
+        # Create table
+        table = Table(title="Elo Calculations by League")
+        table.add_column("League", style="bold")
+        table.add_column("Games", justify="right")
+        table.add_column("First Date")
+        table.add_column("Last Date")
 
-            # Create table
-            table = Table(title="Elo Calculations by League")
-            table.add_column("League", style="bold")
-            table.add_column("Games", justify="right")
-            table.add_column("First Date")
-            table.add_column("Last Date")
+        for league_name, league_stats in sorted(stats["by_league"].items()):
+            table.add_row(
+                league_name.upper(),
+                f"{league_stats['count']:,}",
+                league_stats["first_date"] or "-",
+                league_stats["last_date"] or "-",
+            )
 
-            for league_name, league_stats in sorted(stats["by_league"].items()):
-                table.add_row(
-                    league_name.upper(),
-                    f"{league_stats['count']:,}",
-                    league_stats["first_date"] or "-",
-                    league_stats["last_date"] or "-",
-                )
-
-            console.print(table)
-            console.print(f"\n[bold]Total:[/bold] {stats['total_calculations']:,} calculations")
+        console.print(table)
+        console.print(f"\n[bold]Total:[/bold] {stats['total_calculations']:,} calculations")
 
     except Exception as e:
         cli_error(
             f"Failed to get Elo stats: {e}",
             ExitCode.ERROR,
         )
+    finally:
+        if conn is not None:
+            release_connection(conn)
