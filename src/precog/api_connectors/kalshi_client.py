@@ -1086,7 +1086,7 @@ class KalshiClient:
         Place a new order on a market.
 
         Args:
-            ticker: Market ticker (e.g., "KXNFLGAME-25DEC15-KC-YES")
+            ticker: Market ticker (e.g., "KXNFLGAME-25DEC15CLEKC-KC-YES")
             side: "yes" or "no" - which outcome you're betting on
             action: "buy" or "sell" - entering or exiting position
             count: Number of contracts (min 1)
@@ -1108,7 +1108,7 @@ class KalshiClient:
             >>> client = KalshiClient("demo")
             >>> # Buy 10 YES contracts at $0.65
             >>> order = client.place_order(
-            ...     ticker="KXNFLGAME-25DEC15-KC-YES",
+            ...     ticker="KXNFLGAME-25DEC15CLEKC-KC-YES",
             ...     side="yes",
             ...     action="buy",
             ...     count=10,

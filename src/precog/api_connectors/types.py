@@ -411,8 +411,8 @@ class SeriesData(TypedDict, total=False):
         Series Hierarchy:
         - Category (e.g., "sports")
           └── Series (e.g., "KXNFLGAME")
-              └── Events (e.g., "KXNFLGAME-25DEC15")
-                  └── Markets (e.g., "KXNFLGAME-25DEC15-KC-YES")
+              └── Events (e.g., "KXNFLGAME-25DEC15CLEKC")
+                  └── Markets (e.g., "KXNFLGAME-25DEC15CLEKC-KC-YES")
 
         The series ticker is used to filter markets in get_markets(series_ticker=...).
     """

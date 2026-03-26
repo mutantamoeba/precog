@@ -131,13 +131,13 @@ class TestKalshiMarketPollerPerformance:
         from precog.schedulers.kalshi_poller import KalshiMarketPoller
 
         # Create mock with realistic market data using CORRECT event_ticker format
-        # IMPORTANT: event_ticker must include date (e.g., KXNFLGAME-25DEC15)
+        # IMPORTANT: event_ticker must include date (e.g., KXNFLGAME-25DEC15CLEKC)
         # NOT just series ticker (KXNFLGAME) - the series is a different field
         mock_client = MagicMock()
         mock_client.fetch_all_markets.return_value = [
             {
-                "ticker": f"KXNFLGAME-25DEC15-PERF-{i:04d}",
-                "event_ticker": "KXNFLGAME-25DEC15-PERF",  # CORRECT: includes date
+                "ticker": f"KXNFLGAME-25DEC15CLEKC-PERF-{i:04d}",
+                "event_ticker": "KXNFLGAME-25DEC15CLEKC-PERF",  # CORRECT: includes date
                 "series_ticker": "KXNFLGAME",
                 "title": f"Performance Test Market {i}",
                 "yes_ask": 50 + (i % 10),
