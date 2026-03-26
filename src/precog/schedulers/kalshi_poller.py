@@ -142,6 +142,16 @@ class KalshiMarketPoller(BasePoller):
     # unknown code encounter.
     REGISTRY_REFRESH_INTERVAL: ClassVar[int] = 40
 
+    # Validation frequency: run full market validation every N polls.
+    # At 15s interval, 10 polls = ~2.5 minutes. Validation checks all
+    # markets per series (~7K+) so running every cycle is wasteful.
+    VALIDATION_INTERVAL: ClassVar[int] = 10
+
+    # Backfill frequency: run matching backfill every N polls.
+    # At 15s interval, 40 polls = ~10 minutes. Backfill scans all
+    # unlinked events so running every cycle is wasteful.
+    BACKFILL_INTERVAL: ClassVar[int] = 40
+
     # Status mapping from Kalshi API to database schema
     # Kalshi API returns: 'active', 'unopened', 'closed', 'settled', 'finalized', 'determined', 'initialized'
     # Database constraint allows: 'open', 'closed', 'settled', 'halted'
@@ -244,9 +254,12 @@ class KalshiMarketPoller(BasePoller):
 
         # Rate-limit registry refresh: track poll count since last refresh.
         # Refresh at most once every REGISTRY_REFRESH_INTERVAL polls.
-        # Thread safety: only accessed from _poll_once() thread (APScheduler
-        # max_instances=1 guarantees no concurrent poll execution).
+        # Thread safety: all three counters are only accessed from _poll_once()
+        # thread (APScheduler max_instances=1 guarantees no concurrent execution).
         self._polls_since_registry_refresh: int = 0
+        self._polls_since_validation: int = self.VALIDATION_INTERVAL  # Run on first poll
+        self._polls_since_backfill: int = 0
+        self._should_validate: bool = False  # Set per-cycle in _poll_once
 
         logger.info(
             "KalshiMarketPoller initialized: series=%s, poll_interval=%ds, env=%s",
@@ -285,6 +298,16 @@ class KalshiMarketPoller(BasePoller):
         # Ensure series records exist before syncing markets (FK requirement)
         self.sync_series()
 
+        # Determine which periodic tasks should run this cycle.
+        # Counters are incremented here; checked in _poll_series (validation)
+        # and below (backfill). Both reset to 0 when they fire.
+        self._polls_since_validation += 1
+        self._should_validate = self._polls_since_validation >= self.VALIDATION_INTERVAL
+        if self._should_validate:
+            self._polls_since_validation = 0
+
+        self._polls_since_backfill += 1
+
         total_fetched = 0
         total_updated = 0
         total_created = 0
@@ -313,8 +336,11 @@ class KalshiMarketPoller(BasePoller):
             logger.warning("Failed to update bracket counts: %s", e)
 
         # Post-poll batch: attempt to link unmatched events to games.
+        # Rate-limited: only runs every BACKFILL_INTERVAL polls (~10 min).
         # Non-blocking: errors are logged but never stop polling.
-        self._run_matching_backfill()
+        if self._polls_since_backfill >= self.BACKFILL_INTERVAL:
+            self._polls_since_backfill = 0
+            self._run_matching_backfill()
 
         # Heartbeat logging for operator visibility during quiet periods.
         # BasePoller._poll_wrapper() handles the standard INFO/DEBUG logging
@@ -641,111 +667,103 @@ class KalshiMarketPoller(BasePoller):
 
         # Validate fetched market data (soft validation — log issues, never block ingestion).
         # Runs on raw API data before any DB mapping or filtering.
+        # Rate-limited via self._should_validate (set in _poll_once every VALIDATION_INTERVAL polls).
         # Wrapped in try/except: a validator bug must NEVER prevent market syncing.
-        try:
-            validation_results = self._validator.validate_markets(
-                cast("list[dict[str, Any]]", all_markets)
-            )
-            error_count = sum(1 for r in validation_results if r.has_errors)
-            warning_count = sum(
-                1 for r in validation_results if r.has_warnings and not r.has_errors
-            )
-            valid_count = len(all_markets) - error_count
-
-            # Log individual issues with anomaly deduplication.
-            # Errors always log. Warnings use threshold-based dedup
-            # (1st, 10th, 100th occurrence) to prevent log flooding
-            # from markets that repeatedly fail the same check.
-            for vr in validation_results:
-                if vr.has_errors:
-                    vr.log_issues(logger)
-                elif vr.has_warnings and self._validator.should_log_anomaly(vr.entity_id):
-                    count = self._validator.get_anomaly_count(vr.entity_id)
-                    for issue in vr.issues:
-                        logger.debug(
-                            "[%s:%s] (occurrence #%d) %s",
-                            vr.entity_type,
-                            vr.entity_id,
-                            count,
-                            issue,
-                        )
-
-            # Error rate escalation: escalate log level + write alert when
-            # validation error rate exceeds thresholds.
-            total_checked = len(all_markets)
-            error_rate = error_count / total_checked if total_checked > 0 else 0.0
-
-            if error_rate >= self.VALIDATION_ERROR_RATE:
-                # Critical: >25% error rate — log ERROR + persist alert to DB
-                logger.error(
-                    "Validation [%s]: ERROR RATE %.1f%% - %d/%d markets failed "
-                    "(%d errors, %d warnings) [ACTION: investigate data source]",
-                    series_ticker,
-                    error_rate * 100,
-                    error_count,
-                    total_checked,
-                    error_count,
-                    warning_count,
+        if self._should_validate:
+            try:
+                validation_results = self._validator.validate_markets(
+                    cast("list[dict[str, Any]]", all_markets)
                 )
-                try:
-                    create_alert(
-                        alert_type="validation_error_rate",
-                        severity="error",
-                        message=(
-                            f"Error rate {error_rate * 100:.1f}% exceeds "
-                            f"{self.VALIDATION_ERROR_RATE * 100:.0f}% threshold "
-                            f"({error_count}/{total_checked} markets)"
-                        ),
-                        source=f"kalshi_poller:{series_ticker}",
+                error_count = sum(1 for r in validation_results if r.has_errors)
+                warning_count = sum(
+                    1 for r in validation_results if r.has_warnings and not r.has_errors
+                )
+                valid_count = len(all_markets) - error_count
+
+                # Log individual issues with anomaly deduplication.
+                for vr in validation_results:
+                    if vr.has_errors:
+                        vr.log_issues(logger)
+                    elif vr.has_warnings and self._validator.should_log_anomaly(vr.entity_id):
+                        count = self._validator.get_anomaly_count(vr.entity_id)
+                        for issue in vr.issues:
+                            logger.debug(
+                                "[%s:%s] (occurrence #%d) %s",
+                                vr.entity_type,
+                                vr.entity_id,
+                                count,
+                                issue,
+                            )
+
+                # Error rate escalation
+                total_checked = len(all_markets)
+                error_rate = error_count / total_checked if total_checked > 0 else 0.0
+
+                if error_rate >= self.VALIDATION_ERROR_RATE:
+                    logger.error(
+                        "Validation [%s]: ERROR RATE %.1f%% - %d/%d markets failed "
+                        "(%d errors, %d warnings) [ACTION: investigate data source]",
+                        series_ticker,
+                        error_rate * 100,
+                        error_count,
+                        total_checked,
+                        error_count,
+                        warning_count,
                     )
-                except Exception as alert_err:
-                    logger.debug("Failed to write alert to DB: %s", alert_err)
-            elif error_rate >= self.VALIDATION_WARN_RATE:
-                # Elevated: >10% error rate — log WARNING
-                logger.warning(
-                    "Validation [%s]: error rate %.1f%% - %d/%d markets failed "
-                    "(%d errors, %d warnings)",
-                    series_ticker,
-                    error_rate * 100,
-                    error_count,
-                    total_checked,
-                    error_count,
-                    warning_count,
-                )
-            elif error_count or warning_count:
-                # Normal issues: INFO summary
-                logger.info(
-                    "Validation [%s]: %d markets checked, %d valid, %d errors, %d warnings",
-                    series_ticker,
-                    total_checked,
-                    valid_count,
-                    error_count,
-                    warning_count,
-                )
-            else:
-                # All clean: DEBUG
-                logger.debug(
-                    "Validation [%s]: %d markets checked, all valid",
-                    series_ticker,
-                    total_checked,
-                )
+                    try:
+                        create_alert(
+                            alert_type="validation_error_rate",
+                            severity="error",
+                            message=(
+                                f"Error rate {error_rate * 100:.1f}% exceeds "
+                                f"{self.VALIDATION_ERROR_RATE * 100:.0f}% threshold "
+                                f"({error_count}/{total_checked} markets)"
+                            ),
+                            source=f"kalshi_poller:{series_ticker}",
+                        )
+                    except Exception as alert_err:
+                        logger.debug("Failed to write alert to DB: %s", alert_err)
+                elif error_rate >= self.VALIDATION_WARN_RATE:
+                    logger.warning(
+                        "Validation [%s]: error rate %.1f%% - %d/%d markets failed "
+                        "(%d errors, %d warnings)",
+                        series_ticker,
+                        error_rate * 100,
+                        error_count,
+                        total_checked,
+                        error_count,
+                        warning_count,
+                    )
+                elif error_count or warning_count:
+                    logger.info(
+                        "Validation [%s]: %d markets checked, %d valid, %d errors, %d warnings",
+                        series_ticker,
+                        total_checked,
+                        valid_count,
+                        error_count,
+                        warning_count,
+                    )
+                else:
+                    logger.debug(
+                        "Validation [%s]: %d markets checked, all valid",
+                        series_ticker,
+                        total_checked,
+                    )
 
-            # Track validation stats (separate dict, merged in get_stats)
-            with self._lock:
-                # Cumulative totals
-                self._validation_stats["validation_errors"] += error_count
-                self._validation_stats["validation_warnings"] += warning_count
-                # Per-cycle snapshots (overwritten each cycle)
-                self._validation_stats["validation_errors_last_cycle"] = error_count
-                self._validation_stats["validation_warnings_last_cycle"] = warning_count
-                self._validation_stats["markets_checked_last_cycle"] = total_checked
-                self._validation_stats["error_rate_pct_last_cycle"] = round(error_rate * 100, 1)
-        except Exception as e:
-            logger.error(
-                "Validation failed for series %s (ingestion continues): %s",
-                series_ticker,
-                e,
-            )
+                # Track validation stats
+                with self._lock:
+                    self._validation_stats["validation_errors"] += error_count
+                    self._validation_stats["validation_warnings"] += warning_count
+                    self._validation_stats["validation_errors_last_cycle"] = error_count
+                    self._validation_stats["validation_warnings_last_cycle"] = warning_count
+                    self._validation_stats["markets_checked_last_cycle"] = total_checked
+                    self._validation_stats["error_rate_pct_last_cycle"] = round(error_rate * 100, 1)
+            except Exception as e:
+                logger.error(
+                    "Validation failed for series %s (ingestion continues): %s",
+                    series_ticker,
+                    e,
+                )
 
         markets_updated = 0
         markets_created = 0

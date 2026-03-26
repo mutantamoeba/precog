@@ -517,6 +517,11 @@ class TestGetActiveMarketCount:
 class TestKalshiPollerValidation:
     """Test validation integration in the polling pipeline."""
 
+    @pytest.fixture(autouse=True)
+    def _enable_validation(self, poller_with_mock_client):
+        """Enable validation flag so _poll_series runs validation checks."""
+        poller_with_mock_client._should_validate = True
+
     @pytest.mark.unit
     def test_poller_has_validator_instance(self, poller_with_mock_client):
         """Poller creates a KalshiDataValidator in __init__."""
