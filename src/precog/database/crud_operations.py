@@ -263,6 +263,7 @@ from decimal import Decimal
 from typing import Any, Literal, cast
 
 import psycopg2.errors
+from psycopg2.extras import execute_values
 
 from .connection import fetch_all, fetch_one, get_cursor
 
@@ -7275,7 +7276,8 @@ def insert_temporal_alignment_batch(alignments: list[dict]) -> int:
             - game_id (int | None) — FK to games(id), denormalized from events
 
     Returns:
-        Count of rows inserted.
+        Count of rows submitted for insertion (not deduplicated — this table
+        has no ON CONFLICT clause, so all submitted rows are inserted).
 
     Raises:
         TypeError: If Decimal fields are not Decimal type
@@ -7545,8 +7547,8 @@ def upsert_market_trades_batch(trades: list[dict]) -> int:
     """
     Bulk insert public market trades, skipping duplicates (idempotent).
 
-    Validates all rows before inserting any. Uses executemany with
-    ON CONFLICT DO NOTHING for safe bulk ingestion.
+    Validates all rows before inserting any. Uses execute_values with
+    ON CONFLICT DO NOTHING for safe bulk ingestion and accurate rowcount.
 
     Args:
         trades: List of dicts, each with keys:
@@ -7605,12 +7607,16 @@ def upsert_market_trades_batch(trades: list[dict]) -> int:
                 f"taker_side must be one of {_VALID_TAKER_SIDES}, got '{taker_side}' in trades[{i}]"
             )
 
+        count = row["count"]
+        if not isinstance(count, int) or count <= 0:
+            raise ValueError(f"count must be a positive integer, got {count!r} in trades[{i}]")
+
         validated_params.append(
             (
                 row["platform_id"],
                 row["external_trade_id"],
                 row["market_internal_id"],
-                row["count"],
+                count,
                 yes_price,
                 no_price,
                 taker_side,
@@ -7624,12 +7630,14 @@ def upsert_market_trades_batch(trades: list[dict]) -> int:
             count, yes_price, no_price, taker_side,
             trade_time
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES %s
         ON CONFLICT (platform_id, external_trade_id) DO NOTHING
     """
 
+    template = "(%s, %s, %s, %s, %s, %s, %s, %s)"
+
     with get_cursor(commit=True) as cur:
-        cur.executemany(insert_query, validated_params)
+        execute_values(cur, insert_query, validated_params, template=template)
         return cast("int", cur.rowcount)
 
 
