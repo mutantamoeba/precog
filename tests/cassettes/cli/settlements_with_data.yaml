@@ -16,7 +16,7 @@ interactions:
     uri: https://demo-api.kalshi.co/trade-api/v2/portfolio/settlements?limit=100
   response:
     body:
-      string: '{"cursor":"","settlements":[{"ticker":"KXNFLGAME-25DEC15-KC-YES","market_result":"yes","settlement_value":"1.0000","settled_time":"2025-12-16T02:30:00Z","revenue":"100.0000","total_fees":"0.7000"}]}'
+      string: '{"cursor":"","settlements":[{"ticker":"KXNFLGAME-25DEC15CLEKC-KC-YES","market_result":"yes","settlement_value":"1.0000","settled_time":"2025-12-16T02:30:00Z","revenue":"100.0000","total_fees":"0.7000"}]}'
     headers:
       Connection:
       - keep-alive

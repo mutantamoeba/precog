@@ -127,8 +127,8 @@ def setup_kalshi_platform(db_pool, clean_test_data):
             """
             INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, title, status)
             VALUES
-                ('KXNFLGAME-25DEC15', 'kalshi', %s, 'KXNFLGAME-25DEC15-EXT', 'sports', 'NFL Games Dec 15', 'scheduled'),
-                ('KXNFLGAME-25DEC08', 'kalshi', %s, 'KXNFLGAME-25DEC08-EXT', 'sports', 'NFL Games Dec 08', 'scheduled')
+                ('KXNFLGAME-25DEC15CLEKC', 'kalshi', %s, 'KXNFLGAME-25DEC15CLEKC-EXT', 'sports', 'NFL Games Dec 15', 'scheduled'),
+                ('KXNFLGAME-25DEC08LACKC', 'kalshi', %s, 'KXNFLGAME-25DEC08LACKC-EXT', 'sports', 'NFL Games Dec 08', 'scheduled')
             ON CONFLICT (event_id) DO NOTHING
         """,
             (series_pk, series_pk),
@@ -143,12 +143,12 @@ _cached_event_pk: int | None = None
 
 
 def _get_test_event_pk() -> int:
-    """Look up the integer surrogate PK for the test event KXNFLGAME-25DEC15."""
+    """Look up the integer surrogate PK for the test event KXNFLGAME-25DEC15CLEKC."""
     global _cached_event_pk
     if _cached_event_pk is None:
         from precog.database.crud_operations import get_event
 
-        evt = get_event("KXNFLGAME-25DEC15")
+        evt = get_event("KXNFLGAME-25DEC15CLEKC")
         _cached_event_pk = evt["id"] if evt else 1
     return _cached_event_pk
 

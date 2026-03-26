@@ -449,7 +449,7 @@ class TestKalshiMarketData:
             mock_response.raise_for_status = Mock()
             mock_request.return_value = mock_response
 
-            market = client.get_market("KXNFLGAME-25DEC15-KC-YES")
+            market = client.get_market("KXNFLGAME-25DEC15CLEKC-KC-YES")
 
         # Verify Decimal conversion for *_dollars fields (sub-penny precision)
         # The client's _convert_prices_to_decimal() converts *_dollars fields to Decimal
@@ -464,7 +464,7 @@ class TestKalshiMarketData:
         # Legacy integer cent fields should remain as integers
         assert market["yes_bid"] == 62
         assert market["yes_ask"] == 63
-        assert market["ticker"] == "KXNFLGAME-25DEC15-KC-YES"
+        assert market["ticker"] == "KXNFLGAME-25DEC15CLEKC-KC-YES"
 
     @pytest.mark.unit
     def test_get_markets_with_event_ticker(self, mock_env_credentials, mock_load_private_key):
@@ -991,7 +991,7 @@ class TestKalshiOrderManagement:
             mock_request.return_value = mock_response
 
             order = client.place_order(
-                ticker="KXNFLGAME-25DEC15-KC-YES",
+                ticker="KXNFLGAME-25DEC15CLEKC-KC-YES",
                 side="yes",
                 action="buy",
                 count=10,
@@ -1005,7 +1005,7 @@ class TestKalshiOrderManagement:
         assert "/portfolio/orders" in call_kwargs["url"]
 
         request_body = call_kwargs["json"]
-        assert request_body["ticker"] == "KXNFLGAME-25DEC15-KC-YES"
+        assert request_body["ticker"] == "KXNFLGAME-25DEC15CLEKC-KC-YES"
         assert request_body["side"] == "yes"
         assert request_body["action"] == "buy"
         assert request_body["count"] == 10
@@ -1032,7 +1032,7 @@ class TestKalshiOrderManagement:
             mock_request.return_value = mock_response
 
             _order = client.place_order(
-                ticker="KXNFLGAME-25DEC15-KC-YES",
+                ticker="KXNFLGAME-25DEC15CLEKC-KC-YES",
                 side="no",
                 action="buy",
                 count=5,
@@ -1060,7 +1060,7 @@ class TestKalshiOrderManagement:
             mock_request.return_value = mock_response
 
             order = client.place_order(
-                ticker="KXNFLGAME-25DEC15-KC-YES",
+                ticker="KXNFLGAME-25DEC15CLEKC-KC-YES",
                 side="yes",
                 action="buy",
                 count=10,
@@ -1093,7 +1093,7 @@ class TestKalshiOrderManagement:
             mock_request.return_value = mock_response
 
             _order = client.place_order(
-                ticker="KXNFLGAME-25DEC15-KC-YES",
+                ticker="KXNFLGAME-25DEC15CLEKC-KC-YES",
                 side="yes",
                 action="buy",
                 count=10,
@@ -1119,7 +1119,7 @@ class TestKalshiOrderManagement:
             mock_request.return_value = mock_response
 
             _order = client.place_order(
-                ticker="KXNFLGAME-25DEC15-KC-YES",
+                ticker="KXNFLGAME-25DEC15CLEKC-KC-YES",
                 side="yes",
                 action="buy",
                 count=10,
@@ -1138,7 +1138,7 @@ class TestKalshiOrderManagement:
 
         with pytest.raises(ValueError) as exc_info:
             client.place_order(
-                ticker="KXNFLGAME-25DEC15-KC-YES",
+                ticker="KXNFLGAME-25DEC15CLEKC-KC-YES",
                 side="invalid",  # Invalid side
                 action="buy",
                 count=10,
@@ -1156,7 +1156,7 @@ class TestKalshiOrderManagement:
 
         with pytest.raises(ValueError) as exc_info:
             client.place_order(
-                ticker="KXNFLGAME-25DEC15-KC-YES",
+                ticker="KXNFLGAME-25DEC15CLEKC-KC-YES",
                 side="yes",
                 action="invalid",  # Invalid action
                 count=10,
@@ -1174,7 +1174,7 @@ class TestKalshiOrderManagement:
 
         with pytest.raises(ValueError) as exc_info:
             client.place_order(
-                ticker="KXNFLGAME-25DEC15-KC-YES",
+                ticker="KXNFLGAME-25DEC15CLEKC-KC-YES",
                 side="yes",
                 action="buy",
                 count=0,  # Invalid count
@@ -1192,7 +1192,7 @@ class TestKalshiOrderManagement:
 
         with pytest.raises(ValueError) as exc_info:
             client.place_order(
-                ticker="KXNFLGAME-25DEC15-KC-YES",
+                ticker="KXNFLGAME-25DEC15CLEKC-KC-YES",
                 side="yes",
                 action="buy",
                 count=10,
@@ -1216,7 +1216,7 @@ class TestKalshiOrderManagement:
             mock_request.return_value = mock_response
 
             order = client.place_order(
-                ticker="KXNFLGAME-25DEC15-KC-YES",
+                ticker="KXNFLGAME-25DEC15CLEKC-KC-YES",
                 side="yes",
                 action="buy",
                 count=10,

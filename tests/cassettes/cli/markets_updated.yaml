@@ -16,8 +16,8 @@ interactions:
     uri: https://demo-api.kalshi.co/trade-api/v2/markets?limit=5&series_ticker=KXNFLGAME
   response:
     body:
-      string: '{"cursor":"","markets":[{"ticker":"KXNFLGAME-25DEC15-KC-YES","event_ticker":"KXNFLGAME-25DEC15","series_ticker":"KXNFLGAME","title":"Mock
-        Market 1 - Updated","status":"open","yes_bid":65,"yes_bid_dollars":"0.6500","yes_ask":65,"yes_ask_dollars":"0.6550","no_bid":34,"no_bid_dollars":"0.3450","no_ask":35,"no_ask_dollars":"0.3500","last_price":65,"last_price_dollars":"0.6500","volume":1500,"open_interest":600,"close_time":"2025-12-15T21:00:00Z","expiration_time":"2025-12-15T21:00:00Z","market_type":"binary","notional_value":100,"notional_value_dollars":"1.0000"},{"ticker":"KXNFLGAME-25DEC15-BUF-YES","event_ticker":"KXNFLGAME-25DEC15","series_ticker":"KXNFLGAME","title":"Mock
+      string: '{"cursor":"","markets":[{"ticker":"KXNFLGAME-25DEC15CLEKC-KC-YES","event_ticker":"KXNFLGAME-25DEC15CLEKC","series_ticker":"KXNFLGAME","title":"Mock
+        Market 1 - Updated","status":"open","yes_bid":65,"yes_bid_dollars":"0.6500","yes_ask":65,"yes_ask_dollars":"0.6550","no_bid":34,"no_bid_dollars":"0.3450","no_ask":35,"no_ask_dollars":"0.3500","last_price":65,"last_price_dollars":"0.6500","volume":1500,"open_interest":600,"close_time":"2025-12-15T21:00:00Z","expiration_time":"2025-12-15T21:00:00Z","market_type":"binary","notional_value":100,"notional_value_dollars":"1.0000"},{"ticker":"KXNFLGAME-25DEC15CLEKC-BUF-YES","event_ticker":"KXNFLGAME-25DEC15CLEKC","series_ticker":"KXNFLGAME","title":"Mock
         Market 2 - Updated","status":"open","yes_bid":45,"yes_bid_dollars":"0.4500","yes_ask":45,"yes_ask_dollars":"0.4550","no_bid":54,"no_bid_dollars":"0.5450","no_ask":55,"no_ask_dollars":"0.5500","last_price":45,"last_price_dollars":"0.4500","volume":2500,"open_interest":900,"close_time":"2025-12-15T21:00:00Z","expiration_time":"2025-12-15T21:00:00Z","market_type":"binary","notional_value":100,"notional_value_dollars":"1.0000"}]}'
     headers:
       Cache-Control:

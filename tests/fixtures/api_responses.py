@@ -26,8 +26,8 @@ from decimal import Decimal
 KALSHI_MARKET_RESPONSE = {
     "markets": [
         {
-            "ticker": "KXNFLGAME-25DEC15-KC-YES",
-            "event_ticker": "KXNFLGAME-25DEC15",
+            "ticker": "KXNFLGAME-25DEC15CLEKC-KC-YES",
+            "event_ticker": "KXNFLGAME-25DEC15CLEKC",
             "series_ticker": "KXNFLGAME",
             "title": "Will Kansas City win against Cleveland on Dec 15?",
             "subtitle": "Kansas City Chiefs to win",
@@ -54,8 +54,8 @@ KALSHI_MARKET_RESPONSE = {
             "liquidity_dollars": "1250.0000",
         },
         {
-            "ticker": "KXNFLGAME-25DEC15-BUF-YES",
-            "event_ticker": "KXNFLGAME-25DEC15",
+            "ticker": "KXNFLGAME-25DEC15CLEKC-BUF-YES",
+            "event_ticker": "KXNFLGAME-25DEC15CLEKC",
             "series_ticker": "KXNFLGAME",
             "title": "Will Buffalo win against Detroit on Dec 15?",
             "subtitle": "Buffalo Bills to win",
@@ -87,8 +87,8 @@ KALSHI_MARKET_RESPONSE = {
 
 KALSHI_SINGLE_MARKET_RESPONSE = {
     "market": {
-        "ticker": "KXNFLGAME-25DEC15-KC-YES",
-        "event_ticker": "KXNFLGAME-25DEC15",
+        "ticker": "KXNFLGAME-25DEC15CLEKC-KC-YES",
+        "event_ticker": "KXNFLGAME-25DEC15CLEKC",
         "series_ticker": "KXNFLGAME",
         "title": "Will Kansas City win against Cleveland on Dec 15?",
         "subtitle": "Kansas City Chiefs to win",
@@ -126,8 +126,8 @@ KALSHI_BALANCE_RESPONSE = {
 KALSHI_POSITIONS_RESPONSE = {
     "positions": [
         {
-            "ticker": "KXNFLGAME-25DEC15-KC-YES",
-            "market_ticker": "KXNFLGAME-25DEC15-KC-YES",
+            "ticker": "KXNFLGAME-25DEC15CLEKC-KC-YES",
+            "market_ticker": "KXNFLGAME-25DEC15CLEKC-KC-YES",
             "position": 100,  # Number of contracts
             "side": "yes",
             "user_average_price": "0.6100",  # Average entry price
@@ -137,8 +137,8 @@ KALSHI_POSITIONS_RESPONSE = {
             "resting_order_count": 0,
         },
         {
-            "ticker": "KXNFLGAME-25DEC15-BUF-YES",
-            "market_ticker": "KXNFLGAME-25DEC15-BUF-YES",
+            "ticker": "KXNFLGAME-25DEC15CLEKC-BUF-YES",
+            "market_ticker": "KXNFLGAME-25DEC15CLEKC-BUF-YES",
             "position": 50,
             "side": "yes",
             "user_average_price": "0.4200",
@@ -155,7 +155,7 @@ KALSHI_FILLS_RESPONSE = {
         {
             "order_id": "order_123abc",
             "trade_id": "trade_456def",
-            "ticker": "KXNFLGAME-25DEC15-KC-YES",
+            "ticker": "KXNFLGAME-25DEC15CLEKC-KC-YES",
             "side": "yes",
             "action": "buy",
             "count": 50,
@@ -170,7 +170,7 @@ KALSHI_FILLS_RESPONSE = {
         {
             "order_id": "order_789ghi",
             "trade_id": "trade_012jkl",
-            "ticker": "KXNFLGAME-25DEC15-BUF-YES",
+            "ticker": "KXNFLGAME-25DEC15CLEKC-BUF-YES",
             "side": "yes",
             "action": "buy",
             "count": 50,
@@ -189,7 +189,7 @@ KALSHI_FILLS_RESPONSE = {
 KALSHI_SETTLEMENTS_RESPONSE = {
     "settlements": [
         {
-            "ticker": "KXNFLGAME-25DEC08-KC-YES",
+            "ticker": "KXNFLGAME-25DEC08LACKC-KC-YES",
             "market_result": "yes",  # Market resolved YES
             "settlement_value": "1.0000",  # Full dollar payout
             "settled_time": "2025-12-08T23:30:00Z",
@@ -197,7 +197,7 @@ KALSHI_SETTLEMENTS_RESPONSE = {
             "total_fees": "2.0000",
         },
         {
-            "ticker": "KXNFLGAME-25DEC08-BUF-YES",
+            "ticker": "KXNFLGAME-25DEC08LACKC-BUF-YES",
             "market_result": "no",  # Market resolved NO
             "settlement_value": "0.0000",  # Worthless
             "settled_time": "2025-12-08T23:45:00Z",
@@ -245,7 +245,7 @@ KALSHI_ORDER_RESPONSE = {
         "order_id": "order_abc123def456",
         "user_id": "user_789xyz",
         "client_order_id": "my-custom-id-001",
-        "ticker": "KXNFLGAME-25DEC15-KC-YES",
+        "ticker": "KXNFLGAME-25DEC15CLEKC-KC-YES",
         "side": "yes",
         "action": "buy",
         "type": "limit",
@@ -275,7 +275,7 @@ KALSHI_ORDER_PARTIAL_FILL_RESPONSE = {
         "order_id": "order_abc123def456",
         "user_id": "user_789xyz",
         "client_order_id": "my-custom-id-001",
-        "ticker": "KXNFLGAME-25DEC15-KC-YES",
+        "ticker": "KXNFLGAME-25DEC15CLEKC-KC-YES",
         "side": "yes",
         "action": "buy",
         "type": "limit",
@@ -304,7 +304,7 @@ KALSHI_ORDER_CANCELED_RESPONSE = {
         "order_id": "order_abc123def456",
         "user_id": "user_789xyz",
         "client_order_id": "my-custom-id-001",
-        "ticker": "KXNFLGAME-25DEC15-KC-YES",
+        "ticker": "KXNFLGAME-25DEC15CLEKC-KC-YES",
         "side": "yes",
         "action": "buy",
         "type": "limit",
@@ -333,7 +333,7 @@ KALSHI_ORDER_EXECUTED_RESPONSE = {
         "order_id": "order_filled_fully",
         "user_id": "user_789xyz",
         "client_order_id": "my-custom-id-002",
-        "ticker": "KXNFLGAME-25DEC15-KC-YES",
+        "ticker": "KXNFLGAME-25DEC15CLEKC-KC-YES",
         "side": "yes",
         "action": "buy",
         "type": "market",
@@ -362,7 +362,7 @@ KALSHI_ORDER_EXECUTED_RESPONSE = {
 # =============================================================================
 
 EXPECTED_MARKET_DATA = {
-    "ticker": "KXNFLGAME-25DEC15-KC-YES",
+    "ticker": "KXNFLGAME-25DEC15CLEKC-KC-YES",
     "yes_bid": Decimal("0.6200"),
     "yes_ask": Decimal("0.6250"),
     "no_bid": Decimal("0.3750"),
@@ -373,7 +373,7 @@ EXPECTED_MARKET_DATA = {
 EXPECTED_BALANCE = Decimal("1234.5678")
 
 EXPECTED_POSITION_DATA = {
-    "ticker": "KXNFLGAME-25DEC15-KC-YES",
+    "ticker": "KXNFLGAME-25DEC15CLEKC-KC-YES",
     "position": 100,
     "user_average_price": Decimal("0.6100"),
     "total_cost": Decimal("61.0000"),

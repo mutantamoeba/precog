@@ -96,7 +96,7 @@ def setup_kalshi_platform(db_pool, clean_test_data):
         )
 
         # Create events for test markets
-        # Note: VCR cassette events (KXNFLGAME-25NOV27*) + mock test event (KXNFLGAME-25DEC15)
+        # Note: VCR cassette events (KXNFLGAME-25NOV27*) + mock test event (KXNFLGAME-25DEC15CLEKC)
         cur.execute(
             """
             INSERT INTO events (event_id, platform_id, series_id, external_id, category, title, status)
@@ -104,7 +104,7 @@ def setup_kalshi_platform(db_pool, clean_test_data):
                 ('KXNFLGAME-25NOV27GBDET', 'kalshi', 'KXNFLGAME', 'KXNFLGAME-25NOV27GBDET-EXT', 'sports', 'Green Bay at Detroit', 'scheduled'),
                 ('KXNFLGAME-25NOV27KCDAL', 'kalshi', 'KXNFLGAME', 'KXNFLGAME-25NOV27KCDAL-EXT', 'sports', 'Kansas City at Dallas', 'scheduled'),
                 ('KXNFLGAME-25NOV27CINBAL', 'kalshi', 'KXNFLGAME', 'KXNFLGAME-25NOV27CINBAL-EXT', 'sports', 'Cincinnati at Baltimore', 'scheduled'),
-                ('KXNFLGAME-25DEC15', 'kalshi', 'KXNFLGAME', 'KXNFLGAME-25DEC15-EXT', 'sports', 'Mock Test Event', 'scheduled')
+                ('KXNFLGAME-25DEC15CLEKC', 'kalshi', 'KXNFLGAME', 'KXNFLGAME-25DEC15CLEKC-EXT', 'sports', 'Mock Test Event', 'scheduled')
             ON CONFLICT (event_id) DO NOTHING
         """
         )
@@ -521,7 +521,7 @@ def test_fetch_settlements_creates_records_and_updates_market_status(
     - Market lookup by ticker works correctly
 
     Uses VCR cassette: cli/settlements_with_data.yaml
-    - Contains 1 settlement for ticker KXNFLGAME-25DEC15-KC-YES
+    - Contains 1 settlement for ticker KXNFLGAME-25DEC15CLEKC-KC-YES
     - Manually crafted cassette with realistic settlement data
     """
     from decimal import Decimal
@@ -544,7 +544,7 @@ def test_fetch_settlements_creates_records_and_updates_market_status(
             SELECT m.ticker, m.status
             FROM markets m
             JOIN events e ON m.event_id = e.event_id
-            WHERE m.ticker = 'KXNFLGAME-25DEC15-KC-YES' AND m.row_current_ind = TRUE
+            WHERE m.ticker = 'KXNFLGAME-25DEC15CLEKC-KC-YES' AND m.row_current_ind = TRUE
         """
         )
         market_before = cur.fetchone()
@@ -565,12 +565,12 @@ def test_fetch_settlements_creates_records_and_updates_market_status(
             """
             SELECT market_id, outcome, payout, platform_id
             FROM settlements
-            WHERE market_id = 'MKT-KXNFLGAME-25DEC15-KC-YES'
+            WHERE market_id = 'MKT-KXNFLGAME-25DEC15CLEKC-KC-YES'
         """
         )
         settlement = cur.fetchone()
         assert settlement is not None, "Settlement record not created"
-        assert settlement["market_id"] == "MKT-KXNFLGAME-25DEC15-KC-YES"
+        assert settlement["market_id"] == "MKT-KXNFLGAME-25DEC15CLEKC-KC-YES"
         assert settlement["outcome"] == "yes"
         assert settlement["payout"] == Decimal("1.0000")
         assert settlement["platform_id"] == "kalshi"
@@ -582,7 +582,7 @@ def test_fetch_settlements_creates_records_and_updates_market_status(
             SELECT m.ticker, m.status
             FROM markets m
             JOIN events e ON m.event_id = e.event_id
-            WHERE m.ticker = 'KXNFLGAME-25DEC15-KC-YES' AND m.row_current_ind = TRUE
+            WHERE m.ticker = 'KXNFLGAME-25DEC15CLEKC-KC-YES' AND m.row_current_ind = TRUE
         """
         )
         market_after = cur.fetchone()
@@ -729,8 +729,8 @@ def test_fetch_markets_handles_partial_failures(
         # Mock 3 markets, but one will fail due to missing event
         mock_client.get_markets.return_value = [
             {
-                "ticker": "KXNFLGAME-25DEC15-KC-YES",
-                "event_ticker": "KXNFLGAME-25DEC15",
+                "ticker": "KXNFLGAME-25DEC15CLEKC-KC-YES",
+                "event_ticker": "KXNFLGAME-25DEC15CLEKC",
                 "series_ticker": "KXNFLGAME",
                 "title": "Market 1",
                 "status": "open",
@@ -742,8 +742,8 @@ def test_fetch_markets_handles_partial_failures(
                 "volume": 1000,
             },
             {
-                "ticker": "KXNFLGAME-25DEC15-BUF-YES",
-                "event_ticker": "KXNFLGAME-25DEC15",  # Event exists
+                "ticker": "KXNFLGAME-25DEC15CLEKC-BUF-YES",
+                "event_ticker": "KXNFLGAME-25DEC15CLEKC",  # Event exists
                 "series_ticker": "KXNFLGAME",
                 "title": "Market 2",
                 "status": "open",
@@ -780,8 +780,8 @@ def test_fetch_markets_handles_partial_failures(
         assert "1 markets failed to save" in result.stdout
 
     # Verify 2 successful markets created
-    market1 = get_current_market("KXNFLGAME-25DEC15-KC-YES")
-    market2 = get_current_market("KXNFLGAME-25DEC15-BUF-YES")
+    market1 = get_current_market("KXNFLGAME-25DEC15CLEKC-KC-YES")
+    market2 = get_current_market("KXNFLGAME-25DEC15CLEKC-BUF-YES")
     market3 = get_current_market("NONEXISTENT-EVENT-YES")
 
     assert market1 is not None

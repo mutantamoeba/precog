@@ -94,8 +94,8 @@ class TestKalshiClientIntegration:
 
         # Verify results
         assert len(markets) == 2
-        assert markets[0]["ticker"] == "KXNFLGAME-25DEC15-KC-YES"
-        assert markets[1]["ticker"] == "KXNFLGAME-25DEC15-BUF-YES"
+        assert markets[0]["ticker"] == "KXNFLGAME-25DEC15CLEKC-KC-YES"
+        assert markets[1]["ticker"] == "KXNFLGAME-25DEC15CLEKC-BUF-YES"
 
         # Verify Decimal conversion (using *_dollars fields for sub-penny precision)
         assert isinstance(markets[0]["yes_bid_dollars"], Decimal)
@@ -161,7 +161,7 @@ class TestKalshiClientIntegration:
         # Verify results
         assert positions is not None
         assert len(positions) == 2
-        assert positions[0]["ticker"] == "KXNFLGAME-25DEC15-KC-YES"
+        assert positions[0]["ticker"] == "KXNFLGAME-25DEC15CLEKC-KC-YES"
 
         # Verify Decimal types
         assert isinstance(positions[0]["user_average_price"], Decimal)
@@ -194,7 +194,7 @@ class TestKalshiClientIntegration:
 
         # Verify results
         assert len(fills) == 2
-        assert fills[0]["ticker"] == "KXNFLGAME-25DEC15-KC-YES"
+        assert fills[0]["ticker"] == "KXNFLGAME-25DEC15CLEKC-KC-YES"
 
         # Verify Decimal types (using *_fixed fields for sub-penny precision)
         assert isinstance(fills[0]["yes_price_fixed"], Decimal)
@@ -227,7 +227,7 @@ class TestKalshiClientIntegration:
 
         # Verify results
         assert len(settlements) == 2
-        assert settlements[0]["ticker"] == "KXNFLGAME-25DEC08-KC-YES"
+        assert settlements[0]["ticker"] == "KXNFLGAME-25DEC08LACKC-KC-YES"
 
         # Verify Decimal types
         assert isinstance(settlements[0]["settlement_value"], Decimal)

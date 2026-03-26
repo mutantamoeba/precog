@@ -157,12 +157,12 @@ class TestKalshiMarketPollerChaos:
         mock_create_market.return_value = 1
 
         # Generate large response (500 markets) with CORRECT event_ticker format
-        # IMPORTANT: event_ticker must include date (e.g., KXNFLGAME-25DEC15)
+        # IMPORTANT: event_ticker must include date (e.g., KXNFLGAME-25DEC15CLEKC)
         # NOT just series ticker (KXNFLGAME) - that was the bug!
         large_response = [
             {
-                "ticker": f"KXNFLGAME-25DEC15-CHAOS-{i:06d}",
-                "event_ticker": "KXNFLGAME-25DEC15-CHAOS",  # CORRECT: includes date
+                "ticker": f"KXNFLGAME-25DEC15CLEKC-CHAOS-{i:06d}",
+                "event_ticker": "KXNFLGAME-25DEC15CLEKC-CHAOS",  # CORRECT: includes date
                 "series_ticker": "KXNFLGAME",
                 "title": f"Chaos Test Market {i}",
                 "yes_ask": 50,
