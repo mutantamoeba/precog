@@ -205,8 +205,9 @@ class TestUpsertMarketTrade:
 class TestUpsertMarketTradesBatch:
     """Unit tests for upsert_market_trades_batch function."""
 
+    @patch("precog.database.crud_operations.execute_values")
     @patch("precog.database.crud_operations.get_cursor")
-    def test_batch_returns_rowcount(self, mock_get_cursor):
+    def test_batch_returns_rowcount(self, mock_get_cursor, mock_exec_values):
         """Test batch insert returns cur.rowcount (actual inserts, not skipped)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
         mock_cursor.rowcount = 2
@@ -217,6 +218,7 @@ class TestUpsertMarketTradesBatch:
         result = upsert_market_trades_batch(rows)
 
         assert result == 2
+        mock_exec_values.assert_called_once()
 
     def test_batch_empty_list_returns_zero(self):
         """Test that empty list returns 0 without DB interaction."""
@@ -257,32 +259,37 @@ class TestUpsertMarketTradesBatch:
         with pytest.raises(ValueError, match="taker_side must be one of"):
             upsert_market_trades_batch([row])
 
+    @patch("precog.database.crud_operations.execute_values")
     @patch("precog.database.crud_operations.get_cursor")
-    def test_batch_calls_executemany(self, mock_get_cursor):
-        """Test that batch insert uses executemany for efficiency."""
+    def test_batch_calls_execute_values(self, mock_get_cursor, mock_exec_values):
+        """Test that batch insert uses execute_values for accurate rowcount."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
         mock_cursor.rowcount = 1
 
         rows = [_default_trade_dict()]
         upsert_market_trades_batch(rows)
 
-        mock_cursor.executemany.assert_called_once()
+        mock_exec_values.assert_called_once()
+        # Verify cursor is first arg
+        assert mock_exec_values.call_args[0][0] is mock_cursor
 
+    @patch("precog.database.crud_operations.execute_values")
     @patch("precog.database.crud_operations.get_cursor")
-    def test_batch_sql_contains_on_conflict(self, mock_get_cursor):
+    def test_batch_sql_contains_on_conflict(self, mock_get_cursor, mock_exec_values):
         """Test that batch SQL uses ON CONFLICT DO NOTHING."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
         mock_cursor.rowcount = 1
 
         upsert_market_trades_batch([_default_trade_dict()])
 
-        call_args = mock_cursor.executemany.call_args
-        sql = call_args[0][0]
+        call_args = mock_exec_values.call_args
+        sql = call_args[0][1]  # execute_values(cur, sql, ...)
         assert "ON CONFLICT" in sql
         assert "DO NOTHING" in sql
 
+    @patch("precog.database.crud_operations.execute_values")
     @patch("precog.database.crud_operations.get_cursor")
-    def test_batch_allows_none_optional_fields(self, mock_get_cursor):
+    def test_batch_allows_none_optional_fields(self, mock_get_cursor, mock_exec_values):
         """Test that batch rows without optional fields work fine."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
         mock_cursor.rowcount = 1
@@ -291,12 +298,28 @@ class TestUpsertMarketTradesBatch:
         row = _default_trade_dict()
         upsert_market_trades_batch([row])
 
-        call_args = mock_cursor.executemany.call_args
-        params_list = call_args[0][1]
+        call_args = mock_exec_values.call_args
+        params_list = call_args[0][2]  # execute_values(cur, sql, argslist, ...)
         # yes_price (index 4), no_price (index 5), taker_side (index 6) should be None
         assert params_list[0][4] is None
         assert params_list[0][5] is None
         assert params_list[0][6] is None
+
+    def test_batch_validates_count_positive(self):
+        """Test that count <= 0 is rejected in batch."""
+        row = _default_trade_dict()
+        row["count"] = 0
+
+        with pytest.raises(ValueError, match="count must be a positive integer"):
+            upsert_market_trades_batch([row])
+
+    def test_batch_validates_count_not_negative(self):
+        """Test that negative count is rejected in batch."""
+        row = _default_trade_dict()
+        row["count"] = -5
+
+        with pytest.raises(ValueError, match="count must be a positive integer"):
+            upsert_market_trades_batch([row])
 
 
 # =============================================================================
