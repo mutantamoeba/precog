@@ -32,11 +32,31 @@ Related:
 
 import logging
 from datetime import date
+from enum import Enum
 
 from precog.matching.team_code_registry import TeamCodeRegistry
 from precog.matching.ticker_parser import ParsedTicker, parse_event_ticker
 
 logger = logging.getLogger(__name__)
+
+
+class MatchReason(str, Enum):
+    """Categorized result of an event-to-game matching attempt.
+
+    Used for production monitoring: operators can see why events fail
+    to match (parse failures vs missing codes vs no game in DB).
+
+    Values:
+        matched: Successfully matched event to a game.
+        parse_fail: Could not parse the event ticker (non-sports, bad format).
+        no_code: Parsed ticker but team code(s) not found in registry.
+        no_game: Resolved team codes but no matching game found in DB.
+    """
+
+    MATCHED = "matched"
+    PARSE_FAIL = "parse_fail"
+    NO_CODE = "no_code"
+    NO_GAME = "no_game"
 
 
 class EventGameMatcher:
@@ -101,22 +121,57 @@ class EventGameMatcher:
 
         return None
 
-    def _match_via_ticker(self, event_ticker: str) -> int | None:
-        """Attempt to match using parsed ticker data.
+    def match_event_with_reason(
+        self, event_ticker: str, title: str | None = None
+    ) -> tuple[int | None, MatchReason]:
+        """Try to match an event to a game, returning the reason for the outcome.
+
+        Same logic as match_event() but returns a (game_id, reason) tuple
+        so callers can categorize failures for monitoring stats.
+
+        Args:
+            event_ticker: Kalshi event ticker (e.g., "KXNFLGAME-26JAN18HOUNE")
+            title: Optional event title for fallback parsing (not yet implemented)
+
+        Returns:
+            Tuple of (games.id or None, MatchReason).
+
+        Example:
+            >>> matcher = EventGameMatcher()
+            >>> matcher.registry.load()
+            >>> game_id, reason = matcher.match_event_with_reason("KXNFLGAME-26JAN18HOUNE")
+            >>> reason  # MatchReason.MATCHED or MatchReason.NO_GAME, etc.
+        """
+        game_id, reason = self._match_via_ticker_with_reason(event_ticker)
+        if game_id is not None:
+            return game_id, MatchReason.MATCHED
+
+        # If ticker parse succeeded but no game, reason is already set
+        if reason != MatchReason.PARSE_FAIL:
+            return None, reason
+
+        # Phase 2: Title-based fallback (TODO — stub)
+        if title:
+            game_id = self._match_via_title(title, event_ticker)
+            if game_id is not None:
+                return game_id, MatchReason.MATCHED
+
+        return None, reason
+
+    def _match_via_ticker_with_reason(self, event_ticker: str) -> tuple[int | None, MatchReason]:
+        """Attempt to match using parsed ticker data, returning reason.
 
         Args:
             event_ticker: Kalshi event ticker string.
 
         Returns:
-            games.id or None.
+            Tuple of (games.id or None, MatchReason).
         """
-        # Extract league from ticker to get the right code set
         parsed = self._parse_ticker(event_ticker)
         if parsed is None:
             logger.debug("Could not parse ticker: %s", event_ticker)
-            return None
+            return None, MatchReason.PARSE_FAIL
 
-        # Resolve Kalshi codes to ESPN/canonical codes
         away_espn = self.registry.resolve_kalshi_to_espn(parsed.away_team_code, parsed.league)
         home_espn = self.registry.resolve_kalshi_to_espn(parsed.home_team_code, parsed.league)
 
@@ -129,10 +184,33 @@ class EventGameMatcher:
                 parsed.home_team_code,
                 home_espn,
             )
-            return None
+            # Track which codes failed so the registry can self-heal
+            if away_espn is None:
+                self.registry.record_unknown_code(parsed.away_team_code, parsed.league)
+            if home_espn is None:
+                self.registry.record_unknown_code(parsed.home_team_code, parsed.league)
+            return None, MatchReason.NO_CODE
 
-        # Look up the game in the games dimension table
-        return self._find_game(parsed.league, parsed.game_date, home_espn, away_espn)
+        game_id = self._find_game(parsed.league, parsed.game_date, home_espn, away_espn)
+        if game_id is None:
+            return None, MatchReason.NO_GAME
+        return game_id, MatchReason.MATCHED
+
+    def _match_via_ticker(self, event_ticker: str) -> int | None:
+        """Attempt to match using parsed ticker data.
+
+        Delegates to _match_via_ticker_with_reason() and discards the reason.
+        This ensures the backfill path also records unknown codes for
+        self-healing (Brawne review finding #1, session 24).
+
+        Args:
+            event_ticker: Kalshi event ticker string.
+
+        Returns:
+            games.id or None.
+        """
+        game_id, _reason = self._match_via_ticker_with_reason(event_ticker)
+        return game_id
 
     def _parse_ticker(self, event_ticker: str) -> ParsedTicker | None:
         """Parse ticker with league-appropriate valid codes.

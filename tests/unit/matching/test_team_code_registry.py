@@ -8,6 +8,8 @@ Related:
     - src/precog/matching/team_code_registry.py
 """
 
+from datetime import UTC, datetime, timedelta
+
 from precog.matching.team_code_registry import TeamCodeRegistry
 
 # =============================================================================
@@ -250,3 +252,78 @@ class TestTeamCodeRegistry:
         # NFL data should be gone
         assert registry.get_kalshi_codes("nfl") == set()
         assert "BOS" in registry.get_kalshi_codes("nba")
+
+
+# =============================================================================
+# Needs Refresh Tests
+# =============================================================================
+
+
+class TestNeedsRefresh:
+    """Tests for TeamCodeRegistry.needs_refresh()."""
+
+    def test_needs_refresh_when_never_loaded(self) -> None:
+        """Unloaded registry always needs refresh."""
+        registry = TeamCodeRegistry()
+        assert registry.needs_refresh()
+
+    def test_no_refresh_needed_when_just_loaded(self) -> None:
+        """Freshly loaded registry does not need refresh."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(NFL_TEAMS)
+        assert not registry.needs_refresh(max_age_seconds=3600)
+
+    def test_needs_refresh_when_stale(self) -> None:
+        """Registry older than max_age needs refresh."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(NFL_TEAMS)
+        # Manually set last_loaded_at to 2 hours ago
+        registry._last_loaded_at = datetime.now(UTC) - timedelta(hours=2)
+        assert registry.needs_refresh(max_age_seconds=3600)
+
+    def test_needs_refresh_when_unknown_codes_seen(self) -> None:
+        """Registry with unknown codes needs refresh even if fresh."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(NFL_TEAMS)
+        registry.record_unknown_code("ZZZ", "nfl")
+        assert registry.needs_refresh(max_age_seconds=3600)
+
+    def test_unknown_codes_cleared_on_reload(self) -> None:
+        """Reloading clears the unknown codes set."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(NFL_TEAMS)
+        registry.record_unknown_code("ZZZ", "nfl")
+        assert len(registry.unknown_codes_seen) == 1
+
+        registry.load_from_data(NFL_TEAMS)
+        assert len(registry.unknown_codes_seen) == 0
+
+    def test_last_loaded_at_set_on_load(self) -> None:
+        """last_loaded_at is set after load."""
+        registry = TeamCodeRegistry()
+        assert registry.last_loaded_at is None
+
+        before = datetime.now(UTC)
+        registry.load_from_data(NFL_TEAMS)
+        after = datetime.now(UTC)
+
+        assert registry.last_loaded_at is not None
+        assert before <= registry.last_loaded_at <= after
+
+    def test_record_unknown_code_format(self) -> None:
+        """Unknown codes are stored as CODE:league format."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(NFL_TEAMS)
+        registry.record_unknown_code("zzz", "nfl")
+        assert "ZZZ:nfl" in registry.unknown_codes_seen
+
+    def test_no_refresh_with_zero_max_age_and_fresh(self) -> None:
+        """With max_age_seconds=0, a freshly loaded registry still needs refresh
+        (age > 0 seconds)."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(NFL_TEAMS)
+        # max_age_seconds=0 means any age > 0 triggers refresh
+        # Since loading takes non-zero time, this should be True
+        # (but could be flaky if load is instant). Use 1 second for safety.
+        registry._last_loaded_at = datetime.now(UTC) - timedelta(seconds=2)
+        assert registry.needs_refresh(max_age_seconds=1)

@@ -1841,3 +1841,232 @@ def elo_stats(
     finally:
         if conn is not None:
             release_connection(conn)
+
+
+# =============================================================================
+# Matching Subcommand Group
+# =============================================================================
+
+matching_app = typer.Typer(
+    name="matching",
+    help="Event-to-game matching operations (stats, backfill, refresh)",
+    no_args_is_help=True,
+)
+app.add_typer(matching_app, name="matching")
+
+
+@matching_app.command(
+    "stats",
+    help="Show event-to-game matching statistics.",
+    epilog="Example: precog data matching stats --league nfl",
+)
+def matching_stats(
+    league: str | None = typer.Option(
+        None,
+        "--league",
+        "-l",
+        help="Filter by league (nfl, nba, nhl, ncaaf, ncaab)",
+    ),
+) -> None:
+    """Show event-to-game matching statistics.
+
+    Displays how many events have been matched to games, broken down
+    by match result category (matched, parse_fail, no_code, no_game).
+
+    Examples:
+        precog data matching stats
+        precog data matching stats --league nfl
+    """
+    console.print("\n[bold cyan]Event-to-Game Matching Statistics[/bold cyan]\n")
+
+    try:
+        from precog.database.connection import get_cursor
+        from precog.database.crud_operations import find_unlinked_sports_events
+
+        with get_cursor() as cursor:
+            # Count linked vs unlinked events
+            if league:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM events WHERE game_id IS NOT NULL AND subcategory = %s",
+                    (league,),
+                )
+            else:
+                cursor.execute(
+                    "SELECT COUNT(*) FROM events WHERE game_id IS NOT NULL "
+                    "AND subcategory IS NOT NULL"
+                )
+            linked_count = cursor.fetchone()[0]
+
+            # Get unlinked count
+            unlinked = find_unlinked_sports_events(league=league)
+            unlinked_count = len(unlinked)
+
+            total = linked_count + unlinked_count
+            # NOTE: float is intentional here -- this is a ratio of integer
+            # counts, not a price or probability.
+            match_rate = (linked_count / total * 100) if total > 0 else 0.0
+
+            console.print("[bold]Overall:[/bold]")
+            console.print(f"  Total sports events: {total:,}")
+            console.print(f"  Linked to games:     {linked_count:,}")
+            console.print(f"  Unlinked:            {unlinked_count:,}")
+            console.print(f"  Match rate:          {match_rate:.1f}%")
+
+            # Per-league breakdown
+            if not league:
+                cursor.execute(
+                    "SELECT subcategory, "
+                    "  COUNT(*) FILTER (WHERE game_id IS NOT NULL) AS linked, "
+                    "  COUNT(*) FILTER (WHERE game_id IS NULL) AS unlinked "
+                    "FROM events "
+                    "WHERE subcategory IS NOT NULL "
+                    "GROUP BY subcategory ORDER BY subcategory"
+                )
+                rows = cursor.fetchall()
+                if rows:
+                    console.print("\n[bold]Per League:[/bold]")
+                    league_table = Table(show_header=True, header_style="bold")
+                    league_table.add_column("League")
+                    league_table.add_column("Linked", justify="right")
+                    league_table.add_column("Unlinked", justify="right")
+                    league_table.add_column("Rate", justify="right")
+
+                    for row in rows:
+                        row_league, row_linked, row_unlinked = row
+                        row_total = row_linked + row_unlinked
+                        row_rate = (row_linked / row_total * 100) if row_total > 0 else 0.0
+                        league_table.add_row(
+                            row_league.upper(),
+                            f"{row_linked:,}",
+                            f"{row_unlinked:,}",
+                            f"{row_rate:.1f}%",
+                        )
+                    console.print(league_table)
+
+    except Exception as e:
+        cli_error(
+            f"Failed to get matching stats: {e}",
+            ExitCode.DATABASE_ERROR,
+            hint="Check database connection",
+        )
+
+    console.print()
+
+
+@matching_app.command(
+    "backfill",
+    help="Manually trigger backfill of unlinked events.",
+    epilog="Example: precog data matching backfill --league nfl",
+)
+def matching_backfill(
+    league: str | None = typer.Option(
+        None,
+        "--league",
+        "-l",
+        help="Filter by league (nfl, nba, nhl, ncaaf, ncaab)",
+    ),
+) -> None:
+    """Manually trigger backfill of events with game_id=NULL.
+
+    Attempts to match unlinked events to games using ticker parsing
+    and the team code registry. Safe to run multiple times.
+
+    Examples:
+        precog data matching backfill
+        precog data matching backfill --league nfl
+    """
+    console.print("\n[bold cyan]Matching Backfill[/bold cyan]\n")
+
+    try:
+        from precog.matching import EventGameMatcher
+
+        console.print("[dim]Loading team code registry...[/dim]")
+        matcher = EventGameMatcher()
+        matcher.registry.load()
+
+        registry_codes = sum(
+            len(matcher.registry.get_kalshi_codes(lg))
+            for lg in ("nfl", "ncaaf", "nba", "ncaab", "nhl", "wnba")
+        )
+        console.print(f"[dim]Registry loaded: {registry_codes} codes[/dim]\n")
+
+        console.print("Running backfill...")
+        linked = matcher.backfill_unlinked_events(league=league)
+
+        if linked > 0:
+            echo_success(f"Linked {linked} events to games")
+        else:
+            console.print("[dim]No new matches found[/dim]")
+
+    except Exception as e:
+        cli_error(
+            f"Backfill failed: {e}",
+            ExitCode.DATABASE_ERROR,
+            hint="Check database connection and that teams are seeded",
+        )
+
+    console.print()
+
+
+@matching_app.command(
+    "refresh",
+    help="Manually reload the team code registry from the database.",
+    epilog="Example: precog data matching refresh",
+)
+def matching_refresh(
+    league: str | None = typer.Option(
+        None,
+        "--league",
+        "-l",
+        help="Refresh only a specific league (default: all)",
+    ),
+) -> None:
+    """Manually reload the team code registry from the database.
+
+    Use this after adding new teams or updating kalshi_team_code mappings
+    to ensure the matching module picks up the changes.
+
+    Examples:
+        precog data matching refresh
+        precog data matching refresh --league nfl
+    """
+    console.print("\n[bold cyan]Registry Refresh[/bold cyan]\n")
+
+    try:
+        from precog.matching import TeamCodeRegistry
+
+        registry = TeamCodeRegistry()
+        console.print("[dim]Loading team codes from database...[/dim]")
+        registry.load(league=league)
+
+        # Show what was loaded
+        leagues = ("nfl", "ncaaf", "nba", "ncaab", "nhl", "wnba")
+        loaded_table = Table(show_header=True, header_style="bold")
+        loaded_table.add_column("League")
+        loaded_table.add_column("Codes", justify="right")
+
+        total = 0
+        for lg in leagues:
+            codes = registry.get_kalshi_codes(lg)
+            if codes:
+                loaded_table.add_row(lg.upper(), str(len(codes)))
+                total += len(codes)
+
+        if total > 0:
+            console.print(loaded_table)
+            echo_success(f"Registry loaded: {total} codes across {len(leagues)} leagues")
+        else:
+            console.print("[yellow]No team codes found in database[/yellow]")
+            console.print("[dim]Run 'precog data seed --type teams' first[/dim]")
+
+        if registry.last_loaded_at:
+            console.print(f"\n[dim]Loaded at: {registry.last_loaded_at.isoformat()}[/dim]")
+
+    except Exception as e:
+        cli_error(
+            f"Registry refresh failed: {e}",
+            ExitCode.DATABASE_ERROR,
+            hint="Check database connection",
+        )
+
+    console.print()
