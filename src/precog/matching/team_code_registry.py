@@ -28,6 +28,7 @@ Related:
 """
 
 import logging
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -58,11 +59,68 @@ class TeamCodeRegistry:
         self._kalshi_to_espn: dict[str, dict[str, str]] = {}
         self._kalshi_codes: dict[str, set[str]] = {}
         self._loaded: bool = False
+        self._last_loaded_at: datetime | None = None
+        self._unknown_codes_seen: set[str] = set()
 
     @property
     def is_loaded(self) -> bool:
         """Whether the registry has been loaded from the database."""
         return self._loaded
+
+    @property
+    def last_loaded_at(self) -> datetime | None:
+        """UTC timestamp of the last successful load. None if never loaded."""
+        return self._last_loaded_at
+
+    @property
+    def unknown_codes_seen(self) -> set[str]:
+        """Set of team codes that failed lookup since last load.
+
+        Format: "CODE:league" (e.g., "ZZZ:nfl"). Cleared on each reload.
+        Used by the poller to decide when a registry refresh might help.
+        """
+        return self._unknown_codes_seen
+
+    def needs_refresh(self, max_age_seconds: int = 3600) -> bool:
+        """Check whether the registry should be reloaded.
+
+        Returns True if:
+        - Registry has never been loaded
+        - Registry is older than max_age_seconds
+        - Unknown codes have accumulated (possible new teams)
+
+        Args:
+            max_age_seconds: Maximum age in seconds before a refresh is
+                recommended. Default: 3600 (1 hour).
+
+        Returns:
+            True if a refresh is recommended.
+
+        Example:
+            >>> registry = TeamCodeRegistry()
+            >>> registry.needs_refresh()  # True (never loaded)
+            >>> registry.load()
+            >>> registry.needs_refresh(max_age_seconds=3600)  # False (just loaded)
+        """
+        if not self._loaded or self._last_loaded_at is None:
+            return True
+
+        age = (datetime.now(UTC) - self._last_loaded_at).total_seconds()
+        if age > max_age_seconds:
+            return True
+
+        # If we've seen unknown codes, a refresh might resolve them
+        # (new teams added to DB since last load)
+        return bool(self._unknown_codes_seen)
+
+    def record_unknown_code(self, code: str, league: str) -> None:
+        """Record a team code that failed lookup for monitoring.
+
+        Args:
+            code: The Kalshi team code that was not found.
+            league: The league context for the lookup.
+        """
+        self._unknown_codes_seen.add(f"{code.upper()}:{league}")
 
     def load(self, league: str | None = None) -> None:
         """Load team codes from DB into in-memory cache.
@@ -85,6 +143,8 @@ class TeamCodeRegistry:
         teams = get_teams_with_kalshi_codes(league=league)
         self._build_cache(teams, league)
         self._loaded = True
+        self._last_loaded_at = datetime.now(UTC)
+        self._unknown_codes_seen.clear()
 
         total_codes = sum(len(codes) for codes in self._kalshi_codes.values())
         logger.info(
@@ -109,6 +169,8 @@ class TeamCodeRegistry:
         """
         self._build_cache(teams, league=None)
         self._loaded = True
+        self._last_loaded_at = datetime.now(UTC)
+        self._unknown_codes_seen.clear()
 
     def _build_cache(self, teams: list[dict[str, Any]], league: str | None) -> None:
         """Build internal cache from team data.

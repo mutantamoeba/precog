@@ -871,6 +871,25 @@ class ServiceSupervisor:
         if poll_age_seconds is not None and poll_age_seconds > poll_interval * 2:
             return "degraded", {**details, "reason": "stale_poll_2x_interval"}
 
+        # Enrich details with matching stats for Kalshi service.
+        # This makes matching health visible via the system_health table
+        # without requiring a schema migration to add a new component.
+        if name == "kalshi_rest":
+            matching_matched = stats.get("matching_matched", 0)
+            matching_total = (
+                matching_matched
+                + stats.get("matching_parse_fail", 0)
+                + stats.get("matching_no_code", 0)
+                + stats.get("matching_no_game", 0)
+            )
+            if matching_total > 0:
+                # NOTE: float is intentional here -- this is a ratio of
+                # integer counts, not a price or probability.
+                match_rate = matching_matched / matching_total
+                details["matching_match_rate"] = f"{match_rate:.4f}"
+                details["matching_total_events"] = matching_total
+                details["matching_backfill_linked"] = stats.get("matching_backfill_linked", 0)
+
         # Healthy: running with acceptable error rate
         return "healthy", details
 

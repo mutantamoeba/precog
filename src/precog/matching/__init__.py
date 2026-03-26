@@ -23,12 +23,13 @@ Related:
     - Migration 0041: teams.kalshi_team_code column
 """
 
-from precog.matching.event_game_matcher import EventGameMatcher
+from precog.matching.event_game_matcher import EventGameMatcher, MatchReason
 from precog.matching.team_code_registry import TeamCodeRegistry
 from precog.matching.ticker_parser import ParsedTicker, parse_event_ticker
 
 __all__ = [
     "EventGameMatcher",
+    "MatchReason",
     "ParsedTicker",
     "TeamCodeRegistry",
     "parse_event_ticker",

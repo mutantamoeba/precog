@@ -953,3 +953,149 @@ class TestEventGameMatching:
             mock_create_event.assert_called_once()
             call_kwargs = mock_create_event.call_args.kwargs
             assert call_kwargs["game_id"] == 42
+
+    @pytest.mark.unit
+    def test_matching_stats_tracked_on_match(self, poller_with_mock_client, mock_market_data):
+        """Matching stats are incremented when events are matched."""
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ),
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
+        ):
+            # Set up matcher with a mock that returns a match
+            from precog.matching.event_game_matcher import EventGameMatcher, MatchReason
+
+            mock_matcher = Mock(spec=EventGameMatcher)
+            mock_matcher.match_event_with_reason.return_value = (42, MatchReason.MATCHED)
+            mock_matcher.registry = Mock()
+
+            poller_with_mock_client._event_game_matcher = mock_matcher
+            poller_with_mock_client._matcher_loaded = True
+
+            poller_with_mock_client._sync_market_to_db(mock_market_data)
+
+            stats = poller_with_mock_client.get_stats()
+            assert stats["matching_matched"] == 1
+
+    @pytest.mark.unit
+    def test_matching_stats_in_get_stats(self, poller_with_mock_client):
+        """get_stats() includes matching stat keys."""
+        stats = poller_with_mock_client.get_stats()
+        assert "matching_matched" in stats
+        assert "matching_parse_fail" in stats
+        assert "matching_no_code" in stats
+        assert "matching_no_game" in stats
+        assert "matching_backfill_linked" in stats
+        assert "matching_backfill_runs" in stats
+        assert "matching_registry_refreshes" in stats
+
+
+# =============================================================================
+# Matching Backfill Tests
+# =============================================================================
+
+
+class TestMatchingBackfill:
+    """Test _run_matching_backfill() integration."""
+
+    @pytest.mark.unit
+    def test_backfill_non_blocking_on_error(self, poller_with_mock_client):
+        """Backfill errors don't crash the poller."""
+        from precog.matching.event_game_matcher import EventGameMatcher
+
+        mock_matcher = Mock(spec=EventGameMatcher)
+        mock_matcher.backfill_unlinked_events.side_effect = RuntimeError("DB error")
+        mock_matcher.registry = Mock()
+        mock_matcher.registry.needs_refresh.return_value = False
+
+        poller_with_mock_client._event_game_matcher = mock_matcher
+        poller_with_mock_client._matcher_loaded = True
+
+        # Should not raise
+        poller_with_mock_client._run_matching_backfill()
+
+        # Stats should show 0 linked (error swallowed)
+        stats = poller_with_mock_client.get_stats()
+        assert stats["matching_backfill_linked"] == 0
+
+    @pytest.mark.unit
+    def test_backfill_updates_stats(self, poller_with_mock_client):
+        """Successful backfill updates stats counters."""
+        from precog.matching.event_game_matcher import EventGameMatcher
+
+        mock_matcher = Mock(spec=EventGameMatcher)
+        mock_matcher.backfill_unlinked_events.return_value = 5
+        mock_matcher.registry = Mock()
+        mock_matcher.registry.needs_refresh.return_value = False
+
+        poller_with_mock_client._event_game_matcher = mock_matcher
+        poller_with_mock_client._matcher_loaded = True
+
+        poller_with_mock_client._run_matching_backfill()
+
+        stats = poller_with_mock_client.get_stats()
+        assert stats["matching_backfill_linked"] == 5
+        assert stats["matching_backfill_runs"] == 1
+
+    @pytest.mark.unit
+    def test_backfill_skipped_when_matcher_not_loaded(self, poller_with_mock_client):
+        """Backfill is a no-op when matcher failed to load."""
+        # Matcher is None by default (not loaded yet)
+        # Patch _ensure_matcher_loaded to not actually try loading
+        with patch.object(poller_with_mock_client, "_ensure_matcher_loaded"):
+            poller_with_mock_client._event_game_matcher = None
+            poller_with_mock_client._run_matching_backfill()
+
+        stats = poller_with_mock_client.get_stats()
+        assert stats["matching_backfill_runs"] == 0
+
+
+# =============================================================================
+# Registry Refresh Tests
+# =============================================================================
+
+
+class TestRegistryRefresh:
+    """Test _maybe_refresh_registry() rate limiting."""
+
+    @pytest.mark.unit
+    def test_refresh_rate_limited(self, poller_with_mock_client):
+        """Registry refresh only happens after REGISTRY_REFRESH_INTERVAL polls."""
+        from precog.matching.event_game_matcher import EventGameMatcher
+
+        mock_matcher = Mock(spec=EventGameMatcher)
+        mock_matcher.registry = Mock()
+        mock_matcher.registry.needs_refresh.return_value = True
+
+        poller_with_mock_client._event_game_matcher = mock_matcher
+        poller_with_mock_client._matcher_loaded = True
+        poller_with_mock_client._polls_since_registry_refresh = 0
+
+        # Call once - should not refresh (interval not reached)
+        poller_with_mock_client._maybe_refresh_registry()
+        mock_matcher.registry.load.assert_not_called()
+
+    @pytest.mark.unit
+    def test_refresh_after_interval(self, poller_with_mock_client):
+        """Registry refreshes after enough polls have elapsed."""
+        from precog.matching.event_game_matcher import EventGameMatcher
+
+        mock_matcher = Mock(spec=EventGameMatcher)
+        mock_matcher.registry = Mock()
+        mock_matcher.registry.needs_refresh.return_value = True
+        mock_matcher.registry.unknown_codes_seen = {"ZZZ:nfl"}
+
+        poller_with_mock_client._event_game_matcher = mock_matcher
+        poller_with_mock_client._matcher_loaded = True
+        poller_with_mock_client._polls_since_registry_refresh = (
+            KalshiMarketPoller.REGISTRY_REFRESH_INTERVAL
+        )
+
+        poller_with_mock_client._maybe_refresh_registry()
+        mock_matcher.registry.load.assert_called_once()
+
+        stats = poller_with_mock_client.get_stats()
+        assert stats["matching_registry_refreshes"] == 1

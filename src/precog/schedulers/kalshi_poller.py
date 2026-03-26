@@ -137,6 +137,11 @@ class KalshiMarketPoller(BasePoller):
     # Platform ID for database records
     PLATFORM_ID: ClassVar[str] = "kalshi"
 
+    # Registry refresh: at most once every N polls (at 15s interval,
+    # 40 polls = ~10 minutes). Prevents excessive DB queries on every
+    # unknown code encounter.
+    REGISTRY_REFRESH_INTERVAL: ClassVar[int] = 40
+
     # Status mapping from Kalshi API to database schema
     # Kalshi API returns: 'active', 'unopened', 'closed', 'settled', 'finalized', 'determined', 'initialized'
     # Database constraint allows: 'open', 'closed', 'settled', 'halted'
@@ -224,6 +229,25 @@ class KalshiMarketPoller(BasePoller):
             "error_rate_pct_last_cycle": 0.0,
         }
 
+        # Matching stats: track how well event-to-game linking is performing.
+        # Cumulative counts reset only on poller restart.
+        self._matching_stats: dict[str, int] = {
+            "matching_matched": 0,
+            "matching_parse_fail": 0,
+            "matching_no_code": 0,
+            "matching_no_game": 0,
+            "matching_backfill_linked": 0,
+            "matching_backfill_runs": 0,
+            "matching_backfill_errors": 0,
+            "matching_registry_refreshes": 0,
+        }
+
+        # Rate-limit registry refresh: track poll count since last refresh.
+        # Refresh at most once every REGISTRY_REFRESH_INTERVAL polls.
+        # Thread safety: only accessed from _poll_once() thread (APScheduler
+        # max_instances=1 guarantees no concurrent poll execution).
+        self._polls_since_registry_refresh: int = 0
+
         logger.info(
             "KalshiMarketPoller initialized: series=%s, poll_interval=%ds, env=%s",
             self.series_tickers,
@@ -232,10 +256,11 @@ class KalshiMarketPoller(BasePoller):
         )
 
     def get_stats(self) -> dict[str, Any]:
-        """Get stats including validation counters."""
+        """Get stats including validation and matching counters."""
         with self._lock:
             stats = dict(self._stats)
             stats.update(self._validation_stats)
+            stats.update(self._matching_stats)
             return stats
 
     def _get_job_name(self) -> str:
@@ -286,6 +311,10 @@ class KalshiMarketPoller(BasePoller):
                 logger.debug("Updated bracket_count for %d markets", bracket_updated)
         except Exception as e:
             logger.warning("Failed to update bracket counts: %s", e)
+
+        # Post-poll batch: attempt to link unmatched events to games.
+        # Non-blocking: errors are logged but never stop polling.
+        self._run_matching_backfill()
 
         # Heartbeat logging for operator visibility during quiet periods.
         # BasePoller._poll_wrapper() handles the standard INFO/DEBUG logging
@@ -755,15 +784,18 @@ class KalshiMarketPoller(BasePoller):
 
         Lazy initialization avoids DB queries during __init__ (which may
         run before the DB is ready). The registry is loaded once and
-        cached for the lifetime of the poller.
+        cached for the lifetime of the poller. Periodic refreshes are
+        handled by _maybe_refresh_registry().
         """
         if self._matcher_loaded:
+            self._maybe_refresh_registry()
             return
 
         try:
             self._event_game_matcher = EventGameMatcher()
             self._event_game_matcher.registry.load()
             self._matcher_loaded = True
+            self._polls_since_registry_refresh = 0
             logger.info("Event-game matcher loaded successfully")
         except Exception:
             logger.warning(
@@ -773,11 +805,79 @@ class KalshiMarketPoller(BasePoller):
             self._event_game_matcher = None
             # Don't set _matcher_loaded so we retry next cycle
 
+    def _maybe_refresh_registry(self) -> None:
+        """Refresh the team code registry if it's stale or has unknown codes.
+
+        Rate-limited: checks at most once every REGISTRY_REFRESH_INTERVAL
+        polls to avoid excessive DB queries. Refreshes when:
+        - The registry reports needs_refresh() (age or unknown codes)
+        - Enough polls have elapsed since last refresh
+
+        Non-blocking: errors are logged but never stop polling.
+        """
+        if self._event_game_matcher is None:
+            return
+
+        self._polls_since_registry_refresh += 1
+        if self._polls_since_registry_refresh < self.REGISTRY_REFRESH_INTERVAL:
+            return
+
+        registry = self._event_game_matcher.registry
+        if not registry.needs_refresh():
+            # Reset counter even if no refresh needed, to avoid
+            # checking needs_refresh() on every poll after interval.
+            self._polls_since_registry_refresh = 0
+            return
+
+        try:
+            unknown_before = len(registry.unknown_codes_seen)
+            registry.load()
+            self._polls_since_registry_refresh = 0
+            with self._lock:
+                self._matching_stats["matching_registry_refreshes"] += 1
+            logger.info(
+                "Registry refreshed (had %d unknown codes)",
+                unknown_before,
+            )
+        except Exception:
+            logger.warning(
+                "Failed to refresh team code registry (non-blocking)",
+                exc_info=True,
+            )
+
+    def _run_matching_backfill(self) -> None:
+        """Attempt to link events with game_id=NULL to games.
+
+        Called after each poll cycle. Non-blocking: errors are logged
+        but never stop the polling loop.
+
+        Updates matching stats with the count of newly linked events.
+        """
+        self._ensure_matcher_loaded()
+        if self._event_game_matcher is None:
+            return
+
+        try:
+            linked = self._event_game_matcher.backfill_unlinked_events()
+            with self._lock:
+                self._matching_stats["matching_backfill_linked"] += linked
+                self._matching_stats["matching_backfill_runs"] += 1
+            if linked:
+                logger.info("Matching backfill linked %d events", linked)
+        except Exception:
+            logger.warning(
+                "Matching backfill failed (non-blocking)",
+                exc_info=True,
+            )
+            with self._lock:
+                self._matching_stats["matching_backfill_errors"] += 1
+
     def _match_event_to_game(self, event_ticker: str, title: str | None = None) -> int | None:
         """Try to match a Kalshi event to an ESPN game.
 
         Lazily initializes the matcher on first call. Returns None if
         matching fails or the matcher is unavailable (non-blocking).
+        Tracks per-event match results for monitoring stats.
 
         Args:
             event_ticker: Kalshi event ticker (e.g., "KXNFLGAME-26JAN18HOUNE")
@@ -791,7 +891,17 @@ class KalshiMarketPoller(BasePoller):
             return None
 
         try:
-            return self._event_game_matcher.match_event(event_ticker, title=title)
+            game_id, reason = self._event_game_matcher.match_event_with_reason(
+                event_ticker, title=title
+            )
+
+            # Track categorized result under self._lock for thread safety
+            stat_key = f"matching_{reason.value}"
+            with self._lock:
+                if stat_key in self._matching_stats:
+                    self._matching_stats[stat_key] += 1
+
+            return game_id
         except Exception:
             logger.debug(
                 "Event matching failed for %s (non-blocking)",
