@@ -1,9 +1,25 @@
 # Architecture & Design Decisions
 
 ---
-**Version:** 2.33
-**Last Updated:** December 26, 2025
+**Version:** 2.35
+**Last Updated:** March 27, 2026
 **Status:** ✅ Current
+**Changes in v2.35:**
+- **EXTERNAL DATA SOURCE ARCHITECTURE:** Added ADR-114 for three-tier source pattern with multi-source reconciliation
+  - ADR-114: External Data Source Architecture — Three-Tier Pattern with Multi-Source Reconciliation
+  - Classifies sources by update cadence (A: Continuous, B: Periodic, C: Batch) with P41 obligations per tier
+  - Removes system_health CHECK constraint via migration 0043 (app-layer validation via SystemHealthComponent enum)
+  - ServiceSupervisor registry pattern replaces if/elif chain — HEALTH_COMPONENT_NAME + BREAKER_TYPE as class variables
+  - Two-axis classification: cadence axis (code structure) + cost axis (business planning) — orthogonal
+  - Auth credential policy: {PRECOG_ENV}_ prefix for Tier A only; unprefixed for Tier B/C
+  - Tier B mandatory heartbeats via PeriodicMaintenanceRunner (2x expected interval staleness warning)
+  - GameStateProvider Protocol + MultiSourceReconciler formalized (Phase 4 implementation)
+  - Strategy latency tolerance table: sub-second requires paid (Tier A3) only
+  - Bootstrap-first: no paid APIs Phase 2-3; ROI evaluation gates paid upgrades in Phase 5
+  - Implementation roadmap: R1-R8 ordered by urgency with phase gates
+  - Cross-references: Issues #490, #451, #489, #445, #343; ADR-100/103/105/106/111/076
+**Changes in v2.34:**
+- **FASTAPI WEB BACKEND** - Added Decision #113/ADR-113 (FastAPI as Web Backend for Manual Trade Placement MVP). FastAPI + uvicorn as ASGI server, `src/precog/web/` package, Pydantic Decimal serialization, two-axis environment integration, 9-step build order. Issue #322, Phase 2 Gate Review blocker B2.
 **Changes in v2.33:**
 - **NEIL PAINE DATA SOURCE ARCHITECTURE:** Added ADR-110 for FiveThirtyEight replacement
   - ADR-110: Neil Paine Sports Elo Archives - GitHub data source for NFL/NBA/NHL Elo (MIT license)
@@ -16311,6 +16327,494 @@ Re-evaluate this decision if:
 
 ---
 
+## Decision #114/ADR-114: External Data Source Architecture — Three-Tier Pattern with Multi-Source Reconciliation
+
+**Date:** March 27, 2026
+**Status:** Accepted
+**Phase:** Phase 2 (foundational — governs all subsequent phases)
+**Related Issues:** #490 (External Data Source Architecture ADR), #451 (The Odds API evaluation), #489 (CBBD integration), #445 (temporal alignment), #343 (WebSocket-primary architecture)
+**Council:** Leto II (systems architect), Galadriel (long-horizon risk), Cassandra (forward-looking signal gaps), Miles Vorkosigan (operational pragmatism)
+
+### Context
+
+As of March 2026, Precog integrates two live data sources (Kalshi, ESPN) and three batch data sources (CFBD classification, Neil Paine Elo archives, nfl_data_py). Phase 2 adds a third live source (The Odds API, Issue #451), Phase 2+ adds CBBD (Issue #489), and later phases will add Sportradar, MySportsFeeds, or similar paid providers. Each new source added without a standard pattern has required improvised decisions about component naming, monitoring obligations, auth credential format, supervisor registration, and system_health integration.
+
+The existing ADRs address pieces of this problem but not the whole:
+- ADR-103 defines the BasePoller pattern for **continuous** sources only
+- ADR-106 defines the BaseDataSource pattern for **historical** batch sources
+- ADR-076 documents the business-tier tiering (free/dev/paid) and GameStateProvider abstraction
+- ADR-100 defines the ServiceSupervisor pattern for orchestrating live services
+
+What is missing is a **unified onboarding contract** that specifies: for any new external data source, what tier is it, what components must it provide, and what production-readiness obligations apply before it may be merged.
+
+A four-agent council (Leto II, Galadriel, Cassandra, Miles) deliberated on Issue #490 and reached consensus on all structural decisions documented below.
+
+**The wrong framing to avoid:** The original issue framed this as "Client + Adapter + Poller" — three always-separate layers. This is incorrect. Kalshi and ESPN do not have a separate "Adapter" layer; the Client IS the adapter. The correct framing is: what are the standard **responsibilities** at each layer (Fetch, Normalize, Deliver), and when does a source need a dedicated component for each? The three-responsibility model is universal; whether a single class or three classes implements it depends on update cadence and complexity.
+
+### Problem
+
+Without a standard onboarding contract, every new source requires answering the same questions from scratch:
+
+1. What production-readiness capabilities are required (monitoring, heartbeat, CLI, self-healing)?
+2. Which directory does the source code live in (`api_connectors/` vs `database/seeding/sources/`)?
+3. How does the ServiceSupervisor discover and register a new live source without a code change AND a schema migration?
+4. What credential naming convention applies?
+5. What does the `system_health` table show for this source?
+6. When the same game state arrives from ESPN and a paid feed simultaneously, which value wins?
+7. When does it become appropriate to promote a source from free to paid?
+
+Each improvised answer creates a new inconsistency. Adding The Odds API today without this ADR would likely require: a new `system_health` CHECK constraint migration, a third `if/elif` branch in the supervisor factory, an ad-hoc credential name, and zero monitoring obligations.
+
+### Decision
+
+#### Part 1: Three-Tier Classification by Update Cadence
+
+Sources are classified into one of three tiers. **Tier is determined by update cadence, not by cost, reliability, or complexity.** Cost and reliability are tracked on a separate business axis (documented in Part 5). The tier classification is **declared before implementation begins** and drives the onboarding checklist.
+
+| Tier | Cadence | Code Location | Production-Readiness (Pattern 41) | Current Examples |
+|------|---------|---------------|-----------------------------------|-----------------|
+| **A: Continuous** | Seconds to minutes | `api_connectors/` (Client) + `schedulers/` (BasePoller subclass) + `service_supervisor.py` | All 6 capabilities: monitoring, maintenance, logging, reporting, self-healing, scheduling | Kalshi (REST + WS), ESPN, future Odds API |
+| **B: Periodic** | Daily to weekly | `database/seeding/sources/` (BaseDataSource subclass) + heartbeat task + CLI command | Monitoring + Reporting + CLI (3 of 6) | CFBD classification |
+| **C: Batch** | One-time or seasonal | `database/seeding/sources/` (BaseDataSource subclass) + CLI command | Logging only (1 of 6) | Neil Paine Elo archives, nfl_data_py, nba_api, pybaseball |
+
+**Component naming convention:**
+
+- **Tier A sources:** Named `{Platform}Client` in `api_connectors/` (signals "talks to a live API; failures are immediate"). The poller extending BasePoller in `schedulers/` is named `{Platform}{Entity}Poller`.
+- **Tier B/C sources:** Named `{Platform}Source` or `{Platform}Adapter` in `database/seeding/sources/` (signals "translates offline data; failures are recoverable"). The term "Adapter" is **deprecated** as a primary naming convention in this context — use "Source" for consistency with ADR-106.
+
+**Three responsibilities at every tier:**
+
+Every source, regardless of tier, must address three responsibilities. The same class may handle all three (simple sources) or they may be split across components (complex sources):
+
+1. **Fetch** — retrieve raw data from the external source (HTTP call, file read, library call)
+2. **Normalize** — translate raw data into Precog's canonical form (ESPN team codes, Decimal prices, UTC timestamps)
+3. **Deliver** — hand normalized records to the database layer (CRUD calls, SCD Type 2 upserts)
+
+#### Part 2: system_health CHECK Constraint Removal (Migration 0043)
+
+**Problem:** The `system_health` table has a CHECK constraint on the `component` column enumerating all valid component names. Adding a new Tier A source currently requires both a code change and a schema migration — a coupling that has no architectural value and creates friction for every new integration.
+
+**Decision:** Remove the CHECK constraint and replace it with application-layer validation in `upsert_system_health()`.
+
+```python
+# CURRENT (requires migration to add new source):
+# CHECK constraint in PostgreSQL: component IN ('kalshi_api', 'espn_api', 'websocket', ...)
+
+# FUTURE (migration 0043):
+class SystemHealthComponent(str, Enum):
+    KALSHI_API = "kalshi_api"
+    ESPN_API = "espn_api"
+    WEBSOCKET = "websocket"
+    DATABASE = "database"
+    EDGE_DETECTOR = "edge_detector"
+    TRADING_ENGINE = "trading_engine"
+    # New sources: add here, no migration required
+
+def upsert_system_health(component: str | SystemHealthComponent, ...) -> None:
+    """Upsert component health. Validates component name at application layer."""
+    if isinstance(component, str):
+        try:
+            component = SystemHealthComponent(component)
+        except ValueError:
+            raise ValueError(
+                f"Unknown system_health component: {component!r}. "
+                f"Add to SystemHealthComponent enum before using."
+            )
+    # ... rest of upsert logic
+```
+
+**Migration 0043** is a prerequisite for adding the third Tier A source (The Odds API). It must ship before Phase 2 adds any new live integrations.
+
+#### Part 3: ServiceSupervisor Registry Pattern
+
+**Problem:** The current service factory in `service_supervisor.py` dispatches via `if name == "espn": ... elif name == "kalshi_rest": ... elif name == "kalshi_ws":`. Adding a new service requires modifying the factory function — a violation of the open/closed principle that also makes testing harder.
+
+**Decision:** Replace the `if/elif` chain with a declarative registry dictionary:
+
+```python
+# In service_supervisor.py
+
+# Replaces the if/elif chain in _create_supervised_services():
+SERVICE_FACTORIES: dict[str, Callable[..., EventLoopService]] = {
+    "espn": create_espn_poller,
+    "kalshi_rest": create_kalshi_poller,
+    "kalshi_ws": create_websocket_handler,
+    # New sources registered here — no if/elif modification required
+}
+```
+
+Each `BasePoller` subclass declares its own health metadata as class variables, removing the need for separate lookup dictionaries:
+
+```python
+class ESPNGamePoller(BasePoller):
+    HEALTH_COMPONENT_NAME: ClassVar[str] = "espn_api"
+    BREAKER_TYPE: ClassVar[str] = "data_stale"
+    SERVICE_KEY: ClassVar[str] = "espn"  # Key in SERVICE_FACTORIES
+
+class KalshiMarketPoller(BasePoller):
+    HEALTH_COMPONENT_NAME: ClassVar[str] = "kalshi_api"
+    BREAKER_TYPE: ClassVar[str] = "api_failures"
+    SERVICE_KEY: ClassVar[str] = "kalshi_rest"
+
+class OddsAPIPoller(BasePoller):  # Future: Issue #451
+    HEALTH_COMPONENT_NAME: ClassVar[str] = "odds_api"
+    BREAKER_TYPE: ClassVar[str] = "api_failures"
+    SERVICE_KEY: ClassVar[str] = "odds_api"
+```
+
+The `SERVICE_TO_COMPONENT` and `COMPONENT_TO_BREAKER_TYPE` dictionaries in the current `service_supervisor.py` are superseded by these class variables. The supervisor reads `HEALTH_COMPONENT_NAME` and `BREAKER_TYPE` at registration time.
+
+**This refactor is required before the third Tier A source ships** (see Implementation Roadmap, R3).
+
+#### Part 4: Team Code Normalization — Consolidation Path
+
+**Problem:** Team code normalization is currently implemented in three separate places: `team_history.py`, `ESPNTeamValidator`, and `TeamCodeRegistry` (introduced in PR #488). This redundancy means that a new source's team codes must be normalized in three different ways depending on which path it takes through the system.
+
+**Decision:** Define a canonical `TeamCodeService` as the single normalization authority. All sources — Tier A, B, and C — must normalize team codes through this service before writing to any database table.
+
+```python
+class TeamCodeService:
+    """Single authority for team code normalization across all sources.
+
+    Guarantees:
+    - Round-trip: normalize(normalize(code)) == normalize(code)
+    - Cross-source: ESPN "SEA" and Kalshi "SEA" both resolve to the
+      same canonical form for the correct sport (ADR-111)
+    - Property-tested: Hypothesis round-trip tests enforce invariants
+    """
+
+    def normalize(self, raw_code: str, sport: str) -> str:
+        """Normalize a team code to Precog canonical form."""
+        ...
+
+    def resolve_alias(self, raw_code: str, sport: str) -> str | None:
+        """Resolve known aliases (e.g., BSU -> BOIS for NCAAF)."""
+        ...
+```
+
+**Cross-source natural key contract:** The games table natural key `(sport, game_date, home_team_code, away_team_code)` uses ESPN-normalized team codes as the canonical form. All other sources (CFBD, The Odds API, Sportradar) must normalize their team codes TO this form before writing to `games` or `game_states`. The `TeamCodeService` enforces this.
+
+The consolidation of `team_history.py`, `ESPNTeamValidator`, and `TeamCodeRegistry` into `TeamCodeService` is deferred to before Phase 5 (see Implementation Roadmap, R6). In the interim, all new sources must use `TeamCodeRegistry` as the single normalization entry point.
+
+#### Part 5: Three-Axis Source Classification
+
+Sources are classified along three independent axes. **Axis 1 (cadence)** determines code structure. **Axis 2 (cost)** is a business planning tool. **Axis 3 (domain)** determines which schema tables a source writes to and whether multi-source reconciliation is needed.
+
+**Axis 1 — Cadence (determines code structure):**
+
+| Tier | Label | Cadence |
+|------|-------|---------|
+| A | Continuous | Seconds to minutes |
+| B | Periodic | Daily to weekly |
+| C | Batch | One-time or seasonal |
+
+**Axis 2 — Cost/Reliability (business planning only):**
+
+| Tier | Label | Characteristics |
+|------|-------|----------------|
+| 1 | Historical/Free | Free, stable, batch-oriented (nfl_data_py, Neil Paine) |
+| 2 | Dev/Free | Free but unreliable — undocumented endpoints, no SLA (ESPN hidden API) |
+| 3 | Production/Paid | Paid, reliable, documented SLA (MySportsFeeds, Sportradar, The Odds API) |
+
+**Axis 3 — Domain (determines schema impact and reconciliation needs):**
+
+| Domain | Tables Written | Multi-Source? | Reconciliation Needed? |
+|--------|---------------|--------------|----------------------|
+| **Prediction Markets** | markets, market_snapshots, events, positions, orders, trades | Yes (Kalshi + Polymarket + future) | Yes — cross-platform event matching, arbitrage detection |
+| **Game State** | games, game_states | Yes (ESPN + future paid feeds) | Yes — when 2+ sources report same game |
+| **Betting Lines/Odds** | live_odds_snapshots, historical_odds | Yes (multiple bookmakers per game) | Yes — bookmaker consensus computation |
+| **Team/Classification** | teams (classification, metadata) | Yes (ESPN + CFBD + sport libs) | Partial — authority hierarchy, not real-time |
+| **Statistics** | games.features JSONB, play-by-play (future) | Yes (multiple stat providers per sport) | Partial — feature weighting, not reconciliation |
+| **Elo/Ratings** | elo_calculation_log | No (internally computed) | No |
+
+**When a new integration adds on the source axis only** (e.g., CBBD as a second basketball data source), it follows the tier onboarding checklist. **When it adds on the domain axis only** (e.g., play-by-play data from ESPN), it requires a schema design session. **When it adds on BOTH axes simultaneously** (e.g., Polymarket = new source + prediction markets domain overlap; The Odds API = new source + new betting lines domain), both the tier onboarding AND a schema/reconciliation design are triggered.
+
+A source occupies one position on each axis. ESPN is currently **A2-GameState** (Continuous + Dev/Free + Game State domain). The Odds API will be **A3-BettingLines** (Continuous + Paid + Betting Lines domain). Polymarket will be **A3-PredictionMarkets** (Continuous + Paid + Prediction Markets domain — overlapping with Kalshi). CFBD is **B2-TeamClassification** (Periodic + Dev/Free + Team/Classification domain). Neil Paine archives are **C1-Elo** (Batch + Historical/Free + Elo domain).
+
+**Upgrade policy (bootstrap-first):** Sources begin at the cheapest viable option and are upgraded only when empirical ROI data justifies the cost. No paid APIs during Phase 2-3. Evaluate paid upgrades in Phase 5 when live trading begins.
+
+**Dual-axis trigger rule:** When a proposed integration spans both source and domain axes, it requires TWO reviews: (1) tier onboarding checklist for the source axis, and (2) a schema/reconciliation design session (S25 council or equivalent) for the domain axis. Neither review alone is sufficient.
+
+#### Part 6: Auth Credential Naming Policy
+
+The two-axis credential prefix from ADR-105 (`{PRECOG_ENV}_`) applies to **Tier A sources only**. Tier B and Tier C sources (which run offline and do not touch live execution environments) use unprefixed environment variables.
+
+| Tier | Pattern | Example |
+|------|---------|---------|
+| A: Continuous | `{PRECOG_ENV}_{PLATFORM}_API_KEY` | `DEV_KALSHI_API_KEY`, `PROD_ODDS_API_KEY` |
+| B: Periodic | `{PLATFORM}_API_KEY` (unprefixed) | `CFBD_API_KEY` |
+| C: Batch | N/A (usually no auth required) | — |
+
+**Rationale:** Tier A sources execute trades or write live data in an environment-specific context. A misconfigured `PROD_` credential in a dev run is a live-money risk. Tier B/C sources run offline against shared reference data; environment isolation is not a safety concern.
+
+#### Part 7: Tier B Mandatory Heartbeats
+
+**Problem:** CFBD is currently silent between CLI invocations. If the weekly classification sync has been failing for two weeks, there is no signal of this failure in the monitoring stack.
+
+**Decision:** Every Tier B source must write a `last_run` timestamp to `system_health` after each successful run, using `system_health.last_seen`. A lightweight `PeriodicMaintenanceRunner` (Phase 2, R7) will warn if any Tier B source's `last_seen` is more than `2 × expected_interval` stale.
+
+```python
+class PeriodicMaintenanceRunner:
+    """Runs Tier B sources on schedule and writes heartbeats."""
+
+    STALE_MULTIPLIER: ClassVar[float] = 2.0
+
+    def run_and_heartbeat(
+        self,
+        source: BaseDataSource,
+        component: SystemHealthComponent,
+        expected_interval: timedelta,
+    ) -> None:
+        try:
+            source.run()
+            upsert_system_health(component, status="healthy", ...)
+        except Exception as e:
+            upsert_system_health(component, status="degraded", details=str(e), ...)
+
+    def check_staleness(self) -> list[str]:
+        """Return component names whose last_seen exceeds 2x expected interval."""
+        ...
+```
+
+#### Part 8: The Odds API — Tier A Source Plan (Issue #451)
+
+The Odds API (#451) is classified **Tier A** (update frequency 1-5 minutes, own auth, own rate limits) with cost-tier 3 (paid/reliable). It requires:
+
+- A dedicated `OddsAPIClient` in `api_connectors/` (Fetch + Normalize responsibilities)
+- A dedicated `OddsAPIPoller` extending `BasePoller` in `schedulers/` (Deliver + scheduling)
+- A new `live_odds_snapshots` table with a `source` column (multiple bookmakers coexist in this table)
+- Registration in `SERVICE_FACTORIES` (Part 3)
+- `SystemHealthComponent.ODDS_API` entry (Part 2)
+
+The `live_odds_snapshots` table's `source` column is the first concrete instance of **multi-source coexistence at the table level**: DraftKings, FanDuel, and The Odds API aggregator all write to the same table with distinct `source` values. This is the table-level design that the MultiSourceReconciler (Part 9) operates above.
+
+#### Part 9: Multi-Source Reconciliation (Forward Design, Phase 4+)
+
+When the same data type (game state, odds) arrives from multiple providers simultaneously, a reconciliation layer must decide which value to use and with what confidence. This layer is **forward-designed here** but implemented in Phase 4, after at least two simultaneous Tier A sources are active.
+
+**GameStateProvider Protocol (formalized from ADR-076):**
+
+```python
+from typing import Protocol
+from dataclasses import dataclass
+from datetime import datetime
+
+@dataclass
+class GameState:
+    """Universal game state representation for all providers."""
+    game_id: str
+    home_team: str          # ESPN-normalized team code (canonical form)
+    away_team: str          # ESPN-normalized team code (canonical form)
+    home_score: int
+    away_score: int
+    period: int
+    time_remaining: str
+    situation: dict         # Sport-specific: down/distance (NFL), fouls (NBA)
+    timestamp: datetime
+    source: str             # Provider identifier (e.g., "espn", "sportradar")
+    latency_ms: int         # Time since the underlying event occurred
+    confidence: float       # 0.0-1.0 — based on source reliability tier
+
+class GameStateProvider(Protocol):
+    """Swappable interface for live game state sources."""
+
+    def get_live_state(self, game_id: str) -> GameState: ...
+    def get_latency_estimate(self) -> int: ...
+    def is_available(self) -> bool: ...
+```
+
+**MarketStateProvider Protocol (prediction markets — Kalshi, Polymarket, future platforms):**
+
+The same Provider pattern applies to the core product domain: prediction market data. When Kalshi and Polymarket both list the same event, we need cross-platform comparison, arbitrage detection, and platform-weighted edge calculation.
+
+```python
+from decimal import Decimal
+
+@dataclass
+class MarketState:
+    """Universal prediction market state representation."""
+    event_id: str               # Canonical event identifier (cross-platform)
+    platform: str               # "kalshi", "polymarket", etc.
+    market_id: str              # Platform-specific market identifier
+    event_description: str      # Human-readable event text
+    yes_price: Decimal          # Always Decimal, never float (ADR-002)
+    no_price: Decimal           # Always Decimal, never float
+    volume: int                 # Total contracts traded
+    open_interest: int          # Outstanding contracts
+    timestamp: datetime
+    latency_ms: int             # Time since last platform update
+    confidence: float           # 0.0-1.0 — platform reliability + data freshness
+
+class MarketStateProvider(Protocol):
+    """Swappable interface for prediction market platforms."""
+
+    def get_live_markets(self, series: str) -> list[MarketState]: ...
+    def get_latency_estimate(self) -> int: ...
+    def is_available(self) -> bool: ...
+```
+
+Cross-platform event matching — resolving "Kalshi event X = Polymarket event Y" — is a prerequisite for the MarketSourceReconciler and arbitrage detection. This requires a canonical event identity (similar to the games table's natural key for sports) and a cross-platform mapping table.
+
+**MultiSourceReconciler (generic pattern — applies to BOTH domains):**
+
+```python
+from typing import TypeVar, Generic
+
+T = TypeVar("T")  # GameState or MarketState
+
+class MultiSourceReconciler(Generic[T]):
+    """Sits above individual Providers for any multi-source domain.
+
+    When DraftKings reports -3.5 and FanDuel reports -4.0, the reconciler
+    produces a consensus value with a confidence score reflecting the
+    degree of agreement across sources. Same pattern applies to:
+    - Game state: ESPN vs Sportradar
+    - Market prices: Kalshi vs Polymarket (arbitrage detection)
+    - Betting lines: multiple bookmakers via The Odds API
+    """
+
+    def __init__(self, providers: list[Provider]):
+        self.providers = providers
+
+    def get_reconciled_state(self, entity_id: str) -> T:
+        """Fetch from all available providers, cross-check, return consensus."""
+        states = [
+            p.get_live_state(entity_id)
+            for p in self.providers
+            if p.is_available()
+        ]
+        if not states:
+            raise NoDataAvailableError(entity_id)
+        return self._reconcile(states)
+
+    def _reconcile(self, states: list[T]) -> T:
+        """Return state with highest confidence, weighted by source agreement."""
+        ...
+```
+
+**Confidence model design note:** The `confidence` field (0.0-1.0) is established as an architectural commitment: every multi-source data record MUST carry it. However, the confidence *algorithm* is deferred to a dedicated design session (Phase 4 pre-work). Key questions for that session include: (a) static vs. dynamic confidence per source (does ESPN always = 0.7, or does it decay with latency?), (b) agreement-based vs. reliability-weighted scoring, (c) temporal misalignment handling (source A at T, source B at T+15s), and (d) partial data reconciliation (source A has score but not clock). The reconciler's `_reconcile()` method is intentionally unspecified here — it requires empirical measurement of source behavior before a correct algorithm can be designed.
+
+**Data model implications for multi-source support:**
+
+| Table | Change Needed | Phase |
+|-------|--------------|-------|
+| `live_odds_snapshots` | `source` column (multiple bookmakers coexist) | Phase 2 (The Odds API) |
+| `market_snapshots` | `platform` column or separate per-platform tables for Polymarket | Phase 2 (Polymarket) |
+| Cross-platform event mapping | New table linking Kalshi events to Polymarket events | Phase 2 (Polymarket) |
+| `temporal_alignment` | Extend beyond 2-source pairs for multi-source | Phase 4 (Issue #445) |
+| `games.features JSONB` | Add `feature_set_version` contract for reproducibility | Phase 4 |
+| `training_datasets` | New table for model reproducibility | Phase 5 |
+
+**Confidence field policy:** Every data record from a domain where multiple sources may provide the same data MUST carry `source` (or `platform`) provenance and a `confidence` field (0.0-1.0). This enables the feature engineering layer (Phase 5) to weight sources appropriately without retroactive data re-ingestion. For the Prediction Markets domain specifically, the `platform` field enables arbitrage detection queries: `SELECT * FROM market_snapshots WHERE event_id = X GROUP BY platform HAVING MAX(yes_price) - MIN(yes_price) > threshold`.
+
+#### Part 10: Strategy Latency Tolerance Requirements
+
+The update cadence tier of a source determines which strategy types can rely on it. This formalizes the table from ADR-076 with updated tier labels:
+
+| Strategy Type | Max Tolerable Latency | Minimum Source Tier | Notes |
+|--------------|----------------------|--------------------|-|
+| Pre-game (spreads, totals) | Hours | C (Batch) | Data before game starts |
+| Live game (quarter/half props) | 30-60 seconds | A2 (ESPN acceptable) | Props move slowly |
+| Live in-game (next play, drive) | 5-10 seconds | A2/A3 | May need paid for high-value |
+| Live scalping (rapid exits) | Sub-second | A3 ONLY (paid) | Never ESPN, never free |
+
+No paid APIs during Phase 2-3. The first live strategies must be designed around ESPN's empirically-measured latency (~30-60 seconds). Phase 5 ROI evaluation determines if any strategy justifies paid upgrade.
+
+### Alternatives Rejected
+
+**"Client + Adapter + Poller" as three mandatory separate layers:**
+
+This was the framing in the original Issue #490 description. It was rejected because it does not match the actual code: Kalshi and ESPN do not have a separate "Adapter" class — the Client performs fetch + normalize + deliver with no intermediate layer. Mandating three layers for all sources would create artificial abstractions. The correct model is three **responsibilities** (Fetch, Normalize, Deliver), not three mandatory **classes**.
+
+**Single flat directory for all sources:**
+
+An alternative was to put all source code (live and batch) under a single `sources/` package, organizing by platform rather than by cadence. Rejected because: (a) the live/batch distinction is already established and tested (ADR-103/ADR-106 boundary), (b) the ServiceSupervisor only manages Tier A sources and should not need to know about Tier B/C, and (c) Pattern 41 obligations differ materially by tier — co-location would blur these distinctions.
+
+**Single `system_health` component per source (no registry change):**
+
+An alternative was to keep the CHECK constraint and add migration-per-source. Rejected because: (a) adding a monitoring component should not require a database migration, (b) the constraint provides no query-time benefit (it is not referenced by any FK or index), and (c) moving validation to the application layer is strictly more flexible with identical correctness guarantees.
+
+**Uniform Pattern 41 obligations for all tiers:**
+
+Requiring all 6 P41 capabilities (monitoring, maintenance, logging, reporting, self-healing, scheduling) for every source including batch scripts was proposed for consistency. Rejected because: a one-time historical data loader has no meaningful "scheduling" or "self-healing" requirement. Tier-differentiated P41 is the correct model — obligations scale with operational impact.
+
+**Immediate paid API adoption:**
+
+Galadriel flagged that committing to paid sources before proving strategy profitability inverts the risk/reward. Bootstrap-first (free → measure → upgrade on ROI) was unanimous. The bootstrap-first principle is codified: no paid API contracts during Phase 2-3.
+
+### Consequences
+
+**Positive:**
+
+- Every future source has a clear onboarding checklist determined by its tier declaration
+- Adding a new Tier A source requires no schema migration for `system_health` (after migration 0043)
+- The ServiceSupervisor registry pattern allows new services to be registered without modifying the factory function
+- The two-axis classification (cadence + cost) separates operational concerns from business planning
+- Multi-source data coexistence is forward-designed before the second live odds source ships
+- Tier B sources gain heartbeat visibility — silent failures become observable
+- The auth credential policy is explicit, reducing the risk of credential leakage across environments
+
+**Negative:**
+
+- Migration 0043 is a prerequisite blocker — cannot ship The Odds API until the CHECK constraint is removed
+- The ServiceSupervisor registry refactor touches a high-traffic, high-risk module
+- `TeamCodeService` consolidation (R6) is a Phase 5 dependency — until then, three normalization paths coexist
+- Tier A source onboarding is significantly more work than Tier B/C (all 6 P41 capabilities required)
+
+**Neutral:**
+
+- ADR-076's business-tier labels (Historical/Dev/Production) are preserved but repositioned as Axis 2, subordinate to the cadence-based Axis 1 that governs code structure
+- The GameStateProvider Protocol and MultiSourceReconciler documented here supersede the earlier sketches in ADR-076, which remain as historical context
+
+### Implementation Roadmap
+
+Ordered by urgency; items marked with a phase indicate the earliest phase in which they are required:
+
+| ID | Action | When Required | Notes |
+|----|--------|--------------|-------|
+| R1 | Write this ADR (session 26) | Now | Prerequisite for everything else |
+| R2 | Remove `system_health` CHECK constraint (migration 0043) | Before Phase 2 adds 3rd Tier A source | Unblocks The Odds API + any future Tier A |
+| R3 | Refactor `ServiceSupervisor` to registry pattern | Before 3rd Tier A source | Blocks The Odds API supervisor integration |
+| R4 | Enforce auth credential naming policy (Part 6) | Next new source | Document in onboarding checklist, enforce in code review |
+| R5 | Fix `KalshiAuth` to accept PEM content (not file path) | Phase 7 (Railway migration) | File paths are not cloud-compatible |
+| R6 | Canonical `TeamCodeService` consolidating team_history.py + ESPNTeamValidator + TeamCodeRegistry | Before Phase 5 | Required before multi-source normalization conflicts arise |
+| R7 | `PeriodicMaintenanceRunner` for Tier B heartbeats | Phase 2 | CFBD silent failure gap |
+| R8 | Shared test mock harness for external API clients | Before 3rd live source | Prevents per-source mock duplication |
+| R9 | Polymarket client + poller (Tier A3-PredictionMarkets) | Phase 2 (early) | First cross-platform prediction market source |
+| R10 | Cross-platform event matching table + mapping | Phase 2 (with Polymarket) | "Kalshi event X = Polymarket event Y" — prerequisite for arbitrage |
+| R11 | Confidence model design session | Phase 4 (pre-work) | Dedicated session for reconciliation algorithm — not implementable without empirical source data |
+
+### Revisit Triggers
+
+Re-evaluate this ADR when:
+
+- The **third Tier A live source ships** — the registry pattern (R3) must be in place; if it is not, stop and implement R2+R3 first
+- **Phase 4 backtesting begins** — `temporal_alignment` table (#445) must have shipped; multi-source extension of the 2-source design must be scoped
+- **Any source is promoted between tiers** — a Tier B source becoming Tier A (e.g., CFBD promoting to real-time) requires the full Tier A onboarding checklist, not just a code move
+- **Railway migration begins (Phase 7)** — RSA key file paths (R5) need cloud-compatible alternatives; `KALSHI_PRIVATE_KEY_CONTENT` env var pattern must be standardized
+- **A second simultaneous live odds source is added** — triggers `MultiSourceReconciler` implementation and `live_odds_snapshots.source` column design (Part 9)
+- **Polymarket integration begins** — triggers MarketStateProvider design, cross-platform event matching table, and arbitrage detection framework (R9, R10). This is a dual-axis integration (new source + overlapping Prediction Markets domain) requiring both tier onboarding and schema design
+
+### References
+
+- ADR-100: Service Supervisor Pattern (supervisor orchestration)
+- ADR-103: BasePoller Unified Design Pattern (Tier A live polling contract)
+- ADR-105: Two-Axis Environment Configuration (credential prefix policy)
+- ADR-106: Historical Data Collection Architecture (Tier B/C batch seeding contract)
+- ADR-111: Sport-Specific Team Code Mappings (team code normalization context)
+- ADR-076: Sports Data Source Tiering Strategy (bootstrap-first principle, GameStateProvider origin)
+- Pattern 41: Production-Readiness Checklist (P41 capability obligations by tier)
+- Issue #490: External Data Source Architecture ADR (this ADR)
+- Issue #451: The Odds API evaluation (first Tier A3 source)
+- Issue #489: CBBD integration (NCAAB Tier B source)
+- Issue #445: temporal_alignment implementation (Phase 4 blocker)
+- Issue #343: WebSocket-primary architecture (Phase 4 Tier A design)
+- `src/precog/schedulers/service_supervisor.py` (current factory pattern being replaced)
+- `src/precog/schedulers/base_poller.py` (BasePoller — Tier A base class)
+- `src/precog/database/seeding/sources/` (Tier B/C source location)
+
+---
+
 ## Approval & Sign-off
 
 This document represents the architectural decisions as of October 22, 2025 (Phase 0.5 completion with standardization).
@@ -16321,9 +16825,10 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 ---
 
-**Document Version:** 2.34
-**Last Updated:** March 12, 2026
+**Document Version:** 2.35
+**Last Updated:** March 27, 2026
 **Critical Changes:**
+- v2.35: **EXTERNAL DATA SOURCE ARCHITECTURE** - Added Decision #114/ADR-114 (External Data Source Architecture — Three-Tier Pattern with Multi-Source Reconciliation). Three-tier cadence classification (A/B/C), three-axis source model (cadence + cost + domain), system_health CHECK constraint removal (migration 0043), ServiceSupervisor registry pattern, auth credential naming policy, Tier B mandatory heartbeats, GameStateProvider Protocol, MarketStateProvider Protocol (Polymarket + cross-platform arbitrage), MultiSourceReconciler generic pattern, confidence model commitment, strategy latency tolerance table, bootstrap-first principle, dual-axis trigger rule, R1-R11 implementation roadmap. Issues #490, #451, #489, #445, #343.
 - v2.34: **FASTAPI WEB BACKEND** - Added Decision #113/ADR-113 (FastAPI as Web Backend for Manual Trade Placement MVP). FastAPI + uvicorn as ASGI server, `src/precog/web/` package, Pydantic Decimal serialization, two-axis environment integration, 9-step build order. Issue #322, Phase 2 Gate Review blocker B2.
 - v2.33: **ERA 1 DOCUMENTATION** - Neil Paine data source migration, NCAAF validation, sport-specific mappings, team_season_records VIEW.
 - v2.32: **ELO RATING COMPUTATION ENGINE** - Added Decision #109/ADR-109 (Elo Rating Computation Engine Architecture with multi-sport support, sport-specific K-factors, EPA integration, data source migration). Issue #273, REQ-ELO-001 through REQ-ELO-007. FiveThirtyEight shutdown noted, nfl_data_py deprecation documented.
