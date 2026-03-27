@@ -3190,7 +3190,11 @@ def create_team(
 
     Lookup order:
         1. By (espn_team_id, league) if espn_team_id is provided
-        2. By (team_code, sport, league) as fallback
+        2. By (team_code, sport, league) — ONLY when espn_team_id is None.
+           When espn_team_id is provided but Step 1 finds no match, the team
+           is genuinely new. Falling back to code lookup would match a
+           DIFFERENT team with the same abbreviation (e.g., two "MISS" teams
+           in NCAAF — Ole Miss and Mississippi State).
 
     Args:
         team_code: Abbreviation code (e.g., 'KC', 'BOS', 'TBL')
@@ -3251,19 +3255,24 @@ def create_team(
             return team_id
 
     # Step 2: Fall back to lookup by (team_code, sport, league)
-    existing = fetch_one(
-        "SELECT team_id FROM teams WHERE team_code = %s AND sport = %s AND league = %s",
-        (team_code, sport, league),
-    )
-    if existing:
-        team_id = int(existing["team_id"] if isinstance(existing, dict) else existing[0])
-        logger.debug(
-            "Team found by code: %s %s (team_id=%d)",
-            league.upper(),
-            team_code,
-            team_id,
+    # ONLY when espn_team_id is not provided. When ESPN gives us a team_id
+    # and Step 1 didn't find it, the team is genuinely new — the code
+    # fallback would match a DIFFERENT team with the same abbreviation
+    # (college sports have many code collisions, e.g., two "MISS" in NCAAF).
+    if not espn_team_id:
+        existing = fetch_one(
+            "SELECT team_id FROM teams WHERE team_code = %s AND sport = %s AND league = %s",
+            (team_code, sport, league),
         )
-        return team_id
+        if existing:
+            team_id = int(existing["team_id"] if isinstance(existing, dict) else existing[0])
+            logger.debug(
+                "Team found by code: %s %s (team_id=%d)",
+                league.upper(),
+                team_code,
+                team_id,
+            )
+            return team_id
 
     # Step 3: Team doesn't exist — INSERT it
     insert_query = """
@@ -3313,7 +3322,7 @@ def create_team(
             espn_team_id,
             league,
         )
-        # Try ESPN ID first, then team_code
+        # Try ESPN ID first, then team_code (same guard as Step 2)
         if espn_team_id:
             conflicting = fetch_one(
                 "SELECT team_id FROM teams WHERE espn_team_id = %s AND league = %s",
@@ -3323,12 +3332,17 @@ def create_team(
                 return int(
                     conflicting["team_id"] if isinstance(conflicting, dict) else conflicting[0]
                 )
-        conflicting = fetch_one(
-            "SELECT team_id FROM teams WHERE team_code = %s AND sport = %s AND league = %s",
-            (team_code, sport, league),
-        )
-        if conflicting:
-            return int(conflicting["team_id"] if isinstance(conflicting, dict) else conflicting[0])
+        # Code fallback only when no ESPN ID — prevents same collision
+        # bug as Step 2 (defense-in-depth, see #486)
+        if not espn_team_id:
+            conflicting = fetch_one(
+                "SELECT team_id FROM teams WHERE team_code = %s AND sport = %s AND league = %s",
+                (team_code, sport, league),
+            )
+            if conflicting:
+                return int(
+                    conflicting["team_id"] if isinstance(conflicting, dict) else conflicting[0]
+                )
 
     # Should not reach here, but defensive
     raise ValueError(f"Failed to create or find team: {team_code} ({sport}/{league})")
@@ -5287,6 +5301,46 @@ def update_team_elo_rating(
     """
     with get_cursor(commit=True) as cur:
         cur.execute(query, (new_rating, team_id))
+        return int(cur.rowcount or 0) > 0
+
+
+def update_team_classification(
+    team_id: int,
+    classification: str | None = None,
+    conference: str | None = None,
+) -> bool:
+    """Update a team's classification and/or conference.
+
+    Used by the CFBD backfill to populate division classification
+    (FBS/FCS/D2/D3/professional) and conference for teams that were
+    auto-created without this data.
+
+    Args:
+        team_id: Primary key of the team
+        classification: Division classification (fbs, fcs, d2, d3, professional)
+        conference: Conference name (SEC, Big Ten, etc.)
+
+    Returns:
+        True if update succeeded, False if team not found
+
+    Example:
+        >>> update_team_classification(42, classification="fbs", conference="SEC")
+    """
+    sets = []
+    params: list[Any] = []
+    if classification is not None:
+        sets.append("classification = %s")
+        params.append(classification)
+    if conference is not None:
+        sets.append("conference = %s")
+        params.append(conference)
+    if not sets:
+        return False
+    sets.append("updated_at = NOW()")
+    params.append(team_id)
+    query = f"UPDATE teams SET {', '.join(sets)} WHERE team_id = %s"  # noqa: S608
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, tuple(params))
         return int(cur.rowcount or 0) > 0
 
 
@@ -8830,7 +8884,7 @@ def get_teams_with_kalshi_codes(league: str | None = None) -> list[dict[str, Any
 
     Returns:
         List of team dicts with keys: team_id, team_code, league,
-        kalshi_team_code (may be None).
+        kalshi_team_code (may be None), classification (may be None).
 
     Example:
         >>> teams = get_teams_with_kalshi_codes("nfl")
@@ -8844,7 +8898,7 @@ def get_teams_with_kalshi_codes(league: str | None = None) -> list[dict[str, Any
     """
     if league:
         query = """
-            SELECT team_id, team_code, league, kalshi_team_code
+            SELECT team_id, team_code, league, kalshi_team_code, classification
             FROM teams
             WHERE league = %s
             ORDER BY team_code
@@ -8852,7 +8906,7 @@ def get_teams_with_kalshi_codes(league: str | None = None) -> list[dict[str, Any
         return fetch_all(query, (league,))
 
     query = """
-        SELECT team_id, team_code, league, kalshi_team_code
+        SELECT team_id, team_code, league, kalshi_team_code, classification
         FROM teams
         ORDER BY league, team_code
     """

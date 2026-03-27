@@ -8,6 +8,8 @@ Commands:
     verify  - Verify seed data exists
     stats   - Show data statistics
     sources - List available data sources
+    matching stats/backfill/refresh - Event-to-game matching
+    teams classification/refresh-cfbd - Team classification coverage
 
 Usage:
     precog data seed --type teams
@@ -27,7 +29,7 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import typer
 from rich.table import Table
@@ -2068,5 +2070,216 @@ def matching_refresh(
             ExitCode.DATABASE_ERROR,
             hint="Check database connection",
         )
+
+    console.print()
+
+
+# =============================================================================
+# Teams Subcommand Group
+# =============================================================================
+
+teams_app = typer.Typer(
+    name="teams",
+    help="Team data operations (classification, CFBD refresh)",
+    no_args_is_help=True,
+)
+app.add_typer(teams_app, name="teams")
+
+
+@teams_app.command(
+    "classification",
+    help="Show team classification coverage by league.",
+    epilog="Example: precog data teams classification",
+)
+def teams_classification(
+    league: str | None = typer.Option(
+        None,
+        "--league",
+        "-l",
+        help="Filter by league (nfl, nba, ncaaf, etc.)",
+    ),
+) -> None:
+    """Show team classification coverage by league.
+
+    Displays how many teams have classification data (FBS/FCS/D2/D3/
+    professional) vs NULL, broken down by league. Useful for monitoring
+    data quality after CFBD backfills.
+
+    Examples:
+        precog data teams classification
+        precog data teams classification --league ncaaf
+    """
+    console.print("\n[bold cyan]Team Classification Coverage[/bold cyan]\n")
+
+    try:
+        from precog.database.crud_operations import fetch_all as db_fetch_all
+
+        if league:
+            rows = db_fetch_all(
+                "SELECT league, classification, COUNT(*) AS cnt "
+                "FROM teams WHERE league = %s "
+                "GROUP BY league, classification "
+                "ORDER BY league, classification",
+                (league,),
+            )
+        else:
+            rows = db_fetch_all(
+                "SELECT league, classification, COUNT(*) AS cnt "
+                "FROM teams "
+                "GROUP BY league, classification "
+                "ORDER BY league, classification",
+            )
+
+        if not rows:
+            console.print("[dim]No teams found[/dim]")
+            return
+
+        cls_table = Table(show_header=True, header_style="bold")
+        cls_table.add_column("League")
+        cls_table.add_column("Classification")
+        cls_table.add_column("Count", justify="right")
+
+        total_classified = 0
+        total_null = 0
+        for row in rows:
+            row_league = row["league"]
+            row_cls = row["classification"]
+            cnt = int(row["cnt"])
+            display_cls = row_cls or "[dim]NULL[/dim]"
+            cls_table.add_row(row_league.upper(), display_cls, f"{cnt:,}")
+            if row_cls:
+                total_classified += cnt
+            else:
+                total_null += cnt
+
+        console.print(cls_table)
+
+        total = total_classified + total_null
+        # NOTE: float is intentional — ratio of counts, not a price
+        pct = (total_classified / total * 100) if total > 0 else 0.0
+        console.print(
+            f"\n[bold]Total:[/bold] {total_classified:,}/{total:,} classified ({pct:.1f}%)"
+        )
+        if total_null > 0:
+            console.print(
+                "[dim]Hint: Run 'precog data teams refresh-cfbd' to classify "
+                "NCAAF teams via CFBD API[/dim]"
+            )
+
+    except Exception as e:
+        cli_error(
+            f"Failed to get classification stats: {e}",
+            ExitCode.DATABASE_ERROR,
+            hint="Check database connection",
+        )
+
+    console.print()
+
+
+@teams_app.command(
+    "refresh-cfbd",
+    help="Populate team classifications from CFBD API.",
+    epilog="Example: precog data teams refresh-cfbd",
+)
+def teams_refresh_cfbd(
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        "-n",
+        help="Show what would be updated without making changes",
+    ),
+) -> None:
+    """Fetch team classifications from CFBD API and update the teams table.
+
+    Matches CFBD teams to our teams by abbreviation and updates the
+    classification and conference columns. Only updates teams with NULL
+    classification (won't overwrite existing values).
+
+    Requires CFBD_API_KEY environment variable to be set.
+    Get a free key at: https://collegefootballdata.com
+
+    Examples:
+        precog data teams refresh-cfbd
+        precog data teams refresh-cfbd --dry-run
+    """
+    console.print("\n[bold cyan]CFBD Classification Refresh[/bold cyan]\n")
+
+    try:
+        from precog.database.crud_operations import fetch_all, update_team_classification
+        from precog.database.seeding.sources.sports.cfbd_adapter import CFBDSource
+
+        # Step 1: Fetch from CFBD
+        console.print("[dim]Connecting to CFBD API...[/dim]")
+        source = CFBDSource()
+        cfbd_teams = source.get_team_classifications()
+        console.print(f"[dim]CFBD returned {len(cfbd_teams)} classified teams[/dim]\n")
+
+        # Build lookup by abbreviation
+        cfbd_by_code: dict[str, dict[str, Any]] = {}
+        for t in cfbd_teams:
+            abbr = t.get("abbreviation")
+            if abbr:
+                cfbd_by_code[abbr.upper()] = dict(t)
+
+        # Step 2: Find NCAAF teams with NULL classification
+        our_teams = fetch_all(
+            "SELECT team_id, team_code, team_name, classification "
+            "FROM teams WHERE league = 'ncaaf' AND classification IS NULL "
+            "ORDER BY team_code",
+        )
+        console.print(f"NCAAF teams with NULL classification: {len(our_teams)}")
+
+        # Step 3: Match and update
+        matched = 0
+        updated = 0
+        for team in our_teams:
+            code = team["team_code"].upper()
+            cfbd_match = cfbd_by_code.get(code)
+            if cfbd_match:
+                matched += 1
+                if dry_run:
+                    console.print(
+                        f"  [dim]Would update {code}: "
+                        f"{cfbd_match['classification']} ({cfbd_match.get('conference', '?')})[/dim]"
+                    )
+                else:
+                    success = update_team_classification(
+                        team["team_id"],
+                        classification=cfbd_match["classification"],
+                        conference=cfbd_match.get("conference"),
+                    )
+                    if success:
+                        updated += 1
+
+        source.close()
+
+        # Report
+        if dry_run:
+            console.print(f"\n[bold]Dry run:[/bold] Would update {matched} teams")
+        elif updated > 0:
+            echo_success(f"Updated {updated} teams with CFBD classifications")
+        else:
+            console.print("[dim]No teams needed updating[/dim]")
+
+        unmatched = len(our_teams) - matched
+        if unmatched > 0:
+            console.print(
+                f"[dim]{unmatched} teams not found in CFBD (likely NAIA/club programs)[/dim]"
+            )
+
+    except Exception as e:
+        error_msg = str(e)
+        if "CFBD_API_KEY" in error_msg:
+            cli_error(
+                "CFBD API key not configured",
+                ExitCode.CONFIG_ERROR,
+                hint="Set CFBD_API_KEY in .env (free key from collegefootballdata.com)",
+            )
+        else:
+            cli_error(
+                f"CFBD refresh failed: {e}",
+                ExitCode.NETWORK_ERROR,
+                hint="Check CFBD_API_KEY and network connectivity",
+            )
 
     console.print()

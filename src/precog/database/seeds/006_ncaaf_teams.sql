@@ -40,7 +40,7 @@ INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_
 ('MSU', 'Michigan State Spartans', 'Michigan State', 'football', 'ncaaf', '127', 1440, 'Big Ten', NULL),
 ('MINN', 'Minnesota Golden Gophers', 'Minnesota', 'football', 'ncaaf', '135', 1480, 'Big Ten', NULL),
 ('NEB', 'Nebraska Cornhuskers', 'Nebraska', 'football', 'ncaaf', '158', 1480, 'Big Ten', NULL),
-('NW', 'Northwestern Wildcats', 'Northwestern', 'football', 'ncaaf', '77', 1420, 'Big Ten', NULL),
+('NU', 'Northwestern Wildcats', 'Northwestern', 'football', 'ncaaf', '77', 1420, 'Big Ten', NULL),
 ('OSU', 'Ohio State Buckeyes', 'Ohio State', 'football', 'ncaaf', '194', 1680, 'Big Ten', NULL),
 ('ORE', 'Oregon Ducks', 'Oregon', 'football', 'ncaaf', '2483', 1680, 'Big Ten', NULL),
 ('PSU', 'Penn State Nittany Lions', 'Penn State', 'football', 'ncaaf', '213', 1620, 'Big Ten', NULL),
@@ -79,7 +79,7 @@ INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_
 ('LOU', 'Louisville Cardinals', 'Louisville', 'football', 'ncaaf', '97', 1520, 'ACC', NULL),
 ('MIA', 'Miami Hurricanes', 'Miami', 'football', 'ncaaf', '2390', 1600, 'ACC', NULL),
 ('NC', 'North Carolina Tar Heels', 'North Carolina', 'football', 'ncaaf', '153', 1480, 'ACC', NULL),
-('NCST', 'NC State Wolfpack', 'NC State', 'football', 'ncaaf', '152', 1500, 'ACC', NULL),
+('NCSU', 'NC State Wolfpack', 'NC State', 'football', 'ncaaf', '152', 1500, 'ACC', NULL),
 ('PITT', 'Pittsburgh Panthers', 'Pitt', 'football', 'ncaaf', '221', 1500, 'ACC', NULL),
 ('SMU', 'SMU Mustangs', 'SMU', 'football', 'ncaaf', '2567', 1580, 'ACC', NULL),
 ('STAN', 'Stanford Cardinal', 'Stanford', 'football', 'ncaaf', '24', 1380, 'ACC', NULL),
@@ -89,7 +89,7 @@ INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_
 ('WAKE', 'Wake Forest Demon Deacons', 'Wake Forest', 'football', 'ncaaf', '154', 1440, 'ACC', NULL),
 
 -- TOP GROUP OF 5 (12 Teams - Playoff Contenders)
-('BSU', 'Boise State Broncos', 'Boise State', 'football', 'ncaaf', '68', 1580, 'Mountain West', NULL),
+('BOIS', 'Boise State Broncos', 'Boise State', 'football', 'ncaaf', '68', 1580, 'Mountain West', NULL),
 ('APP', 'Appalachian State Mountaineers', 'App State', 'football', 'ncaaf', '2026', 1520, 'Sun Belt', NULL),
 ('JMU', 'James Madison Dukes', 'James Madison', 'football', 'ncaaf', '256', 1540, 'Sun Belt', NULL),
 ('LT', 'Louisiana Tech Bulldogs', 'Louisiana Tech', 'football', 'ncaaf', '2348', 1460, 'Conference USA', NULL),
@@ -98,7 +98,7 @@ INSERT INTO teams (team_code, team_name, display_name, sport, league, espn_team_
 ('ARMY', 'Army Black Knights', 'Army', 'football', 'ncaaf', '349', 1560, 'American', NULL),
 ('SDSU', 'San Diego State Aztecs', 'San Diego State', 'football', 'ncaaf', '21', 1480, 'Mountain West', NULL),
 ('SJSU', 'San Jose State Spartans', 'San Jose State', 'football', 'ncaaf', '23', 1440, 'Mountain West', NULL),
-('TLNE', 'Tulane Green Wave', 'Tulane', 'football', 'ncaaf', '2655', 1520, 'American', NULL),
+('TULN', 'Tulane Green Wave', 'Tulane', 'football', 'ncaaf', '2655', 1520, 'American', NULL),
 ('USF', 'South Florida Bulls', 'South Florida', 'football', 'ncaaf', '58', 1480, 'American', NULL),
 ('NIU', 'Northern Illinois Huskies', 'Northern Illinois', 'football', 'ncaaf', '2459', 1480, 'MAC', NULL),
 

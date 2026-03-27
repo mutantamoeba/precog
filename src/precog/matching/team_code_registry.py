@@ -34,6 +34,20 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 
+# Classification priority for code collision disambiguation.
+# FBS/FCS win over D2/D3/NULL because Kalshi only trades FBS/FCS markets.
+# Higher number = higher priority.
+CLASSIFICATION_PRIORITY: dict[str | None, int] = {
+    "fbs": 5,
+    "fcs": 4,
+    "professional": 3,
+    "d1": 2,
+    "d2": 1,
+    "d3": 1,
+    None: 0,
+}
+
+
 class TeamCodeRegistry:
     """Cache of team code mappings for fast lookup during matching.
 
@@ -42,6 +56,8 @@ class TeamCodeRegistry:
             Maps Kalshi team codes to canonical ESPN team codes per league.
         _kalshi_codes: dict[league, set[str]]
             All valid Kalshi codes per league (for ticker splitting).
+        _classification: dict[league, dict[kalshi_code, str|None]]
+            Tracks classification per code for disambiguation logging.
         _loaded: Whether the registry has been loaded from DB.
 
     Usage:
@@ -58,6 +74,7 @@ class TeamCodeRegistry:
         """Initialize empty registry. Call load() before use."""
         self._kalshi_to_espn: dict[str, dict[str, str]] = {}
         self._kalshi_codes: dict[str, set[str]] = {}
+        self._classification: dict[str, dict[str, str | None]] = {}
         self._loaded: bool = False
         self._last_loaded_at: datetime | None = None
         self._unknown_codes_seen: set[str] = set()
@@ -175,6 +192,11 @@ class TeamCodeRegistry:
     def _build_cache(self, teams: list[dict[str, Any]], league: str | None) -> None:
         """Build internal cache from team data.
 
+        When multiple teams share the same Kalshi code within a league
+        (common in college sports), the team with the higher classification
+        priority wins. FBS/FCS are preferred because Kalshi only trades
+        those divisions.
+
         Args:
             teams: List of team dicts from DB or test data.
             league: If provided, only clear/rebuild that league's data.
@@ -183,15 +205,18 @@ class TeamCodeRegistry:
             # Clear only the specified league
             self._kalshi_to_espn.pop(league, None)
             self._kalshi_codes.pop(league, None)
+            self._classification.pop(league, None)
         else:
             # Clear all
             self._kalshi_to_espn.clear()
             self._kalshi_codes.clear()
+            self._classification.clear()
 
         for team in teams:
             team_code = team.get("team_code", "")
             team_league = team.get("league", "")
             kalshi_code = team.get("kalshi_team_code")
+            classification = team.get("classification")
 
             if not team_code or not team_league:
                 continue
@@ -200,17 +225,44 @@ class TeamCodeRegistry:
             if team_league not in self._kalshi_to_espn:
                 self._kalshi_to_espn[team_league] = {}
                 self._kalshi_codes[team_league] = set()
+                self._classification[team_league] = {}
 
-            if kalshi_code:
-                # Explicit Kalshi code differs from ESPN code
-                upper_kalshi = kalshi_code.upper()
-                self._kalshi_to_espn[team_league][upper_kalshi] = team_code
-                self._kalshi_codes[team_league].add(upper_kalshi)
-            else:
-                # Kalshi code is same as ESPN code (most teams)
-                upper_code = team_code.upper()
-                self._kalshi_to_espn[team_league][upper_code] = team_code
-                self._kalshi_codes[team_league].add(upper_code)
+            # Determine the effective Kalshi code for this team
+            effective_code = kalshi_code.upper() if kalshi_code else team_code.upper()
+
+            # Check for code collision
+            existing_cls = self._classification[team_league].get(effective_code)
+            new_priority = CLASSIFICATION_PRIORITY.get(classification, 0)
+            existing_priority = CLASSIFICATION_PRIORITY.get(existing_cls, 0)
+
+            if effective_code in self._kalshi_to_espn[team_league]:
+                if new_priority <= existing_priority:
+                    # Existing team has equal or higher priority — skip
+                    logger.debug(
+                        "Code collision: %s:%s — keeping %s (%s) over %s (%s)",
+                        team_league,
+                        effective_code,
+                        self._kalshi_to_espn[team_league][effective_code],
+                        existing_cls or "unclassified",
+                        team_code,
+                        classification or "unclassified",
+                    )
+                    continue
+                # New team has higher priority — replace
+                old_code = self._kalshi_to_espn[team_league][effective_code]
+                logger.info(
+                    "Code collision resolved: %s:%s — %s (%s) replaces %s (%s)",
+                    team_league,
+                    effective_code,
+                    team_code,
+                    classification or "unclassified",
+                    old_code,
+                    existing_cls or "unclassified",
+                )
+
+            self._kalshi_to_espn[team_league][effective_code] = team_code
+            self._kalshi_codes[team_league].add(effective_code)
+            self._classification[team_league][effective_code] = classification
 
     def resolve_kalshi_to_espn(self, kalshi_code: str, league: str) -> str | None:
         """Resolve a Kalshi team code to the canonical ESPN/DB team_code.

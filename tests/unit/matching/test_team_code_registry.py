@@ -327,3 +327,171 @@ class TestNeedsRefresh:
         # (but could be flaky if load is instant). Use 1 second for safety.
         registry._last_loaded_at = datetime.now(UTC) - timedelta(seconds=2)
         assert registry.needs_refresh(max_age_seconds=1)
+
+
+# =============================================================================
+# Classification Collision Tests (#486 Task D)
+# =============================================================================
+
+
+# Two NCAAF teams with the same code but different classifications
+NCAAF_COLLISION_TEAMS: list[dict] = [
+    # D3 team loaded first (by alphabetical order from DB)
+    {"team_code": "MISS", "league": "ncaaf", "kalshi_team_code": None, "classification": "d3"},
+    # FBS team loaded second — should WIN because FBS > D3
+    {"team_code": "MISS", "league": "ncaaf", "kalshi_team_code": None, "classification": "fbs"},
+]
+
+
+class TestClassificationCollision:
+    """Tests for classification-based disambiguation when team codes collide."""
+
+    def test_fbs_wins_over_d3_same_code(self) -> None:
+        """When two teams share a code, FBS wins over D3."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(NCAAF_COLLISION_TEAMS)
+
+        # MISS should resolve to the FBS team (second in list)
+        result = registry.resolve_kalshi_to_espn("MISS", "ncaaf")
+        assert result == "MISS"
+        # The classification stored should be fbs
+        assert registry._classification["ncaaf"]["MISS"] == "fbs"
+
+    def test_fbs_wins_over_fcs(self) -> None:
+        """FBS has higher priority than FCS."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(
+            [
+                {
+                    "team_code": "CODE",
+                    "league": "ncaaf",
+                    "kalshi_team_code": None,
+                    "classification": "fcs",
+                },
+                {
+                    "team_code": "CODE",
+                    "league": "ncaaf",
+                    "kalshi_team_code": None,
+                    "classification": "fbs",
+                },
+            ]
+        )
+        assert registry._classification["ncaaf"]["CODE"] == "fbs"
+
+    def test_fcs_wins_over_d2(self) -> None:
+        """FCS has higher priority than D2."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(
+            [
+                {
+                    "team_code": "XYZ",
+                    "league": "ncaaf",
+                    "kalshi_team_code": None,
+                    "classification": "d2",
+                },
+                {
+                    "team_code": "XYZ",
+                    "league": "ncaaf",
+                    "kalshi_team_code": None,
+                    "classification": "fcs",
+                },
+            ]
+        )
+        assert registry._classification["ncaaf"]["XYZ"] == "fcs"
+
+    def test_first_wins_on_equal_priority(self) -> None:
+        """When two teams have equal classification priority, first loaded wins."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(
+            [
+                {
+                    "team_code": "AAA",
+                    "league": "ncaaf",
+                    "kalshi_team_code": None,
+                    "classification": "d2",
+                },
+                {
+                    "team_code": "AAA",
+                    "league": "ncaaf",
+                    "kalshi_team_code": None,
+                    "classification": "d3",
+                },
+            ]
+        )
+        # Both d2 and d3 have priority 1, so first loaded (d2) should win
+        assert registry._classification["ncaaf"]["AAA"] == "d2"
+
+    def test_classified_wins_over_null(self) -> None:
+        """Any classification wins over NULL."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(
+            [
+                {
+                    "team_code": "BBB",
+                    "league": "ncaaf",
+                    "kalshi_team_code": None,
+                    "classification": None,
+                },
+                {
+                    "team_code": "BBB",
+                    "league": "ncaaf",
+                    "kalshi_team_code": None,
+                    "classification": "d3",
+                },
+            ]
+        )
+        assert registry._classification["ncaaf"]["BBB"] == "d3"
+
+    def test_no_collision_in_pro_leagues(self) -> None:
+        """Pro leagues have unique codes, no collision logic needed."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(
+            [
+                {
+                    "team_code": "HOU",
+                    "league": "nfl",
+                    "kalshi_team_code": None,
+                    "classification": "professional",
+                },
+            ]
+        )
+        assert registry.resolve_kalshi_to_espn("HOU", "nfl") == "HOU"
+        assert registry._classification["nfl"]["HOU"] == "professional"
+
+    def test_collision_does_not_affect_other_leagues(self) -> None:
+        """NCAAF collision doesn't affect NFL codes."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(
+            [
+                {
+                    "team_code": "HOU",
+                    "league": "nfl",
+                    "kalshi_team_code": None,
+                    "classification": "professional",
+                },
+                {
+                    "team_code": "HOU",
+                    "league": "ncaaf",
+                    "kalshi_team_code": None,
+                    "classification": "d3",
+                },
+                {
+                    "team_code": "HOU",
+                    "league": "ncaaf",
+                    "kalshi_team_code": None,
+                    "classification": "fbs",
+                },
+            ]
+        )
+        # NFL HOU is unaffected
+        assert registry.resolve_kalshi_to_espn("HOU", "nfl") == "HOU"
+        assert registry._classification["nfl"]["HOU"] == "professional"
+        # NCAAF HOU is the FBS version
+        assert registry._classification["ncaaf"]["HOU"] == "fbs"
+
+    def test_backward_compat_no_classification_field(self) -> None:
+        """Teams without classification field (old test data) still work."""
+        registry = TeamCodeRegistry()
+        registry.load_from_data(NFL_TEAMS)  # No classification field
+        assert registry.resolve_kalshi_to_espn("JAC", "nfl") == "JAX"
+        assert registry.resolve_kalshi_to_espn("HOU", "nfl") == "HOU"
