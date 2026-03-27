@@ -1,13 +1,26 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.23
+**Version:** 1.25
 **Created:** 2025-11-13
-**Last Updated:** 2025-12-27
+**Last Updated:** 2026-03-26
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.25:**
+- **Added Pattern 41: Production-Readiness Checklist (ALWAYS for New Modules/Features)**
+- Real-world trigger: Matching module (#462) shipped with 98 tests but zero production visibility
+- Every production module must include: monitoring, maintenance CLI, logging, reporting, self-healing, scheduling
+- Template established by #477 (matching production-readiness): MatchReason enum, backfill, registry refresh, CLI commands
+**Changes in V1.24:**
+- **Added Pattern 39: Verify External API Data Before Building Parsers (ALWAYS for External Data Parsing)**
+- Real-world trigger: Session 23 test fixtures showed wrong Kalshi event_ticker format, real API completely different
+- Always hit the real API before building parsers — 30 seconds of verification prevents hours of wrong-direction work
+- **Added Pattern 40: Use execute_values Over executemany for Batch Upserts (ALWAYS for Batch INSERT/UPSERT)**
+- Real-world trigger: Session 23 Glokta audit found executemany rowcount bug hiding for 6 sessions
+- psycopg2 executemany sets rowcount to LAST row only, not sum — silently corrupts monitoring data
+- Use psycopg2.extras.execute_values for correct aggregate rowcount + better performance
 **Changes in V1.23:**
 - **Added Pattern 35: CLI Test Isolation for Parallel Execution (ALWAYS for Typer CLI Tests)**
 - Documents solution to "I/O operation on closed file" errors during pytest-xdist parallel execution
@@ -8857,6 +8870,137 @@ For any surrogate PK migration with downstream FK changes:
 
 ---
 
+## Pattern 39: Verify External API Data Before Building Parsers (ALWAYS for External Data Parsing)
+
+**Severity:** CRITICAL — Wrong assumptions about data format waste hours of implementation effort
+
+### Problem
+
+Test fixtures and docstrings may not match real API data. Building parsers against
+assumed formats leads to code that works in tests but fails against production data.
+
+### Real-World Trigger
+
+Session 23 (#462): Test fixtures showed Kalshi event_ticker format as `KXNFLGAME-25DEC15`
+(date only, no team codes). Docstrings showed `KXNFLGAME-25OCT05-NEBUF` (with teams).
+The real Kalshi API returns `KXNFLGAME-26JAN18HOUNE` (team codes concatenated without
+delimiters, variable-length 2-4 chars). If we had built a parser from the fixture format,
+it would have been fundamentally wrong — matching 0% of real events.
+
+### Pattern
+
+Before building any logic that parses external API data:
+
+1. **Hit the real API** — even a single request reveals the actual format
+2. **Collect multiple examples** — across different sports/leagues/types to see variations
+3. **Compare against fixtures** — if they disagree, the API wins
+4. **Document the real format** — update fixtures and docstrings to match reality
+
+```bash
+# Example: Verify Kalshi event_ticker format (took 30 seconds, saved hours)
+curl -s "https://api.elections.kalshi.com/trade-api/v2/markets?series_ticker=KXNFLGAME&limit=5" \
+  | python -c "import json,sys; [print(m['event_ticker']) for m in json.load(sys.stdin)['markets']]"
+```
+
+### When to Apply
+
+- Building ticker/code parsers for external platforms
+- Implementing data validation against external API responses
+- Writing seed data that represents external API structure
+- Any time a test fixture claims to represent external API data
+
+### Anti-Pattern
+
+```python
+# WRONG: Trust the test fixture / docstring
+# tests/fixtures/api_responses.py says event_ticker = "KXNFLGAME-25DEC15"
+# So we build a parser for {SERIES}-{DATE} format...
+
+# CORRECT: Verify against real API first
+# Real API returns "KXNFLGAME-26JAN18HOUNE" — completely different format!
+# Now build parser for {SERIES}-{DATE}{AWAY}{HOME} format
+```
+
+**References:**
+- Issue #467 (fix test fixtures to match real API)
+- `src/precog/matching/ticker_parser.py` (parser built from verified API data)
+
+---
+
+## Pattern 40: Use execute_values Over executemany for Batch Upserts (ALWAYS for Batch INSERT/UPSERT)
+
+**Severity:** HIGH — `executemany` silently returns wrong rowcount, corrupting monitoring data
+
+### Problem
+
+`psycopg2.cursor.executemany()` executes each row as a separate statement. After
+completion, `cursor.rowcount` reflects only the **last** statement's result — not
+the sum of all executions. For `ON CONFLICT DO NOTHING` batches, this means the
+reported count is 0 or 1, never the actual number of inserted rows.
+
+### Real-World Trigger
+
+Session 23 (#469 audit): Glokta found that `upsert_market_trades_batch()` returned
+`cur.rowcount` after `executemany()`. If 100 trades were submitted with 3 duplicates,
+the function returned 1 (or 0) instead of 97. Any monitoring or reconciliation using
+this count was silently incorrect. The bug had been in production since session 17
+(6 sessions undetected).
+
+### Pattern
+
+```python
+# WRONG: executemany + rowcount — returns LAST row's count only
+cur.executemany(
+    "INSERT INTO trades (...) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+    batch_params,
+)
+inserted = cur.rowcount  # BUG: returns 0 or 1, not actual count
+
+# CORRECT: execute_values — returns aggregate rowcount
+from psycopg2.extras import execute_values
+
+execute_values(
+    cur,
+    "INSERT INTO trades (...) VALUES %s ON CONFLICT DO NOTHING",
+    batch_params,
+)
+inserted = cur.rowcount  # Correct: returns actual rows affected
+```
+
+### Key Differences
+
+| Feature | `executemany()` | `execute_values()` |
+|---------|----------------|-------------------|
+| Execution | One statement per row | Single multi-row INSERT |
+| `rowcount` | Last row only | Aggregate total |
+| Performance | N round trips | 1 round trip |
+| ON CONFLICT | Correct behavior, wrong count | Correct behavior, correct count |
+
+### When to Apply
+
+- Any batch INSERT or UPSERT in CRUD code
+- Any function that returns a count of rows affected after batch operations
+- Any monitoring/alerting that relies on batch insert counts
+
+### Validation Pattern
+
+Always add count validation before batch operations:
+
+```python
+def upsert_batch(items: list[dict]) -> int:
+    for item in items:
+        if item["count"] <= 0:
+            raise ValueError(f"count must be > 0, got {item['count']}")
+    # ... execute_values ...
+```
+
+**References:**
+- Issue #472 (executemany rowcount bug)
+- psycopg2 docs: [execute_values](https://www.psycopg.org/docs/extras.html#psycopg2.extras.execute_values)
+- `src/precog/database/crud_operations.py` (upsert_market_trades_batch)
+
+---
+
 ### Code Examples
 - `api_connectors/types.py` - Pattern 6 (17 TypedDict examples)
 - `api_connectors/kalshi_auth.py` (lines 41-162) - Pattern 7 (excellent docstring examples)
@@ -8865,7 +9009,95 @@ For any surrogate PK migration with downstream FK changes:
 
 ---
 
-**END OF DEVELOPMENT_PATTERNS_V1.22.md**
+## Pattern 41: Production-Readiness Checklist (ALWAYS for New Modules/Features)
+
+**Severity:** HIGH — Modules without production infrastructure are invisible to operators and cannot self-recover
+
+### Problem
+
+Modules ship with functional correctness (tests pass, logic works) but zero production visibility. When they fail in production, operators can't see what's happening, can't manually intervene, and the system can't self-recover. The matching module (#462) had 98 tests but no monitoring, no CLI commands, no self-healing — it was a black box.
+
+### Pattern: Every Production Module Ships with 6 Capabilities
+
+| Capability | What It Means | Checklist |
+|-----------|---------------|-----------|
+| **Monitoring** | Categorized metrics with per-entity breakdowns | Failure reason enum, per-league/per-entity stats, health integration |
+| **Maintenance** | CLI commands for manual intervention | `precog data <module> stats`, `<module> refresh`, `<module> backfill` |
+| **Logging** | Operator-readable output with actionable context | Summary counts at INFO, details at DEBUG, errors with remediation hints |
+| **Reporting** | Stats visible in system_health + CLI + future dashboards | Health metrics in system_health JSONB, CLI table output |
+| **Self-healing** | Automatic recovery from transient failures | Cache refresh on unknown entities, backfill retries, rate-limited recovery |
+| **Scheduling** | Rate-limited periodic operations | Don't run expensive checks every cycle — use interval counters |
+
+### Template (from #477 — Matching Module)
+
+```python
+# 1. MONITORING: Categorized failure tracking
+class MatchReason(str, Enum):
+    MATCHED = "matched"
+    PARSE_FAIL = "parse_fail"
+    NO_CODE = "no_code"
+    NO_GAME = "no_game"
+
+# 2. SELF-HEALING: Cache with staleness detection
+class TeamCodeRegistry:
+    def needs_refresh(self, max_age_seconds: int = 3600) -> bool:
+        """True if never loaded, stale, or unknown codes seen."""
+        ...
+
+    def record_unknown_code(self, code: str, league: str) -> None:
+        """Track codes that failed lookup for self-healing signal."""
+        ...
+
+# 3. SCHEDULING: Rate-limited periodic operations
+VALIDATION_INTERVAL: ClassVar[int] = 10   # Every 10th poll (~2.5 min)
+BACKFILL_INTERVAL: ClassVar[int] = 40     # Every 40th poll (~10 min)
+REGISTRY_REFRESH_INTERVAL: ClassVar[int] = 40
+
+# 4. MAINTENANCE: CLI commands
+@matching_app.command("stats")
+def matching_stats(league: str | None = None):
+    """Show match rate per league, failure breakdown."""
+
+@matching_app.command("backfill")
+def matching_backfill(league: str | None = None):
+    """Manual trigger for backfill_unlinked_events."""
+
+# 5. REPORTING: System health integration
+details["matching_match_rate"] = f"{match_rate:.4f}"
+details["matching_total_events"] = total_events
+
+# 6. LOGGING: Summaries at INFO, details at DEBUG
+logger.info("Validation [%s]: %d checked, %d valid, %d errors, %d warnings", ...)
+logger.debug("[%s:%s] (occurrence #%d) %s", entity_type, entity_id, count, issue)
+```
+
+### When This Pattern Applies
+
+- ANY new module that runs in production (pollers, validators, matchers, future trade execution)
+- ANY existing module being extended with new operational surface
+- NOT needed for: pure utility functions, internal helpers, test infrastructure
+
+### Anti-Patterns
+
+| Anti-Pattern | Problem | Fix |
+|-------------|---------|-----|
+| "We'll add monitoring later" | Later never comes; first production incident is blind | Ship monitoring WITH the feature |
+| Run expensive checks every cycle | Wastes DB resources, floods logs | Use interval counters (`_polls_since_X`) |
+| Swallow all exceptions silently | Persistent failures invisible | Track error counts, escalate after threshold |
+| Log only counts, not categories | "672 warnings" tells you nothing | Categorize failures (MatchReason pattern) |
+| No CLI escape hatch | Can't diagnose at 2 AM via SSH | Add stats/refresh/backfill commands |
+
+### Cross-References
+
+- Issue #477: Matching module production-readiness (template implementation)
+- Issue #476: Production-readiness audit for all modules (Phase 2)
+- Issue #485: Validation warning detail visibility
+- Pattern 26: Resource Cleanup for Testability
+- Pattern 27: Dependency Injection for Testability
+
+---
+
+**END OF DEVELOPMENT_PATTERNS_V1.25.md**
 
 ★ Insight ─────────────────────────────────────
 This extraction serves two critical purposes:
