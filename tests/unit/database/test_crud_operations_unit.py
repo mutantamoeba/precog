@@ -20,6 +20,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
+import psycopg2.errors
 import pytest
 
 # Import functions to test
@@ -27,6 +28,7 @@ from precog.database.crud_operations import (
     LEAGUE_SPORT_CATEGORY,
     TRACKED_SITUATION_KEYS,
     create_game_state,
+    create_team,
     create_team_ranking,
     create_venue,
     find_game_by_matchup,
@@ -2030,3 +2032,247 @@ class TestUpdateEventGameIdUnit:
         result = update_event_game_id(event_internal_id=999, game_id=15)
 
         assert result is False
+
+
+# =============================================================================
+# CREATE TEAM UNIT TESTS
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestCreateTeamUnit:
+    """Unit tests for create_team function.
+
+    Key behavior: when espn_team_id is provided and Step 1 (ESPN ID lookup)
+    finds no match, the code fallback (Step 2) must NOT fire. This prevents
+    college sports code collisions (e.g., two 'MISS' teams in NCAAF) from
+    silently losing ~61 teams per restart.
+    """
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_returns_existing_team_by_espn_id(self, mock_fetch_one):
+        """Step 1: ESPN ID lookup finds existing team -> return its team_id."""
+        mock_fetch_one.return_value = {"team_id": 42}
+
+        result = create_team(
+            team_code="MISS",
+            team_name="Ole Miss Rebels",
+            display_name="Ole Miss",
+            sport="football",
+            league="ncaaf",
+            espn_team_id="145",
+        )
+
+        assert result == 42
+        # Only one fetch_one call (ESPN ID lookup)
+        mock_fetch_one.assert_called_once()
+        call_args = mock_fetch_one.call_args[0]
+        assert "espn_team_id" in call_args[0]
+
+    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_skips_code_fallback_when_espn_id_provided(self, mock_fetch_one, mock_get_cursor):
+        """When espn_team_id is provided and Step 1 finds no match, skip Step 2
+        and go straight to INSERT. This is THE critical fix for #486."""
+        # Step 1: ESPN ID lookup returns no match
+        mock_fetch_one.return_value = None
+
+        # Step 3: INSERT succeeds
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"team_id": 99}
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = create_team(
+            team_code="MISS",
+            team_name="Mississippi State Bulldogs",
+            display_name="Mississippi St",
+            sport="football",
+            league="ncaaf",
+            espn_team_id="344",
+        )
+
+        assert result == 99
+        # fetch_one called exactly ONCE (ESPN ID lookup only, NOT code fallback)
+        mock_fetch_one.assert_called_once()
+        call_args = mock_fetch_one.call_args[0]
+        assert "espn_team_id" in call_args[0]
+        # INSERT was executed
+        mock_cursor.execute.assert_called_once()
+
+    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_uses_code_fallback_when_no_espn_id(self, mock_fetch_one, mock_get_cursor):
+        """When espn_team_id is None, Step 2 code fallback fires normally.
+        This preserves backward compatibility for non-ESPN data sources."""
+        # Step 2: code lookup finds existing team
+        mock_fetch_one.return_value = {"team_id": 50}
+
+        result = create_team(
+            team_code="KC",
+            team_name="Kansas City Chiefs",
+            display_name="Chiefs",
+            sport="football",
+            league="nfl",
+            espn_team_id=None,  # No ESPN ID
+        )
+
+        assert result == 50
+        # fetch_one called once (code fallback — Step 1 was skipped)
+        mock_fetch_one.assert_called_once()
+        call_args = mock_fetch_one.call_args[0]
+        assert "team_code" in call_args[0]
+
+    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_inserts_new_team_when_no_espn_id_and_no_code_match(
+        self, mock_fetch_one, mock_get_cursor
+    ):
+        """When espn_team_id is None and code lookup finds nothing, INSERT."""
+        # Step 2: code lookup finds nothing
+        mock_fetch_one.return_value = None
+
+        # Step 3: INSERT succeeds
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"team_id": 77}
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = create_team(
+            team_code="NEW",
+            team_name="New Team",
+            display_name="New",
+            sport="football",
+            league="nfl",
+        )
+
+        assert result == 77
+        mock_cursor.execute.assert_called_once()
+
+    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_insert_includes_all_fields(self, mock_fetch_one, mock_get_cursor):
+        """Verify INSERT passes all 9 columns including espn_team_id."""
+        mock_fetch_one.return_value = None  # Step 1: no match
+
+        mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"team_id": 101}
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = create_team(
+            team_code="ALA",
+            team_name="Alabama Crimson Tide",
+            display_name="Alabama",
+            sport="football",
+            league="ncaaf",
+            espn_team_id="333",
+            current_elo_rating=None,
+            conference="SEC",
+            division="West",
+        )
+
+        assert result == 101
+        call_args = mock_cursor.execute.call_args[0]
+        sql = call_args[0]
+        params = call_args[1]
+        assert "INSERT INTO teams" in sql
+        assert "RETURNING team_id" in sql
+        # Verify all 9 params are passed in correct order
+        assert params == (
+            "ALA",
+            "Alabama Crimson Tide",
+            "Alabama",
+            "football",
+            "ncaaf",
+            "333",
+            None,
+            "SEC",
+            "West",
+        )
+
+    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_collision_scenario_two_teams_same_code(self, mock_fetch_one, mock_get_cursor):
+        """Simulate the exact NCAAF collision: two different ESPN teams with
+        code 'MISS' in the same league. First call creates Ole Miss (espn_id=145),
+        second call must NOT match it — must create Mississippi State (espn_id=344)."""
+        # --- Call 1: Ole Miss (espn_id=145) is brand new ---
+        mock_fetch_one.return_value = None  # ESPN lookup: not found
+
+        mock_cursor_1 = MagicMock()
+        mock_cursor_1.fetchone.return_value = {"team_id": 200}
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor_1)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result_1 = create_team(
+            team_code="MISS",
+            team_name="Ole Miss Rebels",
+            display_name="Ole Miss",
+            sport="football",
+            league="ncaaf",
+            espn_team_id="145",
+        )
+        assert result_1 == 200
+
+        # --- Call 2: Mississippi State (espn_id=344) is also new ---
+        mock_fetch_one.reset_mock()
+        mock_get_cursor.reset_mock()
+        mock_fetch_one.return_value = None  # ESPN lookup: not found
+
+        mock_cursor_2 = MagicMock()
+        mock_cursor_2.fetchone.return_value = {"team_id": 201}
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor_2)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result_2 = create_team(
+            team_code="MISS",
+            team_name="Mississippi State Bulldogs",
+            display_name="Mississippi St",
+            sport="football",
+            league="ncaaf",
+            espn_team_id="344",
+        )
+
+        # CRITICAL: second call must get a DIFFERENT team_id (201, not 200)
+        assert result_2 == 201
+        assert result_1 != result_2
+        # Each call only did ONE fetch_one (ESPN lookup), never code fallback
+        mock_fetch_one.assert_called_once()
+
+    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_unique_violation_with_espn_id_skips_code_fallback(
+        self, mock_get_cursor, mock_fetch_one
+    ):
+        """When INSERT raises UniqueViolation and espn_team_id is provided,
+        the handler should look up by ESPN ID only — NOT fall through to
+        code-based lookup (same guard as Step 2, defense-in-depth)."""
+        # Step 1: ESPN ID lookup returns None (new team)
+        # UniqueViolation handler ESPN lookup returns the conflicting team
+        mock_fetch_one.side_effect = [None, {"team_id": 300}]
+
+        # Step 3: INSERT raises UniqueViolation (race condition)
+        mock_cursor = MagicMock()
+        mock_cursor.execute.side_effect = psycopg2.errors.UniqueViolation("duplicate key")
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = create_team(
+            team_code="MISS",
+            team_name="Ole Miss Rebels",
+            display_name="Ole Miss",
+            sport="football",
+            league="ncaaf",
+            espn_team_id="145",
+        )
+
+        assert result == 300
+        # fetch_one called exactly twice:
+        # 1. Step 1 ESPN lookup (returned None)
+        # 2. UniqueViolation handler ESPN lookup (returned team_id=300)
+        # NOT a third call for code fallback
+        assert mock_fetch_one.call_count == 2
+        # Both calls should be ESPN ID lookups, not code lookups
+        for call in mock_fetch_one.call_args_list:
+            assert "espn_team_id" in call[0][0]
