@@ -182,12 +182,35 @@ def _apply_full_schema(host: str, port: int, database: str, user: str, password:
     alembic_dir = alembic_dir.resolve()
 
     # Set environment for Alembic
+    # Must set BOTH flat DB_* vars AND prefixed vars (e.g., TEST_DB_HOST)
+    # because alembic/env.py uses get_prefixed_env() which checks prefixed
+    # vars first. Without this, prefixed vars from .env (pointing at the
+    # local database) override our flat vars, and Alembic connects to the
+    # local DB instead of the testcontainer.
     env = os.environ.copy()
     env["DB_HOST"] = host
     env["DB_PORT"] = str(port)
     env["DB_NAME"] = database
     env["DB_USER"] = user
     env["DB_PASSWORD"] = password
+
+    # Determine prefix from PRECOG_ENV (e.g., TEST -> TEST_DB_HOST)
+    precog_env = env.get("PRECOG_ENV", "").lower()
+    prefix_map = {
+        "dev": "DEV",
+        "development": "DEV",
+        "test": "TEST",
+        "staging": "STAGING",
+        "prod": "PROD",
+        "production": "PROD",
+    }
+    prefix = prefix_map.get(precog_env)
+    if prefix:
+        env[f"{prefix}_DB_HOST"] = host
+        env[f"{prefix}_DB_PORT"] = str(port)
+        env[f"{prefix}_DB_NAME"] = database
+        env[f"{prefix}_DB_USER"] = user
+        env[f"{prefix}_DB_PASSWORD"] = password
 
     result = subprocess.run(
         [sys.executable, "-m", "alembic", "upgrade", "head"],
