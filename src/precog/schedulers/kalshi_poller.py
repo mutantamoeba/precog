@@ -680,6 +680,25 @@ class KalshiMarketPoller(BasePoller):
                 )
                 valid_count = len(all_markets) - error_count
 
+                # Build warning type breakdown by field (#485)
+                warning_breakdown: dict[str, int] = {}
+                if warning_count:
+                    for vr in validation_results:
+                        for issue in vr.warnings:
+                            warning_breakdown[issue.field] = (
+                                warning_breakdown.get(issue.field, 0) + 1
+                            )
+                warning_detail = (
+                    " ("
+                    + ", ".join(
+                        f"{f}={c}"
+                        for f, c in sorted(warning_breakdown.items(), key=lambda x: -x[1])
+                    )
+                    + ")"
+                    if warning_breakdown
+                    else ""
+                )
+
                 # Log individual issues with anomaly deduplication.
                 for vr in validation_results:
                     if vr.has_errors:
@@ -702,13 +721,14 @@ class KalshiMarketPoller(BasePoller):
                 if error_rate >= self.VALIDATION_ERROR_RATE:
                     logger.error(
                         "Validation [%s]: ERROR RATE %.1f%% - %d/%d markets failed "
-                        "(%d errors, %d warnings) [ACTION: investigate data source]",
+                        "(%d errors, %d warnings%s) [ACTION: investigate data source]",
                         series_ticker,
                         error_rate * 100,
                         error_count,
                         total_checked,
                         error_count,
                         warning_count,
+                        warning_detail,
                     )
                     try:
                         create_alert(
@@ -726,22 +746,24 @@ class KalshiMarketPoller(BasePoller):
                 elif error_rate >= self.VALIDATION_WARN_RATE:
                     logger.warning(
                         "Validation [%s]: error rate %.1f%% - %d/%d markets failed "
-                        "(%d errors, %d warnings)",
+                        "(%d errors, %d warnings%s)",
                         series_ticker,
                         error_rate * 100,
                         error_count,
                         total_checked,
                         error_count,
                         warning_count,
+                        warning_detail,
                     )
                 elif error_count or warning_count:
                     logger.info(
-                        "Validation [%s]: %d markets checked, %d valid, %d errors, %d warnings",
+                        "Validation [%s]: %d markets checked, %d valid, %d errors, %d warnings%s",
                         series_ticker,
                         total_checked,
                         valid_count,
                         error_count,
                         warning_count,
+                        warning_detail,
                     )
                 else:
                     logger.debug(
