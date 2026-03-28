@@ -51,7 +51,7 @@ def setup_perf_teams(db_pool, clean_test_data):
                     team_id, team_code, team_name,
                     espn_team_id, conference, division, sport, current_elo_rating
                 )
-                VALUES (%s, %s, %s, %s, 'Perf', 'Div', 'nfl', 1500)
+                VALUES (%s, %s, %s, %s, 'Perf', 'Div', 'football', 1500)
                 ON CONFLICT (team_id) DO NOTHING
             """,
                 (
