@@ -53,31 +53,33 @@ from precog.database.crud_operations import (
     upsert_scheduler_status,
     upsert_system_health,
 )
-from precog.schedulers.espn_game_poller import create_espn_poller
-from precog.schedulers.kalshi_poller import create_kalshi_poller
-from precog.schedulers.kalshi_websocket import create_websocket_handler
+from precog.schedulers.espn_game_poller import ESPNGamePoller, create_espn_poller
+from precog.schedulers.kalshi_poller import KalshiMarketPoller, create_kalshi_poller
+from precog.schedulers.kalshi_websocket import KalshiWebSocketHandler, create_websocket_handler
 
 # Set up logging early for helper functions
 logger = logging.getLogger(__name__)
 
-# Maps service names (used internally by ServiceSupervisor) to component names
-# matching the system_health table CHECK constraint:
-# ('kalshi_api', 'polymarket_api', 'espn_api', 'database',
-#  'edge_detector', 'trading_engine', 'websocket')
+# Service registry: maps service names to their health metadata.
+# Built at import time from class variables on poller classes.
+# Adding a new service requires only:
+#   1. Add SERVICE_KEY, HEALTH_COMPONENT, BREAKER_TYPE class vars to the poller
+#   2. Register the factory in SERVICE_FACTORIES (below create_services)
+# No if/elif dispatch needed — the supervisor reads metadata from the registry.
+#
+# Values must match database constraints:
+#   system_health.component: see SystemHealthComponent in crud_operations.py
+#   circuit_breaker_events.breaker_type: ('daily_loss_limit', 'api_failures',
+#       'data_stale', 'position_limit', 'manual')
 SERVICE_TO_COMPONENT: dict[str, str] = {
-    "espn": "espn_api",
-    "kalshi_rest": "kalshi_api",
-    "kalshi_ws": "websocket",
+    ESPNGamePoller.SERVICE_KEY: ESPNGamePoller.HEALTH_COMPONENT,
+    KalshiMarketPoller.SERVICE_KEY: KalshiMarketPoller.HEALTH_COMPONENT,
+    KalshiWebSocketHandler.SERVICE_KEY: KalshiWebSocketHandler.HEALTH_COMPONENT,
 }
-
-# Maps system_health component names to circuit_breaker_events breaker_type.
-# Used for auto-tripping breakers when a component transitions to "down".
-# Must match the CHECK constraint: ('daily_loss_limit', 'api_failures',
-# 'data_stale', 'position_limit', 'manual').
 COMPONENT_TO_BREAKER_TYPE: dict[str, str] = {
-    "espn_api": "data_stale",
-    "kalshi_api": "api_failures",
-    "websocket": "api_failures",
+    ESPNGamePoller.HEALTH_COMPONENT: ESPNGamePoller.BREAKER_TYPE,
+    KalshiMarketPoller.HEALTH_COMPONENT: KalshiMarketPoller.BREAKER_TYPE,
+    KalshiWebSocketHandler.HEALTH_COMPONENT: KalshiWebSocketHandler.BREAKER_TYPE,
 }
 
 
@@ -1131,8 +1133,78 @@ class ServiceSupervisor:
 
 
 # =============================================================================
-# Service Factory
+# Service Factory Registry
 # =============================================================================
+
+
+def _create_espn(
+    config: RunnerConfig,
+    leagues: list[str] | None = None,
+    espn_poll_interval: int = 30,
+    **_kwargs: Any,
+) -> EventLoopService:
+    """Factory for ESPN Game Poller."""
+    return cast(
+        "EventLoopService",
+        create_espn_poller(
+            leagues=leagues,
+            poll_interval=espn_poll_interval,
+        ),
+    )
+
+
+def _create_kalshi_rest(
+    config: RunnerConfig,
+    kalshi_env: str = "demo",
+    series_tickers: list[str] | None = None,
+    kalshi_poll_interval: int = 15,
+    **_kwargs: Any,
+) -> EventLoopService | None:
+    """Factory for Kalshi REST Poller. Returns None if credentials missing."""
+    if not _has_kalshi_credentials(config.environment):
+        logging.getLogger("precog.factory").warning(
+            "Kalshi API credentials not found, skipping REST poller"
+        )
+        return None
+    return cast(
+        "EventLoopService",
+        create_kalshi_poller(
+            series_tickers=series_tickers,
+            poll_interval=kalshi_poll_interval,
+            environment=kalshi_env,
+        ),
+    )
+
+
+def _create_kalshi_ws(
+    config: RunnerConfig,
+    **_kwargs: Any,
+) -> EventLoopService | None:
+    """Factory for Kalshi WebSocket Handler. Returns None if credentials missing."""
+    if not _has_kalshi_credentials(config.environment):
+        logging.getLogger("precog.factory").warning(
+            "Kalshi API credentials not found, skipping WebSocket"
+        )
+        return None
+    return cast(
+        "EventLoopService",
+        create_websocket_handler(
+            environment="demo" if config.environment != Environment.PRODUCTION else "prod"
+        ),
+    )
+
+
+# Registry mapping service names to factory callables.
+# To add a new service (e.g., Polymarket):
+#   1. Add SERVICE_KEY/HEALTH_COMPONENT/BREAKER_TYPE class vars to the poller
+#   2. Add the poller class to _REGISTRY_CLASSES (top of file)
+#   3. Add a _create_<name> factory function
+#   4. Register it here
+SERVICE_FACTORIES: dict[str, Callable[..., EventLoopService | None]] = {
+    "espn": _create_espn,
+    "kalshi_rest": _create_kalshi_rest,
+    "kalshi_ws": _create_kalshi_ws,
+}
 
 
 def create_services(
@@ -1171,66 +1243,27 @@ def create_services(
             continue
 
         try:
-            if name == "espn":
-                espn_service = create_espn_poller(
-                    leagues=leagues,
-                    poll_interval=espn_poll_interval,
-                )
-                services[name] = (cast("EventLoopService", espn_service), svc_config)
-                logger.info("Created ESPN Game Poller (interval=%ds)", espn_poll_interval)
+            factory = SERVICE_FACTORIES.get(name)
 
-            elif name == "kalshi_rest":
-                # Check for Kalshi credentials using two-axis naming convention
-                if _has_kalshi_credentials(config.environment):
-                    kalshi_rest_service = create_kalshi_poller(
-                        series_tickers=series_tickers,
-                        poll_interval=kalshi_poll_interval,
-                        environment=kalshi_env,
-                    )
-                    services[name] = (
-                        cast("EventLoopService", kalshi_rest_service),
-                        svc_config,
-                    )
-                    logger.info(
-                        "Created Kalshi REST Poller (interval=%ds)",
-                        kalshi_poll_interval,
-                    )
-                else:
-                    logger.warning("Kalshi API credentials not found, skipping REST poller")
-                    svc_config.enabled = False
-
-            elif name == "kalshi_ws":
-                # WebSocket for real-time updates
-                if _has_kalshi_credentials(config.environment):
-                    kalshi_ws_service = create_websocket_handler(
-                        environment=(
-                            "demo" if config.environment != Environment.PRODUCTION else "prod"
-                        )
-                    )
-                    services[name] = (
-                        cast("EventLoopService", kalshi_ws_service),
-                        svc_config,
-                    )
-                    logger.info("Created Kalshi WebSocket Handler")
-                else:
-                    logger.warning("Kalshi API credentials not found, skipping WebSocket")
-                    svc_config.enabled = False
-
-            # Future services (Phase 3-5) - placeholder
-            elif name == "edge_calculator":
-                logger.info("Edge Calculator service (Phase 3) - not yet implemented")
+            if factory is None:
+                # Unknown or future service — skip silently
+                logger.info("Service '%s' has no registered factory, skipping", name)
                 svc_config.enabled = False
+                continue
 
-            elif name == "strategy_evaluator":
-                logger.info("Strategy Evaluator service (Phase 4) - not yet implemented")
-                svc_config.enabled = False
+            service = factory(
+                config=config,
+                kalshi_env=kalshi_env,
+                leagues=leagues,
+                series_tickers=series_tickers,
+                espn_poll_interval=espn_poll_interval,
+                kalshi_poll_interval=kalshi_poll_interval,
+            )
 
-            elif name == "trade_executor":
-                logger.info("Trade Executor service (Phase 5) - not yet implemented")
-                svc_config.enabled = False
-
-            elif name == "position_manager":
-                logger.info("Position Manager service (Phase 5) - not yet implemented")
+            if service is not None:
+                services[name] = (service, svc_config)
+                logger.info("Created service '%s'", name)
+            else:
                 svc_config.enabled = False
 
         except Exception as e:

@@ -172,6 +172,11 @@ class KalshiWebSocketHandler:
     Reference: Phase 2 Live Data Integration
     """
 
+    # Service registry metadata (read by ServiceSupervisor at registration)
+    SERVICE_KEY: ClassVar[str] = "kalshi_ws"
+    HEALTH_COMPONENT: ClassVar[str] = "websocket"
+    BREAKER_TYPE: ClassVar[str] = "api_failures"
+
     # WebSocket endpoints
     DEMO_WS_URL: ClassVar[str] = "wss://demo-api.kalshi.co/trade-api/ws/v2"
     PROD_WS_URL: ClassVar[str] = "wss://api.elections.kalshi.com/trade-api/ws/v2"

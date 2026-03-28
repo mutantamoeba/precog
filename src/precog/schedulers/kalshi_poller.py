@@ -104,6 +104,11 @@ class KalshiMarketPoller(BasePoller):
     Related: ADR-100 (Service Supervisor Pattern)
     """
 
+    # Service registry metadata (read by ServiceSupervisor at registration)
+    SERVICE_KEY: ClassVar[str] = "kalshi_rest"
+    HEALTH_COMPONENT: ClassVar[str] = "kalshi_api"
+    BREAKER_TYPE: ClassVar[str] = "api_failures"
+
     # Class-level configuration
     MIN_POLL_INTERVAL: ClassVar[int] = 5  # seconds
     DEFAULT_POLL_INTERVAL: ClassVar[int] = 15  # seconds (balanced for near real-time)
