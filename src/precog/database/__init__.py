@@ -23,7 +23,9 @@ from .connection import (
     require_environment,
 )
 from .crud_operations import (
+    VALID_SYSTEM_HEALTH_COMPONENTS,
     ExecutionEnvironment,
+    SystemHealthComponent,
     close_position,
     create_account_balance,
     create_alert,
@@ -60,10 +62,13 @@ from .crud_operations import (
     update_market_with_versioning,
     update_position_price,
     upsert_game_state,
+    upsert_system_health,
 )
 
 __all__ = [
+    "VALID_SYSTEM_HEALTH_COMPONENTS",
     "ExecutionEnvironment",
+    "SystemHealthComponent",
     "close_position",
     "create_account_balance",
     "create_alert",
@@ -108,4 +113,5 @@ __all__ = [
     "update_market_with_versioning",
     "update_position_price",
     "upsert_game_state",
+    "upsert_system_health",
 ]

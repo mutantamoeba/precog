@@ -275,6 +275,37 @@ logger = logging.getLogger(__name__)
 # - 'backtest': Historical data simulation (no API calls)
 ExecutionEnvironment = Literal["live", "paper", "backtest"]
 
+# App-layer allowlist for system_health.component (ADR-114, Migration 0043).
+# The PostgreSQL CHECK constraint was dropped in migration 0043 so new data
+# sources can be added here without a schema migration. Add new components
+# to this Literal and to VALID_SYSTEM_HEALTH_COMPONENTS below.
+#
+# Tier A components (active data sources):
+#   - 'kalshi_api':      Kalshi prediction market API
+#   - 'espn_api':        ESPN sports data API
+#   - 'database':        PostgreSQL database connection
+# Infrastructure components:
+#   - 'edge_detector':   Edge detection engine
+#   - 'trading_engine':  Trade execution engine
+#   - 'websocket':       WebSocket connections
+# Planned Tier A components (not yet active):
+#   - 'polymarket_api':  Polymarket prediction market API
+SystemHealthComponent = Literal[
+    "kalshi_api",
+    "polymarket_api",
+    "espn_api",
+    "database",
+    "edge_detector",
+    "trading_engine",
+    "websocket",
+]
+
+# Runtime set for O(1) validation in upsert_system_health.
+# Must stay in sync with the SystemHealthComponent Literal above.
+VALID_SYSTEM_HEALTH_COMPONENTS: frozenset[str] = frozenset(
+    SystemHealthComponent.__args__  # type: ignore[attr-defined]
+)
+
 
 class DecimalEncoder(json.JSONEncoder):
     """Custom JSON encoder that converts Decimal to string.
@@ -5698,7 +5729,7 @@ def create_alert(
 
 
 def upsert_system_health(
-    component: str,
+    component: str | SystemHealthComponent,
     status: str,
     details: dict[str, Any] | None = None,
     alert_sent: bool = False,
@@ -5718,10 +5749,12 @@ def upsert_system_health(
     UNIQUE constraint to enable proper ON CONFLICT.
 
     Args:
-        component: Component identifier. Must match the CHECK constraint:
+        component: Component identifier. Must be a value in SystemHealthComponent:
             'kalshi_api', 'polymarket_api', 'espn_api', 'database',
             'edge_detector', 'trading_engine', 'websocket'.
-        status: Health status. Must match the CHECK constraint:
+            Validated at app layer (PostgreSQL CHECK constraint was dropped
+            in Migration 0043 — see ADR-114 Part 2, R2).
+        status: Health status. Must match the DB CHECK constraint:
             'healthy', 'degraded', 'down'.
         details: Optional JSONB payload with component-specific metrics
             (e.g., error_rate, polls_completed, last_successful_poll).
@@ -5731,7 +5764,8 @@ def upsert_system_health(
         True if operation succeeded, False otherwise.
 
     Raises:
-        psycopg2.IntegrityError: If component or status violates CHECK constraints.
+        ValueError: If component is not in VALID_SYSTEM_HEALTH_COMPONENTS.
+        psycopg2.IntegrityError: If status violates the DB CHECK constraint.
 
     Example:
         >>> upsert_system_health(
@@ -5752,11 +5786,30 @@ def upsert_system_health(
         DELETE + INSERT keeps one row per component. A future migration should
         add a UNIQUE constraint to enable proper ON CONFLICT UPSERT.
 
+        The component CHECK constraint was removed in Migration 0043 (ADR-114).
+        To add a new component: add it to SystemHealthComponent and
+        VALID_SYSTEM_HEALTH_COMPONENTS near the top of this file.
+
     References:
-        - Migration 0001: system_health table schema
+        - Migration 0001: system_health table schema (original CHECK constraint)
+        - Migration 0043: DROP component CHECK constraint
         - Issue #389: Wire system_health table
+        - Issue #491: Move component validation to app layer
+        - ADR-114: Tier A data source architecture
         - REQ-OBSERV-001: Observability Requirements
     """
+    # App-layer validation replacing the dropped PostgreSQL CHECK constraint.
+    # The status CHECK constraint ('healthy', 'degraded', 'down') is still
+    # enforced by the database — only component validation moved here.
+    if component not in VALID_SYSTEM_HEALTH_COMPONENTS:
+        valid = sorted(VALID_SYSTEM_HEALTH_COMPONENTS)
+        raise ValueError(
+            f"Invalid system_health component: {component!r}. "
+            f"Valid components: {valid}. "
+            f"To add a new component, update SystemHealthComponent and "
+            f"VALID_SYSTEM_HEALTH_COMPONENTS in crud_operations.py."
+        )
+
     # The system_health table has a non-unique index on component, so we use
     # DELETE + INSERT within a single transaction to simulate upsert behavior.
     # This keeps exactly one row per component (latest health snapshot).

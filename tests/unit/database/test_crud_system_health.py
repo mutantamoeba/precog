@@ -24,6 +24,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from precog.database.crud_operations import (
+    VALID_SYSTEM_HEALTH_COMPONENTS,
     get_system_health,
     get_system_health_summary,
     upsert_system_health,
@@ -141,17 +142,12 @@ class TestUpsertSystemHealth:
 
     @patch("precog.database.crud_operations.get_cursor")
     def test_upsert_all_valid_components(self, mock_get_cursor: MagicMock) -> None:
-        """Test all valid component names from CHECK constraint."""
-        valid_components = [
-            "kalshi_api",
-            "polymarket_api",
-            "espn_api",
-            "database",
-            "edge_detector",
-            "trading_engine",
-            "websocket",
-        ]
-        for component in valid_components:
+        """Test all valid component names from VALID_SYSTEM_HEALTH_COMPONENTS.
+
+        Validates against the app-layer enum (Migration 0043 dropped the DB
+        CHECK constraint — see ADR-114 Part 2, R2).
+        """
+        for component in sorted(VALID_SYSTEM_HEALTH_COMPONENTS):
             mock_cursor = MagicMock()
             mock_cursor.rowcount = 1
             mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
@@ -163,6 +159,25 @@ class TestUpsertSystemHealth:
             insert_call = mock_cursor.execute.call_args_list[1]
             insert_params = insert_call[0][1]
             assert insert_params[0] == component
+
+    def test_upsert_invalid_component_raises_value_error(self) -> None:
+        """Test that an unknown component raises ValueError before hitting the DB.
+
+        Migration 0043 dropped the PostgreSQL CHECK constraint on component.
+        App-layer validation in upsert_system_health() must catch invalid
+        values early and raise a clear error with guidance on how to add new
+        components.
+        """
+        with pytest.raises(ValueError, match="Invalid system_health component"):
+            upsert_system_health(component="unknown_source", status="healthy")  # type: ignore[arg-type]
+
+    def test_upsert_invalid_component_error_message_names_valid_set(self) -> None:
+        """Test that the ValueError message includes valid component names."""
+        with pytest.raises(ValueError) as exc_info:
+            upsert_system_health(component="cfbd_api", status="healthy")  # type: ignore[arg-type]
+        error_msg = str(exc_info.value)
+        assert "cfbd_api" in error_msg
+        assert "crud_operations.py" in error_msg
 
 
 # =============================================================================

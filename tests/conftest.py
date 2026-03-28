@@ -242,12 +242,12 @@ def clean_test_data(db_cursor):
     # Deleting from markets will CASCADE to trades/positions/edges/settlements.
     # Still clean up by strategy/model references for non-market-linked test data.
     db_cursor.execute("DELETE FROM settlements")
-    # Try to delete positions/trades referencing test strategies/models (may fail in CI)
-    # In CI, strategy_id/model_id columns may not exist if migrations 001/003 failed
+    # Try to delete orders/positions referencing test strategies/models (may fail in CI)
+    # Migration 0025: strategy_id/model_id moved from trades to orders table
     # Delete fixture data (99901+) AND any SERIAL-generated data (1-99900)
     try:
         db_cursor.execute(
-            "DELETE FROM trades WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
+            "DELETE FROM orders WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
         )
         db_cursor.execute(
             "DELETE FROM positions WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
@@ -337,9 +337,10 @@ def clean_test_data(db_cursor):
     # Migration 0022: downstream tables use market_internal_id INTEGER FK with ON DELETE CASCADE.
     # Deleting from markets will CASCADE to trades/positions/edges/settlements.
     # Still clean up by strategy/model references for non-market-linked test data.
+    # Migration 0025: strategy_id/model_id moved from trades to orders table
     try:
         db_cursor.execute(
-            "DELETE FROM trades WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
+            "DELETE FROM orders WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
         )
         db_cursor.execute(
             "DELETE FROM positions WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
