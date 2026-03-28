@@ -112,8 +112,8 @@ def setup_property_test_data(db_pool, clean_test_data):
                 espn_team_id, conference, division, sport, current_elo_rating
             )
             VALUES
-                (99001, 'PT1', 'Property Team 1', '99001', 'Test', 'East', 'nfl', 1500),
-                (99002, 'PT2', 'Property Team 2', '99002', 'Test', 'West', 'nfl', 1500)
+                (99001, 'PT1', 'Property Team 1', '99001', 'Test', 'East', 'football', 1500),
+                (99002, 'PT2', 'Property Team 2', '99002', 'Test', 'West', 'football', 1500)
             ON CONFLICT (team_id) DO NOTHING
         """
         )
