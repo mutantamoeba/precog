@@ -124,6 +124,12 @@ MODULE_TIERS = {
     "database/seeding/cache_config": "experimental",
     "database/seeding/epa_seeder": "experimental",
     "database/seeding/kalshi_historical_cache": "experimental",
+    # CFBD adapter for team classification (#486)
+    "database/seeding/sources/sports/cfbd_adapter": "experimental",
+    # Matching module (#462) — event-game linking (promote to business when test suite expands)
+    "matching/event_game_matcher": "experimental",
+    "matching/team_code_registry": "experimental",
+    "matching/ticker_parser": "experimental",
     # Issue #236: NFLDataPySource for stats loading
     "database/seeding/sources/nfl_data_py_source": "experimental",
     # TUI (Issue #268, #283) - Terminal User Interface modules
