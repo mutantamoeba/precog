@@ -164,6 +164,11 @@ class ESPNGamePoller(BasePoller):
     Related: ADR-100 (Service Supervisor Pattern)
     """
 
+    # Service registry metadata (read by ServiceSupervisor at registration)
+    SERVICE_KEY: ClassVar[str] = "espn"
+    HEALTH_COMPONENT: ClassVar[str] = "espn_api"
+    BREAKER_TYPE: ClassVar[str] = "data_stale"
+
     # Class-level configuration
     MIN_POLL_INTERVAL: ClassVar[int] = 15  # seconds (floor to protect ESPN budget)
     DEFAULT_POLL_INTERVAL: ClassVar[int] = 30  # seconds (live games; ~2,160 req/day active)
