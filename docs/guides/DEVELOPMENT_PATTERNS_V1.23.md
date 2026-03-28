@@ -1,13 +1,18 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.25
+**Version:** 1.26
 **Created:** 2025-11-13
-**Last Updated:** 2026-03-26
+**Last Updated:** 2026-03-28
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.26:**
+- **Updated Pattern 41: Added 7th capability — Alerts**
+- Alerts promoted from implicit (buried in Reporting/Logging) to explicit production-readiness requirement
+- Every production module now ships with 7 capabilities: monitoring, alerts, maintenance, logging, reporting, self-healing, scheduling
+- Real-world trigger: C10 post-soak council found circuit breaker types exist but have zero trigger logic; data freshness unmonitored
 **Changes in V1.25:**
 - **Added Pattern 41: Production-Readiness Checklist (ALWAYS for New Modules/Features)**
 - Real-world trigger: Matching module (#462) shipped with 98 tests but zero production visibility
@@ -9017,18 +9022,26 @@ def upsert_batch(items: list[dict]) -> int:
 
 Modules ship with functional correctness (tests pass, logic works) but zero production visibility. When they fail in production, operators can't see what's happening, can't manually intervene, and the system can't self-recover. The matching module (#462) had 98 tests but no monitoring, no CLI commands, no self-healing — it was a black box.
 
-### Pattern: Every Production Module Ships with 6 Capabilities
+### Pattern: Every Production Module Ships with 7 Capabilities
 
 | Capability | What It Means | Checklist |
 |-----------|---------------|-----------|
 | **Monitoring** | Categorized metrics with per-entity breakdowns | Failure reason enum, per-league/per-entity stats, health integration |
+| **Alerts** | Threshold-triggered notifications that demand operator attention | Circuit breaker trips, data freshness violations, error rate escalation, configurable thresholds |
 | **Maintenance** | CLI commands for manual intervention | `precog data <module> stats`, `<module> refresh`, `<module> backfill` |
 | **Logging** | Operator-readable output with actionable context | Summary counts at INFO, details at DEBUG, errors with remediation hints |
 | **Reporting** | Stats visible in system_health + CLI + future dashboards | Health metrics in system_health JSONB, CLI table output |
 | **Self-healing** | Automatic recovery from transient failures | Cache refresh on unknown entities, backfill retries, rate-limited recovery |
 | **Scheduling** | Rate-limited periodic operations | Don't run expensive checks every cycle — use interval counters |
 
-### Template (from #477 — Matching Module)
+**Alerts vs Logging vs Reporting (clear separation):**
+- **Logging** = what happened (passive record for debugging)
+- **Reporting** = how things look (periodic stats for dashboards)
+- **Alerts** = something is WRONG and needs attention NOW (active notification that triggers operator response)
+
+An alert has: a **trigger condition** (threshold exceeded), a **severity** (warning/critical), a **mechanism** (circuit breaker trip, log at CRITICAL, future: Slack/email), and a **remediation hint** ("Kalshi poll overdue >60s — check API status or restart poller").
+
+### Template (from #477 — Matching Module, expanded with Alerts)
 
 ```python
 # 1. MONITORING: Categorized failure tracking
@@ -9038,7 +9051,32 @@ class MatchReason(str, Enum):
     NO_CODE = "no_code"
     NO_GAME = "no_game"
 
-# 2. SELF-HEALING: Cache with staleness detection
+# 2. ALERTS: Threshold-triggered operator notifications
+def _check_alert_conditions(self) -> None:
+    """Evaluate alert thresholds after each poll cycle."""
+    # Data freshness alert
+    if self._seconds_since_last_success > self.poll_interval * 2:
+        logger.critical(
+            "[ALERT] %s poll overdue by %ds — check API status or restart poller",
+            self.name, self._seconds_since_last_success,
+        )
+        self._trip_circuit_breaker("data_stale", f"{self.name} overdue")
+
+    # Error rate escalation
+    if self._error_rate_pct > 10.0:
+        logger.critical(
+            "[ALERT] %s error rate %.1f%% exceeds 10%% threshold",
+            self.name, self._error_rate_pct,
+        )
+
+    # Match rate degradation (for matching-enabled modules)
+    if self._match_rate < 0.05 and self._total_attempted > 100:
+        logger.warning(
+            "[ALERT] Match rate %.1f%% below 5%% — check registry freshness",
+            self._match_rate * 100,
+        )
+
+# 3. SELF-HEALING: Cache with staleness detection
 class TeamCodeRegistry:
     def needs_refresh(self, max_age_seconds: int = 3600) -> bool:
         """True if never loaded, stale, or unknown codes seen."""
@@ -9048,12 +9086,12 @@ class TeamCodeRegistry:
         """Track codes that failed lookup for self-healing signal."""
         ...
 
-# 3. SCHEDULING: Rate-limited periodic operations
+# 4. SCHEDULING: Rate-limited periodic operations
 VALIDATION_INTERVAL: ClassVar[int] = 10   # Every 10th poll (~2.5 min)
 BACKFILL_INTERVAL: ClassVar[int] = 40     # Every 40th poll (~10 min)
 REGISTRY_REFRESH_INTERVAL: ClassVar[int] = 40
 
-# 4. MAINTENANCE: CLI commands
+# 5. MAINTENANCE: CLI commands
 @matching_app.command("stats")
 def matching_stats(league: str | None = None):
     """Show match rate per league, failure breakdown."""
@@ -9062,11 +9100,11 @@ def matching_stats(league: str | None = None):
 def matching_backfill(league: str | None = None):
     """Manual trigger for backfill_unlinked_events."""
 
-# 5. REPORTING: System health integration
+# 6. REPORTING: System health integration
 details["matching_match_rate"] = f"{match_rate:.4f}"
 details["matching_total_events"] = total_events
 
-# 6. LOGGING: Summaries at INFO, details at DEBUG
+# 7. LOGGING: Summaries at INFO, details at DEBUG
 logger.info("Validation [%s]: %d checked, %d valid, %d errors, %d warnings", ...)
 logger.debug("[%s:%s] (occurrence #%d) %s", entity_type, entity_id, count, issue)
 ```
@@ -9086,6 +9124,8 @@ logger.debug("[%s:%s] (occurrence #%d) %s", entity_type, entity_id, count, issue
 | Swallow all exceptions silently | Persistent failures invisible | Track error counts, escalate after threshold |
 | Log only counts, not categories | "672 warnings" tells you nothing | Categorize failures (MatchReason pattern) |
 | No CLI escape hatch | Can't diagnose at 2 AM via SSH | Add stats/refresh/backfill commands |
+| Alert types exist but no triggers | Circuit breaker defined but never trips | Every alert type needs a concrete trigger condition with threshold |
+| Alerts buried in log noise | CRITICAL lost in 753K WARNINGs | Alerts are separate from logging — use `[ALERT]` prefix, CRITICAL level, remediation hint |
 
 ### Cross-References
 
