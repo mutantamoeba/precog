@@ -54,6 +54,7 @@ import logging
 import time
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from enum import Enum
 from typing import Any, ClassVar
 
 from apscheduler.jobstores.sqlalchemy import SQLAlchemyJobStore
@@ -88,6 +89,29 @@ logger = logging.getLogger(__name__)
 # Polling states for per-league adaptive polling
 LEAGUE_STATE_DISCOVERY = "discovery"
 LEAGUE_STATE_TRACKING = "tracking"
+
+
+class GameSyncReason(str, Enum):
+    """Categorized outcomes for ESPN game-to-DB sync operations (#476).
+
+    Mirrors the MatchReason pattern in event_game_matcher.py. Used for
+    failure categorization metrics in system_health reporting.
+
+    Categories:
+        SYNCED: Game state written to DB (new SCD row created)
+        UNCHANGED: Game state identical to current — no new row needed
+        MISSING_EVENT_ID: espn_event_id not in game metadata
+        GAME_DIMENSION_FAILED: games table upsert threw an exception
+        STATE_UPSERT_FAILED: game_states SCD upsert threw an exception
+        API_ERROR: ESPN API returned an error for this league poll
+    """
+
+    SYNCED = "synced"
+    UNCHANGED = "unchanged"
+    MISSING_EVENT_ID = "missing_event_id"
+    GAME_DIMENSION_FAILED = "game_dimension_failed"
+    STATE_UPSERT_FAILED = "state_upsert_failed"
+    API_ERROR = "api_error"
 
 
 class ESPNGamePoller(BasePoller):
@@ -235,6 +259,10 @@ class ESPNGamePoller(BasePoller):
         # Track last validation time for dedup guard (Part F)
         self._last_validation_time: float = 0.0
 
+        # Sync stats: categorized outcomes for P41 failure monitoring (#476).
+        # Mirrors Kalshi's _matching_stats pattern. Cumulative, reset on restart.
+        self._sync_stats: dict[str, int] = {f"sync_{reason.value}": 0 for reason in GameSyncReason}
+
         # Initialize ESPN client (or use provided mock)
         self.espn_client = espn_client or ESPNClient()
 
@@ -251,6 +279,18 @@ class ESPNGamePoller(BasePoller):
     def _get_job_name(self) -> str:
         """Return human-readable name for the polling job."""
         return "ESPN Game State Poll"
+
+    def get_stats(self) -> dict[str, Any]:
+        """Return polling stats merged with sync categorization (#476)."""
+        with self._lock:
+            stats = dict(self._stats)
+            stats.update(self._sync_stats)
+            return stats
+
+    def _record_sync(self, reason: GameSyncReason) -> None:
+        """Increment a categorized sync outcome counter."""
+        with self._lock:
+            self._sync_stats[f"sync_{reason.value}"] += 1
 
     def _poll_once(self) -> dict[str, int]:
         """
@@ -533,8 +573,12 @@ class ESPNGamePoller(BasePoller):
                 try:
                     if self._sync_game_to_db(game, league):
                         games_updated += 1
+                        self._record_sync(GameSyncReason.SYNCED)
+                    else:
+                        self._record_sync(GameSyncReason.UNCHANGED)
                 except Exception as e:
                     sync_errors += 1
+                    self._record_sync(GameSyncReason.STATE_UPSERT_FAILED)
                     event_id = game.get("metadata", {}).get("espn_event_id", "unknown")
                     logger.error("Error syncing game %s: %s", event_id, e)
 
@@ -601,11 +645,13 @@ class ESPNGamePoller(BasePoller):
 
         except ESPNAPIError as e:
             logger.warning("ESPN API error for %s: %s", league, e)
+            self._record_sync(GameSyncReason.API_ERROR)
             with self._lock:
                 self._stats["errors"] += 1
                 self._stats["last_error"] = str(e)
         except Exception as e:
             logger.exception("Error in %s poll cycle: %s", league.upper(), e)
+            self._record_sync(GameSyncReason.API_ERROR)
             with self._lock:
                 self._stats["errors"] += 1
                 self._stats["last_error"] = str(e)
@@ -1016,6 +1062,7 @@ class ESPNGamePoller(BasePoller):
         espn_event_id = metadata.get("espn_event_id")
         if not espn_event_id:
             logger.warning("Game missing espn_event_id, skipping")
+            self._record_sync(GameSyncReason.MISSING_EVENT_ID)
             return False
 
         # Extract team info from normalized structure
@@ -1087,6 +1134,7 @@ class ESPNGamePoller(BasePoller):
                     data_source="espn_poller",
                 )
             except Exception:
+                self._record_sync(GameSyncReason.GAME_DIMENSION_FAILED)
                 logger.warning(
                     "Failed to upsert games dimension row for %s",
                     espn_event_id,
