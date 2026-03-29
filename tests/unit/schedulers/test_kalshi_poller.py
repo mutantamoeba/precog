@@ -1562,6 +1562,11 @@ class TestSettlementDetection:
             "event_internal_id": 42,
         }
 
+        mock_result = {
+            "markets_total": 1,
+            "markets_settled": 1,
+            "outcomes": {"KXNFLGAME-25NOV29-NEBUF-B250": {"settlement_value": "1.0000"}},
+        }
         with (
             patch(
                 "precog.schedulers.kalshi_poller.get_current_market",
@@ -1576,6 +1581,10 @@ class TestSettlementDetection:
                 return_value=True,
             ) as mock_check,
             patch(
+                "precog.schedulers.kalshi_poller.build_event_result",
+                return_value=mock_result,
+            ) as mock_build_result,
+            patch(
                 "precog.schedulers.kalshi_poller.update_event",
                 return_value=True,
             ) as mock_update_event,
@@ -1583,7 +1592,8 @@ class TestSettlementDetection:
             poller_with_mock_client._sync_market_to_db(settled_market)
 
             mock_check.assert_called_once_with(42)
-            mock_update_event.assert_called_once_with(42, status="final")
+            mock_build_result.assert_called_once_with(42)
+            mock_update_event.assert_called_once_with(42, status="final", result=mock_result)
 
     @pytest.mark.unit
     def test_event_not_transitioned_when_siblings_unsettled(self, poller_with_mock_client):

@@ -1028,6 +1028,67 @@ def create_event(
         return cast("int", result["id"])
 
 
+def _fill_event_null_fields(
+    existing: dict[str, Any],
+    start_time: str | None = None,
+    end_time: str | None = None,
+    status: str | None = None,
+    game_id: int | None = None,
+) -> None:
+    """Fill NULL enrichment fields on an existing event row.
+
+    This is a "fill gaps" helper — it only writes values where the existing
+    column is NULL *and* the caller has provided a non-None replacement.
+    Non-NULL values are never overwritten.  Called by ``get_or_create_event()``
+    on the hot path so it short-circuits when there is nothing to update.
+
+    The events table is NOT SCD Type 2, so a direct UPDATE is correct.
+
+    Args:
+        existing: The current event row dict (from ``get_event()``).
+        start_time: Candidate start time (ISO 8601 string).
+        end_time: Candidate end time (ISO 8601 string).
+        status: Candidate status string.
+        game_id: Candidate FK to games(id).
+
+    Educational Note:
+        This pattern avoids a separate SELECT + UPDATE round-trip.  Because
+        ``get_or_create_event()`` already calls ``get_event()``, we inspect
+        the returned dict in Python and only issue an UPDATE when at least
+        one NULL field can be filled.  On a steady-state poll cycle where
+        events are already enriched, zero UPDATEs are executed.
+
+    Reference:
+        - Issue #513: Enrichment data gaps
+        - get_or_create_event() — sole caller
+    """
+    set_parts: list[str] = []
+    params: list[Any] = []
+
+    if start_time and existing.get("start_time") is None:
+        set_parts.append("start_time = %s")
+        params.append(start_time)
+    if end_time and existing.get("end_time") is None:
+        set_parts.append("end_time = %s")
+        params.append(end_time)
+    if status and existing.get("status") is None:
+        set_parts.append("status = %s")
+        params.append(status)
+    if game_id is not None and existing.get("game_id") is None:
+        set_parts.append("game_id = %s")
+        params.append(game_id)
+
+    if not set_parts:
+        return  # Nothing to fill — hot path exits here
+
+    set_parts.append("updated_at = NOW()")
+    query = f"UPDATE events SET {', '.join(set_parts)} WHERE id = %s"  # noqa: S608
+    params.append(existing["id"])
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, params)
+
+
 def get_or_create_event(
     event_id: str,
     platform_id: str,
@@ -1097,11 +1158,14 @@ def get_or_create_event(
         - Migration 0020: events.id SERIAL PK, returns integer instead of VARCHAR
         - Migration 0038: events.game_id FK to games(id)
     """
-    # Check if event already exists — return its surrogate PK
-    # TODO(#462): If game_id provided and event already exists, update
-    # events.game_id (requires update_event() CRUD function).
+    # Check if event already exists — fill NULL enrichment fields if caller
+    # provides values, then return surrogate PK.  This is a "fill gaps" pattern:
+    # we never overwrite a non-NULL value, only backfill NULLs.  The existing
+    # get_event() SELECT is already on the hot path so the NULL checks are
+    # essentially free; the UPDATE only fires when there are actual gaps.
     existing = get_event(event_id)
     if existing is not None:
+        _fill_event_null_fields(existing, start_time, end_time, status, game_id)
         return cast("int", existing["id"]), False
 
     # Create new event — create_event() now returns the integer PK
@@ -9167,6 +9231,72 @@ def check_event_fully_settled(event_internal_id: int) -> bool:
     total = int(result["total"])
     settled = int(result["settled"])
     return total > 0 and total == settled
+
+
+def build_event_result(event_internal_id: int) -> dict[str, Any]:
+    """Build a JSONB result summary from child markets' settlement values.
+
+    Queries all markets for the given event and assembles a dict suitable
+    for storing in ``events.result`` (JSONB column).  Settlement values
+    are serialized as strings to preserve Decimal precision.
+
+    Args:
+        event_internal_id: The events.id (integer surrogate PK).
+
+    Returns:
+        Dict with structure::
+
+            {
+                "markets_total": 3,
+                "markets_settled": 3,
+                "outcomes": {
+                    "TICKER-1": {"settlement_value": "1.0000"},
+                    "TICKER-2": {"settlement_value": "0.0000"},
+                    "TICKER-3": {"settlement_value": null}
+                }
+            }
+
+        If no markets exist for the event, returns a dict with zero
+        counts and an empty outcomes dict.
+
+    Example:
+        >>> result = build_event_result(42)
+        >>> update_event(42, status="final", result=result)
+
+    Educational Note:
+        Settlement values are ``Decimal(10,4)`` in the database.  Storing
+        them as strings in JSONB (e.g., ``"1.0000"``) avoids the float
+        precision trap (``json.dumps(float(Decimal("0.3333")))`` loses
+        precision).  Consumers parse back with ``Decimal(value)``.
+
+    Reference:
+        - Issue #513: Enrichment data gaps — event result population
+        - check_event_fully_settled(): companion function
+        - KalshiMarketPoller settlement propagation
+    """
+    query = """
+        SELECT ticker, settlement_value, status
+        FROM markets
+        WHERE event_internal_id = %s
+        ORDER BY ticker
+    """
+    rows = fetch_all(query, (event_internal_id,))
+
+    markets_total = len(rows)
+    markets_settled = sum(1 for r in rows if r["status"] == "settled")
+
+    outcomes: dict[str, dict[str, str | None]] = {}
+    for row in rows:
+        sv = row["settlement_value"]
+        outcomes[row["ticker"]] = {
+            "settlement_value": str(sv) if sv is not None else None,
+        }
+
+    return {
+        "markets_total": markets_total,
+        "markets_settled": markets_settled,
+        "outcomes": outcomes,
+    }
 
 
 def find_unlinked_sports_events(league: str | None = None) -> list[dict[str, Any]]:
