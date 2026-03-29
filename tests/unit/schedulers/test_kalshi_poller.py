@@ -344,6 +344,13 @@ class TestKalshiMarketPollerSync:
             call_kwargs = mock_create.call_args.kwargs
             assert call_kwargs["yes_ask_price"] == Decimal("0.4800")
             assert call_kwargs["no_ask_price"] == Decimal("0.5500")
+            # Verify bid/last/liquidity/spread are passed through
+            assert call_kwargs["yes_bid_price"] == Decimal("0.4500")
+            assert call_kwargs["no_bid_price"] == Decimal("0.5200")
+            assert call_kwargs["last_price"] == Decimal("0.4700")
+            assert call_kwargs["liquidity"] == Decimal("5000")
+            # spread = yes_ask - yes_bid = 0.4800 - 0.4500 = 0.0300
+            assert call_kwargs["spread"] == Decimal("0.0300")
 
     @pytest.mark.unit
     def test_sync_updates_existing_market(self, poller_with_mock_client, mock_market_data):
@@ -367,6 +374,14 @@ class TestKalshiMarketPollerSync:
             assert was_created is False
             mock_update.assert_called_once()
 
+            # Verify bid/last/liquidity/spread are passed on update path
+            call_kwargs = mock_update.call_args.kwargs
+            assert call_kwargs["yes_bid_price"] == Decimal("0.4500")
+            assert call_kwargs["no_bid_price"] == Decimal("0.5200")
+            assert call_kwargs["last_price"] == Decimal("0.4700")
+            assert call_kwargs["liquidity"] == Decimal("5000")
+            assert call_kwargs["spread"] == Decimal("0.0300")
+
     @pytest.mark.unit
     def test_sync_skips_market_without_ticker(self, poller_with_mock_client):
         """Test that _sync_market_to_db skips market without ticker."""
@@ -385,6 +400,10 @@ class TestKalshiMarketPollerSync:
             "title": "Test Market",
             "yes_ask": 65,  # 65 cents = 0.65
             "no_ask": 35,  # 35 cents = 0.35
+            "yes_bid": 60,  # 60 cents = 0.60
+            "no_bid": 30,  # 30 cents = 0.30
+            "last_price": 62,  # 62 cents = 0.62
+            "liquidity": 3000,
             "status": "open",
             # No *_dollars fields
         }
@@ -399,6 +418,66 @@ class TestKalshiMarketPollerSync:
             call_kwargs = mock_create.call_args.kwargs
             assert call_kwargs["yes_ask_price"] == Decimal("0.65")
             assert call_kwargs["no_ask_price"] == Decimal("0.35")
+            # Bid/last/liquidity fallback from legacy cent fields
+            assert call_kwargs["yes_bid_price"] == Decimal("0.60")
+            assert call_kwargs["no_bid_price"] == Decimal("0.30")
+            assert call_kwargs["last_price"] == Decimal("0.62")
+            assert call_kwargs["liquidity"] == Decimal("3000")
+            # spread = yes_ask - yes_bid = 0.65 - 0.60 = 0.05
+            assert call_kwargs["spread"] == Decimal("0.05")
+
+    @pytest.mark.unit
+    def test_sync_handles_missing_bid_data_gracefully(self, poller_with_mock_client):
+        """Test that None bid/last/liquidity are passed when API has no data."""
+        market_minimal = {
+            "ticker": "KXNFLGAME-MINIMAL",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Minimal Market",
+            "yes_ask_dollars": Decimal("0.5000"),
+            "no_ask_dollars": Decimal("0.5000"),
+            "status": "open",
+            # No bid, last_price, or liquidity fields at all
+        }
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1) as mock_create,
+        ):
+            poller_with_mock_client._sync_market_to_db(market_minimal)
+
+            call_kwargs = mock_create.call_args.kwargs
+            assert call_kwargs["yes_bid_price"] is None
+            assert call_kwargs["no_bid_price"] is None
+            assert call_kwargs["last_price"] is None
+            assert call_kwargs["liquidity"] is None
+            # spread is None when yes_bid is None
+            assert call_kwargs["spread"] is None
+
+    @pytest.mark.unit
+    def test_sync_spread_none_when_bid_is_zero(self, poller_with_mock_client):
+        """Test that spread is None when yes_bid is 0 (no bids in book)."""
+        market_zero_bid = {
+            "ticker": "KXNFLGAME-ZEROBID",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Zero Bid Market",
+            "yes_ask_dollars": Decimal("0.5000"),
+            "no_ask_dollars": Decimal("0.5000"),
+            "yes_bid_dollars": Decimal("0.0000"),
+            "no_bid_dollars": Decimal("0.0000"),
+            "status": "open",
+        }
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1) as mock_create,
+        ):
+            poller_with_mock_client._sync_market_to_db(market_zero_bid)
+
+            call_kwargs = mock_create.call_args.kwargs
+            # spread should be None when bid is 0 (can't compute meaningful spread)
+            assert call_kwargs["spread"] is None
 
 
 # =============================================================================
@@ -930,6 +1009,92 @@ class TestKalshiPollerValidation:
 
 
 # =============================================================================
+# Event Enrichment Tests (start_time, end_time, status)
+# =============================================================================
+
+
+class TestEventEnrichment:
+    """Test that market-level times and initial status flow through to event creation."""
+
+    @pytest.mark.unit
+    def test_start_time_flows_to_get_or_create_event(
+        self, poller_with_mock_client, mock_market_data
+    ):
+        """open_time from market data is passed as start_time to get_or_create_event."""
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ) as mock_create_event,
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
+        ):
+            poller_with_mock_client._sync_market_to_db(mock_market_data)
+
+            mock_create_event.assert_called_once()
+            call_kwargs = mock_create_event.call_args.kwargs
+            assert call_kwargs["start_time"] == "2025-11-29T12:00:00Z"
+
+    @pytest.mark.unit
+    def test_end_time_flows_to_get_or_create_event(self, poller_with_mock_client, mock_market_data):
+        """expiration_time from market data is passed as end_time to get_or_create_event."""
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ) as mock_create_event,
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
+        ):
+            poller_with_mock_client._sync_market_to_db(mock_market_data)
+
+            mock_create_event.assert_called_once()
+            call_kwargs = mock_create_event.call_args.kwargs
+            assert call_kwargs["end_time"] == "2025-11-30T00:00:00Z"
+
+    @pytest.mark.unit
+    def test_status_set_to_live_on_event_creation(self, poller_with_mock_client, mock_market_data):
+        """New events are created with status='live' since we only poll active markets."""
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ) as mock_create_event,
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
+        ):
+            poller_with_mock_client._sync_market_to_db(mock_market_data)
+
+            mock_create_event.assert_called_once()
+            call_kwargs = mock_create_event.call_args.kwargs
+            assert call_kwargs["status"] == "live"
+
+    @pytest.mark.unit
+    def test_missing_open_time_passes_none(self, poller_with_mock_client, mock_market_data):
+        """If market data lacks open_time, start_time is None."""
+        market_no_times = mock_market_data.copy()
+        del market_no_times["open_time"]
+        del market_no_times["expiration_time"]
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ) as mock_create_event,
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
+        ):
+            poller_with_mock_client._sync_market_to_db(market_no_times)
+
+            mock_create_event.assert_called_once()
+            call_kwargs = mock_create_event.call_args.kwargs
+            assert call_kwargs["start_time"] is None
+            assert call_kwargs["end_time"] is None
+            # status is always "live" regardless of time presence
+            assert call_kwargs["status"] == "live"
+
+
+# =============================================================================
 # Event-to-Game Matching Tests (Issue #462)
 # =============================================================================
 
@@ -1104,3 +1269,349 @@ class TestRegistryRefresh:
 
         stats = poller_with_mock_client.get_stats()
         assert stats["matching_registry_refreshes"] == 1
+
+
+# =============================================================================
+# Settlement Detection Tests (Task 5)
+# =============================================================================
+
+
+class TestSettlementDetection:
+    """Test market settlement detection and event propagation."""
+
+    @pytest.mark.unit
+    def test_settled_market_yes_sets_settlement_value(self, poller_with_mock_client):
+        """When a market settles with result='yes', settlement_value=1.0000 is passed."""
+        settled_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills win by 25+ points?",
+            "status": "settled",
+            "result": "yes",
+            "yes_ask_dollars": Decimal("1.0000"),
+            "no_ask_dollars": Decimal("1.0000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        existing = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "yes_ask_price": Decimal("0.4800"),
+            "no_ask_price": Decimal("0.5500"),
+            "status": "open",
+            "event_internal_id": 42,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=existing,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.update_market_with_versioning",
+                return_value=1,
+            ) as mock_update,
+            patch(
+                "precog.schedulers.kalshi_poller.check_event_fully_settled",
+                return_value=False,
+            ),
+        ):
+            poller_with_mock_client._sync_market_to_db(settled_market)
+
+            mock_update.assert_called_once()
+            call_kwargs = mock_update.call_args.kwargs
+            assert call_kwargs["settlement_value"] == Decimal("1.0000")
+            assert call_kwargs["status"] == "settled"
+
+    @pytest.mark.unit
+    def test_settled_market_no_sets_settlement_value(self, poller_with_mock_client):
+        """When a market settles with result='no', settlement_value=0.0000 is passed."""
+        settled_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills win by 25+ points?",
+            "status": "settled",
+            "result": "no",
+            "yes_ask_dollars": Decimal("1.0000"),
+            "no_ask_dollars": Decimal("1.0000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        existing = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "yes_ask_price": Decimal("0.4800"),
+            "no_ask_price": Decimal("0.5500"),
+            "status": "open",
+            "event_internal_id": 42,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=existing,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.update_market_with_versioning",
+                return_value=1,
+            ) as mock_update,
+            patch(
+                "precog.schedulers.kalshi_poller.check_event_fully_settled",
+                return_value=False,
+            ),
+        ):
+            poller_with_mock_client._sync_market_to_db(settled_market)
+
+            call_kwargs = mock_update.call_args.kwargs
+            assert call_kwargs["settlement_value"] == Decimal("0.0000")
+
+    @pytest.mark.unit
+    def test_settled_market_no_result_passes_none(self, poller_with_mock_client):
+        """When a market settles without a result field, settlement_value is None."""
+        settled_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills win by 25+ points?",
+            "status": "settled",
+            # No 'result' key
+            "yes_ask_dollars": Decimal("1.0000"),
+            "no_ask_dollars": Decimal("1.0000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        existing = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "yes_ask_price": Decimal("0.4800"),
+            "no_ask_price": Decimal("0.5500"),
+            "status": "open",
+            "event_internal_id": 42,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=existing,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.update_market_with_versioning",
+                return_value=1,
+            ) as mock_update,
+            patch(
+                "precog.schedulers.kalshi_poller.check_event_fully_settled",
+                return_value=False,
+            ),
+        ):
+            poller_with_mock_client._sync_market_to_db(settled_market)
+
+            call_kwargs = mock_update.call_args.kwargs
+            assert call_kwargs["settlement_value"] is None
+
+    @pytest.mark.unit
+    def test_non_settled_market_has_no_settlement_value(self, poller_with_mock_client):
+        """Non-settled markets do not pass a settlement_value."""
+        open_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills win by 25+ points?",
+            "status": "active",  # Maps to 'open'
+            "result": None,
+            "yes_ask_dollars": Decimal("0.6000"),
+            "no_ask_dollars": Decimal("0.4000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        existing = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "yes_ask_price": Decimal("0.4800"),
+            "no_ask_price": Decimal("0.5500"),
+            "status": "open",
+            "event_internal_id": 42,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=existing,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.update_market_with_versioning",
+                return_value=1,
+            ) as mock_update,
+        ):
+            poller_with_mock_client._sync_market_to_db(open_market)
+
+            call_kwargs = mock_update.call_args.kwargs
+            assert call_kwargs["settlement_value"] is None
+
+    @pytest.mark.unit
+    def test_event_transitions_to_final_when_all_markets_settled(self, poller_with_mock_client):
+        """When the last market settles and all siblings are settled, event -> final."""
+        settled_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills win by 25+ points?",
+            "status": "settled",
+            "result": "yes",
+            "yes_ask_dollars": Decimal("1.0000"),
+            "no_ask_dollars": Decimal("1.0000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        existing = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "yes_ask_price": Decimal("0.4800"),
+            "no_ask_price": Decimal("0.5500"),
+            "status": "open",
+            "event_internal_id": 42,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=existing,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.update_market_with_versioning",
+                return_value=1,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.check_event_fully_settled",
+                return_value=True,
+            ) as mock_check,
+            patch(
+                "precog.schedulers.kalshi_poller.update_event",
+                return_value=True,
+            ) as mock_update_event,
+        ):
+            poller_with_mock_client._sync_market_to_db(settled_market)
+
+            mock_check.assert_called_once_with(42)
+            mock_update_event.assert_called_once_with(42, status="final")
+
+    @pytest.mark.unit
+    def test_event_not_transitioned_when_siblings_unsettled(self, poller_with_mock_client):
+        """When some sibling markets are not settled, event stays as-is."""
+        settled_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills win by 25+ points?",
+            "status": "settled",
+            "result": "no",
+            "yes_ask_dollars": Decimal("1.0000"),
+            "no_ask_dollars": Decimal("1.0000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        existing = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "yes_ask_price": Decimal("0.4800"),
+            "no_ask_price": Decimal("0.5500"),
+            "status": "open",
+            "event_internal_id": 42,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=existing,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.update_market_with_versioning",
+                return_value=1,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.check_event_fully_settled",
+                return_value=False,  # Not all settled
+            ) as mock_check,
+            patch(
+                "precog.schedulers.kalshi_poller.update_event",
+            ) as mock_update_event,
+        ):
+            poller_with_mock_client._sync_market_to_db(settled_market)
+
+            mock_check.assert_called_once_with(42)
+            mock_update_event.assert_not_called()
+
+    @pytest.mark.unit
+    def test_no_event_check_when_market_has_no_event(self, poller_with_mock_client):
+        """When market has no event_internal_id, event settlement check is skipped."""
+        settled_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills win by 25+ points?",
+            "status": "settled",
+            "result": "yes",
+            "yes_ask_dollars": Decimal("1.0000"),
+            "no_ask_dollars": Decimal("1.0000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        existing = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "yes_ask_price": Decimal("0.4800"),
+            "no_ask_price": Decimal("0.5500"),
+            "status": "open",
+            "event_internal_id": None,  # No event
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=existing,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.update_market_with_versioning",
+                return_value=1,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.check_event_fully_settled",
+            ) as mock_check,
+        ):
+            poller_with_mock_client._sync_market_to_db(settled_market)
+
+            mock_check.assert_not_called()
+
+    @pytest.mark.unit
+    def test_no_event_check_when_status_not_settled(self, poller_with_mock_client):
+        """Non-settled status changes do not trigger event settlement check."""
+        closing_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills win by 25+ points?",
+            "status": "closed",  # Maps to 'closed', not 'settled'
+            "result": None,
+            "yes_ask_dollars": Decimal("0.8000"),
+            "no_ask_dollars": Decimal("0.2000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        existing = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "yes_ask_price": Decimal("0.4800"),
+            "no_ask_price": Decimal("0.5500"),
+            "status": "open",
+            "event_internal_id": 42,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=existing,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.update_market_with_versioning",
+                return_value=1,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.check_event_fully_settled",
+            ) as mock_check,
+        ):
+            poller_with_mock_client._sync_market_to_db(closing_market)
+
+            mock_check.assert_not_called()

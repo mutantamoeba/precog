@@ -48,6 +48,7 @@ from typing import Any, ClassVar, cast
 from precog.api_connectors.kalshi_client import KalshiClient
 from precog.api_connectors.types import ProcessedMarketData, SeriesData
 from precog.database.crud_operations import (
+    check_event_fully_settled,
     count_open_markets,
     create_alert,
     create_market,
@@ -55,6 +56,7 @@ from precog.database.crud_operations import (
     get_or_create_event,
     get_or_create_series,
     update_bracket_counts,
+    update_event,
     update_event_game_id,
     update_market_with_versioning,
 )
@@ -583,8 +585,14 @@ class KalshiMarketPoller(BasePoller):
             frequency=series_data.get("frequency"),
             tags=tags if tags else None,
             metadata={
-                "settlement_sources": series_data.get("settlement_sources"),
-                "contract_terms_url": series_data.get("contract_terms_url"),
+                k: v
+                for k, v in {
+                    "settlement_sources": series_data.get("settlement_sources"),
+                    "contract_terms_url": series_data.get("contract_terms_url"),
+                    "expected_expiration_time": series_data.get("expected_expiration_time"),
+                    "settlement_timer_seconds": series_data.get("settlement_timer_seconds"),
+                }.items()
+                if v is not None
             },
             update_if_exists=True,
         )
@@ -1018,6 +1026,38 @@ class KalshiMarketPoller(BasePoller):
             no_ask_cents = market.get("no_ask", 0)
             no_price = Decimal(no_ask_cents) / Decimal(100)
 
+        # Extract bid prices, last trade price, and liquidity (migration 0021 columns).
+        # Same fallback pattern: try _dollars first, fall back to cents/100.
+        yes_bid_price = market.get("yes_bid_dollars")
+        if yes_bid_price is None:
+            yes_bid_cents = market.get("yes_bid")
+            if yes_bid_cents is not None:
+                yes_bid_price = Decimal(yes_bid_cents) / Decimal(100)
+
+        no_bid_price = market.get("no_bid_dollars")
+        if no_bid_price is None:
+            no_bid_cents = market.get("no_bid")
+            if no_bid_cents is not None:
+                no_bid_price = Decimal(no_bid_cents) / Decimal(100)
+
+        last_price = market.get("last_price_dollars")
+        if last_price is None:
+            last_price_cents = market.get("last_price")
+            if last_price_cents is not None:
+                last_price = Decimal(last_price_cents) / Decimal(100)
+
+        # Liquidity: try _dollars first (Decimal), fall back to integer dollar amount.
+        liquidity = market.get("liquidity_dollars")
+        if liquidity is None:
+            raw_liquidity = market.get("liquidity")
+            liquidity = Decimal(raw_liquidity) if raw_liquidity is not None else None
+
+        # Spread = yes_ask - yes_bid (when both are available and bid > 0).
+        # If yes_bid is None or 0, spread is unknowable.
+        spread: Decimal | None = None
+        if yes_bid_price is not None and yes_bid_price > 0:
+            spread = yes_price - yes_bid_price
+
         # Compute series/subcategory and enrichment columns for both
         # create and update paths (migration 0033).
         # Use the passed series_ticker parameter, fall back to market dict if available
@@ -1095,6 +1135,14 @@ class KalshiMarketPoller(BasePoller):
                         series_internal_id=series_pk,  # Integer FK to series(id)
                         subcategory=subcategory,
                         game_id=game_id,  # Link to games table (may be None)
+                        # Event time proxies from market-level fields.
+                        # Uses the FIRST market seen in the event (subsequent
+                        # markets hit the _event_id_map cache and skip creation).
+                        start_time=market.get("open_time"),
+                        end_time=market.get("expiration_time"),
+                        # We only poll active markets, so new events are live.
+                        # Settlement detection (Task 5) transitions to 'final'.
+                        status="live",
                         metadata={
                             "series_ticker": effective_series,
                         },
@@ -1106,6 +1154,24 @@ class KalshiMarketPoller(BasePoller):
                     # match, update it now (handles the TODO in get_or_create_event)
                     if not _created and game_id is not None:
                         update_event_game_id(event_pk, game_id)
+
+            # Settlement detection on create path: if a market arrives
+            # already settled (e.g., poller restart, new series backfill),
+            # compute settlement_value from the Kalshi result field.
+            create_settlement_value: Decimal | None = None
+            if db_status == "settled":
+                create_result = market.get("result")
+                if create_result == "yes":
+                    create_settlement_value = Decimal("1.0000")
+                elif create_result == "no":
+                    create_settlement_value = Decimal("0.0000")
+                else:
+                    logger.warning(
+                        "Market %s settled with unexpected result=%r, "
+                        "settlement_value will be NULL",
+                        ticker,
+                        create_result,
+                    )
 
             # Migration 0022: create_market returns int PK
             # Migration 0033: subtitle, open_time, close_time, expiration_time
@@ -1123,6 +1189,11 @@ class KalshiMarketPoller(BasePoller):
                 status=db_status,
                 volume=market.get("volume"),
                 open_interest=market.get("open_interest"),
+                spread=spread,
+                yes_bid_price=yes_bid_price,
+                no_bid_price=no_bid_price,
+                last_price=last_price,
+                liquidity=liquidity,
                 subtitle=market.get("subtitle"),
                 open_time=market.get("open_time"),
                 close_time=market.get("close_time"),
@@ -1130,6 +1201,7 @@ class KalshiMarketPoller(BasePoller):
                 subcategory=subcategory,
                 source_url=source_url,
                 outcome_label=outcome_label,
+                settlement_value=create_settlement_value,
                 metadata={
                     k: v
                     for k, v in {
@@ -1140,6 +1212,21 @@ class KalshiMarketPoller(BasePoller):
                 },
             )
             logger.debug("Created market: %s", ticker)
+
+            # Event propagation on create path: if created market is already
+            # settled and belongs to an event, check full event settlement.
+            if (
+                db_status == "settled"
+                and event_pk is not None
+                and check_event_fully_settled(event_pk)
+            ):
+                update_event(event_pk, status="final")
+                logger.info(
+                    "Event %s fully settled (triggered by new market %s)",
+                    event_pk,
+                    ticker,
+                )
+
             return True
 
         # Market exists - check if price changed (avoid unnecessary versioning)
@@ -1150,6 +1237,24 @@ class KalshiMarketPoller(BasePoller):
         status_changed = existing["status"] != db_status
 
         if price_changed or status_changed:
+            # Settlement detection: when a market settles, record the
+            # settlement_value derived from the Kalshi 'result' field.
+            # "yes" -> 1.0000, "no" -> 0.0000.  Only set on settled markets.
+            settlement_value: Decimal | None = None
+            if db_status == "settled":
+                result = market.get("result")
+                if result == "yes":
+                    settlement_value = Decimal("1.0000")
+                elif result == "no":
+                    settlement_value = Decimal("0.0000")
+                else:
+                    logger.warning(
+                        "Market %s settled with unexpected result=%r, "
+                        "settlement_value will be NULL",
+                        ticker,
+                        result,
+                    )
+
             # Migration 0033: pass enrichment columns on update path too,
             # so lifecycle timestamps are refreshed when prices change.
             update_market_with_versioning(
@@ -1159,12 +1264,18 @@ class KalshiMarketPoller(BasePoller):
                 status=db_status,
                 volume=market.get("volume"),
                 open_interest=market.get("open_interest"),
+                spread=spread,
+                yes_bid_price=yes_bid_price,
+                no_bid_price=no_bid_price,
+                last_price=last_price,
+                liquidity=liquidity,
                 subtitle=market.get("subtitle"),
                 open_time=market.get("open_time"),
                 close_time=market.get("close_time"),
                 expiration_time=market.get("expiration_time"),
                 subcategory=subcategory,
                 source_url=source_url,
+                settlement_value=settlement_value,
             )
             logger.debug(
                 "Updated market: %s (yes: %s -> %s)",
@@ -1172,6 +1283,22 @@ class KalshiMarketPoller(BasePoller):
                 existing["yes_ask_price"],
                 yes_price,
             )
+
+            # Event settlement propagation: if this market just settled and
+            # belongs to an event, check whether ALL sibling markets have
+            # also settled.  If so, transition the parent event to 'final'.
+            if (
+                db_status == "settled"
+                and existing.get("event_internal_id")
+                and check_event_fully_settled(existing["event_internal_id"])
+            ):
+                update_event(existing["event_internal_id"], status="final")
+                logger.info(
+                    "Event %s fully settled (triggered by market %s)",
+                    existing["event_internal_id"],
+                    ticker,
+                )
+
             return False  # Updated, not created
 
         # No changes, skip

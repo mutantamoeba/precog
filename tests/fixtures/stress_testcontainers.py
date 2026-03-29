@@ -309,6 +309,23 @@ def _stress_postgres_container_session() -> Generator[dict[str, str], None, None
         )
 
         # Set environment variables for precog.database.connection
+        # Must set BOTH flat DB_* vars AND prefixed vars (e.g., TEST_DB_HOST)
+        # because initialize_pool() uses get_prefixed_env() which checks
+        # prefixed vars first. Without prefixed vars here, load_dotenv()
+        # (called at connection.py import time) populates TEST_DB_HOST from
+        # .env — pointing at the local DB, not the testcontainer.
+        # This mirrors _apply_full_schema() which already sets both.
+        precog_env = os.environ.get("PRECOG_ENV", "").lower()
+        prefix_map = {
+            "dev": "DEV",
+            "development": "DEV",
+            "test": "TEST",
+            "staging": "STAGING",
+            "prod": "PROD",
+            "production": "PROD",
+        }
+        prefix = prefix_map.get(precog_env)
+
         original_env = {
             "DB_HOST": os.environ.get("DB_HOST"),
             "DB_PORT": os.environ.get("DB_PORT"),
@@ -316,12 +333,24 @@ def _stress_postgres_container_session() -> Generator[dict[str, str], None, None
             "DB_USER": os.environ.get("DB_USER"),
             "DB_PASSWORD": os.environ.get("DB_PASSWORD"),
         }
+        # Also save prefixed vars so we can restore them
+        if prefix:
+            for var in ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASSWORD"):
+                original_env[f"{prefix}_{var}"] = os.environ.get(f"{prefix}_{var}")
 
         os.environ["DB_HOST"] = host
         os.environ["DB_PORT"] = str(port)
         os.environ["DB_NAME"] = "stress_test_db"
         os.environ["DB_USER"] = "stress_user"
         os.environ["DB_PASSWORD"] = "stress_password"
+
+        # Set prefixed vars to override any .env values loaded at import time
+        if prefix:
+            os.environ[f"{prefix}_DB_HOST"] = host
+            os.environ[f"{prefix}_DB_PORT"] = str(port)
+            os.environ[f"{prefix}_DB_NAME"] = "stress_test_db"
+            os.environ[f"{prefix}_DB_USER"] = "stress_user"
+            os.environ[f"{prefix}_DB_PASSWORD"] = "stress_password"
 
         # Initialize pool
         try:

@@ -27,6 +27,7 @@ import pytest
 from precog.database.crud_operations import (
     LEAGUE_SPORT_CATEGORY,
     TRACKED_SITUATION_KEYS,
+    check_event_fully_settled,
     create_game_state,
     create_team,
     create_team_ranking,
@@ -44,8 +45,10 @@ from precog.database.crud_operations import (
     get_teams_with_kalshi_codes,
     get_venue_by_espn_id,
     get_venue_by_id,
+    update_event,
     update_event_game_id,
     update_game_result,
+    update_market_with_versioning,
     upsert_game_state,
 )
 
@@ -339,9 +342,9 @@ class TestCreateGameStateUnit:
 
     @patch("precog.database.crud_operations.get_cursor")
     def test_create_game_state_returns_id(self, mock_get_cursor):
-        """Test create_game_state returns game_state_id."""
+        """Test create_game_state returns surrogate id."""
         mock_cursor = MagicMock()
-        # Note: RETURNING id returns "id" key, then code maps to game_state_id
+        # Note: RETURNING id returns "id" key (surrogate PK)
         mock_cursor.fetchone.return_value = {"id": 500}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
@@ -373,8 +376,7 @@ class TestCreateGameStateUnit:
         create_game_state(espn_event_id="401547417", situation=situation, game_status="in_progress")
 
         # Verify JSON serialization in params
-        # Note: create_game_state makes 2 execute calls: INSERT then UPDATE
-        # Check the first call (INSERT) for the params
+        # create_game_state makes 1 execute call: INSERT RETURNING id
         insert_call = mock_cursor.execute.call_args_list[0]
         params = insert_call[0][1]
         # situation is near the end of params
@@ -395,8 +397,7 @@ class TestCreateGameStateUnit:
             clock_display="5:32",
         )
 
-        # Note: create_game_state makes 2 execute calls: INSERT then UPDATE
-        # Check the first call (INSERT) for the params
+        # create_game_state makes 1 execute call: INSERT RETURNING id
         insert_call = mock_cursor.execute.call_args_list[0]
         params = insert_call[0][1]
         # Verify Decimal is passed (not float)
@@ -434,7 +435,7 @@ class TestGetGameStateUnit:
     def test_get_current_game_state_returns_current(self, mock_fetch_one):
         """Test get_current_game_state returns current version only."""
         mock_fetch_one.return_value = {
-            "game_state_id": 500,
+            "id": 500,
             "espn_event_id": "401547417",
             "home_score": 14,
             "away_score": 7,
@@ -460,9 +461,9 @@ class TestGetGameStateUnit:
     def test_get_game_state_history_returns_all_versions(self, mock_fetch_all):
         """Test get_game_state_history returns all versions."""
         mock_fetch_all.return_value = [
-            {"game_state_id": 503, "home_score": 21, "row_current_ind": True},
-            {"game_state_id": 502, "home_score": 14, "row_current_ind": False},
-            {"game_state_id": 501, "home_score": 7, "row_current_ind": False},
+            {"id": 503, "home_score": 21, "row_current_ind": True},
+            {"id": 502, "home_score": 14, "row_current_ind": False},
+            {"id": 501, "home_score": 7, "row_current_ind": False},
         ]
 
         result = get_game_state_history("401547417")
@@ -473,7 +474,7 @@ class TestGetGameStateUnit:
     @patch("precog.database.crud_operations.fetch_all")
     def test_get_game_state_history_respects_limit(self, mock_fetch_all):
         """Test get_game_state_history respects limit parameter."""
-        mock_fetch_all.return_value = [{"game_state_id": 1}]
+        mock_fetch_all.return_value = [{"id": 1}]
 
         get_game_state_history("401547417", limit=5)
 
@@ -491,10 +492,9 @@ class TestUpsertGameStateUnit:
         """Test upsert_game_state closes current row before inserting.
 
         Educational Note:
-            upsert_game_state makes 3 execute calls:
+            upsert_game_state makes 2 execute calls:
             1. close_query - SET row_current_ind = FALSE
             2. insert_query - INSERT new row RETURNING id
-            3. update_id_query - UPDATE game_state_id
         """
         mock_cursor = MagicMock()
         # Mock fetchone to return id for RETURNING clause
@@ -2035,6 +2035,155 @@ class TestUpdateEventGameIdUnit:
 
 
 # =============================================================================
+# UPDATE EVENT UNIT TESTS (general-purpose)
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestUpdateEventUnit:
+    """Unit tests for update_event — general-purpose event field updater."""
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_basic_status_update(self, mock_get_cursor):
+        """Single-field update (status) executes correct SQL."""
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = update_event(42, status="final")
+
+        assert result is True
+        mock_cursor.execute.assert_called_once()
+        query, params = mock_cursor.execute.call_args[0]
+        assert "status = %s" in query
+        assert "updated_at = NOW()" in query
+        assert "final" in params
+        assert 42 in params  # event_internal_id in WHERE clause
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_partial_update_multiple_fields(self, mock_get_cursor):
+        """Update start_time and end_time together, leaving other fields untouched."""
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = update_event(
+            7,
+            start_time="2025-12-01T12:00:00Z",
+            end_time="2025-12-01T23:59:00Z",
+        )
+
+        assert result is True
+        query, _params = mock_cursor.execute.call_args[0]
+        assert "start_time = %s" in query
+        assert "end_time = %s" in query
+        # status, result, description should NOT appear
+        assert "status = %s" not in query
+        assert "result = %s" not in query
+        assert "description = %s" not in query
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_returns_false_when_event_not_found(self, mock_get_cursor):
+        """Returns False when no row matches the event_internal_id."""
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 0
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = update_event(999, status="live")
+
+        assert result is False
+
+    def test_invalid_status_raises_value_error(self):
+        """Invalid status value raises ValueError before touching the DB."""
+        with pytest.raises(ValueError, match="Invalid event status 'bogus'"):
+            update_event(42, status="bogus")
+
+    def test_all_none_returns_false(self):
+        """Calling with no fields to update returns False without DB call."""
+        # No DB mock needed — should short-circuit before get_cursor()
+        result = update_event(42)
+        assert result is False
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_result_serialized_as_json(self, mock_get_cursor):
+        """result dict is JSON-serialized (matching create_event metadata pattern)."""
+        import json
+
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result_dict = {"winner": "yes", "settlement_value": "1.0000"}
+        update_event(42, result=result_dict)
+
+        query, params = mock_cursor.execute.call_args[0]
+        assert "result = %s" in query
+        # The result should be a JSON string, not a dict
+        json_param = params[0]  # result is first non-None field
+        assert isinstance(json_param, str)
+        assert json.loads(json_param) == result_dict
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_description_update(self, mock_get_cursor):
+        """Description field can be updated."""
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = update_event(42, description="Updated event description")
+
+        assert result is True
+        query, params = mock_cursor.execute.call_args[0]
+        assert "description = %s" in query
+        assert "Updated event description" in params
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_all_fields_together(self, mock_get_cursor):
+        """All five fields can be updated in a single call."""
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = update_event(
+            42,
+            start_time="2025-12-01T12:00:00Z",
+            end_time="2025-12-01T23:59:00Z",
+            status="final",
+            result={"winner": "yes"},
+            description="Settled",
+        )
+
+        assert result is True
+        query, _params = mock_cursor.execute.call_args[0]
+        assert "start_time = %s" in query
+        assert "end_time = %s" in query
+        assert "status = %s" in query
+        assert "result = %s" in query
+        assert "description = %s" in query
+        assert "updated_at = NOW()" in query
+
+    def test_valid_statuses_accepted(self):
+        """All five valid statuses pass validation (ValueError not raised)."""
+        valid = ["scheduled", "live", "final", "cancelled", "postponed"]
+        for s in valid:
+            # Should NOT raise — we don't care about the DB call,
+            # just that validation passes. Use mock to avoid actual DB.
+            with patch("precog.database.crud_operations.get_cursor") as mock_gc:
+                mock_cursor = MagicMock()
+                mock_cursor.rowcount = 0
+                mock_gc.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+                mock_gc.return_value.__exit__ = MagicMock(return_value=False)
+                # Should not raise ValueError
+                update_event(1, status=s)
+
+
+# =============================================================================
 # CREATE TEAM UNIT TESTS
 # =============================================================================
 
@@ -2276,3 +2425,173 @@ class TestCreateTeamUnit:
         # Both calls should be ESPN ID lookups, not code lookups
         for call in mock_fetch_one.call_args_list:
             assert "espn_team_id" in call[0][0]
+
+
+# =============================================================================
+# SETTLEMENT VALUE ON UPDATE_MARKET_WITH_VERSIONING TESTS
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestUpdateMarketSettlementValue:
+    """Test settlement_value flows through update_market_with_versioning."""
+
+    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_operations.get_current_market")
+    def test_settlement_value_included_in_dimension_update(self, mock_get_current, mock_get_cursor):
+        """settlement_value is written to the markets dimension UPDATE."""
+        mock_get_current.return_value = {
+            "id": 1,
+            "yes_ask_price": Decimal("0.5000"),
+            "no_ask_price": Decimal("0.5000"),
+            "status": "open",
+            "volume": 100,
+            "open_interest": 50,
+            "metadata": None,
+            "spread": None,
+            "yes_bid_price": None,
+            "no_bid_price": None,
+            "last_price": None,
+            "liquidity": None,
+            "subtitle": None,
+            "open_time": None,
+            "close_time": None,
+            "expiration_time": None,
+            "outcome_label": None,
+            "subcategory": None,
+            "bracket_count": None,
+            "source_url": None,
+            "settlement_value": None,
+        }
+
+        mock_cursor = MagicMock()
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        update_market_with_versioning(
+            ticker="TEST-MKT",
+            status="settled",
+            settlement_value=Decimal("1.0000"),
+        )
+
+        # The first execute call is the dimension UPDATE
+        dim_call = mock_cursor.execute.call_args_list[0]
+        sql = dim_call[0][0]
+        params = dim_call[0][1]
+
+        assert "settlement_value" in sql
+        # settlement_value is the 11th param (after source_url, before market_pk)
+        assert Decimal("1.0000") in params
+
+    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_operations.get_current_market")
+    def test_settlement_value_none_preserves_existing(self, mock_get_current, mock_get_cursor):
+        """When settlement_value is None, the existing value is preserved."""
+        mock_get_current.return_value = {
+            "id": 1,
+            "yes_ask_price": Decimal("0.5000"),
+            "no_ask_price": Decimal("0.5000"),
+            "status": "settled",
+            "volume": 100,
+            "open_interest": 50,
+            "metadata": None,
+            "spread": None,
+            "yes_bid_price": None,
+            "no_bid_price": None,
+            "last_price": None,
+            "liquidity": None,
+            "subtitle": None,
+            "open_time": None,
+            "close_time": None,
+            "expiration_time": None,
+            "outcome_label": None,
+            "subcategory": None,
+            "bracket_count": None,
+            "source_url": None,
+            "settlement_value": Decimal("1.0000"),
+        }
+
+        mock_cursor = MagicMock()
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        # Do NOT pass settlement_value — it should use existing
+        update_market_with_versioning(
+            ticker="TEST-MKT",
+            yes_ask_price=Decimal("0.6000"),
+        )
+
+        dim_call = mock_cursor.execute.call_args_list[0]
+        params = dim_call[0][1]
+        # Existing Decimal("1.0000") should be preserved
+        assert Decimal("1.0000") in params
+
+    def test_settlement_value_rejects_float(self):
+        """settlement_value must be Decimal, not float."""
+        with pytest.raises(TypeError, match="settlement_value must be Decimal"):
+            update_market_with_versioning(
+                ticker="TEST-MKT",
+                settlement_value=1.0,  # type: ignore[arg-type]
+            )
+
+
+# =============================================================================
+# CHECK_EVENT_FULLY_SETTLED TESTS
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestCheckEventFullySettled:
+    """Test check_event_fully_settled helper."""
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_all_markets_settled_returns_true(self, mock_fetch_one):
+        """Returns True when all markets in the event are settled."""
+        mock_fetch_one.return_value = {"total": 3, "settled": 3}
+
+        assert check_event_fully_settled(42) is True
+        mock_fetch_one.assert_called_once()
+        # Verify event_internal_id is passed as param
+        call_args = mock_fetch_one.call_args
+        assert call_args[0][1] == (42,)
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_some_unsettled_returns_false(self, mock_fetch_one):
+        """Returns False when some markets are not yet settled."""
+        mock_fetch_one.return_value = {"total": 3, "settled": 1}
+
+        assert check_event_fully_settled(42) is False
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_no_markets_returns_false(self, mock_fetch_one):
+        """Returns False when no markets exist for the event."""
+        mock_fetch_one.return_value = {"total": 0, "settled": 0}
+
+        assert check_event_fully_settled(42) is False
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_fetch_one_returns_none(self, mock_fetch_one):
+        """Returns False when fetch_one returns None (defensive)."""
+        mock_fetch_one.return_value = None
+
+        assert check_event_fully_settled(42) is False
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_single_market_settled(self, mock_fetch_one):
+        """Returns True when a single market in the event is settled."""
+        mock_fetch_one.return_value = {"total": 1, "settled": 1}
+
+        assert check_event_fully_settled(99) is True
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_query_uses_filter_clause(self, mock_fetch_one):
+        """Verify the SQL uses FILTER (WHERE status = 'settled') pattern."""
+        mock_fetch_one.return_value = {"total": 0, "settled": 0}
+
+        check_event_fully_settled(1)
+
+        call_args = mock_fetch_one.call_args
+        sql = call_args[0][0]
+        assert "FILTER" in sql
+        assert "settled" in sql
+        assert "event_internal_id" in sql

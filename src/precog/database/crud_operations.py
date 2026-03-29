@@ -1161,6 +1161,12 @@ def create_market(
     subcategory: str | None = None,
     bracket_count: int | None = None,
     source_url: str | None = None,
+    *,
+    yes_bid_price: Decimal | None = None,
+    no_bid_price: Decimal | None = None,
+    last_price: Decimal | None = None,
+    liquidity: Decimal | None = None,
+    settlement_value: Decimal | None = None,
 ) -> int:
     """
     Create new market (dimension) + initial snapshot (fact).
@@ -1192,6 +1198,10 @@ def create_market(
         subcategory: Sport subcategory (e.g., "nfl", "nba") — matches events.subcategory
         bracket_count: Number of markets in the parent event bracket
         source_url: URL to the market on the platform
+        yes_bid_price: YES bid price as DECIMAL(10,4) (keyword-only, optional)
+        no_bid_price: NO bid price as DECIMAL(10,4) (keyword-only, optional)
+        last_price: Last traded price as DECIMAL(10,4) (keyword-only, optional)
+        liquidity: Market liquidity as DECIMAL(10,4) (keyword-only, optional)
 
     Returns:
         Integer surrogate PK (markets.id) of the newly created market.
@@ -1225,6 +1235,16 @@ def create_market(
     no_ask_price = validate_decimal(no_ask_price, "no_ask_price")
     if spread is not None:
         spread = validate_decimal(spread, "spread")
+    if yes_bid_price is not None:
+        yes_bid_price = validate_decimal(yes_bid_price, "yes_bid_price")
+    if no_bid_price is not None:
+        no_bid_price = validate_decimal(no_bid_price, "no_bid_price")
+    if last_price is not None:
+        last_price = validate_decimal(last_price, "last_price")
+    if liquidity is not None:
+        liquidity = validate_decimal(liquidity, "liquidity")
+    if settlement_value is not None:
+        settlement_value = validate_decimal(settlement_value, "settlement_value")
 
     with get_cursor(commit=True) as cur:
         # Step 1: Insert dimension row
@@ -1235,12 +1255,12 @@ def create_market(
             """
             INSERT INTO markets (
                 platform_id, event_internal_id, external_id,
-                ticker, title, market_type, status,
+                ticker, title, market_type, status, settlement_value,
                 subtitle, open_time, close_time, expiration_time,
                 outcome_label, subcategory, bracket_count, source_url,
                 metadata, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             RETURNING id
             """,
             (
@@ -1251,6 +1271,7 @@ def create_market(
                 title,
                 market_type,
                 status,
+                settlement_value,
                 subtitle,
                 open_time,
                 close_time,
@@ -1266,22 +1287,28 @@ def create_market(
         market_pk = cast("int", dim_row["id"])
 
         # Step 2: Insert initial snapshot (fact row)
+        # Migration 0021: yes_bid_price, no_bid_price, last_price, liquidity
         cur.execute(
             """
             INSERT INTO market_snapshots (
                 market_id, yes_ask_price, no_ask_price,
-                spread, volume, open_interest,
+                yes_bid_price, no_bid_price, last_price,
+                spread, volume, open_interest, liquidity,
                 row_current_ind, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, TRUE, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
             """,
             (
                 market_pk,
                 yes_ask_price,
                 no_ask_price,
+                yes_bid_price,
+                no_bid_price,
+                last_price,
                 spread,
                 volume,
                 open_interest,
+                liquidity,
             ),
         )
 
@@ -1400,6 +1427,13 @@ def update_market_with_versioning(
     subcategory: str | None = None,
     bracket_count: int | None = None,
     source_url: str | None = None,
+    *,
+    spread: Decimal | None = None,
+    yes_bid_price: Decimal | None = None,
+    no_bid_price: Decimal | None = None,
+    last_price: Decimal | None = None,
+    liquidity: Decimal | None = None,
+    settlement_value: Decimal | None = None,
 ) -> int:
     """
     Update market: SCD Type 2 on snapshots, direct UPDATE on dimension.
@@ -1428,6 +1462,13 @@ def update_market_with_versioning(
         subcategory: Sport subcategory (optional) — matches events.subcategory
         bracket_count: Number of markets in parent event bracket (optional)
         source_url: URL to the market on the platform (optional)
+        spread: Fresh bid-ask spread as DECIMAL(10,4) (keyword-only, optional)
+        yes_bid_price: YES bid price as DECIMAL(10,4) (keyword-only, optional)
+        no_bid_price: NO bid price as DECIMAL(10,4) (keyword-only, optional)
+        last_price: Last traded price as DECIMAL(10,4) (keyword-only, optional)
+        liquidity: Market liquidity as DECIMAL(10,4) (keyword-only, optional)
+        settlement_value: Settlement outcome as DECIMAL(10,4) (keyword-only, optional).
+            Must be 0.0000 (no) or 1.0000 (yes). CHECK constraint: 0.0000-1.0000.
 
     Returns:
         Integer surrogate PK of the market (markets.id)
@@ -1449,6 +1490,18 @@ def update_market_with_versioning(
         yes_ask_price = validate_decimal(yes_ask_price, "yes_ask_price")
     if no_ask_price is not None:
         no_ask_price = validate_decimal(no_ask_price, "no_ask_price")
+    if spread is not None:
+        spread = validate_decimal(spread, "spread")
+    if yes_bid_price is not None:
+        yes_bid_price = validate_decimal(yes_bid_price, "yes_bid_price")
+    if no_bid_price is not None:
+        no_bid_price = validate_decimal(no_bid_price, "no_bid_price")
+    if last_price is not None:
+        last_price = validate_decimal(last_price, "last_price")
+    if liquidity is not None:
+        liquidity = validate_decimal(liquidity, "liquidity")
+    if settlement_value is not None:
+        settlement_value = validate_decimal(settlement_value, "settlement_value")
 
     # Get current market + snapshot
     current = get_current_market(ticker)
@@ -1466,6 +1519,13 @@ def update_market_with_versioning(
     new_open_interest = open_interest if open_interest is not None else current["open_interest"]
     new_metadata = market_metadata if market_metadata is not None else current["metadata"]
 
+    # Snapshot microstructure: use fresh values when provided, fall back to current
+    new_spread = spread if spread is not None else current["spread"]
+    new_yes_bid = yes_bid_price if yes_bid_price is not None else current["yes_bid_price"]
+    new_no_bid = no_bid_price if no_bid_price is not None else current["no_bid_price"]
+    new_last_price = last_price if last_price is not None else current["last_price"]
+    new_liquidity = liquidity if liquidity is not None else current["liquidity"]
+
     # Enrichment columns: only override if explicitly provided (not None)
     new_subtitle = subtitle if subtitle is not None else current["subtitle"]
     new_open_time = open_time if open_time is not None else current["open_time"]
@@ -1477,6 +1537,9 @@ def update_market_with_versioning(
     new_subcategory = subcategory if subcategory is not None else current["subcategory"]
     new_bracket_count = bracket_count if bracket_count is not None else current["bracket_count"]
     new_source_url = source_url if source_url is not None else current["source_url"]
+    new_settlement_value = (
+        settlement_value if settlement_value is not None else current["settlement_value"]
+    )
 
     with get_cursor(commit=True) as cur:
         # Step 1: Update dimension row — always bump updated_at, plus
@@ -1495,6 +1558,7 @@ def update_market_with_versioning(
                 subcategory = %s,
                 bracket_count = %s,
                 source_url = %s,
+                settlement_value = %s,
                 updated_at = NOW()
             WHERE id = %s
             """,
@@ -1509,6 +1573,7 @@ def update_market_with_versioning(
                 new_subcategory,
                 new_bracket_count,
                 new_source_url,
+                new_settlement_value,
                 market_pk,
             ),
         )
@@ -1527,22 +1592,28 @@ def update_market_with_versioning(
         )
 
         # Insert new snapshot
+        # Migration 0021: yes_bid_price, no_bid_price, last_price, liquidity
         cur.execute(
             """
             INSERT INTO market_snapshots (
                 market_id, yes_ask_price, no_ask_price,
-                spread, volume, open_interest,
+                yes_bid_price, no_bid_price, last_price,
+                spread, volume, open_interest, liquidity,
                 row_current_ind, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, TRUE, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
             """,
             (
                 market_pk,
                 new_yes,
                 new_no,
-                current["spread"],
+                new_yes_bid,
+                new_no_bid,
+                new_last_price,
+                new_spread,
                 new_volume,
                 new_open_interest,
+                new_liquidity,
             ),
         )
 
@@ -3625,10 +3696,9 @@ def create_game_state(
         - Critical for backtesting live trading strategies
         - ~190 updates per game = ~190 historical rows per game
 
-        Dual-Key Structure (Migration 029):
+        Key Structure:
         - id SERIAL (surrogate key) - returned by this function
-        - game_state_id VARCHAR (business key) - auto-generated as GS-{id}
-        - Enables SCD Type 2 versioning (multiple versions of same event)
+        - espn_event_id (natural key) - used for SCD Type 2 versioning
 
     Example:
         >>> state_id = create_game_state(
@@ -3648,17 +3718,16 @@ def create_game_state(
         - ADR-029: ESPN Data Model with Normalized Schema
         - Pattern 2: Dual Versioning System (SCD Type 2)
     """
-    # Step 1: INSERT with placeholder game_state_id (will be updated immediately)
     insert_query = """
         INSERT INTO game_states (
-            game_state_id, espn_event_id, home_team_id, away_team_id, venue_id,
+            espn_event_id, home_team_id, away_team_id, venue_id,
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
             data_source, game_id, row_current_ind, row_start_ts
         )
         VALUES (
-            'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, TRUE, NOW()
         )
         RETURNING id
@@ -3690,17 +3759,7 @@ def create_game_state(
             ),
         )
         result = cur.fetchone()
-        surrogate_id = cast("int", result["id"])
-
-        # Step 2: UPDATE to set correct game_state_id (GS-{id} format)
-        update_query = """
-            UPDATE game_states
-            SET game_state_id = %s
-            WHERE id = %s
-        """
-        cur.execute(update_query, (f"GS-{surrogate_id}", surrogate_id))
-
-        return surrogate_id
+        return cast("int", result["id"])
 
 
 def get_current_game_state(espn_event_id: str) -> dict[str, Any] | None:
@@ -3944,14 +4003,13 @@ def upsert_game_state(
             return None
 
     # Use a SINGLE transaction for all operations to maintain atomicity
-    # This ensures that if INSERT fails, the UPDATE is also rolled back
+    # This ensures that if INSERT fails, the close is also rolled back
     #
     # Educational Note:
-    #   SCD Type 2 upsert is a 3-step atomic operation:
+    #   SCD Type 2 upsert is a 2-step atomic operation:
     #   1. Close current row (row_current_ind = FALSE)
-    #   2. Insert new row with placeholder game_state_id
-    #   3. Update new row with proper game_state_id (GS-{id})
-    #   All three must succeed or all must fail (ACID transaction)
+    #   2. Insert new row with row_current_ind = TRUE
+    #   Both must succeed or both must fail (ACID transaction)
 
     close_query = """
         UPDATE game_states
@@ -3963,30 +4021,24 @@ def upsert_game_state(
 
     insert_query = """
         INSERT INTO game_states (
-            game_state_id, espn_event_id, home_team_id, away_team_id, venue_id,
+            espn_event_id, home_team_id, away_team_id, venue_id,
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
             data_source, game_id, row_current_ind, row_start_ts
         )
         VALUES (
-            'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, TRUE, NOW()
         )
         RETURNING id
-    """
-
-    update_id_query = """
-        UPDATE game_states
-        SET game_state_id = %s
-        WHERE id = %s
     """
 
     with get_cursor(commit=True) as cur:
         # Step 1: Close current row (if exists)
         cur.execute(close_query, (espn_event_id,))
 
-        # Step 2: Insert new row with placeholder
+        # Step 2: Insert new row
         cur.execute(
             insert_query,
             (
@@ -4013,12 +4065,7 @@ def upsert_game_state(
             ),
         )
         result = cur.fetchone()
-        surrogate_id = cast("int", result["id"])
-
-        # Step 3: Update game_state_id to proper value
-        cur.execute(update_id_query, (f"GS-{surrogate_id}", surrogate_id))
-
-        return surrogate_id
+        return cast("int", result["id"])
 
 
 def get_game_state_history(espn_event_id: str, limit: int = 100) -> list[dict[str, Any]]:
@@ -5507,7 +5554,7 @@ def insert_elo_calculation_log(
         calculation_source: How triggered ('bootstrap', 'realtime', 'backfill', 'manual')
         home_team_id: FK to teams.team_id (optional, for live games)
         away_team_id: FK to teams.team_id (optional, for live games)
-        game_state_id: FK to game_states.game_state_id (optional)
+        game_state_id: FK to game_states.id (optional)
         game_id: FK to games.id (optional)
         mov_multiplier: Margin of victory multiplier (optional)
         home_epa_adjustment: EPA-based adjustment for home team (NFL only)
@@ -8998,6 +9045,128 @@ def update_event_game_id(event_internal_id: int, game_id: int) -> bool:
     with get_cursor(commit=True) as cur:
         cur.execute(query, (game_id, event_internal_id, game_id))
         return bool(cur.rowcount > 0)
+
+
+def update_event(
+    event_internal_id: int,
+    *,
+    start_time: str | None = None,
+    end_time: str | None = None,
+    status: str | None = None,
+    result: dict | None = None,
+    description: str | None = None,
+) -> bool:
+    """Update one or more fields on an existing event.
+
+    Accepts the integer surrogate PK and only updates fields that are
+    explicitly provided (non-None). Always bumps ``updated_at``.
+
+    Args:
+        event_internal_id: The events.id (integer surrogate PK).
+        start_time: New start time (ISO 8601 string). PostgreSQL handles
+            ISO string -> TIMESTAMPTZ conversion natively.
+        end_time: New end time (ISO 8601 string).
+        status: New status. Must be one of: 'scheduled', 'live', 'final',
+            'cancelled', 'postponed' (validated against CHECK constraint).
+        result: Settlement result as a dict. Serialized to JSONB via
+            ``json.dumps()``, matching the pattern used for metadata in
+            ``create_event()``.
+        description: Updated description text.
+
+    Returns:
+        True if a row was updated, False if the event was not found.
+
+    Raises:
+        ValueError: If ``status`` is not a valid CHECK constraint value.
+
+    Example:
+        >>> updated = update_event(42, status="final", result={"winner": "yes"})
+        >>> if updated:
+        ...     print("Event settled")
+
+    References:
+        - events.status CHECK: ('scheduled', 'live', 'final', 'cancelled', 'postponed')
+        - Task 5 (settlement detection) will call this to transition events.
+        - Pattern follows ``update_event_game_id()`` above.
+    """
+    valid_statuses = {"scheduled", "live", "final", "cancelled", "postponed"}
+
+    if status is not None and status not in valid_statuses:
+        raise ValueError(
+            f"Invalid event status '{status}'. Must be one of: {sorted(valid_statuses)}"
+        )
+
+    # Build SET clause dynamically — only include non-None fields
+    set_parts: list[str] = []
+    params: list[Any] = []
+
+    if start_time is not None:
+        set_parts.append("start_time = %s")
+        params.append(start_time)
+    if end_time is not None:
+        set_parts.append("end_time = %s")
+        params.append(end_time)
+    if status is not None:
+        set_parts.append("status = %s")
+        params.append(status)
+    if result is not None:
+        set_parts.append("result = %s")
+        params.append(json.dumps(result))
+    if description is not None:
+        set_parts.append("description = %s")
+        params.append(description)
+
+    if not set_parts:
+        # Nothing to update — caller passed all None
+        return False
+
+    # Always bump updated_at
+    set_parts.append("updated_at = NOW()")
+
+    query = f"UPDATE events SET {', '.join(set_parts)} WHERE id = %s"  # noqa: S608
+    params.append(event_internal_id)
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, params)
+        return bool(cur.rowcount > 0)
+
+
+def check_event_fully_settled(event_internal_id: int) -> bool:
+    """Check whether all markets in an event have settled.
+
+    Uses a single aggregate query to count total markets and settled
+    markets for the given event.  Returns True only when at least one
+    market exists AND every market has ``status = 'settled'``.
+
+    Args:
+        event_internal_id: The events.id (integer surrogate PK).
+
+    Returns:
+        True if all markets in the event are settled (and at least one
+        market exists).  False otherwise.
+
+    Example:
+        >>> if check_event_fully_settled(42):
+        ...     update_event(42, status="final")
+
+    References:
+        - Task 5: Market settlement detection
+        - Called by KalshiMarketPoller._sync_market_to_db after a market
+          transitions to 'settled'.
+    """
+    query = """
+        SELECT
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE status = 'settled') AS settled
+        FROM markets
+        WHERE event_internal_id = %s
+    """
+    result = fetch_one(query, (event_internal_id,))
+    if result is None:
+        return False
+    total = int(result["total"])
+    settled = int(result["settled"])
+    return total > 0 and total == settled
 
 
 def find_unlinked_sports_events(league: str | None = None) -> list[dict[str, Any]]:
