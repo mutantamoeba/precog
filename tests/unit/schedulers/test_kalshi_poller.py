@@ -344,6 +344,13 @@ class TestKalshiMarketPollerSync:
             call_kwargs = mock_create.call_args.kwargs
             assert call_kwargs["yes_ask_price"] == Decimal("0.4800")
             assert call_kwargs["no_ask_price"] == Decimal("0.5500")
+            # Verify bid/last/liquidity/spread are passed through
+            assert call_kwargs["yes_bid_price"] == Decimal("0.4500")
+            assert call_kwargs["no_bid_price"] == Decimal("0.5200")
+            assert call_kwargs["last_price"] == Decimal("0.4700")
+            assert call_kwargs["liquidity"] == Decimal("5000")
+            # spread = yes_ask - yes_bid = 0.4800 - 0.4500 = 0.0300
+            assert call_kwargs["spread"] == Decimal("0.0300")
 
     @pytest.mark.unit
     def test_sync_updates_existing_market(self, poller_with_mock_client, mock_market_data):
@@ -367,6 +374,14 @@ class TestKalshiMarketPollerSync:
             assert was_created is False
             mock_update.assert_called_once()
 
+            # Verify bid/last/liquidity/spread are passed on update path
+            call_kwargs = mock_update.call_args.kwargs
+            assert call_kwargs["yes_bid_price"] == Decimal("0.4500")
+            assert call_kwargs["no_bid_price"] == Decimal("0.5200")
+            assert call_kwargs["last_price"] == Decimal("0.4700")
+            assert call_kwargs["liquidity"] == Decimal("5000")
+            assert call_kwargs["spread"] == Decimal("0.0300")
+
     @pytest.mark.unit
     def test_sync_skips_market_without_ticker(self, poller_with_mock_client):
         """Test that _sync_market_to_db skips market without ticker."""
@@ -385,6 +400,10 @@ class TestKalshiMarketPollerSync:
             "title": "Test Market",
             "yes_ask": 65,  # 65 cents = 0.65
             "no_ask": 35,  # 35 cents = 0.35
+            "yes_bid": 60,  # 60 cents = 0.60
+            "no_bid": 30,  # 30 cents = 0.30
+            "last_price": 62,  # 62 cents = 0.62
+            "liquidity": 3000,
             "status": "open",
             # No *_dollars fields
         }
@@ -399,6 +418,66 @@ class TestKalshiMarketPollerSync:
             call_kwargs = mock_create.call_args.kwargs
             assert call_kwargs["yes_ask_price"] == Decimal("0.65")
             assert call_kwargs["no_ask_price"] == Decimal("0.35")
+            # Bid/last/liquidity fallback from legacy cent fields
+            assert call_kwargs["yes_bid_price"] == Decimal("0.60")
+            assert call_kwargs["no_bid_price"] == Decimal("0.30")
+            assert call_kwargs["last_price"] == Decimal("0.62")
+            assert call_kwargs["liquidity"] == Decimal("3000")
+            # spread = yes_ask - yes_bid = 0.65 - 0.60 = 0.05
+            assert call_kwargs["spread"] == Decimal("0.05")
+
+    @pytest.mark.unit
+    def test_sync_handles_missing_bid_data_gracefully(self, poller_with_mock_client):
+        """Test that None bid/last/liquidity are passed when API has no data."""
+        market_minimal = {
+            "ticker": "KXNFLGAME-MINIMAL",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Minimal Market",
+            "yes_ask_dollars": Decimal("0.5000"),
+            "no_ask_dollars": Decimal("0.5000"),
+            "status": "open",
+            # No bid, last_price, or liquidity fields at all
+        }
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1) as mock_create,
+        ):
+            poller_with_mock_client._sync_market_to_db(market_minimal)
+
+            call_kwargs = mock_create.call_args.kwargs
+            assert call_kwargs["yes_bid_price"] is None
+            assert call_kwargs["no_bid_price"] is None
+            assert call_kwargs["last_price"] is None
+            assert call_kwargs["liquidity"] is None
+            # spread is None when yes_bid is None
+            assert call_kwargs["spread"] is None
+
+    @pytest.mark.unit
+    def test_sync_spread_none_when_bid_is_zero(self, poller_with_mock_client):
+        """Test that spread is None when yes_bid is 0 (no bids in book)."""
+        market_zero_bid = {
+            "ticker": "KXNFLGAME-ZEROBID",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Zero Bid Market",
+            "yes_ask_dollars": Decimal("0.5000"),
+            "no_ask_dollars": Decimal("0.5000"),
+            "yes_bid_dollars": Decimal("0.0000"),
+            "no_bid_dollars": Decimal("0.0000"),
+            "status": "open",
+        }
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1) as mock_create,
+        ):
+            poller_with_mock_client._sync_market_to_db(market_zero_bid)
+
+            call_kwargs = mock_create.call_args.kwargs
+            # spread should be None when bid is 0 (can't compute meaningful spread)
+            assert call_kwargs["spread"] is None
 
 
 # =============================================================================

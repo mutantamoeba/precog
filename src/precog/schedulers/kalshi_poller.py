@@ -1018,6 +1018,38 @@ class KalshiMarketPoller(BasePoller):
             no_ask_cents = market.get("no_ask", 0)
             no_price = Decimal(no_ask_cents) / Decimal(100)
 
+        # Extract bid prices, last trade price, and liquidity (migration 0021 columns).
+        # Same fallback pattern: try _dollars first, fall back to cents/100.
+        yes_bid_price = market.get("yes_bid_dollars")
+        if yes_bid_price is None:
+            yes_bid_cents = market.get("yes_bid")
+            if yes_bid_cents is not None:
+                yes_bid_price = Decimal(yes_bid_cents) / Decimal(100)
+
+        no_bid_price = market.get("no_bid_dollars")
+        if no_bid_price is None:
+            no_bid_cents = market.get("no_bid")
+            if no_bid_cents is not None:
+                no_bid_price = Decimal(no_bid_cents) / Decimal(100)
+
+        last_price = market.get("last_price_dollars")
+        if last_price is None:
+            last_price_cents = market.get("last_price")
+            if last_price_cents is not None:
+                last_price = Decimal(last_price_cents) / Decimal(100)
+
+        # Liquidity: try _dollars first (Decimal), fall back to integer dollar amount.
+        liquidity = market.get("liquidity_dollars")
+        if liquidity is None:
+            raw_liquidity = market.get("liquidity")
+            liquidity = Decimal(raw_liquidity) if raw_liquidity is not None else None
+
+        # Spread = yes_ask - yes_bid (when both are available and bid > 0).
+        # If yes_bid is None or 0, spread is unknowable.
+        spread: Decimal | None = None
+        if yes_bid_price is not None and yes_bid_price > 0:
+            spread = yes_price - yes_bid_price
+
         # Compute series/subcategory and enrichment columns for both
         # create and update paths (migration 0033).
         # Use the passed series_ticker parameter, fall back to market dict if available
@@ -1123,6 +1155,11 @@ class KalshiMarketPoller(BasePoller):
                 status=db_status,
                 volume=market.get("volume"),
                 open_interest=market.get("open_interest"),
+                spread=spread,
+                yes_bid_price=yes_bid_price,
+                no_bid_price=no_bid_price,
+                last_price=last_price,
+                liquidity=liquidity,
                 subtitle=market.get("subtitle"),
                 open_time=market.get("open_time"),
                 close_time=market.get("close_time"),
@@ -1159,6 +1196,11 @@ class KalshiMarketPoller(BasePoller):
                 status=db_status,
                 volume=market.get("volume"),
                 open_interest=market.get("open_interest"),
+                spread=spread,
+                yes_bid_price=yes_bid_price,
+                no_bid_price=no_bid_price,
+                last_price=last_price,
+                liquidity=liquidity,
                 subtitle=market.get("subtitle"),
                 open_time=market.get("open_time"),
                 close_time=market.get("close_time"),

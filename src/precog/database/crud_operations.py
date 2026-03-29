@@ -1161,6 +1161,11 @@ def create_market(
     subcategory: str | None = None,
     bracket_count: int | None = None,
     source_url: str | None = None,
+    *,
+    yes_bid_price: Decimal | None = None,
+    no_bid_price: Decimal | None = None,
+    last_price: Decimal | None = None,
+    liquidity: Decimal | None = None,
 ) -> int:
     """
     Create new market (dimension) + initial snapshot (fact).
@@ -1192,6 +1197,10 @@ def create_market(
         subcategory: Sport subcategory (e.g., "nfl", "nba") — matches events.subcategory
         bracket_count: Number of markets in the parent event bracket
         source_url: URL to the market on the platform
+        yes_bid_price: YES bid price as DECIMAL(10,4) (keyword-only, optional)
+        no_bid_price: NO bid price as DECIMAL(10,4) (keyword-only, optional)
+        last_price: Last traded price as DECIMAL(10,4) (keyword-only, optional)
+        liquidity: Market liquidity as DECIMAL(10,4) (keyword-only, optional)
 
     Returns:
         Integer surrogate PK (markets.id) of the newly created market.
@@ -1225,6 +1234,14 @@ def create_market(
     no_ask_price = validate_decimal(no_ask_price, "no_ask_price")
     if spread is not None:
         spread = validate_decimal(spread, "spread")
+    if yes_bid_price is not None:
+        yes_bid_price = validate_decimal(yes_bid_price, "yes_bid_price")
+    if no_bid_price is not None:
+        no_bid_price = validate_decimal(no_bid_price, "no_bid_price")
+    if last_price is not None:
+        last_price = validate_decimal(last_price, "last_price")
+    if liquidity is not None:
+        liquidity = validate_decimal(liquidity, "liquidity")
 
     with get_cursor(commit=True) as cur:
         # Step 1: Insert dimension row
@@ -1266,22 +1283,28 @@ def create_market(
         market_pk = cast("int", dim_row["id"])
 
         # Step 2: Insert initial snapshot (fact row)
+        # Migration 0021: yes_bid_price, no_bid_price, last_price, liquidity
         cur.execute(
             """
             INSERT INTO market_snapshots (
                 market_id, yes_ask_price, no_ask_price,
-                spread, volume, open_interest,
+                yes_bid_price, no_bid_price, last_price,
+                spread, volume, open_interest, liquidity,
                 row_current_ind, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, TRUE, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
             """,
             (
                 market_pk,
                 yes_ask_price,
                 no_ask_price,
+                yes_bid_price,
+                no_bid_price,
+                last_price,
                 spread,
                 volume,
                 open_interest,
+                liquidity,
             ),
         )
 
@@ -1400,6 +1423,12 @@ def update_market_with_versioning(
     subcategory: str | None = None,
     bracket_count: int | None = None,
     source_url: str | None = None,
+    *,
+    spread: Decimal | None = None,
+    yes_bid_price: Decimal | None = None,
+    no_bid_price: Decimal | None = None,
+    last_price: Decimal | None = None,
+    liquidity: Decimal | None = None,
 ) -> int:
     """
     Update market: SCD Type 2 on snapshots, direct UPDATE on dimension.
@@ -1428,6 +1457,11 @@ def update_market_with_versioning(
         subcategory: Sport subcategory (optional) — matches events.subcategory
         bracket_count: Number of markets in parent event bracket (optional)
         source_url: URL to the market on the platform (optional)
+        spread: Fresh bid-ask spread as DECIMAL(10,4) (keyword-only, optional)
+        yes_bid_price: YES bid price as DECIMAL(10,4) (keyword-only, optional)
+        no_bid_price: NO bid price as DECIMAL(10,4) (keyword-only, optional)
+        last_price: Last traded price as DECIMAL(10,4) (keyword-only, optional)
+        liquidity: Market liquidity as DECIMAL(10,4) (keyword-only, optional)
 
     Returns:
         Integer surrogate PK of the market (markets.id)
@@ -1449,6 +1483,16 @@ def update_market_with_versioning(
         yes_ask_price = validate_decimal(yes_ask_price, "yes_ask_price")
     if no_ask_price is not None:
         no_ask_price = validate_decimal(no_ask_price, "no_ask_price")
+    if spread is not None:
+        spread = validate_decimal(spread, "spread")
+    if yes_bid_price is not None:
+        yes_bid_price = validate_decimal(yes_bid_price, "yes_bid_price")
+    if no_bid_price is not None:
+        no_bid_price = validate_decimal(no_bid_price, "no_bid_price")
+    if last_price is not None:
+        last_price = validate_decimal(last_price, "last_price")
+    if liquidity is not None:
+        liquidity = validate_decimal(liquidity, "liquidity")
 
     # Get current market + snapshot
     current = get_current_market(ticker)
@@ -1465,6 +1509,13 @@ def update_market_with_versioning(
     new_volume = volume if volume is not None else current["volume"]
     new_open_interest = open_interest if open_interest is not None else current["open_interest"]
     new_metadata = market_metadata if market_metadata is not None else current["metadata"]
+
+    # Snapshot microstructure: use fresh values when provided, fall back to current
+    new_spread = spread if spread is not None else current["spread"]
+    new_yes_bid = yes_bid_price if yes_bid_price is not None else current["yes_bid_price"]
+    new_no_bid = no_bid_price if no_bid_price is not None else current["no_bid_price"]
+    new_last_price = last_price if last_price is not None else current["last_price"]
+    new_liquidity = liquidity if liquidity is not None else current["liquidity"]
 
     # Enrichment columns: only override if explicitly provided (not None)
     new_subtitle = subtitle if subtitle is not None else current["subtitle"]
@@ -1527,22 +1578,28 @@ def update_market_with_versioning(
         )
 
         # Insert new snapshot
+        # Migration 0021: yes_bid_price, no_bid_price, last_price, liquidity
         cur.execute(
             """
             INSERT INTO market_snapshots (
                 market_id, yes_ask_price, no_ask_price,
-                spread, volume, open_interest,
+                yes_bid_price, no_bid_price, last_price,
+                spread, volume, open_interest, liquidity,
                 row_current_ind, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, TRUE, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
             """,
             (
                 market_pk,
                 new_yes,
                 new_no,
-                current["spread"],
+                new_yes_bid,
+                new_no_bid,
+                new_last_price,
+                new_spread,
                 new_volume,
                 new_open_interest,
+                new_liquidity,
             ),
         )
 
