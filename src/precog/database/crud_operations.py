@@ -1166,6 +1166,7 @@ def create_market(
     no_bid_price: Decimal | None = None,
     last_price: Decimal | None = None,
     liquidity: Decimal | None = None,
+    settlement_value: Decimal | None = None,
 ) -> int:
     """
     Create new market (dimension) + initial snapshot (fact).
@@ -1242,6 +1243,8 @@ def create_market(
         last_price = validate_decimal(last_price, "last_price")
     if liquidity is not None:
         liquidity = validate_decimal(liquidity, "liquidity")
+    if settlement_value is not None:
+        settlement_value = validate_decimal(settlement_value, "settlement_value")
 
     with get_cursor(commit=True) as cur:
         # Step 1: Insert dimension row
@@ -1252,12 +1255,12 @@ def create_market(
             """
             INSERT INTO markets (
                 platform_id, event_internal_id, external_id,
-                ticker, title, market_type, status,
+                ticker, title, market_type, status, settlement_value,
                 subtitle, open_time, close_time, expiration_time,
                 outcome_label, subcategory, bracket_count, source_url,
                 metadata, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             RETURNING id
             """,
             (
@@ -1268,6 +1271,7 @@ def create_market(
                 title,
                 market_type,
                 status,
+                settlement_value,
                 subtitle,
                 open_time,
                 close_time,

@@ -1155,6 +1155,24 @@ class KalshiMarketPoller(BasePoller):
                     if not _created and game_id is not None:
                         update_event_game_id(event_pk, game_id)
 
+            # Settlement detection on create path: if a market arrives
+            # already settled (e.g., poller restart, new series backfill),
+            # compute settlement_value from the Kalshi result field.
+            create_settlement_value: Decimal | None = None
+            if db_status == "settled":
+                create_result = market.get("result")
+                if create_result == "yes":
+                    create_settlement_value = Decimal("1.0000")
+                elif create_result == "no":
+                    create_settlement_value = Decimal("0.0000")
+                else:
+                    logger.warning(
+                        "Market %s settled with unexpected result=%r, "
+                        "settlement_value will be NULL",
+                        ticker,
+                        create_result,
+                    )
+
             # Migration 0022: create_market returns int PK
             # Migration 0033: subtitle, open_time, close_time, expiration_time
             # promoted from metadata JSONB to proper dimension columns.
@@ -1183,6 +1201,7 @@ class KalshiMarketPoller(BasePoller):
                 subcategory=subcategory,
                 source_url=source_url,
                 outcome_label=outcome_label,
+                settlement_value=create_settlement_value,
                 metadata={
                     k: v
                     for k, v in {
@@ -1193,6 +1212,21 @@ class KalshiMarketPoller(BasePoller):
                 },
             )
             logger.debug("Created market: %s", ticker)
+
+            # Event propagation on create path: if created market is already
+            # settled and belongs to an event, check full event settlement.
+            if (
+                db_status == "settled"
+                and event_pk is not None
+                and check_event_fully_settled(event_pk)
+            ):
+                update_event(event_pk, status="final")
+                logger.info(
+                    "Event %s fully settled (triggered by new market %s)",
+                    event_pk,
+                    ticker,
+                )
+
             return True
 
         # Market exists - check if price changed (avoid unnecessary versioning)
@@ -1213,6 +1247,13 @@ class KalshiMarketPoller(BasePoller):
                     settlement_value = Decimal("1.0000")
                 elif result == "no":
                     settlement_value = Decimal("0.0000")
+                else:
+                    logger.warning(
+                        "Market %s settled with unexpected result=%r, "
+                        "settlement_value will be NULL",
+                        ticker,
+                        result,
+                    )
 
             # Migration 0033: pass enrichment columns on update path too,
             # so lifecycle timestamps are refreshed when prices change.
