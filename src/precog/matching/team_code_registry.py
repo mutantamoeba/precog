@@ -158,17 +158,25 @@ class TeamCodeRegistry:
         from precog.database.crud_operations import get_teams_with_kalshi_codes
 
         teams = get_teams_with_kalshi_codes(league=league)
-        self._build_cache(teams, league)
+        collisions = self._build_cache(teams, league)
         self._loaded = True
         self._last_loaded_at = datetime.now(UTC)
         self._unknown_codes_seen.clear()
 
         total_codes = sum(len(codes) for codes in self._kalshi_codes.values())
-        logger.info(
-            "TeamCodeRegistry loaded: %d leagues, %d total codes",
-            len(self._kalshi_codes),
-            total_codes,
-        )
+        if collisions:
+            logger.info(
+                "TeamCodeRegistry loaded: %d leagues, %d total codes (%d code collisions resolved, see DEBUG for details)",
+                len(self._kalshi_codes),
+                total_codes,
+                collisions,
+            )
+        else:
+            logger.info(
+                "TeamCodeRegistry loaded: %d leagues, %d total codes",
+                len(self._kalshi_codes),
+                total_codes,
+            )
 
     def load_from_data(self, teams: list[dict[str, Any]]) -> None:
         """Load registry from pre-fetched team data (for testing).
@@ -189,7 +197,7 @@ class TeamCodeRegistry:
         self._last_loaded_at = datetime.now(UTC)
         self._unknown_codes_seen.clear()
 
-    def _build_cache(self, teams: list[dict[str, Any]], league: str | None) -> None:
+    def _build_cache(self, teams: list[dict[str, Any]], league: str | None) -> int:
         """Build internal cache from team data.
 
         When multiple teams share the same Kalshi code within a league
@@ -200,7 +208,11 @@ class TeamCodeRegistry:
         Args:
             teams: List of team dicts from DB or test data.
             league: If provided, only clear/rebuild that league's data.
+
+        Returns:
+            Number of code collisions resolved.
         """
+        collisions = 0
         if league:
             # Clear only the specified league
             self._kalshi_to_espn.pop(league, None)
@@ -249,8 +261,9 @@ class TeamCodeRegistry:
                     )
                     continue
                 # New team has higher priority — replace
+                collisions += 1
                 old_code = self._kalshi_to_espn[team_league][effective_code]
-                logger.info(
+                logger.debug(
                     "Code collision resolved: %s:%s — %s (%s) replaces %s (%s)",
                     team_league,
                     effective_code,
@@ -263,6 +276,8 @@ class TeamCodeRegistry:
             self._kalshi_to_espn[team_league][effective_code] = team_code
             self._kalshi_codes[team_league].add(effective_code)
             self._classification[team_league][effective_code] = classification
+
+        return collisions
 
     def resolve_kalshi_to_espn(self, kalshi_code: str, league: str) -> str | None:
         """Resolve a Kalshi team code to the canonical ESPN/DB team_code.
