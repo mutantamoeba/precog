@@ -1127,6 +1127,14 @@ class KalshiMarketPoller(BasePoller):
                         series_internal_id=series_pk,  # Integer FK to series(id)
                         subcategory=subcategory,
                         game_id=game_id,  # Link to games table (may be None)
+                        # Event time proxies from market-level fields.
+                        # Uses the FIRST market seen in the event (subsequent
+                        # markets hit the _event_id_map cache and skip creation).
+                        start_time=market.get("open_time"),
+                        end_time=market.get("expiration_time"),
+                        # We only poll active markets, so new events are live.
+                        # Settlement detection (Task 5) transitions to 'final'.
+                        status="live",
                         metadata={
                             "series_ticker": effective_series,
                         },

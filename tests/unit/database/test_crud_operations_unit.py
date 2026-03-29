@@ -44,6 +44,7 @@ from precog.database.crud_operations import (
     get_teams_with_kalshi_codes,
     get_venue_by_espn_id,
     get_venue_by_id,
+    update_event,
     update_event_game_id,
     update_game_result,
     upsert_game_state,
@@ -2029,6 +2030,155 @@ class TestUpdateEventGameIdUnit:
         result = update_event_game_id(event_internal_id=999, game_id=15)
 
         assert result is False
+
+
+# =============================================================================
+# UPDATE EVENT UNIT TESTS (general-purpose)
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestUpdateEventUnit:
+    """Unit tests for update_event — general-purpose event field updater."""
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_basic_status_update(self, mock_get_cursor):
+        """Single-field update (status) executes correct SQL."""
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = update_event(42, status="final")
+
+        assert result is True
+        mock_cursor.execute.assert_called_once()
+        query, params = mock_cursor.execute.call_args[0]
+        assert "status = %s" in query
+        assert "updated_at = NOW()" in query
+        assert "final" in params
+        assert 42 in params  # event_internal_id in WHERE clause
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_partial_update_multiple_fields(self, mock_get_cursor):
+        """Update start_time and end_time together, leaving other fields untouched."""
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = update_event(
+            7,
+            start_time="2025-12-01T12:00:00Z",
+            end_time="2025-12-01T23:59:00Z",
+        )
+
+        assert result is True
+        query, _params = mock_cursor.execute.call_args[0]
+        assert "start_time = %s" in query
+        assert "end_time = %s" in query
+        # status, result, description should NOT appear
+        assert "status = %s" not in query
+        assert "result = %s" not in query
+        assert "description = %s" not in query
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_returns_false_when_event_not_found(self, mock_get_cursor):
+        """Returns False when no row matches the event_internal_id."""
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 0
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = update_event(999, status="live")
+
+        assert result is False
+
+    def test_invalid_status_raises_value_error(self):
+        """Invalid status value raises ValueError before touching the DB."""
+        with pytest.raises(ValueError, match="Invalid event status 'bogus'"):
+            update_event(42, status="bogus")
+
+    def test_all_none_returns_false(self):
+        """Calling with no fields to update returns False without DB call."""
+        # No DB mock needed — should short-circuit before get_cursor()
+        result = update_event(42)
+        assert result is False
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_result_serialized_as_json(self, mock_get_cursor):
+        """result dict is JSON-serialized (matching create_event metadata pattern)."""
+        import json
+
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result_dict = {"winner": "yes", "settlement_value": "1.0000"}
+        update_event(42, result=result_dict)
+
+        query, params = mock_cursor.execute.call_args[0]
+        assert "result = %s" in query
+        # The result should be a JSON string, not a dict
+        json_param = params[0]  # result is first non-None field
+        assert isinstance(json_param, str)
+        assert json.loads(json_param) == result_dict
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_description_update(self, mock_get_cursor):
+        """Description field can be updated."""
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = update_event(42, description="Updated event description")
+
+        assert result is True
+        query, params = mock_cursor.execute.call_args[0]
+        assert "description = %s" in query
+        assert "Updated event description" in params
+
+    @patch("precog.database.crud_operations.get_cursor")
+    def test_all_fields_together(self, mock_get_cursor):
+        """All five fields can be updated in a single call."""
+        mock_cursor = MagicMock()
+        mock_cursor.rowcount = 1
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        result = update_event(
+            42,
+            start_time="2025-12-01T12:00:00Z",
+            end_time="2025-12-01T23:59:00Z",
+            status="final",
+            result={"winner": "yes"},
+            description="Settled",
+        )
+
+        assert result is True
+        query, _params = mock_cursor.execute.call_args[0]
+        assert "start_time = %s" in query
+        assert "end_time = %s" in query
+        assert "status = %s" in query
+        assert "result = %s" in query
+        assert "description = %s" in query
+        assert "updated_at = NOW()" in query
+
+    def test_valid_statuses_accepted(self):
+        """All five valid statuses pass validation (ValueError not raised)."""
+        valid = ["scheduled", "live", "final", "cancelled", "postponed"]
+        for s in valid:
+            # Should NOT raise — we don't care about the DB call,
+            # just that validation passes. Use mock to avoid actual DB.
+            with patch("precog.database.crud_operations.get_cursor") as mock_gc:
+                mock_cursor = MagicMock()
+                mock_cursor.rowcount = 0
+                mock_gc.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+                mock_gc.return_value.__exit__ = MagicMock(return_value=False)
+                # Should not raise ValueError
+                update_event(1, status=s)
 
 
 # =============================================================================

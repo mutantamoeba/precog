@@ -1009,6 +1009,92 @@ class TestKalshiPollerValidation:
 
 
 # =============================================================================
+# Event Enrichment Tests (start_time, end_time, status)
+# =============================================================================
+
+
+class TestEventEnrichment:
+    """Test that market-level times and initial status flow through to event creation."""
+
+    @pytest.mark.unit
+    def test_start_time_flows_to_get_or_create_event(
+        self, poller_with_mock_client, mock_market_data
+    ):
+        """open_time from market data is passed as start_time to get_or_create_event."""
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ) as mock_create_event,
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
+        ):
+            poller_with_mock_client._sync_market_to_db(mock_market_data)
+
+            mock_create_event.assert_called_once()
+            call_kwargs = mock_create_event.call_args.kwargs
+            assert call_kwargs["start_time"] == "2025-11-29T12:00:00Z"
+
+    @pytest.mark.unit
+    def test_end_time_flows_to_get_or_create_event(self, poller_with_mock_client, mock_market_data):
+        """expiration_time from market data is passed as end_time to get_or_create_event."""
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ) as mock_create_event,
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
+        ):
+            poller_with_mock_client._sync_market_to_db(mock_market_data)
+
+            mock_create_event.assert_called_once()
+            call_kwargs = mock_create_event.call_args.kwargs
+            assert call_kwargs["end_time"] == "2025-11-30T00:00:00Z"
+
+    @pytest.mark.unit
+    def test_status_set_to_live_on_event_creation(self, poller_with_mock_client, mock_market_data):
+        """New events are created with status='live' since we only poll active markets."""
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ) as mock_create_event,
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
+        ):
+            poller_with_mock_client._sync_market_to_db(mock_market_data)
+
+            mock_create_event.assert_called_once()
+            call_kwargs = mock_create_event.call_args.kwargs
+            assert call_kwargs["status"] == "live"
+
+    @pytest.mark.unit
+    def test_missing_open_time_passes_none(self, poller_with_mock_client, mock_market_data):
+        """If market data lacks open_time, start_time is None."""
+        market_no_times = mock_market_data.copy()
+        del market_no_times["open_time"]
+        del market_no_times["expiration_time"]
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ) as mock_create_event,
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1),
+        ):
+            poller_with_mock_client._sync_market_to_db(market_no_times)
+
+            mock_create_event.assert_called_once()
+            call_kwargs = mock_create_event.call_args.kwargs
+            assert call_kwargs["start_time"] is None
+            assert call_kwargs["end_time"] is None
+            # status is always "live" regardless of time presence
+            assert call_kwargs["status"] == "live"
+
+
+# =============================================================================
 # Event-to-Game Matching Tests (Issue #462)
 # =============================================================================
 

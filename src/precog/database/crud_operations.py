@@ -9033,6 +9033,90 @@ def update_event_game_id(event_internal_id: int, game_id: int) -> bool:
         return bool(cur.rowcount > 0)
 
 
+def update_event(
+    event_internal_id: int,
+    *,
+    start_time: str | None = None,
+    end_time: str | None = None,
+    status: str | None = None,
+    result: dict | None = None,
+    description: str | None = None,
+) -> bool:
+    """Update one or more fields on an existing event.
+
+    Accepts the integer surrogate PK and only updates fields that are
+    explicitly provided (non-None). Always bumps ``updated_at``.
+
+    Args:
+        event_internal_id: The events.id (integer surrogate PK).
+        start_time: New start time (ISO 8601 string). PostgreSQL handles
+            ISO string -> TIMESTAMPTZ conversion natively.
+        end_time: New end time (ISO 8601 string).
+        status: New status. Must be one of: 'scheduled', 'live', 'final',
+            'cancelled', 'postponed' (validated against CHECK constraint).
+        result: Settlement result as a dict. Serialized to JSONB via
+            ``json.dumps()``, matching the pattern used for metadata in
+            ``create_event()``.
+        description: Updated description text.
+
+    Returns:
+        True if a row was updated, False if the event was not found.
+
+    Raises:
+        ValueError: If ``status`` is not a valid CHECK constraint value.
+
+    Example:
+        >>> updated = update_event(42, status="final", result={"winner": "yes"})
+        >>> if updated:
+        ...     print("Event settled")
+
+    References:
+        - events.status CHECK: ('scheduled', 'live', 'final', 'cancelled', 'postponed')
+        - Task 5 (settlement detection) will call this to transition events.
+        - Pattern follows ``update_event_game_id()`` above.
+    """
+    valid_statuses = {"scheduled", "live", "final", "cancelled", "postponed"}
+
+    if status is not None and status not in valid_statuses:
+        raise ValueError(
+            f"Invalid event status '{status}'. Must be one of: {sorted(valid_statuses)}"
+        )
+
+    # Build SET clause dynamically — only include non-None fields
+    set_parts: list[str] = []
+    params: list[Any] = []
+
+    if start_time is not None:
+        set_parts.append("start_time = %s")
+        params.append(start_time)
+    if end_time is not None:
+        set_parts.append("end_time = %s")
+        params.append(end_time)
+    if status is not None:
+        set_parts.append("status = %s")
+        params.append(status)
+    if result is not None:
+        set_parts.append("result = %s")
+        params.append(json.dumps(result))
+    if description is not None:
+        set_parts.append("description = %s")
+        params.append(description)
+
+    if not set_parts:
+        # Nothing to update — caller passed all None
+        return False
+
+    # Always bump updated_at
+    set_parts.append("updated_at = NOW()")
+
+    query = f"UPDATE events SET {', '.join(set_parts)} WHERE id = %s"  # noqa: S608
+    params.append(event_internal_id)
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, params)
+        return bool(cur.rowcount > 0)
+
+
 def find_unlinked_sports_events(league: str | None = None) -> list[dict[str, Any]]:
     """Find events where game_id IS NULL and category='sports'.
 
