@@ -583,8 +583,14 @@ class KalshiMarketPoller(BasePoller):
             frequency=series_data.get("frequency"),
             tags=tags if tags else None,
             metadata={
-                "settlement_sources": series_data.get("settlement_sources"),
-                "contract_terms_url": series_data.get("contract_terms_url"),
+                k: v
+                for k, v in {
+                    "settlement_sources": series_data.get("settlement_sources"),
+                    "contract_terms_url": series_data.get("contract_terms_url"),
+                    "expected_expiration_time": series_data.get("expected_expiration_time"),
+                    "settlement_timer_seconds": series_data.get("settlement_timer_seconds"),
+                }.items()
+                if v is not None
             },
             update_if_exists=True,
         )
