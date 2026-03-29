@@ -1280,14 +1280,15 @@ class TestSettlementDetection:
     """Test market settlement detection and event propagation."""
 
     @pytest.mark.unit
-    def test_settled_market_yes_sets_settlement_value(self, poller_with_mock_client):
-        """When a market settles with result='yes', settlement_value=1.0000 is passed."""
+    def test_settled_market_yes_reads_settlement_value_dollars(self, poller_with_mock_client):
+        """When a market settles with settlement_value_dollars=1.0000, it is passed through."""
         settled_market = {
             "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
             "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
             "title": "Bills win by 25+ points?",
             "status": "settled",
             "result": "yes",
+            "settlement_value_dollars": Decimal("1.0000"),
             "yes_ask_dollars": Decimal("1.0000"),
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
@@ -1324,14 +1325,15 @@ class TestSettlementDetection:
             assert call_kwargs["status"] == "settled"
 
     @pytest.mark.unit
-    def test_settled_market_no_sets_settlement_value(self, poller_with_mock_client):
-        """When a market settles with result='no', settlement_value=0.0000 is passed."""
+    def test_settled_market_no_reads_settlement_value_dollars(self, poller_with_mock_client):
+        """When a market settles with settlement_value_dollars=0.0000, it is passed through."""
         settled_market = {
             "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
             "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
             "title": "Bills win by 25+ points?",
             "status": "settled",
             "result": "no",
+            "settlement_value_dollars": Decimal("0.0000"),
             "yes_ask_dollars": Decimal("1.0000"),
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
@@ -1366,14 +1368,60 @@ class TestSettlementDetection:
             assert call_kwargs["settlement_value"] == Decimal("0.0000")
 
     @pytest.mark.unit
-    def test_settled_market_no_result_passes_none(self, poller_with_mock_client):
-        """When a market settles without a result field, settlement_value is None."""
+    def test_settled_market_scalar_reads_fractional_settlement(self, poller_with_mock_client):
+        """Scalar markets pass through fractional settlement_value_dollars directly."""
+        settled_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills total points 25-30?",
+            "status": "settled",
+            "result": "scalar",
+            "settlement_value_dollars": Decimal("0.7500"),
+            "yes_ask_dollars": Decimal("1.0000"),
+            "no_ask_dollars": Decimal("1.0000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        existing = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "yes_ask_price": Decimal("0.4800"),
+            "no_ask_price": Decimal("0.5500"),
+            "status": "open",
+            "event_internal_id": 42,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=existing,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.update_market_with_versioning",
+                return_value=1,
+            ) as mock_update,
+            patch(
+                "precog.schedulers.kalshi_poller.check_event_fully_settled",
+                return_value=False,
+            ),
+        ):
+            poller_with_mock_client._sync_market_to_db(settled_market)
+
+            call_kwargs = mock_update.call_args.kwargs
+            assert call_kwargs["settlement_value"] == Decimal("0.7500")
+
+    @pytest.mark.unit
+    def test_settled_market_missing_settlement_value_dollars_passes_none(
+        self, poller_with_mock_client, caplog
+    ):
+        """When both settlement_value_dollars and settlement_value are absent, result is None with warning."""
         settled_market = {
             "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
             "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
             "title": "Bills win by 25+ points?",
             "status": "settled",
-            # No 'result' key
+            "result": "yes",
+            # No 'settlement_value_dollars' or 'settlement_value' key
             "yes_ask_dollars": Decimal("1.0000"),
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
@@ -1406,6 +1454,51 @@ class TestSettlementDetection:
 
             call_kwargs = mock_update.call_args.kwargs
             assert call_kwargs["settlement_value"] is None
+            assert "settlement_value_dollars is absent" in caplog.text
+
+    @pytest.mark.unit
+    def test_settled_market_falls_back_to_cents(self, poller_with_mock_client):
+        """When settlement_value_dollars is absent but settlement_value (cents) exists, convert it."""
+        settled_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills win by 25+ points?",
+            "status": "settled",
+            "result": "yes",
+            # No 'settlement_value_dollars', but legacy cents field present
+            "settlement_value": Decimal("100"),  # 100 cents = $1.00
+            "yes_ask_dollars": Decimal("1.0000"),
+            "no_ask_dollars": Decimal("0.0000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        existing = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "yes_ask_price": Decimal("0.4800"),
+            "no_ask_price": Decimal("0.5500"),
+            "status": "open",
+            "event_internal_id": 42,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=existing,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.update_market_with_versioning",
+                return_value=1,
+            ) as mock_update,
+            patch(
+                "precog.schedulers.kalshi_poller.check_event_fully_settled",
+                return_value=False,
+            ),
+        ):
+            poller_with_mock_client._sync_market_to_db(settled_market)
+
+            call_kwargs = mock_update.call_args.kwargs
+            assert call_kwargs["settlement_value"] == Decimal("1")
 
     @pytest.mark.unit
     def test_non_settled_market_has_no_settlement_value(self, poller_with_mock_client):
@@ -1454,6 +1547,7 @@ class TestSettlementDetection:
             "title": "Bills win by 25+ points?",
             "status": "settled",
             "result": "yes",
+            "settlement_value_dollars": Decimal("1.0000"),
             "yes_ask_dollars": Decimal("1.0000"),
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
@@ -1500,6 +1594,7 @@ class TestSettlementDetection:
             "title": "Bills win by 25+ points?",
             "status": "settled",
             "result": "no",
+            "settlement_value_dollars": Decimal("0.0000"),
             "yes_ask_dollars": Decimal("1.0000"),
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
@@ -1545,6 +1640,7 @@ class TestSettlementDetection:
             "title": "Bills win by 25+ points?",
             "status": "settled",
             "result": "yes",
+            "settlement_value_dollars": Decimal("1.0000"),
             "yes_ask_dollars": Decimal("1.0000"),
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
@@ -1615,3 +1711,202 @@ class TestSettlementDetection:
             poller_with_mock_client._sync_market_to_db(closing_market)
 
             mock_check.assert_not_called()
+
+    # --- Create path settlement tests ---
+
+    @pytest.mark.unit
+    def test_create_path_settled_market_reads_settlement_value_dollars(
+        self, poller_with_mock_client
+    ):
+        """Create path: settled market reads settlement_value_dollars from API."""
+        settled_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills win by 25+ points?",
+            "status": "settled",
+            "result": "yes",
+            "settlement_value_dollars": Decimal("1.0000"),
+            "yes_ask_dollars": Decimal("1.0000"),
+            "no_ask_dollars": Decimal("0.0000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=None,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.create_market",
+                return_value=1,
+            ) as mock_create,
+            patch(
+                "precog.schedulers.kalshi_poller.check_event_fully_settled",
+                return_value=False,
+            ),
+        ):
+            poller_with_mock_client._sync_market_to_db(settled_market)
+
+            mock_create.assert_called_once()
+            call_kwargs = mock_create.call_args.kwargs
+            assert call_kwargs["settlement_value"] == Decimal("1.0000")
+
+    @pytest.mark.unit
+    def test_create_path_settled_scalar_reads_fractional_settlement(self, poller_with_mock_client):
+        """Create path: scalar market passes fractional settlement_value_dollars."""
+        settled_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills total points 25-30?",
+            "status": "settled",
+            "result": "scalar",
+            "settlement_value_dollars": Decimal("0.4200"),
+            "yes_ask_dollars": Decimal("1.0000"),
+            "no_ask_dollars": Decimal("0.0000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=None,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.create_market",
+                return_value=1,
+            ) as mock_create,
+            patch(
+                "precog.schedulers.kalshi_poller.check_event_fully_settled",
+                return_value=False,
+            ),
+        ):
+            poller_with_mock_client._sync_market_to_db(settled_market)
+
+            call_kwargs = mock_create.call_args.kwargs
+            assert call_kwargs["settlement_value"] == Decimal("0.4200")
+
+    @pytest.mark.unit
+    def test_create_path_settled_missing_settlement_value_dollars_passes_none(
+        self, poller_with_mock_client, caplog
+    ):
+        """Create path: missing both settlement fields results in None with warning."""
+        settled_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills win by 25+ points?",
+            "status": "settled",
+            "result": "yes",
+            # No 'settlement_value_dollars' or 'settlement_value' key
+            "yes_ask_dollars": Decimal("1.0000"),
+            "no_ask_dollars": Decimal("0.0000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=None,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.create_market",
+                return_value=1,
+            ) as mock_create,
+            patch(
+                "precog.schedulers.kalshi_poller.check_event_fully_settled",
+                return_value=False,
+            ),
+        ):
+            poller_with_mock_client._sync_market_to_db(settled_market)
+
+            call_kwargs = mock_create.call_args.kwargs
+            assert call_kwargs["settlement_value"] is None
+            assert "settlement_value_dollars is absent" in caplog.text
+
+    @pytest.mark.unit
+    def test_create_path_settled_falls_back_to_cents(self, poller_with_mock_client):
+        """Create path: falls back to settlement_value (cents) when _dollars absent."""
+        settled_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills win by 25+ points?",
+            "status": "settled",
+            "result": "no",
+            # No 'settlement_value_dollars', but legacy cents field present
+            "settlement_value": Decimal("0"),  # 0 cents = $0.00
+            "yes_ask_dollars": Decimal("0.0000"),
+            "no_ask_dollars": Decimal("1.0000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=None,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.create_market",
+                return_value=1,
+            ) as mock_create,
+            patch(
+                "precog.schedulers.kalshi_poller.check_event_fully_settled",
+                return_value=False,
+            ),
+        ):
+            poller_with_mock_client._sync_market_to_db(settled_market)
+
+            call_kwargs = mock_create.call_args.kwargs
+            assert call_kwargs["settlement_value"] == Decimal("0")
+
+    @pytest.mark.unit
+    def test_create_path_non_settled_market_has_no_settlement_value(self, poller_with_mock_client):
+        """Create path: non-settled markets pass settlement_value=None."""
+        open_market = {
+            "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
+            "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
+            "title": "Bills win by 25+ points?",
+            "status": "active",  # Maps to 'open'
+            "result": None,
+            "yes_ask_dollars": Decimal("0.6000"),
+            "no_ask_dollars": Decimal("0.4000"),
+            "volume": 1500,
+            "open_interest": 800,
+        }
+
+        with (
+            patch(
+                "precog.schedulers.kalshi_poller.get_current_market",
+                return_value=None,
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.get_or_create_event",
+                return_value=(1, True),
+            ),
+            patch(
+                "precog.schedulers.kalshi_poller.create_market",
+                return_value=1,
+            ) as mock_create,
+        ):
+            poller_with_mock_client._sync_market_to_db(open_market)
+
+            call_kwargs = mock_create.call_args.kwargs
+            assert call_kwargs["settlement_value"] is None

@@ -538,6 +538,7 @@ class KalshiClient:
             # Other market fields with *_dollars suffix
             "liquidity_dollars",
             "notional_value_dollars",
+            "settlement_value_dollars",
             # Position/portfolio fields (various formats)
             "user_average_price",
             "realized_pnl",

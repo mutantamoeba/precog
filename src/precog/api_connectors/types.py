@@ -32,7 +32,15 @@ class MarketData(TypedDict):
     expiration_time: str
     status: Literal["open", "closed", "settled"]
     can_close_early: bool
-    result: Literal["yes", "no"] | None
+    result: (
+        Literal["yes", "no", "scalar", ""] | None
+    )  # 'scalar' for non-binary, '' when undetermined
+    # Settlement payout per $1 contract in dollars (e.g., "1.0000" for YES win, "0.0000" for NO win).
+    # Only populated after market settles. Range [0.0000, 1.0000].
+    # For binary markets: 1.0000 (yes) or 0.0000 (no).
+    # For scalar markets: fractional value based on outcome.
+    # This is the authoritative settlement value from the API -- do not derive from result.
+    settlement_value_dollars: str | None
     # Price fields as strings (will be converted to Decimal)
     # These are order book prices, NOT implied probabilities.
     # yes_ask + no_ask > 1.0 is expected (the difference is the spread/vigorish).
@@ -195,7 +203,9 @@ class ProcessedMarketData(TypedDict, total=False):
     expiration_time: str
     status: Literal["open", "closed", "settled"]
     can_close_early: bool
-    result: Literal["yes", "no"] | None
+    result: (
+        Literal["yes", "no", "scalar", ""] | None
+    )  # 'scalar' for non-binary, '' when undetermined
 
     # Legacy integer cent fields (kept as-is from API)
     # These are order book prices in cents, NOT implied probabilities.
@@ -219,6 +229,10 @@ class ProcessedMarketData(TypedDict, total=False):
     no_ask_dollars: Decimal  # Lowest NO sell order / cost to buy NO (stored as no_price)
     last_price_dollars: Decimal
     liquidity_dollars: Decimal
+    # Settlement payout per $1 contract (e.g., Decimal("1.0000") for YES win).
+    # Only present after market settles. Converted from API string by _convert_prices_to_decimal.
+    # Range [0.0000, 1.0000]. None/absent for unsettled markets.
+    settlement_value_dollars: Decimal | None
 
 
 class ProcessedPositionData(TypedDict):

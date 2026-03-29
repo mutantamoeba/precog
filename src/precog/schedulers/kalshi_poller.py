@@ -1157,21 +1157,23 @@ class KalshiMarketPoller(BasePoller):
 
             # Settlement detection on create path: if a market arrives
             # already settled (e.g., poller restart, new series backfill),
-            # compute settlement_value from the Kalshi result field.
+            # read settlement_value_dollars directly from the API response.
+            # _convert_prices_to_decimal already converts it to Decimal.
+            # This handles binary (1.0/0.0) and scalar (fractional) markets.
             create_settlement_value: Decimal | None = None
             if db_status == "settled":
-                create_result = market.get("result")
-                if create_result == "yes":
-                    create_settlement_value = Decimal("1.0000")
-                elif create_result == "no":
-                    create_settlement_value = Decimal("0.0000")
-                else:
-                    logger.warning(
-                        "Market %s settled with unexpected result=%r, "
-                        "settlement_value will be NULL",
-                        ticker,
-                        create_result,
-                    )
+                create_settlement_value = market.get("settlement_value_dollars")
+                # Fallback: legacy API may return settlement_value in cents
+                if create_settlement_value is None:
+                    sv_cents = market.get("settlement_value")
+                    if sv_cents is not None:
+                        create_settlement_value = Decimal(str(sv_cents)) / Decimal("100")
+                    else:
+                        logger.warning(
+                            "Market %s settled but settlement_value_dollars is absent, "
+                            "settlement_value will be NULL",
+                            ticker,
+                        )
 
             # Migration 0022: create_market returns int PK
             # Migration 0033: subtitle, open_time, close_time, expiration_time
@@ -1237,23 +1239,24 @@ class KalshiMarketPoller(BasePoller):
         status_changed = existing["status"] != db_status
 
         if price_changed or status_changed:
-            # Settlement detection: when a market settles, record the
-            # settlement_value derived from the Kalshi 'result' field.
-            # "yes" -> 1.0000, "no" -> 0.0000.  Only set on settled markets.
+            # Settlement detection: when a market transitions to settled,
+            # read settlement_value_dollars directly from the API response.
+            # _convert_prices_to_decimal already converts it to Decimal.
+            # This handles binary (1.0/0.0) and scalar (fractional) markets.
             settlement_value: Decimal | None = None
             if db_status == "settled":
-                result = market.get("result")
-                if result == "yes":
-                    settlement_value = Decimal("1.0000")
-                elif result == "no":
-                    settlement_value = Decimal("0.0000")
-                else:
-                    logger.warning(
-                        "Market %s settled with unexpected result=%r, "
-                        "settlement_value will be NULL",
-                        ticker,
-                        result,
-                    )
+                settlement_value = market.get("settlement_value_dollars")
+                # Fallback: legacy API may return settlement_value in cents
+                if settlement_value is None:
+                    sv_cents = market.get("settlement_value")
+                    if sv_cents is not None:
+                        settlement_value = Decimal(str(sv_cents)) / Decimal("100")
+                    else:
+                        logger.warning(
+                            "Market %s settled but settlement_value_dollars is absent, "
+                            "settlement_value will be NULL",
+                            ticker,
+                        )
 
             # Migration 0033: pass enrichment columns on update path too,
             # so lifecycle timestamps are refreshed when prices change.
