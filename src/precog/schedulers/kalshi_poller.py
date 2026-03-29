@@ -48,6 +48,7 @@ from typing import Any, ClassVar, cast
 from precog.api_connectors.kalshi_client import KalshiClient
 from precog.api_connectors.types import ProcessedMarketData, SeriesData
 from precog.database.crud_operations import (
+    build_event_result,
     check_event_fully_settled,
     count_open_markets,
     create_alert,
@@ -1222,7 +1223,11 @@ class KalshiMarketPoller(BasePoller):
                 and event_pk is not None
                 and check_event_fully_settled(event_pk)
             ):
-                update_event(event_pk, status="final")
+                update_event(
+                    event_pk,
+                    status="final",
+                    result=build_event_result(event_pk),
+                )
                 logger.info(
                     "Event %s fully settled (triggered by new market %s)",
                     event_pk,
@@ -1289,16 +1294,22 @@ class KalshiMarketPoller(BasePoller):
 
             # Event settlement propagation: if this market just settled and
             # belongs to an event, check whether ALL sibling markets have
-            # also settled.  If so, transition the parent event to 'final'.
+            # also settled.  If so, transition the parent event to 'final'
+            # and build a result summary from child market settlement values.
             if (
                 db_status == "settled"
                 and existing.get("event_internal_id")
                 and check_event_fully_settled(existing["event_internal_id"])
             ):
-                update_event(existing["event_internal_id"], status="final")
+                event_id_for_settlement = existing["event_internal_id"]
+                update_event(
+                    event_id_for_settlement,
+                    status="final",
+                    result=build_event_result(event_id_for_settlement),
+                )
                 logger.info(
                     "Event %s fully settled (triggered by market %s)",
-                    existing["event_internal_id"],
+                    event_id_for_settlement,
                     ticker,
                 )
 
