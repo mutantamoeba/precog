@@ -1429,6 +1429,7 @@ def update_market_with_versioning(
     no_bid_price: Decimal | None = None,
     last_price: Decimal | None = None,
     liquidity: Decimal | None = None,
+    settlement_value: Decimal | None = None,
 ) -> int:
     """
     Update market: SCD Type 2 on snapshots, direct UPDATE on dimension.
@@ -1462,6 +1463,8 @@ def update_market_with_versioning(
         no_bid_price: NO bid price as DECIMAL(10,4) (keyword-only, optional)
         last_price: Last traded price as DECIMAL(10,4) (keyword-only, optional)
         liquidity: Market liquidity as DECIMAL(10,4) (keyword-only, optional)
+        settlement_value: Settlement outcome as DECIMAL(10,4) (keyword-only, optional).
+            Must be 0.0000 (no) or 1.0000 (yes). CHECK constraint: 0.0000-1.0000.
 
     Returns:
         Integer surrogate PK of the market (markets.id)
@@ -1493,6 +1496,8 @@ def update_market_with_versioning(
         last_price = validate_decimal(last_price, "last_price")
     if liquidity is not None:
         liquidity = validate_decimal(liquidity, "liquidity")
+    if settlement_value is not None:
+        settlement_value = validate_decimal(settlement_value, "settlement_value")
 
     # Get current market + snapshot
     current = get_current_market(ticker)
@@ -1528,6 +1533,9 @@ def update_market_with_versioning(
     new_subcategory = subcategory if subcategory is not None else current["subcategory"]
     new_bracket_count = bracket_count if bracket_count is not None else current["bracket_count"]
     new_source_url = source_url if source_url is not None else current["source_url"]
+    new_settlement_value = (
+        settlement_value if settlement_value is not None else current["settlement_value"]
+    )
 
     with get_cursor(commit=True) as cur:
         # Step 1: Update dimension row — always bump updated_at, plus
@@ -1546,6 +1554,7 @@ def update_market_with_versioning(
                 subcategory = %s,
                 bracket_count = %s,
                 source_url = %s,
+                settlement_value = %s,
                 updated_at = NOW()
             WHERE id = %s
             """,
@@ -1560,6 +1569,7 @@ def update_market_with_versioning(
                 new_subcategory,
                 new_bracket_count,
                 new_source_url,
+                new_settlement_value,
                 market_pk,
             ),
         )
@@ -9115,6 +9125,44 @@ def update_event(
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
         return bool(cur.rowcount > 0)
+
+
+def check_event_fully_settled(event_internal_id: int) -> bool:
+    """Check whether all markets in an event have settled.
+
+    Uses a single aggregate query to count total markets and settled
+    markets for the given event.  Returns True only when at least one
+    market exists AND every market has ``status = 'settled'``.
+
+    Args:
+        event_internal_id: The events.id (integer surrogate PK).
+
+    Returns:
+        True if all markets in the event are settled (and at least one
+        market exists).  False otherwise.
+
+    Example:
+        >>> if check_event_fully_settled(42):
+        ...     update_event(42, status="final")
+
+    References:
+        - Task 5: Market settlement detection
+        - Called by KalshiMarketPoller._sync_market_to_db after a market
+          transitions to 'settled'.
+    """
+    query = """
+        SELECT
+            COUNT(*) AS total,
+            COUNT(*) FILTER (WHERE status = 'settled') AS settled
+        FROM markets
+        WHERE event_internal_id = %s
+    """
+    result = fetch_one(query, (event_internal_id,))
+    if result is None:
+        return False
+    total = int(result["total"])
+    settled = int(result["settled"])
+    return total > 0 and total == settled
 
 
 def find_unlinked_sports_events(league: str | None = None) -> list[dict[str, Any]]:

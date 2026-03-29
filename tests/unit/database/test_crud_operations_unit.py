@@ -27,6 +27,7 @@ import pytest
 from precog.database.crud_operations import (
     LEAGUE_SPORT_CATEGORY,
     TRACKED_SITUATION_KEYS,
+    check_event_fully_settled,
     create_game_state,
     create_team,
     create_team_ranking,
@@ -47,6 +48,7 @@ from precog.database.crud_operations import (
     update_event,
     update_event_game_id,
     update_game_result,
+    update_market_with_versioning,
     upsert_game_state,
 )
 
@@ -2423,3 +2425,173 @@ class TestCreateTeamUnit:
         # Both calls should be ESPN ID lookups, not code lookups
         for call in mock_fetch_one.call_args_list:
             assert "espn_team_id" in call[0][0]
+
+
+# =============================================================================
+# SETTLEMENT VALUE ON UPDATE_MARKET_WITH_VERSIONING TESTS
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestUpdateMarketSettlementValue:
+    """Test settlement_value flows through update_market_with_versioning."""
+
+    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_operations.get_current_market")
+    def test_settlement_value_included_in_dimension_update(self, mock_get_current, mock_get_cursor):
+        """settlement_value is written to the markets dimension UPDATE."""
+        mock_get_current.return_value = {
+            "id": 1,
+            "yes_ask_price": Decimal("0.5000"),
+            "no_ask_price": Decimal("0.5000"),
+            "status": "open",
+            "volume": 100,
+            "open_interest": 50,
+            "metadata": None,
+            "spread": None,
+            "yes_bid_price": None,
+            "no_bid_price": None,
+            "last_price": None,
+            "liquidity": None,
+            "subtitle": None,
+            "open_time": None,
+            "close_time": None,
+            "expiration_time": None,
+            "outcome_label": None,
+            "subcategory": None,
+            "bracket_count": None,
+            "source_url": None,
+            "settlement_value": None,
+        }
+
+        mock_cursor = MagicMock()
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        update_market_with_versioning(
+            ticker="TEST-MKT",
+            status="settled",
+            settlement_value=Decimal("1.0000"),
+        )
+
+        # The first execute call is the dimension UPDATE
+        dim_call = mock_cursor.execute.call_args_list[0]
+        sql = dim_call[0][0]
+        params = dim_call[0][1]
+
+        assert "settlement_value" in sql
+        # settlement_value is the 11th param (after source_url, before market_pk)
+        assert Decimal("1.0000") in params
+
+    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_operations.get_current_market")
+    def test_settlement_value_none_preserves_existing(self, mock_get_current, mock_get_cursor):
+        """When settlement_value is None, the existing value is preserved."""
+        mock_get_current.return_value = {
+            "id": 1,
+            "yes_ask_price": Decimal("0.5000"),
+            "no_ask_price": Decimal("0.5000"),
+            "status": "settled",
+            "volume": 100,
+            "open_interest": 50,
+            "metadata": None,
+            "spread": None,
+            "yes_bid_price": None,
+            "no_bid_price": None,
+            "last_price": None,
+            "liquidity": None,
+            "subtitle": None,
+            "open_time": None,
+            "close_time": None,
+            "expiration_time": None,
+            "outcome_label": None,
+            "subcategory": None,
+            "bracket_count": None,
+            "source_url": None,
+            "settlement_value": Decimal("1.0000"),
+        }
+
+        mock_cursor = MagicMock()
+        mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
+        mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
+
+        # Do NOT pass settlement_value — it should use existing
+        update_market_with_versioning(
+            ticker="TEST-MKT",
+            yes_ask_price=Decimal("0.6000"),
+        )
+
+        dim_call = mock_cursor.execute.call_args_list[0]
+        params = dim_call[0][1]
+        # Existing Decimal("1.0000") should be preserved
+        assert Decimal("1.0000") in params
+
+    def test_settlement_value_rejects_float(self):
+        """settlement_value must be Decimal, not float."""
+        with pytest.raises(TypeError, match="settlement_value must be Decimal"):
+            update_market_with_versioning(
+                ticker="TEST-MKT",
+                settlement_value=1.0,  # type: ignore[arg-type]
+            )
+
+
+# =============================================================================
+# CHECK_EVENT_FULLY_SETTLED TESTS
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestCheckEventFullySettled:
+    """Test check_event_fully_settled helper."""
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_all_markets_settled_returns_true(self, mock_fetch_one):
+        """Returns True when all markets in the event are settled."""
+        mock_fetch_one.return_value = {"total": 3, "settled": 3}
+
+        assert check_event_fully_settled(42) is True
+        mock_fetch_one.assert_called_once()
+        # Verify event_internal_id is passed as param
+        call_args = mock_fetch_one.call_args
+        assert call_args[0][1] == (42,)
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_some_unsettled_returns_false(self, mock_fetch_one):
+        """Returns False when some markets are not yet settled."""
+        mock_fetch_one.return_value = {"total": 3, "settled": 1}
+
+        assert check_event_fully_settled(42) is False
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_no_markets_returns_false(self, mock_fetch_one):
+        """Returns False when no markets exist for the event."""
+        mock_fetch_one.return_value = {"total": 0, "settled": 0}
+
+        assert check_event_fully_settled(42) is False
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_fetch_one_returns_none(self, mock_fetch_one):
+        """Returns False when fetch_one returns None (defensive)."""
+        mock_fetch_one.return_value = None
+
+        assert check_event_fully_settled(42) is False
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_single_market_settled(self, mock_fetch_one):
+        """Returns True when a single market in the event is settled."""
+        mock_fetch_one.return_value = {"total": 1, "settled": 1}
+
+        assert check_event_fully_settled(99) is True
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_query_uses_filter_clause(self, mock_fetch_one):
+        """Verify the SQL uses FILTER (WHERE status = 'settled') pattern."""
+        mock_fetch_one.return_value = {"total": 0, "settled": 0}
+
+        check_event_fully_settled(1)
+
+        call_args = mock_fetch_one.call_args
+        sql = call_args[0][0]
+        assert "FILTER" in sql
+        assert "settled" in sql
+        assert "event_internal_id" in sql

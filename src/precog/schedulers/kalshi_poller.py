@@ -48,6 +48,7 @@ from typing import Any, ClassVar, cast
 from precog.api_connectors.kalshi_client import KalshiClient
 from precog.api_connectors.types import ProcessedMarketData, SeriesData
 from precog.database.crud_operations import (
+    check_event_fully_settled,
     count_open_markets,
     create_alert,
     create_market,
@@ -55,6 +56,7 @@ from precog.database.crud_operations import (
     get_or_create_event,
     get_or_create_series,
     update_bracket_counts,
+    update_event,
     update_event_game_id,
     update_market_with_versioning,
 )
@@ -1201,6 +1203,17 @@ class KalshiMarketPoller(BasePoller):
         status_changed = existing["status"] != db_status
 
         if price_changed or status_changed:
+            # Settlement detection: when a market settles, record the
+            # settlement_value derived from the Kalshi 'result' field.
+            # "yes" -> 1.0000, "no" -> 0.0000.  Only set on settled markets.
+            settlement_value: Decimal | None = None
+            if db_status == "settled":
+                result = market.get("result")
+                if result == "yes":
+                    settlement_value = Decimal("1.0000")
+                elif result == "no":
+                    settlement_value = Decimal("0.0000")
+
             # Migration 0033: pass enrichment columns on update path too,
             # so lifecycle timestamps are refreshed when prices change.
             update_market_with_versioning(
@@ -1221,6 +1234,7 @@ class KalshiMarketPoller(BasePoller):
                 expiration_time=market.get("expiration_time"),
                 subcategory=subcategory,
                 source_url=source_url,
+                settlement_value=settlement_value,
             )
             logger.debug(
                 "Updated market: %s (yes: %s -> %s)",
@@ -1228,6 +1242,22 @@ class KalshiMarketPoller(BasePoller):
                 existing["yes_ask_price"],
                 yes_price,
             )
+
+            # Event settlement propagation: if this market just settled and
+            # belongs to an event, check whether ALL sibling markets have
+            # also settled.  If so, transition the parent event to 'final'.
+            if (
+                db_status == "settled"
+                and existing.get("event_internal_id")
+                and check_event_fully_settled(existing["event_internal_id"])
+            ):
+                update_event(existing["event_internal_id"], status="final")
+                logger.info(
+                    "Event %s fully settled (triggered by market %s)",
+                    existing["event_internal_id"],
+                    ticker,
+                )
+
             return False  # Updated, not created
 
         # No changes, skip
