@@ -3625,10 +3625,9 @@ def create_game_state(
         - Critical for backtesting live trading strategies
         - ~190 updates per game = ~190 historical rows per game
 
-        Dual-Key Structure (Migration 029):
+        Key Structure:
         - id SERIAL (surrogate key) - returned by this function
-        - game_state_id VARCHAR (business key) - auto-generated as GS-{id}
-        - Enables SCD Type 2 versioning (multiple versions of same event)
+        - espn_event_id (natural key) - used for SCD Type 2 versioning
 
     Example:
         >>> state_id = create_game_state(
@@ -3648,17 +3647,16 @@ def create_game_state(
         - ADR-029: ESPN Data Model with Normalized Schema
         - Pattern 2: Dual Versioning System (SCD Type 2)
     """
-    # Step 1: INSERT with placeholder game_state_id (will be updated immediately)
     insert_query = """
         INSERT INTO game_states (
-            game_state_id, espn_event_id, home_team_id, away_team_id, venue_id,
+            espn_event_id, home_team_id, away_team_id, venue_id,
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
             data_source, game_id, row_current_ind, row_start_ts
         )
         VALUES (
-            'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, TRUE, NOW()
         )
         RETURNING id
@@ -3690,17 +3688,7 @@ def create_game_state(
             ),
         )
         result = cur.fetchone()
-        surrogate_id = cast("int", result["id"])
-
-        # Step 2: UPDATE to set correct game_state_id (GS-{id} format)
-        update_query = """
-            UPDATE game_states
-            SET game_state_id = %s
-            WHERE id = %s
-        """
-        cur.execute(update_query, (f"GS-{surrogate_id}", surrogate_id))
-
-        return surrogate_id
+        return cast("int", result["id"])
 
 
 def get_current_game_state(espn_event_id: str) -> dict[str, Any] | None:
@@ -3944,14 +3932,13 @@ def upsert_game_state(
             return None
 
     # Use a SINGLE transaction for all operations to maintain atomicity
-    # This ensures that if INSERT fails, the UPDATE is also rolled back
+    # This ensures that if INSERT fails, the close is also rolled back
     #
     # Educational Note:
-    #   SCD Type 2 upsert is a 3-step atomic operation:
+    #   SCD Type 2 upsert is a 2-step atomic operation:
     #   1. Close current row (row_current_ind = FALSE)
-    #   2. Insert new row with placeholder game_state_id
-    #   3. Update new row with proper game_state_id (GS-{id})
-    #   All three must succeed or all must fail (ACID transaction)
+    #   2. Insert new row with row_current_ind = TRUE
+    #   Both must succeed or both must fail (ACID transaction)
 
     close_query = """
         UPDATE game_states
@@ -3963,30 +3950,24 @@ def upsert_game_state(
 
     insert_query = """
         INSERT INTO game_states (
-            game_state_id, espn_event_id, home_team_id, away_team_id, venue_id,
+            espn_event_id, home_team_id, away_team_id, venue_id,
             home_score, away_score, period, clock_seconds, clock_display,
             game_status, game_date, broadcast, neutral_site,
             season_type, week_number, league, situation, linescores,
             data_source, game_id, row_current_ind, row_start_ts
         )
         VALUES (
-            'TEMP', %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+            %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
             %s, %s, TRUE, NOW()
         )
         RETURNING id
-    """
-
-    update_id_query = """
-        UPDATE game_states
-        SET game_state_id = %s
-        WHERE id = %s
     """
 
     with get_cursor(commit=True) as cur:
         # Step 1: Close current row (if exists)
         cur.execute(close_query, (espn_event_id,))
 
-        # Step 2: Insert new row with placeholder
+        # Step 2: Insert new row
         cur.execute(
             insert_query,
             (
@@ -4013,12 +3994,7 @@ def upsert_game_state(
             ),
         )
         result = cur.fetchone()
-        surrogate_id = cast("int", result["id"])
-
-        # Step 3: Update game_state_id to proper value
-        cur.execute(update_id_query, (f"GS-{surrogate_id}", surrogate_id))
-
-        return surrogate_id
+        return cast("int", result["id"])
 
 
 def get_game_state_history(espn_event_id: str, limit: int = 100) -> list[dict[str, Any]]:
@@ -5507,7 +5483,7 @@ def insert_elo_calculation_log(
         calculation_source: How triggered ('bootstrap', 'realtime', 'backfill', 'manual')
         home_team_id: FK to teams.team_id (optional, for live games)
         away_team_id: FK to teams.team_id (optional, for live games)
-        game_state_id: FK to game_states.game_state_id (optional)
+        game_state_id: FK to game_states.id (optional)
         game_id: FK to games.id (optional)
         mov_multiplier: Margin of victory multiplier (optional)
         home_epa_adjustment: EPA-based adjustment for home team (NFL only)

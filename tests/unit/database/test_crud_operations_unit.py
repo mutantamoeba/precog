@@ -339,9 +339,9 @@ class TestCreateGameStateUnit:
 
     @patch("precog.database.crud_operations.get_cursor")
     def test_create_game_state_returns_id(self, mock_get_cursor):
-        """Test create_game_state returns game_state_id."""
+        """Test create_game_state returns surrogate id."""
         mock_cursor = MagicMock()
-        # Note: RETURNING id returns "id" key, then code maps to game_state_id
+        # Note: RETURNING id returns "id" key (surrogate PK)
         mock_cursor.fetchone.return_value = {"id": 500}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
@@ -373,8 +373,7 @@ class TestCreateGameStateUnit:
         create_game_state(espn_event_id="401547417", situation=situation, game_status="in_progress")
 
         # Verify JSON serialization in params
-        # Note: create_game_state makes 2 execute calls: INSERT then UPDATE
-        # Check the first call (INSERT) for the params
+        # create_game_state makes 1 execute call: INSERT RETURNING id
         insert_call = mock_cursor.execute.call_args_list[0]
         params = insert_call[0][1]
         # situation is near the end of params
@@ -395,8 +394,7 @@ class TestCreateGameStateUnit:
             clock_display="5:32",
         )
 
-        # Note: create_game_state makes 2 execute calls: INSERT then UPDATE
-        # Check the first call (INSERT) for the params
+        # create_game_state makes 1 execute call: INSERT RETURNING id
         insert_call = mock_cursor.execute.call_args_list[0]
         params = insert_call[0][1]
         # Verify Decimal is passed (not float)
@@ -434,7 +432,7 @@ class TestGetGameStateUnit:
     def test_get_current_game_state_returns_current(self, mock_fetch_one):
         """Test get_current_game_state returns current version only."""
         mock_fetch_one.return_value = {
-            "game_state_id": 500,
+            "id": 500,
             "espn_event_id": "401547417",
             "home_score": 14,
             "away_score": 7,
@@ -460,9 +458,9 @@ class TestGetGameStateUnit:
     def test_get_game_state_history_returns_all_versions(self, mock_fetch_all):
         """Test get_game_state_history returns all versions."""
         mock_fetch_all.return_value = [
-            {"game_state_id": 503, "home_score": 21, "row_current_ind": True},
-            {"game_state_id": 502, "home_score": 14, "row_current_ind": False},
-            {"game_state_id": 501, "home_score": 7, "row_current_ind": False},
+            {"id": 503, "home_score": 21, "row_current_ind": True},
+            {"id": 502, "home_score": 14, "row_current_ind": False},
+            {"id": 501, "home_score": 7, "row_current_ind": False},
         ]
 
         result = get_game_state_history("401547417")
@@ -473,7 +471,7 @@ class TestGetGameStateUnit:
     @patch("precog.database.crud_operations.fetch_all")
     def test_get_game_state_history_respects_limit(self, mock_fetch_all):
         """Test get_game_state_history respects limit parameter."""
-        mock_fetch_all.return_value = [{"game_state_id": 1}]
+        mock_fetch_all.return_value = [{"id": 1}]
 
         get_game_state_history("401547417", limit=5)
 
@@ -491,10 +489,9 @@ class TestUpsertGameStateUnit:
         """Test upsert_game_state closes current row before inserting.
 
         Educational Note:
-            upsert_game_state makes 3 execute calls:
+            upsert_game_state makes 2 execute calls:
             1. close_query - SET row_current_ind = FALSE
             2. insert_query - INSERT new row RETURNING id
-            3. update_id_query - UPDATE game_state_id
         """
         mock_cursor = MagicMock()
         # Mock fetchone to return id for RETURNING clause

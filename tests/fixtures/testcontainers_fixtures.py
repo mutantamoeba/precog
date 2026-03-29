@@ -285,7 +285,6 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     -- 3. GAME STATES (SCD Type 2)
     CREATE TABLE IF NOT EXISTS game_states (
         id SERIAL PRIMARY KEY,
-        game_state_id VARCHAR(50) NOT NULL,
         espn_event_id VARCHAR(50) NOT NULL,
         home_team_id INTEGER REFERENCES teams(team_id),
         away_team_id INTEGER REFERENCES teams(team_id),
@@ -322,7 +321,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_game_states_league ON game_states(league) WHERE row_current_ind = TRUE;
     CREATE INDEX IF NOT EXISTS idx_game_states_situation ON game_states USING GIN (situation);
     CREATE INDEX IF NOT EXISTS idx_game_states_teams ON game_states(home_team_id, away_team_id) WHERE row_current_ind = TRUE;
-    CREATE INDEX IF NOT EXISTS idx_game_states_business_key ON game_states(game_state_id);
+    -- idx_game_states_business_key removed: game_state_id column dropped (migration 0044)
 
     -- 4. PROBABILITY & EDGE DETECTION
     CREATE TABLE IF NOT EXISTS probability_matrices (
@@ -893,7 +892,7 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
     ALTER TABLE events ADD CONSTRAINT fk_events_game_id FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE SET NULL;
 
     -- Track migration version
-    INSERT INTO alembic_version (version_num) VALUES ('0038')
+    INSERT INTO alembic_version (version_num) VALUES ('0044')
     ON CONFLICT (version_num) DO NOTHING;
     """
 
