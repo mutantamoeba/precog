@@ -9395,3 +9395,270 @@ def find_game_by_matchup(
     if result:
         return cast("int", result["id"])
     return None
+
+
+# =============================================================================
+# EXTERNAL TEAM CODES CRUD (Migration 0045)
+# =============================================================================
+# These functions manage the external_team_codes table, which maps team codes
+# from external platforms (Kalshi, Polymarket, ESPN, etc.) to the canonical
+# team_id in our teams table. This replaces the fragile in-memory collision
+# resolution with a persistent, auditable, multi-source mapping.
+#
+# Related:
+#   - Issue #516: External team codes table
+#   - Migration 0045: CREATE TABLE external_team_codes
+#   - TeamCodeRegistry.load_from_external_codes(): Primary consumer
+
+
+def create_external_team_code(
+    team_id: int,
+    source: str,
+    source_team_code: str,
+    league: str,
+    confidence: str = "heuristic",
+    verified_at: str | None = None,
+    notes: str | None = None,
+) -> int:
+    """Create a new external team code mapping.
+
+    Maps a source platform's team code to a canonical team_id. For example,
+    Kalshi's "JAC" in NFL maps to team_id for Jacksonville Jaguars.
+
+    Args:
+        team_id: FK to teams.team_id (the canonical team).
+        source: Platform name ('kalshi', 'polymarket', 'espn', 'odds_api', 'cfbd').
+        source_team_code: The code that platform uses for the team.
+        league: League code ('nfl', 'nba', 'ncaaf', etc.).
+        confidence: How the mapping was established.
+            'exact' = verified by API or human check.
+            'manual' = set by a human but not independently verified.
+            'heuristic' = inferred (e.g., assumed Kalshi code = ESPN code).
+        verified_at: ISO 8601 timestamp of when the mapping was verified.
+            None if not yet verified.
+        notes: Optional human-readable notes about this mapping.
+
+    Returns:
+        The new row's id (SERIAL PK).
+
+    Raises:
+        psycopg2.errors.UniqueViolation: If (source, source_team_code, league)
+            already exists. Use upsert_external_team_code() for idempotent writes.
+        psycopg2.errors.ForeignKeyViolation: If team_id does not exist in teams.
+
+    Example:
+        >>> code_id = create_external_team_code(
+        ...     team_id=42,
+        ...     source="kalshi",
+        ...     source_team_code="JAC",
+        ...     league="nfl",
+        ...     confidence="manual",
+        ...     notes="Kalshi uses JAC for Jacksonville, ESPN uses JAX",
+        ... )
+        >>> print(code_id)  # 1
+
+    Related:
+        - Issue #516: External team codes table
+        - Migration 0045: CREATE TABLE external_team_codes
+    """
+    query = """
+        INSERT INTO external_team_codes
+            (team_id, source, source_team_code, league, confidence, verified_at, notes)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
+    """
+    with get_cursor(commit=True) as cur:
+        cur.execute(
+            query,
+            (team_id, source, source_team_code, league, confidence, verified_at, notes),
+        )
+        row = cur.fetchone()
+        return cast("int", row["id"])
+
+
+def get_external_team_codes(
+    source: str | None = None,
+    league: str | None = None,
+    team_id: int | None = None,
+) -> list[dict[str, Any]]:
+    """Get external team codes with optional filters.
+
+    Returns all external team code mappings, optionally filtered by any
+    combination of source, league, and team_id.
+
+    Args:
+        source: Filter by platform name (e.g., 'kalshi', 'espn').
+        league: Filter by league code (e.g., 'nfl', 'ncaaf').
+        team_id: Filter by canonical team_id.
+
+    Returns:
+        List of dicts with all columns from external_team_codes.
+        Empty list if no matches.
+
+    Example:
+        >>> # All Kalshi NFL codes
+        >>> codes = get_external_team_codes(source="kalshi", league="nfl")
+        >>> len(codes)  # 32 (one per NFL team)
+
+        >>> # All codes for a specific team
+        >>> codes = get_external_team_codes(team_id=42)
+        >>> for c in codes:
+        ...     print(f"{c['source']}: {c['source_team_code']}")
+        ...     # kalshi: JAC
+        ...     # espn: JAX
+
+    Related:
+        - Issue #516: External team codes table
+    """
+    conditions: list[str] = []
+    params: list[Any] = []
+
+    if source is not None:
+        conditions.append("source = %s")
+        params.append(source)
+    if league is not None:
+        conditions.append("league = %s")
+        params.append(league)
+    if team_id is not None:
+        conditions.append("team_id = %s")
+        params.append(team_id)
+
+    where_clause = ""
+    if conditions:
+        where_clause = "WHERE " + " AND ".join(conditions)
+
+    query = f"""
+        SELECT id, team_id, source, source_team_code, league,
+               confidence, verified_at, notes, created_at, updated_at
+        FROM external_team_codes
+        {where_clause}
+        ORDER BY source, league, source_team_code
+    """  # noqa: S608
+    return fetch_all(query, tuple(params) if params else None)
+
+
+def find_team_by_external_code(
+    source: str,
+    source_team_code: str,
+    league: str,
+) -> dict[str, Any] | None:
+    """Look up a team by its external platform code.
+
+    The key lookup function: given a source platform's code and league,
+    resolve to the canonical team row from the teams table. Joins
+    external_team_codes with teams to return the full team record.
+
+    Args:
+        source: Platform name ('kalshi', 'polymarket', 'espn', etc.).
+        source_team_code: The code that platform uses for the team.
+        league: League code ('nfl', 'nba', 'ncaaf', etc.).
+
+    Returns:
+        Dictionary with the full team row (from teams table) plus the
+        external code's confidence level, or None if no mapping exists.
+
+    Example:
+        >>> team = find_team_by_external_code("kalshi", "JAC", "nfl")
+        >>> if team:
+        ...     print(f"{team['team_name']} ({team['team_code']})")
+        ...     # Jacksonville Jaguars (JAX)
+        ...     print(f"Confidence: {team['confidence']}")
+        ...     # Confidence: manual
+
+    Related:
+        - Issue #516: External team codes table
+        - get_team_by_kalshi_code(): Legacy equivalent (teams table only)
+    """
+    query = """
+        SELECT t.*, etc.confidence, etc.source_team_code AS external_code
+        FROM external_team_codes etc
+        JOIN teams t ON t.team_id = etc.team_id
+        WHERE etc.source = %s
+          AND etc.source_team_code = %s
+          AND etc.league = %s
+    """
+    return fetch_one(query, (source, source_team_code, league))
+
+
+def upsert_external_team_code(
+    team_id: int,
+    source: str,
+    source_team_code: str,
+    league: str,
+    confidence: str = "heuristic",
+    notes: str | None = None,
+) -> int:
+    """Insert or update an external team code mapping (idempotent).
+
+    Uses PostgreSQL's INSERT ... ON CONFLICT ... DO UPDATE to either
+    create a new mapping or update an existing one. The conflict key is
+    (source, source_team_code, league).
+
+    On conflict (existing mapping): updates team_id, confidence, notes,
+    and updated_at. This allows bulk seeding to be run repeatedly without
+    duplicates.
+
+    Args:
+        team_id: FK to teams.team_id (the canonical team).
+        source: Platform name ('kalshi', 'polymarket', 'espn', etc.).
+        source_team_code: The code that platform uses for the team.
+        league: League code ('nfl', 'nba', 'ncaaf', etc.).
+        confidence: How the mapping was established ('exact', 'manual',
+            'heuristic').
+        notes: Optional human-readable notes about this mapping.
+
+    Returns:
+        The row's id (either newly created or existing).
+
+    Raises:
+        psycopg2.errors.ForeignKeyViolation: If team_id does not exist.
+
+    Example:
+        >>> # First call creates the row
+        >>> id1 = upsert_external_team_code(42, "kalshi", "JAC", "nfl", "manual")
+        >>> # Second call updates (idempotent)
+        >>> id2 = upsert_external_team_code(42, "kalshi", "JAC", "nfl", "exact")
+        >>> assert id1 == id2  # Same row updated
+
+    Related:
+        - Issue #516: External team codes table
+        - scripts/seed_external_team_codes.py: Primary consumer
+    """
+    query = """
+        INSERT INTO external_team_codes
+            (team_id, source, source_team_code, league, confidence, notes)
+        VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT (source, source_team_code, league)
+        DO UPDATE SET
+            team_id = EXCLUDED.team_id,
+            confidence = EXCLUDED.confidence,
+            notes = EXCLUDED.notes,
+            updated_at = NOW()
+        RETURNING id
+    """
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, (team_id, source, source_team_code, league, confidence, notes))
+        row = cur.fetchone()
+        return cast("int", row["id"])
+
+
+def delete_external_team_code(code_id: int) -> bool:
+    """Delete an external team code mapping by its PK.
+
+    Args:
+        code_id: The external_team_codes.id to delete.
+
+    Returns:
+        True if a row was deleted, False if no row with that id existed.
+
+    Example:
+        >>> deleted = delete_external_team_code(42)
+        >>> print(deleted)  # True
+
+    Related:
+        - Issue #516: External team codes table
+    """
+    query = "DELETE FROM external_team_codes WHERE id = %s"
+    with get_cursor(commit=True) as cur:
+        cur.execute(query, (code_id,))
+        return bool(cur.rowcount > 0)
