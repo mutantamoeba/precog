@@ -1900,10 +1900,12 @@ class TestFindGameByMatchupUnit:
         params = call_args[1]
         assert params[0] == "hockey"
 
+    @patch("precog.database.crud_operations.fetch_all")
     @patch("precog.database.crud_operations.fetch_one")
-    def test_returns_none_when_no_match(self, mock_fetch_one):
-        """Returns None when no game found in database."""
+    def test_returns_none_when_no_match(self, mock_fetch_one, mock_fetch_all):
+        """Returns None when no exact or fuzzy match found."""
         mock_fetch_one.return_value = None
+        mock_fetch_all.return_value = []
 
         result = find_game_by_matchup(
             league="nfl",
@@ -1913,6 +1915,62 @@ class TestFindGameByMatchupUnit:
         )
 
         assert result is None
+        mock_fetch_one.assert_called_once()
+        mock_fetch_all.assert_called_once()
+
+    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_fuzzy_match_finds_game_on_adjacent_day(self, mock_fetch_one, mock_fetch_all):
+        """When exact date misses, +/-1 day window finds the game."""
+        mock_fetch_one.return_value = None  # Exact date: no match
+        mock_fetch_all.return_value = [{"id": 77, "game_date": date(2026, 1, 19)}]
+
+        result = find_game_by_matchup(
+            league="nfl",
+            game_date=date(2026, 1, 18),
+            home_team_code="NE",
+            away_team_code="HOU",
+        )
+
+        assert result == 77
+        # Verify fuzzy query uses correct date window
+        fuzzy_params = mock_fetch_all.call_args[0][1]
+        assert fuzzy_params[1] == date(2026, 1, 17)  # day before
+        assert fuzzy_params[2] == date(2026, 1, 19)  # day after
+
+    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_fuzzy_match_returns_none_on_ambiguity(self, mock_fetch_one, mock_fetch_all):
+        """When +/-1 day returns multiple games, returns None (ambiguous)."""
+        mock_fetch_one.return_value = None
+        mock_fetch_all.return_value = [
+            {"id": 77, "game_date": date(2026, 1, 17)},
+            {"id": 78, "game_date": date(2026, 1, 19)},
+        ]
+
+        result = find_game_by_matchup(
+            league="nfl",
+            game_date=date(2026, 1, 18),
+            home_team_code="NE",
+            away_team_code="HOU",
+        )
+
+        assert result is None
+
+    @patch("precog.database.crud_operations.fetch_one")
+    def test_exact_match_skips_fuzzy(self, mock_fetch_one):
+        """When exact date matches, fuzzy query is never called."""
+        mock_fetch_one.return_value = {"id": 42}
+
+        result = find_game_by_matchup(
+            league="nfl",
+            game_date=date(2026, 1, 18),
+            home_team_code="NE",
+            away_team_code="HOU",
+        )
+
+        assert result == 42
+        # fetch_all should NOT have been called (exact match found)
         mock_fetch_one.assert_called_once()
 
     def test_returns_none_for_unknown_league(self):

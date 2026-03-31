@@ -154,7 +154,7 @@ def _normalize_game_status(status: str) -> str:
         return "in_progress"
     if status_lower == "halftime":
         return "halftime"
-    if status_lower in ("post", "final", "final\\ot", "final\\2ot"):
+    if status_lower in ("post", "final", "final/ot", "final/2ot"):
         return "final"
     return "pre"
 
@@ -299,15 +299,21 @@ def _season_date_range(season_year: int, league: str) -> tuple[date, date]:
     return start, end
 
 
-def _get_resume_date(league: str) -> date | None:
+def _get_resume_date(league: str, start_date: date, end_date: date) -> date | None:
     """
-    Find the last backfilled date for a league by querying the games table.
+    Find the last game date within the requested range for this league.
 
-    DB-derived resume: no external state files needed.
+    Scoped to the requested date range to avoid being confused by games
+    outside the range (e.g., live poller games beyond the backfill window).
+
+    Args:
+        league: League code
+        start_date: Start of requested backfill range
+        end_date: End of requested backfill range
 
     Returns:
-        Last game_date with data_source='espn_backfill' for this league,
-        or None if no backfilled games exist.
+        Last game_date within [start_date, end_date] for this league,
+        or None if no games exist in that range.
     """
     sport = LEAGUE_SPORT_CATEGORY.get(league, league)
     row = fetch_one(
@@ -315,8 +321,9 @@ def _get_resume_date(league: str) -> date | None:
         SELECT MAX(game_date) AS last_date
         FROM games
         WHERE sport = %s AND league = %s
+          AND game_date BETWEEN %s AND %s
         """,
-        (sport, league),
+        (sport, league, start_date, end_date),
     )
     if row and row["last_date"]:
         last: date = row["last_date"]
@@ -364,7 +371,7 @@ def backfill_league(
     # Handle resume
     effective_start = start_date
     if resume:
-        last_date = _get_resume_date(league)
+        last_date = _get_resume_date(league, start_date, end_date)
         if last_date:
             # Start from the day after the last backfilled date
             resume_from = last_date + timedelta(days=1)
@@ -378,7 +385,6 @@ def backfill_league(
             "dates_processed": 0,
             "games_found": 0,
             "new": 0,
-            "updated": 0,
             "skipped": 0,
             "errors": 0,
         }
@@ -388,7 +394,6 @@ def backfill_league(
         "dates_processed": 0,
         "games_found": 0,
         "new": 0,
-        "updated": 0,
         "skipped": 0,
         "errors": 0,
         "api_errors": 0,
