@@ -263,7 +263,9 @@ def backfill_event_results(*, dry_run: bool = False) -> int:
 # ---------------------------------------------------------------------------
 
 
-def backfill_market_settlement_values(*, dry_run: bool = False) -> dict[str, int]:
+def backfill_market_settlement_values(
+    *, dry_run: bool = False, kalshi_env: str | None = None
+) -> dict[str, int]:
     """Re-fetch settlement_value for settled markets with NULL settlement_value.
 
     Groups markets by event_ticker and uses the Kalshi API to re-fetch market
@@ -297,10 +299,10 @@ def backfill_market_settlement_values(*, dry_run: bool = False) -> dict[str, int
     # Lazy-import Kalshi client (only needed for API backfill)
     from precog.api_connectors.kalshi_client import KalshiClient
 
-    # Resolve environment from PRECOG_ENV (e.g., "dev" -> demo API, "prod" -> live API).
-    # Default to "demo" for safety — production backfills require explicit PRECOG_ENV=prod.
-    env = os.getenv("PRECOG_ENV", "dev")
-    kalshi_env = "live" if env == "prod" else "demo"
+    # Resolve environment: explicit arg > PRECOG_ENV > default "demo".
+    if kalshi_env is None:
+        env = os.getenv("PRECOG_ENV", "dev")
+        kalshi_env = "prod" if env == "prod" else "demo"
     try:
         client = KalshiClient(environment=kalshi_env)
     except Exception:
@@ -383,6 +385,12 @@ def main() -> None:
         action="store_true",
         help="Skip market settlement_value backfill (requires Kalshi API).",
     )
+    parser.add_argument(
+        "--kalshi-env",
+        choices=["demo", "prod"],
+        default=None,
+        help="Override Kalshi API environment (default: auto from PRECOG_ENV).",
+    )
     args = parser.parse_args()
 
     mode_label = "[DRY RUN] " if args.dry_run else ""
@@ -414,7 +422,9 @@ def main() -> None:
         print("\n3. Market settlement_value backfill SKIPPED (--skip-api)")
     else:
         print(f"\n{mode_label}3. Backfilling market settlement_value from Kalshi API...")
-        sv_counts = backfill_market_settlement_values(dry_run=args.dry_run)
+        sv_counts = backfill_market_settlement_values(
+            dry_run=args.dry_run, kalshi_env=args.kalshi_env
+        )
         print(
             f"   {mode_label}{sv_counts['updated']} markets updated, "
             f"{sv_counts['still_null']} still NULL"
