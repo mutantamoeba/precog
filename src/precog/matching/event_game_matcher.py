@@ -323,7 +323,7 @@ class EventGameMatcher:
         linked_count = 0
 
         for event in unlinked:
-            event_ticker = event.get("event_id", "")
+            event_ticker = event.get("external_id", "")
             title = event.get("title")
             event_id = event.get("id")
 

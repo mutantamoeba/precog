@@ -258,7 +258,7 @@ Related Guide: docs/guides/VERSIONING_GUIDE_V1.0.md
 
 import json
 import logging
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from typing import Any, Literal, cast
 
@@ -9321,7 +9321,7 @@ def find_unlinked_sports_events(league: str | None = None) -> list[dict[str, Any
     """
     if league:
         query = """
-            SELECT id, event_id, title, subcategory
+            SELECT id, external_id, title, subcategory
             FROM events
             WHERE game_id IS NULL
               AND category = 'sports'
@@ -9331,7 +9331,7 @@ def find_unlinked_sports_events(league: str | None = None) -> list[dict[str, Any
         return fetch_all(query, (league,))
 
     query = """
-        SELECT id, event_id, title, subcategory
+        SELECT id, external_id, title, subcategory
         FROM events
         WHERE game_id IS NULL
           AND category = 'sports'
@@ -9352,9 +9352,18 @@ def find_game_by_matchup(
     away_team_code). This function maps from league to sport using the
     LEAGUE_SPORT_CATEGORY dict and queries by the natural key.
 
+    Uses cascading date lookup to handle Kalshi ET vs ESPN UTC date offsets:
+    1. Try exact date (most common)
+    2. Try date+1 (late-night ET game → next day UTC)
+    3. Try date-1 (early UTC → previous day ET)
+
+    If +/-1 day returns multiple matches (e.g., back-to-back playoff games
+    between the same teams on consecutive days), returns None to avoid
+    linking to the wrong game. This is extremely rare but handled safely.
+
     Args:
         league: League code (e.g., "nfl", "nba", "ncaaf")
-        game_date: Date of the game
+        game_date: Date of the game (from Kalshi ticker, Eastern Time)
         home_team_code: ESPN/canonical home team code (e.g., "KC")
         away_team_code: ESPN/canonical away team code (e.g., "BAL")
 
@@ -9374,6 +9383,7 @@ def find_game_by_matchup(
         - Migration 0035: games dimension table with natural key
         - EventGameMatcher._find_game(): Primary consumer
         - Issue #462: Event-to-game matching
+        - Issue #524: Fuzzy date matching for ET/UTC offset
     """
     # Map league to sport for the natural key query
     sport = LEAGUE_SPORT_CATEGORY.get(league)
@@ -9384,16 +9394,50 @@ def find_game_by_matchup(
         )
         return None
 
-    query = """
+    exact_query = """
         SELECT id FROM games
         WHERE sport = %s
           AND game_date = %s
           AND home_team_code = %s
           AND away_team_code = %s
     """
-    result = fetch_one(query, (sport, game_date, home_team_code, away_team_code))
+    # 1. Try exact date first (most common, cheapest)
+    result = fetch_one(exact_query, (sport, game_date, home_team_code, away_team_code))
     if result:
         return cast("int", result["id"])
+
+    # 2. Try +/-1 day window (handles Kalshi ET vs ESPN UTC offset)
+    #    Use a single query to find all matches in the 3-day window,
+    #    then check for ambiguity.
+    fuzzy_query = """
+        SELECT id, game_date FROM games
+        WHERE sport = %s
+          AND game_date BETWEEN %s AND %s
+          AND home_team_code = %s
+          AND away_team_code = %s
+    """
+    day_before = game_date - timedelta(days=1)
+    day_after = game_date + timedelta(days=1)
+    results = fetch_all(
+        fuzzy_query,
+        (sport, day_before, day_after, home_team_code, away_team_code),
+    )
+
+    if len(results) == 1:
+        # Exactly one match in the +/-1 day window — safe to link
+        return cast("int", results[0]["id"])
+
+    if len(results) > 1:
+        # Multiple matches (e.g., back-to-back playoff games) — ambiguous
+        logger.debug(
+            "Ambiguous fuzzy date match: %s %s@%s on %s found %d games in +/-1d window",
+            league,
+            away_team_code,
+            home_team_code,
+            game_date,
+            len(results),
+        )
+
     return None
 
 
