@@ -140,13 +140,13 @@ class TestBackfillUnlinkedEvents:
         mock_find_unlinked.return_value = [
             {
                 "id": 1,
-                "event_id": "KXNFLGAME-26JAN18HOUNE",
+                "external_id": "KXNFLGAME-26JAN18HOUNE",
                 "title": "HOU @ NE",
                 "subcategory": "nfl",
             },
             {
                 "id": 2,
-                "event_id": "KXNFLGAME-26JAN18KCBUF",
+                "external_id": "KXNFLGAME-26JAN18KCBUF",
                 "title": "KC @ BUF",
                 "subcategory": "nfl",
             },
@@ -186,8 +186,13 @@ class TestBackfillUnlinkedEvents:
     ) -> None:
         """Some events match, some don't."""
         mock_find_unlinked.return_value = [
-            {"id": 1, "event_id": "KXNFLGAME-26JAN18HOUNE", "title": None, "subcategory": "nfl"},
-            {"id": 2, "event_id": "KXPOLITICS-UNKNOWN", "title": None, "subcategory": "politics"},
+            {"id": 1, "external_id": "KXNFLGAME-26JAN18HOUNE", "title": None, "subcategory": "nfl"},
+            {
+                "id": 2,
+                "external_id": "KXPOLITICS-UNKNOWN",
+                "title": None,
+                "subcategory": "politics",
+            },
         ]
         mock_update.return_value = True
 
