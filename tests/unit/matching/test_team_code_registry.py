@@ -2,13 +2,16 @@
 
 Tests the in-memory cache of team code mappings used for matching
 Kalshi events to games. Uses load_from_data() to avoid DB dependency.
+New tests (#516) cover loading from external_team_codes table.
 
 Related:
     - Issue #462: Event-to-game matching
+    - Issue #516: External team codes table
     - src/precog/matching/team_code_registry.py
 """
 
 from datetime import UTC, datetime, timedelta
+from unittest.mock import patch
 
 from precog.matching.team_code_registry import TeamCodeRegistry
 
@@ -495,3 +498,316 @@ class TestClassificationCollision:
         registry.load_from_data(NFL_TEAMS)  # No classification field
         assert registry.resolve_kalshi_to_espn("JAC", "nfl") == "JAX"
         assert registry.resolve_kalshi_to_espn("HOU", "nfl") == "HOU"
+
+
+# =============================================================================
+# External Team Codes Loading Tests (#516)
+# =============================================================================
+
+
+# Mock data matching the external_team_codes table format
+EXTERNAL_KALSHI_CODES: list[dict] = [
+    {
+        "id": 1,
+        "team_id": 42,
+        "source": "kalshi",
+        "source_team_code": "JAC",
+        "league": "nfl",
+        "confidence": "manual",
+    },
+    {
+        "id": 2,
+        "team_id": 43,
+        "source": "kalshi",
+        "source_team_code": "LA",
+        "league": "nfl",
+        "confidence": "manual",
+    },
+    {
+        "id": 3,
+        "team_id": 44,
+        "source": "kalshi",
+        "source_team_code": "HOU",
+        "league": "nfl",
+        "confidence": "heuristic",
+    },
+    {
+        "id": 4,
+        "team_id": 45,
+        "source": "kalshi",
+        "source_team_code": "NE",
+        "league": "nfl",
+        "confidence": "heuristic",
+    },
+    {
+        "id": 5,
+        "team_id": 46,
+        "source": "kalshi",
+        "source_team_code": "KC",
+        "league": "nfl",
+        "confidence": "heuristic",
+    },
+]
+
+EXTERNAL_ESPN_CODES: list[dict] = [
+    {
+        "id": 10,
+        "team_id": 42,
+        "source": "espn",
+        "source_team_code": "JAX",
+        "league": "nfl",
+        "confidence": "exact",
+    },
+    {
+        "id": 11,
+        "team_id": 43,
+        "source": "espn",
+        "source_team_code": "LAR",
+        "league": "nfl",
+        "confidence": "exact",
+    },
+    {
+        "id": 12,
+        "team_id": 44,
+        "source": "espn",
+        "source_team_code": "HOU",
+        "league": "nfl",
+        "confidence": "exact",
+    },
+    {
+        "id": 13,
+        "team_id": 45,
+        "source": "espn",
+        "source_team_code": "NE",
+        "league": "nfl",
+        "confidence": "exact",
+    },
+    {
+        "id": 14,
+        "team_id": 46,
+        "source": "espn",
+        "source_team_code": "KC",
+        "league": "nfl",
+        "confidence": "exact",
+    },
+]
+
+
+class TestLoadFromExternalCodes:
+    """Tests for loading registry from external_team_codes table (#516).
+
+    These tests patch the CRUD functions at their source module because
+    the registry uses lazy imports (inside methods) to avoid circular
+    dependencies. The patch target is precog.database.crud_operations.
+    """
+
+    @patch("precog.database.crud_operations.get_external_team_codes")
+    def test_load_from_external_codes_resolves_mismatches(self, mock_get_codes) -> None:
+        """External codes correctly map Kalshi mismatches (JAC->JAX, LA->LAR)."""
+
+        # Return different data depending on the source param
+        def side_effect(source=None, league=None):
+            if source == "kalshi":
+                return EXTERNAL_KALSHI_CODES
+            if source == "espn":
+                return EXTERNAL_ESPN_CODES
+            return []
+
+        mock_get_codes.side_effect = side_effect
+
+        registry = TeamCodeRegistry()
+        registry.load_from_external_codes(source="kalshi")
+
+        assert registry.is_loaded
+        assert registry.resolve_kalshi_to_espn("JAC", "nfl") == "JAX"
+        assert registry.resolve_kalshi_to_espn("LA", "nfl") == "LAR"
+        assert registry.resolve_kalshi_to_espn("HOU", "nfl") == "HOU"
+        assert registry.resolve_kalshi_to_espn("NE", "nfl") == "NE"
+        assert registry.resolve_kalshi_to_espn("KC", "nfl") == "KC"
+
+    @patch("precog.database.crud_operations.get_external_team_codes")
+    def test_load_from_external_codes_builds_kalshi_codes_set(self, mock_get_codes) -> None:
+        """get_kalshi_codes returns all Kalshi codes after external load."""
+
+        def side_effect(source=None, league=None):
+            if source == "kalshi":
+                return EXTERNAL_KALSHI_CODES
+            if source == "espn":
+                return EXTERNAL_ESPN_CODES
+            return []
+
+        mock_get_codes.side_effect = side_effect
+
+        registry = TeamCodeRegistry()
+        registry.load_from_external_codes(source="kalshi")
+
+        codes = registry.get_kalshi_codes("nfl")
+        assert "JAC" in codes
+        assert "LA" in codes
+        assert "HOU" in codes
+        assert "NE" in codes
+        assert "KC" in codes
+        # ESPN codes for mismatched teams should NOT be in the set
+        assert "JAX" not in codes
+        assert "LAR" not in codes
+
+    @patch("precog.database.crud_operations.get_teams_with_kalshi_codes")
+    @patch("precog.database.crud_operations.get_external_team_codes")
+    def test_fallback_to_legacy_when_external_empty(self, mock_get_codes, mock_get_teams) -> None:
+        """Falls back to teams table when external_team_codes is empty."""
+        # External codes return empty
+        mock_get_codes.return_value = []
+        # Legacy load returns teams data
+        mock_get_teams.return_value = NFL_TEAMS
+
+        registry = TeamCodeRegistry()
+        registry.load_from_external_codes(source="kalshi")
+
+        # Should have loaded from legacy
+        assert registry.is_loaded
+        assert registry.resolve_kalshi_to_espn("JAC", "nfl") == "JAX"
+        mock_get_teams.assert_called_once()
+
+    @patch("precog.database.crud_operations.get_teams_with_kalshi_codes")
+    @patch("precog.database.crud_operations.get_external_team_codes")
+    def test_fallback_to_legacy_on_exception(self, mock_get_codes, mock_get_teams) -> None:
+        """Falls back to teams table when external_team_codes raises an error."""
+        mock_get_codes.side_effect = Exception("Table does not exist")
+        mock_get_teams.return_value = NFL_TEAMS
+
+        registry = TeamCodeRegistry()
+        registry.load_from_external_codes(source="kalshi")
+
+        # Should have loaded from legacy despite the error
+        assert registry.is_loaded
+        assert registry.resolve_kalshi_to_espn("JAC", "nfl") == "JAX"
+
+    @patch("precog.database.crud_operations.get_external_team_codes")
+    def test_external_code_without_espn_mapping(self, mock_get_codes) -> None:
+        """Kalshi code without ESPN mapping uses Kalshi code as team_code."""
+        # Kalshi code exists but no ESPN mapping for team_id=99
+        kalshi_only = [
+            {
+                "id": 50,
+                "team_id": 99,
+                "source": "kalshi",
+                "source_team_code": "XYZ",
+                "league": "nfl",
+                "confidence": "heuristic",
+            },
+        ]
+
+        def side_effect(source=None, league=None):
+            if source == "kalshi":
+                return kalshi_only
+            if source == "espn":
+                return []  # No ESPN codes
+            return []
+
+        mock_get_codes.side_effect = side_effect
+
+        registry = TeamCodeRegistry()
+        registry.load_from_external_codes(source="kalshi")
+
+        # XYZ should resolve to XYZ (same code, no mismatch)
+        assert registry.resolve_kalshi_to_espn("XYZ", "nfl") == "XYZ"
+
+    @patch("precog.database.crud_operations.get_external_team_codes")
+    def test_load_clears_unknown_codes(self, mock_get_codes) -> None:
+        """Loading from external codes clears the unknown_codes_seen set."""
+
+        def side_effect(source=None, league=None):
+            if source == "kalshi":
+                return EXTERNAL_KALSHI_CODES
+            if source == "espn":
+                return EXTERNAL_ESPN_CODES
+            return []
+
+        mock_get_codes.side_effect = side_effect
+
+        registry = TeamCodeRegistry()
+        registry.load_from_data(NFL_TEAMS)
+        registry.record_unknown_code("ZZZ", "nfl")
+        assert len(registry.unknown_codes_seen) == 1
+
+        registry.load_from_external_codes(source="kalshi")
+        assert len(registry.unknown_codes_seen) == 0
+
+    @patch("precog.database.crud_operations.get_external_team_codes")
+    def test_load_sets_last_loaded_at(self, mock_get_codes) -> None:
+        """Loading from external codes sets last_loaded_at."""
+
+        def side_effect(source=None, league=None):
+            if source == "kalshi":
+                return EXTERNAL_KALSHI_CODES
+            if source == "espn":
+                return EXTERNAL_ESPN_CODES
+            return []
+
+        mock_get_codes.side_effect = side_effect
+
+        registry = TeamCodeRegistry()
+        assert registry.last_loaded_at is None
+
+        before = datetime.now(UTC)
+        registry.load_from_external_codes(source="kalshi")
+        after = datetime.now(UTC)
+
+        assert registry.last_loaded_at is not None
+        assert before <= registry.last_loaded_at <= after
+
+
+class TestLoadAutoFallback:
+    """Tests for load() auto-fallback behavior (#516).
+
+    Tests that load() tries external_team_codes first and falls back
+    to the legacy teams table approach when needed.
+    """
+
+    @patch("precog.database.crud_operations.get_external_team_codes")
+    def test_load_tries_external_first(self, mock_get_codes) -> None:
+        """load() attempts external_team_codes before legacy."""
+
+        def side_effect(source=None, league=None):
+            if source == "kalshi":
+                return EXTERNAL_KALSHI_CODES
+            if source == "espn":
+                return EXTERNAL_ESPN_CODES
+            return []
+
+        mock_get_codes.side_effect = side_effect
+
+        registry = TeamCodeRegistry()
+        registry.load()
+
+        assert registry.is_loaded
+        assert registry.resolve_kalshi_to_espn("JAC", "nfl") == "JAX"
+        # External codes were used (not legacy)
+        mock_get_codes.assert_called()
+
+    @patch("precog.database.crud_operations.get_teams_with_kalshi_codes")
+    @patch("precog.database.crud_operations.get_external_team_codes")
+    def test_load_falls_back_when_external_empty(self, mock_get_codes, mock_get_teams) -> None:
+        """load() falls back to legacy when external table is empty."""
+        mock_get_codes.return_value = []
+        mock_get_teams.return_value = NFL_TEAMS
+
+        registry = TeamCodeRegistry()
+        registry.load()
+
+        assert registry.is_loaded
+        assert registry.resolve_kalshi_to_espn("JAC", "nfl") == "JAX"
+        mock_get_teams.assert_called_once()
+
+    @patch("precog.database.crud_operations.get_teams_with_kalshi_codes")
+    @patch("precog.database.crud_operations.get_external_team_codes")
+    def test_load_falls_back_on_error(self, mock_get_codes, mock_get_teams) -> None:
+        """load() falls back to legacy when external table errors."""
+        mock_get_codes.side_effect = Exception("relation does not exist")
+        mock_get_teams.return_value = NFL_TEAMS
+
+        registry = TeamCodeRegistry()
+        registry.load()
+
+        assert registry.is_loaded
+        assert registry.resolve_kalshi_to_espn("JAC", "nfl") == "JAX"

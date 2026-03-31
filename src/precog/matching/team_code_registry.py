@@ -142,9 +142,9 @@ class TeamCodeRegistry:
     def load(self, league: str | None = None) -> None:
         """Load team codes from DB into in-memory cache.
 
-        Queries the teams table for all teams (or a specific league) and
-        builds the mapping dictionaries. Safe to call multiple times
-        (replaces existing data for reloaded leagues).
+        Attempts to load from external_team_codes table first (persistent
+        multi-source mappings). Falls back to the legacy teams table if the
+        external table is empty, doesn't exist, or encounters an error.
 
         Args:
             league: Optional league filter. If None, loads all leagues.
@@ -153,6 +153,23 @@ class TeamCodeRegistry:
             >>> registry = TeamCodeRegistry()
             >>> registry.load()           # Load all leagues
             >>> registry.load("nfl")      # Refresh NFL only
+        """
+        # Try external_team_codes first (new persistent approach)
+        if self._try_load_from_external_codes(league=league):
+            return
+
+        # Fall back to legacy teams table approach
+        self._load_from_teams_table(league=league)
+
+    def _load_from_teams_table(self, league: str | None = None) -> None:
+        """Load from teams table (legacy mode).
+
+        This is the original load path, reading directly from the teams
+        table's kalshi_team_code column. Used as a fallback when the
+        external_team_codes table is empty or unavailable.
+
+        Args:
+            league: Optional league filter. If None, loads all leagues.
         """
         # Import here to avoid circular imports at module level
         from precog.database.crud_operations import get_teams_with_kalshi_codes
@@ -166,17 +183,159 @@ class TeamCodeRegistry:
         total_codes = sum(len(codes) for codes in self._kalshi_codes.values())
         if collisions:
             logger.info(
-                "TeamCodeRegistry loaded: %d leagues, %d total codes (%d code collisions resolved, see DEBUG for details)",
+                "TeamCodeRegistry loaded from teams table (legacy mode): "
+                "%d leagues, %d total codes (%d code collisions resolved, see DEBUG for details)",
                 len(self._kalshi_codes),
                 total_codes,
                 collisions,
             )
         else:
             logger.info(
-                "TeamCodeRegistry loaded: %d leagues, %d total codes",
+                "TeamCodeRegistry loaded from teams table (legacy mode): "
+                "%d leagues, %d total codes",
                 len(self._kalshi_codes),
                 total_codes,
             )
+
+    def _try_load_from_external_codes(
+        self,
+        source: str = "kalshi",
+        league: str | None = None,
+    ) -> bool:
+        """Try to load from external_team_codes table.
+
+        Reads Kalshi code mappings from external_team_codes and resolves
+        each to the corresponding ESPN code by looking up the same team_id
+        with source='espn'.
+
+        Args:
+            source: The source platform to load codes for. Default 'kalshi'.
+            league: Optional league filter.
+
+        Returns:
+            True if successfully loaded (at least one code found).
+            False if the table is empty, doesn't exist, or errors occur
+            (caller should fall back to legacy load).
+        """
+        try:
+            from precog.database.crud_operations import get_external_team_codes
+
+            # Get all codes for the requested source
+            kalshi_codes = get_external_team_codes(source=source, league=league)
+            if not kalshi_codes:
+                logger.debug(
+                    "external_team_codes table empty for source=%s league=%s, "
+                    "falling back to legacy load",
+                    source,
+                    league,
+                )
+                return False
+
+            # Get ESPN codes for cross-referencing (team_id -> ESPN code)
+            espn_codes = get_external_team_codes(source="espn", league=league)
+            espn_by_team: dict[int, str] = {}
+            for ec in espn_codes:
+                espn_by_team[ec["team_id"]] = ec["source_team_code"]
+
+            # Build team data in the format _build_cache expects
+            teams: list[dict[str, Any]] = []
+            for kc in kalshi_codes:
+                team_id = kc["team_id"]
+                kalshi_code_val = kc["source_team_code"]
+                code_league = kc["league"]
+
+                # Look up the ESPN code for this team
+                espn_code = espn_by_team.get(team_id)
+                if espn_code is None:
+                    # No ESPN mapping — use the Kalshi code as both
+                    # (same behavior as teams without kalshi_team_code in legacy)
+                    logger.debug(
+                        "No ESPN code for team_id=%d (kalshi=%s:%s), "
+                        "using Kalshi code as team_code",
+                        team_id,
+                        kalshi_code_val,
+                        code_league,
+                    )
+                    espn_code = kalshi_code_val
+
+                # If Kalshi code differs from ESPN code, set kalshi_team_code
+                # Otherwise, leave it None (same code on both platforms)
+                if kalshi_code_val.upper() != espn_code.upper():
+                    kalshi_team_code = kalshi_code_val
+                else:
+                    kalshi_team_code = None
+
+                teams.append(
+                    {
+                        "team_code": espn_code,
+                        "league": code_league,
+                        "kalshi_team_code": kalshi_team_code,
+                        # Classification not needed: UNIQUE(source, source_team_code,
+                        # league) on external_team_codes means code collisions are
+                        # impossible — each code maps to exactly one team.
+                    }
+                )
+
+            collisions = self._build_cache(teams, league)
+            self._loaded = True
+            self._last_loaded_at = datetime.now(UTC)
+            self._unknown_codes_seen.clear()
+
+            total_codes = sum(len(codes) for codes in self._kalshi_codes.values())
+            if collisions:
+                logger.info(
+                    "TeamCodeRegistry loaded from external_team_codes (%d codes): "
+                    "%d leagues, %d total codes (%d collisions resolved)",
+                    len(kalshi_codes),
+                    len(self._kalshi_codes),
+                    total_codes,
+                    collisions,
+                )
+            else:
+                logger.info(
+                    "TeamCodeRegistry loaded from external_team_codes (%d codes): "
+                    "%d leagues, %d total codes",
+                    len(kalshi_codes),
+                    len(self._kalshi_codes),
+                    total_codes,
+                )
+            return True
+
+        except Exception:
+            # Table might not exist yet (pre-migration), or other DB error.
+            # Fall back to legacy load gracefully.
+            logger.debug(
+                "Failed to load from external_team_codes, falling back to legacy load",
+                exc_info=True,
+            )
+            return False
+
+    def load_from_external_codes(
+        self,
+        source: str = "kalshi",
+        league: str | None = None,
+    ) -> None:
+        """Load team codes from external_team_codes table.
+
+        Public method to explicitly load from the external_team_codes table
+        instead of the legacy teams table. Falls back to legacy load() if
+        the external table is empty or doesn't exist.
+
+        Args:
+            source: The source platform to load codes for. Default 'kalshi'.
+            league: Optional league filter. If None, loads all leagues.
+
+        Example:
+            >>> registry = TeamCodeRegistry()
+            >>> registry.load_from_external_codes()  # Load Kalshi codes
+            >>> registry.load_from_external_codes(source="polymarket")
+        """
+        if not self._try_load_from_external_codes(source=source, league=league):
+            logger.info(
+                "external_team_codes empty/unavailable for source=%s, falling back to legacy load",
+                source,
+            )
+            self._load_from_teams_table(league=league)
 
     def load_from_data(self, teams: list[dict[str, Any]]) -> None:
         """Load registry from pre-fetched team data (for testing).
