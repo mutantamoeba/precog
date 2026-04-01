@@ -62,7 +62,9 @@ class TestTransactionWithSetup:
         assert result["cnt"] == 1, "Test series should exist"
 
         # Test event should exist
-        cursor.execute("SELECT COUNT(*) as cnt FROM events WHERE event_id = 'TEST-EVT-NFL-KC-BUF'")
+        cursor.execute(
+            "SELECT COUNT(*) as cnt FROM events WHERE external_id = 'TEST-EVT-NFL-KC-BUF'"
+        )
         result = cursor.fetchone()
         assert result["cnt"] == 1, "Test event should exist"
 

@@ -135,7 +135,6 @@ def _apply_migration_sql(connection: psycopg2.extensions.connection) -> None:
 
     CREATE TABLE IF NOT EXISTS events (
         id SERIAL PRIMARY KEY,
-        event_id VARCHAR(100) NOT NULL UNIQUE,
         platform_id VARCHAR(50) REFERENCES platforms(platform_id) ON DELETE CASCADE,
         series_internal_id INTEGER REFERENCES series(id) ON DELETE SET NULL,
         external_id VARCHAR(100) NOT NULL,

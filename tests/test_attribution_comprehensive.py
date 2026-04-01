@@ -202,7 +202,7 @@ def test_e2e_full_attribution_workflow(
     # Look up event surrogate PK (migration 0020: events use integer FK)
     from precog.database.connection import fetch_one as _fetch_one
 
-    event_row = _fetch_one("SELECT id FROM events WHERE event_id = %s", (sample_event,))
+    event_row = _fetch_one("SELECT id FROM events WHERE external_id = %s", (sample_event,))
     event_pk = event_row["id"] if event_row else None
 
     market_id = create_market(

@@ -187,11 +187,12 @@ def db_transaction_with_setup(
     _series_pk = _sr["id"] if _sr else None
 
     # Create test event (uses series_internal_id integer FK)
+    # external_id is the canonical business key (migration 0047 dropped event_id column)
     cursor.execute(
         """
-        INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, title, status)
-        VALUES ('TEST-EVT-NFL-KC-BUF', 'test_platform', %s, 'TEST-EXT-EVT', 'sports', 'Test Event: KC vs BUF', 'scheduled')
-        ON CONFLICT (event_id) DO NOTHING
+        INSERT INTO events (platform_id, series_internal_id, external_id, category, title, status)
+        VALUES ('test_platform', %s, 'TEST-EVT-NFL-KC-BUF', 'sports', 'Test Event: KC vs BUF', 'scheduled')
+        ON CONFLICT (platform_id, external_id) DO NOTHING
     """,
         (_series_pk,),
     )
@@ -199,9 +200,9 @@ def db_transaction_with_setup(
     # Create additional test event for compatibility
     cursor.execute(
         """
-        INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, title, status)
-        VALUES ('TEST-EVT', 'test_platform', %s, 'TEST-EVT-2', 'sports', 'Test Event 2', 'scheduled')
-        ON CONFLICT (event_id) DO NOTHING
+        INSERT INTO events (platform_id, series_internal_id, external_id, category, title, status)
+        VALUES ('test_platform', %s, 'TEST-EVT-2', 'sports', 'Test Event 2', 'scheduled')
+        ON CONFLICT (platform_id, external_id) DO NOTHING
     """,
         (_series_pk,),
     )

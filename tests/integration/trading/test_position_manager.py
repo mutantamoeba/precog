@@ -39,7 +39,7 @@ def test_market_pks(db_cursor, clean_test_data):
         with conn.cursor() as cur:
             # Look up event surrogate PK (migration 0020: markets use integer FK)
             # Note: get_connection() returns raw psycopg2 (tuple rows), not dict cursor
-            cur.execute("SELECT id FROM events WHERE event_id = 'TEST-EVT-NFL-KC-BUF'")
+            cur.execute("SELECT id FROM events WHERE external_id = 'TEST-EVT-NFL-KC-BUF'")
             _evt = cur.fetchone()
             event_pk = _evt[0] if _evt else None
 

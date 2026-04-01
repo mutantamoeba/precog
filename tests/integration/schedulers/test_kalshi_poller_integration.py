@@ -168,9 +168,11 @@ class TestPollerDatabaseIntegration:
         """New markets should create both event and market records.
 
         Educational Note:
-            We verify the expected event_id was called rather than asserting
-            exactly one call. This avoids flakiness from test pollution if
-            other pollers are running in background threads during the test run.
+            We verify the expected event_id parameter was passed rather than
+            asserting exactly one call. This avoids flakiness from test
+            pollution if other pollers are running in background threads.
+            Note: ``event_id`` is the function parameter name (legacy);
+            the DB column is ``external_id`` (migration 0047).
         """
         # Reset mock to ensure clean state
         mock_kalshi_client.reset_mock()
