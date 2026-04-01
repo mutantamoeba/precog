@@ -4002,9 +4002,27 @@ def get_current_game_state(espn_event_id: str) -> dict[str, Any] | None:
 # Fields NOT listed here are stored but don't trigger new rows.
 # Reference: ESPNSituationData in api_connectors/espn_client.py
 TRACKED_SITUATION_KEYS: dict[str, list[str]] = {
-    "football": ["possession", "down", "distance", "yard_line", "is_red_zone"],
-    "basketball": ["possession", "bonus", "possession_arrow", "home_fouls", "away_fouls"],
-    "hockey": ["home_powerplay", "away_powerplay"],
+    "football": [
+        "possession",
+        "down",
+        "distance",
+        "yard_line",
+        "is_red_zone",
+        "home_win_probability",
+    ],
+    "basketball": [
+        "possession",
+        "bonus",
+        "possession_arrow",
+        "home_fouls",
+        "away_fouls",
+        "home_win_probability",
+    ],
+    "hockey": [
+        "home_powerplay",
+        "away_powerplay",
+        "home_win_probability",
+    ],
 }
 
 # Maps league codes to sport categories

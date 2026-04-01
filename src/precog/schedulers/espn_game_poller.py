@@ -1137,6 +1137,7 @@ class ESPNGamePoller(BasePoller):
                     game_status=normalized_status,
                     game_time=game_date,
                     data_source="espn_poller",
+                    attendance=metadata.get("attendance"),
                 )
             except Exception:
                 self._record_sync(GameSyncReason.GAME_DIMENSION_FAILED)
