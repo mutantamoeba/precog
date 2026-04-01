@@ -166,6 +166,7 @@ class ESPNGameMetadata(TypedDict, total=False):
         neutral_site: True if game is at neutral location
         season_type: Game type (preseason, regular, playoff, bowl, allstar)
         week_number: Week of the season (if applicable)
+        attendance: Number of fans in attendance (from competition object)
 
     Reference: Phase 2 ESPN Data Model Plan
     """
@@ -179,6 +180,7 @@ class ESPNGameMetadata(TypedDict, total=False):
     neutral_site: bool
     season_type: str
     week_number: int | None
+    attendance: int | None  # from competition.attendance; None if absent
 
 
 class ESPNSituationData(TypedDict, total=False):
@@ -195,6 +197,11 @@ class ESPNSituationData(TypedDict, total=False):
     Common Fields (all sports):
         possession: Which team has the ball ("home" or "away")
         last_play: Description of last play (ESPN provides for all sports)
+        home_win_probability: ESPN live model home win % (0.0-1.0)
+        away_win_probability: ESPN live model away win % (0.0-1.0)
+        tie_probability: ESPN live model tie % (0.0-1.0, rare outside soccer)
+        play_type: Play classification text (e.g., "Pass Reception", "Layup")
+        score_value: Points scored on the play (>0 only)
 
     Football-specific (NFL/NCAAF):
         home_timeouts: Home team timeouts remaining (defaulted to 3)
@@ -207,6 +214,7 @@ class ESPNSituationData(TypedDict, total=False):
         away_turnovers: Away team turnover count
         drive_plays: Plays in current drive
         drive_yards: Yards in current drive
+        drive_result: Drive outcome (e.g., "TOUCHDOWN", "PUNT", "FIELD_GOAL")
 
     Basketball-specific (NBA/NCAAB/WNBA):
         home_timeouts: Home team timeouts remaining (only if present)
@@ -229,6 +237,14 @@ class ESPNSituationData(TypedDict, total=False):
     # Common (all sports)
     possession: str | None
     last_play: str
+    # NOTE: Win probability values are floats (0.0-1.0) from ESPN's live model.
+    # This is an intentional exception to the Decimal rule — these are signal
+    # values stored in JSONB, not prices or financial amounts.
+    home_win_probability: float  # ESPN live model home win % (0.0-1.0)
+    away_win_probability: float  # ESPN live model away win % (0.0-1.0)
+    tie_probability: float  # ESPN live model tie % (0.0-1.0, rare outside soccer)
+    play_type: str  # Play classification text from lastPlay.type.text
+    score_value: int  # Points scored on the play (only present when > 0)
 
     # Football (NFL/NCAAF)
     home_timeouts: int
@@ -241,6 +257,7 @@ class ESPNSituationData(TypedDict, total=False):
     away_turnovers: int
     drive_plays: int
     drive_yards: int
+    drive_result: str  # Drive outcome (e.g., "TOUCHDOWN", "PUNT", "FIELD_GOAL")
 
     # Basketball (NBA/NCAAB)
     home_fouls: int
@@ -1005,6 +1022,7 @@ class ESPNClient:
                     event.get("season", {}).get("type", 2), "regular"
                 ),
                 "week_number": event.get("week", {}).get("number"),
+                "attendance": competition.get("attendance"),
             }
 
             # Parse status
@@ -1066,6 +1084,32 @@ class ESPNClient:
                 if last_play_text:
                     situation["last_play"] = last_play_text
 
+                # Win probability from ESPN's live model (all sports).
+                # NOTE: Values are floats (0.0-1.0), intentional exception to
+                # Decimal rule -- these are signal values in JSONB, not prices.
+                probability = last_play_raw.get("probability", {})
+                if probability:
+                    home_wp = probability.get("homeWinPercentage")
+                    if home_wp is not None:
+                        situation["home_win_probability"] = home_wp
+                    away_wp = probability.get("awayWinPercentage")
+                    if away_wp is not None:
+                        situation["away_win_probability"] = away_wp
+                    tie_pct = probability.get("tiePercentage")
+                    if tie_pct is not None:
+                        situation["tie_probability"] = tie_pct
+
+                # Play classification metadata (all sports)
+                play_type = last_play_raw.get("type", {})
+                if play_type:
+                    play_type_text = play_type.get("text")
+                    if play_type_text:
+                        situation["play_type"] = play_type_text
+
+                score_value = last_play_raw.get("scoreValue")
+                if score_value is not None and score_value > 0:
+                    situation["score_value"] = score_value
+
             if league in self.FOOTBALL_SPORTS:
                 # Football: full situation data
                 situation["home_timeouts"] = situation_raw.get("homeTimeouts", 3)
@@ -1081,7 +1125,7 @@ class ESPNClient:
                     situation["home_turnovers"] = home_turnovers
                 if away_turnovers is not None:
                     situation["away_turnovers"] = away_turnovers
-                # Drive data from lastPlay (play count + yards)
+                # Drive data from lastPlay (play count, yards, result)
                 if last_play_raw:
                     drive = last_play_raw.get("drive", {})
                     if drive:
@@ -1091,6 +1135,9 @@ class ESPNClient:
                         drive_yards = drive.get("yards")
                         if drive_yards is not None:
                             situation["drive_yards"] = drive_yards
+                        drive_result = drive.get("result")
+                        if drive_result:
+                            situation["drive_result"] = drive_result
 
             elif league in self.BASKETBALL_SPORTS:
                 # Basketball: ESPN provides timeouts + foul/bonus data

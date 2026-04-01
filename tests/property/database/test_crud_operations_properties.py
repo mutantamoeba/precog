@@ -565,6 +565,12 @@ def basketball_situation_strategy(draw: st.DrawFn) -> dict:
         "away_fouls": draw(foul_strategy),
         "home_timeouts": draw(st.integers(min_value=0, max_value=7)),
         "away_timeouts": draw(st.integers(min_value=0, max_value=7)),
+        "home_win_probability": draw(
+            st.one_of(
+                st.none(),
+                st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_subnormal=False),
+            )
+        ),
     }
 
 
@@ -577,6 +583,12 @@ def hockey_situation_strategy(draw: st.DrawFn) -> dict:
         "home_shots": draw(shots_strategy),
         "away_shots": draw(shots_strategy),
         "powerplay_time": draw(st.text(min_size=0, max_size=5)),
+        "home_win_probability": draw(
+            st.one_of(
+                st.none(),
+                st.floats(min_value=0.0, max_value=1.0, allow_nan=False, allow_subnormal=False),
+            )
+        ),
     }
 
 
