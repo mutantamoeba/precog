@@ -758,6 +758,10 @@ class KalshiWebSocketHandler:
             )
 
             if price_changed:
+                # Note: enrichment fields (volume_24h, previous_*, depth signals)
+                # are not available in WebSocket messages — only price/volume data.
+                # Existing enrichment values are preserved via fallback logic in
+                # update_market_with_versioning (reads current snapshot for missing keys).
                 update_market_with_versioning(
                     ticker=ticker,
                     yes_ask_price=yes_price,
