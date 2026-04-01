@@ -1180,6 +1180,7 @@ class KalshiMarketPoller(BasePoller):
             # Migration 0033: subtitle, open_time, close_time, expiration_time
             # promoted from metadata JSONB to proper dimension columns.
             # can_close_early and series_ticker remain in metadata.
+            # Migration 0046: depth signals + daily movement columns.
             create_market(
                 platform_id=self.PLATFORM_ID,
                 event_internal_id=event_pk,  # Integer FK to events(id)
@@ -1205,6 +1206,16 @@ class KalshiMarketPoller(BasePoller):
                 source_url=source_url,
                 outcome_label=outcome_label,
                 settlement_value=create_settlement_value,
+                # Migration 0046: dimension enrichment
+                expiration_value=market.get("expiration_value"),
+                notional_value=market.get("notional_value_dollars"),
+                # Migration 0046: snapshot enrichment
+                volume_24h=market.get("volume_24h"),
+                previous_yes_bid=market.get("previous_yes_bid_dollars"),
+                previous_yes_ask=market.get("previous_yes_ask_dollars"),
+                previous_price=market.get("previous_price_dollars"),
+                yes_bid_size=market.get("yes_bid_size"),
+                yes_ask_size=market.get("yes_ask_size"),
                 metadata={
                     k: v
                     for k, v in {
@@ -1265,6 +1276,7 @@ class KalshiMarketPoller(BasePoller):
 
             # Migration 0033: pass enrichment columns on update path too,
             # so lifecycle timestamps are refreshed when prices change.
+            # Migration 0046: pass depth + daily movement columns too.
             update_market_with_versioning(
                 ticker=ticker,
                 yes_ask_price=yes_price,
@@ -1284,6 +1296,16 @@ class KalshiMarketPoller(BasePoller):
                 subcategory=subcategory,
                 source_url=source_url,
                 settlement_value=settlement_value,
+                # Migration 0046: dimension enrichment
+                expiration_value=market.get("expiration_value"),
+                notional_value=market.get("notional_value_dollars"),
+                # Migration 0046: snapshot enrichment
+                volume_24h=market.get("volume_24h"),
+                previous_yes_bid=market.get("previous_yes_bid_dollars"),
+                previous_yes_ask=market.get("previous_yes_ask_dollars"),
+                previous_price=market.get("previous_price_dollars"),
+                yes_bid_size=market.get("yes_bid_size"),
+                yes_ask_size=market.get("yes_ask_size"),
             )
             logger.debug(
                 "Updated market: %s (yes: %s -> %s)",

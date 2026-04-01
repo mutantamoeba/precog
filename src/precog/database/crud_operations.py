@@ -1231,6 +1231,14 @@ def create_market(
     last_price: Decimal | None = None,
     liquidity: Decimal | None = None,
     settlement_value: Decimal | None = None,
+    expiration_value: str | None = None,
+    notional_value: Decimal | None = None,
+    volume_24h: int | None = None,
+    previous_yes_bid: Decimal | None = None,
+    previous_yes_ask: Decimal | None = None,
+    previous_price: Decimal | None = None,
+    yes_bid_size: int | None = None,
+    yes_ask_size: int | None = None,
 ) -> int:
     """
     Create new market (dimension) + initial snapshot (fact).
@@ -1266,6 +1274,23 @@ def create_market(
         no_bid_price: NO bid price as DECIMAL(10,4) (keyword-only, optional)
         last_price: Last traded price as DECIMAL(10,4) (keyword-only, optional)
         liquidity: Market liquidity as DECIMAL(10,4) (keyword-only, optional)
+        settlement_value: Settlement outcome as DECIMAL(10,4) (keyword-only, optional)
+        expiration_value: Free-text settlement outcome description (keyword-only, optional).
+            e.g., "above 42.5", "yes". Dimension-level (per-market constant).
+        notional_value: Dollar notional value of the contract as DECIMAL(10,4)
+            (keyword-only, optional). Dimension-level (per-market constant).
+        volume_24h: 24-hour rolling trading volume in contracts (keyword-only, optional).
+            Integer count, not dollar value. Snapshot-level (per-poll observation).
+        previous_yes_bid: Yesterday's YES bid price as DECIMAL(10,4) (keyword-only, optional).
+            Snapshot-level (per-poll observation).
+        previous_yes_ask: Yesterday's YES ask price as DECIMAL(10,4) (keyword-only, optional).
+            Snapshot-level (per-poll observation).
+        previous_price: Yesterday's last trade price as DECIMAL(10,4) (keyword-only, optional).
+            Snapshot-level (per-poll observation).
+        yes_bid_size: Number of contracts at best YES bid (keyword-only, optional).
+            Integer count. Snapshot-level (per-poll observation).
+        yes_ask_size: Number of contracts at best YES ask (keyword-only, optional).
+            Integer count. Snapshot-level (per-poll observation).
 
     Returns:
         Integer surrogate PK (markets.id) of the newly created market.
@@ -1286,6 +1311,8 @@ def create_market(
         ...     no_ask_price=Decimal("0.4900"),
         ...     subtitle="Week 14",
         ...     close_time="2026-01-15T18:00:00Z",
+        ...     volume_24h=150,
+        ...     previous_yes_bid=Decimal("0.5100"),
         ... )
 
     Reference:
@@ -1293,6 +1320,7 @@ def create_market(
         - Migration 0022: market_id VARCHAR dropped, downstream uses integer FK
         - Migration 0033: enrichment columns added to dimension table
         - Migration 0037: league renamed to subcategory
+        - Migration 0046: depth signals + daily movement columns
     """
     # Runtime type validation (enforces Decimal precision)
     yes_ask_price = validate_decimal(yes_ask_price, "yes_ask_price")
@@ -1309,12 +1337,22 @@ def create_market(
         liquidity = validate_decimal(liquidity, "liquidity")
     if settlement_value is not None:
         settlement_value = validate_decimal(settlement_value, "settlement_value")
+    # Migration 0046: depth + daily movement enrichment fields
+    if notional_value is not None:
+        notional_value = validate_decimal(notional_value, "notional_value")
+    if previous_yes_bid is not None:
+        previous_yes_bid = validate_decimal(previous_yes_bid, "previous_yes_bid")
+    if previous_yes_ask is not None:
+        previous_yes_ask = validate_decimal(previous_yes_ask, "previous_yes_ask")
+    if previous_price is not None:
+        previous_price = validate_decimal(previous_price, "previous_price")
 
     with get_cursor(commit=True) as cur:
         # Step 1: Insert dimension row
         # Migration 0022: market_id VARCHAR dropped — no longer inserted.
         # Migration 0033: enrichment columns added (subtitle, timestamps, etc.)
         # Migration 0037: league renamed to subcategory
+        # Migration 0046: expiration_value, notional_value added
         cur.execute(
             """
             INSERT INTO markets (
@@ -1322,9 +1360,10 @@ def create_market(
                 ticker, title, market_type, status, settlement_value,
                 subtitle, open_time, close_time, expiration_time,
                 outcome_label, subcategory, bracket_count, source_url,
+                expiration_value, notional_value,
                 metadata, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
             RETURNING id
             """,
             (
@@ -1344,6 +1383,8 @@ def create_market(
                 subcategory,
                 bracket_count,
                 source_url,
+                expiration_value,
+                notional_value,
                 json.dumps(metadata) if metadata else None,
             ),
         )
@@ -1352,15 +1393,18 @@ def create_market(
 
         # Step 2: Insert initial snapshot (fact row)
         # Migration 0021: yes_bid_price, no_bid_price, last_price, liquidity
+        # Migration 0046: volume_24h, previous_*, yes_bid_size, yes_ask_size
         cur.execute(
             """
             INSERT INTO market_snapshots (
                 market_id, yes_ask_price, no_ask_price,
                 yes_bid_price, no_bid_price, last_price,
                 spread, volume, open_interest, liquidity,
+                volume_24h, previous_yes_bid, previous_yes_ask,
+                previous_price, yes_bid_size, yes_ask_size,
                 row_current_ind, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
             """,
             (
                 market_pk,
@@ -1373,6 +1417,12 @@ def create_market(
                 volume,
                 open_interest,
                 liquidity,
+                volume_24h,
+                previous_yes_bid,
+                previous_yes_ask,
+                previous_price,
+                yes_bid_size,
+                yes_ask_size,
             ),
         )
 
@@ -1405,6 +1455,7 @@ def get_current_market(ticker: str) -> dict[str, Any] | None:
     """
     # Migration 0022: market_id VARCHAR dropped. Use ticker for lookup.
     # Migration 0033: enrichment columns added to dimension table.
+    # Migration 0046: depth signals + daily movement columns.
     query = """
         SELECT
             m.id,
@@ -1424,6 +1475,8 @@ def get_current_market(ticker: str) -> dict[str, Any] | None:
             m.subcategory,
             m.bracket_count,
             m.source_url,
+            m.expiration_value,
+            m.notional_value,
             m.metadata,
             m.created_at,
             m.updated_at,
@@ -1436,6 +1489,12 @@ def get_current_market(ticker: str) -> dict[str, Any] | None:
             ms.volume,
             ms.open_interest,
             ms.liquidity,
+            ms.volume_24h,
+            ms.previous_yes_bid,
+            ms.previous_yes_ask,
+            ms.previous_price,
+            ms.yes_bid_size,
+            ms.yes_ask_size,
             ms.row_start_ts,
             ms.row_end_ts,
             ms.row_current_ind
@@ -1498,6 +1557,14 @@ def update_market_with_versioning(
     last_price: Decimal | None = None,
     liquidity: Decimal | None = None,
     settlement_value: Decimal | None = None,
+    expiration_value: str | None = None,
+    notional_value: Decimal | None = None,
+    volume_24h: int | None = None,
+    previous_yes_bid: Decimal | None = None,
+    previous_yes_ask: Decimal | None = None,
+    previous_price: Decimal | None = None,
+    yes_bid_size: int | None = None,
+    yes_ask_size: int | None = None,
 ) -> int:
     """
     Update market: SCD Type 2 on snapshots, direct UPDATE on dimension.
@@ -1533,6 +1600,22 @@ def update_market_with_versioning(
         liquidity: Market liquidity as DECIMAL(10,4) (keyword-only, optional)
         settlement_value: Settlement outcome as DECIMAL(10,4) (keyword-only, optional).
             Must be 0.0000 (no) or 1.0000 (yes). CHECK constraint: 0.0000-1.0000.
+        expiration_value: Free-text settlement outcome description (keyword-only, optional).
+            Dimension-level (per-market constant).
+        notional_value: Dollar notional value as DECIMAL(10,4) (keyword-only, optional).
+            Dimension-level (per-market constant).
+        volume_24h: 24-hour rolling volume in contracts (keyword-only, optional).
+            Integer count. Snapshot-level (per-poll observation).
+        previous_yes_bid: Yesterday's YES bid as DECIMAL(10,4) (keyword-only, optional).
+            Snapshot-level (per-poll observation).
+        previous_yes_ask: Yesterday's YES ask as DECIMAL(10,4) (keyword-only, optional).
+            Snapshot-level (per-poll observation).
+        previous_price: Yesterday's last trade price as DECIMAL(10,4) (keyword-only, optional).
+            Snapshot-level (per-poll observation).
+        yes_bid_size: Contracts at best YES bid (keyword-only, optional).
+            Integer count. Snapshot-level (per-poll observation).
+        yes_ask_size: Contracts at best YES ask (keyword-only, optional).
+            Integer count. Snapshot-level (per-poll observation).
 
     Returns:
         Integer surrogate PK of the market (markets.id)
@@ -1541,13 +1624,16 @@ def update_market_with_versioning(
         >>> market_pk = update_market_with_versioning(
         ...     ticker="NFL-KC-BUF-YES",
         ...     yes_ask_price=Decimal("0.5500"),
-        ...     no_ask_price=Decimal("0.4500")
+        ...     no_ask_price=Decimal("0.4500"),
+        ...     volume_24h=200,
+        ...     previous_price=Decimal("0.5300"),
         ... )
 
     Reference:
         - Migration 0021: markets dimension + market_snapshots fact
         - Migration 0033: enrichment columns on dimension table
         - Migration 0037: league renamed to subcategory
+        - Migration 0046: depth signals + daily movement columns
     """
     # Runtime type validation (enforces Decimal precision)
     if yes_ask_price is not None:
@@ -1566,6 +1652,15 @@ def update_market_with_versioning(
         liquidity = validate_decimal(liquidity, "liquidity")
     if settlement_value is not None:
         settlement_value = validate_decimal(settlement_value, "settlement_value")
+    # Migration 0046: depth + daily movement enrichment fields
+    if notional_value is not None:
+        notional_value = validate_decimal(notional_value, "notional_value")
+    if previous_yes_bid is not None:
+        previous_yes_bid = validate_decimal(previous_yes_bid, "previous_yes_bid")
+    if previous_yes_ask is not None:
+        previous_yes_ask = validate_decimal(previous_yes_ask, "previous_yes_ask")
+    if previous_price is not None:
+        previous_price = validate_decimal(previous_price, "previous_price")
 
     # Get current market + snapshot
     current = get_current_market(ticker)
@@ -1590,6 +1685,18 @@ def update_market_with_versioning(
     new_last_price = last_price if last_price is not None else current["last_price"]
     new_liquidity = liquidity if liquidity is not None else current["liquidity"]
 
+    # Migration 0046: snapshot enrichment — use fresh values, fall back to current
+    new_volume_24h = volume_24h if volume_24h is not None else current.get("volume_24h")
+    new_prev_yes_bid = (
+        previous_yes_bid if previous_yes_bid is not None else current.get("previous_yes_bid")
+    )
+    new_prev_yes_ask = (
+        previous_yes_ask if previous_yes_ask is not None else current.get("previous_yes_ask")
+    )
+    new_prev_price = previous_price if previous_price is not None else current.get("previous_price")
+    new_yes_bid_size = yes_bid_size if yes_bid_size is not None else current.get("yes_bid_size")
+    new_yes_ask_size = yes_ask_size if yes_ask_size is not None else current.get("yes_ask_size")
+
     # Enrichment columns: only override if explicitly provided (not None)
     new_subtitle = subtitle if subtitle is not None else current["subtitle"]
     new_open_time = open_time if open_time is not None else current["open_time"]
@@ -1604,11 +1711,19 @@ def update_market_with_versioning(
     new_settlement_value = (
         settlement_value if settlement_value is not None else current["settlement_value"]
     )
+    # Migration 0046: dimension enrichment — use fresh values, fall back to current
+    new_expiration_value = (
+        expiration_value if expiration_value is not None else current.get("expiration_value")
+    )
+    new_notional_value = (
+        notional_value if notional_value is not None else current.get("notional_value")
+    )
 
     with get_cursor(commit=True) as cur:
         # Step 1: Update dimension row — always bump updated_at, plus
         # status/metadata/enrichment if they changed.
         # Migration 0033: enrichment columns updated on dimension row.
+        # Migration 0046: expiration_value, notional_value added.
         cur.execute(
             """
             UPDATE markets
@@ -1623,6 +1738,8 @@ def update_market_with_versioning(
                 bracket_count = %s,
                 source_url = %s,
                 settlement_value = %s,
+                expiration_value = %s,
+                notional_value = %s,
                 updated_at = NOW()
             WHERE id = %s
             """,
@@ -1638,6 +1755,8 @@ def update_market_with_versioning(
                 new_bracket_count,
                 new_source_url,
                 new_settlement_value,
+                new_expiration_value,
+                new_notional_value,
                 market_pk,
             ),
         )
@@ -1657,15 +1776,18 @@ def update_market_with_versioning(
 
         # Insert new snapshot
         # Migration 0021: yes_bid_price, no_bid_price, last_price, liquidity
+        # Migration 0046: volume_24h, previous_*, yes_bid_size, yes_ask_size
         cur.execute(
             """
             INSERT INTO market_snapshots (
                 market_id, yes_ask_price, no_ask_price,
                 yes_bid_price, no_bid_price, last_price,
                 spread, volume, open_interest, liquidity,
+                volume_24h, previous_yes_bid, previous_yes_ask,
+                previous_price, yes_bid_size, yes_ask_size,
                 row_current_ind, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
             """,
             (
                 market_pk,
@@ -1678,6 +1800,12 @@ def update_market_with_versioning(
                 new_volume,
                 new_open_interest,
                 new_liquidity,
+                new_volume_24h,
+                new_prev_yes_bid,
+                new_prev_yes_ask,
+                new_prev_price,
+                new_yes_bid_size,
+                new_yes_ask_size,
             ),
         )
 

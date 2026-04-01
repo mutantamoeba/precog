@@ -20,7 +20,11 @@ from typing import Literal, TypedDict
 
 
 class MarketData(TypedDict):
-    """Single market data from Kalshi API."""
+    """Single market data from Kalshi API.
+
+    Includes both legacy integer cent fields and sub-penny dollar string fields.
+    The _dollars fields are converted to Decimal by _convert_prices_to_decimal().
+    """
 
     ticker: str
     event_ticker: str
@@ -53,6 +57,21 @@ class MarketData(TypedDict):
     volume: int
     open_interest: int
     liquidity: int
+
+    # -- Enrichment fields (Issue #513 P1) --
+    # 24-hour rolling trading volume in contracts. Integer count, not dollar value.
+    # May be absent from some API responses (e.g., newly listed markets).
+    volume_24h: int
+    # Number of contracts resting at the best YES bid price. Depth signal for
+    # liquidity assessment. Integer count. May be 0 for illiquid markets.
+    yes_bid_size: int
+    # Number of contracts resting at the best YES ask price. Depth signal for
+    # liquidity assessment. Integer count. May be 0 for illiquid markets.
+    yes_ask_size: int
+    # Free-text settlement outcome description from Kalshi (e.g., "above 42.5",
+    # "yes", "Chiefs"). Describes what outcome this market represents.
+    # Distinct from settlement_value_dollars (which is the payout amount).
+    expiration_value: str
 
 
 class MarketsResponse(TypedDict):
@@ -233,6 +252,27 @@ class ProcessedMarketData(TypedDict, total=False):
     # Only present after market settles. Converted from API string by _convert_prices_to_decimal.
     # Range [0.0000, 1.0000]. None/absent for unsettled markets.
     settlement_value_dollars: Decimal | None
+
+    # -- Enrichment fields (Issue #513 P1) --
+    # Daily price movement: yesterday's prices converted to Decimal by _convert_prices_to_decimal.
+    # Used for computing daily deltas (e.g., today's yes_bid - previous_yes_bid).
+    # Range: [0.0000, 1.0000]. None/absent for newly listed markets with no prior day data.
+    previous_yes_bid_dollars: Decimal  # Yesterday's YES bid in dollars
+    previous_yes_ask_dollars: Decimal  # Yesterday's YES ask in dollars
+    previous_price_dollars: Decimal  # Yesterday's last trade price in dollars
+    # Dollar notional value of the contract, converted to Decimal by _convert_prices_to_decimal.
+    # Represents the total dollar exposure per contract. None for markets where API omits it.
+    notional_value_dollars: Decimal
+    # 24-hour rolling trading volume in contracts. Integer count, not dollar value.
+    # May be absent from some API responses (e.g., newly listed markets).
+    volume_24h: int
+    # Number of contracts resting at the best YES bid/ask price. Depth signals
+    # for liquidity assessment. Integer counts. May be 0 for illiquid markets.
+    yes_bid_size: int
+    yes_ask_size: int
+    # Free-text settlement outcome description (e.g., "above 42.5", "yes").
+    # Describes what outcome this market represents. Not a price.
+    expiration_value: str
 
 
 class ProcessedPositionData(TypedDict):
