@@ -137,10 +137,10 @@ def sample_event(db_pool, clean_test_data, sample_platform, sample_series) -> st
     series_pk = series_row["id"] if series_row else None
 
     query = """
-        INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, subcategory, title, status)
-        VALUES ('HIGHTEST', 'kalshi', %s, 'HIGHTEST-ext', 'sports', 'nfl', 'Super Bowl LIX', 'scheduled')
-        ON CONFLICT (event_id) DO NOTHING
-        RETURNING event_id
+        INSERT INTO events (platform_id, series_internal_id, external_id, category, subcategory, title, status)
+        VALUES ('kalshi', %s, 'HIGHTEST', 'sports', 'nfl', 'Super Bowl LIX', 'scheduled')
+        ON CONFLICT (platform_id, external_id) DO NOTHING
+        RETURNING external_id
     """
     execute_query(query, (series_pk,))
     return "HIGHTEST"
@@ -157,7 +157,7 @@ def sample_market(db_pool, clean_test_data, sample_platform, sample_event) -> in
     from precog.database.crud_operations import create_market
 
     # Look up event surrogate PK (migration 0020: events use integer FK)
-    event_row = fetch_one("SELECT id FROM events WHERE event_id = 'HIGHTEST'")
+    event_row = fetch_one("SELECT id FROM events WHERE external_id = 'HIGHTEST'")
     event_pk = event_row["id"] if event_row else None
 
     # Check if market already exists (by ticker, since market_id VARCHAR is dropped)

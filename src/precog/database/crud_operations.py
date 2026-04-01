@@ -891,12 +891,14 @@ def get_or_create_series(
 
 def get_event(event_id: str) -> dict[str, Any] | None:
     """
-    Get an event by its business key (event_id VARCHAR).
+    Get an event by its external_id (platform-scoped business key).
 
     Args:
-        event_id: The event business key (UNIQUE, from Kalshi API).
-            Note: this is NOT the integer surrogate PK. The surrogate PK
-            is available in the returned dict as result["id"].
+        event_id: The event business key (from Kalshi API).
+            Note: Parameter name is a legacy holdover; the DB column
+            queried is ``external_id``.  This is NOT the integer
+            surrogate PK.  The surrogate PK is available in the
+            returned dict as result["id"].
 
     Returns:
         Dictionary with event data (including 'id' surrogate PK), or None if not found
@@ -908,12 +910,13 @@ def get_event(event_id: str) -> dict[str, Any] | None:
         ...     print(event['title'])  # Event title
 
     Reference:
-        - Migration 0020: event_id demoted to UNIQUE business key, id is SERIAL PK
+        - Migration 0020: id is SERIAL PK, external_id is the business key
+        - Migration 0047: Dropped redundant event_id column; external_id is canonical
     """
     query = """
         SELECT *
         FROM events
-        WHERE event_id = %s
+        WHERE external_id = %s
     """
     return fetch_one(query, (event_id,))
 
@@ -940,9 +943,13 @@ def create_event(
     enforced via foreign key constraint (markets.event_internal_id -> events.id).
 
     Args:
-        event_id: Unique event business key (VARCHAR, from Kalshi API)
+        event_id: Legacy parameter name kept for caller compatibility.
+            The value is stored in the ``external_id`` column.
+            Callers typically pass the same value for both ``event_id``
+            and ``external_id``; only ``external_id`` is written to the DB.
         platform_id: Foreign key to platforms table (e.g., 'kalshi')
-        external_id: External ID from the platform API
+        external_id: External ID from the platform API (stored as the
+            business key in ``events.external_id``)
         category: Event category ('sports', 'politics', 'entertainment',
                   'economics', 'weather', 'other')
         title: Event title/description
@@ -964,7 +971,8 @@ def create_event(
         to set markets.event_internal_id FK.
 
     Raises:
-        psycopg2.IntegrityError: If event_id already exists or platform_id invalid
+        psycopg2.IntegrityError: If external_id+platform_id already exists
+            or platform_id invalid
 
     Example:
         >>> event_pk = create_event(
@@ -993,21 +1001,21 @@ def create_event(
         - Migration 0019: events.series_internal_id replaces events.series_id
         - Migration 0020: events.id SERIAL PK, markets.event_internal_id INTEGER FK
         - Migration 0038: events.game_id FK to games(id)
+        - Migration 0047: Dropped redundant event_id column
     """
     query = """
         INSERT INTO events (
-            event_id, platform_id, series_internal_id, external_id,
+            platform_id, series_internal_id, external_id,
             category, subcategory, title, description,
             start_time, end_time, status, metadata,
             game_id,
             created_at, updated_at
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), NOW())
         RETURNING id
     """
 
     params = (
-        event_id,
         platform_id,
         series_internal_id,
         external_id,
@@ -1111,7 +1119,8 @@ def get_or_create_event(
     to handle the common pattern of "upsert" behavior for events.
 
     Args:
-        event_id: Unique event business key (VARCHAR, from Kalshi API)
+        event_id: Legacy parameter name kept for caller compatibility.
+            The value is looked up via ``external_id`` in the DB.
         platform_id: Foreign key to platforms table
         external_id: External ID from the platform API
         category: Event category
@@ -1149,13 +1158,14 @@ def get_or_create_event(
         This pattern is essential for polling services like KalshiMarketPoller.
         When polling API data, the same events appear repeatedly. This function
         ensures we don't attempt duplicate inserts (which would fail due to
-        UNIQUE constraint on event_id) while still creating new events when
-        they appear.
+        UNIQUE constraint on external_id+platform_id) while still creating
+        new events when they appear.
 
     Reference:
         - src/precog/schedulers/kalshi_poller.py
         - Migration 0019: events.series_internal_id replaces events.series_id
         - Migration 0020: events.id SERIAL PK, returns integer instead of VARCHAR
+        - Migration 0047: Dropped redundant event_id column
         - Migration 0038: events.game_id FK to games(id)
     """
     # Check if event already exists — fill NULL enrichment fields if caller
@@ -1241,7 +1251,7 @@ def create_market(
     Args:
         platform_id: Foreign key to platforms table (VARCHAR)
         event_internal_id: Integer FK to events(id) surrogate PK. This is the
-            integer returned by get_or_create_event(), NOT the VARCHAR event_id.
+            integer returned by get_or_create_event().
             None if the market has no associated event.
         external_id: External market ID from platform
         ticker: Market ticker (e.g., "NFL-KC-BUF-YES")
@@ -9309,7 +9319,7 @@ def find_unlinked_sports_events(league: str | None = None) -> list[dict[str, Any
         league: Optional subcategory/league filter (e.g., "nfl", "nba").
 
     Returns:
-        List of event dicts with keys: id, event_id, title, subcategory.
+        List of event dicts with keys: id, external_id, title, subcategory.
 
     Example:
         >>> unlinked = find_unlinked_sports_events("nfl")

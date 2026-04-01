@@ -257,7 +257,7 @@ def clean_test_data(db_cursor):
     # Delete markets by ticker pattern — CASCADE handles downstream tables
     # (edges, positions, trades, settlements via market_internal_id FK)
     db_cursor.execute("DELETE FROM markets WHERE ticker LIKE 'TEST-%'")
-    db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
+    db_cursor.execute("DELETE FROM events WHERE external_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
     # Clean up ALL test models and strategies (fixture data + SERIAL-generated)
     # This ensures clean state for property tests that create many strategies
@@ -291,11 +291,12 @@ def clean_test_data(db_cursor):
     _test_series_pk = _series_row["id"] if _series_row else None
 
     # Create test event (uses series_internal_id integer FK)
+    # external_id is the canonical business key (migration 0047 dropped the old event_id column)
     db_cursor.execute(
         """
-        INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, title, status)
-        VALUES ('TEST-EVT-NFL-KC-BUF', 'test_platform', %s, 'TEST-EXT-EVT', 'sports', 'Test Event: KC vs BUF', 'scheduled')
-        ON CONFLICT (event_id) DO NOTHING
+        INSERT INTO events (platform_id, series_internal_id, external_id, category, title, status)
+        VALUES ('test_platform', %s, 'TEST-EVT-NFL-KC-BUF', 'sports', 'Test Event: KC vs BUF', 'scheduled')
+        ON CONFLICT (platform_id, external_id) DO NOTHING
     """,
         (_test_series_pk,),
     )
@@ -303,9 +304,9 @@ def clean_test_data(db_cursor):
     # Create additional test event for test_execute_query
     db_cursor.execute(
         """
-        INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, title, status)
-        VALUES ('TEST-EVT', 'test_platform', %s, 'TEST-EVT-2', 'sports', 'Test Event 2', 'scheduled')
-        ON CONFLICT (event_id) DO NOTHING
+        INSERT INTO events (platform_id, series_internal_id, external_id, category, title, status)
+        VALUES ('test_platform', %s, 'TEST-EVT-2', 'sports', 'Test Event 2', 'scheduled')
+        ON CONFLICT (platform_id, external_id) DO NOTHING
     """,
         (_test_series_pk,),
     )
@@ -349,7 +350,7 @@ def clean_test_data(db_cursor):
         db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
     # Delete markets by ticker pattern — CASCADE handles downstream tables
     db_cursor.execute("DELETE FROM markets WHERE ticker LIKE 'TEST-%'")
-    db_cursor.execute("DELETE FROM events WHERE event_id LIKE 'TEST-%'")
+    db_cursor.execute("DELETE FROM events WHERE external_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
     # Clean up ALL test models and strategies (fixture data + SERIAL-generated)
     # This ensures clean state for next test
@@ -720,10 +721,10 @@ def sample_event(db_pool, clean_test_data, sample_platform, sample_series) -> st
     series_pk = series_row["id"] if series_row else None
 
     query = """
-        INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, subcategory, title, status)
-        VALUES ('HIGHTEST', 'kalshi', %s, 'HIGHTEST-ext', 'sports', 'nfl', 'Super Bowl LIX', 'scheduled')
-        ON CONFLICT (event_id) DO NOTHING
-        RETURNING event_id
+        INSERT INTO events (platform_id, series_internal_id, external_id, category, subcategory, title, status)
+        VALUES ('kalshi', %s, 'HIGHTEST', 'sports', 'nfl', 'Super Bowl LIX', 'scheduled')
+        ON CONFLICT (platform_id, external_id) DO NOTHING
+        RETURNING external_id
     """
     execute_query(query, (series_pk,))
     return "HIGHTEST"
@@ -740,7 +741,7 @@ def sample_market(db_pool, clean_test_data, sample_platform, sample_event) -> in
     from precog.database.crud_operations import create_market
 
     # Look up event surrogate PK (migration 0020: events use integer FK)
-    event_row = fetch_one("SELECT id FROM events WHERE event_id = 'HIGHTEST'")
+    event_row = fetch_one("SELECT id FROM events WHERE external_id = 'HIGHTEST'")
     event_pk = event_row["id"] if event_row else None
 
     # Check if market already exists (by ticker, since market_id VARCHAR is dropped)

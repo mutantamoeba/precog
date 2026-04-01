@@ -123,13 +123,14 @@ def setup_kalshi_platform(db_pool, clean_test_data):
 
         # Create events for test markets (idempotent)
         # Uses series_internal_id (integer FK) instead of old series_id VARCHAR
+        # Migration 0047: event_id column dropped, external_id is canonical business key
         cur.execute(
             """
-            INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, title, status)
+            INSERT INTO events (platform_id, series_internal_id, external_id, category, title, status)
             VALUES
-                ('KXNFLGAME-25DEC15CLEKC', 'kalshi', %s, 'KXNFLGAME-25DEC15CLEKC-EXT', 'sports', 'NFL Games Dec 15', 'scheduled'),
-                ('KXNFLGAME-25DEC08LACKC', 'kalshi', %s, 'KXNFLGAME-25DEC08LACKC-EXT', 'sports', 'NFL Games Dec 08', 'scheduled')
-            ON CONFLICT (event_id) DO NOTHING
+                ('kalshi', %s, 'KXNFLGAME-25DEC15CLEKC', 'sports', 'NFL Games Dec 15', 'scheduled'),
+                ('kalshi', %s, 'KXNFLGAME-25DEC08LACKC', 'sports', 'NFL Games Dec 08', 'scheduled')
+            ON CONFLICT (platform_id, external_id) DO NOTHING
         """,
             (series_pk, series_pk),
         )
@@ -592,7 +593,7 @@ def test_foreign_key_prevents_orphan_markets(
 
     Validates:
     - Cannot create market with non-existent platform_id
-    - Cannot create market with non-existent event_id
+    - Cannot create market with non-existent event_internal_id
     - IntegrityError raised on foreign key violation
 
     Why This Matters:
@@ -1075,17 +1076,17 @@ def test_cascade_delete_integrity(db_pool, clean_test_data, ticker):
         series_pk = cur.fetchone()["id"]
 
         # Create test event (uses series_internal_id integer FK)
+        # Migration 0047: event_id column dropped, external_id is canonical
         cur.execute(
             """
-            INSERT INTO events (event_id, platform_id, series_internal_id, external_id, category, title, status)
-            VALUES (%s, %s, %s, %s, 'sports', 'Test Event', 'scheduled')
+            INSERT INTO events (platform_id, series_internal_id, external_id, category, title, status)
+            VALUES (%s, %s, %s, 'sports', 'Test Event', 'scheduled')
             RETURNING id
         """,
             (
-                test_event_id,
                 test_platform_id,
                 series_pk,
-                f"EXTEVT-{unique_id}",
+                test_event_id,
             ),
         )
         event_pk = cur.fetchone()["id"]

@@ -281,7 +281,7 @@ def backfill_market_settlement_values(
     # Find settled markets with NULL settlement_value
     find_query = """
         SELECT m.id, m.ticker, m.status, m.metadata,
-               e.event_id AS event_ticker
+               e.external_id AS event_ticker
         FROM markets m
         LEFT JOIN events e ON e.id = m.event_internal_id
         WHERE m.status = 'settled'
