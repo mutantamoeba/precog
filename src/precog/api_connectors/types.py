@@ -54,20 +54,22 @@ class MarketData(TypedDict):
     no_bid: str  # Highest resting NO buy order (in cents as string)
     no_ask: str  # Lowest resting NO sell order (cost to buy NO contract)
     last_price: str
-    volume: int
-    open_interest: int
+    # Volume/OI fields: Kalshi API returns these with an _fp suffix as strings
+    # (e.g., volume_fp: "8981763.00"). Convert with int(float(x)) before DB insert.
+    volume_fp: str  # Total lifetime contracts traded (string like "8981763.00")
+    open_interest_fp: str  # Total contracts currently held (string like "4997871.00")
     liquidity: int
 
     # -- Enrichment fields (Issue #513 P1) --
-    # 24-hour rolling trading volume in contracts. Integer count, not dollar value.
-    # May be absent from some API responses (e.g., newly listed markets).
-    volume_24h: int
+    # 24-hour rolling trading volume in contracts. String like "150.00" from API.
+    # Convert with int(float(x)). May be absent for newly listed markets.
+    volume_24h_fp: str
     # Number of contracts resting at the best YES bid price. Depth signal for
-    # liquidity assessment. Integer count. May be 0 for illiquid markets.
-    yes_bid_size: int
+    # liquidity assessment. String like "500.00" from API. May be "0.00" for illiquid markets.
+    yes_bid_size_fp: str
     # Number of contracts resting at the best YES ask price. Depth signal for
-    # liquidity assessment. Integer count. May be 0 for illiquid markets.
-    yes_ask_size: int
+    # liquidity assessment. String like "500.00" from API. May be "0.00" for illiquid markets.
+    yes_ask_size_fp: str
     # Free-text settlement outcome description from Kalshi (e.g., "above 42.5",
     # "yes", "Chiefs"). Describes what outcome this market represents.
     # Distinct from settlement_value_dollars (which is the payout amount).
@@ -234,8 +236,11 @@ class ProcessedMarketData(TypedDict, total=False):
     no_bid: int  # Highest NO buy order in cents (0-99)
     no_ask: int  # Lowest NO sell order in cents (cost to buy NO)
     last_price: int
-    volume: int
-    open_interest: int
+    # Volume/OI fields: Kalshi API returns these with an _fp suffix as strings
+    # (e.g., volume_fp: "8981763.00"). Not converted by _convert_prices_to_decimal;
+    # the poller converts them to int via _parse_fp_int() before DB insert.
+    volume_fp: str  # Total lifetime contracts traded (string like "8981763.00")
+    open_interest_fp: str  # Total contracts currently held (string like "4997871.00")
     liquidity: int
 
     # Sub-penny Decimal fields (*_dollars suffix - converted to Decimal)
@@ -263,13 +268,13 @@ class ProcessedMarketData(TypedDict, total=False):
     # Dollar notional value of the contract, converted to Decimal by _convert_prices_to_decimal.
     # Represents the total dollar exposure per contract. None for markets where API omits it.
     notional_value_dollars: Decimal
-    # 24-hour rolling trading volume in contracts. Integer count, not dollar value.
-    # May be absent from some API responses (e.g., newly listed markets).
-    volume_24h: int
+    # 24-hour rolling trading volume in contracts. String like "150.00" from API.
+    # Not converted by _convert_prices_to_decimal; poller converts via _parse_fp_int().
+    volume_24h_fp: str
     # Number of contracts resting at the best YES bid/ask price. Depth signals
-    # for liquidity assessment. Integer counts. May be 0 for illiquid markets.
-    yes_bid_size: int
-    yes_ask_size: int
+    # for liquidity assessment. Strings like "500.00" from API. May be "0.00".
+    yes_bid_size_fp: str
+    yes_ask_size_fp: str
     # Free-text settlement outcome description (e.g., "above 42.5", "yes").
     # Describes what outcome this market represents. Not a price.
     expiration_value: str

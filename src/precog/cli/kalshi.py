@@ -229,7 +229,8 @@ def markets(
             status = market.get("status", "N/A")
             yes_bid = market.get("yes_bid", Decimal("0"))
             yes_ask = market.get("yes_ask", Decimal("0"))
-            volume = market.get("volume", 0)
+            raw_vol = market.get("volume_fp")
+            volume = int(float(raw_vol)) if raw_vol else 0
 
             # Truncate title if needed
             if len(title) > 40:
@@ -347,7 +348,8 @@ def all_markets(
             status = market.get("status", "N/A")
             yes_bid = market.get("yes_bid", Decimal("0"))
             yes_ask = market.get("yes_ask", Decimal("0"))
-            volume = market.get("volume", 0)
+            raw_vol = market.get("volume_fp")
+            volume = int(float(raw_vol)) if raw_vol else 0
 
             if len(title) > 40:
                 title = title[:37] + "..."

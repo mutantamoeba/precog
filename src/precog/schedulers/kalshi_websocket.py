@@ -766,6 +766,7 @@ class KalshiWebSocketHandler:
                     ticker=ticker,
                     yes_ask_price=yes_price,
                     no_ask_price=no_price,
+                    # WebSocket ticker messages use integer volume/OI (not _fp strings from REST API)
                     volume=msg.get("volume"),
                     open_interest=msg.get("open_interest"),
                 )

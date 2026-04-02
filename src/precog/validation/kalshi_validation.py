@@ -38,6 +38,19 @@ from precog.utils.logger import get_logger
 logger = get_logger(__name__)
 
 
+def _parse_fp_int(raw: str | None) -> int | None:
+    """Parse a Kalshi _fp string field (e.g., "8981763.00") into an integer.
+
+    Returns None if the value is absent or unparseable.
+    """
+    if raw is None:
+        return None
+    try:
+        return int(float(raw))
+    except (ValueError, TypeError, OverflowError):
+        return None
+
+
 # =============================================================================
 # Validation Level Enum
 # =============================================================================
@@ -582,9 +595,9 @@ class KalshiDataValidator:
             - Active market with volume=0 AND OI=0 for extended period (ghost market)
         """
         status = market.get("status")
-        volume = market.get("volume")
-        open_interest = market.get("open_interest")
-        volume_24h = market.get("volume_24h")
+        volume = _parse_fp_int(market.get("volume_fp"))
+        open_interest = _parse_fp_int(market.get("open_interest_fp"))
+        volume_24h = _parse_fp_int(market.get("volume_24h_fp"))
 
         # OI on never-active market
         if status in self.NEVER_ACTIVE_STATUSES and open_interest and open_interest > 0:
@@ -676,8 +689,8 @@ class KalshiDataValidator:
             ...     "yes_ask_dollars": Decimal("0.47"),
             ...     "no_bid_dollars": Decimal("0.53"),
             ...     "no_ask_dollars": Decimal("0.55"),
-            ...     "volume": 1000,
-            ...     "open_interest": 500,
+            ...     "volume_fp": "1000.00",
+            ...     "open_interest_fp": "500.00",
             ... }
             >>> result = validator.validate_market_data(market)
             >>> print(result.is_valid)
@@ -784,7 +797,7 @@ class KalshiDataValidator:
                     )
 
         # Validate volume (cumulative lifetime — not per-update delta)
-        volume = market.get("volume")
+        volume = _parse_fp_int(market.get("volume_fp"))
         if volume is not None:
             if volume < 0:
                 result.add_error("volume", "Negative volume", value=volume, expected=">= 0")
@@ -797,7 +810,7 @@ class KalshiDataValidator:
                 )
 
         # Validate open interest
-        open_interest = market.get("open_interest")
+        open_interest = _parse_fp_int(market.get("open_interest_fp"))
         if open_interest is not None:
             if open_interest < 0:
                 result.add_error(
