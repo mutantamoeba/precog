@@ -69,6 +69,30 @@ from precog.validation.kalshi_validation import KalshiDataValidator
 logger = logging.getLogger(__name__)
 
 
+def _parse_fp_int(market: Any, fp_field: str) -> int | None:
+    """Parse an _fp string field from the Kalshi API into an integer.
+
+    Kalshi API returns several integer-valued fields with an _fp suffix as
+    strings (e.g., volume_fp: "8981763.00").  This helper converts them to
+    int, gracefully handling None and missing keys.
+
+    Args:
+        market: Market data dictionary from the API.
+        fp_field: Key name including the _fp suffix (e.g., "volume_fp").
+
+    Returns:
+        Integer value, or None if the field is absent / None.
+    """
+    raw = market.get(fp_field)
+    if raw is None:
+        return None
+    try:
+        return int(float(raw))
+    except (ValueError, TypeError, OverflowError):
+        logger.warning("Failed to parse %s as int: %r", fp_field, raw)
+        return None
+
+
 class KalshiMarketPoller(BasePoller):
     """
     Kalshi market price polling service.
@@ -1191,8 +1215,8 @@ class KalshiMarketPoller(BasePoller):
                 no_ask_price=no_price,
                 market_type="binary",
                 status=db_status,
-                volume=market.get("volume"),
-                open_interest=market.get("open_interest"),
+                volume=_parse_fp_int(market, "volume_fp"),
+                open_interest=_parse_fp_int(market, "open_interest_fp"),
                 spread=spread,
                 yes_bid_price=yes_bid_price,
                 no_bid_price=no_bid_price,
@@ -1210,12 +1234,12 @@ class KalshiMarketPoller(BasePoller):
                 expiration_value=market.get("expiration_value"),
                 notional_value=market.get("notional_value_dollars"),
                 # Migration 0046: snapshot enrichment
-                volume_24h=market.get("volume_24h"),
+                volume_24h=_parse_fp_int(market, "volume_24h_fp"),
                 previous_yes_bid=market.get("previous_yes_bid_dollars"),
                 previous_yes_ask=market.get("previous_yes_ask_dollars"),
                 previous_price=market.get("previous_price_dollars"),
-                yes_bid_size=market.get("yes_bid_size"),
-                yes_ask_size=market.get("yes_ask_size"),
+                yes_bid_size=_parse_fp_int(market, "yes_bid_size_fp"),
+                yes_ask_size=_parse_fp_int(market, "yes_ask_size_fp"),
                 metadata={
                     k: v
                     for k, v in {
@@ -1282,8 +1306,8 @@ class KalshiMarketPoller(BasePoller):
                 yes_ask_price=yes_price,
                 no_ask_price=no_price,
                 status=db_status,
-                volume=market.get("volume"),
-                open_interest=market.get("open_interest"),
+                volume=_parse_fp_int(market, "volume_fp"),
+                open_interest=_parse_fp_int(market, "open_interest_fp"),
                 spread=spread,
                 yes_bid_price=yes_bid_price,
                 no_bid_price=no_bid_price,
@@ -1300,12 +1324,12 @@ class KalshiMarketPoller(BasePoller):
                 expiration_value=market.get("expiration_value"),
                 notional_value=market.get("notional_value_dollars"),
                 # Migration 0046: snapshot enrichment
-                volume_24h=market.get("volume_24h"),
+                volume_24h=_parse_fp_int(market, "volume_24h_fp"),
                 previous_yes_bid=market.get("previous_yes_bid_dollars"),
                 previous_yes_ask=market.get("previous_yes_ask_dollars"),
                 previous_price=market.get("previous_price_dollars"),
-                yes_bid_size=market.get("yes_bid_size"),
-                yes_ask_size=market.get("yes_ask_size"),
+                yes_bid_size=_parse_fp_int(market, "yes_bid_size_fp"),
+                yes_ask_size=_parse_fp_int(market, "yes_ask_size_fp"),
             )
             logger.debug(
                 "Updated market: %s (yes: %s -> %s)",

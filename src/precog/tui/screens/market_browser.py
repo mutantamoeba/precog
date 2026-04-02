@@ -459,8 +459,9 @@ class MarketBrowserScreen(BaseScreen):
                     title = self._clean_text(market.get("title", ""), max_len=45)
                     ticker = self._clean_text(market.get("ticker", ""), max_len=30)
 
-                    # Format volume safely
-                    volume = market.get("volume", 0)
+                    # Format volume safely (REST API uses _fp suffix for integer fields)
+                    raw_vol = market.get("volume_fp")
+                    volume = int(float(raw_vol)) if raw_vol else 0
                     volume_str = f"{int(volume):,}" if volume else "0"
 
                     table.add_row(

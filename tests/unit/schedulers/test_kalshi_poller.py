@@ -21,9 +21,73 @@ import pytest
 
 from precog.schedulers.kalshi_poller import (
     KalshiMarketPoller,
+    _parse_fp_int,
     create_kalshi_poller,
     run_single_kalshi_poll,
 )
+
+# =============================================================================
+# _parse_fp_int Helper Tests
+# =============================================================================
+
+
+class TestParseFpInt:
+    """Test the _parse_fp_int helper that converts _fp string fields to int."""
+
+    @pytest.mark.unit
+    def test_normal_value(self):
+        """Typical _fp string like '8981763.00' converts to int."""
+        market = {"volume_fp": "8981763.00"}
+        assert _parse_fp_int(market, "volume_fp") == 8981763
+
+    @pytest.mark.unit
+    def test_zero_value(self):
+        """'0.00' converts to 0, NOT None."""
+        market = {"volume_fp": "0.00"}
+        assert _parse_fp_int(market, "volume_fp") == 0
+
+    @pytest.mark.unit
+    def test_missing_field_returns_none(self):
+        """Missing field returns None (graceful fallback)."""
+        market = {}
+        assert _parse_fp_int(market, "volume_fp") is None
+
+    @pytest.mark.unit
+    def test_none_value_returns_none(self):
+        """Explicit None value returns None."""
+        market = {"volume_fp": None}
+        assert _parse_fp_int(market, "volume_fp") is None
+
+    @pytest.mark.unit
+    def test_small_value(self):
+        """Small _fp string like '50.00' converts correctly."""
+        market = {"yes_bid_size_fp": "50.00"}
+        assert _parse_fp_int(market, "yes_bid_size_fp") == 50
+
+    @pytest.mark.unit
+    def test_large_value(self):
+        """Large _fp string converts without overflow."""
+        market = {"open_interest_fp": "4997871.00"}
+        assert _parse_fp_int(market, "open_interest_fp") == 4997871
+
+    @pytest.mark.unit
+    def test_non_numeric_string_returns_none(self):
+        """Non-numeric string returns None and logs warning."""
+        market = {"volume_fp": "not_a_number"}
+        assert _parse_fp_int(market, "volume_fp") is None
+
+    @pytest.mark.unit
+    def test_fractional_part_truncated(self):
+        """Fractional parts (if any) are truncated by int(float())."""
+        market = {"volume_fp": "100.75"}
+        assert _parse_fp_int(market, "volume_fp") == 100
+
+    @pytest.mark.unit
+    def test_integer_string_without_decimal(self):
+        """Integer string without decimal point converts correctly."""
+        market = {"volume_fp": "500"}
+        assert _parse_fp_int(market, "volume_fp") == 500
+
 
 # =============================================================================
 # Test Fixtures
@@ -41,7 +105,12 @@ def mock_kalshi_client():
 
 @pytest.fixture
 def mock_market_data():
-    """Sample market data from Kalshi API (already Decimal-converted)."""
+    """Sample market data from Kalshi API (already Decimal-converted).
+
+    Includes both legacy integer fields (volume, open_interest) and the
+    authoritative _fp string fields (volume_fp, open_interest_fp) that
+    the Kalshi API returns.  The poller reads the _fp variants.
+    """
     return {
         "ticker": "KXNFLGAME-25NOV29-NEBUF-B250",
         "event_ticker": "KXNFLGAME-25NOV29-NEBUF",
@@ -63,8 +132,15 @@ def mock_market_data():
         "no_bid_dollars": Decimal("0.5200"),
         "no_ask_dollars": Decimal("0.5500"),
         "last_price_dollars": Decimal("0.4700"),
+        # Legacy integer fields (kept for validation module compatibility)
         "volume": 1500,
         "open_interest": 800,
+        # Authoritative _fp string fields (read by poller via _parse_fp_int)
+        "volume_fp": "1500.00",
+        "open_interest_fp": "800.00",
+        "volume_24h_fp": "200.00",
+        "yes_bid_size_fp": "50.00",
+        "yes_ask_size_fp": "75.00",
         "liquidity": 5000,
     }
 
@@ -351,6 +427,12 @@ class TestKalshiMarketPollerSync:
             assert call_kwargs["liquidity"] == Decimal("5000")
             # spread = yes_ask - yes_bid = 0.4800 - 0.4500 = 0.0300
             assert call_kwargs["spread"] == Decimal("0.0300")
+            # Verify _fp string fields are converted to int
+            assert call_kwargs["volume"] == 1500
+            assert call_kwargs["open_interest"] == 800
+            assert call_kwargs["volume_24h"] == 200
+            assert call_kwargs["yes_bid_size"] == 50
+            assert call_kwargs["yes_ask_size"] == 75
 
     @pytest.mark.unit
     def test_sync_updates_existing_market(self, poller_with_mock_client, mock_market_data):
@@ -381,6 +463,12 @@ class TestKalshiMarketPollerSync:
             assert call_kwargs["last_price"] == Decimal("0.4700")
             assert call_kwargs["liquidity"] == Decimal("5000")
             assert call_kwargs["spread"] == Decimal("0.0300")
+            # Verify _fp string fields are converted to int on update path
+            assert call_kwargs["volume"] == 1500
+            assert call_kwargs["open_interest"] == 800
+            assert call_kwargs["volume_24h"] == 200
+            assert call_kwargs["yes_bid_size"] == 50
+            assert call_kwargs["yes_ask_size"] == 75
 
     @pytest.mark.unit
     def test_sync_skips_market_without_ticker(self, poller_with_mock_client):
@@ -428,7 +516,7 @@ class TestKalshiMarketPollerSync:
 
     @pytest.mark.unit
     def test_sync_handles_missing_bid_data_gracefully(self, poller_with_mock_client):
-        """Test that None bid/last/liquidity are passed when API has no data."""
+        """Test that None bid/last/liquidity/_fp fields are passed when API has no data."""
         market_minimal = {
             "ticker": "KXNFLGAME-MINIMAL",
             "event_ticker": "KXNFLGAME-EVENT",
@@ -436,7 +524,7 @@ class TestKalshiMarketPollerSync:
             "yes_ask_dollars": Decimal("0.5000"),
             "no_ask_dollars": Decimal("0.5000"),
             "status": "open",
-            # No bid, last_price, or liquidity fields at all
+            # No bid, last_price, liquidity, or _fp fields at all
         }
 
         with (
@@ -453,6 +541,12 @@ class TestKalshiMarketPollerSync:
             assert call_kwargs["liquidity"] is None
             # spread is None when yes_bid is None
             assert call_kwargs["spread"] is None
+            # _fp fields are None when absent from API response
+            assert call_kwargs["volume"] is None
+            assert call_kwargs["open_interest"] is None
+            assert call_kwargs["volume_24h"] is None
+            assert call_kwargs["yes_bid_size"] is None
+            assert call_kwargs["yes_ask_size"] is None
 
     @pytest.mark.unit
     def test_sync_spread_none_when_bid_is_zero(self, poller_with_mock_client):
@@ -478,6 +572,38 @@ class TestKalshiMarketPollerSync:
             call_kwargs = mock_create.call_args.kwargs
             # spread should be None when bid is 0 (can't compute meaningful spread)
             assert call_kwargs["spread"] is None
+
+    @pytest.mark.unit
+    def test_sync_fp_zero_values_become_zero_not_none(self, poller_with_mock_client):
+        """Test that _fp '0.00' values become 0 (not None) in DB insert."""
+        market_zero_fp = {
+            "ticker": "KXNFLGAME-ZEROFP",
+            "event_ticker": "KXNFLGAME-EVENT",
+            "title": "Zero FP Market",
+            "yes_ask_dollars": Decimal("0.5000"),
+            "no_ask_dollars": Decimal("0.5000"),
+            "status": "open",
+            "volume_fp": "0.00",
+            "open_interest_fp": "0.00",
+            "volume_24h_fp": "0.00",
+            "yes_bid_size_fp": "0.00",
+            "yes_ask_size_fp": "0.00",
+        }
+
+        with (
+            patch("precog.schedulers.kalshi_poller.get_current_market", return_value=None),
+            patch("precog.schedulers.kalshi_poller.get_or_create_event", return_value=(1, True)),
+            patch("precog.schedulers.kalshi_poller.create_market", return_value=1) as mock_create,
+        ):
+            poller_with_mock_client._sync_market_to_db(market_zero_fp)
+
+            call_kwargs = mock_create.call_args.kwargs
+            # "0.00" must become 0 (integer), NOT None
+            assert call_kwargs["volume"] == 0
+            assert call_kwargs["open_interest"] == 0
+            assert call_kwargs["volume_24h"] == 0
+            assert call_kwargs["yes_bid_size"] == 0
+            assert call_kwargs["yes_ask_size"] == 0
 
 
 # =============================================================================
@@ -639,8 +765,8 @@ class TestKalshiPollerValidation:
             "status": "active",
             "yes_ask_dollars": Decimal("0.50"),
             "no_ask_dollars": Decimal("0.50"),
-            "volume": -100,  # Invalid: negative volume triggers ERROR
-            "open_interest": 0,
+            "volume_fp": "-100.00",  # Invalid: negative volume triggers ERROR
+            "open_interest_fp": "0.00",
         }
 
         poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [bad_market]
@@ -689,8 +815,8 @@ class TestKalshiPollerValidation:
             "status": "active",
             "yes_ask_dollars": Decimal("0.50"),
             "no_ask_dollars": Decimal("0.50"),
-            "volume": -100,  # Triggers validation ERROR
-            "open_interest": 0,
+            "volume_fp": "-100.00",  # Triggers validation ERROR
+            "open_interest_fp": "0.00",
         }
         poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [bad_market]
 
@@ -717,8 +843,8 @@ class TestKalshiPollerValidation:
             "status": "active",
             "yes_ask_dollars": Decimal("0.50"),
             "no_ask_dollars": Decimal("0.50"),
-            "volume": -100,  # Triggers validation ERROR
-            "open_interest": 0,
+            "volume_fp": "-100.00",  # Triggers validation ERROR
+            "open_interest_fp": "0.00",
         }
         poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [bad_market]
 
@@ -743,8 +869,8 @@ class TestKalshiPollerValidation:
             "status": "active",
             "yes_ask_dollars": Decimal("0.50"),
             "no_ask_dollars": Decimal("0.50"),
-            "volume": 100,
-            "open_interest": 50,
+            "volume_fp": "100.00",
+            "open_interest_fp": "50.00",
         }
         poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [market]
 
@@ -787,7 +913,7 @@ class TestKalshiPollerValidation:
             "event_ticker": "KXNFLGAME-EVENT",
             "title": "Bad Market",
             "status": "active",
-            "volume": -100,  # Triggers validation ERROR
+            "volume_fp": "-100.00",  # Triggers validation ERROR
         }
         poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [bad_market]
 
@@ -814,8 +940,8 @@ class TestKalshiPollerValidation:
             "yes_ask_dollars": Decimal("0.48"),
             "no_bid_dollars": Decimal("0.52"),
             "no_ask_dollars": Decimal("0.55"),
-            "volume": 100,
-            "open_interest": 50,
+            "volume_fp": "100.00",
+            "open_interest_fp": "50.00",
         }
         good_market2 = good_market.copy()
         good_market2["ticker"] = "KXNFLGAME-OK2"
@@ -863,7 +989,7 @@ class TestKalshiPollerValidation:
             "event_ticker": "KXNFLGAME-EVENT",
             "title": "Bad Market",
             "status": "active",
-            "volume": -100,  # ERROR
+            "volume_fp": "-100.00",  # ERROR
         }
         poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [bad_market]
 
@@ -894,7 +1020,7 @@ class TestKalshiPollerValidation:
             "event_ticker": "KXNFLGAME-EVENT",
             "title": "Bad",
             "status": "active",
-            "volume": -100,  # ERROR
+            "volume_fp": "-100.00",  # ERROR
         }
         good_market = {
             "ticker": "KXNFLGAME-GOOD",
@@ -905,8 +1031,8 @@ class TestKalshiPollerValidation:
             "yes_ask_dollars": Decimal("0.48"),
             "no_bid_dollars": Decimal("0.52"),
             "no_ask_dollars": Decimal("0.55"),
-            "volume": 100,
-            "open_interest": 50,
+            "volume_fp": "100.00",
+            "open_interest_fp": "50.00",
         }
         # 2 bad + 11 good = 2/13 = 15.4% error rate (> 10% threshold)
         markets = [bad_market, bad_market.copy()] + [good_market.copy() for _ in range(11)]
@@ -941,7 +1067,7 @@ class TestKalshiPollerValidation:
             "event_ticker": "KXNFLGAME-EVENT",
             "title": "Bad",
             "status": "active",
-            "volume": -100,  # ERROR
+            "volume_fp": "-100.00",  # ERROR
         }
         good_market = {
             "ticker": "KXNFLGAME-GOOD",
@@ -952,8 +1078,8 @@ class TestKalshiPollerValidation:
             "yes_ask_dollars": Decimal("0.48"),
             "no_bid_dollars": Decimal("0.52"),
             "no_ask_dollars": Decimal("0.55"),
-            "volume": 100,
-            "open_interest": 50,
+            "volume_fp": "100.00",
+            "open_interest_fp": "50.00",
         }
         # 1 bad + 10 good = 1/11 = 9.1% error rate (< 10% threshold)
         markets = [bad_market] + [good_market.copy() for _ in range(10)]
@@ -988,7 +1114,7 @@ class TestKalshiPollerValidation:
             "event_ticker": "KXNFLGAME-EVENT",
             "title": "Bad Market",
             "status": "active",
-            "volume": -100,  # ERROR - triggers >25% rate with 1 market
+            "volume_fp": "-100.00",  # ERROR - triggers >25% rate with 1 market
         }
         poller_with_mock_client.kalshi_client.fetch_all_markets.return_value = [bad_market]
 

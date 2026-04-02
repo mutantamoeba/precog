@@ -51,8 +51,8 @@ def valid_market_data() -> dict:
         "yes_ask_dollars": Decimal("0.47"),
         "no_bid_dollars": Decimal("0.53"),
         "no_ask_dollars": Decimal("0.55"),
-        "volume": 1000,
-        "open_interest": 500,
+        "volume_fp": "1000.00",
+        "open_interest_fp": "500.00",
         "open_time": (now - timedelta(hours=2)).isoformat(),
         "close_time": (now + timedelta(hours=24)).isoformat(),
         "expiration_time": (now + timedelta(hours=48)).isoformat(),
@@ -350,27 +350,27 @@ class TestMarketDataValidation:
 
     def test_negative_volume_error(self, validator: KalshiDataValidator) -> None:
         """Negative volume generates error."""
-        market = {"ticker": "TEST", "volume": -100}
+        market = {"ticker": "TEST", "volume_fp": "-100.00"}
         result = validator.validate_market_data(market)
         assert result.has_errors
         assert any("volume" in e.field for e in result.errors)
 
     def test_high_volume_warning(self, validator: KalshiDataValidator) -> None:
         """Unusually high lifetime volume generates warning."""
-        market = {"ticker": "TEST", "volume": 2_000_000}  # Above 1M threshold
+        market = {"ticker": "TEST", "volume_fp": "2000000.00"}  # Above 1M threshold
         result = validator.validate_market_data(market)
         assert result.has_warnings
         assert any("volume" in w.field for w in result.warnings)
 
     def test_moderate_volume_no_warning(self, validator: KalshiDataValidator) -> None:
         """Moderate lifetime volume (below 1M) does not generate warning."""
-        market = {"ticker": "TEST", "volume": 200_000}
+        market = {"ticker": "TEST", "volume_fp": "200000.00"}
         result = validator.validate_market_data(market)
         assert not any("volume" in w.field for w in result.warnings)
 
     def test_negative_open_interest_error(self, validator: KalshiDataValidator) -> None:
         """Negative open interest generates error."""
-        market = {"ticker": "TEST", "open_interest": -50}
+        market = {"ticker": "TEST", "open_interest_fp": "-50.00"}
         result = validator.validate_market_data(market)
         assert result.has_errors
 
@@ -795,14 +795,14 @@ class TestAnomalyTracking:
 
     def test_anomaly_count_increments(self, validator: KalshiDataValidator) -> None:
         """Anomaly count increments on validation issues."""
-        market = {"ticker": "TEST", "volume": -100}  # Error
+        market = {"ticker": "TEST", "volume_fp": "-100.00"}  # Error
         validator.validate_market_data(market)
         assert validator.get_anomaly_count("TEST") > 0
 
     def test_get_all_anomaly_counts(self, validator: KalshiDataValidator) -> None:
         """Get all anomaly counts returns dict."""
-        market1 = {"ticker": "TEST1", "volume": -100}
-        market2 = {"ticker": "TEST2", "volume": -200}
+        market1 = {"ticker": "TEST1", "volume_fp": "-100.00"}
+        market2 = {"ticker": "TEST2", "volume_fp": "-200.00"}
         validator.validate_market_data(market1)
         validator.validate_market_data(market2)
         counts = validator.get_all_anomaly_counts()
@@ -811,7 +811,7 @@ class TestAnomalyTracking:
 
     def test_clear_anomaly_counts(self, validator: KalshiDataValidator) -> None:
         """Clear anomaly counts resets all counts."""
-        market = {"ticker": "TEST", "volume": -100}
+        market = {"ticker": "TEST", "volume_fp": "-100.00"}
         validator.validate_market_data(market)
         assert validator.get_anomaly_count("TEST") > 0
         validator.clear_anomaly_counts()
@@ -877,7 +877,7 @@ class TestValidationSummary:
         """Summary counts errors correctly."""
         markets: list[dict[str, object]] = [
             {"ticker": "GOOD", "status": "open"},
-            {"ticker": "BAD", "volume": -100},  # Error
+            {"ticker": "BAD", "volume_fp": "-100.00"},  # Error
         ]
         results = validator.validate_markets(markets)
         summary = validator.get_validation_summary(results)
@@ -1074,8 +1074,8 @@ class TestTimestampValidation:
         market = {
             "ticker": "TEST-TICKER",
             "status": "open",
-            "volume": 100,
-            "open_interest": 50,
+            "volume_fp": "100.00",
+            "open_interest_fp": "50.00",
         }
         result = validator.validate_market_data(market)
         # Should complete without raising — no timestamp issues expected
@@ -1095,8 +1095,8 @@ class TestCrossFieldConsistency:
         market = {
             "ticker": "TEST-TICKER",
             "status": "unopened",
-            "open_interest": 100,
-            "volume": 0,
+            "open_interest_fp": "100.00",
+            "volume_fp": "0.00",
         }
         result = validator.validate_market_data(market)
         warnings = [i for i in result.warnings if i.field == "open_interest"]
@@ -1107,8 +1107,8 @@ class TestCrossFieldConsistency:
         market = {
             "ticker": "TEST-TICKER",
             "status": "initialized",
-            "open_interest": 50,
-            "volume": 0,
+            "open_interest_fp": "50.00",
+            "volume_fp": "0.00",
         }
         result = validator.validate_market_data(market)
         warnings = [i for i in result.warnings if i.field == "open_interest"]
@@ -1120,9 +1120,9 @@ class TestCrossFieldConsistency:
         market = {
             "ticker": "TEST-TICKER",
             "status": "active",
-            "volume": 100,
-            "volume_24h": 500,
-            "open_interest": 50,
+            "volume_fp": "100.00",
+            "volume_24h_fp": "500.00",
+            "open_interest_fp": "50.00",
             "open_time": (now - timedelta(hours=48)).isoformat(),
             "close_time": (now + timedelta(hours=24)).isoformat(),
             "expiration_time": (now + timedelta(hours=48)).isoformat(),
@@ -1138,9 +1138,9 @@ class TestCrossFieldConsistency:
         market = {
             "ticker": "TEST-TICKER",
             "status": "active",
-            "volume": 100,
-            "volume_24h": 100,
-            "open_interest": 50,
+            "volume_fp": "100.00",
+            "volume_24h_fp": "100.00",
+            "open_interest_fp": "50.00",
             "open_time": (now - timedelta(hours=12)).isoformat(),
             "close_time": (now + timedelta(hours=24)).isoformat(),
             "expiration_time": (now + timedelta(hours=48)).isoformat(),
@@ -1155,8 +1155,8 @@ class TestCrossFieldConsistency:
         market = {
             "ticker": "TEST-GHOST",
             "status": "active",
-            "volume": 0,
-            "open_interest": 0,
+            "volume_fp": "0.00",
+            "open_interest_fp": "0.00",
             "open_time": (now - timedelta(hours=48)).isoformat(),
             "close_time": (now + timedelta(hours=24)).isoformat(),
             "expiration_time": (now + timedelta(hours=48)).isoformat(),
@@ -1171,8 +1171,8 @@ class TestCrossFieldConsistency:
         market = {
             "ticker": "TEST-TICKER",
             "status": "active",
-            "volume": 100,
-            "open_interest": 0,
+            "volume_fp": "100.00",
+            "open_interest_fp": "0.00",
             "open_time": (now - timedelta(hours=48)).isoformat(),
             "close_time": (now + timedelta(hours=24)).isoformat(),
             "expiration_time": (now + timedelta(hours=48)).isoformat(),
