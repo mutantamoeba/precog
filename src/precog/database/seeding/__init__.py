@@ -61,21 +61,27 @@ from precog.database.seeding.epa_seeder import (
     EPASeeder,
     seed_epa_from_cli,
 )
+from precog.database.seeding.game_odds_loader import (
+    LoadResult as OddsLoadResult,
+)
+from precog.database.seeding.game_odds_loader import (
+    bulk_insert_game_odds,
+    get_game_odds_stats,
+    link_orphan_odds_to_games,
+    load_odds_from_source,
+)
+from precog.database.seeding.game_odds_loader import (
+    bulk_insert_game_odds as bulk_insert_historical_odds,
+)
+from precog.database.seeding.game_odds_loader import (
+    get_game_odds_stats as get_historical_odds_stats,
+)
 from precog.database.seeding.historical_elo_loader import (
     HistoricalEloRecord,
     LoadResult,
     get_historical_elo_stats,
     load_csv_elo,
     load_fivethirtyeight_elo,
-)
-from precog.database.seeding.historical_odds_loader import (
-    LoadResult as OddsLoadResult,
-)
-from precog.database.seeding.historical_odds_loader import (
-    bulk_insert_historical_odds,
-    get_historical_odds_stats,
-    link_orphan_odds_to_games,
-    load_odds_from_source,
 )
 from precog.database.seeding.seeding_manager import (
     SeedCategory,
@@ -101,8 +107,10 @@ __all__ = [
     "SeedingManager",
     "SeedingReport",
     "SeedingStats",
+    "bulk_insert_game_odds",
     "bulk_insert_historical_odds",
     "create_seeding_manager",
+    "get_game_odds_stats",
     "get_historical_elo_stats",
     "get_historical_odds_stats",
     "link_orphan_odds_to_games",

@@ -129,10 +129,10 @@ class GameRecord(TypedDict):
 
 
 class OddsRecord(TypedDict):
-    """Historical odds record for database insertion.
+    """Game odds record for database insertion.
 
     Represents betting lines for a single game.
-    Maps to the historical_odds table (migration 0007).
+    Maps to the game_odds table (migration 0007 + 0048 rename).
 
     Fields:
         sport: Sport code (nfl, nba, mlb, etc.)

@@ -313,6 +313,13 @@ class TestProgressBarIntegration:
         """Verify loader functions accept show_progress parameter."""
         import inspect
 
+        from precog.database.seeding.game_odds_loader import (
+            bulk_insert_game_odds as bulk_insert_historical_odds,
+        )
+        from precog.database.seeding.game_odds_loader import (
+            load_odds_from_source,
+        )
+
         # Import functions to verify signatures
         from precog.database.seeding.historical_elo_loader import (
             bulk_insert_historical_elo,
@@ -323,10 +330,6 @@ class TestProgressBarIntegration:
             bulk_insert_historical_games,
             load_csv_games,
             load_fivethirtyeight_games,
-        )
-        from precog.database.seeding.historical_odds_loader import (
-            bulk_insert_historical_odds,
-            load_odds_from_source,
         )
 
         # Check that all functions have show_progress parameter
@@ -350,14 +353,14 @@ class TestProgressBarIntegration:
         """Verify bulk insert functions accept total parameter."""
         import inspect
 
+        from precog.database.seeding.game_odds_loader import (
+            bulk_insert_game_odds as bulk_insert_historical_odds,
+        )
         from precog.database.seeding.historical_elo_loader import (
             bulk_insert_historical_elo,
         )
         from precog.database.seeding.historical_games_loader import (
             bulk_insert_historical_games,
-        )
-        from precog.database.seeding.historical_odds_loader import (
-            bulk_insert_historical_odds,
         )
 
         functions = [

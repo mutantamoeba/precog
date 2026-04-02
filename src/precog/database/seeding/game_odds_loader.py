@@ -1,0 +1,590 @@
+"""
+Game Odds Data Loader for Precog.
+
+This module provides utilities for loading game odds data from
+external data sources into the game_odds table (renamed from historical_odds
+in migration 0048).
+
+Data Sources:
+    - betting_csv: CSV files with spread/total data (e.g., slieb74/NFL-Betting-Data)
+    - BettingCSVSource: Adapter for betting CSV files
+    - espn_poller: Live DraftKings odds from ESPN scoreboard API
+
+Educational Notes:
+------------------
+Closing Line Value (CLV):
+    CLV = Your bet price vs closing line.
+    Beating the closing line is the best predictor of long-term profitability.
+    This table enables historical CLV analysis across thousands of games.
+
+Game Odds Data Format:
+    - spread_home_close: Point spread from home team perspective (e.g., -3.5)
+    - total_close: Over/under line (e.g., 45.5)
+    - moneyline_home_close: Moneyline odds for home team (e.g., -150)
+    - home_covered: Whether home team covered the spread
+    - game_went_over: Whether total went over the line
+
+Team Code Normalization:
+    Source adapters handle team code normalization internally.
+    Historical data may have different codes than current teams:
+    - Oakland Raiders (OAK) -> Las Vegas Raiders (LV)
+    - San Diego Chargers (SD) -> LA Chargers (LAC)
+
+Reference:
+    - Issue #229: Expanded Historical Data Sources
+    - Issue #254: Add progress bars for large seeding operations
+    - Issue #533: ESPN DraftKings odds extraction
+    - Migration 0007: Create historical_odds table (original)
+    - Migration 0048: Rename to game_odds + SCD Type 2
+    - ADR-106: Historical Data Collection Architecture
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import TYPE_CHECKING, Any
+
+from precog.database.connection import get_cursor
+from precog.database.seeding.batch_result import (
+    BatchInsertResult,
+    ErrorHandlingMode,
+)
+from precog.database.seeding.progress import print_load_summary, seeding_progress
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+    from precog.database.seeding.sources.base_source import OddsRecord
+
+logger = logging.getLogger(__name__)
+
+
+# =============================================================================
+# Result Types
+# =============================================================================
+
+
+# Type alias for backward compatibility (Issue #255)
+# BatchInsertResult provides:
+#   - total_records (aliased as records_processed)
+#   - successful (aliased as records_inserted)
+#   - skipped (aliased as records_skipped)
+#   - failed (aliased as errors)
+#   - error_messages property (compatibility)
+#   - PLUS: failed_records list with FailedRecord details
+#
+# Note: The __add__ method for combining results is not preserved.
+# Use BatchInsertResult.merge() or manually combine if needed.
+LoadResult = BatchInsertResult
+
+
+# =============================================================================
+# Source Name Mapping
+# =============================================================================
+
+# Map source adapter names to database-allowed values
+# game_odds table CHECK constraint: 'kaggle', 'odds_portal', 'action_network',
+# 'pinnacle', 'manual', 'imported', 'consensus', 'betting_csv', 'fivethirtyeight',
+# 'espn_poller'
+SOURCE_NAME_MAPPING: dict[str, str] = {
+    "betting_csv": "betting_csv",
+    "fivethirtyeight": "fivethirtyeight",
+    "kaggle": "kaggle",
+    "odds_portal": "odds_portal",
+    "action_network": "action_network",
+    "pinnacle": "pinnacle",
+    "manual": "manual",
+    "espn_poller": "espn_poller",
+}
+
+
+def normalize_source_name(source: str) -> str:
+    """
+    Normalize source name to database-allowed value.
+
+    Args:
+        source: Source name from adapter
+
+    Returns:
+        Database-compatible source name
+    """
+    return SOURCE_NAME_MAPPING.get(source.lower(), "imported")
+
+
+# =============================================================================
+# Database Operations
+# =============================================================================
+
+
+def lookup_game_id(
+    sport: str,
+    game_date: Any,  # date object
+    home_team_code: str,
+    away_team_code: str,
+) -> int | None:
+    """
+    Look up game_id for matching game.
+
+    Args:
+        sport: Sport code (e.g., "nfl")
+        game_date: Game date
+        home_team_code: Home team code (e.g., "KC")
+        away_team_code: Away team code (e.g., "BUF")
+
+    Returns:
+        game_id if found, None otherwise
+    """
+    with get_cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT id FROM games
+            WHERE league = %s
+              AND game_date = %s
+              AND home_team_code = %s
+              AND away_team_code = %s
+            """,
+            (sport, game_date, home_team_code, away_team_code),
+        )
+        row = cursor.fetchone()
+        if row:
+            return int(row["id"])
+    return None
+
+
+def insert_game_odds(record: OddsRecord) -> bool:
+    """
+    Insert or update a single game odds record.
+
+    Uses ON CONFLICT to handle duplicates (same game, same sportsbook).
+
+    Args:
+        record: OddsRecord to insert
+
+    Returns:
+        True if successful, False otherwise
+    """
+    # Try to find matching game
+    game_id = lookup_game_id(
+        record["sport"],
+        record["game_date"],
+        record["home_team_code"],
+        record["away_team_code"],
+    )
+
+    source = normalize_source_name(record["source"])
+    sportsbook = record.get("sportsbook") or "consensus"
+
+    with get_cursor(commit=True) as cursor:
+        cursor.execute(
+            """
+            INSERT INTO game_odds (
+                game_id, sport, game_date,
+                home_team_code, away_team_code, sportsbook,
+                spread_home_open, spread_home_close,
+                spread_home_odds_open, spread_home_odds_close,
+                moneyline_home_open, moneyline_home_close,
+                moneyline_away_open, moneyline_away_close,
+                total_open, total_close,
+                over_odds_open, over_odds_close,
+                home_covered, game_went_over,
+                source, source_file
+            ) VALUES (
+                %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s, %s
+            )
+            ON CONFLICT (sport, game_date, home_team_code, away_team_code, sportsbook)
+                WHERE row_current_ind = TRUE
+            DO UPDATE SET
+                game_id = EXCLUDED.game_id,
+                spread_home_open = COALESCE(EXCLUDED.spread_home_open, game_odds.spread_home_open),
+                spread_home_close = COALESCE(EXCLUDED.spread_home_close, game_odds.spread_home_close),
+                spread_home_odds_open = COALESCE(EXCLUDED.spread_home_odds_open, game_odds.spread_home_odds_open),
+                spread_home_odds_close = COALESCE(EXCLUDED.spread_home_odds_close, game_odds.spread_home_odds_close),
+                moneyline_home_open = COALESCE(EXCLUDED.moneyline_home_open, game_odds.moneyline_home_open),
+                moneyline_home_close = COALESCE(EXCLUDED.moneyline_home_close, game_odds.moneyline_home_close),
+                moneyline_away_open = COALESCE(EXCLUDED.moneyline_away_open, game_odds.moneyline_away_open),
+                moneyline_away_close = COALESCE(EXCLUDED.moneyline_away_close, game_odds.moneyline_away_close),
+                total_open = COALESCE(EXCLUDED.total_open, game_odds.total_open),
+                total_close = COALESCE(EXCLUDED.total_close, game_odds.total_close),
+                over_odds_open = COALESCE(EXCLUDED.over_odds_open, game_odds.over_odds_open),
+                over_odds_close = COALESCE(EXCLUDED.over_odds_close, game_odds.over_odds_close),
+                home_covered = COALESCE(EXCLUDED.home_covered, game_odds.home_covered),
+                game_went_over = COALESCE(EXCLUDED.game_went_over, game_odds.game_went_over),
+                source = EXCLUDED.source,
+                source_file = EXCLUDED.source_file
+            """,
+            (
+                game_id,
+                record["sport"],
+                record["game_date"],
+                record["home_team_code"],
+                record["away_team_code"],
+                sportsbook,
+                record.get("spread_home_open"),
+                record.get("spread_home_close"),
+                record.get("spread_home_odds_open"),
+                record.get("spread_home_odds_close"),
+                record.get("moneyline_home_open"),
+                record.get("moneyline_home_close"),
+                record.get("moneyline_away_open"),
+                record.get("moneyline_away_close"),
+                record.get("total_open"),
+                record.get("total_close"),
+                record.get("over_odds_open"),
+                record.get("over_odds_close"),
+                record.get("home_covered"),
+                record.get("game_went_over"),
+                source,
+                record.get("source_file"),
+            ),
+        )
+        return True
+
+
+def bulk_insert_game_odds(
+    records: Iterator[OddsRecord],
+    batch_size: int = 1000,
+    link_games: bool = True,
+    error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
+    *,
+    total: int | None = None,
+    show_progress: bool = True,
+) -> BatchInsertResult:
+    """
+    Bulk insert game odds records with batching, progress display, and error handling.
+
+    Args:
+        records: Iterator of OddsRecord
+        batch_size: Number of records per batch (default: 1000)
+        link_games: Whether to look up game_id (default: True)
+        error_mode: How to handle errors (default: FAIL - stop on first error)
+            - FAIL: Raise exception on first error
+            - SKIP: Skip failed records, continue processing
+            - COLLECT: Collect all failures, continue processing
+        total: Expected total records (enables determinate progress bar)
+        show_progress: Whether to show progress bar (auto-disabled in CI)
+
+    Returns:
+        BatchInsertResult with statistics and any failed records
+
+    Example:
+        >>> result = bulk_insert_game_odds(
+        ...     records,
+        ...     error_mode=ErrorHandlingMode.COLLECT,
+        ...     show_progress=True,
+        ... )
+        >>> if result.has_failures:
+        ...     print(result.get_failure_summary())
+    """
+    result = BatchInsertResult(error_mode=error_mode, operation="bulk_insert_game_odds")
+
+    batch: list[tuple[Any, ...]] = []
+    game_id_cache: dict[tuple[str, Any, str, str], int | None] = {}
+
+    with seeding_progress(
+        "Loading odds data...",
+        total=total,
+        show_progress=show_progress,
+    ) as (progress, task):
+        for record in records:
+            result.total_records += 1
+
+            # Look up game_id (with caching)
+            game_id: int | None = None
+            if link_games:
+                cache_key = (
+                    record["sport"],
+                    record["game_date"],
+                    record["home_team_code"],
+                    record["away_team_code"],
+                )
+                if cache_key not in game_id_cache:
+                    game_id_cache[cache_key] = lookup_game_id(
+                        record["sport"],
+                        record["game_date"],
+                        record["home_team_code"],
+                        record["away_team_code"],
+                    )
+                game_id = game_id_cache[cache_key]
+
+            source = normalize_source_name(record["source"])
+            sportsbook = record.get("sportsbook") or "consensus"
+
+            batch.append(
+                (
+                    game_id,
+                    record["sport"],
+                    record["game_date"],
+                    record["home_team_code"],
+                    record["away_team_code"],
+                    sportsbook,
+                    record.get("spread_home_open"),
+                    record.get("spread_home_close"),
+                    record.get("spread_home_odds_open"),
+                    record.get("spread_home_odds_close"),
+                    record.get("moneyline_home_open"),
+                    record.get("moneyline_home_close"),
+                    record.get("moneyline_away_open"),
+                    record.get("moneyline_away_close"),
+                    record.get("total_open"),
+                    record.get("total_close"),
+                    record.get("over_odds_open"),
+                    record.get("over_odds_close"),
+                    record.get("home_covered"),
+                    record.get("game_went_over"),
+                    source,
+                    record.get("source_file"),
+                )
+            )
+
+            # Update progress
+            if progress and task is not None:
+                progress.advance(task)
+
+            # Flush batch when full
+            if len(batch) >= batch_size:
+                inserted = _flush_odds_batch(batch)
+                result.successful += inserted
+                batch = []
+
+    # Flush remaining records
+    if batch:
+        inserted = _flush_odds_batch(batch)
+        result.successful += inserted
+
+    return result
+
+
+def _flush_odds_batch(batch: list[tuple[Any, ...]]) -> int:
+    """
+    Insert a batch of odds records using execute_values.
+
+    Args:
+        batch: List of tuples to insert
+
+    Returns:
+        Number of records inserted/updated
+    """
+    if not batch:
+        return 0
+
+    with get_cursor(commit=True) as cursor:
+        from psycopg2.extras import execute_values
+
+        query = """
+            INSERT INTO game_odds (
+                game_id, sport, game_date,
+                home_team_code, away_team_code, sportsbook,
+                spread_home_open, spread_home_close,
+                spread_home_odds_open, spread_home_odds_close,
+                moneyline_home_open, moneyline_home_close,
+                moneyline_away_open, moneyline_away_close,
+                total_open, total_close,
+                over_odds_open, over_odds_close,
+                home_covered, game_went_over,
+                source, source_file
+            ) VALUES %s
+            ON CONFLICT (sport, game_date, home_team_code, away_team_code, sportsbook)
+                WHERE row_current_ind = TRUE
+            DO UPDATE SET
+                game_id = EXCLUDED.game_id,
+                spread_home_close = COALESCE(EXCLUDED.spread_home_close, game_odds.spread_home_close),
+                total_close = COALESCE(EXCLUDED.total_close, game_odds.total_close),
+                home_covered = COALESCE(EXCLUDED.home_covered, game_odds.home_covered),
+                game_went_over = COALESCE(EXCLUDED.game_went_over, game_odds.game_went_over),
+                source = EXCLUDED.source,
+                source_file = EXCLUDED.source_file
+        """
+        execute_values(cursor, query, batch)
+        return len(batch)
+
+
+# =============================================================================
+# Main Entry Points
+# =============================================================================
+
+
+def load_odds_from_source(
+    source_adapter: Any,
+    sport: str = "nfl",
+    seasons: list[int] | None = None,
+    link_games: bool = True,
+    error_mode: ErrorHandlingMode = ErrorHandlingMode.FAIL,
+    *,
+    show_progress: bool = True,
+) -> BatchInsertResult:
+    """
+    Load game odds from a source adapter into the database.
+
+    Args:
+        source_adapter: A source adapter with load_odds() method
+        sport: Sport code (default: "nfl")
+        seasons: Filter to specific seasons (default: all)
+        link_games: Whether to look up game_id (default: True)
+        error_mode: How to handle errors (default: FAIL - stop on first error)
+            - FAIL: Raise exception on first error
+            - SKIP: Skip failed records, continue processing
+            - COLLECT: Collect all failures, continue processing
+        show_progress: Whether to show progress bar (auto-disabled in CI)
+
+    Returns:
+        BatchInsertResult with statistics
+
+    Example:
+        >>> from precog.database.seeding.sources import BettingCSVSource
+        >>> source = BettingCSVSource(data_dir=Path("data/historical"))
+        >>> result = load_odds_from_source(
+        ...     source, sport="nfl", seasons=[2023], show_progress=True
+        ... )
+        >>> print(f"Loaded {result.records_inserted} odds records")
+        >>> # With error collection
+        >>> result = load_odds_from_source(
+        ...     source, error_mode=ErrorHandlingMode.COLLECT
+        ... )
+        >>> if result.has_failures:
+        ...     print(result.get_failure_summary())
+    """
+    logger.info(
+        "Loading game odds: source=%s, sport=%s, seasons=%s",
+        source_adapter.source_name,
+        sport,
+        seasons,
+    )
+
+    records = source_adapter.load_odds(sport=sport, seasons=seasons)
+    result = bulk_insert_game_odds(
+        records, link_games=link_games, error_mode=error_mode, show_progress=show_progress
+    )
+
+    logger.info(
+        "Game odds load complete: processed=%d, inserted=%d, skipped=%d",
+        result.records_processed,
+        result.records_inserted,
+        result.records_skipped,
+    )
+
+    # Print summary table
+    print_load_summary(
+        f"Game Odds Load ({source_adapter.source_name})",
+        processed=result.records_processed,
+        inserted=result.records_inserted,
+        skipped=result.records_skipped,
+        errors=result.errors,
+        show_summary=show_progress,
+    )
+
+    return result
+
+
+def get_game_odds_stats() -> dict[str, Any]:
+    """
+    Get statistics about game odds data in the database.
+
+    Returns:
+        Dictionary with counts by sport, season, source, sportsbook
+    """
+    with get_cursor() as cursor:
+        # Count by sport
+        cursor.execute("""
+            SELECT sport, COUNT(*) as count
+            FROM game_odds
+            GROUP BY sport
+            ORDER BY sport
+        """)
+        by_sport = {row["sport"]: row["count"] for row in cursor.fetchall()}
+
+        # Count by season (derived from game_date)
+        cursor.execute("""
+            SELECT EXTRACT(YEAR FROM game_date)::integer as season, COUNT(*) as count
+            FROM game_odds
+            GROUP BY season
+            ORDER BY season DESC
+            LIMIT 10
+        """)
+        by_season = {row["season"]: row["count"] for row in cursor.fetchall()}
+
+        # Count by source
+        cursor.execute("""
+            SELECT source, COUNT(*) as count
+            FROM game_odds
+            GROUP BY source
+            ORDER BY count DESC
+        """)
+        by_source = {row["source"]: row["count"] for row in cursor.fetchall()}
+
+        # Count by sportsbook
+        cursor.execute("""
+            SELECT sportsbook, COUNT(*) as count
+            FROM game_odds
+            GROUP BY sportsbook
+            ORDER BY count DESC
+        """)
+        by_sportsbook = {row["sportsbook"]: row["count"] for row in cursor.fetchall()}
+
+        # Count linked vs unlinked
+        cursor.execute("""
+            SELECT
+                COUNT(*) FILTER (WHERE game_id IS NOT NULL) as linked,
+                COUNT(*) FILTER (WHERE game_id IS NULL) as unlinked
+            FROM game_odds
+        """)
+        linkage = cursor.fetchone()
+
+        # Total count (current rows only, excludes SCD historical versions)
+        cursor.execute(
+            "SELECT COUNT(*) as total, "
+            "COUNT(*) FILTER (WHERE row_current_ind = TRUE) as current_total "
+            "FROM game_odds"
+        )
+        counts = cursor.fetchone()
+        total = counts["total"]
+        current_total = counts["current_total"]
+
+    return {
+        "total": total,
+        "current_total": current_total,
+        "by_sport": by_sport,
+        "by_season": by_season,
+        "by_source": by_source,
+        "by_sportsbook": by_sportsbook,
+        "linked_to_games": linkage["linked"] if linkage else 0,
+        "unlinked": linkage["unlinked"] if linkage else 0,
+    }
+
+
+def link_orphan_odds_to_games() -> int:
+    """
+    Link game_odds records without game_id to matching games.
+
+    This is useful after loading odds before games, or if new games are added.
+
+    Returns:
+        Number of records updated
+    """
+    with get_cursor(commit=True) as cursor:
+        cursor.execute("""
+            UPDATE game_odds o
+            SET game_id = g.id
+            FROM games g
+            WHERE o.game_id IS NULL
+              AND o.sport = g.sport
+              AND o.game_date = g.game_date
+              AND o.home_team_code = g.home_team_code
+              AND o.away_team_code = g.away_team_code
+        """)
+        rowcount: int = cursor.rowcount or 0
+        return rowcount
+
+
+# =============================================================================
+# Backward Compatibility Aliases
+# =============================================================================
+# These aliases ensure existing code that imports the old names continues to work
+# during the transition period. New code should use the game_odds_* names.
+
+insert_historical_odds = insert_game_odds
+bulk_insert_historical_odds = bulk_insert_game_odds
+get_historical_odds_stats = get_game_odds_stats

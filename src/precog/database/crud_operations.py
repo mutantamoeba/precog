@@ -9862,3 +9862,204 @@ def delete_external_team_code(code_id: int) -> bool:
     with get_cursor(commit=True) as cur:
         cur.execute(query, (code_id,))
         return bool(cur.rowcount > 0)
+
+
+# =============================================================================
+# Game Odds (ESPN DraftKings Odds) — SCD Type 2
+# =============================================================================
+
+
+def upsert_game_odds(
+    game_id: int,
+    sport: str,
+    sportsbook: str,
+    *,
+    game_date: Any | None = None,
+    home_team_code: str | None = None,
+    away_team_code: str | None = None,
+    spread_home_open: Any | None = None,
+    spread_home_close: Any | None = None,
+    spread_home_odds_open: int | None = None,
+    spread_home_odds_close: int | None = None,
+    spread_away_odds_open: int | None = None,
+    spread_away_odds_close: int | None = None,
+    moneyline_home_open: int | None = None,
+    moneyline_home_close: int | None = None,
+    moneyline_away_open: int | None = None,
+    moneyline_away_close: int | None = None,
+    total_open: Any | None = None,
+    total_close: Any | None = None,
+    over_odds_open: int | None = None,
+    over_odds_close: int | None = None,
+    under_odds_open: int | None = None,
+    under_odds_close: int | None = None,
+    home_favorite: bool | None = None,
+    away_favorite: bool | None = None,
+    home_favorite_at_open: bool | None = None,
+    away_favorite_at_open: bool | None = None,
+    details_text: str | None = None,
+    source: str = "espn_poller",
+) -> int | None:
+    """Upsert game odds with SCD Type 2 versioning.
+
+    Compares incoming close values against the current row. If any tracked
+    value changed, the current row is closed (row_current_ind=FALSE) and a
+    new version is inserted. If values are unchanged, only updated_at is bumped.
+
+    Change detection fields (the "close" values that move during line movement):
+        - spread_home_close
+        - moneyline_home_close
+        - moneyline_away_close
+        - total_close
+
+    Args:
+        game_id: FK to games.id (required for ESPN poller path)
+        sport: Sport code ('nfl', 'nba', etc.)
+        sportsbook: Sportsbook name ('draftkings', 'consensus', etc.)
+        game_date: Game date (for CSV import path, optional for ESPN)
+        home_team_code: Home team abbreviation (for CSV import path)
+        away_team_code: Away team abbreviation (for CSV import path)
+        spread_home_*: Home point spread values (Decimal/NUMERIC(5,1))
+        spread_home_odds_*: Home spread odds (American format integer)
+        spread_away_odds_*: Away spread odds (American format integer)
+        moneyline_*: Moneyline odds (American format integer)
+        total_*: Over/under total line (Decimal/NUMERIC(5,1))
+        over_odds_*, under_odds_*: Total line odds (American format integer)
+        home_favorite, away_favorite: Current favorite flags
+        home_favorite_at_open, away_favorite_at_open: Opening favorite flags
+        details_text: Human-readable summary (e.g., "BOS -3.5")
+        source: Data source identifier (default: 'espn_poller')
+
+    Returns:
+        The game_odds.id of the current/new row, or None on error.
+
+    Educational Note:
+        This follows the same SCD Type 2 pattern as update_market_with_versioning():
+        1. Find current row (WHERE game_id = X AND sportsbook = Y AND row_current_ind = TRUE)
+        2. Compare tracked fields
+        3. If changed: close current row, insert new version
+        4. If unchanged: just bump updated_at
+
+    Reference:
+        - Issue #533: ESPN DraftKings odds extraction
+        - Migration 0048: game_odds table with SCD Type 2
+        - update_market_with_versioning() for pattern reference
+    """
+    with get_cursor(commit=True) as cur:
+        # Step 1: Find current row for this game+sportsbook
+        cur.execute(
+            """
+            SELECT id, spread_home_close, moneyline_home_close,
+                   moneyline_away_close, total_close
+            FROM game_odds
+            WHERE game_id = %s
+              AND sportsbook = %s
+              AND row_current_ind = TRUE
+            """,
+            (game_id, sportsbook),
+        )
+        current = cur.fetchone()
+
+        if current is not None:
+            # Step 2: Compare tracked fields for change detection
+            # Convert DB Decimals to strings for safe comparison with incoming values
+            def _eq(db_val: Any, new_val: Any) -> bool:
+                """Compare DB value to new value, treating None == None."""
+                if db_val is None and new_val is None:
+                    return True
+                if db_val is None or new_val is None:
+                    return False
+                return str(db_val) == str(new_val)
+
+            changed = not all(
+                [
+                    _eq(current["spread_home_close"], spread_home_close),
+                    _eq(current["moneyline_home_close"], moneyline_home_close),
+                    _eq(current["moneyline_away_close"], moneyline_away_close),
+                    _eq(current["total_close"], total_close),
+                ]
+            )
+
+            if not changed:
+                # No line movement -- just bump updated_at
+                cur.execute(
+                    "UPDATE game_odds SET updated_at = NOW() WHERE id = %s",
+                    (current["id"],),
+                )
+                return cast("int", current["id"])
+
+            # Step 3: Close current row (SCD Type 2)
+            cur.execute(
+                """
+                UPDATE game_odds
+                SET row_current_ind = FALSE,
+                    row_end_ts = NOW()
+                WHERE id = %s
+                """,
+                (current["id"],),
+            )
+
+        # Step 4: Insert new version
+        cur.execute(
+            """
+            INSERT INTO game_odds (
+                game_id, sport, game_date, home_team_code, away_team_code,
+                sportsbook, source,
+                spread_home_open, spread_home_close,
+                spread_home_odds_open, spread_home_odds_close,
+                spread_away_odds_open, spread_away_odds_close,
+                moneyline_home_open, moneyline_home_close,
+                moneyline_away_open, moneyline_away_close,
+                total_open, total_close,
+                over_odds_open, over_odds_close,
+                under_odds_open, under_odds_close,
+                home_favorite, away_favorite,
+                home_favorite_at_open, away_favorite_at_open,
+                details_text,
+                row_current_ind, row_start_ts, updated_at
+            )
+            VALUES (
+                %s, %s, %s, %s, %s,
+                %s, %s,
+                %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s, %s, %s, %s, %s, %s,
+                %s, %s, %s, %s,
+                %s,
+                TRUE, NOW(), NOW()
+            )
+            RETURNING id
+            """,
+            (
+                game_id,
+                sport,
+                game_date,
+                home_team_code,
+                away_team_code,
+                sportsbook,
+                source,
+                spread_home_open,
+                spread_home_close,
+                spread_home_odds_open,
+                spread_home_odds_close,
+                spread_away_odds_open,
+                spread_away_odds_close,
+                moneyline_home_open,
+                moneyline_home_close,
+                moneyline_away_open,
+                moneyline_away_close,
+                total_open,
+                total_close,
+                over_odds_open,
+                over_odds_close,
+                under_odds_open,
+                under_odds_close,
+                home_favorite,
+                away_favorite,
+                home_favorite_at_open,
+                away_favorite_at_open,
+                details_text,
+            ),
+        )
+        row = cur.fetchone()
+        return cast("int", row["id"]) if row else None

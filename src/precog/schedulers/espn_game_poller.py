@@ -67,6 +67,7 @@ from precog.api_connectors.espn_client import (
     ESPNGameFull,
     ESPNTeamInfo,
     ESPNVenueInfo,
+    extract_espn_odds,
 )
 from precog.database.crud_operations import (
     LEAGUE_SPORT_CATEGORY,
@@ -75,6 +76,7 @@ from precog.database.crud_operations import (
     get_or_create_game,
     get_team_by_espn_id,
     update_game_result,
+    upsert_game_odds,
     upsert_game_state,
 )
 from precog.schedulers.base_poller import BasePoller
@@ -1186,10 +1188,116 @@ class ESPNGamePoller(BasePoller):
                     exc_info=True,
                 )
 
+        # Extract and upsert DraftKings odds (if available).
+        # Wrapped in try/except — odds failure NEVER blocks game state sync.
+        if game_id:
+            try:
+                self._extract_and_upsert_odds(
+                    game=game,
+                    game_id=game_id,
+                    league=league,
+                    game_date=game_date,
+                    home_team_code=home_team_info.get("team_code"),
+                    away_team_code=away_team_info.get("team_code"),
+                )
+            except Exception:
+                logger.warning(
+                    "Odds extraction failed for game_id=%s (non-blocking)",
+                    game_id,
+                    exc_info=True,
+                )
+
         # upsert returns None when skip_if_unchanged=True and no meaningful
         # state change was detected (score, period, status, situation unchanged).
         # Only count as "updated" when a new SCD row was actually created.
         return result_id is not None
+
+    def _extract_and_upsert_odds(
+        self,
+        game: ESPNGameFull,
+        game_id: int,
+        league: str,
+        game_date: Any | None = None,
+        home_team_code: str | None = None,
+        away_team_code: str | None = None,
+    ) -> None:
+        """Extract DraftKings odds from ESPN data and upsert to game_odds.
+
+        Called from _sync_game_to_db after game dimension upsert succeeds.
+        Uses extract_espn_odds() to parse the raw competition odds, then
+        upsert_game_odds() with SCD Type 2 versioning.
+
+        Args:
+            game: ESPNGameFull with metadata.odds populated
+            game_id: FK to games.id
+            league: League code (nfl, nba, etc.)
+            game_date: Game date for the odds row
+            home_team_code: Home team abbreviation
+            away_team_code: Away team abbreviation
+
+        Educational Note:
+            This is intentionally fire-and-forget. If ESPN doesn't provide
+            odds (some games don't have them), we silently skip. If parsing
+            fails, we log at debug level and move on. Game state sync is
+            always the priority.
+
+        Reference:
+            - Issue #533: ESPN DraftKings odds extraction
+        """
+        metadata = game.get("metadata", {})
+        odds_list = metadata.get("odds", [])
+        if not odds_list:
+            return
+
+        # Build a minimal competition-like dict for extract_espn_odds
+        fake_competition: dict[str, Any] = {"odds": odds_list}
+        parsed = extract_espn_odds(fake_competition)
+        if parsed is None:
+            return
+
+        # Map league to sport for the game_odds table
+        sport = LEAGUE_SPORT_CATEGORY.get(league, league)
+
+        # Upsert with SCD Type 2
+        resolved_date = (
+            game_date.date() if game_date is not None and hasattr(game_date, "date") else game_date
+        )
+        upsert_game_odds(
+            game_id=game_id,
+            sport=sport,
+            sportsbook="draftkings",
+            game_date=resolved_date,
+            home_team_code=home_team_code,
+            away_team_code=away_team_code,
+            spread_home_open=parsed.get("spread_home_open"),
+            spread_home_close=parsed.get("spread_home_close"),
+            spread_home_odds_open=parsed.get("spread_home_odds_open"),
+            spread_home_odds_close=parsed.get("spread_home_odds_close"),
+            spread_away_odds_open=parsed.get("spread_away_odds_open"),
+            spread_away_odds_close=parsed.get("spread_away_odds_close"),
+            moneyline_home_open=parsed.get("moneyline_home_open"),
+            moneyline_home_close=parsed.get("moneyline_home_close"),
+            moneyline_away_open=parsed.get("moneyline_away_open"),
+            moneyline_away_close=parsed.get("moneyline_away_close"),
+            total_open=parsed.get("total_open"),
+            total_close=parsed.get("total_close"),
+            over_odds_open=parsed.get("over_odds_open"),
+            over_odds_close=parsed.get("over_odds_close"),
+            under_odds_open=parsed.get("under_odds_open"),
+            under_odds_close=parsed.get("under_odds_close"),
+            home_favorite=parsed.get("home_favorite"),
+            away_favorite=parsed.get("away_favorite"),
+            home_favorite_at_open=parsed.get("home_favorite_at_open"),
+            away_favorite_at_open=parsed.get("away_favorite_at_open"),
+            details_text=parsed.get("details"),
+            source="espn_poller",
+        )
+
+        logger.debug(
+            "Odds upserted for game_id=%s: %s",
+            game_id,
+            parsed.get("details", "no details"),
+        )
 
     def _get_db_team_id(
         self, espn_team_id: str | None, league: str, team_code: str | None
