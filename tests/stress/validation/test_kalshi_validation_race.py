@@ -42,7 +42,7 @@ def create_market(index: int) -> dict[str, Any]:
         "yes_ask_dollars": Decimal("0.48"),
         "no_bid_dollars": Decimal("0.52"),
         "no_ask_dollars": Decimal("0.55"),
-        "volume": 1000,
+        "volume_fp": "1000.00",
     }
 
 

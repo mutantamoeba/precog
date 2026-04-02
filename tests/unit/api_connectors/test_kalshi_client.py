@@ -706,7 +706,7 @@ class TestKalshiErrorHandling:
                     "no_ask_dollars": "0.3750",
                     "last_price": 62,
                     "last_price_dollars": "0.6200",
-                    "volume": 1000,
+                    "volume_fp": "1000.00",
                 }
             ]
         }

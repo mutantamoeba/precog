@@ -70,7 +70,7 @@ class TestMalformedInputData:
             "ticker": 12345,  # Should be string - validator coerces for entity_id
             "status": "open",  # Valid string
             "yes_bid_dollars": "not a decimal",  # Should be Decimal - validator detects this
-            "volume": 1000,  # Use valid int to avoid comparison crash
+            "volume_fp": "1000.00",  # Use valid _fp string to avoid comparison crash
         }
         # Should not crash with these wrong types
         result = validator.validate_market_data(market)
@@ -155,7 +155,7 @@ class TestExtremeNumericValues:
         for volume in extreme_volumes:
             market = {
                 "ticker": "EXTREME-VOL",
-                "volume": volume,
+                "volume_fp": f"{volume}.00",
                 "status": "active",
             }
             result = validator.validate_market_data(market)

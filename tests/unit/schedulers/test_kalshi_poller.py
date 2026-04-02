@@ -1419,6 +1419,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         existing = {
@@ -1464,6 +1466,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         existing = {
@@ -1507,6 +1511,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         existing = {
@@ -1552,6 +1558,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         existing = {
@@ -1597,6 +1605,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("0.0000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         existing = {
@@ -1639,6 +1649,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("0.4000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         existing = {
@@ -1678,6 +1690,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         existing = {
@@ -1735,6 +1749,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         existing = {
@@ -1781,6 +1797,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         existing = {
@@ -1821,6 +1839,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("0.2000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         existing = {
@@ -1866,6 +1886,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("0.0000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         with (
@@ -1906,6 +1928,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("0.0000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         with (
@@ -1947,6 +1971,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("0.0000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         with (
@@ -1988,6 +2014,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("1.0000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         with (
@@ -2026,6 +2054,8 @@ class TestSettlementDetection:
             "no_ask_dollars": Decimal("0.4000"),
             "volume": 1500,
             "open_interest": 800,
+            "volume_fp": "1500.00",
+            "open_interest_fp": "800.00",
         }
 
         with (

@@ -43,8 +43,8 @@ def active_market_data() -> dict[str, Any]:
         "yes_ask_dollars": Decimal("0.48"),
         "no_bid_dollars": Decimal("0.52"),
         "no_ask_dollars": Decimal("0.55"),
-        "volume": 15000,
-        "open_interest": 8500,
+        "volume_fp": "15000.00",
+        "open_interest_fp": "8500.00",
         "last_price": Decimal("0.46"),
     }
 

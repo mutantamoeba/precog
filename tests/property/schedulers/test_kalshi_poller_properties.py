@@ -109,8 +109,8 @@ def market_data_strategy(draw: st.DrawFn) -> dict[str, Any]:
         "no_ask_dollars": no_price,
         "event_ticker": f"EVT-{ticker[:5]}",
         "series_ticker": draw(series_ticker_strategy()),
-        "volume": draw(st.integers(min_value=0, max_value=1000000)),
-        "open_interest": draw(st.integers(min_value=0, max_value=100000)),
+        "volume_fp": f"{draw(st.integers(min_value=0, max_value=1000000))}.00",
+        "open_interest_fp": f"{draw(st.integers(min_value=0, max_value=100000))}.00",
     }
 
 
