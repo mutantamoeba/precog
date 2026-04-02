@@ -53,8 +53,8 @@ def sample_market_data() -> list[dict[str, Any]]:
             "no_bid_dollars": Decimal("0.4525"),
             "event_ticker": "EVT-KC-BUF-2025",
             "series_ticker": "KXNFLGAME",
-            "volume": 15000,
-            "open_interest": 5000,
+            "volume_fp": "15000.00",
+            "open_interest_fp": "5000.00",
         },
         {
             "ticker": "KXNFLGAME-NFL-2025-01-15-DET-PHI",
@@ -66,8 +66,8 @@ def sample_market_data() -> list[dict[str, Any]]:
             "no_bid_dollars": Decimal("0.3925"),
             "event_ticker": "EVT-DET-PHI-2025",
             "series_ticker": "KXNFLGAME",
-            "volume": 22000,
-            "open_interest": 8000,
+            "volume_fp": "22000.00",
+            "open_interest_fp": "8000.00",
         },
     ]
 

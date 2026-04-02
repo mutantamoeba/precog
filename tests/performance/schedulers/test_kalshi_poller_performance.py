@@ -145,6 +145,8 @@ class TestKalshiMarketPollerPerformance:
                 "status": "open",
                 "volume": 1000 * i,
                 "open_interest": 500 * i,
+                "volume_fp": f"{1000 * i}.00",
+                "open_interest_fp": f"{500 * i}.00",
             }
             for i in range(100)
         ]

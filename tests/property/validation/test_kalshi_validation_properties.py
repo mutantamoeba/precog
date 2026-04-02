@@ -254,7 +254,7 @@ class TestMarketDataValidationProperties:
             "no_ask_dollars": Decimal("1") - actual_bid
             if actual_bid >= Decimal("0")
             else Decimal("1"),
-            "volume": volume,
+            "volume_fp": f"{volume}.00",
             "status": "open",
         }
 

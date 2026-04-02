@@ -240,7 +240,7 @@ class TestMarketDataWorkflows:
                     "yes_bid_dollars": "0.6400",
                     "no_ask_dollars": "0.3600",
                     "no_bid_dollars": "0.3500",
-                    "volume": 10000,
+                    "volume_fp": "10000.00",
                 }
             }
         )

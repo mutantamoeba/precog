@@ -499,7 +499,7 @@ class TestKalshiClientDecimalPrecision:
             "no_bid_dollars": "0.5000",
             "no_ask_dollars": "0.5000",
             "last_price_dollars": test_case["api_value"],
-            "volume": 1000,
+            "volume_fp": "1000.00",
         }
 
         mock_response = Mock()
@@ -1066,7 +1066,7 @@ class TestKalshiClientPagination:
                     "no_bid_dollars": "0.3900",
                     "no_ask_dollars": "0.4000",
                     "last_price_dollars": "0.6050",
-                    "volume": 1000,
+                    "volume_fp": "1000.00",
                 },
                 {
                     "ticker": "MARKET-2-YES",
@@ -1075,7 +1075,7 @@ class TestKalshiClientPagination:
                     "no_bid_dollars": "0.2900",
                     "no_ask_dollars": "0.3000",
                     "last_price_dollars": "0.7050",
-                    "volume": 2000,
+                    "volume_fp": "2000.00",
                 },
             ]
             # No "cursor" field = this is the only page
@@ -1115,7 +1115,7 @@ class TestKalshiClientPagination:
                     "no_bid_dollars": "0.3900",
                     "no_ask_dollars": "0.4000",
                     "last_price_dollars": "0.6050",
-                    "volume": 1000,
+                    "volume_fp": "1000.00",
                 },
                 {
                     "ticker": "MARKET-2-YES",
@@ -1124,7 +1124,7 @@ class TestKalshiClientPagination:
                     "no_bid_dollars": "0.2900",
                     "no_ask_dollars": "0.3000",
                     "last_price_dollars": "0.7050",
-                    "volume": 2000,
+                    "volume_fp": "2000.00",
                 },
             ],
             "cursor": "page2_token",  # More pages available
@@ -1142,7 +1142,7 @@ class TestKalshiClientPagination:
                     "no_bid_dollars": "0.1900",
                     "no_ask_dollars": "0.2000",
                     "last_price_dollars": "0.8050",
-                    "volume": 3000,
+                    "volume_fp": "3000.00",
                 },
             ]
             # No cursor = last page
@@ -1245,7 +1245,7 @@ class TestKalshiClientPagination:
                     "no_bid": "0.4900",
                     "no_ask": "0.5000",
                     "last_price": "0.5050",
-                    "volume": 1000,
+                    "volume_fp": "1000.00",
                 }
                 for i in range(1, 11)  # Exactly 10 markets
             ],

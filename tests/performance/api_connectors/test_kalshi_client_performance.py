@@ -145,7 +145,7 @@ class TestKalshiClientPerformance:
                     "no_ask_dollars": f"0.{51 - i % 50:02d}00",
                     "no_bid_dollars": f"0.{50 - i % 50:02d}00",
                     "last_price_dollars": f"0.{50 + i % 50:02d}00",
-                    "volume": 1000 + i,
+                    "volume_fp": f"{1000 + i}.00",
                 }
                 for i in range(100)
             ]
@@ -392,8 +392,8 @@ class TestKalshiClientPerformance:
                     "no_bid_dollars": "0.3500",
                     "last_price_dollars": "0.6450",
                     "previous_price_dollars": "0.6300",
-                    "volume": 10000,
-                    "open_interest": 5000,
+                    "volume_fp": "10000.00",
+                    "open_interest_fp": "5000.00",
                 }
                 for i in range(200)
             ]
