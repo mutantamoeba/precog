@@ -21,6 +21,7 @@ import pytest
 
 from precog.schedulers.kalshi_poller import (
     KalshiMarketPoller,
+    _clamp_non_negative,
     _parse_fp_int,
     create_kalshi_poller,
     run_single_kalshi_poll,
@@ -87,6 +88,40 @@ class TestParseFpInt:
         """Integer string without decimal point converts correctly."""
         market = {"volume_fp": "500"}
         assert _parse_fp_int(market, "volume_fp") == 500
+
+
+# =============================================================================
+# _clamp_non_negative Helper Tests (#542)
+# =============================================================================
+
+
+class TestClampNonNegative:
+    """Test the settlement clamp that prevents negative bid/ask sizes."""
+
+    @pytest.mark.unit
+    def test_positive_value_unchanged(self):
+        """Positive values pass through unmodified."""
+        assert _clamp_non_negative(50) == 50
+
+    @pytest.mark.unit
+    def test_zero_unchanged(self):
+        """Zero passes through unmodified."""
+        assert _clamp_non_negative(0) == 0
+
+    @pytest.mark.unit
+    def test_negative_clamped_to_zero(self):
+        """Negative values (Kalshi settlement artifact) are clamped to 0."""
+        assert _clamp_non_negative(-250589) == 0
+
+    @pytest.mark.unit
+    def test_none_preserved(self):
+        """None is preserved (field missing != value is zero)."""
+        assert _clamp_non_negative(None) is None
+
+    @pytest.mark.unit
+    def test_small_negative_clamped(self):
+        """Even small negatives are clamped."""
+        assert _clamp_non_negative(-1) == 0
 
 
 # =============================================================================

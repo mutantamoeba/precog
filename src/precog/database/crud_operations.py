@@ -9899,6 +9899,8 @@ def upsert_game_odds(
     away_favorite_at_open: bool | None = None,
     details_text: str | None = None,
     source: str = "espn_poller",
+    home_team_id: int | None = None,
+    away_team_id: int | None = None,
 ) -> int | None:
     """Upsert game odds with SCD Type 2 versioning.
 
@@ -10016,6 +10018,7 @@ def upsert_game_odds(
                 home_favorite, away_favorite,
                 home_favorite_at_open, away_favorite_at_open,
                 details_text,
+                home_team_id, away_team_id,
                 row_current_ind, row_start_ts, updated_at
             )
             VALUES (
@@ -10026,6 +10029,7 @@ def upsert_game_odds(
                 %s, %s, %s, %s, %s, %s,
                 %s, %s, %s, %s,
                 %s,
+                %s, %s,
                 TRUE, NOW(), NOW()
             )
             RETURNING id
@@ -10059,6 +10063,8 @@ def upsert_game_odds(
                 home_favorite_at_open,
                 away_favorite_at_open,
                 details_text,
+                home_team_id,
+                away_team_id,
             ),
         )
         row = cur.fetchone()
