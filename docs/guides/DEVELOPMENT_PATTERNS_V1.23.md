@@ -1,13 +1,19 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.26
+**Version:** 1.27
 **Created:** 2025-11-13
-**Last Updated:** 2026-03-28
+**Last Updated:** 2026-03-31
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.27:**
+- **Added Pattern 44: API Consumer Blast Radius (ALWAYS for API Field Name Fixes)**
+- When an API field name is wrong or changes, ALL consumers of the raw API dict must be audited
+- 5 consumer categories: ingestion, validation, display, types, tests
+- Real-world trigger: Kalshi `_fp` suffix bug — 5 fields NULL across 7,802 snapshots, blast radius: 10+ files
+- Related: S63 (spec-first), S64 (post-merge verify), S65 (test fixture staleness)
 **Changes in V1.26:**
 - **Updated Pattern 41: Added 7th capability — Alerts**
 - Alerts promoted from implicit (buried in Reporting/Logging) to explicit production-readiness requirement
@@ -9137,7 +9143,214 @@ logger.debug("[%s:%s] (occurrence #%d) %s", entity_type, entity_id, count, issue
 
 ---
 
-**END OF DEVELOPMENT_PATTERNS_V1.25.md**
+## Pattern 42: Add-Column Checklist (ALWAYS for Adding Columns to Existing Tables)
+
+**Severity:** HIGH — Missing a SELECT query causes silent data loss on fallback/read paths
+
+### Problem
+
+When adding columns to an existing table, developers naturally update the INSERT and
+UPDATE statements. But tables often have SELECT queries in *other functions* that feed
+data back to the write path (e.g., `get_current_market()` feeds fallback values to
+`update_market_with_versioning()`). If the SELECT doesn't include the new columns,
+the fallback logic returns None, silently overwriting real data with NULLs.
+
+Unit tests mask this because mocks can include keys the real query doesn't SELECT.
+
+### Real-World Trigger
+
+Session 33 (#513): Migration 0046 added 8 columns to markets + market_snapshots.
+INSERT and UPDATE statements were updated. But `get_current_market()` — which
+`update_market_with_versioning()` calls to get fallback values — was NOT updated.
+Result: `current.get("volume_24h")` always returned None, silently destroying
+enrichment data on every market update. Glokta caught it in code review; unit tests
+passed because mocks included the new keys.
+
+### Pattern: 6-Point Checklist
+
+When adding columns to an existing table, update ALL of:
+
+| # | What | Why | Easy to miss? |
+|---|------|-----|---------------|
+| 1 | **Migration** (ADD COLUMN) | Column must exist | No |
+| 2 | **INSERT statements** (create path) | New rows must include column | No |
+| 3 | **UPDATE statements** (update path) | Existing rows must include column | No |
+| 4 | **SELECT queries in OTHER functions** | Read paths that feed write paths | **YES** |
+| 5 | **Views** (CREATE OR REPLACE) | Views don't auto-inherit new columns | Sometimes |
+| 6 | **TypedDicts / type definitions** | API types must match schema | No |
+
+Step 4 is the dangerous one. Search for all functions that SELECT from the table
+and ask: "Does any other function use this result as input?" If yes, the SELECT
+must include the new columns.
+
+### Verification
+
+```bash
+# Find all SELECT queries from the table
+grep -n "SELECT.*FROM markets" src/precog/database/crud_operations.py
+# For each: does any caller use the result dict for fallback/merge logic?
+```
+
+### Cross-References
+
+- Pattern 18: SCD Column Preservation (related — SCD versioning operations)
+- Three-Tier Quality Model, Tier A: Code Path Audit
+- Session 33: Glokta review finding #76
+
+---
+
+## Pattern 43: Mock Schema Fidelity (ALWAYS for Dict-Returning Function Mocks)
+
+**Severity:** MEDIUM — Tests pass but production silently loses data
+
+### Problem
+
+When a test mocks a function that returns a dict (e.g., `get_current_market()`),
+the mock dict is hand-crafted by the test author. If the real function's SQL query
+doesn't SELECT a column, the real dict won't have that key — but the mock dict can.
+This means tests exercise code paths that production never reaches.
+
+This is distinct from the Mock Fidelity Rule (protocols.md) which covers *stateful*
+mock divergence in read-then-write loops. This pattern covers *schema* divergence
+between mock dicts and real query results.
+
+### Real-World Trigger
+
+Session 33 (#513): `TestUpdateMarketEnrichment` mocked `get_current_market` with
+`{"volume_24h": 150, "previous_yes_bid": Decimal("0.4800"), ...}`. The test for
+fallback preservation passed — `current.get("volume_24h")` returned 150 as expected.
+But the real `get_current_market()` didn't SELECT those columns, so in production
+`current.get("volume_24h")` would return None. The test validated logic that could
+never execute.
+
+### Pattern
+
+When mocking dict-returning database functions:
+
+1. **Derive mock dicts from the real query** — read the actual SELECT statement
+   and only include keys that the query returns.
+2. **If the mock needs a key the query doesn't return, that's a bug** — either
+   the query needs updating (Pattern 42) or the mock is wrong.
+3. **Consider a shared fixture** — define the "current market shape" once and
+   use it in both the query test and the consumer test.
+
+```python
+# RISKY: Hand-crafted mock with keys the real query may not return
+mock_get_current.return_value = {
+    "id": 42,
+    "yes_ask_price": Decimal("0.5000"),
+    "volume_24h": 150,  # Does get_current_market() actually SELECT this?
+}
+
+# SAFER: Document which query this mock represents
+# Mock matches get_current_market() SELECT as of migration 0046
+mock_get_current.return_value = {
+    # ... only keys that the real query returns
+}
+```
+
+### Cross-References
+
+- Mock Fidelity Rule (protocols.md) — covers stateful mock divergence
+- Pattern 42: Add-Column Checklist — the root cause this pattern catches downstream
+- Session 33: Glokta review finding #76, deployment log insight #74
+
+---
+
+## Pattern 44: API Consumer Blast Radius (ALWAYS for API Field Name Fixes)
+
+**Severity:** HIGH — Fixing only the primary ingestion path leaves validators, display, types, and tests silently broken
+
+### Problem
+
+When an external API field name is discovered to be wrong (typo, suffix mismatch, API evolution), developers naturally fix the primary ingestion code and stop. But the same raw API dictionary flows through multiple consumers — each one using `dict.get("field_name")`. Fixing the ingestion path without updating validators, display code, TypedDicts, and test fixtures leaves those consumers silently broken: they return `None` from `.get()`, skip their logic, and produce no errors.
+
+**Real-world trigger:** The Kalshi API returns integer fields with an `_fp` suffix as strings (e.g., `volume_fp: "8981763.00"`) but code read `market.get("volume")`. This caused:
+- **5 fields** (volume, open_interest, volume_24h, yes_bid_size, yes_ask_size) **always NULL** in 7,802+ market snapshots
+- **5 validator checks** silently inactive (negative volume, high volume, negative OI, ghost market, 24h>lifetime)
+- **CLI** showing volume=0 for every market
+- **TUI** showing volume=0 for every market
+- **TypedDict** field names not matching the actual API response
+- **30+ test fixtures** using old names — tests passed but exercised nothing
+
+The bug existed since the project began. No errors, no warnings, no test failures. Only querying the live DB (S64 trigger) revealed it.
+
+### Pattern: 5-Category Consumer Audit
+
+When an API field name is fixed or renamed, audit ALL consumers of the raw API dictionary:
+
+| # | Category | What to grep | Impact if missed |
+|---|----------|-------------|------------------|
+| 1 | **Ingestion** | Pollers, ETL, CRUD calls using `.get("field")` | Silent NULL data in DB |
+| 2 | **Validation** | Validators using `.get("field")` for cross-field checks | Validators skip checks — dead validation |
+| 3 | **Display** | CLI, TUI, dashboards using `.get("field", default)` | Always shows default value |
+| 4 | **Types** | TypedDict definitions with `field: type` | Type checker can't catch mismatches |
+| 5 | **Tests** | Fixtures with `"field": value` across ALL 8 test types | Tests pass but test nothing — dead tests |
+
+### Procedure
+
+```bash
+# Step 1: Find ALL references to the old field name
+grep -rn '"old_field"' src/ tests/
+
+# Step 2: Categorize each hit
+# - src/precog/schedulers/ → Ingestion
+# - src/precog/validation/ → Validation
+# - src/precog/cli/ or src/precog/tui/ → Display
+# - src/precog/api_connectors/types.py → Types
+# - tests/ → Tests
+
+# Step 3: Fix ALL 5 categories before shipping
+
+# Step 4: Fire S65 — check test fixtures for old names
+grep -rn '"old_field"' tests/unit/ tests/integration/ tests/e2e/ tests/property/
+```
+
+### Special Consideration: `_fp` Suffix Convention
+
+The Kalshi API uses `_fp` suffix for integer fields returned as strings:
+
+| API Field | Type | Example Value | Conversion |
+|-----------|------|---------------|------------|
+| `volume_fp` | string | `"8981763.00"` | `int(float(x))` |
+| `open_interest_fp` | string | `"4997871.00"` | `int(float(x))` |
+| `volume_24h_fp` | string | `"0.00"` | `int(float(x))` |
+| `yes_bid_size_fp` | string | `"24076.00"` | `int(float(x))` |
+| `yes_ask_size_fp` | string | `"0.00"` | `int(float(x))` |
+
+Note: `*_dollars` fields (prices) are also strings but use `Decimal()` conversion. The `_fp` fields are integer counts stored as float-formatted strings.
+
+### Anti-Patterns
+
+| Anti-Pattern | Problem | Fix |
+|-------------|---------|-----|
+| Fix poller, skip validator | Validator silently stops checking | Audit all 5 categories |
+| Fix code, skip TypedDict | Type checker can't catch future regressions | Update TypedDict to match live API |
+| Fix code, skip tests | Tests become dead — pass but test nothing | Fire S65 (test fixture staleness) |
+| Write TypedDict from API docs | Docs may use simplified names vs actual response | Verify against LIVE API response (S63) |
+| Trust `.get()` returns None = safe | None is valid for nullable columns | S64 catches it — query the live DB |
+
+### When This Pattern Applies
+
+- ANY fix to an API field name mismatch (wrong name, wrong suffix, wrong case)
+- ANY API evolution where field names change in a new version
+- ANY discovery that a TypedDict doesn't match the live API response
+- NOT needed for: adding entirely new fields (no old name to audit), internal-only renames
+
+### Cross-References
+
+- S63: Spec-first audit — verify TypedDict against live API BEFORE building
+- S64: Post-merge data verify — query live DB after deployment
+- S65: Test fixture staleness — check test fixtures for old field names after rename
+- Pattern 39: Verify External API Data Before Building Parsers
+- Pattern 42: Add-Column Checklist (related but for DB columns, not API fields)
+- Pattern 43: Mock Schema Fidelity (related — mocks must match real API shape)
+- Issue #536: First S65 firing — test fixture _fp updates
+- Session 34: Discovery, fix, and protocol hardening
+
+---
+
+**END OF DEVELOPMENT_PATTERNS_V1.27.md**
 
 ★ Insight ─────────────────────────────────────
 This extraction serves two critical purposes:
