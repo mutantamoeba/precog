@@ -22,7 +22,7 @@ Data Sources:
 Related:
     - ADR-106: Historical Data Collection Architecture
     - Issue #229: Expanded Historical Data Sources
-    - Migration 0007: historical_odds table
+    - Migration 0007: historical_odds table (renamed to game_odds in 0048)
 """
 
 from __future__ import annotations

@@ -38,7 +38,7 @@ from precog.database.crud_operations import (
     update_game_result,
     upsert_game_state,
 )
-from precog.database.seeding.historical_odds_loader import lookup_game_id
+from precog.database.seeding.game_odds_loader import lookup_game_id
 
 # =============================================================================
 # FIXTURES

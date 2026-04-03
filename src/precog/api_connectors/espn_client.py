@@ -42,9 +42,13 @@ Related Requirements:
 import logging
 import time
 from datetime import datetime, timedelta
-from typing import Any, ClassVar, TypedDict
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any, ClassVar, TypedDict, cast
 
 import requests
+
+if TYPE_CHECKING:
+    from precog.api_connectors.types import ESPNOddsData
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -167,6 +171,7 @@ class ESPNGameMetadata(TypedDict, total=False):
         season_type: Game type (preseason, regular, playoff, bowl, allstar)
         week_number: Week of the season (if applicable)
         attendance: Number of fans in attendance (from competition object)
+        odds: Raw odds list from competition for downstream extraction
 
     Reference: Phase 2 ESPN Data Model Plan
     """
@@ -181,6 +186,7 @@ class ESPNGameMetadata(TypedDict, total=False):
     season_type: str
     week_number: int | None
     attendance: int | None  # from competition.attendance; None if absent
+    odds: list[dict[str, Any]]  # raw odds from competition; empty list if absent
 
 
 class ESPNSituationData(TypedDict, total=False):
@@ -1023,6 +1029,7 @@ class ESPNClient:
                 ),
                 "week_number": event.get("week", {}).get("number"),
                 "attendance": competition.get("attendance"),
+                "odds": competition.get("odds", []),
             }
 
             # Parse status
@@ -1223,3 +1230,222 @@ class ESPNClient:
         """
         cutoff = datetime.now() - timedelta(hours=1)
         self.request_timestamps = [ts for ts in self.request_timestamps if ts > cutoff]
+
+
+# =============================================================================
+# ESPN Odds Parsing (standalone functions, no client state needed)
+# =============================================================================
+
+
+def parse_american_odds(odds_str: str | None) -> int | None:
+    """Parse American odds string to integer.
+
+    Args:
+        odds_str: String like "+130", "-155", or "EVEN"
+
+    Returns:
+        Integer odds value, or None if unparseable.
+        "+130" -> 130, "-155" -> -155, "EVEN" -> 100.
+
+    Educational Note:
+        American odds format:
+        - Positive (+130): bet $100 to win $130 (underdog)
+        - Negative (-155): bet $155 to win $100 (favorite)
+        - "EVEN" or "+100": 50/50 proposition
+    """
+    if odds_str is None:
+        return None
+    odds_str = odds_str.strip()
+    if not odds_str:
+        return None
+    if odds_str.upper() == "EVEN":
+        return 100
+    try:
+        return int(odds_str.replace("+", ""))
+    except (ValueError, TypeError):
+        return None
+
+
+def parse_spread_line(line_str: str | None) -> Decimal | None:
+    """Parse point spread line string to Decimal.
+
+    Args:
+        line_str: String like "+3.5", "-7.0", "0"
+
+    Returns:
+        Decimal value, or None if unparseable.
+        "+3.5" -> Decimal("3.5"), "-7.0" -> Decimal("-7.0").
+    """
+    if line_str is None:
+        return None
+    line_str = line_str.strip()
+    if not line_str:
+        return None
+    try:
+        return Decimal(line_str.replace("+", ""))
+    except Exception:
+        return None
+
+
+def parse_total_line(line_str: str | None) -> Decimal | None:
+    """Parse total (over/under) line string to Decimal.
+
+    Args:
+        line_str: String like "o224.5", "u224.5", "224.5"
+
+    Returns:
+        Decimal value with o/u prefix stripped.
+        "o224.5" -> Decimal("224.5"), "u224.5" -> Decimal("224.5").
+    """
+    if line_str is None:
+        return None
+    line_str = line_str.strip()
+    if not line_str:
+        return None
+    # Strip o/u prefix (ESPN format: "o224.5" for over, "u224.5" for under)
+    if line_str[0] in ("o", "u", "O", "U"):
+        line_str = line_str[1:]
+    try:
+        return Decimal(line_str)
+    except Exception:
+        return None
+
+
+def extract_espn_odds(competition: dict[str, Any]) -> "ESPNOddsData | None":
+    """Extract DraftKings odds from an ESPN competition dict.
+
+    Parses the odds array from a competition object, looking for
+    DraftKings (provider.id = "100") as the primary provider.
+
+    Args:
+        competition: ESPN competition dict (from events[0].competitions[0])
+
+    Returns:
+        ESPNOddsData dict if DraftKings odds found, None otherwise.
+
+    Educational Note:
+        ESPN embeds betting odds from DraftKings in the scoreboard response.
+        The structure is:
+        - competition.odds[0] -> first provider (usually DraftKings)
+        - odds.moneyline.home.close.odds -> "+130"
+        - odds.pointSpread.home.close.line -> "+3.5"
+        - odds.total.over.close.line -> "o224.5"
+
+    Reference:
+        - Issue #533: ESPN DraftKings odds extraction
+        - tests/cassettes/espn/espn_nba_scoreboard.yaml for real data
+    """
+    odds_list = competition.get("odds", [])
+    if not odds_list:
+        return None
+
+    # Find DraftKings provider (id "100")
+    odds = None
+    for provider_odds in odds_list:
+        provider = provider_odds.get("provider", {})
+        if provider.get("id") == "100":
+            odds = provider_odds
+            break
+
+    # Fall back to first provider if DraftKings not found
+    if odds is None:
+        odds = odds_list[0]
+
+    result: dict[str, Any] = {}
+
+    # Top-level fields
+    details = odds.get("details")
+    if details:
+        result["details"] = str(details)
+
+    spread_val = odds.get("spread")
+    if spread_val is not None:
+        try:
+            result["spread"] = Decimal(str(spread_val))
+        except Exception:
+            pass
+
+    over_under_val = odds.get("overUnder")
+    if over_under_val is not None:
+        try:
+            result["over_under"] = Decimal(str(over_under_val))
+        except Exception:
+            pass
+
+    # Moneyline
+    # Use `or {}` pattern for nested dicts — handles both missing keys AND
+    # explicit None values (ESPN sometimes returns {"home": None} instead of
+    # omitting the key). Plain .get("key", {}) only handles missing keys.
+    moneyline = odds.get("moneyline") or {}
+    if moneyline:
+        home_ml = moneyline.get("home") or {}
+        away_ml = moneyline.get("away") or {}
+
+        result["moneyline_home_close"] = parse_american_odds(
+            (home_ml.get("close") or {}).get("odds")
+        )
+        result["moneyline_home_open"] = parse_american_odds((home_ml.get("open") or {}).get("odds"))
+        result["moneyline_away_close"] = parse_american_odds(
+            (away_ml.get("close") or {}).get("odds")
+        )
+        result["moneyline_away_open"] = parse_american_odds((away_ml.get("open") or {}).get("odds"))
+
+    # Point spread
+    point_spread = odds.get("pointSpread") or {}
+    if point_spread:
+        home_ps = point_spread.get("home") or {}
+        away_ps = point_spread.get("away") or {}
+
+        result["spread_home_close"] = parse_spread_line((home_ps.get("close") or {}).get("line"))
+        result["spread_home_open"] = parse_spread_line((home_ps.get("open") or {}).get("line"))
+        result["spread_home_odds_close"] = parse_american_odds(
+            (home_ps.get("close") or {}).get("odds")
+        )
+        result["spread_home_odds_open"] = parse_american_odds(
+            (home_ps.get("open") or {}).get("odds")
+        )
+        result["spread_away_odds_close"] = parse_american_odds(
+            (away_ps.get("close") or {}).get("odds")
+        )
+        result["spread_away_odds_open"] = parse_american_odds(
+            (away_ps.get("open") or {}).get("odds")
+        )
+
+    # Total (over/under)
+    total = odds.get("total") or {}
+    if total:
+        over = total.get("over") or {}
+        under = total.get("under") or {}
+
+        result["total_close"] = parse_total_line((over.get("close") or {}).get("line"))
+        result["total_open"] = parse_total_line((over.get("open") or {}).get("line"))
+        result["over_odds_close"] = parse_american_odds((over.get("close") or {}).get("odds"))
+        result["over_odds_open"] = parse_american_odds((over.get("open") or {}).get("odds"))
+        result["under_odds_close"] = parse_american_odds((under.get("close") or {}).get("odds"))
+        result["under_odds_open"] = parse_american_odds((under.get("open") or {}).get("odds"))
+
+    # Favorite flags
+    home_odds = odds.get("homeTeamOdds") or {}
+    away_odds = odds.get("awayTeamOdds", {})
+
+    if home_odds:
+        fav = home_odds.get("favorite")
+        if fav is not None:
+            result["home_favorite"] = bool(fav)
+        fav_open = home_odds.get("favoriteAtOpen")
+        if fav_open is not None:
+            result["home_favorite_at_open"] = bool(fav_open)
+
+    if away_odds:
+        fav = away_odds.get("favorite")
+        if fav is not None:
+            result["away_favorite"] = bool(fav)
+        fav_open = away_odds.get("favoriteAtOpen")
+        if fav_open is not None:
+            result["away_favorite_at_open"] = bool(fav_open)
+
+    # Return None if we got no meaningful data
+    if len(result) == 0:
+        return None
+
+    return cast("ESPNOddsData", result)

@@ -490,3 +490,61 @@ class SeriesResponse(TypedDict):
 
     series: list[SeriesData]
     cursor: str | None
+
+
+# =============================================================================
+# ESPN Odds Types (DraftKings via ESPN Scoreboard API)
+# =============================================================================
+
+
+class ESPNOddsData(TypedDict, total=False):
+    """DraftKings odds from ESPN scoreboard API.
+
+    Available pre-game for NFL, NBA, NHL, NCAAB, NCAAF.
+    Provider is always DraftKings (provider.id = "100").
+
+    American odds: "+130" = bet $100 to win $130 (underdog).
+    "-155" = bet $155 to win $100 (favorite).
+    Stored as integers: +130 -> 130, -155 -> -155.
+
+    Point spreads and totals use Decimal for NUMERIC(5,1) precision,
+    consistent with the game_odds table column types.
+
+    Reference:
+        - Issue #533: ESPN DraftKings odds extraction
+        - Migration 0007: game_odds table schema
+        - Migration 0048: Rename + SCD Type 2
+    """
+
+    # Top-level fields from ESPN odds object
+    details: str  # "BOS -3.5" -- human-readable spread summary
+    spread: Decimal  # Numeric spread from API (absolute value)
+    over_under: Decimal  # Numeric total from API
+
+    # Moneyline (American odds as integers, parsed from strings like "+130")
+    moneyline_home_open: int
+    moneyline_home_close: int
+    moneyline_away_open: int
+    moneyline_away_close: int
+
+    # Point spread lines (as Decimal, parsed from strings like "+3.5")
+    spread_home_open: Decimal
+    spread_home_close: Decimal
+    spread_home_odds_open: int  # Odds on the spread (American format)
+    spread_home_odds_close: int
+    spread_away_odds_open: int
+    spread_away_odds_close: int
+
+    # Totals (as Decimal, parsed from strings like "o224.5")
+    total_open: Decimal
+    total_close: Decimal
+    over_odds_open: int
+    over_odds_close: int
+    under_odds_open: int
+    under_odds_close: int
+
+    # Favorite flags
+    home_favorite: bool
+    away_favorite: bool
+    home_favorite_at_open: bool
+    away_favorite_at_open: bool

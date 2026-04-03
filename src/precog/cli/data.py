@@ -748,9 +748,9 @@ def stats(
     # Odds statistics
     if show_all or data_type == "odds":
         try:
-            from precog.database.seeding import get_historical_odds_stats
+            from precog.database.seeding import get_game_odds_stats
 
-            stats = get_historical_odds_stats()
+            stats = get_game_odds_stats()
 
             console.print("[bold]Historical Odds:[/bold]")
             console.print(f"  Total records: {stats['total']:,}")
