@@ -93,6 +93,19 @@ def _parse_fp_int(market: Any, fp_field: str) -> int | None:
         return None
 
 
+def _clamp_non_negative(value: int | None) -> int | None:
+    """Clamp an integer to non-negative, preserving None.
+
+    Kalshi API returns negative bid/ask sizes when the order book is
+    dismantled at settlement. Negative depth is physically impossible.
+
+    Reference: Issue #542
+    """
+    if value is None:
+        return None
+    return max(0, value)
+
+
 class KalshiMarketPoller(BasePoller):
     """
     Kalshi market price polling service.
@@ -1238,8 +1251,9 @@ class KalshiMarketPoller(BasePoller):
                 previous_yes_bid=market.get("previous_yes_bid_dollars"),
                 previous_yes_ask=market.get("previous_yes_ask_dollars"),
                 previous_price=market.get("previous_price_dollars"),
-                yes_bid_size=_parse_fp_int(market, "yes_bid_size_fp"),
-                yes_ask_size=_parse_fp_int(market, "yes_ask_size_fp"),
+                # Clamp to 0: Kalshi returns negative depth at settlement (#542)
+                yes_bid_size=_clamp_non_negative(_parse_fp_int(market, "yes_bid_size_fp")),
+                yes_ask_size=_clamp_non_negative(_parse_fp_int(market, "yes_ask_size_fp")),
                 metadata={
                     k: v
                     for k, v in {
@@ -1328,8 +1342,9 @@ class KalshiMarketPoller(BasePoller):
                 previous_yes_bid=market.get("previous_yes_bid_dollars"),
                 previous_yes_ask=market.get("previous_yes_ask_dollars"),
                 previous_price=market.get("previous_price_dollars"),
-                yes_bid_size=_parse_fp_int(market, "yes_bid_size_fp"),
-                yes_ask_size=_parse_fp_int(market, "yes_ask_size_fp"),
+                # Clamp to 0: Kalshi returns negative depth at settlement (#542)
+                yes_bid_size=_clamp_non_negative(_parse_fp_int(market, "yes_bid_size_fp")),
+                yes_ask_size=_clamp_non_negative(_parse_fp_int(market, "yes_ask_size_fp")),
             )
             logger.debug(
                 "Updated market: %s (yes: %s -> %s)",

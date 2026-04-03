@@ -1199,6 +1199,8 @@ class ESPNGamePoller(BasePoller):
                     game_date=game_date,
                     home_team_code=home_team_info.get("team_code"),
                     away_team_code=away_team_info.get("team_code"),
+                    home_team_id=home_team_id,
+                    away_team_id=away_team_id,
                 )
             except Exception:
                 logger.warning(
@@ -1220,6 +1222,8 @@ class ESPNGamePoller(BasePoller):
         game_date: Any | None = None,
         home_team_code: str | None = None,
         away_team_code: str | None = None,
+        home_team_id: int | None = None,
+        away_team_id: int | None = None,
     ) -> None:
         """Extract DraftKings odds from ESPN data and upsert to game_odds.
 
@@ -1291,6 +1295,8 @@ class ESPNGamePoller(BasePoller):
             away_favorite_at_open=parsed.get("away_favorite_at_open"),
             details_text=parsed.get("details"),
             source="espn_poller",
+            home_team_id=home_team_id,
+            away_team_id=away_team_id,
         )
 
         logger.debug(
