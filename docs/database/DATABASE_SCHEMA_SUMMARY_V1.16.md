@@ -1,9 +1,45 @@
 # Database Schema Summary
 
+<!-- FRESHNESS: alembic_head=0048, verified=2026-04-03 -->
+
 ---
-**Version:** 1.15
-**Last Updated:** 2025-12-24
-**Status:** ✅ Current - Historical Data Seeding Infrastructure (Phase 2.7)
+**Version:** 1.16
+**Last Updated:** 2026-04-03
+**Status:** ✅ Current - Alembic head: migration 0048
+
+> **Note:** Migrations 0014-0043 are not yet documented in this summary. A comprehensive V2.0 rewrite is planned to cover the full schema evolution.
+
+**Changes in v1.16:**
+- **SCHEMA CLEANUP + ODDS INFRASTRUCTURE** (Migrations 0044-0048, 2026-03-28 to 2026-04-01)
+- **Migration 0044: Drop game_state_id column** (2026-03-28)
+  - Dropped redundant `game_state_id` VARCHAR(50) from `game_states` (always derived as `GS-{id}`)
+  - Dropped `idx_game_states_business_key` index
+  - Recreated `current_game_states` view without the dropped column
+- **Migration 0045: Create external_team_codes table** (2026-03-29)
+  - **NEW TABLE**: `external_team_codes` for persistent cross-platform team mapping
+  - Columns: id (PK), team_id (FK), source, source_team_code, league, confidence, verified_at, notes
+  - UNIQUE constraint on (source, source_team_code, league)
+  - Indexes: `idx_external_team_codes_team`, `idx_external_team_codes_source`
+  - **Use Case:** Multi-platform team identity resolution (Kalshi, ESPN, Polymarket)
+- **Migration 0046: Market depth and daily movement** (2026-03-30)
+  - `markets` table: Added `expiration_value` VARCHAR(100), `notional_value` DECIMAL(10,4)
+  - `market_snapshots` table: Added `volume_24h` INTEGER, `previous_yes_bid` DECIMAL(10,4), `previous_yes_ask` DECIMAL(10,4), `previous_price` DECIMAL(10,4), `yes_bid_size` INTEGER, `yes_ask_size` INTEGER
+  - Recreated `current_markets` view to include all new columns
+- **Migration 0047: Drop redundant event_id column** (2026-03-31)
+  - Dropped `event_id` VARCHAR(100) from `events` (identical to `external_id`, redundant since migration 0020)
+  - Dropped `uq_events_event_id` UNIQUE constraint
+- **Migration 0048: Rename historical_odds to game_odds** (2026-04-01)
+  - Renamed table `historical_odds` -> `game_odds`
+  - Renamed PK `historical_odds_id` -> `id`
+  - Added SCD Type 2 columns: `row_current_ind`, `row_start_ts`, `row_end_ts`
+  - Added `updated_at`, `details_text` VARCHAR(100)
+  - Added away spread columns: `spread_away_odds_open`, `spread_away_odds_close`
+  - Added under odds columns: `under_odds_open`, `under_odds_close`
+  - Added favorite flags: `home_favorite`, `away_favorite`, `home_favorite_at_open`, `away_favorite_at_open`
+  - Updated CHECK constraints (renamed `historical_odds_*` -> `game_odds_*`, added `espn_poller` source)
+  - Converted UNIQUE constraint to partial index `uq_game_odds_game_book` (SCD-compatible)
+  - Added indexes: `idx_game_odds_current`, `uq_game_odds_game_sportsbook_current`
+  - Renamed all `idx_historical_odds_*` indexes to `idx_game_odds_*`
 **Changes in v1.15:**
 - **HISTORICAL DATA SEEDING INFRASTRUCTURE**: Added Migration 0013 for Phase 2.7 model training data
 - **Migration 0013: Historical Data Enhancements** (Planned - Phase 2.7)

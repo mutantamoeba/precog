@@ -141,7 +141,7 @@ precog-repo/
 - `docs/guides/POSITION_MANAGER_USER_GUIDE_V1.1.md`
 
 **Database & API:**
-- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.15.md` - Complete schema
+- `docs/database/DATABASE_SCHEMA_SUMMARY_V1.16.md` - Complete schema
 - `docs/api-integration/API_INTEGRATION_GUIDE_V2.0.md`
 - `docs/api-integration/KALSHI_DECIMAL_PRICING_CHEAT_SHEET_V1.0.md` - CRITICAL reference
 
