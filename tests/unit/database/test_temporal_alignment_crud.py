@@ -22,7 +22,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_ledger import (
     _VALID_ALIGNMENT_QUALITIES,
     get_alignments_by_market,
     insert_temporal_alignment,

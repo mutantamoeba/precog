@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_historical import (
     get_historical_rankings,
     get_historical_stats,
     get_player_stats,

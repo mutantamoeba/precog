@@ -1883,7 +1883,7 @@ def matching_stats(
 
     try:
         from precog.database.connection import get_cursor
-        from precog.database.crud_operations import find_unlinked_sports_events
+        from precog.database.crud_game_states import find_unlinked_sports_events
 
         with get_cursor() as cursor:
             # Count linked vs unlinked events
@@ -2206,7 +2206,7 @@ def teams_refresh_cfbd(
 
     try:
         from precog.database.connection import fetch_all
-        from precog.database.crud_operations import update_team_classification
+        from precog.database.crud_elo import update_team_classification
         from precog.database.seeding.sources.sports.cfbd_adapter import CFBDSource
 
         # Step 1: Fetch from CFBD

@@ -138,7 +138,7 @@ class SchedulerControlScreen(BaseScreen):
             return
 
         try:
-            from precog.database.crud_operations import list_scheduler_services
+            from precog.database.crud_schedulers import list_scheduler_services
 
             services = list_scheduler_services(include_stale=True, stale_threshold_seconds=120)
 

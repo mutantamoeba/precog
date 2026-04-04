@@ -42,7 +42,10 @@ from typing import Any
 import requests
 
 from precog.database.connection import fetch_all, get_cursor
-from precog.database.crud_operations import create_team, get_team_by_espn_id
+from precog.database.crud_teams import (
+    create_team,
+    get_team_by_espn_id,
+)
 
 logger = logging.getLogger(__name__)
 

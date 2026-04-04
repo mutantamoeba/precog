@@ -69,15 +69,17 @@ from precog.api_connectors.espn_client import (
     ESPNVenueInfo,
     extract_espn_odds,
 )
-from precog.database.crud_operations import (
+from precog.database.crud_game_states import (
     LEAGUE_SPORT_CATEGORY,
-    create_venue,
     get_live_games,
     get_or_create_game,
-    get_team_by_espn_id,
     update_game_result,
     upsert_game_odds,
     upsert_game_state,
+)
+from precog.database.crud_teams import (
+    create_venue,
+    get_team_by_espn_id,
 )
 from precog.schedulers.base_poller import BasePoller
 

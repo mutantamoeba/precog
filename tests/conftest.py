@@ -124,7 +124,7 @@ from precog.database.connection import (  # noqa: E402
     get_environment,
     initialize_pool,
 )
-from precog.database.crud_operations import create_strategy  # noqa: E402
+from precog.database.crud_strategies import create_strategy  # noqa: E402
 from precog.utils.logger import setup_logging  # noqa: E402
 
 # =============================================================================
@@ -371,7 +371,7 @@ def clean_test_data(db_cursor):
 @pytest.fixture
 def sample_market_data(db_pool, clean_test_data):
     """Sample market data for testing."""
-    from precog.database.crud_operations import get_event
+    from precog.database.crud_events import get_event
 
     # Look up event surrogate PK (migration 0020: create_market uses integer FK)
     evt = get_event("TEST-EVT-NFL-KC-BUF")
@@ -738,7 +738,7 @@ def sample_market(db_pool, clean_test_data, sample_platform, sample_event) -> in
         Integer surrogate PK from markets(id) — post-migration 0021/0022.
     """
     from precog.database.connection import fetch_one
-    from precog.database.crud_operations import create_market
+    from precog.database.crud_markets import create_market
 
     # Look up event surrogate PK (migration 0020: events use integer FK)
     event_row = fetch_one("SELECT id FROM events WHERE external_id = 'HIGHTEST'")

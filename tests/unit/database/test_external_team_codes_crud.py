@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_teams import (
     create_external_team_code,
     delete_external_team_code,
     find_team_by_external_code,

@@ -22,16 +22,18 @@ from datetime import datetime
 import pytest
 
 from precog.database.connection import get_cursor
-from precog.database.crud_operations import (
+from precog.database.crud_game_states import (
     create_game_state,
-    create_team_ranking,
-    create_venue,
     get_current_game_state,
-    get_current_rankings,
     get_game_state_history,
     get_live_games,
-    get_venue_by_espn_id,
     upsert_game_state,
+)
+from precog.database.crud_teams import (
+    create_team_ranking,
+    create_venue,
+    get_current_rankings,
+    get_venue_by_espn_id,
 )
 
 # =============================================================================
@@ -488,7 +490,7 @@ class TestStateChangeDetectionPerformance:
         - Target: < 0.1ms per comparison (p95)
         - SLA: < 0.5ms per comparison (p99)
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 14,
@@ -533,7 +535,7 @@ class TestStateChangeDetectionPerformance:
         Benchmark:
         - Target: < 0.1ms per comparison (p95)
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 0,
@@ -587,7 +589,7 @@ class TestStateChangeDetectionPerformance:
         Benchmark:
         - Target: > 100,000 comparisons/sec
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 21,
@@ -623,7 +625,7 @@ class TestStateChangeDetectionPerformance:
         Benchmark:
         - Target: < 0.05ms per comparison (p95) - faster path
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         latencies = []
 

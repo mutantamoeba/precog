@@ -24,7 +24,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_analytics import (
     _VALID_ENTITY_TYPES,
     _VALID_RUN_STATUSES,
     _VALID_RUN_TYPES,

@@ -23,8 +23,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
-    VALID_SYSTEM_HEALTH_COMPONENTS,
+from precog.database.crud_shared import VALID_SYSTEM_HEALTH_COMPONENTS
+from precog.database.crud_system import (
     get_system_health,
     get_system_health_summary,
     upsert_system_health,

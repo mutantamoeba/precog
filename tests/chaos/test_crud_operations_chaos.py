@@ -25,13 +25,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_game_states import (
+    get_current_game_state,
+    upsert_game_state,
+)
+from precog.database.crud_teams import (
     create_team_ranking,
     create_venue,
-    get_current_game_state,
     get_current_rankings,
     get_venue_by_id,
-    upsert_game_state,
 )
 
 # =============================================================================
@@ -800,7 +802,7 @@ class TestGameStateChangedChaos:
             tracked yet. Any new state should be treated as a change to trigger
             the initial database insert.
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         result = game_state_changed(
             current=None,
@@ -823,7 +825,7 @@ class TestGameStateChangedChaos:
             yard_line, is_red_zone) - empty dict and None both have no values
             for these keys, so they're functionally identical.
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 0,
@@ -854,7 +856,7 @@ class TestGameStateChangedChaos:
             This ensures backward compatibility when ESPN adds new fields.
             When league is None/unknown, ALL fields are compared (safe fallback).
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 14,
@@ -892,7 +894,7 @@ class TestGameStateChangedChaos:
             (0-35) is a valid game outcome. The comparison should treat 0
             as a value, not as "missing data".
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 0,
@@ -933,7 +935,7 @@ class TestGameStateChangedChaos:
             ESPN API may return status in different cases. The comparison
             should be case-insensitive or normalized before comparison.
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 14,
@@ -965,7 +967,7 @@ class TestGameStateChangedChaos:
             - Period 5+: overtime periods
             All should be valid for comparison.
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 21,
@@ -1014,7 +1016,7 @@ class TestGameStateChangedChaos:
             When a game starts, situation data becomes available. This
             transition from None to a populated dict must be detected.
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 0,

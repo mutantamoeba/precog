@@ -24,36 +24,42 @@ import psycopg2.errors
 import pytest
 
 # Import functions to test
-from precog.database.crud_operations import (
+from precog.database.crud_events import (
+    _fill_event_null_fields,
+    get_or_create_event,
+)
+from precog.database.crud_game_states import (
     LEAGUE_SPORT_CATEGORY,
     TRACKED_SITUATION_KEYS,
-    _fill_event_null_fields,
     build_event_result,
     check_event_fully_settled,
     create_game_state,
-    create_market,
-    create_team,
-    create_team_ranking,
-    create_venue,
     find_game_by_matchup,
     game_state_changed,
     get_current_game_state,
-    get_current_rankings,
     get_game_state_history,
     get_games_by_date,
     get_live_games,
-    get_or_create_event,
     get_or_create_game,
+    update_event,
+    update_event_game_id,
+    update_game_result,
+    upsert_game_state,
+)
+from precog.database.crud_markets import (
+    create_market,
+    update_market_with_versioning,
+)
+from precog.database.crud_teams import (
+    create_team,
+    create_team_ranking,
+    create_venue,
+    get_current_rankings,
     get_team_by_espn_id,
     get_team_rankings,
     get_teams_with_kalshi_codes,
     get_venue_by_espn_id,
     get_venue_by_id,
-    update_event,
-    update_event_game_id,
-    update_game_result,
-    update_market_with_versioning,
-    upsert_game_state,
 )
 
 # =============================================================================
@@ -1528,7 +1534,7 @@ class TestUpsertSchedulerStatusUnit:
     @patch("precog.database.crud_schedulers.get_cursor")
     def test_upsert_scheduler_status_minimal_params(self, mock_get_cursor):
         """Test upsert with only required parameters (host_id, service_name)."""
-        from precog.database.crud_operations import upsert_scheduler_status
+        from precog.database.crud_schedulers import upsert_scheduler_status
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 1
@@ -1561,7 +1567,7 @@ class TestUpsertSchedulerStatusUnit:
             - config: JSON configuration
             - error_message: For failed status
         """
-        from precog.database.crud_operations import upsert_scheduler_status
+        from precog.database.crud_schedulers import upsert_scheduler_status
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 1
@@ -1591,7 +1597,7 @@ class TestUpsertSchedulerStatusUnit:
     @patch("precog.database.crud_schedulers.get_cursor")
     def test_upsert_scheduler_status_with_error(self, mock_get_cursor):
         """Test upsert with error message for failed status."""
-        from precog.database.crud_operations import upsert_scheduler_status
+        from precog.database.crud_schedulers import upsert_scheduler_status
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 1
@@ -1618,7 +1624,7 @@ class TestGetSchedulerStatusUnit:
     @patch("precog.database.crud_schedulers.fetch_one")
     def test_get_scheduler_status_found(self, mock_fetch_one):
         """Test get_scheduler_status returns service status when found."""
-        from precog.database.crud_operations import get_scheduler_status
+        from precog.database.crud_schedulers import get_scheduler_status
 
         mock_fetch_one.return_value = {
             "host_id": "DESKTOP-TEST",
@@ -1640,7 +1646,7 @@ class TestGetSchedulerStatusUnit:
     @patch("precog.database.crud_schedulers.fetch_one")
     def test_get_scheduler_status_not_found(self, mock_fetch_one):
         """Test get_scheduler_status returns None when service not found."""
-        from precog.database.crud_operations import get_scheduler_status
+        from precog.database.crud_schedulers import get_scheduler_status
 
         mock_fetch_one.return_value = None
 
@@ -1656,7 +1662,7 @@ class TestListSchedulerServicesUnit:
     @patch("precog.database.crud_schedulers.fetch_all")
     def test_list_scheduler_services_all(self, mock_fetch_all):
         """Test listing all scheduler services."""
-        from precog.database.crud_operations import list_scheduler_services
+        from precog.database.crud_schedulers import list_scheduler_services
 
         mock_fetch_all.return_value = [
             {"host_id": "HOST-1", "service_name": "espn", "status": "running"},
@@ -1672,7 +1678,7 @@ class TestListSchedulerServicesUnit:
     @patch("precog.database.crud_schedulers.fetch_all")
     def test_list_scheduler_services_by_host(self, mock_fetch_all):
         """Test filtering services by host_id."""
-        from precog.database.crud_operations import list_scheduler_services
+        from precog.database.crud_schedulers import list_scheduler_services
 
         mock_fetch_all.return_value = [
             {"host_id": "HOST-1", "service_name": "espn", "status": "running"},
@@ -1690,7 +1696,7 @@ class TestListSchedulerServicesUnit:
     @patch("precog.database.crud_schedulers.fetch_all")
     def test_list_scheduler_services_by_status(self, mock_fetch_all):
         """Test filtering services by status."""
-        from precog.database.crud_operations import list_scheduler_services
+        from precog.database.crud_schedulers import list_scheduler_services
 
         mock_fetch_all.return_value = [
             {"host_id": "HOST-1", "service_name": "espn", "status": "running"},
@@ -1713,7 +1719,7 @@ class TestListSchedulerServicesUnit:
             status is 'running' but last_heartbeat is >2 minutes old, the
             service likely crashed without graceful shutdown.
         """
-        from precog.database.crud_operations import list_scheduler_services
+        from precog.database.crud_schedulers import list_scheduler_services
 
         mock_fetch_all.return_value = [
             {"host_id": "HOST-1", "service_name": "espn", "status": "running", "is_stale": False},
@@ -1737,7 +1743,7 @@ class TestCleanupStaleSchedulersUnit:
     @patch("precog.database.crud_schedulers.get_cursor")
     def test_cleanup_stale_schedulers_marks_as_failed(self, mock_get_cursor):
         """Test that stale services are marked as failed."""
-        from precog.database.crud_operations import cleanup_stale_schedulers
+        from precog.database.crud_schedulers import cleanup_stale_schedulers
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 2  # 2 stale services cleaned up
@@ -1755,7 +1761,7 @@ class TestCleanupStaleSchedulersUnit:
     @patch("precog.database.crud_schedulers.get_cursor")
     def test_cleanup_stale_schedulers_by_host(self, mock_get_cursor):
         """Test cleanup only affects specified host."""
-        from precog.database.crud_operations import cleanup_stale_schedulers
+        from precog.database.crud_schedulers import cleanup_stale_schedulers
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 1
@@ -1775,7 +1781,7 @@ class TestCleanupStaleSchedulersUnit:
     @patch("precog.database.crud_schedulers.get_cursor")
     def test_cleanup_stale_schedulers_no_stale_services(self, mock_get_cursor):
         """Test cleanup when no stale services exist."""
-        from precog.database.crud_operations import cleanup_stale_schedulers
+        from precog.database.crud_schedulers import cleanup_stale_schedulers
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 0  # No stale services
@@ -1794,7 +1800,7 @@ class TestDeleteSchedulerStatusUnit:
     @patch("precog.database.crud_schedulers.get_cursor")
     def test_delete_scheduler_status_found(self, mock_get_cursor):
         """Test delete returns True when record found and deleted."""
-        from precog.database.crud_operations import delete_scheduler_status
+        from precog.database.crud_schedulers import delete_scheduler_status
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 1
@@ -1811,7 +1817,7 @@ class TestDeleteSchedulerStatusUnit:
     @patch("precog.database.crud_schedulers.get_cursor")
     def test_delete_scheduler_status_not_found(self, mock_get_cursor):
         """Test delete returns False when record not found."""
-        from precog.database.crud_operations import delete_scheduler_status
+        from precog.database.crud_schedulers import delete_scheduler_status
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 0  # No record deleted

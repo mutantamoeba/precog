@@ -96,9 +96,8 @@ MODULE_TIERS = {
     "analytics/elo_computation_service": "experimental",  # Phase 2C: Elo computation orchestration
     "trading/strategy_manager": "business",
     "trading/position_manager": "business",
-    # Data Operations
-    "database/crud_operations": "business",
-    # CRUD Phase 1a extractions (session 37) — promote to business when individual test suites built
+    # Data Operations — domain modules (Phase 1a-1c extraction, session 37-38)
+    # crud_operations.py deleted; imports go to domain modules directly
     "database/crud_shared": "experimental",
     "database/crud_ledger": "experimental",
     "database/crud_account": "experimental",

@@ -35,13 +35,15 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import pytest
 
 from precog.database.connection import get_cursor
-from precog.database.crud_operations import (
+from precog.database.crud_game_states import (
     create_game_state,
-    create_venue,
     get_current_game_state,
     get_game_state_history,
-    get_venue_by_espn_id,
     upsert_game_state,
+)
+from precog.database.crud_teams import (
+    create_venue,
+    get_venue_by_espn_id,
 )
 
 # Import stress testcontainers fixtures
@@ -743,7 +745,7 @@ class TestStateChangeDetectionStress:
         - Consistent results across all comparisons
         - No memory issues with repeated comparisons
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         # Base current state
         current = {
@@ -803,7 +805,7 @@ class TestStateChangeDetectionStress:
         - Consistent behavior with varying dict sizes
         - No memory accumulation from dict operations
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         base_situation = {
             "down": 1,
@@ -856,7 +858,7 @@ class TestStateChangeDetectionStress:
         - None handling is consistent under load
         - Always returns True for None current (new game)
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         true_count = 0
         for i in range(50):
@@ -882,7 +884,7 @@ class TestStateChangeDetectionStress:
         - No race conditions in comparison logic
         - Consistent results across threads
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 21,
@@ -983,7 +985,7 @@ class TestStateChangeDetectionRace:
         - All threads get consistent results
         - No segfaults or dict corruption
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         # Shared current state (read-only in practice)
         current = {
@@ -1042,7 +1044,7 @@ class TestStateChangeDetectionRace:
         - No cross-thread interference
         - Each thread gets correct result for its comparison
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 10,
@@ -1126,7 +1128,7 @@ class TestStateChangeDetectionRace:
         - Dict comparison is atomic from caller's perspective
         - No partial dict reads/corruption
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         base_situation = {
             "down": 3,
@@ -1199,7 +1201,7 @@ class TestStateChangeDetectionRace:
         - None handling is thread-safe
         - All threads correctly detect new game state
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         results = {"all_true": 0, "not_true": 0, "errors": []}
         lock = threading.Lock()

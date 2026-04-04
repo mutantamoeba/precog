@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_analytics import (
     create_edge,
     get_edge_lifecycle,
     get_edges_by_strategy,

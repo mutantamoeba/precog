@@ -36,16 +36,16 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from precog.database.connection import get_connection, release_connection
-from precog.database.crud_operations import (
+from precog.database.crud_positions import (
     close_position as crud_close_position,
 )
-from precog.database.crud_operations import (
+from precog.database.crud_positions import (
     create_position as crud_create_position,
 )
-from precog.database.crud_operations import (
+from precog.database.crud_positions import (
     get_current_positions,
 )
-from precog.database.crud_operations import (
+from precog.database.crud_positions import (
     update_position_price as crud_update_position_price,
 )
 from precog.utils.logger import get_logger

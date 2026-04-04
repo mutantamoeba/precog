@@ -158,7 +158,7 @@ def health(
     checks_total += 1
     console.print("Checking persistent component health...", end=" ")
     try:
-        from precog.database.crud_operations import get_system_health
+        from precog.database.crud_system import get_system_health
 
         health_records = get_system_health()
         if health_records:

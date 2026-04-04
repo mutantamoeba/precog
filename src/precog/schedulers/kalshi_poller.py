@@ -47,20 +47,24 @@ from typing import Any, ClassVar, cast
 
 from precog.api_connectors.kalshi_client import KalshiClient
 from precog.api_connectors.types import ProcessedMarketData, SeriesData
-from precog.database.crud_operations import (
-    build_event_result,
-    check_event_fully_settled,
-    count_open_markets,
-    create_alert,
-    create_market,
-    get_current_market,
+from precog.database.crud_events import (
     get_or_create_event,
     get_or_create_series,
+)
+from precog.database.crud_game_states import (
+    build_event_result,
+    check_event_fully_settled,
     update_bracket_counts,
     update_event,
     update_event_game_id,
+)
+from precog.database.crud_markets import (
+    count_open_markets,
+    create_market,
+    get_current_market,
     update_market_with_versioning,
 )
+from precog.database.crud_system import create_alert
 from precog.matching.event_game_matcher import EventGameMatcher
 from precog.schedulers.base_poller import BasePoller
 from precog.validation.kalshi_validation import KalshiDataValidator

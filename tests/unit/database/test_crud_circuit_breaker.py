@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_system import (
     create_circuit_breaker_event,
     get_active_breakers,
     resolve_circuit_breaker,

@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_ledger import (
     _VALID_REFERENCE_TYPES,
     _VALID_TRANSACTION_TYPES,
     create_ledger_entry,

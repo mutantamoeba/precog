@@ -601,7 +601,7 @@ class TestLoadFromExternalCodes:
     dependencies. The patch target is precog.database.crud_operations.
     """
 
-    @patch("precog.database.crud_operations.get_external_team_codes")
+    @patch("precog.database.crud_teams.get_external_team_codes")
     def test_load_from_external_codes_resolves_mismatches(self, mock_get_codes) -> None:
         """External codes correctly map Kalshi mismatches (JAC->JAX, LA->LAR)."""
 
@@ -625,7 +625,7 @@ class TestLoadFromExternalCodes:
         assert registry.resolve_kalshi_to_espn("NE", "nfl") == "NE"
         assert registry.resolve_kalshi_to_espn("KC", "nfl") == "KC"
 
-    @patch("precog.database.crud_operations.get_external_team_codes")
+    @patch("precog.database.crud_teams.get_external_team_codes")
     def test_load_from_external_codes_builds_kalshi_codes_set(self, mock_get_codes) -> None:
         """get_kalshi_codes returns all Kalshi codes after external load."""
 
@@ -651,8 +651,8 @@ class TestLoadFromExternalCodes:
         assert "JAX" not in codes
         assert "LAR" not in codes
 
-    @patch("precog.database.crud_operations.get_teams_with_kalshi_codes")
-    @patch("precog.database.crud_operations.get_external_team_codes")
+    @patch("precog.database.crud_teams.get_teams_with_kalshi_codes")
+    @patch("precog.database.crud_teams.get_external_team_codes")
     def test_fallback_to_legacy_when_external_empty(self, mock_get_codes, mock_get_teams) -> None:
         """Falls back to teams table when external_team_codes is empty."""
         # External codes return empty
@@ -668,8 +668,8 @@ class TestLoadFromExternalCodes:
         assert registry.resolve_kalshi_to_espn("JAC", "nfl") == "JAX"
         mock_get_teams.assert_called_once()
 
-    @patch("precog.database.crud_operations.get_teams_with_kalshi_codes")
-    @patch("precog.database.crud_operations.get_external_team_codes")
+    @patch("precog.database.crud_teams.get_teams_with_kalshi_codes")
+    @patch("precog.database.crud_teams.get_external_team_codes")
     def test_fallback_to_legacy_on_exception(self, mock_get_codes, mock_get_teams) -> None:
         """Falls back to teams table when external_team_codes raises an error."""
         mock_get_codes.side_effect = Exception("Table does not exist")
@@ -682,7 +682,7 @@ class TestLoadFromExternalCodes:
         assert registry.is_loaded
         assert registry.resolve_kalshi_to_espn("JAC", "nfl") == "JAX"
 
-    @patch("precog.database.crud_operations.get_external_team_codes")
+    @patch("precog.database.crud_teams.get_external_team_codes")
     def test_external_code_without_espn_mapping(self, mock_get_codes) -> None:
         """Kalshi code without ESPN mapping uses Kalshi code as team_code."""
         # Kalshi code exists but no ESPN mapping for team_id=99
@@ -712,7 +712,7 @@ class TestLoadFromExternalCodes:
         # XYZ should resolve to XYZ (same code, no mismatch)
         assert registry.resolve_kalshi_to_espn("XYZ", "nfl") == "XYZ"
 
-    @patch("precog.database.crud_operations.get_external_team_codes")
+    @patch("precog.database.crud_teams.get_external_team_codes")
     def test_load_clears_unknown_codes(self, mock_get_codes) -> None:
         """Loading from external codes clears the unknown_codes_seen set."""
 
@@ -733,7 +733,7 @@ class TestLoadFromExternalCodes:
         registry.load_from_external_codes(source="kalshi")
         assert len(registry.unknown_codes_seen) == 0
 
-    @patch("precog.database.crud_operations.get_external_team_codes")
+    @patch("precog.database.crud_teams.get_external_team_codes")
     def test_load_sets_last_loaded_at(self, mock_get_codes) -> None:
         """Loading from external codes sets last_loaded_at."""
 
@@ -764,7 +764,7 @@ class TestLoadAutoFallback:
     to the legacy teams table approach when needed.
     """
 
-    @patch("precog.database.crud_operations.get_external_team_codes")
+    @patch("precog.database.crud_teams.get_external_team_codes")
     def test_load_tries_external_first(self, mock_get_codes) -> None:
         """load() attempts external_team_codes before legacy."""
 
@@ -785,8 +785,8 @@ class TestLoadAutoFallback:
         # External codes were used (not legacy)
         mock_get_codes.assert_called()
 
-    @patch("precog.database.crud_operations.get_teams_with_kalshi_codes")
-    @patch("precog.database.crud_operations.get_external_team_codes")
+    @patch("precog.database.crud_teams.get_teams_with_kalshi_codes")
+    @patch("precog.database.crud_teams.get_external_team_codes")
     def test_load_falls_back_when_external_empty(self, mock_get_codes, mock_get_teams) -> None:
         """load() falls back to legacy when external table is empty."""
         mock_get_codes.return_value = []
@@ -799,8 +799,8 @@ class TestLoadAutoFallback:
         assert registry.resolve_kalshi_to_espn("JAC", "nfl") == "JAX"
         mock_get_teams.assert_called_once()
 
-    @patch("precog.database.crud_operations.get_teams_with_kalshi_codes")
-    @patch("precog.database.crud_operations.get_external_team_codes")
+    @patch("precog.database.crud_teams.get_teams_with_kalshi_codes")
+    @patch("precog.database.crud_teams.get_external_team_codes")
     def test_load_falls_back_on_error(self, mock_get_codes, mock_get_teams) -> None:
         """load() falls back to legacy when external table errors."""
         mock_get_codes.side_effect = Exception("relation does not exist")

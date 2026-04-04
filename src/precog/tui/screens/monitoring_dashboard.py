@@ -324,7 +324,7 @@ class MonitoringDashboardScreen(BaseScreen):
             Tuple of (status, details, running_count, total_count)
         """
         try:
-            from precog.database.crud_operations import list_scheduler_services
+            from precog.database.crud_schedulers import list_scheduler_services
 
             services = list_scheduler_services(include_stale=True, stale_threshold_seconds=120)
 
@@ -483,16 +483,8 @@ class MonitoringDashboardScreen(BaseScreen):
         positions_count = "N/A"
         orders_count = "N/A"
 
-        try:
-            from precog.database.crud_operations import (
-                get_open_orders_count,
-                get_open_positions_count,
-            )
-
-            positions_count = str(get_open_positions_count())
-            orders_count = str(get_open_orders_count())
-        except (ImportError, Exception):
-            pass
+        # TODO: Implement get_open_positions_count / get_open_orders_count
+        # These functions don't exist yet — placeholders for Phase 2.
 
         metrics = [
             ("DB Connection", "Connected", "-", "-", "-"),

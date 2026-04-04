@@ -22,7 +22,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_ledger import (
     _VALID_TAKER_SIDES,
     get_latest_trade_time,
     get_market_trades,
