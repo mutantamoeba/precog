@@ -12,7 +12,7 @@ Educational Note:
     needing to test "does the CLI output look correct?".
 
 Reference:
-    docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md - Complete schema documentation
+    docs/database/DATABASE_SCHEMA_SUMMARY.md - Complete schema documentation
     main.py:db_init() - CLI command that uses these functions
 """
 
@@ -263,7 +263,7 @@ def validate_critical_tables(required_tables: list[str] | None = None) -> list[s
         All critical tables exist
 
     Reference:
-        docs/database/DATABASE_SCHEMA_SUMMARY_V1.16.md - Complete table documentation
+        docs/database/DATABASE_SCHEMA_SUMMARY.md - Complete table documentation
     """
     from precog.database.connection import fetch_all
 

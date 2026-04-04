@@ -154,24 +154,33 @@ class TestValidateCriticalTablesIntegration:
 
         missing = validate_critical_tables()
 
-        # Should check 8 default tables
-        assert mock_fetch.call_count == 8
+        # Should check 17 default tables (expanded session 37, C18 finding JC-7)
+        assert mock_fetch.call_count == 17
         assert missing == []
 
     # Unit test - mock OK (tests missing table reporting logic)
     @patch("precog.database.connection.fetch_all")
     def test_reports_missing_tables(self, mock_fetch: MagicMock) -> None:
         """Verify missing tables are correctly reported."""
-        # Alternate between exists and missing
+        # Alternate between exists and missing (17 tables total)
         mock_fetch.side_effect = [
             [{"exists": True}],  # platforms
             [{"exists": False}],  # series - missing
             [{"exists": True}],  # events
             [{"exists": False}],  # markets - missing
+            [{"exists": True}],  # market_snapshots
+            [{"exists": True}],  # games
+            [{"exists": True}],  # game_states
+            [{"exists": True}],  # game_odds
+            [{"exists": True}],  # teams
+            [{"exists": True}],  # external_team_codes
+            [{"exists": True}],  # edges
+            [{"exists": True}],  # orders
             [{"exists": True}],  # strategies
             [{"exists": True}],  # probability_models
             [{"exists": True}],  # positions
             [{"exists": True}],  # trades
+            [{"exists": True}],  # account_balance
         ]
 
         missing = validate_critical_tables()

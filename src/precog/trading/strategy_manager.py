@@ -19,7 +19,7 @@ References:
     - ADR-018: Immutable Strategy Versions
     - ADR-019: Semantic Versioning for Strategies
     - docs/guides/VERSIONING_GUIDE_V1.0.md
-    - docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md (strategies table with strategy_type/domain fields)
+    - docs/database/DATABASE_SCHEMA_SUMMARY.md (strategies table with strategy_type/domain fields)
 
 Phase: 1.5 (Foundation Validation)
 """
@@ -127,7 +127,7 @@ class StrategyManager:
 
     References:
         - docs/guides/VERSIONING_GUIDE_V1.0.md - Complete versioning patterns
-        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.8.md - strategies table schema
+        - docs/database/DATABASE_SCHEMA_SUMMARY.md - strategies table schema
     """
 
     def __init__(self):

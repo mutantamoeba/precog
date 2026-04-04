@@ -253,7 +253,7 @@ def create_settlement(
     Related:
         - REQ-SYS-003: Decimal Precision for All Prices
         - Pattern 1 in CLAUDE.md: Decimal Precision
-        - Settlements table schema: database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+        - Settlements table schema: database/DATABASE_SCHEMA_SUMMARY.md
     """
     if not isinstance(payout, Decimal):
         raise ValueError(f"Payout must be Decimal, got {type(payout).__name__}")

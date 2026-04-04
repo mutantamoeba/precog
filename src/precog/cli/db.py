@@ -17,7 +17,7 @@ Usage:
 
 Related:
     - Issue #204: CLI Refactor
-    - docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+    - docs/database/DATABASE_SCHEMA_SUMMARY.md
     - docs/planning/CLI_REFACTOR_COMPREHENSIVE_PLAN_V1.0.md Section 4.2.4
 """
 

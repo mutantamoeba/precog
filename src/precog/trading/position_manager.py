@@ -24,7 +24,7 @@ References:
     - ADR-089: Dual-Key Schema Pattern (positions use surrogate id + business key)
     - docs/guides/POSITION_MANAGEMENT_GUIDE_V1.0.md
     - docs/guides/TRAILING_STOP_GUIDE_V1.0.md
-    - docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md (positions table)
+    - docs/database/DATABASE_SCHEMA_SUMMARY.md (positions table)
 
 Phase: 1.5 (Foundation Validation)
 """
@@ -143,7 +143,7 @@ class PositionManager:
 
     References:
         - docs/guides/POSITION_MANAGEMENT_GUIDE_V1.0.md - Complete position management patterns
-        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md - positions table schema (dual-key structure)
+        - docs/database/DATABASE_SCHEMA_SUMMARY.md - positions table schema (dual-key structure)
     """
 
     def __init__(self):

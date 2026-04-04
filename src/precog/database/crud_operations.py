@@ -250,7 +250,7 @@ trade_id = create_trade(
 )
 ```
 
-Reference: docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+Reference: docs/database/DATABASE_SCHEMA_SUMMARY.md
 Related Requirements: REQ-DB-003 (SCD Type 2 Versioning)
 Related ADR: ADR-019 (Historical Data Versioning Strategy)
 Related Guide: docs/guides/VERSIONING_GUIDE_V1.0.md
@@ -353,7 +353,7 @@ def get_series(series_id: str) -> dict[str, Any] | None:
         SELECT * FROM series WHERE 'Football' = ANY(tags)
 
     Reference:
-        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+        - docs/database/DATABASE_SCHEMA_SUMMARY.md
         - src/precog/api_connectors/kalshi_client.py (get_series, get_sports_series)
         - Migration 0019: Added surrogate PK, demoted series_id to business key
     """
@@ -523,7 +523,7 @@ def create_series(
         SELECT * FROM series WHERE 'Football' = ANY(tags)
 
     Reference:
-        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+        - docs/database/DATABASE_SCHEMA_SUMMARY.md
         - Migration 0010: Added tags column with GIN index
         - Migration 0019: Added surrogate PK (id SERIAL)
     """
@@ -861,7 +861,7 @@ def create_event(
         a market for a non-existent event.
 
     Reference:
-        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+        - docs/database/DATABASE_SCHEMA_SUMMARY.md
         - Migration 0019: events.series_internal_id replaces events.series_id
         - Migration 0020: events.id SERIAL PK, markets.event_internal_id INTEGER FK
         - Migration 0038: events.game_id FK to games(id)
