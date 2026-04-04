@@ -98,6 +98,11 @@ MODULE_TIERS = {
     "trading/position_manager": "business",
     # Data Operations
     "database/crud_operations": "business",
+    # CRUD Phase 1a extractions (session 37) — promote to business when individual test suites built
+    "database/crud_shared": "experimental",
+    "database/crud_ledger": "experimental",
+    "database/crud_account": "experimental",
+    "database/crud_orders": "experimental",
     "database/seeding/seeding_manager": "business",
     "database/seeding/historical_elo_loader": "business",
     # Batch Result Types (Issue #255) - Experimental until full test suite built
@@ -124,6 +129,8 @@ MODULE_TIERS = {
     "database/seeding/cache_config": "experimental",
     "database/seeding/epa_seeder": "experimental",
     "database/seeding/kalshi_historical_cache": "experimental",
+    # Game odds loader (session 36 ESPN odds)
+    "database/seeding/game_odds_loader": "experimental",
     # CFBD adapter for team classification (#486)
     "database/seeding/sources/sports/cfbd_adapter": "experimental",
     # Matching module (#462) — event-game linking (promote to business when test suite expands)
