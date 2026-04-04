@@ -37,6 +37,7 @@ TRACKED_SITUATION_KEYS: dict[str, list[str]] = {
         "home_win_probability",
     ],
     "hockey": [
+        "last_play",
         "home_powerplay",
         "away_powerplay",
         "home_win_probability",
