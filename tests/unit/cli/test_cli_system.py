@@ -179,7 +179,7 @@ class TestSystemHealthCheck5:
     displays component-level health status in the CLI.
     """
 
-    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.crud_system.get_system_health")
     @patch("precog.database.connection.get_cursor")
     def test_all_components_healthy(self, mock_cursor, mock_get_health, cli_runner):
         """When all components are healthy, Check 5 shows OK."""
@@ -194,7 +194,7 @@ class TestSystemHealthCheck5:
         output = strip_ansi(result.stdout).lower()
         assert "2 components" in output
 
-    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.crud_system.get_system_health")
     @patch("precog.database.connection.get_cursor")
     def test_some_components_down(self, mock_cursor, mock_get_health, cli_runner):
         """When a component is down, Check 5 shows UNHEALTHY."""
@@ -210,7 +210,7 @@ class TestSystemHealthCheck5:
         assert "unhealthy" in output
         assert "1 down" in output
 
-    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.crud_system.get_system_health")
     @patch("precog.database.connection.get_cursor")
     def test_degraded_only(self, mock_cursor, mock_get_health, cli_runner):
         """When components are degraded (but none down), shows DEGRADED."""
@@ -224,7 +224,7 @@ class TestSystemHealthCheck5:
         output = strip_ansi(result.stdout).lower()
         assert "degraded" in output
 
-    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.crud_system.get_system_health")
     @patch("precog.database.connection.get_cursor")
     def test_no_health_records(self, mock_cursor, mock_get_health, cli_runner):
         """When system_health table is empty, shows OK with explanation."""
@@ -236,7 +236,7 @@ class TestSystemHealthCheck5:
         output = strip_ansi(result.stdout).lower()
         assert "no health data yet" in output
 
-    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.crud_system.get_system_health")
     @patch("precog.database.connection.get_cursor")
     def test_db_exception_handled(self, mock_cursor, mock_get_health, cli_runner):
         """When get_system_health raises, Check 5 reports FAILED gracefully."""
@@ -248,7 +248,7 @@ class TestSystemHealthCheck5:
         output = strip_ansi(result.stdout).lower()
         assert "failed" in output
 
-    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.crud_system.get_system_health")
     @patch("precog.database.connection.get_cursor")
     def test_verbose_shows_detail_table(self, mock_cursor, mock_get_health, cli_runner):
         """Verbose mode shows per-component detail table."""

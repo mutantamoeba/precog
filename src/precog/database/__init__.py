@@ -1,10 +1,16 @@
 """
 Database package for Precog trading system.
+
 Uses raw SQL queries with psycopg2 for PostgreSQL interaction.
+CRUD operations live in domain-specific modules (crud_*.py).
+Import directly from the domain module, not from this package.
+
+Example:
+    from precog.database.crud_markets import create_market
+    from precog.database.crud_teams import get_team_by_espn_id
+    from precog.database.connection import get_cursor
 
 Environment Safety (Issue #161):
-    This module exports environment safety functions for preventing
-    accidental operations against production databases:
     - get_environment(): Detect current environment
     - require_environment(): Enforce specific environment
     - protect_dangerous_operation(): Guard DROP/TRUNCATE/DELETE
@@ -22,96 +28,14 @@ from .connection import (
     protect_dangerous_operation,
     require_environment,
 )
-from .crud_operations import (
-    VALID_SYSTEM_HEALTH_COMPONENTS,
-    ExecutionEnvironment,
-    SystemHealthComponent,
-    close_position,
-    create_account_balance,
-    create_alert,
-    create_game_state,
-    create_market,
-    create_order,
-    create_position,
-    create_settlement,
-    create_strategy,
-    create_team,
-    create_team_ranking,
-    create_trade,
-    create_venue,
-    get_current_game_state,
-    get_current_market,
-    get_current_positions,
-    get_current_rankings,
-    get_game_state_history,
-    get_games_by_date,
-    get_latest_orderbook,
-    get_live_games,
-    get_market_history,
-    get_markets_summary,
-    get_orderbook_history,
-    get_recent_trades,
-    get_strategy_by_name_and_version,
-    get_team_rankings,
-    get_trades_by_market,
-    get_venue_by_espn_id,
-    get_venue_by_id,
-    insert_orderbook_snapshot,
-    update_account_balance_with_versioning,
-    update_bracket_counts,
-    update_market_with_versioning,
-    update_position_price,
-    upsert_game_state,
-    upsert_system_health,
-)
 
 __all__ = [
-    "VALID_SYSTEM_HEALTH_COMPONENTS",
-    "ExecutionEnvironment",
-    "SystemHealthComponent",
-    "close_position",
-    "create_account_balance",
-    "create_alert",
-    "create_game_state",
-    "create_market",
-    "create_order",
-    "create_position",
-    "create_settlement",
-    "create_strategy",
-    "create_team",
-    "create_team_ranking",
-    "create_trade",
-    "create_venue",
     "execute_query",
     "fetch_all",
     "fetch_one",
     "get_connection",
-    "get_current_game_state",
-    "get_current_market",
-    "get_current_positions",
-    "get_current_rankings",
     "get_cursor",
     "get_environment",
-    "get_game_state_history",
-    "get_games_by_date",
-    "get_latest_orderbook",
-    "get_live_games",
-    "get_market_history",
-    "get_markets_summary",
-    "get_orderbook_history",
-    "get_recent_trades",
-    "get_strategy_by_name_and_version",
-    "get_team_rankings",
-    "get_trades_by_market",
-    "get_venue_by_espn_id",
-    "get_venue_by_id",
-    "insert_orderbook_snapshot",
     "protect_dangerous_operation",
     "require_environment",
-    "update_account_balance_with_versioning",
-    "update_bracket_counts",
-    "update_market_with_versioning",
-    "update_position_price",
-    "upsert_game_state",
-    "upsert_system_health",
 ]

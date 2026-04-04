@@ -911,7 +911,7 @@ kelly_fraction = config['kelly_fraction']
 - **`docs/guides/CONFIGURATION_GUIDE_V3.1.md`** - YAML configuration reference
 - **`docs/guides/VERSIONING_GUIDE_V1.0.md`** - Strategy/model versioning patterns
 - **`docs/guides/POSITION_MANAGEMENT_GUIDE_V1.0.md`** - Position lifecycle management
-- **`docs/guides/DEVELOPMENT_PATTERNS_V1.23.md`** - Critical development patterns
+- **`docs/guides/DEVELOPMENT_PATTERNS_V1.27.md`** - Critical development patterns
 
 ### **Requirements**
 - **Model Manager**: REQ-MODEL-001 through REQ-MODEL-005

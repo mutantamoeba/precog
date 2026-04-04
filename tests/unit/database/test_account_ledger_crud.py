@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_ledger import (
     _VALID_REFERENCE_TYPES,
     _VALID_TRANSACTION_TYPES,
     create_ledger_entry,
@@ -62,7 +62,7 @@ def _default_ledger_kwargs():
 class TestCreateLedgerEntry:
     """Unit tests for create_ledger_entry function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_create_ledger_entry_returns_surrogate_id(self, mock_get_cursor):
         """Test create_ledger_entry returns the integer surrogate PK."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -72,7 +72,7 @@ class TestCreateLedgerEntry:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_create_ledger_entry_validates_decimal_amount(self, mock_get_cursor):
         """Test that float values are rejected for amount."""
         _mock_cursor_context(mock_get_cursor)
@@ -83,7 +83,7 @@ class TestCreateLedgerEntry:
         with pytest.raises(TypeError, match="amount must be Decimal"):
             create_ledger_entry(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_create_ledger_entry_validates_decimal_running_balance(self, mock_get_cursor):
         """Test that float values are rejected for running_balance."""
         _mock_cursor_context(mock_get_cursor)
@@ -94,7 +94,7 @@ class TestCreateLedgerEntry:
         with pytest.raises(TypeError, match="running_balance must be Decimal"):
             create_ledger_entry(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_create_ledger_entry_validates_transaction_type(self, mock_get_cursor):
         """Test that invalid transaction_type values are rejected."""
         _mock_cursor_context(mock_get_cursor)
@@ -105,7 +105,7 @@ class TestCreateLedgerEntry:
         with pytest.raises(ValueError, match="transaction_type must be one of"):
             create_ledger_entry(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_create_ledger_entry_validates_reference_type(self, mock_get_cursor):
         """Test that invalid reference_type values are rejected."""
         _mock_cursor_context(mock_get_cursor)
@@ -116,7 +116,7 @@ class TestCreateLedgerEntry:
         with pytest.raises(ValueError, match="reference_type must be one of"):
             create_ledger_entry(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_create_ledger_entry_allows_none_reference_type(self, mock_get_cursor):
         """Test that reference_type=None is accepted (not validated)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -129,7 +129,7 @@ class TestCreateLedgerEntry:
 
         assert result == 2
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_create_ledger_entry_validates_running_balance_non_negative(self, mock_get_cursor):
         """Test that negative running_balance is rejected."""
         _mock_cursor_context(mock_get_cursor)
@@ -140,7 +140,7 @@ class TestCreateLedgerEntry:
         with pytest.raises(ValueError, match="running_balance must be >= 0"):
             create_ledger_entry(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_create_ledger_entry_allows_zero_running_balance(self, mock_get_cursor):
         """Test that running_balance=0 is accepted (boundary value)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -155,7 +155,7 @@ class TestCreateLedgerEntry:
 
         assert result == 10
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_create_ledger_entry_allows_negative_amount(self, mock_get_cursor):
         """Test that negative amounts are allowed (withdrawals, fees)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -169,7 +169,7 @@ class TestCreateLedgerEntry:
 
         assert result == 3
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_create_ledger_entry_with_all_optional_fields(self, mock_get_cursor):
         """Test create_ledger_entry with every optional parameter provided."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -189,7 +189,7 @@ class TestCreateLedgerEntry:
 
         assert result == 99
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_create_ledger_entry_accepts_all_valid_transaction_types(self, mock_get_cursor):
         """Test that every valid transaction_type is accepted."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -201,7 +201,7 @@ class TestCreateLedgerEntry:
             result = create_ledger_entry(**kwargs)
             assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_create_ledger_entry_accepts_all_valid_reference_types(self, mock_get_cursor):
         """Test that every valid reference_type is accepted."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -224,7 +224,7 @@ class TestCreateLedgerEntry:
 class TestGetLedgerEntries:
     """Unit tests for get_ledger_entries function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_get_ledger_entries_returns_empty_list(self, mock_fetch_all):
         """Test that empty result set returns empty list."""
         mock_fetch_all.return_value = []
@@ -238,7 +238,7 @@ class TestGetLedgerEntries:
         with pytest.raises(ValueError, match="transaction_type must be one of"):
             get_ledger_entries("kalshi", transaction_type="refund")
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_get_ledger_entries_returns_list(self, mock_fetch_all):
         """Test that result is a list of dicts."""
         mock_fetch_all.return_value = [
@@ -251,7 +251,7 @@ class TestGetLedgerEntries:
         assert len(result) == 2
         assert result[0]["id"] == 1
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_get_ledger_entries_filters_by_type(self, mock_fetch_all):
         """Test filtering by transaction_type."""
         mock_fetch_all.return_value = []
@@ -263,7 +263,7 @@ class TestGetLedgerEntries:
         assert "transaction_type = %s" in query
         assert "fee" in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_get_ledger_entries_filters_by_since(self, mock_fetch_all):
         """Test filtering by since datetime."""
         mock_fetch_all.return_value = []
@@ -276,7 +276,7 @@ class TestGetLedgerEntries:
         assert "created_at >= %s" in query
         assert cutoff in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_get_ledger_entries_respects_limit(self, mock_fetch_all):
         """Test that custom limit is applied."""
         mock_fetch_all.return_value = []
@@ -286,7 +286,7 @@ class TestGetLedgerEntries:
         params = mock_fetch_all.call_args[0][1]
         assert 25 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_get_ledger_entries_default_limit(self, mock_fetch_all):
         """Test that default limit of 100 is applied."""
         mock_fetch_all.return_value = []
@@ -296,7 +296,7 @@ class TestGetLedgerEntries:
         params = mock_fetch_all.call_args[0][1]
         assert 100 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_get_ledger_entries_orders_by_created_at_desc(self, mock_fetch_all):
         """Test that query orders by created_at DESC."""
         mock_fetch_all.return_value = []
@@ -306,7 +306,7 @@ class TestGetLedgerEntries:
         query = mock_fetch_all.call_args[0][0]
         assert "ORDER BY created_at DESC, id DESC" in query
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_get_ledger_entries_combines_filters(self, mock_fetch_all):
         """Test combining transaction_type and since filters."""
         mock_fetch_all.return_value = []
@@ -328,7 +328,7 @@ class TestGetLedgerEntries:
 class TestGetRunningBalance:
     """Unit tests for get_running_balance function."""
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_ledger.fetch_one")
     def test_get_running_balance_returns_decimal(self, mock_fetch_one):
         """Test that running_balance is returned as Decimal from latest entry."""
         mock_fetch_one.return_value = {"running_balance": Decimal("1500.0000")}
@@ -338,7 +338,7 @@ class TestGetRunningBalance:
         assert result == Decimal("1500.0000")
         assert isinstance(result, Decimal)
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_ledger.fetch_one")
     def test_get_running_balance_returns_none_when_empty(self, mock_fetch_one):
         """Test that None is returned when no ledger entries exist."""
         mock_fetch_one.return_value = None
@@ -347,7 +347,7 @@ class TestGetRunningBalance:
 
         assert result is None
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_ledger.fetch_one")
     def test_get_running_balance_queries_latest_entry(self, mock_fetch_one):
         """Test that query orders by created_at DESC LIMIT 1."""
         mock_fetch_one.return_value = {"running_balance": Decimal("1000.0000")}
@@ -358,7 +358,7 @@ class TestGetRunningBalance:
         assert "ORDER BY created_at DESC, id DESC" in query
         assert "LIMIT 1" in query
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_ledger.fetch_one")
     def test_get_running_balance_filters_by_platform(self, mock_fetch_one):
         """Test that query filters by platform_id."""
         mock_fetch_one.return_value = {"running_balance": Decimal("1000.0000")}

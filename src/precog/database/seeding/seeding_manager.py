@@ -55,10 +55,10 @@ from typing import Any, ClassVar, TypedDict
 
 from precog.api_connectors.espn_client import ESPNAPIError, ESPNClient
 from precog.database.connection import get_cursor
-from precog.database.crud_operations import (
+from precog.database.crud_game_states import upsert_game_state
+from precog.database.crud_teams import (
     create_venue,
     get_team_by_espn_id,
-    upsert_game_state,
 )
 
 # Set up logging

@@ -172,7 +172,7 @@ class TeamCodeRegistry:
             league: Optional league filter. If None, loads all leagues.
         """
         # Import here to avoid circular imports at module level
-        from precog.database.crud_operations import get_teams_with_kalshi_codes
+        from precog.database.crud_teams import get_teams_with_kalshi_codes
 
         teams = get_teams_with_kalshi_codes(league=league)
         collisions = self._build_cache(teams, league)
@@ -218,7 +218,7 @@ class TeamCodeRegistry:
             (caller should fall back to legacy load).
         """
         try:
-            from precog.database.crud_operations import get_external_team_codes
+            from precog.database.crud_teams import get_external_team_codes
 
             # Get all codes for the requested source
             kalshi_codes = get_external_team_codes(source=source, league=league)

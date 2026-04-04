@@ -24,7 +24,7 @@ References:
     - ADR-089: Dual-Key Schema Pattern (positions use surrogate id + business key)
     - docs/guides/POSITION_MANAGEMENT_GUIDE_V1.0.md
     - docs/guides/TRAILING_STOP_GUIDE_V1.0.md
-    - docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md (positions table)
+    - docs/database/DATABASE_SCHEMA_SUMMARY.md (positions table)
 
 Phase: 1.5 (Foundation Validation)
 """
@@ -36,16 +36,16 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 
 from precog.database.connection import get_connection, release_connection
-from precog.database.crud_operations import (
+from precog.database.crud_positions import (
     close_position as crud_close_position,
 )
-from precog.database.crud_operations import (
+from precog.database.crud_positions import (
     create_position as crud_create_position,
 )
-from precog.database.crud_operations import (
+from precog.database.crud_positions import (
     get_current_positions,
 )
-from precog.database.crud_operations import (
+from precog.database.crud_positions import (
     update_position_price as crud_update_position_price,
 )
 from precog.utils.logger import get_logger
@@ -143,7 +143,7 @@ class PositionManager:
 
     References:
         - docs/guides/POSITION_MANAGEMENT_GUIDE_V1.0.md - Complete position management patterns
-        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.9.md - positions table schema (dual-key structure)
+        - docs/database/DATABASE_SCHEMA_SUMMARY.md - positions table schema (dual-key structure)
     """
 
     def __init__(self):

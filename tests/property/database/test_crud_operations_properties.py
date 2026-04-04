@@ -13,7 +13,7 @@ import pytest
 from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
-from precog.database.crud_operations import (
+from precog.database.crud_game_states import (
     LEAGUE_SPORT_CATEGORY,
     TRACKED_SITUATION_KEYS,
     game_state_changed,

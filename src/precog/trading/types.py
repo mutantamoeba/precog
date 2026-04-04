@@ -76,7 +76,7 @@ class StrategyResponse(TypedDict):
     References:
         - REQ-VER-001: Immutable Version Configs
         - REQ-VER-002: Semantic Versioning
-        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md (strategies table)
+        - docs/database/DATABASE_SCHEMA_SUMMARY.md (strategies table)
     """
 
     strategy_id: int  # Primary key (surrogate)
@@ -286,7 +286,7 @@ class ModelResponse(TypedDict):
     References:
         - REQ-VER-001: Immutable Version Configs
         - REQ-VER-002: Semantic Versioning
-        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md (probability_models table)
+        - docs/database/DATABASE_SCHEMA_SUMMARY.md (probability_models table)
     """
 
     model_id: int  # Primary key

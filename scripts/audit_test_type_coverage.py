@@ -96,8 +96,24 @@ MODULE_TIERS = {
     "analytics/elo_computation_service": "experimental",  # Phase 2C: Elo computation orchestration
     "trading/strategy_manager": "business",
     "trading/position_manager": "business",
-    # Data Operations
-    "database/crud_operations": "business",
+    # Data Operations — domain modules (Phase 1a-1c extraction, session 37-38)
+    # crud_operations.py deleted; imports go to domain modules directly
+    "database/crud_shared": "experimental",
+    "database/crud_ledger": "experimental",
+    "database/crud_account": "experimental",
+    "database/crud_orders": "experimental",
+    # CRUD Phase 1b/1c extractions (session 38) — promote to business when individual test suites built
+    "database/crud_events": "experimental",
+    "database/crud_markets": "experimental",
+    "database/crud_positions": "experimental",
+    "database/crud_strategies": "experimental",
+    "database/crud_teams": "experimental",
+    "database/crud_game_states": "experimental",
+    "database/crud_historical": "experimental",
+    "database/crud_schedulers": "experimental",
+    "database/crud_elo": "experimental",
+    "database/crud_system": "experimental",
+    "database/crud_analytics": "experimental",
     "database/seeding/seeding_manager": "business",
     "database/seeding/historical_elo_loader": "business",
     # Batch Result Types (Issue #255) - Experimental until full test suite built
@@ -124,6 +140,8 @@ MODULE_TIERS = {
     "database/seeding/cache_config": "experimental",
     "database/seeding/epa_seeder": "experimental",
     "database/seeding/kalshi_historical_cache": "experimental",
+    # Game odds loader (session 36 ESPN odds)
+    "database/seeding/game_odds_loader": "experimental",
     # CFBD adapter for team classification (#486)
     "database/seeding/sources/sports/cfbd_adapter": "experimental",
     # Matching module (#462) — event-game linking (promote to business when test suite expands)

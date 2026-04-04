@@ -114,7 +114,7 @@ def balance(
         # Store in database (Phase 1.5+)
         if not dry_run:
             try:
-                from precog.database.crud_operations import update_account_balance_with_versioning
+                from precog.database.crud_account import update_account_balance_with_versioning
 
                 balance_id = update_account_balance_with_versioning(
                     platform_id="kalshi",

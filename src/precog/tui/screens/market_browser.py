@@ -185,7 +185,7 @@ class MarketBrowserScreen(BaseScreen):
 
         try:
             # Try to fetch from database
-            from precog.database.crud_operations import get_markets_summary
+            from precog.database.crud_markets import get_markets_summary
 
             markets = get_markets_summary(
                 sport=None if sport == "all" else sport,

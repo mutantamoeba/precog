@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_system import (
     create_circuit_breaker_event,
     get_active_breakers,
     resolve_circuit_breaker,
@@ -36,7 +36,7 @@ from precog.database.crud_operations import (
 class TestCreateCircuitBreakerEvent:
     """Unit tests for create_circuit_breaker_event with mocked database."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_create_event_returns_event_id(self, mock_get_cursor: MagicMock) -> None:
         """Test creating a circuit breaker event returns the new event_id."""
         mock_cursor = MagicMock()
@@ -54,7 +54,7 @@ class TestCreateCircuitBreakerEvent:
         mock_get_cursor.assert_called_once_with(commit=True)
         mock_cursor.execute.assert_called_once()
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_create_event_without_optional_params(self, mock_get_cursor: MagicMock) -> None:
         """Test creating event with only breaker_type (no trigger_value or notes)."""
         mock_cursor = MagicMock()
@@ -72,7 +72,7 @@ class TestCreateCircuitBreakerEvent:
         assert params[1] is None  # trigger_value JSON
         assert params[2] is None  # notes
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_create_event_serializes_trigger_value(self, mock_get_cursor: MagicMock) -> None:
         """Test that trigger_value dict is serialized to JSON."""
         mock_cursor = MagicMock()
@@ -93,7 +93,7 @@ class TestCreateCircuitBreakerEvent:
         assert parsed["component"] == "kalshi_api"
         assert parsed["error_count"] == 15
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_create_event_returns_none_on_no_result(self, mock_get_cursor: MagicMock) -> None:
         """Test returns None if fetchone returns None (unexpected DB issue)."""
         mock_cursor = MagicMock()
@@ -115,7 +115,7 @@ class TestCreateCircuitBreakerEvent:
 class TestResolveCircuitBreaker:
     """Unit tests for resolve_circuit_breaker with mocked database."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_resolve_active_breaker_returns_true(self, mock_get_cursor: MagicMock) -> None:
         """Test resolving an active breaker returns True."""
         mock_cursor = MagicMock()
@@ -131,7 +131,7 @@ class TestResolveCircuitBreaker:
         assert result is True
         mock_get_cursor.assert_called_once_with(commit=True)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_resolve_already_resolved_returns_false(self, mock_get_cursor: MagicMock) -> None:
         """Test resolving an already-resolved breaker returns False."""
         mock_cursor = MagicMock()
@@ -143,7 +143,7 @@ class TestResolveCircuitBreaker:
 
         assert result is False
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_resolve_without_action(self, mock_get_cursor: MagicMock) -> None:
         """Test resolving with no resolution_action passes None."""
         mock_cursor = MagicMock()
@@ -168,7 +168,7 @@ class TestResolveCircuitBreaker:
 class TestGetActiveBreakers:
     """Unit tests for get_active_breakers with mocked database."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_system.fetch_all")
     def test_get_all_active_breakers(self, mock_fetch_all: MagicMock) -> None:
         """Test fetching all active breakers without filter."""
         mock_fetch_all.return_value = [
@@ -184,7 +184,7 @@ class TestGetActiveBreakers:
         call_args = mock_fetch_all.call_args
         assert len(call_args[0]) == 1  # Just the query, no params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_system.fetch_all")
     def test_get_active_breakers_by_type(self, mock_fetch_all: MagicMock) -> None:
         """Test fetching active breakers filtered by type."""
         mock_fetch_all.return_value = [
@@ -198,7 +198,7 @@ class TestGetActiveBreakers:
         call_args = mock_fetch_all.call_args
         assert call_args[0][1] == ("data_stale",)
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_system.fetch_all")
     def test_get_active_breakers_empty(self, mock_fetch_all: MagicMock) -> None:
         """Test returns empty list when no active breakers exist."""
         mock_fetch_all.return_value = []

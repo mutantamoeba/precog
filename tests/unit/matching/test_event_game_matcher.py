@@ -129,8 +129,8 @@ class TestMatchEvent:
 class TestBackfillUnlinkedEvents:
     """Tests for EventGameMatcher.backfill_unlinked_events()."""
 
-    @patch("precog.database.crud_operations.update_event_game_id")
-    @patch("precog.database.crud_operations.find_unlinked_sports_events")
+    @patch("precog.database.crud_game_states.update_event_game_id")
+    @patch("precog.database.crud_game_states.find_unlinked_sports_events")
     def test_backfill_links_events(
         self,
         mock_find_unlinked: MagicMock,
@@ -161,8 +161,8 @@ class TestBackfillUnlinkedEvents:
         assert count == 2
         assert mock_update.call_count == 2
 
-    @patch("precog.database.crud_operations.update_event_game_id")
-    @patch("precog.database.crud_operations.find_unlinked_sports_events")
+    @patch("precog.database.crud_game_states.update_event_game_id")
+    @patch("precog.database.crud_game_states.find_unlinked_sports_events")
     def test_backfill_no_unlinked(
         self,
         mock_find_unlinked: MagicMock,
@@ -177,8 +177,8 @@ class TestBackfillUnlinkedEvents:
         assert count == 0
         mock_update.assert_not_called()
 
-    @patch("precog.database.crud_operations.update_event_game_id")
-    @patch("precog.database.crud_operations.find_unlinked_sports_events")
+    @patch("precog.database.crud_game_states.update_event_game_id")
+    @patch("precog.database.crud_game_states.find_unlinked_sports_events")
     def test_backfill_partial_match(
         self,
         mock_find_unlinked: MagicMock,

@@ -1,9 +1,9 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.27
+**Version:** 1.28
 **Created:** 2025-11-13
-**Last Updated:** 2026-03-31
+**Last Updated:** 2026-04-03
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
@@ -8741,7 +8741,7 @@ last_trading_price = history[-2]['yes_price']  # Second-to-last row = last pre-s
 
 ### Foundation Documents
 - `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` - All requirements
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.33.md` - All ADRs (includes ADR-002, ADR-018-020, ADR-048, ADR-053-054, ADR-074)
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.35.md` - All ADRs (includes ADR-002, ADR-018-020, ADR-048, ADR-053-054, ADR-074)
 - `docs/foundation/DEVELOPMENT_PHASES_V1.8.md` - Phase planning
 
 ### Implementation Guides
@@ -9345,6 +9345,73 @@ Note: `*_dollars` fields (prices) are also strings but use `Decimal()` conversio
 - Pattern 39: Verify External API Data Before Building Parsers
 - Pattern 42: Add-Column Checklist (related but for DB columns, not API fields)
 - Pattern 43: Mock Schema Fidelity (related — mocks must match real API shape)
+
+---
+
+## Pattern 45: None-Preserving Value Sanitization (ALWAYS for External API Value Clamping)
+
+**Severity:** MEDIUM — Conflating NULL with zero corrupts downstream analytics and ML features
+
+### Problem
+
+External APIs sometimes return invalid values (negative order book depth at settlement, out-of-range counts, nonsensical measurements). The natural fix is `max(0, value or 0)` — but `or 0` silently converts `None` to `0`, destroying the semantic distinction between:
+
+- **`None`** — the field was absent from the API response ("we don't know")
+- **`0`** — the field was present and measured as zero ("the order book is empty")
+
+This matters because downstream consumers treat these differently:
+- ML features: `None` → impute or exclude from training. `0` → "empty book" signal (meaningful).
+- Analytics: `None` → skip row in aggregation. `0` → include as valid zero.
+- Dashboards: `None` → show "N/A". `0` → show "0".
+
+**Real-world trigger:** Kalshi API returns negative `yes_bid_size_fp` and `yes_ask_size_fp` at market settlement (order book dismantled). Initial fix used `max(0, _parse_fp_int(...) or 0)` which would have converted every missing-field `None` to `0`, making ~5% of snapshots appear to have "measured zero depth" when they actually had "no depth data."
+
+### Pattern: Clamp Helper with None Passthrough
+
+```python
+# WRONG — conflates "missing" with "zero"
+yes_bid_size = max(0, _parse_fp_int(market, "yes_bid_size_fp") or 0)
+
+# RIGHT — preserves None semantics
+def _clamp_non_negative(value: int | None) -> int | None:
+    """Clamp to non-negative, preserving None.
+    None = field absent (unknown). 0 = measured zero. Negative = API artifact.
+    """
+    if value is None:
+        return None
+    return max(0, value)
+
+yes_bid_size = _clamp_non_negative(_parse_fp_int(market, "yes_bid_size_fp"))
+```
+
+### The Three States
+
+| API Response | `_parse_fp_int` Returns | `or 0` Result | Correct Result | Semantic Meaning |
+|-------------|------------------------|---------------|----------------|------------------|
+| Field missing | `None` | `0` (WRONG) | `None` | "We don't know" |
+| `"0.00"` | `0` | `0` | `0` | "Measured zero" |
+| `"-250589.00"` | `-250589` | `-250589` | `0` | "API artifact, clamp" |
+
+### When This Pattern Applies
+
+- Clamping, flooring, or ceiling values parsed from external APIs
+- Any sanitization where the input can be `None` (field absent)
+- NOT needed for: required fields that are always present, internal calculations where None is a bug
+
+### Anti-Patterns
+
+| Anti-Pattern | Problem | Fix |
+|-------------|---------|-----|
+| `value or 0` before `max()` | `None` becomes `0` | Use explicit `if value is None` check |
+| `value if value else 0` | Also converts `None` to `0` | Same — check `is None` specifically |
+| `max(0, value)` without None guard | `TypeError: '>' not supported between NoneType and int` | Add None check first |
+| `COALESCE(value, 0)` in SQL | Perpetuates the same conflation in the DB layer | See `feedback_coalesce_null_perpetuation.md` |
+
+### Cross-References
+
+- Pattern 1: Decimal Precision (related — Decimal vs float, this is None vs 0)
+- `feedback_coalesce_null_perpetuation.md` — SQL-side equivalent of this problem
+- Issue #542: Kalshi negative bid/ask sizes at settlement (origin of this pattern)
 - Issue #536: First S65 firing — test fixture _fp updates
 - Session 34: Discovery, fix, and protocol hardening
 

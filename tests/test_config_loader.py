@@ -288,18 +288,18 @@ def test_validate_required_configs_fails_on_missing(temp_config_dir):
 
 @pytest.mark.unit
 def test_get_env_with_environment_prefix(monkeypatch):
-    """Test get_env() uses environment-specific prefix (DEVELOPMENT_, PRODUCTION_, etc.)."""
-    monkeypatch.setenv("ENVIRONMENT", "development")
-    monkeypatch.setenv("DEVELOPMENT_DB_HOST", "localhost")
-    monkeypatch.setenv("DEVELOPMENT_DB_PORT", "5432")
+    """Test get_env() uses environment-specific prefix (DEV_, PROD_, etc.)."""
+    monkeypatch.setenv("PRECOG_ENV", "dev")
+    monkeypatch.setenv("DEV_DB_HOST", "localhost")
+    monkeypatch.setenv("DEV_DB_PORT", "5432")
 
     loader = ConfigLoader()
 
-    # Should get DEVELOPMENT_DB_HOST (with DEVELOPMENT_ prefix)
+    # Should get DEV_DB_HOST (with DEV_ prefix via get_env_prefix())
     db_host = loader.get_env("DB_HOST")
     assert db_host == "localhost"
 
-    # Should get DEVELOPMENT_DB_PORT
+    # Should get DEV_DB_PORT
     db_port = loader.get_env("DB_PORT")
     assert db_port == "5432"
 
@@ -355,9 +355,9 @@ def test_get_env_bool_conversion(monkeypatch):
 @pytest.mark.unit
 def test_get_env_int_conversion(monkeypatch):
     """Test get_env() converts string to int."""
-    monkeypatch.setenv("ENVIRONMENT", "development")
-    monkeypatch.setenv("DEVELOPMENT_PORT", "5432")
-    monkeypatch.setenv("DEVELOPMENT_INVALID_INT", "not_a_number")
+    monkeypatch.setenv("PRECOG_ENV", "dev")
+    monkeypatch.setenv("DEV_PORT", "5432")
+    monkeypatch.setenv("DEV_INVALID_INT", "not_a_number")
 
     loader = ConfigLoader()
 
@@ -374,9 +374,9 @@ def test_get_env_int_conversion(monkeypatch):
 @pytest.mark.unit
 def test_get_env_decimal_conversion(monkeypatch):
     """Test get_env() converts string to Decimal."""
-    monkeypatch.setenv("ENVIRONMENT", "production")
-    monkeypatch.setenv("PRODUCTION_MAX_EXPOSURE", "10000.50")
-    monkeypatch.setenv("PRODUCTION_INVALID_DECIMAL", "not_a_decimal")
+    monkeypatch.setenv("PRECOG_ENV", "prod")
+    monkeypatch.setenv("PROD_MAX_EXPOSURE", "10000.50")
+    monkeypatch.setenv("PROD_INVALID_DECIMAL", "not_a_decimal")
 
     loader = ConfigLoader()
 
@@ -393,12 +393,12 @@ def test_get_env_decimal_conversion(monkeypatch):
 @pytest.mark.unit
 def test_get_db_config(monkeypatch):
     """Test get_db_config() returns database configuration dict."""
-    monkeypatch.setenv("ENVIRONMENT", "development")
-    monkeypatch.setenv("DEVELOPMENT_DB_HOST", "localhost")
-    monkeypatch.setenv("DEVELOPMENT_DB_PORT", "5432")
-    monkeypatch.setenv("DEVELOPMENT_DB_NAME", "precog_dev")
-    monkeypatch.setenv("DEVELOPMENT_DB_USER", "postgres")
-    monkeypatch.setenv("DEVELOPMENT_DB_PASSWORD", "test_password")
+    monkeypatch.setenv("PRECOG_ENV", "dev")
+    monkeypatch.setenv("DEV_DB_HOST", "localhost")
+    monkeypatch.setenv("DEV_DB_PORT", "5432")
+    monkeypatch.setenv("DEV_DB_NAME", "precog_dev")
+    monkeypatch.setenv("DEV_DB_USER", "postgres")
+    monkeypatch.setenv("DEV_DB_PASSWORD", "test_password")
 
     loader = ConfigLoader()
     db_config = loader.get_db_config()
@@ -413,10 +413,10 @@ def test_get_db_config(monkeypatch):
 @pytest.mark.unit
 def test_get_kalshi_config(monkeypatch):
     """Test get_kalshi_config() returns Kalshi API configuration dict."""
-    monkeypatch.setenv("ENVIRONMENT", "production")
-    monkeypatch.setenv("PRODUCTION_KALSHI_API_KEY", "sk_live_test123")
-    monkeypatch.setenv("PRODUCTION_KALSHI_PRIVATE_KEY_PATH", "_keys/prod_private.pem")
-    monkeypatch.setenv("PRODUCTION_KALSHI_BASE_URL", "https://api.kalshi.co")
+    monkeypatch.setenv("PRECOG_ENV", "prod")
+    monkeypatch.setenv("PROD_KALSHI_API_KEY", "sk_live_test123")
+    monkeypatch.setenv("PROD_KALSHI_PRIVATE_KEY_PATH", "_keys/prod_private.pem")
+    monkeypatch.setenv("PROD_KALSHI_BASE_URL", "https://api.kalshi.co")
 
     loader = ConfigLoader()
     kalshi_config = loader.get_kalshi_config()
@@ -794,8 +794,8 @@ def test_get_kalshi_config_global_function(monkeypatch):
 @pytest.mark.unit
 def test_get_env_global_function(monkeypatch):
     """Test get_env() global convenience function."""
-    monkeypatch.setenv("ENVIRONMENT", "development")
-    monkeypatch.setenv("DEVELOPMENT_TEST_VAR", "test_value")
+    monkeypatch.setenv("PRECOG_ENV", "dev")
+    monkeypatch.setenv("DEV_TEST_VAR", "test_value")
 
     # Import and patch the global config instance
     import precog.config.config_loader as config_module

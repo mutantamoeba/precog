@@ -24,36 +24,42 @@ import psycopg2.errors
 import pytest
 
 # Import functions to test
-from precog.database.crud_operations import (
+from precog.database.crud_events import (
+    _fill_event_null_fields,
+    get_or_create_event,
+)
+from precog.database.crud_game_states import (
     LEAGUE_SPORT_CATEGORY,
     TRACKED_SITUATION_KEYS,
-    _fill_event_null_fields,
     build_event_result,
     check_event_fully_settled,
     create_game_state,
-    create_market,
-    create_team,
-    create_team_ranking,
-    create_venue,
     find_game_by_matchup,
     game_state_changed,
     get_current_game_state,
-    get_current_rankings,
     get_game_state_history,
     get_games_by_date,
     get_live_games,
-    get_or_create_event,
     get_or_create_game,
+    update_event,
+    update_event_game_id,
+    update_game_result,
+    upsert_game_state,
+)
+from precog.database.crud_markets import (
+    create_market,
+    update_market_with_versioning,
+)
+from precog.database.crud_teams import (
+    create_team,
+    create_team_ranking,
+    create_venue,
+    get_current_rankings,
     get_team_by_espn_id,
     get_team_rankings,
     get_teams_with_kalshi_codes,
     get_venue_by_espn_id,
     get_venue_by_id,
-    update_event,
-    update_event_game_id,
-    update_game_result,
-    update_market_with_versioning,
-    upsert_game_state,
 )
 
 # =============================================================================
@@ -65,7 +71,7 @@ from precog.database.crud_operations import (
 class TestCreateVenueUnit:
     """Unit tests for create_venue function with mocked database."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_create_venue_returns_venue_id(self, mock_get_cursor):
         """Test create_venue returns the venue_id from database."""
         # Setup mock
@@ -88,7 +94,7 @@ class TestCreateVenueUnit:
         assert result == 42
         mock_cursor.execute.assert_called_once()
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_create_venue_with_minimal_params(self, mock_get_cursor):
         """Test create_venue with only required parameters."""
         mock_cursor = MagicMock()
@@ -105,7 +111,7 @@ class TestCreateVenueUnit:
         assert "ON CONFLICT" in sql
         assert "DO UPDATE SET" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_create_venue_indoor_flag_default_false(self, mock_get_cursor):
         """Test indoor flag defaults to False."""
         mock_cursor = MagicMock()
@@ -139,7 +145,7 @@ class TestCreateVenueUnit:
             "explicit_none",
         ],
     )
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_create_venue_capacity_edge_cases(
         self, mock_get_cursor, capacity_input, expected_capacity
     ):
@@ -189,7 +195,7 @@ class TestCreateVenueUnit:
 class TestGetVenueUnit:
     """Unit tests for venue retrieval functions."""
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_get_venue_by_espn_id_returns_dict(self, mock_fetch_one):
         """Test get_venue_by_espn_id returns venue dictionary."""
         mock_fetch_one.return_value = {
@@ -209,7 +215,7 @@ class TestGetVenueUnit:
         assert result["venue_name"] == "Arrowhead Stadium"
         mock_fetch_one.assert_called_once()
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_get_venue_by_espn_id_not_found_returns_none(self, mock_fetch_one):
         """Test get_venue_by_espn_id returns None when not found."""
         mock_fetch_one.return_value = None
@@ -218,7 +224,7 @@ class TestGetVenueUnit:
 
         assert result is None
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_get_venue_by_id_returns_dict(self, mock_fetch_one):
         """Test get_venue_by_id returns venue dictionary."""
         mock_fetch_one.return_value = {"venue_id": 42, "venue_name": "Test Stadium"}
@@ -238,7 +244,7 @@ class TestGetVenueUnit:
 class TestCreateTeamRankingUnit:
     """Unit tests for create_team_ranking function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_create_team_ranking_returns_ranking_id(self, mock_get_cursor):
         """Test create_team_ranking returns the ranking_id."""
         mock_cursor = MagicMock()
@@ -263,7 +269,7 @@ class TestCreateTeamRankingUnit:
         sql = call_args[0][0]
         assert "ON CONFLICT" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_create_team_ranking_with_minimal_params(self, mock_get_cursor):
         """Test create_team_ranking with only required parameters."""
         mock_cursor = MagicMock()
@@ -286,7 +292,7 @@ class TestCreateTeamRankingUnit:
 class TestGetTeamRankingsUnit:
     """Unit tests for team ranking retrieval functions."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_teams.fetch_all")
     def test_get_team_rankings_returns_list(self, mock_fetch_all):
         """Test get_team_rankings returns list of rankings."""
         mock_fetch_all.return_value = [
@@ -300,7 +306,7 @@ class TestGetTeamRankingsUnit:
         assert result[0]["rank"] == 3
         mock_fetch_all.assert_called_once()
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_teams.fetch_all")
     def test_get_team_rankings_empty_list_when_none(self, mock_fetch_all):
         """Test get_team_rankings returns empty list when no rankings."""
         mock_fetch_all.return_value = []
@@ -309,8 +315,8 @@ class TestGetTeamRankingsUnit:
 
         assert result == []
 
-    @patch("precog.database.crud_operations.fetch_all")
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_all")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_get_current_rankings_returns_ordered_list(self, mock_fetch_one, mock_fetch_all):
         """Test get_current_rankings returns rankings ordered by rank."""
         mock_fetch_one.return_value = {"max_week": 12}
@@ -325,7 +331,7 @@ class TestGetTeamRankingsUnit:
         assert len(result) == 3
         assert result[0]["rank"] == 1
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_get_current_rankings_no_week_returns_empty(self, mock_fetch_one):
         """Test get_current_rankings returns empty when no weeks exist."""
         mock_fetch_one.return_value = {"max_week": None}
@@ -344,7 +350,7 @@ class TestGetTeamRankingsUnit:
 class TestCreateGameStateUnit:
     """Unit tests for create_game_state function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_create_game_state_returns_id(self, mock_get_cursor):
         """Test create_game_state returns surrogate id."""
         mock_cursor = MagicMock()
@@ -366,7 +372,7 @@ class TestCreateGameStateUnit:
 
         assert result == 500
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_create_game_state_with_situation_jsonb(self, mock_get_cursor):
         """Test create_game_state serializes situation to JSONB."""
         mock_cursor = MagicMock()
@@ -386,7 +392,7 @@ class TestCreateGameStateUnit:
         # situation is near the end of params
         assert '{"possession": "KC"' in str(params)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_create_game_state_with_decimal_clock(self, mock_get_cursor):
         """Test create_game_state handles Decimal clock_seconds."""
         mock_cursor = MagicMock()
@@ -407,7 +413,7 @@ class TestCreateGameStateUnit:
         # Verify Decimal is passed (not float)
         assert any(isinstance(p, Decimal) for p in params)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_create_game_state_passes_game_id(self, mock_get_cursor):
         """Test create_game_state passes game_id FK to INSERT."""
         mock_cursor = MagicMock()
@@ -435,7 +441,7 @@ class TestCreateGameStateUnit:
 class TestGetGameStateUnit:
     """Unit tests for game state retrieval functions."""
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_get_current_game_state_returns_current(self, mock_fetch_one):
         """Test get_current_game_state returns current version only."""
         mock_fetch_one.return_value = {
@@ -452,7 +458,7 @@ class TestGetGameStateUnit:
         assert result["row_current_ind"] is True
         assert result["home_score"] == 14
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_get_current_game_state_not_found_returns_none(self, mock_fetch_one):
         """Test get_current_game_state returns None when not found."""
         mock_fetch_one.return_value = None
@@ -461,7 +467,7 @@ class TestGetGameStateUnit:
 
         assert result is None
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_all")
     def test_get_game_state_history_returns_all_versions(self, mock_fetch_all):
         """Test get_game_state_history returns all versions."""
         mock_fetch_all.return_value = [
@@ -475,7 +481,7 @@ class TestGetGameStateUnit:
         assert len(result) == 3
         assert result[0]["home_score"] == 21  # Most recent first
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_all")
     def test_get_game_state_history_respects_limit(self, mock_fetch_all):
         """Test get_game_state_history respects limit parameter."""
         mock_fetch_all.return_value = [{"id": 1}]
@@ -491,7 +497,7 @@ class TestGetGameStateUnit:
 class TestUpsertGameStateUnit:
     """Unit tests for upsert_game_state SCD Type 2 function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_upsert_game_state_closes_current_row(self, mock_get_cursor):
         """Test upsert_game_state closes current row before inserting.
 
@@ -525,7 +531,7 @@ class TestUpsertGameStateUnit:
 class TestGetLiveGamesUnit:
     """Unit tests for get_live_games function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_all")
     def test_get_live_games_filters_in_progress(self, mock_fetch_all):
         """Test get_live_games filters by in_progress status."""
         mock_fetch_all.return_value = [
@@ -540,7 +546,7 @@ class TestGetLiveGamesUnit:
         sql = call_args[0][0]
         assert "game_status = 'in_progress'" in sql
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_all")
     def test_get_live_games_filters_by_league(self, mock_fetch_all):
         """Test get_live_games filters by league when provided."""
         mock_fetch_all.return_value = []
@@ -558,7 +564,7 @@ class TestGetLiveGamesUnit:
 class TestGetGamesByDateUnit:
     """Unit tests for get_games_by_date function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_all")
     def test_get_games_by_date_filters_by_date(self, mock_fetch_all):
         """Test get_games_by_date filters by date correctly."""
         mock_fetch_all.return_value = [
@@ -573,7 +579,7 @@ class TestGetGamesByDateUnit:
         sql = call_args[0][0]
         assert "DATE(gs.game_date) = DATE(%s)" in sql
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_all")
     def test_get_games_by_date_filters_by_league(self, mock_fetch_all):
         """Test get_games_by_date filters by league when provided."""
         mock_fetch_all.return_value = []
@@ -594,7 +600,7 @@ class TestGetGamesByDateUnit:
 class TestGetOrCreateGameUnit:
     """Unit tests for get_or_create_game — games dimension upsert."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_get_or_create_game_returns_id(self, mock_get_cursor):
         """Test get_or_create_game returns the game id."""
         mock_cursor = MagicMock()
@@ -614,7 +620,7 @@ class TestGetOrCreateGameUnit:
         assert result == 42
         assert mock_cursor.execute.call_count == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_get_or_create_game_derives_season_from_date(self, mock_get_cursor):
         """Test season is derived from game_date.year when not provided."""
         mock_cursor = MagicMock()
@@ -645,7 +651,7 @@ class TestGetOrCreateGameUnit:
                 away_team_code="MICH",
             )
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_get_or_create_game_on_conflict_sql_has_case_guard(self, mock_get_cursor):
         """Test the ON CONFLICT clause has CASE guard for game_status.
 
@@ -673,7 +679,7 @@ class TestGetOrCreateGameUnit:
         assert "final" in sql
         assert "final_ot" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_get_or_create_game_passes_all_fields(self, mock_get_cursor):
         """Test all optional fields are passed through to SQL."""
         mock_cursor = MagicMock()
@@ -715,7 +721,7 @@ class TestGetOrCreateGameUnit:
 class TestUpdateGameResultUnit:
     """Unit tests for update_game_result — final score + derived fields."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_update_game_result_home_win(self, mock_get_cursor):
         """Test home win sets correct margin and result."""
         mock_cursor = MagicMock()
@@ -732,7 +738,7 @@ class TestUpdateGameResultUnit:
         assert params[3] == "home_win"  # result
         assert params[4] == 42  # game_id
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_update_game_result_away_win(self, mock_get_cursor):
         """Test away win sets correct margin and result."""
         mock_cursor = MagicMock()
@@ -746,7 +752,7 @@ class TestUpdateGameResultUnit:
         assert params[2] == -14  # actual_margin (10-24)
         assert params[3] == "away_win"
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_update_game_result_draw(self, mock_get_cursor):
         """Test draw sets correct margin and result."""
         mock_cursor = MagicMock()
@@ -786,7 +792,7 @@ class TestGetTeamByEspnIdUnit:
         - src/precog/database/crud_operations.py get_team_by_espn_id
     """
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_get_team_by_espn_id_returns_team_dict(self, mock_fetch_one):
         """Test successful team lookup returns dictionary."""
         mock_fetch_one.return_value = {
@@ -804,7 +810,7 @@ class TestGetTeamByEspnIdUnit:
         assert result["team_name"] == "Arizona Cardinals"
         mock_fetch_one.assert_called_once()
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_get_team_by_espn_id_not_found_returns_none(self, mock_fetch_one):
         """Test team not found returns None gracefully.
 
@@ -819,7 +825,7 @@ class TestGetTeamByEspnIdUnit:
 
         assert result is None
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_get_team_by_espn_id_wrong_league_returns_none(self, mock_fetch_one):
         """Test team exists but in wrong league returns None.
 
@@ -833,7 +839,7 @@ class TestGetTeamByEspnIdUnit:
 
         assert result is None
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_get_team_by_espn_id_without_league_filter(self, mock_fetch_one):
         """Test team lookup without league filter.
 
@@ -855,7 +861,7 @@ class TestGetTeamByEspnIdUnit:
         assert result is not None
         assert result["team_id"] == 42
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_get_team_by_espn_id_empty_string_handled(self, mock_fetch_one):
         """Test empty ESPN ID is handled gracefully."""
         mock_fetch_one.return_value = None
@@ -1525,10 +1531,10 @@ class TestGameStateChangedSportAwareUnit:
 class TestUpsertSchedulerStatusUnit:
     """Unit tests for upsert_scheduler_status function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_schedulers.get_cursor")
     def test_upsert_scheduler_status_minimal_params(self, mock_get_cursor):
         """Test upsert with only required parameters (host_id, service_name)."""
-        from precog.database.crud_operations import upsert_scheduler_status
+        from precog.database.crud_schedulers import upsert_scheduler_status
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 1
@@ -1548,7 +1554,7 @@ class TestUpsertSchedulerStatusUnit:
         assert "ON CONFLICT" in sql
         assert "DO UPDATE SET" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_schedulers.get_cursor")
     def test_upsert_scheduler_status_all_params(self, mock_get_cursor):
         """Test upsert with all parameters.
 
@@ -1561,7 +1567,7 @@ class TestUpsertSchedulerStatusUnit:
             - config: JSON configuration
             - error_message: For failed status
         """
-        from precog.database.crud_operations import upsert_scheduler_status
+        from precog.database.crud_schedulers import upsert_scheduler_status
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 1
@@ -1588,10 +1594,10 @@ class TestUpsertSchedulerStatusUnit:
         assert "stats" in sql
         assert "config" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_schedulers.get_cursor")
     def test_upsert_scheduler_status_with_error(self, mock_get_cursor):
         """Test upsert with error message for failed status."""
-        from precog.database.crud_operations import upsert_scheduler_status
+        from precog.database.crud_schedulers import upsert_scheduler_status
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 1
@@ -1615,10 +1621,10 @@ class TestUpsertSchedulerStatusUnit:
 class TestGetSchedulerStatusUnit:
     """Unit tests for get_scheduler_status function."""
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_schedulers.fetch_one")
     def test_get_scheduler_status_found(self, mock_fetch_one):
         """Test get_scheduler_status returns service status when found."""
-        from precog.database.crud_operations import get_scheduler_status
+        from precog.database.crud_schedulers import get_scheduler_status
 
         mock_fetch_one.return_value = {
             "host_id": "DESKTOP-TEST",
@@ -1637,10 +1643,10 @@ class TestGetSchedulerStatusUnit:
         assert result["pid"] == 12345
         mock_fetch_one.assert_called_once()
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_schedulers.fetch_one")
     def test_get_scheduler_status_not_found(self, mock_fetch_one):
         """Test get_scheduler_status returns None when service not found."""
-        from precog.database.crud_operations import get_scheduler_status
+        from precog.database.crud_schedulers import get_scheduler_status
 
         mock_fetch_one.return_value = None
 
@@ -1653,10 +1659,10 @@ class TestGetSchedulerStatusUnit:
 class TestListSchedulerServicesUnit:
     """Unit tests for list_scheduler_services function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_schedulers.fetch_all")
     def test_list_scheduler_services_all(self, mock_fetch_all):
         """Test listing all scheduler services."""
-        from precog.database.crud_operations import list_scheduler_services
+        from precog.database.crud_schedulers import list_scheduler_services
 
         mock_fetch_all.return_value = [
             {"host_id": "HOST-1", "service_name": "espn", "status": "running"},
@@ -1669,10 +1675,10 @@ class TestListSchedulerServicesUnit:
         assert len(result) == 3
         assert result[0]["service_name"] == "espn"
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_schedulers.fetch_all")
     def test_list_scheduler_services_by_host(self, mock_fetch_all):
         """Test filtering services by host_id."""
-        from precog.database.crud_operations import list_scheduler_services
+        from precog.database.crud_schedulers import list_scheduler_services
 
         mock_fetch_all.return_value = [
             {"host_id": "HOST-1", "service_name": "espn", "status": "running"},
@@ -1687,10 +1693,10 @@ class TestListSchedulerServicesUnit:
         sql = call_args[0][0]
         assert "host_id = %s" in sql
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_schedulers.fetch_all")
     def test_list_scheduler_services_by_status(self, mock_fetch_all):
         """Test filtering services by status."""
-        from precog.database.crud_operations import list_scheduler_services
+        from precog.database.crud_schedulers import list_scheduler_services
 
         mock_fetch_all.return_value = [
             {"host_id": "HOST-1", "service_name": "espn", "status": "running"},
@@ -1704,7 +1710,7 @@ class TestListSchedulerServicesUnit:
         sql = call_args[0][0]
         assert "status = %s" in sql
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_schedulers.fetch_all")
     def test_list_scheduler_services_includes_stale_detection(self, mock_fetch_all):
         """Test that is_stale field is included when requested.
 
@@ -1713,7 +1719,7 @@ class TestListSchedulerServicesUnit:
             status is 'running' but last_heartbeat is >2 minutes old, the
             service likely crashed without graceful shutdown.
         """
-        from precog.database.crud_operations import list_scheduler_services
+        from precog.database.crud_schedulers import list_scheduler_services
 
         mock_fetch_all.return_value = [
             {"host_id": "HOST-1", "service_name": "espn", "status": "running", "is_stale": False},
@@ -1734,10 +1740,10 @@ class TestListSchedulerServicesUnit:
 class TestCleanupStaleSchedulersUnit:
     """Unit tests for cleanup_stale_schedulers function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_schedulers.get_cursor")
     def test_cleanup_stale_schedulers_marks_as_failed(self, mock_get_cursor):
         """Test that stale services are marked as failed."""
-        from precog.database.crud_operations import cleanup_stale_schedulers
+        from precog.database.crud_schedulers import cleanup_stale_schedulers
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 2  # 2 stale services cleaned up
@@ -1752,10 +1758,10 @@ class TestCleanupStaleSchedulersUnit:
         assert "SET status = 'failed'" in sql
         assert "IN ('running', 'starting')" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_schedulers.get_cursor")
     def test_cleanup_stale_schedulers_by_host(self, mock_get_cursor):
         """Test cleanup only affects specified host."""
-        from precog.database.crud_operations import cleanup_stale_schedulers
+        from precog.database.crud_schedulers import cleanup_stale_schedulers
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 1
@@ -1772,10 +1778,10 @@ class TestCleanupStaleSchedulersUnit:
         sql = mock_cursor.execute.call_args[0][0]
         assert "host_id = %s" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_schedulers.get_cursor")
     def test_cleanup_stale_schedulers_no_stale_services(self, mock_get_cursor):
         """Test cleanup when no stale services exist."""
-        from precog.database.crud_operations import cleanup_stale_schedulers
+        from precog.database.crud_schedulers import cleanup_stale_schedulers
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 0  # No stale services
@@ -1791,10 +1797,10 @@ class TestCleanupStaleSchedulersUnit:
 class TestDeleteSchedulerStatusUnit:
     """Unit tests for delete_scheduler_status function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_schedulers.get_cursor")
     def test_delete_scheduler_status_found(self, mock_get_cursor):
         """Test delete returns True when record found and deleted."""
-        from precog.database.crud_operations import delete_scheduler_status
+        from precog.database.crud_schedulers import delete_scheduler_status
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 1
@@ -1808,10 +1814,10 @@ class TestDeleteSchedulerStatusUnit:
         sql = mock_cursor.execute.call_args[0][0]
         assert "DELETE FROM scheduler_status" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_schedulers.get_cursor")
     def test_delete_scheduler_status_not_found(self, mock_get_cursor):
         """Test delete returns False when record not found."""
-        from precog.database.crud_operations import delete_scheduler_status
+        from precog.database.crud_schedulers import delete_scheduler_status
 
         mock_cursor = MagicMock()
         mock_cursor.rowcount = 0  # No record deleted
@@ -1832,7 +1838,7 @@ class TestDeleteSchedulerStatusUnit:
 class TestFindGameByMatchupUnit:
     """Unit tests for find_game_by_matchup — league-to-sport mapping + game lookup."""
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_nfl_maps_to_football(self, mock_fetch_one):
         """NFL league maps to 'football' sport in query."""
         mock_fetch_one.return_value = {"id": 42}
@@ -1850,7 +1856,7 @@ class TestFindGameByMatchupUnit:
         params = call_args[1]
         assert params[0] == "football"
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_nba_maps_to_basketball(self, mock_fetch_one):
         """NBA league maps to 'basketball' sport in query."""
         mock_fetch_one.return_value = {"id": 99}
@@ -1867,7 +1873,7 @@ class TestFindGameByMatchupUnit:
         params = call_args[1]
         assert params[0] == "basketball"
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_ncaaf_maps_to_football(self, mock_fetch_one):
         """NCAAF league maps to 'football' sport."""
         mock_fetch_one.return_value = {"id": 7}
@@ -1884,7 +1890,7 @@ class TestFindGameByMatchupUnit:
         params = call_args[1]
         assert params[0] == "football"
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_nhl_maps_to_hockey(self, mock_fetch_one):
         """NHL league maps to 'hockey' sport."""
         mock_fetch_one.return_value = {"id": 55}
@@ -1901,8 +1907,8 @@ class TestFindGameByMatchupUnit:
         params = call_args[1]
         assert params[0] == "hockey"
 
-    @patch("precog.database.crud_operations.fetch_all")
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_returns_none_when_no_match(self, mock_fetch_one, mock_fetch_all):
         """Returns None when no exact or fuzzy match found."""
         mock_fetch_one.return_value = None
@@ -1919,8 +1925,8 @@ class TestFindGameByMatchupUnit:
         mock_fetch_one.assert_called_once()
         mock_fetch_all.assert_called_once()
 
-    @patch("precog.database.crud_operations.fetch_all")
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_fuzzy_match_finds_game_on_adjacent_day(self, mock_fetch_one, mock_fetch_all):
         """When exact date misses, +/-1 day window finds the game."""
         mock_fetch_one.return_value = None  # Exact date: no match
@@ -1939,8 +1945,8 @@ class TestFindGameByMatchupUnit:
         assert fuzzy_params[1] == date(2026, 1, 17)  # day before
         assert fuzzy_params[2] == date(2026, 1, 19)  # day after
 
-    @patch("precog.database.crud_operations.fetch_all")
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_fuzzy_match_returns_none_on_ambiguity(self, mock_fetch_one, mock_fetch_all):
         """When +/-1 day returns multiple games, returns None (ambiguous)."""
         mock_fetch_one.return_value = None
@@ -1958,7 +1964,7 @@ class TestFindGameByMatchupUnit:
 
         assert result is None
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_exact_match_skips_fuzzy(self, mock_fetch_one):
         """When exact date matches, fuzzy query is never called."""
         mock_fetch_one.return_value = {"id": 42}
@@ -1985,7 +1991,7 @@ class TestFindGameByMatchupUnit:
 
         assert result is None
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_passes_all_params_to_query(self, mock_fetch_one):
         """Verify game_date, home_team_code, away_team_code all passed."""
         mock_fetch_one.return_value = {"id": 1}
@@ -2012,7 +2018,7 @@ class TestFindGameByMatchupUnit:
 class TestGetTeamsWithKalshiCodesUnit:
     """Unit tests for get_teams_with_kalshi_codes — team registry data source."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_teams.fetch_all")
     def test_returns_list_of_team_dicts(self, mock_fetch_all):
         """Returns list of team dicts with expected keys."""
         mock_fetch_all.return_value = [
@@ -2026,7 +2032,7 @@ class TestGetTeamsWithKalshiCodesUnit:
         assert result[0]["team_code"] == "HOU"
         assert result[1]["kalshi_team_code"] == "JAC"
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_teams.fetch_all")
     def test_filters_by_league(self, mock_fetch_all):
         """When league is provided, passes it as query param."""
         mock_fetch_all.return_value = []
@@ -2040,7 +2046,7 @@ class TestGetTeamsWithKalshiCodesUnit:
         params = call_args[1]
         assert params == ("nba",)
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_teams.fetch_all")
     def test_returns_all_when_league_none(self, mock_fetch_all):
         """When league is None, returns all teams (no WHERE clause on league)."""
         mock_fetch_all.return_value = [
@@ -2065,7 +2071,7 @@ class TestGetTeamsWithKalshiCodesUnit:
 class TestUpdateEventGameIdUnit:
     """Unit tests for update_event_game_id — linking events to games."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_returns_true_when_updated(self, mock_get_cursor):
         """Returns True when event was found and updated."""
         mock_cursor = MagicMock()
@@ -2083,7 +2089,7 @@ class TestUpdateEventGameIdUnit:
         assert 15 in params  # game_id
         assert 42 in params  # event_internal_id
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_returns_false_when_no_event_found(self, mock_get_cursor):
         """Returns False when no event matched (rowcount=0)."""
         mock_cursor = MagicMock()
@@ -2105,7 +2111,7 @@ class TestUpdateEventGameIdUnit:
 class TestUpdateEventUnit:
     """Unit tests for update_event — general-purpose event field updater."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_basic_status_update(self, mock_get_cursor):
         """Single-field update (status) executes correct SQL."""
         mock_cursor = MagicMock()
@@ -2123,7 +2129,7 @@ class TestUpdateEventUnit:
         assert "final" in params
         assert 42 in params  # event_internal_id in WHERE clause
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_partial_update_multiple_fields(self, mock_get_cursor):
         """Update start_time and end_time together, leaving other fields untouched."""
         mock_cursor = MagicMock()
@@ -2146,7 +2152,7 @@ class TestUpdateEventUnit:
         assert "result = %s" not in query
         assert "description = %s" not in query
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_returns_false_when_event_not_found(self, mock_get_cursor):
         """Returns False when no row matches the event_internal_id."""
         mock_cursor = MagicMock()
@@ -2169,7 +2175,7 @@ class TestUpdateEventUnit:
         result = update_event(42)
         assert result is False
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_result_serialized_as_json(self, mock_get_cursor):
         """result dict is JSON-serialized (matching create_event metadata pattern)."""
         import json
@@ -2189,7 +2195,7 @@ class TestUpdateEventUnit:
         assert isinstance(json_param, str)
         assert json.loads(json_param) == result_dict
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_description_update(self, mock_get_cursor):
         """Description field can be updated."""
         mock_cursor = MagicMock()
@@ -2204,7 +2210,7 @@ class TestUpdateEventUnit:
         assert "description = %s" in query
         assert "Updated event description" in params
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_all_fields_together(self, mock_get_cursor):
         """All five fields can be updated in a single call."""
         mock_cursor = MagicMock()
@@ -2236,7 +2242,7 @@ class TestUpdateEventUnit:
         for s in valid:
             # Should NOT raise — we don't care about the DB call,
             # just that validation passes. Use mock to avoid actual DB.
-            with patch("precog.database.crud_operations.get_cursor") as mock_gc:
+            with patch("precog.database.crud_game_states.get_cursor") as mock_gc:
                 mock_cursor = MagicMock()
                 mock_cursor.rowcount = 0
                 mock_gc.return_value.__enter__ = MagicMock(return_value=mock_cursor)
@@ -2260,7 +2266,7 @@ class TestCreateTeamUnit:
     silently losing ~61 teams per restart.
     """
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_returns_existing_team_by_espn_id(self, mock_fetch_one):
         """Step 1: ESPN ID lookup finds existing team -> return its team_id."""
         mock_fetch_one.return_value = {"team_id": 42}
@@ -2280,8 +2286,8 @@ class TestCreateTeamUnit:
         call_args = mock_fetch_one.call_args[0]
         assert "espn_team_id" in call_args[0]
 
-    @patch("precog.database.crud_operations.get_cursor")
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.get_cursor")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_skips_code_fallback_when_espn_id_provided(self, mock_fetch_one, mock_get_cursor):
         """When espn_team_id is provided and Step 1 finds no match, skip Step 2
         and go straight to INSERT. This is THE critical fix for #486."""
@@ -2311,8 +2317,8 @@ class TestCreateTeamUnit:
         # INSERT was executed
         mock_cursor.execute.assert_called_once()
 
-    @patch("precog.database.crud_operations.get_cursor")
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.get_cursor")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_uses_code_fallback_when_no_espn_id(self, mock_fetch_one, mock_get_cursor):
         """When espn_team_id is None, Step 2 code fallback fires normally.
         This preserves backward compatibility for non-ESPN data sources."""
@@ -2334,8 +2340,8 @@ class TestCreateTeamUnit:
         call_args = mock_fetch_one.call_args[0]
         assert "team_code" in call_args[0]
 
-    @patch("precog.database.crud_operations.get_cursor")
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.get_cursor")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_inserts_new_team_when_no_espn_id_and_no_code_match(
         self, mock_fetch_one, mock_get_cursor
     ):
@@ -2360,8 +2366,8 @@ class TestCreateTeamUnit:
         assert result == 77
         mock_cursor.execute.assert_called_once()
 
-    @patch("precog.database.crud_operations.get_cursor")
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.get_cursor")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_insert_includes_all_fields(self, mock_fetch_one, mock_get_cursor):
         """Verify INSERT passes all 9 columns including espn_team_id."""
         mock_fetch_one.return_value = None  # Step 1: no match
@@ -2402,8 +2408,8 @@ class TestCreateTeamUnit:
             "West",
         )
 
-    @patch("precog.database.crud_operations.get_cursor")
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.get_cursor")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_collision_scenario_two_teams_same_code(self, mock_fetch_one, mock_get_cursor):
         """Simulate the exact NCAAF collision: two different ESPN teams with
         code 'MISS' in the same league. First call creates Ole Miss (espn_id=145),
@@ -2451,8 +2457,8 @@ class TestCreateTeamUnit:
         # Each call only did ONE fetch_one (ESPN lookup), never code fallback
         mock_fetch_one.assert_called_once()
 
-    @patch("precog.database.crud_operations.fetch_one")
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.fetch_one")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_unique_violation_with_espn_id_skips_code_fallback(
         self, mock_get_cursor, mock_fetch_one
     ):
@@ -2498,8 +2504,8 @@ class TestCreateTeamUnit:
 class TestUpdateMarketSettlementValue:
     """Test settlement_value flows through update_market_with_versioning."""
 
-    @patch("precog.database.crud_operations.get_cursor")
-    @patch("precog.database.crud_operations.get_current_market")
+    @patch("precog.database.crud_markets.get_cursor")
+    @patch("precog.database.crud_markets.get_current_market")
     def test_settlement_value_included_in_dimension_update(self, mock_get_current, mock_get_cursor):
         """settlement_value is written to the markets dimension UPDATE."""
         mock_get_current.return_value = {
@@ -2545,8 +2551,8 @@ class TestUpdateMarketSettlementValue:
         # settlement_value is the 11th param (after source_url, before market_pk)
         assert Decimal("1.0000") in params
 
-    @patch("precog.database.crud_operations.get_cursor")
-    @patch("precog.database.crud_operations.get_current_market")
+    @patch("precog.database.crud_markets.get_cursor")
+    @patch("precog.database.crud_markets.get_current_market")
     def test_settlement_value_none_preserves_existing(self, mock_get_current, mock_get_cursor):
         """When settlement_value is None, the existing value is preserved."""
         mock_get_current.return_value = {
@@ -2606,7 +2612,7 @@ class TestUpdateMarketSettlementValue:
 class TestCheckEventFullySettled:
     """Test check_event_fully_settled helper."""
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_all_markets_settled_returns_true(self, mock_fetch_one):
         """Returns True when all markets in the event are settled."""
         mock_fetch_one.return_value = {"total": 3, "settled": 3}
@@ -2617,35 +2623,35 @@ class TestCheckEventFullySettled:
         call_args = mock_fetch_one.call_args
         assert call_args[0][1] == (42,)
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_some_unsettled_returns_false(self, mock_fetch_one):
         """Returns False when some markets are not yet settled."""
         mock_fetch_one.return_value = {"total": 3, "settled": 1}
 
         assert check_event_fully_settled(42) is False
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_no_markets_returns_false(self, mock_fetch_one):
         """Returns False when no markets exist for the event."""
         mock_fetch_one.return_value = {"total": 0, "settled": 0}
 
         assert check_event_fully_settled(42) is False
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_fetch_one_returns_none(self, mock_fetch_one):
         """Returns False when fetch_one returns None (defensive)."""
         mock_fetch_one.return_value = None
 
         assert check_event_fully_settled(42) is False
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_single_market_settled(self, mock_fetch_one):
         """Returns True when a single market in the event is settled."""
         mock_fetch_one.return_value = {"total": 1, "settled": 1}
 
         assert check_event_fully_settled(99) is True
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_game_states.fetch_one")
     def test_query_uses_filter_clause(self, mock_fetch_one):
         """Verify the SQL uses FILTER (WHERE status = 'settled') pattern."""
         mock_fetch_one.return_value = {"total": 0, "settled": 0}
@@ -2680,7 +2686,7 @@ class TestFillEventNullFields:
         - get_or_create_event(): sole caller
     """
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_events.get_cursor")
     def test_fills_null_start_time(self, mock_get_cursor):
         """When existing start_time is NULL, caller value is written."""
         mock_cursor = MagicMock()
@@ -2705,7 +2711,7 @@ class TestFillEventNullFields:
         # end_time and status should NOT be in the update
         assert "end_time" not in sql.split("WHERE")[0]
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_events.get_cursor")
     def test_fills_multiple_null_fields(self, mock_get_cursor):
         """Multiple NULL fields are all filled in a single UPDATE."""
         mock_cursor = MagicMock()
@@ -2730,7 +2736,7 @@ class TestFillEventNullFields:
         assert "game_id" in sql
         assert "updated_at = NOW()" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_events.get_cursor")
     def test_does_not_overwrite_non_null_values(self, mock_get_cursor):
         """Non-NULL existing values are never overwritten."""
         mock_cursor = MagicMock()
@@ -2756,7 +2762,7 @@ class TestFillEventNullFields:
         # No UPDATE should be issued because all fields are non-NULL
         mock_cursor.execute.assert_not_called()
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_events.get_cursor")
     def test_no_update_when_no_values_provided(self, mock_get_cursor):
         """No UPDATE when caller provides no enrichment values."""
         mock_cursor = MagicMock()
@@ -2770,7 +2776,7 @@ class TestFillEventNullFields:
         # No caller values -> no UPDATE
         mock_cursor.execute.assert_not_called()
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_events.get_cursor")
     def test_partial_fill_only_null_columns(self, mock_get_cursor):
         """Only NULL columns get updated; populated columns are skipped."""
         mock_cursor = MagicMock()
@@ -2807,7 +2813,7 @@ class TestFillEventNullFields:
         assert "2025-01-01T22:00:00Z" in params
         assert 15 in params
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_events.get_cursor")
     def test_game_id_zero_is_treated_as_value(self, mock_get_cursor):
         """game_id=0 is falsy in Python but should still be written if existing is NULL.
 
@@ -2849,8 +2855,8 @@ class TestGetOrCreateEventUpsert:
         - Issue #513: 98.7% of events had NULL start_time/end_time
     """
 
-    @patch("precog.database.crud_operations._fill_event_null_fields")
-    @patch("precog.database.crud_operations.get_event")
+    @patch("precog.database.crud_events._fill_event_null_fields")
+    @patch("precog.database.crud_events.get_event")
     def test_existing_event_triggers_fill(self, mock_get_event, mock_fill):
         """Existing event triggers _fill_event_null_fields with caller args."""
         mock_get_event.return_value = {
@@ -2883,13 +2889,13 @@ class TestGetOrCreateEventUpsert:
             15,
         )
 
-    @patch("precog.database.crud_operations._fill_event_null_fields")
-    @patch("precog.database.crud_operations.get_event")
+    @patch("precog.database.crud_events._fill_event_null_fields")
+    @patch("precog.database.crud_events.get_event")
     def test_new_event_does_not_trigger_fill(self, mock_get_event, mock_fill):
         """New event (not existing) goes through create path, not fill."""
         mock_get_event.return_value = None
 
-        with patch("precog.database.crud_operations.create_event", return_value=99):
+        with patch("precog.database.crud_events.create_event", return_value=99):
             pk, created = get_or_create_event(
                 event_id="NEW-EVT-1",
                 platform_id="kalshi",
@@ -2921,7 +2927,7 @@ class TestBuildEventResult:
         - Issue #513: Event result population on settlement
     """
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_all")
     def test_basic_result_structure(self, mock_fetch_all):
         """Verify correct JSONB structure from settled markets."""
         mock_fetch_all.return_value = [
@@ -2936,7 +2942,7 @@ class TestBuildEventResult:
         assert result["outcomes"]["KXNFL-T1"]["settlement_value"] == "1.0000"
         assert result["outcomes"]["KXNFL-T2"]["settlement_value"] == "0.0000"
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_all")
     def test_handles_null_settlement_values(self, mock_fetch_all):
         """Markets with NULL settlement_value are included with None."""
         mock_fetch_all.return_value = [
@@ -2951,7 +2957,7 @@ class TestBuildEventResult:
         assert result["outcomes"]["KXNFL-T1"]["settlement_value"] == "1.0000"
         assert result["outcomes"]["KXNFL-T2"]["settlement_value"] is None
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_all")
     def test_mixed_settled_and_open_markets(self, mock_fetch_all):
         """Result correctly counts settled vs non-settled markets."""
         mock_fetch_all.return_value = [
@@ -2966,7 +2972,7 @@ class TestBuildEventResult:
         assert result["outcomes"]["MKT-A"]["settlement_value"] == "1.0000"
         assert result["outcomes"]["MKT-B"]["settlement_value"] is None
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_all")
     def test_no_markets_returns_empty(self, mock_fetch_all):
         """Event with no child markets returns empty structure."""
         mock_fetch_all.return_value = []
@@ -2977,7 +2983,7 @@ class TestBuildEventResult:
         assert result["markets_settled"] == 0
         assert result["outcomes"] == {}
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_all")
     def test_decimal_precision_preserved(self, mock_fetch_all):
         """Decimal precision is preserved via string serialization.
 
@@ -2995,7 +3001,7 @@ class TestBuildEventResult:
 
         assert result["outcomes"]["SCALAR-MKT"]["settlement_value"] == "0.3333"
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_game_states.fetch_all")
     def test_query_filters_by_event_internal_id(self, mock_fetch_all):
         """Verify the SQL uses event_internal_id filter."""
         mock_fetch_all.return_value = []
@@ -3032,7 +3038,7 @@ class TestCreateMarketEnrichment:
         - Issue #513: Kalshi API enrichment (P1)
     """
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_markets.get_cursor")
     def test_create_market_with_all_enrichment_fields(self, mock_get_cursor):
         """All 8 new enrichment fields are passed to SQL INSERT statements.
 
@@ -3097,7 +3103,7 @@ class TestCreateMarketEnrichment:
         assert 45 in snap_params  # yes_bid_size
         assert 30 in snap_params  # yes_ask_size
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_markets.get_cursor")
     def test_create_market_enrichment_fields_nullable(self, mock_get_cursor):
         """Enrichment fields default to None when not provided.
 
@@ -3145,7 +3151,7 @@ class TestCreateMarketEnrichment:
         assert snap_params[14] is None  # yes_bid_size
         assert snap_params[15] is None  # yes_ask_size
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_markets.get_cursor")
     def test_create_market_decimal_validation_on_enrichment(self, mock_get_cursor):
         """Decimal enrichment fields are validated by validate_decimal().
 
@@ -3192,8 +3198,8 @@ class TestUpdateMarketEnrichment:
         - Issue #513: Kalshi API enrichment (P1)
     """
 
-    @patch("precog.database.crud_operations.get_current_market")
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_markets.get_current_market")
+    @patch("precog.database.crud_markets.get_cursor")
     def test_update_market_with_enrichment_fields(self, mock_get_cursor, mock_get_current):
         """All 8 enrichment fields are passed through on update path.
 
@@ -3283,8 +3289,8 @@ class TestUpdateMarketEnrichment:
         assert 60 in snap_params  # yes_bid_size
         assert 40 in snap_params  # yes_ask_size
 
-    @patch("precog.database.crud_operations.get_current_market")
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_markets.get_current_market")
+    @patch("precog.database.crud_markets.get_cursor")
     def test_update_market_enrichment_falls_back_to_current(
         self, mock_get_cursor, mock_get_current
     ):
@@ -3355,8 +3361,8 @@ class TestUpdateMarketEnrichment:
         assert 30 in snap_params  # yes_bid_size preserved
         assert 25 in snap_params  # yes_ask_size preserved
 
-    @patch("precog.database.crud_operations.get_current_market")
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_markets.get_current_market")
+    @patch("precog.database.crud_markets.get_cursor")
     def test_update_market_integer_fields_pass_through(self, mock_get_cursor, mock_get_current):
         """Integer enrichment fields (volume_24h, yes_bid_size, yes_ask_size)
         are passed through without Decimal validation.

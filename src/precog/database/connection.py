@@ -36,7 +36,7 @@ Security Note:
 - NEVER hardcode passwords in this module
 - See: docs/utility/SECURITY_REVIEW_CHECKLIST.md
 
-Reference: docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md
+Reference: docs/database/DATABASE_SCHEMA_SUMMARY.md
 Related Requirements: REQ-DB-002 (Connection Pooling)
 Related ADR: ADR-008 (PostgreSQL Connection Strategy)
 """

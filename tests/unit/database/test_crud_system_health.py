@@ -23,8 +23,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
-    VALID_SYSTEM_HEALTH_COMPONENTS,
+from precog.database.crud_shared import VALID_SYSTEM_HEALTH_COMPONENTS
+from precog.database.crud_system import (
     get_system_health,
     get_system_health_summary,
     upsert_system_health,
@@ -39,7 +39,7 @@ from precog.database.crud_operations import (
 class TestUpsertSystemHealth:
     """Unit tests for upsert_system_health with mocked database."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_upsert_healthy_component(self, mock_get_cursor: MagicMock) -> None:
         """Test upserting a healthy component returns True."""
         mock_cursor = MagicMock()
@@ -57,7 +57,7 @@ class TestUpsertSystemHealth:
         # Should execute DELETE then INSERT
         assert mock_cursor.execute.call_count == 2
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_upsert_with_details(self, mock_get_cursor: MagicMock) -> None:
         """Test upserting with JSONB details payload."""
         mock_cursor = MagicMock()
@@ -82,7 +82,7 @@ class TestUpsertSystemHealth:
         assert json.loads(insert_params[2]) == details
         assert insert_params[3] is True  # alert_sent
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_upsert_with_none_details(self, mock_get_cursor: MagicMock) -> None:
         """Test upserting with no details passes None for JSONB column."""
         mock_cursor = MagicMock()
@@ -96,7 +96,7 @@ class TestUpsertSystemHealth:
         insert_params = insert_call[0][1]
         assert insert_params[2] is None  # details_json is None
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_upsert_delete_before_insert(self, mock_get_cursor: MagicMock) -> None:
         """Test that DELETE is executed before INSERT for upsert behavior."""
         mock_cursor = MagicMock()
@@ -113,7 +113,7 @@ class TestUpsertSystemHealth:
         # Second call is INSERT
         assert "INSERT INTO system_health" in calls[1][0][0]
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_upsert_returns_false_on_zero_rowcount(self, mock_get_cursor: MagicMock) -> None:
         """Test that zero rowcount returns False."""
         mock_cursor = MagicMock()
@@ -124,7 +124,7 @@ class TestUpsertSystemHealth:
         result = upsert_system_health(component="kalshi_api", status="healthy")
         assert result is False
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_upsert_all_valid_statuses(self, mock_get_cursor: MagicMock) -> None:
         """Test all three valid status values pass through correctly."""
         for status in ("healthy", "degraded", "down"):
@@ -140,7 +140,7 @@ class TestUpsertSystemHealth:
             insert_params = insert_call[0][1]
             assert insert_params[1] == status
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_system.get_cursor")
     def test_upsert_all_valid_components(self, mock_get_cursor: MagicMock) -> None:
         """Test all valid component names from VALID_SYSTEM_HEALTH_COMPONENTS.
 
@@ -189,7 +189,7 @@ class TestUpsertSystemHealth:
 class TestGetSystemHealth:
     """Unit tests for get_system_health with mocked database."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_system.fetch_all")
     def test_get_all_components(self, mock_fetch_all: MagicMock) -> None:
         """Test fetching all component health records."""
         mock_fetch_all.return_value = [
@@ -207,7 +207,7 @@ class TestGetSystemHealth:
         call_args = mock_fetch_all.call_args
         assert len(call_args[0]) == 1  # Only query, no params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_system.fetch_all")
     def test_get_specific_component(self, mock_fetch_all: MagicMock) -> None:
         """Test fetching health for a specific component."""
         mock_fetch_all.return_value = [
@@ -223,7 +223,7 @@ class TestGetSystemHealth:
         call_args = mock_fetch_all.call_args
         assert call_args[0][1] == ("kalshi_api",)
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_system.fetch_all")
     def test_get_empty_result(self, mock_fetch_all: MagicMock) -> None:
         """Test fetching when no health records exist."""
         mock_fetch_all.return_value = []
@@ -232,7 +232,7 @@ class TestGetSystemHealth:
 
         assert result == []
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_system.fetch_all")
     def test_get_none_component_fetches_all(self, mock_fetch_all: MagicMock) -> None:
         """Test that component=None fetches all records."""
         mock_fetch_all.return_value = []
@@ -253,7 +253,7 @@ class TestGetSystemHealth:
 class TestGetSystemHealthSummary:
     """Unit tests for get_system_health_summary convenience function."""
 
-    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.crud_system.get_system_health")
     def test_summary_maps_components_to_status(self, mock_get_health: MagicMock) -> None:
         """Test summary returns component -> status mapping."""
         mock_get_health.return_value = [
@@ -270,7 +270,7 @@ class TestGetSystemHealthSummary:
             "websocket": "down",
         }
 
-    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.crud_system.get_system_health")
     def test_summary_empty_when_no_records(self, mock_get_health: MagicMock) -> None:
         """Test summary returns empty dict when no health records."""
         mock_get_health.return_value = []
@@ -279,7 +279,7 @@ class TestGetSystemHealthSummary:
 
         assert result == {}
 
-    @patch("precog.database.crud_operations.get_system_health")
+    @patch("precog.database.crud_system.get_system_health")
     def test_summary_delegates_to_get_system_health(self, mock_get_health: MagicMock) -> None:
         """Test summary calls get_system_health with no filter."""
         mock_get_health.return_value = []

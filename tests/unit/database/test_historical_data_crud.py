@@ -19,7 +19,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_historical import (
     get_historical_rankings,
     get_historical_stats,
     get_player_stats,
@@ -40,7 +40,7 @@ from precog.database.crud_operations import (
 class TestInsertHistoricalStatUnit:
     """Unit tests for insert_historical_stat function with mocked database."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_historical.get_cursor")
     def test_insert_stat_returns_stat_id(self, mock_get_cursor):
         """Test insert_historical_stat returns the stat_id from database."""
         # Setup mock
@@ -66,7 +66,7 @@ class TestInsertHistoricalStatUnit:
         assert result == 42
         mock_cursor.execute.assert_called_once()
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_historical.get_cursor")
     def test_insert_stat_with_minimal_params(self, mock_get_cursor):
         """Test insert_historical_stat with only required parameters."""
         mock_cursor = MagicMock()
@@ -90,7 +90,7 @@ class TestInsertHistoricalStatUnit:
         assert "ON CONFLICT" in sql
         assert "DO UPDATE SET" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_historical.get_cursor")
     def test_insert_stat_upsert_updates_existing(self, mock_get_cursor):
         """Test that UPSERT pattern updates stats when record exists.
 
@@ -125,7 +125,7 @@ class TestInsertHistoricalStatUnit:
         assert "stats = EXCLUDED.stats" in sql
         assert "DO UPDATE SET" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_historical.get_cursor")
     def test_insert_stat_handles_jsonb(self, mock_get_cursor):
         """Test that stats dict is properly handled as JSONB.
 
@@ -171,7 +171,7 @@ class TestInsertHistoricalStatUnit:
 class TestInsertHistoricalStatsBatchUnit:
     """Unit tests for insert_historical_stats_batch function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_historical.get_cursor")
     def test_batch_insert_single_batch(self, mock_get_cursor):
         """Test batch insert with records that fit in single batch."""
         mock_cursor = MagicMock()
@@ -200,7 +200,7 @@ class TestInsertHistoricalStatsBatchUnit:
         # Note: batch insert uses executemany, not execute
         assert mock_cursor.executemany.call_count == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_historical.get_cursor")
     def test_batch_insert_multiple_batches(self, mock_get_cursor):
         """Test batch insert splits records into multiple batches.
 
@@ -235,7 +235,7 @@ class TestInsertHistoricalStatsBatchUnit:
         # Note: batch insert uses executemany, not execute
         assert mock_cursor.executemany.call_count == 3  # 3 batches
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_historical.get_cursor")
     def test_batch_insert_empty_list(self, mock_get_cursor):
         """Test batch insert handles empty record list."""
         inserted, failed = insert_historical_stats_batch([])
@@ -249,7 +249,7 @@ class TestInsertHistoricalStatsBatchUnit:
 class TestGetHistoricalStatsUnit:
     """Unit tests for get_historical_stats function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_historical.fetch_all")
     def test_get_stats_basic_query(self, mock_fetch_all):
         """Test basic query with required parameters only."""
         mock_fetch_all.return_value = [
@@ -262,7 +262,7 @@ class TestGetHistoricalStatsUnit:
         assert result[0]["sport"] == "NFL"
         mock_fetch_all.assert_called_once()
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_historical.fetch_all")
     def test_get_stats_with_all_filters(self, mock_fetch_all):
         """Test query with all optional filters applied."""
         mock_fetch_all.return_value = []
@@ -288,7 +288,7 @@ class TestGetHistoricalStatsUnit:
         assert "source = %s" in sql
         assert "LIMIT %s" in sql
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_historical.fetch_all")
     def test_get_stats_ordered_by_season_week(self, mock_fetch_all):
         """Test results are ordered by season DESC, week DESC."""
         mock_fetch_all.return_value = []
@@ -305,7 +305,7 @@ class TestGetHistoricalStatsUnit:
 class TestGetPlayerStatsUnit:
     """Unit tests for get_player_stats function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_historical.fetch_all")
     def test_get_player_stats_basic(self, mock_fetch_all):
         """Test get_player_stats with required parameters."""
         mock_fetch_all.return_value = [
@@ -317,7 +317,7 @@ class TestGetPlayerStatsUnit:
         assert len(result) == 1
         assert result[0]["player_id"] == "12345"
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_historical.fetch_all")
     def test_get_player_stats_with_season_filter(self, mock_fetch_all):
         """Test get_player_stats filters by season when provided."""
         mock_fetch_all.return_value = []
@@ -333,7 +333,7 @@ class TestGetPlayerStatsUnit:
 class TestGetTeamStatsUnit:
     """Unit tests for get_team_stats function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_historical.fetch_all")
     def test_get_team_stats_basic(self, mock_fetch_all):
         """Test get_team_stats with required parameters."""
         mock_fetch_all.return_value = [
@@ -345,7 +345,7 @@ class TestGetTeamStatsUnit:
         assert len(result) == 1
         assert result[0]["team_code"] == "KC"
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_historical.fetch_all")
     def test_get_team_stats_ordered_by_season_week(self, mock_fetch_all):
         """Test results ordered by season DESC, week DESC."""
         mock_fetch_all.return_value = []
@@ -366,7 +366,7 @@ class TestGetTeamStatsUnit:
 class TestInsertHistoricalRankingUnit:
     """Unit tests for insert_historical_ranking function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_historical.get_cursor")
     def test_insert_ranking_returns_ranking_id(self, mock_get_cursor):
         """Test insert_historical_ranking returns the ranking_id from database."""
         mock_cursor = MagicMock()
@@ -390,7 +390,7 @@ class TestInsertHistoricalRankingUnit:
         assert result == 42
         mock_cursor.execute.assert_called_once()
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_historical.get_cursor")
     def test_insert_ranking_with_minimal_params(self, mock_get_cursor):
         """Test insert_historical_ranking with only required parameters."""
         mock_cursor = MagicMock()
@@ -413,7 +413,7 @@ class TestInsertHistoricalRankingUnit:
         sql = call_args[0][0]
         assert "ON CONFLICT" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_historical.get_cursor")
     def test_insert_ranking_upsert_uses_poll_type(self, mock_get_cursor):
         """Test UPSERT conflict key includes poll_type.
 
@@ -450,7 +450,7 @@ class TestInsertHistoricalRankingUnit:
 class TestInsertHistoricalRankingsBatchUnit:
     """Unit tests for insert_historical_rankings_batch function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_historical.get_cursor")
     def test_batch_insert_rankings(self, mock_get_cursor):
         """Test batch insert for rankings."""
         mock_cursor = MagicMock()
@@ -476,7 +476,7 @@ class TestInsertHistoricalRankingsBatchUnit:
         assert inserted == 25
         assert failed == 0
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_historical.get_cursor")
     def test_batch_insert_rankings_empty_list(self, mock_get_cursor):
         """Test batch insert handles empty record list."""
         inserted, failed = insert_historical_rankings_batch([])
@@ -490,7 +490,7 @@ class TestInsertHistoricalRankingsBatchUnit:
 class TestGetHistoricalRankingsUnit:
     """Unit tests for get_historical_rankings function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_historical.fetch_all")
     def test_get_rankings_basic_query(self, mock_fetch_all):
         """Test basic rankings query."""
         mock_fetch_all.return_value = [
@@ -502,7 +502,7 @@ class TestGetHistoricalRankingsUnit:
         assert len(result) == 1
         assert result[0]["rank"] == 1
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_historical.fetch_all")
     def test_get_rankings_top_n_filter(self, mock_fetch_all):
         """Test top_n parameter limits results to top N teams."""
         mock_fetch_all.return_value = []
@@ -513,7 +513,7 @@ class TestGetHistoricalRankingsUnit:
         sql = call_args[0][0]
         assert "rank <= %s" in sql
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_historical.fetch_all")
     def test_get_rankings_ordered_by_rank(self, mock_fetch_all):
         """Test results ordered by week DESC, rank ASC."""
         mock_fetch_all.return_value = []
@@ -529,7 +529,7 @@ class TestGetHistoricalRankingsUnit:
 class TestGetTeamRankingHistoryUnit:
     """Unit tests for get_team_ranking_history function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_historical.fetch_all")
     def test_get_team_ranking_history_basic(self, mock_fetch_all):
         """Test get_team_ranking_history with required parameters."""
         mock_fetch_all.return_value = [
@@ -543,7 +543,7 @@ class TestGetTeamRankingHistoryUnit:
         # Verify ordered by week DESC
         assert result[0]["week"] > result[1]["week"]
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_historical.fetch_all")
     def test_get_team_ranking_history_ordered_by_season_week(self, mock_fetch_all):
         """Test results ordered by season DESC, week ASC for chronological history.
 
@@ -560,7 +560,7 @@ class TestGetTeamRankingHistoryUnit:
         sql = call_args[0][0]
         assert "ORDER BY season DESC, week ASC" in sql
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_historical.fetch_all")
     def test_get_team_ranking_history_with_season_filter(self, mock_fetch_all):
         """Test filtering by specific season."""
         mock_fetch_all.return_value = []

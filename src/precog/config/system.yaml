@@ -549,7 +549,7 @@ backup:
 # NOTIFICATIONS
 # ============================================
 # Alert and notification system
-# Integrated with alerts table (see DATABASE_SCHEMA_SUMMARY_V1.6.md)
+# Integrated with alerts table (see DATABASE_SCHEMA_SUMMARY.md)
 # REQ-ALERT-009, REQ-ALERT-010, REQ-ALERT-011 (see MASTER_REQUIREMENTS_V2.7.md)
 
 notifications:

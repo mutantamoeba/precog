@@ -15,7 +15,7 @@ from decimal import Decimal
 import pytest
 
 from precog.database.connection import get_connection, release_connection
-from precog.database.crud_operations import create_strategy
+from precog.database.crud_strategies import create_strategy
 from precog.trading.position_manager import (
     InsufficientMarginError,
     PositionManager,

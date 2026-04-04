@@ -12199,7 +12199,7 @@ def test_create_strategy_real(db_pool, db_cursor, clean_test_data):
 
 **Supporting Documentation:**
 - DEVELOPMENT_PHILOSOPHY_V1.3.md (updated TDD section with Phase 1.5 lesson learned)
-- DEVELOPMENT_PATTERNS_V1.23.md (added Pattern 13: Test Coverage Quality, Patterns 26-28: Resource Cleanup, Dependency Injection, CI-Safe Stress Testing)
+- DEVELOPMENT_PATTERNS_V1.27.md (added Pattern 13: Test Coverage Quality, Patterns 26-28: Resource Cleanup, Dependency Injection, CI-Safe Stress Testing)
 - PHASE_1.5_TEST_PLAN_V1.0.md (test planning for manager components)
 
 **Development Guides:**
@@ -12270,7 +12270,7 @@ tests/
 - `docs/foundation/TESTING_STRATEGY_V3.9.md` (comprehensive 8 test type framework)
 - `docs/foundation/TEST_REQUIREMENTS_COMPREHENSIVE_V2.1.md` (REQ-TEST-012 through REQ-TEST-019)
 - `docs/foundation/DEVELOPMENT_PHILOSOPHY_V1.3.md` (TDD section with Phase 1.5 lessons)
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.23.md` (Pattern 13: Test Coverage Quality, Patterns 26-28)
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.27.md` (Pattern 13: Test Coverage Quality, Patterns 26-28)
 
 **Code:**
 - `tests/conftest.py` (db_pool, clean_test_data fixtures)
@@ -15252,7 +15252,7 @@ pytest tests/stress/test_config_loader_stress.py tests/stress/test_logger_stress
 ### Related Artifacts
 
 - **Issue:** #168 (Testcontainers for Database Stress Tests)
-- **Pattern:** Pattern 28 in DEVELOPMENT_PATTERNS_V1.23.md
+- **Pattern:** Pattern 28 in DEVELOPMENT_PATTERNS_V1.27.md
 - **Testing Strategy:** TESTING_STRATEGY_V3.9.md Section 5.3.4 (Stress Tests CI Behavior)
 - **Isolation Patterns:** TEST_ISOLATION_PATTERNS_V1.1.md Pattern 6 (CI-Safe ThreadPoolExecutor)
 - **Requirement:** REQ-TEST-020 (CI-Safe Stress Testing)
@@ -16837,6 +16837,7 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 - v2.29: **TWO-AXIS ENVIRONMENT CONFIGURATION (PLANNED)** - Added Decision #105/ADR-105 for environment configuration architecture with PRECOG_ENV (database) + {MARKET}_MODE (API per market) with safety guardrails. Documented in PHASE_2.5_DEFERRED_TASKS_V1.1, Issue #202.
 - v2.28: **BASEPOLLER UNIFIED DESIGN PATTERN** - Added Decision #103/ADR-103 (BasePoller abstract class with Template Method pattern, {Platform}{Entity}Poller naming convention, generic stats fields)
 - v2.27: **PHASE 2.5 LIVE DATA COLLECTION** - Added Decisions #100-102/ADR-100-102 (Service Supervisor Pattern, ESPN Status/Season Mapping, CloudWatch/ELK Deferral)
+- v2.36: **DOMAIN MODULE PATTERN** - Added Decision #115/ADR-115 (Database Domain Module Architecture). Direct imports from domain modules, no re-export facades. Session 38.
 - v2.26: **CI-SAFE STRESS TEST MARKERS (ISSUE #168)** - Added Decision #99/ADR-099 (skipif vs xfail(run=False) for CI Stress Tests): `skipif(_is_ci)` preferred over `xfail(run=False)` for clearer semantic meaning (SKIPPED vs XFAIL)
 - v2.24: **TIMESCALEDB DECISION (PHASE 6+)** - Added Decision #98/ADR-098 (TimescaleDB Deferred to Phase 6+): Current PostgreSQL + SCD Type 2 sufficient for Phase 1-5, triggers defined for re-evaluation
 - v2.21: **WORKFLOW ENFORCEMENT ARCHITECTURE** - Added Decisions #94-97/ADR-094-307 (YAML-Driven Validation, Auto-Discovery Pattern, Parallel Execution in Git Hooks, Tier-Specific Coverage Targets - Phase 1.5)
@@ -16860,4 +16861,95 @@ This document represents the architectural decisions as of October 22, 2025 (Pha
 
 **For complete ADR catalog, see:** ADR_INDEX_V1.4.md
 
-**END OF ARCHITECTURE DECISIONS V2.34**
+## Decision #115/ADR-115: Database Domain Module Architecture
+
+**Date:** April 4, 2026
+**Status:** Accepted
+**Phase:** Phase 1 (infrastructure — applies to all database operations)
+
+### Context
+
+The `database/crud_operations.py` file grew to 8,329 lines containing 112 functions across 11+ unrelated domains (markets, teams, game states, analytics, etc.). This created:
+- Merge conflicts when multiple features touched different domains
+- Difficulty finding relevant code (scrolling through 8K lines)
+- `git blame` noise (unrelated changes in the same file)
+- Lost type information when mypy traced through re-export layers
+
+### Decision
+
+**Adopt a domain module pattern for database CRUD operations:**
+
+1. **Domain modules** (`crud_markets.py`, `crud_teams.py`, etc.) are the single source of truth for each domain's CRUD functions.
+
+2. **Direct imports** — consumers import from the domain module, not through a facade:
+   ```python
+   # Correct
+   from precog.database.crud_markets import create_market
+   # Wrong (no facade exists)
+   from precog.database.crud_operations import create_market
+   ```
+
+3. **`database/__init__.py`** exports only connection infrastructure (`get_cursor`, `fetch_one`, `fetch_all`, environment functions). No CRUD re-exports.
+
+4. **No cross-module dependencies** — domain modules import only from `connection` and `crud_shared`. Never from each other. If a cross-module call is needed, use a lazy import inside the function body.
+
+5. **Adding a new CRUD function** requires only one step: add it to the appropriate domain module. No re-export bookkeeping.
+
+### Module Inventory (15 modules)
+
+| Module | Domain | Lines |
+|--------|--------|-------|
+| `crud_shared` | Constants, helpers, type aliases | 193 |
+| `crud_account` | Account balance, settlements | 274 |
+| `crud_ledger` | Ledger entries, temporal alignment, market trades | 898 |
+| `crud_orders` | Orders (attribution, fill tracking) | 523 |
+| `crud_events` | Series, events (Kalshi hierarchy) | 760 |
+| `crud_markets` | Markets, snapshots, orderbook | 914 |
+| `crud_positions` | Positions (SCD Type 2), trades | 799 |
+| `crud_strategies` | Strategy versioning (immutable) | 391 |
+| `crud_teams` | Teams, venues, rankings, external codes | 931 |
+| `crud_game_states` | Game states, games dimension, game odds | 1,505 |
+| `crud_historical` | Historical stats and rankings | 743 |
+| `crud_schedulers` | Scheduler heartbeat tracking | 447 |
+| `crud_elo` | Elo ratings and calculation logs | 442 |
+| `crud_system` | System health, circuit breakers, alerts | 422 |
+| `crud_analytics` | Edges, evaluations, backtesting, predictions, metrics | 1,091 |
+
+### Dependency Graph
+
+```
+connection.py --> crud_shared.py
+     ^                ^
+     |                |
+     +-- 15 domain modules (crud_*.py)
+                ^
+                |
+         consumers (schedulers, CLI, matching, trading, etc.)
+```
+
+No cycles. No domain module imports another domain module.
+
+### Alternatives Considered
+
+1. **Re-export facade (`crud_operations.py`)** — Rejected. Created a three-layer import chain, hid type information from mypy, required double maintenance (domain module + re-export) for every new function.
+
+2. **`__init__.py` as the facade** — Rejected. Same maintenance burden as option 1, and `__init__.py` should expose package infrastructure, not application logic.
+
+3. **Keep the monolith** — Rejected. 8,329 lines with 11 unrelated domains is unmaintainable.
+
+### Consequences
+
+- (+) Each import statement tells you which domain you're touching
+- (+) mypy gets precise type information (no `Any` from re-export chains)
+- (+) `git blame` shows only domain-relevant changes
+- (+) Zero maintenance overhead for new functions
+- (-) Test mock patches must target the domain module, not a facade
+- (-) One-time migration cost (145 import rewrites across 55 files)
+
+### Cross-References
+
+- Issue #554: CRUD god object decomposition
+- Session 37: Phase 1a extraction (4 modules)
+- Session 38: Phase 1b/1c extraction (11 modules) + Option B cleanup
+
+**END OF ARCHITECTURE DECISIONS V2.36**

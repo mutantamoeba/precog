@@ -16,7 +16,7 @@ from hypothesis import assume, given, settings
 from hypothesis import strategies as st
 
 from precog.database.connection import get_cursor
-from precog.database.crud_operations import (
+from precog.database.crud_events import (
     create_series,
     get_or_create_series,
     get_series,

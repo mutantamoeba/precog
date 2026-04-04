@@ -44,7 +44,7 @@ from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 from psycopg2 import IntegrityError
 
-from precog.database.crud_operations import (
+from precog.database.crud_markets import (
     create_market,
     get_current_market,
     update_market_with_versioning,
@@ -147,7 +147,7 @@ def _get_test_event_pk() -> int:
     """Look up the integer surrogate PK for the test event KXNFLGAME-25DEC15CLEKC."""
     global _cached_event_pk
     if _cached_event_pk is None:
-        from precog.database.crud_operations import get_event
+        from precog.database.crud_events import get_event
 
         evt = get_event("KXNFLGAME-25DEC15CLEKC")
         _cached_event_pk = evt["id"] if evt else 1

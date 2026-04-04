@@ -18,7 +18,13 @@ from decimal import Decimal
 
 import pytest
 
-from precog.database import crud_operations
+from precog.database.crud_markets import get_market_history
+from precog.database.crud_strategies import (
+    create_strategy,
+    get_strategy,
+    list_strategies,
+    update_strategy_status,
+)
 
 # NOTE: Phase 1.5 Manager APIs and strategy_types lookup table are now implemented.
 # Tests enabled - validating SQL injection resistance in CRUD operations.
@@ -103,7 +109,7 @@ def test_create_strategy_rejects_sql_injection_in_name(
     # Create strategy with malicious input
     # Use unique version per payload to avoid duplicate key violations
     unique_version = f"v1.0-{hashlib.md5(malicious_input.encode()).hexdigest()[:8]}"
-    strategy_id = crud_operations.create_strategy(
+    strategy_id = create_strategy(
         strategy_name=malicious_input,  # Malicious SQL in name field
         strategy_version=unique_version,
         strategy_type="value",  # Use valid strategy type from lookup table
@@ -115,12 +121,12 @@ def test_create_strategy_rejects_sql_injection_in_name(
     assert isinstance(strategy_id, int)
 
     # Verify name stored exactly as provided (not executed as SQL)
-    strategy = crud_operations.get_strategy(strategy_id)
+    strategy = get_strategy(strategy_id)
     assert strategy is not None
     assert strategy["strategy_name"] == malicious_input  # Exact match - SQL NOT executed
 
     # Verify strategies table still exists (DROP TABLE prevented)
-    all_strategies = crud_operations.list_strategies()
+    all_strategies = list_strategies()
     assert len(all_strategies) >= 1  # At least our test strategy exists
 
 
@@ -159,7 +165,7 @@ def test_get_market_history_rejects_sql_injection_in_ticker(
         - markets table still exists
     """
     # Query with malicious ticker
-    history = crud_operations.get_market_history(malicious_input, limit=10)
+    history = get_market_history(malicious_input, limit=10)
 
     # Verify query executed safely
     assert isinstance(history, list)
@@ -218,7 +224,7 @@ def test_update_strategy_status_rejects_sql_injection(
 
     # First, create a test strategy with unique version
     unique_version = f"v1.0-{hashlib.md5(malicious_input.encode()).hexdigest()[:8]}"
-    strategy_id = crud_operations.create_strategy(
+    strategy_id = create_strategy(
         strategy_name="SQL injection update test",
         strategy_version=unique_version,
         strategy_type="value",  # Use valid strategy type from lookup table
@@ -230,7 +236,7 @@ def test_update_strategy_status_rejects_sql_injection(
     # Try to update strategy status with malicious SQL payload
     # Defense in depth: either stored as data OR rejected by constraints
     try:
-        result = crud_operations.update_strategy_status(
+        result = update_strategy_status(
             strategy_id=strategy_id,
             new_status=malicious_input,  # Malicious SQL in status field
         )
@@ -240,7 +246,7 @@ def test_update_strategy_status_rejects_sql_injection(
         assert result is True
 
         # Verify status stored exactly as provided (not executed as SQL)
-        strategy = crud_operations.get_strategy(strategy_id)
+        strategy = get_strategy(strategy_id)
         assert strategy is not None
         assert strategy["status"] == malicious_input  # Exact match - SQL NOT executed
 
@@ -259,7 +265,7 @@ def test_update_strategy_status_rejects_sql_injection(
 
     # CRITICAL: Regardless of success/constraint failure, strategies table must exist
     # If SQL injection had executed, the table might be dropped/corrupted
-    all_strategies = crud_operations.list_strategies()
+    all_strategies = list_strategies()
     assert len(all_strategies) >= 1, "strategies table was damaged by injection!"
 
 
@@ -321,7 +327,7 @@ def test_get_market_history_rejects_sql_injection_in_limit(
     # Either Python raises TypeError/ValueError OR database rejects invalid BIGINT
     with pytest.raises((TypeError, ValueError, psycopg2.errors.InvalidTextRepresentation)):
         # This should fail - either at Python level or database level
-        crud_operations.get_market_history("TEST-TICKER", limit=malicious_limit)  # type: ignore[arg-type]
+        get_market_history("TEST-TICKER", limit=malicious_limit)  # type: ignore[arg-type]
 
     # Verify strategies table still exists
     db_cursor.execute("SELECT COUNT(*) as count FROM strategies")
@@ -384,7 +390,7 @@ def test_create_strategy_rejects_sql_injection_in_json_config(
 
     # Create strategy with malicious JSON - use unique version with timestamp
     unique_version = f"v1.0-json-{int(time.time() * 1000) % 100000}"
-    strategy_id = crud_operations.create_strategy(
+    strategy_id = create_strategy(
         strategy_name="JSON injection test",
         strategy_version=unique_version,
         strategy_type="value",  # Use valid strategy type from lookup table
@@ -395,13 +401,13 @@ def test_create_strategy_rejects_sql_injection_in_json_config(
     assert strategy_id is not None
 
     # Verify config stored exactly (SQL NOT executed)
-    strategy = crud_operations.get_strategy(strategy_id)
+    strategy = get_strategy(strategy_id)
     assert strategy is not None
     assert strategy["config"]["malicious_key"] == "'; DROP TABLE strategies; --"
     assert strategy["config"]["nested"]["another_injection"] == "' OR '1'='1"
 
     # Verify strategies table still exists
-    all_strategies = crud_operations.list_strategies()
+    all_strategies = list_strategies()
     assert len(all_strategies) >= 1
 
 
@@ -445,7 +451,7 @@ def test_strategies_table_survives_all_injection_attempts(
 
     # Verify CRUD still works - use unique version with timestamp
     unique_version = f"v1.0-integrity-{int(time.time() * 1000) % 100000}"
-    strategy_id = crud_operations.create_strategy(
+    strategy_id = create_strategy(
         strategy_name="Post-injection integrity test",
         strategy_version=unique_version,
         strategy_type="value",  # Use valid strategy type from lookup table
@@ -453,6 +459,6 @@ def test_strategies_table_survives_all_injection_attempts(
     )
     assert strategy_id is not None
 
-    strategy = crud_operations.get_strategy(strategy_id)
+    strategy = get_strategy(strategy_id)
     assert strategy is not None
     assert strategy["strategy_name"] == "Post-injection integrity test"
