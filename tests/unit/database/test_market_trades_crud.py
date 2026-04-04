@@ -75,7 +75,7 @@ def _default_trade_dict():
 class TestUpsertMarketTrade:
     """Unit tests for upsert_market_trade function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_upsert_returns_surrogate_id(self, mock_get_cursor):
         """Test upsert_market_trade returns the integer surrogate PK on insert."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -85,7 +85,7 @@ class TestUpsertMarketTrade:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_upsert_returns_none_on_conflict(self, mock_get_cursor):
         """Test upsert returns None when trade already exists (ON CONFLICT DO NOTHING)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -95,7 +95,7 @@ class TestUpsertMarketTrade:
 
         assert result is None
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_upsert_validates_decimal_yes_price(self, mock_get_cursor):
         """Test that float values are rejected for yes_price."""
         _mock_cursor_context(mock_get_cursor)
@@ -106,7 +106,7 @@ class TestUpsertMarketTrade:
         with pytest.raises(TypeError, match="yes_price must be Decimal"):
             upsert_market_trade(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_upsert_validates_decimal_no_price(self, mock_get_cursor):
         """Test that float values are rejected for no_price."""
         _mock_cursor_context(mock_get_cursor)
@@ -117,7 +117,7 @@ class TestUpsertMarketTrade:
         with pytest.raises(TypeError, match="no_price must be Decimal"):
             upsert_market_trade(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_upsert_validates_taker_side(self, mock_get_cursor):
         """Test that invalid taker_side values are rejected."""
         _mock_cursor_context(mock_get_cursor)
@@ -128,7 +128,7 @@ class TestUpsertMarketTrade:
         with pytest.raises(ValueError, match="taker_side must be one of"):
             upsert_market_trade(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_upsert_allows_none_optional_fields(self, mock_get_cursor):
         """Test that all optional fields accept None (default behavior)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -139,7 +139,7 @@ class TestUpsertMarketTrade:
 
         assert result == 2
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_upsert_with_all_optional_fields(self, mock_get_cursor):
         """Test upsert_market_trade with every optional parameter provided."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -158,7 +158,7 @@ class TestUpsertMarketTrade:
 
         assert result == 99
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_upsert_accepts_all_valid_taker_sides(self, mock_get_cursor):
         """Test that every valid taker_side is accepted."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -170,7 +170,7 @@ class TestUpsertMarketTrade:
             result = upsert_market_trade(**kwargs)
             assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_upsert_sql_contains_on_conflict(self, mock_get_cursor):
         """Test that the SQL uses ON CONFLICT DO NOTHING for idempotency."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -183,7 +183,7 @@ class TestUpsertMarketTrade:
         assert "ON CONFLICT" in sql
         assert "DO NOTHING" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_upsert_sql_contains_returning_id(self, mock_get_cursor):
         """Test that the SQL uses RETURNING id to get the surrogate PK."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -205,8 +205,8 @@ class TestUpsertMarketTrade:
 class TestUpsertMarketTradesBatch:
     """Unit tests for upsert_market_trades_batch function."""
 
-    @patch("precog.database.crud_operations.execute_values")
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.execute_values")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_batch_returns_rowcount(self, mock_get_cursor, mock_exec_values):
         """Test batch insert returns cur.rowcount (actual inserts, not skipped)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -226,7 +226,7 @@ class TestUpsertMarketTradesBatch:
 
         assert result == 0
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_batch_validates_decimal_yes_price(self, mock_get_cursor):
         """Test that float yes_price is rejected in batch."""
         _mock_cursor_context(mock_get_cursor)
@@ -237,7 +237,7 @@ class TestUpsertMarketTradesBatch:
         with pytest.raises(TypeError, match="yes_price must be Decimal"):
             upsert_market_trades_batch([row])
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_batch_validates_decimal_no_price(self, mock_get_cursor):
         """Test that float no_price is rejected in batch."""
         _mock_cursor_context(mock_get_cursor)
@@ -248,7 +248,7 @@ class TestUpsertMarketTradesBatch:
         with pytest.raises(TypeError, match="no_price must be Decimal"):
             upsert_market_trades_batch([row])
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_batch_validates_taker_side(self, mock_get_cursor):
         """Test that invalid taker_side is rejected in batch."""
         _mock_cursor_context(mock_get_cursor)
@@ -259,8 +259,8 @@ class TestUpsertMarketTradesBatch:
         with pytest.raises(ValueError, match="taker_side must be one of"):
             upsert_market_trades_batch([row])
 
-    @patch("precog.database.crud_operations.execute_values")
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.execute_values")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_batch_calls_execute_values(self, mock_get_cursor, mock_exec_values):
         """Test that batch insert uses execute_values for accurate rowcount."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -273,8 +273,8 @@ class TestUpsertMarketTradesBatch:
         # Verify cursor is first arg
         assert mock_exec_values.call_args[0][0] is mock_cursor
 
-    @patch("precog.database.crud_operations.execute_values")
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.execute_values")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_batch_sql_contains_on_conflict(self, mock_get_cursor, mock_exec_values):
         """Test that batch SQL uses ON CONFLICT DO NOTHING."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -287,8 +287,8 @@ class TestUpsertMarketTradesBatch:
         assert "ON CONFLICT" in sql
         assert "DO NOTHING" in sql
 
-    @patch("precog.database.crud_operations.execute_values")
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.execute_values")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_batch_allows_none_optional_fields(self, mock_get_cursor, mock_exec_values):
         """Test that batch rows without optional fields work fine."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -331,7 +331,7 @@ class TestUpsertMarketTradesBatch:
 class TestGetMarketTrades:
     """Unit tests for get_market_trades function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_returns_empty_list(self, mock_fetch_all):
         """Test that empty result set returns empty list."""
         mock_fetch_all.return_value = []
@@ -340,7 +340,7 @@ class TestGetMarketTrades:
 
         assert result == []
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_returns_list_of_dicts(self, mock_fetch_all):
         """Test that result is a list of dicts."""
         mock_fetch_all.return_value = [
@@ -353,7 +353,7 @@ class TestGetMarketTrades:
         assert len(result) == 2
         assert result[0]["id"] == 1
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_filters_by_since(self, mock_fetch_all):
         """Test that since parameter adds trade_time filter."""
         mock_fetch_all.return_value = []
@@ -366,7 +366,7 @@ class TestGetMarketTrades:
         assert "trade_time >= %s" in query
         assert cutoff in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_respects_limit(self, mock_fetch_all):
         """Test that custom limit is applied."""
         mock_fetch_all.return_value = []
@@ -376,7 +376,7 @@ class TestGetMarketTrades:
         params = mock_fetch_all.call_args[0][1]
         assert 25 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_default_limit(self, mock_fetch_all):
         """Test that default limit of 100 is applied."""
         mock_fetch_all.return_value = []
@@ -386,7 +386,7 @@ class TestGetMarketTrades:
         params = mock_fetch_all.call_args[0][1]
         assert 100 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_orders_by_trade_time_desc(self, mock_fetch_all):
         """Test that query orders by trade_time DESC, id DESC."""
         mock_fetch_all.return_value = []
@@ -396,7 +396,7 @@ class TestGetMarketTrades:
         query = mock_fetch_all.call_args[0][0]
         assert "ORDER BY trade_time DESC, id DESC" in query
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_filters_by_market_internal_id(self, mock_fetch_all):
         """Test that query filters by market_internal_id."""
         mock_fetch_all.return_value = []
@@ -408,7 +408,7 @@ class TestGetMarketTrades:
         assert "market_internal_id = %s" in query
         assert 42 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_no_since_omits_time_filter(self, mock_fetch_all):
         """Test that omitting since does not add time filter."""
         mock_fetch_all.return_value = []
@@ -428,7 +428,7 @@ class TestGetMarketTrades:
 class TestGetLatestTradeTime:
     """Unit tests for get_latest_trade_time function."""
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_ledger.fetch_one")
     def test_returns_datetime_from_latest(self, mock_fetch_one):
         """Test that function returns trade_time from the most recent trade."""
         expected = datetime(2026, 1, 15, 20, 30, 0, tzinfo=UTC)
@@ -438,7 +438,7 @@ class TestGetLatestTradeTime:
 
         assert result == expected
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_ledger.fetch_one")
     def test_returns_none_when_empty(self, mock_fetch_one):
         """Test that function returns None when no trades exist for this market."""
         mock_fetch_one.return_value = None
@@ -447,7 +447,7 @@ class TestGetLatestTradeTime:
 
         assert result is None
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_ledger.fetch_one")
     def test_queries_correct_market(self, mock_fetch_one):
         """Test that query filters by the given market_internal_id."""
         mock_fetch_one.return_value = None
@@ -457,7 +457,7 @@ class TestGetLatestTradeTime:
         params = mock_fetch_one.call_args[0][1]
         assert 99 in params
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_ledger.fetch_one")
     def test_orders_by_trade_time_desc(self, mock_fetch_one):
         """Test that query orders by trade_time DESC, id DESC with LIMIT 1."""
         mock_fetch_one.return_value = None
