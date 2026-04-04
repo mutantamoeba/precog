@@ -182,13 +182,12 @@ class ESPNGamePoller(BasePoller):
     # Per-league adaptive polling constants
     DEFAULT_TRACKING_INTERVAL: ClassVar[int] = 30  # seconds (per-league, live games)
     DEFAULT_DISCOVERY_INTERVAL: ClassVar[int] = 900  # seconds (per-league, no live games)
-    MAX_CONCURRENT_TRACKING: ClassVar[int] = 2  # above this, throttle tracking interval
-    THROTTLED_TRACKING_INTERVAL: ClassVar[int] = 60  # seconds (when 3+ leagues tracking)
+    DEFAULT_MAX_THROTTLED_INTERVAL: ClassVar[int] = 60  # never throttle slower than this
     LEAGUE_STAGGER_OFFSET: ClassVar[int] = 15  # seconds between league job starts
     HEARTBEAT_TRACKING_EVERY_N: ClassVar[int] = 20  # heartbeat every N quiet tracking polls
 
-    # ESPN rate limit budget
-    ESPN_RATE_LIMIT: ClassVar[int] = 250  # requests per hour
+    # ESPN rate limit budget (configurable via constructor or YAML)
+    DEFAULT_RATE_BUDGET: ClassVar[int] = 250  # requests per hour
 
     # Game status mappings
     LIVE_STATUSES: ClassVar[set[str]] = {"in", "in_progress", "halftime"}
@@ -205,6 +204,8 @@ class ESPNGamePoller(BasePoller):
         job_store_url: str | None = None,
         adaptive_polling: bool = True,
         validate_teams_on_start: bool = True,
+        rate_budget_per_hour: int | None = None,
+        max_throttled_interval: int | None = None,
     ) -> None:
         """
         Initialize the ESPNGamePoller.
@@ -254,6 +255,15 @@ class ESPNGamePoller(BasePoller):
         self.job_store_url = job_store_url
         self.adaptive_polling = adaptive_polling
         self.validate_teams_on_start = validate_teams_on_start
+
+        # Rate budget and throttle computation (C18 JC-4 / #560)
+        self.rate_budget_per_hour = rate_budget_per_hour or self.DEFAULT_RATE_BUDGET
+        self.max_throttled_interval = max_throttled_interval or self.DEFAULT_MAX_THROTTLED_INTERVAL
+        tracking_interval = self.poll_interval or self.DEFAULT_TRACKING_INTERVAL
+        discovery_overhead = len(self.leagues) * (3600 // self.DEFAULT_DISCOVERY_INTERVAL)
+        available_for_tracking = self.rate_budget_per_hour - discovery_overhead
+        req_per_league_tracking = 3600 // tracking_interval
+        self._max_concurrent_full_speed = max(1, available_for_tracking // req_per_league_tracking)
 
         # Per-league polling state (protected by self._lock from BasePoller)
         # Maps league code -> LEAGUE_STATE_DISCOVERY or LEAGUE_STATE_TRACKING
@@ -761,38 +771,64 @@ class ESPNGamePoller(BasePoller):
         operations to be executed OUTSIDE the lock (avoids deadlock with
         APScheduler's internal lock).
 
-        When 3+ leagues are in TRACKING state simultaneously, the tracking
-        interval is increased to THROTTLED_TRACKING_INTERVAL (60s) to stay
-        under ESPN's 250 req/hr rate limit.
+        When more leagues are tracking than can run at full speed, excess
+        leagues are throttled. Throttle interval is computed from the rate
+        budget, not hardcoded. Capped at max_throttled_interval (default 60s).
 
         Returns:
             List of (job_id, old_interval, new_interval, state, tracking_count)
             tuples for jobs that need rescheduling.
 
         Educational Note:
-            Rate budget math:
-            - DISCOVERY leagues: 3600/900 = 4 req/hr each
-            - TRACKING leagues (normal): 3600/30 = 120 req/hr each
-            - TRACKING leagues (throttled): 3600/60 = 60 req/hr each
+            Rate budget math (computed, not hardcoded — #560):
+            - rate_budget_per_hour: configurable (default 250, can increase to 500+)
+            - discovery_overhead: len(leagues) * (3600/900) = ~16 req/hr for 4 leagues
+            - available_for_tracking: budget - discovery_overhead
+            - max_concurrent_full_speed: available / (3600 / tracking_interval)
 
-            With 3 tracking + 1 discovery: 3*60 + 4 = 184 req/hr (safe)
-            With 4 tracking (throttled): 4*60 = 240 req/hr (safe)
-            With 2 tracking + 2 discovery: 2*120 + 2*4 = 248 req/hr (safe)
+            Example at 500 req/hr, 15s tracking:
+            - discovery overhead: 4 * 4 = 16 req/hr
+            - available: 484 req/hr
+            - full speed: 3600/15 = 240 req/hr per league
+            - max at full speed: 484/240 = 2 leagues
+            - overflow leagues: throttled to share remaining budget
+            - throttled interval: capped at max_throttled_interval (60s)
         """
         tracking_count = sum(1 for s in self._league_states.values() if s == LEAGUE_STATE_TRACKING)
+        base_interval = self.poll_interval or self.DEFAULT_TRACKING_INTERVAL
 
-        # Determine tracking interval based on concurrent tracking count
-        if tracking_count > self.MAX_CONCURRENT_TRACKING:
-            tracking_interval = self.THROTTLED_TRACKING_INTERVAL
+        # Compute throttled interval for overflow leagues
+        if tracking_count > self._max_concurrent_full_speed:
+            # Budget used by full-speed leagues
+            full_speed_count = self._max_concurrent_full_speed
+            overflow_count = tracking_count - full_speed_count
+            full_speed_budget = full_speed_count * (3600 // base_interval)
+            discovery_budget = (len(self.leagues) - tracking_count) * (
+                3600 // self.DEFAULT_DISCOVERY_INTERVAL
+            )
+            remaining_budget = self.rate_budget_per_hour - full_speed_budget - discovery_budget
+
+            if remaining_budget > 0 and overflow_count > 0:
+                computed_throttle = max(base_interval, 3600 // (remaining_budget // overflow_count))
+            else:
+                computed_throttle = self.max_throttled_interval
+
+            # Cap at max_throttled_interval (never slower than 60s by default)
+            throttled_interval = min(computed_throttle, self.max_throttled_interval)
         else:
-            tracking_interval = self.DEFAULT_TRACKING_INTERVAL
+            throttled_interval = base_interval  # no throttling needed
 
         pending: list[tuple[str, int, int, str, int]] = []
 
         for league in self.leagues:
             state = self._league_states.get(league, LEAGUE_STATE_DISCOVERY)
             if state == LEAGUE_STATE_TRACKING:
-                new_interval = tracking_interval
+                # First N leagues get full speed, rest get throttled
+                # For now, uniform — priority-based throttling is Phase 2 (#560)
+                if tracking_count > self._max_concurrent_full_speed:
+                    new_interval = throttled_interval
+                else:
+                    new_interval = base_interval
             else:
                 new_interval = self.DEFAULT_DISCOVERY_INTERVAL
 
@@ -806,11 +842,11 @@ class ESPNGamePoller(BasePoller):
 
         # Validate rate budget
         total_req_hr = sum(3600 // iv for iv in self._league_intervals.values())
-        if total_req_hr > self.ESPN_RATE_LIMIT:
+        if total_req_hr > self.rate_budget_per_hour:
             logger.warning(
                 "Rate budget exceeded: %d req/hr > %d limit (tracking=%d leagues)",
                 total_req_hr,
-                self.ESPN_RATE_LIMIT,
+                self.rate_budget_per_hour,
                 tracking_count,
             )
 
