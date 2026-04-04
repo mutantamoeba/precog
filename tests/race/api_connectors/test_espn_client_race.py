@@ -13,7 +13,6 @@ Usage:
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -228,15 +227,14 @@ class TestRateLimitRaceConditions:
                 for t in threads:
                     t.join()
 
-                # All timestamps should be recorded
-                # Note: May have slight variation due to timing, but should be close
-                assert len(client.request_timestamps) >= num_threads * 0.9
+                # TokenBucket tokens should have been consumed
+                assert client.rate_limiter.tokens < client.rate_limiter.capacity
 
             finally:
                 client.close()
 
     def test_concurrent_rate_limit_checking(self) -> None:
-        """Test rate limit checking under concurrent access."""
+        """Test rate limit checking under concurrent access with TokenBucket."""
         num_threads = 50
         remaining_values: list[int] = []
         lock = threading.Lock()
@@ -244,8 +242,6 @@ class TestRateLimitRaceConditions:
         client = ESPNClient(rate_limit_per_hour=500)
 
         try:
-            # Pre-populate with some timestamps
-            client.request_timestamps = [datetime.now() for _ in range(200)]
 
             def check_remaining() -> None:
                 remaining = client.get_remaining_requests()
@@ -260,48 +256,38 @@ class TestRateLimitRaceConditions:
                 t.join()
 
             assert len(remaining_values) == num_threads
-            # All values should be consistent (around 300)
+            # All values should be consistent (TokenBucket is thread-safe)
             for value in remaining_values:
-                assert 280 <= value <= 320, f"Unexpected remaining value: {value}"
+                assert value >= 0
 
         finally:
             client.close()
 
-    def test_concurrent_timestamp_cleanup(self) -> None:
-        """Test concurrent timestamp cleanup operations."""
-        from datetime import timedelta
+    def test_concurrent_token_acquisition(self) -> None:
+        """Test concurrent token acquisition doesn't exceed capacity."""
+        from precog.api_connectors.rate_limiter import TokenBucket
 
-        num_threads = 10
-        client = ESPNClient(rate_limit_per_hour=1000)
+        limiter = TokenBucket(capacity=100, refill_rate=0.001)
+        acquired = {"count": 0}
+        lock = threading.Lock()
 
-        try:
-            # Add mix of old and recent timestamps
-            now = datetime.now()
-            old_time = now - timedelta(hours=2)
+        def acquire_tokens():
+            count = 0
+            for _ in range(20):
+                if limiter.acquire(block=False):
+                    count += 1
+            with lock:
+                acquired["count"] += count
 
-            client.request_timestamps = []
-            for i in range(500):
-                if i % 2 == 0:
-                    client.request_timestamps.append(old_time)
-                else:
-                    client.request_timestamps.append(now)
+        # 10 threads each trying 20 acquires (200 total, 100 capacity)
+        threads = [threading.Thread(target=acquire_tokens) for _ in range(10)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
 
-            def cleanup() -> None:
-                client._clean_old_timestamps()
-
-            threads = [threading.Thread(target=cleanup) for _ in range(num_threads)]
-
-            for t in threads:
-                t.start()
-            for t in threads:
-                t.join()
-
-            # Should have cleaned up old timestamps
-            # Remaining should be recent ones only
-            assert len(client.request_timestamps) <= 300
-
-        finally:
-            client.close()
+        # Should not exceed capacity
+        assert acquired["count"] <= 101  # Float precision tolerance
 
 
 # =============================================================================

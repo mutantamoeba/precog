@@ -273,9 +273,12 @@ class ESPNGamePoller(BasePoller):
             )
         tracking_interval = self.poll_interval or self.DEFAULT_TRACKING_INTERVAL
         discovery_overhead = len(self.leagues) * (3600 // self.DEFAULT_DISCOVERY_INTERVAL)
-        available_for_tracking = self.rate_budget_per_hour - discovery_overhead
-        req_per_league_tracking = 3600 // tracking_interval
-        self._max_concurrent_full_speed = max(1, available_for_tracking // req_per_league_tracking)
+        available_for_tracking = max(0, self.rate_budget_per_hour - discovery_overhead)
+        req_per_league_tracking = 3600 // tracking_interval if tracking_interval <= 3600 else 1
+        self._max_concurrent_full_speed = max(
+            1,
+            available_for_tracking // req_per_league_tracking if req_per_league_tracking > 0 else 1,
+        )
 
         # Per-league polling state (protected by self._lock from BasePoller)
         # Maps league code -> LEAGUE_STATE_DISCOVERY or LEAGUE_STATE_TRACKING
