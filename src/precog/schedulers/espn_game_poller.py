@@ -257,8 +257,20 @@ class ESPNGamePoller(BasePoller):
         self.validate_teams_on_start = validate_teams_on_start
 
         # Rate budget and throttle computation (C18 JC-4 / #560)
-        self.rate_budget_per_hour = rate_budget_per_hour or self.DEFAULT_RATE_BUDGET
-        self.max_throttled_interval = max_throttled_interval or self.DEFAULT_MAX_THROTTLED_INTERVAL
+        self.rate_budget_per_hour = (
+            rate_budget_per_hour if rate_budget_per_hour is not None else self.DEFAULT_RATE_BUDGET
+        )
+        self.max_throttled_interval = (
+            max_throttled_interval
+            if max_throttled_interval is not None
+            else self.DEFAULT_MAX_THROTTLED_INTERVAL
+        )
+        if self.rate_budget_per_hour < 1:
+            raise ValueError(f"rate_budget_per_hour must be >= 1, got {self.rate_budget_per_hour}")
+        if self.max_throttled_interval < 15:
+            raise ValueError(
+                f"max_throttled_interval must be >= 15, got {self.max_throttled_interval}"
+            )
         tracking_interval = self.poll_interval or self.DEFAULT_TRACKING_INTERVAL
         discovery_overhead = len(self.leagues) * (3600 // self.DEFAULT_DISCOVERY_INTERVAL)
         available_for_tracking = self.rate_budget_per_hour - discovery_overhead
@@ -797,38 +809,37 @@ class ESPNGamePoller(BasePoller):
         tracking_count = sum(1 for s in self._league_states.values() if s == LEAGUE_STATE_TRACKING)
         base_interval = self.poll_interval or self.DEFAULT_TRACKING_INTERVAL
 
-        # Compute throttled interval for overflow leagues
-        if tracking_count > self._max_concurrent_full_speed:
-            # Budget used by full-speed leagues
-            full_speed_count = self._max_concurrent_full_speed
-            overflow_count = tracking_count - full_speed_count
-            full_speed_budget = full_speed_count * (3600 // base_interval)
-            discovery_budget = (len(self.leagues) - tracking_count) * (
-                3600 // self.DEFAULT_DISCOVERY_INTERVAL
+        # Compute tracking interval: uniform allocation across all tracking leagues.
+        # When tracking_count <= max_concurrent_full_speed, use base interval.
+        # When tracking_count > max_concurrent_full_speed, compute from budget.
+        if tracking_count > self._max_concurrent_full_speed and tracking_count > 0:
+            # Budget available for tracking = total - discovery overhead
+            discovery_count = len(self.leagues) - tracking_count
+            discovery_budget = discovery_count * (3600 // self.DEFAULT_DISCOVERY_INTERVAL)
+            available_for_tracking = max(0, self.rate_budget_per_hour - discovery_budget)
+
+            # Uniform allocation: all tracking leagues share equally
+            per_league_budget = (
+                available_for_tracking // tracking_count if tracking_count > 0 else 0
             )
-            remaining_budget = self.rate_budget_per_hour - full_speed_budget - discovery_budget
 
-            if remaining_budget > 0 and overflow_count > 0:
-                computed_throttle = max(base_interval, 3600 // (remaining_budget // overflow_count))
+            if per_league_budget > 0:
+                computed_interval = max(base_interval, 3600 // per_league_budget)
             else:
-                computed_throttle = self.max_throttled_interval
+                computed_interval = self.max_throttled_interval
 
-            # Cap at max_throttled_interval (never slower than 60s by default)
-            throttled_interval = min(computed_throttle, self.max_throttled_interval)
+            # Cap: never slower than max_throttled_interval, never faster than base
+            tracking_interval = min(computed_interval, self.max_throttled_interval)
+            tracking_interval = max(tracking_interval, base_interval)
         else:
-            throttled_interval = base_interval  # no throttling needed
+            tracking_interval = base_interval  # no throttling needed
 
         pending: list[tuple[str, int, int, str, int]] = []
 
         for league in self.leagues:
             state = self._league_states.get(league, LEAGUE_STATE_DISCOVERY)
             if state == LEAGUE_STATE_TRACKING:
-                # First N leagues get full speed, rest get throttled
-                # For now, uniform — priority-based throttling is Phase 2 (#560)
-                if tracking_count > self._max_concurrent_full_speed:
-                    new_interval = throttled_interval
-                else:
-                    new_interval = base_interval
+                new_interval = tracking_interval
             else:
                 new_interval = self.DEFAULT_DISCOVERY_INTERVAL
 

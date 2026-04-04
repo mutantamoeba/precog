@@ -1105,6 +1105,28 @@ class TestRecalculateLeagueIntervals:
         total_req_hr = sum(3600 // iv for iv in poller._league_intervals.values())
         assert total_req_hr <= poller.rate_budget_per_hour
 
+    def test_tight_budget_no_division_by_zero(self, mock_espn_client: MagicMock) -> None:
+        """Test tight budget (122/hr) doesn't crash with ZeroDivisionError.
+
+        With budget=122 and max_throttled_interval=60, 4 leagues at 60s = 240 req/hr
+        which exceeds the budget. The cap is respected (no interval > 60s) and a
+        warning is logged. Budget cannot be met when the cap makes it impossible.
+        """
+        poller = ESPNGamePoller(
+            leagues=["nfl", "ncaaf", "nba", "nhl"],
+            espn_client=mock_espn_client,
+            rate_budget_per_hour=122,
+        )
+        for league in poller.leagues:
+            poller._league_states[league] = LEAGUE_STATE_TRACKING
+
+        # Should not raise ZeroDivisionError
+        poller._recalculate_league_intervals()
+
+        # Cap should be respected — no interval faster than base or slower than cap
+        for iv in poller._league_intervals.values():
+            assert iv <= poller.max_throttled_interval or iv == poller.DEFAULT_DISCOVERY_INTERVAL
+
     def test_higher_budget_allows_more_full_speed(self, mock_espn_client: MagicMock) -> None:
         """Test higher rate budget allows more leagues at full speed."""
         poller_low = ESPNGamePoller(
