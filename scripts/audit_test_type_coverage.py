@@ -103,6 +103,18 @@ MODULE_TIERS = {
     "database/crud_ledger": "experimental",
     "database/crud_account": "experimental",
     "database/crud_orders": "experimental",
+    # CRUD Phase 1b/1c extractions (session 38) — promote to business when individual test suites built
+    "database/crud_events": "experimental",
+    "database/crud_markets": "experimental",
+    "database/crud_positions": "experimental",
+    "database/crud_strategies": "experimental",
+    "database/crud_teams": "experimental",
+    "database/crud_game_states": "experimental",
+    "database/crud_historical": "experimental",
+    "database/crud_schedulers": "experimental",
+    "database/crud_elo": "experimental",
+    "database/crud_system": "experimental",
+    "database/crud_analytics": "experimental",
     "database/seeding/seeding_manager": "business",
     "database/seeding/historical_elo_loader": "business",
     # Batch Result Types (Issue #255) - Experimental until full test suite built

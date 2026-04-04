@@ -41,7 +41,7 @@ def mock_cursor():
 @pytest.fixture
 def mock_get_cursor(mock_cursor):
     """Patch get_cursor to return mock cursor."""
-    with patch("precog.database.crud_operations.get_cursor") as mock_gc:
+    with patch("precog.database.crud_game_states.get_cursor") as mock_gc:
         # Context manager returns cursor
         mock_gc.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_gc.return_value.__exit__ = MagicMock(return_value=False)
