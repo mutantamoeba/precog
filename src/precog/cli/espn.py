@@ -499,7 +499,7 @@ def status(
     try:
         client = get_espn_client()
         remaining = client.get_remaining_requests()
-        rate_limit = client.rate_limit_per_hour
+        rate_limit = client.rate_limiter.capacity
 
         table = Table(title="ESPN Client Status")
         table.add_column("Property", style="cyan", no_wrap=True)
