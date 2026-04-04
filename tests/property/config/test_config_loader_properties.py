@@ -147,51 +147,73 @@ class TestEnvironmentPrefixProperties:
     )
     @settings(max_examples=50)
     def test_environment_prefix_matches_environment_name(self, env: str, key: str) -> None:
-        """Environment prefix should match the environment setting.
+        """Environment prefix should match get_env_prefix() mapping.
 
-        Property: For environment 'X', get_env('KEY') should look for 'X_KEY' first.
+        Property: For PRECOG_ENV='X', get_env('KEY') should look for 'PREFIX_KEY' first,
+        where PREFIX comes from environment.py's get_env_prefix().
         """
-        loader = ConfigLoader()
-        loader.environment = env
-
-        expected_prefix = env.upper()
+        # Map environment names to their correct prefixes via get_env_prefix()
+        prefix_map = {
+            "development": "DEV",
+            "staging": "STAGING",
+            "production": "PROD",
+            "test": "TEST",
+        }
+        expected_prefix = prefix_map[env]
         prefixed_key = f"{expected_prefix}_{key}"
 
-        # Set environment variable with prefix
+        loader = ConfigLoader()
+
+        # Set environment variable with correct prefix
         test_value = "test_value_123"
-        with patch.dict(os.environ, {prefixed_key: test_value}, clear=False):
+        with patch.dict(
+            os.environ,
+            {prefixed_key: test_value, "PRECOG_ENV": env},
+            clear=False,
+        ):
             result = loader.get_env(key)
 
         assert result == test_value
 
     @given(environment_name_strategy())
     def test_all_environments_use_correct_prefix(self, env_name: str) -> None:
-        """All environments use their uppercased name as prefix.
+        """All environments use get_env_prefix() for consistent prefix mapping.
 
-        Note: The code uses environment.upper() as prefix, so:
-        - "development" -> "DEVELOPMENT_"
+        Note: get_env_prefix() maps via environment.py:
+        - "development" -> "DEV_"
         - "staging" -> "STAGING_"
-        - "production" -> "PRODUCTION_"
+        - "production" -> "PROD_"
         - "test" -> "TEST_"
         """
-        loader = ConfigLoader()
-        loader.environment = env_name
+        # Map environment names to their correct prefixes
+        prefix_map = {
+            "development": "DEV",
+            "staging": "STAGING",
+            "production": "PROD",
+            "test": "TEST",
+        }
+        actual_prefix = prefix_map[env_name]
 
-        # The actual prefix is the uppercased environment name
-        actual_prefix = env_name.upper()
+        loader = ConfigLoader()
 
         # Use unique key to avoid conflicts
         key = f"UNIQUE_PREFIX_TEST_{actual_prefix}"
         prefixed_key = f"{actual_prefix}_{key}"
         test_value = f"value_for_{actual_prefix}"
 
-        # Set and then clean up manually to avoid patch issues
+        # Set PRECOG_ENV so get_env_prefix() returns the right prefix
+        old_precog = os.environ.get("PRECOG_ENV")
         old_value = os.environ.get(prefixed_key)
         try:
+            os.environ["PRECOG_ENV"] = env_name
             os.environ[prefixed_key] = test_value
             result = loader.get_env(key)
             assert result == test_value
         finally:
+            if old_precog is not None:
+                os.environ["PRECOG_ENV"] = old_precog
+            elif "PRECOG_ENV" in os.environ:
+                del os.environ["PRECOG_ENV"]
             if old_value is not None:
                 os.environ[prefixed_key] = old_value
             elif prefixed_key in os.environ:
@@ -205,13 +227,12 @@ class TestEnvironmentPrefixProperties:
         Property: get_env('KEY') returns unprefixed KEY if ENV_KEY doesn't exist.
         """
         loader = ConfigLoader()
-        loader.environment = "development"
 
         # Only set unprefixed key
         test_value = "unprefixed_value"
-        with patch.dict(os.environ, {key: test_value}, clear=False):
-            # Clear any prefixed version
-            env_key = f"DEVELOPMENT_{key}"
+        with patch.dict(os.environ, {key: test_value, "PRECOG_ENV": "dev"}, clear=False):
+            # Clear any prefixed version (DEV_ prefix via get_env_prefix())
+            env_key = f"DEV_{key}"
             env_backup = os.environ.pop(env_key, None)
             try:
                 result = loader.get_env(key)

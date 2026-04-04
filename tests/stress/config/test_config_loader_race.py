@@ -312,9 +312,9 @@ trailing_stops:
         with patch.dict(
             os.environ,
             {
-                "ENVIRONMENT": "development",
-                "DEVELOPMENT_TEST_VAR": "dev_value",
-                "PRODUCTION_TEST_VAR": "prod_value",
+                "PRECOG_ENV": "dev",
+                "DEV_TEST_VAR": "dev_value",
+                "PROD_TEST_VAR": "prod_value",
                 "TEST_VAR": "fallback_value",
             },
         ):

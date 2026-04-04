@@ -24,7 +24,7 @@
 - **DATA SOURCE UPDATES:** FiveThirtyEight shutdown (March 2025), nfl_data_py deprecation (Sep 2025)
 - **EPA AVAILABLE FREE:** Pre-computed in nflreadpy load_pbp() (372 columns)
 - **DVOA UNAVAILABLE:** Proprietary FTN metric, requires subscription
-- **CROSS-REFERENCES:** ADR-304 (Elo Computation Engine), Issue #273, DATA_SOURCES_SPECIFICATION_V1.0.md
+- **CROSS-REFERENCES:** ADR-109 (Elo Computation Engine), Issue #273, DATA_SOURCES_SPECIFICATION_V1.0.md
 - Total requirements: 129 -> 136
 **Changes in v2.23:**
 - **EXECUTION ENVIRONMENT TRACKING:** Added REQ-DB-017 (Execution Environment Tracking)
@@ -331,7 +331,7 @@ precog/
   1. `PROJECT_OVERVIEW_V1.5.md` - System architecture and tech stack
   2. `MASTER_REQUIREMENTS_V2.25.md` - This document (requirements through Phase 10)
   3. `MASTER_INDEX_V2.53.md` - Complete document inventory
-  4. `ARCHITECTURE_DECISIONS_V2.33.md` - All 112 ADRs with design rationale (Phase 0-4.5)
+  4. `ARCHITECTURE_DECISIONS_V2.35.md` - All 112 ADRs with design rationale (Phase 0-4.5)
   5. `REQUIREMENT_INDEX_V1.17.md` - Systematic requirement catalog
   6. `ADR_INDEX_V1.25.md` - Architecture decision index
   7. `TESTING_STRATEGY_V3.9.md` - Test cases, coverage requirements, test isolation patterns
@@ -3901,7 +3901,7 @@ Implement a unified base class for all APScheduler-based polling services:
 **Phase:** 3
 **Priority:** High
 **Status:** 🔵 Planned
-**Reference:** ADR-304, Issue #273, DATA_SOURCES_SPECIFICATION_V1.0.md
+**Reference:** ADR-109, Issue #273, DATA_SOURCES_SPECIFICATION_V1.0.md
 
 Implement a unified Elo rating computation engine supporting multiple sports:
 
@@ -3933,7 +3933,7 @@ Implement a unified Elo rating computation engine supporting multiple sports:
 **Phase:** 3
 **Priority:** High
 **Status:** 🔵 Planned
-**Reference:** ADR-304, ELO_COMPUTATION_GUIDE_V1.0.md (planned)
+**Reference:** ADR-109, ELO_COMPUTATION_GUIDE_V1.0.md (planned)
 
 Configure optimal K-factors for each sport based on season length and variance:
 
@@ -3987,7 +3987,7 @@ Integrate pre-computed EPA metrics from nflreadpy for NFL analysis:
 **Phase:** 3
 **Priority:** High
 **Status:** 🔵 Planned
-**Reference:** ADR-304, DATA_SOURCES_SPECIFICATION_V1.0.md
+**Reference:** ADR-109, DATA_SOURCES_SPECIFICATION_V1.0.md
 
 Bootstrap Elo ratings from historical game results:
 
@@ -4019,7 +4019,7 @@ Bootstrap Elo ratings from historical game results:
 **Phase:** 3
 **Priority:** Medium
 **Status:** 🔵 Planned
-**Reference:** ADR-304, LIVE_DATA_INTEGRATION_GUIDE_V1.1.md
+**Reference:** ADR-109, LIVE_DATA_INTEGRATION_GUIDE_V1.1.md
 
 Update Elo ratings in real-time as games complete:
 
@@ -4045,7 +4045,7 @@ Update Elo ratings in real-time as games complete:
 **Phase:** 3
 **Priority:** High
 **Status:** 🔵 Planned
-**Reference:** ADR-304, DATABASE_SCHEMA_SUMMARY_V1.15.md
+**Reference:** ADR-109, DATABASE_SCHEMA_SUMMARY_V1.15.md
 
 Store Elo ratings with temporal validity for historical analysis:
 

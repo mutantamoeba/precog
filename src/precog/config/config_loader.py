@@ -24,7 +24,8 @@ This 3-tier hierarchy allows:
 
 Multi-Environment Support:
 --------------------------
-Environment variables use automatic prefixes based on ENVIRONMENT variable:
+Environment variables use automatic prefixes based on PRECOG_ENV variable
+(delegating to environment.py's get_env_prefix()):
 - **DEV_*** prefix for development (local laptop)
 - **STAGING_*** prefix for staging (pre-production testing)
 - **PROD_*** prefix for production (live trading!)
@@ -169,7 +170,11 @@ class ConfigLoader:
             >>> db_host = loader.get_env('DB_HOST')  # Looks for PROD_DB_HOST
         """
         # Try environment-specific prefixed variable first
-        env_prefix = self.environment.upper()
+        # Delegate to environment.py's prefix mapping for consistency
+        # (DEV_, TEST_, STAGING_, PROD_ — NOT raw DEVELOPMENT_, etc.)
+        from precog.config.environment import get_env_prefix
+
+        env_prefix = get_env_prefix()
         prefixed_key = f"{env_prefix}_{key}"
         value = os.getenv(prefixed_key)
         logger.debug(f"Looking for env var '{prefixed_key}': {'found' if value else 'not found'}")
