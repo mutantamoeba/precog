@@ -263,7 +263,7 @@ def validate_critical_tables(required_tables: list[str] | None = None) -> list[s
         All critical tables exist
 
     Reference:
-        docs/database/DATABASE_SCHEMA_SUMMARY_V1.7.md - Complete table documentation
+        docs/database/DATABASE_SCHEMA_SUMMARY_V1.16.md - Complete table documentation
     """
     from precog.database.connection import fetch_all
 
@@ -273,10 +273,19 @@ def validate_critical_tables(required_tables: list[str] | None = None) -> list[s
             "series",
             "events",
             "markets",
+            "market_snapshots",
+            "games",
+            "game_states",
+            "game_odds",
+            "teams",
+            "external_team_codes",
+            "edges",
+            "orders",
             "strategies",
             "probability_models",
             "positions",
             "trades",
+            "account_balance",
         ]
 
     missing_tables = []
