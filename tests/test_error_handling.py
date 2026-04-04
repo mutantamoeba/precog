@@ -132,7 +132,7 @@ def test_crud_operation_with_foreign_key_violation():
     # Attempt to create market with nonexistent foreign key
     from decimal import Decimal
 
-    from precog.database.crud_operations import create_market
+    from precog.database.crud_markets import create_market
 
     with pytest.raises(psycopg2.IntegrityError) as exc_info:
         create_market(

@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_analytics import (
     create_edge,
     get_edge_lifecycle,
     get_edges_by_strategy,
@@ -52,7 +52,7 @@ def _mock_cursor_context(mock_get_cursor, mock_cursor=None):
 class TestCreateEdge:
     """Unit tests for create_edge function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_create_edge_returns_surrogate_id(self, mock_get_cursor):
         """Test create_edge returns the integer surrogate PK."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -69,7 +69,7 @@ class TestCreateEdge:
 
         assert result == 42
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_create_edge_auto_generates_edge_id(self, mock_get_cursor):
         """Test that edge_id is set to EDGE-{id} after insert."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -90,7 +90,7 @@ class TestCreateEdge:
         update_call = calls[1]
         assert "EDGE-7" in str(update_call)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_create_edge_validates_decimal_fields(self, mock_get_cursor):
         """Test that float values are rejected for Decimal fields."""
         _mock_cursor_context(mock_get_cursor)
@@ -105,7 +105,7 @@ class TestCreateEdge:
                 market_price=Decimal("0.5200"),
             )
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_create_edge_validates_optional_decimal_fields(self, mock_get_cursor):
         """Test that optional Decimal fields also reject floats."""
         _mock_cursor_context(mock_get_cursor)
@@ -121,7 +121,7 @@ class TestCreateEdge:
                 yes_ask_price=0.53,  # float -- should raise
             )
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_create_edge_with_all_optional_fields(self, mock_get_cursor):
         """Test create_edge with every optional parameter provided."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -157,7 +157,7 @@ class TestCreateEdge:
         # confidence_metrics should be JSON-serialized (16th param, 0-indexed 15)
         assert json.loads(insert_params[15]) == {"model_agreement": 0.95}
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_create_edge_sets_edge_status_detected(self, mock_get_cursor):
         """Test that new edges default to edge_status='detected'."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -175,7 +175,7 @@ class TestCreateEdge:
         insert_sql = mock_cursor.execute.call_args_list[0][0][0]
         assert "'detected'" in insert_sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_create_edge_sets_row_current_ind_true(self, mock_get_cursor):
         """Test that new edges have row_current_ind = TRUE."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -204,7 +204,7 @@ class TestCreateEdge:
 class TestUpdateEdgeOutcome:
     """Unit tests for update_edge_outcome function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_update_edge_outcome_success(self, mock_get_cursor):
         """Test successful outcome update returns True."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -218,7 +218,7 @@ class TestUpdateEdgeOutcome:
 
         assert result is True
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_update_edge_outcome_not_found(self, mock_get_cursor):
         """Test outcome update returns False when edge not found."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -232,7 +232,7 @@ class TestUpdateEdgeOutcome:
 
         assert result is False
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_update_edge_outcome_sets_status_settled(self, mock_get_cursor):
         """Test that outcome update sets edge_status to 'settled'."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -248,7 +248,7 @@ class TestUpdateEdgeOutcome:
         assert "settled" in sql
         assert "row_current_ind = TRUE" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_update_edge_outcome_validates_decimal(self, mock_get_cursor):
         """Test that settlement_value rejects floats."""
         _mock_cursor_context(mock_get_cursor)
@@ -260,7 +260,7 @@ class TestUpdateEdgeOutcome:
                 settlement_value=1.0,  # float -- should raise
             )
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_update_edge_outcome_invalid_outcome(self, mock_get_cursor):
         """Test that invalid outcome values are rejected."""
         _mock_cursor_context(mock_get_cursor)
@@ -272,7 +272,7 @@ class TestUpdateEdgeOutcome:
                 settlement_value=Decimal("1.0000"),
             )
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_update_edge_outcome_with_resolved_at(self, mock_get_cursor):
         """Test outcome update with explicit resolved_at timestamp."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -299,7 +299,7 @@ class TestUpdateEdgeOutcome:
 class TestUpdateEdgeStatus:
     """Unit tests for update_edge_status function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_update_edge_status_success(self, mock_get_cursor):
         """Test successful status transition returns True."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -309,7 +309,7 @@ class TestUpdateEdgeStatus:
 
         assert result is True
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_update_edge_status_not_found(self, mock_get_cursor):
         """Test status update returns False when edge not found."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -319,7 +319,7 @@ class TestUpdateEdgeStatus:
 
         assert result is False
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_update_edge_status_invalid_status(self, mock_get_cursor):
         """Test that invalid status values are rejected."""
         _mock_cursor_context(mock_get_cursor)
@@ -327,7 +327,7 @@ class TestUpdateEdgeStatus:
         with pytest.raises(ValueError, match="new_status must be one of"):
             update_edge_status(edge_pk=42, new_status="invalid_status")
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_update_edge_status_all_valid_statuses(self, mock_get_cursor):
         """Test that all valid statuses are accepted."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -345,7 +345,7 @@ class TestUpdateEdgeStatus:
             result = update_edge_status(edge_pk=42, new_status=status)
             assert result is True
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_update_edge_status_filters_by_row_current_ind(self, mock_get_cursor):
         """Test that status update only targets current SCD rows."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -366,7 +366,7 @@ class TestUpdateEdgeStatus:
 class TestGetEdgesByStrategy:
     """Unit tests for get_edges_by_strategy function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_analytics.fetch_all")
     def test_get_edges_by_strategy_basic(self, mock_fetch_all):
         """Test basic query with only strategy_id."""
         mock_fetch_all.return_value = [
@@ -383,7 +383,7 @@ class TestGetEdgesByStrategy:
         assert "row_current_ind = TRUE" in sql
         assert "strategy_id = %s" in sql
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_analytics.fetch_all")
     def test_get_edges_by_strategy_with_status_filter(self, mock_fetch_all):
         """Test query with edge_status filter."""
         mock_fetch_all.return_value = []
@@ -396,7 +396,7 @@ class TestGetEdgesByStrategy:
         assert "edge_status = %s" in sql
         assert "detected" in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_analytics.fetch_all")
     def test_get_edges_by_strategy_with_exec_env_filter(self, mock_fetch_all):
         """Test query with execution_environment filter."""
         mock_fetch_all.return_value = []
@@ -409,7 +409,7 @@ class TestGetEdgesByStrategy:
         assert "execution_environment = %s" in sql
         assert "paper" in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_analytics.fetch_all")
     def test_get_edges_by_strategy_with_all_filters(self, mock_fetch_all):
         """Test query with all optional filters."""
         mock_fetch_all.return_value = []
@@ -426,7 +426,7 @@ class TestGetEdgesByStrategy:
         # Params: strategy_id, edge_status, execution_environment, limit
         assert params == (5, "settled", "live", 50)
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_analytics.fetch_all")
     def test_get_edges_by_strategy_default_limit(self, mock_fetch_all):
         """Test that default limit is 100."""
         mock_fetch_all.return_value = []
@@ -438,7 +438,7 @@ class TestGetEdgesByStrategy:
         # Last param should be limit = 100
         assert params[-1] == 100
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_analytics.fetch_all")
     def test_get_edges_by_strategy_orders_by_created_at_desc(self, mock_fetch_all):
         """Test that results are ordered by created_at DESC."""
         mock_fetch_all.return_value = []
@@ -458,7 +458,7 @@ class TestGetEdgesByStrategy:
 class TestGetEdgeLifecycle:
     """Unit tests for get_edge_lifecycle function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_analytics.fetch_all")
     def test_get_edge_lifecycle_returns_computed_fields(self, mock_fetch_all):
         """Test that query selects realized_pnl and hours_to_resolution."""
         mock_fetch_all.return_value = [
@@ -476,7 +476,7 @@ class TestGetEdgeLifecycle:
         assert result[0]["realized_pnl"] == Decimal("0.4800")
         assert result[0]["hours_to_resolution"] == 24.5
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_analytics.fetch_all")
     def test_get_edge_lifecycle_queries_view(self, mock_fetch_all):
         """Test that query uses the edge_lifecycle view."""
         mock_fetch_all.return_value = []
@@ -488,7 +488,7 @@ class TestGetEdgeLifecycle:
         assert "realized_pnl" in sql
         assert "hours_to_resolution" in sql
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_analytics.fetch_all")
     def test_get_edge_lifecycle_filter_by_market(self, mock_fetch_all):
         """Test filtering by market_internal_id."""
         mock_fetch_all.return_value = []
@@ -501,7 +501,7 @@ class TestGetEdgeLifecycle:
         assert "market_internal_id = %s" in sql
         assert 42 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_analytics.fetch_all")
     def test_get_edge_lifecycle_filter_by_strategy(self, mock_fetch_all):
         """Test filtering by strategy_id."""
         mock_fetch_all.return_value = []
@@ -514,7 +514,7 @@ class TestGetEdgeLifecycle:
         assert "strategy_id = %s" in sql
         assert 5 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_analytics.fetch_all")
     def test_get_edge_lifecycle_with_both_filters(self, mock_fetch_all):
         """Test filtering by both market and strategy."""
         mock_fetch_all.return_value = []
@@ -525,7 +525,7 @@ class TestGetEdgeLifecycle:
         params = call_args[0][1]
         assert params == (42, 5, 25)
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_analytics.fetch_all")
     def test_get_edge_lifecycle_default_limit(self, mock_fetch_all):
         """Test that default limit is 100."""
         mock_fetch_all.return_value = []

@@ -127,7 +127,7 @@ def _ensure_venue(venue_info: ESPNVenueInfo) -> int | None:
     if not venue_name:
         return None
     try:
-        return create_venue(
+        venue_id: int = create_venue(
             espn_venue_id=venue_info.get("espn_venue_id", venue_name),
             venue_name=venue_name,
             city=venue_info.get("city"),
@@ -135,6 +135,7 @@ def _ensure_venue(venue_info: ESPNVenueInfo) -> int | None:
             capacity=venue_info.get("capacity"),
             indoor=venue_info.get("indoor", False),
         )
+        return venue_id
     except Exception:
         logger.debug("Could not create venue: %s", venue_name)
         return None

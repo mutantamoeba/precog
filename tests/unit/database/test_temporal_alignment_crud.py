@@ -22,7 +22,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_ledger import (
     _VALID_ALIGNMENT_QUALITIES,
     get_alignments_by_market,
     insert_temporal_alignment,
@@ -76,7 +76,7 @@ def _default_alignment_dict():
 class TestInsertTemporalAlignment:
     """Unit tests for insert_temporal_alignment function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_insert_returns_surrogate_id(self, mock_get_cursor):
         """Test insert_temporal_alignment returns the integer surrogate PK."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -86,7 +86,7 @@ class TestInsertTemporalAlignment:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_insert_validates_decimal_time_delta(self, mock_get_cursor):
         """Test that float values are rejected for time_delta_seconds."""
         _mock_cursor_context(mock_get_cursor)
@@ -97,7 +97,7 @@ class TestInsertTemporalAlignment:
         with pytest.raises(TypeError, match="time_delta_seconds must be Decimal"):
             insert_temporal_alignment(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_insert_validates_decimal_yes_ask_price(self, mock_get_cursor):
         """Test that float values are rejected for yes_ask_price."""
         _mock_cursor_context(mock_get_cursor)
@@ -108,7 +108,7 @@ class TestInsertTemporalAlignment:
         with pytest.raises(TypeError, match="yes_ask_price must be Decimal"):
             insert_temporal_alignment(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_insert_validates_decimal_no_ask_price(self, mock_get_cursor):
         """Test that float values are rejected for no_ask_price."""
         _mock_cursor_context(mock_get_cursor)
@@ -119,7 +119,7 @@ class TestInsertTemporalAlignment:
         with pytest.raises(TypeError, match="no_ask_price must be Decimal"):
             insert_temporal_alignment(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_insert_validates_decimal_spread(self, mock_get_cursor):
         """Test that float values are rejected for spread."""
         _mock_cursor_context(mock_get_cursor)
@@ -130,7 +130,7 @@ class TestInsertTemporalAlignment:
         with pytest.raises(TypeError, match="spread must be Decimal"):
             insert_temporal_alignment(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_insert_validates_alignment_quality(self, mock_get_cursor):
         """Test that invalid alignment_quality values are rejected."""
         _mock_cursor_context(mock_get_cursor)
@@ -141,7 +141,7 @@ class TestInsertTemporalAlignment:
         with pytest.raises(ValueError, match="alignment_quality must be one of"):
             insert_temporal_alignment(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_insert_allows_none_optional_fields(self, mock_get_cursor):
         """Test that all optional fields accept None (default behavior)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -152,7 +152,7 @@ class TestInsertTemporalAlignment:
 
         assert result == 2
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_insert_with_all_optional_fields(self, mock_get_cursor):
         """Test insert_temporal_alignment with every optional parameter provided."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -179,7 +179,7 @@ class TestInsertTemporalAlignment:
 
         assert result == 99
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_insert_accepts_all_valid_alignment_qualities(self, mock_get_cursor):
         """Test that every valid alignment_quality is accepted."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -191,7 +191,7 @@ class TestInsertTemporalAlignment:
             result = insert_temporal_alignment(**kwargs)
             assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_insert_default_alignment_quality_is_good(self, mock_get_cursor):
         """Test that default alignment_quality is 'good' when not specified."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -217,7 +217,7 @@ class TestInsertTemporalAlignment:
 class TestInsertTemporalAlignmentBatch:
     """Unit tests for insert_temporal_alignment_batch function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_batch_insert_returns_count(self, mock_get_cursor):
         """Test batch insert returns count of rows inserted."""
         _mock_cursor_context(mock_get_cursor)
@@ -236,7 +236,7 @@ class TestInsertTemporalAlignmentBatch:
 
         assert result == 0
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_batch_insert_validates_decimal_time_delta(self, mock_get_cursor):
         """Test that float time_delta_seconds is rejected in batch."""
         _mock_cursor_context(mock_get_cursor)
@@ -247,7 +247,7 @@ class TestInsertTemporalAlignmentBatch:
         with pytest.raises(TypeError, match="time_delta_seconds must be Decimal"):
             insert_temporal_alignment_batch([row])
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_batch_insert_validates_alignment_quality(self, mock_get_cursor):
         """Test that invalid alignment_quality is rejected in batch."""
         _mock_cursor_context(mock_get_cursor)
@@ -258,7 +258,7 @@ class TestInsertTemporalAlignmentBatch:
         with pytest.raises(ValueError, match="alignment_quality must be one of"):
             insert_temporal_alignment_batch([row])
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_batch_insert_defaults_quality_to_good(self, mock_get_cursor):
         """Test that batch rows without alignment_quality default to 'good'."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -273,7 +273,7 @@ class TestInsertTemporalAlignmentBatch:
         # alignment_quality is the 7th param (index 6)
         assert params_list[0][6] == "good"
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_batch_insert_validates_decimal_yes_ask_price(self, mock_get_cursor):
         """Test that float yes_ask_price is rejected in batch."""
         _mock_cursor_context(mock_get_cursor)
@@ -284,7 +284,7 @@ class TestInsertTemporalAlignmentBatch:
         with pytest.raises(TypeError, match="yes_ask_price must be Decimal"):
             insert_temporal_alignment_batch([row])
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_ledger.get_cursor")
     def test_batch_insert_calls_executemany(self, mock_get_cursor):
         """Test that batch insert uses executemany for efficiency."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -304,7 +304,7 @@ class TestInsertTemporalAlignmentBatch:
 class TestGetAlignmentsByMarket:
     """Unit tests for get_alignments_by_market function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_returns_empty_list(self, mock_fetch_all):
         """Test that empty result set returns empty list."""
         mock_fetch_all.return_value = []
@@ -313,7 +313,7 @@ class TestGetAlignmentsByMarket:
 
         assert result == []
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_returns_list_of_dicts(self, mock_fetch_all):
         """Test that result is a list of dicts."""
         mock_fetch_all.return_value = [
@@ -326,7 +326,7 @@ class TestGetAlignmentsByMarket:
         assert len(result) == 2
         assert result[0]["id"] == 1
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_filters_by_min_quality(self, mock_fetch_all):
         """Test filtering by min_quality includes correct quality levels."""
         mock_fetch_all.return_value = []
@@ -344,7 +344,7 @@ class TestGetAlignmentsByMarket:
         assert "poor" not in params
         assert "fair" not in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_min_quality_stale_includes_all(self, mock_fetch_all):
         """Test that min_quality='stale' includes all quality levels."""
         mock_fetch_all.return_value = []
@@ -360,7 +360,7 @@ class TestGetAlignmentsByMarket:
         with pytest.raises(ValueError, match="min_quality must be one of"):
             get_alignments_by_market(42, min_quality="excellent")
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_respects_limit(self, mock_fetch_all):
         """Test that custom limit is applied."""
         mock_fetch_all.return_value = []
@@ -370,7 +370,7 @@ class TestGetAlignmentsByMarket:
         params = mock_fetch_all.call_args[0][1]
         assert 25 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_default_limit(self, mock_fetch_all):
         """Test that default limit of 100 is applied."""
         mock_fetch_all.return_value = []
@@ -380,7 +380,7 @@ class TestGetAlignmentsByMarket:
         params = mock_fetch_all.call_args[0][1]
         assert 100 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_orders_by_snapshot_time_desc(self, mock_fetch_all):
         """Test that query orders by snapshot_time DESC, id DESC."""
         mock_fetch_all.return_value = []
@@ -390,7 +390,7 @@ class TestGetAlignmentsByMarket:
         query = mock_fetch_all.call_args[0][0]
         assert "ORDER BY snapshot_time DESC, id DESC" in query
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_filters_by_market_id(self, mock_fetch_all):
         """Test that query filters by market_id."""
         mock_fetch_all.return_value = []
@@ -402,7 +402,7 @@ class TestGetAlignmentsByMarket:
         assert "market_id = %s" in query
         assert 42 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_min_quality_fair_includes_fair_good_exact(self, mock_fetch_all):
         """Test that min_quality='fair' includes fair, good, and exact."""
         mock_fetch_all.return_value = []
@@ -416,7 +416,7 @@ class TestGetAlignmentsByMarket:
         assert "stale" not in params
         assert "poor" not in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_ledger.fetch_all")
     def test_no_min_quality_omits_quality_filter(self, mock_fetch_all):
         """Test that omitting min_quality does not add quality filter."""
         mock_fetch_all.return_value = []

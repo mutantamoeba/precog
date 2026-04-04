@@ -43,8 +43,8 @@ from hypothesis import given
 from hypothesis import strategies as st
 
 from precog.database.connection import fetch_all
-from precog.database.crud_operations import (
-    create_market,
+from precog.database.crud_markets import create_market
+from precog.database.crud_positions import (
     create_position,
     create_trade,
     get_position_by_id,

@@ -51,13 +51,13 @@ from typing import Any
 import psycopg2.errors
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_positions import (
     create_position,
-    create_strategy,
     create_trade,
     get_position_by_id,
     get_trade_by_id,
 )
+from precog.database.crud_strategies import create_strategy
 
 # =============================================================================
 # FIXTURES
@@ -154,7 +154,7 @@ def sample_market(db_pool, clean_test_data, sample_platform, sample_event) -> in
         Integer surrogate PK from markets(id) -- post-migration 0021/0022.
     """
     from precog.database.connection import fetch_one
-    from precog.database.crud_operations import create_market
+    from precog.database.crud_markets import create_market
 
     # Look up event surrogate PK (migration 0020: events use integer FK)
     event_row = fetch_one("SELECT id FROM events WHERE external_id = 'HIGHTEST'")

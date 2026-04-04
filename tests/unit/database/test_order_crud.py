@@ -21,7 +21,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_orders import (
     KALSHI_STATUS_MAP,
     cancel_order,
     create_order,
@@ -68,7 +68,7 @@ def _default_order_kwargs():
 class TestCreateOrder:
     """Unit tests for create_order function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_create_order_returns_surrogate_id(self, mock_get_cursor):
         """Test create_order returns the integer surrogate PK."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -78,7 +78,7 @@ class TestCreateOrder:
 
         assert result == 7
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_create_order_sets_remaining_equals_requested(self, mock_get_cursor):
         """Test that remaining_quantity is set to requested_quantity on insert."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -94,7 +94,7 @@ class TestCreateOrder:
         assert insert_params[13] == 10  # requested_quantity
         assert insert_params[14] == 10  # remaining_quantity = requested_quantity
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_create_order_sets_status_submitted(self, mock_get_cursor):
         """Test that new orders default to status='submitted'."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -105,7 +105,7 @@ class TestCreateOrder:
         insert_sql = mock_cursor.execute.call_args_list[0][0][0]
         assert "'submitted'" in insert_sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_create_order_validates_decimal_price(self, mock_get_cursor):
         """Test that float values are rejected for requested_price."""
         _mock_cursor_context(mock_get_cursor)
@@ -116,7 +116,7 @@ class TestCreateOrder:
         with pytest.raises(TypeError, match="requested_price must be Decimal"):
             create_order(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_create_order_validates_side(self, mock_get_cursor):
         """Test that invalid side values are rejected."""
         _mock_cursor_context(mock_get_cursor)
@@ -127,7 +127,7 @@ class TestCreateOrder:
         with pytest.raises(ValueError, match="side must be one of"):
             create_order(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_create_order_validates_action(self, mock_get_cursor):
         """Test that invalid action values are rejected."""
         _mock_cursor_context(mock_get_cursor)
@@ -138,7 +138,7 @@ class TestCreateOrder:
         with pytest.raises(ValueError, match="action must be one of"):
             create_order(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_create_order_validates_order_type(self, mock_get_cursor):
         """Test that invalid order_type values are rejected."""
         _mock_cursor_context(mock_get_cursor)
@@ -149,7 +149,7 @@ class TestCreateOrder:
         with pytest.raises(ValueError, match="order_type must be one of"):
             create_order(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_create_order_validates_time_in_force(self, mock_get_cursor):
         """Test that invalid time_in_force values are rejected."""
         _mock_cursor_context(mock_get_cursor)
@@ -160,7 +160,7 @@ class TestCreateOrder:
         with pytest.raises(ValueError, match="time_in_force must be one of"):
             create_order(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_create_order_validates_execution_environment(self, mock_get_cursor):
         """Test that invalid execution_environment values are rejected (Glokta #5)."""
         _mock_cursor_context(mock_get_cursor)
@@ -171,7 +171,7 @@ class TestCreateOrder:
         with pytest.raises(ValueError, match="execution_environment must be one of"):
             create_order(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_create_order_validates_trade_source(self, mock_get_cursor):
         """Test that invalid trade_source values are rejected (Glokta #5)."""
         _mock_cursor_context(mock_get_cursor)
@@ -182,7 +182,7 @@ class TestCreateOrder:
         with pytest.raises(ValueError, match="trade_source must be one of"):
             create_order(**kwargs)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_create_order_with_all_optional_fields(self, mock_get_cursor):
         """Test create_order with every optional parameter provided."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -220,7 +220,7 @@ class TestCreateOrder:
 class TestGetOrderById:
     """Unit tests for get_order_by_id function."""
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_orders.fetch_one")
     def test_get_order_by_id_found(self, mock_fetch_one):
         """Test retrieving an existing order by PK."""
         mock_fetch_one.return_value = {"id": 42, "status": "submitted"}
@@ -231,7 +231,7 @@ class TestGetOrderById:
         assert result["id"] == 42
         mock_fetch_one.assert_called_once()
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_orders.fetch_one")
     def test_get_order_by_id_not_found(self, mock_fetch_one):
         """Test retrieving a non-existent order returns None."""
         mock_fetch_one.return_value = None
@@ -250,7 +250,7 @@ class TestGetOrderById:
 class TestGetOrderByExternalId:
     """Unit tests for get_order_by_external_id function."""
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_orders.fetch_one")
     def test_get_order_by_external_id_found(self, mock_fetch_one):
         """Test retrieving an order by platform + external_order_id."""
         mock_fetch_one.return_value = {"id": 42, "external_order_id": "abc-123"}
@@ -261,7 +261,7 @@ class TestGetOrderByExternalId:
         assert result["external_order_id"] == "abc-123"
         mock_fetch_one.assert_called_once()
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_orders.fetch_one")
     def test_get_order_by_external_id_not_found(self, mock_fetch_one):
         """Test retrieving a non-existent external order returns None."""
         mock_fetch_one.return_value = None
@@ -280,7 +280,7 @@ class TestGetOrderByExternalId:
 class TestUpdateOrderStatus:
     """Unit tests for update_order_status function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_update_status_valid_transition(self, mock_get_cursor):
         """Test a valid status transition returns True."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -290,7 +290,7 @@ class TestUpdateOrderStatus:
 
         assert result is True
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_update_status_terminal_guard_filled(self, mock_get_cursor):
         """Test that filled orders cannot be updated (Glokta #1)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -303,7 +303,7 @@ class TestUpdateOrderStatus:
         execute_sql = mock_cursor.execute.call_args[0][0]
         assert "NOT IN ('filled', 'cancelled', 'expired')" in execute_sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_update_status_terminal_guard_cancelled(self, mock_get_cursor):
         """Test that cancelled orders cannot be updated (Glokta #1)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -313,7 +313,7 @@ class TestUpdateOrderStatus:
 
         assert result is False
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_update_status_terminal_guard_expired(self, mock_get_cursor):
         """Test that expired orders cannot be updated (Glokta #1)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -323,7 +323,7 @@ class TestUpdateOrderStatus:
 
         assert result is False
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_update_status_sets_filled_at(self, mock_get_cursor):
         """Test that transitioning to 'filled' sets filled_at = NOW()."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -334,7 +334,7 @@ class TestUpdateOrderStatus:
         execute_sql = mock_cursor.execute.call_args[0][0]
         assert "filled_at = NOW()" in execute_sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_update_status_sets_cancelled_at_for_cancelled(self, mock_get_cursor):
         """Test that transitioning to 'cancelled' sets cancelled_at = NOW()."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -345,7 +345,7 @@ class TestUpdateOrderStatus:
         execute_sql = mock_cursor.execute.call_args[0][0]
         assert "cancelled_at = NOW()" in execute_sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_update_status_sets_cancelled_at_for_expired(self, mock_get_cursor):
         """Test that transitioning to 'expired' sets cancelled_at (Glokta #2)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -361,7 +361,7 @@ class TestUpdateOrderStatus:
         with pytest.raises(ValueError, match="new_status must be one of"):
             update_order_status(42, "unknown_status")
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_update_status_always_sets_updated_at(self, mock_get_cursor):
         """Test that updated_at = NOW() is always set."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -382,7 +382,7 @@ class TestUpdateOrderStatus:
 class TestUpdateOrderFill:
     """Unit tests for update_order_fill function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_fill_increments_quantities(self, mock_get_cursor):
         """Test that fill SQL increments filled and decrements remaining."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -395,7 +395,7 @@ class TestUpdateOrderFill:
         assert "filled_quantity = filled_quantity +" in execute_sql
         assert "remaining_quantity = remaining_quantity -" in execute_sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_fill_sets_partial_fill_or_filled_status(self, mock_get_cursor):
         """Test that fill SQL uses CASE to set partial_fill or filled."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -407,7 +407,7 @@ class TestUpdateOrderFill:
         assert "'partial_fill'" in execute_sql
         assert "'filled'" in execute_sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_fill_computes_weighted_average_price(self, mock_get_cursor):
         """Test that fill SQL computes weighted average fill price."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -419,7 +419,7 @@ class TestUpdateOrderFill:
         assert "average_fill_price" in execute_sql
         assert "COALESCE" in execute_sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_fill_overfill_protection(self, mock_get_cursor):
         """Test that WHERE clause prevents overfilling."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -451,7 +451,7 @@ class TestUpdateOrderFill:
         with pytest.raises(TypeError, match="fees must be Decimal"):
             update_order_fill(42, 5, Decimal("0.5500"), 0.01)
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_fill_terminal_state_guard(self, mock_get_cursor):
         """Test that fills on terminal orders are rejected."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -462,7 +462,7 @@ class TestUpdateOrderFill:
         execute_sql = mock_cursor.execute.call_args[0][0]
         assert "NOT IN ('filled', 'cancelled', 'expired')" in execute_sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_fill_sets_filled_at_when_fully_filled(self, mock_get_cursor):
         """Test that filled_at is set when remaining reaches zero."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -483,7 +483,7 @@ class TestUpdateOrderFill:
 class TestCancelOrder:
     """Unit tests for cancel_order function."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_cancel_success(self, mock_get_cursor):
         """Test cancelling an open order returns True."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -496,7 +496,7 @@ class TestCancelOrder:
         assert "'cancelled'" in execute_sql
         assert "cancelled_at = NOW()" in execute_sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_cancel_rejects_already_filled(self, mock_get_cursor):
         """Test that already-filled orders cannot be cancelled."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -506,7 +506,7 @@ class TestCancelOrder:
 
         assert result is False
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_cancel_rejects_already_cancelled(self, mock_get_cursor):
         """Test that already-cancelled orders return False."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -516,7 +516,7 @@ class TestCancelOrder:
 
         assert result is False
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_orders.get_cursor")
     def test_cancel_only_allows_active_statuses(self, mock_get_cursor):
         """Test that WHERE clause only targets cancellable statuses."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -540,7 +540,7 @@ class TestCancelOrder:
 class TestGetOpenOrders:
     """Unit tests for get_open_orders function."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_orders.fetch_all")
     def test_get_open_orders_filters_active_statuses(self, mock_fetch_all):
         """Test that query filters for active statuses only."""
         mock_fetch_all.return_value = []
@@ -553,7 +553,7 @@ class TestGetOpenOrders:
         assert "'pending'" in query
         assert "'partial_fill'" in query
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_orders.fetch_all")
     def test_get_open_orders_strategy_filter(self, mock_fetch_all):
         """Test filtering by strategy_id."""
         mock_fetch_all.return_value = []
@@ -565,7 +565,7 @@ class TestGetOpenOrders:
         assert "strategy_id = %s" in query
         assert 1 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_orders.fetch_all")
     def test_get_open_orders_environment_filter(self, mock_fetch_all):
         """Test filtering by execution_environment."""
         mock_fetch_all.return_value = []
@@ -577,7 +577,7 @@ class TestGetOpenOrders:
         assert "execution_environment = %s" in query
         assert "paper" in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_orders.fetch_all")
     def test_get_open_orders_market_filter(self, mock_fetch_all):
         """Test filtering by market_internal_id."""
         mock_fetch_all.return_value = []
@@ -589,7 +589,7 @@ class TestGetOpenOrders:
         assert "market_internal_id = %s" in query
         assert 42 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_orders.fetch_all")
     def test_get_open_orders_default_limit(self, mock_fetch_all):
         """Test that default limit of 100 is applied."""
         mock_fetch_all.return_value = []
@@ -599,7 +599,7 @@ class TestGetOpenOrders:
         params = mock_fetch_all.call_args[0][1]
         assert 100 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_orders.fetch_all")
     def test_get_open_orders_custom_limit(self, mock_fetch_all):
         """Test passing a custom limit."""
         mock_fetch_all.return_value = []
@@ -609,7 +609,7 @@ class TestGetOpenOrders:
         params = mock_fetch_all.call_args[0][1]
         assert 25 in params
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_orders.fetch_all")
     def test_get_open_orders_returns_list(self, mock_fetch_all):
         """Test that result is a list of dicts."""
         mock_fetch_all.return_value = [

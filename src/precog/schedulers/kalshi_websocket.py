@@ -62,7 +62,7 @@ from enum import Enum
 from typing import Any, ClassVar, TypedDict
 
 from precog.api_connectors.kalshi_auth import KalshiAuth
-from precog.database.crud_operations import (
+from precog.database.crud_markets import (
     get_current_market,
     update_market_with_versioning,
 )

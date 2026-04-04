@@ -21,22 +21,24 @@ from decimal import Decimal
 import pytest
 
 from precog.database.connection import get_cursor
-from precog.database.crud_operations import (
+from precog.database.crud_game_states import (
     create_game_state,
-    create_team_ranking,
-    create_venue,
     game_state_changed,
     get_current_game_state,
-    get_current_rankings,
     get_game_state_history,
     get_games_by_date,
     get_live_games,
     get_or_create_game,
+    update_game_result,
+    upsert_game_state,
+)
+from precog.database.crud_teams import (
+    create_team_ranking,
+    create_venue,
+    get_current_rankings,
     get_team_rankings,
     get_venue_by_espn_id,
     get_venue_by_id,
-    update_game_result,
-    upsert_game_state,
 )
 from precog.database.seeding.game_odds_loader import lookup_game_id
 

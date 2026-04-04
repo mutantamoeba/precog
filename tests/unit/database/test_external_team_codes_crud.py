@@ -20,7 +20,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_teams import (
     create_external_team_code,
     delete_external_team_code,
     find_team_by_external_code,
@@ -51,7 +51,7 @@ def _mock_cursor_context(mock_get_cursor, mock_cursor=None):
 class TestCreateExternalTeamCode:
     """Unit tests for create_external_team_code."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_create_returns_id(self, mock_get_cursor):
         """Creating a new code returns the SERIAL PK."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -72,7 +72,7 @@ class TestCreateExternalTeamCode:
         assert "INSERT INTO external_team_codes" in sql
         assert "RETURNING id" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_create_with_defaults(self, mock_get_cursor):
         """Creating with only required params uses default confidence='heuristic'."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -96,7 +96,7 @@ class TestCreateExternalTeamCode:
         assert params[5] is None  # verified_at
         assert params[6] is None  # notes
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_create_with_verified_at(self, mock_get_cursor):
         """Creating with a verified_at timestamp passes it through."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -125,7 +125,7 @@ class TestCreateExternalTeamCode:
 class TestGetExternalTeamCodes:
     """Unit tests for get_external_team_codes."""
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_teams.fetch_all")
     def test_get_all_no_filters(self, mock_fetch_all):
         """Getting all codes with no filters returns everything."""
         mock_fetch_all.return_value = [
@@ -139,7 +139,7 @@ class TestGetExternalTeamCodes:
         sql = mock_fetch_all.call_args[0][0]
         assert "WHERE" not in sql
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_teams.fetch_all")
     def test_get_filtered_by_source(self, mock_fetch_all):
         """Filtering by source adds WHERE clause."""
         mock_fetch_all.return_value = [
@@ -154,7 +154,7 @@ class TestGetExternalTeamCodes:
         params = mock_fetch_all.call_args[0][1]
         assert params == ("kalshi",)
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_teams.fetch_all")
     def test_get_filtered_by_league(self, mock_fetch_all):
         """Filtering by league adds WHERE clause."""
         mock_fetch_all.return_value = []
@@ -166,7 +166,7 @@ class TestGetExternalTeamCodes:
         params = mock_fetch_all.call_args[0][1]
         assert params == ("nba",)
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_teams.fetch_all")
     def test_get_filtered_by_team_id(self, mock_fetch_all):
         """Filtering by team_id adds WHERE clause."""
         mock_fetch_all.return_value = []
@@ -178,7 +178,7 @@ class TestGetExternalTeamCodes:
         params = mock_fetch_all.call_args[0][1]
         assert params == (42,)
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_teams.fetch_all")
     def test_get_multiple_filters(self, mock_fetch_all):
         """Multiple filters are combined with AND."""
         mock_fetch_all.return_value = []
@@ -193,7 +193,7 @@ class TestGetExternalTeamCodes:
         params = mock_fetch_all.call_args[0][1]
         assert params == ("kalshi", "nfl", 42)
 
-    @patch("precog.database.crud_operations.fetch_all")
+    @patch("precog.database.crud_teams.fetch_all")
     def test_get_empty_result(self, mock_fetch_all):
         """No matching codes returns empty list."""
         mock_fetch_all.return_value = []
@@ -212,7 +212,7 @@ class TestGetExternalTeamCodes:
 class TestFindTeamByExternalCode:
     """Unit tests for find_team_by_external_code."""
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_find_returns_team_with_confidence(self, mock_fetch_one):
         """Finding a team returns the full team row plus confidence."""
         mock_fetch_one.return_value = {
@@ -231,7 +231,7 @@ class TestFindTeamByExternalCode:
         assert result["confidence"] == "manual"
         assert result["external_code"] == "JAC"
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_find_nonexistent_returns_none(self, mock_fetch_one):
         """Looking up a code that doesn't exist returns None."""
         mock_fetch_one.return_value = None
@@ -240,7 +240,7 @@ class TestFindTeamByExternalCode:
 
         assert result is None
 
-    @patch("precog.database.crud_operations.fetch_one")
+    @patch("precog.database.crud_teams.fetch_one")
     def test_find_uses_join_query(self, mock_fetch_one):
         """The query JOINs external_team_codes with teams."""
         mock_fetch_one.return_value = None
@@ -263,7 +263,7 @@ class TestFindTeamByExternalCode:
 class TestUpsertExternalTeamCode:
     """Unit tests for upsert_external_team_code."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_upsert_returns_id(self, mock_get_cursor):
         """Upsert returns the row id (new or existing)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -279,7 +279,7 @@ class TestUpsertExternalTeamCode:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_upsert_uses_on_conflict(self, mock_get_cursor):
         """Upsert SQL uses ON CONFLICT for idempotency."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -298,7 +298,7 @@ class TestUpsertExternalTeamCode:
         assert "DO UPDATE SET" in sql
         assert "updated_at = NOW()" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_upsert_updates_team_id_on_conflict(self, mock_get_cursor):
         """On conflict, team_id is updated (handles reassignment)."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -316,7 +316,7 @@ class TestUpsertExternalTeamCode:
         assert "team_id = EXCLUDED.team_id" in sql
         assert "confidence = EXCLUDED.confidence" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_upsert_with_notes(self, mock_get_cursor):
         """Notes are passed through to the upsert."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -343,7 +343,7 @@ class TestUpsertExternalTeamCode:
 class TestDeleteExternalTeamCode:
     """Unit tests for delete_external_team_code."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_delete_existing_returns_true(self, mock_get_cursor):
         """Deleting an existing row returns True."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)
@@ -356,7 +356,7 @@ class TestDeleteExternalTeamCode:
         assert "DELETE FROM external_team_codes" in sql
         assert "WHERE id = %s" in sql
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_delete_nonexistent_returns_false(self, mock_get_cursor):
         """Deleting a non-existent row returns False."""
         mock_cursor = _mock_cursor_context(mock_get_cursor)

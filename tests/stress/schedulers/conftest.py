@@ -11,7 +11,7 @@ def _clean_scheduler_status():
     subsequent supervisor starts. Stress tests that share a DB need cleanup
     between tests to prevent false positives.
     """
-    from precog.database.crud_operations import cleanup_stale_schedulers
+    from precog.database.crud_schedulers import cleanup_stale_schedulers
 
     try:
         cleanup_stale_schedulers(stale_threshold_seconds=0)

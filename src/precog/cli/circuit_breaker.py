@@ -59,7 +59,7 @@ def list_breakers() -> None:
         precog circuit-breaker list
     """
     try:
-        from precog.database.crud_operations import get_active_breakers
+        from precog.database.crud_system import get_active_breakers
 
         breakers = get_active_breakers()
     except Exception as e:
@@ -137,7 +137,7 @@ def trip(
         raise typer.Exit(code=1)
 
     try:
-        from precog.database.crud_operations import create_circuit_breaker_event
+        from precog.database.crud_system import create_circuit_breaker_event
 
         event_id = create_circuit_breaker_event(
             breaker_type=breaker_type,
@@ -182,7 +182,7 @@ def resolve(
         precog circuit-breaker resolve 42 --action "ESPN poller restarted"
     """
     try:
-        from precog.database.crud_operations import resolve_circuit_breaker
+        from precog.database.crud_system import resolve_circuit_breaker
 
         resolved = resolve_circuit_breaker(
             event_id=event_id,

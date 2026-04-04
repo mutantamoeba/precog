@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_events import (
     create_series,
     get_or_create_series,
     get_series,

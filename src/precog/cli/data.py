@@ -1883,7 +1883,7 @@ def matching_stats(
 
     try:
         from precog.database.connection import get_cursor
-        from precog.database.crud_operations import find_unlinked_sports_events
+        from precog.database.crud_game_states import find_unlinked_sports_events
 
         with get_cursor() as cursor:
             # Count linked vs unlinked events
@@ -2112,7 +2112,7 @@ def teams_classification(
     console.print("\n[bold cyan]Team Classification Coverage[/bold cyan]\n")
 
     try:
-        from precog.database.crud_operations import fetch_all as db_fetch_all
+        from precog.database.connection import fetch_all as db_fetch_all
 
         if league:
             rows = db_fetch_all(
@@ -2205,7 +2205,8 @@ def teams_refresh_cfbd(
     console.print("\n[bold cyan]CFBD Classification Refresh[/bold cyan]\n")
 
     try:
-        from precog.database.crud_operations import fetch_all, update_team_classification
+        from precog.database.connection import fetch_all
+        from precog.database.crud_elo import update_team_classification
         from precog.database.seeding.sources.sports.cfbd_adapter import CFBDSource
 
         # Step 1: Fetch from CFBD

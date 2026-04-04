@@ -40,14 +40,16 @@ from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 
 from precog.database.connection import get_cursor
-from precog.database.crud_operations import (
+from precog.database.crud_game_states import (
     create_game_state,
-    create_team_ranking,
-    create_venue,
     get_current_game_state,
     get_game_state_history,
-    get_venue_by_espn_id,
     upsert_game_state,
+)
+from precog.database.crud_teams import (
+    create_team_ranking,
+    create_venue,
+    get_venue_by_espn_id,
 )
 
 # Mark ALL tests in this module as requiring database access

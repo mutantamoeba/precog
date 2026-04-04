@@ -37,7 +37,7 @@ from precog.database import (
     update_market_with_versioning,
     update_position_price,
 )
-from precog.database.crud_operations import DecimalEncoder
+from precog.database.crud_shared import DecimalEncoder
 
 # =============================================================================
 # MARKET CRUD TESTS

@@ -23,17 +23,19 @@ from decimal import Decimal
 import pytest
 
 from precog.database.connection import get_cursor
-from precog.database.crud_operations import (
+from precog.database.crud_game_states import (
     create_game_state,
-    create_team_ranking,
-    create_venue,
     get_current_game_state,
-    get_current_rankings,
     get_game_state_history,
     get_live_games,
+    upsert_game_state,
+)
+from precog.database.crud_teams import (
+    create_team_ranking,
+    create_venue,
+    get_current_rankings,
     get_team_rankings,
     get_venue_by_espn_id,
-    upsert_game_state,
 )
 
 # =============================================================================
@@ -408,7 +410,7 @@ class TestStateChangeDetectionWorkflow:
         5. Verify new rows created only for meaningful changes
         6. Compare final row count with vs without state change detection
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         teams = setup_e2e_teams
 
@@ -550,7 +552,7 @@ class TestStateChangeDetectionWorkflow:
         This is critical for football where possession changes are significant
         events that should be recorded.
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         teams = setup_e2e_teams
 

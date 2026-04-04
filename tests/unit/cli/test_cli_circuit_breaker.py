@@ -42,7 +42,7 @@ class TestListBreakers:
         output = strip_ansi(result.stdout).lower()
         assert "active" in output or "unresolved" in output
 
-    @patch("precog.database.crud_operations.get_active_breakers")
+    @patch("precog.database.crud_system.get_active_breakers")
     def test_list_no_active_breakers(self, mock_get: MagicMock, cli_runner) -> None:
         """Test list with no active breakers shows informative message."""
         mock_get.return_value = []
@@ -53,7 +53,7 @@ class TestListBreakers:
         output = strip_ansi(result.stdout).lower()
         assert "no active" in output
 
-    @patch("precog.database.crud_operations.get_active_breakers")
+    @patch("precog.database.crud_system.get_active_breakers")
     def test_list_shows_active_breakers(self, mock_get: MagicMock, cli_runner) -> None:
         """Test list displays active breakers in a table."""
         mock_get.return_value = [
@@ -79,7 +79,7 @@ class TestListBreakers:
         assert "api_failures" in output
         assert "2 active breaker" in output.lower()
 
-    @patch("precog.database.crud_operations.get_active_breakers")
+    @patch("precog.database.crud_system.get_active_breakers")
     def test_list_truncates_long_notes(self, mock_get: MagicMock, cli_runner) -> None:
         """Test list truncates notes longer than 60 characters."""
         mock_get.return_value = [
@@ -98,7 +98,7 @@ class TestListBreakers:
         # Should be truncated -- Rich may use "..." or unicode ellipsis
         assert "..." in output or "\u2026" in output
 
-    @patch("precog.database.crud_operations.get_active_breakers")
+    @patch("precog.database.crud_system.get_active_breakers")
     def test_list_handles_db_error(self, mock_get: MagicMock, cli_runner) -> None:
         """Test list handles database errors gracefully."""
         mock_get.side_effect = Exception("DB connection failed")
@@ -119,7 +119,7 @@ class TestListBreakers:
 class TestTripBreaker:
     """Tests for 'precog circuit-breaker trip' command."""
 
-    @patch("precog.database.crud_operations.create_circuit_breaker_event")
+    @patch("precog.database.crud_system.create_circuit_breaker_event")
     def test_trip_valid_type(self, mock_create: MagicMock, cli_runner) -> None:
         """Test tripping a breaker with a valid type."""
         mock_create.return_value = 42
@@ -144,7 +144,7 @@ class TestTripBreaker:
         output = strip_ansi(result.stdout).lower()
         assert "invalid" in output
 
-    @patch("precog.database.crud_operations.create_circuit_breaker_event")
+    @patch("precog.database.crud_system.create_circuit_breaker_event")
     def test_trip_all_valid_types(self, mock_create: MagicMock, cli_runner) -> None:
         """Test all five valid breaker types are accepted."""
         valid_types = [
@@ -160,7 +160,7 @@ class TestTripBreaker:
             result = cli_runner.invoke(app, ["trip", btype])
             assert result.exit_code == 0, f"Type '{btype}' should be valid"
 
-    @patch("precog.database.crud_operations.create_circuit_breaker_event")
+    @patch("precog.database.crud_system.create_circuit_breaker_event")
     def test_trip_without_notes(self, mock_create: MagicMock, cli_runner) -> None:
         """Test tripping without --notes passes None."""
         mock_create.return_value = 10
@@ -174,7 +174,7 @@ class TestTripBreaker:
             notes=None,
         )
 
-    @patch("precog.database.crud_operations.create_circuit_breaker_event")
+    @patch("precog.database.crud_system.create_circuit_breaker_event")
     def test_trip_returns_none_shows_error(self, mock_create: MagicMock, cli_runner) -> None:
         """Test trip shows error when create returns None."""
         mock_create.return_value = None
@@ -183,7 +183,7 @@ class TestTripBreaker:
 
         assert result.exit_code == 1
 
-    @patch("precog.database.crud_operations.create_circuit_breaker_event")
+    @patch("precog.database.crud_system.create_circuit_breaker_event")
     def test_trip_handles_db_error(self, mock_create: MagicMock, cli_runner) -> None:
         """Test trip handles database errors gracefully."""
         mock_create.side_effect = Exception("DB error")
@@ -204,7 +204,7 @@ class TestTripBreaker:
 class TestResolveBreaker:
     """Tests for 'precog circuit-breaker resolve' command."""
 
-    @patch("precog.database.crud_operations.resolve_circuit_breaker")
+    @patch("precog.database.crud_system.resolve_circuit_breaker")
     def test_resolve_active_breaker(self, mock_resolve: MagicMock, cli_runner) -> None:
         """Test resolving an active breaker."""
         mock_resolve.return_value = True
@@ -216,7 +216,7 @@ class TestResolveBreaker:
         assert "resolved" in output
         assert "42" in output
 
-    @patch("precog.database.crud_operations.resolve_circuit_breaker")
+    @patch("precog.database.crud_system.resolve_circuit_breaker")
     def test_resolve_nonexistent_breaker(self, mock_resolve: MagicMock, cli_runner) -> None:
         """Test resolving a nonexistent breaker shows error."""
         mock_resolve.return_value = False
@@ -227,7 +227,7 @@ class TestResolveBreaker:
         output = strip_ansi(result.stdout).lower()
         assert "could not resolve" in output or "already resolved" in output
 
-    @patch("precog.database.crud_operations.resolve_circuit_breaker")
+    @patch("precog.database.crud_system.resolve_circuit_breaker")
     def test_resolve_without_action(self, mock_resolve: MagicMock, cli_runner) -> None:
         """Test resolving without --action passes None."""
         mock_resolve.return_value = True
@@ -240,7 +240,7 @@ class TestResolveBreaker:
             resolution_action=None,
         )
 
-    @patch("precog.database.crud_operations.resolve_circuit_breaker")
+    @patch("precog.database.crud_system.resolve_circuit_breaker")
     def test_resolve_handles_db_error(self, mock_resolve: MagicMock, cli_runner) -> None:
         """Test resolve handles database errors gracefully."""
         mock_resolve.side_effect = Exception("DB error")

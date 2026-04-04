@@ -716,7 +716,7 @@ def _show_db_backed_status(verbose: bool) -> bool:
     """
     from datetime import UTC, datetime, timedelta
 
-    from precog.database.crud_operations import list_scheduler_services
+    from precog.database.crud_schedulers import list_scheduler_services
 
     try:
         # Query database for all services on this host

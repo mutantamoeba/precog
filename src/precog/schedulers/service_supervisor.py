@@ -45,12 +45,14 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Protocol, cast
 
-from precog.database.crud_operations import (
+from precog.database.crud_schedulers import (
     check_active_schedulers,
     cleanup_stale_schedulers,
+    upsert_scheduler_status,
+)
+from precog.database.crud_system import (
     create_circuit_breaker_event,
     get_active_breakers,
-    upsert_scheduler_status,
     upsert_system_health,
 )
 from precog.schedulers.espn_game_poller import ESPNGamePoller, create_espn_poller

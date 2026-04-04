@@ -287,7 +287,7 @@ class EventGameMatcher:
         Returns:
             games.id or None.
         """
-        from precog.database.crud_operations import find_game_by_matchup
+        from precog.database.crud_game_states import find_game_by_matchup
 
         return find_game_by_matchup(
             league=league,
@@ -314,7 +314,7 @@ class EventGameMatcher:
             >>> linked = matcher.backfill_unlinked_events("nfl")
             >>> print(f"Linked {linked} events to games")
         """
-        from precog.database.crud_operations import (
+        from precog.database.crud_game_states import (
             find_unlinked_sports_events,
             update_event_game_id,
         )

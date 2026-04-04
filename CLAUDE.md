@@ -12,7 +12,7 @@ A modular Python application that identifies and executes positive expected valu
 
 **Pipeline:** Fetch market prices (Kalshi) -> Calculate true probabilities (ML models) -> Identify edges -> Execute trades -> Monitor positions -> Exit strategically.
 
-**Current Focus:** Kalshi platform, NFL/NCAAF markets.
+**Current Focus:** Kalshi platform, NFL/NCAAF/NBA/NHL markets.
 **Future:** Multiple sports, non-sports markets, multiple platforms.
 
 ### Tech Stack
@@ -107,6 +107,7 @@ precog-repo/
 │   ├── trading/             # StrategyManager, PositionManager
 │   ├── analytics/           # ModelManager, EloEngine
 │   ├── schedulers/          # Pollers (Kalshi, ESPN), ServiceSupervisor
+│   ├── matching/            # Event-game matching, ticker parsing
 │   ├── runners/             # ServiceRunner (production wrapper)
 │   ├── cli/                 # Typer CLI commands
 │   └── tui/                 # Terminal UI (deprioritized)
@@ -129,11 +130,11 @@ precog-repo/
 
 **Architecture & Planning:**
 - `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` - All requirements
-- `docs/foundation/ARCHITECTURE_DECISIONS_V2.33.md` - 107+ ADRs
+- `docs/foundation/ARCHITECTURE_DECISIONS_V2.35.md` - 114 ADRs
 - `docs/foundation/DEVELOPMENT_PHASES_V1.15.md` - Phase roadmap
 
 **Implementation:**
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.23.md` - 10 critical patterns with examples
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.28.md` - 45 development patterns with examples
 - `docs/guides/CONFIGURATION_GUIDE_V3.1.md` - YAML config reference
 - `docs/guides/KALSHI_CLIENT_USER_GUIDE_V1.0.md` - Kalshi API usage
 - `docs/guides/STRATEGY_MANAGER_USER_GUIDE_V1.1.md`

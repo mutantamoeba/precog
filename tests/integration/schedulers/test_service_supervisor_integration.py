@@ -147,7 +147,7 @@ def _clean_scheduler_status():
     The startup guard (Issue #363) detects these as active instances and blocks
     subsequent tests. Force-clean before each test to prevent false positives.
     """
-    from precog.database.crud_operations import cleanup_stale_schedulers
+    from precog.database.crud_schedulers import cleanup_stale_schedulers
 
     try:
         cleanup_stale_schedulers(stale_threshold_seconds=0)

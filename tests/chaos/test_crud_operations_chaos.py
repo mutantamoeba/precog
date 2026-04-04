@@ -25,13 +25,15 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from precog.database.crud_operations import (
+from precog.database.crud_game_states import (
+    get_current_game_state,
+    upsert_game_state,
+)
+from precog.database.crud_teams import (
     create_team_ranking,
     create_venue,
-    get_current_game_state,
     get_current_rankings,
     get_venue_by_id,
-    upsert_game_state,
 )
 
 # =============================================================================
@@ -43,7 +45,7 @@ from precog.database.crud_operations import (
 class TestVenueNullHandling:
     """Test NULL handling for venue operations."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_venue_with_all_nullable_fields_none(self, mock_get_cursor):
         """Venue should handle all nullable fields being None.
 
@@ -69,7 +71,7 @@ class TestVenueNullHandling:
         assert result == 1
         mock_cursor.execute.assert_called_once()
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_venue_with_empty_string_city(self, mock_get_cursor):
         """Empty string city should be handled (may differ from NULL).
 
@@ -104,7 +106,7 @@ class TestVenueNullHandling:
 class TestVenueBoundaryValues:
     """Test boundary values for venue operations."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_venue_name_max_length(self, mock_get_cursor):
         """Venue name at maximum length (255 chars typical).
 
@@ -128,7 +130,7 @@ class TestVenueBoundaryValues:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_venue_capacity_zero(self, mock_get_cursor):
         """Capacity of 0 is valid edge case.
 
@@ -150,7 +152,7 @@ class TestVenueBoundaryValues:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_venue_capacity_max_int(self, mock_get_cursor):
         """Capacity at max integer value.
 
@@ -182,7 +184,7 @@ class TestVenueBoundaryValues:
 class TestVenueEdgeCases:
     """Test edge cases for venue operations."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_venue_unicode_name(self, mock_get_cursor):
         """Venue name with Unicode characters.
 
@@ -204,7 +206,7 @@ class TestVenueEdgeCases:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_venue_special_characters_name(self, mock_get_cursor):
         """Venue name with special characters (SQL injection attempt).
 
@@ -237,7 +239,7 @@ class TestVenueEdgeCases:
 class TestTeamRankingNullHandling:
     """Test NULL handling for team ranking operations."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_ranking_with_null_optional_fields(self, mock_get_cursor):
         """Team ranking with NULL optional fields should be handled.
 
@@ -276,7 +278,7 @@ class TestTeamRankingNullHandling:
 class TestTeamRankingBoundaryValues:
     """Test boundary values for team ranking operations."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_ranking_week_zero(self, mock_get_cursor):
         """Week 0 (preseason) should be valid.
 
@@ -301,7 +303,7 @@ class TestTeamRankingBoundaryValues:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_ranking_rank_one(self, mock_get_cursor):
         """Rank 1 is the minimum valid rank.
 
@@ -325,7 +327,7 @@ class TestTeamRankingBoundaryValues:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_teams.get_cursor")
     def test_ranking_high_points(self, mock_get_cursor):
         """Rankings with very high point totals.
 
@@ -361,7 +363,7 @@ class TestTeamRankingBoundaryValues:
 class TestGameStateNullHandling:
     """Test NULL handling for game state operations."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_game_state_with_null_scores(self, mock_get_cursor):
         """Game state with default scores (game not started).
 
@@ -386,7 +388,7 @@ class TestGameStateNullHandling:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_game_state_with_null_situation(self, mock_get_cursor):
         """Game state with NULL situation JSONB.
 
@@ -423,7 +425,7 @@ class TestGameStateNullHandling:
 class TestGameStateBoundaryValues:
     """Test boundary values for game state operations."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_game_state_score_zero(self, mock_get_cursor):
         """Score of 0 is valid (shutout).
 
@@ -449,7 +451,7 @@ class TestGameStateBoundaryValues:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_game_state_high_score(self, mock_get_cursor):
         """Very high score (edge of realistic).
 
@@ -475,7 +477,7 @@ class TestGameStateBoundaryValues:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_game_state_period_overtime(self, mock_get_cursor):
         """Overtime period (period > 4 for NFL).
 
@@ -513,7 +515,7 @@ class TestGameStateBoundaryValues:
 class TestGameStateEdgeCases:
     """Test edge cases for game state operations."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_game_state_empty_linescores(self, mock_get_cursor):
         """Game state with empty list linescores.
 
@@ -538,7 +540,7 @@ class TestGameStateEdgeCases:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_game_state_complex_situation(self, mock_get_cursor):
         """Game state with complex nested JSONB situation.
 
@@ -585,7 +587,7 @@ class TestGameStateEdgeCases:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_game_state_unicode_in_situation(self, mock_get_cursor):
         """Game state with Unicode in JSONB situation.
 
@@ -625,7 +627,7 @@ class TestGameStateEdgeCases:
 class TestQueryEdgeCases:
     """Test edge cases for query operations."""
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_get_venue_not_found(self, mock_get_cursor):
         """Query for non-existent venue returns None.
 
@@ -643,7 +645,7 @@ class TestQueryEdgeCases:
 
         assert result is None
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_get_game_state_not_found(self, mock_get_cursor):
         """Query for non-existent game state returns None.
 
@@ -660,7 +662,7 @@ class TestQueryEdgeCases:
 
         assert result is None
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_analytics.get_cursor")
     def test_get_rankings_empty_result(self, mock_get_cursor):
         """Query for rankings with no data returns empty list.
 
@@ -698,7 +700,7 @@ class TestDecimalPrecisionChaos:
         places and very small values are handled correctly.
     """
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_game_state_clock_seconds_precision(self, mock_get_cursor):
         """Clock seconds with high decimal precision.
 
@@ -723,7 +725,7 @@ class TestDecimalPrecisionChaos:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_game_state_clock_very_small(self, mock_get_cursor):
         """Clock with very small time remaining.
 
@@ -748,7 +750,7 @@ class TestDecimalPrecisionChaos:
 
         assert result == 1
 
-    @patch("precog.database.crud_operations.get_cursor")
+    @patch("precog.database.crud_game_states.get_cursor")
     def test_game_state_clock_zero(self, mock_get_cursor):
         """Clock at exactly zero (end of period).
 
@@ -800,7 +802,7 @@ class TestGameStateChangedChaos:
             tracked yet. Any new state should be treated as a change to trigger
             the initial database insert.
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         result = game_state_changed(
             current=None,
@@ -823,7 +825,7 @@ class TestGameStateChangedChaos:
             yard_line, is_red_zone) - empty dict and None both have no values
             for these keys, so they're functionally identical.
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 0,
@@ -854,7 +856,7 @@ class TestGameStateChangedChaos:
             This ensures backward compatibility when ESPN adds new fields.
             When league is None/unknown, ALL fields are compared (safe fallback).
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 14,
@@ -892,7 +894,7 @@ class TestGameStateChangedChaos:
             (0-35) is a valid game outcome. The comparison should treat 0
             as a value, not as "missing data".
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 0,
@@ -933,7 +935,7 @@ class TestGameStateChangedChaos:
             ESPN API may return status in different cases. The comparison
             should be case-insensitive or normalized before comparison.
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 14,
@@ -965,7 +967,7 @@ class TestGameStateChangedChaos:
             - Period 5+: overtime periods
             All should be valid for comparison.
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 21,
@@ -1014,7 +1016,7 @@ class TestGameStateChangedChaos:
             When a game starts, situation data becomes available. This
             transition from None to a populated dict must be detected.
         """
-        from precog.database.crud_operations import game_state_changed
+        from precog.database.crud_game_states import game_state_changed
 
         current = {
             "home_score": 0,

@@ -5,7 +5,7 @@
 **Created:** 2025-12-25
 **Last Updated:** 2025-12-25
 **Purpose:** Comprehensive specification of all external data sources for sports data ingestion
-**Related:** ADR-106 (Historical Data Collection), ADR-304 (Elo Computation Architecture), Issue #273
+**Related:** ADR-106 (Historical Data Collection), ADR-109 (Elo Computation Architecture), Issue #273
 ---
 
 ## 1. Overview
@@ -462,7 +462,7 @@ pip install nflreadpy nba_api nhl-api-py pybaseball cfbd cbbd itscalledsoccer
 ## 13. Related Documentation
 
 - **ADR-106**: Historical Data Collection Architecture
-- **ADR-304**: Elo Computation Architecture
+- **ADR-109**: Elo Computation Architecture
 - **ADR-305**: Data Source Adapter Migration (nfl_data_py -> nflreadpy)
 - **REQ-DATA-008**: Data Source Adapter Architecture
 - **Issue #273**: Comprehensive Elo Rating Computation Module

@@ -41,7 +41,7 @@ def mock_cursor():
 @pytest.fixture
 def mock_get_cursor(mock_cursor):
     """Patch get_cursor to return mock cursor."""
-    with patch("precog.database.crud_operations.get_cursor") as mock_gc:
+    with patch("precog.database.crud_game_states.get_cursor") as mock_gc:
         # Context manager returns cursor
         mock_gc.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_gc.return_value.__exit__ = MagicMock(return_value=False)
@@ -58,7 +58,7 @@ class TestUpsertGameOddsNewRow:
 
     def test_creates_new_row_when_no_current(self, mock_get_cursor) -> None:
         """When no current row exists, INSERT a new one."""
-        from precog.database.crud_operations import upsert_game_odds
+        from precog.database.crud_game_states import upsert_game_odds
 
         _, mock_cursor = mock_get_cursor
 
@@ -86,7 +86,7 @@ class TestUpsertGameOddsNewRow:
 
     def test_passes_all_fields_to_insert(self, mock_get_cursor) -> None:
         """All fields are passed through to the INSERT statement."""
-        from precog.database.crud_operations import upsert_game_odds
+        from precog.database.crud_game_states import upsert_game_odds
 
         _, mock_cursor = mock_get_cursor
         mock_cursor.fetchone.side_effect = [None, {"id": 1}]
@@ -143,7 +143,7 @@ class TestUpsertGameOddsSCDVersioning:
 
     def test_creates_new_version_when_spread_changes(self, mock_get_cursor) -> None:
         """When spread_home_close changes, close current and insert new."""
-        from precog.database.crud_operations import upsert_game_odds
+        from precog.database.crud_game_states import upsert_game_odds
 
         _, mock_cursor = mock_get_cursor
 
@@ -181,7 +181,7 @@ class TestUpsertGameOddsSCDVersioning:
 
     def test_creates_new_version_when_moneyline_changes(self, mock_get_cursor) -> None:
         """When moneyline_home_close changes, create new version."""
-        from precog.database.crud_operations import upsert_game_odds
+        from precog.database.crud_game_states import upsert_game_odds
 
         _, mock_cursor = mock_get_cursor
 
@@ -211,7 +211,7 @@ class TestUpsertGameOddsSCDVersioning:
 
     def test_creates_new_version_when_total_changes(self, mock_get_cursor) -> None:
         """When total_close changes, create new version."""
-        from precog.database.crud_operations import upsert_game_odds
+        from precog.database.crud_game_states import upsert_game_odds
 
         _, mock_cursor = mock_get_cursor
 
@@ -241,7 +241,7 @@ class TestUpsertGameOddsSCDVersioning:
 
     def test_no_new_version_when_unchanged(self, mock_get_cursor) -> None:
         """When all tracked values are the same, just update updated_at."""
-        from precog.database.crud_operations import upsert_game_odds
+        from precog.database.crud_game_states import upsert_game_odds
 
         _, mock_cursor = mock_get_cursor
 
@@ -278,7 +278,7 @@ class TestUpsertGameOddsSCDVersioning:
 
     def test_none_vs_none_is_unchanged(self, mock_get_cursor) -> None:
         """When both DB and new values are None, that's unchanged."""
-        from precog.database.crud_operations import upsert_game_odds
+        from precog.database.crud_game_states import upsert_game_odds
 
         _, mock_cursor = mock_get_cursor
 
@@ -307,7 +307,7 @@ class TestUpsertGameOddsSCDVersioning:
 
     def test_none_to_value_is_changed(self, mock_get_cursor) -> None:
         """When DB has None and new value is set, that's a change."""
-        from precog.database.crud_operations import upsert_game_odds
+        from precog.database.crud_game_states import upsert_game_odds
 
         _, mock_cursor = mock_get_cursor
 
@@ -337,7 +337,7 @@ class TestUpsertGameOddsSCDVersioning:
 
     def test_value_to_none_is_changed(self, mock_get_cursor) -> None:
         """When DB has a value and new is None, that's a change."""
-        from precog.database.crud_operations import upsert_game_odds
+        from precog.database.crud_game_states import upsert_game_odds
 
         _, mock_cursor = mock_get_cursor
 

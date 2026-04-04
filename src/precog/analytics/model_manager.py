@@ -19,7 +19,7 @@ References:
     - ADR-018: Immutable Strategy Versions (applies to models too)
     - ADR-019: Semantic Versioning for Strategies (applies to models too)
     - docs/guides/VERSIONING_GUIDE_V1.0.md
-    - docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md (probability_models table with model_class/domain fields)
+    - docs/database/DATABASE_SCHEMA_SUMMARY.md (probability_models table with model_class/domain fields)
 
 Phase: 1.5 (Foundation Validation)
 """
@@ -90,7 +90,7 @@ class ModelManager:
     References:
         - REQ-VER-001: Immutable Version Configs
         - REQ-VER-004: Version Lifecycle Management
-        - docs/database/DATABASE_SCHEMA_SUMMARY_V1.10.md (probability_models table with model_class/domain fields)
+        - docs/database/DATABASE_SCHEMA_SUMMARY.md (probability_models table with model_class/domain fields)
     """
 
     def create_model(

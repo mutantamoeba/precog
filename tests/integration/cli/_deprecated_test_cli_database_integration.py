@@ -40,7 +40,7 @@ from typer.testing import CliRunner
 from main import app
 
 # Import database CRUD functions for verification
-from precog.database.crud_operations import get_current_market
+from precog.database.crud_markets import get_current_market
 
 # Configure VCR for test cassettes
 my_vcr = vcr.VCR(

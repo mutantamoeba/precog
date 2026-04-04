@@ -159,7 +159,7 @@ class PositionViewerScreen(BaseScreen):
             return
 
         try:
-            from precog.database.crud_operations import get_positions_with_pnl
+            from precog.database.crud_positions import get_positions_with_pnl
 
             positions = get_positions_with_pnl(
                 status=None if status_filter == "all" else status_filter,

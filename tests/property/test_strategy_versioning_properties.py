@@ -50,7 +50,7 @@ from hypothesis import HealthCheck, assume, given, settings
 from hypothesis import strategies as st
 from psycopg2 import IntegrityError
 
-from precog.database.crud_operations import (
+from precog.database.crud_strategies import (
     create_strategy,
     get_active_strategy_version,
     get_all_strategy_versions,
