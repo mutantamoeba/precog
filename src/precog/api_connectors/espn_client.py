@@ -41,7 +41,7 @@ Related Requirements:
 
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any, ClassVar, TypedDict, cast
 
@@ -494,27 +494,39 @@ class ESPNClient:
         rate_limit_per_hour: int = 250,
         timeout_seconds: float = 10,
         max_retries: int = 3,
+        rate_limiter: Any = None,
     ):
         """
         Initialize ESPN client.
 
         Args:
-            rate_limit_per_hour: Maximum requests allowed per hour (default 250, ~2,500/day budget)
+            rate_limit_per_hour: Maximum requests allowed per hour (default 250).
+                Ignored if rate_limiter is provided.
             timeout_seconds: Request timeout in seconds (default 10, supports float for sub-second)
             max_retries: Maximum retry attempts for failed requests (default 3)
+            rate_limiter: Optional TokenBucket instance. If not provided, one is
+                created from rate_limit_per_hour. Prefer passing a TokenBucket
+                configured from YAML (data_sources.yaml espn.rate_limit).
 
         Educational Note:
-            Default values are chosen for production use:
-            - 250 req/hour (stays under ~2,500 req/day with adaptive polling)
-            - 10s timeout = reasonable for API responses
-            - 3 retries = handles transient failures without excessive delays
+            Rate limiting uses the generic TokenBucket from rate_limiter.py:
+            - Token bucket allows bursts (up to capacity) then throttles
+            - Configurable via data_sources.yaml (espn.rate_limit section)
+            - Same algorithm used by Kalshi client — one pattern for all APIs
         """
-        self.rate_limit_per_hour = rate_limit_per_hour
         self.timeout_seconds = timeout_seconds
         self.max_retries = max_retries
 
-        # Request tracking for rate limiting
-        self.request_timestamps: list[datetime] = []
+        # Rate limiting via generic TokenBucket (ADR-115 consolidation, C18 JC-4)
+        if rate_limiter is not None:
+            self.rate_limiter = rate_limiter
+        else:
+            from .rate_limiter import TokenBucket
+
+            # Convert requests/hour to tokens/second for TokenBucket
+            capacity = rate_limit_per_hour
+            refill_rate = rate_limit_per_hour / 3600.0
+            self.rate_limiter = TokenBucket(capacity=capacity, refill_rate=refill_rate)
 
         # Session for connection pooling
         self.session = requests.Session()
@@ -526,7 +538,7 @@ class ESPNClient:
         )
 
         logger.info(
-            f"ESPN client initialized (rate_limit={rate_limit_per_hour}/hr, "
+            f"ESPN client initialized (rate_limiter={self.rate_limiter}, "
             f"timeout={timeout_seconds}s, max_retries={max_retries})"
         )
 
@@ -717,18 +729,17 @@ class ESPNClient:
 
     def get_remaining_requests(self) -> int:
         """
-        Get number of requests remaining in current rate limit window.
+        Get approximate number of requests remaining in rate limit bucket.
 
         Returns:
-            Number of requests that can be made before rate limit is hit
+            Number of tokens available in the rate limiter bucket
 
         Usage:
             >>> remaining = client.get_remaining_requests()
             >>> if remaining < 10:
             ...     print("Warning: Approaching rate limit!")
         """
-        self._clean_old_timestamps()
-        return self.rate_limit_per_hour - len(self.request_timestamps)
+        return int(self.rate_limiter.tokens)
 
     def close(self) -> None:
         """
@@ -774,8 +785,8 @@ class ESPNClient:
         Returns:
             List of parsed ESPNGameFull dicts with metadata/state structure
         """
-        # Check rate limit before making request
-        self._check_rate_limit()
+        # Acquire rate limit token (blocks if bucket empty)
+        self.rate_limiter.acquire()
 
         # Build URL with optional date parameter
         url = self.ENDPOINTS[league]
@@ -827,9 +838,6 @@ class ESPNClient:
                     params=params,
                     timeout=self.timeout_seconds,
                 )
-
-                # Track successful request
-                self.request_timestamps.append(datetime.now())
 
                 # Check for HTTP errors
                 response.raise_for_status()
@@ -1204,32 +1212,6 @@ class ESPNClient:
         except Exception as e:
             logger.warning(f"Error parsing event: {e}")
             return None
-
-    def _check_rate_limit(self) -> None:
-        """
-        Check if request would exceed rate limit.
-
-        Raises:
-            RateLimitExceeded: If rate limit would be exceeded
-        """
-        self._clean_old_timestamps()
-
-        if len(self.request_timestamps) >= self.rate_limit_per_hour:
-            raise RateLimitExceeded(
-                f"Rate limit exceeded ({self.rate_limit_per_hour} requests/hour). "
-                f"Try again in a few minutes."
-            )
-
-    def _clean_old_timestamps(self) -> None:
-        """
-        Remove timestamps older than 1 hour from tracking list.
-
-        Educational Note:
-            This sliding window approach means the rate limit resets
-            gradually over time rather than all at once on the hour.
-        """
-        cutoff = datetime.now() - timedelta(hours=1)
-        self.request_timestamps = [ts for ts in self.request_timestamps if ts > cutoff]
 
 
 # =============================================================================

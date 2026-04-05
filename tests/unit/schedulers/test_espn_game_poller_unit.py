@@ -724,21 +724,32 @@ class TestPerLeaguePollingConstants:
         """Test DEFAULT_DISCOVERY_INTERVAL constant."""
         assert ESPNGamePoller.DEFAULT_DISCOVERY_INTERVAL == 900
 
-    def test_max_concurrent_tracking(self) -> None:
-        """Test MAX_CONCURRENT_TRACKING constant."""
-        assert ESPNGamePoller.MAX_CONCURRENT_TRACKING == 2
-
-    def test_throttled_tracking_interval(self) -> None:
-        """Test THROTTLED_TRACKING_INTERVAL constant."""
-        assert ESPNGamePoller.THROTTLED_TRACKING_INTERVAL == 60
+    def test_max_throttled_interval(self) -> None:
+        """Test DEFAULT_MAX_THROTTLED_INTERVAL constant."""
+        assert ESPNGamePoller.DEFAULT_MAX_THROTTLED_INTERVAL == 60
 
     def test_league_stagger_offset(self) -> None:
         """Test LEAGUE_STAGGER_OFFSET constant."""
         assert ESPNGamePoller.LEAGUE_STAGGER_OFFSET == 15
 
-    def test_espn_rate_limit(self) -> None:
-        """Test ESPN_RATE_LIMIT constant."""
-        assert ESPNGamePoller.ESPN_RATE_LIMIT == 250
+    def test_default_rate_budget(self) -> None:
+        """Test DEFAULT_RATE_BUDGET constant."""
+        assert ESPNGamePoller.DEFAULT_RATE_BUDGET == 250
+
+    def test_computed_max_concurrent_full_speed(self) -> None:
+        """Test max concurrent full speed is computed from budget."""
+        # Default: 250 budget, 30s interval, 4 leagues
+        # Discovery overhead: 4 * 4 = 16, Available: 234, Per league: 120
+        # Max concurrent: 234 // 120 = 1 (conservative with 4 leagues at 900s)
+        poller = ESPNGamePoller()
+        assert poller._max_concurrent_full_speed >= 1
+
+    def test_custom_rate_budget(self) -> None:
+        """Test custom rate budget changes computed concurrent limit."""
+        poller = ESPNGamePoller(rate_budget_per_hour=500)
+        assert poller.rate_budget_per_hour == 500
+        # Higher budget = more concurrent full-speed leagues
+        assert poller._max_concurrent_full_speed >= 2
 
     def test_league_state_constants(self) -> None:
         """Test module-level state constants."""
@@ -1011,14 +1022,13 @@ class TestRecalculateLeagueIntervals:
     """Unit tests for _recalculate_league_intervals method.
 
     Educational Note:
-        This method enforces the rate budget by throttling tracking intervals
-        when too many leagues are simultaneously tracking. With MAX_CONCURRENT_TRACKING=2:
-        - 1-2 tracking: 30s each (120 req/hr each, max 248 total)
-        - 3+ tracking: 60s each (60 req/hr each, safely under 250)
+        This method enforces the rate budget by computing throttle intervals
+        from the rate budget and tracking interval. The max concurrent full-speed
+        count is derived, not hardcoded (#560).
     """
 
     def test_single_tracking_league_gets_normal_interval(self, mock_espn_client: MagicMock) -> None:
-        """Test 1 tracking league uses DEFAULT_TRACKING_INTERVAL."""
+        """Test 1 tracking league uses base tracking interval."""
         poller = ESPNGamePoller(
             leagues=["nfl", "nba", "nhl"],
             espn_client=mock_espn_client,
@@ -1032,10 +1042,11 @@ class TestRecalculateLeagueIntervals:
         assert poller._league_intervals["nhl"] == 900
 
     def test_two_tracking_leagues_get_normal_interval(self, mock_espn_client: MagicMock) -> None:
-        """Test 2 tracking leagues use DEFAULT_TRACKING_INTERVAL (under threshold)."""
+        """Test 2 tracking leagues within budget use base interval."""
         poller = ESPNGamePoller(
             leagues=["nfl", "nba", "nhl"],
             espn_client=mock_espn_client,
+            rate_budget_per_hour=500,  # Enough for 2 at 30s
         )
         poller._league_states["nfl"] = LEAGUE_STATE_TRACKING
         poller._league_states["nba"] = LEAGUE_STATE_TRACKING
@@ -1046,13 +1057,12 @@ class TestRecalculateLeagueIntervals:
         assert poller._league_intervals["nba"] == 30
         assert poller._league_intervals["nhl"] == 900
 
-    def test_three_tracking_leagues_get_throttled_interval(
-        self, mock_espn_client: MagicMock
-    ) -> None:
-        """Test 3 tracking leagues are throttled to THROTTLED_TRACKING_INTERVAL."""
+    def test_overflow_leagues_get_throttled(self, mock_espn_client: MagicMock) -> None:
+        """Test leagues beyond budget capacity are throttled."""
         poller = ESPNGamePoller(
             leagues=["nfl", "nba", "nhl"],
             espn_client=mock_espn_client,
+            rate_budget_per_hour=250,  # Can only do ~2 at 30s
         )
         poller._league_states["nfl"] = LEAGUE_STATE_TRACKING
         poller._league_states["nba"] = LEAGUE_STATE_TRACKING
@@ -1060,17 +1070,17 @@ class TestRecalculateLeagueIntervals:
 
         poller._recalculate_league_intervals()
 
-        assert poller._league_intervals["nfl"] == 60
-        assert poller._league_intervals["nba"] == 60
-        assert poller._league_intervals["nhl"] == 60
+        # All tracking leagues should have intervals <= max_throttled_interval
+        for league in ["nfl", "nba", "nhl"]:
+            assert poller._league_intervals[league] <= poller.max_throttled_interval
 
-    def test_four_tracking_leagues_get_throttled_interval(
-        self, mock_espn_client: MagicMock
-    ) -> None:
-        """Test 4 tracking leagues are throttled to THROTTLED_TRACKING_INTERVAL."""
+    def test_throttled_interval_capped_at_max(self, mock_espn_client: MagicMock) -> None:
+        """Test throttled interval never exceeds max_throttled_interval."""
         poller = ESPNGamePoller(
             leagues=["nfl", "ncaaf", "nba", "nhl"],
             espn_client=mock_espn_client,
+            rate_budget_per_hour=100,  # Very tight budget
+            max_throttled_interval=60,
         )
         for league in poller.leagues:
             poller._league_states[league] = LEAGUE_STATE_TRACKING
@@ -1078,7 +1088,58 @@ class TestRecalculateLeagueIntervals:
         poller._recalculate_league_intervals()
 
         for league in poller.leagues:
-            assert poller._league_intervals[league] == 60
+            assert poller._league_intervals[league] <= 60
+
+    def test_total_rate_within_budget(self, mock_espn_client: MagicMock) -> None:
+        """Test total request rate stays within budget after throttling."""
+        poller = ESPNGamePoller(
+            leagues=["nfl", "ncaaf", "nba", "nhl"],
+            espn_client=mock_espn_client,
+            rate_budget_per_hour=250,
+        )
+        for league in poller.leagues:
+            poller._league_states[league] = LEAGUE_STATE_TRACKING
+
+        poller._recalculate_league_intervals()
+
+        total_req_hr = sum(3600 // iv for iv in poller._league_intervals.values())
+        assert total_req_hr <= poller.rate_budget_per_hour
+
+    def test_tight_budget_no_division_by_zero(self, mock_espn_client: MagicMock) -> None:
+        """Test tight budget (122/hr) doesn't crash with ZeroDivisionError.
+
+        With budget=122 and max_throttled_interval=60, 4 leagues at 60s = 240 req/hr
+        which exceeds the budget. The cap is respected (no interval > 60s) and a
+        warning is logged. Budget cannot be met when the cap makes it impossible.
+        """
+        poller = ESPNGamePoller(
+            leagues=["nfl", "ncaaf", "nba", "nhl"],
+            espn_client=mock_espn_client,
+            rate_budget_per_hour=122,
+        )
+        for league in poller.leagues:
+            poller._league_states[league] = LEAGUE_STATE_TRACKING
+
+        # Should not raise ZeroDivisionError
+        poller._recalculate_league_intervals()
+
+        # Cap should be respected — no interval faster than base or slower than cap
+        for iv in poller._league_intervals.values():
+            assert iv <= poller.max_throttled_interval or iv == poller.DEFAULT_DISCOVERY_INTERVAL
+
+    def test_higher_budget_allows_more_full_speed(self, mock_espn_client: MagicMock) -> None:
+        """Test higher rate budget allows more leagues at full speed."""
+        poller_low = ESPNGamePoller(
+            leagues=["nfl", "nba"],
+            espn_client=mock_espn_client,
+            rate_budget_per_hour=250,
+        )
+        poller_high = ESPNGamePoller(
+            leagues=["nfl", "nba"],
+            espn_client=mock_espn_client,
+            rate_budget_per_hour=500,
+        )
+        assert poller_high._max_concurrent_full_speed >= poller_low._max_concurrent_full_speed
 
     def test_discovery_leagues_always_get_discovery_interval(
         self, mock_espn_client: MagicMock

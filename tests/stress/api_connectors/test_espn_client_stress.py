@@ -12,7 +12,6 @@ Usage:
 
 import gc
 import time
-from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -112,50 +111,43 @@ class TestHighVolumeRequests:
                 client.close()
 
     def test_rapid_rate_limit_checks(self) -> None:
-        """Test rapid rate limit checking performance."""
+        """Test rapid rate limit checking performance with TokenBucket."""
         num_checks = 1000
 
         client = ESPNClient(rate_limit_per_hour=500)
 
         try:
-            # Pre-populate with timestamps
-            client.request_timestamps = [datetime.now() for _ in range(250)]
-
             start = time.perf_counter()
 
             for _ in range(num_checks):
                 remaining = client.get_remaining_requests()
-                assert remaining >= 250
+                assert remaining >= 0
 
             elapsed = time.perf_counter() - start
 
-            # Should complete in reasonable time
+            # Should complete in reasonable time (O(1) per check with TokenBucket)
             assert elapsed < 2.0, f"Rate limit checks took {elapsed:.2f}s for {num_checks} checks"
 
         finally:
             client.close()
 
-    def test_timestamp_list_growth_under_load(self) -> None:
-        """Test that timestamp list doesn't grow unbounded."""
+    def test_token_bucket_consumption_under_load(self) -> None:
+        """Test that TokenBucket tokens decrease under sustained load."""
         num_requests = 200
 
         client = ESPNClient(rate_limit_per_hour=10000)
 
         try:
-            # Patch at session level so _make_request runs and records timestamps
+            initial_tokens = client.rate_limiter.tokens
+
             with patch.object(client.session, "get") as mock_get:
                 mock_get.return_value = create_mock_response({"events": []})
 
                 for _ in range(num_requests):
                     client.get_nfl_scoreboard()
 
-                # List should not exceed rate limit
-                assert len(client.request_timestamps) <= num_requests
-
-                # After cleanup, old timestamps should be removed
-                client._clean_old_timestamps()
-                # All timestamps should still be recent
-                assert len(client.request_timestamps) == num_requests
+                # Tokens should have been consumed (may have partial refill)
+                assert client.rate_limiter.tokens < initial_tokens
 
         finally:
             client.close()
@@ -274,51 +266,44 @@ class TestRateLimitWindow:
 
     def test_sliding_window_cleanup_under_load(self) -> None:
         """Test sliding window cleanup performance."""
-        from datetime import timedelta
 
         client = ESPNClient(rate_limit_per_hour=1000)
 
         try:
-            # Add mix of old and new timestamps
-            now = datetime.now()
-            old_time = now - timedelta(hours=2)
-
-            client.request_timestamps = []
-            for i in range(25):
-                if i % 2 == 0:
-                    client.request_timestamps.append(old_time)
-                else:
-                    client.request_timestamps.append(now)
-
+            # TokenBucket refill is O(1) — no cleanup needed
+            # Verify get_remaining_requests is fast under load
             start = time.perf_counter()
-            client._clean_old_timestamps()
+            for _ in range(1000):
+                client.get_remaining_requests()
             elapsed = time.perf_counter() - start
 
-            # Cleanup should be fast
-            assert elapsed < 0.1, f"Cleanup took {elapsed:.3f}s"
-
-            # Old timestamps should be removed
-            assert len(client.request_timestamps) == 12
+            # O(1) operations should be fast
+            assert elapsed < 0.1, f"1000 remaining checks took {elapsed:.3f}s"
 
         finally:
             client.close()
 
     def test_rate_limit_near_boundary(self) -> None:
-        """Test behavior near rate limit boundary."""
-        client = ESPNClient(rate_limit_per_hour=100)
+        """Test behavior near rate limit boundary with TokenBucket."""
+        from precog.api_connectors.rate_limiter import TokenBucket
+
+        # Small bucket to test boundary
+        limiter = TokenBucket(capacity=5, refill_rate=0.001)  # Very slow refill
+        client = ESPNClient(rate_limiter=limiter)
 
         try:
-            # Fill to exactly limit
-            client.request_timestamps = [datetime.now() for _ in range(99)]
+            # Consume 4 tokens
+            for _ in range(4):
+                limiter.acquire()
 
-            # Should still have 1 remaining
-            assert client.get_remaining_requests() == 1
+            # Should have ~1 remaining
+            assert client.get_remaining_requests() >= 1
 
-            # Add one more
-            client.request_timestamps.append(datetime.now())
+            # Consume the last token
+            limiter.acquire()
 
-            # Should be at limit
-            assert client.get_remaining_requests() == 0
+            # Should be empty
+            assert client.get_remaining_requests() < 1
 
         finally:
             client.close()

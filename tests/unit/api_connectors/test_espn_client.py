@@ -22,7 +22,7 @@ Educational Note:
     mock it to avoid network dependencies in unit tests.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import MagicMock, Mock, patch
 
 import pytest
@@ -68,9 +68,9 @@ class TestESPNClientInitialization:
         client = ESPNClient()
 
         assert client is not None
-        assert client.rate_limit_per_hour == 250
         assert client.timeout_seconds == 10
         assert client.max_retries == 3
+        assert client.rate_limiter is not None
 
     def test_client_accepts_custom_config(self):
         """Verify client accepts custom configuration values."""
@@ -82,9 +82,19 @@ class TestESPNClientInitialization:
             max_retries=5,
         )
 
-        assert client.rate_limit_per_hour == 200
         assert client.timeout_seconds == 5
         assert client.max_retries == 5
+        assert client.rate_limiter.capacity == 200
+
+    def test_client_accepts_custom_rate_limiter(self):
+        """Verify client accepts an external TokenBucket."""
+        from precog.api_connectors.espn_client import ESPNClient
+        from precog.api_connectors.rate_limiter import TokenBucket
+
+        custom_limiter = TokenBucket(capacity=100, refill_rate=1.0)
+        client = ESPNClient(rate_limiter=custom_limiter)
+
+        assert client.rate_limiter is custom_limiter
 
     def test_client_has_session(self):
         """Verify client creates requests session for connection pooling."""
@@ -94,16 +104,6 @@ class TestESPNClientInitialization:
 
         assert hasattr(client, "session")
         assert isinstance(client.session, requests.Session)
-
-    def test_client_tracks_request_count(self):
-        """Verify client initializes request tracking for rate limiting."""
-        from precog.api_connectors.espn_client import ESPNClient
-
-        client = ESPNClient()
-
-        assert hasattr(client, "request_timestamps")
-        assert isinstance(client.request_timestamps, list)
-        assert len(client.request_timestamps) == 0
 
 
 # =============================================================================
@@ -1218,8 +1218,8 @@ class TestRateLimiting:
     """Tests for rate limiting (500 requests per hour)."""
 
     @patch("requests.Session.get")
-    def test_rate_limiter_tracks_requests(self, mock_get: MagicMock):
-        """Verify rate limiter tracks request timestamps."""
+    def test_rate_limiter_consumes_token_on_request(self, mock_get: MagicMock):
+        """Verify rate limiter consumes a token per API request."""
         from precog.api_connectors.espn_client import ESPNClient
 
         mock_response = Mock()
@@ -1227,90 +1227,45 @@ class TestRateLimiting:
         mock_response.json.return_value = ESPN_NFL_SCOREBOARD_LIVE
         mock_get.return_value = mock_response
 
-        client = ESPNClient()
-        initial_count = len(client.request_timestamps)
+        client = ESPNClient(rate_limit_per_hour=250)
+        initial_tokens = client.rate_limiter.tokens
 
         client.get_nfl_scoreboard()
 
-        assert len(client.request_timestamps) == initial_count + 1
+        # Token bucket should have consumed 1 token
+        assert client.rate_limiter.tokens < initial_tokens
 
     @patch("requests.Session.get")
-    def test_rate_limiter_blocks_when_limit_reached(self, mock_get: MagicMock):
-        """Verify rate limiter blocks requests when limit is reached."""
-        from precog.api_connectors.espn_client import ESPNClient, RateLimitExceeded
+    def test_rate_limiter_blocks_when_empty(self, mock_get: MagicMock):
+        """Verify rate limiter blocks (returns False) when bucket is empty."""
+        from precog.api_connectors.rate_limiter import TokenBucket
 
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = ESPN_NFL_SCOREBOARD_LIVE
-        mock_get.return_value = mock_response
+        # Tiny bucket that empties immediately
+        limiter = TokenBucket(capacity=1, refill_rate=0.001)
+        limiter.acquire()  # Empty the bucket
 
-        client = ESPNClient(rate_limit_per_hour=5)
-
-        # Simulate 5 requests in the past hour
-        now = datetime.now()
-        client.request_timestamps = [now - timedelta(minutes=i) for i in range(5)]
-
-        # 6th request should raise RateLimitExceeded
-        with pytest.raises(RateLimitExceeded):
-            client.get_nfl_scoreboard()
-
-    @patch("requests.Session.get")
-    def test_rate_limiter_allows_after_window_expires(self, mock_get: MagicMock):
-        """Verify rate limiter allows requests after hour window expires."""
-        from precog.api_connectors.espn_client import ESPNClient
-
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = ESPN_NFL_SCOREBOARD_LIVE
-        mock_get.return_value = mock_response
-
-        client = ESPNClient(rate_limit_per_hour=5)
-
-        # Simulate 5 requests from >1 hour ago
-        old_time = datetime.now() - timedelta(hours=2)
-        client.request_timestamps = [old_time for _ in range(5)]
-
-        # Should not raise - old requests expired
-        result = client.get_nfl_scoreboard()
-        assert result is not None
-
-    @patch("requests.Session.get")
-    def test_rate_limiter_cleans_old_timestamps(self, mock_get: MagicMock):
-        """Verify rate limiter removes timestamps older than 1 hour."""
-        from precog.api_connectors.espn_client import ESPNClient
-
-        mock_response = Mock()
-        mock_response.status_code = 200
-        mock_response.json.return_value = ESPN_NFL_SCOREBOARD_LIVE
-        mock_get.return_value = mock_response
-
-        client = ESPNClient(rate_limit_per_hour=10)
-
-        # Add mix of old and recent timestamps
-        now = datetime.now()
-        old_timestamps = [now - timedelta(hours=2) for _ in range(5)]
-        recent_timestamps = [now - timedelta(minutes=30) for _ in range(3)]
-        client.request_timestamps = old_timestamps + recent_timestamps
-
-        client.get_nfl_scoreboard()
-
-        # Old timestamps should be cleaned
-        assert len(client.request_timestamps) <= 4  # 3 recent + 1 new
+        # Non-blocking acquire should return False
+        assert limiter.acquire(block=False) is False
 
     def test_get_remaining_requests(self):
-        """Verify client reports remaining requests in rate limit window."""
+        """Verify client reports remaining tokens in rate limiter."""
         from precog.api_connectors.espn_client import ESPNClient
 
         client = ESPNClient(rate_limit_per_hour=500)
 
-        # No requests made yet
-        assert client.get_remaining_requests() == 500
+        # Full bucket
+        remaining = client.get_remaining_requests()
+        assert remaining == 500
 
-        # Simulate 100 requests
-        now = datetime.now()
-        client.request_timestamps = [now - timedelta(minutes=i % 60) for i in range(100)]
+    def test_custom_rate_limiter_used(self):
+        """Verify external TokenBucket is used instead of default."""
+        from precog.api_connectors.espn_client import ESPNClient
+        from precog.api_connectors.rate_limiter import TokenBucket
 
-        assert client.get_remaining_requests() == 400
+        custom = TokenBucket(capacity=42, refill_rate=1.0)
+        client = ESPNClient(rate_limiter=custom)
+
+        assert client.get_remaining_requests() == 42
 
 
 # =============================================================================

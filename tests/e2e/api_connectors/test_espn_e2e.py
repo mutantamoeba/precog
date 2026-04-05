@@ -117,8 +117,8 @@ class TestESPNConnectivity:
         espn_client.get_nfl_scoreboard()
         espn_client.get_nfl_scoreboard()
 
-        # Both should use same session (tracked via timestamps)
-        assert len(espn_client.request_timestamps) >= 2
+        # Both should use same session (tokens consumed from rate limiter)
+        assert espn_client.rate_limiter.tokens < espn_client.rate_limiter.capacity
 
     @pytest.mark.parametrize("league", ["nfl", "ncaaf", "nba", "ncaab", "nhl", "wnba"])
     def test_all_supported_leagues_accessible(self, espn_client, league):
@@ -390,16 +390,16 @@ class TestESPNRateLimiting:
             We make a few real requests and verify the rate limiter
             is tracking them. We don't actually hit the limit (wasteful).
         """
-        initial_count = len(espn_client.request_timestamps)
+        initial_remaining = espn_client.get_remaining_requests()
 
         # Make 3 real requests
         espn_client.get_nfl_scoreboard()
         espn_client.get_nfl_scoreboard()
         espn_client.get_nfl_scoreboard()
 
-        # Should have 3 more timestamps
-        new_count = len(espn_client.request_timestamps)
-        assert new_count >= initial_count + 3
+        # Should have fewer tokens remaining
+        new_remaining = espn_client.get_remaining_requests()
+        assert new_remaining < initial_remaining
 
     def test_remaining_requests_decrements(self, espn_client):
         """Verify remaining request count decrements.
@@ -568,8 +568,8 @@ class TestESPNDataPipeline:
                 "unknown",  # Fallback for unmapped ESPN states
             }
 
-            # Rate limiting worked
-            assert len(espn_client.request_timestamps) > 0
+            # Rate limiting worked (tokens consumed)
+            assert espn_client.rate_limiter.tokens < espn_client.rate_limiter.capacity
 
     @pytest.mark.parametrize("league", ["ncaaf", "nba", "ncaab", "nhl", "wnba"])
     def test_full_pipeline_other_sports(self, espn_client, league):

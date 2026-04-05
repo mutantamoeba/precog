@@ -1,9 +1,9 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.28
+**Version:** 1.29
 **Created:** 2025-11-13
-**Last Updated:** 2026-04-03
+**Last Updated:** 2026-04-04
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
@@ -9425,6 +9425,52 @@ This extraction serves two critical purposes:
 2. **Improved Usability:** Patterns are now in a dedicated, searchable reference guide rather than buried in a 3,700-line master document
 
 The preservation of all cross-references (ADRs, REQs, file paths) ensures developers can navigate from patterns to detailed implementation guides without information loss.
+
+## Pattern 46: Mock Patch Migration on Module Extraction (ALWAYS for Module Splits)
+
+**Context:** When extracting functions from a god object into domain modules (e.g., `crud_operations.py` → `crud_markets.py`, `crud_teams.py`), mock.patch targets must follow the function to its new namespace.
+
+**The Problem:** Python's `mock.patch("module.name")` patches the name in a specific module's namespace. When a function moves from module A to module B, all patches must update:
+
+```python
+# BEFORE extraction: function lives in crud_operations
+@patch("precog.database.crud_operations.get_cursor")  # ✅ Works
+
+# AFTER extraction: function moved to crud_markets
+@patch("precog.database.crud_operations.get_cursor")  # ❌ AttributeError
+@patch("precog.database.crud_markets.get_cursor")      # ✅ Works
+```
+
+**Three categories of patches to migrate:**
+
+| Category | Example | New Target |
+|----------|---------|------------|
+| **Helper patches** (get_cursor, fetch_one, fetch_all) | `@patch("old_module.get_cursor")` | Domain module where the function under test lives |
+| **Cross-function patches** (function A mocks function B in same module) | `@patch("old_module.get_current_market")` | Domain module where the caller lives |
+| **Consumer patches** (CLI/scheduler tests mock a CRUD function) | `@patch("old_module.create_market")` | Module where the consumer's import binds the name |
+
+**Systematic migration approach (session 38):**
+1. Write a script with function→module mapping (already known from extraction)
+2. Rewrite `from X import Y` statements using the mapping
+3. Rewrite `@patch("X.Y")` strings using the mapping
+4. Handle aliased imports (`import X as Y`) manually — scripts miss these
+5. Run tests iteratively: unit → integration → stress/chaos/race
+
+**Scale:** Session 38 migrated 302 helper patches + 40 function patches + 145 import rewrites across 55 files. Script-based approach completed in ~30 minutes.
+
+**When This Pattern Applies:**
+- ANY module split or extraction (god object decomposition)
+- Renaming modules or moving functions between files
+- NOT needed for: adding new functions (no existing patches to migrate)
+
+**Reference:**
+- ADR-115: Database Domain Module Architecture
+- Session 38: CRUD Phase 1b/1c extraction + Option B cleanup
+
+---
+
+V1.29 Updates:
+- Added Pattern 46 (Mock Patch Migration on Module Extraction) documenting the systematic approach to migrating mock.patch targets when splitting god objects into domain modules. Discovered during session 38 CRUD decomposition: 302 patches across 9 files initially, then 145 imports across 55 files for Option B.
 
 V1.3 Updates:
 - Added Pattern 12 (Test Fixture Security Compliance) documenting project-relative test fixture pattern from PR #79, ensuring test fixtures comply with path traversal protection (CWE-22) implemented in PR #76.

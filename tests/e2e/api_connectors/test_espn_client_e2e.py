@@ -11,7 +11,7 @@ Usage:
     pytest tests/e2e/api_connectors/test_espn_client_e2e.py -v -m e2e
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -20,7 +20,6 @@ import requests
 from precog.api_connectors.espn_client import (
     ESPNAPIError,
     ESPNClient,
-    RateLimitExceeded,
 )
 
 # =============================================================================
@@ -271,37 +270,38 @@ class TestRateLimitingWorkflow:
         finally:
             client.close()
 
-    def test_rate_limit_exceeded_raises_error(self) -> None:
-        """Test that exceeding rate limit raises error."""
-        client = ESPNClient(rate_limit_per_hour=2)
+    def test_rate_limiter_blocks_when_empty(self) -> None:
+        """Test that TokenBucket blocks (non-blocking returns False) when empty."""
+        from precog.api_connectors.rate_limiter import TokenBucket
+
+        limiter = TokenBucket(capacity=1, refill_rate=0.001)
+        client = ESPNClient(rate_limiter=limiter)
 
         try:
-            # Fill rate limit
-            client.request_timestamps = [
-                datetime.now(),
-                datetime.now(),
-            ]
+            # Drain the bucket
+            limiter.acquire()
 
-            with pytest.raises(RateLimitExceeded) as exc_info:
-                client._check_rate_limit()
-
-            assert "Rate limit exceeded" in str(exc_info.value)
+            # Non-blocking acquire should fail
+            assert limiter.acquire(block=False) is False
 
         finally:
             client.close()
 
-    def test_rate_limit_resets_after_hour(self) -> None:
-        """Test that rate limit resets after old timestamps expire."""
-        client = ESPNClient(rate_limit_per_hour=5)
+    def test_rate_limiter_refills_over_time(self) -> None:
+        """Test that TokenBucket refills tokens over time."""
+        from precog.api_connectors.rate_limiter import TokenBucket
+
+        limiter = TokenBucket(capacity=100, refill_rate=100.0)  # Fast refill for test
+        client = ESPNClient(rate_limiter=limiter)
 
         try:
-            # Add old timestamps (older than 1 hour)
-            old_time = datetime.now() - timedelta(hours=2)
-            client.request_timestamps = [old_time] * 5
+            # Drain some tokens
+            for _ in range(10):
+                limiter.acquire()
 
-            # Should reset after cleanup
+            # Should have ~90 remaining (fast refill may add a few back)
             remaining = client.get_remaining_requests()
-            assert remaining == 5
+            assert remaining >= 85
 
         finally:
             client.close()

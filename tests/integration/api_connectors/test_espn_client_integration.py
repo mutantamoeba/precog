@@ -22,7 +22,6 @@ Reference: docs/testing/PHASE_2_TEST_PLAN_V1.0.md Section 2.1.4
 """
 
 import os
-from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -162,8 +161,8 @@ class TestESPNIntegrationWithMocks:
         client.get_nfl_scoreboard()
         client.get_nfl_scoreboard()
 
-        # Should have used the same session (tracked via request_timestamps)
-        assert len(client.request_timestamps) == 3
+        # Should have used the same session (tokens consumed from rate limiter)
+        assert client.rate_limiter.tokens < client.rate_limiter.capacity
 
 
 # =============================================================================
@@ -332,27 +331,27 @@ class TestESPNRateLimitingIntegration:
         assert client.get_remaining_requests() == 95
 
     @patch("requests.Session.get")
-    def test_rate_limit_blocks_when_exceeded(self, mock_get):
-        """Integration test: Rate limit blocks requests when exceeded."""
-        from datetime import timedelta
+    def test_rate_limit_blocks_when_bucket_empty(self, mock_get):
+        """Integration test: TokenBucket blocks when empty (non-blocking returns False)."""
         from unittest.mock import Mock
 
-        from precog.api_connectors.espn_client import ESPNClient, RateLimitExceeded
+        from precog.api_connectors.espn_client import ESPNClient
+        from precog.api_connectors.rate_limiter import TokenBucket
+
+        # Create a bucket with 1 token, very slow refill
+        limiter = TokenBucket(capacity=1, refill_rate=0.001)
+        client = ESPNClient(rate_limiter=limiter)
 
         mock_response = Mock()
         mock_response.status_code = 200
         mock_response.json.return_value = ESPN_NFL_SCOREBOARD_LIVE
         mock_get.return_value = mock_response
 
-        client = ESPNClient(rate_limit_per_hour=5)
+        # First request succeeds (consumes the 1 token)
+        client.get_nfl_scoreboard()
 
-        # Simulate 5 requests already made
-        now = datetime.now()
-        client.request_timestamps = [now - timedelta(minutes=i) for i in range(5)]
-
-        # 6th request should be blocked
-        with pytest.raises(RateLimitExceeded):
-            client.get_nfl_scoreboard()
+        # Bucket should be nearly empty
+        assert client.get_remaining_requests() < 1
 
 
 # =============================================================================

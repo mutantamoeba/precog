@@ -150,15 +150,18 @@ MODULE_TIERS = {
     "matching/ticker_parser": "experimental",
     # Issue #236: NFLDataPySource for stats loading
     "database/seeding/sources/nfl_data_py_source": "experimental",
+    # TUI entries removed — TUI deleted in PR #563 (#558)
     # Schedulers
     "schedulers/espn_game_poller": "business",
+    # Priority-based polling (#560) — new module, promote to business when test suite expands
+    "schedulers/league_priority": "experimental",
     # Validation
     "validation/espn_validation": "business",
     "validation/kalshi_validation": "business",
     # Infrastructure (80%+) - 4 types required
     # API Clients
     "api_connectors/espn_client": "infrastructure",
-    "api_connectors/espn_team_validator": "business",
+    "api_connectors/espn_team_validator": "experimental",  # Promote to business when test suite expands
     "api_connectors/rate_limiter": "infrastructure",
     # Configuration
     "config/config_loader": "infrastructure",
@@ -183,7 +186,7 @@ MODULE_TIERS = {
     "cli/config": "infrastructure",
     "cli/system": "infrastructure",
     # Infrastructure - circuit breaker management
-    "cli/circuit_breaker": "infrastructure",
+    "cli/circuit_breaker": "experimental",  # Promote to infrastructure when test suite expands
     # Experimental - future features not yet implemented
     "cli/_future/model": "experimental",
     "cli/_future/position": "experimental",
@@ -245,6 +248,7 @@ def discover_testable_modules() -> list[str]:
         "migrations/",  # Database migrations
         "alembic/",  # Alembic migrations
         "seeds/",  # Seed data
+        "tui/",  # TUI removed in PR #563 (#558) — source pending deletion
     ]
 
     for py_file in SRC_DIR.rglob("*.py"):

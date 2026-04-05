@@ -141,23 +141,26 @@ class RealisticMockService:
 
 @pytest.fixture(autouse=True)
 def _clean_scheduler_status():
-    """Clean stale scheduler_status entries before each integration test.
+    """Delete all scheduler_status entries before each integration test.
 
     Integration tests create real supervisors that write to scheduler_status.
     The startup guard (Issue #363) detects these as active instances and blocks
-    subsequent tests. Force-clean before each test to prevent false positives.
+    subsequent tests. A full DELETE is needed because cleanup_stale_schedulers
+    only marks entries with OLD heartbeats — it misses fresh heartbeats written
+    by health check threads racing with stop_all().
     """
-    from precog.database.crud_schedulers import cleanup_stale_schedulers
+    from precog.database.connection import get_cursor
 
-    try:
-        cleanup_stale_schedulers(stale_threshold_seconds=0)
-    except Exception:
-        pass  # Table may not exist in test environments
+    def _purge():
+        try:
+            with get_cursor(commit=True) as cur:
+                cur.execute("DELETE FROM scheduler_status")
+        except Exception:
+            pass  # Table may not exist in test environments
+
+    _purge()
     yield
-    try:
-        cleanup_stale_schedulers(stale_threshold_seconds=0)
-    except Exception:
-        pass
+    _purge()
 
 
 @pytest.fixture
