@@ -206,6 +206,7 @@ class ESPNGamePoller(BasePoller):
         validate_teams_on_start: bool = True,
         rate_budget_per_hour: int | None = None,
         max_throttled_interval: int | None = None,
+        priority_calculator: Any | None = None,
     ) -> None:
         """
         Initialize the ESPNGamePoller.
@@ -289,6 +290,12 @@ class ESPNGamePoller(BasePoller):
         self._league_intervals: dict[str, int] = dict.fromkeys(
             self.leagues, self.DEFAULT_DISCOVERY_INTERVAL
         )
+
+        # Priority-based adaptive polling (#560)
+        # Stores last scoreboard games per league for priority calculation
+        self._league_last_games: dict[str, list[ESPNGameFull]] = {}
+        # Optional priority calculator for non-uniform throttling
+        self._priority_calculator = priority_calculator
 
         # Track last validation time for dedup guard (Part F)
         self._last_validation_time: float = 0.0
@@ -718,6 +725,9 @@ class ESPNGamePoller(BasePoller):
         pending_reschedules: list[tuple[str, int, int, str, int]] = []
 
         with self._lock:
+            # Store latest games for priority-based throttle calculation (#560)
+            self._league_last_games[league] = games
+
             if league not in self._league_states:
                 logger.warning("Unknown league '%s' in state evaluation, ignoring", league)
                 return
@@ -727,19 +737,31 @@ class ESPNGamePoller(BasePoller):
             new_state = LEAGUE_STATE_TRACKING if has_live else LEAGUE_STATE_DISCOVERY
 
             if old_state == new_state:
-                return  # No transition needed
+                # No state transition, but if priority calculator is active,
+                # recalculate intervals every poll cycle so game-phase urgency
+                # updates as games progress (Q1 → Q4, etc). Without this,
+                # intervals computed at TRACKING entry never change. (#560)
+                if self._priority_calculator is not None and old_state == LEAGUE_STATE_TRACKING:
+                    pending_reschedules = self._recalculate_league_intervals()
+                else:
+                    return  # No transition, no priority calculator — nothing to do
+            else:
+                # State transition — always recalculate
+                self._league_states[league] = new_state
 
-            # Transition the state
-            self._league_states[league] = new_state
-            logger.info(
-                "League %s state transition: %s -> %s",
-                league.upper(),
-                old_state,
-                new_state,
-            )
+                # Clean up stale game cache on TRACKING → DISCOVERY
+                if new_state == LEAGUE_STATE_DISCOVERY and league in self._league_last_games:
+                    del self._league_last_games[league]
 
-            # Recalculate intervals and collect reschedule ops (execute outside lock)
-            pending_reschedules = self._recalculate_league_intervals()
+                logger.info(
+                    "League %s state transition: %s -> %s",
+                    league.upper(),
+                    old_state,
+                    new_state,
+                )
+
+                # Recalculate intervals and collect reschedule ops (execute outside lock)
+                pending_reschedules = self._recalculate_league_intervals()
 
         # Execute reschedules OUTSIDE the lock to avoid deadlock with APScheduler
         for job_id, old_interval, new_interval, state, tracking_count in pending_reschedules:
@@ -812,16 +834,49 @@ class ESPNGamePoller(BasePoller):
         tracking_count = sum(1 for s in self._league_states.values() if s == LEAGUE_STATE_TRACKING)
         base_interval = self.poll_interval or self.DEFAULT_TRACKING_INTERVAL
 
-        # Compute tracking interval: uniform allocation across all tracking leagues.
-        # When tracking_count <= max_concurrent_full_speed, use base interval.
-        # When tracking_count > max_concurrent_full_speed, compute from budget.
-        if tracking_count > self._max_concurrent_full_speed and tracking_count > 0:
-            # Budget available for tracking = total - discovery overhead
-            discovery_count = len(self.leagues) - tracking_count
-            discovery_budget = discovery_count * (3600 // self.DEFAULT_DISCOVERY_INTERVAL)
-            available_for_tracking = max(0, self.rate_budget_per_hour - discovery_budget)
+        # Determine whether throttling is needed
+        needs_throttle = tracking_count > self._max_concurrent_full_speed and tracking_count > 0
 
-            # Uniform allocation: all tracking leagues share equally
+        # Budget available for tracking = total - discovery overhead
+        discovery_count = len(self.leagues) - tracking_count
+        discovery_budget = discovery_count * (3600 // self.DEFAULT_DISCOVERY_INTERVAL)
+        available_for_tracking = max(0, self.rate_budget_per_hour - discovery_budget)
+
+        # Per-league interval map for tracking leagues (uniform or priority-based)
+        priority_intervals: dict[str, int] | None = None
+
+        if needs_throttle and self._priority_calculator is not None:
+            # Priority-based allocation (#560): higher-priority leagues poll faster
+            try:
+                tracking_leagues = [
+                    lg
+                    for lg in self.leagues
+                    if self._league_states.get(lg) == LEAGUE_STATE_TRACKING
+                ]
+                priority_intervals = self._priority_calculator.allocate_budget(
+                    tracking_leagues=tracking_leagues,
+                    budget_available=available_for_tracking,
+                    base_interval=base_interval,
+                    max_throttled_interval=self.max_throttled_interval,
+                    league_games=self._league_last_games,
+                )
+                if priority_intervals is not None:
+                    logger.info(
+                        "Priority-based throttle: %s (tracking=%d, budget=%d req/hr)",
+                        {lg: f"{iv}s" for lg, iv in priority_intervals.items()},
+                        tracking_count,
+                        available_for_tracking,
+                    )
+            except Exception:
+                logger.warning(
+                    "Priority allocation failed, falling back to uniform throttle",
+                    exc_info=True,
+                )
+                priority_intervals = None
+
+        # Compute uniform tracking interval (used when no priority calculator
+        # or as fallback when priority allocation fails)
+        if needs_throttle:
             per_league_budget = (
                 available_for_tracking // tracking_count if tracking_count > 0 else 0
             )
@@ -832,17 +887,21 @@ class ESPNGamePoller(BasePoller):
                 computed_interval = self.max_throttled_interval
 
             # Cap: never slower than max_throttled_interval, never faster than base
-            tracking_interval = min(computed_interval, self.max_throttled_interval)
-            tracking_interval = max(tracking_interval, base_interval)
+            uniform_tracking_interval = min(computed_interval, self.max_throttled_interval)
+            uniform_tracking_interval = max(uniform_tracking_interval, base_interval)
         else:
-            tracking_interval = base_interval  # no throttling needed
+            uniform_tracking_interval = base_interval  # no throttling needed
 
         pending: list[tuple[str, int, int, str, int]] = []
 
         for league in self.leagues:
             state = self._league_states.get(league, LEAGUE_STATE_DISCOVERY)
             if state == LEAGUE_STATE_TRACKING:
-                new_interval = tracking_interval
+                # Use priority-based interval if available, else uniform
+                if priority_intervals is not None and league in priority_intervals:
+                    new_interval = priority_intervals[league]
+                else:
+                    new_interval = uniform_tracking_interval
             else:
                 new_interval = self.DEFAULT_DISCOVERY_INTERVAL
 
@@ -855,7 +914,7 @@ class ESPNGamePoller(BasePoller):
                 pending.append((job_id, old_interval, new_interval, state, tracking_count))
 
         # Validate rate budget
-        total_req_hr = sum(3600 // iv for iv in self._league_intervals.values())
+        total_req_hr = sum(3600 / iv for iv in self._league_intervals.values())
         if total_req_hr > self.rate_budget_per_hour:
             logger.warning(
                 "Rate budget exceeded: %d req/hr > %d limit (tracking=%d leagues)",

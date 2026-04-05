@@ -367,6 +367,40 @@ def count_open_markets() -> int:
     return int(result["count"])
 
 
+def count_open_markets_by_subcategory(subcategory: str) -> int:
+    """Count open (non-settled) markets for a given subcategory (e.g., 'nfl', 'nba').
+
+    Uses COALESCE to check both the market's denormalized subcategory and
+    the parent event's subcategory, matching the pattern in get_markets_summary.
+
+    Args:
+        subcategory: Sport subcategory to filter by (e.g., "nfl", "nba").
+
+    Returns:
+        Number of open markets for the given subcategory.
+
+    Educational Note:
+        Migration 0037 renamed league to subcategory. Markets may have the
+        subcategory denormalized directly, or it may only exist on the parent
+        event. COALESCE handles both cases.
+
+    Example:
+        >>> nfl_count = count_open_markets_by_subcategory("nfl")
+        >>> print(f"Tracking {nfl_count} open NFL markets")
+    """
+    query = """
+        SELECT COUNT(*) AS count
+        FROM markets m
+        LEFT JOIN events e ON e.id = m.event_internal_id
+        WHERE m.status = 'open'
+          AND LOWER(COALESCE(m.subcategory, e.subcategory)) = LOWER(%s)
+    """
+    result = fetch_one(query, (subcategory,))
+    if result is None:
+        return 0
+    return int(result["count"])
+
+
 def update_market_with_versioning(
     ticker: str,
     yes_ask_price: Decimal | None = None,

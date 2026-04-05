@@ -51,6 +51,34 @@ live_stats:
       requests_per_minute: 60
       burst_allowance: 10
 
+    # Priority-based adaptive polling (#560)
+    # When multiple leagues track simultaneously and budget requires throttling,
+    # allocate budget by priority instead of uniformly.
+    priority_polling:
+      enabled: true  # false = uniform allocation fallback
+
+      # Signal weights (normalized internally - need not sum to 1.0)
+      weights:
+        game_phase: "0.50"     # Late-game urgency (most dynamic signal)
+        active_markets: "0.30" # Open Kalshi markets for this league
+        static_priority: "0.20" # User-configured baseline
+
+      # Per-league static priority (0.0-1.0)
+      league_priorities:
+        nfl: "0.8"
+        nba: "0.7"
+        ncaaf: "0.6"
+        nhl: "0.5"
+
+      # Open market count thresholds for signal scaling
+      market_thresholds:
+        low: 1       # >=1 open markets -> 0.3
+        medium: 6    # >=6 -> 0.6
+        high: 16     # >=16 -> 1.0
+
+      # Cache TTL for DB-sourced signals (seconds)
+      market_count_cache_ttl: 300  # 5 minutes
+
     # Data parsing
     parsing:
       extract_score: true

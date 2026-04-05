@@ -159,6 +159,57 @@ def _prevent_system_sleep_for_supervised(logger: Any) -> None:
         atexit.register(_restore_sleep)
 
 
+def _create_priority_calculator() -> Any:
+    """Create a LeaguePriorityCalculator from YAML config, or None if disabled.
+
+    Reads priority_polling config from data_sources.yaml. Returns None if
+    config is missing or priority_polling.enabled is false, which causes the
+    poller to use uniform allocation (existing behavior).
+
+    Reference: Issue #560
+    """
+    try:
+        from precog.config.config_loader import ConfigLoader
+        from precog.database.crud_markets import count_open_markets_by_subcategory
+        from precog.schedulers.league_priority import LeaguePriorityCalculator
+
+        config = ConfigLoader()
+        espn_config = config.get("data_sources", "live_stats.espn") or {}
+        priority_config = (
+            espn_config.get("priority_polling", {}) if isinstance(espn_config, dict) else {}
+        )
+
+        if not priority_config.get("enabled", False):
+            return None
+
+        # Parse weights (strings in YAML per convention, used as floats internally)
+        raw_weights = priority_config.get("weights", {})
+        weights = {k: float(v) for k, v in raw_weights.items()} if raw_weights else None
+
+        # Parse league priorities
+        raw_priorities = priority_config.get("league_priorities", {})
+        league_priorities = (
+            {k: float(v) for k, v in raw_priorities.items()} if raw_priorities else None
+        )
+
+        # Parse market thresholds
+        market_thresholds = priority_config.get("market_thresholds", None)
+
+        # Cache TTL
+        cache_ttl = int(priority_config.get("market_count_cache_ttl", 300))
+
+        return LeaguePriorityCalculator(
+            weights=weights,
+            league_priorities=league_priorities,
+            market_thresholds=market_thresholds,
+            market_count_cache_ttl=cache_ttl,
+            market_count_fn=count_open_markets_by_subcategory,
+        )
+    except Exception:
+        # Config missing, YAML error, or import failure — fall back to uniform allocation
+        return None
+
+
 def _start_supervised_mode(
     espn: bool,
     kalshi: bool,
@@ -577,9 +628,12 @@ def start(
         console.print(f"  Interval: {espn_interval} seconds")
 
         try:
+            # Wire priority-based adaptive polling (#560)
+            priority_calculator = _create_priority_calculator()
             _espn_updater = ESPNGamePoller(
                 leagues=league_list,
                 poll_interval=espn_interval,
+                priority_calculator=priority_calculator,
             )
             _espn_updater.start()
             console.print("[green][OK] ESPN polling started[/green]")
