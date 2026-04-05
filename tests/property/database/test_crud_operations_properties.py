@@ -578,6 +578,7 @@ def basketball_situation_strategy(draw: st.DrawFn) -> dict:
 def hockey_situation_strategy(draw: st.DrawFn) -> dict:
     """Generate a realistic hockey situation dict."""
     return {
+        "last_play": draw(st.one_of(st.none(), st.text(min_size=0, max_size=80))),
         "home_powerplay": draw(powerplay_strategy),
         "away_powerplay": draw(powerplay_strategy),
         "home_shots": draw(shots_strategy),
