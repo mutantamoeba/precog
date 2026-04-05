@@ -1143,6 +1143,7 @@ def _create_espn(
     config: RunnerConfig,
     leagues: list[str] | None = None,
     espn_poll_interval: int = 30,
+    priority_calculator: Any | None = None,
     **_kwargs: Any,
 ) -> EventLoopService:
     """Factory for ESPN Game Poller."""
@@ -1151,6 +1152,7 @@ def _create_espn(
         create_espn_poller(
             leagues=leagues,
             poll_interval=espn_poll_interval,
+            priority_calculator=priority_calculator,
         ),
     )
 
@@ -1217,6 +1219,7 @@ def create_services(
     series_tickers: list[str] | None = None,
     espn_poll_interval: int = 30,
     kalshi_poll_interval: int = 15,
+    priority_calculator: Any | None = None,
 ) -> dict[str, tuple[EventLoopService, ServiceConfig]]:
     """
     Create service instances based on configuration.
@@ -1260,6 +1263,7 @@ def create_services(
                 series_tickers=series_tickers,
                 espn_poll_interval=espn_poll_interval,
                 kalshi_poll_interval=kalshi_poll_interval,
+                priority_calculator=priority_calculator,
             )
 
             if service is not None:
@@ -1285,6 +1289,7 @@ def create_supervisor(
     kalshi_poll_interval: int = 15,
     health_check_interval: int = 60,
     metrics_interval: int = 300,
+    priority_calculator: Any | None = None,
 ) -> ServiceSupervisor:
     """
     Create and configure a ServiceSupervisor with services.
@@ -1330,6 +1335,7 @@ def create_supervisor(
         series_tickers=series_tickers,
         espn_poll_interval=espn_poll_interval,
         kalshi_poll_interval=kalshi_poll_interval,
+        priority_calculator=priority_calculator,
     )
 
     # Create supervisor

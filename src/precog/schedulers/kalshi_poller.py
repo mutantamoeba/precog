@@ -730,14 +730,15 @@ class KalshiMarketPoller(BasePoller):
                     cast("list[dict[str, Any]]", all_markets)
                 )
                 error_count = sum(1 for r in validation_results if r.has_errors)
-                warning_count = sum(
+                # Markets with warnings but no errors (error markets are in error_count)
+                warning_only_count = sum(
                     1 for r in validation_results if r.has_warnings and not r.has_errors
                 )
                 valid_count = len(all_markets) - error_count
 
                 # Build warning type breakdown by field (#485)
                 warning_breakdown: dict[str, int] = {}
-                if warning_count:
+                if warning_only_count:
                     for vr in validation_results:
                         for issue in vr.warnings:
                             warning_breakdown[issue.field] = (
@@ -776,13 +777,13 @@ class KalshiMarketPoller(BasePoller):
                 if error_rate >= self.VALIDATION_ERROR_RATE:
                     logger.error(
                         "Validation [%s]: ERROR RATE %.1f%% - %d/%d markets failed "
-                        "(%d errors, %d warnings%s) [ACTION: investigate data source]",
+                        "(%d errors, %d warning-only%s) [ACTION: investigate data source]",
                         series_ticker,
                         error_rate * 100,
                         error_count,
                         total_checked,
                         error_count,
-                        warning_count,
+                        warning_only_count,
                         warning_detail,
                     )
                     try:
@@ -801,23 +802,23 @@ class KalshiMarketPoller(BasePoller):
                 elif error_rate >= self.VALIDATION_WARN_RATE:
                     logger.warning(
                         "Validation [%s]: error rate %.1f%% - %d/%d markets failed "
-                        "(%d errors, %d warnings%s)",
+                        "(%d errors, %d warning-only%s)",
                         series_ticker,
                         error_rate * 100,
                         error_count,
                         total_checked,
                         error_count,
-                        warning_count,
+                        warning_only_count,
                         warning_detail,
                     )
-                elif error_count or warning_count:
+                elif error_count or warning_only_count:
                     logger.info(
-                        "Validation [%s]: %d markets checked, %d valid, %d errors, %d warnings%s",
+                        "Validation [%s]: %d markets checked, %d valid, %d errors, %d warning-only%s",
                         series_ticker,
                         total_checked,
                         valid_count,
                         error_count,
-                        warning_count,
+                        warning_only_count,
                         warning_detail,
                     )
                 else:
@@ -830,9 +831,9 @@ class KalshiMarketPoller(BasePoller):
                 # Track validation stats
                 with self._lock:
                     self._validation_stats["validation_errors"] += error_count
-                    self._validation_stats["validation_warnings"] += warning_count
+                    self._validation_stats["validation_warnings"] += warning_only_count
                     self._validation_stats["validation_errors_last_cycle"] = error_count
-                    self._validation_stats["validation_warnings_last_cycle"] = warning_count
+                    self._validation_stats["validation_warnings_last_cycle"] = warning_only_count
                     self._validation_stats["markets_checked_last_cycle"] = total_checked
                     self._validation_stats["error_rate_pct_last_cycle"] = round(error_rate * 100, 1)
             except Exception as e:

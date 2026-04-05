@@ -319,4 +319,4 @@ class TestCompleteValidationSummary:
         assert summary["total"] == 3
         assert summary["valid_count"] == 2
         assert "error_count" in summary
-        assert "warning_count" in summary
+        assert "warning_only_count" in summary

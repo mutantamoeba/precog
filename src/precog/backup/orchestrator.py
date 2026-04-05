@@ -25,6 +25,7 @@ import platform
 import shutil
 import subprocess
 import tempfile
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -143,7 +144,7 @@ class BackupOrchestrator:
             if result.returncode == 0:
                 # Parse "abc123 (head)" format
                 for line in result.stdout.strip().splitlines():
-                    if "head" in line or line.strip():
+                    if "head" in line:
                         return line.strip().split()[0]
         except Exception as e:
             logger.debug("Could not determine migration head: %s", e)
@@ -278,16 +279,7 @@ class BackupOrchestrator:
 
                 # Step 4: Store via backend
                 storage_id = self._backend.store(dump_path, metadata)
-                metadata = BackupMetadata(
-                    **{
-                        **metadata.to_dict(),
-                        "storage_id": storage_id,
-                        "backup_type": metadata.backup_type,
-                        "status": metadata.status,
-                        "created_at": metadata.created_at,
-                        "completed_at": metadata.completed_at,
-                    }
-                )
+                metadata = replace(metadata, storage_id=storage_id)
 
                 logger.info(
                     "Backup complete: %s (%d bytes, checksum=%s, verified=%s)",
@@ -546,8 +538,6 @@ class BackupOrchestrator:
             logger.info("pg_restore completed successfully")
         except subprocess.TimeoutExpired as e:
             raise BackupError(f"pg_restore timed out after {_PG_TIMEOUT}s.") from e
-        except subprocess.CalledProcessError as e:
-            raise BackupError(f"pg_restore failed:\n  stderr: {e.stderr}") from e
 
     def _record_health(
         self,

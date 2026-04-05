@@ -167,30 +167,47 @@ def update_account_balance_with_versioning(
     if not isinstance(new_balance, Decimal):
         raise ValueError(f"Balance must be Decimal, got {type(new_balance).__name__}")
 
-    # Step 1: Close current row (set row_current_ind = FALSE, row_end_ts = NOW)
+    # Step 0: Lock current row to prevent concurrent close→insert races.
+    # Without FOR UPDATE, two concurrent calls can both close the current row
+    # before either inserts, leaving zero current rows for the platform.
+    lock_query = """
+        SELECT id FROM account_balance
+        WHERE platform_id = %s AND row_current_ind = TRUE
+        FOR UPDATE
+    """
+
+    # Step 1: Close current row — use a single NOW() for temporal continuity
+    # between the old row's end and new row's start.
     close_query = """
         UPDATE account_balance
         SET row_current_ind = FALSE,
-            row_end_ts = NOW()
+            row_end_ts = %s
         WHERE platform_id = %s AND row_current_ind = TRUE
     """
 
-    # Step 2: Insert new balance record with row_start_ts
+    # Step 2: Insert new balance record with matching row_start_ts
     insert_query = """
         INSERT INTO account_balance (
             platform_id, balance, currency,
             row_current_ind, row_start_ts, created_at
         )
-        VALUES (%s, %s, %s, TRUE, NOW(), NOW())
+        VALUES (%s, %s, %s, TRUE, %s, %s)
         RETURNING id
     """
 
     with get_cursor(commit=True) as cur:
+        # Capture timestamp once for temporal continuity
+        cur.execute("SELECT NOW() AS ts")
+        now = cur.fetchone()["ts"]
+
+        # Lock current row (serializes concurrent updates)
+        cur.execute(lock_query, (platform_id,))
+
         # Close old balance version
-        cur.execute(close_query, (platform_id,))
+        cur.execute(close_query, (now, platform_id))
 
         # Insert new balance version
-        cur.execute(insert_query, (platform_id, new_balance, currency))
+        cur.execute(insert_query, (platform_id, new_balance, currency, now, now))
         result = cur.fetchone()
         return result["id"] if result else None
 

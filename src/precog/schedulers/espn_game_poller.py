@@ -685,7 +685,8 @@ class ESPNGamePoller(BasePoller):
                         self._validator.validate_game_state(game) for game in games
                     ]
                     error_count = sum(1 for r in validation_results if r.has_errors)
-                    warning_count = sum(
+                    # Games with warnings but no errors (error-only games are in error_count)
+                    warning_only_count = sum(
                         1 for r in validation_results if r.has_warnings and not r.has_errors
                     )
                     total_checked = len(games)
@@ -696,32 +697,32 @@ class ESPNGamePoller(BasePoller):
                     if error_rate >= self.VALIDATION_ERROR_RATE:
                         logger.error(
                             "ESPN validation [%s]: ERROR RATE %.1f%% - %d/%d games failed "
-                            "(%d errors, %d warnings) [ACTION: investigate data source]",
+                            "(%d errors, %d warning-only) [ACTION: investigate data source]",
                             league.upper(),
                             error_rate * 100,
                             error_count,
                             total_checked,
                             error_count,
-                            warning_count,
+                            warning_only_count,
                         )
                     elif error_rate >= self.VALIDATION_WARN_RATE:
                         logger.warning(
                             "ESPN validation [%s]: error rate %.1f%% - %d/%d games failed "
-                            "(%d errors, %d warnings)",
+                            "(%d errors, %d warning-only)",
                             league.upper(),
                             error_rate * 100,
                             error_count,
                             total_checked,
                             error_count,
-                            warning_count,
+                            warning_only_count,
                         )
-                    elif error_count or warning_count:
+                    elif error_count or warning_only_count:
                         logger.info(
-                            "ESPN validation [%s]: %d games checked, %d errors, %d warnings",
+                            "ESPN validation [%s]: %d games checked, %d errors, %d warning-only",
                             league.upper(),
                             total_checked,
                             error_count,
-                            warning_count,
+                            warning_only_count,
                         )
                     else:
                         logger.debug(
@@ -733,7 +734,7 @@ class ESPNGamePoller(BasePoller):
                     # Track cumulative validation stats
                     with self._lock:
                         self._validation_stats["validation_errors"] += error_count
-                        self._validation_stats["validation_warnings"] += warning_count
+                        self._validation_stats["validation_warnings"] += warning_only_count
                         self._validation_stats["validation_runs"] += 1
                         self._validation_stats["games_checked_last_cycle"] = total_checked
                         self._validation_stats["error_rate_pct_last_cycle"] = round(
@@ -1680,6 +1681,7 @@ def create_espn_poller(
     idle_interval: int = 300,
     persist_jobs: bool = False,
     job_store_url: str | None = None,
+    priority_calculator: Any | None = None,
 ) -> ESPNGamePoller:
     """
     Factory function to create a configured ESPNGamePoller.
@@ -1718,6 +1720,7 @@ def create_espn_poller(
         idle_interval=idle_interval,
         persist_jobs=persist_jobs,
         job_store_url=job_store_url,
+        priority_calculator=priority_calculator,
     )
 
 
