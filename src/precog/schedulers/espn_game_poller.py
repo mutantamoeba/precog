@@ -53,7 +53,6 @@ Related ADR: ADR-100 (Service Supervisor Pattern)
 import logging
 import time
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
 from enum import Enum
 from typing import Any, ClassVar
 
@@ -82,6 +81,7 @@ from precog.database.crud_teams import (
     get_team_by_espn_id,
 )
 from precog.schedulers.base_poller import BasePoller
+from precog.validation.espn_validation import ESPNDataValidator
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -188,6 +188,19 @@ class ESPNGamePoller(BasePoller):
 
     # ESPN rate limit budget (configurable via constructor or YAML)
     DEFAULT_RATE_BUDGET: ClassVar[int] = 250  # requests per hour
+
+    # Validation frequency: run game state validation every N polls.
+    # ESPN polls per-league at 30s, so 20 polls = ~10 minutes.
+    # Validates raw API data before DB sync (soft validation, never blocks).
+    VALIDATION_INTERVAL: ClassVar[int] = 20
+
+    # Validation error rate thresholds for log-level escalation.
+    # Below WARN: summary at INFO. Above WARN: summary at WARNING.
+    # Above ERROR: summary at ERROR.
+    # NOTE: float is intentional here -- these are ratios of integer counts,
+    # not prices, probabilities, or money values. Decimal not required.
+    VALIDATION_WARN_RATE: ClassVar[float] = 0.05  # 5% error rate
+    VALIDATION_ERROR_RATE: ClassVar[float] = 0.25  # 25% error rate
 
     # Game status mappings
     LIVE_STATUSES: ClassVar[set[str]] = {"in", "in_progress", "halftime"}
@@ -307,6 +320,32 @@ class ESPNGamePoller(BasePoller):
         # Initialize ESPN client (or use provided mock)
         self.espn_client = espn_client or ESPNClient()
 
+        # Initialize data validator (instance-level, NOT module-level singleton,
+        # because _anomaly_counts is stateful per-poller)
+        self._validator = ESPNDataValidator()
+
+        # Rate-limited validation: run every VALIDATION_INTERVAL league polls.
+        # Counter starts at VALIDATION_INTERVAL to trigger on first poll.
+        # Thread safety: protected by self._lock in _poll_league_wrapper.
+        self._polls_since_validation: int = self.VALIDATION_INTERVAL  # Run on first poll
+
+        # Validation stats tracked separately from PollerStats TypedDict
+        # to avoid type contract violations. Merged in get_stats().
+        self._validation_stats: dict[str, int | float] = {
+            "validation_errors": 0,
+            "validation_warnings": 0,
+            "validation_runs": 0,
+            "games_checked_last_cycle": 0,
+            "error_rate_pct_last_cycle": 0.0,
+        }
+
+        # Per-league last successful poll timestamps for data gap detection.
+        # Exposed in get_stats() so the supervisor's _determine_health() can
+        # detect staleness (degraded at 2x interval, down at 5x interval).
+        # The key "last_successful_poll" is what _determine_health expects.
+        self._last_successful_poll: str | None = None
+        self._league_last_successful_poll: dict[str, str] = {}
+
         logger.info(
             "ESPNGamePoller initialized: leagues=%s, poll_interval=%ds, "
             "idle_interval=%ds, persist_jobs=%s, adaptive_polling=%s",
@@ -322,10 +361,19 @@ class ESPNGamePoller(BasePoller):
         return "ESPN Game State Poll"
 
     def get_stats(self) -> dict[str, Any]:
-        """Return polling stats merged with sync categorization (#476)."""
+        """Return polling stats merged with sync categorization, validation, and gap detection.
+
+        The ``last_successful_poll`` key is consumed by the supervisor's
+        ``_determine_health()`` for staleness detection (degraded at 2x
+        poll interval, down at 5x). Per-league timestamps are included
+        as ``league_last_successful_poll`` for operational visibility.
+        """
         with self._lock:
             stats = dict(self._stats)
             stats.update(self._sync_stats)
+            stats.update(self._validation_stats)
+            stats["last_successful_poll"] = self._last_successful_poll
+            stats["league_last_successful_poll"] = dict(self._league_last_successful_poll)
             return stats
 
     def _record_sync(self, reason: GameSyncReason) -> None:
@@ -339,6 +387,11 @@ class ESPNGamePoller(BasePoller):
 
         Returns:
             Dictionary with counts: items_fetched, items_updated, items_created
+
+        Note:
+            This method is NOT used by the per-league scheduler. Per-league
+            APScheduler jobs call _poll_league_wrapper() directly. This exists
+            for the BasePoller interface and manual/test invocations.
         """
         total_fetched = 0
         total_updated = 0
@@ -605,9 +658,94 @@ class ESPNGamePoller(BasePoller):
         """
         start_time = datetime.now(UTC)
 
+        # Determine whether validation should run this league poll.
+        # Counter incremented per-league-poll (not per-cycle) since APScheduler
+        # calls _poll_league_wrapper directly for each league. Thread-safe:
+        # APScheduler max_instances=1 per job, but multiple league jobs can
+        # overlap, so protect the counter under self._lock.
+        with self._lock:
+            self._polls_since_validation += 1
+            should_validate = self._polls_since_validation >= self.VALIDATION_INTERVAL
+            if should_validate:
+                self._polls_since_validation = 0
+
         try:
             # Poll the league and get games for state evaluation
             games = self.espn_client.get_scoreboard(league)
+
+            # Validate fetched game data (soft validation -- log issues, never block).
+            # Runs on raw API data before any DB sync.
+            # Rate-limited via should_validate (computed above every
+            # VALIDATION_INTERVAL polls). validate_game_state() calls log_issues()
+            # internally, so we only do aggregate summary logging here.
+            # Wrapped in try/except: a validator bug must NEVER prevent game syncing.
+            if should_validate and games:
+                try:
+                    validation_results = [
+                        self._validator.validate_game_state(game) for game in games
+                    ]
+                    error_count = sum(1 for r in validation_results if r.has_errors)
+                    warning_count = sum(
+                        1 for r in validation_results if r.has_warnings and not r.has_errors
+                    )
+                    total_checked = len(games)
+
+                    # Error rate escalation logging (mirrors Kalshi pattern)
+                    error_rate = error_count / total_checked if total_checked > 0 else 0.0
+
+                    if error_rate >= self.VALIDATION_ERROR_RATE:
+                        logger.error(
+                            "ESPN validation [%s]: ERROR RATE %.1f%% - %d/%d games failed "
+                            "(%d errors, %d warnings) [ACTION: investigate data source]",
+                            league.upper(),
+                            error_rate * 100,
+                            error_count,
+                            total_checked,
+                            error_count,
+                            warning_count,
+                        )
+                    elif error_rate >= self.VALIDATION_WARN_RATE:
+                        logger.warning(
+                            "ESPN validation [%s]: error rate %.1f%% - %d/%d games failed "
+                            "(%d errors, %d warnings)",
+                            league.upper(),
+                            error_rate * 100,
+                            error_count,
+                            total_checked,
+                            error_count,
+                            warning_count,
+                        )
+                    elif error_count or warning_count:
+                        logger.info(
+                            "ESPN validation [%s]: %d games checked, %d errors, %d warnings",
+                            league.upper(),
+                            total_checked,
+                            error_count,
+                            warning_count,
+                        )
+                    else:
+                        logger.debug(
+                            "ESPN validation [%s]: %d games checked, all valid",
+                            league.upper(),
+                            total_checked,
+                        )
+
+                    # Track cumulative validation stats
+                    with self._lock:
+                        self._validation_stats["validation_errors"] += error_count
+                        self._validation_stats["validation_warnings"] += warning_count
+                        self._validation_stats["validation_runs"] += 1
+                        self._validation_stats["games_checked_last_cycle"] = total_checked
+                        self._validation_stats["error_rate_pct_last_cycle"] = round(
+                            error_rate * 100, 1
+                        )
+                except Exception as e:
+                    logger.error(
+                        "ESPN validation failed for %s (ingestion continues): %s",
+                        league.upper(),
+                        e,
+                    )
+
             games_updated = 0
             sync_errors = 0
             for game in games:
@@ -623,12 +761,19 @@ class ESPNGamePoller(BasePoller):
                     event_id = game.get("metadata", {}).get("espn_event_id", "unknown")
                     logger.error("Error syncing game %s: %s", event_id, e)
 
+            poll_timestamp = datetime.now(UTC).isoformat()
             with self._lock:
                 self._stats["polls_completed"] += 1
                 self._stats["items_fetched"] += len(games)
                 self._stats["items_updated"] += games_updated
                 self._stats["errors"] += sync_errors
                 self._stats["last_poll"] = start_time.isoformat()
+
+                # Track last_successful_poll for supervisor staleness detection.
+                # Only update when the poll completed without sync errors.
+                if sync_errors == 0:
+                    self._last_successful_poll = poll_timestamp
+                    self._league_last_successful_poll[league] = poll_timestamp
 
             elapsed = (datetime.now(UTC) - start_time).total_seconds()
             if games_updated:
@@ -1216,11 +1361,8 @@ class ESPNGamePoller(BasePoller):
         situation_data = state.get("situation", {})
         situation = dict(situation_data) if situation_data else {}
 
-        # Convert clock_seconds to Decimal for database
-        clock_seconds = None
-        clock_val = state.get("clock_seconds")
-        if clock_val is not None:
-            clock_seconds = Decimal(str(clock_val))
+        # clock_seconds is already Decimal from ESPN client (Pattern 1: Decimal at source)
+        clock_seconds = state.get("clock_seconds")
 
         # Derive season from game_date (calendar year)
         game_season = game_date.year if game_date else None

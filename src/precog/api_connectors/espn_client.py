@@ -307,7 +307,7 @@ class ESPNGameState(TypedDict, total=False):
     home_score: int
     away_score: int
     period: int
-    clock_seconds: float
+    clock_seconds: Decimal
     clock_display: str
     game_status: str
     situation: ESPNSituationData
@@ -379,7 +379,7 @@ class GameState(TypedDict, total=False):
     home_score: int
     away_score: int
     period: int
-    clock_seconds: float
+    clock_seconds: Decimal
     clock_display: str
     game_status: str
 
@@ -1194,7 +1194,7 @@ class ESPNClient:
                 "home_score": home_score,
                 "away_score": away_score,
                 "period": period,
-                "clock_seconds": float(clock_seconds) if clock_seconds else 0.0,
+                "clock_seconds": Decimal(str(clock_seconds)) if clock_seconds else Decimal("0"),
                 "clock_display": clock_display,
                 "game_status": game_status,
                 "situation": situation,

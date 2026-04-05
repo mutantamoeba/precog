@@ -22,6 +22,7 @@ Usage in tests:
 Reference: docs/testing/PHASE_2_TEST_PLAN_V1.0.md Section 2.1
 """
 
+from decimal import Decimal
 
 # =============================================================================
 # ESPN NFL Scoreboard - Live Game
@@ -980,7 +981,7 @@ EXPECTED_GAME_STATE_LIVE = {
     "home_score": 24,
     "away_score": 21,
     "period": 4,
-    "clock_seconds": 485,
+    "clock_seconds": Decimal("485"),
     "clock_display": "8:05",
     "game_status": "in_progress",
     "possession": "away",  # KC has the ball
@@ -999,7 +1000,7 @@ EXPECTED_GAME_STATE_PREGAME = {
     "home_score": 0,
     "away_score": 0,
     "period": 0,
-    "clock_seconds": 0,
+    "clock_seconds": Decimal("0"),
     "clock_display": "0:00",
     "game_status": "scheduled",
     "possession": None,
@@ -1018,7 +1019,7 @@ EXPECTED_GAME_STATE_FINAL = {
     "home_score": 20,
     "away_score": 27,
     "period": 4,
-    "clock_seconds": 0,
+    "clock_seconds": Decimal("0"),
     "clock_display": "0:00",
     "game_status": "final",
     "possession": None,
@@ -1038,7 +1039,7 @@ EXPECTED_GAME_STATE_HALFTIME = {
     "home_score": 10,
     "away_score": 14,
     "period": 2,
-    "clock_seconds": 0,
+    "clock_seconds": Decimal("0"),
     "clock_display": "0:00",
     "game_status": "halftime",
     "possession": None,

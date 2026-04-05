@@ -11,6 +11,7 @@ Usage:
 """
 
 from contextlib import nullcontext
+from decimal import Decimal
 from typing import Any
 from unittest.mock import MagicMock, patch
 
@@ -25,6 +26,7 @@ from precog.schedulers.espn_game_poller import (
     refresh_all_scoreboards,
     run_single_espn_poll,
 )
+from precog.validation.espn_validation import ValidationResult
 
 # =============================================================================
 # Fixtures
@@ -71,7 +73,7 @@ def sample_game_data() -> dict[str, Any]:
             "home_score": 21,
             "away_score": 17,
             "period": 3,
-            "clock_seconds": 845.5,
+            "clock_seconds": Decimal("845.5"),
             "clock_display": "14:05",
             "game_status": "in_progress",
             "situation": {
@@ -1508,3 +1510,515 @@ class TestPeriodicTeamValidation:
             assert job is None
         finally:
             poller.stop()
+
+
+# =============================================================================
+# Unit Tests: ESPN Data Validation Wiring
+# =============================================================================
+
+
+@pytest.mark.unit
+class TestESPNDataValidationWiring:
+    """Unit tests for ESPN data validation wiring in the poller.
+
+    Educational Note:
+        The ESPNDataValidator is wired into _poll_league_wrapper to run
+        soft validation on raw API data BEFORE DB sync. Validation is
+        rate-limited (every VALIDATION_INTERVAL polls) and never blocks
+        ingestion. This mirrors the Kalshi poller's validation pattern.
+    """
+
+    def test_validator_initialized(self, mock_espn_client: MagicMock) -> None:
+        """Test ESPNDataValidator is instantiated in __init__."""
+        from precog.validation.espn_validation import ESPNDataValidator
+
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+
+        assert hasattr(poller, "_validator")
+        assert isinstance(poller._validator, ESPNDataValidator)
+
+    def test_validation_constants_defined(self) -> None:
+        """Test validation class constants exist and have correct values."""
+        assert ESPNGamePoller.VALIDATION_INTERVAL == 20
+        assert ESPNGamePoller.VALIDATION_ERROR_RATE == 0.25
+        assert ESPNGamePoller.VALIDATION_WARN_RATE == 0.05
+
+    def test_validation_stats_initialized(self, mock_espn_client: MagicMock) -> None:
+        """Test validation stats are initialized to zero."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+
+        assert poller._validation_stats["validation_errors"] == 0
+        assert poller._validation_stats["validation_warnings"] == 0
+        assert poller._validation_stats["validation_runs"] == 0
+        assert poller._validation_stats["games_checked_last_cycle"] == 0
+        assert poller._validation_stats["error_rate_pct_last_cycle"] == 0.0
+
+    def test_validation_stats_in_get_stats(self, mock_espn_client: MagicMock) -> None:
+        """Test get_stats includes validation stats."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+        stats = poller.get_stats()
+
+        assert "validation_errors" in stats
+        assert "validation_warnings" in stats
+        assert "validation_runs" in stats
+
+    def test_polls_since_validation_starts_at_interval(self, mock_espn_client: MagicMock) -> None:
+        """Test counter starts at VALIDATION_INTERVAL to trigger on first poll."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+
+        assert poller._polls_since_validation == ESPNGamePoller.VALIDATION_INTERVAL
+
+    def test_counter_triggers_on_first_league_poll(self, mock_espn_client: MagicMock) -> None:
+        """Test validation triggers on first _poll_league_wrapper call.
+
+        Counter starts at VALIDATION_INTERVAL so the first poll increments it
+        past the threshold, triggering validation and resetting to 0.
+        """
+        mock_espn_client.get_scoreboard.return_value = []
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+
+        poller._poll_league_wrapper("nfl")
+
+        # After first poll: counter was at VALIDATION_INTERVAL, incremented to
+        # VALIDATION_INTERVAL+1 which >= VALIDATION_INTERVAL, so it reset to 0
+        assert poller._polls_since_validation == 0
+
+    def test_counter_does_not_trigger_after_recent_validation(
+        self, mock_espn_client: MagicMock
+    ) -> None:
+        """Test validation does not trigger on subsequent polls before interval."""
+        mock_espn_client.get_scoreboard.return_value = []
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+
+        # First poll triggers validation (counter starts at VALIDATION_INTERVAL)
+        poller._poll_league_wrapper("nfl")
+        # Second poll should NOT trigger (counter is at 1 after reset+increment)
+        poller._poll_league_wrapper("nfl")
+
+        assert poller._polls_since_validation == 1
+
+    @patch("precog.schedulers.espn_game_poller.update_game_result")
+    @patch("precog.schedulers.espn_game_poller.get_or_create_game")
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_validation_runs_when_should_validate(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        mock_get_or_create_game: MagicMock,
+        mock_update_result: MagicMock,
+        mock_espn_client: MagicMock,
+        sample_game_data: dict[str, Any],
+    ) -> None:
+        """Test validation runs on games when _should_validate is True."""
+        mock_espn_client.get_scoreboard.return_value = [sample_game_data]
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+        mock_get_or_create_game.return_value = 42
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        # Force validation to run
+        poller._polls_since_validation = ESPNGamePoller.VALIDATION_INTERVAL
+
+        with patch.object(poller._validator, "validate_game_state") as mock_validate:
+            mock_validate.return_value = ValidationResult(game_id="401547417")
+            poller._poll_league_wrapper("nfl")
+
+            # Validator should have been called once per game
+            mock_validate.assert_called_once_with(sample_game_data)
+
+        # Validation stats should be updated
+        assert poller._validation_stats["validation_runs"] == 1
+        assert poller._validation_stats["games_checked_last_cycle"] == 1
+
+    @patch("precog.schedulers.espn_game_poller.update_game_result")
+    @patch("precog.schedulers.espn_game_poller.get_or_create_game")
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_validation_skipped_when_not_due(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        mock_get_or_create_game: MagicMock,
+        mock_update_result: MagicMock,
+        mock_espn_client: MagicMock,
+        sample_game_data: dict[str, Any],
+    ) -> None:
+        """Test validation is skipped when _should_validate is False."""
+        mock_espn_client.get_scoreboard.return_value = [sample_game_data]
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+        mock_get_or_create_game.return_value = 42
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        # Ensure validation does NOT run
+        poller._polls_since_validation = 0
+
+        with patch.object(poller._validator, "validate_game_state") as mock_validate:
+            poller._poll_league_wrapper("nfl")
+
+            mock_validate.assert_not_called()
+
+        # Validation stats should remain at zero
+        assert poller._validation_stats["validation_runs"] == 0
+
+    def test_validation_skipped_on_empty_games(self, mock_espn_client: MagicMock) -> None:
+        """Test validation is skipped when no games returned (even if due)."""
+        mock_espn_client.get_scoreboard.return_value = []
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        poller._polls_since_validation = ESPNGamePoller.VALIDATION_INTERVAL
+
+        with patch.object(poller._validator, "validate_game_state") as mock_validate:
+            poller._poll_league_wrapper("nfl")
+
+            mock_validate.assert_not_called()
+
+        assert poller._validation_stats["validation_runs"] == 0
+
+    @patch("precog.schedulers.espn_game_poller.update_game_result")
+    @patch("precog.schedulers.espn_game_poller.get_or_create_game")
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_validation_error_does_not_block_sync(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        mock_get_or_create_game: MagicMock,
+        mock_update_result: MagicMock,
+        mock_espn_client: MagicMock,
+        sample_game_data: dict[str, Any],
+    ) -> None:
+        """Test validator exception does NOT prevent game sync."""
+        mock_espn_client.get_scoreboard.return_value = [sample_game_data]
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+        mock_get_or_create_game.return_value = 42
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        poller._polls_since_validation = ESPNGamePoller.VALIDATION_INTERVAL
+
+        with patch.object(
+            poller._validator,
+            "validate_game_state",
+            side_effect=RuntimeError("Validator exploded"),
+        ):
+            poller._poll_league_wrapper("nfl")
+
+        # Game sync should still have happened
+        mock_upsert.assert_called_once()
+        mock_get_or_create_game.assert_called_once()
+        # Items should be fetched and updated
+        assert poller._stats["items_fetched"] == 1
+        assert poller._stats["items_updated"] == 1
+
+    @patch("precog.schedulers.espn_game_poller.update_game_result")
+    @patch("precog.schedulers.espn_game_poller.get_or_create_game")
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_validation_stats_accumulate(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        mock_get_or_create_game: MagicMock,
+        mock_update_result: MagicMock,
+        mock_espn_client: MagicMock,
+        sample_game_data: dict[str, Any],
+    ) -> None:
+        """Test validation stats accumulate across multiple poll cycles."""
+        mock_espn_client.get_scoreboard.return_value = [sample_game_data]
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+        mock_get_or_create_game.return_value = 42
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+
+        # Create a result with one error
+        error_result = ValidationResult(game_id="401547417")
+        error_result.add_error("home_score", "Negative score", value=-1)
+
+        with patch.object(poller._validator, "validate_game_state", return_value=error_result):
+            # Run two validation cycles
+            poller._polls_since_validation = ESPNGamePoller.VALIDATION_INTERVAL
+            poller._poll_league_wrapper("nfl")
+            poller._polls_since_validation = ESPNGamePoller.VALIDATION_INTERVAL
+            poller._poll_league_wrapper("nfl")
+
+        # Errors should accumulate
+        assert poller._validation_stats["validation_errors"] == 2
+        assert poller._validation_stats["validation_runs"] == 2
+
+    @patch("precog.schedulers.espn_game_poller.update_game_result")
+    @patch("precog.schedulers.espn_game_poller.get_or_create_game")
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_error_rate_escalation_error_level(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        mock_get_or_create_game: MagicMock,
+        mock_update_result: MagicMock,
+        mock_espn_client: MagicMock,
+        sample_game_data: dict[str, Any],
+    ) -> None:
+        """Test error-level logging when error rate >= VALIDATION_ERROR_RATE."""
+        mock_espn_client.get_scoreboard.return_value = [sample_game_data]
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+        mock_get_or_create_game.return_value = 42
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        poller._polls_since_validation = ESPNGamePoller.VALIDATION_INTERVAL
+
+        # 1 game with error = 100% error rate (> 25% threshold)
+        error_result = ValidationResult(game_id="401547417")
+        error_result.add_error("home_score", "Negative score", value=-1)
+
+        with patch.object(poller._validator, "validate_game_state", return_value=error_result):
+            with patch("precog.schedulers.espn_game_poller.logger") as mock_logger:
+                poller._poll_league_wrapper("nfl")
+                # Should have logged at ERROR level for the aggregate
+                mock_logger.error.assert_any_call(
+                    "ESPN validation [%s]: ERROR RATE %.1f%% - %d/%d games failed "
+                    "(%d errors, %d warnings) [ACTION: investigate data source]",
+                    "NFL",
+                    100.0,
+                    1,
+                    1,
+                    1,
+                    0,
+                )
+
+        assert poller._validation_stats["error_rate_pct_last_cycle"] == 100.0
+
+    @patch("precog.schedulers.espn_game_poller.update_game_result")
+    @patch("precog.schedulers.espn_game_poller.get_or_create_game")
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_warning_only_games_counted_correctly(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        mock_get_or_create_game: MagicMock,
+        mock_update_result: MagicMock,
+        mock_espn_client: MagicMock,
+        sample_game_data: dict[str, Any],
+    ) -> None:
+        """Test warnings-only results count toward warnings not errors."""
+        mock_espn_client.get_scoreboard.return_value = [sample_game_data]
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+        mock_get_or_create_game.return_value = 42
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        poller._polls_since_validation = ESPNGamePoller.VALIDATION_INTERVAL
+
+        # Result with warnings only (no errors)
+        warn_result = ValidationResult(game_id="401547417")
+        warn_result.add_warning("clock_seconds", "Unusual clock value")
+
+        with patch.object(poller._validator, "validate_game_state", return_value=warn_result):
+            poller._poll_league_wrapper("nfl")
+
+        assert poller._validation_stats["validation_errors"] == 0
+        assert poller._validation_stats["validation_warnings"] == 1
+        assert poller._validation_stats["error_rate_pct_last_cycle"] == 0.0
+
+    def test_wrapper_counter_increments(self, mock_espn_client: MagicMock) -> None:
+        """Test _poll_league_wrapper increments the validation counter each call."""
+        mock_espn_client.get_scoreboard.return_value = []
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        # Reset counter to 0
+        poller._polls_since_validation = 0
+
+        poller._poll_league_wrapper("nfl")
+        assert poller._polls_since_validation == 1
+
+        poller._poll_league_wrapper("nfl")
+        assert poller._polls_since_validation == 2
+
+    def test_wrapper_counter_resets_at_interval(self, mock_espn_client: MagicMock) -> None:
+        """Test counter resets to 0 when VALIDATION_INTERVAL reached."""
+        mock_espn_client.get_scoreboard.return_value = []
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        # Set counter just below threshold
+        poller._polls_since_validation = ESPNGamePoller.VALIDATION_INTERVAL - 1
+
+        poller._poll_league_wrapper("nfl")
+
+        assert poller._polls_since_validation == 0
+
+
+class TestDataGapDetection:
+    """Tests for per-league last_successful_poll tracking and data gap detection.
+
+    The supervisor's _determine_health() checks stats["last_successful_poll"]
+    for staleness. These tests verify the key is set correctly.
+    """
+
+    def test_last_successful_poll_initialized_none(self, mock_espn_client: MagicMock) -> None:
+        """Test last_successful_poll starts as None."""
+        poller = ESPNGamePoller(espn_client=mock_espn_client)
+        stats = poller.get_stats()
+
+        assert stats["last_successful_poll"] is None
+        assert stats["league_last_successful_poll"] == {}
+
+    @patch("precog.schedulers.espn_game_poller.update_game_result")
+    @patch("precog.schedulers.espn_game_poller.get_or_create_game")
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_last_successful_poll_set_on_success(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        mock_get_or_create_game: MagicMock,
+        mock_update_result: MagicMock,
+        mock_espn_client: MagicMock,
+        sample_game_data: dict[str, Any],
+    ) -> None:
+        """Test last_successful_poll is set after a clean poll."""
+        mock_espn_client.get_scoreboard.return_value = [sample_game_data]
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+        mock_get_or_create_game.return_value = 42
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        poller._polls_since_validation = 0
+
+        poller._poll_league_wrapper("nfl")
+
+        stats = poller.get_stats()
+        assert stats["last_successful_poll"] is not None
+        assert stats["league_last_successful_poll"]["nfl"] is not None
+
+    def test_last_successful_poll_not_set_on_api_error(self, mock_espn_client: MagicMock) -> None:
+        """Test last_successful_poll is NOT set when ESPN API fails."""
+        mock_espn_client.get_scoreboard.side_effect = Exception("API down")
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        poller._polls_since_validation = 0
+
+        poller._poll_league_wrapper("nfl")
+
+        stats = poller.get_stats()
+        assert stats["last_successful_poll"] is None
+
+    @patch("precog.schedulers.espn_game_poller.update_game_result")
+    @patch("precog.schedulers.espn_game_poller.get_or_create_game")
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_per_league_timestamps_independent(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        mock_get_or_create_game: MagicMock,
+        mock_update_result: MagicMock,
+        mock_espn_client: MagicMock,
+        sample_game_data: dict[str, Any],
+    ) -> None:
+        """Test each league gets its own timestamp."""
+        mock_espn_client.get_scoreboard.return_value = [sample_game_data]
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+        mock_get_or_create_game.return_value = 42
+
+        poller = ESPNGamePoller(
+            leagues=["nfl", "nba"],
+            espn_client=mock_espn_client,
+        )
+        poller._polls_since_validation = 0
+
+        poller._poll_league_wrapper("nfl")
+
+        stats = poller.get_stats()
+        assert "nfl" in stats["league_last_successful_poll"]
+        assert "nba" not in stats["league_last_successful_poll"]
+
+    @patch("precog.schedulers.espn_game_poller.update_game_result")
+    @patch("precog.schedulers.espn_game_poller.get_or_create_game")
+    @patch("precog.schedulers.espn_game_poller.get_team_by_espn_id")
+    @patch("precog.schedulers.espn_game_poller.upsert_game_state")
+    @patch("precog.schedulers.espn_game_poller.create_venue")
+    def test_last_successful_poll_not_set_on_sync_errors(
+        self,
+        mock_create_venue: MagicMock,
+        mock_upsert: MagicMock,
+        mock_get_team: MagicMock,
+        mock_get_or_create_game: MagicMock,
+        mock_update_result: MagicMock,
+        mock_espn_client: MagicMock,
+        sample_game_data: dict[str, Any],
+    ) -> None:
+        """Test last_successful_poll not updated when sync errors occur."""
+        mock_espn_client.get_scoreboard.return_value = [sample_game_data]
+        mock_get_team.return_value = {"team_id": 1}
+        mock_create_venue.return_value = 100
+        mock_get_or_create_game.return_value = 42
+        mock_upsert.side_effect = Exception("DB write failed")
+
+        poller = ESPNGamePoller(
+            leagues=["nfl"],
+            espn_client=mock_espn_client,
+        )
+        poller._polls_since_validation = 0
+
+        poller._poll_league_wrapper("nfl")
+
+        stats = poller.get_stats()
+        assert stats["last_successful_poll"] is None
