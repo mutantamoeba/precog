@@ -1462,7 +1462,219 @@ Complements live data polling (REQ-DATA-001-005) with batch import capabilities.
 
 ---
 
+### 4.14 Trade Execution Requirements (Era 2, Phase 2)
+
+> **Added:** V2.26 (Session 41, 2026-04-05). Formalizes C4 Phase Gate finding B1.
+> **Reference:** DEVELOPMENT_PHASES_ERA2_V1.0.md, Epic #504
+
+#### REQ-TRADE-001: Order Placement Pipeline
+- Submit orders to Kalshi API through validated pipeline
+- Pipeline: Web UI form → FastAPI endpoint → OrderValidator → Kalshi API → Result classification
+- All orders must pass through OrderValidator before submission (no bypass path)
+- Related: #509 (endpoint), #510 (form), #326 (validator)
+
+#### REQ-TRADE-002: Order Result Classification
+- Every order attempt classified as CONFIRMED, REJECTED, or UNKNOWN
+- CONFIRMED: Kalshi accepted the order (has order_id)
+- REJECTED: Kalshi returned an error (reason captured)
+- UNKNOWN: Network timeout, ambiguous response (triggers reconciliation)
+- Related: #328
+
+#### REQ-TRADE-003: Order Idempotency
+- Every order submission includes a unique client_order_id (UUID)
+- Duplicate client_order_id submissions must not create duplicate orders
+- client_order_id stored in orders table, used for reconciliation
+- Related: #325
+
+#### REQ-TRADE-004: Order Reconciliation
+- Periodic sync between local orders table and Kalshi API state
+- Detect: orders that Kalshi has but we don't (missed fills), orders we have but Kalshi doesn't (phantom)
+- Reconciliation runs on configurable interval (default: every 60 seconds during market hours)
+- Related: #327, #417
+
+#### REQ-TRADE-005: Fills Pipeline
+- Ingest public market trades and portfolio fills from Kalshi API
+- Store in trades table with full audit trail
+- Auto-paginate large result sets
+- Link fills to orders via order_id
+- Related: #401-#405
+
+#### REQ-TRADE-006: Kill Switch
+- Instant kill switch: cancel all open orders + disable new order submission
+- Activatable from: web UI button, CLI command, API endpoint
+- Kill switch state persisted (survives service restart)
+- Re-enable requires explicit user action (not automatic)
+- Related: #329
+
+---
+
+### 4.15 Order Types Requirements (Era 2, Phase 2)
+
+> **Added:** V2.26 (Session 41, 2026-04-05).
+> **Note:** Kalshi natively supports limit orders. Stop loss, take profit, and trailing stops are application-level features built on top of Kalshi's order API.
+
+#### REQ-ORDER-001: Market Orders
+- Place orders at best available price (aggressive limit on Kalshi)
+- For YES side: limit price at or above current ask
+- For NO side: limit price at or below current bid
+- User selects quantity only; price determined by market
+- Related: #509, #570
+
+#### REQ-ORDER-002: Limit Orders
+- Place orders at user-specified price
+- Time-in-force options: GTC (good-til-cancelled), IOC (immediate-or-cancel)
+- Order remains open until filled, cancelled, or market closes
+- Related: #509, #570
+
+#### REQ-ORDER-003: Stop Loss Orders
+- Application-level conditional order
+- Trigger: current market price drops to or below user-specified stop price
+- On trigger: automatically place a sell order (market or limit, user-configurable)
+- Stop price configurable as absolute price or distance from entry
+- Persisted to database; survives service restarts
+- Related: #573, #576
+
+#### REQ-ORDER-004: Take Profit Orders
+- Application-level conditional order
+- Trigger: current market price rises to or above user-specified target price
+- On trigger: automatically place a sell order
+- Partial take profit supported: sell percentage of position at target
+- Can be combined with stop loss on same position (bracket order)
+- Related: #574, #576
+
+#### REQ-ORDER-005: Trailing Stop Orders
+- Application-level conditional order with dynamic threshold
+- Track peak price since activation
+- Stop price = peak_price - trail_distance (absolute or percentage)
+- Stop price only moves up, never down (ratchet behavior)
+- Activation modes: immediate (from entry) or conditional (after minimum profit reached)
+- Related: #575, #576
+- Leverages existing positions.trailing_stop_state JSONB infrastructure
+
+#### REQ-ORDER-006: Order Condition Monitoring Service
+- Background service evaluating all active order conditions
+- Runs as EventLoopService under ServiceSupervisor
+- Configurable polling interval (default: 10-30 seconds during market hours)
+- Respects kill switch state, API rate limits
+- Idempotent: conditions that already triggered are not re-triggered
+- Related: #576
+
+---
+
+### 4.16 Trading Safety Requirements (Era 2, Phase 2)
+
+> **Added:** V2.26 (Session 41, 2026-04-05).
+> **Reference:** C4 gate finding G3 — "No real trade without safety infrastructure."
+
+#### REQ-SAFE-001: OrderValidator — 10 Tier 1 Safety Guards
+All orders must pass these guards before submission:
+1. **Max order size:** Reject orders exceeding configured max contracts (default: 25)
+2. **Max order value:** Reject orders exceeding configured max dollar value (default: $50)
+3. **Max position size:** Reject if resulting position would exceed limit
+4. **Max daily loss:** Reject if daily realized loss exceeds threshold
+5. **Max open orders:** Reject if too many orders already pending
+6. **Market status check:** Reject if market is closed/settled
+7. **Balance check:** Reject if insufficient account balance
+8. **Spread check:** Reject if bid/ask spread exceeds threshold (illiquid)
+9. **Price sanity:** Reject if price is outside reasonable bounds (e.g., <$0.02 or >$0.98)
+10. **Data freshness:** Reject if market data is older than configured max age
+- Guard thresholds configurable in trading.yaml `safety_guards:` section
+- All guard evaluations logged regardless of pass/fail
+- Related: #326, #561, #303
+
+#### REQ-SAFE-002: Pre-Trade Data Freshness
+- Before placing any order, verify market data freshness
+- Re-poll market if data age exceeds threshold (configurable, default: 30 seconds)
+- Abort trade if re-poll fails or data remains stale
+- Prevents phantom edges from stale ESPN/Kalshi data
+- Related: #561, #303
+
+#### REQ-SAFE-003: Behavioral Circuit Breakers
+- Automatic safety triggers based on trading patterns:
+  - Rapid loss circuit breaker: pause trading after N consecutive losses
+  - Velocity circuit breaker: pause after N orders in M minutes
+  - Drawdown circuit breaker: pause after portfolio drops X% in a session
+- Circuit breaker state visible in web UI
+- Manual reset required to resume trading
+- Related: #330
+
+#### REQ-SAFE-004: Pre-Live Checklist
+Before any real-money trading is enabled:
+- [ ] All 10 Tier 1 guards tested on demo API
+- [ ] Kill switch tested (activate + verify orders cancelled + verify lockout)
+- [ ] Order reconciliation verified (DB matches Kalshi state)
+- [ ] Fills pipeline verified (fills appear in DB within 60 seconds)
+- [ ] Data freshness guard tested (stale data correctly blocked)
+- [ ] Circuit breakers tested (trigger conditions produce expected behavior)
+- [ ] 1-week demo soak with zero safety failures
+
+---
+
+### 4.17 Web UI Requirements (Era 2, Phases 2-4)
+
+> **Added:** V2.26 (Session 41, 2026-04-05).
+> **Reference:** Epic #583 (Web UI Platform)
+
+#### REQ-WEB-001: Web Application Foundation
+- FastAPI backend with frontend framework (technology choice per FastAPI ADR)
+- Authentication: session-based, single-user local auth for MVP
+- Design system with consistent components, typography, color palette
+- Navigation shell with sidebar/header accommodating all Phase 2-5 pages
+- Desktop-first responsive layout
+- Related: #568
+
+#### REQ-WEB-002: Market Browsing
+- Market list with filters: sport, status (open/closed/settled), category, date
+- Text search across market tickers and titles
+- Market detail view: current yes/no prices, bid/ask spread, volume
+- Live price updates without full page reload
+- Quick navigation to trading page with market context
+- Related: #569
+
+#### REQ-WEB-003: Trading Interface
+- Order entry form supporting all 5 order types (REQ-ORDER-001 through 005)
+- Market context panel showing current bid/ask, spread, volume
+- Order confirmation dialog before submission (safety UX)
+- Active orders panel with cancel capability
+- Recent fills display
+- Inline OrderValidator feedback (which guards passed/failed)
+- Related: #570
+
+#### REQ-WEB-004: Position Management
+- Open positions list with real-time P&L
+- Position detail: entry price, current value, exposure, attached conditions
+- Modify actions: adjust stop loss, take profit, trailing stop settings
+- Close actions: market sell or limit sell
+- Exposure summary: total by sport, market type
+- SCD Type 2 filtering (row_current_ind = TRUE)
+- Related: #571
+
+#### REQ-WEB-005: Trade History & Reporting
+- Completed trades with filters: date range, sport, market, side, outcome
+- Performance metrics: ROI, win rate, P&L curve, Sharpe ratio, max drawdown
+- Breakdowns by sport, market type, time period
+- Export: CSV/JSON
+- Related: #572
+
+#### REQ-WEB-006: Operations Pages (Phase 3)
+- Configuration management: view/edit YAML settings, environment display
+- Alerts dashboard: system health, trading alerts, custom rules
+- Log viewer: searchable logs with live tail
+- Scheduler management: service status, start/stop controls, rate limit visualization
+- Related: #577, #578, #579, #580
+
+#### REQ-WEB-007: Model Analytics Pages (Phase 4)
+- Model training interface: configure, train, compare, promote
+- Model analytics: calibration curves, Brier score, ECE, feature importance
+- Model decay detection and alerting
+- Related: #581, #582
+
+---
+
 ## 5. Development Phases
+
+> **Note:** Phases 0-1.5 below are Era 1 definitions (historical). For Era 2 phases (2-5),
+> see `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.0.md`.
 
 ### Phase 0: Foundation & Documentation (COMPLETED)
 
@@ -4443,6 +4655,7 @@ For questions or issues:
 | 2.4 | 2025-10-19 | **MAJOR UPDATE**: Added Phase 0.5 (Foundation Enhancement); added versioning requirements (strategies, probability_models with immutable pattern); added trailing stop loss requirements; updated database overview to V1.4; added Phase 1.5 (Foundation Validation); updated all phase descriptions to reflect versioning enhancements |
 | 2.5 | 2025-10-21 | **CRITICAL UPDATE**: Added Phase 5 monitoring and exit management requirements; Added REQ-MON-*, REQ-EXIT-*, REQ-EXEC-* requirements; Updated database to V1.5 (position_exits, exit_attempts tables); Added 10 exit conditions with priority hierarchy |
 | 2.6 | 2025-10-22 | **STANDARDIZATION**: Added systematic REQ IDs to all requirements; Added REQUIREMENT_INDEX.md and ADR_INDEX.md references; Improved requirement traceability |
+| 2.26 | 2026-04-05 | **ERA 2 REQUIREMENTS**: Added sections 4.14-4.17 (REQ-TRADE, REQ-ORDER, REQ-SAFE, REQ-WEB). Formalizes C4 Phase Gate finding B1. 22 new requirements covering trade execution, 5 order types, safety guards, and web UI across Phases 2-4. |
 
 ---
 
