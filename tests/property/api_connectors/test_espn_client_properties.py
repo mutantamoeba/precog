@@ -24,7 +24,6 @@ Reference: docs/testing/PHASE_2_TEST_PLAN_V1.0.md Section 2.1.3
 Related: ADR-074 (Property-Based Testing with Hypothesis)
 """
 
-from datetime import datetime, timedelta
 from typing import Any
 
 from hypothesis import HealthCheck, given, settings
@@ -283,11 +282,9 @@ class TestRateLimitingInvariants:
 
         client = ESPNClient(rate_limit_per_hour=500)
 
-        # Simulate requests in the past hour
-        now = datetime.now()
-        client.request_timestamps = [
-            now - timedelta(minutes=i % 60) for i in range(min(num_requests, 500))
-        ]
+        # Consume tokens to simulate requests (up to capacity)
+        tokens_to_consume = min(num_requests, 500)
+        client.rate_limiter.tokens = max(0.0, client.rate_limiter.tokens - tokens_to_consume)
 
         remaining = client.get_remaining_requests()
         assert remaining >= 0, "Remaining requests should never be negative"
@@ -303,22 +300,26 @@ class TestRateLimitingInvariants:
         remaining = client.get_remaining_requests()
         assert remaining <= rate_limit, "Remaining should not exceed rate limit"
 
-    @given(num_old=st.integers(min_value=0, max_value=100))
+    @given(
+        elapsed_seconds=st.floats(
+            min_value=0.0, max_value=7200.0, allow_nan=False, allow_infinity=False
+        )
+    )
     @settings(max_examples=50)
-    def test_old_timestamps_are_cleaned(self, num_old: int):
-        """Property: Timestamps older than 1 hour are cleaned up."""
+    def test_tokens_refill_up_to_capacity(self, elapsed_seconds: float):
+        """Property: Token refill never exceeds bucket capacity."""
         from precog.api_connectors.espn_client import ESPNClient
 
         client = ESPNClient(rate_limit_per_hour=500)
 
-        # Add old timestamps (>1 hour ago)
-        old_time = datetime.now() - timedelta(hours=2)
-        client.request_timestamps = [old_time for _ in range(num_old)]
+        # Drain bucket, then simulate time passing for refill
+        client.rate_limiter.tokens = 0.0
+        client.rate_limiter.last_refill = client.rate_limiter.last_refill - elapsed_seconds
+        client.rate_limiter._refill()
 
-        # Clean should remove all old timestamps
-        client._clean_old_timestamps()
-
-        assert len(client.request_timestamps) == 0, "Old timestamps should be cleaned"
+        assert client.rate_limiter.tokens <= client.rate_limiter.capacity, (
+            "Tokens should never exceed capacity after refill"
+        )
 
 
 # =============================================================================
