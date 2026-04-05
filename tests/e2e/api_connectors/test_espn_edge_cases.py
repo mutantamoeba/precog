@@ -38,6 +38,7 @@ Reference:
 Phase: 2 (Live Data Collection)
 """
 
+from decimal import Decimal
 from typing import Any, cast
 
 import pytest
@@ -174,7 +175,7 @@ class TestVenueEdgeCases:
                 "home_score": 0,
                 "away_score": 0,
                 "period": 0,
-                "clock_seconds": 0.0,  # Pre-game has 0 seconds
+                "clock_seconds": Decimal("0"),  # Pre-game has 0 seconds
                 "clock_display": "",
                 "game_status": "pre",
                 "situation": {},
@@ -238,7 +239,7 @@ class TestVenueEdgeCases:
                 "home_score": 14,
                 "away_score": 10,
                 "period": 2,
-                "clock_seconds": 300,
+                "clock_seconds": Decimal("300"),
                 "clock_display": "5:00",
                 "game_status": "in_progress",
                 "situation": {
@@ -330,7 +331,7 @@ class TestGameStateEdgeCases:
                 "home_score": 42,
                 "away_score": 36,
                 "period": 5,  # Overtime!
-                "clock_seconds": 420,
+                "clock_seconds": Decimal("420"),
                 "clock_display": "7:00",
                 "game_status": "in_progress",
                 "situation": {
@@ -400,7 +401,7 @@ class TestGameStateEdgeCases:
                 "home_score": 63,
                 "away_score": 63,
                 "period": 8,  # 4th overtime!
-                "clock_seconds": 0,
+                "clock_seconds": Decimal("0"),
                 "clock_display": "0:00",
                 "game_status": "in_progress",
                 "situation": {
@@ -851,7 +852,7 @@ class TestRegressionPrevention:
                 "home_score": 7,
                 "away_score": 3,
                 "period": 1,
-                "clock_seconds": 600,
+                "clock_seconds": Decimal("600"),
                 "clock_display": "10:00",
                 "game_status": "in_progress",
                 "situation": {},

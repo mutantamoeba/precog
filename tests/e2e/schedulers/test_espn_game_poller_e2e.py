@@ -76,7 +76,7 @@ def sample_game_data() -> dict[str, Any]:
             "home_score": 21,
             "away_score": 17,
             "period": 3,
-            "clock_seconds": 845.5,
+            "clock_seconds": Decimal("845.5"),
             "clock_display": "14:05",
             "game_status": "in_progress",
             "situation": {
