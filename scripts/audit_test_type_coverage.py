@@ -150,19 +150,6 @@ MODULE_TIERS = {
     "matching/ticker_parser": "experimental",
     # Issue #236: NFLDataPySource for stats loading
     "database/seeding/sources/nfl_data_py_source": "experimental",
-    # TUI (Issue #268, #283) - Terminal User Interface modules
-    "tui/app": "experimental",
-    "tui/screens/main_menu": "experimental",
-    "tui/screens/market_browser": "experimental",
-    "tui/screens/monitoring_dashboard": "experimental",
-    "tui/screens/position_viewer": "experimental",
-    "tui/screens/scheduler_control": "experimental",
-    "tui/screens/settings": "experimental",
-    "tui/widgets/header": "experimental",
-    "tui/screens/base_screen": "experimental",
-    "tui/screens/help_screen": "experimental",
-    "tui/widgets/breadcrumb": "experimental",
-    "tui/widgets/environment_bar": "experimental",
     # Schedulers
     "schedulers/espn_game_poller": "business",
     # Validation
