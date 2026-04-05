@@ -1814,7 +1814,7 @@ class TestESPNDataValidationWiring:
                 # Should have logged at ERROR level for the aggregate
                 mock_logger.error.assert_any_call(
                     "ESPN validation [%s]: ERROR RATE %.1f%% - %d/%d games failed "
-                    "(%d errors, %d warnings) [ACTION: investigate data source]",
+                    "(%d errors, %d warning-only) [ACTION: investigate data source]",
                     "NFL",
                     100.0,
                     1,

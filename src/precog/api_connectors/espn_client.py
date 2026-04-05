@@ -785,8 +785,11 @@ class ESPNClient:
         Returns:
             List of parsed ESPNGameFull dicts with metadata/state structure
         """
-        # Acquire rate limit token (blocks if bucket empty)
-        self.rate_limiter.acquire()
+        # Non-blocking acquire: raise immediately if bucket empty (preserves old contract)
+        if not self.rate_limiter.acquire(block=False):
+            raise RateLimitExceededError(
+                "ESPN rate limit exceeded (token bucket empty). Try again shortly."
+            )
 
         # Build URL with optional date parameter
         url = self.ENDPOINTS[league]

@@ -1261,7 +1261,8 @@ class KalshiDataValidator:
         total = len(results)
         valid_count = sum(1 for r in results if r.is_valid)
         error_count = sum(1 for r in results if r.has_errors)
-        warning_count = sum(1 for r in results if r.has_warnings and not r.has_errors)
+        # Entities with warnings-only (excludes entities also having errors)
+        warning_only_count = sum(1 for r in results if r.has_warnings and not r.has_errors)
 
         all_errors = [
             {"entity": r.entity_id, "issue": str(issue)} for r in results for issue in r.errors
@@ -1275,7 +1276,7 @@ class KalshiDataValidator:
             "total": total,
             "valid_count": valid_count,
             "error_count": error_count,
-            "warning_count": warning_count,
+            "warning_only_count": warning_only_count,
             "valid_percentage": (valid_count / total * 100) if total > 0 else 100,
             "errors": all_errors[:10],  # Limit to first 10
             "warnings": all_warnings[:10],  # Limit to first 10

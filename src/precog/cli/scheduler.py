@@ -294,6 +294,9 @@ def _start_supervised_mode(
         raise typer.Exit(code=1)
 
     try:
+        # Create priority calculator for ESPN adaptive polling
+        priority_calculator = _create_priority_calculator()
+
         # Create supervisor using factory function
         _supervisor = create_supervisor(
             environment=supervisor_env,
@@ -304,6 +307,7 @@ def _start_supervised_mode(
             espn_poll_interval=espn_interval,
             kalshi_poll_interval=kalshi_interval,
             health_check_interval=health_interval,
+            priority_calculator=priority_calculator,
         )
 
         # Register alert callback for console output
