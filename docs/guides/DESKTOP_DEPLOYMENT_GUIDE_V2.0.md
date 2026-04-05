@@ -287,6 +287,205 @@ python main.py scheduler start --supervised --foreground
 
 ---
 
+## Backup & Restore
+
+### Scheduled Backups (Desktop)
+
+Set up a daily backup via Task Scheduler:
+
+```powershell
+# Daily backup script — save as C:\Users\<user>\scripts\precog_backup.ps1
+$date = Get-Date -Format "yyyy-MM-dd"
+$backupDir = "C:\Users\<user>\backups\precog"
+$backupFile = "$backupDir\precog_staging_$date.dump"
+
+# Create backup directory if needed
+New-Item -ItemType Directory -Force -Path $backupDir | Out-Null
+
+# Custom-format dump (compressed, restorable)
+pg_dump -U postgres -Fc --verbose -f $backupFile precog_staging 2>&1 | Tee-Object "$backupDir\backup_$date.log"
+
+# Verify dump is valid
+pg_restore --list $backupFile | Select-Object -First 5
+
+# Retain last 14 days of backups
+Get-ChildItem $backupDir -Filter "precog_staging_*.dump" | Sort-Object CreationTime | Select-Object -SkipLast 14 | Remove-Item -Force
+
+Write-Host "Backup complete: $backupFile ($('{0:N1}' -f ((Get-Item $backupFile).Length / 1MB)) MB)"
+```
+
+Schedule in Task Scheduler: daily at 04:00 AM, run whether logged in or not.
+
+### Restore from Backup
+
+Restoring to the **same machine** (e.g., after corruption):
+
+```powershell
+# Stop services first
+python main.py scheduler stop
+
+# Drop and recreate database
+dropdb -U postgres precog_staging
+createdb -U postgres precog_staging
+
+# Restore
+pg_restore -U postgres -d precog_staging --no-owner --no-privileges --verbose <backup_file>.dump
+
+# Verify migration level
+cd src/precog/database && alembic current && cd ../../..
+
+# Clear stale scheduler state
+psql -U postgres -d precog_staging -c "DELETE FROM scheduler_status;"
+
+# Restart
+python main.py scheduler start --supervised --foreground
+```
+
+### Migrate Data to Another Machine
+
+To move the database **with data** to a new machine (e.g., new desktop, Railway):
+
+```powershell
+# === On source machine ===
+python main.py scheduler stop
+pg_dump -U postgres -Fc --verbose -f precog_export.dump precog_staging
+
+# Transfer via USB (not cloud — contains no secrets but may contain market positions)
+
+# === On target machine ===
+# Prerequisites: PostgreSQL installed, database created, repo cloned, .env configured
+createdb -U postgres precog_staging  # or precog_prod
+
+# Restore
+pg_restore -U postgres -d precog_staging --no-owner --no-privileges --verbose precog_export.dump
+
+# Apply any migrations the source didn't have
+cd src/precog/database && alembic upgrade head && cd ../../..
+
+# Clear scheduler state (different host)
+psql -U postgres -d precog_staging -c "DELETE FROM scheduler_status;"
+
+# Verify
+python scripts/test_db_connection.py
+python main.py scheduler start --supervised --foreground
+```
+
+**Post-migration verification:**
+```sql
+-- Row counts (compare with source)
+SELECT 'market_snapshots' as tbl, COUNT(*) FROM market_snapshots
+UNION ALL SELECT 'game_states', COUNT(*) FROM game_states
+UNION ALL SELECT 'game_odds', COUNT(*) FROM game_odds
+UNION ALL SELECT 'orders', COUNT(*) FROM orders;
+
+-- SCD integrity (should return 0 rows)
+SELECT 'game_states' as tbl, espn_event_id as key, COUNT(*)
+FROM game_states WHERE row_current_ind = TRUE
+GROUP BY espn_event_id HAVING COUNT(*) > 1
+UNION ALL
+SELECT 'market_snapshots', market_id::text, COUNT(*)
+FROM market_snapshots WHERE row_current_ind = TRUE
+GROUP BY market_id HAVING COUNT(*) > 1;
+```
+
+---
+
+## Dual-Machine Workflow (Laptop + Desktop)
+
+### Development Loop
+
+```
+  Laptop (dev)                          Desktop (staging)
+  ============                          =================
+  1. Write code                         4. git pull origin main
+  2. Run tests                          5. alembic upgrade head
+  3. Push to main (via PR)              6. Restart services
+       |                                     |
+       +------ GitHub (main branch) ---------+
+```
+
+### When to Restart Desktop Services
+
+| Change Type | Restart Needed? | Command |
+|-------------|-----------------|---------|
+| Schema migration (new alembic) | **YES** — stop, migrate, start | Full restart sequence |
+| Poller code (schedulers/, api_connectors/) | **YES** — new code needs fresh import | `scheduler stop` then `start` |
+| CRUD module changes (database/) | **YES** — runtime imports | Full restart |
+| CLI-only changes (cli/) | **NO** — CLI is invoked fresh each time | No action needed |
+| Config changes (YAML) | **YES** — config loaded at startup | `scheduler stop` then `start` |
+| Documentation only | **NO** | No action needed |
+| Test-only changes | **NO** | No action needed |
+
+### Keeping Migrations in Sync
+
+Both machines must be at the same Alembic head after every pull:
+
+```powershell
+# On desktop after git pull
+cd src/precog/database
+alembic current          # Check current migration
+alembic upgrade head     # Apply any new migrations
+alembic current          # Verify at head
+cd ../../..
+```
+
+**If migrations diverge** (e.g., desktop is behind):
+```powershell
+# Check what's pending
+alembic history --indicate-current
+
+# Apply all pending
+alembic upgrade head
+```
+
+**If you need to test a migration on laptop first:**
+```powershell
+# On laptop (dev DB)
+PRECOG_ENV=dev alembic upgrade head
+
+# Run tests
+python -m pytest tests/unit/ tests/integration/ -q --no-cov
+
+# If green, push to main, then pull on desktop
+```
+
+### Environment Isolation
+
+| Item | Laptop | Desktop | Synced via |
+|------|--------|---------|------------|
+| Code | latest main or feature branch | main only | Git |
+| .env | `PRECOG_ENV=dev` | `PRECOG_ENV=staging` | **NEVER synced** — local only |
+| _keys/ | dev keys | staging/prod keys | **USB transfer** — never git |
+| Database | `precog_dev` (expendable) | `precog_staging` (production data) | Independent — never synced |
+| Migrations | same Alembic chain | same Alembic chain | Git (code) + `alembic upgrade head` |
+| Config YAML | same files | same files | Git |
+
+### Emergency: Bad Migration on Desktop
+
+If a migration breaks the desktop database:
+
+```powershell
+# 1. Stop services immediately
+python main.py scheduler stop
+
+# 2. Check what happened
+cd src/precog/database
+alembic current
+alembic history --indicate-current
+
+# 3. Downgrade the bad migration
+alembic downgrade -1
+
+# 4. Verify
+alembic current
+
+# 5. On laptop: fix the migration, push fix, then re-pull on desktop
+```
+
+If downgrade fails or data is corrupted: restore from daily backup (see Backup & Restore above).
+
+---
+
 ## Troubleshooting
 
 | Symptom | Cause | Fix |
