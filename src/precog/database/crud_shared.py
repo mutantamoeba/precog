@@ -33,6 +33,8 @@ ExecutionEnvironment = Literal["live", "paper", "backtest"]
 #   - 'kalshi_api':      Kalshi prediction market API
 #   - 'espn_api':        ESPN sports data API
 #   - 'database':        PostgreSQL database connection
+# Operational components:
+#   - 'backup':          Database backup system
 # Infrastructure components:
 #   - 'edge_detector':   Edge detection engine
 #   - 'trading_engine':  Trade execution engine
@@ -44,6 +46,7 @@ SystemHealthComponent = Literal[
     "polymarket_api",
     "espn_api",
     "database",
+    "backup",
     "edge_detector",
     "trading_engine",
     "websocket",

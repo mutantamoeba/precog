@@ -69,6 +69,7 @@ def register_commands() -> None:
     4. Future stubs (strategy, model, position, trade)
     """
     # Import command modules (deferred for performance)
+    from precog.cli import backup as backup_cmd
     from precog.cli import circuit_breaker as circuit_breaker_cmd
     from precog.cli import config as config_cmd
     from precog.cli import data as data_cmd
@@ -83,6 +84,7 @@ def register_commands() -> None:
     app.add_typer(espn_cmd.app, name="espn", help="ESPN data operations")
     app.add_typer(data_cmd.app, name="data", help="Data seeding and management")
     app.add_typer(db_cmd.app, name="db", help="Database operations")
+    app.add_typer(backup_cmd.app, name="backup", help="Database backup and restore")
     app.add_typer(scheduler_cmd.app, name="scheduler", help="Service management")
     app.add_typer(config_cmd.app, name="config", help="Configuration management")
     app.add_typer(system_cmd.app, name="system", help="System utilities")
