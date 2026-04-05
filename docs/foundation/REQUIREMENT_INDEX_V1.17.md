@@ -831,14 +831,49 @@ This document provides a systematic index of all Precog requirements using categ
 - Deployment: Vercel for frontend, PostgreSQL backend unchanged
 - Related: ADR-081 (dashboard stack), ADR-083 (data source), DASHBOARD_DEVELOPMENT_GUIDE_V1.0.md
 
+### Trade Execution (TRADE) — NEW in V1.18
+
+**REQ-TRADE-001: Order Placement Pipeline** — Web UI -> FastAPI -> OrderValidator -> Kalshi API -> Result
+**REQ-TRADE-002: Order Result Classification** — CONFIRMED / REJECTED / UNKNOWN three-state
+**REQ-TRADE-003: Order Idempotency** — Mandatory client_order_id (UUID) on every submission
+**REQ-TRADE-004: Order Reconciliation** — Periodic DB <-> Kalshi state sync
+**REQ-TRADE-005: Fills Pipeline** — Ingest public trades + portfolio fills with auto-pagination
+**REQ-TRADE-006: Kill Switch** — Instant cancel-all + disable, persisted, explicit re-enable
+
+### Order Types (ORDER) — NEW in V1.18
+
+**REQ-ORDER-001: Market Orders** — Aggressive limit at best available price
+**REQ-ORDER-002: Limit Orders** — User-specified price, GTC/IOC time-in-force
+**REQ-ORDER-003: Stop Loss** — App-level conditional sell on price drop below threshold
+**REQ-ORDER-004: Take Profit** — App-level conditional sell on price rise above target, partial support
+**REQ-ORDER-005: Trailing Stop** — Dynamic ratcheting stop, peak tracking, conditional activation
+**REQ-ORDER-006: Order Condition Monitoring Service** — Background evaluator for all conditional orders
+
+### Trading Safety (SAFE) — NEW in V1.18
+
+**REQ-SAFE-001: OrderValidator — 10 Tier 1 Safety Guards** — Max size/value/position/loss, market/balance/spread/price/freshness checks
+**REQ-SAFE-002: Pre-Trade Data Freshness** — Re-poll + abort on stale market data
+**REQ-SAFE-003: Behavioral Circuit Breakers** — Rapid loss, velocity, drawdown auto-pause
+**REQ-SAFE-004: Pre-Live Checklist** — 7-item gate before real-money trading enabled
+
+### Web UI (WEB) — NEW in V1.18
+
+**REQ-WEB-001: Web Application Foundation** — FastAPI backend, auth, design system, navigation
+**REQ-WEB-002: Market Browsing** — Search, filter, live prices, market detail
+**REQ-WEB-003: Trading Interface** — All 5 order types, confirmation, active orders, validator feedback
+**REQ-WEB-004: Position Management** — Real-time P&L, modify/close, exposure summary
+**REQ-WEB-005: Trade History & Reporting** — Performance metrics, breakdowns, export
+**REQ-WEB-006: Operations Pages (Phase 3)** — Config, alerts, logs, scheduler management
+**REQ-WEB-007: Model Analytics Pages (Phase 4)** — Training interface, calibration, feature importance
+
 ---
 
 ## Requirement Statistics
 
-**Total Requirements:** 127
-**Completed (✅):** 31 (Phase 0-2.5, including REQ-SCHED-001, REQ-SCHED-002)
-**In Progress (🟡):** 1 (REQ-DATA-003 - ESPN client complete, database pending)
-**Planned (🔵):** 95 (Phase 0.7, 1-10 including REQ-ML-001, REQ-ANALYTICS-001-004, REQ-REPORTING-001, REQ-DATA-001-005, REQ-OBSERV-003)
+**Total Requirements:** 159
+**Completed:** 31 (Phase 0-2.5, including REQ-SCHED-001, REQ-SCHED-002)
+**In Progress:** 1 (REQ-DATA-003 - ESPN client complete, database pending)
+**Planned:** 127 (Phase 0.7-5 including all Era 2 requirements)
 
 **By Category:**
 - System (SYS): 6 requirements
@@ -863,6 +898,10 @@ This document provides a systematic index of all Precog requirements using categ
 - **Security (SEC): 1 requirement** (NEW in V1.3)
 - **Analytics (ANALYTICS): 4 requirements** (NEW in V1.5 - materialized views, performance tracking)
 - **Reporting (REPORTING): 1 requirement** (NEW in V1.5 - dashboard architecture)
+- **Trade Execution (TRADE): 6 requirements** (NEW in V1.18 - order pipeline, reconciliation, kill switch)
+- **Order Types (ORDER): 6 requirements** (NEW in V1.18 - market, limit, stop loss, take profit, trailing stop)
+- **Trading Safety (SAFE): 4 requirements** (NEW in V1.18 - OrderValidator, freshness, circuit breakers)
+- **Web UI (WEB): 7 requirements** (NEW in V1.18 - foundation through Phase 4 analytics)
 
 **By Phase:**
 - Phase 0: 6 requirements (100% complete)
@@ -871,7 +910,10 @@ This document provides a systematic index of all Precog requirements using categ
 - **Phase 0.7: 7 requirements (0% complete)** - CI/CD and advanced testing
 - **Phase 1: 29 requirements (0% complete)** - API best practices, alerts, CLI
 - **Phase 1.5-2: 1 requirement (0% complete)** - performance tracking architecture (REQ-ANALYTICS-003)
-- **Phase 2: 8 requirements (0% complete)** - ESPN data, venues, rankings (REQ-DATA-001-005)
+- **Era 1 Phase 2: 8 requirements (0% complete)** - ESPN data, venues, rankings (REQ-DATA-001-005)
+- **Era 2 Phase 2: 22 requirements (0% complete)** - trade execution, orders, safety, web UI (REQ-TRADE/ORDER/SAFE/WEB)
+- **Era 2 Phase 3: 1 requirement (0% complete)** - operations web pages (REQ-WEB-006)
+- **Era 2 Phase 4: 1 requirement (0% complete)** - model analytics pages (REQ-WEB-007)
 - Phase 4: 5 requirements (0% complete)
 - Phase 4-5: 15 requirements (0% complete) - methods system
 - Phase 5: 14 requirements (100% complete - documented)

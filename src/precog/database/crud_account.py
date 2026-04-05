@@ -83,9 +83,10 @@ def create_account_balance(
 
     query = """
         INSERT INTO account_balance (
-            platform_id, balance, currency, row_current_ind, created_at
+            platform_id, balance, currency,
+            row_current_ind, row_start_ts, created_at
         )
-        VALUES (%s, %s, %s, TRUE, NOW())
+        VALUES (%s, %s, %s, TRUE, NOW(), NOW())
         RETURNING id
     """
 
@@ -166,27 +167,29 @@ def update_account_balance_with_versioning(
     if not isinstance(new_balance, Decimal):
         raise ValueError(f"Balance must be Decimal, got {type(new_balance).__name__}")
 
-    # Step 1: Mark current balance as historical (row_current_ind = FALSE)
-    update_query = """
+    # Step 1: Close current row (set row_current_ind = FALSE, row_end_ts = NOW)
+    close_query = """
         UPDATE account_balance
-        SET row_current_ind = FALSE
+        SET row_current_ind = FALSE,
+            row_end_ts = NOW()
         WHERE platform_id = %s AND row_current_ind = TRUE
     """
 
-    # Step 2: Insert new balance record
+    # Step 2: Insert new balance record with row_start_ts
     insert_query = """
         INSERT INTO account_balance (
-            platform_id, balance, currency, row_current_ind, created_at
+            platform_id, balance, currency,
+            row_current_ind, row_start_ts, created_at
         )
-        VALUES (%s, %s, %s, TRUE, NOW())
+        VALUES (%s, %s, %s, TRUE, NOW(), NOW())
         RETURNING id
     """
 
     with get_cursor(commit=True) as cur:
-        # Mark old balance as historical
-        cur.execute(update_query, (platform_id,))
+        # Close old balance version
+        cur.execute(close_query, (platform_id,))
 
-        # Insert new balance
+        # Insert new balance version
         cur.execute(insert_query, (platform_id, new_balance, currency))
         result = cur.fetchone()
         return result["id"] if result else None
