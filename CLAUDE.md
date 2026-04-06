@@ -131,7 +131,7 @@ precog-repo/
 **Architecture & Planning:**
 - `docs/foundation/MASTER_REQUIREMENTS_V2.25.md` - All requirements
 - `docs/foundation/ARCHITECTURE_DECISIONS_V2.35.md` - 114 ADRs
-- `docs/foundation/DEVELOPMENT_PHASES_V1.15.md` - Phase roadmap
+- `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.1.md` - Phase roadmap (Era 2: current)
 
 **Implementation:**
 - `docs/guides/DEVELOPMENT_PATTERNS_V1.30.md` - 50 development patterns with examples
