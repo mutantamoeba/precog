@@ -584,8 +584,15 @@ class TestLockVerification:
         for t in threads:
             t.start()
 
+        # 30s join timeout (raised from 10s session 42c).
+        # Test runs in ~4.4s isolated and is stable across many runs, but under
+        # the full stress/chaos/race suite the threads can be slowed by ambient
+        # CPU/IO contention from prior tests, occasionally exceeding a tight
+        # timeout. A real deadlock would hang indefinitely; 30s is comfortably
+        # within "real deadlock" territory while forgiving suite-load slowness.
+        # Precedent: session 36 raised a similar stress test threshold 5s→30s.
         for t in threads:
-            t.join(timeout=10.0)
+            t.join(timeout=30.0)
             if t.is_alive():
                 deadlock_detected.set()
 
