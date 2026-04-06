@@ -131,6 +131,96 @@ export PRECOG_ENV=test
 find tests/ -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
 # ==============================================================================
+# STEP 0.5: Docs-Only Fast Path (#616)
+# ==============================================================================
+# If 100% of changed files match documentation patterns, skip the test gate.
+#
+# Why this is safe:
+#   - Pre-commit hooks (.pre-commit-config.yaml) already enforce credential
+#     scans, file size limits, EOF, trailing whitespace, and merge markers at
+#     COMMIT time, so the pre-push test gate adds zero safety value for pushes
+#     that touch only markdown/text files.
+#   - Branch verification (above) still runs.
+#   - Pre-commit ran on every individual commit before this push.
+#
+# Detection uses STRICT EXTENSION/FILENAME matching ONLY (no directory prefixes).
+# This is intentional: a .py file inside docs/ (e.g., a renamed module) MUST
+# trigger the full gate, even though its parent directory is "docs/". The issue
+# body explicitly warned about this failure mode.
+#
+# A file qualifies as docs ONLY if it matches:
+#   - Extensions: .md, .txt, .rst (anywhere in the tree)
+#   - Special filenames at any path: README, README.{md,txt,rst,...},
+#     LICENSE, LICENSE.{md,txt,rst,...}, AUTHORS, CHANGELOG, CHANGELOG.{...}
+#
+# Any other file — .py, .yaml, .toml, .cfg, .ini, .sh, .sql, .json, .zip,
+# binary blobs, etc. — triggers the full gate. We err on the side of running
+# the gate when in doubt.
+#
+# Override: SKIP_DOCS_FAST_PATH=1 git push  (forces full gate even on docs)
+#
+# Reference: issue #616, memory/feedback_pre_push_docs_only_skip.md
+if [[ "${SKIP_DOCS_FAST_PATH:-0}" != "1" ]]; then
+    # Get the list of files changed in this push.
+    # Try multiple strategies to handle: existing branch with upstream, new
+    # branch first push, no upstream configured, etc.
+    CHANGED_FILES=""
+
+    # Strategy 1: against upstream tracking branch (existing branch with @{u})
+    if git rev-parse --abbrev-ref --symbolic-full-name @{u} > /dev/null 2>&1; then
+        CHANGED_FILES=$(git diff --name-only @{u}..HEAD 2>/dev/null || true)
+    fi
+
+    # Strategy 2: against merge-base with origin/main (new branch first push)
+    if [[ -z "$CHANGED_FILES" ]]; then
+        MERGE_BASE=$(git merge-base HEAD origin/main 2>/dev/null || true)
+        if [[ -n "$MERGE_BASE" ]]; then
+            CHANGED_FILES=$(git diff --name-only "$MERGE_BASE" HEAD 2>/dev/null || true)
+        fi
+    fi
+
+    # Strategy 3: just the last commit (final fallback)
+    if [[ -z "$CHANGED_FILES" ]]; then
+        CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
+    fi
+
+    if [[ -n "$CHANGED_FILES" ]]; then
+        # Find any file that does NOT match docs/markdown patterns.
+        # If this returns even one line, the fast path does NOT activate.
+        # Strict extension/filename matching — directory prefix is irrelevant.
+        # This was tested with: docs/foo.md (docs), docs/foo.py (NOT docs),
+        # CLAUDE.md (docs), config/trading.yaml (NOT docs).
+        NON_DOCS=$(echo "$CHANGED_FILES" | grep -vE '(\.md$|\.txt$|\.rst$|^README$|^README\.[a-z]+$|^LICENSE$|^LICENSE\.[a-z]+$|^AUTHORS$|^CHANGELOG$|^CHANGELOG\.[a-z]+$)' | head -1 || true)
+
+        if [[ -z "$NON_DOCS" ]]; then
+            echo ""
+            echo "Docs-only push detected (#616) — skipping test gate."
+            echo ""
+            echo "Changed files (all match docs patterns):"
+            echo "$CHANGED_FILES" | sed 's/^/  /'
+            echo ""
+            echo "Pre-commit hooks (credential scan, EOF, whitespace, file size)"
+            echo "already ran at commit time. Test gate adds no safety value here."
+            echo ""
+            echo "To force full gate: SKIP_DOCS_FAST_PATH=1 git push"
+            echo ""
+
+            END_TIME=$(date +%s)
+            TOTAL_DURATION=$((END_TIME - START_TIME))
+            echo "Pre-push fast path complete (${TOTAL_DURATION}s)."
+
+            echo "" >> "$LOG_FILE"
+            echo "========================================" >> "$LOG_FILE"
+            echo "DOCS-ONLY FAST PATH: PASSED (${TOTAL_DURATION}s)" >> "$LOG_FILE"
+            echo "Changed files:" >> "$LOG_FILE"
+            echo "$CHANGED_FILES" >> "$LOG_FILE"
+
+            exit 0
+        fi
+    fi
+fi
+
+# ==============================================================================
 # STEP 1: Unit Tests (parallel, no DB)
 # ==============================================================================
 echo "Running tests (verbose output logged to $LOG_FILE)..."
