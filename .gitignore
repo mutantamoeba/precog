@@ -157,6 +157,7 @@ PHASE_CHECKLISTS_AND_TEMPLATES.md
 logs/
 .pre-push-logs/
 .pre-push-artifacts/
+.verification_findings/
 
 # Temporary files
 *.tmp
