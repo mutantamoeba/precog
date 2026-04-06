@@ -1465,7 +1465,7 @@ Complements live data polling (REQ-DATA-001-005) with batch import capabilities.
 ### 4.14 Trade Execution Requirements (Era 2, Phase 2)
 
 > **Added:** V2.26 (Session 41, 2026-04-05). Formalizes C4 Phase Gate finding B1.
-> **Reference:** DEVELOPMENT_PHASES_ERA2_V1.0.md, Epic #504
+> **Reference:** DEVELOPMENT_PHASES_ERA2_V1.1.md, Epic #504
 
 #### REQ-TRADE-001: Order Placement Pipeline
 - Submit orders to Kalshi API through validated pipeline
@@ -1674,7 +1674,7 @@ Before any real-money trading is enabled:
 ## 5. Development Phases
 
 > **Note:** Phases 0-1.5 below are Era 1 definitions (historical). For Era 2 phases (2-5),
-> see `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.0.md`.
+> see `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.1.md`.
 
 ### Phase 0: Foundation & Documentation (COMPLETED)
 

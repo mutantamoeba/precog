@@ -1,6 +1,7 @@
-# Era 2: Development Phases (V1.0)
+# Era 2: Development Phases (V1.1)
 
 **Created:** 2026-04-05 (Session 41)
+**Last Updated:** 2026-04-06 (Session 42c — Phase 3/4 reframe + Claude Review fixes)
 **Replaces:** DEVELOPMENT_PHASES_V1.15.md (archived, Era 1 phases 0-1.5)
 **Freshness:** Update at each phase gate and after scope changes.
 
@@ -17,17 +18,19 @@
 | Phase | Theme | Issue Count | GitHub Label |
 |-------|-------|-------------|-------------|
 | **2** | Full Manual Trading Platform | 38 | `phase-2` |
-| **3** | Operations, Expansion & Signal Sources | 17+ | `phase-3` |
-| **4** | Probability Estimation (ML + Ensembles) | 9+ | `phase-4` |
-| **5** | Strategy & Autonomous Trading | 16+ | `phase-5` |
+| **3** | Operations, Expansion & Signal Sources | 20 + 6 TBD | `phase-3` |
+| **4** | Probability Estimation (ML + Ensembles) | 7 + 9 TBD | `phase-4` |
+| **5** | Strategy & Autonomous Trading | 16 | `phase-5` |
+
+> **TBD items** are signal source / engine work items not yet ticketed — they'll be filed during Phase 3 entry once Strategy Research Epic #602 produces requirements. Defined counts reflect issues already filed in GitHub.
 
 ### Phase Dependencies
 
 ```
 Phase 1 (COMPLETE) ──> Phase 2 ──> Phase 3 ──────────> Phase 4 ──────────> Phase 5
   Data Collection        Trading     Operations          Probability          Strategy
-                         + Web UI    + Expansion          Estimation          + Autonomous
-                                     + Signal Sources     (ML + Ensembles)
+                         + Web UI    + Expansion         Estimation           + Autonomous
+                                     + Signal Sources    (ML + Ensembles)
 ```
 
 ```
@@ -154,14 +157,14 @@ Each phase builds on the previous. Phase gates enforce entry/exit criteria.
 - TBD — Odds API connector (aggregate odds from 5-10 books)
 - TBD — Sportsbook odds schema + CRUD + poller
 - TBD — Odds normalization pipeline (American/decimal/implied prob)
-- Epic: #602 (Strategy Research — Track B informs requirements)
+- Informed by: #602 Track B (Strategy Research — sportsbook consensus)
 
 #### Signal Sources — Weather Forecasts (NEW, conditional)
 - TBD — Weather API connector (Open-Meteo / NOAA GFS)
 - TBD — Weather forecast schema + CRUD + poller
 - TBD — Kalshi weather market monitoring (30-day liquidity assessment)
 - Conditional on: Kalshi weather market liquidity verification
-- Epic: #602 (Strategy Research — Track A informs requirements)
+- Informed by: #602 Track A (Strategy Research — weather strategy)
 
 #### Data Expansion
 - #487 — CFBD integration (historical game data for Elo)
@@ -192,8 +195,11 @@ Each phase builds on the previous. Phase gates enforce entry/exit criteria.
 ### Entry Criteria
 - Phase 3 complete
 - Sufficient historical data (200+ settled markets per sport)
+- Historical game data loaded for all sports — enables Elo computation, ML training, and consensus backtesting (#481)
 - Sportsbook odds ingestion running (from Phase 3)
 - Weather forecast ingestion running (from Phase 3, if applicable)
+
+> **Note on Elo:** V1.0 listed "Elo ratings computed and validated" as a Phase 4 entry criterion, but Elo computation (#482-#484) is itself in Phase 4 scope — that was a circular gate. V1.1 reframes the gate as "historical data loaded" (the *prerequisite* for Elo), with Elo execution and validation tracked in scope and exit criteria.
 
 ### Exit Criteria
 - [ ] Elo engine running in production for all supported sports
@@ -291,5 +297,5 @@ These items are prerequisites for specific phases but are tracked separately:
 
 | Version | Date | Session | Changes |
 |---------|------|---------|---------|
-| 1.1 | 2026-04-05 | 42c | Phase 3 expanded: signal sources (sportsbook odds, weather forecasts). Phase 4 reframed: "Probability Estimation" (ML + consensus + weather ensembles). Strategy Research epic #602 runs parallel. |
+| 1.1 | 2026-04-06 | 42c | Phase 3 expanded: signal sources (sportsbook odds, weather forecasts). Phase 4 reframed: "Probability Estimation" (ML + consensus + weather ensembles). Strategy Research epic #602 runs parallel. Claude Review fixes: issue counts, Elo gate visibility, ASCII alignment, "Informed by" convention, V1.0→V1.1 filename. |
 | 1.0 | 2026-04-05 | 41 | Initial Era 2 roadmap. 4 phases, 80 issues across phases. |
