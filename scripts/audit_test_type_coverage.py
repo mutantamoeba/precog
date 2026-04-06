@@ -174,6 +174,13 @@ MODULE_TIERS = {
     "schedulers/base_poller": "infrastructure",
     # Utilities
     "utils/logger": "infrastructure",
+    # Backup System (#565, PR #597, Session 42b)
+    # Pluggable storage backends for automated database backups.
+    # Tagged "experimental" until full test suite (8 types) is built; currently
+    # has unit tests only. Promote to "infrastructure" when test coverage expands.
+    "backup/orchestrator": "experimental",
+    "backup/storage_local": "experimental",
+    "backup/storage_filen": "experimental",
     # CLI Modules (Issue #234)
     # Critical - manages service scheduling
     "cli/scheduler": "critical",
@@ -185,6 +192,9 @@ MODULE_TIERS = {
     # Infrastructure - utility and config
     "cli/config": "infrastructure",
     "cli/system": "infrastructure",
+    # Experimental - backup CLI commands (#565, PR #597)
+    # Promote to infrastructure when full test suite built
+    "cli/backup": "experimental",
     # Infrastructure - circuit breaker management
     "cli/circuit_breaker": "experimental",  # Promote to infrastructure when test suite expands
     # Experimental - future features not yet implemented

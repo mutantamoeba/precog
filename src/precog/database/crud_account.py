@@ -11,6 +11,7 @@ Tables covered:
 
 import logging
 from decimal import Decimal
+from typing import cast
 
 from .connection import get_cursor
 from .crud_shared import retry_on_scd_unique_conflict
@@ -243,7 +244,25 @@ def update_account_balance_with_versioning(
             # specific constraint and re-runs this attempt.
             cur.execute(insert_query, (platform_id, new_balance, currency, now, now))
             result = cur.fetchone()
-            return result["id"] if result else None
+            # PR #631 / Claude Review Issue 1: refuse to silently return None
+            # for money-touching SCD code. The retry helper is generic over
+            # T (including None for callers that legitimately expect it), so
+            # the "None is bad" semantics must be enforced at THIS consumer.
+            # If INSERT...RETURNING id yields no row, a DB trigger or
+            # constraint suppressed the return -- callers must see this loudly
+            # rather than receive None and propagate it as a "successful"
+            # balance id.
+            if result is None or result.get("id") is None:
+                raise RuntimeError(
+                    "INSERT INTO account_balance RETURNING id produced no row -- "
+                    "this should be impossible after a successful INSERT and "
+                    "indicates a DB trigger or constraint suppressed the return. "
+                    "Refusing to silently return None for money-touching SCD code."
+                )
+            # cast() satisfies mypy: RealDictCursor.fetchone() is typed Any in
+            # the psycopg2 stubs, so without the cast mypy reports
+            # ``Returning Any from function declared to return "int | None"``.
+            return cast("int", result["id"])
 
     # Wrap the attempt in the SCD race-prevention retry helper. The helper
     # discriminates on constraint_name=idx_balance_unique_current so CHECK

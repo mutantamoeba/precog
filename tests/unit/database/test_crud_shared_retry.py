@@ -30,61 +30,10 @@ import psycopg2.errors
 import pytest
 
 from precog.database.crud_shared import retry_on_scd_unique_conflict
-
-# =============================================================================
-# Helpers for synthesizing UniqueViolation with a controllable diag
-# =============================================================================
-
-
-class _FakeDiag:
-    """Stand-in for psycopg2's Diagnostics object exposing constraint_name."""
-
-    def __init__(self, constraint_name: str | None) -> None:
-        self.constraint_name = constraint_name
-
-
-class _StubUniqueViolation(psycopg2.errors.UniqueViolation):
-    """UniqueViolation subclass that exposes a writable, fake ``diag``.
-
-    psycopg2's native ``Error.diag`` is a read-only descriptor populated from
-    libpq, so we cannot mutate it on a real ``UniqueViolation`` instance.
-    Subclassing lets us override ``diag`` as a property backed by a plain
-    instance attribute. The helper reads the attribute via
-    ``getattr(exc, "diag", None)`` so this stub is behaviorally
-    indistinguishable from a real ``UniqueViolation`` for the discrimination
-    logic, while preserving ``isinstance`` checks against the real class.
-    """
-
-    def __init__(self, message: str, constraint_name: str | None) -> None:
-        super().__init__(message)
-        self._fake_diag = _FakeDiag(constraint_name)
-
-    @property  # type: ignore[override]
-    def diag(self) -> _FakeDiag:  # type: ignore[override]
-        return self._fake_diag
-
-
-class _StubCheckViolation(psycopg2.errors.CheckViolation):
-    """CheckViolation subclass with the same writable-diag pattern."""
-
-    def __init__(self, message: str, constraint_name: str | None) -> None:
-        super().__init__(message)
-        self._fake_diag = _FakeDiag(constraint_name)
-
-    @property  # type: ignore[override]
-    def diag(self) -> _FakeDiag:  # type: ignore[override]
-        return self._fake_diag
-
-
-def _make_unique_violation(constraint_name: str | None) -> psycopg2.errors.UniqueViolation:
-    """Build a UniqueViolation-compatible exception with a controlled constraint_name."""
-    return _StubUniqueViolation("simulated unique violation", constraint_name)
-
-
-def _make_check_violation() -> psycopg2.errors.CheckViolation:
-    """Build a CheckViolation as a non-matching IntegrityError sibling."""
-    return _StubCheckViolation("simulated check violation", "balance_non_negative_check")
-
+from tests.unit.database._psycopg2_stubs import (
+    _make_check_violation,
+    _make_unique_violation,
+)
 
 # =============================================================================
 # Happy path

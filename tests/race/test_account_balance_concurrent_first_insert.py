@@ -161,7 +161,17 @@ class TestAccountBalanceConcurrentFirstInsert:
 
         num_iterations = 50
 
-        with caplog.at_level(logging.WARNING, logger="precog.database.crud_account"):
+        # PR #631 / Claude Review Issue 4: capture WARNINGs from ALL loggers,
+        # not just precog.database.crud_account. The retry helper currently
+        # logs through ``logger_override=logger`` (the crud_account module
+        # logger), but if a future caller passes ``logger_override=None`` or
+        # routes through a different logger, a logger-restricted caplog would
+        # miss the retry WARNING and the ``len(retry_warnings) >= 1`` assertion
+        # below would give a false green. The message-content filter
+        # (``"SCD partial-unique-index conflict" in r.getMessage()``) is
+        # sufficient to discriminate retry warnings from any unrelated
+        # warnings emitted during the test.
+        with caplog.at_level(logging.WARNING):
             for iteration in range(num_iterations):
                 # Clean state at the start of each iteration so every pass is
                 # a genuine "first insert" scenario.

@@ -23,6 +23,10 @@ from precog.database.crud_account import (
     create_account_balance,
     update_account_balance_with_versioning,
 )
+from tests.unit.database._psycopg2_stubs import (
+    _make_check_violation,
+    _make_unique_violation,
+)
 
 
 @pytest.mark.unit
@@ -43,54 +47,12 @@ class TestCrudAccount:
 # end-to-end through the public CRUD function, with no real DB. Race-condition
 # verification against a live database lives in
 # ``tests/race/test_account_balance_concurrent_first_insert.py``.
-
-
-class _FakeDiag:
-    """Stand-in for psycopg2 Diagnostics with controllable constraint_name."""
-
-    def __init__(self, constraint_name: str | None) -> None:
-        self.constraint_name = constraint_name
-
-
-class _StubUniqueViolation(psycopg2.errors.UniqueViolation):
-    """UniqueViolation subclass that exposes a writable, fake ``diag``.
-
-    psycopg2's native ``Error.diag`` is a read-only descriptor populated from
-    libpq, so we cannot mutate it on a real ``UniqueViolation`` instance.
-    Subclassing lets us override ``diag`` as a property; the helper reads
-    via ``getattr(exc, "diag", None)``, so this stub is behaviorally
-    indistinguishable while preserving ``isinstance`` checks.
-    """
-
-    def __init__(self, message: str, constraint_name: str | None) -> None:
-        super().__init__(message)
-        self._fake_diag = _FakeDiag(constraint_name)
-
-    @property  # type: ignore[override]
-    def diag(self) -> _FakeDiag:  # type: ignore[override]
-        return self._fake_diag
-
-
-class _StubCheckViolation(psycopg2.errors.CheckViolation):
-    """CheckViolation subclass with the same writable-diag pattern."""
-
-    def __init__(self, message: str, constraint_name: str | None) -> None:
-        super().__init__(message)
-        self._fake_diag = _FakeDiag(constraint_name)
-
-    @property  # type: ignore[override]
-    def diag(self) -> _FakeDiag:  # type: ignore[override]
-        return self._fake_diag
-
-
-def _make_unique_violation(constraint_name: str | None) -> psycopg2.errors.UniqueViolation:
-    """Build a UniqueViolation-compatible exception with a controlled constraint_name."""
-    return _StubUniqueViolation("simulated unique violation", constraint_name)
-
-
-def _make_check_violation() -> psycopg2.errors.CheckViolation:
-    """Build a CheckViolation as a non-matching IntegrityError sibling."""
-    return _StubCheckViolation("simulated check violation", "balance_non_negative_check")
+#
+# The psycopg2 stub classes (_FakeDiag, _StubUniqueViolation,
+# _StubCheckViolation) and their factory helpers live in the shared
+# ``tests/unit/database/_psycopg2_stubs.py`` module so test_crud_shared_retry.py
+# and the upcoming SCD CRUD tests for sibling tables can reuse them without
+# duplicating the writable-diag pattern.
 
 
 def _build_cursor_stub(insert_side_effect: Exception | None) -> MagicMock:
@@ -286,3 +248,106 @@ class TestUpdateBalanceRetryBehavior:
         assert len(errors) == 1
         assert "idx_balance_unique_current" in errors[0].getMessage()
         assert "kalshi" in errors[0].getMessage()
+
+
+# =============================================================================
+# PR #631 / Claude Review Issue 1: refuse to silently return None
+# =============================================================================
+#
+# The retry helper is generic over T (including None for callers that
+# legitimately expect None on the success path). For money-touching SCD code
+# the closure must NARROW that contract: if INSERT...RETURNING id yields no
+# row -- e.g., a future DB trigger or constraint suppresses the return -- the
+# closure raises RuntimeError rather than propagating None up to a caller
+# that would treat it as a "successful" balance id.
+
+
+@pytest.mark.unit
+class TestUpdateBalanceRefusesSilentNone:
+    """The closure raises RuntimeError if INSERT...RETURNING yields no row."""
+
+    def test_raises_runtime_error_when_insert_returning_yields_no_row(self) -> None:
+        """fetchone() after the INSERT returns None -> RuntimeError, not None.
+
+        The cursor stub for this test is bespoke: it must succeed all four
+        execute() calls (NOW, lock, close, insert) but return None from the
+        SECOND fetchone() (the one that follows the INSERT). The shared
+        ``_build_cursor_stub`` helper always returns ``{"id": 42}`` for that
+        fetchone, so we cannot reuse it here.
+        """
+        cursor = MagicMock(name="cursor_returning_none")
+
+        timestamp_row = {"ts": "2026-04-06T12:00:00+00:00"}
+        # Second fetchone returns None to simulate INSERT...RETURNING yielding
+        # no row. This is the failure mode the None-check guards against.
+        fetchone_returns: list[dict[str, object] | None] = [timestamp_row, None]
+
+        def fetchone() -> dict[str, object] | None:
+            return fetchone_returns.pop(0)
+
+        cursor.fetchone.side_effect = fetchone
+        # All four execute calls succeed without raising.
+        cursor.execute.return_value = None
+
+        class _CursorContext:
+            def __enter__(self) -> MagicMock:
+                return cursor
+
+            def __exit__(self, exc_type, exc, tb) -> bool:
+                return False
+
+        def factory(commit: bool = False) -> _CursorContext:
+            del commit
+            return _CursorContext()
+
+        with patch("precog.database.crud_account.get_cursor", side_effect=factory):
+            with pytest.raises(RuntimeError, match="produced no row"):
+                update_account_balance_with_versioning(
+                    platform_id="kalshi",
+                    new_balance=Decimal("1000.0000"),
+                )
+
+        # All four executes ran (NOW, lock, close, insert) before fetchone
+        # returned None and the closure raised.
+        assert cursor.execute.call_count == 4
+
+    def test_raises_runtime_error_when_insert_returning_row_lacks_id(self) -> None:
+        """fetchone() returns a dict missing the ``id`` key -> RuntimeError.
+
+        Defensive companion to the None case: if a future trigger rewrites
+        RETURNING to omit the id column, ``result.get("id")`` is None and
+        the same guard fires. We assert the same RuntimeError surfaces so
+        callers cannot silently propagate a missing balance id.
+        """
+        cursor = MagicMock(name="cursor_missing_id")
+
+        timestamp_row = {"ts": "2026-04-06T12:00:00+00:00"}
+        # Insert returns a row, but the ``id`` field is absent (or None).
+        empty_inserted_row: dict[str, object] = {}
+        fetchone_returns: list[dict[str, object]] = [timestamp_row, empty_inserted_row]
+
+        def fetchone() -> dict[str, object]:
+            return fetchone_returns.pop(0)
+
+        cursor.fetchone.side_effect = fetchone
+        cursor.execute.return_value = None
+
+        class _CursorContext:
+            def __enter__(self) -> MagicMock:
+                return cursor
+
+            def __exit__(self, exc_type, exc, tb) -> bool:
+                return False
+
+        def factory(commit: bool = False) -> _CursorContext:
+            del commit
+            return _CursorContext()
+
+        with patch("precog.database.crud_account.get_cursor", side_effect=factory):
+            with pytest.raises(RuntimeError, match="produced no row"):
+                update_account_balance_with_versioning(
+                    platform_id="kalshi",
+                    new_balance=Decimal("1000.0000"),
+                )
+
+        assert cursor.execute.call_count == 4
