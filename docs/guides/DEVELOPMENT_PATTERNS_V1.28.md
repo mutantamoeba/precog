@@ -1,13 +1,19 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.29
+**Version:** 1.30
 **Created:** 2025-11-13
-**Last Updated:** 2026-04-04
+**Last Updated:** 2026-04-06
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.30:**
+- **Added Pattern 47: Verify Schema Before Fixing Pattern Violations (ALWAYS for Code Review Findings)**
+- **Added Pattern 48: Use dataclasses.replace() for Frozen Dataclass Updates (ALWAYS for Immutable Records)**
+- **Added Pattern 49: SCD Race Condition Prevention with FOR UPDATE (ALWAYS for SCD Close→Insert)**
+- **Added Pattern 50: Reverse-Engineer Strategy via Closed Trade Lifecycle (ALWAYS for External Trader Analysis)**
+- All four sourced from Session 42c (S68 audit fixes + ColdMath strategy analysis)
 **Changes in V1.27:**
 - **Added Pattern 44: API Consumer Blast Radius (ALWAYS for API Field Name Fixes)**
 - When an API field name is wrong or changes, ALL consumers of the raw API dict must be audited
@@ -9468,6 +9474,171 @@ The preservation of all cross-references (ADRs, REQs, file paths) ensures develo
 - Session 38: CRUD Phase 1b/1c extraction + Option B cleanup
 
 ---
+
+## Pattern 47: Verify Schema Before Fixing Pattern Violations (ALWAYS for Code Review Findings)
+
+**Trigger:** A code review (human or AI) flags missing pattern usage (e.g., "missing row_current_ind filter").
+
+**Rule:** Before fixing, verify the precondition holds — does the table actually use this pattern?
+
+**Why:** Pattern flags are heuristics. Claude Review CI flagged `crud_teams.py` for missing SCD Type 2 filters in Session 42b (issue #595). Session 42c verification revealed: **the `teams` table has no `row_current_ind` column** — it's a standard dimension table, not SCD Type 2. The fix would have failed at runtime. Cost of unnecessary verification: ~2 minutes. Cost of unverified fix attempt: a full Tier 2 cycle (build + review + QA + revert).
+
+**SCD Type 2 tables in this codebase:** `game_states`, `markets`, `positions`, `edges`, `account_balance`. NOT `teams`, `events`, `games`, `venues`, `series`.
+
+**Verification steps:**
+1. Check the table's CREATE statement (latest migration): does the column exist?
+2. If unsure, query: `SELECT column_name FROM information_schema.columns WHERE table_name = 'X' AND column_name = 'row_current_ind'`
+3. If the column doesn't exist, close the review finding as a false positive with explanation
+
+**When This Pattern Applies:**
+- Any code review finding flagging "missing X pattern"
+- Any automated linter rule about SCD/security/precision patterns
+- Any inherited belief about how a table works ("I thought we used SCD here")
+
+**Reference:** Session 42c S68 audit, issue #595 closed as false positive after schema verification.
+
+---
+
+## Pattern 48: Use dataclasses.replace() for Frozen Dataclass Updates (ALWAYS for Immutable Records)
+
+**Trigger:** Need to create a new instance of a `@dataclass(frozen=True)` with one or more fields changed.
+
+**Rule:** Use `dataclasses.replace(instance, field=new_value)`. NEVER use `dict_spread` reconstruction.
+
+**Why:** The naive pattern serializes types away:
+
+```python
+# WRONG — fragile and silently corrupts types
+metadata = BackupMetadata(
+    **{
+        **metadata.to_dict(),  # serializes BackupType enum -> string, datetime -> ISO string
+        "storage_id": storage_id,
+        "backup_type": metadata.backup_type,  # manual override 1
+        "status": metadata.status,             # manual override 2
+        "created_at": metadata.created_at,     # manual override 3
+        "completed_at": metadata.completed_at, # manual override 4
+    }
+)
+```
+
+If anyone adds a new enum or datetime field to `BackupMetadata` later and forgets to add it to the manual override list, it silently passes a string to the dataclass constructor. The bug only surfaces when the field is read.
+
+**Correct:**
+```python
+from dataclasses import replace
+metadata = replace(metadata, storage_id=storage_id)
+```
+
+`replace()` preserves all original types and only updates the specified fields. It's the standard library's idiomatic answer for exactly this case.
+
+**When This Pattern Applies:**
+- Updating a single field on a frozen dataclass
+- Updating multiple fields on a frozen dataclass (still cleaner than dict spread)
+- Anywhere you'd be tempted to reach for `**asdict(instance)`
+
+**When NOT to use:**
+- Creating from scratch (use the constructor)
+- Building from external dict input (use `from_dict()` classmethod with explicit deserialization)
+
+**Reference:** Session 42c, PR #601 backup orchestrator fix, Claude Review finding on PR #597.
+
+---
+
+## Pattern 49: SCD Race Condition Prevention with FOR UPDATE (ALWAYS for SCD Close→Insert)
+
+**Trigger:** Any function that closes the current SCD row and inserts a new one in the same transaction.
+
+**Rule:** Use `SELECT ... FOR UPDATE` to lock the current row before the close→insert sequence. Capture `NOW()` once for temporal continuity.
+
+**Why:** The naive pattern has a race window:
+
+```python
+# WRONG — race condition between concurrent calls
+with get_cursor(commit=True) as cur:
+    cur.execute("UPDATE account_balance SET row_current_ind = FALSE, row_end_ts = NOW() WHERE platform_id = %s AND row_current_ind = TRUE", (platform_id,))
+    cur.execute("INSERT INTO account_balance (...) VALUES (..., NOW(), NOW())", (...))
+```
+
+Two concurrent calls can both execute the UPDATE (closing the current row) before either runs the INSERT. The partial unique index from the migration prevents *duplicate* current rows but NOT the *zero* current rows scenario. After the race, the table has zero current rows for that platform — balance lookups return NULL, breaking downstream logic.
+
+**Correct:**
+```python
+with get_cursor(commit=True) as cur:
+    # Capture timestamp once for temporal continuity
+    cur.execute("SELECT NOW() AS ts")
+    now = cur.fetchone()["ts"]
+
+    # Lock current row (serializes concurrent updates)
+    cur.execute("SELECT id FROM account_balance WHERE platform_id = %s AND row_current_ind = TRUE FOR UPDATE", (platform_id,))
+
+    # Close old version (uses captured timestamp)
+    cur.execute("UPDATE account_balance SET row_current_ind = FALSE, row_end_ts = %s WHERE platform_id = %s AND row_current_ind = TRUE", (now, platform_id))
+
+    # Insert new version (matching row_start_ts)
+    cur.execute("INSERT INTO account_balance (..., row_start_ts, created_at) VALUES (..., %s, %s)", (..., now, now))
+```
+
+**Why two improvements?**
+1. `FOR UPDATE` serializes concurrent transactions on the same `platform_id` — the second transaction blocks until the first commits, then sees the new current row and locks it.
+2. Single `NOW()` ensures `row_end_ts` of the old row equals `row_start_ts` of the new row exactly — no temporal gap or overlap. Two separate `NOW()` calls drift by microseconds.
+
+**Edge cases handled:**
+- **No current row exists:** `FOR UPDATE` locks zero rows (no-op), UPDATE affects zero rows, INSERT proceeds. Function degrades gracefully to a plain insert.
+- **Transaction interrupted:** `get_cursor(commit=True)` rolls back on any exception. No partial state.
+- **Deadlock:** Single-row locks with consistent ordering — no deadlock risk.
+
+**When This Pattern Applies:**
+- ANY SCD Type 2 versioning function with close → insert
+- Affected tables: `markets`, `positions`, `game_states`, `edges`, `account_balance`
+- ANY function that reads-then-writes the same row in a single transaction with concurrent callers
+
+**Reference:** Session 42c, issue #587, PR #601 `update_account_balance_with_versioning` fix.
+
+---
+
+## Pattern 50: Reverse-Engineer Strategy via Closed Trade Lifecycle (ALWAYS for External Trader Analysis)
+
+**Trigger:** Reverse-engineering a public trader's strategy from their trade history (Polymarket, Kalshi, sportsbooks).
+
+**Rule:** Look at the full lifecycle (TRADE → MERGE/REDEEM), not just the active book.
+
+**Why:** Active positions are a moment in time. The trade history is the strategy. Session 42c ColdMath analysis (#605):
+
+- **Active positions:** ~70% weather markets — looked like a pure weather trader
+- **MERGE/REDEEM history:** ~40% sports markets (MLS, J-League, cycling, Eurovision) — much more diversified
+- **Conclusion:** Strategy is multi-domain, just heavy on weather *right now*
+
+If we'd only analyzed the active book, we would have missed the diversification entirely.
+
+**Methodology:**
+1. Fetch full activity history (paginate all transaction types: TRADE, MERGE, REDEEM, MAKER_REBATE)
+2. Group by `conditionId` (or market identifier) to reconstruct position lifecycles
+3. Match TRADE entries to REDEEM entries: profit = redeem_amount - sum(buy_costs)
+4. Identify losing positions: conditionIds with TRADEs but no REDEEMs (expired worthless)
+5. Compute strategy metrics: win rate, edge by price bucket, Sharpe ratio
+6. Segment by market type/category to find specialization patterns
+
+**Key APIs:**
+- Polymarket: `https://data-api.polymarket.com/activity?user=<wallet>&limit=200&offset=N`
+- Public wallets are tradeable as on-chain data
+- API typically caps at offset 3200 — older trades may need archival sources
+
+**Caveat:** REDEEM events only fire on winning positions (losing shares expire worthless and don't generate REDEEM). Cross-reference with market resolution data to find losing positions and compute true win rate.
+
+**When This Pattern Applies:**
+- Any reverse-engineering of a profitable trader (Polymarket, Kalshi, sportsbooks)
+- Strategy research for new market types (#602 epic)
+- Validating that a published "edge" actually exists
+
+**Reference:** Session 42c, ColdMath analysis, `findings_coldmath_weather_strategy.md`, `memory/research/coldmath_polymarket_trades_20260405.csv`.
+
+---
+
+V1.30 Updates:
+- Added Pattern 47 (Verify Schema Before Fixing Pattern Violations) — false positive prevention for code review findings. Source: Session 42c #595 false positive (teams table is not SCD Type 2).
+- Added Pattern 48 (Use dataclasses.replace() for Frozen Dataclass Updates) — Python idiom for immutable record updates. Source: Session 42c PR #601 backup orchestrator fix.
+- Added Pattern 49 (SCD Race Condition Prevention with FOR UPDATE) — money-touching code pattern for SCD Type 2 close→insert sequences. Source: Session 42c #587 account_balance race fix.
+- Added Pattern 50 (Reverse-Engineer Strategy via Closed Trade Lifecycle) — research methodology for analyzing external traders. Source: Session 42c ColdMath analysis.
 
 V1.29 Updates:
 - Added Pattern 46 (Mock Patch Migration on Module Extraction) documenting the systematic approach to migrating mock.patch targets when splitting god objects into domain modules. Discovered during session 38 CRUD decomposition: 302 patches across 9 files initially, then 145 imports across 55 files for Option B.
