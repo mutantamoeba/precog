@@ -13,6 +13,7 @@ import logging
 from decimal import Decimal
 
 from .connection import get_cursor
+from .crud_shared import retry_on_scd_unique_conflict
 
 logger = logging.getLogger(__name__)
 
@@ -120,7 +121,22 @@ def update_account_balance_with_versioning(
         id of newly created record
 
     Raises:
-        ValueError: If new_balance is float (not Decimal)
+        ValueError: If ``new_balance`` is not a ``Decimal``.
+        psycopg2.errors.UniqueViolation: If the partial unique index
+            conflict on ``idx_balance_unique_current`` persists after one
+            retry. This indicates a sustained concurrent first-insert
+            race that the SCD race-prevention helper could not resolve.
+            The first attempt's exception is chained via ``__cause__``
+            for postmortem analysis. See issue #613 and
+            ``crud_shared.retry_on_scd_unique_conflict`` for the full
+            chaining contract.
+        psycopg2.Error: Any other database error (CHECK violation on a
+            negative balance, FK violation on an unknown ``platform_id``,
+            ``OperationalError`` on connection failure, etc.) propagates
+            without retry. The retry helper only discriminates on the
+            targeted ``idx_balance_unique_current`` UniqueViolation --
+            all sibling IntegrityError sources bypass the retry path
+            and surface immediately to the caller.
 
     Educational Note:
         SCD Type 2 Versioning Pattern:
@@ -167,7 +183,7 @@ def update_account_balance_with_versioning(
     if not isinstance(new_balance, Decimal):
         raise ValueError(f"Balance must be Decimal, got {type(new_balance).__name__}")
 
-    # Step 0: Lock current row to prevent concurrent close→insert races.
+    # Step 0: Lock current row to prevent concurrent close->insert races.
     # Without FOR UPDATE, two concurrent calls can both close the current row
     # before either inserts, leaving zero current rows for the platform.
     lock_query = """
@@ -176,7 +192,7 @@ def update_account_balance_with_versioning(
         FOR UPDATE
     """
 
-    # Step 1: Close current row — use a single NOW() for temporal continuity
+    # Step 1: Close current row -- use a single NOW() for temporal continuity
     # between the old row's end and new row's start.
     close_query = """
         UPDATE account_balance
@@ -195,21 +211,51 @@ def update_account_balance_with_versioning(
         RETURNING id
     """
 
-    with get_cursor(commit=True) as cur:
-        # Capture timestamp once for temporal continuity
-        cur.execute("SELECT NOW() AS ts")
-        now = cur.fetchone()["ts"]
+    def _attempt_close_and_insert() -> int | None:
+        """One attempt at the SCD close+insert sequence.
 
-        # Lock current row (serializes concurrent updates)
-        cur.execute(lock_query, (platform_id,))
+        Opens its own ``get_cursor(commit=True)`` block so the retry helper
+        can run this closure twice and get a fresh transaction (with a fresh
+        MVCC snapshot) on the second invocation. NOW() is captured INSIDE
+        each attempt so the close and insert use a single timestamp per
+        attempt -- never carrying a timestamp across the retry boundary,
+        which would create backward temporal intervals.
+        """
+        with get_cursor(commit=True) as cur:
+            # Capture timestamp once for temporal continuity within THIS attempt.
+            cur.execute("SELECT NOW() AS ts")
+            now = cur.fetchone()["ts"]
 
-        # Close old balance version
-        cur.execute(close_query, (now, platform_id))
+            # Lock current row (serializes concurrent updates). On the first
+            # attempt of a first-insert race, this returns zero rows; on the
+            # retry attempt the sibling caller's row is now visible and gets
+            # locked, so close+insert proceeds normally.
+            cur.execute(lock_query, (platform_id,))
 
-        # Insert new balance version
-        cur.execute(insert_query, (platform_id, new_balance, currency, now, now))
-        result = cur.fetchone()
-        return result["id"] if result else None
+            # Close old balance version (no-op if no current row exists).
+            cur.execute(close_query, (now, platform_id))
+
+            # Insert new balance version. If a sibling caller raced us between
+            # the lock query and this insert (only possible on the FIRST insert
+            # for this platform_id, when the lock query found zero rows to
+            # serialize against), this raises psycopg2.errors.UniqueViolation
+            # on idx_balance_unique_current. The retry helper catches that
+            # specific constraint and re-runs this attempt.
+            cur.execute(insert_query, (platform_id, new_balance, currency, now, now))
+            result = cur.fetchone()
+            return result["id"] if result else None
+
+    # Wrap the attempt in the SCD race-prevention retry helper. The helper
+    # discriminates on constraint_name=idx_balance_unique_current so CHECK
+    # violations, FK violations, and other unrelated IntegrityError sources
+    # re-raise immediately without a misleading retry. See issue #613 and
+    # crud_shared.retry_on_scd_unique_conflict for the full design rationale.
+    return retry_on_scd_unique_conflict(
+        _attempt_close_and_insert,
+        "idx_balance_unique_current",
+        business_key={"platform_id": platform_id},
+        logger_override=logger,
+    )
 
 
 # =============================================================================
