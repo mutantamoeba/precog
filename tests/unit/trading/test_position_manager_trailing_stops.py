@@ -256,18 +256,25 @@ def test_initialize_trailing_stop_position_not_found(
 
 
 def test_initialize_trailing_stop_closed_position(position_manager, valid_trailing_config, mocker):
-    """Test initialization fails when position is already closed."""
+    """Test initialization fails when position is not open (e.g., closed).
+
+    The status guard rejects any non-"open" status — this aligns the
+    position_manager guard with the CRUD's ``!= "open"`` check so that
+    "settled", "expired", etc. all surface as the same caller-visible
+    error instead of bubbling up from the CRUD as a "concurrent close"
+    message. See PR #671 review thread for the rationale.
+    """
     mock_position = {
         "id": 123,
         "position_id": "POS-2025-001",
-        "status": "closed",  # Closed position
+        "status": "closed",  # Non-open status
     }
     _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(
         mocker,
         fetch_results=[mock_position],
     )
 
-    with pytest.raises(ValueError, match="Position 123 is already closed"):
+    with pytest.raises(ValueError, match="Position 123 is not open"):
         position_manager.initialize_trailing_stop(123, valid_trailing_config)
 
     crud_mock.assert_not_called()

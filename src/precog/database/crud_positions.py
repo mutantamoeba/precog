@@ -45,7 +45,7 @@ def _jsonb_dumps(obj: Any) -> str:
     Round-trip semantics: on the READ path, psycopg2's JSONB decoder
     returns the stored value as a Python string (not Decimal). Consumers
     that need Decimal semantics must parse the string back with
-    ``Decimal(value)`` at read time. See #[TBD] for the symmetric
+    ``Decimal(value)`` at read time. See #669 for the symmetric
     read-path fix in ``check_trailing_stop_trigger``.
 
     Usage::

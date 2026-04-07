@@ -784,8 +784,17 @@ class PositionManager:
         if not current_position:
             raise ValueError(f"Position {position_id} not found or not current")
 
-        if current_position["status"] == "closed":
-            raise ValueError(f"Position {position_id} is already closed")
+        # Reject any non-open status (closed, settled, etc.) — trailing stops
+        # only make sense for currently-open positions, and the CRUD layer
+        # enforces the same invariant. Aligning here gives a clearer error
+        # at the caller boundary instead of a "concurrent close" message
+        # bubbling up from the CRUD's race-detection path.
+        if current_position["status"] != "open":
+            raise ValueError(
+                f"Position {position_id} is not open "
+                f"(status={current_position['status']!r}); "
+                f"cannot initialize trailing stop"
+            )
 
         # Create initial trailing stop state
         trailing_stop_state = {
@@ -954,8 +963,14 @@ class PositionManager:
         if not current_position:
             raise ValueError(f"Position {position_id} not found or not current")
 
-        if current_position["status"] == "closed":
-            raise ValueError(f"Position {position_id} is already closed")
+        # Reject any non-open status (closed, settled, etc.) — see
+        # initialize_trailing_stop above for the rationale.
+        if current_position["status"] != "open":
+            raise ValueError(
+                f"Position {position_id} is not open "
+                f"(status={current_position['status']!r}); "
+                f"cannot update trailing stop"
+            )
 
         if not current_position["trailing_stop_state"]:
             raise ValueError(f"Position {position_id} has no trailing stop configured")
