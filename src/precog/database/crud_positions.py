@@ -7,18 +7,53 @@ Tables covered:
     - trades: Execution event records
 """
 
+import json
 import logging
 from decimal import Decimal
 from typing import Any, cast
 
+from psycopg2.extras import Json
+
 from .connection import fetch_all, fetch_one, get_cursor
 from .crud_shared import (
+    DecimalEncoder,
     ExecutionEnvironment,
     retry_on_scd_unique_conflict,
     validate_decimal,
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _jsonb_dumps(obj: Any) -> str:
+    """
+    JSON serializer for JSONB columns that preserves Decimal precision.
+
+    Uses ``DecimalEncoder`` from ``crud_shared`` to serialize ``Decimal``
+    values as their string representation (e.g. ``Decimal("0.6500")`` ->
+    ``"0.6500"``). Required because ``psycopg2.extras.Json`` defaults to
+    plain ``json.dumps`` which raises ``TypeError: Object of type Decimal
+    is not JSON serializable`` when the dict contains ``Decimal`` values.
+
+    This is the Marvin blocking-fix for the #629 PR (session 42e):
+    ``set_trailing_stop_state`` callers in ``position_manager.py`` build
+    ``trailing_stop_state`` dicts containing ``Decimal`` values at every
+    level (``activation_price``, ``highest_price``, ``current_stop_price``,
+    and nested ``config.*``). Without this encoder, every real production
+    call would crash at the INSERT boundary.
+
+    Round-trip semantics: on the READ path, psycopg2's JSONB decoder
+    returns the stored value as a Python string (not Decimal). Consumers
+    that need Decimal semantics must parse the string back with
+    ``Decimal(value)`` at read time. See #669 for the symmetric
+    read-path fix in ``check_trailing_stop_trigger``.
+
+    Usage::
+
+        from psycopg2.extras import Json
+        cur.execute(sql, (Json(trailing_stop_state, dumps=_jsonb_dumps), ...))
+    """
+    return json.dumps(obj, cls=DecimalEncoder)
 
 
 def get_positions_with_pnl(
@@ -727,6 +762,337 @@ def close_position(
                 ),
             )
 
+            result = cur.fetchone()
+            if result is None or result.get("id") is None:
+                raise RuntimeError(
+                    "INSERT INTO positions RETURNING id produced no row -- "
+                    "this should be impossible after a successful INSERT and "
+                    "indicates a DB trigger or constraint suppressed the return."
+                )
+            return cast("int", result["id"])  # Return new surrogate id
+
+    return retry_on_scd_unique_conflict(
+        _attempt_close_and_insert,
+        "idx_positions_unique_current",
+        business_key={"position_id": position_bk},
+        logger_override=logger,
+    )
+
+
+def set_trailing_stop_state(
+    position_id: int,
+    trailing_stop_state: dict,
+    current_price: Decimal | None = None,
+    unrealized_pnl: Decimal | None = None,
+) -> int:
+    """
+    Update position's trailing stop state (and optionally current_price / unrealized_pnl)
+    using SCD Type 2 versioning.
+
+    This is the canonical CRUD entry point for both ``initialize_trailing_stop``
+    (which only mutates ``trailing_stop_state``) and ``update_trailing_stop``
+    (which additionally mutates ``current_price`` and ``unrealized_pnl``) in
+    ``position_manager``. Callers pass a fully-prepared ``trailing_stop_state``
+    dict -- this function does not compute or modify the JSONB structure; it
+    only persists the SCD version.
+
+    Args:
+        position_id: Position surrogate id (int) to update.
+        trailing_stop_state: New trailing stop state dict (wrapped in
+            ``psycopg2.extras.Json`` for JSONB serialization). Required --
+            there is no legitimate reason to call this helper without a
+            trailing stop state.
+        current_price: Optional new current_price. If None, the current row's
+            ``current_price`` is preserved (initialize-trailing-stop path). If
+            provided, the INSERT uses this value (update-trailing-stop path).
+        unrealized_pnl: Optional new unrealized_pnl. If None, the current
+            row's ``unrealized_pnl`` is preserved. If provided, the INSERT
+            uses this value. Typically passed alongside ``current_price``
+            because the update path recomputes PnL via
+            ``PositionManager.calculate_position_pnl``.
+
+    Returns:
+        id (surrogate key) of newly created version.
+
+    Raises:
+        ValueError: If position not found, or if the current row's status is
+            not ``'open'`` (closed/settled positions cannot have their
+            trailing stop state mutated).
+        RuntimeError: If the INSERT ... RETURNING id produces no row (DB
+            trigger or constraint suppression — should be impossible).
+
+    Canonical pattern:
+        This function mirrors :func:`update_position_price` and
+        :func:`close_position` (both adopted in PR #665 as canonical Pattern 49
+        consumers). The shape is:
+
+        1. Outer ``fetch_one`` by surrogate id to raise ValueError-not-found
+           immediately and capture the business key.
+        2. ``_attempt_close_and_insert`` closure opens its OWN
+           ``with get_cursor(commit=True)`` block so the retry helper can
+           rerun it in a fresh transaction.
+        3. Inside the closure: capture ``NOW()`` once, FOR UPDATE lock by
+           business key, re-fetch the current row, check status, close the
+           current row, INSERT the new version copying Python values from
+           the re-fetch.
+        4. Wrap in ``retry_on_scd_unique_conflict`` keyed on
+           ``idx_positions_unique_current``.
+
+    Why not ``INSERT ... SELECT FROM positions``:
+        Issue #629: the pre-PR-#665 position_manager.initialize_trailing_stop
+        and update_trailing_stop methods both issued:
+
+            UPDATE positions SET row_current_ind = FALSE WHERE id = %s;
+            INSERT INTO positions (...) SELECT ... FROM positions
+                WHERE id = %s AND row_current_ind = TRUE;
+
+        in a single transaction. Under PostgreSQL READ COMMITTED, the INSERT's
+        SELECT observes the UPDATE's row-level change within the same
+        transaction, so the SELECT returns ZERO rows, the INSERT inserts
+        nothing, and ``cur.fetchone()["id"]`` raises TypeError on the
+        ``None`` result. Latent for 4.5 months because zero production
+        callers and all tests mocked the cursor. This helper captures all
+        row values into Python BEFORE the close, then INSERTs from Python
+        values -- the same fix PR #665 applied to ``update_position_price``
+        and ``close_position``.
+
+    Why ``execution_environment`` appears explicitly:
+        The pre-refactor ``INSERT ... SELECT`` preserved all columns including
+        ``execution_environment`` implicitly. The refactor makes the INSERT
+        column list explicit, so ``execution_environment`` must be copied
+        explicitly from the re-fetched current row. Marvin's sentinel audit
+        on #662 flagged the same bug in ``update_position_price`` (a
+        separate PR); do NOT repeat it here.
+
+    Example:
+        >>> # Initialize a trailing stop on an existing open position
+        >>> state = {
+        ...     "config": {...},
+        ...     "activated": False,
+        ...     "activation_price": None,
+        ...     "current_stop_price": Decimal("0.4500"),
+        ...     "highest_price": Decimal("0.5000"),
+        ... }
+        >>> new_id = set_trailing_stop_state(
+        ...     position_id=1,
+        ...     trailing_stop_state=state,
+        ... )
+        >>>
+        >>> # Update trailing stop with new price
+        >>> state["highest_price"] = Decimal("0.6000")
+        >>> state["current_stop_price"] = Decimal("0.5500")
+        >>> new_id = set_trailing_stop_state(
+        ...     position_id=new_id,
+        ...     trailing_stop_state=state,
+        ...     current_price=Decimal("0.6000"),
+        ...     unrealized_pnl=Decimal("10.0000"),
+        ... )
+
+    Reference:
+        - Issue #629: latent INSERT...SELECT bug in trailing stop write paths.
+        - Issue #628: trailing stop race test coverage.
+        - PR #665: canonical Pattern 49 adoption for positions
+          (``update_position_price`` and ``close_position``).
+        - Pattern 49 (DEVELOPMENT_PATTERNS_V1.30.md): SCD Race Prevention.
+    """
+    # Fetch OUTSIDE the retry closure to satisfy the "raise ValueError if
+    # missing" contract immediately (no retry on missing positions) and
+    # capture the business key (position_id column) so retries can re-fetch
+    # by business key even after a sibling caller creates a new surrogate id.
+    initial_current = fetch_one(
+        "SELECT * FROM positions WHERE id = %s AND row_current_ind = TRUE", (position_id,)
+    )
+    if not initial_current:
+        msg = f"Position not found: {position_id}"
+        raise ValueError(msg)
+
+    position_bk = initial_current["position_id"]  # Business key (stable across retries)
+
+    def _attempt_close_and_insert() -> int:
+        """One attempt at the SCD close+insert sequence for set_trailing_stop_state.
+
+        Opens its own ``get_cursor(commit=True)`` block so the retry helper
+        can run this closure twice and get a fresh transaction (with a fresh
+        MVCC snapshot) on the second invocation.
+
+        Issue #629: concurrent-update race on the trailing-stop write paths.
+        Two concurrent callers (e.g., ``initialize_trailing_stop`` racing
+        with ``update_trailing_stop``) for the same surrogate id can both
+        proceed past their independent close (the second as a no-op) and
+        both INSERT, colliding on ``idx_positions_unique_current``. On retry,
+        we look up the fresh current row by BUSINESS KEY (``position_id``
+        column) -- the surrogate id from the outer fetch is stale after the
+        sibling caller created a new version.
+        """
+        with get_cursor(commit=True) as cur:
+            # Capture timestamp once for temporal continuity within THIS attempt.
+            cur.execute("SELECT NOW() AS ts")
+            now = cur.fetchone()["ts"]
+
+            # Step 1: Lock the current row by business key. FOR UPDATE
+            # serializes concurrent updates against the same position_bk.
+            # On retry the sibling caller's row is visible and gets locked.
+            cur.execute(
+                """
+                SELECT id FROM positions
+                WHERE position_id = %s
+                  AND row_current_ind = TRUE
+                FOR UPDATE
+                """,
+                (position_bk,),
+            )
+
+            # Step 2: Re-fetch the full current row by business key so the
+            # INSERT copies Python values from the LOCKED row (not from a
+            # post-UPDATE SELECT that would observe the close and return
+            # zero rows -- the bug this function exists to fix).
+            cur.execute(
+                """
+                SELECT * FROM positions
+                WHERE position_id = %s
+                  AND row_current_ind = TRUE
+                """,
+                (position_bk,),
+            )
+            current = cur.fetchone()
+            if current is None:
+                # Extraordinary state: the business key had a current row
+                # when we fetched outside the closure but no current row
+                # now. A concurrent close_position may have deleted the
+                # current version between the outer fetch and this attempt.
+                raise RuntimeError(
+                    f"Position business key {position_bk!r} has no current "
+                    f"row inside the retry closure (was present in the "
+                    f"outer fetch). A concurrent close_position may have "
+                    f"closed this position."
+                )
+
+            # Mirror the hardened ``!= "open"`` guard from update_position_price
+            # and close_position (PR #665). Refusing to mutate the trailing
+            # stop on a non-open position is critical because the old
+            # ``INSERT ... SELECT`` path silently succeeded against closed
+            # positions (preserving the ``closed`` status in the new row)
+            # which would have layered a new trailing_stop_state onto a
+            # terminal position. The positive allow-list defends against
+            # ``{'closed', 'settled', None}``.
+            if current["status"] != "open":
+                raise ValueError(
+                    f"Position business key {position_bk!r} is not open "
+                    f"(observed status: {current['status']!r}). A "
+                    f"concurrent close_position or settlement may have "
+                    f"transitioned this position between the outer fetch "
+                    f"and this retry attempt. Refusing to write a trailing "
+                    f"stop state update for a position that is no longer open."
+                )
+
+            # Resolve the price / pnl fields to persist. If the caller did
+            # not pass them (initialize path), copy from the re-fetched
+            # current row so the new version carries the up-to-date values
+            # a sibling caller may have committed between the outer fetch
+            # and this closure.
+            new_current_price = (
+                current_price if current_price is not None else current["current_price"]
+            )
+            new_unrealized_pnl = (
+                unrealized_pnl if unrealized_pnl is not None else current["unrealized_pnl"]
+            )
+
+            # Step 3: Close current row by business key so the close and
+            # the lock target the same row the partial unique index
+            # protects. Uses the captured ``now`` placeholder (not a
+            # literal NOW()) to honor Pattern 49's "single NOW() per
+            # attempt" temporal-continuity rule.
+            cur.execute(
+                """
+                UPDATE positions
+                SET row_current_ind = FALSE,
+                    row_end_ts = %s
+                WHERE position_id = %s
+                  AND row_current_ind = TRUE
+                """,
+                (now, position_bk),
+            )
+
+            # Step 4: Insert new version with same position_id (business
+            # key) but new id (surrogate). All columns copied explicitly
+            # from the re-fetched ``current`` row (NOT via SELECT FROM
+            # positions, which would re-introduce the #629 bug).
+            #
+            # execution_environment is copied explicitly (Marvin sentinel
+            # audit on #662: the pre-refactor INSERT ... SELECT preserved
+            # it implicitly; the refactor must preserve it explicitly).
+            #
+            # trailing_stop_state is wrapped in psycopg2.extras.Json --
+            # psycopg2's default adapter does not handle plain dicts, so
+            # this is required whenever we pass a dict parameter bound for
+            # a JSONB column. The canonical update_position_price and
+            # close_position functions pass ``current["trailing_stop_state"]``
+            # straight through without wrapping, which is a latent bug
+            # (tracked separately) when the field is non-None on re-insert.
+            cur.execute(
+                """
+                INSERT INTO positions (
+                    position_id, market_internal_id, strategy_id, model_id, side,
+                    quantity, entry_price,
+                    current_price, unrealized_pnl, realized_pnl,
+                    target_price, stop_loss_price,
+                    trailing_stop_state, position_metadata,
+                    status, entry_time, last_check_time,
+                    exit_price, exit_reason, exit_time,
+                    calculated_probability, edge_at_entry, market_price_at_entry,
+                    execution_environment,
+                    row_start_ts, row_current_ind
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s,
+                    %s, %s,
+                    %s, %s, %s,
+                    %s, %s,
+                    %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s,
+                    %s, %s, %s,
+                    %s,
+                    %s, TRUE
+                )
+                RETURNING id
+                """,
+                (
+                    current["position_id"],  # Copy business key from current version
+                    current["market_internal_id"],
+                    current["strategy_id"],
+                    current["model_id"],
+                    current["side"],
+                    current["quantity"],
+                    current["entry_price"],
+                    new_current_price,
+                    new_unrealized_pnl,
+                    current["realized_pnl"],
+                    current["target_price"],
+                    current["stop_loss_price"],
+                    # Marvin blocking-fix (#629 PR review, session 42e):
+                    # trailing_stop_state contains Decimal values built by
+                    # position_manager (activation_price, highest_price,
+                    # current_stop_price, config.*). Plain json.dumps cannot
+                    # serialize Decimal. _jsonb_dumps uses DecimalEncoder so
+                    # Decimals serialize as their str repr. Round-trip on
+                    # read returns the string form; consumers that need
+                    # Decimal semantics must parse on read.
+                    Json(trailing_stop_state, dumps=_jsonb_dumps),
+                    current["position_metadata"],
+                    current["status"],
+                    current["entry_time"],
+                    now,  # last_check_time
+                    current["exit_price"],
+                    current["exit_reason"],
+                    current["exit_time"],
+                    current["calculated_probability"],
+                    current["edge_at_entry"],
+                    current["market_price_at_entry"],
+                    current["execution_environment"],  # Preserve execution environment
+                    now,  # row_start_ts
+                ),
+            )
             result = cur.fetchone()
             if result is None or result.get("id") is None:
                 raise RuntimeError(

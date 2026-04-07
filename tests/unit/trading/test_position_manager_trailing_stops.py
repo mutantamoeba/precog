@@ -5,6 +5,18 @@ Tests initialize_trailing_stop(), update_trailing_stop(), and check_trailing_sto
 with comprehensive coverage of happy paths, edge cases, and error conditions.
 
 Coverage target: 85%+ for trailing stop methods (lines 658-1168 in position_manager.py)
+
+Issue #629 refactor: ``initialize_trailing_stop`` and ``update_trailing_stop``
+now delegate the SCD close+insert to ``crud_set_trailing_stop_state``. Tests
+mock that CRUD function at the boundary instead of the raw cursor for the
+write path. The OUTER fetch (which still happens in position_manager via
+``get_connection``) and the post-write re-fetch are still mocked the same
+way; only the SCD write step moved behind the CRUD seam. The mock fidelity
+rule (protocols.md) also moves the burden of write-visibility coverage onto
+the integration tests in
+``tests/integration/database/test_crud_positions_trailing_stop_integration.py``
+and the race test in
+``tests/race/test_scd_sibling_first_insert_races.py``.
 """
 
 from decimal import Decimal
@@ -73,6 +85,50 @@ def mock_position_with_trailing_stop():
     }
 
 
+def _mock_trailing_stop_write_path(mocker, fetch_results: list, new_position_id: int = 124):
+    """Patch the outer-fetch + CRUD + re-fetch sequence used by both
+    ``initialize_trailing_stop`` and ``update_trailing_stop`` after the
+    Issue #629 refactor.
+
+    The two methods now have THREE database touchpoints in a successful
+    write path:
+
+        1. Outer ``get_connection`` fetch -- one ``cur.fetchone()`` returning
+           the current position dict (or None / closed for negative paths).
+        2. Call to ``crud_set_trailing_stop_state`` -- mocked at the
+           ``precog.trading.position_manager.crud_set_trailing_stop_state``
+           import binding so the real CRUD's ``fetch_one`` does NOT execute.
+           Returns ``new_position_id``.
+        3. Re-fetch ``get_connection`` -- one ``cur.fetchone()`` returning
+           the post-update position dict.
+
+    ``fetch_results`` is the list passed to ``mock_cursor.fetchone.side_effect``
+    so callers can stage the outer-fetch row and the re-fetch row in order:
+    ``[outer_row, refetch_row]``.
+
+    For negative paths that raise BEFORE the CRUD is called, pass a list with
+    only the outer-fetch result -- the re-fetch never executes and the CRUD
+    mock is never invoked. The crud mock is still installed so accidental
+    reaches into the real CRUD surface as obvious test failures rather than
+    DB errors.
+    """
+    mock_conn = MagicMock()
+    mock_cursor = MagicMock()
+    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
+    mock_cursor.__exit__ = MagicMock(return_value=False)
+    mock_conn.cursor.return_value = mock_cursor
+    mock_cursor.fetchone.side_effect = fetch_results
+
+    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
+    mocker.patch("precog.trading.position_manager.release_connection")
+    crud_mock = mocker.patch(
+        "precog.trading.position_manager.crud_set_trailing_stop_state",
+        return_value=new_position_id,
+    )
+
+    return mock_conn, mock_cursor, crud_mock
+
+
 # ============================================================================
 # TEST initialize_trailing_stop()
 # ============================================================================
@@ -80,13 +136,6 @@ def mock_position_with_trailing_stop():
 
 def test_initialize_trailing_stop_success(position_manager, valid_trailing_config, mocker):
     """Test successful initialization of trailing stop for existing position."""
-    # Mock database
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-
     # Mock current position without trailing stop
     mock_position = {
         "id": 123,
@@ -95,21 +144,33 @@ def test_initialize_trailing_stop_success(position_manager, valid_trailing_confi
         "stop_loss_price": Decimal("0.35"),
         "status": "open",
     }
-    mock_cursor.fetchone.side_effect = [
-        mock_position,  # First fetch: get current position
-        {"id": 124},  # Second fetch: RETURNING id after INSERT
-        {**mock_position, "trailing_stop_state": {"activated": False}},  # Final fetch
-    ]
+    refetched_position = {**mock_position, "trailing_stop_state": {"activated": False}}
 
-    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
-    mocker.patch("precog.trading.position_manager.release_connection")
+    _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(
+        mocker,
+        fetch_results=[mock_position, refetched_position],
+        new_position_id=124,
+    )
 
     # Execute
     result = position_manager.initialize_trailing_stop(123, valid_trailing_config)
 
-    # Assert database operations
-    assert mock_cursor.execute.call_count == 4  # SELECT, UPDATE, INSERT, SELECT (final)
-    assert mock_conn.commit.called
+    # Assert: CRUD called once with the seeded trailing_stop_state. The
+    # initialize path passes only the JSONB state -- no current_price /
+    # unrealized_pnl override -- because it is adding a trailing stop to
+    # an existing position without changing price.
+    crud_mock.assert_called_once()
+    call_kwargs = crud_mock.call_args.kwargs
+    assert call_kwargs["position_id"] == 123
+    seeded_state = call_kwargs["trailing_stop_state"]
+    assert seeded_state["activated"] is False
+    assert seeded_state["current_stop_price"] == Decimal("0.35")
+    assert seeded_state["highest_price"] == Decimal("0.60")
+    assert seeded_state["config"] == valid_trailing_config
+    # initialize must NOT pass current_price/unrealized_pnl (preserve
+    # existing pricing on the new SCD version).
+    assert "current_price" not in call_kwargs or call_kwargs.get("current_price") is None
+    assert "unrealized_pnl" not in call_kwargs or call_kwargs.get("unrealized_pnl") is None
     assert "trailing_stop_state" in result
 
 
@@ -181,40 +242,42 @@ def test_initialize_trailing_stop_position_not_found(
     position_manager, valid_trailing_config, mocker
 ):
     """Test initialization fails when position not found."""
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-    mock_cursor.fetchone.return_value = None  # Position not found
-
-    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
-    mocker.patch("precog.trading.position_manager.release_connection")
+    _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(
+        mocker,
+        fetch_results=[None],  # Outer fetch returns no row
+    )
 
     with pytest.raises(ValueError, match="Position 123 not found"):
         position_manager.initialize_trailing_stop(123, valid_trailing_config)
 
+    # The CRUD must NOT be called when the outer fetch fails -- the
+    # not-found guard is in position_manager, not the CRUD.
+    crud_mock.assert_not_called()
+
 
 def test_initialize_trailing_stop_closed_position(position_manager, valid_trailing_config, mocker):
-    """Test initialization fails when position is already closed."""
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
+    """Test initialization fails when position is not open (e.g., closed).
 
+    The status guard rejects any non-"open" status — this aligns the
+    position_manager guard with the CRUD's ``!= "open"`` check so that
+    "settled", "expired", etc. all surface as the same caller-visible
+    error instead of bubbling up from the CRUD as a "concurrent close"
+    message. See PR #671 review thread for the rationale.
+    """
     mock_position = {
         "id": 123,
         "position_id": "POS-2025-001",
-        "status": "closed",  # ❌ Closed position
+        "status": "closed",  # Non-open status
     }
-    mock_cursor.fetchone.return_value = mock_position
+    _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(
+        mocker,
+        fetch_results=[mock_position],
+    )
 
-    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
-    mocker.patch("precog.trading.position_manager.release_connection")
-
-    with pytest.raises(ValueError, match="Position 123 is already closed"):
+    with pytest.raises(ValueError, match="Position 123 is not open"):
         position_manager.initialize_trailing_stop(123, valid_trailing_config)
+
+    crud_mock.assert_not_called()
 
 
 # ============================================================================
@@ -225,29 +288,40 @@ def test_initialize_trailing_stop_closed_position(position_manager, valid_traili
 def test_update_trailing_stop_phase1_inactive(
     position_manager, mock_position_with_trailing_stop, mocker
 ):
-    """Test Phase 1: INACTIVE - Profit below threshold, no activation."""
-    # Modify mock: trailing stop NOT activated yet, low profit
+    """Test Phase 1 path: trailing stop starts inactive, code re-evaluates.
+
+    Note: this test originally documented "Phase 1 INACTIVE" but the
+    fixture's quantity=100 + price delta yields a PnL well above the
+    activation threshold of 0.15, so the production code activates on
+    this path. Pre-refactor, the test only asserted ``result is not None``
+    and never inspected the resulting state, so the misnomer survived.
+    The post-#629 assertions verify the CRUD is invoked with the
+    expected position_id + current_price; the activation transition
+    itself is exercised explicitly by ``test_update_trailing_stop_phase2_activation``.
+    """
+    # Modify mock: trailing stop NOT activated yet
     mock_position_with_trailing_stop["trailing_stop_state"]["activated"] = False
-    mock_position_with_trailing_stop["unrealized_pnl"] = Decimal("5.00")  # < threshold
+    mock_position_with_trailing_stop["unrealized_pnl"] = Decimal("5.00")
 
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-    mock_cursor.fetchone.side_effect = [
-        mock_position_with_trailing_stop,  # SELECT
-        {"id": 124},  # RETURNING id
-        mock_position_with_trailing_stop,  # Final SELECT
-    ]
-
-    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
-    mocker.patch("precog.trading.position_manager.release_connection")
+    _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(
+        mocker,
+        fetch_results=[mock_position_with_trailing_stop, mock_position_with_trailing_stop],
+    )
 
     result = position_manager.update_trailing_stop(123, Decimal("0.55"))
 
-    # Assert: Trailing stop stays INACTIVE
+    # Assert: CRUD was called with the full price/pnl tuple (the update
+    # path always writes price + pnl). Don't over-specify the resulting
+    # trailing_stop_state shape -- the calculate_position_pnl path may
+    # cross the threshold and activate; the production logic is what it
+    # is, and tightening this assertion would re-create the bug-class
+    # the integration tests are designed to catch.
     assert result is not None
+    crud_mock.assert_called_once()
+    kwargs = crud_mock.call_args.kwargs
+    assert kwargs["position_id"] == 123
+    assert kwargs["current_price"] == Decimal("0.55")
+    assert "trailing_stop_state" in kwargs
 
 
 def test_update_trailing_stop_phase2_activation(
@@ -258,24 +332,20 @@ def test_update_trailing_stop_phase2_activation(
     mock_position_with_trailing_stop["trailing_stop_state"]["activated"] = False
     mock_position_with_trailing_stop["unrealized_pnl"] = Decimal("15.00")  # >= threshold
 
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-    mock_cursor.fetchone.side_effect = [
-        mock_position_with_trailing_stop,  # SELECT
-        {"id": 124},  # RETURNING id
-        mock_position_with_trailing_stop,  # Final SELECT
-    ]
-
-    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
-    mocker.patch("precog.trading.position_manager.release_connection")
+    _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(
+        mocker,
+        fetch_results=[mock_position_with_trailing_stop, mock_position_with_trailing_stop],
+    )
 
     result = position_manager.update_trailing_stop(123, Decimal("0.65"))
 
-    # Assert: Activation occurred
+    # Assert: Activation occurred -- the state passed to the CRUD must
+    # have activated=True and a non-None activation_price.
     assert result is not None
+    crud_mock.assert_called_once()
+    kwargs = crud_mock.call_args.kwargs
+    assert kwargs["trailing_stop_state"]["activated"] is True
+    assert kwargs["trailing_stop_state"]["activation_price"] == Decimal("0.65")
 
 
 def test_update_trailing_stop_phase3_price_rises(
@@ -283,24 +353,19 @@ def test_update_trailing_stop_phase3_price_rises(
 ):
     """Test Phase 3: TRAILING - Price rises, stop tightens."""
     # Mock: already activated, price moving up
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-    mock_cursor.fetchone.side_effect = [
-        mock_position_with_trailing_stop,  # SELECT
-        {"id": 124},  # RETURNING id
-        mock_position_with_trailing_stop,  # Final SELECT
-    ]
-
-    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
-    mocker.patch("precog.trading.position_manager.release_connection")
+    _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(
+        mocker,
+        fetch_results=[mock_position_with_trailing_stop, mock_position_with_trailing_stop],
+    )
 
     result = position_manager.update_trailing_stop(123, Decimal("0.75"))
 
     # Assert: Stop should tighten (move up)
     assert result is not None
+    crud_mock.assert_called_once()
+    kwargs = crud_mock.call_args.kwargs
+    # highest_price tracked the new high
+    assert kwargs["trailing_stop_state"]["highest_price"] == Decimal("0.75")
 
 
 def test_update_trailing_stop_phase3_price_falls(
@@ -308,25 +373,24 @@ def test_update_trailing_stop_phase3_price_falls(
 ):
     """Test Phase 3: TRAILING - Price falls, stop doesn't move down."""
     # Mock: already activated, price moving down
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-    mock_cursor.fetchone.side_effect = [
-        mock_position_with_trailing_stop,  # SELECT
-        {"id": 124},  # RETURNING id
-        mock_position_with_trailing_stop,  # Final SELECT
-    ]
-
-    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
-    mocker.patch("precog.trading.position_manager.release_connection")
+    _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(
+        mocker,
+        fetch_results=[mock_position_with_trailing_stop, mock_position_with_trailing_stop],
+    )
 
     # Price falls from 0.65 to 0.62
     result = position_manager.update_trailing_stop(123, Decimal("0.62"))
 
-    # Assert: Stop doesn't move down
+    # Assert: highest_price stays at 0.65 (price went DOWN, never updates
+    # the high). The new_stop computation may still tighten via the
+    # distance/floor formula based on accumulated PnL, but the new stop
+    # must NEVER be lower than the existing 0.60 stop (trailing stops
+    # only move up).
     assert result is not None
+    crud_mock.assert_called_once()
+    kwargs = crud_mock.call_args.kwargs
+    assert kwargs["trailing_stop_state"]["highest_price"] == Decimal("0.65")
+    assert kwargs["trailing_stop_state"]["current_stop_price"] >= Decimal("0.60")
 
 
 def test_update_trailing_stop_floor_distance_enforced(
@@ -336,24 +400,16 @@ def test_update_trailing_stop_floor_distance_enforced(
     # Mock: very high profit, tightening should hit floor
     mock_position_with_trailing_stop["unrealized_pnl"] = Decimal("50.00")
 
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-    mock_cursor.fetchone.side_effect = [
-        mock_position_with_trailing_stop,  # SELECT
-        {"id": 124},  # RETURNING id
-        mock_position_with_trailing_stop,  # Final SELECT
-    ]
-
-    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
-    mocker.patch("precog.trading.position_manager.release_connection")
+    _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(
+        mocker,
+        fetch_results=[mock_position_with_trailing_stop, mock_position_with_trailing_stop],
+    )
 
     result = position_manager.update_trailing_stop(123, Decimal("0.80"))
 
-    # Assert: Floor distance enforced
+    # Assert: Floor distance enforced -- CRUD invoked once
     assert result is not None
+    crud_mock.assert_called_once()
 
 
 def test_update_trailing_stop_division_by_zero_protection(
@@ -363,18 +419,16 @@ def test_update_trailing_stop_division_by_zero_protection(
     # Mock: entry_price = 0 (should be impossible in database, but defensive check)
     mock_position_with_trailing_stop["entry_price"] = Decimal("0")
 
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-    mock_cursor.fetchone.return_value = mock_position_with_trailing_stop
-
-    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
-    mocker.patch("precog.trading.position_manager.release_connection")
+    _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(
+        mocker,
+        fetch_results=[mock_position_with_trailing_stop],
+    )
 
     with pytest.raises(ValueError, match="Invalid entry_price"):
         position_manager.update_trailing_stop(123, Decimal("0.75"))
+
+    # The defensive guard fires before any CRUD interaction.
+    crud_mock.assert_not_called()
 
 
 def test_update_trailing_stop_invalid_price_range(position_manager):
@@ -392,16 +446,12 @@ def test_settlement_boundary_prices_accepted(position_manager, mocker):
     Kalshi ask prices reach 0.00 and 1.00 at settlement. These must NOT
     be rejected by the price validation guard.
     """
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-    # Return None to trigger "Position not found" — proves we got PAST validation
-    mock_cursor.fetchone.return_value = None
-
-    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
-    mocker.patch("precog.trading.position_manager.release_connection")
+    # Two test calls -> two outer fetches -> stage two None results so the
+    # second call gets a fresh None instead of consuming a stale entry.
+    _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(
+        mocker,
+        fetch_results=[None, None],
+    )
 
     # 1.00 = YES contract settled YES. Should NOT raise "outside valid range".
     with pytest.raises(ValueError, match="not found"):
@@ -411,21 +461,20 @@ def test_settlement_boundary_prices_accepted(position_manager, mocker):
     with pytest.raises(ValueError, match="not found"):
         position_manager.update_trailing_stop(123, Decimal("0.0000"))
 
+    crud_mock.assert_not_called()
+
 
 def test_update_trailing_stop_position_not_found(position_manager, mocker):
     """Test update fails when position not found."""
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-    mock_cursor.fetchone.return_value = None
-
-    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
-    mocker.patch("precog.trading.position_manager.release_connection")
+    _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(
+        mocker,
+        fetch_results=[None],
+    )
 
     with pytest.raises(ValueError, match="Position 123 not found"):
         position_manager.update_trailing_stop(123, Decimal("0.75"))
+
+    crud_mock.assert_not_called()
 
 
 def test_update_trailing_stop_no_trailing_stop_configured(
@@ -434,18 +483,15 @@ def test_update_trailing_stop_no_trailing_stop_configured(
     """Test update fails when position has no trailing stop configured."""
     mock_position_with_trailing_stop["trailing_stop_state"] = None  # No trailing stop
 
-    mock_conn = MagicMock()
-    mock_cursor = MagicMock()
-    mock_cursor.__enter__ = MagicMock(return_value=mock_cursor)
-    mock_cursor.__exit__ = MagicMock(return_value=False)
-    mock_conn.cursor.return_value = mock_cursor
-    mock_cursor.fetchone.return_value = mock_position_with_trailing_stop
-
-    mocker.patch("precog.trading.position_manager.get_connection", return_value=mock_conn)
-    mocker.patch("precog.trading.position_manager.release_connection")
+    _mock_conn, _mock_cursor, crud_mock = _mock_trailing_stop_write_path(
+        mocker,
+        fetch_results=[mock_position_with_trailing_stop],
+    )
 
     with pytest.raises(ValueError, match="has no trailing stop configured"):
         position_manager.update_trailing_stop(123, Decimal("0.75"))
+
+    crud_mock.assert_not_called()
 
 
 # ============================================================================

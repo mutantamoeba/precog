@@ -21,6 +21,12 @@ Sites covered (one TestCase per site):
       (concurrent-update race on ``idx_positions_unique_current``).
     - Issue #627: ``close_position`` in ``crud_positions`` (concurrent-close
       race on ``idx_positions_unique_current``).
+    - Issue #628 / #629: ``set_trailing_stop_state`` in ``crud_positions``
+      (concurrent-update race on ``idx_positions_unique_current``). The
+      underlying #629 bug was a same-transaction READ COMMITTED visibility
+      issue (UPDATE then INSERT...SELECT in one transaction); this race
+      test guards the new CRUD function the same way the #626 race test
+      guards ``update_position_price``.
 
 These tests use TWO real database connections (via ``ThreadPoolExecutor``)
 and a ``threading.Barrier`` to maximize the probability of an actual race.
@@ -67,7 +73,11 @@ from precog.database.crud_game_states import (
     upsert_game_state,
 )
 from precog.database.crud_markets import update_market_with_versioning
-from precog.database.crud_positions import close_position, update_position_price
+from precog.database.crud_positions import (
+    close_position,
+    set_trailing_stop_state,
+    update_position_price,
+)
 
 # CI detection mirrors tests/fixtures/stress_testcontainers.py:_is_ci.
 _is_ci = os.getenv("CI") == "true" or os.getenv("GITHUB_ACTIONS") == "true"
@@ -835,3 +845,146 @@ class TestClosePositionConcurrentClose:
         # loudly because the second close's exit_price/realized_pnl would
         # silently clobber the first close's. The status-check guard inside
         # the closure (added per Brawne CONCERN 1) is the loudness mechanism.
+
+
+# =============================================================================
+# Issue #628 / #629 — set_trailing_stop_state concurrent-update race
+# =============================================================================
+
+
+@pytest.mark.race
+@_skip_in_ci
+class TestSetTrailingStopStateConcurrentUpdate:
+    """Issue #628 / #629: two-thread concurrent-update race on
+    ``set_trailing_stop_state``.
+
+    The underlying #629 bug was a same-transaction READ COMMITTED visibility
+    issue: ``UPDATE positions SET row_current_ind = FALSE`` followed by
+    ``INSERT ... SELECT FROM positions WHERE row_current_ind = TRUE`` in
+    one transaction returned zero rows from the SELECT and silently
+    inserted nothing. PR #629 extracted ``set_trailing_stop_state`` in
+    ``crud_positions``, mirroring the canonical Pattern 49 shape from
+    ``update_position_price`` (PR #665), which captures all column values
+    into Python BEFORE the close and INSERTs from those captured values.
+
+    This race test asserts the same invariants as #626's
+    ``update_position_price`` race: under two concurrent callers racing
+    on the same business key, both callers return a valid id, exactly one
+    row remains current, and the SCD chain stays consistent. FOR UPDATE
+    serializes the close+insert sequence so the retry helper does not
+    typically need to fire (the test does not assert on caplog WARNINGs
+    for that reason -- mirroring ``TestUpdatePositionPriceConcurrentUpdate``).
+    """
+
+    def test_concurrent_trailing_stop_update_resolved_by_retry(
+        self,
+        position_race_setup: Any,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        position_bk, market_pk, _initial_surrogate_id = position_race_setup
+
+        # Two distinct trailing stop states so we can verify the SCD row
+        # surviving as current is one of the two payloads (not a hybrid).
+        state_a = {
+            "config": {
+                "activation_threshold": "0.15",
+                "initial_distance": "0.05",
+                "tightening_rate": "0.10",
+                "floor_distance": "0.02",
+            },
+            "activated": False,
+            "activation_price": None,
+            "current_stop_price": "0.4500",
+            "highest_price": "0.5500",
+            "_marker": "thread_a",
+        }
+        state_b = {
+            "config": state_a["config"],
+            "activated": True,
+            "activation_price": "0.6500",
+            "current_stop_price": "0.6000",
+            "highest_price": "0.6500",
+            "_marker": "thread_b",
+        }
+
+        with caplog.at_level(logging.WARNING):
+            for iteration in range(_NUM_ITERATIONS):
+                fresh_surrogate = _reset_position(position_bk, market_pk)
+
+                def call_a(_sid: int = fresh_surrogate) -> int:
+                    return set_trailing_stop_state(
+                        position_id=_sid,
+                        trailing_stop_state=state_a,
+                        current_price=Decimal("0.5500"),
+                        unrealized_pnl=Decimal("0.5000"),
+                    )
+
+                def call_b(_sid: int = fresh_surrogate) -> int:
+                    return set_trailing_stop_state(
+                        position_id=_sid,
+                        trailing_stop_state=state_b,
+                        current_price=Decimal("0.6500"),
+                        unrealized_pnl=Decimal("1.5000"),
+                    )
+
+                results, errors = _run_two_thread_race(call_a, call_b)
+
+                assert errors["a"] is None, (
+                    f"iteration {iteration}: thread A raised: {errors['a']!r}"
+                )
+                assert errors["b"] is None, (
+                    f"iteration {iteration}: thread B raised: {errors['b']!r}"
+                )
+                assert results["a"] is not None
+                assert results["b"] is not None
+
+                with get_cursor(commit=False) as cur:
+                    cur.execute(
+                        """
+                        SELECT id, row_current_ind, trailing_stop_state,
+                               execution_environment
+                        FROM positions
+                        WHERE position_id = %s
+                        """,
+                        (position_bk,),
+                    )
+                    rows = cur.fetchall()
+
+                current_rows = [r for r in rows if r["row_current_ind"]]
+                assert len(current_rows) == 1, (
+                    f"iteration {iteration}: expected exactly one current "
+                    f"position row, found {len(current_rows)}"
+                )
+
+                # The surviving current row's trailing_stop_state must be
+                # ONE of the two payloads -- never a hybrid. The marker
+                # field discriminates which thread won.
+                surviving_marker = current_rows[0]["trailing_stop_state"].get("_marker")
+                assert surviving_marker in {"thread_a", "thread_b"}, (
+                    f"iteration {iteration}: surviving trailing_stop_state "
+                    f"is neither thread A nor thread B's payload (no _marker "
+                    f"or unknown _marker={surviving_marker!r}). The CRUD "
+                    f"function may have produced a hybrid write."
+                )
+
+                # execution_environment must be preserved for EVERY row in
+                # the chain (not silently defaulted to 'live'). The
+                # _reset_position fixture seeds the chain with the default
+                # 'live' value, but we still verify the assertion holds in
+                # case a future fixture switches to 'paper'.
+                envs = {r["execution_environment"] for r in rows}
+                assert len(envs) == 1, (
+                    f"iteration {iteration}: execution_environment varies "
+                    f"across the SCD chain: {envs}. The CRUD function "
+                    f"failed to preserve the column on at least one row."
+                )
+
+        # NOTE: Issues #628/#629 are concurrent-UPDATE races (not first-insert
+        # races). FOR UPDATE serializes the two callers against the existing
+        # current row in the typical case, so the retry helper does NOT need
+        # to fire on every iteration -- asserting that it must would turn
+        # healthy serialization into a test failure. The primary invariants
+        # are "no exceptions, exactly one current row, surviving payload is
+        # one of the two threads' (not a hybrid), and execution_environment
+        # is preserved across the chain." See the equivalent NOTE on
+        # ``TestUpdatePositionPriceConcurrentUpdate`` (#626).
