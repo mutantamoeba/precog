@@ -23,11 +23,33 @@ from typing import Any, Literal
 
 import psycopg2.errors
 
-# Type alias for execution environment - matches database ENUM (Migration 0008)
+# Type alias for execution environment - matches database CHECK constraint
+# (originally Migration 0008 ENUM, converted to VARCHAR + CHECK in 0024,
+# extended to 4 values on account_balance ONLY in Migration 0051).
 # - 'live': Production trading with Kalshi Production API (real money)
 # - 'paper': Integration testing with Kalshi Demo/Sandbox API (no real money)
 # - 'backtest': Historical data simulation (no API calls)
-ExecutionEnvironment = Literal["live", "paper", "backtest"]
+# - 'unknown': Forensic tombstone for historical rows of unknown provenance.
+#   Reserved by Migration 0051 on account_balance ONLY; trades and positions
+#   CHECK constraints (chk_trades_exec_env, chk_positions_exec_env) only allow
+#   the first 3 values. The two per-domain validator frozensets below enforce
+#   this asymmetry at the function boundary so a Python caller passing
+#   'unknown' to create_position fails LOUDLY with a clear error message
+#   instead of crashing on the DB CHECK constraint with a confusing message.
+#   Mulder's data-honesty framing in findings_622_686_mulder.md.
+ExecutionEnvironment = Literal["live", "paper", "backtest", "unknown"]
+
+# Per-domain runtime allowlists for O(1) validation. The asymmetry between
+# account_balance (4 values, includes 'unknown') and trades/positions (3 values,
+# no 'unknown') is INTENTIONAL — only account_balance has the forensic tombstone
+# reserved. Each CRUD function uses the appropriate constant. See PM Decision 1
+# in findings_622_686_synthesis.md (Option B: tightened per-domain validators).
+VALID_EXECUTION_ENVIRONMENTS_BALANCE: frozenset[str] = frozenset(
+    {"live", "paper", "backtest", "unknown"}
+)
+VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION: frozenset[str] = frozenset(
+    {"live", "paper", "backtest"}
+)
 
 # App-layer allowlist for system_health.component (ADR-114, Migration 0043).
 # The PostgreSQL CHECK constraint was dropped in migration 0043 so new data

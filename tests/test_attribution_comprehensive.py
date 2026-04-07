@@ -100,6 +100,7 @@ def test_property_edge_calculation_invariant(
             price=market_price,
             calculated_probability=calculated_prob,
             market_price=market_price,
+            execution_environment="paper",  # required (#622+#686)
         )
 
         trade = get_trade_by_id(trade_id)
@@ -147,6 +148,7 @@ def test_property_attribution_immutability(
             entry_price=mkt_price,
             calculated_probability=calc_prob,
             market_price_at_entry=mkt_price,
+            execution_environment="paper",  # required (#622+#686)
         )
 
         # Read position twice
@@ -229,6 +231,7 @@ def test_e2e_full_attribution_workflow(
         calculated_probability=Decimal("0.7000"),
         market_price=Decimal("0.5500"),
         trade_source="automated",
+        execution_environment="paper",  # required (#622+#686)
     )
 
     # Step 3: Create position from trade
@@ -241,6 +244,7 @@ def test_e2e_full_attribution_workflow(
         entry_price=Decimal("0.5500"),
         calculated_probability=Decimal("0.7000"),
         market_price_at_entry=Decimal("0.5500"),
+        execution_environment="paper",  # required (#622+#686)
     )
 
     # Step 4: Verify attribution consistency
@@ -299,6 +303,7 @@ def test_stress_bulk_trade_creation(
             price=mkt_price,
             calculated_probability=calc_prob,
             market_price=mkt_price,
+            execution_environment="paper",  # required (#622+#686)
         )
         trade_ids.append(trade_id)
 
@@ -350,6 +355,7 @@ def test_stress_bulk_position_creation(
             entry_price=entry_price,
             calculated_probability=calc_prob,
             market_price_at_entry=entry_price,
+            execution_environment="paper",  # required (#622+#686)
         )
         position_ids.append(position_id)
 
@@ -399,6 +405,7 @@ def test_race_concurrent_trade_creation(
                 price=Decimal("0.5000"),
                 calculated_probability=Decimal("0.6500"),
                 market_price=Decimal("0.5000"),
+                execution_environment="paper",  # required (#622+#686)
             )
             trade_ids.append(trade_id)
         result_queue.put((thread_id, trade_ids))
@@ -474,6 +481,7 @@ def test_performance_analytics_query_with_large_dataset(
             price=mkt_price,
             calculated_probability=calc_prob,
             market_price=mkt_price,
+            execution_environment="paper",  # required (#622+#686)
         )
 
     # Performance test: Analytics query
@@ -542,7 +550,8 @@ def test_chaos_trade_with_null_attribution_fields(
         quantity=10,
         price=Decimal("0.5000"),
         # calculated_probability=None,  # Omitted -> defaults to NULL
-        # market_price=None,            # Omitted -> defaults to NULL
+        # market_price=None,            # Omitted -> defaults to NULL,
+        execution_environment="paper",  # required (#622+#686)
     )
 
     trade = get_trade_by_id(trade_id)
@@ -589,6 +598,7 @@ def test_chaos_position_with_automatic_edge_calculation(
         entry_price=Decimal("0.5000"),
         calculated_probability=Decimal("0.7000"),
         market_price_at_entry=Decimal("0.5000"),
+        execution_environment="paper",  # required (#622+#686)
     )
 
     position = get_position_by_id(position_id)
@@ -627,6 +637,7 @@ def test_chaos_trade_with_probability_boundary_values(
         price=Decimal("0.0100"),
         calculated_probability=Decimal("0.0000"),
         market_price=Decimal("0.0100"),
+        execution_environment="paper",  # required (#622+#686)
     )
 
     trade_obj_1 = get_trade_by_id(trade_1)
@@ -644,6 +655,7 @@ def test_chaos_trade_with_probability_boundary_values(
         price=Decimal("0.9900"),
         calculated_probability=Decimal("1.0000"),
         market_price=Decimal("0.9900"),
+        execution_environment="paper",  # required (#622+#686)
     )
 
     trade_obj_2 = get_trade_by_id(trade_2)
@@ -661,6 +673,7 @@ def test_chaos_trade_with_probability_boundary_values(
         price=Decimal("0.9800"),
         calculated_probability=Decimal("0.9999"),
         market_price=Decimal("0.9800"),
+        execution_environment="paper",  # required (#622+#686)
     )
 
     trade_obj_3 = get_trade_by_id(trade_3)

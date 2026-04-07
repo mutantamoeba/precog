@@ -30,7 +30,7 @@ Phase: 1.5 (Foundation Validation)
 """
 
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 
 import psycopg2
 from psycopg2.extras import RealDictCursor
@@ -171,6 +171,7 @@ class PositionManager:
         quantity: int,
         entry_price: Decimal,
         available_margin: Decimal,
+        execution_environment: Literal["live", "paper", "backtest"],
         target_price: Decimal | None = None,
         stop_loss_price: Decimal | None = None,
         trailing_stop_config: dict[str, Any] | None = None,
@@ -186,6 +187,19 @@ class PositionManager:
             quantity: Number of contracts
             entry_price: Entry price (Decimal, NEVER float!)
             available_margin: Account's available margin for validation
+            execution_environment: Execution context — REQUIRED, no default.
+                Must be one of 'live' (production), 'paper' (demo API), or
+                'backtest' (simulation). Note: 'unknown' is reserved for
+                ``account_balance`` only and is not valid here. Callers
+                MUST derive this from
+                ``precog.config.environment.derive_execution_environment(
+                app_env, market_mode)`` at the application boundary or
+                pass an explicit literal — never inherit a Python default.
+                This is the #686 fix: prior to this PR, ``open_position``
+                silently dropped this value and ``crud_create_position``
+                fell back to its (now-removed) ``"live"`` default,
+                contaminating paper-mode positions with a live tag. See
+                ``findings_622_686_synthesis.md``.
             target_price: Optional profit target price
             stop_loss_price: Optional stop loss price
             trailing_stop_config: Optional trailing stop configuration
@@ -227,6 +241,21 @@ class PositionManager:
             - Pattern 1 (CLAUDE.md): Decimal Precision - NEVER USE FLOAT
             - ADR-002: Decimal Precision for Prices
         """
+        # Validation: execution_environment (typo defense before any
+        # downstream work). The CRUD layer also validates, but doing it
+        # here surfaces the error at the public manager boundary instead
+        # of inside a wrapped CRUD call.
+        _valid_envs = frozenset({"live", "paper", "backtest"})
+        if execution_environment not in _valid_envs:
+            raise ValueError(
+                f"Invalid execution_environment: {execution_environment!r}. "
+                f"Must be one of {sorted(_valid_envs)}. Use "
+                f"derive_execution_environment(app_env, market_mode) from "
+                f"precog.config.environment instead of constructing this "
+                f"value inline. Note: 'unknown' is reserved for "
+                f"account_balance only."
+            )
+
         # Validation: Price range
         if not (Decimal("0.01") <= entry_price <= Decimal("0.99")):
             raise ValueError(f"Entry price {entry_price} outside valid range [0.01, 0.99]")
@@ -268,7 +297,11 @@ class PositionManager:
                 "current_stop_price": stop_loss_price,  # Initial stop = static stop loss
             }
 
-        # Create position via CRUD
+        # Create position via CRUD. execution_environment is now REQUIRED
+        # at the CRUD layer (no default), so we must pass it explicitly.
+        # This is the #686 fix: prior to this PR, the parameter was silently
+        # dropped and the CRUD's now-removed "live" default contaminated
+        # paper-mode positions.
         try:
             position_id = crud_create_position(
                 market_internal_id=market_internal_id,
@@ -277,6 +310,7 @@ class PositionManager:
                 side=side,
                 quantity=quantity,
                 entry_price=entry_price,
+                execution_environment=execution_environment,
                 target_price=target_price,
                 stop_loss_price=stop_loss_price,
                 trailing_stop_state=trailing_stop_state,

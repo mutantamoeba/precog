@@ -16,6 +16,7 @@ from psycopg2.extras import Json
 
 from .connection import fetch_all, fetch_one, get_cursor
 from .crud_shared import (
+    VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION,
     DecimalEncoder,
     ExecutionEnvironment,
     retry_on_scd_unique_conflict,
@@ -162,6 +163,7 @@ def create_position(
     side: str,
     quantity: int,
     entry_price: Decimal,
+    execution_environment: ExecutionEnvironment,
     target_price: Decimal | None = None,
     stop_loss_price: Decimal | None = None,
     trailing_stop_state: dict | None = None,
@@ -169,8 +171,6 @@ def create_position(
     # ⭐ ATTRIBUTION ARCHITECTURE (Migration 020) - NEW parameters
     calculated_probability: Decimal | None = None,
     market_price_at_entry: Decimal | None = None,
-    # ⭐ EXECUTION ENVIRONMENT (Migration 0008, ADR-107) - NEW parameter
-    execution_environment: ExecutionEnvironment = "live",
 ) -> int:
     """
     Create new position with status = 'open' and immutable entry-time attribution.
@@ -182,14 +182,22 @@ def create_position(
         side: 'YES' or 'NO'
         quantity: Number of contracts
         entry_price: Entry price as DECIMAL(10,4)
+        execution_environment: Execution context — REQUIRED, no default.
+            Must be one of 'live' (production), 'paper' (demo API), or
+            'backtest' (simulation). Note: 'unknown' is NOT valid here —
+            it's reserved for ``account_balance`` only as a forensic
+            tombstone (Migration 0051). Callers MUST derive this from
+            ``derive_execution_environment(app_env, market_mode)`` at
+            the application boundary or pass an explicit literal — never
+            inherit a default. The optional-default precedent removed in
+            the #622+#686 synthesis PR was the literal cause of #662, #686,
+            and #622. See findings_622_686_synthesis.md.
         target_price: Take-profit target
         stop_loss_price: Stop-loss price
         trailing_stop_state: Trailing stop configuration as JSONB
         position_metadata: Additional metadata
         calculated_probability: Model's predicted win probability at entry (immutable snapshot)
         market_price_at_entry: Kalshi market price at entry (immutable snapshot)
-        execution_environment: Execution context - 'live' (production), 'paper' (demo),
-            or 'backtest' (simulation). Default 'live'. See ADR-107.
 
     Returns:
         id (surrogate key) of newly created position
@@ -238,6 +246,22 @@ def create_position(
         - Migration 020: Position Attribution
         - docs/analysis/SCHEMA_ANALYSIS_2025-11-21.md (Gap #2: Position Attribution)
     """
+    # Validate execution_environment before any DB interaction. Typo defense
+    # (Marvin's recommendation from #662): 'Live', 'demo', and other
+    # near-misses must fail loudly at the function boundary, not silently
+    # bypass the CHECK constraint via psycopg2 type coercion.
+    # Note: positions/trades only allow 3 values (no 'unknown'); the broader
+    # 4-value allowlist applies to account_balance only. See
+    # crud_shared.VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION.
+    if execution_environment not in VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION:
+        msg = (
+            f"Invalid execution_environment: {execution_environment!r}. "
+            f"Must be one of {sorted(VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION)}. "
+            f"Note: 'unknown' is reserved for account_balance only and is "
+            f"not valid on positions/trades."
+        )
+        raise ValueError(msg)
+
     # ⭐ Calculate edge_at_entry if both probability and price provided
     edge_at_entry: Decimal | None = None
     if calculated_probability is not None and market_price_at_entry is not None:
@@ -1132,13 +1156,13 @@ def create_trade(
     side: str,
     quantity: int,
     price: Decimal,
+    execution_environment: ExecutionEnvironment,
     order_id: int | None = None,
     is_taker: bool | None = None,
     fees: Decimal | None = None,
     trade_metadata: dict | None = None,
     calculated_probability: Decimal | None = None,
     market_price: Decimal | None = None,
-    execution_environment: ExecutionEnvironment = "live",
 ) -> int:
     """
     Record an executed trade (fill event).
@@ -1152,13 +1176,17 @@ def create_trade(
         side: Trade direction - 'buy' or 'sell'
         quantity: Number of contracts filled
         price: Execution price as DECIMAL(10,4) in [0, 1]
+        execution_environment: Execution context — REQUIRED, no default.
+            Must be one of 'live', 'paper', or 'backtest'. Note: 'unknown'
+            is reserved for ``account_balance`` only and is not valid here.
+            See ``create_position`` and findings_622_686_synthesis.md for
+            the full rationale on why this is required-without-default.
         order_id: Integer FK to orders(id) — links fill to its order
         is_taker: Whether this fill was a taker (True) or maker (False)
         fees: Per-fill fees as DECIMAL(10,4)
         trade_metadata: Additional metadata as JSONB
         calculated_probability: Model-predicted probability at execution [0, 1]
         market_price: Kalshi market price at execution [0, 1]
-        execution_environment: 'live', 'paper', or 'backtest' (default 'live')
 
     Returns:
         id of newly created trade
@@ -1186,6 +1214,16 @@ def create_trade(
         - Migration 0025: orders/trades redesign
         - Issue #336: council-approved separation of orders and trades
     """
+    # Validate execution_environment before any DB interaction. See
+    # create_position for the full rationale.
+    if execution_environment not in VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION:
+        msg = (
+            f"Invalid execution_environment: {execution_environment!r}. "
+            f"Must be one of {sorted(VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION)}. "
+            f"Note: 'unknown' is reserved for account_balance only."
+        )
+        raise ValueError(msg)
+
     # Calculate edge_value if both probability and price provided
     edge_value: Decimal | None = None
     if calculated_probability is not None and market_price is not None:

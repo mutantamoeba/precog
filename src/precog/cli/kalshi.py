@@ -114,14 +114,32 @@ def balance(
         # Store in database (Phase 1.5+)
         if not dry_run:
             try:
+                from precog.config.environment import (
+                    MarketMode,
+                    derive_execution_environment,
+                    get_app_environment,
+                )
                 from precog.database.crud_account import update_account_balance_with_versioning
+
+                # Map the CLI's --env flag (already in scope as `use_demo`)
+                # to the canonical MarketMode enum and derive the
+                # execution_environment via the single-line-of-truth
+                # translator. NEVER hardcode the value here -- see
+                # findings_622_686_synthesis.md for the full rationale on
+                # why this is the only acceptable source-of-truth pattern.
+                _market_mode = MarketMode.DEMO if use_demo else MarketMode.LIVE
+                _exec_env = derive_execution_environment(get_app_environment(), _market_mode)
 
                 balance_id = update_account_balance_with_versioning(
                     platform_id="kalshi",
                     new_balance=balance_value,
+                    execution_environment=_exec_env,
                     currency="USD",
                 )
-                echo_success(f"Balance saved to database (ID: {balance_id})")
+                echo_success(
+                    f"Balance saved to database (ID: {balance_id}, "
+                    f"execution_environment={_exec_env})"
+                )
             except ImportError:
                 if verbose:
                     console.print("[dim]Database integration not available[/dim]")

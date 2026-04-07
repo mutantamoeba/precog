@@ -624,15 +624,21 @@ def position_race_setup(db_pool: Any) -> Any:
         market_pk = cur.fetchone()["id"]
 
         # Create the initial current position row.
+        # execution_environment is explicit (not relying on the DB default)
+        # per the #622+#686 synthesis principle: every code path should be
+        # explicit about which environment it writes, even when using raw
+        # SQL. Seeded as 'paper' so future race tests can verify the column
+        # is preserved across concurrent operations.
         cur.execute(
             """
             INSERT INTO positions (
                 position_id, market_internal_id, side, quantity,
                 entry_price, current_price,
                 status, entry_time, last_check_time,
-                row_current_ind, row_start_ts
+                row_current_ind, row_start_ts,
+                execution_environment
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), TRUE, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), TRUE, NOW(), %s)
             RETURNING id
             """,
             (
@@ -643,6 +649,7 @@ def position_race_setup(db_pool: Any) -> Any:
                 Decimal("0.5000"),
                 Decimal("0.5000"),
                 "open",
+                "paper",
             ),
         )
         position_surrogate_id = cur.fetchone()["id"]
@@ -659,7 +666,11 @@ def position_race_setup(db_pool: Any) -> Any:
 
 
 def _reset_position(position_bk: str, market_pk: int) -> int:
-    """Reset the positions chain to a single current row; return its id."""
+    """Reset the positions chain to a single current row; return its id.
+
+    execution_environment is explicit ('paper') per the #622+#686 synthesis
+    principle. Matches the seeding in position_race_setup.
+    """
     with get_cursor(commit=True) as cur:
         cur.execute("DELETE FROM positions WHERE position_id = %s", (position_bk,))
         cur.execute(
@@ -668,9 +679,10 @@ def _reset_position(position_bk: str, market_pk: int) -> int:
                 position_id, market_internal_id, side, quantity,
                 entry_price, current_price,
                 status, entry_time, last_check_time,
-                row_current_ind, row_start_ts
+                row_current_ind, row_start_ts,
+                execution_environment
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), TRUE, NOW())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), NOW(), TRUE, NOW(), %s)
             RETURNING id
             """,
             (
@@ -681,6 +693,7 @@ def _reset_position(position_bk: str, market_pk: int) -> int:
                 Decimal("0.5000"),
                 Decimal("0.5000"),
                 "open",
+                "paper",
             ),
         )
         return int(cur.fetchone()["id"])

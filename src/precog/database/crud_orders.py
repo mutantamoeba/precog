@@ -72,6 +72,7 @@ def create_order(
     action: str,
     requested_price: Decimal,
     requested_quantity: int,
+    execution_environment: ExecutionEnvironment,
     order_type: str = "market",
     time_in_force: str = "good_till_canceled",
     strategy_id: int | None = None,
@@ -79,7 +80,6 @@ def create_order(
     edge_id: int | None = None,
     position_id: int | None = None,
     client_order_id: str | None = None,
-    execution_environment: ExecutionEnvironment = "live",
     trade_source: str = "automated",
     order_metadata: dict | None = None,
 ) -> int:
@@ -105,7 +105,14 @@ def create_order(
         edge_id: FK to edges(id) for attribution
         position_id: FK to positions(id) for attribution
         client_order_id: User-provided tracking ID
-        execution_environment: 'live', 'paper', or 'backtest'
+        execution_environment: Execution context — REQUIRED, no default. Must be
+            one of 'live', 'paper', or 'backtest'. The optional-default precedent
+            removed in the #622+#686 synthesis PR was the literal cause of the
+            #622/#662/#686 bug class. orders is the GENESIS row for Phase 2
+            manual trade placement (#508), so any default here would silently
+            tag every demo trade as 'live'. Callers MUST derive this from
+            ``derive_execution_environment(app_env, market_mode)`` at the
+            application boundary or pass an explicit literal.
         trade_source: 'automated' or 'manual'
         order_metadata: Additional data stored as JSONB
 

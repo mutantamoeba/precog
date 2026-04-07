@@ -65,6 +65,7 @@ class TestCreateEdge:
             true_win_probability=Decimal("0.5700"),
             market_implied_probability=Decimal("0.5200"),
             market_price=Decimal("0.5200"),
+            execution_environment="paper",  # required (#622+#686)
         )
 
         assert result == 42
@@ -82,6 +83,7 @@ class TestCreateEdge:
             true_win_probability=Decimal("0.5700"),
             market_implied_probability=Decimal("0.5200"),
             market_price=Decimal("0.5200"),
+            execution_environment="paper",  # required (#622+#686)
         )
 
         # Second execute call should be the UPDATE for edge_id
@@ -103,6 +105,7 @@ class TestCreateEdge:
                 true_win_probability=Decimal("0.5700"),
                 market_implied_probability=Decimal("0.5200"),
                 market_price=Decimal("0.5200"),
+                execution_environment="paper",  # required (#622+#686)
             )
 
     @patch("precog.database.crud_analytics.get_cursor")
@@ -118,7 +121,8 @@ class TestCreateEdge:
                 true_win_probability=Decimal("0.5700"),
                 market_implied_probability=Decimal("0.5200"),
                 market_price=Decimal("0.5200"),
-                yes_ask_price=0.53,  # float -- should raise
+                yes_ask_price=0.53,  # float -- should raise,
+                execution_environment="paper",  # required (#622+#686)
             )
 
     @patch("precog.database.crud_analytics.get_cursor")
@@ -170,6 +174,7 @@ class TestCreateEdge:
             true_win_probability=Decimal("0.5700"),
             market_implied_probability=Decimal("0.5200"),
             market_price=Decimal("0.5200"),
+            execution_environment="paper",  # required (#622+#686)
         )
 
         insert_sql = mock_cursor.execute.call_args_list[0][0][0]
@@ -188,6 +193,7 @@ class TestCreateEdge:
             true_win_probability=Decimal("0.5700"),
             market_implied_probability=Decimal("0.5200"),
             market_price=Decimal("0.5200"),
+            execution_environment="paper",  # required (#622+#686)
         )
 
         insert_sql = mock_cursor.execute.call_args_list[0][0][0]

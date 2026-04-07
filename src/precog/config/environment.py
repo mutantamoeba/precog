@@ -43,7 +43,7 @@ import os
 import warnings
 from dataclasses import dataclass
 from enum import Enum
-from typing import ClassVar, overload
+from typing import ClassVar, Literal, overload
 
 from dotenv import load_dotenv
 
@@ -658,3 +658,127 @@ def require_market_mode(market: str, required: MarketMode) -> None:
             f"Set {env_var}={required.value} to proceed."
         )
         raise RuntimeError(msg)
+
+
+def derive_execution_environment(
+    app_env: AppEnvironment,
+    market_mode: MarketMode,
+) -> Literal["live", "paper", "backtest"]:
+    """
+    Translate the two-axis runtime environment to a single execution_environment value.
+
+    This function is the SINGLE LINE OF TRUTH in the codebase for the runtime
+    mapping from ``(PRECOG_ENV, MARKET_MODE)`` to the
+    ``execution_environment`` value persisted on money-touching SCD tables
+    (``positions``, ``trades``, ``account_balance``). Every CRUD caller that
+    needs an ``execution_environment`` value MUST obtain it from this
+    function — never construct the literal inline, never read it from
+    YAML, never pass a constant.
+
+    Why this function exists:
+        Pre-2026, the codebase had FIVE unreconciled vocabularies for the
+        same concept (``PRECOG_ENV``, ``MarketMode``, the
+        ``execution_environment`` DB column, the dead ``trading.yaml
+        environment:`` field, and ``KalshiClient.environment``). No
+        translator existed; the mapping lived only in human memory. The
+        result was the #662/#686/#622 cross-environment-contamination bug
+        class. This function eliminates the implicit mapping by making it
+        a single, testable, validated function.
+
+    Mapping (after SAFETY_RULES validation):
+        ``MarketMode.LIVE`` -> ``'live'``
+        ``MarketMode.DEMO`` -> ``'paper'``
+        ``'backtest'`` -> set explicitly by the backtest entry point only,
+            NEVER derived here from runtime axes.
+
+    Args:
+        app_env: The application environment from ``get_app_environment()``.
+        market_mode: The market API mode from ``get_market_mode("kalshi")``
+            or equivalent for other markets.
+
+    Returns:
+        One of ``'live'`` or ``'paper'``. ``'backtest'`` is never returned
+        from this function.
+
+    Raises:
+        ValueError: If the ``(app_env, market_mode)`` combination is BLOCKED
+            by ``EnvironmentConfig.SAFETY_RULES`` (e.g., ``test+live``,
+            ``prod+demo``). The error message includes the blocked
+            combination. This guard converts a silent contamination risk
+            into a loud, traceable failure at the application boundary,
+            BEFORE any DB write happens.
+
+    Example:
+        >>> from precog.config.environment import (
+        ...     derive_execution_environment,
+        ...     get_app_environment,
+        ...     get_market_mode,
+        ... )
+        >>> exec_env = derive_execution_environment(
+        ...     get_app_environment(),
+        ...     get_market_mode("kalshi"),
+        ... )
+        >>> # 'live' or 'paper' depending on env vars
+
+        >>> # Backtest entry point sets the value explicitly:
+        >>> # backtest_runner.py:
+        >>> #     create_position(..., execution_environment='backtest')
+        >>> # NEVER call derive_execution_environment() from a backtest path.
+
+    Educational Note:
+        Why this function does not handle ``'backtest'``:
+        Backtest is not a runtime axis — it is a separate execution mode
+        triggered by an explicit backtest entry point (e.g.,
+        ``backtest_runner``). Mixing it into the runtime translator would
+        force every CRUD caller to know about backtest semantics, which is
+        the opposite of single-line-of-truth. The backtest entry point
+        sets the literal ``'backtest'`` directly when calling CRUD
+        functions; this translator handles only the live/paper runtime
+        distinction.
+
+    Related:
+        - REQ-SAFE-005 (proposed): Mandatory translator function for
+          execution environment derivation
+        - findings_622_686_synthesis.md (Mulder + Holden design pass)
+        - findings_622_686_mulder.md (5 unreconciled vocabularies analysis)
+        - ADR-107: Single-Database Architecture with Execution Environments
+        - ADR-105: Two-Axis Environment Model
+        - Migration 0051: account_balance.execution_environment + the dead
+          per-mode views drop
+        - Issues #622, #662, #686 (the bug class this function prevents)
+    """
+    # Lookup the safety rule for this combination. EnvironmentConfig owns
+    # the SAFETY_RULES dict (the canonical source of truth for which
+    # combinations are allowed); this function only adds the additional
+    # constraint that BLOCKED combinations cannot derive a value at all.
+    safety = EnvironmentConfig.SAFETY_RULES.get((app_env, market_mode), CombinationSafety.WARNING)
+    if safety == CombinationSafety.BLOCKED:
+        msg = (
+            f"BLOCKED combination: ({app_env.value}, {market_mode.value}). "
+            f"This combination is not allowed by EnvironmentConfig.SAFETY_RULES "
+            f"and cannot derive a valid execution_environment. Refusing to "
+            f"return any value to prevent silent cross-environment "
+            f"contamination on money-touching SCD tables. See ADR-105 and "
+            f"the #622+#686 synthesis for the full rationale."
+        )
+        raise ValueError(msg)
+
+    # WARNING combinations are allowed (e.g., dev + live API for production
+    # debugging). The mapping is the same as ALLOWED combinations: the
+    # safety warning is logged elsewhere via EnvironmentConfig.validate().
+    if market_mode == MarketMode.LIVE:
+        return "live"
+    if market_mode == MarketMode.DEMO:
+        return "paper"
+
+    # Defensive: every MarketMode value is handled above. mypy correctly
+    # infers this is unreachable today (MarketMode has exactly LIVE + DEMO),
+    # but the guard exists to fail loudly if a future MarketMode value is
+    # added without updating this function. The `type: ignore` suppresses
+    # the unreachable warning at the cost of preserving runtime defense.
+    msg = (  # type: ignore[unreachable]
+        f"Unhandled MarketMode value in derive_execution_environment: "
+        f"{market_mode!r}. This function must be updated when new "
+        f"MarketMode values are added."
+    )
+    raise ValueError(msg)

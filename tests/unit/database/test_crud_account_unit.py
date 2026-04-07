@@ -125,7 +125,8 @@ class TestUpdateBalanceRejectsFloat:
         with pytest.raises(ValueError, match="Balance must be Decimal"):
             update_account_balance_with_versioning(
                 platform_id="kalshi",
-                new_balance=1234.5678,  # type: ignore[arg-type]
+                new_balance=1234.5678,  # type: ignore[arg-type],
+                execution_environment="paper",  # required (#622+#686)
             )
 
 
@@ -142,6 +143,7 @@ class TestUpdateBalanceRetryBehavior:
                 result = update_account_balance_with_versioning(
                     platform_id="kalshi",
                     new_balance=Decimal("1000.0000"),
+                    execution_environment="paper",  # required (#622+#686)
                 )
 
         assert result == 42
@@ -165,6 +167,7 @@ class TestUpdateBalanceRetryBehavior:
                 result = update_account_balance_with_versioning(
                     platform_id="kalshi",
                     new_balance=Decimal("2500.0000"),
+                    execution_environment="paper",  # required (#622+#686)
                 )
 
         assert result == 42
@@ -194,6 +197,7 @@ class TestUpdateBalanceRetryBehavior:
                     update_account_balance_with_versioning(
                         platform_id="kalshi",
                         new_balance=Decimal("-100.0000"),
+                        execution_environment="paper",  # required (#622+#686)
                     )
 
         # Only the first cursor was used; no retry.
@@ -214,6 +218,7 @@ class TestUpdateBalanceRetryBehavior:
                     update_account_balance_with_versioning(
                         platform_id="kalshi",
                         new_balance=Decimal("500.0000"),
+                        execution_environment="paper",  # required (#622+#686)
                     )
 
         assert cursors[0].execute.call_count == 4
@@ -236,6 +241,7 @@ class TestUpdateBalanceRetryBehavior:
                     update_account_balance_with_versioning(
                         platform_id="kalshi",
                         new_balance=Decimal("750.0000"),
+                        execution_environment="paper",  # required (#622+#686)
                     )
 
         # Both cursors fully attempted (4 executes each).
@@ -305,6 +311,7 @@ class TestUpdateBalanceRefusesSilentNone:
                 update_account_balance_with_versioning(
                     platform_id="kalshi",
                     new_balance=Decimal("1000.0000"),
+                    execution_environment="paper",  # required (#622+#686)
                 )
 
         # All four executes ran (NOW, lock, close, insert) before fetchone
@@ -348,6 +355,7 @@ class TestUpdateBalanceRefusesSilentNone:
                 update_account_balance_with_versioning(
                     platform_id="kalshi",
                     new_balance=Decimal("1000.0000"),
+                    execution_environment="paper",  # required (#622+#686)
                 )
 
         assert cursor.execute.call_count == 4
