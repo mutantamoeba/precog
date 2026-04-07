@@ -10,8 +10,18 @@ Tests the SCD Type 2 upsert logic for game_odds records, verifying:
 These tests mock the database cursor to verify SQL logic without
 requiring a live database connection.
 
+Issue #624 note:
+    upsert_game_odds now wraps its mutation body in
+    retry_on_scd_unique_conflict. The closure begins with a
+    ``SELECT NOW() AS ts`` to capture a single temporal marker per attempt
+    (Pattern 49), so every test's fetchone side_effect list must lead with
+    a ``{"ts": <datetime>}`` row before the SELECT-current row. Similarly,
+    execute.call_count includes the extra SELECT NOW() and the FOR UPDATE
+    lock query has been merged into the SELECT current row.
+
 Related:
     - Issue #533: ESPN DraftKings odds extraction
+    - Issue #624: SCD first-insert race prevention helper adoption
     - Migration 0048: game_odds table with SCD Type 2
     - crud_operations.py: upsert_game_odds()
 
@@ -19,10 +29,16 @@ Usage:
     pytest tests/unit/database/test_upsert_game_odds.py -v
 """
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+# Single temporal marker returned by the closure's SELECT NOW() AS ts.
+# Tests that care about timestamp values can reference this constant.
+_NOW_TS = datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)
+_NOW_ROW = {"ts": _NOW_TS}
 
 # =============================================================================
 # Fixtures
@@ -62,9 +78,12 @@ class TestUpsertGameOddsNewRow:
 
         _, mock_cursor = mock_get_cursor
 
-        # First query (SELECT current) returns None (no existing row)
-        # Second query (INSERT) returns new id
+        # fetchone sequence (Issue #624):
+        #   1. SELECT NOW() AS ts  → {"ts": datetime}
+        #   2. SELECT current row (FOR UPDATE) → None (first insert)
+        #   3. INSERT RETURNING id → {"id": 42}
         mock_cursor.fetchone.side_effect = [
+            _NOW_ROW,
             None,  # SELECT current row
             {"id": 42},  # INSERT RETURNING id
         ]
@@ -81,15 +100,15 @@ class TestUpsertGameOddsNewRow:
         )
 
         assert result == 42
-        # Should have been called twice: SELECT then INSERT
-        assert mock_cursor.execute.call_count == 2
+        # SELECT NOW() + SELECT current + INSERT = 3 calls
+        assert mock_cursor.execute.call_count == 3
 
     def test_passes_all_fields_to_insert(self, mock_get_cursor) -> None:
         """All fields are passed through to the INSERT statement."""
         from precog.database.crud_game_states import upsert_game_odds
 
         _, mock_cursor = mock_get_cursor
-        mock_cursor.fetchone.side_effect = [None, {"id": 1}]
+        mock_cursor.fetchone.side_effect = [_NOW_ROW, None, {"id": 1}]
 
         from datetime import date
 
@@ -124,8 +143,9 @@ class TestUpsertGameOddsNewRow:
             source="espn_poller",
         )
 
-        # Verify the INSERT was called with all values
-        insert_call = mock_cursor.execute.call_args_list[1]
+        # Issue #624: INSERT is now the 3rd execute call (after SELECT NOW()
+        # and SELECT current row). Index 2 is the INSERT.
+        insert_call = mock_cursor.execute.call_args_list[2]
         params = insert_call[0][1]
         assert params[0] == 10  # game_id
         assert params[1] == "football"  # sport
@@ -149,6 +169,7 @@ class TestUpsertGameOddsSCDVersioning:
 
         # Current row has spread_home_close = 3.5
         mock_cursor.fetchone.side_effect = [
+            _NOW_ROW,
             {
                 "id": 100,
                 "spread_home_close": Decimal("3.5"),
@@ -170,14 +191,15 @@ class TestUpsertGameOddsSCDVersioning:
         )
 
         assert result == 101
-        # Should be 3 calls: SELECT, UPDATE (close), INSERT (new)
-        assert mock_cursor.execute.call_count == 3
+        # Issue #624: SELECT NOW() + SELECT current + UPDATE close + INSERT = 4 calls
+        assert mock_cursor.execute.call_count == 4
 
-        # Verify the UPDATE closed the old row
-        close_call = mock_cursor.execute.call_args_list[1]
+        # Verify the UPDATE closed the old row (now call index 2 after NOW() + SELECT)
+        close_call = mock_cursor.execute.call_args_list[2]
         close_sql = close_call[0][0]
         assert "row_current_ind = FALSE" in close_sql
-        assert "row_end_ts = NOW()" in close_sql
+        # Issue #624: close now uses %s placeholder for row_end_ts (was NOW())
+        assert "row_end_ts = %s" in close_sql
 
     def test_creates_new_version_when_moneyline_changes(self, mock_get_cursor) -> None:
         """When moneyline_home_close changes, create new version."""
@@ -186,6 +208,7 @@ class TestUpsertGameOddsSCDVersioning:
         _, mock_cursor = mock_get_cursor
 
         mock_cursor.fetchone.side_effect = [
+            _NOW_ROW,
             {
                 "id": 100,
                 "spread_home_close": Decimal("3.5"),
@@ -207,7 +230,8 @@ class TestUpsertGameOddsSCDVersioning:
         )
 
         assert result == 102
-        assert mock_cursor.execute.call_count == 3  # SELECT + UPDATE + INSERT
+        # Issue #624: SELECT NOW() + SELECT current + UPDATE close + INSERT
+        assert mock_cursor.execute.call_count == 4
 
     def test_creates_new_version_when_total_changes(self, mock_get_cursor) -> None:
         """When total_close changes, create new version."""
@@ -216,6 +240,7 @@ class TestUpsertGameOddsSCDVersioning:
         _, mock_cursor = mock_get_cursor
 
         mock_cursor.fetchone.side_effect = [
+            _NOW_ROW,
             {
                 "id": 100,
                 "spread_home_close": Decimal("3.5"),
@@ -237,7 +262,8 @@ class TestUpsertGameOddsSCDVersioning:
         )
 
         assert result == 103
-        assert mock_cursor.execute.call_count == 3
+        # Issue #624: SELECT NOW() + SELECT current + UPDATE close + INSERT
+        assert mock_cursor.execute.call_count == 4
 
     def test_no_new_version_when_unchanged(self, mock_get_cursor) -> None:
         """When all tracked values are the same, just update updated_at."""
@@ -246,6 +272,7 @@ class TestUpsertGameOddsSCDVersioning:
         _, mock_cursor = mock_get_cursor
 
         mock_cursor.fetchone.side_effect = [
+            _NOW_ROW,
             {
                 "id": 100,
                 "spread_home_close": Decimal("3.5"),
@@ -267,13 +294,14 @@ class TestUpsertGameOddsSCDVersioning:
 
         # Should return existing row id
         assert result == 100
-        # Only 2 calls: SELECT + UPDATE updated_at (no INSERT)
-        assert mock_cursor.execute.call_count == 2
+        # Issue #624: SELECT NOW() + SELECT current + UPDATE updated_at (no INSERT)
+        assert mock_cursor.execute.call_count == 3
 
-        # Verify the update was just for updated_at
-        update_call = mock_cursor.execute.call_args_list[1]
+        # Verify the update was just for updated_at (now call index 2)
+        update_call = mock_cursor.execute.call_args_list[2]
         update_sql = update_call[0][0]
-        assert "updated_at = NOW()" in update_sql
+        # Issue #624: updated_at now uses %s placeholder
+        assert "updated_at = %s" in update_sql
         assert "row_current_ind" not in update_sql
 
     def test_none_vs_none_is_unchanged(self, mock_get_cursor) -> None:
@@ -283,6 +311,7 @@ class TestUpsertGameOddsSCDVersioning:
         _, mock_cursor = mock_get_cursor
 
         mock_cursor.fetchone.side_effect = [
+            _NOW_ROW,
             {
                 "id": 100,
                 "spread_home_close": None,
@@ -303,7 +332,8 @@ class TestUpsertGameOddsSCDVersioning:
         )
 
         assert result == 100
-        assert mock_cursor.execute.call_count == 2  # SELECT + UPDATE updated_at
+        # Issue #624: SELECT NOW() + SELECT current + UPDATE updated_at
+        assert mock_cursor.execute.call_count == 3
 
     def test_none_to_value_is_changed(self, mock_get_cursor) -> None:
         """When DB has None and new value is set, that's a change."""
@@ -312,6 +342,7 @@ class TestUpsertGameOddsSCDVersioning:
         _, mock_cursor = mock_get_cursor
 
         mock_cursor.fetchone.side_effect = [
+            _NOW_ROW,
             {
                 "id": 100,
                 "spread_home_close": None,
@@ -333,7 +364,8 @@ class TestUpsertGameOddsSCDVersioning:
         )
 
         assert result == 104
-        assert mock_cursor.execute.call_count == 3  # SELECT + UPDATE + INSERT
+        # Issue #624: SELECT NOW() + SELECT current + UPDATE close + INSERT
+        assert mock_cursor.execute.call_count == 4
 
     def test_value_to_none_is_changed(self, mock_get_cursor) -> None:
         """When DB has a value and new is None, that's a change."""
@@ -342,6 +374,7 @@ class TestUpsertGameOddsSCDVersioning:
         _, mock_cursor = mock_get_cursor
 
         mock_cursor.fetchone.side_effect = [
+            _NOW_ROW,
             {
                 "id": 100,
                 "spread_home_close": Decimal("3.5"),
@@ -363,4 +396,5 @@ class TestUpsertGameOddsSCDVersioning:
         )
 
         assert result == 105
-        assert mock_cursor.execute.call_count == 3
+        # Issue #624: SELECT NOW() + SELECT current + UPDATE close + INSERT
+        assert mock_cursor.execute.call_count == 4

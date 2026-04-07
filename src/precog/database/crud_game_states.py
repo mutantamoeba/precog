@@ -15,6 +15,7 @@ from decimal import Decimal
 from typing import Any, cast
 
 from .connection import fetch_all, fetch_one, get_cursor
+from .crud_shared import retry_on_scd_unique_conflict
 
 logger = logging.getLogger(__name__)
 
@@ -411,14 +412,30 @@ def upsert_game_state(
     #
     # Educational Note:
     #   SCD Type 2 upsert is a 2-step atomic operation:
-    #   1. Close current row (row_current_ind = FALSE)
-    #   2. Insert new row with row_current_ind = TRUE
-    #   Both must succeed or both must fail (ACID transaction)
+    #   1. Lock current row with FOR UPDATE (serializes concurrent updates)
+    #   2. Close current row (row_current_ind = FALSE)
+    #   3. Insert new row with row_current_ind = TRUE
+    #   All must succeed or all must fail (ACID transaction)
+    #
+    # Issue #623: SCD first-insert race. On the FIRST upsert for a brand-new
+    # espn_event_id, the FOR UPDATE lock finds zero rows to lock, so two
+    # concurrent callers can race into the INSERT and collide on
+    # idx_game_states_current_unique. retry_on_scd_unique_conflict catches
+    # that specific collision and re-runs the closure in a fresh transaction,
+    # where the sibling caller's row is now visible and the close+insert
+    # proceeds normally.
+
+    lock_query = """
+        SELECT id FROM game_states
+        WHERE espn_event_id = %s
+          AND row_current_ind = TRUE
+        FOR UPDATE
+    """
 
     close_query = """
         UPDATE game_states
         SET row_current_ind = FALSE,
-            row_end_ts = NOW()
+            row_end_ts = %s
         WHERE espn_event_id = %s
           AND row_current_ind = TRUE
     """
@@ -433,43 +450,78 @@ def upsert_game_state(
         )
         VALUES (
             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-            %s, %s, TRUE, NOW()
+            %s, %s, TRUE, %s
         )
         RETURNING id
     """
 
-    with get_cursor(commit=True) as cur:
-        # Step 1: Close current row (if exists)
-        cur.execute(close_query, (espn_event_id,))
+    def _attempt_close_and_insert() -> int:
+        """One attempt at the SCD close+insert sequence.
 
-        # Step 2: Insert new row
-        cur.execute(
-            insert_query,
-            (
-                espn_event_id,
-                home_team_id,
-                away_team_id,
-                venue_id,
-                home_score,
-                away_score,
-                period,
-                clock_seconds,
-                clock_display,
-                game_status,
-                game_date,
-                broadcast,
-                neutral_site,
-                season_type,
-                week_number,
-                league,
-                json.dumps(situation) if situation else None,
-                json.dumps(linescores) if linescores else None,
-                data_source,
-                game_id,
-            ),
-        )
-        result = cur.fetchone()
-        return cast("int", result["id"])
+        Opens its own ``get_cursor(commit=True)`` block so the retry helper
+        can run this closure twice and get a fresh transaction (with a fresh
+        MVCC snapshot) on the second invocation. NOW() is captured INSIDE
+        each attempt so the close and insert use a single timestamp per
+        attempt -- never carrying a timestamp across the retry boundary,
+        which would create backward temporal intervals.
+        """
+        with get_cursor(commit=True) as cur:
+            # Capture timestamp once for temporal continuity within THIS attempt.
+            cur.execute("SELECT NOW() AS ts")
+            now = cur.fetchone()["ts"]
+
+            # Step 1: Lock current row (if any). On the first-insert path
+            # this returns zero rows; on retry the sibling caller's row is
+            # now visible and gets locked.
+            cur.execute(lock_query, (espn_event_id,))
+
+            # Step 2: Close current row (no-op if no current row exists).
+            cur.execute(close_query, (now, espn_event_id))
+
+            # Step 3: Insert new row with matching row_start_ts.
+            cur.execute(
+                insert_query,
+                (
+                    espn_event_id,
+                    home_team_id,
+                    away_team_id,
+                    venue_id,
+                    home_score,
+                    away_score,
+                    period,
+                    clock_seconds,
+                    clock_display,
+                    game_status,
+                    game_date,
+                    broadcast,
+                    neutral_site,
+                    season_type,
+                    week_number,
+                    league,
+                    json.dumps(situation) if situation else None,
+                    json.dumps(linescores) if linescores else None,
+                    data_source,
+                    game_id,
+                    now,
+                ),
+            )
+            result = cur.fetchone()
+            if result is None or result.get("id") is None:
+                raise RuntimeError(
+                    "INSERT INTO game_states RETURNING id produced no row -- "
+                    "this should be impossible after a successful INSERT and "
+                    "indicates a DB trigger or constraint suppressed the return."
+                )
+            return cast("int", result["id"])
+
+    # Wrap the attempt in the SCD race-prevention retry helper. See issue #623
+    # and crud_shared.retry_on_scd_unique_conflict for the full design.
+    return retry_on_scd_unique_conflict(
+        _attempt_close_and_insert,
+        "idx_game_states_current_unique",
+        business_key={"espn_event_id": espn_event_id},
+        logger_override=logger,
+    )
 
 
 def get_game_state_history(espn_event_id: str, limit: int = 100) -> list[dict[str, Any]]:
@@ -1326,126 +1378,178 @@ def upsert_game_odds(
         - Issue #533: ESPN DraftKings odds extraction
         - Migration 0048: game_odds table with SCD Type 2
         - update_market_with_versioning() for pattern reference
+        - Issue #624: SCD first-insert race prevention via
+          retry_on_scd_unique_conflict helper.
     """
-    with get_cursor(commit=True) as cur:
-        # Step 1: Find current row for this game+sportsbook
-        cur.execute(
-            """
-            SELECT id, spread_home_close, moneyline_home_close,
-                   moneyline_away_close, total_close
-            FROM game_odds
-            WHERE game_id = %s
-              AND sportsbook = %s
-              AND row_current_ind = TRUE
-            """,
-            (game_id, sportsbook),
-        )
-        current = cur.fetchone()
 
-        if current is not None:
-            # Step 2: Compare tracked fields for change detection
-            # Convert DB Decimals to strings for safe comparison with incoming values
-            def _eq(db_val: Any, new_val: Any) -> bool:
-                """Compare DB value to new value, treating None == None."""
-                if db_val is None and new_val is None:
-                    return True
-                if db_val is None or new_val is None:
-                    return False
-                return str(db_val) == str(new_val)
+    def _eq(db_val: Any, new_val: Any) -> bool:
+        """Compare DB value to new value, treating None == None."""
+        if db_val is None and new_val is None:
+            return True
+        if db_val is None or new_val is None:
+            return False
+        return str(db_val) == str(new_val)
 
-            changed = not all(
-                [
-                    _eq(current["spread_home_close"], spread_home_close),
-                    _eq(current["moneyline_home_close"], moneyline_home_close),
-                    _eq(current["moneyline_away_close"], moneyline_away_close),
-                    _eq(current["total_close"], total_close),
-                ]
-            )
+    def _attempt_upsert() -> int | None:
+        """One attempt at the SCD lookup + close + insert sequence.
 
-            if not changed:
-                # No line movement -- just bump updated_at
-                cur.execute(
-                    "UPDATE game_odds SET updated_at = NOW() WHERE id = %s",
-                    (current["id"],),
-                )
-                return cast("int", current["id"])
+        Opens its own ``get_cursor(commit=True)`` block so the retry helper
+        can run this closure twice and get a fresh transaction (with a fresh
+        MVCC snapshot) on the second invocation. NOW() is captured INSIDE
+        each attempt so the close and insert use a single timestamp per
+        attempt.
 
-            # Step 3: Close current row (SCD Type 2)
+        Issue #624: first-insert race on (game_id, sportsbook). On the retry,
+        the sibling caller's row is visible; the FOR UPDATE lock finds it;
+        the normal close+insert path proceeds.
+        """
+        with get_cursor(commit=True) as cur:
+            # Capture timestamp once for temporal continuity within THIS attempt.
+            cur.execute("SELECT NOW() AS ts")
+            now = cur.fetchone()["ts"]
+
+            # Step 1: Lock current row for this game+sportsbook (if any).
+            # FOR UPDATE serializes concurrent updates. On the first-insert
+            # path this returns zero rows; on retry, the sibling's row is
+            # visible and gets locked.
             cur.execute(
                 """
-                UPDATE game_odds
-                SET row_current_ind = FALSE,
-                    row_end_ts = NOW()
-                WHERE id = %s
+                SELECT id, spread_home_close, moneyline_home_close,
+                       moneyline_away_close, total_close
+                FROM game_odds
+                WHERE game_id = %s
+                  AND sportsbook = %s
+                  AND row_current_ind = TRUE
+                FOR UPDATE
                 """,
-                (current["id"],),
+                (game_id, sportsbook),
             )
+            current = cur.fetchone()
 
-        # Step 4: Insert new version
-        cur.execute(
-            """
-            INSERT INTO game_odds (
-                game_id, sport, game_date, home_team_code, away_team_code,
-                sportsbook, source,
-                spread_home_open, spread_home_close,
-                spread_home_odds_open, spread_home_odds_close,
-                spread_away_odds_open, spread_away_odds_close,
-                moneyline_home_open, moneyline_home_close,
-                moneyline_away_open, moneyline_away_close,
-                total_open, total_close,
-                over_odds_open, over_odds_close,
-                under_odds_open, under_odds_close,
-                home_favorite, away_favorite,
-                home_favorite_at_open, away_favorite_at_open,
-                details_text,
-                home_team_id, away_team_id,
-                row_current_ind, row_start_ts, updated_at
+            if current is not None:
+                # Step 2: Compare tracked fields for change detection.
+                changed = not all(
+                    [
+                        _eq(current["spread_home_close"], spread_home_close),
+                        _eq(current["moneyline_home_close"], moneyline_home_close),
+                        _eq(current["moneyline_away_close"], moneyline_away_close),
+                        _eq(current["total_close"], total_close),
+                    ]
+                )
+
+                if not changed:
+                    # No line movement -- just bump updated_at.
+                    cur.execute(
+                        "UPDATE game_odds SET updated_at = %s WHERE id = %s",
+                        (now, current["id"]),
+                    )
+                    return cast("int", current["id"])
+
+                # Step 3: Close current row (SCD Type 2).
+                cur.execute(
+                    """
+                    UPDATE game_odds
+                    SET row_current_ind = FALSE,
+                        row_end_ts = %s
+                    WHERE id = %s
+                    """,
+                    (now, current["id"]),
+                )
+
+            # Step 4: Insert new version with matching row_start_ts.
+            cur.execute(
+                """
+                INSERT INTO game_odds (
+                    game_id, sport, game_date, home_team_code, away_team_code,
+                    sportsbook, source,
+                    spread_home_open, spread_home_close,
+                    spread_home_odds_open, spread_home_odds_close,
+                    spread_away_odds_open, spread_away_odds_close,
+                    moneyline_home_open, moneyline_home_close,
+                    moneyline_away_open, moneyline_away_close,
+                    total_open, total_close,
+                    over_odds_open, over_odds_close,
+                    under_odds_open, under_odds_close,
+                    home_favorite, away_favorite,
+                    home_favorite_at_open, away_favorite_at_open,
+                    details_text,
+                    home_team_id, away_team_id,
+                    row_current_ind, row_start_ts, updated_at
+                )
+                VALUES (
+                    %s, %s, %s, %s, %s,
+                    %s, %s,
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    %s,
+                    %s, %s,
+                    TRUE, %s, %s
+                )
+                RETURNING id
+                """,
+                (
+                    game_id,
+                    sport,
+                    game_date,
+                    home_team_code,
+                    away_team_code,
+                    sportsbook,
+                    source,
+                    spread_home_open,
+                    spread_home_close,
+                    spread_home_odds_open,
+                    spread_home_odds_close,
+                    spread_away_odds_open,
+                    spread_away_odds_close,
+                    moneyline_home_open,
+                    moneyline_home_close,
+                    moneyline_away_open,
+                    moneyline_away_close,
+                    total_open,
+                    total_close,
+                    over_odds_open,
+                    over_odds_close,
+                    under_odds_open,
+                    under_odds_close,
+                    home_favorite,
+                    away_favorite,
+                    home_favorite_at_open,
+                    away_favorite_at_open,
+                    details_text,
+                    home_team_id,
+                    away_team_id,
+                    now,
+                    now,
+                ),
             )
-            VALUES (
-                %s, %s, %s, %s, %s,
-                %s, %s,
-                %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s,
-                %s, %s, %s, %s, %s, %s,
-                %s, %s, %s, %s,
-                %s,
-                %s, %s,
-                TRUE, NOW(), NOW()
-            )
-            RETURNING id
-            """,
-            (
-                game_id,
-                sport,
-                game_date,
-                home_team_code,
-                away_team_code,
-                sportsbook,
-                source,
-                spread_home_open,
-                spread_home_close,
-                spread_home_odds_open,
-                spread_home_odds_close,
-                spread_away_odds_open,
-                spread_away_odds_close,
-                moneyline_home_open,
-                moneyline_home_close,
-                moneyline_away_open,
-                moneyline_away_close,
-                total_open,
-                total_close,
-                over_odds_open,
-                over_odds_close,
-                under_odds_open,
-                under_odds_close,
-                home_favorite,
-                away_favorite,
-                home_favorite_at_open,
-                away_favorite_at_open,
-                details_text,
-                home_team_id,
-                away_team_id,
-            ),
-        )
-        row = cur.fetchone()
-        return cast("int", row["id"]) if row else None
+            row = cur.fetchone()
+            if row is None or row.get("id") is None:
+                raise RuntimeError(
+                    "INSERT INTO game_odds RETURNING id produced no row -- "
+                    "this should be impossible after a successful INSERT and "
+                    "indicates a DB trigger or constraint suppressed the return."
+                )
+            return cast("int", row["id"])
+
+    # Issue #624 scoping note: the game_odds table has TWO partial unique
+    # indexes that both enforce "at most one current row" per business key:
+    #   1. uq_game_odds_game_book ON (sport, game_date, home_team_code,
+    #      away_team_code, sportsbook) WHERE row_current_ind = TRUE
+    #      (migration 0048, created first)
+    #   2. uq_game_odds_game_sportsbook_current ON (game_id, sportsbook)
+    #      WHERE game_id IS NOT NULL AND row_current_ind = TRUE
+    #      (migration 0048, created second)
+    # PostgreSQL checks partial unique indexes in creation order, so
+    # uq_game_odds_game_book fires FIRST under a concurrent first-insert
+    # race. Discriminating on uq_game_odds_game_sportsbook_current would
+    # miss the real collision site. The issue body only named the second
+    # index; the test suite proved the first one is the one that actually
+    # raises UniqueViolation.
+    return retry_on_scd_unique_conflict(
+        _attempt_upsert,
+        "uq_game_odds_game_book",
+        business_key={"game_id": game_id, "sportsbook": sportsbook},
+        logger_override=logger,
+    )

@@ -373,7 +373,15 @@ class TestGameStateNullHandling:
             rather than NULL to represent "no score yet".
         """
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
+        # PR #631 SCD retry helper adoption (issue #623): the closure now
+        # captures NOW() inside its own transaction, so fetchone is called
+        # twice (once for the timestamp row, once for the INSERT RETURNING id).
+        # The FOR UPDATE lock query's fetchone result is not consumed by the
+        # closure, so no placeholder is needed for it.
+        mock_cursor.fetchone.side_effect = [
+            {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            {"id": 1},  # INSERT RETURNING id
+        ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -398,7 +406,15 @@ class TestGameStateNullHandling:
             fetched), it should be NULL rather than an empty object.
         """
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
+        # PR #631 SCD retry helper adoption (issue #623): the closure now
+        # captures NOW() inside its own transaction, so fetchone is called
+        # twice (once for the timestamp row, once for the INSERT RETURNING id).
+        # The FOR UPDATE lock query's fetchone result is not consumed by the
+        # closure, so no placeholder is needed for it.
+        mock_cursor.fetchone.side_effect = [
+            {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            {"id": 1},  # INSERT RETURNING id
+        ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -435,7 +451,15 @@ class TestGameStateBoundaryValues:
             started) or default values.
         """
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
+        # PR #631 SCD retry helper adoption (issue #623): the closure now
+        # captures NOW() inside its own transaction, so fetchone is called
+        # twice (once for the timestamp row, once for the INSERT RETURNING id).
+        # The FOR UPDATE lock query's fetchone result is not consumed by the
+        # closure, so no placeholder is needed for it.
+        mock_cursor.fetchone.side_effect = [
+            {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            {"id": 1},  # INSERT RETURNING id
+        ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -461,7 +485,15 @@ class TestGameStateBoundaryValues:
             up to at least 100+ without issues.
         """
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
+        # PR #631 SCD retry helper adoption (issue #623): the closure now
+        # captures NOW() inside its own transaction, so fetchone is called
+        # twice (once for the timestamp row, once for the INSERT RETURNING id).
+        # The FOR UPDATE lock query's fetchone result is not consumed by the
+        # closure, so no placeholder is needed for it.
+        mock_cursor.fetchone.side_effect = [
+            {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            {"id": 1},  # INSERT RETURNING id
+        ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -487,7 +519,15 @@ class TestGameStateBoundaryValues:
             The period field must handle values greater than 4.
         """
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
+        # PR #631 SCD retry helper adoption (issue #623): the closure now
+        # captures NOW() inside its own transaction, so fetchone is called
+        # twice (once for the timestamp row, once for the INSERT RETURNING id).
+        # The FOR UPDATE lock query's fetchone result is not consumed by the
+        # closure, so no placeholder is needed for it.
+        mock_cursor.fetchone.side_effect = [
+            {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            {"id": 1},  # INSERT RETURNING id
+        ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -525,7 +565,15 @@ class TestGameStateEdgeCases:
             the JSONB field handles empty arrays correctly.
         """
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
+        # PR #631 SCD retry helper adoption (issue #623): the closure now
+        # captures NOW() inside its own transaction, so fetchone is called
+        # twice (once for the timestamp row, once for the INSERT RETURNING id).
+        # The FOR UPDATE lock query's fetchone result is not consumed by the
+        # closure, so no placeholder is needed for it.
+        mock_cursor.fetchone.side_effect = [
+            {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            {"id": 1},  # INSERT RETURNING id
+        ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -550,7 +598,15 @@ class TestGameStateEdgeCases:
             structures are handled correctly by psycopg2's Json adapter.
         """
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
+        # PR #631 SCD retry helper adoption (issue #623): the closure now
+        # captures NOW() inside its own transaction, so fetchone is called
+        # twice (once for the timestamp row, once for the INSERT RETURNING id).
+        # The FOR UPDATE lock query's fetchone result is not consumed by the
+        # closure, so no placeholder is needed for it.
+        mock_cursor.fetchone.side_effect = [
+            {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            {"id": 1},  # INSERT RETURNING id
+        ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -597,7 +653,15 @@ class TestGameStateEdgeCases:
             UTF-8 correctly through the database layer.
         """
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
+        # PR #631 SCD retry helper adoption (issue #623): the closure now
+        # captures NOW() inside its own transaction, so fetchone is called
+        # twice (once for the timestamp row, once for the INSERT RETURNING id).
+        # The FOR UPDATE lock query's fetchone result is not consumed by the
+        # closure, so no placeholder is needed for it.
+        mock_cursor.fetchone.side_effect = [
+            {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            {"id": 1},  # INSERT RETURNING id
+        ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -710,7 +774,15 @@ class TestDecimalPrecisionChaos:
             database column and Python handling are compatible.
         """
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
+        # PR #631 SCD retry helper adoption (issue #623): the closure now
+        # captures NOW() inside its own transaction, so fetchone is called
+        # twice (once for the timestamp row, once for the INSERT RETURNING id).
+        # The FOR UPDATE lock query's fetchone result is not consumed by the
+        # closure, so no placeholder is needed for it.
+        mock_cursor.fetchone.side_effect = [
+            {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            {"id": 1},  # INSERT RETURNING id
+        ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -735,7 +807,15 @@ class TestDecimalPrecisionChaos:
             loss or rounding issues near zero.
         """
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
+        # PR #631 SCD retry helper adoption (issue #623): the closure now
+        # captures NOW() inside its own transaction, so fetchone is called
+        # twice (once for the timestamp row, once for the INSERT RETURNING id).
+        # The FOR UPDATE lock query's fetchone result is not consumed by the
+        # closure, so no placeholder is needed for it.
+        mock_cursor.fetchone.side_effect = [
+            {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            {"id": 1},  # INSERT RETURNING id
+        ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -760,7 +840,15 @@ class TestDecimalPrecisionChaos:
             None or invalid.
         """
         mock_cursor = MagicMock()
-        mock_cursor.fetchone.return_value = {"id": 1}
+        # PR #631 SCD retry helper adoption (issue #623): the closure now
+        # captures NOW() inside its own transaction, so fetchone is called
+        # twice (once for the timestamp row, once for the INSERT RETURNING id).
+        # The FOR UPDATE lock query's fetchone result is not consumed by the
+        # closure, so no placeholder is needed for it.
+        mock_cursor.fetchone.side_effect = [
+            {"ts": datetime(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},  # SELECT NOW() AS ts
+            {"id": 1},  # INSERT RETURNING id
+        ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
