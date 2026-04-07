@@ -14,6 +14,7 @@ from typing import Any, cast
 
 from .connection import fetch_all, fetch_one, get_cursor
 from .crud_shared import (
+    retry_on_scd_unique_conflict,
     validate_decimal,
 )
 
@@ -529,154 +530,203 @@ def update_market_with_versioning(
     if previous_price is not None:
         previous_price = validate_decimal(previous_price, "previous_price")
 
-    # Get current market + snapshot
-    current = get_current_market(ticker)
-    if not current:
-        msg = f"Market not found: {ticker}"
-        raise ValueError(msg)
+    def _attempt_update_and_snapshot() -> int:
+        """One attempt at the dimension UPDATE + SCD snapshot close+insert.
 
-    market_pk = current["id"]
+        Opens its own ``get_cursor(commit=True)`` block so the retry helper
+        can run this closure twice and get a fresh transaction (with a fresh
+        MVCC snapshot) on the second invocation.
 
-    # Determine what changed
-    new_yes = yes_ask_price if yes_ask_price is not None else current["yes_ask_price"]
-    new_no = no_ask_price if no_ask_price is not None else current["no_ask_price"]
-    new_status = status if status is not None else current["status"]
-    new_volume = volume if volume is not None else current["volume"]
-    new_open_interest = open_interest if open_interest is not None else current["open_interest"]
-    new_metadata = market_metadata if market_metadata is not None else current["metadata"]
+        Issue #625: concurrent-update race on market_snapshots. When two
+        callers update the same market's snapshot concurrently, both can
+        close (the second as a no-op) and both can INSERT, colliding on
+        idx_market_snapshots_unique_current. On retry, the FOR UPDATE lock
+        serializes the second caller against the sibling's committed row,
+        and the close+insert path proceeds normally.
 
-    # Snapshot microstructure: use fresh values when provided, fall back to current
-    new_spread = spread if spread is not None else current["spread"]
-    new_yes_bid = yes_bid_price if yes_bid_price is not None else current["yes_bid_price"]
-    new_no_bid = no_bid_price if no_bid_price is not None else current["no_bid_price"]
-    new_last_price = last_price if last_price is not None else current["last_price"]
-    new_liquidity = liquidity if liquidity is not None else current["liquidity"]
+        ``get_current_market`` is called INSIDE the closure so retries pick
+        up fresh snapshot values committed by the sibling caller. NOW() is
+        captured INSIDE each attempt for temporal continuity.
+        """
+        # Re-fetch current market + snapshot on each attempt so retries see
+        # the sibling caller's now-committed row.
+        current = get_current_market(ticker)
+        if not current:
+            msg = f"Market not found: {ticker}"
+            raise ValueError(msg)
 
-    # Migration 0046: snapshot enrichment — use fresh values, fall back to current
-    new_volume_24h = volume_24h if volume_24h is not None else current.get("volume_24h")
-    new_prev_yes_bid = (
-        previous_yes_bid if previous_yes_bid is not None else current.get("previous_yes_bid")
-    )
-    new_prev_yes_ask = (
-        previous_yes_ask if previous_yes_ask is not None else current.get("previous_yes_ask")
-    )
-    new_prev_price = previous_price if previous_price is not None else current.get("previous_price")
-    new_yes_bid_size = yes_bid_size if yes_bid_size is not None else current.get("yes_bid_size")
-    new_yes_ask_size = yes_ask_size if yes_ask_size is not None else current.get("yes_ask_size")
+        market_pk = current["id"]
 
-    # Enrichment columns: only override if explicitly provided (not None)
-    new_subtitle = subtitle if subtitle is not None else current["subtitle"]
-    new_open_time = open_time if open_time is not None else current["open_time"]
-    new_close_time = close_time if close_time is not None else current["close_time"]
-    new_expiration_time = (
-        expiration_time if expiration_time is not None else current["expiration_time"]
-    )
-    new_outcome_label = outcome_label if outcome_label is not None else current["outcome_label"]
-    new_subcategory = subcategory if subcategory is not None else current["subcategory"]
-    new_bracket_count = bracket_count if bracket_count is not None else current["bracket_count"]
-    new_source_url = source_url if source_url is not None else current["source_url"]
-    new_settlement_value = (
-        settlement_value if settlement_value is not None else current["settlement_value"]
-    )
-    # Migration 0046: dimension enrichment — use fresh values, fall back to current
-    new_expiration_value = (
-        expiration_value if expiration_value is not None else current.get("expiration_value")
-    )
-    new_notional_value = (
-        notional_value if notional_value is not None else current.get("notional_value")
-    )
+        # Determine what changed
+        new_yes = yes_ask_price if yes_ask_price is not None else current["yes_ask_price"]
+        new_no = no_ask_price if no_ask_price is not None else current["no_ask_price"]
+        new_status = status if status is not None else current["status"]
+        new_volume = volume if volume is not None else current["volume"]
+        new_open_interest = open_interest if open_interest is not None else current["open_interest"]
+        new_metadata = market_metadata if market_metadata is not None else current["metadata"]
 
-    with get_cursor(commit=True) as cur:
-        # Step 1: Update dimension row — always bump updated_at, plus
-        # status/metadata/enrichment if they changed.
-        # Migration 0033: enrichment columns updated on dimension row.
-        # Migration 0046: expiration_value, notional_value added.
-        cur.execute(
-            """
-            UPDATE markets
-            SET status = %s,
-                metadata = %s,
-                subtitle = %s,
-                open_time = %s,
-                close_time = %s,
-                expiration_time = %s,
-                outcome_label = %s,
-                subcategory = %s,
-                bracket_count = %s,
-                source_url = %s,
-                settlement_value = %s,
-                expiration_value = %s,
-                notional_value = %s,
-                updated_at = NOW()
-            WHERE id = %s
-            """,
-            (
-                new_status,
-                json.dumps(new_metadata) if new_metadata else None,
-                new_subtitle,
-                new_open_time,
-                new_close_time,
-                new_expiration_time,
-                new_outcome_label,
-                new_subcategory,
-                new_bracket_count,
-                new_source_url,
-                new_settlement_value,
-                new_expiration_value,
-                new_notional_value,
-                market_pk,
-            ),
+        # Snapshot microstructure: use fresh values when provided, fall back to current
+        new_spread = spread if spread is not None else current["spread"]
+        new_yes_bid = yes_bid_price if yes_bid_price is not None else current["yes_bid_price"]
+        new_no_bid = no_bid_price if no_bid_price is not None else current["no_bid_price"]
+        new_last_price = last_price if last_price is not None else current["last_price"]
+        new_liquidity = liquidity if liquidity is not None else current["liquidity"]
+
+        # Migration 0046: snapshot enrichment — use fresh values, fall back to current
+        new_volume_24h = volume_24h if volume_24h is not None else current.get("volume_24h")
+        new_prev_yes_bid = (
+            previous_yes_bid if previous_yes_bid is not None else current.get("previous_yes_bid")
+        )
+        new_prev_yes_ask = (
+            previous_yes_ask if previous_yes_ask is not None else current.get("previous_yes_ask")
+        )
+        new_prev_price = (
+            previous_price if previous_price is not None else current.get("previous_price")
+        )
+        new_yes_bid_size = yes_bid_size if yes_bid_size is not None else current.get("yes_bid_size")
+        new_yes_ask_size = yes_ask_size if yes_ask_size is not None else current.get("yes_ask_size")
+
+        # Enrichment columns: only override if explicitly provided (not None)
+        new_subtitle = subtitle if subtitle is not None else current["subtitle"]
+        new_open_time = open_time if open_time is not None else current["open_time"]
+        new_close_time = close_time if close_time is not None else current["close_time"]
+        new_expiration_time = (
+            expiration_time if expiration_time is not None else current["expiration_time"]
+        )
+        new_outcome_label = outcome_label if outcome_label is not None else current["outcome_label"]
+        new_subcategory = subcategory if subcategory is not None else current["subcategory"]
+        new_bracket_count = bracket_count if bracket_count is not None else current["bracket_count"]
+        new_source_url = source_url if source_url is not None else current["source_url"]
+        new_settlement_value = (
+            settlement_value if settlement_value is not None else current["settlement_value"]
+        )
+        # Migration 0046: dimension enrichment — use fresh values, fall back to current
+        new_expiration_value = (
+            expiration_value if expiration_value is not None else current.get("expiration_value")
+        )
+        new_notional_value = (
+            notional_value if notional_value is not None else current.get("notional_value")
         )
 
-        # Step 2: Create new snapshot (SCD Type 2 on market_snapshots)
-        # Mark current snapshot as historical
-        cur.execute(
-            """
-            UPDATE market_snapshots
-            SET row_current_ind = FALSE,
-                row_end_ts = NOW()
-            WHERE market_id = %s
-              AND row_current_ind = TRUE
-            """,
-            (market_pk,),
-        )
+        with get_cursor(commit=True) as cur:
+            # Capture timestamp once for temporal continuity within THIS attempt.
+            cur.execute("SELECT NOW() AS ts")
+            now = cur.fetchone()["ts"]
 
-        # Insert new snapshot
-        # Migration 0021: yes_bid_price, no_bid_price, last_price, liquidity
-        # Migration 0046: volume_24h, previous_*, yes_bid_size, yes_ask_size
-        cur.execute(
-            """
-            INSERT INTO market_snapshots (
-                market_id, yes_ask_price, no_ask_price,
-                yes_bid_price, no_bid_price, last_price,
-                spread, volume, open_interest, liquidity,
-                volume_24h, previous_yes_bid, previous_yes_ask,
-                previous_price, yes_bid_size, yes_ask_size,
-                row_current_ind, updated_at
+            # Step 0: Lock the current snapshot row (if any) for the target
+            # market. FOR UPDATE serializes concurrent updates; on retry the
+            # sibling caller's committed row is visible and gets locked.
+            cur.execute(
+                """
+                SELECT id FROM market_snapshots
+                WHERE market_id = %s
+                  AND row_current_ind = TRUE
+                FOR UPDATE
+                """,
+                (market_pk,),
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, NOW())
-            """,
-            (
-                market_pk,
-                new_yes,
-                new_no,
-                new_yes_bid,
-                new_no_bid,
-                new_last_price,
-                new_spread,
-                new_volume,
-                new_open_interest,
-                new_liquidity,
-                new_volume_24h,
-                new_prev_yes_bid,
-                new_prev_yes_ask,
-                new_prev_price,
-                new_yes_bid_size,
-                new_yes_ask_size,
-            ),
-        )
 
-        return cast("int", market_pk)
+            # Step 1: Update dimension row — always bump updated_at, plus
+            # status/metadata/enrichment if they changed.
+            # Migration 0033: enrichment columns updated on dimension row.
+            # Migration 0046: expiration_value, notional_value added.
+            cur.execute(
+                """
+                UPDATE markets
+                SET status = %s,
+                    metadata = %s,
+                    subtitle = %s,
+                    open_time = %s,
+                    close_time = %s,
+                    expiration_time = %s,
+                    outcome_label = %s,
+                    subcategory = %s,
+                    bracket_count = %s,
+                    source_url = %s,
+                    settlement_value = %s,
+                    expiration_value = %s,
+                    notional_value = %s,
+                    updated_at = %s
+                WHERE id = %s
+                """,
+                (
+                    new_status,
+                    json.dumps(new_metadata) if new_metadata else None,
+                    new_subtitle,
+                    new_open_time,
+                    new_close_time,
+                    new_expiration_time,
+                    new_outcome_label,
+                    new_subcategory,
+                    new_bracket_count,
+                    new_source_url,
+                    new_settlement_value,
+                    new_expiration_value,
+                    new_notional_value,
+                    now,
+                    market_pk,
+                ),
+            )
+
+            # Step 2: Create new snapshot (SCD Type 2 on market_snapshots)
+            # Mark current snapshot as historical using the captured timestamp
+            # so the close/insert pair share one temporal boundary.
+            cur.execute(
+                """
+                UPDATE market_snapshots
+                SET row_current_ind = FALSE,
+                    row_end_ts = %s
+                WHERE market_id = %s
+                  AND row_current_ind = TRUE
+                """,
+                (now, market_pk),
+            )
+
+            # Insert new snapshot
+            # Migration 0021: yes_bid_price, no_bid_price, last_price, liquidity
+            # Migration 0046: volume_24h, previous_*, yes_bid_size, yes_ask_size
+            cur.execute(
+                """
+                INSERT INTO market_snapshots (
+                    market_id, yes_ask_price, no_ask_price,
+                    yes_bid_price, no_bid_price, last_price,
+                    spread, volume, open_interest, liquidity,
+                    volume_24h, previous_yes_bid, previous_yes_ask,
+                    previous_price, yes_bid_size, yes_ask_size,
+                    row_current_ind, row_start_ts, updated_at
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, TRUE, %s, %s)
+                """,
+                (
+                    market_pk,
+                    new_yes,
+                    new_no,
+                    new_yes_bid,
+                    new_no_bid,
+                    new_last_price,
+                    new_spread,
+                    new_volume,
+                    new_open_interest,
+                    new_liquidity,
+                    new_volume_24h,
+                    new_prev_yes_bid,
+                    new_prev_yes_ask,
+                    new_prev_price,
+                    new_yes_bid_size,
+                    new_yes_ask_size,
+                    now,
+                    now,
+                ),
+            )
+
+            return cast("int", market_pk)
+
+    return retry_on_scd_unique_conflict(
+        _attempt_update_and_snapshot,
+        "idx_market_snapshots_unique_current",
+        business_key={"ticker": ticker},
+        logger_override=logger,
+    )
 
 
 def get_market_history(ticker: str, limit: int = 100) -> list[dict[str, Any]]:

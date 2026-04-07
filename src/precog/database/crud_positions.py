@@ -14,6 +14,7 @@ from typing import Any, cast
 from .connection import fetch_all, fetch_one, get_cursor
 from .crud_shared import (
     ExecutionEnvironment,
+    retry_on_scd_unique_conflict,
     validate_decimal,
 )
 
@@ -347,75 +348,207 @@ def update_position_price(
         ... )
         >>> # Returns new surrogate id (e.g., 2)
     """
-    # Get current version using surrogate id
-    current = fetch_one(
+    # Get current version using surrogate id. We fetch OUTSIDE the retry
+    # closure to (a) satisfy the "raise ValueError if missing" contract
+    # immediately (no retry on missing positions) and (b) capture the
+    # business key (position_id column) so retries can re-fetch by business
+    # key even after the sibling caller creates a new surrogate id.
+    initial_current = fetch_one(
         "SELECT * FROM positions WHERE id = %s AND row_current_ind = TRUE", (position_id,)
     )
-    if not current:
+    if not initial_current:
         msg = f"Position not found: {position_id}"
         raise ValueError(msg)
 
+    position_bk = initial_current["position_id"]  # Business key (stable across retries)
+
     new_trailing_stop = (
-        trailing_stop_state if trailing_stop_state is not None else current["trailing_stop_state"]
+        trailing_stop_state
+        if trailing_stop_state is not None
+        else initial_current["trailing_stop_state"]
     )
 
     # ⭐ Early return optimization (Issue #113):
     # Skip SCD Type 2 versioning if no state actually changed.
     # This prevents 3600+ unnecessary writes/hour in monitoring loops.
-    price_unchanged = current["current_price"] == current_price
-    trailing_stop_unchanged = current["trailing_stop_state"] == new_trailing_stop
+    # The check runs against the initial fetch; if a sibling caller has
+    # since changed state we fall through and let the closure re-derive
+    # the new version from fresh values.
+    price_unchanged = initial_current["current_price"] == current_price
+    trailing_stop_unchanged = initial_current["trailing_stop_state"] == new_trailing_stop
     if price_unchanged and trailing_stop_unchanged:
         # No state change - return existing id without creating new version
-        return cast("int", current["id"])
+        return cast("int", initial_current["id"])
 
-    with get_cursor(commit=True) as cur:
-        # Mark current as historical using surrogate id
-        cur.execute(
-            """
-            UPDATE positions
-            SET row_current_ind = FALSE,
-                row_end_ts = NOW()
-            WHERE id = %s
-              AND row_current_ind = TRUE
-        """,
-            (position_id,),
-        )
+    def _attempt_close_and_insert() -> int:
+        """One attempt at the SCD close+insert sequence for update_position_price.
 
-        # Insert new version with same position_id (business key) but new id (surrogate)
-        cur.execute(
-            """
-            INSERT INTO positions (
-                position_id, market_internal_id, strategy_id, model_id, side,
-                quantity, entry_price,
-                current_price, unrealized_pnl,
-                target_price, stop_loss_price,
-                trailing_stop_state, position_metadata,
-                status, entry_time, last_check_time
+        Opens its own ``get_cursor(commit=True)`` block so the retry helper
+        can run this closure twice and get a fresh transaction (with a fresh
+        MVCC snapshot) on the second invocation.
+
+        Issue #626: concurrent-update race on positions. Two concurrent
+        update_position_price calls for the same surrogate id can both
+        proceed past their independent close (the second as a no-op) and
+        both INSERT, colliding on idx_positions_unique_current. On retry,
+        we look up the fresh current row by BUSINESS KEY (position_id
+        column) — the surrogate id from the outer fetch is stale after the
+        sibling caller created a new version.
+        """
+        with get_cursor(commit=True) as cur:
+            # Capture timestamp once for temporal continuity within THIS attempt.
+            cur.execute("SELECT NOW() AS ts")
+            now = cur.fetchone()["ts"]
+
+            # Step 1: Lock the current row by business key. FOR UPDATE
+            # serializes concurrent updates against the same position_bk.
+            # On retry the sibling caller's row is visible and gets locked.
+            cur.execute(
+                """
+                SELECT id FROM positions
+                WHERE position_id = %s
+                  AND row_current_ind = TRUE
+                FOR UPDATE
+                """,
+                (position_bk,),
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
-            RETURNING id
-        """,
-            (
-                current["position_id"],  # Copy business key from current version
-                current["market_internal_id"],
-                current["strategy_id"],
-                current["model_id"],
-                current["side"],
-                current["quantity"],
-                current["entry_price"],
-                current_price,
-                (current_price - current["entry_price"]) * current["quantity"],  # unrealized_pnl
-                current["target_price"],
-                current["stop_loss_price"],
-                new_trailing_stop,
-                current["position_metadata"],
-                current["status"],
-                current["entry_time"],
-            ),
-        )
 
-        result = cur.fetchone()
-        return cast("int", result["id"])  # Return new surrogate id
+            # Step 2: Re-fetch the full current row by business key. On the
+            # first attempt this equals initial_current; on retry the
+            # sibling caller's new version is the current row.
+            cur.execute(
+                """
+                SELECT * FROM positions
+                WHERE position_id = %s
+                  AND row_current_ind = TRUE
+                """,
+                (position_bk,),
+            )
+            current = cur.fetchone()
+            if current is None:
+                # Extraordinary state: the business key had a current row
+                # when we fetched outside the closure but no current row
+                # now. A concurrent close_position may have deleted the
+                # current version between the outer fetch and this attempt.
+                # Surface loudly rather than silently insert a new current
+                # row for a position that has been closed.
+                raise RuntimeError(
+                    f"Position business key {position_bk!r} has no current "
+                    f"row inside the retry closure (was present in the "
+                    f"outer fetch). A concurrent close_position may have "
+                    f"closed this position."
+                )
+
+            # Brawne CONCERN 1 parallel (#626 diff-scoped review) +
+            # Marvin recommendation #1 (#627 sentinel pass): refuse to
+            # update a position that is not in the 'open' state. Without
+            # this check, an update racing with a concurrent close hits
+            # this closure on retry, sees a non-open status on the
+            # sibling's committed row, and silently writes a new SCD
+            # version with the caller's price into a position that has
+            # already exited or settled. The status field is preserved
+            # by the INSERT below, so the row stays in its terminal
+            # state -- but the prices/trailing_stop are overwritten with
+            # stale values from a caller who believed it was updating an
+            # open position.
+            #
+            # Why ``!= "open"`` instead of ``== "closed"``: positions
+            # schema (migration 0001) allows ``{'open', 'closed',
+            # 'settled'}`` and the column is nullable. The complete
+            # non-open state space is ``{'closed', 'settled', None}``.
+            # ``'settled'`` is currently unreachable (no writer sets it
+            # on positions.status today) but Kalshi settlement semantics
+            # in api_connectors/types.py and migration 0024's defaulting
+            # behavior leave the door open. NULL is similarly latent.
+            # Use the positive allow-list to close both holes.
+            #
+            # Raise ValueError so position_manager.update_position's
+            # outer ValueError handler can surface the conflict to the
+            # caller (parity with "Position not found").
+            if current["status"] != "open":
+                raise ValueError(
+                    f"Position business key {position_bk!r} is not open "
+                    f"(observed status: {current['status']!r}). A "
+                    f"concurrent close_position or settlement may have "
+                    f"transitioned this position between the outer fetch "
+                    f"and this retry attempt. Refusing to write an "
+                    f"update for a position that is no longer open."
+                )
+
+            # Re-derive trailing_stop from the fresh current row so retries
+            # use the sibling's committed value when caller did not override.
+            fresh_trailing_stop = (
+                trailing_stop_state
+                if trailing_stop_state is not None
+                else current["trailing_stop_state"]
+            )
+
+            # Step 3: Close current row by business key so the close and
+            # the lock target the same row the partial unique index
+            # protects.
+            cur.execute(
+                """
+                UPDATE positions
+                SET row_current_ind = FALSE,
+                    row_end_ts = %s
+                WHERE position_id = %s
+                  AND row_current_ind = TRUE
+                """,
+                (now, position_bk),
+            )
+
+            # Step 4: Insert new version with same position_id (business
+            # key) but new id (surrogate). row_start_ts matches row_end_ts
+            # on the historical row for Pattern 49 temporal continuity.
+            cur.execute(
+                """
+                INSERT INTO positions (
+                    position_id, market_internal_id, strategy_id, model_id, side,
+                    quantity, entry_price,
+                    current_price, unrealized_pnl,
+                    target_price, stop_loss_price,
+                    trailing_stop_state, position_metadata,
+                    status, entry_time, last_check_time, row_start_ts
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    current["position_id"],  # Copy business key from current version
+                    current["market_internal_id"],
+                    current["strategy_id"],
+                    current["model_id"],
+                    current["side"],
+                    current["quantity"],
+                    current["entry_price"],
+                    current_price,
+                    (current_price - current["entry_price"])
+                    * current["quantity"],  # unrealized_pnl
+                    current["target_price"],
+                    current["stop_loss_price"],
+                    fresh_trailing_stop,
+                    current["position_metadata"],
+                    current["status"],
+                    current["entry_time"],
+                    now,
+                    now,
+                ),
+            )
+            result = cur.fetchone()
+            if result is None or result.get("id") is None:
+                raise RuntimeError(
+                    "INSERT INTO positions RETURNING id produced no row -- "
+                    "this should be impossible after a successful INSERT and "
+                    "indicates a DB trigger or constraint suppressed the return."
+                )
+            return cast("int", result["id"])  # Return new surrogate id
+
+    return retry_on_scd_unique_conflict(
+        _attempt_close_and_insert,
+        "idx_positions_unique_current",
+        business_key={"position_id": position_bk},
+        logger_override=logger,
+    )
 
 
 def close_position(
@@ -441,64 +574,174 @@ def close_position(
         ...     realized_pnl=Decimal("8.00")
         ... )
     """
-    # Get current version using surrogate id
-    current = fetch_one(
+    # Get current version using surrogate id. Fetch OUTSIDE the retry
+    # closure to satisfy the "raise ValueError if missing" contract
+    # immediately and capture the business key for retry correctness.
+    initial_current = fetch_one(
         "SELECT * FROM positions WHERE id = %s AND row_current_ind = TRUE", (position_id,)
     )
-    if not current:
+    if not initial_current:
         msg = f"Position not found: {position_id}"
         raise ValueError(msg)
 
-    with get_cursor(commit=True) as cur:
-        # Mark current as historical using surrogate id
-        cur.execute(
-            """
-            UPDATE positions
-            SET row_current_ind = FALSE,
-                row_end_ts = NOW()
-            WHERE id = %s
-              AND row_current_ind = TRUE
-        """,
-            (position_id,),
-        )
+    position_bk = initial_current["position_id"]  # Business key (stable across retries)
 
-        # Insert closed version with same position_id (business key)
-        # NOTE: execution_environment is preserved from original position
-        cur.execute(
-            """
-            INSERT INTO positions (
-                position_id, market_internal_id, strategy_id, model_id, side,
-                quantity, entry_price, exit_price, current_price,
-                realized_pnl,
-                target_price, stop_loss_price,
-                trailing_stop_state, position_metadata,
-                status, entry_time, exit_time, execution_environment
+    def _attempt_close_and_insert() -> int:
+        """One attempt at the SCD close+insert sequence for close_position.
+
+        Opens its own ``get_cursor(commit=True)`` block so the retry helper
+        can run this closure twice and get a fresh transaction on the
+        second invocation.
+
+        Issue #627: concurrent-close race on positions. Two concurrent
+        close_position calls for the same position (e.g., target_hit and
+        stop_loss firing in the same monitor tick) can both proceed past
+        the close (the second as a no-op) and both INSERT, colliding on
+        idx_positions_unique_current. On retry, we look up the fresh
+        current row by BUSINESS KEY (position_id column) — the surrogate
+        id from the outer fetch is stale after the sibling caller created
+        a new version.
+        """
+        with get_cursor(commit=True) as cur:
+            # Capture timestamp once for temporal continuity within THIS attempt.
+            cur.execute("SELECT NOW() AS ts")
+            now = cur.fetchone()["ts"]
+
+            # Step 1: Lock the current row by business key. FOR UPDATE
+            # serializes concurrent close calls against the same position_bk.
+            cur.execute(
+                """
+                SELECT id FROM positions
+                WHERE position_id = %s
+                  AND row_current_ind = TRUE
+                FOR UPDATE
+                """,
+                (position_bk,),
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'closed', %s, NOW(), %s)
-            RETURNING id
-        """,
-            (
-                current["position_id"],  # Copy business key from current version
-                current["market_internal_id"],
-                current["strategy_id"],
-                current["model_id"],
-                current["side"],
-                current["quantity"],
-                current["entry_price"],
-                exit_price,
-                exit_price,  # Set current_price to exit_price for closed positions
-                realized_pnl,
-                current["target_price"],
-                current["stop_loss_price"],
-                current["trailing_stop_state"],
-                current["position_metadata"],
-                current["entry_time"],
-                current["execution_environment"],  # Preserve execution environment
-            ),
-        )
 
-        result = cur.fetchone()
-        return cast("int", result["id"])  # Return new surrogate id
+            # Step 2: Re-fetch the full current row by business key so
+            # retries copy the sibling's committed values into the new
+            # closed version (not stale values from the outer fetch).
+            cur.execute(
+                """
+                SELECT * FROM positions
+                WHERE position_id = %s
+                  AND row_current_ind = TRUE
+                """,
+                (position_bk,),
+            )
+            current = cur.fetchone()
+            if current is None:
+                raise RuntimeError(
+                    f"Position business key {position_bk!r} has no current "
+                    f"row inside the retry closure (was present in the "
+                    f"outer fetch). A concurrent close_position may have "
+                    f"already closed this position."
+                )
+
+            # Brawne CONCERN 1 (#627 diff-scoped review) + Marvin
+            # recommendation #1 (sentinel pass): refuse to close a
+            # position that is not in the 'open' state. Without this
+            # check, two concurrent close_position callers can BOTH
+            # succeed -- the second's retry attempt sees a non-open
+            # status from the first's commit on re-fetch, then proceeds
+            # to close the (already-terminal) current row again with
+            # the SECOND caller's exit_price and realized_pnl, silently
+            # overwriting the first close. The OLD behavior raised
+            # UniqueViolation in this race, which propagated past
+            # position_manager.close_position's `except ValueError`
+            # handler -- loud failure. Preserve that loudness by
+            # raising ValueError here so the outer handler can surface
+            # the conflict to the caller.
+            #
+            # Why ``!= "open"`` instead of ``== "closed"``: positions
+            # schema (migration 0001) allows ``{'open', 'closed',
+            # 'settled'}`` and the column is nullable. The complete
+            # non-open state space is ``{'closed', 'settled', None}``.
+            # ``'settled'`` is currently unreachable but Kalshi
+            # settlement semantics may populate it in Phase 2+. Use the
+            # positive allow-list to defend against the entire
+            # non-open state space.
+            if current["status"] != "open":
+                raise ValueError(
+                    f"Position business key {position_bk!r} is not open "
+                    f"(observed status: {current['status']!r}). A "
+                    f"concurrent close_position or settlement may have "
+                    f"transitioned this position between the outer fetch "
+                    f"and this retry attempt. Refusing to overwrite the "
+                    f"existing terminal state with this caller's "
+                    f"exit_price and realized_pnl."
+                )
+
+            # Step 3: Close current row by business key so the close and
+            # the lock target the same row the partial unique index
+            # protects.
+            cur.execute(
+                """
+                UPDATE positions
+                SET row_current_ind = FALSE,
+                    row_end_ts = %s
+                WHERE position_id = %s
+                  AND row_current_ind = TRUE
+                """,
+                (now, position_bk),
+            )
+
+            # Step 4: Insert closed version with same position_id (business
+            # key). row_start_ts matches row_end_ts on the historical row
+            # for Pattern 49 temporal continuity. execution_environment is
+            # preserved from the original position.
+            cur.execute(
+                """
+                INSERT INTO positions (
+                    position_id, market_internal_id, strategy_id, model_id, side,
+                    quantity, entry_price, exit_price, current_price,
+                    realized_pnl,
+                    target_price, stop_loss_price,
+                    trailing_stop_state, position_metadata,
+                    status, entry_time, exit_time, execution_environment,
+                    row_start_ts
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'closed', %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (
+                    current["position_id"],  # Copy business key from current version
+                    current["market_internal_id"],
+                    current["strategy_id"],
+                    current["model_id"],
+                    current["side"],
+                    current["quantity"],
+                    current["entry_price"],
+                    exit_price,
+                    exit_price,  # Set current_price to exit_price for closed positions
+                    realized_pnl,
+                    current["target_price"],
+                    current["stop_loss_price"],
+                    current["trailing_stop_state"],
+                    current["position_metadata"],
+                    current["entry_time"],
+                    now,  # exit_time
+                    current["execution_environment"],  # Preserve execution environment
+                    now,  # row_start_ts
+                ),
+            )
+
+            result = cur.fetchone()
+            if result is None or result.get("id") is None:
+                raise RuntimeError(
+                    "INSERT INTO positions RETURNING id produced no row -- "
+                    "this should be impossible after a successful INSERT and "
+                    "indicates a DB trigger or constraint suppressed the return."
+                )
+            return cast("int", result["id"])  # Return new surrogate id
+
+    return retry_on_scd_unique_conflict(
+        _attempt_close_and_insert,
+        "idx_positions_unique_current",
+        business_key={"position_id": position_bk},
+        logger_override=logger,
+    )
 
 
 # =============================================================================

@@ -16,7 +16,7 @@ Usage:
     pytest tests/unit/database/test_phase2c_crud.py -v -m unit
 """
 
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
 
@@ -502,13 +502,24 @@ class TestUpsertGameStateUnit:
         """Test upsert_game_state closes current row before inserting.
 
         Educational Note:
-            upsert_game_state makes 2 execute calls:
-            1. close_query - SET row_current_ind = FALSE
-            2. insert_query - INSERT new row RETURNING id
+            Issue #623: upsert_game_state now wraps its mutation body in
+            retry_on_scd_unique_conflict. The closure executes:
+                1. SELECT NOW() AS ts  → {"ts": datetime}
+                2. SELECT id ... FOR UPDATE (lock query) → fetchone not consumed
+                3. close_query - SET row_current_ind = FALSE, row_end_ts = %s
+                4. insert_query - INSERT new row RETURNING id → {"id": ...}
+            The close SQL asserts now use %s placeholder (was NOW()).
         """
+        from datetime import datetime as _dt
+
         mock_cursor = MagicMock()
-        # Mock fetchone to return id for RETURNING clause
-        mock_cursor.fetchone.return_value = {"id": 100}
+        # Mock fetchone to return: NOW() ts row, then INSERT RETURNING id.
+        # (The FOR UPDATE lock query's fetchone result is not consumed by
+        # the closure, so no placeholder is needed for it.)
+        mock_cursor.fetchone.side_effect = [
+            {"ts": _dt(2026, 1, 15, 12, 0, 0, tzinfo=UTC)},
+            {"id": 100},  # INSERT RETURNING id
+        ]
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -520,10 +531,15 @@ class TestUpsertGameStateUnit:
             skip_if_unchanged=False,  # Bypass state check to avoid DB call
         )
 
-        # Verify close query was first execute call
-        close_sql = mock_cursor.execute.call_args_list[0][0][0]  # First call, first positional arg
+        # Issue #623: execute call sequence is now
+        # [0] SELECT NOW() AS ts
+        # [1] SELECT id ... FOR UPDATE (lock query)
+        # [2] UPDATE ... SET row_current_ind = FALSE (close query)
+        # [3] INSERT ... RETURNING id
+        close_sql = mock_cursor.execute.call_args_list[2][0][0]
         assert "row_current_ind = FALSE" in close_sql
-        assert "row_end_ts = NOW()" in close_sql
+        # Issue #623: row_end_ts now uses %s placeholder (was NOW())
+        assert "row_end_ts = %s" in close_sql
         assert result == 100
 
 
@@ -2507,7 +2523,19 @@ class TestUpdateMarketSettlementValue:
     @patch("precog.database.crud_markets.get_cursor")
     @patch("precog.database.crud_markets.get_current_market")
     def test_settlement_value_included_in_dimension_update(self, mock_get_current, mock_get_cursor):
-        """settlement_value is written to the markets dimension UPDATE."""
+        """settlement_value is written to the markets dimension UPDATE.
+
+        Issue #625: update_market_with_versioning now wraps its mutation
+        body in retry_on_scd_unique_conflict. The closure executes:
+            [0] SELECT NOW() AS ts
+            [1] SELECT id ... FOR UPDATE (market_snapshots lock)
+            [2] UPDATE markets SET ...          <- dimension UPDATE
+            [3] UPDATE market_snapshots ... (close)
+            [4] INSERT INTO market_snapshots ...
+        So the dimension UPDATE is now at call_args_list[2].
+        """
+        from datetime import datetime as _dt
+
         mock_get_current.return_value = {
             "id": 1,
             "yes_ask_price": Decimal("0.5000"),
@@ -2533,6 +2561,10 @@ class TestUpdateMarketSettlementValue:
         }
 
         mock_cursor = MagicMock()
+        # fetchone returns the NOW() ts row for the first call; remaining
+        # calls (lock result) can return a generic MagicMock without
+        # breaking the test because the closure does not read them.
+        mock_cursor.fetchone.return_value = {"ts": _dt(2026, 1, 15, 12, 0, 0, tzinfo=UTC)}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -2542,8 +2574,9 @@ class TestUpdateMarketSettlementValue:
             settlement_value=Decimal("1.0000"),
         )
 
-        # The first execute call is the dimension UPDATE
-        dim_call = mock_cursor.execute.call_args_list[0]
+        # Issue #625: dimension UPDATE is now at index 2 (after SELECT NOW()
+        # and FOR UPDATE lock).
+        dim_call = mock_cursor.execute.call_args_list[2]
         sql = dim_call[0][0]
         params = dim_call[0][1]
 
@@ -2554,7 +2587,13 @@ class TestUpdateMarketSettlementValue:
     @patch("precog.database.crud_markets.get_cursor")
     @patch("precog.database.crud_markets.get_current_market")
     def test_settlement_value_none_preserves_existing(self, mock_get_current, mock_get_cursor):
-        """When settlement_value is None, the existing value is preserved."""
+        """When settlement_value is None, the existing value is preserved.
+
+        Issue #625: dimension UPDATE is at index 2 (not 0) in call_args_list
+        because the closure now runs SELECT NOW() + FOR UPDATE lock first.
+        """
+        from datetime import datetime as _dt
+
         mock_get_current.return_value = {
             "id": 1,
             "yes_ask_price": Decimal("0.5000"),
@@ -2580,6 +2619,7 @@ class TestUpdateMarketSettlementValue:
         }
 
         mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"ts": _dt(2026, 1, 15, 12, 0, 0, tzinfo=UTC)}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -2589,7 +2629,8 @@ class TestUpdateMarketSettlementValue:
             yes_ask_price=Decimal("0.6000"),
         )
 
-        dim_call = mock_cursor.execute.call_args_list[0]
+        # Issue #625: dimension UPDATE is now at index 2.
+        dim_call = mock_cursor.execute.call_args_list[2]
         params = dim_call[0][1]
         # Existing Decimal("1.0000") should be preserved
         assert Decimal("1.0000") in params
@@ -3205,7 +3246,17 @@ class TestUpdateMarketEnrichment:
 
         Dimension fields go to UPDATE markets SET ..., and snapshot fields
         go to INSERT INTO market_snapshots (...).
+
+        Issue #625: update_market_with_versioning now wraps its mutation
+        body in retry_on_scd_unique_conflict. Execute call sequence is:
+            [0] SELECT NOW() AS ts
+            [1] SELECT id ... FOR UPDATE (market_snapshots lock)
+            [2] UPDATE markets SET ...          <- dimension UPDATE
+            [3] UPDATE market_snapshots ... (close)
+            [4] INSERT INTO market_snapshots ...
         """
+        from datetime import datetime as _dt
+
         # Mock existing market (current state)
         mock_get_current.return_value = {
             "id": 42,
@@ -3241,6 +3292,7 @@ class TestUpdateMarketEnrichment:
         }
 
         mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"ts": _dt(2026, 1, 15, 12, 0, 0, tzinfo=UTC)}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -3260,11 +3312,13 @@ class TestUpdateMarketEnrichment:
             yes_ask_size=40,
         )
 
-        # 3 execute calls: dimension UPDATE, snapshot close UPDATE, snapshot INSERT
-        assert mock_cursor.execute.call_count == 3
+        # Issue #625: 5 execute calls now:
+        # SELECT NOW(), FOR UPDATE lock, dim UPDATE, snap close, snap INSERT
+        assert mock_cursor.execute.call_count == 5
 
         # Verify dimension UPDATE includes expiration_value and notional_value
-        dim_call = mock_cursor.execute.call_args_list[0]
+        # (now at index 2)
+        dim_call = mock_cursor.execute.call_args_list[2]
         dim_sql = dim_call[0][0]
         dim_params = dim_call[0][1]
         assert "expiration_value" in dim_sql
@@ -3272,8 +3326,8 @@ class TestUpdateMarketEnrichment:
         assert "Chiefs win" in dim_params
         assert Decimal("1.0000") in dim_params
 
-        # Verify snapshot INSERT includes all 6 new fields
-        snap_call = mock_cursor.execute.call_args_list[2]  # 3rd call = new snapshot
+        # Verify snapshot INSERT includes all 6 new fields (now at index 4)
+        snap_call = mock_cursor.execute.call_args_list[4]
         snap_sql = snap_call[0][0]
         snap_params = snap_call[0][1]
         assert "volume_24h" in snap_sql
@@ -3301,7 +3355,13 @@ class TestUpdateMarketEnrichment:
             enrichment field is None (not provided), the existing value from the
             current snapshot is carried forward. This prevents data loss when the
             poller only updates prices without re-providing all enrichment fields.
+
+            Issue #625: dimension UPDATE is at call_args_list[2] and snapshot
+            INSERT is at call_args_list[4] (shifted by SELECT NOW() +
+            FOR UPDATE lock at [0] and [1]).
         """
+        from datetime import datetime as _dt
+
         # Mock existing market with enrichment values already populated
         mock_get_current.return_value = {
             "id": 42,
@@ -3337,6 +3397,7 @@ class TestUpdateMarketEnrichment:
         }
 
         mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"ts": _dt(2026, 1, 15, 12, 0, 0, tzinfo=UTC)}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -3347,13 +3408,13 @@ class TestUpdateMarketEnrichment:
             no_ask_price=Decimal("0.4500"),
         )
 
-        # Verify dimension UPDATE preserves existing enrichment values
-        dim_params = mock_cursor.execute.call_args_list[0][0][1]
+        # Issue #625: dim UPDATE at index 2, snap INSERT at index 4.
+        dim_params = mock_cursor.execute.call_args_list[2][0][1]
         assert "Chiefs win" in dim_params  # expiration_value preserved
         assert Decimal("1.0000") in dim_params  # notional_value preserved
 
         # Verify snapshot INSERT carries forward existing enrichment values
-        snap_params = mock_cursor.execute.call_args_list[2][0][1]
+        snap_params = mock_cursor.execute.call_args_list[4][0][1]
         assert 150 in snap_params  # volume_24h preserved
         assert Decimal("0.4800") in snap_params  # previous_yes_bid preserved
         assert Decimal("0.5100") in snap_params  # previous_yes_ask preserved
@@ -3371,7 +3432,12 @@ class TestUpdateMarketEnrichment:
             These fields are contract counts, not dollar prices. They are
             stored as INTEGER in the database, not DECIMAL(10,4). They should
             NOT go through validate_decimal() -- that would be a type error.
+
+            Issue #625: snapshot INSERT is at call_args_list[4] (shifted by
+            SELECT NOW() and FOR UPDATE lock).
         """
+        from datetime import datetime as _dt
+
         mock_get_current.return_value = {
             "id": 42,
             "yes_ask_price": Decimal("0.5000"),
@@ -3405,6 +3471,7 @@ class TestUpdateMarketEnrichment:
         }
 
         mock_cursor = MagicMock()
+        mock_cursor.fetchone.return_value = {"ts": _dt(2026, 1, 15, 12, 0, 0, tzinfo=UTC)}
         mock_get_cursor.return_value.__enter__ = MagicMock(return_value=mock_cursor)
         mock_get_cursor.return_value.__exit__ = MagicMock(return_value=False)
 
@@ -3418,8 +3485,8 @@ class TestUpdateMarketEnrichment:
             yes_ask_size=75,
         )
 
-        # Verify snapshot INSERT contains the integer values
-        snap_params = mock_cursor.execute.call_args_list[2][0][1]
+        # Issue #625: snapshot INSERT is at index 4.
+        snap_params = mock_cursor.execute.call_args_list[4][0][1]
         assert 500 in snap_params  # volume_24h as int
         assert 100 in snap_params  # yes_bid_size as int
         assert 75 in snap_params  # yes_ask_size as int
