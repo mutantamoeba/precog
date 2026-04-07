@@ -962,193 +962,29 @@ class TestTrailingStopIntegration:
         - docs/guides/TRAILING_STOP_GUIDE_V1.0.md
     """
 
-    def test_initialize_trailing_stop(self):
-        """Test trailing stop initialization for existing position.
-
-        Educational Note:
-            initialize_trailing_stop() adds trailing stop to position that was
-            opened WITHOUT trailing stop.
-
-            Use case:
-            1. Open position with static stop: $0.35
-            2. Price moves to $0.75 (+$0.25 profit)
-            3. Add trailing stop to protect gains
-            4. Trailing stop begins tracking highest price
-
-        References:
-            - REQ-TRAIL-002: JSONB State Management
-            - docs/guides/TRAILING_STOP_GUIDE_V1.0.md
-        """
-        manager = PositionManager()
-
-        with (
-            patch("precog.trading.position_manager.get_connection") as mock_get_conn,
-            patch("precog.trading.position_manager.release_connection"),
-        ):
-            mock_conn = MagicMock()
-            mock_cursor = MagicMock()
-            mock_get_conn.return_value = mock_conn
-            mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-
-            # Mock current position (before trailing stop)
-            current_position = {
-                "id": 1,
-                "position_id": "POS-1",
-                "side": "YES",
-                "quantity": 10,
-                "entry_price": Decimal("0.5000"),
-                "current_price": Decimal("0.7500"),
-                "stop_loss_price": Decimal("0.3500"),  # Static stop
-                "status": "open",
-                "trailing_stop_state": None,  # No trailing stop yet
-                "row_current_ind": True,
-            }
-
-            # Mock updated position (after trailing stop initialization)
-            updated_position = {
-                "id": 2,  # New version
-                "position_id": "POS-1",
-                "side": "YES",
-                "quantity": 10,
-                "entry_price": Decimal("0.5000"),
-                "current_price": Decimal("0.7500"),
-                "stop_loss_price": Decimal("0.3500"),
-                "status": "open",
-                "trailing_stop_state": {
-                    "config": {
-                        "activation_threshold": Decimal("0.15"),
-                        "initial_distance": Decimal("0.05"),
-                        "tightening_rate": Decimal("0.10"),
-                        "floor_distance": Decimal("0.02"),
-                    },
-                    "activated": False,  # Not activated yet
-                    "activation_price": None,
-                    "current_stop_price": Decimal("0.3500"),  # Start with static stop
-                    "highest_price": Decimal("0.7500"),  # Track from current price
-                },
-                "row_current_ind": True,
-            }
-
-            # Configure fetchone to return different data
-            mock_cursor.fetchone.side_effect = [
-                current_position,  # First: get current position
-                {"id": 2},  # Second: RETURNING id from INSERT
-                updated_position,  # Third: get updated position
-            ]
-
-            # Initialize trailing stop
-            config = {
-                "activation_threshold": Decimal("0.15"),
-                "initial_distance": Decimal("0.05"),
-                "tightening_rate": Decimal("0.10"),
-                "floor_distance": Decimal("0.02"),
-            }
-            result = manager.initialize_trailing_stop(position_id=1, config=config)
-
-            # Verify trailing stop initialized
-            assert result["id"] == 2  # New version
-            assert result["trailing_stop_state"] is not None
-            assert result["trailing_stop_state"]["activated"] is False
-            assert result["trailing_stop_state"]["config"] == config
-            assert result["trailing_stop_state"]["current_stop_price"] == Decimal("0.3500")
-            assert result["trailing_stop_state"]["highest_price"] == Decimal("0.7500")
-
-    def test_update_trailing_stop_on_favorable_movement(self):
-        """Test trailing stop updates when price moves favorably.
-
-        Educational Note:
-            When price moves UP (favorable for YES):
-            1. Update highest_price if new high
-            2. Recalculate stop: highest_price - distance
-            3. Stop only moves UP, never down (trailing behavior)
-
-            Scenario:
-            - Highest: $0.75, Stop: $0.70 (distance $0.05)
-            - Price moves to $0.80 -> NEW HIGH!
-            - Update stop: $0.80 - $0.05 = $0.75 (stop raised)
-
-        References:
-            - REQ-TRAIL-003: Stop Price Updates
-            - REQ-TRAIL-004: Peak Price Tracking
-        """
-        manager = PositionManager()
-
-        with (
-            patch("precog.trading.position_manager.get_connection") as mock_get_conn,
-            patch("precog.trading.position_manager.release_connection"),
-        ):
-            mock_conn = MagicMock()
-            mock_cursor = MagicMock()
-            mock_get_conn.return_value = mock_conn
-            mock_conn.cursor.return_value.__enter__.return_value = mock_cursor
-
-            # Mock position with activated trailing stop
-            current_position = {
-                "id": 1,
-                "position_id": "POS-1",
-                "side": "YES",
-                "quantity": 10,
-                "entry_price": Decimal("0.5000"),
-                "current_price": Decimal("0.7500"),
-                "stop_loss_price": Decimal("0.3500"),
-                "status": "open",
-                "trailing_stop_state": {
-                    "config": {
-                        "activation_threshold": Decimal("0.15"),
-                        "initial_distance": Decimal("0.05"),
-                        "tightening_rate": Decimal("0.10"),
-                        "floor_distance": Decimal("0.02"),
-                    },
-                    "activated": True,  # Already activated
-                    "activation_price": Decimal("0.6500"),
-                    "current_stop_price": Decimal("0.7000"),  # Previous stop
-                    "highest_price": Decimal("0.7500"),  # Previous high
-                },
-                "row_current_ind": True,
-            }
-
-            # Mock updated position (after price moves to $0.80)
-            updated_position = {
-                "id": 2,
-                "position_id": "POS-1",
-                "side": "YES",
-                "quantity": 10,
-                "entry_price": Decimal("0.5000"),
-                "current_price": Decimal("0.8000"),  # NEW HIGH!
-                "stop_loss_price": Decimal("0.3500"),
-                "unrealized_pnl": Decimal("3.00"),  # 10 * (0.80 - 0.50)
-                "status": "open",
-                "trailing_stop_state": {
-                    "config": {
-                        "activation_threshold": Decimal("0.15"),
-                        "initial_distance": Decimal("0.05"),
-                        "tightening_rate": Decimal("0.10"),
-                        "floor_distance": Decimal("0.02"),
-                    },
-                    "activated": True,
-                    "activation_price": Decimal("0.6500"),
-                    "current_stop_price": Decimal("0.7500"),  # Stop raised!
-                    "highest_price": Decimal("0.8000"),  # New high!
-                },
-                "row_current_ind": True,
-            }
-
-            # Configure fetchone
-            mock_cursor.fetchone.side_effect = [
-                current_position,  # Get current position
-                {"id": 2},  # RETURNING id
-                updated_position,  # Get updated position
-            ]
-
-            # Update trailing stop
-            result = manager.update_trailing_stop(position_id=1, current_price=Decimal("0.8000"))
-
-            # Verify stop updated
-            assert result["id"] == 2
-            assert result["trailing_stop_state"]["highest_price"] == Decimal("0.8000")
-            # Note: Stop calculation with tightening is complex, verify it moved up
-            # Original stop: $0.70, New stop should be higher (closer to price)
-            assert result["trailing_stop_state"]["current_stop_price"] > Decimal("0.7000")
+    # test_initialize_trailing_stop and test_update_trailing_stop_on_favorable_movement
+    # were DELETED in the session 42e #629 fix PR.
+    #
+    # Why: Both tests pre-loaded mock_cursor.fetchone.side_effect with 3 values and
+    # asserted against them, but the production code they tested (initialize_trailing_stop
+    # and update_trailing_stop in position_manager.py) executed a single-transaction
+    # SELECT -> UPDATE row_current_ind=FALSE -> INSERT...SELECT WHERE row_current_ind=TRUE
+    # -> SELECT sequence. Under a real PostgreSQL READ COMMITTED transaction, the INSERT's
+    # SELECT subquery would see its own prior UPDATE and match zero rows, causing
+    # cur.fetchone() to return None and raise TypeError on ["id"] access. The pure
+    # MagicMock cursor returned the pre-loaded values regardless of what queries were
+    # executed, so the tests passed for 4.5 months while hiding the #629 bug in production.
+    #
+    # This is a textbook Mock Fidelity Rule violation (see protocols.md). The replacement
+    # coverage lives in:
+    #   - tests/integration/database/test_crud_positions_trailing_stop_integration.py
+    #     (4 real-DB integration tests against the new set_trailing_stop_state CRUD function)
+    #   - tests/race/test_scd_sibling_first_insert_races.py::TestSetTrailingStopStateConcurrentUpdate
+    #     (barrier-synchronized two-thread race test)
+    #
+    # Joe Chip's audit (session 42e) also flagged 16 other mock-heavy tests in this file
+    # as misfiled (pure-mock tests in tests/e2e/). Those are tracked as a separate
+    # follow-up issue for relocation -- see the PR description for the issue reference.
 
     def test_trailing_stop_trigger_detection(self):
         """Test detection of trailing stop trigger (exit signal).

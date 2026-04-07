@@ -46,6 +46,9 @@ from precog.database.crud_positions import (
     get_current_positions,
 )
 from precog.database.crud_positions import (
+    set_trailing_stop_state as crud_set_trailing_stop_state,
+)
+from precog.database.crud_positions import (
     update_position_price as crud_update_position_price,
 )
 from precog.utils.logger import get_logger
@@ -758,7 +761,12 @@ class PositionManager:
                 f"tightening_rate must be between 0 and 1, got {config['tightening_rate']}"
             )
 
-        # Get current position
+        # Get current position to build the initial trailing_stop_state. We
+        # fetch OUTSIDE the CRUD call so we can read the current_price and
+        # stop_loss_price needed to seed the state dict. The CRUD function
+        # will re-fetch inside its retry closure; that's the canonical
+        # Pattern 49 shape and deliberate (the CRUD's re-fetch observes any
+        # sibling commits between our read and the SCD write).
         conn = get_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -770,61 +778,44 @@ class PositionManager:
                     (position_id,),
                 )
                 current_position = cur.fetchone()
+        finally:
+            release_connection(conn)
 
-                if not current_position:
-                    raise ValueError(f"Position {position_id} not found or not current")
+        if not current_position:
+            raise ValueError(f"Position {position_id} not found or not current")
 
-                if current_position["status"] == "closed":
-                    raise ValueError(f"Position {position_id} is already closed")
+        if current_position["status"] == "closed":
+            raise ValueError(f"Position {position_id} is already closed")
 
-                # Create initial trailing stop state
-                trailing_stop_state = {
-                    "config": config,
-                    "activated": False,  # Not activated yet (waiting for threshold)
-                    "activation_price": None,  # Will be set when activated
-                    "current_stop_price": current_position[
-                        "stop_loss_price"
-                    ],  # Start with existing stop
-                    "highest_price": current_position[
-                        "current_price"
-                    ],  # Track highest price for trailing
-                }
+        # Create initial trailing stop state
+        trailing_stop_state = {
+            "config": config,
+            "activated": False,  # Not activated yet (waiting for threshold)
+            "activation_price": None,  # Will be set when activated
+            "current_stop_price": current_position["stop_loss_price"],  # Start with existing stop
+            "highest_price": current_position["current_price"],  # Track highest price for trailing
+        }
 
-                # Update position with new trailing_stop_state (creates SCD Type 2 version)
-                cur.execute(
-                    """
-                    UPDATE positions
-                    SET row_current_ind = FALSE
-                    WHERE id = %s
-                    """,
-                    (position_id,),
-                )
+        # Delegate the SCD close+insert to the canonical CRUD function
+        # (Issue #629 fix): the CRUD function captures row values into
+        # Python BEFORE the close and INSERTs from Python values, avoiding
+        # the READ COMMITTED visibility bug that the prior
+        # ``UPDATE ... ; INSERT ... SELECT FROM positions WHERE
+        # row_current_ind = TRUE`` pattern had. The CRUD function also
+        # wraps the close+insert in the Pattern 49 retry helper and
+        # preserves ``execution_environment``.
+        new_position_id = crud_set_trailing_stop_state(
+            position_id=position_id,
+            trailing_stop_state=trailing_stop_state,
+        )
 
-                cur.execute(
-                    """
-                    INSERT INTO positions (
-                        position_id, market_internal_id, strategy_id, model_id, side, quantity,
-                        entry_price, current_price, target_price, stop_loss_price,
-                        unrealized_pnl, realized_pnl, status, exit_price, exit_reason,
-                        trailing_stop_state, position_metadata, row_current_ind
-                    )
-                    SELECT
-                        position_id, market_internal_id, strategy_id, model_id, side, quantity,
-                        entry_price, current_price, target_price, stop_loss_price,
-                        unrealized_pnl, realized_pnl, status, exit_price, exit_reason,
-                        %s::jsonb, position_metadata, TRUE
-                    FROM positions
-                    WHERE id = %s
-                      AND row_current_ind = TRUE
-                    RETURNING id
-                    """,
-                    (psycopg2.extras.Json(trailing_stop_state), position_id),
-                )
-
-                new_position_id = cur.fetchone()["id"]
-                conn.commit()
-
-                # Fetch full updated position
+        # Re-fetch the full updated position so the caller gets a dict with
+        # all columns populated (including the new surrogate id, the
+        # updated row_start_ts, and any sibling-committed fields). Uses its
+        # own pooled connection.
+        fetch_conn = get_connection()
+        try:
+            with fetch_conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
                     """
                     SELECT * FROM positions
@@ -834,22 +825,33 @@ class PositionManager:
                     (new_position_id,),
                 )
                 updated_position = cur.fetchone()
-
-                logger.info(
-                    f"Initialized trailing stop for position {updated_position['position_id']}",
-                    extra={
-                        "position_id": updated_position["position_id"],  # Business key
-                        "old_id": position_id,
-                        "new_id": new_position_id,
-                        "activation_threshold": str(config["activation_threshold"]),
-                        "initial_distance": str(config["initial_distance"]),
-                    },
-                )
-
-                return dict(updated_position)
-
         finally:
-            release_connection(conn)
+            release_connection(fetch_conn)
+
+        if updated_position is None:
+            # Extraordinary state: the CRUD function returned a new id but
+            # the row is gone (concurrent close_position between the CRUD
+            # commit and this re-fetch). Surface loudly rather than return
+            # an incomplete dict.
+            raise RuntimeError(
+                f"set_trailing_stop_state returned id {new_position_id} but "
+                f"the row is no longer current. A concurrent close_position "
+                f"may have closed this position between the CRUD commit and "
+                f"the re-fetch."
+            )
+
+        logger.info(
+            f"Initialized trailing stop for position {updated_position['position_id']}",
+            extra={
+                "position_id": updated_position["position_id"],  # Business key
+                "old_id": position_id,
+                "new_id": new_position_id,
+                "activation_threshold": str(config["activation_threshold"]),
+                "initial_distance": str(config["initial_distance"]),
+            },
+        )
+
+        return dict(updated_position)
 
     def update_trailing_stop(
         self,
@@ -928,7 +930,13 @@ class PositionManager:
         if not (Decimal("0.00") <= current_price <= Decimal("1.00")):
             raise ValueError(f"Current price {current_price} outside valid range [0.00, 1.00]")
 
-        # Get current position
+        # Get current position. We fetch OUTSIDE the CRUD call so we can
+        # read the existing trailing_stop_state, compute the new state in
+        # Python (activation/trailing logic below), and pass the finalized
+        # dict to the CRUD function. The CRUD function re-fetches inside
+        # its retry closure; that's the canonical Pattern 49 shape and
+        # deliberate (the CRUD's re-fetch observes any sibling commits
+        # between our read and the SCD write).
         conn = get_connection()
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -940,130 +948,112 @@ class PositionManager:
                     (position_id,),
                 )
                 current_position = cur.fetchone()
+        finally:
+            release_connection(conn)
 
-                if not current_position:
-                    raise ValueError(f"Position {position_id} not found or not current")
+        if not current_position:
+            raise ValueError(f"Position {position_id} not found or not current")
 
-                if current_position["status"] == "closed":
-                    raise ValueError(f"Position {position_id} is already closed")
+        if current_position["status"] == "closed":
+            raise ValueError(f"Position {position_id} is already closed")
 
-                if not current_position["trailing_stop_state"]:
-                    raise ValueError(f"Position {position_id} has no trailing stop configured")
+        if not current_position["trailing_stop_state"]:
+            raise ValueError(f"Position {position_id} has no trailing stop configured")
 
-                trailing_state = current_position["trailing_stop_state"]
-                config = trailing_state["config"]
+        trailing_state = current_position["trailing_stop_state"]
+        config = trailing_state["config"]
 
-                # Calculate current P&L
-                unrealized_pnl = self.calculate_position_pnl(
-                    entry_price=current_position["entry_price"],
-                    current_price=current_price,
-                    quantity=current_position["quantity"],
-                    side=current_position["side"],
+        # Calculate current P&L
+        unrealized_pnl = self.calculate_position_pnl(
+            entry_price=current_position["entry_price"],
+            current_price=current_price,
+            quantity=current_position["quantity"],
+            side=current_position["side"],
+        )
+
+        # Check if trailing stop should activate
+        if not trailing_state["activated"]:
+            # Check if profit threshold reached
+            if unrealized_pnl >= config["activation_threshold"]:
+                # ACTIVATE trailing stop!
+                trailing_state["activated"] = True
+                trailing_state["activation_price"] = current_price
+                trailing_state["highest_price"] = current_price
+
+                # Calculate initial stop price
+                initial_stop = current_price - config["initial_distance"]
+                trailing_state["current_stop_price"] = max(
+                    initial_stop, current_position["stop_loss_price"] or Decimal("0")
                 )
 
-                # Check if trailing stop should activate
-                if not trailing_state["activated"]:
-                    # Check if profit threshold reached
-                    if unrealized_pnl >= config["activation_threshold"]:
-                        # ACTIVATE trailing stop!
-                        trailing_state["activated"] = True
-                        trailing_state["activation_price"] = current_price
-                        trailing_state["highest_price"] = current_price
+                logger.info(
+                    f"Trailing stop ACTIVATED for {current_position['position_id']}",
+                    extra={
+                        "position_id": current_position["position_id"],  # Business key
+                        "activation_price": str(current_price),
+                        "activation_pnl": str(unrealized_pnl),
+                        "threshold": str(config["activation_threshold"]),
+                        "initial_stop": str(trailing_state["current_stop_price"]),
+                    },
+                )
+            else:
+                # Not activated yet, keep existing stop
+                trailing_state["current_stop_price"] = current_position["stop_loss_price"]
 
-                        # Calculate initial stop price
-                        initial_stop = current_price - config["initial_distance"]
-                        trailing_state["current_stop_price"] = max(
-                            initial_stop, current_position["stop_loss_price"] or Decimal("0")
-                        )
+        else:
+            # Trailing stop already activated, update stop price
+            # Update highest price if new high
+            if current_price > trailing_state["highest_price"]:
+                trailing_state["highest_price"] = current_price
 
-                        logger.info(
-                            f"Trailing stop ACTIVATED for {current_position['position_id']}",
-                            extra={
-                                "position_id": current_position["position_id"],  # Business key
-                                "activation_price": str(current_price),
-                                "activation_pnl": str(unrealized_pnl),
-                                "threshold": str(config["activation_threshold"]),
-                                "initial_stop": str(trailing_state["current_stop_price"]),
-                            },
-                        )
-                    else:
-                        # Not activated yet, keep existing stop
-                        trailing_state["current_stop_price"] = current_position["stop_loss_price"]
+            # Calculate distance with tightening
+            # Formula: distance = max(floor, initial * (1 - tightening_rate * profit_ratio))
+            # Defensive programming: Validate entry_price before division
+            if current_position["entry_price"] <= Decimal("0"):
+                raise ValueError(f"Invalid entry_price: {current_position['entry_price']}")
+            profit_ratio = unrealized_pnl / current_position["entry_price"]
+            distance_factor = Decimal("1") - (config["tightening_rate"] * profit_ratio)
+            distance = max(
+                config["floor_distance"],
+                config["initial_distance"] * distance_factor,
+            )
 
-                else:
-                    # Trailing stop already activated, update stop price
-                    # Update highest price if new high
-                    if current_price > trailing_state["highest_price"]:
-                        trailing_state["highest_price"] = current_price
+            # New stop = highest_price - distance
+            new_stop = trailing_state["highest_price"] - distance
 
-                    # Calculate distance with tightening
-                    # Formula: distance = max(floor, initial * (1 - tightening_rate * profit_ratio))
-                    # Defensive programming: Validate entry_price before division
-                    if current_position["entry_price"] <= Decimal("0"):
-                        raise ValueError(f"Invalid entry_price: {current_position['entry_price']}")
-                    profit_ratio = unrealized_pnl / current_position["entry_price"]
-                    distance_factor = Decimal("1") - (config["tightening_rate"] * profit_ratio)
-                    distance = max(
-                        config["floor_distance"],
-                        config["initial_distance"] * distance_factor,
-                    )
-
-                    # New stop = highest_price - distance
-                    new_stop = trailing_state["highest_price"] - distance
-
-                    # Trailing stop NEVER moves down, only up
-                    if new_stop > trailing_state["current_stop_price"]:
-                        trailing_state["current_stop_price"] = new_stop
-                        logger.debug(
-                            f"Trailing stop UPDATED for {current_position['position_id']}",
-                            extra={
-                                "position_id": current_position["position_id"],  # Business key
-                                "highest_price": str(trailing_state["highest_price"]),
-                                "new_stop": str(new_stop),
-                                "distance": str(distance),
-                            },
-                        )
-
-                # Update position with new trailing_stop_state (SCD Type 2)
-                cur.execute(
-                    """
-                    UPDATE positions
-                    SET row_current_ind = FALSE
-                    WHERE id = %s
-                    """,
-                    (position_id,),
+            # Trailing stop NEVER moves down, only up
+            if new_stop > trailing_state["current_stop_price"]:
+                trailing_state["current_stop_price"] = new_stop
+                logger.debug(
+                    f"Trailing stop UPDATED for {current_position['position_id']}",
+                    extra={
+                        "position_id": current_position["position_id"],  # Business key
+                        "highest_price": str(trailing_state["highest_price"]),
+                        "new_stop": str(new_stop),
+                        "distance": str(distance),
+                    },
                 )
 
-                cur.execute(
-                    """
-                    INSERT INTO positions (
-                        position_id, market_internal_id, strategy_id, model_id, side, quantity,
-                        entry_price, current_price, target_price, stop_loss_price,
-                        unrealized_pnl, realized_pnl, status, exit_price, exit_reason,
-                        trailing_stop_state, position_metadata, row_current_ind
-                    )
-                    SELECT
-                        position_id, market_internal_id, strategy_id, model_id, side, quantity,
-                        entry_price, %s, target_price, stop_loss_price,
-                        %s, realized_pnl, status, exit_price, exit_reason,
-                        %s::jsonb, position_metadata, TRUE
-                    FROM positions
-                    WHERE id = %s
-                      AND row_current_ind = TRUE
-                    RETURNING id
-                    """,
-                    (
-                        current_price,
-                        unrealized_pnl,
-                        psycopg2.extras.Json(trailing_state),
-                        position_id,
-                    ),
-                )
+        # Delegate the SCD close+insert to the canonical CRUD function
+        # (Issue #629 fix): the CRUD function captures row values into
+        # Python BEFORE the close and INSERTs from Python values, avoiding
+        # the READ COMMITTED visibility bug that the prior
+        # ``UPDATE ... ; INSERT ... SELECT FROM positions WHERE
+        # row_current_ind = TRUE`` pattern had. The CRUD function also
+        # wraps the close+insert in the Pattern 49 retry helper and
+        # preserves ``execution_environment``.
+        new_position_id = crud_set_trailing_stop_state(
+            position_id=position_id,
+            trailing_stop_state=trailing_state,
+            current_price=current_price,
+            unrealized_pnl=unrealized_pnl,
+        )
 
-                new_position_id = cur.fetchone()["id"]
-                conn.commit()
-
-                # Fetch full updated position
+        # Re-fetch the full updated position so the caller gets a dict with
+        # all columns populated. Uses its own pooled connection.
+        fetch_conn = get_connection()
+        try:
+            with fetch_conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
                     """
                     SELECT * FROM positions
@@ -1073,11 +1063,18 @@ class PositionManager:
                     (new_position_id,),
                 )
                 updated_position = cur.fetchone()
-
-                return dict(updated_position)
-
         finally:
-            release_connection(conn)
+            release_connection(fetch_conn)
+
+        if updated_position is None:
+            raise RuntimeError(
+                f"set_trailing_stop_state returned id {new_position_id} but "
+                f"the row is no longer current. A concurrent close_position "
+                f"may have closed this position between the CRUD commit and "
+                f"the re-fetch."
+            )
+
+        return dict(updated_position)
 
     def check_trailing_stop_trigger(self, position_id: int) -> bool:
         """Check if trailing stop has been triggered.
