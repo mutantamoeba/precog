@@ -380,8 +380,17 @@ omit = [
 # Branch coverage (not just line coverage)
 branch = true
 
-# Measure concurrency (thread only - greenlet not supported on Windows)
-concurrency = ["thread"]
+# Parallel mode: each worker writes to .coverage.<suffix> then pytest-cov combines.
+# REQUIRED when running with pytest-xdist (-n auto); without this, xdist workers
+# race on a single .coverage file and combine() crashes with "Can't combine
+# statement coverage data with branch data" on Linux (fork). See #632.
+parallel = true
+
+# Concurrency models coverage.py must track:
+# - multiprocessing: required for pytest-xdist workers (spawn/fork subprocesses)
+# - thread: required for race/chaos tests that exercise threaded code paths
+# greenlet is NOT listed (not supported on Windows; we don't use it).
+concurrency = ["multiprocessing", "thread"]
 
 [tool.coverage.report]
 # Reporting precision
