@@ -535,6 +535,11 @@ def update_position_price(
             # Step 4: Insert new version with same position_id (business
             # key) but new id (surrogate). row_start_ts matches row_end_ts
             # on the historical row for Pattern 49 temporal continuity.
+            # execution_environment is preserved from the original position
+            # (Issue #662: Marvin sentinel pass found that omitting this
+            # column silently flipped non-'live' positions to the column's
+            # DEFAULT 'live' on every price update -- cross-environment
+            # contamination with no audit signal).
             cur.execute(
                 """
                 INSERT INTO positions (
@@ -543,9 +548,10 @@ def update_position_price(
                     current_price, unrealized_pnl,
                     target_price, stop_loss_price,
                     trailing_stop_state, position_metadata,
-                    status, entry_time, last_check_time, row_start_ts
+                    status, entry_time, last_check_time, execution_environment,
+                    row_start_ts
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
                 (
@@ -565,8 +571,9 @@ def update_position_price(
                     current["position_metadata"],
                     current["status"],
                     current["entry_time"],
-                    now,
-                    now,
+                    now,  # last_check_time
+                    current["execution_environment"],  # Preserve execution environment
+                    now,  # row_start_ts
                 ),
             )
             result = cur.fetchone()

@@ -59,7 +59,7 @@ from typing import Any
 import pytest
 
 from precog.database.connection import get_cursor
-from precog.database.crud_positions import set_trailing_stop_state
+from precog.database.crud_positions import set_trailing_stop_state, update_position_price
 
 # Test identifiers reserved for this integration suite. Use the TEST- prefix
 # so the suite-wide ``clean_test_data`` regex picks up any orphaned rows the
@@ -575,3 +575,168 @@ class TestSetTrailingStopStateIntegration:
         # as Decimal — psycopg2 reads DECIMAL(10,4) as Decimal natively.
         assert row["current_price"] == Decimal("0.6500")
         assert row["unrealized_pnl"] == Decimal("1.5000")
+
+
+@pytest.mark.integration
+class TestUpdatePositionPriceIntegration:
+    """Single-threaded integration coverage for ``update_position_price``.
+
+    Issue #662 (Marvin sentinel pass on PR #665, session 42e):
+
+    The pre-fix INSERT column list in ``update_position_price`` omitted
+    ``execution_environment``. The column is ``NOT NULL DEFAULT 'live'``
+    (migrations 0008 + 0024), so every SCD version produced by a price
+    update silently stamped the new row with ``'live'`` regardless of
+    the original position's environment. A position opened in ``'paper'``
+    or ``'backtest'`` mode flipped to ``'live'`` on its very first price
+    tick -- cross-environment contamination with no audit signal except
+    the SCD history itself.
+
+    This test pins the fix. It would have failed loudly on the pre-fix
+    code because the fixture seeds the position with
+    ``execution_environment='paper'`` and then asserts the new SCD
+    version is still ``'paper'``. Pre-fix, the new row would carry the
+    DEFAULT ``'live'``.
+
+    Reuses the ``trailing_stop_position`` fixture from this file because
+    that fixture already seeds an open position with a non-default
+    ``execution_environment='paper'`` -- the exact setup needed to
+    detect the regression.
+
+    Reference:
+        - Issue #662: update_position_price drops execution_environment.
+        - PR #665: SCD retry helper batch adoption (the PR Marvin
+          reviewed when she found this latent bug).
+        - close_position at crud_positions.py:760: the canonical
+          reference -- it has handled execution_environment correctly
+          since the SCD pattern was first introduced.
+    """
+
+    def test_preserves_execution_environment_across_price_update(
+        self, trailing_stop_position: tuple[int, str, int]
+    ) -> None:
+        """A price update on a 'paper' position must keep execution_environment='paper'.
+
+        Pre-fix behavior: the INSERT column list omitted
+        ``execution_environment``, so the new SCD row picked up the
+        column DEFAULT ``'live'``. This test would fail with
+        ``assert 'live' == 'paper'`` against pre-fix code.
+
+        Post-fix behavior: the INSERT column list explicitly includes
+        ``execution_environment`` and the values tuple copies
+        ``current["execution_environment"]`` from the re-fetched current
+        row, mirroring ``close_position``'s pattern.
+        """
+        surrogate_id, position_bk, _market_pk = trailing_stop_position
+
+        # Sanity check: the fixture seeds 'paper'. If this assertion ever
+        # fails, the fixture has drifted and the rest of the test is
+        # meaningless.
+        with get_cursor(commit=False) as cur:
+            cur.execute(
+                """
+                SELECT execution_environment
+                FROM positions
+                WHERE id = %s AND row_current_ind = TRUE
+                """,
+                (surrogate_id,),
+            )
+            seed_row = cur.fetchone()
+        assert seed_row is not None
+        assert seed_row["execution_environment"] == "paper", (
+            "fixture must seed execution_environment='paper' for this test "
+            "to detect the #662 regression"
+        )
+
+        # Trigger an SCD version write via update_position_price. The
+        # fixture's current_price is Decimal('0.5500'); use a different
+        # value so the early-return optimization (price_unchanged AND
+        # trailing_stop_unchanged) does NOT short-circuit and skip the
+        # INSERT we want to test.
+        new_id = update_position_price(
+            position_id=surrogate_id,
+            current_price=Decimal("0.6000"),
+        )
+
+        assert new_id is not None
+        assert new_id != surrogate_id, "must allocate a new surrogate id"
+
+        # Read back the new current row and verify execution_environment
+        # was preserved (not silently flipped to the DEFAULT 'live').
+        with get_cursor(commit=False) as cur:
+            cur.execute(
+                """
+                SELECT id, current_price, execution_environment, row_current_ind
+                FROM positions
+                WHERE position_id = %s AND row_current_ind = TRUE
+                """,
+                (position_bk,),
+            )
+            current = cur.fetchone()
+
+        assert current is not None
+        assert current["id"] == new_id
+        assert current["current_price"] == Decimal("0.6000")
+        assert current["execution_environment"] == "paper", (
+            f"execution_environment must be preserved across SCD price "
+            f"updates; expected 'paper', got "
+            f"{current['execution_environment']!r}. This is the #662 bug "
+            f"Marvin found in PR #665 review: update_position_price's "
+            f"INSERT column list omitted execution_environment, so the "
+            f"new SCD row picked up the column DEFAULT 'live' and "
+            f"silently flipped paper-mode positions to live."
+        )
+
+        # Also verify the historical row still carries 'paper' (the
+        # close path doesn't touch execution_environment, but assert it
+        # explicitly so a future regression that mutates the historical
+        # row gets caught here too).
+        with get_cursor(commit=False) as cur:
+            cur.execute(
+                """
+                SELECT execution_environment
+                FROM positions
+                WHERE position_id = %s AND row_current_ind = FALSE
+                ORDER BY row_start_ts DESC
+                LIMIT 1
+                """,
+                (position_bk,),
+            )
+            historical = cur.fetchone()
+        assert historical is not None
+        assert historical["execution_environment"] == "paper"
+
+        # Marvin sentinel pass: a SECOND price update on the surviving
+        # 'paper' row. This catches "partial fix" regressions where one
+        # call site is fixed but a downstream refactor reintroduces the
+        # bug on a follow-up update -- the canonical failure mode for
+        # SCD chains, where the first version preserves the value but
+        # the chain drops it on subsequent versions. Pre-fix code would
+        # flip the new row to 'live' here exactly the same way as on the
+        # first update, so this assertion is independent evidence (not
+        # just a re-check of the first assertion).
+        second_new_id = update_position_price(
+            position_id=new_id,
+            current_price=Decimal("0.6500"),
+        )
+        assert second_new_id != new_id, "second update must allocate a new surrogate id"
+
+        with get_cursor(commit=False) as cur:
+            cur.execute(
+                """
+                SELECT id, current_price, execution_environment
+                FROM positions
+                WHERE position_id = %s AND row_current_ind = TRUE
+                """,
+                (position_bk,),
+            )
+            after_second = cur.fetchone()
+        assert after_second is not None
+        assert after_second["id"] == second_new_id
+        assert after_second["current_price"] == Decimal("0.6500")
+        assert after_second["execution_environment"] == "paper", (
+            f"execution_environment must be preserved across the FULL SCD "
+            f"chain, not just the first update; expected 'paper', got "
+            f"{after_second['execution_environment']!r} after the second "
+            f"price update"
+        )
