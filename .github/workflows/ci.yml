@@ -152,14 +152,22 @@ jobs:
     if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
-        # Trimmed matrix: 3.14 (production target) on both OS, 3.12 (backward compat) on Linux only
+        # Linux-only PR matrix as of #685: 3.14 (production target) + 3.12
+        # (backward compat). Windows is NOT in the PR matrix because the
+        # pre-push hook (scripts/pre-push-validation.sh) already runs the
+        # medium gate on the developer's Windows machine before any push
+        # reaches CI. Windows still runs in the test-windows-main job
+        # below, which is gated to push events on main only -- that
+        # preserves the fresh-environment-runner safety net at zero PR
+        # cost (Claude Review feedback on #697 escalated this from full
+        # removal to "Windows on main only" to address concern #3).
+        # Windows on PR accounted for ~43% of billable CI minutes (2x
+        # multiplier x ~5min job = ~10 billable min per run).
         include:
           - os: ubuntu-latest
             python-version: '3.14'
           - os: ubuntu-latest
             python-version: '3.12'
-          - os: windows-latest
-            python-version: '3.14'
       fail-fast: false
 
     # Environment safety (Issue #161): Explicitly set test environment
@@ -222,6 +230,89 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.os }}-py${{ matrix.python-version }}
+          path: |
+            test-results.xml
+            test_results/
+            htmlcov/
+            coverage.xml
+          retention-days: 7
+
+  test-windows-main:
+    # Windows test job — runs ONLY on push to main, NOT on pull_request.
+    # Preserves the fresh-environment-runner safety net (catches CRLF/LF
+    # issues, missing implicit deps, path assumptions that work on the
+    # developer's accumulated-state Windows workstation but not on a
+    # clean runner) at zero PR-cost.
+    #
+    # Why this is separate from the `test:` job above instead of a matrix
+    # entry: GitHub Actions does not support per-matrix-include `if:`
+    # conditionals. The cleanest pattern is two jobs with different `if:`
+    # gates at the job level.
+    #
+    # Why this exists at all: Claude Review on #697 (PR #685 partial)
+    # escalated 3 concerns about full Windows removal:
+    #   1. Single-Windows-developer assumption (hypothetical multi-contributor)
+    #   2. Pre-push hook bypass via --no-verify (discipline issue)
+    #   3. Fresh CI runner vs developer workstation differences (real)
+    # This job addresses concern #3 by running Windows on main post-merge.
+    # Concerns #1 and #2 remain documented but unaddressed.
+    name: Tests (Python 3.14 on windows-latest, main only)
+    runs-on: windows-latest
+    needs: detect-changes
+    if: |
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect-changes.outputs.code == 'true')
+      || github.event_name == 'workflow_dispatch'
+
+    # Environment safety (Issue #161): Explicitly set test environment
+    env:
+      PRECOG_ENV: test
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+          allow-prereleases: true
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/pip
+            ~\AppData\Local\pip\Cache
+          key: ${{ runner.os }}-pip-3.14-${{ hashFiles('requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-3.14-
+            ${{ runner.os }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .  # Install precog package (src/ layout)
+          pip install pytest pytest-cov pytest-xdist
+
+      - name: Run tests (unit + property) - Windows fresh-runner verification
+        run: |
+          python -m pytest tests/unit/ tests/property/ -v --tb=short --junitxml=test-results.xml --cov=src/precog --cov-report=xml --cov-report=html --cov-report=term-missing -n auto --ignore=tests/property/test_crud_operations_properties.py --ignore=tests/property/test_database_crud_properties.py --ignore=tests/property/test_strategy_versioning_properties.py --ignore=tests/property/database/test_series_crud_properties.py
+
+      - name: Publish Test Results
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: 'test-results.xml'
+          check_name: 'Test Results (windows-latest, Python 3.14, main only)'
+          fail_on_failure: false
+          include_passed: false
+
+      - name: Archive test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-windows-latest-py3.14-main
           path: |
             test-results.xml
             test_results/
