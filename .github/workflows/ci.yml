@@ -152,14 +152,18 @@ jobs:
     if: needs.detect-changes.outputs.code == 'true' || github.event_name == 'workflow_dispatch'
     strategy:
       matrix:
-        # Trimmed matrix: 3.14 (production target) on both OS, 3.12 (backward compat) on Linux only
+        # Linux-only matrix as of #685: 3.14 (production target) + 3.12
+        # (backward compat). Windows was dropped because the pre-push hook
+        # (scripts/pre-push-validation.sh) already runs the medium gate
+        # locally on the developer's Windows machine before any push reaches
+        # CI -- the Windows CI job was duplicating coverage that pre-push
+        # provides. Windows accounted for ~43% of billable CI minutes (2x
+        # multiplier x ~5min job = ~10 billable min per run).
         include:
           - os: ubuntu-latest
             python-version: '3.14'
           - os: ubuntu-latest
             python-version: '3.12'
-          - os: windows-latest
-            python-version: '3.14'
       fail-fast: false
 
     # Environment safety (Issue #161): Explicitly set test environment
