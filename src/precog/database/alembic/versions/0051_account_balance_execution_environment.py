@@ -75,16 +75,22 @@ Round-trip:
     upgrade head succeeds against a populated DB.
 
 Related:
+    - **docs/database/RATIONALE_MIGRATION_0051.md** -- the in-repo design
+      rationale for this migration. READ THIS FIRST if you're trying to
+      understand WHY this migration exists or what the architecture
+      decisions were.
     - Issue #622 (account_balance missing column)
     - Issue #686 (PositionManager.open_position drops execution_environment)
     - Issue #662 (update_position_price drops execution_environment, fixed in #688)
-    - findings_622_686_synthesis.md
-    - findings_622_686_holden.md (3 ship-blocking findings, 15-point prereq list)
-    - findings_622_686_mulder.md (data-model honesty framing)
     - ADR-107 (Single-Database Architecture with Execution Environments)
     - Migration 0008 (added execution_environment to trades/positions only)
     - Migration 0024 (dropped the ENUM type, converted to VARCHAR + CHECK)
     - Migration 0049 (added SCD temporal columns + idx_balance_unique_current)
+    - Issue #691 (follow-up: finish account_ledger + settlements + read-path defaults)
+
+For the deeper agent-by-agent design pass (Mulder data-model skepticism +
+Holden schema safety review), see the synthesis files in the project
+memory directory: ~/.claude/projects/.../memory/findings_622_686_*.md
 """
 
 from alembic import op
