@@ -51,6 +51,7 @@ from precog.database.crud_positions import (
 from precog.database.crud_positions import (
     update_position_price as crud_update_position_price,
 )
+from precog.database.crud_shared import VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION
 from precog.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -244,13 +245,15 @@ class PositionManager:
         # Validation: execution_environment (typo defense before any
         # downstream work). The CRUD layer also validates, but doing it
         # here surfaces the error at the public manager boundary instead
-        # of inside a wrapped CRUD call.
-        _valid_envs = frozenset({"live", "paper", "backtest"})
-        if execution_environment not in _valid_envs:
+        # of inside a wrapped CRUD call. Uses the centralized constant
+        # from crud_shared so the allow-list stays in sync across all
+        # call sites (positions/trades/orders/edges all use the same
+        # 3-value rule). See issue #693.
+        if execution_environment not in VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION:
             raise ValueError(
                 f"Invalid execution_environment: {execution_environment!r}. "
-                f"Must be one of {sorted(_valid_envs)}. Use "
-                f"derive_execution_environment(app_env, market_mode) from "
+                f"Must be one of {sorted(VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION)}. "
+                f"Use derive_execution_environment(app_env, market_mode) from "
                 f"precog.config.environment instead of constructing this "
                 f"value inline. Note: 'unknown' is reserved for "
                 f"account_balance only."

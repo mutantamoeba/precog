@@ -15,7 +15,11 @@ from decimal import Decimal
 from typing import cast
 
 from .connection import fetch_all, fetch_one, get_cursor
-from .crud_shared import ExecutionEnvironment, validate_decimal
+from .crud_shared import (
+    VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION,
+    ExecutionEnvironment,
+    validate_decimal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +54,9 @@ _VALID_ORDER_SIDES = {"yes", "no"}
 _VALID_ORDER_ACTIONS = {"buy", "sell"}
 _VALID_ORDER_TYPES = {"market", "limit"}
 _VALID_TIME_IN_FORCE = {"fill_or_kill", "good_till_canceled", "immediate_or_cancel"}
-_VALID_EXEC_ENVS = {"live", "paper", "backtest"}
+# Use the canonical per-domain frozenset from crud_shared so the orders/trades/
+# positions allow-list stays in sync. Local constant retired in PR #690 follow-up
+# (Claude Review of #690).
 _VALID_TRADE_SOURCES = {"automated", "manual"}
 _VALID_ORDER_STATUSES = {
     "submitted",
@@ -168,10 +174,12 @@ def create_order(
         raise ValueError(
             f"time_in_force must be one of {_VALID_TIME_IN_FORCE}, got '{time_in_force}'"
         )
-    if execution_environment not in _VALID_EXEC_ENVS:
+    if execution_environment not in VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION:
         raise ValueError(
-            f"execution_environment must be one of {_VALID_EXEC_ENVS}, "
-            f"got '{execution_environment}'"
+            f"execution_environment must be one of "
+            f"{sorted(VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION)}, "
+            f"got '{execution_environment}'. Note: 'unknown' is reserved "
+            f"for account_balance only and is not valid on orders."
         )
     if trade_source not in _VALID_TRADE_SOURCES:
         raise ValueError(
