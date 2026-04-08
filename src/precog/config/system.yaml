@@ -11,37 +11,16 @@
 # DOWNSTREAM IMPACT: Determines which other configs are active
 
 ---
-version: "1.0"
-last_updated: "2025-10-09"
+version: "1.1"
+last_updated: "2026-04-07"
 
-# ============================================
-# ENVIRONMENT SELECTION
-# ============================================
-# This is the MOST IMPORTANT setting - it determines everything else
-#
-# Three environments:
-# - demo: Paper trading, fake money, learning
-# - prod: REAL MONEY, live trading
-# - test: Automated testing, CI/CD
-#
-# SAFETY: Default is 'demo' to prevent accidental real money trading
-# You must EXPLICITLY change to 'prod' for live trading
-
-environment:
-  active: "demo"  # Options: demo | prod | test
-
-  # Why three environments?
-  # - demo: Learn system safely, test strategies, no risk
-  # - prod: Real money after you're confident
-  # - test: Automated testing during development
-
-  # Switching environments:
-  # Option 1: Change this value and restart
-  # Option 2: Set TRADING_ENV environment variable (overrides this)
-  # Example: export TRADING_ENV=prod
-
-  # CRITICAL: Always verify which environment before trading!
-  # System will log environment on startup
+# REMOVED IN #622+#686 SYNTHESIS PR (session 42f):
+#   The `environment:` block (and its `active:` subkey) was deleted
+#   because it was dead code. Nothing in src/ ever read it. The runtime
+#   trading environment is determined by the two-axis model
+#   (PRECOG_ENV + KALSHI_MODE) and translated to execution_environment
+#   via precog.config.environment.derive_execution_environment(). See
+#   findings_622_686_synthesis.md and findings_622_686_mulder.md.
 
 # ============================================
 # DATABASE CONNECTIONS

@@ -4,20 +4,19 @@
 # Think of this as the "risk management headquarters" - every trade
 # must comply with these limits.
 #
-# Version: "1.0"
-# Last Updated: 2025-10-09
+# Version: "1.1"
+# Last Updated: 2026-04-07
 # ============================================
-
-# ============================================
-# TRADING ENVIRONMENT
-# ============================================
-# Which environment are we trading in?
-# - 'demo': Paper trading (fake money, testing strategies)
-# - 'prod': Live trading (real money, real consequences)
 #
-# WHY THIS MATTERS: Prevents accidentally trading with real money
-# while testing new strategies. Always start with demo!
-environment: demo  # CHANGE TO 'prod' ONLY WHEN READY FOR REAL MONEY
+# REMOVED IN #622+#686 SYNTHESIS PR (session 42f):
+#   The `environment: demo` field was deleted because it was dead code.
+#   Nothing in src/ ever read it. The runtime trading environment is
+#   determined by the two-axis model (PRECOG_ENV + KALSHI_MODE) and
+#   translated to execution_environment via
+#   precog.config.environment.derive_execution_environment(). See
+#   findings_622_686_synthesis.md and findings_622_686_mulder.md for
+#   the "five unreconciled vocabularies" analysis that flagged this
+#   field as dead.
 
 # ============================================
 # ACCOUNT LIMITS (Circuit Breakers)

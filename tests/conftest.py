@@ -397,6 +397,13 @@ def sample_position_data():
     """Sample position data for testing.
 
     Uses high IDs (99901) to match fixture data and avoid SERIAL collision.
+
+    Includes ``execution_environment="paper"`` because as of the #622+#686
+    synthesis PR, ``create_position`` requires this parameter with no
+    default. Tests use 'paper' as the canonical default — it makes the
+    fixture self-documenting that test data is NOT representative of
+    production-tagged rows. Tests that need a different value should
+    construct their own dict or strip this key before passing.
     """
     return {
         "strategy_id": 99901,
@@ -406,6 +413,7 @@ def sample_position_data():
         "entry_price": Decimal("0.5200"),
         "target_price": Decimal("0.6000"),
         "stop_loss_price": Decimal("0.4800"),
+        "execution_environment": "paper",
     }
 
 
@@ -414,11 +422,16 @@ def sample_trade_data():
     """Sample trade data for testing.
 
     Uses high IDs (99901) to match fixture data and avoid SERIAL collision.
+
+    Includes ``execution_environment="paper"`` because as of the #622+#686
+    synthesis PR, ``create_trade`` requires this parameter with no default.
+    See ``sample_position_data`` for the rationale on the default value.
     """
     return {
         "side": "buy",  # trades use 'buy'/'sell', not 'yes'/'no'
         "quantity": 100,
         "price": Decimal("0.5200"),
+        "execution_environment": "paper",
         # Attribution (strategy_id, model_id) lives on orders, not trades (migration 0025)
     }
 

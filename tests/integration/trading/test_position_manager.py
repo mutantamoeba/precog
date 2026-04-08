@@ -162,6 +162,10 @@ def position_params(db_cursor, clean_test_data, test_market_pks):
         "target_price": Decimal("0.7500"),  # Target @ 75%
         "stop_loss_price": Decimal("0.3500"),  # Stop @ 35%
         "available_margin": Decimal("1000.00"),  # Sufficient margin
+        # PositionManager.open_position requires execution_environment as of
+        # the #622+#686 synthesis PR. Tests use 'paper' as the canonical
+        # default — see conftest.sample_position_data for rationale.
+        "execution_environment": "paper",
     }
 
 

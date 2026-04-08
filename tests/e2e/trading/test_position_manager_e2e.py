@@ -152,6 +152,7 @@ class TestPositionLifecycle:
                 available_margin=Decimal("1000.00"),  # More than enough
                 target_price=Decimal("0.7500"),
                 stop_loss_price=Decimal("0.3500"),
+                execution_environment="paper",  # required (#622+#686)
             )
 
             # Verify position created
@@ -376,6 +377,7 @@ class TestPositionLifecycle:
                 stop_loss_price=Decimal("0.3500"),
                 trailing_stop_config=trailing_config,
                 position_metadata=metadata,
+                execution_environment="paper",  # required (#622+#686)
             )
 
             # Verify all parameters stored
@@ -1141,7 +1143,8 @@ class TestPositionPrecisionRequirements:
                 entry_price=Decimal("0.5000"),  # Decimal!
                 available_margin=Decimal("1000.00"),  # Decimal!
                 target_price=Decimal("0.7500"),  # Decimal!
-                stop_loss_price=Decimal("0.3500"),  # Decimal!
+                stop_loss_price=Decimal("0.3500"),  # Decimal!,
+                execution_environment="paper",  # required (#622+#686)
             )
 
             # Verify ALL prices are Decimal type
@@ -1307,6 +1310,7 @@ class TestPositionPrecisionRequirements:
                 available_margin=Decimal("1000.00"),
                 target_price=Decimal("0.7500"),
                 stop_loss_price=Decimal("0.3500"),
+                execution_environment="paper",  # required (#622+#686)
             )
             assert isinstance(pos["entry_price"], Decimal)
 
@@ -1372,7 +1376,8 @@ class TestMarginValidationAndErrors:
                 side="YES",
                 quantity=10,
                 entry_price=Decimal("0.7500"),
-                available_margin=Decimal("2.00"),  # Need $2.50, have $2.00 -> FAIL
+                available_margin=Decimal("2.00"),  # Need $2.50, have $2.00 -> FAIL,
+                execution_environment="paper",  # required (#622+#686)
             )
 
     def test_insufficient_margin_no_position(self):
@@ -1397,7 +1402,8 @@ class TestMarginValidationAndErrors:
                 side="NO",
                 quantity=10,
                 entry_price=Decimal("0.7500"),
-                available_margin=Decimal("7.00"),  # Need $7.50, have $7.00 -> FAIL
+                available_margin=Decimal("7.00"),  # Need $7.50, have $7.00 -> FAIL,
+                execution_environment="paper",  # required (#622+#686)
             )
 
     def test_invalid_price_range_validation(self):
@@ -1429,6 +1435,7 @@ class TestMarginValidationAndErrors:
                 quantity=10,
                 entry_price=Decimal("0.00"),  # Too low!
                 available_margin=Decimal("1000.00"),
+                execution_environment="paper",  # required (#622+#686)
             )
 
         # Test price too high ($1.00)
@@ -1441,4 +1448,5 @@ class TestMarginValidationAndErrors:
                 quantity=10,
                 entry_price=Decimal("1.00"),  # Too high!
                 available_margin=Decimal("1000.00"),
+                execution_environment="paper",  # required (#622+#686)
             )

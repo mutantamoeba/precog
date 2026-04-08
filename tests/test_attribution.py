@@ -209,6 +209,7 @@ def test_create_trade_with_automated_source_default(
         side="buy",
         quantity=50,
         price=Decimal("0.5500"),
+        execution_environment="paper",  # required (#622+#686)
     )
 
     trade = get_trade_by_id(trade_id)
@@ -236,7 +237,8 @@ def test_create_trade_with_manual_source(
         side="buy",
         quantity=100,
         price=Decimal("0.6000"),
-        trade_source="manual",  # Kalshi UI trade
+        trade_source="manual",  # Kalshi UI trade,
+        execution_environment="paper",  # required (#622+#686)
     )
 
     trade = get_trade_by_id(trade_id)
@@ -267,6 +269,7 @@ def test_create_trade_with_attribution_fields(
         calculated_probability=Decimal("0.6250"),  # Model prediction: 62.50%
         market_price=Decimal("0.5200"),  # Kalshi price: 52.00%
         trade_source="automated",
+        execution_environment="paper",  # required (#622+#686)
     )
 
     trade = get_trade_by_id(trade_id)
@@ -297,7 +300,8 @@ def test_create_trade_with_negative_edge(
         quantity=50,
         price=Decimal("0.7500"),
         calculated_probability=Decimal("0.6000"),  # Model says 60%
-        market_price=Decimal("0.7500"),  # Market priced at 75% (overpriced!)
+        market_price=Decimal("0.7500"),  # Market priced at 75% (overpriced!),
+        execution_environment="paper",  # required (#622+#686)
     )
 
     trade = get_trade_by_id(trade_id)
@@ -327,7 +331,8 @@ def test_create_trade_without_attribution_fields(
         side="buy",
         quantity=50,
         price=Decimal("0.5000"),
-        # No attribution fields provided
+        # No attribution fields provided,
+        execution_environment="paper",  # required (#622+#686)
     )
 
     trade = get_trade_by_id(trade_id)
@@ -361,6 +366,7 @@ def test_create_trade_probability_out_of_range(
             price=Decimal("0.5000"),
             calculated_probability=Decimal("1.5000"),  # Invalid: > 1.0
             market_price=Decimal("0.5000"),
+            execution_environment="paper",  # required (#622+#686)
         )
 
     # Test probability < 0.0
@@ -374,6 +380,7 @@ def test_create_trade_probability_out_of_range(
             price=Decimal("0.5000"),
             calculated_probability=Decimal("-0.2000"),  # Invalid: < 0.0
             market_price=Decimal("0.5000"),
+            execution_environment="paper",  # required (#622+#686)
         )
 
 
@@ -404,7 +411,8 @@ def test_create_position_with_attribution_fields(
         target_price=Decimal("0.7500"),
         stop_loss_price=Decimal("0.4500"),
         calculated_probability=Decimal("0.6800"),  # Model prediction at entry
-        market_price_at_entry=Decimal("0.5200"),  # Kalshi price at entry
+        market_price_at_entry=Decimal("0.5200"),  # Kalshi price at entry,
+        execution_environment="paper",  # required (#622+#686)
     )
 
     position = get_position_by_id(position_id)
@@ -437,6 +445,7 @@ def test_create_position_immutable_attribution(
         entry_price=Decimal("0.4500"),
         calculated_probability=Decimal("0.5500"),
         market_price_at_entry=Decimal("0.4500"),
+        execution_environment="paper",  # required (#622+#686)
     )
 
     position = get_position_by_id(position_id)
@@ -470,7 +479,8 @@ def test_create_position_without_attribution_fields(
         side="yes",
         quantity=75,
         entry_price=Decimal("0.5000"),
-        # No attribution fields provided
+        # No attribution fields provided,
+        execution_environment="paper",  # required (#622+#686)
     )
 
     position = get_position_by_id(position_id)
@@ -499,7 +509,8 @@ def test_create_position_with_negative_edge(
         quantity=50,
         entry_price=Decimal("0.8000"),
         calculated_probability=Decimal("0.7000"),  # Model: 70%
-        market_price_at_entry=Decimal("0.8000"),  # Market: 80% (overpriced)
+        market_price_at_entry=Decimal("0.8000"),  # Market: 80% (overpriced),
+        execution_environment="paper",  # required (#622+#686)
     )
 
     position = get_position_by_id(position_id)
@@ -529,6 +540,7 @@ def test_create_position_probability_out_of_range(
             entry_price=Decimal("0.5000"),
             calculated_probability=Decimal("1.2000"),  # Invalid: > 1.0
             market_price_at_entry=Decimal("0.5000"),
+            execution_environment="paper",  # required (#622+#686)
         )
 
 
@@ -670,6 +682,7 @@ def test_analytics_query_roi_by_model(
         price=Decimal("0.5000"),
         calculated_probability=Decimal("0.6500"),
         market_price=Decimal("0.5000"),
+        execution_environment="paper",  # required (#622+#686)
     )
 
     trade_id_2 = create_trade(
@@ -681,6 +694,7 @@ def test_analytics_query_roi_by_model(
         price=Decimal("0.5000"),
         calculated_probability=Decimal("0.7000"),
         market_price=Decimal("0.5000"),
+        execution_environment="paper",  # required (#622+#686)
     )
 
     # Verify trades created with different models
@@ -721,6 +735,7 @@ def test_analytics_query_edge_vs_outcome(
         price=Decimal("0.5000"),
         calculated_probability=Decimal("0.7500"),  # High edge: 0.25
         market_price=Decimal("0.5000"),
+        execution_environment="paper",  # required (#622+#686)
     )
 
     # Low edge trade
@@ -733,6 +748,7 @@ def test_analytics_query_edge_vs_outcome(
         price=Decimal("0.5000"),
         calculated_probability=Decimal("0.5500"),  # Low edge: 0.05
         market_price=Decimal("0.5000"),
+        execution_environment="paper",  # required (#622+#686)
     )
 
     trade_high = get_trade_by_id(trade_id_high_edge)

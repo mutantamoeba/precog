@@ -15,7 +15,11 @@ from decimal import Decimal
 from typing import cast
 
 from .connection import fetch_all, fetch_one, get_cursor
-from .crud_shared import ExecutionEnvironment, validate_decimal
+from .crud_shared import (
+    VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION,
+    ExecutionEnvironment,
+    validate_decimal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +54,9 @@ _VALID_ORDER_SIDES = {"yes", "no"}
 _VALID_ORDER_ACTIONS = {"buy", "sell"}
 _VALID_ORDER_TYPES = {"market", "limit"}
 _VALID_TIME_IN_FORCE = {"fill_or_kill", "good_till_canceled", "immediate_or_cancel"}
-_VALID_EXEC_ENVS = {"live", "paper", "backtest"}
+# Use the canonical per-domain frozenset from crud_shared so the orders/trades/
+# positions allow-list stays in sync. Local constant retired in PR #690 follow-up
+# (Claude Review of #690).
 _VALID_TRADE_SOURCES = {"automated", "manual"}
 _VALID_ORDER_STATUSES = {
     "submitted",
@@ -72,6 +78,7 @@ def create_order(
     action: str,
     requested_price: Decimal,
     requested_quantity: int,
+    execution_environment: ExecutionEnvironment,
     order_type: str = "market",
     time_in_force: str = "good_till_canceled",
     strategy_id: int | None = None,
@@ -79,7 +86,6 @@ def create_order(
     edge_id: int | None = None,
     position_id: int | None = None,
     client_order_id: str | None = None,
-    execution_environment: ExecutionEnvironment = "live",
     trade_source: str = "automated",
     order_metadata: dict | None = None,
 ) -> int:
@@ -105,7 +111,14 @@ def create_order(
         edge_id: FK to edges(id) for attribution
         position_id: FK to positions(id) for attribution
         client_order_id: User-provided tracking ID
-        execution_environment: 'live', 'paper', or 'backtest'
+        execution_environment: Execution context — REQUIRED, no default. Must be
+            one of 'live', 'paper', or 'backtest'. The optional-default precedent
+            removed in the #622+#686 synthesis PR was the literal cause of the
+            #622/#662/#686 bug class. orders is the GENESIS row for Phase 2
+            manual trade placement (#508), so any default here would silently
+            tag every demo trade as 'live'. Callers MUST derive this from
+            ``derive_execution_environment(app_env, market_mode)`` at the
+            application boundary or pass an explicit literal.
         trade_source: 'automated' or 'manual'
         order_metadata: Additional data stored as JSONB
 
@@ -161,10 +174,12 @@ def create_order(
         raise ValueError(
             f"time_in_force must be one of {_VALID_TIME_IN_FORCE}, got '{time_in_force}'"
         )
-    if execution_environment not in _VALID_EXEC_ENVS:
+    if execution_environment not in VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION:
         raise ValueError(
-            f"execution_environment must be one of {_VALID_EXEC_ENVS}, "
-            f"got '{execution_environment}'"
+            f"execution_environment must be one of "
+            f"{sorted(VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION)}, "
+            f"got '{execution_environment}'. Note: 'unknown' is reserved "
+            f"for account_balance only and is not valid on orders."
         )
     if trade_source not in _VALID_TRADE_SOURCES:
         raise ValueError(

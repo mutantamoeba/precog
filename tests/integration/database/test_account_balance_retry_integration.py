@@ -135,6 +135,7 @@ class TestAccountBalanceRetryIntegration:
             platform_id=retry_integration_platform,
             new_balance=balance,
             currency="USD",
+            execution_environment="paper",  # required (#622+#686)
         )
 
         assert balance_id is not None
@@ -180,6 +181,7 @@ class TestAccountBalanceRetryIntegration:
             platform_id=retry_integration_platform,
             new_balance=initial_balance,
             currency="USD",
+            execution_environment="paper",  # required (#622+#686)
         )
         assert first_id is not None
 
@@ -187,6 +189,7 @@ class TestAccountBalanceRetryIntegration:
             platform_id=retry_integration_platform,
             new_balance=updated_balance,
             currency="USD",
+            execution_environment="paper",  # required (#622+#686)
         )
         assert second_id is not None
         assert second_id != first_id, "second call must insert a new row with a distinct id"
@@ -256,6 +259,7 @@ class TestAccountBalanceRetryIntegration:
                 platform_id=retry_integration_platform,
                 new_balance=1000.0,  # type: ignore[arg-type]
                 currency="USD",
+                execution_environment="paper",  # required (#622+#686)
             )
 
         # Verify no row was created -- the guard fires before the retry

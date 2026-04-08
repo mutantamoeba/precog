@@ -47,7 +47,15 @@ def _mock_cursor_context(mock_get_cursor, mock_cursor=None):
 
 
 def _default_order_kwargs():
-    """Return minimal valid kwargs for create_order."""
+    """Return minimal valid kwargs for create_order.
+
+    Includes ``execution_environment="paper"`` because as of the #622+#686
+    synthesis PR, ``create_order`` requires this parameter with no Python
+    default. Tests use 'paper' as the canonical default — see
+    conftest.sample_position_data for rationale. Tests that need a
+    different value should construct their own dict or strip the key
+    before passing.
+    """
     return {
         "platform_id": "kalshi",
         "external_order_id": "abc-123",
@@ -56,6 +64,7 @@ def _default_order_kwargs():
         "action": "buy",
         "requested_price": Decimal("0.5500"),
         "requested_quantity": 10,
+        "execution_environment": "paper",
     }
 
 

@@ -18,6 +18,7 @@ from typing import Any, cast
 
 from .connection import fetch_all, fetch_one, get_cursor
 from .crud_shared import (
+    VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION,
     ExecutionEnvironment,
     validate_decimal,
 )
@@ -54,6 +55,7 @@ def create_edge(
     true_win_probability: Decimal,
     market_implied_probability: Decimal,
     market_price: Decimal,
+    execution_environment: ExecutionEnvironment,
     yes_ask_price: Decimal | None = None,
     no_ask_price: Decimal | None = None,
     spread: Decimal | None = None,
@@ -67,7 +69,6 @@ def create_edge(
     recommended_action: str | None = None,
     category: str | None = None,
     subcategory: str | None = None,
-    execution_environment: ExecutionEnvironment = "live",
 ) -> int:
     """
     Create a new edge record with SCD Type 2 row_current_ind = TRUE.
@@ -97,7 +98,14 @@ def create_edge(
         recommended_action: 'auto_execute', 'alert', or 'ignore'
         category: Market category (e.g., 'sports', 'politics')
         subcategory: Market subcategory (e.g., 'nfl', 'ncaaf')
-        execution_environment: 'live', 'paper', or 'backtest' (default 'live')
+        execution_environment: Execution context — REQUIRED, no default. Must
+            be one of 'live', 'paper', or 'backtest'. Note: 'unknown' is
+            reserved for ``account_balance`` only and is not valid here.
+            Edges are signal sources for trading; tagging an edge with the
+            wrong environment contaminates analytics queries that filter by
+            environment. The optional-default precedent removed in the
+            #622+#686 synthesis PR was the literal cause of the
+            #622/#662/#686 bug class. See findings_622_686_synthesis.md.
 
     Returns:
         Integer surrogate PK (edges.id) of the newly created edge.
@@ -134,6 +142,17 @@ def create_edge(
         - Migration 0023: edges enrichment and cleanup
         - ADR-002: Decimal Precision for All Financial Data
     """
+    # Validate execution_environment before any DB interaction. Typo defense
+    # (Marvin's recommendation from #662). Edges follow the trade/position
+    # 3-value rule, not the 4-value account_balance rule.
+    if execution_environment not in VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION:
+        msg = (
+            f"Invalid execution_environment: {execution_environment!r}. "
+            f"Must be one of {sorted(VALID_EXECUTION_ENVIRONMENTS_TRADE_POSITION)}. "
+            f"Note: 'unknown' is reserved for account_balance only."
+        )
+        raise ValueError(msg)
+
     # Runtime type validation (enforces Decimal precision)
     expected_value = validate_decimal(expected_value, "expected_value")
     true_win_probability = validate_decimal(true_win_probability, "true_win_probability")

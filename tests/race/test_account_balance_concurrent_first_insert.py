@@ -207,6 +207,7 @@ class TestAccountBalanceConcurrentFirstInsert:
                             platform_id=_platform,
                             new_balance=balance,
                             currency="USD",
+                            execution_environment="paper",  # required (#622+#686)
                         )
                         _results[label] = balance_id
                     except Exception as exc:  # pragma: no cover - failure path

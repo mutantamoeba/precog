@@ -1,6 +1,20 @@
 # Database Schema Summary
 
-<!-- FRESHNESS: alembic_head=0048, verified=2026-04-05, tables=42, views=8 -->
+<!-- FRESHNESS: alembic_head=0051, verified=2026-04-07, tables=42, views=1 -->
+<!--
+Changelog from prior FRESHNESS marker (alembic_head=0048):
+- Migration 0049: account_balance SCD temporal columns (row_start_ts, row_end_ts) + idx_balance_unique_current
+- Migration 0050: Phase 2 indexes for trade execution queries
+- Migration 0051: account_balance.execution_environment column + drop dead per-mode views
+  - account_balance gets execution_environment VARCHAR(20) NOT NULL DEFAULT 'live'
+  - CHECK constraint allows ('live', 'paper', 'backtest', 'unknown')
+  - 'unknown' is reserved for future forensic backfills (no rows use it today)
+  - idx_balance_unique_current is now composite (platform_id, execution_environment) WHERE row_current_ind = TRUE
+  - DROPPED views: current_balances, live_trades, paper_trades, backtest_trades, training_data_trades, live_positions, paper_positions, backtest_positions
+    All had ZERO production consumers verified by grep on src/.
+  - See findings_622_686_synthesis.md for the design rationale
+-->
+
 
 ---
 **Version:** 2.0
@@ -273,17 +287,22 @@ Position state over time. Versioned via SCD.
 Partial unique index: 1 current row per position_id.
 
 #### account_balance (Fact - SCD Type 2)
-Balance snapshots per platform.
+Balance snapshots per platform, partitioned by execution_environment.
 
 | Column | Type | Notes |
 |--------|------|-------|
-| balance_id (PK) | SERIAL | |
+| id (PK) | SERIAL | renamed from `balance_id` in migration 0036 |
 | platform_id (FK) | VARCHAR(50) | |
 | balance | DECIMAL(10,4) | >= 0 |
 | currency | VARCHAR(3) | DEFAULT 'USD' |
+| execution_environment | VARCHAR(20) | NOT NULL DEFAULT 'live'. CHECK IN ('live', 'paper', 'backtest', 'unknown'). Added in migration 0051. REQUIRED parameter on all CRUD writes — no Python default. See ADR-107 and findings_622_686_synthesis.md. The 'unknown' value is reserved for future forensic backfills of historical rows; no rows in the current schema use it. |
 | row_current_ind | BOOLEAN | SCD Type 2 |
+| row_start_ts | TIMESTAMPTZ | SCD Type 2 (added migration 0049) |
+| row_end_ts | TIMESTAMPTZ | SCD Type 2 (added migration 0049) |
 
-**Known gap (C4 finding H1):** Missing `row_start_ts`/`row_end_ts`. Fix planned for Phase 2 migration.
+**Partial unique index** `idx_balance_unique_current`: composite on `(platform_id, execution_environment) WHERE row_current_ind = TRUE`. The index name is preserved across migrations 0049 and 0051 so the SCD retry helper (`crud_shared.retry_on_scd_unique_conflict`) continues to discriminate by constraint name. One current row per `(platform_id, execution_environment)` tuple.
+
+**Cross-environment isolation:** post-migration 0051, `account_balance` can hold parallel current rows for the same `platform_id` in different environments (e.g., one live and one paper). Queries that need a single environment MUST filter on both `row_current_ind = TRUE` AND `execution_environment = %s`. Mode-blind queries are a money-contamination risk — see #622, #662, #686 in the issue tracker.
 
 #### account_ledger (Fact - Append Only)
 Explains WHY balance changed. Created 0026.
@@ -404,7 +423,7 @@ Runtime configuration overrides with expiration support.
 | current_game_states | Latest game states | game_states WHERE row_current_ind |
 | current_edges | Active edges | edges WHERE row_current_ind |
 | open_positions | Active positions | positions WHERE row_current_ind AND status = 'open' |
-| current_balances | Latest balances | account_balance WHERE row_current_ind |
+| ~~current_balances~~ | DROPPED in migration 0051 | use `WHERE row_current_ind=TRUE AND execution_environment=%s` |
 | active_strategies | Deployed strategies | strategies WHERE status = 'active' |
 | active_models | Models in use | probability_models WHERE status = 'active' |
 | team_season_records | W/L/D aggregation | UNION ALL from games + game_states with dedup |

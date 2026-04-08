@@ -183,6 +183,7 @@ class TestInvalidSideHandling:
                 quantity=10,
                 entry_price=Decimal("0.50"),
                 available_margin=Decimal("100.00"),
+                execution_environment="paper",  # required (#622+#686)
             )
 
     @patch("precog.trading.position_manager.get_connection")
@@ -203,6 +204,7 @@ class TestInvalidSideHandling:
                 quantity=10,
                 entry_price=Decimal("0.50"),
                 available_margin=Decimal("100.00"),
+                execution_environment="paper",  # required (#622+#686)
             )
 
     @patch("precog.trading.position_manager.get_connection")
@@ -223,6 +225,7 @@ class TestInvalidSideHandling:
                 quantity=10,
                 entry_price=Decimal("0.50"),
                 available_margin=Decimal("100.00"),
+                execution_environment="paper",  # required (#622+#686)
             )
 
 

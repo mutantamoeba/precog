@@ -468,6 +468,7 @@ def test_trade_strategy_model_attribution(
         requested_price=sample_trade_data["price"],
         requested_quantity=sample_trade_data["quantity"],
         strategy_id=strategy_id,
+        execution_environment="paper",  # required (#622+#686)
     )
 
     # Create trade linked to order
@@ -566,7 +567,10 @@ def test_create_account_balance_with_decimal(db_pool, clean_test_data):
 
     # Test: Create account balance
     balance_id = create_account_balance(
-        platform_id="test-platform", balance=Decimal("1234.5678"), currency="USD"
+        platform_id="test-platform",
+        balance=Decimal("1234.5678"),
+        execution_environment="paper",  # required, no default (#622+#686)
+        currency="USD",
     )
 
     assert balance_id is not None
@@ -608,6 +612,7 @@ def test_create_account_balance_rejects_float(db_pool, clean_test_data):
         create_account_balance(
             platform_id="test-platform2",
             balance=1234.5678,  # type: ignore[arg-type]  # Float not Decimal
+            execution_environment="paper",
             currency="USD",
         )
 
@@ -635,6 +640,7 @@ def test_update_account_balance_rejects_float(db_pool, clean_test_data):
         update_account_balance_with_versioning(
             platform_id="test-platform3",
             new_balance=5678.1234,  # type: ignore[arg-type]  # Float not Decimal
+            execution_environment="paper",
         )
 
 
@@ -767,6 +773,7 @@ def test_get_recent_trades_with_strategy_filter(
         requested_price=sample_trade_data["price"],
         requested_quantity=sample_trade_data["quantity"],
         strategy_id=strategy_id1,
+        execution_environment="paper",  # required (#622+#686)
     )
     order_id2 = create_order(
         platform_id="test_platform",
@@ -777,6 +784,7 @@ def test_get_recent_trades_with_strategy_filter(
         requested_price=sample_trade_data["price"],
         requested_quantity=sample_trade_data["quantity"],
         strategy_id=strategy_id2,
+        execution_environment="paper",  # required (#622+#686)
     )
 
     # Create trades linked to their respective orders
@@ -786,6 +794,7 @@ def test_get_recent_trades_with_strategy_filter(
         side=sample_trade_data["side"],
         quantity=sample_trade_data["quantity"],
         price=sample_trade_data["price"],
+        execution_environment="paper",  # required (#622+#686)
     )
     _trade2 = create_trade(  # Intentionally unused - testing filter
         market_internal_id=market_id,
@@ -793,6 +802,7 @@ def test_get_recent_trades_with_strategy_filter(
         side=sample_trade_data["side"],
         quantity=sample_trade_data["quantity"],
         price=sample_trade_data["price"],
+        execution_environment="paper",  # required (#622+#686)
     )
 
     # Test: Get trades filtered by strategy_id1 (JOINs through orders)
@@ -886,13 +896,14 @@ def test_create_trade_with_execution_environment(
 
     Verifies Migration 0008 integration - trades can be tagged with
     'live', 'paper', or 'backtest' execution context.
+
+    Note: sample_trade_data includes execution_environment="paper" by default
+    (as of #622+#686 synthesis). This test exercises that default path.
     """
     market_id = create_market(**sample_market_data)
 
-    # Create trade with paper environment (demo API testing)
-    trade_id = create_trade(
-        market_internal_id=market_id, **sample_trade_data, execution_environment="paper"
-    )
+    # Create trade with paper environment (fixture default)
+    trade_id = create_trade(market_internal_id=market_id, **sample_trade_data)
     assert trade_id is not None
 
     # Retrieve and verify execution_environment is set
@@ -902,20 +913,27 @@ def test_create_trade_with_execution_environment(
 
 
 @pytest.mark.integration
-def test_create_trade_default_execution_environment(
+def test_create_trade_rejects_missing_execution_environment(
     db_pool, clean_test_data, sample_market_data, sample_trade_data
 ):
-    """Test that trades default to 'live' execution_environment."""
+    """Test that create_trade raises TypeError when execution_environment missing.
+
+    As of the #622+#686 synthesis PR, create_trade has no default for
+    execution_environment — callers MUST pass it. The test validates that
+    omission is loud (TypeError), not silent.
+
+    The previous version of this test verified the old default 'live' value.
+    That default was the literal cause of the #622/#662/#686 bug class and
+    has been removed.
+    """
     market_id = create_market(**sample_market_data)
 
-    # Create trade without specifying execution_environment
-    trade_id = create_trade(market_internal_id=market_id, **sample_trade_data)
-    assert trade_id is not None
-
-    # Verify default is 'live'
-    trades = get_trades_by_market(market_id, limit=1)
-    assert len(trades) == 1
-    assert trades[0]["execution_environment"] == "live"
+    # Drop execution_environment from the fixture spread; verify TypeError
+    trade_data_without_exec_env = {
+        k: v for k, v in sample_trade_data.items() if k != "execution_environment"
+    }
+    with pytest.raises(TypeError, match="execution_environment"):
+        create_trade(market_internal_id=market_id, **trade_data_without_exec_env)
 
 
 @pytest.mark.integration
@@ -925,12 +943,15 @@ def test_get_trades_by_market_with_environment_filter(
     """Test filtering trades by execution_environment."""
     market_id = create_market(**sample_market_data)
 
+    # Strip the fixture's default execution_environment so we can override
+    # per-call without TypeError ("got multiple values for keyword argument").
+    trade_data_no_env = {k: v for k, v in sample_trade_data.items() if k != "execution_environment"}
     # Create trades in different environments
-    create_trade(market_internal_id=market_id, **sample_trade_data, execution_environment="live")
-    create_trade(market_internal_id=market_id, **sample_trade_data, execution_environment="paper")
-    create_trade(market_internal_id=market_id, **sample_trade_data, execution_environment="paper")
+    create_trade(market_internal_id=market_id, **trade_data_no_env, execution_environment="live")
+    create_trade(market_internal_id=market_id, **trade_data_no_env, execution_environment="paper")
+    create_trade(market_internal_id=market_id, **trade_data_no_env, execution_environment="paper")
     create_trade(
-        market_internal_id=market_id, **sample_trade_data, execution_environment="backtest"
+        market_internal_id=market_id, **trade_data_no_env, execution_environment="backtest"
     )
 
     # Filter by paper environment
@@ -955,9 +976,10 @@ def test_get_recent_trades_with_environment_filter(
     """Test filtering recent trades by execution_environment."""
     market_id = create_market(**sample_market_data)
 
+    trade_data_no_env = {k: v for k, v in sample_trade_data.items() if k != "execution_environment"}
     # Create trades in different environments
-    create_trade(market_internal_id=market_id, **sample_trade_data, execution_environment="live")
-    create_trade(market_internal_id=market_id, **sample_trade_data, execution_environment="paper")
+    create_trade(market_internal_id=market_id, **trade_data_no_env, execution_environment="live")
+    create_trade(market_internal_id=market_id, **trade_data_no_env, execution_environment="paper")
 
     # Filter by paper environment
     paper_trades = get_recent_trades(limit=10, execution_environment="paper")
@@ -972,14 +994,13 @@ def test_create_position_with_execution_environment(
     """Test creating positions with execution_environment parameter.
 
     Verifies Migration 0008 integration - positions can be tagged with
-    'live', 'paper', or 'backtest' execution context.
+    'live', 'paper', or 'backtest' execution context. The fixture's
+    default is 'paper' as of the #622+#686 synthesis PR.
     """
     market_id = create_market(**sample_market_data)
 
-    # Create position with paper environment
-    pos_id = create_position(
-        market_internal_id=market_id, **sample_position_data, execution_environment="paper"
-    )
+    # Create position with paper environment (fixture default)
+    pos_id = create_position(market_internal_id=market_id, **sample_position_data)
     assert pos_id is not None
 
     # Retrieve and verify execution_environment is set
@@ -989,19 +1010,23 @@ def test_create_position_with_execution_environment(
 
 
 @pytest.mark.integration
-def test_create_position_default_execution_environment(
+def test_create_position_rejects_missing_execution_environment(
     db_pool, clean_test_data, sample_market_data, sample_position_data
 ):
-    """Test that positions default to 'live' execution_environment."""
+    """Test that create_position raises TypeError when execution_environment missing.
+
+    As of the #622+#686 synthesis PR, create_position has no default for
+    execution_environment — callers MUST pass it. The previous version of
+    this test verified the old default 'live' value, which was the literal
+    cause of #622/#662/#686.
+    """
     market_id = create_market(**sample_market_data)
 
-    # Create position without specifying execution_environment
-    pos_id = create_position(market_internal_id=market_id, **sample_position_data)
-    assert pos_id is not None
-
-    # Verify default is 'live' by filtering
-    live_positions = get_current_positions(execution_environment="live")
-    assert any(p["id"] == pos_id for p in live_positions)
+    pos_data_no_env = {
+        k: v for k, v in sample_position_data.items() if k != "execution_environment"
+    }
+    with pytest.raises(TypeError, match="execution_environment"):
+        create_position(market_internal_id=market_id, **pos_data_no_env)
 
 
 @pytest.mark.integration
@@ -1011,15 +1036,18 @@ def test_get_current_positions_with_environment_filter(
     """Test filtering positions by execution_environment."""
     market_id = create_market(**sample_market_data)
 
+    pos_data_no_env = {
+        k: v for k, v in sample_position_data.items() if k != "execution_environment"
+    }
     # Create positions in different environments
     live_pos_id = create_position(
-        market_internal_id=market_id, **sample_position_data, execution_environment="live"
+        market_internal_id=market_id, **pos_data_no_env, execution_environment="live"
     )
     paper_pos_id = create_position(
-        market_internal_id=market_id, **sample_position_data, execution_environment="paper"
+        market_internal_id=market_id, **pos_data_no_env, execution_environment="paper"
     )
     backtest_pos_id = create_position(
-        market_internal_id=market_id, **sample_position_data, execution_environment="backtest"
+        market_internal_id=market_id, **pos_data_no_env, execution_environment="backtest"
     )
 
     # Filter by paper environment
@@ -1046,10 +1074,8 @@ def test_get_current_positions_combined_filters(
     """Test combining status and execution_environment filters."""
     market_id = create_market(**sample_market_data)
 
-    # Create open position in paper environment
-    paper_pos_id = create_position(
-        market_internal_id=market_id, **sample_position_data, execution_environment="paper"
-    )
+    # Create open position in paper environment (fixture default)
+    paper_pos_id = create_position(market_internal_id=market_id, **sample_position_data)
 
     # Filter by status AND environment
     open_paper_positions = get_current_positions(status="open", execution_environment="paper")

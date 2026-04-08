@@ -14,7 +14,11 @@ from decimal import Decimal
 from typing import cast
 
 from .connection import get_cursor
-from .crud_shared import retry_on_scd_unique_conflict
+from .crud_shared import (
+    VALID_EXECUTION_ENVIRONMENTS_BALANCE,
+    ExecutionEnvironment,
+    retry_on_scd_unique_conflict,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -27,72 +31,111 @@ logger = logging.getLogger(__name__)
 def create_account_balance(
     platform_id: str,
     balance: Decimal,
+    execution_environment: ExecutionEnvironment,
     currency: str = "USD",
 ) -> int | None:
     """
     Create new account balance snapshot with row_current_ind = TRUE.
 
     Account balance uses SCD Type 2 versioning to track balance changes over time.
-    Each balance fetch creates a new snapshot.
+    Each balance fetch creates a new snapshot, partitioned by execution_environment
+    so live and paper balances coexist for the same platform_id without
+    cross-contamination (Migration 0051).
 
     Args:
         platform_id: Foreign key to platforms table (e.g., "kalshi")
         balance: Account balance as DECIMAL(10,4) - NEVER use float!
+        execution_environment: Execution context — REQUIRED, no default. Must
+            be one of 'live' (production), 'paper' (demo API), 'backtest'
+            (simulation), or 'unknown' (forensic tombstone). Callers MUST
+            obtain this value from
+            ``precog.config.environment.derive_execution_environment``
+            or pass an explicit literal — never inherit a Python default.
+            See findings_622_686_synthesis.md for the rationale: the
+            optional-default precedent on ``crud_positions.create_position``
+            was the literal cause of the #622/#662/#686 bug class.
         currency: Currency code (default: "USD")
 
     Returns:
         id of newly created record
 
     Raises:
-        ValueError: If balance is float (not Decimal)
-        psycopg2.Error: If database operation fails
+        ValueError: If balance is float (not Decimal), or if
+            ``execution_environment`` is not one of the four allowed values.
+        psycopg2.Error: If database operation fails.
 
     Educational Note:
         Account balance stored as DECIMAL(10,4) for exact precision.
         NEVER use float for financial calculations!
 
-        Why this matters:
-        - Float arithmetic introduces rounding errors
-        - Example: float(1234.5678) + float(0.0001) may not equal 1234.5679
-        - Decimal: Decimal("1234.5678") + Decimal("0.0001") = Decimal("1234.5679") ✅
+        Why execution_environment is REQUIRED with no default:
+        - Cost of miss with REQUIRED: caller breaks with TypeError. LOUD.
+        - Cost of miss with optional default: silent contamination on a
+          money table. Indistinguishable from correct behavior.
+        See ``findings_622_686_synthesis.md`` for the full rationale.
 
         SCD Type 2 Pattern:
         - Every balance fetch creates NEW row with row_current_ind=TRUE
         - Enables balance history tracking without losing data
         - Query current balance: WHERE row_current_ind = TRUE
+          AND execution_environment = %s
 
     Example:
         >>> from decimal import Decimal
+        >>> from precog.config.environment import (
+        ...     derive_execution_environment,
+        ...     get_app_environment,
+        ...     get_market_mode,
+        ... )
+        >>> exec_env = derive_execution_environment(
+        ...     get_app_environment(), get_market_mode("kalshi")
+        ... )
         >>> balance_id = create_account_balance(
         ...     platform_id="kalshi",
         ...     balance=Decimal("1234.5678"),
-        ...     currency="USD"
+        ...     execution_environment=exec_env,
+        ...     currency="USD",
         ... )
-        >>> print(balance_id)  # 42
 
-        >>> # ❌ WRONG - Float contamination
+        >>> # WRONG - Float contamination
         >>> balance = 1234.5678  # float type
-        >>> # Will raise ValueError
+        >>> # Will raise ValueError on the Decimal guard
+
+        >>> # WRONG - missing execution_environment
+        >>> create_account_balance("kalshi", Decimal("1000.00"))
+        >>> # TypeError: missing 1 required positional argument
 
     Related:
         - REQ-SYS-003: Decimal Precision for All Prices
+        - REQ-SAFE-005 (proposed): Mandatory translator function for
+          execution environment derivation
         - ADR-002: Decimal-Only Financial Calculations
+        - ADR-107: Single-Database Architecture with Execution Environments
         - Pattern 1 in CLAUDE.md: Decimal Precision
         - Pattern 2 in CLAUDE.md: SCD Type 2 Versioning
+        - Issues #622, #662, #686 (the bug class this signature prevents)
     """
     if not isinstance(balance, Decimal):
         raise ValueError(f"Balance must be Decimal, got {type(balance).__name__}")
+    if execution_environment not in VALID_EXECUTION_ENVIRONMENTS_BALANCE:
+        msg = (
+            f"Invalid execution_environment: {execution_environment!r}. "
+            f"Must be one of {sorted(VALID_EXECUTION_ENVIRONMENTS_BALANCE)}. "
+            f"This is the typo defense Marvin recommended on #662 -- "
+            f"'Live', 'demo', and other near-misses must fail loudly here."
+        )
+        raise ValueError(msg)
 
     query = """
         INSERT INTO account_balance (
-            platform_id, balance, currency,
+            platform_id, balance, currency, execution_environment,
             row_current_ind, row_start_ts, created_at
         )
-        VALUES (%s, %s, %s, TRUE, NOW(), NOW())
+        VALUES (%s, %s, %s, %s, TRUE, NOW(), NOW())
         RETURNING id
     """
 
-    params = (platform_id, balance, currency)
+    params = (platform_id, balance, currency, execution_environment)
 
     with get_cursor(commit=True) as cur:
         cur.execute(query, params)
@@ -103,6 +146,7 @@ def create_account_balance(
 def update_account_balance_with_versioning(
     platform_id: str,
     new_balance: Decimal,
+    execution_environment: ExecutionEnvironment,
     currency: str = "USD",
 ) -> int | None:
     """
@@ -116,6 +160,16 @@ def update_account_balance_with_versioning(
     Args:
         platform_id: Platform identifier (e.g., "kalshi")
         new_balance: New balance as DECIMAL(10,4)
+        execution_environment: Execution context — REQUIRED, no default. Must
+            be one of 'live', 'paper', 'backtest', or 'unknown'. The
+            close+insert SCD sequence operates on the row scoped to BOTH
+            platform_id AND execution_environment, so passing a value that
+            does not match the existing current row will create a parallel
+            current row in a different environment (which is the correct
+            behavior — live and paper balances coexist for the same
+            platform_id post-Migration 0051). Callers MUST derive this value
+            from ``derive_execution_environment(app_env, market_mode)`` at
+            the application boundary, never inherit a Python default.
         currency: Currency code (default: "USD")
 
     Returns:
@@ -183,32 +237,52 @@ def update_account_balance_with_versioning(
     """
     if not isinstance(new_balance, Decimal):
         raise ValueError(f"Balance must be Decimal, got {type(new_balance).__name__}")
+    if execution_environment not in VALID_EXECUTION_ENVIRONMENTS_BALANCE:
+        msg = (
+            f"Invalid execution_environment: {execution_environment!r}. "
+            f"Must be one of {sorted(VALID_EXECUTION_ENVIRONMENTS_BALANCE)}. "
+            f"Typo defense (Marvin's recommendation on #662): this guard "
+            f"fires before any DB interaction, so 'Live', 'demo', and other "
+            f"near-misses cannot reach the SCD versioning path."
+        )
+        raise ValueError(msg)
 
     # Step 0: Lock current row to prevent concurrent close->insert races.
     # Without FOR UPDATE, two concurrent calls can both close the current row
-    # before either inserts, leaving zero current rows for the platform.
+    # before either inserts, leaving zero current rows for the (platform_id,
+    # execution_environment) tuple.
+    #
+    # The lock is scoped to (platform_id, execution_environment) because
+    # post-Migration 0051 the partial unique index is composite. Without the
+    # execution_environment predicate, a live update would unnecessarily
+    # serialize against a concurrent paper update for the same platform.
     lock_query = """
         SELECT id FROM account_balance
-        WHERE platform_id = %s AND row_current_ind = TRUE
+        WHERE platform_id = %s
+          AND execution_environment = %s
+          AND row_current_ind = TRUE
         FOR UPDATE
     """
 
     # Step 1: Close current row -- use a single NOW() for temporal continuity
-    # between the old row's end and new row's start.
+    # between the old row's end and new row's start. Scoped to the same
+    # (platform_id, execution_environment) tuple as the lock.
     close_query = """
         UPDATE account_balance
         SET row_current_ind = FALSE,
             row_end_ts = %s
-        WHERE platform_id = %s AND row_current_ind = TRUE
+        WHERE platform_id = %s
+          AND execution_environment = %s
+          AND row_current_ind = TRUE
     """
 
     # Step 2: Insert new balance record with matching row_start_ts
     insert_query = """
         INSERT INTO account_balance (
-            platform_id, balance, currency,
+            platform_id, balance, currency, execution_environment,
             row_current_ind, row_start_ts, created_at
         )
-        VALUES (%s, %s, %s, TRUE, %s, %s)
+        VALUES (%s, %s, %s, %s, TRUE, %s, %s)
         RETURNING id
     """
 
@@ -227,22 +301,30 @@ def update_account_balance_with_versioning(
             cur.execute("SELECT NOW() AS ts")
             now = cur.fetchone()["ts"]
 
-            # Lock current row (serializes concurrent updates). On the first
-            # attempt of a first-insert race, this returns zero rows; on the
-            # retry attempt the sibling caller's row is now visible and gets
-            # locked, so close+insert proceeds normally.
-            cur.execute(lock_query, (platform_id,))
+            # Lock current row (serializes concurrent updates against the
+            # same platform+env tuple). On the first attempt of a first-insert
+            # race, this returns zero rows; on the retry attempt the sibling
+            # caller's row is now visible and gets locked, so close+insert
+            # proceeds normally. Post-Migration 0051 the lock is scoped to
+            # (platform_id, execution_environment) so cross-environment writes
+            # do not unnecessarily serialize.
+            cur.execute(lock_query, (platform_id, execution_environment))
 
-            # Close old balance version (no-op if no current row exists).
-            cur.execute(close_query, (now, platform_id))
+            # Close old balance version (no-op if no current row exists for
+            # this platform+env tuple).
+            cur.execute(close_query, (now, platform_id, execution_environment))
 
             # Insert new balance version. If a sibling caller raced us between
             # the lock query and this insert (only possible on the FIRST insert
-            # for this platform_id, when the lock query found zero rows to
-            # serialize against), this raises psycopg2.errors.UniqueViolation
-            # on idx_balance_unique_current. The retry helper catches that
-            # specific constraint and re-runs this attempt.
-            cur.execute(insert_query, (platform_id, new_balance, currency, now, now))
+            # for this (platform_id, execution_environment) tuple, when the
+            # lock query found zero rows to serialize against), this raises
+            # psycopg2.errors.UniqueViolation on idx_balance_unique_current.
+            # The retry helper catches that specific constraint and re-runs
+            # this attempt.
+            cur.execute(
+                insert_query,
+                (platform_id, new_balance, currency, execution_environment, now, now),
+            )
             result = cur.fetchone()
             # PR #631 / Claude Review Issue 1: refuse to silently return None
             # for money-touching SCD code. The retry helper is generic over
@@ -272,7 +354,10 @@ def update_account_balance_with_versioning(
     return retry_on_scd_unique_conflict(
         _attempt_close_and_insert,
         "idx_balance_unique_current",
-        business_key={"platform_id": platform_id},
+        business_key={
+            "platform_id": platform_id,
+            "execution_environment": execution_environment,
+        },
         logger_override=logger,
     )
 
