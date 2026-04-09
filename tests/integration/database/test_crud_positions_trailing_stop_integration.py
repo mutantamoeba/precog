@@ -59,7 +59,12 @@ from typing import Any
 import pytest
 
 from precog.database.connection import get_cursor
-from precog.database.crud_positions import set_trailing_stop_state, update_position_price
+from precog.database.crud_positions import (
+    close_position,
+    create_position,
+    set_trailing_stop_state,
+    update_position_price,
+)
 
 # Test identifiers reserved for this integration suite. Use the TEST- prefix
 # so the suite-wide ``clean_test_data`` regex picks up any orphaned rows the
@@ -740,3 +745,661 @@ class TestUpdatePositionPriceIntegration:
             f"{after_second['execution_environment']!r} after the second "
             f"price update"
         )
+
+
+# =============================================================================
+# Issue #666 + #706: psycopg2 dict-adapter / Decimal-JSONB fixtures
+# =============================================================================
+
+
+# Production-shape trailing_stop_state: every numeric value is a Decimal,
+# mirroring the dict ``position_manager`` builds in
+# ``initialize_trailing_stop`` and ``update_trailing_stop`` callers. Kept
+# at module scope (not a fixture) so each test copies it via ``dict(...)``
+# and mutates independently without cross-test bleed.
+_PRODUCTION_SHAPE_TRAILING_STOP: dict[str, Any] = {
+    "config": {
+        "activation_threshold": Decimal("0.15"),
+        "initial_distance": Decimal("0.05"),
+        "tightening_rate": Decimal("0.10"),
+        "floor_distance": Decimal("0.02"),
+    },
+    "activated": True,
+    "activation_price": Decimal("0.6500"),
+    "current_stop_price": Decimal("0.6000"),
+    "highest_price": Decimal("0.6500"),
+}
+
+
+_CREATE_POS_TEST_TICKER = "TEST-INT-706-MKT"
+_CREATE_POS_BK_PREFIX = "TEST-INT-706-POS-"
+_CREATE_POS_STRATEGY_ID = 99901  # matches conftest.clean_test_data seed
+_CREATE_POS_MODEL_ID = 99901  # matches conftest.clean_test_data seed
+
+
+@pytest.fixture
+def create_position_market(db_pool: Any) -> Any:
+    """Seed a clean market plus strategy/model parent rows for create_position tests.
+
+    ``create_position`` requires ``strategy_id`` and ``model_id`` FKs to
+    non-null rows in ``strategies`` / ``probability_models`` (see
+    ``crud_positions.py:281``). This fixture seeds the same high-id parent
+    rows the suite-wide ``clean_test_data`` fixture uses (99901/99901) so
+    tests can call ``create_position(...)`` directly.
+
+    Tears down positions, market, and market_snapshots after each test.
+    Leaves the strategy/model rows alone because other tests in the same
+    session may reuse them and the cleanup happens in the test-session
+    ``clean_test_data`` teardown block.
+
+    Yields the market surrogate PK.
+    """
+    with get_cursor(commit=True) as cur:
+        # Cleanup any orphaned rows from a prior failed run.
+        cur.execute(
+            "DELETE FROM positions WHERE position_id LIKE %s",
+            (_CREATE_POS_BK_PREFIX + "%",),
+        )
+        cur.execute(
+            """
+            DELETE FROM market_snapshots WHERE market_id IN (
+                SELECT id FROM markets WHERE ticker = %s
+            )
+            """,
+            (_CREATE_POS_TEST_TICKER,),
+        )
+        cur.execute("DELETE FROM markets WHERE ticker = %s", (_CREATE_POS_TEST_TICKER,))
+
+        # Seed strategy + model parent rows idempotently. Mirrors the high
+        # IDs conftest.clean_test_data uses so we don't collide with
+        # SERIAL-generated rows from property tests.
+        cur.execute(
+            """
+            INSERT INTO strategies (
+                strategy_id, strategy_name, strategy_version, strategy_type,
+                config, status
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (strategy_id) DO NOTHING
+            """,
+            (
+                _CREATE_POS_STRATEGY_ID,
+                "test_706_strategy",
+                "v1.0",
+                "value",
+                '{"test": true}',
+                "active",
+            ),
+        )
+        cur.execute(
+            """
+            INSERT INTO probability_models (
+                model_id, model_name, model_version, model_class,
+                config, status
+            )
+            VALUES (%s, %s, %s, %s, %s, %s)
+            ON CONFLICT (model_id) DO NOTHING
+            """,
+            (
+                _CREATE_POS_MODEL_ID,
+                "test_706_model",
+                "v1.0",
+                "elo",
+                '{"test": true}',
+                "active",
+            ),
+        )
+
+        # Seed the market (positions FK to markets.id).
+        cur.execute(
+            """
+            INSERT INTO markets (
+                platform_id, event_internal_id, external_id, ticker, title,
+                market_type, status
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            RETURNING id
+            """,
+            (
+                "kalshi",
+                None,
+                f"{_CREATE_POS_TEST_TICKER}-EXT",
+                _CREATE_POS_TEST_TICKER,
+                "Issue 706 Integration Market",
+                "binary",
+                "open",
+            ),
+        )
+        market_pk = cur.fetchone()["id"]
+
+    yield market_pk
+
+    # Teardown: remove positions + market rows. Leave strategy/model rows
+    # alone so co-running tests that share the 99901 seed don't have the
+    # rug pulled mid-test.
+    try:
+        with get_cursor(commit=True) as cur:
+            cur.execute(
+                "DELETE FROM positions WHERE position_id LIKE %s",
+                (_CREATE_POS_BK_PREFIX + "%",),
+            )
+            cur.execute("DELETE FROM market_snapshots WHERE market_id = %s", (market_pk,))
+            cur.execute("DELETE FROM markets WHERE id = %s", (market_pk,))
+    except Exception:
+        # Best-effort cleanup; do not mask the actual test outcome.
+        pass
+
+
+def _seed_open_position_with_trailing_stop(
+    *,
+    market_pk: int,
+    position_bk: str,
+    trailing_stop_state: Any,
+    execution_environment: str = "paper",
+) -> int:
+    """Seed an open position with a raw SQL INSERT so the trailing stop
+    state hits the DB via psycopg2's adapter (not via any CRUD function).
+
+    Used by the update_position_price / close_position tests to pre-stage
+    a current row carrying a populated (or NULL) trailing_stop_state. We
+    cannot use ``create_position`` for this seed step because
+    ``create_position`` itself is under test here -- bootstrapping via
+    ``create_position`` would mask a regression where the seed succeeds
+    for the wrong reason (e.g., adapter works for create but not update).
+
+    Wraps non-None dicts with ``Json(..., dumps=_jsonb_dumps)`` via the
+    same internal encoder the CRUD functions now use, so the seeded row
+    has the correct on-disk shape. Uses ``json.dumps(..., cls=DecimalEncoder)``
+    inlined here to avoid importing a private symbol from the module
+    under test.
+    """
+    import json as _json
+
+    from psycopg2.extras import Json
+
+    from precog.database.crud_shared import DecimalEncoder
+
+    def _dumps(obj: Any) -> str:
+        return _json.dumps(obj, cls=DecimalEncoder)
+
+    wrapped_state = (
+        Json(trailing_stop_state, dumps=_dumps) if trailing_stop_state is not None else None
+    )
+
+    with get_cursor(commit=True) as cur:
+        cur.execute(
+            """
+            INSERT INTO positions (
+                position_id, market_internal_id, side, quantity,
+                entry_price, current_price, stop_loss_price,
+                trailing_stop_state,
+                status, entry_time, last_check_time,
+                row_current_ind, row_start_ts,
+                execution_environment
+            )
+            VALUES (
+                %s, %s, %s, %s,
+                %s, %s, %s,
+                %s,
+                %s, NOW(), NOW(),
+                TRUE, NOW(),
+                %s
+            )
+            RETURNING id
+            """,
+            (
+                position_bk,
+                market_pk,
+                "YES",
+                10,
+                Decimal("0.5000"),
+                Decimal("0.5500"),
+                Decimal("0.4500"),
+                wrapped_state,
+                "open",
+                execution_environment,
+            ),
+        )
+        return cast_int(cur.fetchone()["id"])
+
+
+def cast_int(value: Any) -> int:
+    """Narrow ``Any`` -> ``int`` without pulling ``typing.cast`` into the
+    test file's public namespace. Wraps psycopg2 RealDictRow lookups where
+    we know the column is SERIAL.
+    """
+    return int(value)
+
+
+# =============================================================================
+# Issue #706: create_position — psycopg2 dict-adapter / Decimal-JSONB fix
+# =============================================================================
+
+
+@pytest.mark.integration
+class TestCreatePositionTrailingStopJsonbWrite:
+    """Single-threaded integration coverage for ``create_position`` when the
+    ``trailing_stop_state`` parameter is a dict containing Decimal values.
+
+    Issue #706 (filed session 43 from Glokta review of PR #705):
+
+    ``create_position`` passes the raw ``trailing_stop_state`` dict to
+    ``cur.execute(...)`` as an INSERT parameter. psycopg2 has no default
+    ``dict -> jsonb`` adapter, so any non-None caller crashes with
+    ``ProgrammingError: can't adapt type 'dict'``. Even if the adapter
+    existed, plain ``json.dumps`` cannot serialize ``Decimal`` values
+    (``TypeError: Object of type Decimal is not JSON serializable``).
+
+    This test class pins the fix: ``trailing_stop_state`` is now wrapped
+    with ``Json(..., dumps=_jsonb_dumps)`` if not None (matching the
+    canonical ``set_trailing_stop_state`` pattern from #629 PR). The
+    ``is not None`` conditional is critical -- wrapping ``None`` with
+    ``Json(None)`` would serialize as the JSONB string ``"null"``, a
+    4-character JSONB value that is NOT a SQL NULL. That would silently
+    break any existing ``WHERE trailing_stop_state IS NULL`` query.
+    """
+
+    def test_create_position_with_decimal_trailing_stop_state(
+        self, create_position_market: int
+    ) -> None:
+        """A fresh ``create_position`` call with a production-shape dict
+        round-trips correctly.
+
+        Pre-fix behavior: crashes with either ``ProgrammingError: can't
+        adapt type 'dict'`` or ``TypeError: Object of type Decimal is not
+        JSON serializable`` (both are valid pre-fix failure modes; the
+        exact one depends on psycopg2 internals).
+
+        Post-fix behavior: returns a valid surrogate id, the row is
+        readable, and the trailing stop state is stored as a JSONB object
+        with the Decimal-bearing values preserved as their string form
+        (per the ``_jsonb_dumps`` / ``DecimalEncoder`` contract).
+        """
+        market_pk = create_position_market
+
+        # Copy the module-scope production-shape dict so the test is
+        # independent of other tests' mutations.
+        state = {
+            "config": dict(_PRODUCTION_SHAPE_TRAILING_STOP["config"]),
+            "activated": _PRODUCTION_SHAPE_TRAILING_STOP["activated"],
+            "activation_price": _PRODUCTION_SHAPE_TRAILING_STOP["activation_price"],
+            "current_stop_price": _PRODUCTION_SHAPE_TRAILING_STOP["current_stop_price"],
+            "highest_price": _PRODUCTION_SHAPE_TRAILING_STOP["highest_price"],
+        }
+
+        new_id = create_position(
+            market_internal_id=market_pk,
+            strategy_id=_CREATE_POS_STRATEGY_ID,
+            model_id=_CREATE_POS_MODEL_ID,
+            side="YES",
+            quantity=10,
+            entry_price=Decimal("0.5200"),
+            execution_environment="paper",
+            target_price=Decimal("0.7500"),
+            stop_loss_price=Decimal("0.4500"),
+            trailing_stop_state=state,
+        )
+
+        assert new_id is not None
+        assert isinstance(new_id, int)
+
+        # Read back the row and verify the trailing stop state round-trips.
+        with get_cursor(commit=False) as cur:
+            cur.execute(
+                """
+                SELECT id, trailing_stop_state, execution_environment,
+                       row_current_ind
+                FROM positions
+                WHERE id = %s
+                """,
+                (new_id,),
+            )
+            row = cur.fetchone()
+
+        assert row is not None
+        assert row["row_current_ind"] is True
+        assert row["execution_environment"] == "paper"
+
+        stored_state = row["trailing_stop_state"]
+        # psycopg2 auto-decodes JSONB to a Python dict on read.
+        assert isinstance(stored_state, dict), (
+            f"expected JSONB to decode as dict, got {type(stored_state).__name__}: {stored_state!r}"
+        )
+
+        # Every Decimal-bearing value comes back as its string
+        # representation (because _jsonb_dumps used DecimalEncoder on
+        # write). Assert the exact string form to catch any regression
+        # where the encoder is bypassed.
+        assert stored_state["activation_price"] == "0.6500"
+        assert stored_state["current_stop_price"] == "0.6000"
+        assert stored_state["highest_price"] == "0.6500"
+        assert stored_state["config"]["activation_threshold"] == "0.15"
+        assert stored_state["config"]["initial_distance"] == "0.05"
+        assert stored_state["config"]["tightening_rate"] == "0.10"
+        assert stored_state["config"]["floor_distance"] == "0.02"
+        assert stored_state["activated"] is True
+
+    def test_create_position_with_none_trailing_stop_state(
+        self, create_position_market: int
+    ) -> None:
+        """Passing ``trailing_stop_state=None`` must store SQL NULL, not
+        the JSONB string ``"null"``.
+
+        If ``create_position`` ever wrapped ``None`` with ``Json(None)``,
+        the column would contain the 4-character JSONB string ``"null"``
+        instead of an actual SQL NULL. That would silently break every
+        caller that uses ``WHERE trailing_stop_state IS NULL`` to find
+        positions without a trailing stop.
+        """
+        market_pk = create_position_market
+
+        new_id = create_position(
+            market_internal_id=market_pk,
+            strategy_id=_CREATE_POS_STRATEGY_ID,
+            model_id=_CREATE_POS_MODEL_ID,
+            side="YES",
+            quantity=5,
+            entry_price=Decimal("0.4500"),
+            execution_environment="paper",
+            trailing_stop_state=None,
+        )
+
+        assert new_id is not None
+
+        # The SQL-level check: ``trailing_stop_state IS NULL`` must return
+        # True. A JSONB ``"null"`` string would return False here.
+        with get_cursor(commit=False) as cur:
+            cur.execute(
+                """
+                SELECT
+                    trailing_stop_state IS NULL AS is_sql_null,
+                    trailing_stop_state
+                FROM positions
+                WHERE id = %s
+                """,
+                (new_id,),
+            )
+            row = cur.fetchone()
+
+        assert row is not None
+        assert row["is_sql_null"] is True, (
+            f"trailing_stop_state must be SQL NULL, not a JSONB value; "
+            f"got is_sql_null={row['is_sql_null']!r}, "
+            f"stored_value={row['trailing_stop_state']!r}. If stored_value "
+            f"is the string 'null' or None-as-JSONB, the None-wrap guard "
+            f"was bypassed."
+        )
+        assert row["trailing_stop_state"] is None
+
+
+# =============================================================================
+# Issue #666 (part 1): update_position_price JSONB write
+# =============================================================================
+
+
+@pytest.mark.integration
+class TestUpdatePositionPriceTrailingStopJsonbWrite:
+    """Single-threaded integration coverage for the ``update_position_price``
+    trailing_stop_state re-insert path.
+
+    Issue #666 (filed session 42e by Marvin sentinel pass on PR #665):
+
+    ``update_position_price`` re-inserts ``current["trailing_stop_state"]``
+    (decoded from JSONB to a Python ``dict`` by psycopg2 on the re-fetch)
+    straight into the new SCD row's INSERT params. psycopg2 has no
+    ``dict -> jsonb`` adapter, so any position carrying a non-None
+    trailing_stop_state crashed on the FIRST price update after the
+    trailing stop was initialized. The bug was latent because
+    ``trailing_stop_state`` is NULL on every fixture-seeded position in
+    the unit tests -- the write path was never exercised with a
+    non-None value.
+
+    This test class pins the fix: the sibling ``fresh_trailing_stop``
+    parameter is now wrapped with ``Json(..., dumps=_jsonb_dumps)`` if
+    not None. Both paths covered (populated dict + NULL preserved).
+    """
+
+    def test_update_position_price_with_populated_trailing_stop(
+        self, create_position_market: int
+    ) -> None:
+        """A price update on a position carrying a production-shape
+        trailing_stop_state does not crash and preserves the state.
+
+        Pre-fix: crashes at the INSERT step with
+        ``ProgrammingError: can't adapt type 'dict'`` because the
+        re-fetched ``current["trailing_stop_state"]`` is a plain dict
+        that psycopg2 cannot serialize.
+
+        Post-fix: the new SCD row is created, and the trailing_stop_state
+        round-trips as the same dict shape (string form on read).
+        """
+        market_pk = create_position_market
+        position_bk = f"{_CREATE_POS_BK_PREFIX}update-decimal"
+
+        state = dict(_PRODUCTION_SHAPE_TRAILING_STOP)
+        state["config"] = dict(_PRODUCTION_SHAPE_TRAILING_STOP["config"])
+
+        surrogate_id = _seed_open_position_with_trailing_stop(
+            market_pk=market_pk,
+            position_bk=position_bk,
+            trailing_stop_state=state,
+        )
+
+        # Sanity: the seed wrote a real JSONB object (not NULL, not "null").
+        with get_cursor(commit=False) as cur:
+            cur.execute(
+                """
+                SELECT trailing_stop_state, trailing_stop_state IS NULL AS is_null
+                FROM positions
+                WHERE id = %s
+                """,
+                (surrogate_id,),
+            )
+            seed_row = cur.fetchone()
+        assert seed_row is not None
+        assert seed_row["is_null"] is False
+        assert isinstance(seed_row["trailing_stop_state"], dict)
+
+        # Trigger the code path under test. No explicit trailing_stop_state
+        # passed -- this exercises the "preserve from current row" branch
+        # that re-feeds the decoded dict back into the INSERT params.
+        new_id = update_position_price(
+            position_id=surrogate_id,
+            current_price=Decimal("0.6200"),
+        )
+
+        assert new_id is not None
+        assert new_id != surrogate_id
+
+        with get_cursor(commit=False) as cur:
+            cur.execute(
+                """
+                SELECT id, current_price, trailing_stop_state,
+                       execution_environment, row_current_ind
+                FROM positions
+                WHERE position_id = %s AND row_current_ind = TRUE
+                """,
+                (position_bk,),
+            )
+            current = cur.fetchone()
+
+        assert current is not None
+        assert current["id"] == new_id
+        assert current["current_price"] == Decimal("0.6200")
+        assert current["execution_environment"] == "paper"
+
+        stored_state = current["trailing_stop_state"]
+        assert isinstance(stored_state, dict)
+        # Values preserved across the re-insert.
+        assert stored_state["activation_price"] == "0.6500"
+        assert stored_state["current_stop_price"] == "0.6000"
+        assert stored_state["highest_price"] == "0.6500"
+        assert stored_state["config"]["activation_threshold"] == "0.15"
+
+    def test_update_position_price_with_null_trailing_stop(
+        self, create_position_market: int
+    ) -> None:
+        """A price update on a position with NULL trailing_stop_state
+        keeps it SQL NULL, not the JSONB ``"null"`` string.
+        """
+        market_pk = create_position_market
+        position_bk = f"{_CREATE_POS_BK_PREFIX}update-null"
+
+        surrogate_id = _seed_open_position_with_trailing_stop(
+            market_pk=market_pk,
+            position_bk=position_bk,
+            trailing_stop_state=None,
+        )
+
+        new_id = update_position_price(
+            position_id=surrogate_id,
+            current_price=Decimal("0.6200"),
+        )
+
+        assert new_id is not None
+        assert new_id != surrogate_id
+
+        with get_cursor(commit=False) as cur:
+            cur.execute(
+                """
+                SELECT
+                    trailing_stop_state IS NULL AS is_sql_null,
+                    trailing_stop_state
+                FROM positions
+                WHERE id = %s
+                """,
+                (new_id,),
+            )
+            row = cur.fetchone()
+
+        assert row is not None
+        assert row["is_sql_null"] is True, (
+            f"trailing_stop_state must remain SQL NULL across the SCD "
+            f"update; got is_sql_null={row['is_sql_null']!r}, "
+            f"stored_value={row['trailing_stop_state']!r}"
+        )
+        assert row["trailing_stop_state"] is None
+
+
+# =============================================================================
+# Issue #666 (part 2): close_position JSONB write
+# =============================================================================
+
+
+@pytest.mark.integration
+class TestClosePositionTrailingStopJsonbWrite:
+    """Single-threaded integration coverage for the ``close_position``
+    trailing_stop_state re-insert path.
+
+    Issue #666 (same archetype as the update path): ``close_position``
+    re-inserts ``current["trailing_stop_state"]`` (decoded dict) into the
+    closed-version SCD row's INSERT params without wrapping. Any position
+    closed while carrying a non-None trailing_stop_state crashed at the
+    close boundary. The fix wraps with ``Json(..., dumps=_jsonb_dumps)``
+    if not None.
+    """
+
+    def test_close_position_preserves_decimal_trailing_stop(
+        self, create_position_market: int
+    ) -> None:
+        """Closing a position carrying a production-shape trailing stop
+        preserves the state into the closed SCD row.
+        """
+        market_pk = create_position_market
+        position_bk = f"{_CREATE_POS_BK_PREFIX}close-decimal"
+
+        state = dict(_PRODUCTION_SHAPE_TRAILING_STOP)
+        state["config"] = dict(_PRODUCTION_SHAPE_TRAILING_STOP["config"])
+
+        surrogate_id = _seed_open_position_with_trailing_stop(
+            market_pk=market_pk,
+            position_bk=position_bk,
+            trailing_stop_state=state,
+        )
+
+        closed_id = close_position(
+            position_id=surrogate_id,
+            exit_price=Decimal("0.6000"),
+            exit_reason="target_hit",
+            realized_pnl=Decimal("1.0000"),
+        )
+
+        assert closed_id is not None
+        assert closed_id != surrogate_id
+
+        with get_cursor(commit=False) as cur:
+            cur.execute(
+                """
+                SELECT id, status, exit_price, realized_pnl,
+                       trailing_stop_state, execution_environment,
+                       row_current_ind
+                FROM positions
+                WHERE position_id = %s AND row_current_ind = TRUE
+                """,
+                (position_bk,),
+            )
+            current = cur.fetchone()
+
+        assert current is not None
+        assert current["id"] == closed_id
+        assert current["status"] == "closed"
+        assert current["exit_price"] == Decimal("0.6000")
+        assert current["realized_pnl"] == Decimal("1.0000")
+        assert current["execution_environment"] == "paper"
+
+        stored_state = current["trailing_stop_state"]
+        assert isinstance(stored_state, dict)
+        assert stored_state["activation_price"] == "0.6500"
+        assert stored_state["current_stop_price"] == "0.6000"
+        assert stored_state["highest_price"] == "0.6500"
+        assert stored_state["config"]["activation_threshold"] == "0.15"
+        assert stored_state["config"]["floor_distance"] == "0.02"
+
+    def test_close_position_with_null_trailing_stop(self, create_position_market: int) -> None:
+        """Closing a position with NULL trailing_stop_state leaves it
+        SQL NULL on the closed row.
+
+        Regression guard on the None path: the ``is not None`` conditional
+        must not be bypassed by any refactor that moves the check into
+        the SQL layer (where JSONB NULL semantics differ from SQL NULL).
+        """
+        market_pk = create_position_market
+        position_bk = f"{_CREATE_POS_BK_PREFIX}close-null"
+
+        surrogate_id = _seed_open_position_with_trailing_stop(
+            market_pk=market_pk,
+            position_bk=position_bk,
+            trailing_stop_state=None,
+        )
+
+        closed_id = close_position(
+            position_id=surrogate_id,
+            exit_price=Decimal("0.6000"),
+            exit_reason="target_hit",
+            realized_pnl=Decimal("1.0000"),
+        )
+
+        assert closed_id is not None
+
+        with get_cursor(commit=False) as cur:
+            cur.execute(
+                """
+                SELECT
+                    trailing_stop_state IS NULL AS is_sql_null,
+                    trailing_stop_state,
+                    status
+                FROM positions
+                WHERE id = %s
+                """,
+                (closed_id,),
+            )
+            row = cur.fetchone()
+
+        assert row is not None
+        assert row["status"] == "closed"
+        assert row["is_sql_null"] is True, (
+            f"trailing_stop_state must remain SQL NULL on the closed SCD "
+            f"row; got is_sql_null={row['is_sql_null']!r}, "
+            f"stored_value={row['trailing_stop_state']!r}"
+        )
+        assert row["trailing_stop_state"] is None
