@@ -50,7 +50,24 @@ def valid_trailing_config():
 
 @pytest.fixture
 def mock_position_with_trailing_stop():
-    """Mock position dict with trailing stop state."""
+    """Mock position dict with trailing stop state.
+
+    The ``trailing_stop_state`` dict uses STRING values for every
+    Decimal-bearing key — this matches the production JSONB round-trip
+    shape (psycopg2's JSONB decoder returns stored Decimals as plain
+    Python strings). The position_manager decodes these back to Decimal
+    at the read boundary via ``_decode_trailing_stop_state`` (#669 fix).
+
+    The Mock Fidelity Rule (protocols.md) requires test fixtures to
+    match the runtime types they replace. Using ``Decimal`` here would
+    silently bypass the read-path helper and mask the bug class #669
+    fixed.
+
+    Note: Top-level position columns (``entry_price``, ``current_price``,
+    ``stop_loss_price``, etc.) stay as ``Decimal`` because those are real
+    ``DECIMAL(10,4)`` database columns — psycopg2 returns them as Decimal
+    natively, not via JSONB.
+    """
     return {
         "id": 123,
         "position_id": "POS-2025-001",
@@ -70,15 +87,15 @@ def mock_position_with_trailing_stop():
         "exit_reason": None,
         "trailing_stop_state": {
             "config": {
-                "activation_threshold": Decimal("0.15"),
-                "initial_distance": Decimal("0.05"),
-                "tightening_rate": Decimal("0.10"),
-                "floor_distance": Decimal("0.02"),
+                "activation_threshold": "0.15",
+                "initial_distance": "0.05",
+                "tightening_rate": "0.10",
+                "floor_distance": "0.02",
             },
             "activated": True,
-            "activation_price": Decimal("0.65"),
-            "current_stop_price": Decimal("0.60"),
-            "highest_price": Decimal("0.65"),
+            "activation_price": "0.65",
+            "current_stop_price": "0.60",
+            "highest_price": "0.65",
         },
         "position_metadata": None,
         "row_current_ind": True,
@@ -504,9 +521,10 @@ def test_check_trailing_stop_trigger_yes_position_triggered(
 ):
     """Test YES position: trigger when current_price <= stop_price."""
     # Mock: current_price = 0.58, stop_price = 0.60 -> TRIGGERED
+    # Note: current_stop_price is a JSONB-round-trip STRING (Mock Fidelity Rule).
     mock_position_with_trailing_stop["side"] = "YES"
     mock_position_with_trailing_stop["current_price"] = Decimal("0.58")
-    mock_position_with_trailing_stop["trailing_stop_state"]["current_stop_price"] = Decimal("0.60")
+    mock_position_with_trailing_stop["trailing_stop_state"]["current_stop_price"] = "0.60"
 
     mock_conn = MagicMock()
     mock_cursor = MagicMock()
@@ -528,9 +546,10 @@ def test_check_trailing_stop_trigger_yes_position_not_triggered(
 ):
     """Test YES position: no trigger when current_price > stop_price."""
     # Mock: current_price = 0.70, stop_price = 0.60 -> NOT TRIGGERED
+    # Note: current_stop_price is a JSONB-round-trip STRING (Mock Fidelity Rule).
     mock_position_with_trailing_stop["side"] = "YES"
     mock_position_with_trailing_stop["current_price"] = Decimal("0.70")
-    mock_position_with_trailing_stop["trailing_stop_state"]["current_stop_price"] = Decimal("0.60")
+    mock_position_with_trailing_stop["trailing_stop_state"]["current_stop_price"] = "0.60"
 
     mock_conn = MagicMock()
     mock_cursor = MagicMock()
@@ -552,9 +571,10 @@ def test_check_trailing_stop_trigger_no_position_triggered(
 ):
     """Test NO position: trigger when current_price >= (1.00 - stop_price)."""
     # Mock: NO position, current_price = 0.72, stop = 0.30 -> effective stop = 0.70 -> TRIGGERED
+    # Note: current_stop_price is a JSONB-round-trip STRING (Mock Fidelity Rule).
     mock_position_with_trailing_stop["side"] = "NO"
     mock_position_with_trailing_stop["current_price"] = Decimal("0.72")
-    mock_position_with_trailing_stop["trailing_stop_state"]["current_stop_price"] = Decimal("0.30")
+    mock_position_with_trailing_stop["trailing_stop_state"]["current_stop_price"] = "0.30"
 
     mock_conn = MagicMock()
     mock_cursor = MagicMock()
@@ -576,9 +596,10 @@ def test_check_trailing_stop_trigger_no_position_not_triggered(
 ):
     """Test NO position: no trigger when current_price < (1.00 - stop_price)."""
     # Mock: NO position, current_price = 0.65, stop = 0.30 -> effective stop = 0.70 -> NOT TRIGGERED
+    # Note: current_stop_price is a JSONB-round-trip STRING (Mock Fidelity Rule).
     mock_position_with_trailing_stop["side"] = "NO"
     mock_position_with_trailing_stop["current_price"] = Decimal("0.65")
-    mock_position_with_trailing_stop["trailing_stop_state"]["current_stop_price"] = Decimal("0.30")
+    mock_position_with_trailing_stop["trailing_stop_state"]["current_stop_price"] = "0.30"
 
     mock_conn = MagicMock()
     mock_cursor = MagicMock()

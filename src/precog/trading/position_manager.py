@@ -77,6 +77,60 @@ class InsufficientMarginError(Exception):
     """
 
 
+def _decode_trailing_stop_state(state: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Decode a JSONB-round-tripped trailing_stop_state dict back to Decimal types.
+
+    The write path serializes Decimal values via ``_jsonb_dumps`` in
+    ``crud_positions.py`` (the symmetric write-side helper). On read,
+    psycopg2's JSONB decoder returns those values as plain Python strings.
+    This helper restores the type contract declared by ``TrailingStopState``
+    (``trading/types.py``) by parsing string values back to ``Decimal`` at
+    known Decimal-bearing keys.
+
+    **Idempotent:** if a value is already a ``Decimal`` (e.g., from a
+    mocked test fixture or from in-memory state that hasn't been
+    round-tripped through JSONB), ``str()`` returns its string form and
+    ``Decimal(str())`` parses it cleanly. This means callers can safely
+    apply the helper regardless of whether the input came from the DB or
+    from in-memory state.
+
+    Args:
+        state: trailing_stop_state dict from a positions row, or None.
+
+    Returns:
+        New dict with Decimal values restored, or None if input is None.
+
+    See #669 (this fix) and ``crud_positions._jsonb_dumps`` (the symmetric
+    write-side helper). The Mock Fidelity Rule (protocols.md) requires
+    integration tests to use production-shape inputs that trigger this
+    round-trip — see
+    ``tests/integration/trading/test_position_manager_trailing_stop_integration.py``.
+    """
+    if state is None:
+        return None
+    decoded: dict[str, Any] = dict(state)
+
+    # Top-level Decimal-bearing keys (per TrailingStopState TypedDict)
+    for key in ("activation_price", "current_stop_price", "highest_price"):
+        if decoded.get(key) is not None:
+            decoded[key] = Decimal(str(decoded[key]))
+
+    # Nested config Decimal-bearing keys (per TrailingStopConfig TypedDict)
+    if "config" in decoded and decoded["config"] is not None:
+        config = dict(decoded["config"])
+        for key in (
+            "activation_threshold",
+            "initial_distance",
+            "tightening_rate",
+            "floor_distance",
+        ):
+            if config.get(key) is not None:
+                config[key] = Decimal(str(config[key]))
+        decoded["config"] = config
+
+    return decoded
+
+
 class PositionManager:
     """Manages position lifecycle with risk management and P&L tracking.
 
@@ -1012,7 +1066,13 @@ class PositionManager:
         if not current_position["trailing_stop_state"]:
             raise ValueError(f"Position {position_id} has no trailing stop configured")
 
-        trailing_state = current_position["trailing_stop_state"]
+        # Decode JSONB round-trip: psycopg2's JSONB decoder returns the
+        # stored Decimal values as plain Python strings. The helper parses
+        # them back to Decimal at every Decimal-bearing key so the
+        # arithmetic and comparisons below stay correct. See #669 and
+        # ``_decode_trailing_stop_state`` above.
+        trailing_state = _decode_trailing_stop_state(current_position["trailing_stop_state"])
+        assert trailing_state is not None  # not-None guarded above
         config = trailing_state["config"]
 
         # Calculate current P&L
@@ -1197,7 +1257,15 @@ class PositionManager:
                 if not current_position["trailing_stop_state"]:
                     raise ValueError(f"Position {position_id} has no trailing stop configured")
 
-                trailing_state = current_position["trailing_stop_state"]
+                # Decode JSONB round-trip: psycopg2's JSONB decoder returns
+                # the stored Decimal values as plain Python strings. The
+                # helper parses them back to Decimal so the comparisons
+                # and arithmetic below stay correct. See #669 and
+                # ``_decode_trailing_stop_state`` above.
+                trailing_state = _decode_trailing_stop_state(
+                    current_position["trailing_stop_state"]
+                )
+                assert trailing_state is not None  # not-None guarded above
 
                 # If not activated yet, no trigger possible
                 if not trailing_state["activated"]:
