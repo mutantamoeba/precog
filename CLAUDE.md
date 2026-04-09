@@ -230,7 +230,16 @@ git push origin feature/description
 gh pr create --title "..." --body "..."
 ```
 
-Branch protection on `main`: requires PR, 6 CI checks must pass, must be up-to-date.
+Branch protection on `main` (restored session 43, 2026-04-08): requires PR, must be up-to-date with main, and these 6 status checks must pass before merge:
+
+1. `Tests (Python 3.14 on ubuntu-latest)`
+2. `Tests (Python 3.12 on ubuntu-latest)`
+3. `Integration Tests (PostgreSQL)`
+4. `Test Type Coverage Audit (TESTING_STRATEGY V3.2)`
+5. `Pre-commit Validation (Ruff, Mypy, Security)`
+6. `Security Scanning (Ruff & Safety)`
+
+Admin override is enabled (`enforce_admins: false`) for emergency direct pushes. The Windows test job (`Tests (Python 3.14 on windows-latest, main only)`) is **deliberately not required** because per #697 it only runs on main-branch pushes, not PR runs — requiring it would block every PR forever.
 
 ---
 
