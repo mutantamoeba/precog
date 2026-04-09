@@ -230,16 +230,13 @@ git push origin feature/description
 gh pr create --title "..." --body "..."
 ```
 
-Branch protection on `main` (restored session 43, 2026-04-08): requires PR, must be up-to-date with main, and these 6 status checks must pass before merge:
+Branch protection on `main` (restored session 43, 2026-04-08): requires PR, must be up-to-date with main, and the **`CI Summary`** status check must pass before merge.
 
-1. `Tests (Python 3.14 on ubuntu-latest)`
-2. `Tests (Python 3.12 on ubuntu-latest)`
-3. `Integration Tests (PostgreSQL)`
-4. `Test Type Coverage Audit (TESTING_STRATEGY V3.2)`
-5. `Pre-commit Validation (Ruff, Mypy, Security)`
-6. `Security Scanning (Ruff & Safety)`
+`CI Summary` is the umbrella job in `.github/workflows/ci.yml` that aggregates all the underlying jobs (`pre-commit-checks`, `security-scan`, `documentation-validation`, `test`, `integration-tests`, `test-type-coverage`). It is the **only** required status check, by design — most of those underlying jobs are gated on `needs.detect-changes.outputs.code == 'true'` and skip on docs-only PRs. Requiring them individually would block every docs-only PR forever waiting for skipped checks. `CI Summary` runs unconditionally (`if: always()`) and correctly treats skipped jobs as success while still failing on any actual job failure.
 
-Admin override is enabled (`enforce_admins: false`) for emergency direct pushes. The Windows test job (`Tests (Python 3.14 on windows-latest, main only)`) is **deliberately not required** because per #697 it only runs on main-branch pushes, not PR runs — requiring it would block every PR forever.
+Admin override is enabled (`enforce_admins: false`) for emergency direct pushes. The Windows test job (`Tests (Python 3.14 on windows-latest, main only)`) is also deliberately not required because per #697 it only runs on main-branch pushes, not PR runs.
+
+**History note (session 43):** The first attempt at restoration required 6 individual checks. The very first PR to test the rule (#701 — this doc) was a docs-only change, and all 6 checks were skipped via `paths-filter`, blocking the PR forever. The `CI Summary` umbrella was the correct gate from the start. **Lesson: when a workflow uses `paths-filter` or `if:` conditionals, gate on the umbrella job that's designed to handle skips, not on individual conditional jobs.**
 
 ---
 
