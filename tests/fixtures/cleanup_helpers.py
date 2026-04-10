@@ -109,16 +109,21 @@ def delete_market_with_children(
 
     # Children referencing markets via market_internal_id
     for table in (
-        "temporal_alignment",
         "orderbook_snapshots",
         "market_trades",
-        "predictions",
         "market_snapshots",
         "edges",
         "settlements",
     ):
         cursor.execute(
             f"DELETE FROM {table} WHERE market_internal_id IN ({placeholders})",  # noqa: S608
+            tuple(market_ids),
+        )
+
+    # Tables that use market_id (not market_internal_id)
+    for table in ("temporal_alignment", "predictions"):
+        cursor.execute(
+            f"DELETE FROM {table} WHERE market_id IN ({placeholders})",  # noqa: S608
             tuple(market_ids),
         )
 
