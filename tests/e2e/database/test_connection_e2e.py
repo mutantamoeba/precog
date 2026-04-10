@@ -39,7 +39,7 @@ class TestConnectionE2E:
                 """
                 INSERT INTO venues (espn_venue_id, venue_name, city)
                 VALUES (%s, %s, %s)
-                ON CONFLICT (espn_venue_id) DO UPDATE
+                ON CONFLICT (espn_venue_id) WHERE row_current_ind = TRUE DO UPDATE
                 SET venue_name = EXCLUDED.venue_name
                 """,
                 (venue_id, "E2E Test Venue", "Test City"),
@@ -103,7 +103,7 @@ class TestConnectionE2E:
                     """
                     INSERT INTO venues (espn_venue_id, venue_name, city)
                     VALUES (%s, %s, %s)
-                    ON CONFLICT (espn_venue_id) DO NOTHING
+                    ON CONFLICT (espn_venue_id) WHERE row_current_ind = TRUE DO NOTHING
                     """,
                     (venue_id, f"Venue {venue_id}", "Batch City"),
                 )
@@ -134,7 +134,7 @@ class TestConnectionE2E:
                 """
                 INSERT INTO venues (espn_venue_id, venue_name, city)
                 VALUES (%s, %s, %s)
-                ON CONFLICT (espn_venue_id) DO NOTHING
+                ON CONFLICT (espn_venue_id) WHERE row_current_ind = TRUE DO NOTHING
                 """,
                 (venue_id, "Concurrent Venue", "Concurrent City"),
             )
@@ -199,7 +199,7 @@ class TestConnectionE2E:
                 """
                 INSERT INTO venues (espn_venue_id, venue_name, city)
                 VALUES (%s, %s, %s)
-                ON CONFLICT (espn_venue_id) DO NOTHING
+                ON CONFLICT (espn_venue_id) WHERE row_current_ind = TRUE DO NOTHING
                 """,
                 (venue_id, "Isolation Test", "Test City"),
             )

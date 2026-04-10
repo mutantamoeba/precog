@@ -91,7 +91,7 @@ def setup_kalshi_platform(db_pool, clean_test_data):
             """
             INSERT INTO series (series_id, platform_id, external_id, title, category)
             VALUES ('KXNFLGAME', 'kalshi', 'KXNFLGAME-EXT', 'NFL Game Series', 'sports')
-            ON CONFLICT (series_id) DO NOTHING
+            ON CONFLICT (series_id) WHERE row_current_ind = TRUE DO NOTHING
         """
         )
 

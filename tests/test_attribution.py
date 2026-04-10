@@ -120,7 +120,7 @@ def sample_series(db_pool, clean_test_data, sample_platform) -> str:
     query = """
         INSERT INTO series (series_id, platform_id, external_id, category, subcategory, title, frequency)
         VALUES ('NFL-2025', 'kalshi', 'NFL-2025-ext', 'sports', 'nfl', 'NFL 2025 Season', 'recurring')
-        ON CONFLICT (series_id) DO NOTHING
+        ON CONFLICT (series_id) WHERE row_current_ind = TRUE DO NOTHING
         RETURNING series_id
     """
     execute_query(query)
