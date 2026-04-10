@@ -72,10 +72,9 @@ class TestConnectionE2E:
 
         # Delete
         with get_cursor(commit=True) as cur:
-            cur.execute(
-                "DELETE FROM venues WHERE espn_venue_id = %s",
-                (venue_id,),
-            )
+            from tests.fixtures.cleanup_helpers import delete_venue_with_children
+
+            delete_venue_with_children(cur, "espn_venue_id = %s", (venue_id,))
 
         # Verify deletion
         with get_cursor() as cur:
@@ -116,7 +115,9 @@ class TestConnectionE2E:
 
         # Cleanup
         with get_cursor(commit=True) as cur:
-            cur.execute("DELETE FROM venues WHERE espn_venue_id LIKE 'E2E-BATCH-%'")
+            from tests.fixtures.cleanup_helpers import delete_venue_with_children
+
+            delete_venue_with_children(cur, "espn_venue_id LIKE %s", ("E2E-BATCH-%",))
 
     def test_concurrent_access_workflow(self, db_pool, clean_test_data):
         """
@@ -156,10 +157,9 @@ class TestConnectionE2E:
 
         # Cleanup
         with get_cursor(commit=True) as cur:
-            cur.execute(
-                "DELETE FROM venues WHERE espn_venue_id = %s",
-                (venue_id,),
-            )
+            from tests.fixtures.cleanup_helpers import delete_venue_with_children
+
+            delete_venue_with_children(cur, "espn_venue_id = %s", (venue_id,))
 
     def test_error_recovery_workflow(self, db_pool, clean_test_data):
         """

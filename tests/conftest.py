@@ -237,44 +237,14 @@ def clean_test_data(db_cursor):
         pass  # Already rolled back or no active transaction
 
     # Cleanup before test (strict reverse FK order — RESTRICT requires children first).
-    # Migration 0057 converted all CASCADE/SET NULL FKs to RESTRICT, so deleting
-    # a parent with existing children raises ForeignKeyViolation. Must delete
-    # from leaf tables up to root tables.
-    #
-    # Dependency chain (leaf → root):
-    #   temporal_alignment → market_snapshots → markets → events → series
-    #   exit_attempts/position_exits → positions → markets
-    #   trades → orders → markets/strategies/models
-    #   account_ledger → orders
-    #   settlements → markets
-    #   edges → markets/strategies/models
-    #   orderbook_snapshots → markets
-    #   market_trades → markets
+    # Uses shared helper from tests/fixtures/cleanup_helpers.py.
+    from tests.fixtures.cleanup_helpers import delete_all_test_data
 
-    # Tier 1: Leaf tables (no children reference these)
-    db_cursor.execute("DELETE FROM temporal_alignment")
-    db_cursor.execute("DELETE FROM exit_attempts")
-    db_cursor.execute("DELETE FROM position_exits")
-    db_cursor.execute("DELETE FROM account_ledger")
-    db_cursor.execute("DELETE FROM settlements")
-    db_cursor.execute("DELETE FROM market_trades")
-    db_cursor.execute("DELETE FROM orderbook_snapshots")
-
-    # Tier 2: Tables with only leaf children (already cleared above)
-    db_cursor.execute("DELETE FROM trades")
-    db_cursor.execute("DELETE FROM orders")
-    db_cursor.execute("DELETE FROM market_snapshots")
-
-    # Tier 3: Core tables
-    db_cursor.execute("DELETE FROM edges")
-    db_cursor.execute("DELETE FROM positions")
+    delete_all_test_data(db_cursor)
+    # Delete markets (children already cleared by delete_all_test_data)
     db_cursor.execute("DELETE FROM markets WHERE ticker LIKE 'TEST-%'")
-
-    # Tier 4: Dimension/reference tables
     db_cursor.execute("DELETE FROM events WHERE external_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
-
-    # Tier 5: Root tables
     try:
         db_cursor.execute("DELETE FROM probability_models")
         db_cursor.execute("DELETE FROM strategies")
@@ -348,19 +318,9 @@ def clean_test_data(db_cursor):
     yield  # Test runs here
 
     # Cleanup after test (strict reverse FK order — RESTRICT, no CASCADE).
-    # Same tier structure as setup cleanup above.
-    db_cursor.execute("DELETE FROM temporal_alignment")
-    db_cursor.execute("DELETE FROM exit_attempts")
-    db_cursor.execute("DELETE FROM position_exits")
-    db_cursor.execute("DELETE FROM account_ledger")
-    db_cursor.execute("DELETE FROM settlements")
-    db_cursor.execute("DELETE FROM market_trades")
-    db_cursor.execute("DELETE FROM orderbook_snapshots")
-    db_cursor.execute("DELETE FROM trades")
-    db_cursor.execute("DELETE FROM orders")
-    db_cursor.execute("DELETE FROM market_snapshots")
-    db_cursor.execute("DELETE FROM edges")
-    db_cursor.execute("DELETE FROM positions")
+    from tests.fixtures.cleanup_helpers import delete_all_test_data
+
+    delete_all_test_data(db_cursor)
     db_cursor.execute("DELETE FROM markets WHERE ticker LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE external_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")

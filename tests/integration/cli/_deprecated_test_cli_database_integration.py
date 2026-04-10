@@ -115,7 +115,9 @@ def setup_kalshi_platform(db_pool, clean_test_data):
     # The 'kalshi' platform is seeded by Alembic migration and should persist
     # Deleting it causes race conditions in parallel test execution (Issue #228)
     with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM markets WHERE platform_id = 'kalshi'")
+        from tests.fixtures.cleanup_helpers import delete_market_with_children
+
+        delete_market_with_children(cur, "platform_id = %s", ("kalshi",))
         cur.execute("DELETE FROM events WHERE platform_id = 'kalshi'")
         cur.execute("DELETE FROM series WHERE platform_id = 'kalshi'")
         cur.execute("DELETE FROM account_balance WHERE platform_id = 'kalshi'")
@@ -379,13 +381,14 @@ def test_fetch_markets_upsert_pattern(
     from precog.database.connection import get_cursor
 
     with get_cursor(commit=True) as cur:
-        cur.execute(
-            """
-            DELETE FROM markets m
-            USING events e
-            WHERE m.event_internal_id = e.id
-              AND e.series_id = 'KXNFLGAME'
-        """
+        # Delete markets and their children via helper (RESTRICT FKs require
+        # children to be deleted first).
+        from tests.fixtures.cleanup_helpers import delete_market_with_children
+
+        delete_market_with_children(
+            cur,
+            "event_internal_id IN (SELECT id FROM events WHERE platform_id = %s)",
+            ("kalshi",),
         )
 
     # Set environment variables for KalshiClient initialization

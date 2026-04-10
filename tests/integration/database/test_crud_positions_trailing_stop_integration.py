@@ -95,21 +95,11 @@ def trailing_stop_position(db_pool: Any) -> Any:
     position_bk = f"{_TEST_POSITION_BK_PREFIX}1"
 
     # Setup: clean any leftover state and ensure the market + position rows exist.
+    from tests.fixtures.cleanup_helpers import delete_market_with_children
+
     with get_cursor(commit=True) as cur:
-        # Cleanup in FK order: positions first (FKs to markets), then markets.
-        cur.execute(
-            "DELETE FROM positions WHERE position_id LIKE %s",
-            (_TEST_POSITION_BK_PREFIX + "%",),
-        )
-        cur.execute(
-            """
-            DELETE FROM market_snapshots WHERE market_id IN (
-                SELECT id FROM markets WHERE ticker = %s
-            )
-            """,
-            (_TEST_TICKER,),
-        )
-        cur.execute("DELETE FROM markets WHERE ticker = %s", (_TEST_TICKER,))
+        # RESTRICT-safe cleanup: delete all children before parents.
+        delete_market_with_children(cur, "ticker = %s", (_TEST_TICKER,))
 
         # Create the underlying market (positions FK to markets.id).
         cur.execute(
@@ -169,12 +159,10 @@ def trailing_stop_position(db_pool: Any) -> Any:
 
     yield position_surrogate_id, position_bk, market_pk
 
-    # Teardown: remove all rows this test touched.
+    # Teardown: RESTRICT-safe cleanup.
     try:
         with get_cursor(commit=True) as cur:
-            cur.execute("DELETE FROM positions WHERE position_id = %s", (position_bk,))
-            cur.execute("DELETE FROM market_snapshots WHERE market_id = %s", (market_pk,))
-            cur.execute("DELETE FROM markets WHERE id = %s", (market_pk,))
+            delete_market_with_children(cur, "id = %s", (market_pk,))
     except Exception:
         # Best-effort cleanup; do not mask the actual test outcome.
         pass

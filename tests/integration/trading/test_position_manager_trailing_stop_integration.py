@@ -93,15 +93,9 @@ def trailing_stop_open_position(db_pool: Any) -> Any:
             "DELETE FROM positions WHERE position_id LIKE %s",
             (_TEST_POSITION_BK_PREFIX + "%",),
         )
-        cur.execute(
-            """
-            DELETE FROM market_snapshots WHERE market_id IN (
-                SELECT id FROM markets WHERE ticker = %s
-            )
-            """,
-            (_TEST_TICKER,),
-        )
-        cur.execute("DELETE FROM markets WHERE ticker = %s", (_TEST_TICKER,))
+        from tests.fixtures.cleanup_helpers import delete_market_with_children
+
+        delete_market_with_children(cur, "ticker = %s", (_TEST_TICKER,))
 
         # Create the underlying market (positions FK to markets.id).
         cur.execute(
@@ -169,8 +163,9 @@ def trailing_stop_open_position(db_pool: Any) -> Any:
     try:
         with get_cursor(commit=True) as cur:
             cur.execute("DELETE FROM positions WHERE position_id = %s", (position_bk,))
-            cur.execute("DELETE FROM market_snapshots WHERE market_id = %s", (market_pk,))
-            cur.execute("DELETE FROM markets WHERE id = %s", (market_pk,))
+            from tests.fixtures.cleanup_helpers import delete_market_with_children
+
+            delete_market_with_children(cur, "id = %s", (market_pk,))
     except Exception:
         pass
 
