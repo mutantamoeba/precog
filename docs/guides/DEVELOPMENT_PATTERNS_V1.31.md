@@ -1,13 +1,32 @@
 # Precog Development Patterns Guide
 
 ---
-**Version:** 1.30
+**Version:** 1.31
 **Created:** 2025-11-13
-**Last Updated:** 2026-04-06
+**Last Updated:** 2026-04-10
 **Purpose:** Comprehensive reference for critical development patterns used throughout the Precog project
 **Target Audience:** Developers and AI assistants working on any phase of the project
 **Extracted From:** CLAUDE.md V1.15 (Section: Critical Patterns, Lines 930-2027)
 **Status:** ✅ Current
+**Changes in V1.31:**
+- **Added Pattern 52: SCD Race Retry Helper Structure (ALWAYS for SCD Retry Logic)**
+- **Added Pattern 53: Race Tests Must Assert The Race Actually Fired (ALWAYS for Race Tests)**
+- **Added Pattern 54: Verifier Scripts as Investigation Deliverables (ALWAYS for External API Investigation)**
+- **Added Pattern 55: Fee-Aware Orderbook Edge Calculation (ALWAYS for Edge Calculations)**
+- **Added Pattern 56: JSONB + Decimal Round-Trip via Custom Encoder (ALWAYS for JSONB with Decimal)**
+- **Added Pattern 57: Close-by-Business-Key Inside Retry Closure (ALWAYS for SCD Retry with Surrogate Keys)**
+- **Added Pattern 58: Triple-Reviewer Convergence as Structural Validation (ALWAYS for Multi-Agent Review)**
+- **Added Pattern 59: Migration Round-Trip Testing on a Populated DB (ALWAYS for Non-Trivial Migrations)**
+- **Added Pattern 60: AST Helper Scripts for Systematic Test Fixture Updates (MEDIUM for Cascading Signature Changes)**
+- **Added Pattern 61: git push --no-verify Repeat-Use Acceptance Criteria (ALWAYS for Hook Bypass)**
+- **Added Pattern 62: In-Repo Per-Migration Rationale Docs (MEDIUM for Architecturally Significant Migrations)**
+- **Added Pattern 63: LATERAL Subquery for SCD Type 2 Temporal Matching (ALWAYS for Cross-Table SCD Correlation)**
+- **Added Pattern 64: IS DISTINCT FROM in BEFORE UPDATE Triggers (ALWAYS for Immutability Triggers)**
+- **Updated Pattern 2: Added anti-pattern warning for same-transaction read-after-write with row_current_ind filter**
+- Patterns 52-55 sourced from Session 42d (SCD retry helper, race test fire assertion, verifier scripts, fee-aware edge)
+- Patterns 56-57 sourced from Session 42e (JSONB Decimal serialization, business-key retry closure)
+- Patterns 58-62 sourced from Session 42f (reviewer convergence, migration round-trip, AST helpers, --no-verify criteria, rationale docs)
+- Patterns 63-64 sourced from Session 47 (Schema Hardening Arc C0+C1)
 **Changes in V1.30:**
 - **Added Pattern 47: Verify Schema Before Fixing Pattern Violations (ALWAYS for Code Review Findings)**
 - **Added Pattern 48: Use dataclasses.replace() for Frozen Dataclass Updates (ALWAYS for Immutable Records)**
@@ -472,7 +491,42 @@ v1_0.status = "deprecated"  # OK
 
 **Reference:** `docs/guides/VERSIONING_GUIDE_V1.0.md`
 
-**⚠️ MAINTENANCE REMINDER:**
+**WARNING: Anti-pattern -- Pattern 2 filter on same-transaction read-after-write.**
+
+Adding `AND row_current_ind = TRUE` to an `INSERT...SELECT` that runs in the same transaction as an `UPDATE` which just cleared that flag will cause the `SELECT` to match zero rows. The `INSERT` then inserts nothing, `RETURNING id` yields no row, and consumers that expect a row raise `TypeError`.
+
+This anti-pattern was introduced by PR #139 (2025-11-25) as an overly-aggressive Pattern 2 enforcement sweep. It broke the trailing stop write paths for 4.5 months without detection because zero production callers exercised the bug and all tests used pure mocks.
+
+```python
+# WRONG -- same-transaction read-after-write with row_current_ind filter
+cur.execute("UPDATE positions SET row_current_ind = FALSE WHERE id = %s", (pid,))
+cur.execute("""
+    INSERT INTO positions (...)
+    SELECT ... FROM positions
+    WHERE id = %s AND row_current_ind = TRUE   -- sees the UPDATE above, matches 0 rows
+    RETURNING id
+""", (pid,))
+row = cur.fetchone()  # row is None!
+new_id = row["id"]   # TypeError
+```
+
+```python
+# CORRECT -- capture values BEFORE the UPDATE, then INSERT from Python-level values
+cur.execute("SELECT * FROM positions WHERE id = %s AND row_current_ind = TRUE", (pid,))
+current = cur.fetchone()
+cur.execute("UPDATE positions SET row_current_ind = FALSE WHERE id = %s", (pid,))
+cur.execute("""
+    INSERT INTO positions (col_a, col_b, ...)
+    VALUES (%s, %s, ...)
+    RETURNING id
+""", (current["col_a"], current["col_b"], ...))
+```
+
+**Why the anti-pattern is subtle:** The Pattern 2 filter looks correct in isolation ("always filter by `row_current_ind = TRUE`"), and code review typically approves it as a defensive improvement. The failure only manifests when the same transaction has already cleared the flag -- a non-obvious interaction visible only to integration tests.
+
+**Reference:** Session 42e #629 investigation. Git blame to commit `c4a34adb` (PR #139). Related: Pattern 49 (SCD race prevention -- the newer approach that avoids the anti-pattern entirely by using the retry helper + FOR UPDATE + captured Python values).
+
+**MAINTENANCE REMINDER:**
 When adding new SCD Type 2 tables (versioned tables):
 1. Add table name to `versioned_tables` list in `scripts/validate_schema_consistency.py`
 2. Ensure table has ALL 4 required columns:
@@ -9633,6 +9687,902 @@ If we'd only analyzed the active book, we would have missed the diversification 
 **Reference:** Session 42c, ColdMath analysis, `findings_coldmath_weather_strategy.md`, `memory/research/coldmath_polymarket_trades_20260405.csv`.
 
 ---
+
+## Pattern 52: SCD Race Retry Helper Structure (ALWAYS for SCD Retry Logic)
+
+**Severity:** HIGH -- Money-touching SCD code with naive retry logic can corrupt temporal continuity or mask real bugs.
+
+### Problem / Trigger
+
+You are implementing or modifying a retry mechanism for an SCD Type 2 close-then-insert sequence (e.g., `update_*_with_versioning` functions in `crud_*.py`) protected by a unique partial index like `idx_*_unique_current`.
+
+### The Pattern / Rule
+
+SCD race retry must satisfy 7 conditions:
+
+1. **Catch the SPECIFIC exception, not the family.** Use `psycopg2.errors.UniqueViolation`, NOT bare `psycopg2.IntegrityError` or `Exception`. The targeted family includes 4-5 distinct constraint sources (CHECK, FK, NOT NULL, partial unique, future). A bare catch masks CHECK violations from buggy upstream data.
+
+2. **Discriminate by `diag.constraint_name`.** Inspect `e.diag.constraint_name` and only retry when it matches the expected partial unique index. Other constraint violations re-raise immediately. Defensive `getattr(exc, "diag", None)` guards against psycopg2 API drift.
+
+3. **Retry MUST run in a NEW transaction.** PostgreSQL aborts the current transaction on constraint violation; even with manual rollback, the same transaction's MVCC snapshot will not see the sibling caller's committed row. Structure as TWO sequential `with get_cursor(commit=True)` blocks, never nested.
+
+4. **Re-capture `NOW()` per attempt.** Reusing the first attempt's timestamp creates backward temporal intervals (sibling's `row_end_ts` before its own `row_start_ts`) -- silent SCD corruption. Pattern 49's "single NOW() for temporal continuity" applies WITHIN a single attempt, not across retries.
+
+5. **Max ONE retry, re-raise via explicit `__cause__` chain.** On second failure, use `raise exc2 from first_exc` (capture `first_exc` before attempt 1's except clause exits -- Python's automatic `__context__` chain is severed when the first except exits cleanly). Two retries indicate the system is in a state more retries cannot fix.
+
+6. **Structured logging at WARNING (between attempts) and ERROR (on exhaustion).** Both must include the constraint name and a business key (e.g., `platform_id`) for postmortem correlation.
+
+7. **Tests MUST exercise the retry path with stub injection.** Unit tests must mock the cursor to raise `UniqueViolation` with a specific `constraint_name` on the first attempt and succeed on the second. A separate test for non-matching constraint must verify NO retry. Race tests must use `caplog` to assert the WARNING fires (see Pattern 53).
+
+### Why
+
+The naive "wrap in try/except IntegrityError, retry once" implementation has THREE silent corruption modes:
+- Masks CHECK violations (caught CHECK looks like a transient race)
+- Reuses MVCC snapshot (retry does not see sibling's commit, fails infinitely)
+- Reuses NOW() timestamp (creates backward temporal intervals)
+
+Each is invisible without code inspection. The pattern catches all three.
+
+### Wrong
+
+```python
+def update_balance_with_versioning(platform_id, new_balance):
+    try:
+        with get_cursor(commit=True) as cur:
+            cur.execute("SELECT NOW() AS ts")
+            now = cur.fetchone()["ts"]
+            cur.execute(LOCK_QUERY, (platform_id,))
+            cur.execute(CLOSE_QUERY, (now, platform_id))
+            cur.execute(INSERT_QUERY, (platform_id, new_balance, now, now))
+            return cur.fetchone()["id"]
+    except psycopg2.IntegrityError:  # WRONG: too broad
+        # WRONG: same transaction, MVCC snapshot stale, NOW() reused
+        with get_cursor(commit=True) as cur:
+            cur.execute(INSERT_QUERY, (platform_id, new_balance, now, now))
+            return cur.fetchone()["id"]
+```
+
+### Right
+
+```python
+def update_balance_with_versioning(platform_id, new_balance):
+    def _attempt():
+        with get_cursor(commit=True) as cur:
+            cur.execute("SELECT NOW() AS ts")  # RE-CAPTURED per attempt
+            now = cur.fetchone()["ts"]
+            cur.execute(LOCK_QUERY, (platform_id,))
+            cur.execute(CLOSE_QUERY, (now, platform_id))
+            cur.execute(INSERT_QUERY, (platform_id, new_balance, now, now))
+            return cur.fetchone()["id"]
+
+    return retry_on_scd_unique_conflict(
+        _attempt,
+        "idx_balance_unique_current",  # SPECIFIC constraint name
+        business_key={"platform_id": platform_id},
+    )
+```
+
+### When This Pattern Applies
+
+- ANY SCD Type 2 close+insert sequence in `crud_*.py`
+- Especially money-touching tables: `account_balance`, `positions`, `account_ledger`
+- Sites currently identified for adoption: 7 sibling sites in #623-#628
+
+### When NOT to Apply
+
+- Append-only tables (no SCD versioning)
+- Single-row updates that do not follow close+insert pattern
+- Read-only operations
+- INSERT-only with no current-row constraint
+
+### Source
+
+- Session 42d, PR #631 (#613 SCD first-insert race fix)
+- Holden's 7 conditions: `memory/findings_613_holden_scoping.md`
+- Helper implementation: `src/precog/database/crud_shared.py::retry_on_scd_unique_conflict`
+- Companion: Pattern 49 (FOR UPDATE locks zero rows on first insert -- this pattern handles the gap)
+
+---
+
+## Pattern 53: Race Tests Must Assert The Race Actually Fired (ALWAYS for Race Tests)
+
+**Severity:** HIGH -- Race tests can silently provide false coverage if they pass under serialization without exercising the race code path.
+
+### Problem / Trigger
+
+You are writing or reviewing a race test (`tests/race/test_*.py`) that exercises a concurrent code path with `threading.Barrier` synchronization.
+
+### The Pattern / Rule
+
+Race tests must assert TWO things:
+1. **Correctness invariants** -- the outcome is correct regardless of which thread won (e.g., "exactly 1 current SCD row", "exactly 2 version rows", "balances are not duplicated")
+2. **The race actually fired** -- at least one execution exercised the contested code path
+
+The second assertion is non-obvious but critical. Without it, the test passes when:
+- OS scheduler serializes the threads enough that thread A completes before thread B starts
+- The race window is too narrow to hit reliably
+- The test environment (single-CPU CI, slow VM) eliminates the timing pressure
+
+### Why
+
+Marvin (Sentinel) caught this in Session 42d's #631 review. The original race test for #613 SCD race ran TWO threads ONCE, asserted correctness invariants, and passed. But the WARNING log (from the retry helper) NEVER fired in many runs because the threads were serializing under typical timing. The test was a coverage liar -- it would have continued passing if a regression broke the retry logic, because the regression would never be reached.
+
+The fix: 50-iteration loop + caplog assertion that the WARNING fires at least once. Now the test FAILS if the race path is never exercised, even if all per-iteration assertions pass.
+
+### Wrong
+
+```python
+# Single-iteration race test -- may never exercise the contested path
+def test_concurrent_balance_update(self):
+    barrier = threading.Barrier(2)
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        f_a = executor.submit(thread_fn, "a", barrier)
+        f_b = executor.submit(thread_fn, "b", barrier)
+        f_a.result()
+        f_b.result()
+    # Only checks correctness, not whether the race actually fired
+    assert count_current_rows() == 1
+```
+
+### Right
+
+```python
+@pytest.mark.skipif(_is_ci, reason="Race tests hang in CI threading model")
+class TestRaceXYZ:
+    def test_race_actually_fires(self, caplog):
+        NUM_ITERATIONS = 50
+
+        with caplog.at_level(logging.WARNING):
+            for i in range(NUM_ITERATIONS):
+                clear_test_data()
+
+                barrier = threading.Barrier(2)
+                results = {}
+                with ThreadPoolExecutor(max_workers=2) as executor:
+                    f_a = executor.submit(thread_fn, "a", barrier, results)
+                    f_b = executor.submit(thread_fn, "b", barrier, results)
+                    f_a.result()
+                    f_b.result()
+
+                # Per-iteration: correctness invariants
+                assert count_current_rows() == 1
+
+        # Across all iterations: prove the race actually fired at least once
+        race_warnings = [
+            r for r in caplog.records
+            if r.levelno == logging.WARNING
+            and "expected race signature substring" in r.getMessage()
+        ]
+        assert len(race_warnings) >= 1, (
+            f"Race test ran {NUM_ITERATIONS} iterations without firing the contested "
+            f"code path. The threads are serializing and the test is providing false "
+            f"coverage. Either increase iteration count, shorten the barrier release "
+            f"timing, or inject a deterministic delay to force the race."
+        )
+```
+
+### When This Pattern Applies
+
+- ANY new race test (`tests/race/`)
+- Existing race tests that depend on contested code paths firing
+- Stress tests where the assertion is "this code path executed under load"
+
+### When NOT to Apply
+
+- Race tests that test FAILURE modes (e.g., "deadlock detected and recovered") where the assertion IS the contested-path firing
+- Pure stress tests where the assertion is throughput, not correctness
+
+### Source
+
+- Session 42d, PR #631 (#613 SCD race fix)
+- Marvin's review finding: `memory/findings_508_subcouncil_B_safety.md` (Marvin frame, Scenario 7)
+- Implementation: `tests/race/test_account_balance_concurrent_first_insert.py`
+
+---
+
+## Pattern 54: Verifier Scripts as Investigation Deliverables (ALWAYS for External API Investigation)
+
+**Severity:** MEDIUM -- When investigating external API behavior, deliver an executable verifier script rather than running one-shot investigation.
+
+### Problem / Trigger
+
+You are tasked with "investigate behavior X of external system Y" (e.g., issue #335 -- investigate Kalshi demo API order endpoint behavior).
+
+### The Pattern / Rule
+
+Instead of running the investigation directly and producing one-shot findings, build a **standalone verifier script** with safety modes that the user (or any future operator) can run when needed.
+
+Minimum required structure:
+
+```python
+#!/usr/bin/env python3
+"""
+External system verifier (#issue-num).
+
+SAFETY MODES:
+    --dry-run        Print plan, no API calls (default)
+    --read-only      Read-only API calls
+    --live           Write tests against test/demo system
+    --allow-prod     REQUIRED for production
+"""
+
+# Bake in safety guards:
+# - Refuses to run without required env vars
+# - Refuses --live if precondition state is unsafe (e.g., balance too low)
+# - Hard caps on test side effects (max 1 contract, max $1, etc.)
+# - All test artifacts use identifiable prefix (e.g., "VERIFY_335_")
+# - Cleans up any mutations after each test
+# - Refuses prod mode without explicit --allow-prod flag
+
+# Each test scenario records to a structured findings file:
+# - .verification_findings/<system>_findings_<timestamp>.json
+# - .verification_findings/<system>_findings_<timestamp>.md
+```
+
+### Why
+
+For external-system investigations, the value of "I delivered the script" is almost equal to "I delivered findings" -- because the script can be re-run any time, but findings are a snapshot that decay. A high-quality verifier the user runs themselves with a clear head produces better understanding than a hastily-run verifier produced at session end.
+
+Specific advantages:
+- **Re-runnable:** detects API regressions in the future
+- **Auditable:** produces durable findings files
+- **Safe:** baked-in guards prevent accidental damage
+- **Educational:** the script's structure documents the test plan
+- **Independent of session context:** anyone can run it later
+
+### Wrong
+
+PM at session end runs 13 API tests directly, parses the responses, manually documents findings in a memory file. Quality suffers in late context. The findings are a snapshot. The script that ran the tests is gone.
+
+### Right
+
+PM builds `scripts/verify_kalshi_demo_orders.py` with:
+- 4 safety modes (dry-run/read-only/live/allow-prod)
+- 13 scenarios scaffolded with TODO placeholders
+- Structured findings collection
+- Read-only mode validated against real API to confirm script works
+- Live mode deferred to user supervision
+- Closes #335 in spirit (artifact exists), issue stays open until findings populated
+
+### When This Pattern Applies
+
+- "Investigate external API behavior" tasks
+- Pre-integration verification of third-party services
+- Regression detection scripts
+- Pre-live checklist automation
+
+### When NOT to Apply
+
+- Investigations of internal codebase (use grep + read directly)
+- Investigations that require human judgment (use PM analysis)
+- One-time research that will not be repeated
+
+### Source
+
+- Session 42d, #335 Kalshi demo API verifier
+- Script: `scripts/verify_kalshi_demo_orders.py`
+- Test plan + findings template: `memory/findings_335_kalshi_demo_verification.md`
+- Council reference: Sub-Council C synthesis -- flagged #335 as Phase 2 entry criterion
+
+---
+
+## Pattern 55: Fee-Aware Orderbook Edge Calculation (ALWAYS for Edge Calculations)
+
+**Severity:** HIGH -- Edge calculations that do not subtract per-trade fees systematically overestimate edge by the fee amount (0.1-0.2% per trade for Kalshi). Affects every trade decision.
+
+### Problem / Trigger
+
+You are computing edge between a model probability and a Kalshi (or other orderbook prediction market) price.
+
+**Correction note (Session 42f):** An earlier version of this pattern was titled "Strip Exchange Margin (Vig) Before Computing Edges." That was WRONG for Kalshi (and other orderbook prediction markets). Kalshi is an orderbook, not a sportsbook. There is no vig. The exchange takes its cut as explicit per-trade fees, not as built-in price margin. The framing is "subtract fees + use the correct side of the orderbook" not "strip vig."
+
+### The Pattern / Rule
+
+Kalshi quotes are real orderbook bids and asks, not bookmaker prices. To compute edge correctly:
+
+```python
+from decimal import Decimal
+
+# Buying YES -- your cost is what you pay at the offer + fees
+def edge_buying_yes(model_p: Decimal, yes_ask: Decimal, fee_rate: Decimal) -> Decimal:
+    return model_p - yes_ask - fee_rate
+
+# Selling YES -- your proceeds are what you receive at the bid - fees
+def edge_selling_yes(model_p: Decimal, yes_bid: Decimal, fee_rate: Decimal) -> Decimal:
+    return yes_bid - model_p - fee_rate
+
+# Buying NO is symmetric
+def edge_buying_no(model_p: Decimal, no_ask: Decimal, fee_rate: Decimal) -> Decimal:
+    return (Decimal("1.0") - model_p) - no_ask - fee_rate
+```
+
+### Why
+
+- **No vig:** Kalshi is an orderbook, not a sportsbook. `yes_bid + no_bid <= 1.0` and `yes_ask + no_ask >= 1.0` are arbitrage-free constraints, not vig markers. The gap between them is the **bid-ask spread** of an orderbook, same as on any stock exchange.
+- **Fees ARE the issue:** Kalshi 2026 fees are claimed at 0.1% major / 0.2% sports (per Reddit r/PillarLab post, NEEDS VERIFICATION). Per-trade fees compound across many trades and turn marginal edges into losses.
+- **Side matters:** `market_probability` for buy decisions must use the ASK (what you would pay), and for sell decisions must use the BID (what you would receive). Using the midpoint or wrong side biases edge in opposite directions for buys vs sells.
+
+### Wrong
+
+```python
+edge = model_p - market.last_price  # WRONG -- last_price is not what you would pay now
+edge = model_p - (market.yes_ask + market.yes_bid) / 2  # WRONG -- midpoint is fictional
+edge = model_p - market.yes_ask  # WRONG -- missing fee subtraction
+```
+
+### Right
+
+```python
+from decimal import Decimal
+
+fee_rate = kalshi_fee_for_market(market)  # Decimal("0.001") for major, Decimal("0.002") for sports
+edge = model_p - market.yes_ask_dollars - fee_rate  # CORRECT for buying YES
+```
+
+**Multi-bracket markets:** For multi-bracket markets (temperature buckets, multi-outcome questions), each bracket is its own orderbook. The sum of `yes_ask` across brackets > 1.0 because each bracket has its own bid-ask spread. If you want fair-value implied probability across brackets (for comparison, not for trading), normalize:
+
+```python
+from decimal import Decimal
+
+def normalize_bracket_prices(bracket_asks: dict[str, Decimal]) -> dict[str, Decimal]:
+    """Normalize bracket asks for cross-bracket comparison.
+
+    This is NOT vig removal -- it is spread accounting across multi-outcome markets.
+    Use this for COMPARISON across brackets, not for edge calculation on a
+    single bracket trade.
+    """
+    total = sum(bracket_asks.values())  # > 1.0 due to per-bracket spreads
+    return {k: v / total for k, v in bracket_asks.items()}
+```
+
+For trading a single bracket, use that bracket's actual `yes_ask_dollars` + fees, no normalization.
+
+### When This Pattern Applies
+
+- ANY edge calculation against a Kalshi orderbook price
+- ANY edge calculation against a Polymarket orderbook price
+- Cross-bracket comparison in multi-outcome markets (use `normalize_bracket_prices`)
+
+### When NOT to Apply
+
+- Sportsbook markets (DraftKings, FanDuel, Pinnacle) -- these DO have vig in the traditional sense (-110/-110 etc.) and need a different correction. We do not trade these.
+- Display of raw exchange prices for debugging (label clearly)
+- Order placement (you submit the raw bid/ask; the exchange handles fees on its side at execution)
+
+### Source
+
+- Session 42d follow-up review of Reddit r/PillarLab post (2026)
+- Session 42f correction: user pushback + live Kalshi demo API verification (2026-04-07, 50-market sample)
+- Tracked under issue #673 (audit + fix existing edge calculation code; rescoped to "fee subtraction + correct orderbook side")
+- Meta-lesson: Verify externally-sourced terminology before propagating it into formal documentation
+
+---
+
+## Pattern 56: JSONB + Decimal Round-Trip via Custom Encoder (ALWAYS for JSONB with Decimal)
+
+**Severity:** HIGH -- `psycopg2.extras.Json` uses plain `json.dumps` by default, which raises `TypeError` on any `Decimal` value. The crash is hard to detect in tests.
+
+### Problem / Trigger
+
+You are storing `Decimal` values in a JSONB column via `psycopg2.extras.Json(dict)`.
+
+### The Pattern / Rule
+
+Provide a custom `dumps` callable that serializes `Decimal` as its string representation. `psycopg2.extras.Json` uses plain `json.dumps` by default, which raises `TypeError: Object of type Decimal is not JSON serializable` on any Decimal value.
+
+### Why
+
+The default `json.dumps` has no `Decimal` adapter. Any dict containing Decimal values passed to `Json()` will crash at the INSERT boundary. The crash is hard to detect in tests because:
+1. Unit tests that mock the CRUD function never exercise the serializer
+2. Integration tests that use string stand-ins (`"0.4500"` instead of `Decimal("0.4500")`) trivially pass through `json.dumps`
+3. Race tests usually do not seed meaningful state data
+
+**Symmetric read-path requirement:** If the producer writes Decimal-as-string, the consumer MUST parse it back as Decimal at read time. Otherwise comparisons like `Decimal <= str` raise `TypeError` silently. File an issue pairing the write-path fix with the read-path fix (e.g., session 42e: #669 pairs with #629's `_jsonb_dumps` fix).
+
+### Wrong
+
+```python
+from psycopg2.extras import Json
+from decimal import Decimal
+
+# Crashes at INSERT if trailing_stop_state contains Decimal values
+state = {"activation_price": Decimal("0.4500"), "current_stop_price": Decimal("0.4200")}
+cur.execute(
+    "INSERT INTO positions (trailing_stop_state) VALUES (%s)",
+    (Json(state),),
+)
+```
+
+### Right
+
+```python
+import json
+from decimal import Decimal
+from psycopg2.extras import Json
+from precog.database.crud_shared import DecimalEncoder
+
+def _jsonb_dumps(obj):
+    """json.dumps with DecimalEncoder for JSONB columns.
+
+    Serializes Decimal as its string representation so psycopg2 can
+    encode the value into JSONB. Round-trip contract: on READ, the
+    JSONB decoder returns the stored value as a Python string (not
+    Decimal). Consumers that need Decimal semantics must parse with
+    Decimal(value) at read time.
+    """
+    return json.dumps(obj, cls=DecimalEncoder)
+
+state = {"activation_price": Decimal("0.4500"), "current_stop_price": Decimal("0.4200")}
+cur.execute(
+    "INSERT INTO positions (trailing_stop_state) VALUES (%s)",
+    (Json(state, dumps=_jsonb_dumps),),
+)
+```
+
+### When This Pattern Applies
+
+- Any CRUD function that stores a Python dict containing Decimal values into a JSONB column
+- Any JSONB column where upstream callers pass Decimal values (e.g., `trailing_stop_state`, `config`)
+
+### When NOT to Apply
+
+- Pure Decimal columns (`DECIMAL(10,4)`) -- psycopg2 handles these natively
+- JSONB storing only strings/ints/bools/lists of primitives
+- Columns stored as structured PostgreSQL types (hstore, arrays)
+
+### Source
+
+- Session 42e Marvin sentinel pass on PR #671
+- Reproduced end-to-end against a real PostgreSQL testcontainer
+- Fix: `src/precog/database/crud_positions.py::_jsonb_dumps`
+- Related: Issue #666 (sibling bug), Issue #669 (symmetric read-path), Issue #670 (Mock Fidelity Rule serialization extension)
+
+---
+
+## Pattern 57: Close-by-Business-Key Inside Retry Closure (ALWAYS for SCD Retry with Surrogate Keys)
+
+**Severity:** HIGH -- Using surrogate id inside a retry closure causes stale-reference bugs when a sibling caller's commit changes the surrogate.
+
+### Problem / Trigger
+
+A CRUD function closes and re-inserts an SCD versioned row inside a `retry_on_scd_unique_conflict` closure, AND retries may see a sibling caller's committed row with a different surrogate id.
+
+### The Pattern / Rule
+
+Inside the closure, use the **business key** (not the surrogate id) in both the lock query and the close query. The surrogate id captured before entering the closure becomes stale on retry.
+
+### Why
+
+The retry helper invokes the closure a second time after a sibling caller's commit. The sibling's new version has a new surrogate id but the same business key. If the closure uses `WHERE id = %s` (surrogate), it will either:
+1. Match zero rows (if the sibling closed the original surrogate) -- INSERT creates an orphan second current row -- unique index violation, retry loop, error
+2. Match the sibling's row but with stale values -- update over fresh data
+
+Using `WHERE <business_key_col> = %s AND row_current_ind = TRUE` always finds the correct current row on both the first attempt and the retry.
+
+### Wrong
+
+```python
+def _attempt(position_id: int, ...):  # position_id captured as surrogate
+    with get_cursor(commit=True) as cur:
+        cur.execute("SELECT ... FOR UPDATE WHERE id = %s", (position_id,))
+        cur.execute("UPDATE positions SET row_current_ind = FALSE WHERE id = %s", (position_id,))
+        # On retry after sibling's commit, position_id is stale -- this closes
+        # the wrong row or matches zero rows
+```
+
+### Right
+
+```python
+# Outer: fetch once by surrogate to validate existence and capture business key
+initial_current = fetch_one(
+    "SELECT * FROM positions WHERE id = %s AND row_current_ind = TRUE",
+    (position_id,),
+)
+if not initial_current:
+    raise ValueError(f"Position not found: {position_id}")
+position_bk = initial_current["position_id"]  # Business key, stable across retries
+
+def _attempt():
+    with get_cursor(commit=True) as cur:
+        cur.execute("SELECT NOW() AS ts")
+        now = cur.fetchone()["ts"]
+        # Lock by business key -- always finds current row even after sibling's commit
+        cur.execute(
+            "SELECT id FROM positions WHERE position_id = %s "
+            "AND row_current_ind = TRUE FOR UPDATE",
+            (position_bk,),
+        )
+        # Re-fetch fresh current row by business key
+        cur.execute(
+            "SELECT * FROM positions WHERE position_id = %s "
+            "AND row_current_ind = TRUE",
+            (position_bk,),
+        )
+        current = cur.fetchone()
+        # Close by business key -- survives sibling surrogate churn
+        cur.execute(
+            "UPDATE positions SET row_current_ind = FALSE, row_end_ts = %s "
+            "WHERE position_id = %s AND row_current_ind = TRUE",
+            (now, position_bk),
+        )
+        # ... INSERT using captured current values ...
+
+retry_on_scd_unique_conflict(
+    _attempt,
+    "idx_positions_unique_current",
+    business_key={"position_id": position_bk},
+)
+```
+
+### When This Pattern Applies
+
+- Any retry closure where the business key is distinct from the surrogate id AND the table uses SCD Type 2 versioning where each version gets a new surrogate
+- Canonical examples: `crud_positions.py::update_position_price`, `close_position`, `set_trailing_stop_state`
+
+### When NOT to Apply
+
+- Tables where the "business key" and surrogate id are the same (e.g., `user_id` is both surrogate and business key)
+- Non-retry code paths (Pattern 49's FOR UPDATE is sufficient without retry)
+
+### Source
+
+- Session 42e PR #665 (canonical pattern landed there) and PR #671 (applied again in `set_trailing_stop_state`)
+- Extends Pattern 49 (SCD Race Prevention) and Pattern 52 (SCD Race Retry Helper Structure)
+
+---
+
+## Pattern 58: Triple-Reviewer Convergence as Structural Validation (ALWAYS for Multi-Agent Review)
+
+**Severity:** MEDIUM -- Individual reviewer findings have variance; convergence across 3+ independent frames is high-confidence signal.
+
+### Problem / Trigger
+
+You are dispatching 3+ agents with different cognitive frames to review the same diff in parallel (per protocols.md Step 4 + 4b + 5 for money-touching Tier 2 PRs).
+
+### The Pattern / Rule
+
+When 3+ reviewers with different cognitive frames independently surface the same finding, treat it as **structurally validated** -- high-confidence signal worth treating as a blocker, even if any individual reviewer would have rated it non-blocking.
+
+### Why
+
+Individual reviewer findings have variance -- a single reviewer might be wrong, overfit to their frame, or miss context. Three reviewers with different frames converging on the same finding reduces false-positive probability dramatically. The convergence itself is the signal, not any single review.
+
+### Wrong
+
+"Glokta flagged create_order as a Medium finding, Marvin flagged it as a HIGH follow-up, Brawne also called it out -- but none are blockers so we can defer all three to a follow-up issue."
+
+### Right
+
+"Three independent reviewers flagged the same thing with different framings. Fold the fix into this PR before merge."
+
+### When This Pattern Applies
+
+- Any PR that dispatches 3+ reviewer-role agents in parallel (Glokta/Brawne/Marvin, or Mulder/Holden/Cassandra, etc.) and a finding appears in 2+ outputs
+
+### When NOT to Apply
+
+- Single-reviewer passes (Tier 1, small fixes)
+- When reviewers converge on a correctness nit rather than a design gap (the pattern is for convergence on material findings, not typos)
+
+### Source
+
+- Session 42f Task 3c -- Glokta + Brawne + Marvin + Claude Review CI all independently flagged the `crud_orders.create_order` / `crud_analytics.create_edge` optional-default precedent gap on PR #690. The 4-way convergence was what surfaced the gap. The finding was folded into the same PR rather than deferred.
+
+---
+
+## Pattern 59: Migration Round-Trip Testing on a Populated DB (ALWAYS for Non-Trivial Migrations)
+
+**Severity:** HIGH -- Downgrade ordering bugs are structurally invisible to pure logic review. They manifest only when the DB actually refuses an operation.
+
+### Problem / Trigger
+
+You are writing an Alembic migration that drops/modifies columns, indexes, views, or constraints. Especially when the downgrade path recreates dependent objects.
+
+### The Pattern / Rule
+
+Before merging any Alembic migration that has a non-trivial downgrade path, **run `alembic upgrade head -> downgrade -1 -> upgrade head` against a populated test database**. Not a mocked test. A real PostgreSQL instance with at least one representative row per affected table.
+
+### Why
+
+Downgrade ordering bugs are structurally invisible to pure logic review. They manifest only when the DB actually refuses an operation due to dependency resolution. Pattern 49 (SCD race prevention) covers the upgrade path; Pattern 2 (SCD filtering) covers runtime query correctness; NEITHER catches "the recreated view depends on the column we are about to drop."
+
+### Wrong
+
+Logic review only: "The downgrade recreates current_balances view, then drops the execution_environment column. Each step looks right in isolation. LGTM."
+
+### Right
+
+Empirical test: `alembic downgrade -1` -> `ERROR: cannot drop column execution_environment of table account_balance because other objects depend on it` -> reorder: drop view THEN drop column THEN recreate view -> `alembic downgrade -1` succeeds -> `alembic upgrade head` succeeds -> merge.
+
+### When This Pattern Applies
+
+- Every migration that DROPS or ALTERS columns, indexes, views, or constraints AND has a downgrade path that recreates dependent objects
+- Migrations that change schema semantics for money/trade tables
+
+### When NOT to Apply
+
+- Pure additive migrations (ADD COLUMN with DEFAULT, ADD INDEX, CREATE TABLE)
+- Schema-only migrations with no row-level effects
+- Tiny config-table updates
+
+### Source
+
+- Session 42f Task 3c, PR #690 migration 0051
+- Samwise's original downgrade recreated `current_balances` view BEFORE dropping the column, causing `DROP COLUMN execution_environment` to fail with `DependentObjectsStillExist`
+- Fix: recreate view AFTER column drop so its `SELECT *` captures the post-downgrade column list
+
+---
+
+## Pattern 60: AST Helper Scripts for Systematic Test Fixture Updates (MEDIUM for Cascading Signature Changes)
+
+**Severity:** MEDIUM -- Manual Edit-by-Edit for 10+ sites is error-prone (missed sites, inconsistent style, kwarg-collision bugs).
+
+### Problem / Trigger
+
+A CRUD signature change (adding a required parameter, renaming, etc.) cascades into many test call sites (10+).
+
+### The Pattern / Rule
+
+Rather than editing each test call site manually, write a small AST-aware Python script that walks the test files and inserts the new parameter at every matching call. Use `ast.walk()` to find function calls, check for the parameter's presence (idempotency), and insert at the correct position.
+
+### Why
+
+Manual Edit-by-Edit for 10+ sites is error-prone (missed sites, inconsistent style, kwarg-collision bugs). An AST script handles all sites uniformly, runs in seconds, and is idempotent (re-running is safe). Also produces a deterministic count report that serves as verification.
+
+### Wrong
+
+Edit each of 30 call sites individually, track progress mentally, hope you did not miss any.
+
+### Right
+
+Write `.add_exec_env_kwarg.py` helper, run it across all target files, get "5 + 16 + 13 + 4 + 1 + 8 + 3 + 6 call sites modified" output, commit, delete the helper script.
+
+### When This Pattern Applies
+
+- Signature changes that affect 10+ test call sites across multiple files
+- Cascading refactors
+- Renaming a commonly-used helper
+
+### When NOT to Apply
+
+- Single-file changes (just use Edit)
+- Signature changes where each call site needs different judgment about the new parameter value
+- Anything touching production code logic (AST scripts do not understand semantic context well enough for prod refactors)
+- When each test site has genuinely different intent and the new value must be reasoned per-site
+
+### Source
+
+- Session 42f Task 3c, PR #690
+- Samwise's build changed 6 CRUD function signatures from optional-with-default to required
+- PM wrote `.add_exec_env_kwarg.py` as a one-shot AST script, ran it in three batches (~60 test call sites across 8 files), total ~5 minutes vs ~45 minutes manual
+
+---
+
+## Pattern 61: git push --no-verify Repeat-Use Acceptance Criteria (ALWAYS for Hook Bypass)
+
+**Severity:** MEDIUM -- Pre-push hooks are load-bearing. Bypassing the hook normalizes degraded safety. But infinitely rigid discipline produces worse workarounds.
+
+### Problem / Trigger
+
+Pre-push hook fails on a known pre-existing flake that is blocking a push whose diff is provably unable to affect the failing test.
+
+### The Pattern / Rule
+
+`git push --no-verify` is discouraged but permitted **once per session** when ALL FIVE criteria are met:
+
+1. The diff is demonstrably unable to affect the failing test (trivially: `.md`, `.yml` workflow, `.github/ISSUE_TEMPLATE/*`)
+2. The test failure reproduces across multiple runs (flake, not a regression)
+3. An issue tracking the underlying test-quality problem exists
+4. The bypass is documented in a PR comment with the rationale visible
+5. The current session has not already used `--no-verify` once (no repeats within a session without explicit user sign-off)
+
+### Why
+
+Pre-push hooks are load-bearing -- they catch developer-environment issues before shared CI runners. Bypassing the hook normalizes degraded safety. But infinitely rigid discipline produces workarounds worse than the original problem (e.g., operators learning to avoid the hook via branch tricks). The 5-criteria rule threads the needle: allows escape valves when the bypass is genuinely safe, but makes each use deliberate, documented, and non-repeating.
+
+### Wrong
+
+"Hook failed on a flaky test. Push with --no-verify, move on." (implicit, undocumented, normalizing)
+
+### Right
+
+"Hook failed on a known pre-existing flake (#698 tracks it). My diff is YAML-only and provably unable to affect Python tests. Using --no-verify ONCE, documenting in PR comment, filing tracking issue, will not repeat this session without sign-off." (explicit, 5-criteria audit, transparent)
+
+### When This Pattern Applies
+
+- Truly one-off situations where a reproducible pre-existing flake blocks a trivial diff. Rare.
+
+### When NOT to Apply
+
+- Any code change (`.py`, `.sql`, any non-workflow file) -- the hook is checking exactly the class of thing the diff might break
+- Repeated use within a session (stop and fix the hook instead)
+- Large diffs where "unable to affect" is hard to prove
+- Situations where the flake could plausibly be causally related to the diff
+
+### Source
+
+- Session 42f PR #697 commit 882f479
+- CLI race test failure on YAML-only diff, filed as #698
+- Dedicated feedback note: `feedback_no_verify_push_session_42.md`
+
+---
+
+## Pattern 62: In-Repo Per-Migration Rationale Docs (MEDIUM for Architecturally Significant Migrations)
+
+**Severity:** MEDIUM -- Agent synthesis documents live outside the repo. Every "See findings_*.md" reference in a migration docstring is a dead link for anyone reading from a fresh clone.
+
+### Problem / Trigger
+
+You are shipping an architecturally significant migration that references design decisions from a multi-agent council or cross-cutting bug class.
+
+### The Pattern / Rule
+
+For any migration that (a) closes 2+ bug class issues, (b) changes schema semantics for money/trade tables, or (c) represents the completion of a multi-PR architectural arc, create a companion `docs/database/RATIONALE_MIGRATION_NNNN.md` file in the same PR. The migration's docstring should reference it first, before any external references.
+
+### Why
+
+Agent synthesis documents (e.g., `findings_622_686_synthesis.md`) live in the PM's local memory directory, outside the repo. Every `See findings_*.md` reference in a migration docstring is a dead link for anyone reading the code from a fresh clone. The 12-month archeologist needs a discoverable, version-controlled rationale that travels with the code.
+
+### Wrong
+
+Migration docstring says `See findings_622_686_synthesis.md for design rationale.` -- but that file lives at `~/.claude/projects/.../memory/` and is not in the repo.
+
+### Right
+
+Migration docstring says `See docs/database/RATIONALE_MIGRATION_0051.md for design rationale (in-repo). For the deeper agent-by-agent synthesis, see ~/.claude/projects/.../memory/findings_622_686_*.md (outside the repo, PM-local).`
+
+### When This Pattern Applies
+
+- Architecturally significant migrations
+- Migrations closing a cross-cutting bug class
+- Migrations that complete a multi-session arc
+- Migrations where a future developer will ask "but WHY?"
+
+### When NOT to Apply
+
+- Routine migrations (ADD COLUMN for a new feature, simple INDEX additions, data migrations)
+- If the rationale fits in the migration docstring itself in under 20 lines, do not split it out
+
+### Source
+
+- Session 42f PR #690 migration 0051 shipped `docs/database/RATIONALE_MIGRATION_0051.md` alongside the migration
+- Claude Review on PR #690 escalated Marvin's "12-month archeology" concern
+
+---
+
+## Pattern 63: LATERAL Subquery for SCD Type 2 Temporal Matching (ALWAYS for Cross-Table SCD Correlation)
+
+**Severity:** HIGH -- Using `row_current_ind = TRUE` for cross-table temporal correlation silently drops any row superseded between poll cycles.
+
+### Problem / Trigger
+
+You need to correlate rows across two SCD Type 2 tables by timestamp proximity.
+
+### The Pattern / Rule
+
+Use `CROSS JOIN LATERAL` with `ORDER BY ABS(EXTRACT(EPOCH FROM (ts1 - ts2))) LIMIT 1` to find the closest-in-time row. Do NOT filter by `row_current_ind = TRUE` on the source table -- use a time-window lookback + NOT EXISTS instead.
+
+### Why
+
+In SCD Type 2, `row_current_ind = TRUE` means "the latest version." When a new row arrives (~every 15-30s for pollers), the previous row flips to FALSE. Any service that only processes current rows will permanently miss any row superseded between poll cycles. The time-window + NOT EXISTS approach processes ALL recent rows regardless of their current/historical status.
+
+### Wrong
+
+```sql
+-- DANGEROUS: drops any snapshot superseded before the writer runs
+SELECT ms.*, gs.*
+FROM market_snapshots ms
+JOIN game_states gs ON gs.game_id = g.id AND gs.row_current_ind = TRUE
+WHERE ms.row_current_ind = TRUE
+```
+
+### Right
+
+```sql
+-- SAFE: processes all recent snapshots, finds closest game_state by time
+SELECT ms.*, gs.*
+FROM market_snapshots ms
+JOIN markets m ON ms.market_id = m.id
+JOIN events e ON m.event_internal_id = e.id
+JOIN games g ON e.game_id = g.id
+CROSS JOIN LATERAL (
+    SELECT gs_inner.*
+    FROM game_states gs_inner
+    WHERE gs_inner.game_id = g.id
+    ORDER BY ABS(EXTRACT(EPOCH FROM (ms.row_start_ts - gs_inner.row_start_ts)))
+    LIMIT 1
+) gs
+WHERE ms.row_start_ts > NOW() - INTERVAL '600 seconds'
+  AND NOT EXISTS (
+      SELECT 1 FROM temporal_alignment ta
+      WHERE ta.market_snapshot_id = ms.id AND ta.game_state_id = gs.id
+  )
+```
+
+### When This Pattern Applies
+
+- Any cross-table temporal correlation where both tables use SCD Type 2 versioning (market_snapshots, game_states, game_odds, positions)
+- Batch-processing services that must not miss any historical row
+
+### When NOT to Apply
+
+- Single-table queries where you genuinely only want the current row (`row_current_ind = TRUE` is correct for "show me the latest price")
+- Real-time dashboards where only the current state matters
+
+### Source
+
+- Glokta review B1 on #722 (session 47)
+- The writer's original query used `row_current_ind = TRUE` on both tables, which would silently drop any snapshot superseded before the writer ran
+
+---
+
+## Pattern 64: IS DISTINCT FROM in BEFORE UPDATE Triggers (ALWAYS for Immutability Triggers)
+
+**Severity:** HIGH -- Using `!=` in trigger column comparison returns NULL when either operand is NULL, silently allowing the mutation.
+
+### Problem / Trigger
+
+You are writing a PostgreSQL BEFORE UPDATE trigger to enforce column immutability (block changes to specific columns while allowing others).
+
+### The Pattern / Rule
+
+Use `IS DISTINCT FROM` (not `!=` or `<>`) for column comparison in triggers.
+
+### Why
+
+`!=` returns NULL when either operand is NULL. A NULL condition in a trigger's IF block does not fire the RAISE, silently allowing the mutation. `IS DISTINCT FROM` treats NULL as a value: `NULL IS DISTINCT FROM NULL` is FALSE, `NULL IS DISTINCT FROM 'x'` is TRUE. This also enables no-op updates (`SET config = config`) to pass through, which is important for ORM bulk-save patterns that SET all columns.
+
+### Wrong
+
+```sql
+-- DANGEROUS: NULL comparison returns NULL, silently allows mutation
+IF NEW.config != OLD.config THEN
+    RAISE EXCEPTION 'Cannot modify immutable column';
+END IF;
+```
+
+### Right
+
+```sql
+-- SAFE: handles NULLs correctly and allows no-op updates
+IF NEW.config IS DISTINCT FROM OLD.config
+   OR NEW.strategy_version IS DISTINCT FROM OLD.strategy_version
+THEN
+    RAISE EXCEPTION 'Cannot modify immutable columns. Create a new version instead.';
+END IF;
+```
+
+### When This Pattern Applies
+
+- Any BEFORE UPDATE trigger that selectively blocks column changes
+- Especially important when the protected columns could theoretically be NULL or when ORMs send full-row updates
+
+### When NOT to Apply
+
+- Triggers that block ALL updates (append-only enforcement) -- use a simple `RAISE EXCEPTION` with no column checks
+
+### Source
+
+- Migration 0056 (session 47, #371)
+- Verified by integration test `test_noop_update_of_immutable_column_succeeds`
+
+---
+
+V1.31 Updates:
+- Added Pattern 52 (SCD Race Retry Helper Structure) -- 7-condition retry pattern for money-touching SCD code. Source: Session 42d PR #631.
+- Added Pattern 53 (Race Tests Must Assert The Race Actually Fired) -- caplog assertion that contested code path executes. Source: Session 42d PR #631.
+- Added Pattern 54 (Verifier Scripts as Investigation Deliverables) -- executable scripts over one-shot findings. Source: Session 42d #335.
+- Added Pattern 55 (Fee-Aware Orderbook Edge Calculation) -- subtract fees + use correct orderbook side. Source: Session 42d/42f, corrected from vig to fees.
+- Added Pattern 56 (JSONB + Decimal Round-Trip via Custom Encoder) -- custom dumps for psycopg2 Json. Source: Session 42e PR #671.
+- Added Pattern 57 (Close-by-Business-Key Inside Retry Closure) -- use business key not surrogate inside retries. Source: Session 42e PR #665.
+- Added Pattern 58 (Triple-Reviewer Convergence as Structural Validation) -- multi-agent convergence signal. Source: Session 42f PR #690.
+- Added Pattern 59 (Migration Round-Trip Testing on a Populated DB) -- empirical upgrade/downgrade/upgrade test. Source: Session 42f PR #690.
+- Added Pattern 60 (AST Helper Scripts for Systematic Test Fixture Updates) -- AST scripts for cascading refactors. Source: Session 42f PR #690.
+- Added Pattern 61 (git push --no-verify Repeat-Use Acceptance Criteria) -- 5-criteria rule for hook bypass. Source: Session 42f PR #697.
+- Added Pattern 62 (In-Repo Per-Migration Rationale Docs) -- companion docs for architecturally significant migrations. Source: Session 42f PR #690.
+- Added Pattern 63 (LATERAL Subquery for SCD Type 2 Temporal Matching) -- CROSS JOIN LATERAL for cross-table SCD correlation. Source: Session 47 #722.
+- Added Pattern 64 (IS DISTINCT FROM in BEFORE UPDATE Triggers) -- NULL-safe comparison in immutability triggers. Source: Session 47 #371.
+- Updated Pattern 2 (Dual Versioning System) with anti-pattern warning for same-transaction read-after-write with row_current_ind filter. Source: Session 42e #629.
 
 V1.30 Updates:
 - Added Pattern 47 (Verify Schema Before Fixing Pattern Violations) — false positive prevention for code review findings. Source: Session 42c #595 false positive (teams table is not SCD Type 2).
