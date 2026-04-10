@@ -348,18 +348,18 @@ def fk_test_team(db_pool: Any) -> Any:
         # Cleanup
         cur.execute(
             "DELETE FROM team_rankings WHERE team_id IN "
-            "(SELECT team_id FROM teams WHERE team_code = %s AND sport = 'nfl')",
+            "(SELECT team_id FROM teams WHERE team_code = %s AND sport = 'football')",
             (team_code,),
         )
         cur.execute(
-            "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+            "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
             (team_code,),
         )
 
         cur.execute(
             """
             INSERT INTO teams (team_code, team_name, sport, league)
-            VALUES (%s, 'Migration 0057 Test Team', 'nfl', 'nfl')
+            VALUES (%s, 'Migration 0057 Test Team', 'football', 'nfl')
             RETURNING team_id
             """,
             (team_code,),
@@ -647,13 +647,13 @@ class TestRestrictBlocksDeletion:
             cur.execute(
                 """
                 INSERT INTO events (
-                    event_id, platform_id, external_id,
+                    platform_id, external_id,
                     category, title
                 )
-                VALUES (%s, %s, %s, 'sports', 'Test Event')
+                VALUES (%s, %s, 'sports', 'Test Event')
                 RETURNING id
                 """,
-                ("MIG57-EVT", platform_id, "MIG57-EVT-EXT"),
+                (platform_id, "MIG57-EVT-EXT"),
             )
             event_id = cur.fetchone()["id"]
 
@@ -873,13 +873,13 @@ class TestSCDDefaults:
         team_code = "M57DA"
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
             cur.execute(
                 """
                 INSERT INTO teams (team_code, team_name, sport, league)
-                VALUES (%s, 'Default Test Team', 'nfl', 'nfl')
+                VALUES (%s, 'Default Test Team', 'football', 'nfl')
                 RETURNING row_current_ind, row_start_ts, row_end_ts
                 """,
                 (team_code,),
@@ -892,7 +892,7 @@ class TestSCDDefaults:
         # Cleanup
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
 
@@ -948,7 +948,7 @@ class TestSCDDefaults:
         team_code = "M57DF"
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
             cur.execute(
@@ -956,7 +956,7 @@ class TestSCDDefaults:
                 INSERT INTO teams (
                     team_code, team_name, sport, league, row_current_ind
                 )
-                VALUES (%s, 'Historical Test Team', 'nfl', 'nfl', FALSE)
+                VALUES (%s, 'Historical Test Team', 'football', 'nfl', FALSE)
                 RETURNING row_current_ind
                 """,
                 (team_code,),
@@ -967,7 +967,7 @@ class TestSCDDefaults:
         # Cleanup
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
 
@@ -976,7 +976,7 @@ class TestSCDDefaults:
         team_code = "M57DN"
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
 
@@ -987,7 +987,7 @@ class TestSCDDefaults:
                     INSERT INTO teams (
                         team_code, team_name, sport, league, row_current_ind
                     )
-                    VALUES (%s, 'Null Current Team', 'nfl', 'nfl', NULL)
+                    VALUES (%s, 'Null Current Team', 'football', 'nfl', NULL)
                     """,
                     (team_code,),
                 )
@@ -995,7 +995,7 @@ class TestSCDDefaults:
         # Cleanup (might not exist if insert failed)
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
 
@@ -1005,7 +1005,7 @@ class TestSCDDefaults:
         team_code = "M57NS"
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
 
@@ -1016,7 +1016,7 @@ class TestSCDDefaults:
                     INSERT INTO teams (
                         team_code, team_name, sport, league, row_start_ts
                     )
-                    VALUES (%s, 'Null Start Team', 'nfl', 'nfl', NULL)
+                    VALUES (%s, 'Null Start Team', 'football', 'nfl', NULL)
                     """,
                     (team_code,),
                 )
@@ -1024,7 +1024,7 @@ class TestSCDDefaults:
         # Cleanup (might not exist if insert failed)
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
 
@@ -1033,7 +1033,7 @@ class TestSCDDefaults:
         team_code = "M57NE"
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
             cur.execute(
@@ -1041,7 +1041,7 @@ class TestSCDDefaults:
                 INSERT INTO teams (
                     team_code, team_name, sport, league, row_end_ts
                 )
-                VALUES (%s, 'Nullable End Team', 'nfl', 'nfl', NULL)
+                VALUES (%s, 'Nullable End Team', 'football', 'nfl', NULL)
                 RETURNING row_end_ts
                 """,
                 (team_code,),
@@ -1052,7 +1052,7 @@ class TestSCDDefaults:
         # Cleanup
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
 
@@ -1071,13 +1071,13 @@ class TestSCDUniqueConstraint:
         team_code = "M57DU"
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
             cur.execute(
                 """
                 INSERT INTO teams (team_code, team_name, sport, league, row_current_ind)
-                VALUES (%s, 'Dup Test Team 1', 'nfl', 'nfl', TRUE)
+                VALUES (%s, 'Dup Test Team 1', 'football', 'nfl', TRUE)
                 """,
                 (team_code,),
             )
@@ -1087,7 +1087,7 @@ class TestSCDUniqueConstraint:
                 cur.execute(
                     """
                     INSERT INTO teams (team_code, team_name, sport, league, row_current_ind)
-                    VALUES (%s, 'Dup Test Team 2', 'nfl', 'nfl', TRUE)
+                    VALUES (%s, 'Dup Test Team 2', 'football', 'nfl', TRUE)
                     """,
                     (team_code,),
                 )
@@ -1095,7 +1095,7 @@ class TestSCDUniqueConstraint:
         # Cleanup
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
 
@@ -1104,27 +1104,27 @@ class TestSCDUniqueConstraint:
         team_code = "M57HD"
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
             # Insert two historical rows -- both FALSE, no unique violation
             cur.execute(
                 """
                 INSERT INTO teams (team_code, team_name, sport, league, row_current_ind)
-                VALUES (%s, 'Hist Team V1', 'nfl', 'nfl', FALSE)
+                VALUES (%s, 'Hist Team V1', 'football', 'nfl', FALSE)
                 """,
                 (team_code,),
             )
             cur.execute(
                 """
                 INSERT INTO teams (team_code, team_name, sport, league, row_current_ind)
-                VALUES (%s, 'Hist Team V2', 'nfl', 'nfl', FALSE)
+                VALUES (%s, 'Hist Team V2', 'football', 'nfl', FALSE)
                 """,
                 (team_code,),
             )
 
             cur.execute(
-                "SELECT COUNT(*) AS cnt FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "SELECT COUNT(*) AS cnt FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
             assert cur.fetchone()["cnt"] == 2
@@ -1132,7 +1132,7 @@ class TestSCDUniqueConstraint:
         # Cleanup
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
 
@@ -1248,13 +1248,13 @@ class TestDeleteWithoutChildren:
         team_code = "M57OR"
         with get_cursor(commit=True) as cur:
             cur.execute(
-                "DELETE FROM teams WHERE team_code = %s AND sport = 'nfl'",
+                "DELETE FROM teams WHERE team_code = %s AND sport = 'football'",
                 (team_code,),
             )
             cur.execute(
                 """
                 INSERT INTO teams (team_code, team_name, sport, league)
-                VALUES (%s, 'Orphan Test Team', 'nfl', 'nfl')
+                VALUES (%s, 'Orphan Test Team', 'football', 'nfl')
                 RETURNING team_id
                 """,
                 (team_code,),
