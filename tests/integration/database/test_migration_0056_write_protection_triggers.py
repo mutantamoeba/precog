@@ -312,8 +312,8 @@ class TestStrategyImmutability:
     def test_update_immutable_config_raises(self, trigger_test_scaffold: dict) -> None:
         """UPDATE of config (immutable) must raise."""
         sid = trigger_test_scaffold["strategy_id"]
-        with get_cursor(commit=True) as cur:
-            with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+        with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+            with get_cursor(commit=True) as cur:
                 cur.execute(
                     "UPDATE strategies SET config = %s WHERE strategy_id = %s",
                     (json.dumps({"param": "tampered"}), sid),
@@ -322,8 +322,8 @@ class TestStrategyImmutability:
     def test_update_immutable_version_raises(self, trigger_test_scaffold: dict) -> None:
         """UPDATE of strategy_version (immutable) must raise."""
         sid = trigger_test_scaffold["strategy_id"]
-        with get_cursor(commit=True) as cur:
-            with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+        with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+            with get_cursor(commit=True) as cur:
                 cur.execute(
                     "UPDATE strategies SET strategy_version = '2.0' WHERE strategy_id = %s",
                     (sid,),
@@ -332,8 +332,8 @@ class TestStrategyImmutability:
     def test_update_immutable_name_raises(self, trigger_test_scaffold: dict) -> None:
         """UPDATE of strategy_name (immutable) must raise."""
         sid = trigger_test_scaffold["strategy_id"]
-        with get_cursor(commit=True) as cur:
-            with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+        with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+            with get_cursor(commit=True) as cur:
                 cur.execute(
                     "UPDATE strategies SET strategy_name = 'tampered-name' WHERE strategy_id = %s",
                     (sid,),
@@ -346,8 +346,8 @@ class TestStrategyImmutability:
         constraint — is what blocks the change.
         """
         sid = trigger_test_scaffold["strategy_id"]
-        with get_cursor(commit=True) as cur:
-            with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+        with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+            with get_cursor(commit=True) as cur:
                 cur.execute(
                     "UPDATE strategies SET strategy_type = 'arbitrage' WHERE strategy_id = %s",
                     (sid,),
@@ -372,8 +372,8 @@ class TestStrategyImmutability:
     def test_update_multiple_immutable_columns_raises(self, trigger_test_scaffold: dict) -> None:
         """UPDATE of multiple immutable columns at once must raise."""
         sid = trigger_test_scaffold["strategy_id"]
-        with get_cursor(commit=True) as cur:
-            with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+        with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+            with get_cursor(commit=True) as cur:
                 cur.execute(
                     "UPDATE strategies SET config = %s, strategy_name = 'x' WHERE strategy_id = %s",
                     (json.dumps({"tampered": True}), sid),
@@ -423,8 +423,8 @@ class TestModelImmutability:
     def test_update_immutable_config_raises(self, trigger_test_scaffold: dict) -> None:
         """UPDATE of config (immutable) must raise."""
         mid = trigger_test_scaffold["model_id"]
-        with get_cursor(commit=True) as cur:
-            with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+        with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+            with get_cursor(commit=True) as cur:
                 cur.execute(
                     "UPDATE probability_models SET config = %s WHERE model_id = %s",
                     (json.dumps({"learning_rate": "0.99"}), mid),
@@ -433,8 +433,8 @@ class TestModelImmutability:
     def test_update_immutable_version_raises(self, trigger_test_scaffold: dict) -> None:
         """UPDATE of model_version (immutable) must raise."""
         mid = trigger_test_scaffold["model_id"]
-        with get_cursor(commit=True) as cur:
-            with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+        with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+            with get_cursor(commit=True) as cur:
                 cur.execute(
                     "UPDATE probability_models SET model_version = '2.0' WHERE model_id = %s",
                     (mid,),
@@ -443,8 +443,8 @@ class TestModelImmutability:
     def test_update_immutable_name_raises(self, trigger_test_scaffold: dict) -> None:
         """UPDATE of model_name (immutable) must raise."""
         mid = trigger_test_scaffold["model_id"]
-        with get_cursor(commit=True) as cur:
-            with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+        with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+            with get_cursor(commit=True) as cur:
                 cur.execute(
                     "UPDATE probability_models SET model_name = 'tampered' WHERE model_id = %s",
                     (mid,),
@@ -457,8 +457,8 @@ class TestModelImmutability:
         constraint — is what blocks the change.
         """
         mid = trigger_test_scaffold["model_id"]
-        with get_cursor(commit=True) as cur:
-            with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+        with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+            with get_cursor(commit=True) as cur:
                 cur.execute(
                     "UPDATE probability_models SET model_class = 'ensemble' WHERE model_id = %s",
                     (mid,),
@@ -474,6 +474,26 @@ class TestModelImmutability:
                 (mid,),
             )
             assert cur.fetchone() is not None
+
+    def test_update_multiple_immutable_columns_raises(self, trigger_test_scaffold: dict) -> None:
+        """UPDATE of multiple immutable columns at once must raise."""
+        mid = trigger_test_scaffold["model_id"]
+        with pytest.raises(psycopg2.errors.RaiseException, match="immutable"):
+            with get_cursor(commit=True) as cur:
+                cur.execute(
+                    "UPDATE probability_models SET config = %s, model_name = 'x' "
+                    "WHERE model_id = %s",
+                    (json.dumps({"tampered": True}), mid),
+                )
+
+    def test_update_zero_rows_no_exception(self, trigger_test_scaffold: dict) -> None:
+        """UPDATE matching zero rows must NOT raise (trigger fires per-row)."""
+        with get_cursor(commit=True) as cur:
+            cur.execute(
+                "UPDATE probability_models SET config = %s WHERE model_id = -999",
+                (json.dumps({"tampered": True}),),
+            )
+            assert cur.rowcount == 0
 
 
 # =============================================================================
@@ -606,11 +626,11 @@ class TestAppendOnlyEnforcement:
         with get_cursor(commit=True) as cur:
             pk = _insert_append_only_row(cur, table, trigger_test_scaffold)
 
-        with get_cursor(commit=True) as cur:
-            pk_col = _PK_COLUMN[table]
-            upd_col = _UPDATE_COLUMN[table]
-            upd_val = _UPDATE_VALUE[table]
-            with pytest.raises(psycopg2.errors.RaiseException, match="append-only"):
+        pk_col = _PK_COLUMN[table]
+        upd_col = _UPDATE_COLUMN[table]
+        upd_val = _UPDATE_VALUE[table]
+        with pytest.raises(psycopg2.errors.RaiseException, match="append-only"):
+            with get_cursor(commit=True) as cur:
                 cur.execute(
                     f"UPDATE {table} SET {upd_col} = %s WHERE {pk_col} = %s",  # noqa: S608
                     (upd_val, pk),
