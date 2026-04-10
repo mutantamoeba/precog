@@ -452,8 +452,9 @@ def insert_temporal_alignment_batch(alignments: list[dict]) -> int:
             - game_id (int | None) -- FK to games(id), denormalized from events
 
     Returns:
-        Count of rows submitted for insertion (not deduplicated -- this table
-        has no ON CONFLICT clause, so all submitted rows are inserted).
+        Count of rows inserted (duplicates are silently skipped via
+        ON CONFLICT DO NOTHING on the unique constraint
+        uq_alignment_snapshot_game).
 
     Raises:
         TypeError: If Decimal fields are not Decimal type
@@ -547,6 +548,7 @@ def insert_temporal_alignment_batch(alignments: list[dict]) -> int:
             game_id
         )
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (market_snapshot_id, game_state_id) DO NOTHING
     """
 
     with get_cursor(commit=True) as cur:

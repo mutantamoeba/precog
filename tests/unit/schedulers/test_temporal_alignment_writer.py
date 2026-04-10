@@ -113,6 +113,15 @@ class TestFindUnalignedPairs:
         assert alignment["home_score"] == 21
         assert alignment["clock"] == "8:42"
 
+    @pytest.mark.parametrize(
+        ("lookback", "limit"),
+        [(0, 100), (-1, 100), (600, 0), (600, -5), (0, 0)],
+    )
+    def test_rejects_non_positive_params(self, lookback: int, limit: int) -> None:
+        """Zero or negative lookback_seconds / batch_limit raises ValueError."""
+        with pytest.raises(ValueError, match="must be positive"):
+            find_unaligned_pairs(lookback_seconds=lookback, batch_limit=limit)
+
     @patch("precog.schedulers.temporal_alignment_writer.get_cursor")
     def test_null_prices_handled(self, mock_get_cursor: MagicMock) -> None:
         """NULL price fields remain None (not Decimal)."""

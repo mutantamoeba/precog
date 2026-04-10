@@ -99,6 +99,8 @@ _UNALIGNED_QUERY = """
         LIMIT 1
     ) gs
     WHERE e.game_id IS NOT NULL
+      -- psycopg2 substitutes %s inside the string literal, producing
+      -- e.g. INTERVAL '600 seconds'. Safe: lookback_seconds is typed int.
       AND ms.row_start_ts > NOW() - INTERVAL '%s seconds'
       AND NOT EXISTS (
           SELECT 1 FROM temporal_alignment ta
@@ -131,6 +133,12 @@ def find_unaligned_pairs(
 
     Returns list of dicts ready for insert_temporal_alignment_batch().
     """
+    if lookback_seconds <= 0 or batch_limit <= 0:
+        raise ValueError(
+            f"lookback_seconds and batch_limit must be positive, "
+            f"got {lookback_seconds=}, {batch_limit=}"
+        )
+
     with get_cursor() as cur:
         cur.execute(_UNALIGNED_QUERY, (lookback_seconds, batch_limit))
         rows = cur.fetchall()
