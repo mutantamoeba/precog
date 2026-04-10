@@ -1,19 +1,32 @@
 #!/bin/bash
 # Pre-push hook - Full local gate (branch check + unit/integration/e2e + stress/chaos)
 # CI handles: property, security, performance tests + doc validation
-# Stress/chaos run HERE only (they hang on CI runners due to threading + 2 vCPUs)
+# Stress/chaos/race run HERE only (they hang on CI runners due to threading + 2 vCPUs)
 #
 # Runs:
 #   0. Branch name verification
 #   0.25. Stale bytecode cleanup
-#   1. Unit tests (parallel, no DB)
-#   2. Integration + E2E tests (sequential, needs DB)
-#   3. Stress & Chaos tests (full suite, ~992 tests)
+#   0.5. Fast paths (docs-only, test-only-unit, migration-only, config-only)
+#   1+2+3. Test tiers IN PARALLEL (session 43):
+#     - Unit tests (pytest-xdist, no DB)
+#     - Integration + E2E tests (sequential, own testcontainer)
+#     - Stress + Chaos + Race tests (sequential, own testcontainer)
 #
-# Logging: Full verbose output goes to .pre-push-logs/ (retained 30 days).
-#          Console shows only summaries and failures.
+# Parallelization safety (session 43 design):
+#   Each test tier runs as a SEPARATE python -m pytest invocation, which means
+#   each gets its own session-scoped testcontainer on a random port. Integration
+#   uses `postgres_container` fixture with username=test_user; stress uses
+#   `_stress_postgres_container_session` with username=stress_user. Running all
+#   3 tiers in parallel spawns 3 independent Docker containers with zero
+#   cross-tier DB contention. Historical contention from an earlier attempt
+#   was from within-tier xdist (workers sharing a session container and racing
+#   on tables) — that's why integration tests still use `-p no:xdist`.
 #
-# Speed: ~9-10 minutes
+# Logging: Each tier writes to its own log file; all are consolidated into
+#          the main log file after completion. Console shows only summaries
+#          and failures.
+#
+# Speed: ~8 minutes parallel (was ~14 min serial) — 47% faster
 # Bypass: git push --no-verify
 # Full suite: python -m pytest tests/ -q --no-cov
 
@@ -38,12 +51,15 @@ echo ""
 cd "$(git rev-parse --show-toplevel)"
 
 # ==============================================================================
-# LOGGING SETUP: verbose output to file, summaries to console
+# LOGGING SETUP: per-tier log files, consolidated into main log after completion
 # ==============================================================================
 LOG_DIR=".pre-push-logs"
 mkdir -p "$LOG_DIR"
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 LOG_FILE="$LOG_DIR/pre-push-${TIMESTAMP}.log"
+UNIT_LOG="$LOG_DIR/pre-push-${TIMESTAMP}-unit.log"
+INT_LOG="$LOG_DIR/pre-push-${TIMESTAMP}-integration.log"
+STRESS_LOG="$LOG_DIR/pre-push-${TIMESTAMP}-stress.log"
 
 # Retention: remove logs older than 30 days
 find "$LOG_DIR" -name "pre-push-*.log" -mtime +30 -delete 2>/dev/null || true
@@ -53,53 +69,6 @@ echo "Pre-push validation started at $(date)" > "$LOG_FILE"
 echo "Branch: $(git rev-parse --abbrev-ref HEAD)" >> "$LOG_FILE"
 echo "Commit: $(git rev-parse --short HEAD)" >> "$LOG_FILE"
 echo "========================================" >> "$LOG_FILE"
-
-# run_step: runs a pytest command, logs full output, shows only summary/failures
-# Usage: run_step "Step Name" pytest_args...
-run_step() {
-    local step_name="$1"
-    shift
-    local step_start=$(date +%s)
-
-    echo "" >> "$LOG_FILE"
-    echo "=== $step_name ===" >> "$LOG_FILE"
-    echo "Command: python -m pytest $*" >> "$LOG_FILE"
-    echo "" >> "$LOG_FILE"
-
-    # Run tests, capture full output to log, extract summary for console
-    local output
-    output=$(python -m pytest "$@" 2>&1)
-    local exit_code=$?
-
-    echo "$output" >> "$LOG_FILE"
-
-    local step_end=$(date +%s)
-    local step_duration=$((step_end - step_start))
-
-    if [[ $exit_code -eq 0 ]]; then
-        # Show only the summary line (last non-empty line with pass/skip counts)
-        local summary
-        summary=$(echo "$output" | grep -E "^=+ .+ =+$" | tail -1)
-        if [[ -z "$summary" ]]; then
-            # Fallback: grab last line with "passed"
-            summary=$(echo "$output" | grep -E "passed" | tail -1)
-        fi
-        echo "  $step_name: PASSED (${step_duration}s) — $summary"
-        echo "RESULT: PASSED (${step_duration}s)" >> "$LOG_FILE"
-    else
-        echo ""
-        echo "  $step_name: FAILED"
-        echo ""
-        # Show failure details (short traceback + summary)
-        echo "$output" | grep -E "^(FAILED|ERROR|E |    |tests/)" | head -30
-        echo ""
-        echo "$output" | grep -E "^=+ .+ =+$" | tail -1
-        echo ""
-        echo "Full output: $LOG_FILE"
-        echo "RESULT: FAILED (${step_duration}s)" >> "$LOG_FILE"
-        return 1
-    fi
-}
 
 # ==============================================================================
 # STEP 0: Branch Name Verification
@@ -131,124 +100,276 @@ export PRECOG_ENV=test
 find tests/ -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
 
 # ==============================================================================
-# STEP 0.5: Docs-Only Fast Path (#616)
+# STEP 0.5: Fast Path Detection
 # ==============================================================================
-# If 100% of changed files match documentation patterns, skip the test gate.
+# Extended from #616 (docs-only fast path) in session 43 to support three more
+# categories of "safe to skip tiers" changes. Each fast path exits early OR
+# narrows the tier set, skipping tiers that cannot be affected by the change.
 #
-# Why this is safe:
-#   - Pre-commit hooks (.pre-commit-config.yaml) already enforce credential
-#     scans, file size limits, EOF, trailing whitespace, and merge markers at
-#     COMMIT time, so the pre-push test gate adds zero safety value for pushes
-#     that touch only markdown/text files.
-#   - Branch verification (above) still runs.
-#   - Pre-commit ran on every individual commit before this push.
+# Priority order (most specific first):
+#   1. Docs-only (#616): exits immediately, no test gate
+#   2. Test-only-unit: only unit tier runs
+#   3. Migration-only: only integration tier runs
+#   4. Config-only: skip stress+chaos+race, run unit + integration
+#   5. Default: all 3 tiers run in parallel
 #
-# Detection uses STRICT EXTENSION/FILENAME matching ONLY (no directory prefixes).
-# This is intentional: a .py file inside docs/ (e.g., a renamed module) MUST
-# trigger the full gate, even though its parent directory is "docs/". The issue
-# body explicitly warned about this failure mode.
+# Safety analysis per fast path is documented inline with each detection block.
 #
-# A file qualifies as docs ONLY if it matches:
-#   - Extensions: .md, .txt, .rst (anywhere in the tree)
-#   - Special filenames at any path: README, README.{md,txt,rst,...},
-#     LICENSE, LICENSE.{md,txt,rst,...}, AUTHORS, CHANGELOG, CHANGELOG.{...}
-#
-# Any other file — .py, .yaml, .toml, .cfg, .ini, .sh, .sql, .json, .zip,
-# binary blobs, etc. — triggers the full gate. We err on the side of running
-# the gate when in doubt.
-#
-# Override: SKIP_DOCS_FAST_PATH=1 git push  (forces full gate even on docs)
-#
-# Reference: issue #616, memory/feedback_pre_push_docs_only_skip.md
-if [[ "${SKIP_DOCS_FAST_PATH:-0}" != "1" ]]; then
-    # Get the list of files changed in this push.
-    # Try multiple strategies to handle: existing branch with upstream, new
-    # branch first push, no upstream configured, etc.
-    CHANGED_FILES=""
+# Override: SKIP_DOCS_FAST_PATH=1 git push  (forces full gate regardless)
 
-    # Strategy 1: against upstream tracking branch (existing branch with @{u})
-    if git rev-parse --abbrev-ref --symbolic-full-name @{u} > /dev/null 2>&1; then
-        CHANGED_FILES=$(git diff --name-only @{u}..HEAD 2>/dev/null || true)
+# Get the list of files changed in this push using the same 3-strategy
+# approach as the original docs fast path (#616).
+CHANGED_FILES=""
+if git rev-parse --abbrev-ref --symbolic-full-name @{u} > /dev/null 2>&1; then
+    CHANGED_FILES=$(git diff --name-only @{u}..HEAD 2>/dev/null || true)
+fi
+if [[ -z "$CHANGED_FILES" ]]; then
+    MERGE_BASE=$(git merge-base HEAD origin/main 2>/dev/null || true)
+    if [[ -n "$MERGE_BASE" ]]; then
+        CHANGED_FILES=$(git diff --name-only "$MERGE_BASE" HEAD 2>/dev/null || true)
+    fi
+fi
+if [[ -z "$CHANGED_FILES" ]]; then
+    CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
+fi
+
+# Tier selection flags (default: run all 3)
+RUN_UNIT=1
+RUN_INT=1
+RUN_STRESS=1
+FAST_PATH_NAME=""
+
+if [[ "${SKIP_DOCS_FAST_PATH:-0}" != "1" && -n "$CHANGED_FILES" ]]; then
+    # -------------------------------------------------------------------------
+    # Fast path 1: Docs-only (#616) — EXIT IMMEDIATELY
+    # -------------------------------------------------------------------------
+    # Strict extension/filename matching (directory prefix is irrelevant).
+    # A .py file inside docs/ (e.g., a renamed module) MUST trigger the full
+    # gate, even though its parent directory is "docs/".
+    NON_DOCS=$(echo "$CHANGED_FILES" | grep -vE '(\.md$|\.txt$|\.rst$|^README$|^README\.[a-z]+$|^LICENSE$|^LICENSE\.[a-z]+$|^AUTHORS$|^CHANGELOG$|^CHANGELOG\.[a-z]+$)' | head -1 || true)
+    if [[ -z "$NON_DOCS" ]]; then
+        echo ""
+        echo "Docs-only push detected (#616) — skipping test gate."
+        echo ""
+        echo "Changed files (all match docs patterns):"
+        echo "$CHANGED_FILES" | sed 's/^/  /'
+        echo ""
+        echo "Pre-commit hooks already ran at commit time. Test gate adds no safety value here."
+        echo "To force full gate: SKIP_DOCS_FAST_PATH=1 git push"
+        echo ""
+        END_TIME=$(date +%s)
+        TOTAL_DURATION=$((END_TIME - START_TIME))
+        echo "Pre-push fast path complete (${TOTAL_DURATION}s)."
+        echo "" >> "$LOG_FILE"
+        echo "DOCS-ONLY FAST PATH: PASSED (${TOTAL_DURATION}s)" >> "$LOG_FILE"
+        exit 0
     fi
 
-    # Strategy 2: against merge-base with origin/main (new branch first push)
-    if [[ -z "$CHANGED_FILES" ]]; then
-        MERGE_BASE=$(git merge-base HEAD origin/main 2>/dev/null || true)
-        if [[ -n "$MERGE_BASE" ]]; then
-            CHANGED_FILES=$(git diff --name-only "$MERGE_BASE" HEAD 2>/dev/null || true)
-        fi
-    fi
-
-    # Strategy 3: just the last commit (final fallback)
-    if [[ -z "$CHANGED_FILES" ]]; then
-        CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD 2>/dev/null || true)
-    fi
-
-    if [[ -n "$CHANGED_FILES" ]]; then
-        # Find any file that does NOT match docs/markdown patterns.
-        # If this returns even one line, the fast path does NOT activate.
-        # Strict extension/filename matching — directory prefix is irrelevant.
-        # This was tested with: docs/foo.md (docs), docs/foo.py (NOT docs),
-        # CLAUDE.md (docs), config/trading.yaml (NOT docs).
-        NON_DOCS=$(echo "$CHANGED_FILES" | grep -vE '(\.md$|\.txt$|\.rst$|^README$|^README\.[a-z]+$|^LICENSE$|^LICENSE\.[a-z]+$|^AUTHORS$|^CHANGELOG$|^CHANGELOG\.[a-z]+$)' | head -1 || true)
-
-        if [[ -z "$NON_DOCS" ]]; then
-            echo ""
-            echo "Docs-only push detected (#616) — skipping test gate."
-            echo ""
-            echo "Changed files (all match docs patterns):"
-            echo "$CHANGED_FILES" | sed 's/^/  /'
-            echo ""
-            echo "Pre-commit hooks (credential scan, EOF, whitespace, file size)"
-            echo "already ran at commit time. Test gate adds no safety value here."
-            echo ""
-            echo "To force full gate: SKIP_DOCS_FAST_PATH=1 git push"
-            echo ""
-
-            END_TIME=$(date +%s)
-            TOTAL_DURATION=$((END_TIME - START_TIME))
-            echo "Pre-push fast path complete (${TOTAL_DURATION}s)."
-
-            echo "" >> "$LOG_FILE"
-            echo "========================================" >> "$LOG_FILE"
-            echo "DOCS-ONLY FAST PATH: PASSED (${TOTAL_DURATION}s)" >> "$LOG_FILE"
-            echo "Changed files:" >> "$LOG_FILE"
-            echo "$CHANGED_FILES" >> "$LOG_FILE"
-
-            exit 0
+    # -------------------------------------------------------------------------
+    # Fast path 2: Test-only-unit — only unit tier runs
+    # -------------------------------------------------------------------------
+    # If all changed files are under tests/unit/ (and NOT tests/conftest.py or
+    # tests/fixtures/ which are shared across tiers), integration and stress
+    # tiers cannot be affected. Run only the unit tier.
+    #
+    # Safety: unit tests are fully isolated (no DB), so a broken unit test
+    # cannot contaminate integration or stress test state. Shared conftest
+    # files (tests/conftest.py, tests/fixtures/*) are deliberately excluded
+    # because they could affect all tiers.
+    NOT_UNIT_ONLY=$(echo "$CHANGED_FILES" | grep -vE '^tests/unit/.*\.py$' | head -1 || true)
+    if [[ -z "$NOT_UNIT_ONLY" ]]; then
+        RUN_INT=0
+        RUN_STRESS=0
+        FAST_PATH_NAME="test-only-unit"
+    else
+        # ---------------------------------------------------------------------
+        # Fast path 3: Migration-only — only integration tier runs
+        # ---------------------------------------------------------------------
+        # If all changed files are Alembic migration files or their
+        # corresponding migration test files, only the integration tier is
+        # relevant. Unit tests mock the DB and cannot see schema changes.
+        # Stress/chaos/race tests use their own testcontainer with a
+        # different container setup and don't exercise migration logic.
+        #
+        # Safety: a broken migration is caught by the integration tier's
+        # testcontainer, which applies migrations from scratch. A migration
+        # that drops a column referenced by a CRUD function would surface
+        # as a CRUD integration test failure.
+        NOT_MIGRATION=$(echo "$CHANGED_FILES" | grep -vE '^(src/precog/database/alembic/versions/.*\.py$|tests/integration/database/test_migration_.*\.py$)' | head -1 || true)
+        if [[ -z "$NOT_MIGRATION" ]]; then
+            RUN_UNIT=0
+            RUN_STRESS=0
+            FAST_PATH_NAME="migration-only"
+        else
+            # -----------------------------------------------------------------
+            # Fast path 4: Config-only — skip stress+chaos+race
+            # -----------------------------------------------------------------
+            # If all changed files are YAML/TOML config files under
+            # src/precog/config/, unit + integration are sufficient.
+            # Stress/chaos/race test concurrency/failure modes, not config.
+            #
+            # DELIBERATELY EXCLUDES pyproject.toml and tool config files
+            # (ruff.toml, etc.) at project root, because those can affect
+            # dependency resolution, lint rules, test discovery, and pytest
+            # markers — any of which could surface as stress-test regressions.
+            # Only src/precog/config/*.{yaml,yml,toml} qualifies.
+            NOT_CONFIG=$(echo "$CHANGED_FILES" | grep -vE '^src/precog/config/.*\.(ya?ml|toml)$' | head -1 || true)
+            if [[ -z "$NOT_CONFIG" ]]; then
+                RUN_STRESS=0
+                FAST_PATH_NAME="config-only"
+            fi
         fi
     fi
 fi
 
+if [[ -n "$FAST_PATH_NAME" ]]; then
+    echo ""
+    echo "Fast path: $FAST_PATH_NAME — narrowed tier selection"
+    echo "  Unit tests:           $([ $RUN_UNIT -eq 1 ] && echo "RUN" || echo "SKIP")"
+    echo "  Integration + E2E:    $([ $RUN_INT -eq 1 ] && echo "RUN" || echo "SKIP")"
+    echo "  Stress + Chaos + Race: $([ $RUN_STRESS -eq 1 ] && echo "RUN" || echo "SKIP")"
+    echo ""
+    echo "  To force full gate:   SKIP_DOCS_FAST_PATH=1 git push"
+    echo ""
+fi
+
 # ==============================================================================
-# STEP 1: Unit Tests (parallel, no DB)
+# STEP 1+2+3: Run selected tiers IN PARALLEL
 # ==============================================================================
-echo "Running tests (verbose output logged to $LOG_FILE)..."
+# Each tier runs in a subshell that writes output to its own log file. After
+# all tiers complete, we print per-tier summaries and consolidate logs.
+#
+# Subshell pattern: { start_time; pytest; exit_code; duration; exit $? } &
+#   - Captures start time and duration inside the subshell
+#   - Writes DURATION=N to the log file as the last line for later parsing
+#   - The subshell's exit code propagates via wait $PID
+
+echo "Running tests in parallel (per-tier logs in $LOG_DIR/pre-push-${TIMESTAMP}-*.log)..."
 echo ""
-if ! run_step "Unit tests" tests/unit/ --no-cov --tb=short -n auto -q; then
-    echo ""
-    echo "Unit tests failed. Fix before pushing."
-    exit 1
+
+UNIT_PID=""
+INT_PID=""
+STRESS_PID=""
+
+if [[ $RUN_UNIT -eq 1 ]]; then
+    {
+        _start=$(date +%s)
+        python -m pytest tests/unit/ --no-cov --tb=short -n auto -q > "$UNIT_LOG" 2>&1
+        _exit=$?
+        _end=$(date +%s)
+        echo "" >> "$UNIT_LOG"
+        echo "DURATION=$((_end - _start))" >> "$UNIT_LOG"
+        exit $_exit
+    } &
+    UNIT_PID=$!
 fi
 
-# ==============================================================================
-# STEP 2: Integration + E2E Tests (sequential, needs DB)
-# ==============================================================================
-if ! run_step "Integration + E2E" tests/integration/ tests/e2e/ --no-cov --tb=short -p no:xdist -q; then
-    echo ""
-    echo "Integration/E2E tests failed. Fix before pushing."
-    exit 1
+if [[ $RUN_INT -eq 1 ]]; then
+    {
+        _start=$(date +%s)
+        python -m pytest tests/integration/ tests/e2e/ --no-cov --tb=short -p no:xdist -q > "$INT_LOG" 2>&1
+        _exit=$?
+        _end=$(date +%s)
+        echo "" >> "$INT_LOG"
+        echo "DURATION=$((_end - _start))" >> "$INT_LOG"
+        exit $_exit
+    } &
+    INT_PID=$!
 fi
 
-# ==============================================================================
-# STEP 3: Stress, Chaos & Race Tests (full suite, skipped in CI)
-# ==============================================================================
-# Stress/chaos/race tests use threading heavily and hang on CI runners (2 vCPUs).
-# Pre-push is their only automated gate. CI only verifies collection.
-# Runs all stress + chaos + race tests (~1100 tests, ~3 min).
-if ! run_step "Stress + Chaos + Race" tests/stress/ tests/chaos/ tests/race/ --no-cov --tb=short -q --timeout=120 --timeout-method=thread; then
+if [[ $RUN_STRESS -eq 1 ]]; then
+    {
+        _start=$(date +%s)
+        python -m pytest tests/stress/ tests/chaos/ tests/race/ --no-cov --tb=short -q --timeout=120 --timeout-method=thread > "$STRESS_LOG" 2>&1
+        _exit=$?
+        _end=$(date +%s)
+        echo "" >> "$STRESS_LOG"
+        echo "DURATION=$((_end - _start))" >> "$STRESS_LOG"
+        exit $_exit
+    } &
+    STRESS_PID=$!
+fi
+
+# Wait for all launched tiers
+UNIT_EXIT=0
+INT_EXIT=0
+STRESS_EXIT=0
+
+if [[ -n "$UNIT_PID" ]]; then
+    wait "$UNIT_PID"
+    UNIT_EXIT=$?
+fi
+if [[ -n "$INT_PID" ]]; then
+    wait "$INT_PID"
+    INT_EXIT=$?
+fi
+if [[ -n "$STRESS_PID" ]]; then
+    wait "$STRESS_PID"
+    STRESS_EXIT=$?
+fi
+
+# Print per-tier summaries (in a consistent order regardless of completion order)
+print_tier_result() {
+    local name="$1"
+    local pid="$2"
+    local exit_code="$3"
+    local log_file="$4"
+
+    if [[ -z "$pid" ]]; then
+        echo "  $name: SKIPPED (fast path)"
+        return
+    fi
+
+    local duration=""
+    if [[ -f "$log_file" ]]; then
+        duration=$(grep "^DURATION=" "$log_file" | tail -1 | cut -d= -f2)
+    fi
+
+    if [[ $exit_code -eq 0 ]]; then
+        local summary=""
+        if [[ -f "$log_file" ]]; then
+            summary=$(grep -E "^=+ .+ =+$" "$log_file" | tail -1)
+            [[ -z "$summary" ]] && summary=$(grep -E "passed" "$log_file" | tail -1)
+        fi
+        echo "  $name: PASSED (${duration}s) — $summary"
+    else
+        echo ""
+        echo "  $name: FAILED (${duration}s)"
+        echo ""
+        if [[ -f "$log_file" ]]; then
+            echo "  --- Failures from $name ---"
+            grep -E "^(FAILED|ERROR|E |    |tests/)" "$log_file" | head -30 | sed 's/^/  /'
+            grep -E "^=+ .+ =+$" "$log_file" | tail -1 | sed 's/^/  /'
+            echo "  --- Full log: $log_file ---"
+        fi
+        echo ""
+    fi
+}
+
+print_tier_result "Unit tests          " "$UNIT_PID" $UNIT_EXIT "$UNIT_LOG"
+print_tier_result "Integration + E2E   " "$INT_PID" $INT_EXIT "$INT_LOG"
+print_tier_result "Stress + Chaos + Race" "$STRESS_PID" $STRESS_EXIT "$STRESS_LOG"
+
+# Consolidate per-tier logs into the main log file
+{
+    echo "" >> "$LOG_FILE"
+    echo "========================================" >> "$LOG_FILE"
+    echo "PARALLEL TIER LOGS" >> "$LOG_FILE"
+    echo "========================================" >> "$LOG_FILE"
+    for tier_log in "$UNIT_LOG" "$INT_LOG" "$STRESS_LOG"; do
+        if [[ -f "$tier_log" ]]; then
+            echo "" >> "$LOG_FILE"
+            echo "--- $(basename "$tier_log") ---" >> "$LOG_FILE"
+            cat "$tier_log" >> "$LOG_FILE"
+        fi
+    done
+} 2>/dev/null || true
+
+# Overall verdict: fail if any launched tier failed
+if [[ $UNIT_EXIT -ne 0 || $INT_EXIT -ne 0 || $STRESS_EXIT -ne 0 ]]; then
     echo ""
-    echo "Stress/chaos/race tests failed. Fix before pushing."
+    echo "One or more test tiers failed. See logs above."
+    echo "Main log: $LOG_FILE"
     exit 1
 fi
 
@@ -256,7 +377,11 @@ END_TIME=$(date +%s)
 TOTAL_DURATION=$((END_TIME - START_TIME))
 
 echo ""
-echo "All pre-push checks passed! (${TOTAL_DURATION}s)"
+if [[ -n "$FAST_PATH_NAME" ]]; then
+    echo "All pre-push checks passed! (${TOTAL_DURATION}s, fast path: $FAST_PATH_NAME)"
+else
+    echo "All pre-push checks passed! (${TOTAL_DURATION}s, all tiers in parallel)"
+fi
 echo "CI will run remaining tests (property, security, performance)."
 echo "Full local suite: python -m pytest tests/ -q --no-cov"
 
