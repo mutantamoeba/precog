@@ -236,37 +236,50 @@ def clean_test_data(db_cursor):
     except Exception:
         pass  # Already rolled back or no active transaction
 
-    # Cleanup before test (in reverse FK order)
-    # Delete child records first - trades/positions reference strategies/models/markets
-    # Migration 0022: downstream tables use market_internal_id INTEGER FK with ON DELETE CASCADE.
-    # Deleting from markets will CASCADE to trades/positions/edges/settlements.
-    # Still clean up by strategy/model references for non-market-linked test data.
+    # Cleanup before test (strict reverse FK order — RESTRICT requires children first).
+    # Migration 0057 converted all CASCADE/SET NULL FKs to RESTRICT, so deleting
+    # a parent with existing children raises ForeignKeyViolation. Must delete
+    # from leaf tables up to root tables.
+    #
+    # Dependency chain (leaf → root):
+    #   temporal_alignment → market_snapshots → markets → events → series
+    #   exit_attempts/position_exits → positions → markets
+    #   trades → orders → markets/strategies/models
+    #   account_ledger → orders
+    #   settlements → markets
+    #   edges → markets/strategies/models
+    #   orderbook_snapshots → markets
+    #   market_trades → markets
+
+    # Tier 1: Leaf tables (no children reference these)
+    db_cursor.execute("DELETE FROM temporal_alignment")
+    db_cursor.execute("DELETE FROM exit_attempts")
+    db_cursor.execute("DELETE FROM position_exits")
+    db_cursor.execute("DELETE FROM account_ledger")
     db_cursor.execute("DELETE FROM settlements")
-    # Try to delete orders/positions referencing test strategies/models (may fail in CI)
-    # Migration 0025: strategy_id/model_id moved from trades to orders table
-    # Delete fixture data (99901+) AND any SERIAL-generated data (1-99900)
-    try:
-        db_cursor.execute(
-            "DELETE FROM orders WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
-        )
-        db_cursor.execute(
-            "DELETE FROM positions WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
-        )
-    except Exception:
-        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
-    # Delete markets by ticker pattern — CASCADE handles downstream tables
-    # (edges, positions, trades, settlements via market_internal_id FK)
+    db_cursor.execute("DELETE FROM market_trades")
+    db_cursor.execute("DELETE FROM orderbook_snapshots")
+
+    # Tier 2: Tables with only leaf children (already cleared above)
+    db_cursor.execute("DELETE FROM trades")
+    db_cursor.execute("DELETE FROM orders")
+    db_cursor.execute("DELETE FROM market_snapshots")
+
+    # Tier 3: Core tables
+    db_cursor.execute("DELETE FROM edges")
+    db_cursor.execute("DELETE FROM positions")
     db_cursor.execute("DELETE FROM markets WHERE ticker LIKE 'TEST-%'")
+
+    # Tier 4: Dimension/reference tables
     db_cursor.execute("DELETE FROM events WHERE external_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
-    # Clean up ALL test models and strategies (fixture data + SERIAL-generated)
-    # This ensures clean state for property tests that create many strategies
+
+    # Tier 5: Root tables
     try:
         db_cursor.execute("DELETE FROM probability_models")
         db_cursor.execute("DELETE FROM strategies")
     except Exception:
         db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
-    # Delete both uppercase TEST-PLATFORM- and lowercase test_ platforms
     db_cursor.execute(
         "DELETE FROM platforms WHERE platform_id LIKE 'test_%' OR platform_id LIKE 'TEST-PLATFORM-%'"
     )
@@ -334,26 +347,23 @@ def clean_test_data(db_cursor):
 
     yield  # Test runs here
 
-    # Cleanup after test (in reverse FK order)
-    # Migration 0022: downstream tables use market_internal_id INTEGER FK with ON DELETE CASCADE.
-    # Deleting from markets will CASCADE to trades/positions/edges/settlements.
-    # Still clean up by strategy/model references for non-market-linked test data.
-    # Migration 0025: strategy_id/model_id moved from trades to orders table
-    try:
-        db_cursor.execute(
-            "DELETE FROM orders WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
-        )
-        db_cursor.execute(
-            "DELETE FROM positions WHERE strategy_id IS NOT NULL OR model_id IS NOT NULL"
-        )
-    except Exception:
-        db_cursor.connection.rollback()  # CRITICAL: Clear aborted transaction state
-    # Delete markets by ticker pattern — CASCADE handles downstream tables
+    # Cleanup after test (strict reverse FK order — RESTRICT, no CASCADE).
+    # Same tier structure as setup cleanup above.
+    db_cursor.execute("DELETE FROM temporal_alignment")
+    db_cursor.execute("DELETE FROM exit_attempts")
+    db_cursor.execute("DELETE FROM position_exits")
+    db_cursor.execute("DELETE FROM account_ledger")
+    db_cursor.execute("DELETE FROM settlements")
+    db_cursor.execute("DELETE FROM market_trades")
+    db_cursor.execute("DELETE FROM orderbook_snapshots")
+    db_cursor.execute("DELETE FROM trades")
+    db_cursor.execute("DELETE FROM orders")
+    db_cursor.execute("DELETE FROM market_snapshots")
+    db_cursor.execute("DELETE FROM edges")
+    db_cursor.execute("DELETE FROM positions")
     db_cursor.execute("DELETE FROM markets WHERE ticker LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM events WHERE external_id LIKE 'TEST-%'")
     db_cursor.execute("DELETE FROM series WHERE series_id LIKE 'TEST-%'")
-    # Clean up ALL test models and strategies (fixture data + SERIAL-generated)
-    # This ensures clean state for next test
     try:
         db_cursor.execute("DELETE FROM probability_models")
         db_cursor.execute("DELETE FROM strategies")
