@@ -282,6 +282,19 @@ def create_position(
         RETURNING id
     """
 
+    # trailing_stop_state is wrapped in psycopg2.extras.Json with the
+    # Decimal-aware ``_jsonb_dumps`` encoder. psycopg2 has no default
+    # ``dict -> jsonb`` adapter, and plain ``json.dumps`` cannot serialize
+    # ``Decimal``. The production position_manager builds this dict with
+    # Decimal values at activation_price, highest_price, current_stop_price,
+    # and nested config.* keys. Without this wrap, every non-None caller
+    # crashes at the INSERT boundary with ``ProgrammingError: can't adapt
+    # type 'dict'`` or ``TypeError: Object of type Decimal is not JSON
+    # serializable``. The ``is not None`` conditional is critical --
+    # wrapping ``None`` with ``Json(None)`` would serialize as the JSONB
+    # string ``"null"`` instead of a SQL NULL, silently breaking any
+    # ``WHERE trailing_stop_state IS NULL`` query. Mirrors the canonical
+    # pattern in ``set_trailing_stop_state`` (#629 PR). Fixes #706.
     params = (
         market_internal_id,
         strategy_id,
@@ -291,7 +304,7 @@ def create_position(
         entry_price,
         target_price,
         stop_loss_price,
-        trailing_stop_state,
+        Json(trailing_stop_state, dumps=_jsonb_dumps) if trailing_stop_state is not None else None,
         position_metadata,
         calculated_probability,
         edge_at_entry,
@@ -564,6 +577,14 @@ def update_position_price(
             # column silently flipped non-'live' positions to the column's
             # DEFAULT 'live' on every price update -- cross-environment
             # contamination with no audit signal).
+            # trailing_stop_state is wrapped in psycopg2.extras.Json with the
+            # Decimal-aware ``_jsonb_dumps`` encoder. See the canonical
+            # rationale in ``set_trailing_stop_state`` (#629 PR) and the
+            # ``_jsonb_dumps`` docstring. The ``is not None`` conditional is
+            # critical: wrapping ``None`` with ``Json(None)`` would serialize
+            # as the JSONB string ``"null"`` instead of a SQL NULL, silently
+            # breaking ``WHERE trailing_stop_state IS NULL`` queries. Fixes
+            # #666 (latent dict-adapter bug on the update path).
             cur.execute(
                 """
                 INSERT INTO positions (
@@ -591,7 +612,9 @@ def update_position_price(
                     * current["quantity"],  # unrealized_pnl
                     current["target_price"],
                     current["stop_loss_price"],
-                    fresh_trailing_stop,
+                    Json(fresh_trailing_stop, dumps=_jsonb_dumps)
+                    if fresh_trailing_stop is not None
+                    else None,
                     current["position_metadata"],
                     current["status"],
                     current["entry_time"],
@@ -757,6 +780,18 @@ def close_position(
             # key). row_start_ts matches row_end_ts on the historical row
             # for Pattern 49 temporal continuity. execution_environment is
             # preserved from the original position.
+            #
+            # trailing_stop_state is wrapped in psycopg2.extras.Json with the
+            # Decimal-aware ``_jsonb_dumps`` encoder. See the canonical
+            # rationale in ``set_trailing_stop_state`` (#629 PR) and the
+            # ``_jsonb_dumps`` docstring. The ``is not None`` conditional is
+            # critical: wrapping ``None`` with ``Json(None)`` would serialize
+            # as the JSONB string ``"null"`` instead of a SQL NULL, silently
+            # breaking ``WHERE trailing_stop_state IS NULL`` queries. Fixes
+            # #666 (latent dict-adapter bug on the close path). Note:
+            # ``current["trailing_stop_state"]`` was already decoded from
+            # JSONB to a plain ``dict`` by psycopg2's JSONB adapter when the
+            # row was re-fetched on line 693 above, so it is safe to rewrap.
             cur.execute(
                 """
                 INSERT INTO positions (
@@ -784,7 +819,9 @@ def close_position(
                     realized_pnl,
                     current["target_price"],
                     current["stop_loss_price"],
-                    current["trailing_stop_state"],
+                    Json(current["trailing_stop_state"], dumps=_jsonb_dumps)
+                    if current["trailing_stop_state"] is not None
+                    else None,
                     current["position_metadata"],
                     current["entry_time"],
                     now,  # exit_time
@@ -1056,10 +1093,9 @@ def set_trailing_stop_state(
             # trailing_stop_state is wrapped in psycopg2.extras.Json --
             # psycopg2's default adapter does not handle plain dicts, so
             # this is required whenever we pass a dict parameter bound for
-            # a JSONB column. The canonical update_position_price and
-            # close_position functions pass ``current["trailing_stop_state"]``
-            # straight through without wrapping, which is a latent bug
-            # (tracked separately) when the field is non-None on re-insert.
+            # a JSONB column. The sibling ``update_position_price``,
+            # ``close_position``, and ``create_position`` functions were
+            # updated to adopt the same pattern (#666, #706).
             cur.execute(
                 """
                 INSERT INTO positions (
