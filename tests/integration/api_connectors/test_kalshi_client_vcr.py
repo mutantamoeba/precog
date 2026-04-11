@@ -1,5 +1,5 @@
 """
-Integration tests for Kalshi API client using VCR cassettes (Pattern 13).
+Integration tests for Kalshi API client using VCR cassettes (Pattern 22).
 
 Tests the full KalshiClient integration using REAL recorded API responses.
 These tests use the VCR (Video Cassette Recorder) pattern:
@@ -20,20 +20,20 @@ Cassettes recorded: tests/cassettes/kalshi_*.yaml
 - kalshi_get_fills.yaml (1 historical fill)
 - kalshi_get_settlements.yaml (0 settlements)
 
-Pattern 13 Exception: External API mock
+Pattern 22 (External API Test Mocking): VCR OR live, never hand-written mocks.
 These tests use VCR to replay REAL API responses. They test API client behavior
 without touching the database, so database fixtures (db_pool, db_cursor, clean_test_data)
-are not applicable. Pattern 13 lesson learned was about DATABASE connection pool mocking,
-not HTTP interaction recording.
+are not applicable. The historical Pattern 13 lesson was about DATABASE connection
+pool mocking, not HTTP interaction recording; the external-API rule is now Pattern 22.
 
 Related Requirements:
     - REQ-API-001: Kalshi API Integration
     - REQ-API-002: RSA-PSS Authentication
     - REQ-SYS-003: Decimal Precision for Prices
-    - REQ-TEST-002: Integration tests use real API fixtures (Pattern 13)
+    - REQ-TEST-002: Integration tests use real API fixtures (Pattern 22)
 
 Reference:
-    - Pattern 13 (CLAUDE.md): Real Fixtures, Not Mocks
+    - Pattern 22 (CLAUDE.md Critical Pattern #7 + DEVELOPMENT_PATTERNS_V1.31.md)
     - GitHub Issue #124: Fix integration test mocks
     - Phase 1.5 Test Audit: 77% false positive rate from mocks
 """
@@ -69,8 +69,8 @@ class TestKalshiClientWithVCR:
     - No mocks needed - uses actual recorded HTTP interactions
 
     Educational Note:
-        Pattern 13: Real Fixtures, Not Mocks
-        -----------------------------------
+        Pattern 22: External API Test Mocking — VCR OR live
+        ----------------------------------------------------
         Problem: Mocks create false positives (tests pass but code broken)
         - Mock returns {"balance": "1234.5678"} but real API returns {"balance": 123456} (cents!)
         - Test passes with mock, fails in production

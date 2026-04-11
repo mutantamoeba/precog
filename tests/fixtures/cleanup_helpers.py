@@ -177,7 +177,16 @@ def _delete_cascade(
 
     for child_table, child_column, delete_rule in children:
         if delete_rule == "SET NULL":
-            # Clear the reference instead of deleting the row.
+            # Clear the reference instead of deleting the child row.
+            #
+            # Non-transitive by design: we UPDATE the FK to NULL and stop.
+            # If the SET NULL child has its own RESTRICT children
+            # (grandchildren of the parent being deleted), those
+            # grandchildren are NOT cleaned up here -- the child row still
+            # exists, so the grandchildren's FKs are still valid. For
+            # full-subtree cleanup use delete_all_test_data; for scoped
+            # cleanup of a specific subtree, call this helper with the
+            # grandchild's parent directly.
             placeholders = ",".join(["%s"] * len(ids))
             cursor.execute(
                 f"UPDATE {child_table} SET {child_column} = NULL "  # noqa: S608
@@ -201,8 +210,21 @@ def _delete_cascade(
 
         # Discover the child's own children (grandchildren of the root)
         # by looking up the child's PK and recursing.
+        #
+        # _visited handles termination when child_pk == child_column; the
+        # guard is unnecessary. The previous ``child_pk != child_column``
+        # check was overly broad and skipped legitimate recursion into
+        # tables where the FK happens to BE the PK, leaving their own
+        # children uncleaned. The _visited set (line ~174) terminates
+        # any same-(table, column) re-entry on the first recursive call.
+        #
+        # Known limitation: self-referential FKs (e.g., ``foo.parent_id ->
+        # foo.id``) terminate on first re-entry via _visited and may leave
+        # uncleaned grandchildren under the same table. No such FK exists
+        # in the current schema (verified via grep across all migrations);
+        # revisit this helper if one is added.
         child_pk = _discover_primary_key(cursor, child_table)
-        if child_pk is not None and child_pk != child_column:
+        if child_pk is not None:
             # Fetch the child row IDs that match our parent ids, then
             # recursively cascade into the child's subtree before deleting.
             placeholders = ",".join(["%s"] * len(ids))
@@ -356,13 +378,17 @@ def delete_venue_with_children(
 ) -> None:
     """Delete venue(s) via dynamic FK discovery.
 
-    In the current schema, ``games.venue_id`` is ``ON DELETE SET NULL``
-    and ``game_states.venue_id`` is ``ON DELETE NO ACTION``. Neither is
-    listed in migration 0057 because both were already RESTRICT-compliant.
-    ``_delete_cascade`` handles both rules automatically: SET NULL becomes
-    an UPDATE to clear the reference, NO ACTION triggers recursive delete
-    of the child rows -- but since tests rarely populate ``game_states``
-    through this path, the NO ACTION branch is usually a no-op.
+    In the current schema (post-migration 0057), both ``games.venue_id``
+    and ``game_states.venue_id`` prevent venue deletion when referenced:
+
+    - ``games.venue_id`` was ``SET NULL`` in migration 0035; migration 0057
+      converted it to ``RESTRICT``.
+    - ``game_states.venue_id`` has been ``NO ACTION`` since the 0001
+      baseline (implicit default). ``NO ACTION`` behaves identically to
+      ``RESTRICT`` for cleanup purposes.
+
+    ``_delete_cascade`` handles both via dynamic FK discovery -- no
+    hardcoded child list needed.
     """
     cursor.execute(
         f"SELECT venue_id FROM venues WHERE {where_clause}",  # noqa: S608
