@@ -114,17 +114,18 @@ def clean_test_markets():
         E2E tests that write to the database need cleanup to be idempotent.
         We delete markets created by the poller to allow re-running tests.
     """
-    # Cleanup before test
+    # Cleanup before test (RESTRICT-safe: delete children before parents)
+    from tests.fixtures.cleanup_helpers import delete_market_with_children
+
     with get_cursor(commit=True) as cur:
-        # Delete markets and events created by kalshi poller (platform_id='kalshi')
-        cur.execute("DELETE FROM markets WHERE platform_id = 'kalshi'")
+        delete_market_with_children(cur, "platform_id = %s", ("kalshi",))
         cur.execute("DELETE FROM events WHERE platform_id = 'kalshi'")
 
     yield
 
-    # Cleanup after test (optional - helps with debugging if commented out)
+    # Cleanup after test
     with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM markets WHERE platform_id = 'kalshi'")
+        delete_market_with_children(cur, "platform_id = %s", ("kalshi",))
         cur.execute("DELETE FROM events WHERE platform_id = 'kalshi'")
 
 
