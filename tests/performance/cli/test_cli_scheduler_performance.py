@@ -50,7 +50,10 @@ class TestSchedulerPerformance:
         p95 = sorted(times)[int(iterations * 0.95)]
         p99 = sorted(times)[int(iterations * 0.99)]
 
-        # Help should be very fast
+        # Help should be very fast.
+        # These bounds measure CLI framework overhead alone (Typer + click +
+        # imports). There is no DB or network I/O on the --help path, so
+        # these are pure dispatch benchmarks.
         assert p50 < 200, f"p50={p50}ms exceeds 200ms"
         assert p95 < 500, f"p95={p95}ms exceeds 500ms"
         assert p99 < 1000, f"p99={p99}ms exceeds 1000ms"
@@ -69,7 +72,12 @@ class TestSchedulerPerformance:
         p50 = statistics.median(times)
         p95 = sorted(times)[int(iterations * 0.95)]
 
-        # Status should be reasonably fast
+        # Status should be reasonably fast.
+        # 500ms is the upper bound for CLI framework overhead alone (Typer +
+        # click + imports). There is no live supervisor or DB connection at
+        # this point -- the autouse cleanup fixture nulls ``_supervisor``
+        # between tests, so the status command falls through to its
+        # no-supervisor branch. This measures dispatch overhead only.
         assert p50 < 500, f"p50={p50}ms exceeds 500ms"
         assert p95 < 1000, f"p95={p95}ms exceeds 1000ms"
 

@@ -1,5 +1,5 @@
 """
-Integration tests for ESPN API client using VCR cassettes (Pattern 13).
+Integration tests for ESPN API client using VCR cassettes (Pattern 22).
 
 Tests the full ESPNClient integration using REAL recorded API responses.
 These tests use the VCR (Video Cassette Recorder) pattern:
@@ -19,18 +19,18 @@ Cassettes recorded: tests/cassettes/espn/*.yaml
 - espn_nfl_live_games.yaml (8 live NFL games with situation data)
 - espn_nba_scoreboard.yaml (7 NBA games)
 
-Pattern 13 Exception: External API mock
+Pattern 22 (External API Test Mocking): VCR OR live, never hand-written mocks.
 These tests use VCR to replay REAL API responses. They test API client behavior
 without touching the database, so database fixtures (db_pool, db_cursor, clean_test_data)
-are not applicable. Pattern 13 lesson learned was about DATABASE connection pool mocking,
-not HTTP interaction recording.
+are not applicable. The historical Pattern 13 lesson was about DATABASE connection
+pool mocking, not HTTP interaction recording; the external-API rule is now Pattern 22.
 
 Related Requirements:
     - REQ-DATA-001: Game State Data Collection
-    - REQ-TEST-002: Integration tests use real API fixtures (Pattern 13)
+    - REQ-TEST-002: Integration tests use real API fixtures (Pattern 22)
 
 Reference:
-    - Pattern 13 (CLAUDE.md): Real Fixtures, Not Mocks
+    - Pattern 22 (CLAUDE.md Critical Pattern #7 + DEVELOPMENT_PATTERNS_V1.31.md)
     - GitHub Issue #180: ESPN E2E test edge cases (down: -1)
     - scripts/record_espn_cassettes.py: Cassette recording script
 """
@@ -63,8 +63,8 @@ class TestESPNClientWithVCR:
     - Edge cases like down: -1 during non-play situations
 
     Educational Note:
-        Pattern 13: Real Fixtures, Not Mocks
-        -----------------------------------
+        Pattern 22: External API Test Mocking — VCR OR live
+        ----------------------------------------------------
         Problem: Mocks create false positives (tests pass but code broken)
         - Mock returns simplified structure but real API has nested events
         - Test passes with mock, fails in production
