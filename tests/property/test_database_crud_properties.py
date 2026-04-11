@@ -999,6 +999,11 @@ def test_check_constraints_enforced(db_pool, clean_test_data, setup_kalshi_platf
 @settings(
     suppress_health_check=[HealthCheck.function_scoped_fixture],
     database=None,  # Disable Hypothesis example database to prevent stale state issues
+    deadline=None,  # Dynamic FK discovery + cascading RESTRICT delete runs
+    # several SELECT/DELETE round-trips per iteration, which exceeds
+    # Hypothesis's default 200ms deadline. The test is integration-heavy
+    # and not a fast unit-style property check, so deadline enforcement
+    # is counterproductive here.
 )
 @given(ticker=st.text(alphabet=st.characters(whitelist_categories=["Lu"]), min_size=5, max_size=20))
 def test_restrict_prevents_platform_delete_with_markets(db_pool, clean_test_data, ticker):
