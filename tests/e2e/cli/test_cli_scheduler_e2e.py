@@ -79,8 +79,14 @@ class TestSchedulerStartStopWorkflow:
             mock_instance.get_status.return_value = {"running": True, "pollers": []}
             mock_create_supervisor.return_value = mock_instance
 
-            # Start scheduler (non-foreground so it returns immediately)
-            result = runner.invoke(isolated_app, ["scheduler", "start"])
+            # Start scheduler via the supervised code path. The non-supervised
+            # path at src/precog/cli/scheduler.py:619+ instantiates
+            # KalshiMarketPoller and ESPNGamePoller directly rather than going
+            # through create_supervisor(), so the mocks above would not cover
+            # it and the real pollers would spin up and hang on 429 retries.
+            # --supervised routes through _start_supervised_mode which is the
+            # code path our mocks actually replace.
+            result = runner.invoke(isolated_app, ["scheduler", "start", "--supervised"])
             assert result.exit_code in [0, 1, 2]
 
             # Check status
