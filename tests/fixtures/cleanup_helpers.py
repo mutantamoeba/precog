@@ -225,14 +225,22 @@ def delete_venue_with_children(
 
     placeholders = ",".join(["%s"] * len(venue_ids))
 
-    # Games reference venues via venue_id — SET NULL the FK (games are not owned by venues)
-    # With RESTRICT we can't delete venues if games reference them.
-    # Clear the venue_id FK on games first.
+    # games.venue_id and game_states.venue_id both carry foreign-key
+    # constraints to venues(venue_id). Neither is listed in migration 0057
+    # because they were already compliant: games.venue_id was declared
+    # ON DELETE SET NULL and game_states.venue_id was declared NO ACTION
+    # (functionally equivalent to RESTRICT for delete enforcement — they
+    # only diverge for deferrable constraints, which these are not).
+    #
+    # Either way, we cannot simply DELETE a venue while a game or
+    # game_state still references it: SET NULL is a nullify-at-delete
+    # behavior and NO ACTION raises ForeignKeyViolation. Clearing the
+    # references explicitly makes the teardown order-independent and
+    # correct under either semantics, which is the point of this helper.
     cursor.execute(
         f"UPDATE games SET venue_id = NULL WHERE venue_id IN ({placeholders})",  # noqa: S608
         tuple(venue_ids),
     )
-    # game_states also reference venues
     cursor.execute(
         f"UPDATE game_states SET venue_id = NULL WHERE venue_id IN ({placeholders})",  # noqa: S608
         tuple(venue_ids),

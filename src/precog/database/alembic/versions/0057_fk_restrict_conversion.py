@@ -112,7 +112,7 @@ CASCADE -> RESTRICT (28):
 SCD Type 2 columns + indexes (3 tables):
   60. teams:  row_current_ind, row_start_ts, row_end_ts
             + idx_teams_current (partial on row_current_ind)
-            + idx_teams_unique_current (partial unique on team_code, sport)
+            + idx_teams_unique_current (partial unique on team_code, league)
   61. venues: row_current_ind, row_start_ts, row_end_ts
             + idx_venues_current (partial on row_current_ind)
             + idx_venues_unique_current (partial unique on espn_venue_id)
@@ -140,7 +140,12 @@ DISCREPANCIES vs original task brief:
     inventory (CASCADE, from 0022, explicitly named constraints)
   - teams business key: task brief said team_code alone, but team_code is NOT
     unique (migration 0003 changed to UNIQUE(team_code, sport), 0018 relaxed to
-    pro leagues only). Using (team_code, sport) to match existing uniqueness.
+    pro leagues only, 0039 introduced idx_teams_code_league_pro on
+    (team_code, league)). Design review chose (team_code, league) over
+    (team_code, sport) because league is more granular -- sport collapses
+    NFL+NCAAF under 'football' and would allow duplicate team_codes across
+    those two leagues. See the "Business key decisions" block above for the
+    full rationale.
 """
 
 from collections.abc import Sequence
@@ -502,6 +507,31 @@ def upgrade() -> None:
         'Always filter by row_current_ind = TRUE for current data.'
     """)
 
+    # =========================================================================
+    # Phase 4: Supporting indexes for consumers that depend on this migration
+    # =========================================================================
+    # Compound index for temporal_alignment_writer (#747) and Pattern 63
+    # (LATERAL subquery for SCD temporal matching). The writer's hot-path
+    # query ORDERs by the time delta between a market_snapshot and the
+    # closest game_state for a given game_id:
+    #
+    #     SELECT ... FROM game_states gs_inner
+    #     WHERE gs_inner.game_id = gs.game_id
+    #     ORDER BY ABS(EXTRACT(EPOCH FROM (ms.row_start_ts - gs_inner.row_start_ts)))
+    #     LIMIT 1
+    #
+    # The pre-existing idx_game_states_game_id covers the equality filter
+    # but not the ORDER BY, so without this compound index the planner has
+    # to sort every matching game_state per snapshot row. At NFL-season
+    # scale (hundreds of state rows per game) that becomes a sequential
+    # scan per outer row. The compound (game_id, row_start_ts) lets the
+    # planner read rows in row_start_ts order for each game_id bucket.
+    op.execute("""
+        CREATE INDEX IF NOT EXISTS idx_game_states_game_id_row_start_ts
+        ON game_states(game_id, row_start_ts)
+        WHERE game_id IS NOT NULL
+    """)
+
 
 def downgrade() -> None:
     """Reverse: drop SCD columns + indexes, re-create FKs with original ON DELETE."""
@@ -514,6 +544,9 @@ def downgrade() -> None:
     op.execute("DROP VIEW IF EXISTS current_series")
     op.execute("DROP VIEW IF EXISTS current_venues")
     op.execute("DROP VIEW IF EXISTS current_teams")
+
+    # Drop supporting indexes introduced by Phase 4
+    op.execute("DROP INDEX IF EXISTS idx_game_states_game_id_row_start_ts")
 
     # Drop SCD indexes (they depend on the columns)
     op.execute("DROP INDEX IF EXISTS idx_series_platform_external_current")

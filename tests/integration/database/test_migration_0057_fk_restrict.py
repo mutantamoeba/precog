@@ -553,6 +553,38 @@ class TestSCDIndexes:
                 "Expected league in index definition (composite business key)"
             )
 
+    def test_game_states_game_id_row_start_ts_compound_index_exists(self, db_pool: Any) -> None:
+        """Compound index for temporal_alignment_writer LATERAL sort.
+
+        Pairs with PR #747 and Pattern 63. The writer's hot-path query
+        does ORDER BY ABS(ms.row_start_ts - gs_inner.row_start_ts) for
+        each game_id bucket, which is only efficient if the planner can
+        walk game_states ordered by row_start_ts within a game_id.
+        """
+        with get_cursor(commit=False) as cur:
+            cur.execute(
+                """
+                SELECT indexdef
+                FROM pg_indexes
+                WHERE schemaname = 'public'
+                    AND tablename = 'game_states'
+                    AND indexname = 'idx_game_states_game_id_row_start_ts'
+                """,
+            )
+            row = cur.fetchone()
+            assert row is not None, (
+                "idx_game_states_game_id_row_start_ts missing — temporal_alignment"
+                " writer LATERAL subquery will fall back to a sequential sort"
+            )
+            indexdef = row["indexdef"].lower()
+            assert "game_id" in indexdef
+            assert "row_start_ts" in indexdef
+            # Partial index on game_id IS NOT NULL — matches the pattern used by
+            # the pre-existing idx_game_states_game_id (0035).
+            assert "game_id is not null" in indexdef, (
+                "Expected partial index WHERE clause matching idx_game_states_game_id"
+            )
+
 
 # =============================================================================
 # TestRestrictBlocksDeletion
