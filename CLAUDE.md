@@ -134,7 +134,7 @@ precog-repo/
 - `docs/foundation/DEVELOPMENT_PHASES_ERA2_V1.1.md` - Phase roadmap (Era 2: current)
 
 **Implementation:**
-- `docs/guides/DEVELOPMENT_PATTERNS_V1.30.md` - 50 development patterns with examples
+- `docs/guides/DEVELOPMENT_PATTERNS_V1.31.md` - 64 development patterns with examples
 - `docs/guides/CONFIGURATION_GUIDE_V3.1.md` - YAML config reference
 - `docs/guides/KALSHI_CLIENT_USER_GUIDE_V1.0.md` - Kalshi API usage
 - `docs/guides/STRATEGY_MANAGER_USER_GUIDE_V1.1.md`
