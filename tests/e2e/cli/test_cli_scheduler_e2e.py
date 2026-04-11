@@ -43,18 +43,43 @@ class TestSchedulerStartStopWorkflow:
         """Test complete scheduler start-stop-status workflow.
 
         E2E: Tests full lifecycle from start to stop.
+
+        IMPORTANT: The CLI ``scheduler start`` command calls
+        ``create_supervisor(...)`` (a factory function), not
+        ``ServiceSupervisor(...)`` directly. The factory does
+        substantial setup work before instantiating the supervisor --
+        it creates Kalshi/ESPN pollers, rate limiters, circuit
+        breakers, and tests network connectivity. Patching only
+        ``ServiceSupervisor`` the class leaves all of that real setup
+        intact, which on CI causes the Kalshi poller to hit rate-limit
+        429s and hang inside ``time.sleep`` until pytest's per-test
+        timeout fires. The fix is to patch ``create_supervisor`` so
+        the factory itself is replaced.
+
+        In addition, ``_validate_startup`` must be patched to return
+        True so the CLI does not short-circuit with exit code 1 before
+        reaching the factory call. This test was previously "passing"
+        on many environments only because _validate_startup happened
+        to return False and the test accepted exit code 1 -- a silent
+        no-op that masked the real execution path.
         """
         runner = CliRunner()
 
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
+        with (
+            patch(
+                "precog.schedulers.service_supervisor.create_supervisor"
+            ) as mock_create_supervisor,
+            patch("precog.cli.scheduler._validate_startup", return_value=True),
+            patch("precog.cli.scheduler._prevent_system_sleep_for_supervised"),
+        ):
             mock_instance = MagicMock()
-            mock_instance.start.return_value = True
+            mock_instance.start_all.return_value = None
             mock_instance.stop.return_value = True
-            mock_instance.is_running.return_value = True
+            mock_instance.is_running = True
             mock_instance.get_status.return_value = {"running": True, "pollers": []}
-            mock_supervisor.return_value = mock_instance
+            mock_create_supervisor.return_value = mock_instance
 
-            # Start scheduler
+            # Start scheduler (non-foreground so it returns immediately)
             result = runner.invoke(isolated_app, ["scheduler", "start"])
             assert result.exit_code in [0, 1, 2]
 
