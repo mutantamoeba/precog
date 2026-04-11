@@ -100,22 +100,31 @@ class TestSchedulerStartStopWorkflow:
     def test_scheduler_restart_workflow(self, isolated_app) -> None:
         """Test scheduler restart workflow.
 
-        E2E: Tests stop then start sequence.
+        E2E: Tests stop then start sequence via the supervised path. See
+        the docstring on test_complete_scheduler_lifecycle for why the
+        mock targets create_supervisor and the invocation passes
+        --supervised.
         """
         runner = CliRunner()
 
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
+        with (
+            patch(
+                "precog.schedulers.service_supervisor.create_supervisor"
+            ) as mock_create_supervisor,
+            patch("precog.cli.scheduler._validate_startup", return_value=True),
+            patch("precog.cli.scheduler._prevent_system_sleep_for_supervised"),
+        ):
             mock_instance = MagicMock()
-            mock_instance.start.return_value = True
+            mock_instance.start_all.return_value = None
             mock_instance.stop.return_value = True
-            mock_supervisor.return_value = mock_instance
+            mock_create_supervisor.return_value = mock_instance
 
-            # Stop (should handle not running)
+            # Stop (should handle not running — module globals are all None)
             result = runner.invoke(isolated_app, ["scheduler", "stop"])
             assert result.exit_code in [0, 1, 2]
 
-            # Start
-            result = runner.invoke(isolated_app, ["scheduler", "start"])
+            # Start via supervised path so create_supervisor mock is effective
+            result = runner.invoke(isolated_app, ["scheduler", "start", "--supervised"])
             assert result.exit_code in [0, 1, 2]
 
 
@@ -126,15 +135,37 @@ class TestSchedulerPollingWorkflow:
         """Test single poll execution workflow.
 
         E2E: Tests poll-once from CLI through database.
+
+        The poll_once CLI command does not go through create_supervisor --
+        it imports ESPNGamePoller and KalshiMarketPoller directly from
+        precog.schedulers and instantiates them. Patch those poller
+        classes at the package re-export path so the delayed function-
+        scoped import inside poll_once picks up the mocks.
         """
         runner = CliRunner()
 
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
-            mock_instance = MagicMock()
-            mock_instance.poll_once.return_value = {"games": 5, "updated": 3}
-            mock_supervisor.return_value = mock_instance
+        with (
+            patch("precog.schedulers.ESPNGamePoller") as mock_espn,
+            patch("precog.schedulers.KalshiMarketPoller") as mock_kalshi,
+        ):
+            mock_espn_instance = MagicMock()
+            mock_espn_instance.poll_once.return_value = {
+                "items_fetched": 5,
+                "items_updated": 3,
+            }
+            mock_espn.return_value = mock_espn_instance
 
-            result = runner.invoke(isolated_app, ["scheduler", "poll-once", "--league", "nfl"])
+            mock_kalshi_instance = MagicMock()
+            mock_kalshi_instance.poll_once.return_value = {
+                "items_fetched": 10,
+                "items_updated": 8,
+                "items_created": 2,
+            }
+            mock_kalshi.return_value = mock_kalshi_instance
+
+            # Note: scheduler poll-once takes --leagues (comma-separated string),
+            # not --league, per src/precog/cli/scheduler.py::poll_once.
+            result = runner.invoke(isolated_app, ["scheduler", "poll-once", "--leagues", "nfl"])
             assert result.exit_code in [0, 1, 2]
 
     def test_poll_multiple_leagues_workflow(self, isolated_app) -> None:
@@ -144,14 +175,28 @@ class TestSchedulerPollingWorkflow:
         """
         runner = CliRunner()
 
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
-            mock_instance = MagicMock()
-            mock_instance.poll_once.return_value = {"games": 10, "updated": 8}
-            mock_supervisor.return_value = mock_instance
+        with (
+            patch("precog.schedulers.ESPNGamePoller") as mock_espn,
+            patch("precog.schedulers.KalshiMarketPoller") as mock_kalshi,
+        ):
+            mock_espn_instance = MagicMock()
+            mock_espn_instance.poll_once.return_value = {
+                "items_fetched": 20,
+                "items_updated": 12,
+            }
+            mock_espn.return_value = mock_espn_instance
+
+            mock_kalshi_instance = MagicMock()
+            mock_kalshi_instance.poll_once.return_value = {
+                "items_fetched": 30,
+                "items_updated": 18,
+                "items_created": 4,
+            }
+            mock_kalshi.return_value = mock_kalshi_instance
 
             result = runner.invoke(
                 isolated_app,
-                ["scheduler", "poll-once", "--league", "nfl", "--league", "nba", "--save"],
+                ["scheduler", "poll-once", "--leagues", "nfl,nba"],
             )
             assert result.exit_code in [0, 1, 2]
 
@@ -162,20 +207,33 @@ class TestSchedulerErrorRecovery:
     def test_scheduler_recovers_from_poll_error(self, isolated_app) -> None:
         """Test scheduler recovers from polling errors.
 
-        E2E: Tests error recovery workflow.
+        E2E: Tests error recovery workflow. See test_poll_once_workflow
+        for the mock-at-package-level pattern rationale.
         """
         runner = CliRunner()
 
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
-            mock_instance = MagicMock()
-            mock_instance.poll_once.side_effect = [
-                Exception("API error"),
-                {"games": 3, "updated": 2},
-            ]
-            mock_supervisor.return_value = mock_instance
+        with (
+            patch("precog.schedulers.ESPNGamePoller") as mock_espn,
+            patch("precog.schedulers.KalshiMarketPoller") as mock_kalshi,
+        ):
+            # ESPN poller raises on poll_once -- the CLI catches it and logs
+            # but does not crash, so exit code should still be in the normal
+            # range.
+            mock_espn_instance = MagicMock()
+            mock_espn_instance.poll_once.side_effect = Exception("API error")
+            mock_espn.return_value = mock_espn_instance
 
-            # First poll fails
-            result = runner.invoke(isolated_app, ["scheduler", "poll-once", "--league", "nfl"])
+            # Kalshi poller succeeds so the overall command still reports some
+            # progress.
+            mock_kalshi_instance = MagicMock()
+            mock_kalshi_instance.poll_once.return_value = {
+                "items_fetched": 3,
+                "items_updated": 2,
+                "items_created": 1,
+            }
+            mock_kalshi.return_value = mock_kalshi_instance
+
+            result = runner.invoke(isolated_app, ["scheduler", "poll-once", "--leagues", "nfl"])
             # CLI should handle error gracefully
             assert result.exit_code in [0, 1, 2, 3, 4, 5]
 
@@ -183,13 +241,18 @@ class TestSchedulerErrorRecovery:
         """Test scheduler handles stop request during poll.
 
         E2E: Tests graceful shutdown during operation.
+
+        The stop CLI command calls _scheduler_stop_impl() which accesses
+        module-global references to pollers/supervisor. With no prior
+        start command in this test, all those globals are None and the
+        stop command is a no-op -- no real I/O -- so no mocks are
+        required. We keep the test to document the expected exit code
+        behavior and to guard against regressions if stop ever gains
+        real I/O in the absence of running services.
         """
         runner = CliRunner()
 
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
-            mock_instance = MagicMock()
-            mock_instance.stop.return_value = True
-            mock_supervisor.return_value = mock_instance
-
-            result = runner.invoke(isolated_app, ["scheduler", "stop", "--force"])
-            assert result.exit_code in [0, 1, 2]
+        # scheduler stop does not accept a --force flag -- that belongs to
+        # scheduler start. Removing it to match the actual CLI signature.
+        result = runner.invoke(isolated_app, ["scheduler", "stop"])
+        assert result.exit_code in [0, 1, 2]
