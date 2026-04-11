@@ -1001,58 +1001,53 @@ def test_check_constraints_enforced(db_pool, clean_test_data, setup_kalshi_platf
     database=None,  # Disable Hypothesis example database to prevent stale state issues
 )
 @given(ticker=st.text(alphabet=st.characters(whitelist_categories=["Lu"]), min_size=5, max_size=20))
-def test_cascade_delete_integrity(db_pool, clean_test_data, ticker):
+def test_restrict_prevents_platform_delete_with_markets(db_pool, clean_test_data, ticker):
     """
-    PROPERTY: Deleting platform cascades to delete all related markets.
+    PROPERTY: Deleting a platform with dependent markets raises ForeignKeyViolation.
 
-    Validates:
-    - Foreign key CASCADE behavior works correctly
-    - Deleting platform removes all markets for that platform
-    - No orphan markets left after platform deletion
-    - Referential integrity maintained
+    Validates (post migration 0057):
+    - Foreign key RESTRICT behavior blocks orphaning children
+    - Deleting platform while markets reference it raises ForeignKeyViolation
+    - Dependent markets must be removed first; only then does platform delete succeed
+    - Referential integrity is preserved by refusing the delete, not by cascading
 
     Why This Matters:
-        Without CASCADE, deleting platforms would fail (due to foreign key constraint)
-        or leave orphan markets. CASCADE ensures referential integrity by automatically
-        removing dependent rows when parent is deleted.
+        Migration 0057 converted markets.platform_id -> platforms.platform_id from
+        ON DELETE CASCADE to ON DELETE RESTRICT (FK #34 in the 0057 conversion list).
+        Silent CASCADE of platform deletes was too dangerous: a misdirected admin
+        DELETE on a high-traffic platform would silently erase every market and all
+        downstream SCD history. RESTRICT forces the caller to delete children
+        explicitly, making the destruction visible and intentional.
 
     Educational Note:
-        PostgreSQL CASCADE behavior:
-        FOREIGN KEY (platform_id) REFERENCES platforms(platform_id) ON DELETE CASCADE
+        After migration 0057, the FK is declared:
+        FOREIGN KEY (platform_id) REFERENCES platforms(platform_id) ON DELETE RESTRICT
 
-        When you delete a platform:
-        1. PostgreSQL finds all markets referencing that platform
-        2. Automatically deletes those markets
-        3. Then deletes the platform
-        4. All in one atomic transaction
-
-        Without CASCADE (default RESTRICT):
         DELETE FROM platforms WHERE platform_id = 'kalshi'
-        ERROR: violates foreign key constraint "fk_markets_platform"
+        ERROR: update or delete on table "platforms" violates foreign key constraint
+               "markets_platform_id_fkey" on table "markets"
         DETAIL: Key (platform_id)=(kalshi) is still referenced from table "markets"
 
-        With CASCADE:
-        DELETE FROM platforms WHERE platform_id = 'kalshi'
-        -- Deletes platform AND all related markets automatically ✅
-
-    Example:
-        >>> create_market(platform_id="test-platform", ticker="MKT-1")
-        >>> create_market(platform_id="test-platform", ticker="MKT-2")
-        >>> delete_platform("test-platform")  # Triggers CASCADE
-        >>> markets = query(Market).filter(platform_id="test-platform").all()
-        >>> assert len(markets) == 0  # Both markets deleted automatically
+        Correct sequence now:
+        DELETE FROM markets WHERE platform_id = 'test-platform';   -- children first
+        DELETE FROM platforms WHERE platform_id = 'test-platform'; -- then parent
     """
     import uuid
 
+    import psycopg2
+
     from precog.database.connection import get_cursor
 
-    # Use UUID to ensure uniqueness across Hypothesis examples
+    # Use UUID to ensure uniqueness across Hypothesis examples.
+    # Prefixes must match the LIKE patterns in tests/conftest.py::clean_test_data
+    # so that any rows leaked across Hypothesis examples are cleaned up between
+    # test runs — especially important under RESTRICT, where CASCADE is no
+    # longer doing the janitorial work.
     unique_id = uuid.uuid4().hex[:8]
-    test_platform_id = f"PLAT-{unique_id}"
-
-    test_series_id = f"SER-{unique_id}"
-    test_event_id = f"EVT-{unique_id}"
-    test_ticker = f"TKR-{unique_id}"
+    test_platform_id = f"TEST-PLATFORM-{unique_id}"
+    test_series_id = f"TEST-SERIES-{unique_id}"
+    test_event_id = f"TEST-EVENT-{unique_id}"
+    test_ticker = f"TEST-{unique_id}"
 
     with get_cursor(commit=True) as cur:
         # Create test platform
@@ -1117,23 +1112,55 @@ def test_cascade_delete_integrity(db_pool, clean_test_data, ticker):
 
     assert count_before > 0, "Market should exist before platform deletion"
 
-    # Delete platform (should CASCADE delete to markets)
-    with get_cursor(commit=True) as cur:
-        cur.execute("DELETE FROM platforms WHERE platform_id = %s", (test_platform_id,))
+    # Attempting to delete the platform while a market still references it
+    # must raise ForeignKeyViolation (RESTRICT semantics from migration 0057).
+    with pytest.raises(psycopg2.errors.ForeignKeyViolation):
+        with get_cursor(commit=True) as cur:
+            cur.execute(
+                "DELETE FROM platforms WHERE platform_id = %s",
+                (test_platform_id,),
+            )
 
-    # Verify markets CASCADE deleted
+    # Platform and market must both still exist after the refused delete.
     with get_cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) FROM platforms WHERE platform_id = %s",
+            (test_platform_id,),
+        )
+        platform_count = (cur.fetchone() or {}).get("count", 0)
         cur.execute(
             "SELECT COUNT(*) FROM markets WHERE platform_id = %s",
             (test_platform_id,),
         )
-        result = cur.fetchone()
-        count_after = result["count"] if result else 0
+        market_count = (cur.fetchone() or {}).get("count", 0)
 
-    assert count_after == 0, (
-        f"CASCADE delete failed: {count_before} markets before deletion, "
-        f"{count_after} after (expected 0)"
-    )
+    assert platform_count == 1, "RESTRICT should have preserved the platform row"
+    assert market_count == count_before, "RESTRICT should have preserved the market rows"
+
+    # Correct deletion sequence: children first, then parent. Use the shared
+    # helper from tests/fixtures/cleanup_helpers.py so that the full RESTRICT
+    # FK subtree (market_snapshots, position_exits, etc.) is torn down in the
+    # right order. Hand-rolling the sequence here would drift from the real
+    # schema as migrations add new child tables.
+    from tests.fixtures.cleanup_helpers import delete_platform_with_children
+
+    with get_cursor(commit=True) as cur:
+        delete_platform_with_children(cur, "platform_id = %s", (test_platform_id,))
+
+    with get_cursor() as cur:
+        cur.execute(
+            "SELECT COUNT(*) FROM platforms WHERE platform_id = %s",
+            (test_platform_id,),
+        )
+        platform_count_after = (cur.fetchone() or {}).get("count", 0)
+        cur.execute(
+            "SELECT COUNT(*) FROM markets WHERE platform_id = %s",
+            (test_platform_id,),
+        )
+        market_count_after = (cur.fetchone() or {}).get("count", 0)
+
+    assert platform_count_after == 0, "Platform should be gone once children are removed"
+    assert market_count_after == 0, "Markets should be gone once explicitly deleted"
 
 
 # TODO: Additional property tests to consider (future phases):
