@@ -935,6 +935,44 @@ def _cleanup_apscheduler_threads():
         )
 
 
+# =============================================================================
+# SCHEDULER CLI MODULE-GLOBAL CLEANUP (#764)
+# =============================================================================
+
+
+@pytest.fixture(autouse=True)
+def _cleanup_scheduler_cli_module_globals():
+    """
+    Reset precog.cli.scheduler module globals between tests.
+
+    The CLI's scheduler commands (start, stop, status, poll-once) store their
+    state in module-level globals: _supervisor, _espn_updater, _kalshi_poller.
+    A test that calls `scheduler start` and doesn't follow with `scheduler stop`
+    leaves the mocked supervisor/poller attached to the module, which then
+    leaks into the next test under the same process.
+
+    This fixture saves the pre-test state and restores it after. The retrofit
+    in #764 made the leak deterministic where it was previously probabilistic
+    (factory mocks reliably populate the global every time), so without this
+    fixture a `start`-only test would pollute every subsequent test that reads
+    those globals.
+
+    Scope: function (autouse) - runs after every test.
+    """
+    from precog.cli import scheduler as _scheduler_module
+
+    saved = {
+        "_supervisor": getattr(_scheduler_module, "_supervisor", None),
+        "_espn_updater": getattr(_scheduler_module, "_espn_updater", None),
+        "_kalshi_poller": getattr(_scheduler_module, "_kalshi_poller", None),
+    }
+
+    yield
+
+    for name, value in saved.items():
+        setattr(_scheduler_module, name, value)
+
+
 def pytest_configure(config):
     """
     Register custom markers and enforce test environment.

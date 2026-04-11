@@ -26,60 +26,122 @@ def setup_commands():
 
 
 class TestSchedulerChaos:
-    """Chaos tests for scheduler CLI."""
+    """Chaos tests for scheduler CLI.
+
+    Mock Level Notes (#764):
+        ``status`` does not call ``create_supervisor``; it queries
+        the database via ``list_scheduler_services``. Chaos for
+        status must be injected into that database call.
+
+        ``poll-once`` does not call ``create_supervisor``; it
+        directly instantiates ``ESPNGamePoller`` and
+        ``KalshiMarketPoller`` from ``precog.schedulers``. Chaos for
+        poll-once must be injected into the poller's ``poll_once``
+        method.
+
+        The previous versions of these tests patched
+        ``ServiceSupervisor`` (a class the CLI never instantiates
+        on these code paths), so the chaos was never actually
+        injected -- the tests reported success on every call,
+        regardless of the random failure rate, because the CLI
+        ran its real (or fallback) path uninfluenced by the mock.
+    """
 
     def test_supervisor_random_failures(self, cli_runner) -> None:
-        """Test scheduler handles random supervisor failures.
+        """Test scheduler status handles random database-IPC failures.
 
-        Chaos: Random failures during 20 invocations.
+        Chaos: 30% random failure rate on the database-backed
+        status query across 20 invocations. Failures are caught
+        inside ``_show_db_backed_status`` (it has a try/except that
+        returns False on error and falls back to the in-process
+        path), so the CLI must complete with exit 0 on every call.
         """
+        from precog.cli import scheduler as scheduler_module
+
         call_count = [0]
 
         def random_failure(*args, **kwargs):
             call_count[0] += 1
             if random.random() < 0.3:  # 30% failure rate
-                raise Exception("Random supervisor failure")
-            return {"running": False, "pollers": []}
+                raise Exception("Random database failure")
+            return []  # No services in DB -> fall back to in-process
 
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
-            mock_instance = MagicMock()
-            mock_instance.get_status.side_effect = random_failure
-            mock_supervisor.return_value = mock_instance
+        original_supervisor = scheduler_module._supervisor
+        scheduler_module._supervisor = None
+        try:
+            with patch(
+                "precog.database.crud_schedulers.list_scheduler_services",
+                side_effect=random_failure,
+            ):
+                successes = 0
+                for _ in range(20):
+                    result = cli_runner.invoke(app, ["scheduler", "status"])
+                    if result.exit_code == 0:
+                        successes += 1
 
-            successes = 0
-            for _ in range(20):
-                result = cli_runner.invoke(app, ["scheduler", "status"])
-                if result.exit_code in [0, 1, 2]:
-                    successes += 1
-
-            # Should handle failures gracefully
-            assert successes >= 10, f"Only {successes} successes out of 20"
+                # The CLI catches DB failures internally and falls
+                # back, so every call should exit cleanly.
+                assert successes == 20, (
+                    f"Only {successes}/20 status calls succeeded; expected 20. "
+                    f"Chaos was actually injected (call_count={call_count[0]})."
+                )
+                # Verify the chaos hook was actually exercised -- if
+                # the patch silently missed (the #764 anti-pattern),
+                # call_count would be zero.
+                assert call_count[0] == 20, (
+                    f"chaos hook was only called {call_count[0]} times; "
+                    "expected 20 (one per status invocation)"
+                )
+        finally:
+            scheduler_module._supervisor = original_supervisor
 
     def test_poll_with_intermittent_failures(self, cli_runner) -> None:
-        """Test poll-once with intermittent failures.
+        """Test poll-once with intermittent ESPN poller failures.
 
-        Chaos: Alternating success/failure pattern.
+        Chaos: Every 3rd ESPN poll raises. The CLI catches the
+        exception inside the ``try/except`` around ``poller.poll_once()``
+        and continues to the Kalshi poller, so the command always
+        exits cleanly. Verifies the CLI's per-poller error isolation.
         """
         call_count = [0]
 
         def alternating_result(*args, **kwargs):
             call_count[0] += 1
             if call_count[0] % 3 == 0:  # Every 3rd call fails
-                raise Exception("Intermittent failure")
-            return {"games": 5, "updated": 3}
+                raise Exception("Intermittent ESPN failure")
+            return {"items_fetched": 5, "items_updated": 3}
 
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
-            mock_instance = MagicMock()
-            mock_instance.poll_once.side_effect = alternating_result
-            mock_supervisor.return_value = mock_instance
+        with (
+            patch("precog.schedulers.ESPNGamePoller") as mock_espn_cls,
+            patch("precog.schedulers.KalshiMarketPoller") as mock_kalshi_cls,
+        ):
+            mock_espn = MagicMock()
+            mock_espn.poll_once.side_effect = alternating_result
+            mock_espn_cls.return_value = mock_espn
+
+            mock_kalshi = MagicMock()
+            mock_kalshi.poll_once.return_value = {
+                "items_fetched": 1,
+                "items_updated": 1,
+                "items_created": 0,
+            }
+            mock_kalshi.kalshi_client = MagicMock()
+            mock_kalshi_cls.return_value = mock_kalshi
 
             results = []
             for _ in range(15):
-                result = cli_runner.invoke(app, ["scheduler", "poll-once", "--league", "nfl"])
+                result = cli_runner.invoke(app, ["scheduler", "poll-once", "--leagues", "nfl"])
                 results.append(result.exit_code)
 
-            # All should complete (success or graceful failure)
+            # All should complete cleanly -- the CLI catches
+            # per-poller exceptions and continues.
             assert len(results) == 15
+            assert all(code == 0 for code in results), f"unexpected non-zero exit codes: {results}"
+            # Verify the chaos hook actually fired.
+            assert call_count[0] == 15, (
+                f"chaos hook was only called {call_count[0]} times; "
+                "expected 15 (one per poll-once invocation)"
+            )
 
 
 class TestDbChaos:
@@ -267,16 +329,35 @@ class TestResourceExhaustion:
     def test_handles_memory_pressure(self, cli_runner) -> None:
         """Test CLI handles memory pressure scenarios.
 
-        Chaos: Large response data.
-        """
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
-            mock_instance = MagicMock()
-            # Large status response
-            mock_instance.get_status.return_value = {
-                "running": True,
-                "pollers": [{"name": f"poller_{i}", "data": "x" * 1000} for i in range(100)],
-            }
-            mock_supervisor.return_value = mock_instance
+        Chaos: 100 fake services in the database-backed status
+        response. The CLI must render the table and exit cleanly.
 
+        See class docstring for why we patch
+        ``list_scheduler_services`` and not ``ServiceSupervisor``.
+        """
+        from datetime import UTC, datetime
+
+        large_service_list = [
+            {
+                "service_name": f"poller_{i}",
+                "host_id": "test-host",
+                "pid": 1000 + i,
+                "status": "running",
+                "started_at": datetime.now(UTC),
+                "last_heartbeat": datetime.now(UTC),
+                "error_message": None,
+                "stats": {"large_field": "x" * 1000},
+            }
+            for i in range(100)
+        ]
+
+        with patch(
+            "precog.database.crud_schedulers.list_scheduler_services",
+            return_value=large_service_list,
+        ) as mock_list:
             result = cli_runner.invoke(app, ["scheduler", "status"])
-            assert result.exit_code in [0, 1, 2]
+            assert result.exit_code == 0, (
+                f"status under memory pressure should exit 0; "
+                f"got {result.exit_code}: {result.output}"
+            )
+            mock_list.assert_called_once()

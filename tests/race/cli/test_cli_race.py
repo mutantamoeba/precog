@@ -63,16 +63,23 @@ class TestSchedulerRace:
     def test_rapid_sequential_status_checks(self, isolated_app) -> None:
         """Test rapid sequential status check invocations.
 
-        Race: Tests 10 rapid status calls in sequence.
+        Race: Tests 10 rapid status calls in sequence. Verifies the
+        status command's module-global access (``_supervisor``,
+        ``_show_db_backed_status``) does not develop inconsistent
+        state across rapid calls.
+
+        Mock note (#764): patches ``_show_db_backed_status``, the
+        actual code path the status command takes. The previous
+        version patched ``ServiceSupervisor``, which the status
+        command never instantiates -- so the test was either
+        making real DB calls (if ``list_scheduler_services`` worked)
+        or hitting the in-process fallback. Either way, the mock
+        was a no-op.
         """
         runner = CliRunner()
         results = []
 
-        with patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor:
-            mock_instance = MagicMock()
-            mock_instance.get_status.return_value = {"running": False, "pollers": []}
-            mock_supervisor.return_value = mock_instance
-
+        with patch("precog.cli.scheduler._show_db_backed_status", return_value=True) as mock_status:
             start = time.perf_counter()
             for _ in range(10):
                 result = runner.invoke(isolated_app, ["scheduler", "status"])
@@ -80,19 +87,24 @@ class TestSchedulerRace:
             elapsed = time.perf_counter() - start
 
             assert len(results) == 10
-            assert all(code in [0, 1, 2] for code in results)
+            assert all(code == 0 for code in results), f"unexpected exit codes: {results}"
+            assert mock_status.call_count == 10, (
+                f"_show_db_backed_status called {mock_status.call_count} times; expected 10"
+            )
             # All 10 calls should complete in reasonable time
             assert elapsed < 30.0, f"10 calls took {elapsed:.2f}s"
 
     def test_rapid_alternating_start_stop(self, isolated_app) -> None:
         """Test rapid alternating start and stop requests.
 
-        Race: Tests alternating start/stop calls.
+        Race: Tests alternating start/stop calls on the non-supervised code path.
 
-        Note: Must mock create_supervisor (the factory the CLI actually calls),
-        not ServiceSupervisor directly. The CLI calls create_supervisor() which
-        internally creates real pollers — mocking only the class leaves real
-        ESPN/Kalshi clients alive, causing APScheduler thread leaks and timeouts.
+        Note: This test drives the NON-supervised code path (no --supervised flag),
+        where the CLI directly instantiates ESPNGamePoller / KalshiMarketPoller from
+        precog.schedulers. Both must be mocked at the package level to prevent
+        real API client creation. This is distinct from the supervised path which
+        requires patching create_supervisor (see test_cli_scheduler_e2e.py for
+        that pattern).
         """
         runner = CliRunner()
         results = []
@@ -102,8 +114,8 @@ class TestSchedulerRace:
         mock_poller.stop.return_value = None
 
         with (
-            patch("precog.schedulers.ESPNGamePoller", return_value=mock_poller),
-            patch("precog.schedulers.KalshiMarketPoller", return_value=mock_poller),
+            patch("precog.schedulers.ESPNGamePoller", return_value=mock_poller) as mock_espn,
+            patch("precog.schedulers.KalshiMarketPoller", return_value=mock_poller) as mock_kalshi,
         ):
             for i in range(5):
                 result = runner.invoke(isolated_app, ["scheduler", "start"])
@@ -112,8 +124,16 @@ class TestSchedulerRace:
                 results.append(("stop", result.exit_code))
 
             assert len(results) == 10
-            # All should complete without errors
-            assert all(code in [0, 1, 2] for _, code in results)
+            for label, code in results:
+                assert code == 0, f"{label} returned exit {code} (expected 0)"
+
+            assert mock_espn.call_count == 5, (
+                f"ESPNGamePoller constructor called {mock_espn.call_count} times, expected 5 — "
+                "mock is a no-op if count is 0"
+            )
+            assert mock_kalshi.call_count == 5, (
+                f"KalshiMarketPoller constructor called {mock_kalshi.call_count} times, expected 5"
+            )
 
 
 class TestDbRace:
@@ -238,14 +258,28 @@ class TestCrossModuleRace:
         """Test rapid commands across different modules.
 
         Race: Tests rapid commands from scheduler, db, and system.
+        Verifies that interleaved access does not develop
+        inconsistent module-global state.
+
+        Mock note (#764): scheduler status patches
+        ``_show_db_backed_status`` (the real code path) and is
+        held to strict exit 0. The db/system commands are out of
+        scope for #764 -- they have their own "missing critical
+        tables -> exit 1" behavior under partial mocks that is
+        unrelated to the scheduler retrofit. Their assertions
+        remain intentionally loose; tightening them would require
+        a separate audit of db/system CLI mock fidelity.
         """
         runner = CliRunner()
-        results = []
+        scheduler_results = []
+        other_results = []
 
         with (
             patch("precog.database.connection.test_connection") as mock_test,
             patch("precog.database.connection.get_cursor") as mock_ctx,
-            patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor,
+            patch(
+                "precog.cli.scheduler._show_db_backed_status", return_value=True
+            ) as mock_sched_status,
         ):
             mock_test.return_value = True
             mock_cur = MagicMock()
@@ -260,9 +294,6 @@ class TestCrossModuleRace:
             mock_cur.fetchall.return_value = []
             mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
-            mock_instance = MagicMock()
-            mock_instance.get_status.return_value = {"running": False, "pollers": []}
-            mock_supervisor.return_value = mock_instance
 
             commands = [
                 (["scheduler", "status"], "scheduler"),
@@ -276,22 +307,43 @@ class TestCrossModuleRace:
             for _ in range(3):
                 for cmd, name in commands:
                     result = runner.invoke(isolated_app, cmd)
-                    results.append((name, result.exit_code))
+                    if name == "scheduler":
+                        scheduler_results.append(result.exit_code)
+                    else:
+                        other_results.append((name, result.exit_code))
 
-            assert len(results) == 15  # 5 commands * 3 rounds
-            assert all(code in [0, 1, 2] for _, code in results)
+            # scheduler status fired 3 times -- verify the mock was hit
+            assert mock_sched_status.call_count == 3, (
+                f"_show_db_backed_status called {mock_sched_status.call_count} times; expected 3"
+            )
+            # Scheduler is the #764 in-scope path: strict exit 0.
+            assert all(code == 0 for code in scheduler_results), (
+                f"scheduler status exit codes: {scheduler_results}; expected all 0"
+            )
+            # db/system are out of scope (#764): just require they
+            # don't crash with an unhandled exception.
+            assert len(other_results) == 12  # 4 non-scheduler commands * 3 rounds
+            assert all(code in [0, 1, 2] for _, code in other_results), (
+                f"unexpected exit codes from db/system: {other_results}"
+            )
 
     def test_state_isolation_between_modules(self, isolated_app) -> None:
         """Test that module state doesn't leak between rapid calls.
 
-        Race: Verifies isolation between different CLI modules.
+        Race: Verifies isolation between different CLI modules. Module-
+        global state in ``precog.cli.scheduler`` is not touched by
+        the ``status`` code path when ``_show_db_backed_status``
+        returns True, so the scheduler module remains in a clean
+        state across calls.
         """
         runner = CliRunner()
 
         with (
             patch("precog.database.connection.test_connection") as mock_test,
             patch("precog.database.connection.get_cursor") as mock_ctx,
-            patch("precog.schedulers.service_supervisor.ServiceSupervisor") as mock_supervisor,
+            patch(
+                "precog.cli.scheduler._show_db_backed_status", return_value=True
+            ) as mock_sched_status,
         ):
             mock_test.return_value = True
             mock_cur = MagicMock()
@@ -306,20 +358,26 @@ class TestCrossModuleRace:
             mock_cur.fetchall.return_value = []
             mock_ctx.return_value.__enter__ = MagicMock(return_value=mock_cur)
             mock_ctx.return_value.__exit__ = MagicMock(return_value=False)
-            mock_instance = MagicMock()
-            mock_instance.get_status.return_value = {"running": False, "pollers": []}
-            mock_supervisor.return_value = mock_instance
 
-            # Rapid interleaved calls
+            # Rapid interleaved calls. Scheduler is the #764 in-scope
+            # path and is held to strict exit 0; db/system have their
+            # own "missing critical tables -> exit 1" behavior under
+            # partial mocks that is out of scope for this retrofit.
             for _ in range(5):
-                # Call scheduler
+                # Call scheduler -- the #764 in-scope path
                 r1 = runner.invoke(isolated_app, ["scheduler", "status"])
-                assert r1.exit_code in [0, 1, 2]
+                assert r1.exit_code == 0, (
+                    f"scheduler status should exit 0; got {r1.exit_code}: {r1.output}"
+                )
 
-                # Immediately call db
+                # Immediately call db (out of scope: just require no crash)
                 r2 = runner.invoke(isolated_app, ["db", "status"])
                 assert r2.exit_code in [0, 1, 2]
 
-                # Immediately call system
+                # Immediately call system (out of scope: just require no crash)
                 r3 = runner.invoke(isolated_app, ["system", "health"])
                 assert r3.exit_code in [0, 1, 2]
+
+            assert mock_sched_status.call_count == 5, (
+                f"_show_db_backed_status called {mock_sched_status.call_count} times; expected 5"
+            )
