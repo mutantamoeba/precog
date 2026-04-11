@@ -94,6 +94,31 @@ ASCII output for console (Windows cp1252). Explicit UTF-8 for file I/O.
 ### 6. Immutable Versioning
 Strategies and models are immutable once created. Create new version, don't modify existing.
 
+### 7. External API Test Mocking — VCR OR live, NEVER hand-written
+
+Tests that exercise code calling **Kalshi, ESPN, or any HTTP client** use one of two approaches — **never** hand-written `MagicMock` response dicts:
+
+```python
+# CORRECT — Pattern 22 VCR cassette (reproducible, catches shape regressions)
+@pytest.mark.vcr  # Records to tests/cassettes/ on first run, replays after
+def test_kalshi_market_fetch():
+    markets = kalshi_client.get_markets(series="NFL")
+    assert markets[0]["ticker"].startswith("KXNFLGAME-")
+
+# CORRECT — Live contract test (catches API format drift)
+@pytest.mark.live_api  # Runs only in nightly contract workflow, never in normal CI
+def test_kalshi_api_responds_to_markets_endpoint():
+    markets = kalshi_client.get_markets()
+    assert "markets" in markets and all("ticker" in m for m in markets["markets"])
+
+# WRONG — Hand-written mock (rots silently, cannot catch drift)
+mock_kalshi.poll_once.return_value = {"items_fetched": 10, "items_updated": 8}
+```
+
+**Why:** Hand-written mocks freeze a guessed shape that diverges from the real API over time. VCR cassettes (`tests/cassettes/`) record real responses once and replay them — they catch regressions in our code AND surface format drift when the cassette is re-recorded. Live contract tests catch drift in real-time but are gated to nightly runs. See `tests/integration/api_connectors/test_kalshi_client_vcr.py` for the canonical Pattern 22 reference implementation.
+
+**Umbrella issue #764** tracks the retrofit of 8 files that historically violated this rule and had been reporting fictional green CI for months. **Trigger S73** enforces this rule on new PRs; **Pattern 22** in `docs/guides/DEVELOPMENT_PATTERNS_V1.31.md` is the authoritative reference.
+
 ---
 
 ## Repository Structure
