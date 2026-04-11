@@ -199,10 +199,13 @@ class TestTemporalAlignmentWriter:
     ) -> None:
         """poll_once with no unaligned pairs inserts nothing."""
         mock_find.return_value = []
-        writer = TemporalAlignmentWriter()
+        writer = TemporalAlignmentWriter(lookback_seconds=450, batch_limit=250)
         result = writer._poll_once()
         assert result == {"items_created": 0}
         mock_insert.assert_not_called()
+        # _poll_once must forward the instance's configured lookback/batch
+        # values to find_unaligned_pairs, not default module constants.
+        mock_find.assert_called_once_with(lookback_seconds=450, batch_limit=250)
 
     @patch("precog.schedulers.temporal_alignment_writer.insert_temporal_alignment_batch")
     @patch("precog.schedulers.temporal_alignment_writer.find_unaligned_pairs")
@@ -214,10 +217,23 @@ class TestTemporalAlignmentWriter:
         """poll_once with pairs calls batch insert and returns count."""
         mock_find.return_value = [{"market_snapshot_id": 1}, {"market_snapshot_id": 2}]
         mock_insert.return_value = 2
-        writer = TemporalAlignmentWriter()
+        writer = TemporalAlignmentWriter(lookback_seconds=600, batch_limit=1000)
         result = writer._poll_once()
         assert result == {"items_created": 2}
         mock_insert.assert_called_once()
+        mock_find.assert_called_once_with(lookback_seconds=600, batch_limit=1000)
+
+    @patch("precog.schedulers.temporal_alignment_writer.find_unaligned_pairs")
+    def test_poll_once_reraises_exceptions(self, mock_find: MagicMock) -> None:
+        """poll_once must re-raise exceptions so the supervisor observes them.
+
+        Swallowing the exception would let the writer silently fail while
+        the circuit breaker and health component still report healthy.
+        """
+        mock_find.side_effect = RuntimeError("simulated DB failure")
+        writer = TemporalAlignmentWriter()
+        with pytest.raises(RuntimeError, match="simulated DB failure"):
+            writer._poll_once()
 
 
 class TestFactory:
@@ -236,3 +252,4 @@ class TestFactory:
         )
         assert writer.poll_interval == 60
         assert writer._lookback_seconds == 300
+        assert writer._batch_limit == 500

@@ -452,9 +452,12 @@ def insert_temporal_alignment_batch(alignments: list[dict]) -> int:
             - game_id (int | None) -- FK to games(id), denormalized from events
 
     Returns:
-        Count of rows inserted (duplicates are silently skipped via
-        ON CONFLICT DO NOTHING on the unique constraint
-        uq_alignment_snapshot_game).
+        Count of rows actually inserted (not rows submitted). Duplicates
+        on the unique constraint uq_alignment_snapshot_game are silently
+        skipped via ON CONFLICT DO NOTHING. The returned count comes from
+        psycopg2's cur.rowcount after execute_values, so retry cycles that
+        catch up within the lookback window correctly report the net-new
+        row count rather than the submitted count.
 
     Raises:
         TypeError: If Decimal fields are not Decimal type
@@ -547,13 +550,19 @@ def insert_temporal_alignment_batch(alignments: list[dict]) -> int:
             game_status, home_score, away_score, period, clock,
             game_id
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES %s
         ON CONFLICT (market_snapshot_id, game_state_id) DO NOTHING
     """
+    template = "(%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)"
 
+    # Use execute_values + cur.rowcount (mirrors upsert_market_trades_batch)
+    # so the return value reflects rows *actually inserted* rather than rows
+    # submitted. ON CONFLICT DO NOTHING will skip duplicates; cur.rowcount
+    # on execute_values reports the effective count, unlike executemany
+    # where DB-API 2.0 leaves rowcount undefined across iterations.
     with get_cursor(commit=True) as cur:
-        cur.executemany(insert_query, validated_params)
-        return len(validated_params)
+        execute_values(cur, insert_query, validated_params, template=template)
+        return cast("int", cur.rowcount)
 
 
 def get_alignments_by_market(

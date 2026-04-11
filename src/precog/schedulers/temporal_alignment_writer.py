@@ -99,9 +99,14 @@ _UNALIGNED_QUERY = """
         LIMIT 1
     ) gs
     WHERE e.game_id IS NOT NULL
-      -- psycopg2 substitutes %s inside the string literal, producing
-      -- e.g. INTERVAL '600 seconds'. Safe: lookback_seconds is typed int.
-      AND ms.row_start_ts > NOW() - INTERVAL '%s seconds'
+      -- Idiomatic parameterized interval: pass the seconds count as a
+      -- plain integer parameter and let PostgreSQL multiply. Prior
+      -- versions used INTERVAL '%s seconds' which embedded the parameter
+      -- inside a string literal -- safe while lookback_seconds was
+      -- int-typed, but brittle if the type were ever loosened and
+      -- unconventional psycopg2 usage (parameters should be values, not
+      -- SQL fragments).
+      AND ms.row_start_ts > NOW() - (%s * INTERVAL '1 second')
       AND NOT EXISTS (
           SELECT 1 FROM temporal_alignment ta
           WHERE ta.market_snapshot_id = ms.id
